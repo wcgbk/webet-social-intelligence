@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="WeBetAI delivers a daily social intelligence digest via text â curated from X, Polymarket & Kalshi. Meet Betty, your AI companion who turns trending topics into friendly micro bets." />
+  <title>WeBetAI â Social Intelligence Agent</title>
+
+  <!-- Geist Sans via Fontsource CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/700.css" />
+
+  <style>
+    /* âââ Reset âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* âââ Design Tokens âââââââââââââââââââââââââââââââââââââââââââââââââ */
+    :root {
+      --bg:           hsl(260, 87%,  3%);
+      --fg:           hsl(40,   6%, 95%);
+      --primary:      hsl(121, 95%, 76%);   /* #87FB89 */
+      --primary-fg:   hsl(0,   0%,   5%);
+      --hero-heading: hsl(40,  10%, 96%);
+      --hero-sub:     hsl(40,   6%, 82%);
+      --muted:        hsl(240,  4%, 16%);
+      --border:       hsl(240,  4%, 20%);
+      --section-gap:  clamp(72px, 10vw, 120px);
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Geist Sans', system-ui, -apple-system, sans-serif;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* âââ Liquid Glass ââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .liquid-glass {
+      position: relative;
+      background: rgba(255, 255, 255, 0.01);
+      background-blend-mode: luminosity;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: none;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+    .liquid-glass::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      padding: 1.4px;
+      border-radius: inherit;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 20%,
+        rgba(255,255,255,0)    40%, rgba(255,255,255,0)    60%,
+        rgba(255,255,255,0.15) 80%, rgba(255,255,255,0.45) 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* âââ Utility âââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .container {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .text-primary { color: var(--primary); }
+    .sr-only { position: absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+    /* âââ Buttons âââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-family: inherit; font-size: 1rem; font-weight: 500;
+      border: none; cursor: pointer; text-decoration: none;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--primary); color: var(--primary-fg);
+      border-radius: 9999px; padding: 13px 26px;
+    }
+    .btn-primary:hover { background: hsl(121, 95%, 68%); transform: translateY(-1px); }
+    .btn-secondary {
+      border-radius: 9999px; padding: 13px 26px;
+      color: var(--fg);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.07); }
+    .btn-sm {
+      font-size: 0.875rem; font-weight: 500;
+      background: var(--primary); color: var(--primary-fg);
+      border-radius: 0.75rem; padding: 7px 18px;
+    }
+    .btn-sm:hover { background: hsl(121, 95%, 68%); }
+
+    /* âââ NAVBAR ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .navbar-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 16px 16px 0;
+      /* Above-hero: transparent; gains glass on scroll via JS */
+    }
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      max-width: 850px;
+      border-radius: 1.5rem;
+      padding: 10px 16px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 9px;
+      text-decoration: none; flex-shrink: 0;
+    }
+    .nav-logo-icon {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      background: linear-gradient(135deg, hsl(121, 95%, 60%) 0%, hsl(160, 80%, 50%) 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo-text {
+      font-size: 1rem; font-weight: 600; color: var(--fg); letter-spacing: -0.01em;
+    }
+    .nav-logo-text span { color: var(--primary); }
+    .nav-links { display: flex; align-items: center; gap: 2px; list-style: none; }
+    .nav-links a {
+      display: flex; align-items: center; gap: 3px;
+      padding: 6px 12px; font-size: 0.9375rem; color: rgba(241,237,230,0.85);
+      text-decoration: none; border-radius: 0.75rem; transition: background 0.15s;
+    }
+    .nav-links a:hover { background: rgba(255,255,255,0.07); }
+    .chevron { opacity: 0.55; flex-shrink: 0; }
+
+    /* Mobile nav */
+    .nav-hamburger {
+      display: none; background: none; border: none; cursor: pointer;
+      flex-direction: column; gap: 5px; padding: 6px;
+    }
+    .nav-hamburger span {
+      display: block; width: 22px; height: 2px; background: var(--fg);
+      border-radius: 2px; transition: all 0.25s ease;
+    }
+    .nav-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .nav-hamburger.open span:nth-child(2) { opacity: 0; }
+    .nav-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    .mobile-menu {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(6,2,18,0.97);
+      backdrop-filter: blur(16px);
+      z-index: 99; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a {
+      font-size: 1.5rem; font-weight: 500; color: var(--fg); text-decoration: none;
+      padding: 14px 32px; border-radius: 1rem; width: 100%; max-width: 300px; text-align: center;
+      transition: background 0.15s;
+    }
+    .mobile-menu a:hover { background: rgba(255,255,255,0.07); }
+    .mobile-menu .btn-primary { margin-top: 12px; font-size: 1rem; width: 100%; max-width: 300px; justify-content: center; }
+
+    /* âââ HERO ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .hero {
+      position: relative;
+      min-height: 100svh;
+      display: flex; flex-direction: column; align-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 0%,   hsl(260, 60%, 8%) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 100%,  hsl(200, 40%, 5%) 0%, transparent 60%),
+        var(--bg);
+    }
+    /* Navbar sits inside hero (sticky) */
+    .hero .navbar-wrap {
+      position: relative; /* revert sticky inside hero â sticky applied to outer .navbar-wrap */
+    }
+    .hero-video {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
+    }
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg,
+        rgba(5,1,14,0.50) 0%, rgba(5,1,14,0.20) 40%, rgba(5,1,14,0.65) 100%);
+      z-index: 1;
+    }
+    .hero-content {
+      position: relative; z-index: 2;
+      width: 100%; display: flex; flex-direction: column; align-items: center; flex: 1;
+    }
+    .hero-main {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 48px 16px 32px;
+      gap: 26px; max-width: 1100px; margin: 0 auto; width: 100%;
+    }
+
+    /* Badge */
+    .announce-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      border-radius: 9999px; padding: 6px 10px 6px 14px;
+      font-size: 0.875rem; color: var(--fg);
+    }
+    .announce-label { font-weight: 400; opacity: 0.9; }
+    .announce-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: rgba(255,255,255,0.06); border-radius: 9999px;
+      padding: 3px 10px; font-size: 0.8125rem; font-weight: 500;
+      color: var(--primary);
+    }
+
+    /* Heading */
+    .hero-eyebrow {
+      font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--primary); opacity: 0.9;
+    }
+    .hero-heading {
+      font-size: clamp(2rem, 5.5vw, 4.25rem);
+      font-weight: 600; letter-spacing: -0.025em; line-height: 1.05;
+      max-width: 900px; color: var(--hero-heading);
+    }
+    .hero-heading .line2 { display: block; color: var(--primary); }
+    .hero-sub {
+      font-size: clamp(1rem, 2vw, 1.125rem);
+      max-width: 34rem; opacity: 0.80; color: var(--hero-sub); line-height: 1.7;
+    }
+    .hero-ctas {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .cta-note {
+      font-size: 0.8rem; color: rgba(241,237,230,0.45);
+      margin-top: -8px;
+    }
+
+    /* Feature pills row */
+    .hero-pills {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 9999px; padding: 5px 14px;
+      font-size: 0.8125rem; color: rgba(241,237,230,0.80);
+    }
+    .pill-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--primary); flex-shrink: 0; }
+
+    /* âââ MARQUEE / TRUST BAR âââââââââââââââââââââââââââââââââââââââââââ */
+    .trust-bar {
+      width: 100%; padding: 0 0 28px;
+      display: flex; align-items: center; gap: 20px; overflow: hidden;
+    }
+    .trust-label {
+      flex-shrink: 0; font-size: 0.8125rem;
+      color: rgba(241,237,230,0.45); white-space: nowrap; padding-left: 28px;
+    }
+    .marquee-track {
+      flex: 1; overflow: hidden;
+      mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    }
+    .marquee-inner {
+      display: flex; align-items: center; gap: 10px;
+      width: max-content; animation: marquee-scroll 22s linear infinite;
+    }
+    @keyframes marquee-scroll { from { transform: translateX(0%); } to { transform: translateX(-50%); } }
+    .brand-item {
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    }
+    .brand-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--fg); flex-shrink: 0;
+    }
+    .brand-name {
+      font-size: 0.9375rem; font-weight: 600; color: var(--fg); opacity: 0.75; white-space: nowrap;
+    }
+    .brand-sep { width: 1px; height: 14px; background: rgba(255,255,255,0.10); margin: 0 6px; flex-shrink: 0; }
+
+    /* âââ SECTION SHARED ââââââââââââââââââââââââââââââââââââââââââââââââ */
+    section { padding: var(--section-gap) 0; }
+    .section-label {
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.13em;
+      text-transform: uppercase; color: var(--primary); margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(1.75rem, 3.5vw, 2.75rem);
+      font-weight: 600; letter-spacing: -0.02em; line-height: 1.15;
+      color: var(--hero-heading); margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 1.0625rem; color: var(--hero-sub); line-height: 1.70; max-width: 540px;
+    }
+
+    /* âââ FEATURES GRID âââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 52px;
+    }
+    .feature-card {
+      border-radius: 1.25rem; padding: 28px 26px 30px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: rgba(135,251,137,0.08);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .feature-title {
+      font-size: 1.0625rem; font-weight: 600; color: var(--hero-heading); line-height: 1.3;
+    }
+    .feature-body {
+      font-size: 0.9375rem; color: var(--hero-sub); line-height: 1.65;
+    }
+    .feature-tag {
+      display: inline-flex; align-items: center;
+      background: rgba(135,251,137,0.08); border-radius: 9999px;
+      padding: 3px 12px; font-size: 0.75rem; font-weight: 500;
+      color: var(--primary); margin-top: auto; width: fit-content;
+    }
+
+    /* âââ BETTY SECTION âââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .betty-wrap {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+    }
+    .betty-visual {
+      position: relative; border-radius: 1.5rem; overflow: hidden;
+      aspect-ratio: 4/5; max-height: 520px;
+    }
+    .betty-bg {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg,
+        hsl(260, 60%, 8%) 0%, hsl(220, 50%, 6%) 100%);
+    }
+    .betty-chat {
+      position: relative; z-index: 2;
+      display: flex; flex-direction: column; gap: 12px;
+      padding: 28px 22px; height: 100%; justify-content: flex-end;
+    }
+    .chat-bubble {
+      max-width: 85%; padding: 11px 15px; border-radius: 16px;
+      font-size: 0.875rem; line-height: 1.55; color: var(--fg);
+    }
+    .chat-bubble.betty {
+      background: rgba(135,251,137,0.10);
+      border-radius: 16px 16px 16px 4px;
+      border: 1px solid rgba(135,251,137,0.15);
+      align-self: flex-start;
+    }
+    .chat-bubble.user {
+      background: rgba(255,255,255,0.06);
+      border-radius: 16px 16px 4px 16px;
+      align-self: flex-end;
+    }
+    .chat-sender {
+      font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; margin-bottom: 4px;
+    }
+    .chat-sender.betty-name { color: var(--primary); }
+    .chat-time { font-size: 0.6875rem; color: rgba(241,237,230,0.35); margin-top: 4px; }
+    .betty-avatar {
+      width: 32px; height: 32px; border-radius: 9999px;
+      background: linear-gradient(135deg, var(--primary) 0%, hsl(160,70%,55%) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8125rem; font-weight: 700; color: var(--primary-fg); flex-shrink: 0;
+    }
+    .chat-row { display: flex; align-items: flex-end; gap: 8px; }
+    .betty-copy { display: flex; flex-direction: column; gap: 20px; }
+    .betty-stat-row {
+      display: flex; gap: 24px; flex-wrap: wrap; margin-top: 8px;
+    }
+    .betty-stat { display: flex; flex-direction: column; gap: 4px; }
+    .betty-stat-num {
+      font-size: 1.75rem; font-weight: 700; color: var(--primary); letter-spacing: -0.02em;
+    }
+    .betty-stat-label { font-size: 0.8125rem; color: var(--hero-sub); }
+
+    /* âââ HOW IT WORKS ââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .how-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0; margin-top: 52px; position: relative;
+    }
+    .how-connector {
+      position: absolute; top: 30px; left: calc(33.33% + 24px); right: calc(33.33% + 24px);
+      height: 1px; background: linear-gradient(to right, var(--border), var(--primary), var(--border));
+    }
+    .how-connector-2 {
+      position: absolute; top: 30px; left: calc(66.66% + 24px); right: 24px;
+      height: 1px; background: linear-gradient(to right, var(--border), var(--primary), var(--border));
+    }
+    .how-step { padding: 0 24px; display: flex; flex-direction: column; gap: 14px; }
+    .how-num {
+      width: 48px; height: 48px; border-radius: 9999px;
+      background: rgba(135,251,137,0.06);
+      border: 1px solid rgba(135,251,137,0.20);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 700; color: var(--primary);
+    }
+    .how-title { font-size: 1.0625rem; font-weight: 600; color: var(--hero-heading); }
+    .how-body { font-size: 0.9375rem; color: var(--hero-sub); line-height: 1.65; }
+
+    /* âââ TOPICS / PLATFORMS ââââââââââââââââââââââââââââââââââââââââââââ */
+    .topics-grid {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-top: 40px;
+    }
+    .topic-chip {
+      display: flex; align-items: center; gap: 8px;
+      border-radius: 12px; padding: 12px 18px;
+      font-size: 0.9375rem; font-weight: 500; color: var(--fg);
+      cursor: default;
+    }
+    .topic-chip .dot { width: 8px; height: 8px; border-radius: 9999px; }
+    .dot-red    { background: hsl(0,  80%, 65%); }
+    .dot-orange { background: hsl(30, 90%, 62%); }
+    .dot-yellow { background: hsl(50, 95%, 62%); }
+    .dot-blue   { background: hsl(210,80%, 65%); }
+    .dot-purple { background: hsl(270,70%, 72%); }
+    .dot-green  { background: var(--primary); }
+
+    .platforms-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 16px; margin-top: 52px;
+    }
+    .platform-card {
+      border-radius: 1.25rem; padding: 26px 24px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .platform-logo-row { display: flex; align-items: center; gap: 12px; }
+    .platform-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.875rem; font-weight: 700;
+    }
+    .platform-icon.x-icon { background: #000; color: #fff; border: 1px solid rgba(255,255,255,0.15); }
+    .platform-icon.poly-icon { background: hsl(215,80%,20%); color: hsl(215,90%,72%); }
+    .platform-icon.kalshi-icon { background: hsl(265,60%,18%); color: hsl(265,80%,75%); }
+    .platform-name { font-size: 1rem; font-weight: 600; color: var(--hero-heading); }
+    .platform-body { font-size: 0.9rem; color: var(--hero-sub); line-height: 1.60; }
+
+    /* âââ DIGEST PREVIEW ââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .digest-wrap {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center;
+    }
+    .digest-phone {
+      border-radius: 1.75rem; padding: 24px 20px;
+      display: flex; flex-direction: column; gap: 14px;
+      max-width: 320px; margin: 0 auto;
+      background: rgba(255,255,255,0.02);
+    }
+    .digest-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .digest-from { font-size: 0.75rem; font-weight: 600; color: var(--primary); }
+    .digest-time { font-size: 0.75rem; color: rgba(241,237,230,0.40); }
+    .digest-subject { font-size: 0.9375rem; font-weight: 600; color: var(--hero-heading); }
+    .digest-item {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .digest-item:last-child { border-bottom: none; }
+    .digest-num {
+      font-size: 0.75rem; font-weight: 700; color: var(--primary);
+      min-width: 18px; margin-top: 2px;
+    }
+    .digest-text { font-size: 0.8125rem; color: var(--hero-sub); line-height: 1.55; }
+    .digest-bet {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(135,251,137,0.08); border-radius: 6px;
+      padding: 2px 8px; font-size: 0.6875rem; font-weight: 600; color: var(--primary);
+      margin-top: 4px;
+    }
+    .digest-copy { display: flex; flex-direction: column; gap: 20px; }
+    .deliver-row {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px;
+    }
+    .deliver-chip {
+      display: flex; align-items: center; gap: 7px;
+      border-radius: 10px; padding: 8px 16px;
+      font-size: 0.875rem; color: var(--fg);
+    }
+
+    /* âââ PRICING / FINAL CTA âââââââââââââââââââââââââââââââââââââââââââ */
+    .cta-section {
+      text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 28px;
+    }
+    .cta-section .section-title { margin-bottom: 0; }
+    .cta-section .section-sub { text-align: center; max-width: 460px; }
+    .cta-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .free-note {
+      font-size: 0.8rem; color: rgba(241,237,230,0.40);
+    }
+
+    /* âââ FOOTER ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0 32px;
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between; gap: 24px;
+      flex-wrap: wrap;
+    }
+    .footer-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+    .footer-logo-text { font-size: 0.9375rem; font-weight: 600; color: var(--fg); }
+    .footer-logo-text span { color: var(--primary); }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a {
+      font-size: 0.875rem; color: rgba(241,237,230,0.50);
+      text-decoration: none; transition: color 0.15s;
+    }
+    .footer-links a:hover { color: var(--fg); }
+    .footer-copy {
+      font-size: 0.8125rem; color: rgba(241,237,230,0.35);
+    }
+
+    /* âââ DIVIDER âââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .divider {
+      width: 100%; height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      border: none;
+    }
+
+    /* âââ MOBILE RESPONSIVE âââââââââââââââââââââââââââââââââââââââââââââ */
+    @media (max-width: 768px) {
+      :root { --section-gap: 64px; }
+
+      /* Navbar */
+      .nav-links { display: none; }
+      .nav-desktop-cta { display: none; }
+      .nav-hamburger { display: flex; }
+
+      /* Hero */
+      .hero-heading { font-size: clamp(1.875rem, 7vw, 2.5rem); }
+      .hero-pills { gap: 6px; }
+      .pill { font-size: 0.75rem; padding: 4px 11px; }
+      .trust-label { display: none; }
+
+      /* Features */
+      .features-grid { grid-template-columns: 1fr; gap: 12px; }
+
+      /* Betty */
+      .betty-wrap { grid-template-columns: 1fr; gap: 40px; }
+      .betty-visual { max-height: 380px; order: -1; }
+      .betty-stat-row { gap: 20px; }
+
+      /* How it works */
+      .how-grid { grid-template-columns: 1fr; gap: 32px; }
+      .how-connector, .how-connector-2 { display: none; }
+      .how-step { padding: 0; }
+
+      /* Platforms */
+      .platforms-row { grid-template-columns: 1fr; gap: 12px; }
+
+      /* Digest */
+      .digest-wrap { grid-template-columns: 1fr; gap: 40px; }
+
+      /* Footer */
+      .footer-inner { flex-direction: column; align-items: flex-start; gap: 20px; }
+      .footer-links { flex-wrap: wrap; gap: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      .hero-ctas { flex-direction: column; width: 100%; }
+      .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+      .cta-buttons { flex-direction: column; width: 100%; }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .platforms-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* âââ SCROLL ANIMATIONS âââââââââââââââââââââââââââââââââââââââââââââ */
+    .fade-up {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.55s ease, transform 0.55s ease;
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .fade-up-delay-1 { transition-delay: 0.10s; }
+    .fade-up-delay-2 { transition-delay: 0.20s; }
+    .fade-up-delay-3 { transition-delay: 0.30s; }
+
+    /* âââ GLOW ACCENTS ââââââââââââââââââââââââââââââââââââââââââââââââââ */
+    .glow-dot {
+      position: absolute; border-radius: 9999px; pointer-events: none; z-index: 0;
+    }
+    .glow-dot-tl {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(135,251,137,0.04) 0%, transparent 70%);
+      top: -100px; left: -100px;
+    }
+    .glow-dot-br {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(100,150,255,0.04) 0%, transparent 70%);
+      bottom: -80px; right: -80px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     HERO SECTION
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<section class="hero">
+  <video class="hero-video" autoplay loop muted playsinline
+    src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260309_042944_4a2205b7-b061-490a-852b-92d9e9955ce9.mp4">
+  </video>
+  <div class="hero-overlay"></div>
+
+  <div class="hero-content">
+
+    <!-- Sticky Navbar -->
+    <div class="navbar-wrap" id="navbar-wrap">
+      <nav class="navbar liquid-glass">
+        <a href="#" class="nav-logo">
+          <div class="nav-logo-icon">
+            <!-- Brain/network icon -->
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="9" r="2.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.5"/>
+              <circle cx="9" cy="3" r="1.5" fill="rgba(5,10,5,0.9)"/>
+              <circle cx="15" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+              <circle cx="3" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+              <line x1="9" y1="4.5" x2="9" y2="6.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+              <line x1="14.1" y1="11.7" x2="11.1" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+              <line x1="3.9" y1="11.7" x2="6.9" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="nav-logo-text">WeBet<span>AI</span></span>
+        </a>
+
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li>
+            <a href="#how-it-works">How It Works
+              <svg class="chevron" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M3.25 5L6.5 8.25L9.75 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+          </li>
+          <li><a href="#betty">Meet Betty</a></li>
+          <li><a href="#digest">Digest</a></li>
+        </ul>
+
+        <a href="#signup" class="btn btn-sm nav-desktop-cta">Start Free</a>
+
+        <!-- Hamburger -->
+        <button class="nav-hamburger" id="hamburger" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu" id="mobile-menu" role="dialog" aria-label="Navigation">
+      <a href="#features"     onclick="closeMobileMenu()">Features</a>
+      <a href="#how-it-works" onclick="closeMobileMenu()">How It Works</a>
+      <a href="#betty"        onclick="closeMobileMenu()">Meet Betty</a>
+      <a href="#digest"       onclick="closeMobileMenu()">Today's Digest</a>
+      <a href="#signup" class="btn btn-primary" onclick="closeMobileMenu()">Start Free â No App Needed</a>
+    </div>
+
+    <!-- Hero Main -->
+    <div class="hero-main">
+
+      <!-- Announce badge -->
+      <div class="announce-badge liquid-glass fade-up">
+        <span class="announce-label">Powered by X Â· Polymarket Â· Kalshi</span>
+        <span class="announce-chip">
+          Unbiased Data
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </div>
+
+      <!-- Eyebrow -->
+      <p class="hero-eyebrow fade-up fade-up-delay-1">Social Intelligence Agent</p>
+
+      <!-- Headline -->
+      <h1 class="hero-heading fade-up fade-up-delay-1">
+        We Curate Social Media
+        <span class="line2">So You Don't Have To</span>
+      </h1>
+
+      <!-- Sub -->
+      <p class="hero-sub fade-up fade-up-delay-2">
+        A trending topics daily digest delivered straight to your texts â so you can
+        create conversations with friends worth having.
+      </p>
+
+      <!-- Pills -->
+      <div class="hero-pills fade-up fade-up-delay-2">
+        <div class="pill liquid-glass"><span class="pill-dot"></span>Daily 5 PM EST Digest</div>
+        <div class="pill liquid-glass"><span class="pill-dot"></span>No App Required</div>
+        <div class="pill liquid-glass"><span class="pill-dot"></span>Micro Bets With Friends</div>
+        <div class="pill liquid-glass"><span class="pill-dot"></span>Free Test Coins</div>
+      </div>
+
+      <!-- CTAs -->
+      <div class="hero-ctas fade-up fade-up-delay-3">
+        <a href="#signup"  class="btn btn-primary">Sign Up for Your Daily Digest</a>
+        <a href="sms:+1BETTYNUM" class="btn btn-secondary liquid-glass">Text Betty Now to Place a Bet</a>
+      </div>
+      <p class="cta-note fade-up fade-up-delay-3">Free to start Â· No credit card Â· Cancel anytime</p>
+
+    </div>
+
+    <!-- Trust / Brand marquee -->
+    <div class="trust-bar">
+      <span class="trust-label">Verified data from</span>
+      <div class="marquee-track">
+        <div class="marquee-inner" id="marquee"></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     FEATURES
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<section id="features">
+  <div class="container" style="position:relative;">
+    <div class="glow-dot glow-dot-tl"></div>
+    <div class="section-label fade-up">Why WeBetAI</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:end; margin-bottom:0;">
+      <h2 class="section-title fade-up" style="margin-bottom:0;">
+        Intelligence That Pays Off
+      </h2>
+      <p class="section-sub fade-up" style="margin-bottom:0;">
+        Built on fully vetted data sources with content validated by price, WeBetAI gives you
+        the peace of mind that the information you consume daily is authentic, disinformationâfree,
+        and full of dependable decision intelligence.
+      </p>
+    </div>
+
+    <div class="features-grid">
+
+      <div class="feature-card liquid-glass fade-up">
+        <div class="feature-icon">
+          <!-- Trending icon -->
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M3 15l5-5 4 4 7-7" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 7h5v5" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-title">Price-Validated Trending Topics</div>
+        <div class="feature-body">
+          Betty scans X's top trends â across news, politics, crypto, sports, and entertainment â
+          and cross-references them with live prediction markets for unbiased, high-engagement insights.
+        </div>
+        <span class="feature-tag">Real-time Â· 5 categories</span>
+      </div>
+
+      <div class="feature-card liquid-glass fade-up fade-up-delay-1">
+        <div class="feature-icon">
+          <!-- Chat/SMS icon -->
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M3 5a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H7l-4 4V5z" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 9h6M8 12h3" stroke="var(--primary)" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-title">Betty in Your Group Chats</div>
+        <div class="feature-body">
+          Invite Betty to any text thread. She participates naturally, recommends friendly
+          handshake micro bets to settle trending-topic debates, and even talks back when
+          you need a second opinion.
+        </div>
+        <span class="feature-tag">Text or Talk to Betty</span>
+      </div>
+
+      <div class="feature-card liquid-glass fade-up fade-up-delay-2">
+        <div class="feature-icon">
+          <!-- Shield/trust icon -->
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M11 2l7 3v5c0 4.5-3 8-7 9C4 18 1 14.5 1 10V5l10-3z" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7.5 11l2.5 2.5 4.5-4.5" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-title">Free From Disinformation</div>
+        <div class="feature-body">
+          Every piece of content is validated by real money in prediction markets â
+          the most honest signal on the internet. No clickbait, no bias,
+          no distraction. Just dependable data-driven decision intelligence.
+        </div>
+        <span class="feature-tag">Polymarket + Kalshi validated</span>
+      </div>
+
+      <div class="feature-card liquid-glass fade-up">
+        <div class="feature-icon">
+          <!-- Coins icon -->
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="9" cy="11" r="7" stroke="var(--primary)" stroke-width="1.8"/>
+            <circle cx="14" cy="8" r="4" fill="hsl(260,87%,3%)" stroke="var(--primary)" stroke-width="1.8"/>
+            <path d="M14 6v4" stroke="var(--primary)" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-title">Micro Bets on Any Topic</div>
+        <div class="feature-body">
+          Directly challenge friends on news, sports, or entertainment outcomes.
+          Put your money where your mouth is â or start with free test coins
+          to get the feel of social prediction markets before going live.
+        </div>
+        <span class="feature-tag">Free test coins to start</span>
+      </div>
+
+      <div class="feature-card liquid-glass fade-up fade-up-delay-1">
+        <div class="feature-icon">
+          <!-- Delivery icon -->
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="2" y="5" width="18" height="13" rx="2" stroke="var(--primary)" stroke-width="1.8"/>
+            <path d="M2 9l9 6 9-6" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="feature-title">Delivered Your Way</div>
+        <div class="feature-body">
+          Get your 5 PM EST digest via text, email, or X DM â
+          complete with embedded posts, graphics, and bet suggestions.
+          Zero apps to download, zero feeds to doom-scroll.
+        </div>
+        <span class="feature-tag">Text Â· Email Â· X DM</span>
+      </div>
+
+      <div class="feature-card liquid-glass fade-up fade-up-delay-2">
+        <div class="feature-icon">
+          <!-- Star/quality icon -->
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M11 2l2.5 6H20l-5.5 4 2 6.5L11 15l-5.5 3.5 2-6.5L2 8h6.5L11 2z" stroke="var(--primary)" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-title">Best-in-Class Authentic Data</div>
+        <div class="feature-body">
+          Only fully vetted sources make the cut. WeBetAI is built on the principle
+          that great decisions come from great information â consumed daily,
+          effortlessly, directly in your pocket.
+        </div>
+        <span class="feature-tag">Curated Â· Authentic Â· Daily</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     BETTY SECTION
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->div class="chat-bubble user">
+              Yeah, I'm backing Mahomes. Set it up with Jake for $5.
+            </div>
+            <div class="chat-time" style="text-align:right;">5:02 PM</div>
+          </div>
+
+          <div class="chat-row">
+            <div class="betty-avatar">B</div>
+            <div>
+              <div class="chat-sender betty-name">Betty Â· WeBetAI</div>
+              <div class="chat-bubble betty">
+                Done! ð Bet created: <strong>Mahomes MVP vs. Lamar MVP â $5</strong>.
+                I've texted Jake the challenge link. You've got 72% of X sentiment on your side.
+                Good luck! ð
+              </div>
+              <div class="chat-time">5:02 PM</div>
+            </div>
+          </div>
+
+          <div style="align-self:flex-end; text-align:right;">
+            <div class="chat-bubble user">
+              Wait, what about the crypto angle?
+            </div>
+            <div class="chat-time" style="text-align:right;">5:03 PM</div>
+          </div>
+
+          <div class="chat-row">
+            <div class="betty-avatar">B</div>
+            <div>
+              <div class="chat-sender betty-name">Betty Â· WeBetAI</div>
+              <div class="chat-bubble betty">
+                Great catch. BTC ETF approval is trending top-5 on X right now.
+                Kalshi has it at 78% by year-end. I can add that to your digest â want the full breakdown?
+              </div>
+              <div class="chat-time">5:03 PM</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Copy -->
+      <div class="betty-copy fade-up fade-up-delay-1">
+        <p class="section-label">Meet Betty</p>
+        <h2 class="section-title">
+          Your AI Companion Who Makes Every Conversation Count
+        </h2>
+        <p class="section-sub">
+          Betty participates in every text thread she's invited to â recommending friendly
+          handshake micro bets to settle trending topic debates. Text or even talk to Betty
+          to directly challenge friends on any topic: news, sports, entertainment.
+        </p>
+        <div class="betty-stat-row">
+          <div class="betty-stat">
+            <span class="betty-stat-num">5</span>
+            <span class="betty-stat-label">Topic Categories Tracked</span>
+          </div>
+          <div class="betty-stat">
+            <span class="betty-stat-num">5 PM</span>
+            <span class="betty-stat-label">Daily Digest Delivery</span>
+          </div>
+          <div class="betty-stat">
+            <span class="betty-stat-num">2</span>
+            <span class="betty-stat-label">Live Prediction Markets</span>
+          </div>
+        </div>
+        <div class="hero-ctas" style="justify-content:flex-start; margin-top:8px;">
+          <a href="sms:+1BETTYNUM" class="btn btn-primary">Text Betty Now</a>
+          <a href="#how-it-works" class="btn btn-secondary liquid-glass">See How It Works</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     HOW IT WORKS
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<section id="how-it-works">
+  <div class="container" style="text-align:center;">
+    <p class="section-label fade-up">Simple by Design</p>
+    <h2 class="section-title fade-up" style="margin:0 auto 12px;">
+      From Trend to Text in Three Steps
+    </h2>
+    <p class="section-sub fade-up" style="margin:0 auto;">
+      No app to download, no feed to configure. WeBetAI does the heavy lifting so
+      you can focus on the conversation.
+    </p>
+
+    <div class="how-grid">
+      <div class="how-connector"></div>
+      <div class="how-connector-2"></div>
+
+      <div class="how-step fade-up">
+        <div class="how-num">1</div>
+        <div class="how-title">Betty Scans the Web</div>
+        <div class="how-body">
+          Every day Betty cross-references X's top trends â overall and by category â
+          with live Polymarket and Kalshi prediction markets to surface only the
+          highest-signal, most bet-worthy topics.
+        </div>
+      </div>
+
+      <div class="how-step fade-up fade-up-delay-1">
+        <div class="how-num">2</div>
+        <div class="how-title">You Get the Digest at 5 PM</div>
+        <div class="how-body">
+          Your curated daily digest arrives at 5 PM EST via text, email, or X DM â
+          complete with embedded posts, graphics, market probabilities,
+          and ready-to-share bet suggestions.
+        </div>
+      </div>
+
+      <div class="how-step fade-up fade-up-delay-2">
+        <div class="how-num">3</div>
+        <div class="how-title">Bet With Friends, Win the Argument</div>
+        <div class="how-body">
+          Invite Betty to your group chat. She'll recommend micro bets based on the
+          day's topics. Text or talk to her to challenge friends instantly â
+          free test coins included to get you started.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     TOPICS + PLATFORMS
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<section id="topics">
+  <div class="container">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:start;">
+
+      <!-- Topics -->
+      <div>
+        <p class="section-label fade-up">Coverage</p>
+        <h2 class="section-title fade-up">Five Categories,<br>One Digest</h2>
+        <p class="section-sub fade-up">
+          Betty tracks X trends across all five major conversation categories
+          every single day â so nothing slips through the cracks.
+        </p>
+        <div class="topics-grid fade-up">
+          <div class="topic-chip liquid-glass"><span class="dot dot-red"></span>Breaking News</div>
+          <div class="topic-chip liquid-glass"><span class="dot dot-orange"></span>Politics</div>
+          <div class="topic-chip liquid-glass"><span class="dot dot-yellow"></span>Crypto &amp; Finance</div>
+          <div class="topic-chip liquid-glass"><span class="dot dot-blue"></span>Sports</div>
+          <div class="topic-chip liquid-glass"><span class="dot dot-purple"></span>Entertainment</div>
+          <div class="topic-chip liquid-glass"><span class="dot dot-green"></span>Your Custom Mix</div>
+        </div>
+      </div>
+
+      <!-- Platforms -->
+      <div>
+        <p class="section-label fade-up">Data Sources</p>
+        <h2 class="section-title fade-up">Validated by Real Money</h2>
+        <p class="section-sub fade-up">
+          We don't guess what's important â we follow the money. Every trend
+          is cross-referenced with live prediction markets before it hits your digest.
+        </p>
+        <div class="platforms-row" style="margin-top:28px; grid-template-columns:1fr;">
+          <div class="platform-card liquid-glass fade-up" style="border-radius:1rem; padding:18px 20px;">
+            <div class="platform-logo-row">
+              <div class="platform-icon x-icon">ð</div>
+              <div class="platform-name">X (Twitter)</div>
+            </div>
+            <div class="platform-body">Top-trending topics overall and by category â the pulse of real-time conversation.</div>
+          </div>
+          <div class="platform-card liquid-glass fade-up fade-up-delay-1" style="border-radius:1rem; padding:18px 20px;">
+            <div class="platform-logo-row">
+              <div class="platform-icon poly-icon">PM</div>
+              <div class="platform-name">Polymarket</div>
+            </div>
+            <div class="platform-body">Decentralized prediction markets providing crowd-sourced, unbiased probability signals.</div>
+          </div>
+          <div class="platform-card liquid-glass fade-up fade-up-delay-2" style="border-radius:1rem; padding:18px 20px;">
+            <div class="platform-logo-row">
+              <div class="platform-icon kalshi-icon">KA</div>
+              <div class="platform-name">Kalshi</div>
+            </div>
+            <div class="platform-body">CFTC-regulated event contracts â the most legally compliant signal in the game.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     DIGEST PREVIEW
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<section id="digest">
+  <div class="container">
+    <div class="digest-wrap">
+
+      <!-- Phone mockup -->
+      <div class="digest-phone liquid-glass fade-up">
+        <div class="digest-header">
+          <span class="digest-from">Betty Â· WeBetAI</span>
+          <span class="digest-time">5:00 PM EST</span>
+        </div>
+        <div class="digest-subject">ð Your Daily Intelligence Digest â March 15</div>
+
+        <div class="digest-item">
+          <span class="digest-num">#1</span>
+          <div>
+            <div class="digest-text">
+              <strong style="color:var(--hero-heading);">Mahomes vs. Lamar MVP</strong><br>
+              72% of X sentiment backs Lamar. Polymarket: 62% Lamar. Classic water-cooler argument.
+            </div>
+            <span class="digest-bet">ð° Bet suggestion: $5 â Lamar wins MVP</span>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <span class="digest-num">#2</span>
+          <div>
+            <div class="digest-text">
+              <strong style="color:var(--hero-heading);">BTC ETF Expansion</strong><br>
+              Top trending in crypto. Kalshi: 78% approval by year-end. Market action heating up.
+            </div>
+            <span class="digest-bet">ð° Bet suggestion: $10 â Approved by Dec</span>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <span class="digest-num">#3</span>
+          <div>
+            <div class="digest-text">
+              <strong style="color:var(--hero-heading);">Oscars Best Picture</strong><br>
+              X exploding with predictions. Polymarket has Conclave at 44% â big upset potential.
+            </div>
+            <span class="digest-bet">ð° Bet suggestion: $3 â Conclave upsets</span>
+          </div>
+        </div>
+
+        <div style="text-align:center; padding-top:4px;">
+          <span style="font-size:0.75rem; color:rgba(241,237,230,0.35);">+ 2 more topics in full digest</span>
+        </div>
+      </div>
+
+      <!-- Copy -->
+      <div class="digest-copy fade-up fade-up-delay-1">
+        <p class="section-label">Daily Digest</p>
+        <h2 class="section-title">Your 5 PM EST Intelligence Drop</h2>
+        <p class="section-sub">
+          Every day at 5 PM EST, Betty compiles the top 5 trending topics â with embedded posts,
+          graphics, market probabilities, and ready-to-place bet suggestions â and sends it
+          directly to you. No app. No feed. Just signal.
+        </p>
+
+        <p class="section-sub" style="margin-top:8px; font-size:0.9375rem;">
+          Choose how you receive it:
+        </p>
+        <div class="deliver-row">
+          <div class="deliver-chip liquid-glass">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M1.5 3.5a1 1 0 011-1h10a1 1 0 011 1v8a1 1 0 01-1 1h-10a1 1 0 01-1-1v-8z" stroke="var(--primary)" stroke-width="1.3"/>
+              <path d="M1.5 5l6 4 6-4" stroke="var(--primary)" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+            Text Message
+          </div>
+          <div class="deliver-chip liquid-glass">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <rect x="1.5" y="3" width="12" height="9" rx="1.5" stroke="var(--primary)" stroke-width="1.3"/>
+              <path d="M1.5 5.5l6 3.5 6-3.5" stroke="var(--primary)" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+            Email
+          </div>
+          <div class="deliver-chip liquid-glass">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M13 2L2.5 7.5 7 8.5l2 5L13 2z" stroke="var(--primary)" stroke-width="1.3" stroke-linejoin="round"/>
+            </svg>
+            X DM
+          </div>
+        </div>
+
+        <div style="margin-top:20px;">
+          <a href="#signup" class="btn btn-primary">Get My First Digest Free</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     FINAL CTA
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<section id="signup" style="padding: var(--section-gap) 0;">
+  <div class="container">
+    <div class="cta-section">
+      <!-- Glow -->
+      <div style="position:relative; width:100%; display:flex; justify-content:center;">
+        <div style="position:absolute; width:600px; height:300px; border-radius:9999px;
+          background: radial-gradient(ellipse, rgba(135,251,137,0.05) 0%, transparent 70%);
+          top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none;"></div>
+      </div>
+
+      <p class="section-label fade-up">Get Started</p>
+      <h2 class="section-title fade-up" style="max-width:680px; margin-bottom:0; text-align:center;">
+        Start Winning Conversations Today
+      </h2>
+      <p class="section-sub fade-up" style="text-align:center;">
+        Sign up for your free daily social intelligence digest. No app, no feed, no fluff.
+        Just Betty, trends, and friendly bets delivered to your phone every day at 5 PM.
+      </p>
+
+      <div class="cta-buttons fade-up">
+        <a href="#signup" class="btn btn-primary" style="font-size:1.0625rem; padding:15px 32px;">
+          Sign Up for Your Daily Digest
+        </a>
+        <a href="sms:+1BETTYNUM" class="btn btn-secondary liquid-glass" style="font-size:1.0625rem; padding:15px 32px;">
+          Text Betty Now to Place a Bet
+        </a>
+      </div>
+      <p class="free-note fade-up">Free test coins included Â· No credit card Â· Works via text</p>
+    </div>
+  </div>
+</section>
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     FOOTER
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <a href="#" class="footer-logo">
+        <div class="nav-logo-icon" style="width:28px;height:28px;">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="2.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.5"/>
+            <circle cx="9" cy="3" r="1.5" fill="rgba(5,10,5,0.9)"/>
+            <circle cx="15" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+            <circle cx="3" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+            <line x1="9" y1="4.5" x2="9" y2="6.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="14.1" y1="11.7" x2="11.1" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="3.9" y1="11.7" x2="6.9" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="footer-logo-text">WeBet<span>AI</span></span>
+      </a>
+
+      <div class="footer-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#betty">Meet Betty</a>
+        <a href="#digest">Digest</a>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+      </div>
+
+      <p class="footer-copy">Â© 2026 WeBetAI Inc. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<!-- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+     SCRIPTS
+âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ -->
+<script>
+  /* ââ Marquee brands âââââââââââââââââââââââââââââââ */
+  const brands = [
+    { name: 'X (Twitter)',  letter: 'ð' },
+    { name: 'Polymarket',   letter: 'PM' },
+    { name: 'Kalshi',       letter: 'KA' },
+    { name: 'Breaking News',letter: 'ð°' },
+    { name: 'Sports',       letter: 'ð' },
+    { name: 'Crypto',       letter: 'â¿'  },
+    { name: 'Entertainment',letter: 'ð¬' },
+    { name: 'Politics',     letter: 'ð'  },
+  ];
+  const allBrands = [...brands, ...brands];
+  const marqueeEl = document.getElementById('marquee');
+  marqueeEl.innerHTML = allBrands.map(b => `
+    <div class="brand-item">
+      <div class="brand-icon liquid-glass">${b.letter}</div>
+      <span class="brand-name">${b.name}</span>
+    </div>
+    <div class="brand-sep"></div>
+  `).join('');
+
+  /* ââ Mobile hamburger âââââââââââââââââââââââââââââ */
+  const hamburger   = document.getElementById('hamburger');
+  const mobileMenu  = document.getElementById('mobile-menu');
+  hamburger.addEventListener('click', () => {
+    const open = mobileMenu.classList.toggle('open');
+    hamburger.classList.toggle('open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+  function closeMobileMenu() {
+    mobileMenu.classList.remove('open');
+    hamburger.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  /* ââ Intersection Observer (fade-up) ââââââââââââââ */
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+  /* ââ Kickstart hero fade-ups (already in view) ââââ */
+  document.querySelectorAll('.hero .fade-up').forEach(el => {
+    setTimeout(() => el.classList.add('visible'), 100);
+  });
+
+  /* ââ Navbar glass on scroll âââââââââââââââââââââââ */
+  const navbarWrap = document.getElementById('navbar-wrap');
+  window.addEventListener('scroll', () => {
+    const scrolled = window.scrollY > 40;
+    navbarWrap.style.paddingTop = scrolled ? '10px' : '16px';
+  }, { passive: true });
+</script>
+
+</body>
+</html>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { XLoginButton } from "@/components/XLoginButton";
+import { XLoginButton, useXAuth } from "@/components/XLoginButton";
 import { ConversationWindow, type Message } from "@/components/ConversationWindow";
 import { ChatInput } from "@/components/ChatInput";
 import { VoiceToggle, speakText } from "@/components/VoiceToggle";
@@ -10,36 +9,68 @@ import { SendToClaudeButton } from "@/components/SendToClaudeButton";
 import { OnboardingSection } from "@/components/OnboardingSection";
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { user, isLoggedIn } = useXAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [grokApiKey, setGrokApiKey] = useState<string>();
-  const [grokConfigured, setGrokConfigured] = useState(false);
-  const [anthropicConfigured, setAnthropicConfigured] = useState(false);
+  const [grokApiKey, setGrokApiKey] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("grok_api_key") || "";
+    }
+    return "";
+  });
+  const [grokConfigured, setGrokConfigured] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("grok_api_key");
+    }
+    return false;
+  });
+  const [anthropicConfigured, setAnthropicConfigured] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("anthropic_api_key");
+    }
+    return false;
+  });
 
   const sendMessage = useCallback(
     async (content: string) => {
+      if (!grokApiKey) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content, timestamp: Date.now() },
+          {
+            role: "assistant",
+            content: "Please configure your Grok API key in the setup section below first.",
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
+
       const userMessage: Message = { role: "user", content, timestamp: Date.now() };
       const newMessages = [...messages, userMessage];
       setMessages(newMessages);
       setIsStreaming(true);
 
       try {
-        const response = await fetch("/api/chat", {
+        const response = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${grokApiKey}`,
+          },
           body: JSON.stringify({
+            model: "grok-3",
             messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-            apiKey: grokApiKey,
+            stream: true,
           }),
         });
 
         if (!response.ok) {
-          const err = await response.json();
+          const err = await response.text();
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", content: `Error: ${err.error}`, timestamp: Date.now() },
+            { role: "assistant", content: `Error: ${err}`, timestamp: Date.now() },
           ]);
           setIsStreaming(false);
           return;
@@ -89,11 +120,10 @@ export default function Home() {
           }
         }
 
-        // TTS playback if voice is active
         if (isVoiceActive && assistantContent) {
           await speakText(assistantContent);
         }
-      } catch (error) {
+      } catch {
         setMessages((prev) => [
           ...prev,
           {
@@ -120,15 +150,18 @@ export default function Home() {
     if (grok) {
       setGrokApiKey(grok);
       setGrokConfigured(true);
+      localStorage.setItem("grok_api_key", grok);
     }
-    if (anthropic) setAnthropicConfigured(true);
+    if (anthropic) {
+      setAnthropicConfigured(true);
+      localStorage.setItem("anthropic_api_key", anthropic);
+    }
   };
 
   return (
     <main className="min-h-screen">
       {/* ─── Above the Fold ─── */}
       <section className="flex min-h-screen flex-col px-4 py-6">
-        {/* Header */}
         <header className="mx-auto flex w-full max-w-3xl items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold">
@@ -140,9 +173,7 @@ export default function Home() {
           <XLoginButton />
         </header>
 
-        {/* Main widget area */}
         <div className="mx-auto mt-8 flex w-full max-w-3xl flex-1 flex-col gap-4">
-          {/* Controls row */}
           <div className="flex items-center gap-3">
             <VoiceToggle
               isActive={isVoiceActive}
@@ -153,20 +184,18 @@ export default function Home() {
             <SendToClaudeButton messages={messages} disabled={isStreaming} />
           </div>
 
-          {/* Conversation */}
           <ConversationWindow
             messages={messages}
             isStreaming={isStreaming}
             isVoiceActive={isVoiceActive}
           />
 
-          {/* Chat input */}
           <ChatInput onSend={sendMessage} disabled={isStreaming} />
         </div>
       </section>
 
-      {/* ─── Below the Fold ─── */}
-      {session && (
+      {/* ─── Below the Fold (post-login) ─── */}
+      {isLoggedIn && (
         <div className="border-t border-[var(--border)] bg-[var(--background)] px-4 pb-16">
           <OnboardingSection
             onKeysSubmit={handleKeysSubmit}

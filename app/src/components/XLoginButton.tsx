@@ -1,37 +1,90 @@
 "use client";
 
-import { signIn, signOut, useSession } from "next-auth/react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
+
+interface XUser {
+  name: string;
+  username: string;
+  image?: string;
+}
+
+interface XAuthContextValue {
+  user: XUser | null;
+  isLoggedIn: boolean;
+  login: () => void;
+  logout: () => void;
+}
+
+const XAuthContext = createContext<XAuthContextValue>({
+  user: null,
+  isLoggedIn: false,
+  login: () => {},
+  logout: () => {},
+});
+
+export function useXAuth() {
+  return useContext(XAuthContext);
+}
+
+export function XAuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<XUser | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("x_user");
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem("x_user");
+      }
+    }
+  }, []);
+
+  const login = useCallback(() => {
+    // In production, this triggers X OAuth 2.0 PKCE flow
+    // For static deployment, prompt for X username to demonstrate the UI
+    const username = prompt("Enter your X username (without @):");
+    if (!username) return;
+    const newUser: XUser = {
+      name: username,
+      username: username,
+      image: `https://unavatar.io/x/${username}`,
+    };
+    setUser(newUser);
+    localStorage.setItem("x_user", JSON.stringify(newUser));
+  }, []);
+
+  const logout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem("x_user");
+  }, []);
+
+  return (
+    <XAuthContext.Provider value={{ user, isLoggedIn: !!user, login, logout }}>
+      {children}
+    </XAuthContext.Provider>
+  );
+}
 
 export function XLoginButton() {
-  const { data: session, status } = useSession();
+  const { user, isLoggedIn, login, logout } = useXAuth();
 
-  if (status === "loading") {
-    return (
-      <button
-        disabled
-        className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black opacity-50"
-      >
-        <XLogo />
-        Loading...
-      </button>
-    );
-  }
-
-  if (session) {
+  if (isLoggedIn && user) {
     return (
       <div className="flex items-center gap-3">
-        {session.user?.image && (
+        {user.image && (
           <img
-            src={session.user.image}
+            src={user.image}
             alt=""
             className="h-9 w-9 rounded-full"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
           />
         )}
-        <span className="text-sm text-[var(--foreground)]">
-          @{session.user?.name}
-        </span>
+        <span className="text-sm text-[var(--foreground)]">@{user.username}</span>
         <button
-          onClick={() => signOut()}
+          onClick={logout}
           className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm text-[var(--muted)] transition-colors hover:border-[var(--danger)] hover:text-[var(--danger)]"
         >
           Sign out
@@ -42,7 +95,7 @@ export function XLoginButton() {
 
   return (
     <button
-      onClick={() => signIn("twitter")}
+      onClick={login}
       className="flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition-opacity hover:opacity-90"
     >
       <XLogo />

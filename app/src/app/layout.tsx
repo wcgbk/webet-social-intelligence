@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SessionProvider } from "@/components/SessionProvider";
+import { XAuthProvider } from "@/components/XLoginButton";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
-        <SessionProvider>{children}</SessionProvider>
+        <XAuthProvider>{children}</XAuthProvider>
       </body>
     </html>
   );

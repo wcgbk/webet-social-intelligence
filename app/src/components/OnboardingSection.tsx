@@ -19,21 +19,10 @@ export function OnboardingSection({
   const [avatar, setAvatar] = useState<string>();
   const [saving, setSaving] = useState(false);
 
-  const handleSaveKeys = async () => {
+  const handleSaveKeys = () => {
     setSaving(true);
-    try {
-      await fetch("/api/keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          grokApiKey: grokKey || undefined,
-          anthropicApiKey: anthropicKey || undefined,
-        }),
-      });
-      onKeysSubmit(grokKey, anthropicKey);
-    } finally {
-      setSaving(false);
-    }
+    onKeysSubmit(grokKey, anthropicKey);
+    setSaving(false);
   };
 
   const steps = [

@@ -125,8 +125,11 @@ body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1A1A1A; }
 
 <script>
 // ─── State ───────────────────────────────────────────────────────────
+// Allow ?demo=1 to bypass auth
+const _urlParams = new URLSearchParams(window.location.search);
+const _demoMode = _urlParams.get('demo') === '1';
 const APP = {
-  token: localStorage.getItem('admin_token'),
+  token: _demoMode ? 'demo' : localStorage.getItem('admin_token'),
   userEmail: localStorage.getItem('admin_email') || 'ben@worldclassgrowth.com',
   currentPage: 'feed',
   feedItems: [],

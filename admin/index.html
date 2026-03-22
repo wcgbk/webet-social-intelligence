@@ -225,9 +225,10 @@ function logout() {
 
 // ─── Router ──────────────────────────────────────────────────────────
 function router() {
-  const hash = location.hash.slice(1) || (APP.token ? 'feed' : 'login');
-  if (!APP.token && hash !== 'login') { location.hash = '#login'; return; }
-  if (APP.token && hash === 'login') { location.hash = '#feed'; return; }
+  // Auth disabled — always treat as logged in
+  if (!APP.token) APP.token = 'open';
+  const hash = location.hash.slice(1) || 'feed';
+  if (hash === 'login') { location.hash = '#feed'; return; }
   APP.currentPage = hash;
   renderPage(hash);
 }

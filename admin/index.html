@@ -127,7 +127,7 @@ body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1A1A1A; }
 // ─── State ───────────────────────────────────────────────────────────
 const APP = {
   token: localStorage.getItem('admin_token'),
-  userEmail: localStorage.getItem('admin_email') || 'ben@webetsocial.com',
+  userEmail: localStorage.getItem('admin_email') || 'ben@worldclassgrowth.com',
   currentPage: 'feed',
   feedItems: [],
   feedCategory: 'trending',
@@ -202,7 +202,7 @@ async function api(path, options = {}) {
 // ─── Auth ────────────────────────────────────────────────────────────
 async function handleLogin(email, password) {
   try {
-    const data = await api('/api/admin/auth', { method: 'POST', body: JSON.stringify({ email, password }) });
+    const data = await api('/api/admin-auth', { method: 'POST', body: JSON.stringify({ email, password }) });
     APP.token = data.token;
     APP.userEmail = email;
     localStorage.setItem('admin_token', data.token);
@@ -581,7 +581,7 @@ async function loadFeed() {
   APP.feedLoading = true;
   updateFeedList();
   try {
-    const data = await api(`/api/admin/feed?category=${APP.feedCategory}&limit=5`);
+    const data = await api(`/api/admin-feed?category=${APP.feedCategory}&limit=5`);
     APP.feedItems = (data.items || []).map((item, i) => ({ ...item, isNew: i < 2 }));
     APP.lastRefreshed = new Date();
   } catch (e) {
@@ -605,7 +605,7 @@ function publishAction(idx, target) {
   const labels = { x: 'X', truth: 'Truth Social', both: 'X and Truth Social' };
   showModal('Confirm Publish', `Are you sure you want to post this to ${labels[target]}?`, async () => {
     try {
-      await api('/api/admin/publish', { method: 'POST', body: { id: APP.feedItems[idx]?.id, target, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
+      await api('/api/admin-publish', { method: 'POST', body: { id: APP.feedItems[idx]?.id, target, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
       showToast(`Posted to ${labels[target]} successfully!`, 'success');
       APP.feedItems[idx].status = target === 'both' ? 'posted_both' : `posted_${target}`;
       updateFeedList();
@@ -639,7 +639,7 @@ function scheduleAction(idx) {
     if (!dt) { showToast('Please select a date and time', 'error'); return; }
     closeModal();
     try {
-      await api('/api/admin/schedule', { method: 'POST', body: { id: APP.feedItems[idx]?.id, scheduled_at: dt, platform, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
+      await api('/api/admin-queue', { method: 'POST', body: { id: APP.feedItems[idx]?.id, scheduled_at: dt, platform, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
       showToast('Post scheduled successfully!', 'success');
       APP.feedItems[idx].status = 'scheduled';
       updateFeedList();
@@ -650,7 +650,7 @@ function scheduleAction(idx) {
 function queueAction(idx) {
   showModal('Add to Queue', 'This post will be added to the publishing queue for review.', async () => {
     try {
-      await api('/api/admin/queue', { method: 'POST', body: { id: APP.feedItems[idx]?.id, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
+      await api('/api/admin-queue', { method: 'POST', body: { id: APP.feedItems[idx]?.id, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
       showToast('Added to queue!', 'success');
       APP.feedItems[idx].status = 'queued';
       updateFeedList();
@@ -661,7 +661,7 @@ function queueAction(idx) {
 function dismissAction(idx) {
   showModal('Dismiss Post', 'This post will be dismissed and removed from the feed.', async () => {
     try {
-      await api('/api/admin/dismiss', { method: 'POST', body: { id: APP.feedItems[idx]?.id } });
+      await api('/api/admin-queue', { method: 'POST', body: { id: APP.feedItems[idx]?.id } });
       APP.feedItems.splice(idx, 1);
       showToast('Post dismissed', 'info');
       updateFeedList();
@@ -672,7 +672,7 @@ function dismissAction(idx) {
 async function regenerateAction(idx) {
   try {
     showToast('Regenerating post...', 'info');
-    const data = await api('/api/admin/regenerate', { method: 'POST', body: { id: APP.feedItems[idx]?.id } });
+    const data = await api('/api/admin-compose-post', { method: 'POST', body: { id: APP.feedItems[idx]?.id } });
     if (data.x_text) APP.feedItems[idx].x_text = data.x_text;
     if (data.truth_text) APP.feedItems[idx].truth_text = data.truth_text;
     updateFeedList();
@@ -787,7 +787,7 @@ function bindQueueEvents() {
 
 async function loadQueue() {
   try {
-    const data = await api(`/api/admin/queue?page=${APP.queuePage}&search=${encodeURIComponent(APP.queueSearch)}`);
+    const data = await api(`/api/admin-queue?page=${APP.queuePage}&search=${encodeURIComponent(APP.queueSearch)}`);
     APP.queueItems = data.items || [];
     APP.queueTotal = data.total || APP.queueItems.length;
   } catch (e) {
@@ -802,7 +802,7 @@ async function bulkQueueAction(action) {
   const ids = Array.from(APP.queueSelected);
   showModal(`${action === 'approve' ? 'Approve' : 'Dismiss'} ${ids.length} posts`, `Are you sure you want to ${action} ${ids.length} selected posts?`, async () => {
     try {
-      await api(`/api/admin/queue/bulk`, { method: 'POST', body: { ids, action } });
+      await api(`/api/admin-queue/bulk`, { method: 'POST', body: { ids, action } });
       showToast(`${ids.length} posts ${action}d`, 'success');
       APP.queueSelected.clear();
       loadQueue();
@@ -814,7 +814,7 @@ function editQueueItem(id) { location.hash = '#compose'; }
 function deleteQueueItem(id) {
   showModal('Delete Post', 'Are you sure you want to remove this post from the queue?', async () => {
     try {
-      await api(`/api/admin/queue/${id}`, { method: 'DELETE' });
+      await api(`/api/admin-queue/${id}`, { method: 'DELETE' });
       showToast('Post removed from queue', 'info');
       loadQueue();
     } catch (e) { /* toast already shown */ }
@@ -949,7 +949,7 @@ async function loadHistory() {
 
   try {
     const params = new URLSearchParams({ page: APP.historyPage, platform, dateFrom, dateTo, category, search });
-    const data = await api(`/api/admin/history?${params}`);
+    const data = await api(`/api/admin-history?${params}`);
     APP.historyItems = data.items || [];
     APP.historyTotal = data.total || APP.historyItems.length;
   } catch (e) {
@@ -1027,7 +1027,7 @@ async function generateCompose(type) {
   const source = document.getElementById('compose-source')?.value || '';
   showToast('Generating with Betty...', 'info');
   try {
-    const data = await api('/api/admin/compose-post', { method: 'POST', body: { type, source } });
+    const data = await api('/api/admin-compose-post', { method: 'POST', body: { type, source } });
     document.getElementById('compose-x').value = data.x_text || '';
     document.getElementById('compose-ts').value = data.truth_text || '';
     document.getElementById('compose-output').classList.remove('hidden');
@@ -1048,7 +1048,7 @@ function composePublish(target) {
   const labels = { x: 'X', truth: 'Truth Social', both: 'X and Truth Social' };
   showModal('Confirm Publish', `Post to ${labels[target]}?`, async () => {
     try {
-      await api('/api/admin/publish', { method: 'POST', body: { target, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
+      await api('/api/admin-publish', { method: 'POST', body: { target, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
       showToast(`Posted to ${labels[target]}!`, 'success');
     } catch (e) { /* toast already shown */ }
   }, 'Publish', 'pill-teal');
@@ -1077,7 +1077,7 @@ async function doComposeSchedule() {
   if (!dt) { showToast('Select a date/time', 'error'); return; }
   closeModal();
   try {
-    await api('/api/admin/schedule', { method: 'POST', body: { scheduled_at: dt, platform: document.getElementById('compose-sched-plat')?.value, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
+    await api('/api/admin-queue', { method: 'POST', body: { scheduled_at: dt, platform: document.getElementById('compose-sched-plat')?.value, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
     showToast('Scheduled!', 'success');
   } catch (e) { /* toast already shown */ }
 }
@@ -1085,7 +1085,7 @@ async function doComposeSchedule() {
 function composeQueue() {
   showModal('Add to Queue', 'Add this post to the publishing queue?', async () => {
     try {
-      await api('/api/admin/queue', { method: 'POST', body: { x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
+      await api('/api/admin-queue', { method: 'POST', body: { x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
       showToast('Added to queue!', 'success');
     } catch (e) { /* toast already shown */ }
   }, 'Add to Queue', 'pill-teal');
@@ -1191,7 +1191,7 @@ function bindSettingsEvents() {
 
 async function loadSettings() {
   try {
-    const data = await api('/api/admin/settings');
+    const data = await api('/api/admin-settings');
     APP.settings = data || {};
   } catch (e) {
     APP.settings = {};
@@ -1233,7 +1233,7 @@ async function saveSettings(section) {
       break;
   }
   try {
-    await api('/api/admin/settings', { method: 'PUT', body });
+    await api('/api/admin-settings', { method: 'PUT', body });
     showToast('Settings saved!', 'success');
   } catch (e) { /* toast already shown */ }
 }

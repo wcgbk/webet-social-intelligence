@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeBetAI - Social Intelligence | Admin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        teal: { DEFAULT: '#006B6E', light: '#E0F5F5', mint: '#E8FAF8' },
+        charcoal: { DEFAULT: '#1A1A2E', dark: '#0D0D1A' },
+        txt: { primary: '#1A1A1A', secondary: '#6B7280' },
+        success: '#10B981',
+        danger: '#EF4444',
+        border: '#E5E7EB',
+      },
+      fontFamily: { inter: ['Inter', 'sans-serif'] },
+    }
+  }
+}
+</script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1A1A1A; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+
+/* Login styles */
+.login-input { background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 0; width: 100%; font-size: 15px; outline: none; transition: border-color 0.2s; }
+.login-input:focus { border-bottom-color: #fff; }
+.login-input::placeholder { color: rgba(255,255,255,0.4); }
+
+/* Sidebar */
+.sidebar { width: 220px; min-height: 100vh; background: #006B6E; position: fixed; left: 0; top: 0; z-index: 40; transition: width 0.2s; }
+.sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 20px; color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 500; border-radius: 8px; margin: 2px 10px; transition: all 0.15s; cursor: pointer; text-decoration: none; }
+.sidebar-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.sidebar-link.active { background: rgba(255,255,255,0.18); color: #fff; }
+.sidebar-link svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* Content area */
+.main-content { margin-left: 220px; min-height: 100vh; }
+
+/* Pills */
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border-radius: 24px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1.5px solid transparent; white-space: nowrap; }
+.pill-teal { background: #006B6E; color: #fff; border-color: #006B6E; }
+.pill-teal:hover { background: #005557; }
+.pill-outlined { background: transparent; color: #006B6E; border-color: #006B6E; }
+.pill-outlined:hover { background: #E0F5F5; }
+.pill-danger { background: #EF4444; color: #fff; border-color: #EF4444; }
+.pill-danger:hover { background: #DC2626; }
+.pill-success { background: #10B981; color: #fff; border-color: #10B981; }
+
+/* Status pills */
+.status-ready { background: #D1FAE5; color: #065F46; }
+.status-posted-x { background: #DBEAFE; color: #1E40AF; }
+.status-posted-truth { background: #FEE2E2; color: #991B1B; }
+.status-posted-both { background: #EDE9FE; color: #5B21B6; }
+.status-scheduled { background: #FEF3C7; color: #92400E; }
+.status-queued { background: #F3F4F6; color: #374151; }
+
+/* Card */
+.card { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+
+/* Modal overlay */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal-box { background: #fff; border-radius: 16px; padding: 32px; max-width: 440px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+
+/* Toast */
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 14px 20px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: slideIn 0.3s ease; max-width: 380px; }
+.toast-success { background: #10B981; }
+.toast-error { background: #EF4444; }
+.toast-info { background: #006B6E; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* Skeleton */
+.skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Category filter */
+.cat-pill { padding: 8px 18px; border-radius: 24px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1.5px solid #006B6E; }
+.cat-pill.active { background: #006B6E; color: #fff; }
+.cat-pill:not(.active) { background: transparent; color: #006B6E; }
+.cat-pill:not(.active):hover { background: #E0F5F5; }
+
+/* Table */
+.admin-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.admin-table th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #E5E7EB; }
+.admin-table td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+.admin-table tr:hover td { background: #F9FAFB; }
+
+/* Checkbox */
+.teal-checkbox { accent-color: #006B6E; width: 16px; height: 16px; cursor: pointer; }
+
+/* Textarea */
+.compose-textarea { width: 100%; min-height: 120px; border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px; font-size: 14px; font-family: 'Inter', sans-serif; resize: vertical; outline: none; transition: border-color 0.15s; }
+.compose-textarea:focus { border-color: #006B6E; box-shadow: 0 0 0 3px rgba(0,107,110,0.1); }
+
+/* NEW badge */
+.new-badge { background: #006B6E; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .sidebar { width: 60px; }
+  .sidebar .sidebar-text { display: none; }
+  .sidebar .sidebar-logo-text { display: none; }
+  .sidebar-link { justify-content: center; padding: 11px; margin: 2px 6px; }
+  .main-content { margin-left: 60px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div id="toast-container" class="toast-container"></div>
+<div id="modal-root"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────
+const APP = {
+  token: localStorage.getItem('admin_token'),
+  userEmail: localStorage.getItem('admin_email') || 'ben@webetsocial.com',
+  currentPage: 'feed',
+  feedItems: [],
+  feedCategory: 'trending',
+  feedLoading: false,
+  lastRefreshed: null,
+  queueItems: [],
+  queuePage: 1,
+  queueTotal: 0,
+  queueSearch: '',
+  queueSelected: new Set(),
+  historyItems: [],
+  historyPage: 1,
+  historyTotal: 0,
+  historyFilters: { platform: '', dateFrom: '', dateTo: '', category: '', search: '' },
+  historySelected: new Set(),
+  settings: {},
+  rateLimits: { x: { remaining: 48, total: 50 }, truth: { remaining: 25, total: 25 } },
+};
+
+const CATEGORIES = ['Trending', 'Politics', 'Sports', 'Crypto', 'Entertainment', 'Tech', 'Markets', 'Culture'];
+
+// ─── Toast ───────────────────────────────────────────────────────────
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.animation = 'fadeOut 0.3s ease forwards'; setTimeout(() => toast.remove(), 300); }, 3500);
+}
+
+// ─── Modal ───────────────────────────────────────────────────────────
+function showModal(title, message, onConfirm, confirmText = 'Confirm', confirmClass = 'pill-teal') {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <h3 class="text-lg font-bold text-txt-primary mb-2">${title}</h3>
+        <p class="text-sm text-txt-secondary mb-6">${message}</p>
+        <div class="flex gap-3 justify-end">
+          <button class="pill pill-outlined" onclick="closeModal()">Cancel</button>
+          <button class="pill ${confirmClass}" id="modal-confirm-btn">${confirmText}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-confirm-btn').addEventListener('click', () => { closeModal(); onConfirm(); });
+}
+
+function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+
+// ─── API ─────────────────────────────────────────────────────────────
+async function api(path, options = {}) {
+  try {
+    const res = await fetch(path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${APP.token}`,
+        ...(options.headers || {})
+      },
+      body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+    });
+    if (res.status === 401) { logout(); throw new Error('Unauthorized'); }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Request failed (${res.status})`); }
+    return res.json();
+  } catch (err) {
+    if (err.message !== 'Unauthorized') showToast(err.message, 'error');
+    throw err;
+  }
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────
+async function handleLogin(email, password) {
+  try {
+    const data = await api('/api/admin/auth', { method: 'POST', body: JSON.stringify({ email, password }) });
+    APP.token = data.token;
+    APP.userEmail = email;
+    localStorage.setItem('admin_token', data.token);
+    localStorage.setItem('admin_email', email);
+    location.hash = '#feed';
+  } catch (e) {
+    showToast('Login failed. Check your credentials.', 'error');
+  }
+}
+
+function logout() {
+  APP.token = null;
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_email');
+  location.hash = '#login';
+}
+
+// ─── Router ──────────────────────────────────────────────────────────
+function router() {
+  const hash = location.hash.slice(1) || (APP.token ? 'feed' : 'login');
+  if (!APP.token && hash !== 'login') { location.hash = '#login'; return; }
+  if (APP.token && hash === 'login') { location.hash = '#feed'; return; }
+  APP.currentPage = hash;
+  renderPage(hash);
+}
+
+function renderPage(page) {
+  const app = document.getElementById('app');
+  if (page === 'login') {
+    app.innerHTML = renderLogin();
+    bindLoginEvents();
+  } else {
+    app.innerHTML = renderShell(page);
+    bindShellEvents(page);
+    loadPageData(page);
+  }
+}
+
+// ─── SVG Icons ───────────────────────────────────────────────────────
+const ICONS = {
+  dice: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/></svg>`,
+  feed: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
+  queue: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
+  history: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  compose: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
+  logout: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  eyeOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
+  refresh: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>`,
+  x: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`,
+  heart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>`,
+  retweet: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>`,
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`,
+  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  chevDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  externalLink: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline w-3 h-3"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+};
+
+function icon(name, cls = 'w-5 h-5') { return `<span class="inline-flex ${cls}">${ICONS[name] || ''}</span>`; }
+
+// ─── Login Page ──────────────────────────────────────────────────────
+function renderLogin() {
+  return `
+  <div class="flex min-h-screen">
+    <!-- Left Panel -->
+    <div class="hidden md:flex w-1/2 items-center justify-center" style="background:#E0F5F5">
+      <div class="text-center">
+        <div class="flex items-center justify-center gap-3 mb-4">
+          <span class="w-14 h-14 text-teal">${ICONS.dice}</span>
+          <span class="text-4xl font-extrabold" style="color:#006B6E">WeBet</span>
+        </div>
+        <p class="text-sm font-medium" style="color:#006B6E;opacity:0.7">Social Intelligence Platform</p>
+      </div>
+    </div>
+    <!-- Right Panel -->
+    <div class="w-full md:w-1/2 flex items-center justify-center px-8" style="background:#0D0D1A">
+      <div class="w-full max-w-sm">
+        <div class="flex items-center gap-3 mb-2 md:hidden">
+          <span class="w-10 h-10 text-white">${ICONS.dice}</span>
+          <span class="text-2xl font-extrabold text-white">WeBet</span>
+        </div>
+        <h1 class="text-3xl font-bold text-white mb-1">Welcome back</h1>
+        <p class="text-sm text-white/40 mb-10">Sign in to your admin dashboard</p>
+        <form id="login-form">
+          <label class="block text-xs font-semibold text-white/60 tracking-widest uppercase mb-2">Email ID</label>
+          <input type="email" id="login-email" class="login-input mb-6" placeholder="you@webetsocial.com" value="ben@webetsocial.com" required>
+          <label class="block text-xs font-semibold text-white/60 tracking-widest uppercase mb-2">Password</label>
+          <div class="relative mb-6">
+            <input type="password" id="login-password" class="login-input pr-10" placeholder="Enter password" required>
+            <button type="button" id="toggle-password" class="absolute right-0 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 w-5 h-5">${ICONS.eye}</button>
+          </div>
+          <label class="flex items-center gap-2 mb-8 cursor-pointer">
+            <input type="checkbox" class="teal-checkbox" checked>
+            <span class="text-sm text-white/60">Remember me</span>
+          </label>
+          <button type="submit" class="w-full py-3 rounded-3xl bg-white text-charcoal-dark font-bold text-sm hover:bg-gray-100 transition">LOGIN</button>
+        </form>
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindLoginEvents() {
+  const form = document.getElementById('login-form');
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    handleLogin(email, password);
+  });
+  const toggle = document.getElementById('toggle-password');
+  toggle?.addEventListener('click', () => {
+    const input = document.getElementById('login-password');
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    toggle.innerHTML = isPassword ? ICONS.eyeOff : ICONS.eye;
+  });
+}
+
+// ─── App Shell ───────────────────────────────────────────────────────
+function renderShell(page) {
+  const navItems = [
+    { id: 'feed', label: 'Feed', icon: 'feed' },
+    { id: 'queue', label: 'Queue', icon: 'queue' },
+    { id: 'history', label: 'History', icon: 'history' },
+    { id: 'compose', label: 'Compose', icon: 'compose' },
+    { id: 'settings', label: 'Settings', icon: 'settings' },
+  ];
+  const pageTitle = { feed: 'Feed', queue: 'Post Queue', history: 'Published History', compose: 'Compose Post', settings: 'Settings' }[page] || 'Feed';
+  const initial = (APP.userEmail || 'B')[0].toUpperCase();
+
+  return `
+  <!-- Sidebar -->
+  <aside class="sidebar flex flex-col">
+    <div class="flex items-center gap-2 px-5 py-5 mb-4">
+      <span class="w-8 h-8 text-white flex-shrink-0">${ICONS.dice}</span>
+      <span class="sidebar-logo-text text-white font-extrabold text-lg">WeBet</span>
+    </div>
+    <nav class="flex-1">
+      ${navItems.map(n => `
+        <a href="#${n.id}" class="sidebar-link ${page === n.id ? 'active' : ''}">
+          ${icon(n.icon, 'w-5 h-5')}
+          <span class="sidebar-text">${n.label}</span>
+        </a>
+      `).join('')}
+    </nav>
+    <div class="px-3 pb-5">
+      <button onclick="logout()" class="sidebar-link w-full">
+        ${icon('logout', 'w-5 h-5')}
+        <span class="sidebar-text">Logout</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-content">
+    <!-- Top Bar -->
+    <header class="bg-white border-b border-border px-6 py-3 flex items-center justify-between sticky top-0 z-30">
+      <h1 class="text-lg font-bold text-txt-primary">${pageTitle}</h1>
+      <div class="flex items-center gap-4">
+        <div class="hidden sm:flex items-center gap-3 text-xs text-txt-secondary">
+          <span class="flex items-center gap-1">${icon('x','w-3.5 h-3.5')} <span class="font-semibold text-txt-primary">${APP.rateLimits.x.remaining}</span>/${APP.rateLimits.x.total}</span>
+          <span class="text-border">|</span>
+          <span class="flex items-center gap-1">TS <span class="font-semibold text-txt-primary">${APP.rateLimits.truth.remaining}</span>/${APP.rateLimits.truth.total}</span>
+        </div>
+        <div class="flex items-center gap-2 cursor-pointer">
+          <div class="w-8 h-8 rounded-full bg-teal flex items-center justify-center text-white text-sm font-bold">${initial}</div>
+          <span class="hidden sm:inline text-sm text-txt-secondary">${APP.userEmail}</span>
+          <span class="w-4 h-4 text-txt-secondary">${ICONS.chevDown}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="p-6" id="page-content">
+      ${renderPageContent(page)}
+    </main>
+  </div>`;
+}
+
+function renderPageContent(page) {
+  switch (page) {
+    case 'feed': return renderFeedPage();
+    case 'queue': return renderQueuePage();
+    case 'history': return renderHistoryPage();
+    case 'compose': return renderComposePage();
+    case 'settings': return renderSettingsPage();
+    default: return renderFeedPage();
+  }
+}
+
+function bindShellEvents(page) {
+  switch (page) {
+    case 'feed': bindFeedEvents(); break;
+    case 'queue': bindQueueEvents(); break;
+    case 'history': bindHistoryEvents(); break;
+    case 'compose': bindComposeEvents(); break;
+    case 'settings': bindSettingsEvents(); break;
+  }
+}
+
+async function loadPageData(page) {
+  switch (page) {
+    case 'feed': await loadFeed(); break;
+    case 'queue': await loadQueue(); break;
+    case 'history': await loadHistory(); break;
+    case 'settings': await loadSettings(); break;
+  }
+}
+
+// ─── Feed Page ───────────────────────────────────────────────────────
+function renderFeedPage() {
+  const lastRefresh = APP.lastRefreshed ? `Last refreshed: ${APP.lastRefreshed.toLocaleTimeString()}` : '';
+  return `
+    <div class="flex flex-wrap items-center gap-3 mb-6">
+      <div class="flex flex-wrap gap-2 flex-1">
+        ${CATEGORIES.map(c => `<button class="cat-pill ${APP.feedCategory === c.toLowerCase() ? 'active' : ''}" data-cat="${c.toLowerCase()}">${c}</button>`).join('')}
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-txt-secondary">${lastRefresh}</span>
+        <button class="pill pill-outlined flex items-center gap-2" id="refresh-feed-btn">${icon('refresh','w-4 h-4')} Refresh Feed</button>
+      </div>
+    </div>
+    <div id="feed-list">
+      ${APP.feedLoading ? renderSkeletonCards(3) : renderFeedItems()}
+    </div>`;
+}
+
+function renderSkeletonCards(n) {
+  return Array(n).fill(0).map(() => `
+    <div class="card">
+      <div class="skeleton h-4 w-1/3 mb-4"></div>
+      <div class="skeleton h-3 w-full mb-2"></div>
+      <div class="skeleton h-3 w-2/3 mb-6"></div>
+      <div class="flex gap-4">
+        <div class="skeleton h-24 flex-1"></div>
+        <div class="skeleton h-24 flex-1"></div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <div class="skeleton h-8 w-24"></div>
+        <div class="skeleton h-8 w-24"></div>
+        <div class="skeleton h-8 w-24"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderFeedItems() {
+  if (!APP.feedItems.length) return '<div class="text-center py-16 text-txt-secondary"><p class="text-lg font-medium">No feed items</p><p class="text-sm mt-1">Try refreshing or switching categories.</p></div>';
+  return APP.feedItems.map((item, i) => renderFeedCard(item, i)).join('');
+}
+
+function renderFeedCard(item, idx) {
+  const statusCls = {
+    'ready': 'status-ready', 'posted_x': 'status-posted-x', 'posted_truth': 'status-posted-truth',
+    'posted_both': 'status-posted-both', 'scheduled': 'status-scheduled', 'queued': 'status-queued'
+  }[item.status || 'ready'] || 'status-ready';
+  const statusLabel = {
+    'ready': 'Ready', 'posted_x': 'Posted to X', 'posted_truth': 'Posted to Truth',
+    'posted_both': 'Posted to Both', 'scheduled': 'Scheduled', 'queued': 'Queued'
+  }[item.status || 'ready'] || 'Ready';
+
+  const xLen = (item.x_text || '').length;
+  const tsLen = (item.truth_text || '').length;
+
+  return `
+  <div class="card" data-feed-idx="${idx}">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        ${item.isNew ? '<span class="new-badge">NEW</span>' : ''}
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#E0F5F5;color:#006B6E">${item.category || 'Trending'}</span>
+      </div>
+      <span class="text-xs font-semibold px-3 py-1 rounded-full ${statusCls}">${statusLabel}</span>
+    </div>
+
+    <!-- Source Preview -->
+    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+      <div class="flex items-start gap-3 mb-3">
+        <div class="w-10 h-10 rounded-full bg-teal/10 flex items-center justify-center text-teal font-bold text-sm flex-shrink-0">${(item.source?.name || 'U')[0]}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-semibold text-sm text-txt-primary">${item.source?.name || 'Unknown'}</span>
+            <span class="text-xs text-txt-secondary">@${item.source?.handle || 'unknown'}</span>
+          </div>
+          <p class="text-sm text-txt-primary mt-1">${item.source?.text || ''}</p>
+          <div class="flex items-center gap-4 mt-2 text-xs text-txt-secondary">
+            <span class="flex items-center gap-1">${icon('heart','w-3.5 h-3.5')} ${formatNum(item.source?.likes || 0)}</span>
+            <span class="flex items-center gap-1">${icon('retweet','w-3.5 h-3.5')} ${formatNum(item.source?.retweets || 0)}</span>
+            ${item.source?.url ? `<a href="${item.source.url}" target="_blank" class="text-teal hover:underline">View on X ${ICONS.externalLink}</a>` : ''}
+          </div>
+        </div>
+      </div>
+      ${item.market ? `
+      <div class="mt-3 p-3 border border-border rounded-lg bg-white">
+        <p class="text-sm font-semibold text-txt-primary mb-2">${item.market.question || ''}</p>
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <span class="px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold">YES ${item.market.yes_odds || '—'}%</span>
+          <span class="px-3 py-1 rounded-full bg-red-100 text-red-700 font-bold">NO ${item.market.no_odds || '—'}%</span>
+          <span class="text-txt-secondary">Vol: $${formatNum(item.market.volume || 0)}</span>
+          <span class="text-txt-secondary">Bettability: <strong class="text-teal">${item.market.bettability || '—'}/10</strong></span>
+        </div>
+        ${item.market.grok_reason ? `<p class="text-xs text-txt-secondary mt-2 italic">${item.market.grok_reason}</p>` : ''}
+      </div>` : ''}
+    </div>
+
+    <!-- AI-Composed Posts -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">X Version</label>
+          <span class="text-xs ${xLen > 280 ? 'text-danger font-bold' : 'text-txt-secondary'}" id="x-counter-${idx}">${xLen}/280</span>
+        </div>
+        <textarea class="compose-textarea" data-idx="${idx}" data-platform="x" maxlength="280" rows="4">${item.x_text || ''}</textarea>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">Truth Social Version</label>
+          <span class="text-xs ${tsLen > 500 ? 'text-danger font-bold' : 'text-txt-secondary'}" id="ts-counter-${idx}">${tsLen}/500</span>
+        </div>
+        <textarea class="compose-textarea" data-idx="${idx}" data-platform="truth" maxlength="500" rows="4">${item.truth_text || ''}</textarea>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-wrap gap-2">
+      <button class="pill pill-teal" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
+      <button class="pill pill-teal" onclick="publishAction(${idx},'truth')">Post to Truth</button>
+      <button class="pill pill-teal text-sm px-6" onclick="publishAction(${idx},'both')">Post to Both</button>
+      <button class="pill pill-outlined" onclick="scheduleAction(${idx})">${icon('calendar','w-4 h-4')} Schedule</button>
+      <button class="pill pill-outlined" onclick="queueAction(${idx})">Add to Queue</button>
+      <button class="pill pill-danger" onclick="dismissAction(${idx})">Dismiss</button>
+      <button class="pill pill-outlined" onclick="regenerateAction(${idx})">${icon('refresh','w-4 h-4')} Regenerate</button>
+    </div>
+  </div>`;
+}
+
+function bindFeedEvents() {
+  document.querySelectorAll('.cat-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      APP.feedCategory = btn.dataset.cat;
+      renderAndBindPage('feed');
+      loadFeed();
+    });
+  });
+  document.getElementById('refresh-feed-btn')?.addEventListener('click', () => loadFeed());
+  bindTextareaCounters();
+}
+
+function bindTextareaCounters() {
+  document.querySelectorAll('.compose-textarea').forEach(ta => {
+    ta.addEventListener('input', () => {
+      const idx = ta.dataset.idx;
+      const platform = ta.dataset.platform;
+      const max = platform === 'x' ? 280 : 500;
+      const len = ta.value.length;
+      const counter = document.getElementById(`${platform === 'x' ? 'x' : 'ts'}-counter-${idx}`);
+      if (counter) {
+        counter.textContent = `${len}/${max}`;
+        counter.className = `text-xs ${len > max ? 'text-danger font-bold' : 'text-txt-secondary'}`;
+      }
+      if (APP.feedItems[idx]) {
+        if (platform === 'x') APP.feedItems[idx].x_text = ta.value;
+        else APP.feedItems[idx].truth_text = ta.value;
+      }
+    });
+  });
+}
+
+async function loadFeed() {
+  APP.feedLoading = true;
+  updateFeedList();
+  try {
+    const data = await api(`/api/admin/feed?category=${APP.feedCategory}&limit=5`);
+    APP.feedItems = (data.items || []).map((item, i) => ({ ...item, isNew: i < 2 }));
+    APP.lastRefreshed = new Date();
+  } catch (e) {
+    APP.feedItems = getDemoFeedItems();
+    APP.lastRefreshed = new Date();
+  }
+  APP.feedLoading = false;
+  updateFeedList();
+  bindTextareaCounters();
+}
+
+function updateFeedList() {
+  const el = document.getElementById('feed-list');
+  if (el) {
+    el.innerHTML = APP.feedLoading ? renderSkeletonCards(3) : renderFeedItems();
+    if (!APP.feedLoading) bindTextareaCounters();
+  }
+}
+
+function publishAction(idx, target) {
+  const labels = { x: 'X', truth: 'Truth Social', both: 'X and Truth Social' };
+  showModal('Confirm Publish', `Are you sure you want to post this to ${labels[target]}?`, async () => {
+    try {
+      await api('/api/admin/publish', { method: 'POST', body: { id: APP.feedItems[idx]?.id, target, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
+      showToast(`Posted to ${labels[target]} successfully!`, 'success');
+      APP.feedItems[idx].status = target === 'both' ? 'posted_both' : `posted_${target}`;
+      updateFeedList();
+    } catch (e) { /* toast already shown */ }
+  }, 'Publish', 'pill-teal');
+}
+
+function scheduleAction(idx) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <h3 class="text-lg font-bold text-txt-primary mb-4">Schedule Post</h3>
+        <label class="block text-sm font-medium text-txt-secondary mb-2">Date & Time</label>
+        <input type="datetime-local" id="schedule-datetime" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4">
+        <label class="block text-sm font-medium text-txt-secondary mb-2">Platform</label>
+        <select id="schedule-platform" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-6">
+          <option value="both">Both (X + Truth)</option>
+          <option value="x">X only</option>
+          <option value="truth">Truth Social only</option>
+        </select>
+        <div class="flex gap-3 justify-end">
+          <button class="pill pill-outlined" onclick="closeModal()">Cancel</button>
+          <button class="pill pill-teal" id="schedule-confirm">Schedule</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('schedule-confirm').addEventListener('click', async () => {
+    const dt = document.getElementById('schedule-datetime').value;
+    const platform = document.getElementById('schedule-platform').value;
+    if (!dt) { showToast('Please select a date and time', 'error'); return; }
+    closeModal();
+    try {
+      await api('/api/admin/schedule', { method: 'POST', body: { id: APP.feedItems[idx]?.id, scheduled_at: dt, platform, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
+      showToast('Post scheduled successfully!', 'success');
+      APP.feedItems[idx].status = 'scheduled';
+      updateFeedList();
+    } catch (e) { /* toast already shown */ }
+  });
+}
+
+function queueAction(idx) {
+  showModal('Add to Queue', 'This post will be added to the publishing queue for review.', async () => {
+    try {
+      await api('/api/admin/queue', { method: 'POST', body: { id: APP.feedItems[idx]?.id, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
+      showToast('Added to queue!', 'success');
+      APP.feedItems[idx].status = 'queued';
+      updateFeedList();
+    } catch (e) { /* toast already shown */ }
+  }, 'Add to Queue', 'pill-teal');
+}
+
+function dismissAction(idx) {
+  showModal('Dismiss Post', 'This post will be dismissed and removed from the feed.', async () => {
+    try {
+      await api('/api/admin/dismiss', { method: 'POST', body: { id: APP.feedItems[idx]?.id } });
+      APP.feedItems.splice(idx, 1);
+      showToast('Post dismissed', 'info');
+      updateFeedList();
+    } catch (e) { /* toast already shown */ }
+  }, 'Dismiss', 'pill-danger');
+}
+
+async function regenerateAction(idx) {
+  try {
+    showToast('Regenerating post...', 'info');
+    const data = await api('/api/admin/regenerate', { method: 'POST', body: { id: APP.feedItems[idx]?.id } });
+    if (data.x_text) APP.feedItems[idx].x_text = data.x_text;
+    if (data.truth_text) APP.feedItems[idx].truth_text = data.truth_text;
+    updateFeedList();
+    showToast('Post regenerated!', 'success');
+  } catch (e) { /* toast already shown */ }
+}
+
+// ─── Queue Page ──────────────────────────────────────────────────────
+function renderQueuePage() {
+  const items = APP.queueItems;
+  const needsReview = items.filter(i => i.status === 'needs_review');
+  const others = items.filter(i => i.status !== 'needs_review');
+  const hasSelected = APP.queueSelected.size > 0;
+  const perPage = 10;
+  const total = APP.queueTotal || items.length;
+  const start = (APP.queuePage - 1) * perPage + 1;
+  const end = Math.min(APP.queuePage * perPage, total);
+
+  return `
+    <div class="flex flex-wrap items-center gap-3 mb-6">
+      <div class="relative flex-1 max-w-xs">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-secondary">${ICONS.search}</span>
+        <input type="text" id="queue-search" class="w-full pl-10 pr-4 py-2 border border-border rounded-full text-sm" placeholder="Search queue..." value="${APP.queueSearch}">
+      </div>
+      <button class="pill pill-teal" onclick="location.hash='#compose'">${icon('plus','w-4 h-4')} Add Post</button>
+    </div>
+
+    ${hasSelected ? `
+    <div class="flex items-center gap-3 mb-4 p-3 bg-teal-light rounded-lg">
+      <span class="text-sm font-medium text-teal">${APP.queueSelected.size} selected</span>
+      <button class="pill pill-success text-xs" onclick="bulkQueueAction('approve')">Approve All</button>
+      <button class="pill pill-danger text-xs" onclick="bulkQueueAction('dismiss')">Dismiss All</button>
+    </div>` : ''}
+
+    ${needsReview.length ? `
+    <div class="mb-6">
+      <h3 class="text-sm font-semibold text-amber-700 mb-3">Needs Review (${needsReview.length})</h3>
+      <div class="border-l-4 border-amber-400 bg-amber-50 rounded-r-lg overflow-hidden">
+        <table class="admin-table">
+          <thead><tr><th class="w-10"></th><th>Preview</th><th>Platform</th><th>Scheduled</th><th>Status</th><th class="w-20">Actions</th></tr></thead>
+          <tbody>${needsReview.map((item, i) => renderQueueRow(item, i, true)).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    <div class="card p-0 overflow-hidden">
+      <table class="admin-table">
+        <thead><tr><th class="w-10"><input type="checkbox" class="teal-checkbox" id="queue-select-all"></th><th>Preview</th><th>Platform</th><th>Scheduled</th><th>Status</th><th class="w-20">Actions</th></tr></thead>
+        <tbody id="queue-tbody">
+          ${others.length ? others.map((item, i) => renderQueueRow(item, i)).join('') : '<tr><td colspan="6" class="text-center py-8 text-txt-secondary">No queued posts</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center justify-end gap-4 mt-4 text-sm text-txt-secondary">
+      <span>${start}-${end} of ${total}</span>
+      <div class="flex gap-1">
+        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${APP.queuePage <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.queuePage--;loadQueue()">&#8592;</button>
+        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${end >= total ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.queuePage++;loadQueue()">&#8594;</button>
+      </div>
+    </div>`;
+}
+
+function renderQueueRow(item, idx, isReview = false) {
+  const checked = APP.queueSelected.has(item.id) ? 'checked' : '';
+  const platformPills = (item.platforms || ['x']).map(p => {
+    if (p === 'x') return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-900 text-white">X</span>';
+    return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-red-600 text-white">TS</span>';
+  }).join(' ');
+  const statusCls = { approved: 'status-ready', needs_review: 'status-scheduled', scheduled: 'status-scheduled', dismissed: 'status-queued' }[item.status] || 'status-queued';
+  const statusLabel = { approved: 'Approved', needs_review: 'Needs Review', scheduled: 'Scheduled', dismissed: 'Dismissed' }[item.status] || item.status;
+  const preview = (item.x_text || item.text || '').slice(0, 80) + ((item.x_text || item.text || '').length > 80 ? '...' : '');
+
+  return `<tr>
+    <td><input type="checkbox" class="teal-checkbox queue-item-cb" data-id="${item.id}" ${checked}></td>
+    <td class="max-w-xs"><span class="text-sm">${preview}</span></td>
+    <td>${platformPills}</td>
+    <td class="text-sm text-txt-secondary">${item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : '—'}</td>
+    <td><span class="text-xs font-semibold px-2 py-1 rounded-full ${statusCls}">${statusLabel}</span></td>
+    <td>
+      <div class="flex items-center gap-2">
+        <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-txt-secondary" onclick="editQueueItem('${item.id}')">${icon('edit','w-4 h-4')}</button>
+        <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 text-danger" onclick="deleteQueueItem('${item.id}')">${icon('trash','w-4 h-4')}</button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function bindQueueEvents() {
+  document.getElementById('queue-search')?.addEventListener('input', debounce((e) => {
+    APP.queueSearch = e.target.value;
+    APP.queuePage = 1;
+    loadQueue();
+  }, 300));
+  document.getElementById('queue-select-all')?.addEventListener('change', (e) => {
+    const cbs = document.querySelectorAll('.queue-item-cb');
+    cbs.forEach(cb => {
+      cb.checked = e.target.checked;
+      if (e.target.checked) APP.queueSelected.add(cb.dataset.id);
+      else APP.queueSelected.delete(cb.dataset.id);
+    });
+    renderAndBindPage('queue');
+  });
+  document.querySelectorAll('.queue-item-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) APP.queueSelected.add(cb.dataset.id);
+      else APP.queueSelected.delete(cb.dataset.id);
+      renderAndBindPage('queue');
+    });
+  });
+}
+
+async function loadQueue() {
+  try {
+    const data = await api(`/api/admin/queue?page=${APP.queuePage}&search=${encodeURIComponent(APP.queueSearch)}`);
+    APP.queueItems = data.items || [];
+    APP.queueTotal = data.total || APP.queueItems.length;
+  } catch (e) {
+    APP.queueItems = getDemoQueueItems();
+    APP.queueTotal = APP.queueItems.length;
+  }
+  const el = document.getElementById('page-content');
+  if (el && APP.currentPage === 'queue') { el.innerHTML = renderQueuePage(); bindQueueEvents(); }
+}
+
+async function bulkQueueAction(action) {
+  const ids = Array.from(APP.queueSelected);
+  showModal(`${action === 'approve' ? 'Approve' : 'Dismiss'} ${ids.length} posts`, `Are you sure you want to ${action} ${ids.length} selected posts?`, async () => {
+    try {
+      await api(`/api/admin/queue/bulk`, { method: 'POST', body: { ids, action } });
+      showToast(`${ids.length} posts ${action}d`, 'success');
+      APP.queueSelected.clear();
+      loadQueue();
+    } catch (e) { /* toast already shown */ }
+  }, action === 'approve' ? 'Approve All' : 'Dismiss All', action === 'approve' ? 'pill-success' : 'pill-danger');
+}
+
+function editQueueItem(id) { location.hash = '#compose'; }
+function deleteQueueItem(id) {
+  showModal('Delete Post', 'Are you sure you want to remove this post from the queue?', async () => {
+    try {
+      await api(`/api/admin/queue/${id}`, { method: 'DELETE' });
+      showToast('Post removed from queue', 'info');
+      loadQueue();
+    } catch (e) { /* toast already shown */ }
+  }, 'Delete', 'pill-danger');
+}
+
+// ─── History Page ────────────────────────────────────────────────────
+function renderHistoryPage() {
+  const items = APP.historyItems;
+  const total = APP.historyTotal || items.length;
+  const perPage = 10;
+  const start = (APP.historyPage - 1) * perPage + 1;
+  const end = Math.min(APP.historyPage * perPage, total);
+
+  // Stats
+  const totalPosts = total;
+  const xPosts = items.filter(i => (i.platforms || []).includes('x')).length;
+  const tsPosts = items.filter(i => (i.platforms || []).includes('truth')).length;
+  const avgEng = items.length ? Math.round(items.reduce((s, i) => s + (i.engagement?.total || 0), 0) / items.length) : 0;
+
+  return `
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-txt-primary">${totalPosts}</p><p class="text-xs text-txt-secondary mt-1">Total Posts</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-txt-primary">${xPosts} / ${tsPosts}</p><p class="text-xs text-txt-secondary mt-1">X / Truth Social</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-txt-primary">${formatNum(avgEng)}</p><p class="text-xs text-txt-secondary mt-1">Avg Engagement</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-teal">#1</p><p class="text-xs text-txt-secondary mt-1">Top Performer</p></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-3 mb-4">
+      <select id="hist-platform" class="border border-border rounded-lg px-3 py-2 text-sm">
+        <option value="">All Platforms</option><option value="x">X</option><option value="truth">Truth Social</option>
+      </select>
+      <input type="date" id="hist-date-from" class="border border-border rounded-lg px-3 py-2 text-sm" placeholder="From">
+      <input type="date" id="hist-date-to" class="border border-border rounded-lg px-3 py-2 text-sm" placeholder="To">
+      <select id="hist-category" class="border border-border rounded-lg px-3 py-2 text-sm">
+        <option value="">All Categories</option>${CATEGORIES.map(c => `<option value="${c.toLowerCase()}">${c}</option>`).join('')}
+      </select>
+      <div class="relative flex-1 min-w-[200px]">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-secondary">${ICONS.search}</span>
+        <input type="text" id="hist-search" class="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm" placeholder="Search history...">
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card p-0 overflow-x-auto">
+      <table class="admin-table">
+        <thead><tr><th class="w-10"><input type="checkbox" class="teal-checkbox" id="hist-select-all"></th><th>Post Preview</th><th>Platform</th><th>Published</th><th>Category</th><th>Engagement</th><th class="w-20">Actions</th></tr></thead>
+        <tbody id="hist-tbody">
+          ${items.length ? items.map((item, i) => renderHistoryRow(item, i)).join('') : '<tr><td colspan="7" class="text-center py-8 text-txt-secondary">No published posts</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center justify-end gap-4 mt-4 text-sm text-txt-secondary">
+      <span>${start}-${end} of ${total}</span>
+      <div class="flex gap-1">
+        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${APP.historyPage <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.historyPage--;loadHistory()">&#8592;</button>
+        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${end >= total ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.historyPage++;loadHistory()">&#8594;</button>
+      </div>
+    </div>`;
+}
+
+function renderHistoryRow(item, idx) {
+  const checked = APP.historySelected.has(item.id) ? 'checked' : '';
+  const platformPills = (item.platforms || ['x']).map(p => {
+    if (p === 'x') return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-900 text-white">X</span>';
+    return '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-red-600 text-white">TS</span>';
+  }).join(' ');
+  const preview = (item.text || '').slice(0, 80) + ((item.text || '').length > 80 ? '...' : '');
+  const eng = item.engagement || {};
+
+  return `<tr class="cursor-pointer" onclick="showHistoryPreview(${idx})">
+    <td onclick="event.stopPropagation()"><input type="checkbox" class="teal-checkbox hist-item-cb" data-id="${item.id}" ${checked}></td>
+    <td class="max-w-xs"><span class="text-sm">${preview}</span></td>
+    <td>${platformPills}</td>
+    <td class="text-sm text-txt-secondary">${item.published_at ? new Date(item.published_at).toLocaleDateString() : '—'}</td>
+    <td><span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#E0F5F5;color:#006B6E">${item.category || '—'}</span></td>
+    <td class="text-sm">
+      <div class="flex items-center gap-3 text-xs text-txt-secondary">
+        <span>${icon('heart','w-3 h-3')} ${formatNum(eng.likes || 0)}</span>
+        <span>${icon('retweet','w-3 h-3')} ${formatNum(eng.retweets || 0)}</span>
+      </div>
+    </td>
+    <td onclick="event.stopPropagation()">
+      <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-txt-secondary" onclick="showHistoryPreview(${idx})">${icon('eye','w-4 h-4')}</button>
+    </td>
+  </tr>`;
+}
+
+function showHistoryPreview(idx) {
+  const item = APP.historyItems[idx];
+  if (!item) return;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box max-w-lg" style="background:#1A1A2E; color:#fff;">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold">Post Preview</h3>
+          <button onclick="closeModal()" class="w-6 h-6 text-white/60 hover:text-white">${ICONS.close}</button>
+        </div>
+        <p class="text-sm leading-relaxed mb-4">${item.text || ''}</p>
+        <div class="flex items-center gap-4 text-xs text-white/50">
+          <span>${item.published_at ? new Date(item.published_at).toLocaleString() : ''}</span>
+          <span>${(item.platforms || []).join(', ').toUpperCase()}</span>
+          <span>${item.category || ''}</span>
+        </div>
+        <div class="flex items-center gap-4 mt-3 text-sm text-white/70">
+          <span>${icon('heart','w-4 h-4')} ${item.engagement?.likes || 0}</span>
+          <span>${icon('retweet','w-4 h-4')} ${item.engagement?.retweets || 0}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bindHistoryEvents() {
+  ['hist-platform', 'hist-date-from', 'hist-date-to', 'hist-category'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => { APP.historyPage = 1; loadHistory(); });
+  });
+  document.getElementById('hist-search')?.addEventListener('input', debounce(() => { APP.historyPage = 1; loadHistory(); }, 300));
+}
+
+async function loadHistory() {
+  const f = APP.historyFilters;
+  const platform = document.getElementById('hist-platform')?.value || f.platform;
+  const dateFrom = document.getElementById('hist-date-from')?.value || f.dateFrom;
+  const dateTo = document.getElementById('hist-date-to')?.value || f.dateTo;
+  const category = document.getElementById('hist-category')?.value || f.category;
+  const search = document.getElementById('hist-search')?.value || f.search;
+  APP.historyFilters = { platform, dateFrom, dateTo, category, search };
+
+  try {
+    const params = new URLSearchParams({ page: APP.historyPage, platform, dateFrom, dateTo, category, search });
+    const data = await api(`/api/admin/history?${params}`);
+    APP.historyItems = data.items || [];
+    APP.historyTotal = data.total || APP.historyItems.length;
+  } catch (e) {
+    APP.historyItems = getDemoHistoryItems();
+    APP.historyTotal = APP.historyItems.length;
+  }
+  const el = document.getElementById('page-content');
+  if (el && APP.currentPage === 'history') { el.innerHTML = renderHistoryPage(); bindHistoryEvents(); }
+}
+
+// ─── Compose Page ────────────────────────────────────────────────────
+function renderComposePage() {
+  return `
+    <div class="max-w-4xl">
+      <div class="card mb-6">
+        <h3 class="text-sm font-semibold text-txt-primary mb-3">Source Content</h3>
+        <textarea id="compose-source" class="compose-textarea" rows="4" placeholder="Paste an X post URL or write free-form text..."></textarea>
+        <div class="flex flex-wrap gap-3 mt-4">
+          <button class="pill pill-teal" id="generate-betty-btn">${icon('compose','w-4 h-4')} Generate with Betty</button>
+          <button class="pill pill-outlined" id="gen-trending">Today's trending bets</button>
+          <button class="pill pill-outlined" id="gen-lock">THE LOCK's top pick</button>
+          <button class="pill pill-outlined" id="gen-crypto">Crypto pulse</button>
+        </div>
+      </div>
+
+      <div id="compose-output" class="hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">X Version</label>
+              <span class="text-xs text-txt-secondary" id="compose-x-counter">0/280</span>
+            </div>
+            <textarea id="compose-x" class="compose-textarea" maxlength="280" rows="5" placeholder="X post will appear here..."></textarea>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">Truth Social Version</label>
+              <span class="text-xs text-txt-secondary" id="compose-ts-counter">0/500</span>
+            </div>
+            <textarea id="compose-ts" class="compose-textarea" maxlength="500" rows="5" placeholder="Truth Social post will appear here..."></textarea>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="pill pill-teal" onclick="composePublish('x')">${icon('x','w-4 h-4')} Post to X</button>
+          <button class="pill pill-teal" onclick="composePublish('truth')">Post to Truth</button>
+          <button class="pill pill-teal px-6" onclick="composePublish('both')">Post to Both</button>
+          <button class="pill pill-outlined" onclick="composeSchedule()">${icon('calendar','w-4 h-4')} Schedule</button>
+          <button class="pill pill-outlined" onclick="composeQueue()">Add to Queue</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bindComposeEvents() {
+  document.getElementById('generate-betty-btn')?.addEventListener('click', () => generateCompose('custom'));
+  document.getElementById('gen-trending')?.addEventListener('click', () => generateCompose('trending'));
+  document.getElementById('gen-lock')?.addEventListener('click', () => generateCompose('lock'));
+  document.getElementById('gen-crypto')?.addEventListener('click', () => generateCompose('crypto'));
+
+  ['compose-x', 'compose-ts'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', (e) => {
+      const max = id === 'compose-x' ? 280 : 500;
+      const counterId = id === 'compose-x' ? 'compose-x-counter' : 'compose-ts-counter';
+      const counter = document.getElementById(counterId);
+      if (counter) {
+        const len = e.target.value.length;
+        counter.textContent = `${len}/${max}`;
+        counter.className = `text-xs ${len > max ? 'text-danger font-bold' : 'text-txt-secondary'}`;
+      }
+    });
+  });
+}
+
+async function generateCompose(type) {
+  const source = document.getElementById('compose-source')?.value || '';
+  showToast('Generating with Betty...', 'info');
+  try {
+    const data = await api('/api/admin/compose-post', { method: 'POST', body: { type, source } });
+    document.getElementById('compose-x').value = data.x_text || '';
+    document.getElementById('compose-ts').value = data.truth_text || '';
+    document.getElementById('compose-output').classList.remove('hidden');
+    document.getElementById('compose-x').dispatchEvent(new Event('input'));
+    document.getElementById('compose-ts').dispatchEvent(new Event('input'));
+    showToast('Post generated!', 'success');
+  } catch (e) {
+    // Demo fallback
+    document.getElementById('compose-x').value = 'Breaking: Markets are moving. The smart money is on the over. #WeBetAI';
+    document.getElementById('compose-ts').value = 'Breaking: Markets are moving. The smart money is on the over. Our AI analysis shows a 73% probability of hitting. Follow for more real-time picks. #WeBetAI #SmartBets';
+    document.getElementById('compose-output').classList.remove('hidden');
+    document.getElementById('compose-x').dispatchEvent(new Event('input'));
+    document.getElementById('compose-ts').dispatchEvent(new Event('input'));
+  }
+}
+
+function composePublish(target) {
+  const labels = { x: 'X', truth: 'Truth Social', both: 'X and Truth Social' };
+  showModal('Confirm Publish', `Post to ${labels[target]}?`, async () => {
+    try {
+      await api('/api/admin/publish', { method: 'POST', body: { target, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
+      showToast(`Posted to ${labels[target]}!`, 'success');
+    } catch (e) { /* toast already shown */ }
+  }, 'Publish', 'pill-teal');
+}
+
+function composeSchedule() {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <h3 class="text-lg font-bold text-txt-primary mb-4">Schedule Post</h3>
+        <input type="datetime-local" id="compose-sched-dt" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4">
+        <select id="compose-sched-plat" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-6">
+          <option value="both">Both</option><option value="x">X only</option><option value="truth">Truth Social only</option>
+        </select>
+        <div class="flex gap-3 justify-end">
+          <button class="pill pill-outlined" onclick="closeModal()">Cancel</button>
+          <button class="pill pill-teal" onclick="doComposeSchedule()">Schedule</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doComposeSchedule() {
+  const dt = document.getElementById('compose-sched-dt')?.value;
+  if (!dt) { showToast('Select a date/time', 'error'); return; }
+  closeModal();
+  try {
+    await api('/api/admin/schedule', { method: 'POST', body: { scheduled_at: dt, platform: document.getElementById('compose-sched-plat')?.value, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
+    showToast('Scheduled!', 'success');
+  } catch (e) { /* toast already shown */ }
+}
+
+function composeQueue() {
+  showModal('Add to Queue', 'Add this post to the publishing queue?', async () => {
+    try {
+      await api('/api/admin/queue', { method: 'POST', body: { x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
+      showToast('Added to queue!', 'success');
+    } catch (e) { /* toast already shown */ }
+  }, 'Add to Queue', 'pill-teal');
+}
+
+// ─── Settings Page ───────────────────────────────────────────────────
+function renderSettingsPage() {
+  const s = APP.settings;
+  return `
+    <div class="max-w-3xl space-y-6">
+      <!-- API Keys -->
+      <div class="card">
+        <h3 class="text-base font-bold text-txt-primary mb-4">API Keys</h3>
+        <div class="space-y-4">
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">xAI API Key</label><input type="password" id="set-xai-key" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.xai_key || ''}" placeholder="xai-..."></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">X API Bearer Token</label><input type="password" id="set-x-token" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_token || ''}" placeholder="Bearer token"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">X API Key</label><input type="password" id="set-x-api-key" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_api_key || ''}" placeholder="API key"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">X API Secret</label><input type="password" id="set-x-api-secret" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_api_secret || ''}" placeholder="API secret"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Truth Social Token</label><input type="password" id="set-truth-token" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.truth_token || ''}" placeholder="Truth Social access token"></div>
+        </div>
+        <button class="pill pill-teal mt-4" onclick="saveSettings('api_keys')">Save API Keys</button>
+      </div>
+
+      <!-- Betty Persona -->
+      <div class="card">
+        <h3 class="text-base font-bold text-txt-primary mb-4">Betty Persona</h3>
+        <label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">System Prompt</label>
+        <textarea id="set-betty-prompt" class="compose-textarea" rows="8" placeholder="Define Betty's personality and posting style...">${s.betty_prompt || ''}</textarea>
+        <button class="pill pill-teal mt-4" onclick="saveSettings('betty')">Save Persona</button>
+      </div>
+
+      <!-- Feed Config -->
+      <div class="card">
+        <h3 class="text-base font-bold text-txt-primary mb-4">Feed Configuration</h3>
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-2">Active Categories</label>
+          <div class="flex flex-wrap gap-3">
+            ${CATEGORIES.map(c => `<label class="flex items-center gap-2 text-sm"><input type="checkbox" class="teal-checkbox set-category-cb" value="${c.toLowerCase()}" ${(s.categories || CATEGORIES.map(c=>c.toLowerCase())).includes(c.toLowerCase()) ? 'checked' : ''}> ${c}</label>`).join('')}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Refresh Interval (min)</label><input type="number" id="set-refresh-interval" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.refresh_interval || 15}" min="1" max="120"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Items Per Category</label><input type="number" id="set-items-per-cat" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.items_per_category || 5}" min="1" max="20"></div>
+        </div>
+        <button class="pill pill-teal mt-4" onclick="saveSettings('feed')">Save Feed Config</button>
+      </div>
+
+      <!-- Queue Config -->
+      <div class="card">
+        <h3 class="text-base font-bold text-txt-primary mb-4">Queue Configuration</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Posts Per Day</label><input type="number" id="set-posts-per-day" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.posts_per_day || 12}" min="1" max="50"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Min Spacing (hours)</label><input type="number" id="set-min-spacing" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.min_spacing || 1}" min="0.5" max="12" step="0.5"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Quiet Hours Start</label><input type="time" id="set-quiet-start" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.quiet_start || '23:00'}"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Quiet Hours End</label><input type="time" id="set-quiet-end" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.quiet_end || '07:00'}"></div>
+          <div class="col-span-2"><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Timezone</label>
+            <select id="set-timezone" class="w-full border border-border rounded-lg px-3 py-2 text-sm">
+              ${['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Phoenix','Pacific/Honolulu','UTC'].map(tz => `<option value="${tz}" ${(s.timezone || 'America/New_York') === tz ? 'selected' : ''}>${tz}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <button class="pill pill-teal mt-4" onclick="saveSettings('queue')">Save Queue Config</button>
+      </div>
+
+      <!-- Auto-Draft Config -->
+      <div class="card">
+        <h3 class="text-base font-bold text-txt-primary mb-4">Auto-Draft Configuration</h3>
+        <div class="mb-4">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <div class="relative">
+              <input type="checkbox" id="set-autodraft-enabled" class="sr-only" ${s.autodraft_enabled ? 'checked' : ''}>
+              <div class="w-11 h-6 bg-gray-300 rounded-full transition" id="autodraft-track"></div>
+              <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition" id="autodraft-thumb"></div>
+            </div>
+            <span class="text-sm font-medium text-txt-primary">Enable Auto-Draft Generation</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Generation Time</label><input type="time" id="set-gen-time" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.gen_time || '09:00'}"></div>
+          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Number of Drafts</label><input type="number" id="set-num-drafts" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.num_drafts || 10}" min="1" max="50"></div>
+          <div class="col-span-2"><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Min Bettability Score</label><input type="number" id="set-min-bettability" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.min_bettability || 6}" min="1" max="10"></div>
+        </div>
+        <button class="pill pill-teal mt-4" onclick="saveSettings('autodraft')">Save Auto-Draft Config</button>
+      </div>
+    </div>`;
+}
+
+function bindSettingsEvents() {
+  // Toggle switch
+  const toggle = document.getElementById('set-autodraft-enabled');
+  const track = document.getElementById('autodraft-track');
+  const thumb = document.getElementById('autodraft-thumb');
+  if (toggle && track && thumb) {
+    const update = () => {
+      if (toggle.checked) { track.style.background = '#006B6E'; thumb.style.transform = 'translateX(20px)'; }
+      else { track.style.background = '#D1D5DB'; thumb.style.transform = 'translateX(0)'; }
+    };
+    update();
+    track.addEventListener('click', () => { toggle.checked = !toggle.checked; update(); });
+    thumb.addEventListener('click', () => { toggle.checked = !toggle.checked; update(); });
+  }
+}
+
+async function loadSettings() {
+  try {
+    const data = await api('/api/admin/settings');
+    APP.settings = data || {};
+  } catch (e) {
+    APP.settings = {};
+  }
+  const el = document.getElementById('page-content');
+  if (el && APP.currentPage === 'settings') { el.innerHTML = renderSettingsPage(); bindSettingsEvents(); }
+}
+
+async function saveSettings(section) {
+  let body = { section };
+  switch (section) {
+    case 'api_keys':
+      body.xai_key = document.getElementById('set-xai-key')?.value;
+      body.x_token = document.getElementById('set-x-token')?.value;
+      body.x_api_key = document.getElementById('set-x-api-key')?.value;
+      body.x_api_secret = document.getElementById('set-x-api-secret')?.value;
+      body.truth_token = document.getElementById('set-truth-token')?.value;
+      break;
+    case 'betty':
+      body.betty_prompt = document.getElementById('set-betty-prompt')?.value;
+      break;
+    case 'feed':
+      body.categories = Array.from(document.querySelectorAll('.set-category-cb:checked')).map(cb => cb.value);
+      body.refresh_interval = parseInt(document.getElementById('set-refresh-interval')?.value);
+      body.items_per_category = parseInt(document.getElementById('set-items-per-cat')?.value);
+      break;
+    case 'queue':
+      body.posts_per_day = parseInt(document.getElementById('set-posts-per-day')?.value);
+      body.min_spacing = parseFloat(document.getElementById('set-min-spacing')?.value);
+      body.quiet_start = document.getElementById('set-quiet-start')?.value;
+      body.quiet_end = document.getElementById('set-quiet-end')?.value;
+      body.timezone = document.getElementById('set-timezone')?.value;
+      break;
+    case 'autodraft':
+      body.autodraft_enabled = document.getElementById('set-autodraft-enabled')?.checked;
+      body.gen_time = document.getElementById('set-gen-time')?.value;
+      body.num_drafts = parseInt(document.getElementById('set-num-drafts')?.value);
+      body.min_bettability = parseInt(document.getElementById('set-min-bettability')?.value);
+      break;
+  }
+  try {
+    await api('/api/admin/settings', { method: 'PUT', body });
+    showToast('Settings saved!', 'success');
+  } catch (e) { /* toast already shown */ }
+}
+
+// ─── Demo Data (fallback when API unavailable) ──────────────────────
+function getDemoFeedItems() {
+  return [
+    {
+      id: 'f1', category: 'Politics', isNew: true, status: 'ready',
+      source: { name: 'Nate Silver', handle: 'NateSilver538', text: 'New polling data shows the race tightening in three key swing states. Pennsylvania margin now within 1.5 points. Michigan and Wisconsin also closing.', likes: 12400, retweets: 3200, url: 'https://x.com' },
+      market: { question: 'Will the Democratic candidate win Pennsylvania in 2026?', yes_odds: 52, no_odds: 48, volume: 2400000, bettability: 8, grok_reason: 'High-signal poll movement from A-rated pollster. Market hasn\'t fully priced in the shift yet.' },
+      x_text: 'Swing state alert: PA margin now 1.5pts per @NateSilver538. Smart money says this race is FAR from over.\n\nPolymarket still has it at 52/48. That\'s value. #WeBetAI',
+      truth_text: 'SWING STATE ALERT: Pennsylvania margin now just 1.5 points according to top pollster Nate Silver. Michigan and Wisconsin also tightening fast.\n\nPrediction markets have PA at 52/48 - our AI sees this as a value bet opportunity. The smart money is moving. #WeBetAI #Elections'
+    },
+    {
+      id: 'f2', category: 'Sports', isNew: true, status: 'ready',
+      source: { name: 'Adam Schefter', handle: 'AdamSchefter', text: 'Breaking: Star QB cleared to play Sunday after knee injury scare. Full participant in practice today.', likes: 45000, retweets: 8900, url: 'https://x.com' },
+      market: { question: 'Will the team win their division this season?', yes_odds: 67, no_odds: 33, volume: 890000, bettability: 7, grok_reason: 'QB return significantly impacts win probability. Line movement expected.' },
+      x_text: 'QB1 is BACK. Cleared for Sunday. The line hasn\'t moved yet.\n\nBettability: 7/10. Move fast. #WeBetAI #NFL',
+      truth_text: 'BREAKING: Star quarterback cleared to play Sunday after knee injury scare. Full practice participant today.\n\nOur bettability score: 7/10. The betting lines haven\'t adjusted yet - this is your window. Division odds at 67% YES. #WeBetAI #NFL #SportsBetting'
+    },
+    {
+      id: 'f3', category: 'Crypto', isNew: false, status: 'ready',
+      source: { name: 'Whale Alert', handle: 'whale_alert', text: '50,000 BTC ($3.2B) transferred from unknown wallet to Coinbase. Largest single transfer in 90 days.', likes: 28000, retweets: 11200, url: 'https://x.com' },
+      market: { question: 'Will Bitcoin drop below $60K this week?', yes_odds: 31, no_odds: 69, volume: 5600000, bettability: 6, grok_reason: 'Large exchange inflows historically precede sell pressure, but market sentiment remains bullish.' },
+      x_text: '$3.2B BTC just hit Coinbase. Whale dump incoming or just repositioning?\n\nMarkets say 31% chance of <$60K. Contrarians, your moment? #Bitcoin #WeBetAI',
+      truth_text: 'WHALE ALERT: 50,000 Bitcoin ($3.2 BILLION) just transferred to Coinbase - the largest single transfer in 90 days.\n\nPrediction markets give a 31% chance BTC drops below $60K this week. Our AI analysis suggests watching for cascading sell pressure. #WeBetAI #Bitcoin #Crypto'
+    }
+  ];
+}
+
+function getDemoQueueItems() {
+  return [
+    { id: 'q1', x_text: 'Fed meeting today. Markets pricing in a hold. But watch the dot plot...', platforms: ['x', 'truth'], scheduled_at: '2026-03-21T14:00:00', status: 'needs_review' },
+    { id: 'q2', x_text: 'March Madness upset alert: Our model has a 12-seed winning tonight. #WeBetAI', platforms: ['x'], scheduled_at: '2026-03-21T18:00:00', status: 'approved' },
+    { id: 'q3', x_text: 'Crypto market cap just crossed $3T again. Bull run confirmed?', platforms: ['x', 'truth'], scheduled_at: '2026-03-21T20:00:00', status: 'scheduled' },
+    { id: 'q4', x_text: 'Trade deadline moves are shaking up championship odds. Full analysis incoming.', platforms: ['truth'], scheduled_at: '2026-03-22T10:00:00', status: 'needs_review' },
+  ];
+}
+
+function getDemoHistoryItems() {
+  return [
+    { id: 'h1', text: 'Called it: Bitcoin broke $65K overnight just as our AI predicted. Polymarket odds shifted 12 points.', platforms: ['x', 'truth'], published_at: '2026-03-20T15:30:00', category: 'Crypto', engagement: { likes: 342, retweets: 89, total: 431 } },
+    { id: 'h2', text: 'THE LOCK came through again. 4th straight winning pick. Follow for daily edges.', platforms: ['x'], published_at: '2026-03-20T12:00:00', category: 'Sports', engagement: { likes: 567, retweets: 134, total: 701 } },
+    { id: 'h3', text: 'Senate vote prediction: Our model had it at 87% YES. Final result: passed 54-46.', platforms: ['x', 'truth'], published_at: '2026-03-19T20:00:00', category: 'Politics', engagement: { likes: 1200, retweets: 445, total: 1645 } },
+    { id: 'h4', text: 'Earnings season surprise: Tech sector beating estimates by 15% on average. Markets adjusting.', platforms: ['truth'], published_at: '2026-03-19T14:00:00', category: 'Markets', engagement: { likes: 234, retweets: 56, total: 290 } },
+    { id: 'h5', text: 'Oscar prediction markets were WAY off. Our AI had the upset at 40%. Most had it at 12%.', platforms: ['x'], published_at: '2026-03-18T22:00:00', category: 'Entertainment', engagement: { likes: 890, retweets: 267, total: 1157 } },
+  ];
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+function formatNum(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return function (...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), ms); };
+}
+
+function renderAndBindPage(page) {
+  const el = document.getElementById('page-content');
+  if (el) { el.innerHTML = renderPageContent(page); bindShellEvents(page); }
+}
+
+// ─── Init ────────────────────────────────────────────────────────────
+window.addEventListener('hashchange', router);
+window.addEventListener('DOMContentLoaded', () => {
+  if (!location.hash) location.hash = APP.token ? '#feed' : '#login';
+  router();
+});
+
+// Expose globals for inline onclick handlers
+window.logout = logout;
+window.publishAction = publishAction;
+window.scheduleAction = scheduleAction;
+window.queueAction = queueAction;
+window.dismissAction = dismissAction;
+window.regenerateAction = regenerateAction;
+window.composePublish = composePublish;
+window.composeSchedule = composeSchedule;
+window.composeQueue = composeQueue;
+window.doComposeSchedule = doComposeSchedule;
+window.showHistoryPreview = showHistoryPreview;
+window.closeModal = closeModal;
+window.bulkQueueAction = bulkQueueAction;
+window.editQueueItem = editQueueItem;
+window.deleteQueueItem = deleteQueueItem;
+window.saveSettings = saveSettings;
+</script>
+</body>
+</html>

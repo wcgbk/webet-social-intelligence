@@ -1,6 +1,31 @@
 [build]
   functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+
+[functions."trigger-picks"]
+  schedule = "0 14 * * *"
+  # 14:00 UTC = 9am EST / 10am EDT. Picks generate daily, no human or machine needed.
+
+[functions."admin-auto-draft"]
+  schedule = "0 12 * * *"
+  # 12:00 UTC = 7am EST / 8am EDT. Auto-generate morning feed digest.
+
+[functions."admin-queue-process"]
+  schedule = "*/15 * * * *"
+  # Every 15 minutes. Process scheduled posts in the queue.
+
+[[redirects]]
+  from = "/edge/optimization"
+  to = "/edge/optimization/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/edge"
+  to = "/edge/index.html"
+  status = 200
+
 [[redirects]]
   from = "/webetai"
   to = "/webetai/index.html"
@@ -10,6 +35,68 @@
   from = "/webetai/*"
   to = "/webetai/index.html"
   status = 200
+
+[[redirects]]
+  from = "/feed/beta2"
+  to = "/feed/beta2/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/feed/beta"
+  to = "/feed/beta/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/feed"
+  to = "/feed/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/grok-to-code"
+  to = "/grok-to-code.html"
+  status = 200
+
+[[redirects]]
+  from = "/claude"
+  to = "/grok-to-code.html"
+  status = 200
+
+# Admin dashboard — serve from /admin path and app.webetsocial.com subdomain
+[[redirects]]
+  from = "/admin"
+  to = "/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin/index.html"
+  status = 200
+
+# Subdomain routing: app.webetsocial.com → admin dashboard
+[[redirects]]
+  from = "https://app.webetsocial.com/*"
+  to = "/admin/index.html"
+  status = 200
+  force = true
+  conditions = {Role = ["admin"]}
+
+[[redirects]]
+  from = "https://app.webetsocial.com/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://app.webetsocial.com"
+  to = "/admin/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://app.webetsocial.com/*"
+  to = "/admin/index.html"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/api/*"

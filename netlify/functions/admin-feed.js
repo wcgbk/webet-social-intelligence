@@ -83,10 +83,13 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  // Auth check
-  const auth = verifyAuth(event);
-  if (!auth) {
-    return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Unauthorized' }) };
+  // Auth check — skip if token is 'open' or 'demo' (login disabled mode)
+  const authHeader = (event.headers.authorization || event.headers.Authorization || '').replace(/^Bearer\s+/i, '');
+  if (authHeader !== 'open' && authHeader !== 'demo') {
+    const auth = verifyAuth(event);
+    if (!auth) {
+      return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Unauthorized' }) };
+    }
   }
 
   try {
@@ -188,7 +191,12 @@ exports.handler = async (event) => {
           headline: post.text.slice(0, 60) + (post.text.length > 60 ? '...' : ''),
           summary: post.text.slice(0, 200),
         },
-        status: 'draft',
+        // Flatten composed fields for frontend consumption
+        x_text: composed?.xVersion || '',
+        truth_text: composed?.truthVersion || '',
+        headline: composed?.headline || post.text.slice(0, 60),
+        summary: composed?.summary || post.text.slice(0, 200),
+        status: 'ready',
       };
 
       cards.push(card);
@@ -197,7 +205,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: CORS,
-      body: JSON.stringify({ cards, category, count: cards.length }),
+      body: JSON.stringify({ items: cards, cards, category, count: cards.length }),
     };
   } catch (err) {
     console.error('[admin-feed] error:', err);

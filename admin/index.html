@@ -160,13 +160,22 @@ body { font-family: 'Geist Sans', system-ui, sans-serif; background: #0a0a0a; co
 /* Keep login inputs dark */
 .login-input { background: transparent !important; color: #fff !important; }
 
+/* Mobile nav */
+.mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: #0a0a0a; border-top: 1px solid #1f1f1f; padding: 6px 0; }
+.mobile-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; color: rgba(255,255,255,0.4); font-size: 10px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.mobile-nav-item.active { color: #006B6E; }
+.mobile-nav-item svg { width: 20px; height: 20px; }
+
 /* Mobile */
 @media (max-width: 768px) {
-  .sidebar { width: 60px; }
+  .sidebar { width: 0; overflow: hidden; border: none; }
   .sidebar .sidebar-text { display: none; }
   .sidebar .sidebar-logo-text { display: none; }
-  .sidebar-link { justify-content: center; padding: 11px; margin: 2px 6px; }
-  .main-content { margin-left: 60px; }
+  .main-content { margin-left: 0; padding-bottom: 72px; }
+  .mobile-nav { display: flex !important; }
+}
+@media (max-width: 640px) {
+  .hide-sm { display: none !important; }
 }
 </style>
 </head>
@@ -439,14 +448,14 @@ function renderShell(page) {
     <header style="background:#0a0a0a;border-bottom:1px solid #1f1f1f;" class="px-6 py-3 flex items-center justify-between sticky top-0 z-30">
       <h1 class="text-lg font-bold text-white">${pageTitle}</h1>
       <div class="flex items-center gap-4">
-        <div class="hidden sm:flex items-center gap-3 text-xs" style="color:rgba(255,255,255,0.45)">
+        <div class="hidden sm:flex items-center gap-3 text-xs hide-sm" style="color:rgba(255,255,255,0.45)">
           <span class="flex items-center gap-1">${icon('x','w-3.5 h-3.5')} <span class="font-semibold text-white">${APP.rateLimits.x.remaining}</span>/${APP.rateLimits.x.total}</span>
           <span style="color:#333">|</span>
           <span class="flex items-center gap-1">TS <span class="font-semibold text-white">${APP.rateLimits.truth.remaining}</span>/${APP.rateLimits.truth.total}</span>
         </div>
         <div class="flex items-center gap-2 cursor-pointer">
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background:#006B6E;color:#fff">${initial}</div>
-          <span class="hidden sm:inline text-sm" style="color:rgba(255,255,255,0.45)">${APP.userEmail}</span>
+          <span class="hidden sm:inline text-sm hide-sm" style="color:rgba(255,255,255,0.45)">${APP.userEmail}</span>
           <span class="w-4 h-4" style="color:rgba(255,255,255,0.45)">${ICONS.chevDown}</span>
         </div>
       </div>
@@ -456,7 +465,16 @@ function renderShell(page) {
     <main class="p-6" id="page-content">
       ${renderPageContent(page)}
     </main>
-  </div>`;
+  </div>
+
+  <!-- Mobile Bottom Nav -->
+  <nav class="mobile-nav">
+    <a href="#feed" class="mobile-nav-item ${page==='feed'?'active':''}">${ICONS.feed}Feed</a>
+    <a href="#betbuilder" class="mobile-nav-item ${page==='betbuilder'?'active':''}">${ICONS.builder}Builder</a>
+    <a href="#queue" class="mobile-nav-item ${page==='queue'?'active':''}">${ICONS.queue}Queue</a>
+    <a href="#history" class="mobile-nav-item ${page==='history'?'active':''}">${ICONS.history}History</a>
+    <a href="#compose" class="mobile-nav-item ${page==='compose'?'active':''}">${ICONS.compose}Compose</a>
+  </nav>`;
 }
 
 function renderPageContent(page) {
@@ -542,78 +560,98 @@ function renderFeedCard(item, idx) {
     'ready': 'Ready', 'posted_x': 'Posted to X', 'posted_truth': 'Posted to Truth',
     'posted_both': 'Posted to Both', 'scheduled': 'Scheduled', 'queued': 'Queued'
   }[item.status || 'ready'] || 'Ready';
-
   const xLen = (item.x_text || '').length;
   const tsLen = (item.truth_text || '').length;
+  const m = item.market || {};
+  const yesPct = m.yes_odds || 50;
+  const noPct = m.no_odds || 50;
 
   return `
-  <div class="card" data-feed-idx="${idx}">
+  <div class="bb-card" data-feed-idx="${idx}">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-2">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid #e8eae9;">
+      <div style="display:flex;align-items:center;gap:8px;">
         ${item.isNew ? '<span class="new-badge">NEW</span>' : ''}
-        <span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:rgba(0,107,110,0.08);color:#006B6E">${item.category || 'Trending'}</span>
+        <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:rgba(0,107,110,0.08);color:#006B6E;">${item.category || 'Trending'}</span>
       </div>
       <span class="text-xs font-semibold px-3 py-1 rounded-full ${statusCls}">${statusLabel}</span>
     </div>
 
-    <!-- Source Preview -->
-    <div class="rounded-lg p-4 mb-4" style="background:#f9fafb;border:1px solid #e5e7eb">
-      <div class="flex items-start gap-3 mb-3">
-        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style="background:rgba(0,107,110,0.08);color:#006B6E">${(item.source?.name || 'U')[0]}</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="font-semibold text-sm" style="color:#1a1a1a">${item.source?.name || 'Unknown'}</span>
-            <span class="text-xs text-dim">@${item.source?.handle || 'unknown'}</span>
+    <!-- X Post Embed -->
+    <div style="padding:16px 20px;">
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#f0fafa;border:1px solid #b8dede;display:flex;align-items:center;justify-content:center;color:#006B6E;font-weight:700;font-size:16px;flex-shrink:0;">${(item.source?.name || 'U')[0]}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:14px;color:#252B1A;">${item.source?.name || 'Unknown'}</span>
+            <span style="font-size:12px;color:#787878;">@${item.source?.handle || 'unknown'}</span>
+            <span style="margin-left:auto;color:#787878;opacity:0.4;">${icon('x','w-4 h-4')}</span>
           </div>
-          <p class="text-sm mt-1" style="color:#4a4a4a">${item.source?.text || ''}</p>
-          <div class="flex items-center gap-4 mt-2 text-xs text-dim">
-            <span class="flex items-center gap-1">${icon('heart','w-3.5 h-3.5')} ${formatNum(item.source?.likes || 0)}</span>
-            <span class="flex items-center gap-1">${icon('retweet','w-3.5 h-3.5')} ${formatNum(item.source?.retweets || 0)}</span>
-            ${item.source?.url ? `<a href="${item.source.url}" target="_blank" style="color:#006B6E" class="hover:underline">View on X ${ICONS.externalLink}</a>` : ''}
+          <p style="font-size:14px;color:#4a4a4a;line-height:1.55;margin-top:6px;">${item.source?.text || ''}</p>
+          <div style="display:flex;align-items:center;gap:16px;margin-top:10px;padding-top:8px;border-top:1px solid #e8eae9;font-size:12px;color:#787878;">
+            <span style="display:flex;align-items:center;gap:4px;">${icon('heart','w-3.5 h-3.5')} ${formatNum(item.source?.likes || 0)}</span>
+            <span style="display:flex;align-items:center;gap:4px;">${icon('retweet','w-3.5 h-3.5')} ${formatNum(item.source?.retweets || 0)}</span>
+            ${item.source?.url ? `<a href="${item.source.url}" target="_blank" style="color:#006B6E;display:flex;align-items:center;gap:4px;margin-left:auto;" class="hover:underline">View on X ${ICONS.externalLink}</a>` : ''}
           </div>
         </div>
       </div>
-      ${item.market ? `
-      <div class="mt-3 p-3 rounded-lg" style="background:#fff;border:1px solid #e5e7eb">
-        <p class="text-sm font-semibold mb-2" style="color:#1a1a1a">${item.market.question || ''}</p>
-        <div class="flex flex-wrap items-center gap-3 text-xs">
-          <span class="px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold">YES ${item.market.yes_odds || '—'}%</span>
-          <span class="px-3 py-1 rounded-full bg-red-100 text-red-700 font-bold">NO ${item.market.no_odds || '—'}%</span>
-          <span class="text-dim">Vol: $${formatNum(item.market.volume || 0)}</span>
-          <span class="text-dim">Bettability: <strong style="color:#006B6E">${item.market.bettability || '—'}/10</strong></span>
-        </div>
-        ${item.market.grok_reason ? `<p class="text-xs text-dim mt-2 italic">${item.market.grok_reason}</p>` : ''}
-      </div>` : ''}
     </div>
+
+    ${m.question ? `
+    <!-- Market Match Section -->
+    <div style="border-top:1px solid #e8eae9;padding:0;">
+      <div style="padding:12px 20px 8px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#787878;text-transform:uppercase;letter-spacing:0.06em;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#006B6E" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        Matched Market
+        <span style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;background:rgba(16,185,129,0.08);color:#10B981;border:1px solid rgba(16,185,129,0.2);">
+          ${m.bettability && m.bettability !== '—' ? (m.bettability >= 7 ? 'STRONG' : 'GOOD') : 'MATCHED'}
+        </span>
+      </div>
+      <div style="padding:0 20px 14px;">
+        <div class="bb-bet-string">
+          <div style="font-size:15px;font-weight:600;color:#252B1A;line-height:1.5;">
+            ${m.question}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;flex-wrap:wrap;">
+          <span class="bb-odds-chip yes" style="position:relative">${yesPct}% Yes<div class="odds-bar" style="width:${yesPct}%"></div></span>
+          <span class="bb-odds-chip no" style="position:relative">${noPct}% No<div class="odds-bar" style="width:${noPct}%"></div></span>
+          <span style="color:#787878;">Vol: $${formatNum(m.volume || 0)}</span>
+          <span style="color:#787878;">Bettability: <b style="color:#006B6E">${m.bettability || '—'}/10</b></span>
+        </div>
+        ${m.grok_reason ? `<p style="font-size:11px;font-style:italic;color:#787878;margin-top:8px;">${m.grok_reason}</p>` : ''}
+      </div>
+    </div>` : ''}
 
     <!-- AI-Composed Posts -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <label class="text-xs font-semibold text-dim uppercase tracking-wide">X Version</label>
-          <span class="text-xs ${xLen > 280 ? 'text-danger font-bold' : 'text-dim'}" id="x-counter-${idx}">${xLen}/280</span>
+    <div style="border-top:1px solid #e8eae9;padding:16px 20px;">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <label style="font-size:11px;font-weight:600;color:#787878;text-transform:uppercase;letter-spacing:0.05em;">X Version</label>
+            <span style="font-size:11px;color:${xLen > 280 ? '#EF4444' : '#787878'};" id="x-counter-${idx}">${xLen}/280</span>
+          </div>
+          <textarea class="compose-textarea" data-idx="${idx}" data-platform="x" maxlength="280" rows="4">${item.x_text || ''}</textarea>
         </div>
-        <textarea class="compose-textarea" data-idx="${idx}" data-platform="x" maxlength="280" rows="4">${item.x_text || ''}</textarea>
-      </div>
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <label class="text-xs font-semibold text-dim uppercase tracking-wide">Truth Social Version</label>
-          <span class="text-xs ${tsLen > 500 ? 'text-danger font-bold' : 'text-dim'}" id="ts-counter-${idx}">${tsLen}/500</span>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <label style="font-size:11px;font-weight:600;color:#787878;text-transform:uppercase;letter-spacing:0.05em;">Truth Social Version</label>
+            <span style="font-size:11px;color:${tsLen > 500 ? '#EF4444' : '#787878'};" id="ts-counter-${idx}">${tsLen}/500</span>
+          </div>
+          <textarea class="compose-textarea" data-idx="${idx}" data-platform="truth" maxlength="500" rows="4">${item.truth_text || ''}</textarea>
         </div>
-        <textarea class="compose-textarea" data-idx="${idx}" data-platform="truth" maxlength="500" rows="4">${item.truth_text || ''}</textarea>
       </div>
-    </div>
 
-    <!-- Action Buttons -->
-    <div class="flex flex-wrap gap-2">
-      <button class="pill pill-primary" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
-      <button class="pill pill-primary" onclick="publishAction(${idx},'truth')">Post to Truth</button>
-      <button class="pill pill-primary text-sm px-6" onclick="publishAction(${idx},'both')">Post to Both</button>
-      <button class="pill pill-outlined" onclick="scheduleAction(${idx})">${icon('calendar','w-4 h-4')} Schedule</button>
-      <button class="pill pill-outlined" onclick="queueAction(${idx})">Add to Queue</button>
-      <button class="pill pill-danger" onclick="dismissAction(${idx})">Dismiss</button>
-      <button class="pill pill-outlined" onclick="regenerateAction(${idx})">${icon('refresh','w-4 h-4')} Regenerate</button>
+      <!-- Action Buttons -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button class="pill pill-primary" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
+        <button class="pill pill-primary" onclick="publishAction(${idx},'truth')">Post to Truth</button>
+        <button class="pill pill-primary" style="padding:6px 24px;" onclick="publishAction(${idx},'both')">Post to Both</button>
+        <button class="pill pill-outlined" onclick="scheduleAction(${idx})">${icon('calendar','w-4 h-4')} Schedule</button>
+        <button class="pill pill-outlined" onclick="queueAction(${idx})">Add to Queue</button>
+        <button class="pill pill-danger" onclick="dismissAction(${idx})">Dismiss</button>
+        <button class="pill pill-outlined" onclick="regenerateAction(${idx})">${icon('refresh','w-4 h-4')} Regenerate</button>
+      </div>
     </div>
   </div>`;
 }
@@ -1496,12 +1534,15 @@ function bindBetBuilderEvents() {
 }
 
 async function loadBetBuilder() {
-  APP.bbLoading = true;
+  // Show demo data instantly
+  APP.bbItems = getDemoFeedItems().map(item => ({ ...item, selectedSide: 'YES', stake: 5 }));
+  APP.bbLastRefreshed = new Date();
+  APP.bbLoading = false;
   updateBBList();
+  // Fetch real data in background
   try {
-    const data = await api(`/api/admin-feed?category=${APP.bbCategory}&limit=8`);
+    const data = await api(`/api/admin-feed?category=${APP.bbCategory}&limit=3`);
     const items = (data.items || data.cards || []).map(item => {
-      // Normalize from API format
       const m = item.markets?.[0] || item.matchedMarkets?.[0] || {};
       return {
         source: item.sourcePost || item.source || { name: 'Unknown', handle: 'unknown', text: '' },
@@ -1523,15 +1564,15 @@ async function loadBetBuilder() {
         stake: 5,
       };
     });
-    APP.bbItems = items;
-    APP.bbLastRefreshed = new Date();
+    if (items.length > 0) {
+      APP.bbItems = items;
+      APP.bbLastRefreshed = new Date();
+      updateBBList();
+      showToast('Live bets loaded', 'success');
+    }
   } catch (e) {
-    // Fall back to demo data mapped to bb format
-    APP.bbItems = getDemoFeedItems().map(item => ({ ...item, selectedSide: 'YES', stake: 5 }));
-    APP.bbLastRefreshed = new Date();
+    // Demo data already showing
   }
-  APP.bbLoading = false;
-  updateBBList();
 }
 
 function updateBBList() {

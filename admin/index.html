@@ -4,33 +4,38 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WeBetAI - Social Intelligence | Admin Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 tailwind.config = {
   theme: {
     extend: {
       colors: {
-        teal: { DEFAULT: '#006B6E', light: '#E0F5F5', mint: '#E8FAF8' },
-        charcoal: { DEFAULT: '#1A1A2E', dark: '#0D0D1A' },
-        txt: { primary: '#1A1A1A', secondary: '#6B7280' },
+        bg: 'hsl(260, 87%, 3%)',
+        fg: 'hsl(40, 6%, 95%)',
+        primary: { DEFAULT: 'hsl(121, 95%, 76%)', fg: 'hsl(0, 0%, 5%)' },
+        card: { DEFAULT: 'hsl(240, 5%, 8%)', inner: 'hsl(240, 6%, 11%)' },
+        muted: 'hsl(240, 4%, 16%)',
+        border: 'hsl(240, 4%, 20%)',
         success: '#10B981',
         danger: '#EF4444',
-        border: '#E5E7EB',
+        amber: '#F59E0B',
       },
-      fontFamily: { inter: ['Inter', 'sans-serif'] },
+      fontFamily: { sans: ["'Geist Sans'", 'system-ui', 'sans-serif'] },
     }
   }
 }
 </script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1A1A1A; }
+body { font-family: 'Geist Sans', system-ui, sans-serif; background: hsl(260, 87%, 3%); color: hsl(40, 6%, 95%); }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: hsl(240, 4%, 25%); border-radius: 3px; }
 
 /* Login styles */
 .login-input { background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 0; width: 100%; font-size: 15px; outline: none; transition: border-color 0.2s; }
@@ -38,10 +43,10 @@ body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1A1A1A; }
 .login-input::placeholder { color: rgba(255,255,255,0.4); }
 
 /* Sidebar */
-.sidebar { width: 220px; min-height: 100vh; background: #006B6E; position: fixed; left: 0; top: 0; z-index: 40; transition: width 0.2s; }
-.sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 20px; color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 500; border-radius: 8px; margin: 2px 10px; transition: all 0.15s; cursor: pointer; text-decoration: none; }
-.sidebar-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
-.sidebar-link.active { background: rgba(255,255,255,0.18); color: #fff; }
+.sidebar { width: 220px; min-height: 100vh; background: hsl(240, 5%, 8%); border-right: 1px solid hsl(240, 4%, 20%); position: fixed; left: 0; top: 0; z-index: 40; transition: width 0.2s; }
+.sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 20px; color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 500; border-radius: 8px; margin: 2px 10px; transition: all 0.15s; cursor: pointer; text-decoration: none; }
+.sidebar-link:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+.sidebar-link.active { background: rgba(135,251,137,0.08); color: hsl(121,95%,76%); }
 .sidebar-link svg { width: 20px; height: 20px; flex-shrink: 0; }
 
 /* Content area */
@@ -49,63 +54,109 @@ body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1A1A1A; }
 
 /* Pills */
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border-radius: 24px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1.5px solid transparent; white-space: nowrap; }
-.pill-teal { background: #006B6E; color: #fff; border-color: #006B6E; }
-.pill-teal:hover { background: #005557; }
-.pill-outlined { background: transparent; color: #006B6E; border-color: #006B6E; }
-.pill-outlined:hover { background: #E0F5F5; }
+.pill-primary { background: hsl(121,95%,76%); color: hsl(0,0%,5%); border-color: hsl(121,95%,76%); }
+.pill-primary:hover { background: hsl(121,95%,68%); }
+.pill-outlined { background: transparent; color: hsl(40, 6%, 95%); border-color: hsl(240, 4%, 20%); }
+.pill-outlined:hover { background: rgba(255,255,255,0.05); }
 .pill-danger { background: #EF4444; color: #fff; border-color: #EF4444; }
 .pill-danger:hover { background: #DC2626; }
 .pill-success { background: #10B981; color: #fff; border-color: #10B981; }
 
 /* Status pills */
-.status-ready { background: #D1FAE5; color: #065F46; }
-.status-posted-x { background: #DBEAFE; color: #1E40AF; }
-.status-posted-truth { background: #FEE2E2; color: #991B1B; }
-.status-posted-both { background: #EDE9FE; color: #5B21B6; }
-.status-scheduled { background: #FEF3C7; color: #92400E; }
-.status-queued { background: #F3F4F6; color: #374151; }
+.status-ready { background: rgba(16,185,129,0.15); color: #10B981; }
+.status-posted-x { background: rgba(59,130,246,0.15); color: #60A5FA; }
+.status-posted-truth { background: rgba(167,139,250,0.15); color: #A78BFA; }
+.status-posted-both { background: rgba(167,139,250,0.15); color: #C4B5FD; }
+.status-scheduled { background: rgba(245,158,11,0.15); color: #F59E0B; }
+.status-queued { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); }
 
 /* Card */
-.card { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+.card { position: relative; background: rgba(255,255,255,0.01); background-blend-mode: luminosity; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid hsl(240, 4%, 20%); box-shadow: inset 0 1px 1px rgba(255,255,255,0.06); border-radius: 16px; padding: 24px; margin-bottom: 16px; overflow: hidden; color: hsl(40, 6%, 95%); }
+
+/* BetBuilder card — beta2 style */
+.bb-card { background: #fff; border: 1px solid #e8eae9; border-radius: 16px; margin-bottom: 16px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.bb-card .market-section { padding: 16px 20px; }
+.bb-bet-string { background: #f0fafa; border: 1.5px solid #b8dede; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.bb-bet-string .ph { color: #006B6E; }
+.bb-bet-string .side-yes { color: #10b981; font-weight: 700; }
+.bb-bet-string .side-no { color: #ef4444; font-weight: 700; }
+.bb-odds-chip { padding: 3px 10px; border-radius: 6px; font-weight: 700; font-size: 0.6875rem; position: relative; overflow: hidden; display: inline-block; }
+.bb-odds-chip.yes { background: rgba(16,185,129,0.08); color: #10b981; }
+.bb-odds-chip.no { background: rgba(239,68,68,0.06); color: #ef4444; }
+.bb-odds-chip .odds-bar { position: absolute; bottom: 0; left: 0; height: 2px; border-radius: 0 0 6px 6px; }
+.bb-odds-chip.yes .odds-bar { background: #10b981; }
+.bb-odds-chip.no .odds-bar { background: #ef4444; }
+.bb-side-toggle { display: flex; border: 1.5px solid #e8eae9; border-radius: 9999px; overflow: hidden; margin-bottom: 10px; }
+.bb-side-btn { flex: 1; padding: 9px 0; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: #fff; color: #787878; text-align: center; font-family: inherit; }
+.bb-side-btn:first-child { border-right: 1px solid #e8eae9; }
+.bb-side-btn.active-yes { background: #10b981; color: #fff; }
+.bb-side-btn.active-no { background: #ef4444; color: #fff; }
+.bb-send-btn { width: 100%; padding: 11px; border-radius: 10px; font-size: 0.8125rem; font-weight: 600; border: none; cursor: pointer; background: linear-gradient(135deg, #006B6E 0%, #004d50 100%); color: #fff; position: relative; overflow: hidden; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.bb-send-btn::after { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%); animation: btnShimmer 3s ease-in-out infinite; }
+@keyframes btnShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.bb-send-btn:hover { filter: brightness(1.1); }
+.bb-action-row { display: flex; gap: 4px; padding: 6px 20px 10px; border-top: 1px solid #e8eae9; margin-top: 4px; }
+.bb-action-btn { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: none; background: transparent; color: #787878; cursor: pointer; font-size: 0.6875rem; font-weight: 600; font-family: inherit; transition: all 0.15s; }
+.bb-action-btn:hover { background: #f0fafa; color: #006B6E; }
+.bb-social-bar { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid #e8eae9; flex-wrap: wrap; }
+.bb-social-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 24px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; color: #fff; font-family: inherit; transition: all 0.15s; }
+.bb-social-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.bb-social-btn.x-btn { background: #000; }
+.bb-social-btn.truth-btn { background: #5448C8; }
+.bb-social-btn.linkedin-btn { background: #0077B5; }
+.bb-match-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* Modal overlay */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; }
-.modal-box { background: #fff; border-radius: 16px; padding: 32px; max-width: 440px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.modal-box { background: hsl(240, 5%, 8%); border: 1px solid hsl(240, 4%, 20%); border-radius: 16px; padding: 32px; max-width: 440px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); color: hsl(40, 6%, 95%); }
 
 /* Toast */
 .toast-container { position: fixed; top: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
 .toast { padding: 14px 20px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: slideIn 0.3s ease; max-width: 380px; }
 .toast-success { background: #10B981; }
 .toast-error { background: #EF4444; }
-.toast-info { background: #006B6E; }
+.toast-info { background: hsl(121,95%,76%); color: hsl(0,0%,5%); }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
 /* Skeleton */
-.skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
+.skeleton { background: linear-gradient(90deg, hsl(240,5%,10%) 25%, hsl(240,5%,14%) 50%, hsl(240,5%,10%) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* Category filter */
-.cat-pill { padding: 8px 18px; border-radius: 24px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1.5px solid #006B6E; }
-.cat-pill.active { background: #006B6E; color: #fff; }
-.cat-pill:not(.active) { background: transparent; color: #006B6E; }
-.cat-pill:not(.active):hover { background: #E0F5F5; }
+.cat-pill { padding: 8px 18px; border-radius: 24px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1.5px solid hsl(240,4%,20%); }
+.cat-pill.active { background: hsl(121,95%,76%); color: hsl(0,0%,5%); border-color: hsl(121,95%,76%); }
+.cat-pill:not(.active) { background: transparent; color: hsl(40,6%,95%); }
+.cat-pill:not(.active):hover { background: rgba(255,255,255,0.05); }
 
 /* Table */
 .admin-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.admin-table th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #E5E7EB; }
-.admin-table td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
-.admin-table tr:hover td { background: #F9FAFB; }
+.admin-table th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid hsl(240, 4%, 20%); }
+.admin-table td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid hsl(240, 4%, 20%); vertical-align: middle; color: hsl(40, 6%, 95%); }
+.admin-table tr:hover td { background: hsl(240, 5%, 10%); }
 
 /* Checkbox */
-.teal-checkbox { accent-color: #006B6E; width: 16px; height: 16px; cursor: pointer; }
+.teal-checkbox { accent-color: hsl(121,95%,76%); width: 16px; height: 16px; cursor: pointer; }
 
 /* Textarea */
-.compose-textarea { width: 100%; min-height: 120px; border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px; font-size: 14px; font-family: 'Inter', sans-serif; resize: vertical; outline: none; transition: border-color 0.15s; }
-.compose-textarea:focus { border-color: #006B6E; box-shadow: 0 0 0 3px rgba(0,107,110,0.1); }
+.compose-textarea { width: 100%; min-height: 120px; background: hsl(240, 6%, 11%); border: 1px solid hsl(240, 4%, 20%); border-radius: 8px; padding: 12px; font-size: 14px; font-family: 'Geist Sans', system-ui, sans-serif; color: hsl(40, 6%, 95%); resize: vertical; outline: none; transition: border-color 0.15s; }
+.compose-textarea:focus { border-color: hsl(121,95%,76%); box-shadow: 0 0 0 3px rgba(135,251,137,0.1); }
 
 /* NEW badge */
-.new-badge { background: #006B6E; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.new-badge { background: hsl(121,95%,76%); color: hsl(0,0%,5%); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Text color utilities */
+.text-dim { color: rgba(255,255,255,0.45); }
+
+/* Dark form inputs */
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], select, textarea:not(.compose-textarea) {
+  background: hsl(240, 6%, 11%) !important;
+  color: hsl(40, 6%, 95%) !important;
+  border-color: hsl(240, 4%, 20%) !important;
+}
+input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.3) !important; }
+select option { background: hsl(240, 5%, 8%); color: hsl(40, 6%, 95%); }
 
 /* Mobile */
 @media (max-width: 768px) {
@@ -163,13 +214,13 @@ function showToast(message, type = 'info') {
 }
 
 // ─── Modal ───────────────────────────────────────────────────────────
-function showModal(title, message, onConfirm, confirmText = 'Confirm', confirmClass = 'pill-teal') {
+function showModal(title, message, onConfirm, confirmText = 'Confirm', confirmClass = 'pill-primary') {
   const root = document.getElementById('modal-root');
   root.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal-box">
-        <h3 class="text-lg font-bold text-txt-primary mb-2">${title}</h3>
-        <p class="text-sm text-txt-secondary mb-6">${message}</p>
+        <h3 class="text-lg font-bold text-fg mb-2">${title}</h3>
+        <p class="text-sm text-dim mb-6">${message}</p>
         <div class="flex gap-3 justify-end">
           <button class="pill pill-outlined" onclick="closeModal()">Cancel</button>
           <button class="pill ${confirmClass}" id="modal-confirm-btn">${confirmText}</button>
@@ -267,6 +318,9 @@ const ICONS = {
   chevDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
   close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  builder: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/></svg>`,
+  linkedin: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
+  truth: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 3h6l4 5.5L16 3h6L14 13v8h-4v-8L2 3z"/></svg>`,
   clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   externalLink: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline w-3 h-3"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
 };
@@ -275,23 +329,32 @@ function icon(name, cls = 'w-5 h-5') { return `<span class="inline-flex ${cls}">
 
 // ─── Login Page ──────────────────────────────────────────────────────
 function renderLogin() {
+  const loginLogo = `<svg viewBox="0 0 470 419" fill="none" style="width:48px; height:42px;" xmlns="http://www.w3.org/2000/svg">
+    <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+    <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="hsl(121,95%,76%)"/>
+  </svg>`;
+  const loginLogoMobile = `<svg viewBox="0 0 470 419" fill="none" style="width:36px; height:32px;" xmlns="http://www.w3.org/2000/svg">
+    <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+    <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="hsl(121,95%,76%)"/>
+  </svg>`;
   return `
   <div class="flex min-h-screen">
     <!-- Left Panel -->
-    <div class="hidden md:flex w-1/2 items-center justify-center" style="background:#E0F5F5">
-      <div class="text-center">
+    <div class="hidden md:flex w-1/2 items-center justify-center" style="background:hsl(260,87%,3%); position:relative; overflow:hidden;">
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%, rgba(135,251,137,0.08) 0%, transparent 70%);"></div>
+      <div class="text-center" style="position:relative;z-index:1;">
         <div class="flex items-center justify-center gap-3 mb-4">
-          <span class="w-14 h-14 text-teal">${ICONS.dice}</span>
-          <span class="text-4xl font-extrabold" style="color:#006B6E">WeBet</span>
+          ${loginLogo}
+          <span class="text-4xl font-extrabold text-white">WeBet</span>
         </div>
-        <p class="text-sm font-medium" style="color:#006B6E;opacity:0.7">Social Intelligence Platform</p>
+        <p class="text-sm font-medium" style="color:hsl(121,95%,76%);opacity:0.7">Social Intelligence Platform</p>
       </div>
     </div>
     <!-- Right Panel -->
-    <div class="w-full md:w-1/2 flex items-center justify-center px-8" style="background:#0D0D1A">
+    <div class="w-full md:w-1/2 flex items-center justify-center px-8" style="background:hsl(240,5%,8%)">
       <div class="w-full max-w-sm">
         <div class="flex items-center gap-3 mb-2 md:hidden">
-          <span class="w-10 h-10 text-white">${ICONS.dice}</span>
+          ${loginLogoMobile}
           <span class="text-2xl font-extrabold text-white">WeBet</span>
         </div>
         <h1 class="text-3xl font-bold text-white mb-1">Welcome back</h1>
@@ -308,7 +371,7 @@ function renderLogin() {
             <input type="checkbox" class="teal-checkbox" checked>
             <span class="text-sm text-white/60">Remember me</span>
           </label>
-          <button type="submit" class="w-full py-3 rounded-3xl bg-white text-charcoal-dark font-bold text-sm hover:bg-gray-100 transition">LOGIN</button>
+          <button type="submit" class="w-full py-3 rounded-3xl font-bold text-sm transition" style="background:hsl(121,95%,76%);color:hsl(0,0%,5%);">LOGIN</button>
         </form>
       </div>
     </div>
@@ -336,19 +399,20 @@ function bindLoginEvents() {
 function renderShell(page) {
   const navItems = [
     { id: 'feed', label: 'Feed', icon: 'feed' },
+    { id: 'betbuilder', label: 'WeBet Builder', icon: 'builder' },
     { id: 'queue', label: 'Queue', icon: 'queue' },
     { id: 'history', label: 'History', icon: 'history' },
     { id: 'compose', label: 'Compose', icon: 'compose' },
     { id: 'settings', label: 'Settings', icon: 'settings' },
   ];
-  const pageTitle = { feed: 'Feed', queue: 'Post Queue', history: 'Published History', compose: 'Compose Post', settings: 'Settings' }[page] || 'Feed';
+  const pageTitle = { feed: 'Feed', betbuilder: 'WeBet Builder', queue: 'Post Queue', history: 'Published History', compose: 'Compose Post', settings: 'Settings' }[page] || 'Feed';
   const initial = (APP.userEmail || 'B')[0].toUpperCase();
 
   return `
   <!-- Sidebar -->
   <aside class="sidebar flex flex-col">
     <div class="flex items-center gap-2 px-5 py-5 mb-4">
-      <span class="w-8 h-8 text-white flex-shrink-0">${ICONS.dice}</span>
+      <span class="flex-shrink-0"><svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px;" xmlns="http://www.w3.org/2000/svg"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="hsl(121,95%,76%)"/></svg></span>
       <span class="sidebar-logo-text text-white font-extrabold text-lg">WeBet</span>
     </div>
     <nav class="flex-1">
@@ -370,18 +434,18 @@ function renderShell(page) {
   <!-- Main -->
   <div class="main-content">
     <!-- Top Bar -->
-    <header class="bg-white border-b border-border px-6 py-3 flex items-center justify-between sticky top-0 z-30">
-      <h1 class="text-lg font-bold text-txt-primary">${pageTitle}</h1>
+    <header style="background:hsl(240,5%,8%);border-bottom:1px solid hsl(240,4%,20%);" class="px-6 py-3 flex items-center justify-between sticky top-0 z-30">
+      <h1 class="text-lg font-bold" style="color:hsl(40,6%,95%)">${pageTitle}</h1>
       <div class="flex items-center gap-4">
-        <div class="hidden sm:flex items-center gap-3 text-xs text-txt-secondary">
-          <span class="flex items-center gap-1">${icon('x','w-3.5 h-3.5')} <span class="font-semibold text-txt-primary">${APP.rateLimits.x.remaining}</span>/${APP.rateLimits.x.total}</span>
-          <span class="text-border">|</span>
-          <span class="flex items-center gap-1">TS <span class="font-semibold text-txt-primary">${APP.rateLimits.truth.remaining}</span>/${APP.rateLimits.truth.total}</span>
+        <div class="hidden sm:flex items-center gap-3 text-xs" style="color:rgba(255,255,255,0.45)">
+          <span class="flex items-center gap-1">${icon('x','w-3.5 h-3.5')} <span class="font-semibold" style="color:hsl(40,6%,95%)">${APP.rateLimits.x.remaining}</span>/${APP.rateLimits.x.total}</span>
+          <span style="color:hsl(240,4%,20%)">|</span>
+          <span class="flex items-center gap-1">TS <span class="font-semibold" style="color:hsl(40,6%,95%)">${APP.rateLimits.truth.remaining}</span>/${APP.rateLimits.truth.total}</span>
         </div>
         <div class="flex items-center gap-2 cursor-pointer">
-          <div class="w-8 h-8 rounded-full bg-teal flex items-center justify-center text-white text-sm font-bold">${initial}</div>
-          <span class="hidden sm:inline text-sm text-txt-secondary">${APP.userEmail}</span>
-          <span class="w-4 h-4 text-txt-secondary">${ICONS.chevDown}</span>
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background:hsl(121,95%,76%);color:hsl(0,0%,5%)">${initial}</div>
+          <span class="hidden sm:inline text-sm" style="color:rgba(255,255,255,0.45)">${APP.userEmail}</span>
+          <span class="w-4 h-4" style="color:rgba(255,255,255,0.45)">${ICONS.chevDown}</span>
         </div>
       </div>
     </header>
@@ -396,6 +460,7 @@ function renderShell(page) {
 function renderPageContent(page) {
   switch (page) {
     case 'feed': return renderFeedPage();
+    case 'betbuilder': return renderBetBuilderPage();
     case 'queue': return renderQueuePage();
     case 'history': return renderHistoryPage();
     case 'compose': return renderComposePage();
@@ -407,6 +472,7 @@ function renderPageContent(page) {
 function bindShellEvents(page) {
   switch (page) {
     case 'feed': bindFeedEvents(); break;
+    case 'betbuilder': bindBetBuilderEvents(); break;
     case 'queue': bindQueueEvents(); break;
     case 'history': bindHistoryEvents(); break;
     case 'compose': bindComposeEvents(); break;
@@ -417,6 +483,7 @@ function bindShellEvents(page) {
 async function loadPageData(page) {
   switch (page) {
     case 'feed': await loadFeed(); break;
+    case 'betbuilder': await loadBetBuilder(); break;
     case 'queue': await loadQueue(); break;
     case 'history': await loadHistory(); break;
     case 'settings': await loadSettings(); break;
@@ -432,7 +499,7 @@ function renderFeedPage() {
         ${CATEGORIES.map(c => `<button class="cat-pill ${APP.feedCategory === c.toLowerCase() ? 'active' : ''}" data-cat="${c.toLowerCase()}">${c}</button>`).join('')}
       </div>
       <div class="flex items-center gap-3">
-        <span class="text-xs text-txt-secondary">${lastRefresh}</span>
+        <span class="text-xs text-dim">${lastRefresh}</span>
         <button class="pill pill-outlined flex items-center gap-2" id="refresh-feed-btn">${icon('refresh','w-4 h-4')} Refresh Feed</button>
       </div>
     </div>
@@ -460,7 +527,7 @@ function renderSkeletonCards(n) {
 }
 
 function renderFeedItems() {
-  if (!APP.feedItems.length) return '<div class="text-center py-16 text-txt-secondary"><p class="text-lg font-medium">No feed items</p><p class="text-sm mt-1">Try refreshing or switching categories.</p></div>';
+  if (!APP.feedItems.length) return '<div class="text-center py-16 text-dim"><p class="text-lg font-medium">No feed items</p><p class="text-sm mt-1">Try refreshing or switching categories.</p></div>';
   return APP.feedItems.map((item, i) => renderFeedCard(item, i)).join('');
 }
 
@@ -483,38 +550,38 @@ function renderFeedCard(item, idx) {
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
         ${item.isNew ? '<span class="new-badge">NEW</span>' : ''}
-        <span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#E0F5F5;color:#006B6E">${item.category || 'Trending'}</span>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:rgba(135,251,137,0.1);color:hsl(121,95%,76%)">${item.category || 'Trending'}</span>
       </div>
       <span class="text-xs font-semibold px-3 py-1 rounded-full ${statusCls}">${statusLabel}</span>
     </div>
 
     <!-- Source Preview -->
-    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+    <div class="rounded-lg p-4 mb-4" style="background:hsl(240,6%,11%)">
       <div class="flex items-start gap-3 mb-3">
-        <div class="w-10 h-10 rounded-full bg-teal/10 flex items-center justify-center text-teal font-bold text-sm flex-shrink-0">${(item.source?.name || 'U')[0]}</div>
+        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style="background:rgba(135,251,137,0.1);color:hsl(121,95%,76%)">${(item.source?.name || 'U')[0]}</div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="font-semibold text-sm text-txt-primary">${item.source?.name || 'Unknown'}</span>
-            <span class="text-xs text-txt-secondary">@${item.source?.handle || 'unknown'}</span>
+            <span class="font-semibold text-sm text-fg">${item.source?.name || 'Unknown'}</span>
+            <span class="text-xs text-dim">@${item.source?.handle || 'unknown'}</span>
           </div>
-          <p class="text-sm text-txt-primary mt-1">${item.source?.text || ''}</p>
-          <div class="flex items-center gap-4 mt-2 text-xs text-txt-secondary">
+          <p class="text-sm text-fg mt-1">${item.source?.text || ''}</p>
+          <div class="flex items-center gap-4 mt-2 text-xs text-dim">
             <span class="flex items-center gap-1">${icon('heart','w-3.5 h-3.5')} ${formatNum(item.source?.likes || 0)}</span>
             <span class="flex items-center gap-1">${icon('retweet','w-3.5 h-3.5')} ${formatNum(item.source?.retweets || 0)}</span>
-            ${item.source?.url ? `<a href="${item.source.url}" target="_blank" class="text-teal hover:underline">View on X ${ICONS.externalLink}</a>` : ''}
+            ${item.source?.url ? `<a href="${item.source.url}" target="_blank" style="color:hsl(121,95%,76%)" class="hover:underline">View on X ${ICONS.externalLink}</a>` : ''}
           </div>
         </div>
       </div>
       ${item.market ? `
-      <div class="mt-3 p-3 border border-border rounded-lg bg-white">
-        <p class="text-sm font-semibold text-txt-primary mb-2">${item.market.question || ''}</p>
+      <div class="mt-3 p-3 rounded-lg" style="background:hsl(240,6%,11%);border:1px solid hsl(240,4%,20%)">
+        <p class="text-sm font-semibold text-fg mb-2">${item.market.question || ''}</p>
         <div class="flex flex-wrap items-center gap-3 text-xs">
           <span class="px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold">YES ${item.market.yes_odds || '—'}%</span>
           <span class="px-3 py-1 rounded-full bg-red-100 text-red-700 font-bold">NO ${item.market.no_odds || '—'}%</span>
-          <span class="text-txt-secondary">Vol: $${formatNum(item.market.volume || 0)}</span>
-          <span class="text-txt-secondary">Bettability: <strong class="text-teal">${item.market.bettability || '—'}/10</strong></span>
+          <span class="text-dim">Vol: $${formatNum(item.market.volume || 0)}</span>
+          <span class="text-dim">Bettability: <strong style="color:hsl(121,95%,76%)">${item.market.bettability || '—'}/10</strong></span>
         </div>
-        ${item.market.grok_reason ? `<p class="text-xs text-txt-secondary mt-2 italic">${item.market.grok_reason}</p>` : ''}
+        ${item.market.grok_reason ? `<p class="text-xs text-dim mt-2 italic">${item.market.grok_reason}</p>` : ''}
       </div>` : ''}
     </div>
 
@@ -522,15 +589,15 @@ function renderFeedCard(item, idx) {
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <div class="flex items-center justify-between mb-1">
-          <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">X Version</label>
-          <span class="text-xs ${xLen > 280 ? 'text-danger font-bold' : 'text-txt-secondary'}" id="x-counter-${idx}">${xLen}/280</span>
+          <label class="text-xs font-semibold text-dim uppercase tracking-wide">X Version</label>
+          <span class="text-xs ${xLen > 280 ? 'text-danger font-bold' : 'text-dim'}" id="x-counter-${idx}">${xLen}/280</span>
         </div>
         <textarea class="compose-textarea" data-idx="${idx}" data-platform="x" maxlength="280" rows="4">${item.x_text || ''}</textarea>
       </div>
       <div>
         <div class="flex items-center justify-between mb-1">
-          <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">Truth Social Version</label>
-          <span class="text-xs ${tsLen > 500 ? 'text-danger font-bold' : 'text-txt-secondary'}" id="ts-counter-${idx}">${tsLen}/500</span>
+          <label class="text-xs font-semibold text-dim uppercase tracking-wide">Truth Social Version</label>
+          <span class="text-xs ${tsLen > 500 ? 'text-danger font-bold' : 'text-dim'}" id="ts-counter-${idx}">${tsLen}/500</span>
         </div>
         <textarea class="compose-textarea" data-idx="${idx}" data-platform="truth" maxlength="500" rows="4">${item.truth_text || ''}</textarea>
       </div>
@@ -538,9 +605,9 @@ function renderFeedCard(item, idx) {
 
     <!-- Action Buttons -->
     <div class="flex flex-wrap gap-2">
-      <button class="pill pill-teal" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
-      <button class="pill pill-teal" onclick="publishAction(${idx},'truth')">Post to Truth</button>
-      <button class="pill pill-teal text-sm px-6" onclick="publishAction(${idx},'both')">Post to Both</button>
+      <button class="pill pill-primary" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
+      <button class="pill pill-primary" onclick="publishAction(${idx},'truth')">Post to Truth</button>
+      <button class="pill pill-primary text-sm px-6" onclick="publishAction(${idx},'both')">Post to Both</button>
       <button class="pill pill-outlined" onclick="scheduleAction(${idx})">${icon('calendar','w-4 h-4')} Schedule</button>
       <button class="pill pill-outlined" onclick="queueAction(${idx})">Add to Queue</button>
       <button class="pill pill-danger" onclick="dismissAction(${idx})">Dismiss</button>
@@ -571,7 +638,7 @@ function bindTextareaCounters() {
       const counter = document.getElementById(`${platform === 'x' ? 'x' : 'ts'}-counter-${idx}`);
       if (counter) {
         counter.textContent = `${len}/${max}`;
-        counter.className = `text-xs ${len > max ? 'text-danger font-bold' : 'text-txt-secondary'}`;
+        counter.className = `text-xs ${len > max ? 'text-danger font-bold' : 'text-dim'}`;
       }
       if (APP.feedItems[idx]) {
         if (platform === 'x') APP.feedItems[idx].x_text = ta.value;
@@ -614,7 +681,7 @@ function publishAction(idx, target) {
       APP.feedItems[idx].status = target === 'both' ? 'posted_both' : `posted_${target}`;
       updateFeedList();
     } catch (e) { /* toast already shown */ }
-  }, 'Publish', 'pill-teal');
+  }, 'Publish', 'pill-primary');
 }
 
 function scheduleAction(idx) {
@@ -622,10 +689,10 @@ function scheduleAction(idx) {
   root.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal-box">
-        <h3 class="text-lg font-bold text-txt-primary mb-4">Schedule Post</h3>
-        <label class="block text-sm font-medium text-txt-secondary mb-2">Date & Time</label>
+        <h3 class="text-lg font-bold text-fg mb-4">Schedule Post</h3>
+        <label class="block text-sm font-medium text-dim mb-2">Date & Time</label>
         <input type="datetime-local" id="schedule-datetime" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4">
-        <label class="block text-sm font-medium text-txt-secondary mb-2">Platform</label>
+        <label class="block text-sm font-medium text-dim mb-2">Platform</label>
         <select id="schedule-platform" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-6">
           <option value="both">Both (X + Truth)</option>
           <option value="x">X only</option>
@@ -633,7 +700,7 @@ function scheduleAction(idx) {
         </select>
         <div class="flex gap-3 justify-end">
           <button class="pill pill-outlined" onclick="closeModal()">Cancel</button>
-          <button class="pill pill-teal" id="schedule-confirm">Schedule</button>
+          <button class="pill pill-primary" id="schedule-confirm">Schedule</button>
         </div>
       </div>
     </div>`;
@@ -659,7 +726,7 @@ function queueAction(idx) {
       APP.feedItems[idx].status = 'queued';
       updateFeedList();
     } catch (e) { /* toast already shown */ }
-  }, 'Add to Queue', 'pill-teal');
+  }, 'Add to Queue', 'pill-primary');
 }
 
 function dismissAction(idx) {
@@ -698,15 +765,15 @@ function renderQueuePage() {
   return `
     <div class="flex flex-wrap items-center gap-3 mb-6">
       <div class="relative flex-1 max-w-xs">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-secondary">${ICONS.search}</span>
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim">${ICONS.search}</span>
         <input type="text" id="queue-search" class="w-full pl-10 pr-4 py-2 border border-border rounded-full text-sm" placeholder="Search queue..." value="${APP.queueSearch}">
       </div>
-      <button class="pill pill-teal" onclick="location.hash='#compose'">${icon('plus','w-4 h-4')} Add Post</button>
+      <button class="pill pill-primary" onclick="location.hash='#compose'">${icon('plus','w-4 h-4')} Add Post</button>
     </div>
 
     ${hasSelected ? `
-    <div class="flex items-center gap-3 mb-4 p-3 bg-teal-light rounded-lg">
-      <span class="text-sm font-medium text-teal">${APP.queueSelected.size} selected</span>
+    <div class="flex items-center gap-3 mb-4 p-3 rounded-lg" style="background:rgba(135,251,137,0.06)">
+      <span class="text-sm font-medium" style="color:hsl(121,95%,76%)">${APP.queueSelected.size} selected</span>
       <button class="pill pill-success text-xs" onclick="bulkQueueAction('approve')">Approve All</button>
       <button class="pill pill-danger text-xs" onclick="bulkQueueAction('dismiss')">Dismiss All</button>
     </div>` : ''}
@@ -726,16 +793,16 @@ function renderQueuePage() {
       <table class="admin-table">
         <thead><tr><th class="w-10"><input type="checkbox" class="teal-checkbox" id="queue-select-all"></th><th>Preview</th><th>Platform</th><th>Scheduled</th><th>Status</th><th class="w-20">Actions</th></tr></thead>
         <tbody id="queue-tbody">
-          ${others.length ? others.map((item, i) => renderQueueRow(item, i)).join('') : '<tr><td colspan="6" class="text-center py-8 text-txt-secondary">No queued posts</td></tr>'}
+          ${others.length ? others.map((item, i) => renderQueueRow(item, i)).join('') : '<tr><td colspan="6" class="text-center py-8 text-dim">No queued posts</td></tr>'}
         </tbody>
       </table>
     </div>
 
-    <div class="flex items-center justify-end gap-4 mt-4 text-sm text-txt-secondary">
+    <div class="flex items-center justify-end gap-4 mt-4 text-sm text-dim">
       <span>${start}-${end} of ${total}</span>
       <div class="flex gap-1">
-        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${APP.queuePage <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.queuePage--;loadQueue()">&#8592;</button>
-        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${end >= total ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.queuePage++;loadQueue()">&#8594;</button>
+        <button class="px-3 py-1 border border-border rounded hover:bg-muted ${APP.queuePage <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.queuePage--;loadQueue()">&#8592;</button>
+        <button class="px-3 py-1 border border-border rounded hover:bg-muted ${end >= total ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.queuePage++;loadQueue()">&#8594;</button>
       </div>
     </div>`;
 }
@@ -754,11 +821,11 @@ function renderQueueRow(item, idx, isReview = false) {
     <td><input type="checkbox" class="teal-checkbox queue-item-cb" data-id="${item.id}" ${checked}></td>
     <td class="max-w-xs"><span class="text-sm">${preview}</span></td>
     <td>${platformPills}</td>
-    <td class="text-sm text-txt-secondary">${item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : '—'}</td>
+    <td class="text-sm text-dim">${item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : '—'}</td>
     <td><span class="text-xs font-semibold px-2 py-1 rounded-full ${statusCls}">${statusLabel}</span></td>
     <td>
       <div class="flex items-center gap-2">
-        <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-txt-secondary" onclick="editQueueItem('${item.id}')">${icon('edit','w-4 h-4')}</button>
+        <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-muted text-dim" onclick="editQueueItem('${item.id}')">${icon('edit','w-4 h-4')}</button>
         <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 text-danger" onclick="deleteQueueItem('${item.id}')">${icon('trash','w-4 h-4')}</button>
       </div>
     </td>
@@ -842,10 +909,10 @@ function renderHistoryPage() {
   return `
     <!-- Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div class="card py-4 text-center"><p class="text-2xl font-bold text-txt-primary">${totalPosts}</p><p class="text-xs text-txt-secondary mt-1">Total Posts</p></div>
-      <div class="card py-4 text-center"><p class="text-2xl font-bold text-txt-primary">${xPosts} / ${tsPosts}</p><p class="text-xs text-txt-secondary mt-1">X / Truth Social</p></div>
-      <div class="card py-4 text-center"><p class="text-2xl font-bold text-txt-primary">${formatNum(avgEng)}</p><p class="text-xs text-txt-secondary mt-1">Avg Engagement</p></div>
-      <div class="card py-4 text-center"><p class="text-2xl font-bold text-teal">#1</p><p class="text-xs text-txt-secondary mt-1">Top Performer</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-fg">${totalPosts}</p><p class="text-xs text-dim mt-1">Total Posts</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-fg">${xPosts} / ${tsPosts}</p><p class="text-xs text-dim mt-1">X / Truth Social</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold text-fg">${formatNum(avgEng)}</p><p class="text-xs text-dim mt-1">Avg Engagement</p></div>
+      <div class="card py-4 text-center"><p class="text-2xl font-bold" style="color:hsl(121,95%,76%)">#1</p><p class="text-xs text-dim mt-1">Top Performer</p></div>
     </div>
 
     <!-- Filters -->
@@ -859,7 +926,7 @@ function renderHistoryPage() {
         <option value="">All Categories</option>${CATEGORIES.map(c => `<option value="${c.toLowerCase()}">${c}</option>`).join('')}
       </select>
       <div class="relative flex-1 min-w-[200px]">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-secondary">${ICONS.search}</span>
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim">${ICONS.search}</span>
         <input type="text" id="hist-search" class="w-full pl-10 pr-4 py-2 border border-border rounded-lg text-sm" placeholder="Search history...">
       </div>
     </div>
@@ -869,16 +936,16 @@ function renderHistoryPage() {
       <table class="admin-table">
         <thead><tr><th class="w-10"><input type="checkbox" class="teal-checkbox" id="hist-select-all"></th><th>Post Preview</th><th>Platform</th><th>Published</th><th>Category</th><th>Engagement</th><th class="w-20">Actions</th></tr></thead>
         <tbody id="hist-tbody">
-          ${items.length ? items.map((item, i) => renderHistoryRow(item, i)).join('') : '<tr><td colspan="7" class="text-center py-8 text-txt-secondary">No published posts</td></tr>'}
+          ${items.length ? items.map((item, i) => renderHistoryRow(item, i)).join('') : '<tr><td colspan="7" class="text-center py-8 text-dim">No published posts</td></tr>'}
         </tbody>
       </table>
     </div>
 
-    <div class="flex items-center justify-end gap-4 mt-4 text-sm text-txt-secondary">
+    <div class="flex items-center justify-end gap-4 mt-4 text-sm text-dim">
       <span>${start}-${end} of ${total}</span>
       <div class="flex gap-1">
-        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${APP.historyPage <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.historyPage--;loadHistory()">&#8592;</button>
-        <button class="px-3 py-1 border border-border rounded hover:bg-gray-50 ${end >= total ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.historyPage++;loadHistory()">&#8594;</button>
+        <button class="px-3 py-1 border border-border rounded hover:bg-muted ${APP.historyPage <= 1 ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.historyPage--;loadHistory()">&#8592;</button>
+        <button class="px-3 py-1 border border-border rounded hover:bg-muted ${end >= total ? 'opacity-40 pointer-events-none' : ''}" onclick="APP.historyPage++;loadHistory()">&#8594;</button>
       </div>
     </div>`;
 }
@@ -896,16 +963,16 @@ function renderHistoryRow(item, idx) {
     <td onclick="event.stopPropagation()"><input type="checkbox" class="teal-checkbox hist-item-cb" data-id="${item.id}" ${checked}></td>
     <td class="max-w-xs"><span class="text-sm">${preview}</span></td>
     <td>${platformPills}</td>
-    <td class="text-sm text-txt-secondary">${item.published_at ? new Date(item.published_at).toLocaleDateString() : '—'}</td>
-    <td><span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#E0F5F5;color:#006B6E">${item.category || '—'}</span></td>
+    <td class="text-sm text-dim">${item.published_at ? new Date(item.published_at).toLocaleDateString() : '—'}</td>
+    <td><span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:rgba(135,251,137,0.1);color:hsl(121,95%,76%)">${item.category || '—'}</span></td>
     <td class="text-sm">
-      <div class="flex items-center gap-3 text-xs text-txt-secondary">
+      <div class="flex items-center gap-3 text-xs text-dim">
         <span>${icon('heart','w-3 h-3')} ${formatNum(eng.likes || 0)}</span>
         <span>${icon('retweet','w-3 h-3')} ${formatNum(eng.retweets || 0)}</span>
       </div>
     </td>
     <td onclick="event.stopPropagation()">
-      <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-txt-secondary" onclick="showHistoryPreview(${idx})">${icon('eye','w-4 h-4')}</button>
+      <button class="w-7 h-7 flex items-center justify-center rounded hover:bg-muted text-dim" onclick="showHistoryPreview(${idx})">${icon('eye','w-4 h-4')}</button>
     </td>
   </tr>`;
 }
@@ -969,10 +1036,10 @@ function renderComposePage() {
   return `
     <div class="max-w-4xl">
       <div class="card mb-6">
-        <h3 class="text-sm font-semibold text-txt-primary mb-3">Source Content</h3>
+        <h3 class="text-sm font-semibold text-fg mb-3">Source Content</h3>
         <textarea id="compose-source" class="compose-textarea" rows="4" placeholder="Paste an X post URL or write free-form text..."></textarea>
         <div class="flex flex-wrap gap-3 mt-4">
-          <button class="pill pill-teal" id="generate-betty-btn">${icon('compose','w-4 h-4')} Generate with Betty</button>
+          <button class="pill pill-primary" id="generate-betty-btn">${icon('compose','w-4 h-4')} Generate with Betty</button>
           <button class="pill pill-outlined" id="gen-trending">Today's trending bets</button>
           <button class="pill pill-outlined" id="gen-lock">THE LOCK's top pick</button>
           <button class="pill pill-outlined" id="gen-crypto">Crypto pulse</button>
@@ -983,23 +1050,23 @@ function renderComposePage() {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <div class="flex items-center justify-between mb-1">
-              <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">X Version</label>
-              <span class="text-xs text-txt-secondary" id="compose-x-counter">0/280</span>
+              <label class="text-xs font-semibold text-dim uppercase tracking-wide">X Version</label>
+              <span class="text-xs text-dim" id="compose-x-counter">0/280</span>
             </div>
             <textarea id="compose-x" class="compose-textarea" maxlength="280" rows="5" placeholder="X post will appear here..."></textarea>
           </div>
           <div>
             <div class="flex items-center justify-between mb-1">
-              <label class="text-xs font-semibold text-txt-secondary uppercase tracking-wide">Truth Social Version</label>
-              <span class="text-xs text-txt-secondary" id="compose-ts-counter">0/500</span>
+              <label class="text-xs font-semibold text-dim uppercase tracking-wide">Truth Social Version</label>
+              <span class="text-xs text-dim" id="compose-ts-counter">0/500</span>
             </div>
             <textarea id="compose-ts" class="compose-textarea" maxlength="500" rows="5" placeholder="Truth Social post will appear here..."></textarea>
           </div>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button class="pill pill-teal" onclick="composePublish('x')">${icon('x','w-4 h-4')} Post to X</button>
-          <button class="pill pill-teal" onclick="composePublish('truth')">Post to Truth</button>
-          <button class="pill pill-teal px-6" onclick="composePublish('both')">Post to Both</button>
+          <button class="pill pill-primary" onclick="composePublish('x')">${icon('x','w-4 h-4')} Post to X</button>
+          <button class="pill pill-primary" onclick="composePublish('truth')">Post to Truth</button>
+          <button class="pill pill-primary px-6" onclick="composePublish('both')">Post to Both</button>
           <button class="pill pill-outlined" onclick="composeSchedule()">${icon('calendar','w-4 h-4')} Schedule</button>
           <button class="pill pill-outlined" onclick="composeQueue()">Add to Queue</button>
         </div>
@@ -1021,7 +1088,7 @@ function bindComposeEvents() {
       if (counter) {
         const len = e.target.value.length;
         counter.textContent = `${len}/${max}`;
-        counter.className = `text-xs ${len > max ? 'text-danger font-bold' : 'text-txt-secondary'}`;
+        counter.className = `text-xs ${len > max ? 'text-danger font-bold' : 'text-dim'}`;
       }
     });
   });
@@ -1055,7 +1122,7 @@ function composePublish(target) {
       await api('/api/admin-publish', { method: 'POST', body: { target, x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
       showToast(`Posted to ${labels[target]}!`, 'success');
     } catch (e) { /* toast already shown */ }
-  }, 'Publish', 'pill-teal');
+  }, 'Publish', 'pill-primary');
 }
 
 function composeSchedule() {
@@ -1063,14 +1130,14 @@ function composeSchedule() {
   root.innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal-box">
-        <h3 class="text-lg font-bold text-txt-primary mb-4">Schedule Post</h3>
+        <h3 class="text-lg font-bold text-fg mb-4">Schedule Post</h3>
         <input type="datetime-local" id="compose-sched-dt" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4">
         <select id="compose-sched-plat" class="w-full border border-border rounded-lg px-3 py-2 text-sm mb-6">
           <option value="both">Both</option><option value="x">X only</option><option value="truth">Truth Social only</option>
         </select>
         <div class="flex gap-3 justify-end">
           <button class="pill pill-outlined" onclick="closeModal()">Cancel</button>
-          <button class="pill pill-teal" onclick="doComposeSchedule()">Schedule</button>
+          <button class="pill pill-primary" onclick="doComposeSchedule()">Schedule</button>
         </div>
       </div>
     </div>`;
@@ -1092,7 +1159,7 @@ function composeQueue() {
       await api('/api/admin-queue', { method: 'POST', body: { x_text: document.getElementById('compose-x')?.value, truth_text: document.getElementById('compose-ts')?.value } });
       showToast('Added to queue!', 'success');
     } catch (e) { /* toast already shown */ }
-  }, 'Add to Queue', 'pill-teal');
+  }, 'Add to Queue', 'pill-primary');
 }
 
 // ─── Settings Page ───────────────────────────────────────────────────
@@ -1102,77 +1169,77 @@ function renderSettingsPage() {
     <div class="max-w-3xl space-y-6">
       <!-- API Keys -->
       <div class="card">
-        <h3 class="text-base font-bold text-txt-primary mb-4">API Keys</h3>
+        <h3 class="text-base font-bold text-fg mb-4">API Keys</h3>
         <div class="space-y-4">
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">xAI API Key</label><input type="password" id="set-xai-key" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.xai_key || ''}" placeholder="xai-..."></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">X API Bearer Token</label><input type="password" id="set-x-token" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_token || ''}" placeholder="Bearer token"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">X API Key</label><input type="password" id="set-x-api-key" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_api_key || ''}" placeholder="API key"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">X API Secret</label><input type="password" id="set-x-api-secret" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_api_secret || ''}" placeholder="API secret"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Truth Social Token</label><input type="password" id="set-truth-token" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.truth_token || ''}" placeholder="Truth Social access token"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">xAI API Key</label><input type="password" id="set-xai-key" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.xai_key || ''}" placeholder="xai-..."></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">X API Bearer Token</label><input type="password" id="set-x-token" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_token || ''}" placeholder="Bearer token"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">X API Key</label><input type="password" id="set-x-api-key" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_api_key || ''}" placeholder="API key"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">X API Secret</label><input type="password" id="set-x-api-secret" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.x_api_secret || ''}" placeholder="API secret"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Truth Social Token</label><input type="password" id="set-truth-token" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.truth_token || ''}" placeholder="Truth Social access token"></div>
         </div>
-        <button class="pill pill-teal mt-4" onclick="saveSettings('api_keys')">Save API Keys</button>
+        <button class="pill pill-primary mt-4" onclick="saveSettings('api_keys')">Save API Keys</button>
       </div>
 
       <!-- Betty Persona -->
       <div class="card">
-        <h3 class="text-base font-bold text-txt-primary mb-4">Betty Persona</h3>
-        <label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">System Prompt</label>
+        <h3 class="text-base font-bold text-fg mb-4">Betty Persona</h3>
+        <label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">System Prompt</label>
         <textarea id="set-betty-prompt" class="compose-textarea" rows="8" placeholder="Define Betty's personality and posting style...">${s.betty_prompt || ''}</textarea>
-        <button class="pill pill-teal mt-4" onclick="saveSettings('betty')">Save Persona</button>
+        <button class="pill pill-primary mt-4" onclick="saveSettings('betty')">Save Persona</button>
       </div>
 
       <!-- Feed Config -->
       <div class="card">
-        <h3 class="text-base font-bold text-txt-primary mb-4">Feed Configuration</h3>
+        <h3 class="text-base font-bold text-fg mb-4">Feed Configuration</h3>
         <div class="mb-4">
-          <label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-2">Active Categories</label>
+          <label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-2">Active Categories</label>
           <div class="flex flex-wrap gap-3">
             ${CATEGORIES.map(c => `<label class="flex items-center gap-2 text-sm"><input type="checkbox" class="teal-checkbox set-category-cb" value="${c.toLowerCase()}" ${(s.categories || CATEGORIES.map(c=>c.toLowerCase())).includes(c.toLowerCase()) ? 'checked' : ''}> ${c}</label>`).join('')}
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Refresh Interval (min)</label><input type="number" id="set-refresh-interval" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.refresh_interval || 15}" min="1" max="120"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Items Per Category</label><input type="number" id="set-items-per-cat" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.items_per_category || 5}" min="1" max="20"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Refresh Interval (min)</label><input type="number" id="set-refresh-interval" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.refresh_interval || 15}" min="1" max="120"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Items Per Category</label><input type="number" id="set-items-per-cat" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.items_per_category || 5}" min="1" max="20"></div>
         </div>
-        <button class="pill pill-teal mt-4" onclick="saveSettings('feed')">Save Feed Config</button>
+        <button class="pill pill-primary mt-4" onclick="saveSettings('feed')">Save Feed Config</button>
       </div>
 
       <!-- Queue Config -->
       <div class="card">
-        <h3 class="text-base font-bold text-txt-primary mb-4">Queue Configuration</h3>
+        <h3 class="text-base font-bold text-fg mb-4">Queue Configuration</h3>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Posts Per Day</label><input type="number" id="set-posts-per-day" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.posts_per_day || 12}" min="1" max="50"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Min Spacing (hours)</label><input type="number" id="set-min-spacing" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.min_spacing || 1}" min="0.5" max="12" step="0.5"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Quiet Hours Start</label><input type="time" id="set-quiet-start" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.quiet_start || '23:00'}"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Quiet Hours End</label><input type="time" id="set-quiet-end" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.quiet_end || '07:00'}"></div>
-          <div class="col-span-2"><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Timezone</label>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Posts Per Day</label><input type="number" id="set-posts-per-day" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.posts_per_day || 12}" min="1" max="50"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Min Spacing (hours)</label><input type="number" id="set-min-spacing" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.min_spacing || 1}" min="0.5" max="12" step="0.5"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Quiet Hours Start</label><input type="time" id="set-quiet-start" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.quiet_start || '23:00'}"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Quiet Hours End</label><input type="time" id="set-quiet-end" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.quiet_end || '07:00'}"></div>
+          <div class="col-span-2"><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Timezone</label>
             <select id="set-timezone" class="w-full border border-border rounded-lg px-3 py-2 text-sm">
               ${['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Phoenix','Pacific/Honolulu','UTC'].map(tz => `<option value="${tz}" ${(s.timezone || 'America/New_York') === tz ? 'selected' : ''}>${tz}</option>`).join('')}
             </select>
           </div>
         </div>
-        <button class="pill pill-teal mt-4" onclick="saveSettings('queue')">Save Queue Config</button>
+        <button class="pill pill-primary mt-4" onclick="saveSettings('queue')">Save Queue Config</button>
       </div>
 
       <!-- Auto-Draft Config -->
       <div class="card">
-        <h3 class="text-base font-bold text-txt-primary mb-4">Auto-Draft Configuration</h3>
+        <h3 class="text-base font-bold text-fg mb-4">Auto-Draft Configuration</h3>
         <div class="mb-4">
           <label class="flex items-center gap-3 cursor-pointer">
             <div class="relative">
               <input type="checkbox" id="set-autodraft-enabled" class="sr-only" ${s.autodraft_enabled ? 'checked' : ''}>
-              <div class="w-11 h-6 bg-gray-300 rounded-full transition" id="autodraft-track"></div>
+              <div class="w-11 h-6 rounded-full transition" id="autodraft-track" style="background:hsl(240,4%,25%)"></div>
               <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition" id="autodraft-thumb"></div>
             </div>
-            <span class="text-sm font-medium text-txt-primary">Enable Auto-Draft Generation</span>
+            <span class="text-sm font-medium text-fg">Enable Auto-Draft Generation</span>
           </label>
         </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Generation Time</label><input type="time" id="set-gen-time" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.gen_time || '09:00'}"></div>
-          <div><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Number of Drafts</label><input type="number" id="set-num-drafts" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.num_drafts || 10}" min="1" max="50"></div>
-          <div class="col-span-2"><label class="block text-xs font-semibold text-txt-secondary uppercase tracking-wide mb-1">Min Bettability Score</label><input type="number" id="set-min-bettability" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.min_bettability || 6}" min="1" max="10"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Generation Time</label><input type="time" id="set-gen-time" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.gen_time || '09:00'}"></div>
+          <div><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Number of Drafts</label><input type="number" id="set-num-drafts" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.num_drafts || 10}" min="1" max="50"></div>
+          <div class="col-span-2"><label class="block text-xs font-semibold text-dim uppercase tracking-wide mb-1">Min Bettability Score</label><input type="number" id="set-min-bettability" class="w-full border border-border rounded-lg px-3 py-2 text-sm" value="${s.min_bettability || 6}" min="1" max="10"></div>
         </div>
-        <button class="pill pill-teal mt-4" onclick="saveSettings('autodraft')">Save Auto-Draft Config</button>
+        <button class="pill pill-primary mt-4" onclick="saveSettings('autodraft')">Save Auto-Draft Config</button>
       </div>
     </div>`;
 }
@@ -1184,8 +1251,8 @@ function bindSettingsEvents() {
   const thumb = document.getElementById('autodraft-thumb');
   if (toggle && track && thumb) {
     const update = () => {
-      if (toggle.checked) { track.style.background = '#006B6E'; thumb.style.transform = 'translateX(20px)'; }
-      else { track.style.background = '#D1D5DB'; thumb.style.transform = 'translateX(0)'; }
+      if (toggle.checked) { track.style.background = 'hsl(121,95%,76%)'; thumb.style.transform = 'translateX(20px)'; }
+      else { track.style.background = 'hsl(240,4%,25%)'; thumb.style.transform = 'translateX(0)'; }
     };
     update();
     track.addEventListener('click', () => { toggle.checked = !toggle.checked; update(); });
@@ -1243,6 +1310,401 @@ async function saveSettings(section) {
 }
 
 // ─── Demo Data (fallback when API unavailable) ──────────────────────
+// ─── BetBuilder Page ──────────────────────────────────────────────────
+// State
+APP.bbItems = [];
+APP.bbCategory = 'trending';
+APP.bbLoading = false;
+APP.bbLastRefreshed = null;
+
+function renderBetBuilderPage() {
+  const lastRefresh = APP.bbLastRefreshed ? `Last refreshed: ${APP.bbLastRefreshed.toLocaleTimeString()}` : '';
+  return `
+    <div class="flex flex-wrap items-center gap-3 mb-2">
+      <div class="flex flex-wrap gap-2 flex-1">
+        ${CATEGORIES.map(c => `<button class="cat-pill ${APP.bbCategory === c.toLowerCase() ? 'active' : ''}" data-bbcat="${c.toLowerCase()}">${c}</button>`).join('')}
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-dim">${lastRefresh}</span>
+        <button class="pill pill-outlined flex items-center gap-2" id="bb-refresh-btn">${icon('refresh','w-4 h-4')} Refresh</button>
+      </div>
+    </div>
+    <p class="text-xs text-dim mb-6">Select a trending topic below. Each card shows the bet exactly as it appears on the frontend. Click a social button to open that platform's compose window with the post pre-filled.</p>
+    <div id="bb-list">
+      ${APP.bbLoading ? renderSkeletonCards(3) : renderBetBuilderItems()}
+    </div>`;
+}
+
+function renderBetBuilderItems() {
+  if (!APP.bbItems.length) return '<div class="text-center py-16 text-dim"><p class="text-lg font-medium">No trending bets found</p><p class="text-sm mt-1">Try refreshing or switching categories.</p></div>';
+  return APP.bbItems.map((item, i) => renderBetBuilderCard(item, i)).join('');
+}
+
+function renderBetBuilderCard(item, idx) {
+  const m = item.market || (item.markets && item.markets[0]) || {};
+  const yesPct = m.yes_odds || m.yesPrice || 50;
+  const noPct = m.no_odds || m.noPrice || 50;
+  const side = item.selectedSide || m.side || 'YES';
+  const stake = item.stake || 5;
+  const betClaim = m.betClaim || m.question || 'this outcome';
+  const volume = m.volume || 0;
+  const bettability = m.bettability || m.bettabilityScore || '—';
+  const grokReason = m.grok_reason || m.grokReason || '';
+  const sourceLabel = m.source === 'kalshi' ? 'Kalshi' : 'Polymarket';
+  const matchScore = bettability !== '—' ? (bettability >= 7 ? 'Strong' : bettability >= 4 ? 'Good' : 'Fair') : 'Good';
+  const outcome = side === 'YES' ? `<span class="side-yes">YES — ${betClaim}</span>` : `<span class="side-no">NO — ${betClaim}</span>`;
+  const authorHandle = item.source?.handle || 'unknown';
+  const commenters = item.commenters || [];
+  const tagLine = buildTagLine(authorHandle, commenters);
+
+  return `
+  <div class="bb-card" data-bb-idx="${idx}">
+    <!-- ═══ CAPTURABLE CARD IMAGE ═══ -->
+    <div class="bb-capture" id="bb-capture-${idx}" style="background:#fff;">
+      <!-- WeBet brand bar -->
+      <div style="background:#006B6E;padding:10px 20px;display:flex;align-items:center;gap:8px;">
+        <span style="color:#fff;font-weight:800;font-size:16px;">🎲 WeBet</span>
+        <span style="color:rgba(255,255,255,0.6);font-size:11px;margin-left:auto;">Social Intelligence</span>
+      </div>
+
+      <!-- Embedded X post preview -->
+      <div style="padding:16px 20px 0;">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:#e0f5f5;display:flex;align-items:center;justify-content:center;color:#006B6E;font-weight:700;font-size:16px;flex-shrink:0;">${(item.source?.name || 'U')[0]}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-weight:700;font-size:14px;color:#252B1A;">${item.source?.name || 'Unknown'}</span>
+              <span style="font-size:12px;color:#787878;">@${authorHandle}</span>
+            </div>
+            <p style="font-size:14px;color:#4a4a4a;margin-top:4px;line-height:1.5;">${item.source?.text || ''}</p>
+            <div style="display:flex;align-items:center;gap:16px;margin-top:8px;font-size:11px;color:#787878;">
+              <span>♡ ${formatNum(item.source?.likes || 0)}</span>
+              <span>↻ ${formatNum(item.source?.retweets || 0)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Market match section -->
+      <div style="padding:0 20px 16px;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#252B1A;margin-bottom:10px;">
+          <span class="bb-match-pulse"></span>
+          <span>📈 Matched Market</span>
+          <span style="background:rgba(16,185,129,0.1);color:#10b981;padding:2px 8px;border-radius:99px;font-size:10px;">${matchScore}</span>
+          <span style="background:#f0fafa;color:#006B6E;padding:2px 8px;border-radius:99px;font-size:10px;">${sourceLabel}</span>
+        </div>
+
+        <!-- Bet string -->
+        <div class="bb-bet-string">
+          <div style="font-size:15px;font-weight:600;color:#252B1A;line-height:1.5;">
+            <span class="ph">@Friend</span> <span class="ph">WeBet $${stake}</span>
+            ${outcome}
+          </div>
+        </div>
+
+        <!-- Odds bars -->
+        <div style="display:flex;align-items:center;gap:10px;font-size:11px;margin-bottom:10px;flex-wrap:wrap;">
+          <span class="bb-odds-chip yes" style="position:relative">${yesPct}% Yes<div class="odds-bar" style="width:${yesPct}%"></div></span>
+          <span class="bb-odds-chip no" style="position:relative">${noPct}% No<div class="odds-bar" style="width:${noPct}%"></div></span>
+          <span style="color:#787878">${formatNum(volume)} vol</span>
+          ${bettability !== '—' ? `<span style="color:#787878">Bettability: <b style="color:#006B6E">${bettability}/10</b></span>` : ''}
+        </div>
+        ${grokReason ? `<p style="font-size:11px;font-style:italic;color:#787878;margin-bottom:8px;">${grokReason}</p>` : ''}
+
+        <!-- CTA -->
+        <div style="background:linear-gradient(135deg,#006B6E,#004d50);color:#fff;text-align:center;padding:10px;border-radius:10px;font-size:13px;font-weight:600;">
+          Think otherwise? Bet on it → webetsocial.com
+        </div>
+      </div>
+    </div>
+    <!-- ═══ END CAPTURABLE CARD ═══ -->
+
+    <!-- Controls (not captured in image) -->
+    <div style="padding:12px 20px;border-top:1px solid #e8eae9;background:#f9fafb;">
+      <!-- Side toggle + Stake -->
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <div class="bb-side-toggle" style="flex:1;min-width:200px;">
+          <button class="bb-side-btn ${side === 'YES' ? 'active-yes' : ''}" onclick="bbPickSide(${idx},'YES')">Yes ✓</button>
+          <button class="bb-side-btn ${side === 'NO' ? 'active-no' : ''}" onclick="bbPickSide(${idx},'NO')">No ✗</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;border-radius:8px;background:#f0fafa;border:1px solid #b8dede;" onclick="bbCycleStake(${idx})">
+          <span style="font-weight:700;font-size:14px;color:#006B6E;" id="bb-stk-${idx}">${stake}</span>
+          <span style="font-size:11px;color:#787878;">credits · tap to change</span>
+        </div>
+      </div>
+
+      <!-- Tags preview -->
+      <div style="font-size:11px;color:#787878;margin-bottom:10px;">
+        <strong>Tags:</strong> ${tagLine}
+      </div>
+
+      <!-- Editable summary text -->
+      <details style="margin-bottom:10px;">
+        <summary style="font-size:11px;font-weight:600;color:#006B6E;cursor:pointer;">Edit post caption</summary>
+        <textarea class="compose-textarea" id="bb-caption-${idx}" rows="3" style="margin-top:6px;font-size:12px;">${item.x_text || bbBuildDefaultCaption(item, idx)}</textarea>
+      </details>
+    </div>
+
+    <!-- Social share buttons -->
+    <div class="bb-social-bar" style="background:#fff;">
+      <button class="bb-social-btn x-btn" onclick="bbShareWithImage(${idx},'x')">
+        ${icon('x','w-4 h-4')} Post to X
+      </button>
+      <button class="bb-social-btn truth-btn" onclick="bbShareWithImage(${idx},'truth')">
+        ${icon('truth','w-4 h-4')} Post to Truth Social
+      </button>
+      <button class="bb-social-btn linkedin-btn" onclick="bbShareWithImage(${idx},'linkedin')">
+        ${icon('linkedin','w-4 h-4')} Post to LinkedIn
+      </button>
+    </div>
+
+    <!-- Action row -->
+    <div class="bb-action-row">
+      <button class="bb-action-btn" onclick="bbShareWithImage(${idx},'all')">
+        ${icon('externalLink','w-3 h-3')} Share All
+      </button>
+      <button class="bb-action-btn" onclick="bbDownloadCard(${idx})">
+        📥 Download Card
+      </button>
+      <button class="bb-action-btn" onclick="bbCopyText(${idx})">
+        ${icon('edit','w-3 h-3')} Copy Text
+      </button>
+      <button class="bb-action-btn" onclick="bbRegenerate(${idx})">
+        ${icon('refresh','w-3 h-3')} Regenerate
+      </button>
+    </div>
+  </div>`;
+}
+
+function bindBetBuilderEvents() {
+  document.querySelectorAll('[data-bbcat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      APP.bbCategory = btn.dataset.bbcat;
+      renderAndBindPage('betbuilder');
+      loadBetBuilder();
+    });
+  });
+  document.getElementById('bb-refresh-btn')?.addEventListener('click', () => loadBetBuilder());
+}
+
+async function loadBetBuilder() {
+  APP.bbLoading = true;
+  updateBBList();
+  try {
+    const data = await api(`/api/admin-feed?category=${APP.bbCategory}&limit=8`);
+    const items = (data.items || data.cards || []).map(item => {
+      // Normalize from API format
+      const m = item.markets?.[0] || item.matchedMarkets?.[0] || {};
+      return {
+        source: item.sourcePost || item.source || { name: 'Unknown', handle: 'unknown', text: '' },
+        market: {
+          question: m.question || '',
+          yes_odds: m.yesPrice || m.yes_odds || 50,
+          no_odds: m.noPrice || m.no_odds || 50,
+          volume: m.volume || 0,
+          bettability: m.bettabilityScore || m.bettability || '—',
+          grok_reason: m.grokReason || m.grok_reason || '',
+          betClaim: m.betClaim || m.question || '',
+          side: m.side || 'YES',
+          source: m.source || 'polymarket',
+        },
+        commenters: item.commenters || [],
+        x_text: item.x_text || item.composed?.xVersion || '',
+        truth_text: item.truth_text || item.composed?.truthVersion || '',
+        selectedSide: m.side || 'YES',
+        stake: 5,
+      };
+    });
+    APP.bbItems = items;
+    APP.bbLastRefreshed = new Date();
+  } catch (e) {
+    // Fall back to demo data mapped to bb format
+    APP.bbItems = getDemoFeedItems().map(item => ({ ...item, selectedSide: 'YES', stake: 5 }));
+    APP.bbLastRefreshed = new Date();
+  }
+  APP.bbLoading = false;
+  updateBBList();
+}
+
+function updateBBList() {
+  const el = document.getElementById('bb-list');
+  if (el) el.innerHTML = APP.bbLoading ? renderSkeletonCards(3) : renderBetBuilderItems();
+}
+
+function bbPickSide(idx, side) {
+  if (APP.bbItems[idx]) {
+    APP.bbItems[idx].selectedSide = side;
+    updateBBList();
+  }
+}
+
+function bbCycleStake(idx) {
+  const stakes = [5, 10, 25, 50, 100];
+  if (!APP.bbItems[idx]) return;
+  const cur = APP.bbItems[idx].stake || 5;
+  const next = stakes[(stakes.indexOf(cur) + 1) % stakes.length];
+  APP.bbItems[idx].stake = next;
+  updateBBList();
+}
+
+function buildTagLine(authorHandle, commenters) {
+  const tags = [`@${authorHandle}`];
+  if (commenters && commenters.length > 0) {
+    commenters.slice(0, 3).forEach(h => tags.push(`@${h}`));
+  } else {
+    tags.push('@WeBetSocialAI');
+  }
+  return tags.join(' ');
+}
+
+function bbBuildDefaultCaption(item, idx) {
+  const m = item.market || {};
+  const side = item.selectedSide || 'YES';
+  const stake = item.stake || 5;
+  const betClaim = m.betClaim || m.question || 'this outcome';
+  const yesPct = m.yes_odds || 50;
+  const sourceLabel = m.source === 'kalshi' ? 'Kalshi' : 'Polymarket';
+  const volume = m.volume || 0;
+  const authorHandle = item.source?.handle || 'unknown';
+  const commenters = item.commenters || [];
+  const tags = buildTagLine(authorHandle, commenters);
+  const hook = item.source?.text ? item.source.text.slice(0, 80) + '...' : 'Trending now';
+  return `${hook}\n\n@Friend WeBet $${stake} ${side} — ${betClaim}\n${yesPct}% ${side} on ${sourceLabel} · ${formatNum(volume)} vol\n\n${tags}\n\nBuild your bet → webetsocial.com/feed`;
+}
+
+function bbGetShareText(idx) {
+  // Use edited caption if available
+  const captionEl = document.getElementById(`bb-caption-${idx}`);
+  if (captionEl && captionEl.value.trim()) return captionEl.value.trim();
+  const item = APP.bbItems[idx];
+  if (!item) return '';
+  if (item.x_text) return item.x_text;
+  return bbBuildDefaultCaption(item, idx);
+}
+
+// Capture the bet card as a PNG image
+async function bbCaptureCard(idx) {
+  const el = document.getElementById(`bb-capture-${idx}`);
+  if (!el) return null;
+  try {
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+    return canvas;
+  } catch (err) {
+    console.error('Card capture failed:', err);
+    showToast('Failed to capture card image', 'error');
+    return null;
+  }
+}
+
+// Download card image
+async function bbDownloadCard(idx) {
+  showToast('Capturing card...', 'info');
+  const canvas = await bbCaptureCard(idx);
+  if (!canvas) return;
+  const link = document.createElement('a');
+  link.download = `webet-card-${idx}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  showToast('Card image downloaded!', 'success');
+}
+
+// Copy card image to clipboard
+async function bbCopyCardImage(idx) {
+  const canvas = await bbCaptureCard(idx);
+  if (!canvas) return;
+  canvas.toBlob(async (blob) => {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      showToast('Card image copied to clipboard! Paste it in your post.', 'success');
+    } catch {
+      showToast('Clipboard write failed — downloading instead', 'error');
+      bbDownloadCard(idx);
+    }
+  }, 'image/png');
+}
+
+// Share with image: copies card image to clipboard, then opens the platform compose
+async function bbShareWithImage(idx, platform) {
+  showToast('Capturing card image...', 'info');
+  const canvas = await bbCaptureCard(idx);
+  if (!canvas) return;
+
+  // Copy image to clipboard so user can paste it
+  try {
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch {
+    // Fallback: download the image
+    const link = document.createElement('a');
+    link.download = `webet-card-${idx}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  const text = bbGetShareText(idx);
+
+  const openPlatform = (p) => {
+    switch(p) {
+      case 'x':
+        window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=500');
+        break;
+      case 'truth':
+        window.open(`https://truthsocial.com/share?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=500');
+        break;
+      case 'linkedin':
+        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://webetsocial.com/feed')}`, '_blank', 'width=600,height=500');
+        break;
+    }
+  };
+
+  if (platform === 'all') {
+    showToast('Card image copied! Paste it when each compose window opens.', 'success');
+    openPlatform('x');
+    setTimeout(() => openPlatform('truth'), 800);
+    setTimeout(() => openPlatform('linkedin'), 1600);
+  } else {
+    showToast('Card image copied to clipboard — paste it in the compose window!', 'success');
+    openPlatform(platform);
+  }
+}
+
+function bbCopyText(idx) {
+  const text = bbGetShareText(idx);
+  navigator.clipboard.writeText(text).then(() => showToast('Post text copied to clipboard!', 'success')).catch(() => showToast('Failed to copy', 'error'));
+}
+
+async function bbRegenerate(idx) {
+  const item = APP.bbItems[idx];
+  if (!item) return;
+  showToast('Regenerating with Betty...', 'info');
+  try {
+    const data = await api('/api/admin-compose-post', {
+      method: 'POST',
+      body: {
+        xPost: item.source,
+        markets: item.market ? [item.market] : [],
+      }
+    });
+    if (data.xVersion) APP.bbItems[idx].x_text = data.xVersion;
+    if (data.truthVersion) APP.bbItems[idx].truth_text = data.truthVersion;
+    updateBBList();
+    showToast('Regenerated!', 'success');
+  } catch (e) { /* toast already shown */ }
+}
+
+// Expose BetBuilder globals
+window.bbPickSide = bbPickSide;
+window.bbCycleStake = bbCycleStake;
+window.bbShareWithImage = bbShareWithImage;
+window.bbDownloadCard = bbDownloadCard;
+window.bbCopyText = bbCopyText;
+window.bbRegenerate = bbRegenerate;
+
 function getDemoFeedItems() {
   return [
     {

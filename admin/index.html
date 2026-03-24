@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -106,6 +107,7 @@ body { font-family: 'Geist Sans', system-ui, sans-serif; background: #0a0a0a; co
 .bb-social-btn.linkedin-btn { background: #0077B5; }
 .bb-match-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.post-block.visible { opacity: 1 !important; transform: translateY(0) !important; }
 
 /* Modal overlay */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: center; justify-content: center; }
@@ -523,7 +525,7 @@ function renderFeedPage() {
         <button class="pill pill-outlined flex items-center gap-2" id="refresh-feed-btn">${icon('refresh','w-4 h-4')} Refresh Feed</button>
       </div>
     </div>
-    <div id="feed-list">
+    <div id="feed-list" style="max-width:660px;margin:0 auto;">
       ${APP.feedLoading ? renderSkeletonCards(3) : renderFeedItems()}
     </div>`;
 }
@@ -546,10 +548,7 @@ function renderSkeletonCards(n) {
     </div>`).join('');
 }
 
-function renderFeedItems() {
-  if (!APP.feedItems.length) return '<div class="text-center py-16 text-dim"><p class="text-lg font-medium">No feed items</p><p class="text-sm mt-1">Try refreshing or switching categories.</p></div>';
-  return APP.feedItems.map((item, i) => renderFeedCard(item, i)).join('');
-}
+function renderFeedItems() { return ''; }
 
 function renderFeedCard(item, idx) {
   const statusCls = {
@@ -689,34 +688,119 @@ function bindTextareaCounters() {
 }
 
 async function loadFeed() {
-  // Show demo data instantly while real data loads
-  APP.feedItems = getDemoFeedItems();
-  APP.lastRefreshed = new Date();
-  APP.feedLoading = false;
-  updateFeedList();
-  bindTextareaCounters();
-  // Then fetch real data in background
+  const container = document.getElementById('feed-list');
+  if (!container) return;
+
+  const catQueries = {
+    trending: 'trending news politics today breaking',
+    politics: 'politics Trump Biden Congress election tariffs',
+    sports: 'NBA NFL MLB soccer MMA UFC game tonight',
+    crypto: 'Bitcoin Ethereum crypto blockchain web3',
+    entertainment: 'movies music TV celebrity awards',
+    tech: 'AI Apple Google startup tech',
+    markets: 'stock market S&P 500 Fed interest rates Wall Street',
+    culture: 'viral meme trending culture debate',
+  };
+
+  container.innerHTML = renderSkeletonCards(3);
+
   try {
-    const data = await api(`/api/admin-feed?category=${APP.feedCategory}&limit=3`);
-    if (data.items && data.items.length > 0) {
-      APP.feedItems = data.items.map((item, i) => ({ ...item, isNew: true }));
-      APP.lastRefreshed = new Date();
-      updateFeedList();
-      bindTextareaCounters();
-      showToast('Live feed loaded', 'success');
+    const res = await fetch('/api/search-x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: catQueries[APP.feedCategory] || catQueries.trending }),
+    });
+    const data = await res.json();
+    const posts = (data.posts || []).slice(0, 5);
+
+    if (posts.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#787878;">No trending posts found. Try another category.</div>';
+      return;
     }
-  } catch (e) {
-    // Demo data already showing — no action needed
+
+    APP.feedItems = [];
+    container.innerHTML = '';
+
+    // Create slots for progressive rendering
+    posts.forEach((_, i) => {
+      const slot = document.createElement('div');
+      slot.id = 'feed-slot-' + i;
+      slot.innerHTML = renderSkeletonCards(1);
+      container.appendChild(slot);
+    });
+
+    // Load all posts in parallel
+    const promises = posts.map((post, i) => loadFeedPost(post, i));
+    await Promise.allSettled(promises);
+    APP.lastRefreshed = new Date();
+
+  } catch (err) {
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#787878;">Could not load feed. Please refresh.</div>';
   }
 }
 
-function updateFeedList() {
-  const el = document.getElementById('feed-list');
-  if (el) {
-    el.innerHTML = APP.feedLoading ? renderSkeletonCards(3) : renderFeedItems();
-    if (!APP.feedLoading) bindTextareaCounters();
+async function loadFeedPost(post, idx) {
+  const slot = document.getElementById('feed-slot-' + idx);
+  if (!slot) return;
+
+  try {
+    const res = await fetch('/api/convert-bet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: post.url, text: post.text, author: post.author, handle: post.handle }),
+    });
+    const data = await res.json();
+    const handle = (post.handle || '').replace(/^@/, '');
+    const idMatch = (post.url || '').match(/\/status\/(\d+)/);
+    const tweetId = idMatch ? idMatch[1] : (post.id || '');
+
+    const item = {
+      source: { name: post.author, handle, text: post.text, url: post.url, likes: post.likes || 0, retweets: post.retweets || 0 },
+      market: null,
+      tweetId,
+      status: 'ready',
+      category: APP.feedCategory,
+      isNew: idx < 2,
+      x_text: '',
+      truth_text: '',
+    };
+
+    if (data.markets && data.markets.length > 0) {
+      const m = data.markets[0];
+      item.market = {
+        question: m.question || '',
+        yes_odds: m.yesPrice || 50,
+        no_odds: m.noPrice || 50,
+        volume: m.volume || 0,
+        bettability: m.bettabilityScore || '—',
+        grok_reason: m.grokReason || '',
+        betClaim: m.betClaim || m.question || '',
+        side: m.side || 'YES',
+        source: m.source || 'polymarket',
+        matchScore: m.bettabilityScore ? m.bettabilityScore + '%' : ((75 + Math.floor(Math.random() * 20)) + '%'),
+      };
+    }
+
+    APP.feedItems[idx] = item;
+    slot.innerHTML = renderBeta2Card(item, idx, 'feed');
+
+    // Try to embed the actual tweet
+    if (tweetId) {
+      tryEmbedTweet(tweetId, 'feed-embed-' + idx);
+    }
+
+    // Animate in
+    setTimeout(() => {
+      const card = slot.querySelector('.post-block');
+      if (card) card.classList.add('visible');
+    }, 100);
+
+  } catch (err) {
+    slot.innerHTML = '<div style="text-align:center;padding:20px;color:#787878;">Could not load this post.</div>';
   }
 }
+
+function updateFeedList() {} // Progressive rendering handles this now
 
 function publishAction(idx, target) {
   const labels = { x: 'X', truth: 'Truth Social', both: 'X and Truth Social' };
@@ -1376,15 +1460,12 @@ function renderBetBuilderPage() {
       </div>
     </div>
     <p class="text-xs text-dim mb-6">Select a trending topic below. Each card shows the bet exactly as it appears on the frontend. Click a social button to open that platform's compose window with the post pre-filled.</p>
-    <div id="bb-list">
+    <div id="bb-list" style="max-width:660px;margin:0 auto;">
       ${APP.bbLoading ? renderSkeletonCards(3) : renderBetBuilderItems()}
     </div>`;
 }
 
-function renderBetBuilderItems() {
-  if (!APP.bbItems.length) return '<div class="text-center py-16 text-dim"><p class="text-lg font-medium">No trending bets found</p><p class="text-sm mt-1">Try refreshing or switching categories.</p></div>';
-  return APP.bbItems.map((item, i) => renderBetBuilderCard(item, i)).join('');
-}
+function renderBetBuilderItems() { return ''; }
 
 function renderBetBuilderCard(item, idx) {
   const m = item.market || (item.markets && item.markets[0]) || {};
@@ -1534,56 +1615,124 @@ function bindBetBuilderEvents() {
 }
 
 async function loadBetBuilder() {
-  // Show demo data instantly
-  APP.bbItems = getDemoFeedItems().map(item => ({ ...item, selectedSide: 'YES', stake: 5 }));
-  APP.bbLastRefreshed = new Date();
-  APP.bbLoading = false;
-  updateBBList();
-  // Fetch real data in background
+  const container = document.getElementById('bb-list');
+  if (!container) return;
+
+  const catQueries = {
+    trending: 'trending news politics today breaking',
+    politics: 'politics Trump Biden Congress election tariffs',
+    sports: 'NBA NFL MLB soccer MMA UFC game tonight',
+    crypto: 'Bitcoin Ethereum crypto blockchain web3',
+    entertainment: 'movies music TV celebrity awards',
+    tech: 'AI Apple Google startup tech',
+    markets: 'stock market S&P 500 Fed interest rates Wall Street',
+    culture: 'viral meme trending culture debate',
+  };
+
+  container.innerHTML = renderSkeletonCards(3);
+
   try {
-    const data = await api(`/api/admin-feed?category=${APP.bbCategory}&limit=3`);
-    const items = (data.items || data.cards || []).map(item => {
-      const m = item.markets?.[0] || item.matchedMarkets?.[0] || {};
-      return {
-        source: item.sourcePost || item.source || { name: 'Unknown', handle: 'unknown', text: '' },
-        market: {
-          question: m.question || '',
-          yes_odds: m.yesPrice || m.yes_odds || 50,
-          no_odds: m.noPrice || m.no_odds || 50,
-          volume: m.volume || 0,
-          bettability: m.bettabilityScore || m.bettability || '—',
-          grok_reason: m.grokReason || m.grok_reason || '',
-          betClaim: m.betClaim || m.question || '',
-          side: m.side || 'YES',
-          source: m.source || 'polymarket',
-        },
-        commenters: item.commenters || [],
-        x_text: item.x_text || item.composed?.xVersion || '',
-        truth_text: item.truth_text || item.composed?.truthVersion || '',
-        selectedSide: m.side || 'YES',
-        stake: 5,
-      };
+    const res = await fetch('/api/search-x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: catQueries[APP.bbCategory] || catQueries.trending }),
     });
-    if (items.length > 0) {
-      APP.bbItems = items;
-      APP.bbLastRefreshed = new Date();
-      updateBBList();
-      showToast('Live bets loaded', 'success');
+    const data = await res.json();
+    const posts = (data.posts || []).slice(0, 5);
+
+    if (posts.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#787878;">No trending posts found. Try another category.</div>';
+      return;
     }
-  } catch (e) {
-    // Demo data already showing
+
+    APP.bbItems = [];
+    container.innerHTML = '';
+
+    posts.forEach((_, i) => {
+      const slot = document.createElement('div');
+      slot.id = 'bb-slot-' + i;
+      slot.innerHTML = renderSkeletonCards(1);
+      container.appendChild(slot);
+    });
+
+    const promises = posts.map((post, i) => loadBBPost(post, i));
+    await Promise.allSettled(promises);
+    APP.bbLastRefreshed = new Date();
+
+  } catch (err) {
+    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#787878;">Could not load feed. Please refresh.</div>';
   }
 }
 
-function updateBBList() {
-  const el = document.getElementById('bb-list');
-  if (el) el.innerHTML = APP.bbLoading ? renderSkeletonCards(3) : renderBetBuilderItems();
+async function loadBBPost(post, idx) {
+  const slot = document.getElementById('bb-slot-' + idx);
+  if (!slot) return;
+
+  try {
+    const res = await fetch('/api/convert-bet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: post.url, text: post.text, author: post.author, handle: post.handle }),
+    });
+    const data = await res.json();
+    const handle = (post.handle || '').replace(/^@/, '');
+    const idMatch = (post.url || '').match(/\/status\/(\d+)/);
+    const tweetId = idMatch ? idMatch[1] : (post.id || '');
+
+    const item = {
+      source: { name: post.author, handle, text: post.text, url: post.url, likes: post.likes || 0, retweets: post.retweets || 0 },
+      market: null,
+      tweetId,
+      selectedSide: 'YES',
+      stake: 5,
+      x_text: '',
+      truth_text: '',
+    };
+
+    if (data.markets && data.markets.length > 0) {
+      const m = data.markets[0];
+      item.market = {
+        question: m.question || '',
+        yes_odds: m.yesPrice || 50,
+        no_odds: m.noPrice || 50,
+        volume: m.volume || 0,
+        bettability: m.bettabilityScore || '—',
+        grok_reason: m.grokReason || '',
+        betClaim: m.betClaim || m.question || '',
+        side: m.side || 'YES',
+        source: m.source || 'polymarket',
+        matchScore: m.bettabilityScore ? m.bettabilityScore + '%' : ((75 + Math.floor(Math.random() * 20)) + '%'),
+      };
+      item.selectedSide = m.side || 'YES';
+    }
+
+    APP.bbItems[idx] = item;
+    slot.innerHTML = renderBeta2Card(item, idx, 'bb');
+
+    if (tweetId) tryEmbedTweet(tweetId, 'bb-embed-' + idx);
+
+    setTimeout(() => {
+      const card = slot.querySelector('.post-block');
+      if (card) card.classList.add('visible');
+    }, 100);
+
+  } catch (err) {
+    slot.innerHTML = '<div style="text-align:center;padding:20px;color:#787878;">Could not load this post.</div>';
+  }
 }
+
+function updateBBList() {} // Progressive rendering handles this now
 
 function bbPickSide(idx, side) {
   if (APP.bbItems[idx]) {
     APP.bbItems[idx].selectedSide = side;
-    updateBBList();
+    const slot = document.getElementById('bb-slot-' + idx);
+    if (slot) {
+      slot.innerHTML = renderBeta2Card(APP.bbItems[idx], idx, 'bb');
+      const card = slot.querySelector('.post-block');
+      if (card) card.classList.add('visible');
+      if (APP.bbItems[idx].tweetId) tryEmbedTweet(APP.bbItems[idx].tweetId, 'bb-embed-' + idx);
+    }
   }
 }
 
@@ -1593,7 +1742,142 @@ function bbCycleStake(idx) {
   const cur = APP.bbItems[idx].stake || 5;
   const next = stakes[(stakes.indexOf(cur) + 1) % stakes.length];
   APP.bbItems[idx].stake = next;
-  updateBBList();
+  const slot = document.getElementById('bb-slot-' + idx);
+  if (slot) {
+    slot.innerHTML = renderBeta2Card(APP.bbItems[idx], idx, 'bb');
+    const card = slot.querySelector('.post-block');
+    if (card) card.classList.add('visible');
+    if (APP.bbItems[idx].tweetId) tryEmbedTweet(APP.bbItems[idx].tweetId, 'bb-embed-' + idx);
+  }
+}
+
+function renderBeta2Card(item, idx, mode) {
+  const m = item.market || {};
+  const yesPct = m.yes_odds || 50;
+  const noPct = m.no_odds || 50;
+  const side = item.selectedSide || m.side || 'YES';
+  const stake = item.stake || 5;
+  const betClaim = m.betClaim || m.question || 'this outcome';
+  const volume = m.volume || 0;
+  const bettability = m.bettability || '—';
+  const grokReason = m.grok_reason || '';
+  const sourceLabel = m.source === 'sportsbook' ? 'Sportsbook' : 'Polymarket';
+  const matchScore = m.matchScore || ((75 + Math.floor(Math.random() * 20)) + '%');
+  const handle = item.source?.handle || 'unknown';
+  const initial = (item.source?.name || 'U')[0].toUpperCase();
+  const prefix = mode === 'bb' ? 'bb' : 'feed';
+  const outcome = side === 'YES'
+    ? `<span style="color:#10b981;font-weight:700;">YES &mdash; ${betClaim}</span>`
+    : `<span style="color:#ef4444;font-weight:700;">NO &mdash; ${betClaim}</span>`;
+
+  const hasMarket = m.question;
+
+  // Fallback X post card (shown until embed loads)
+  const fallbackPost = `<div class="post-card" style="padding:16px 20px;">
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="width:44px;height:44px;border-radius:50%;background:#f0fafa;border:1px solid #b8dede;display:flex;align-items:center;justify-content:center;color:#006B6E;font-weight:700;font-size:16px;flex-shrink:0;">${initial}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:14px;color:#252B1A;">${item.source?.name || 'Unknown'}</span>
+          <span style="font-size:12px;color:#787878;">@${handle}</span>
+          <a href="${item.source?.url || '#'}" target="_blank" style="margin-left:auto;color:#787878;opacity:0.4;"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        </div>
+        <p style="font-size:14px;color:#4a4a4a;line-height:1.55;margin-top:6px;">${item.source?.text || ''}</p>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:10px;padding-top:8px;border-top:1px solid #e8eae9;font-size:12px;color:#787878;">
+          <span>&#9825; ${formatNum(item.source?.likes || 0)}</span>
+          <span>&#8635; ${formatNum(item.source?.retweets || 0)}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // Market section (matching beta2 exactly)
+  const marketSection = hasMarket ? `
+    <div style="border-top:1px solid #e8eae9;">
+      <div style="padding:12px 20px 8px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#787878;text-transform:uppercase;letter-spacing:0.06em;">
+        <span class="bb-match-pulse"></span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#006B6E" stroke-width="2.5" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        Matched Market
+        <span style="background:rgba(16,185,129,0.08);color:#10b981;padding:2px 8px;border-radius:99px;font-size:10px;border:1px solid rgba(16,185,129,0.15);margin-left:8px;">${matchScore} match</span>
+        <span style="background:#f0fafa;color:#006B6E;padding:2px 8px;border-radius:99px;font-size:10px;margin-left:auto;">${sourceLabel}</span>
+      </div>
+      <div style="padding:0 20px 14px;">
+        <div class="bb-bet-string">
+          <div style="font-size:15px;font-weight:600;color:#252B1A;line-height:1.5;">
+            <span class="ph">@Friend</span> <span class="ph">WeBet $<span id="${prefix}-stake-display-${idx}">${stake}</span></span> ${outcome}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:10px;flex-wrap:wrap;">
+          <span class="bb-odds-chip yes" style="position:relative">${yesPct}% Yes<div class="odds-bar" style="width:${yesPct}%"></div></span>
+          <span class="bb-odds-chip no" style="position:relative">${noPct}% No<div class="odds-bar" style="width:${noPct}%"></div></span>
+          <span style="color:#787878">${formatNum(volume)} vol</span>
+          <span style="color:#787878">${sourceLabel}</span>
+        </div>
+        <div class="bb-side-toggle">
+          <button class="bb-side-btn ${side === 'YES' ? 'active-yes' : ''}" onclick="${mode === 'bb' ? `bbPickSide(${idx},'YES')` : ''}">Yes &#10003;</button>
+          <button class="bb-side-btn ${side === 'NO' ? 'active-no' : ''}" onclick="${mode === 'bb' ? `bbPickSide(${idx},'NO')` : ''}">No &#10007;</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <div style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#006B6E;font-weight:600;background:#f0fafa;padding:5px 14px;border-radius:8px;border:1px solid #b8dede;cursor:pointer;" onclick="${mode === 'bb' ? `bbCycleStake(${idx})` : ''}">
+            <span id="${prefix}-stake-${idx}" style="min-width:20px;text-align:center;">${stake}</span> credits
+          </div>
+          <span style="font-size:11px;color:#787878;">Tap to change</span>
+        </div>
+        <button class="bb-send-btn" style="position:relative;z-index:1;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Send Bet
+        </button>
+      </div>
+    </div>` : '';
+
+  // Admin action buttons
+  const actionButtons = mode === 'bb' ? `
+    <div class="bb-social-bar" style="background:#fff;">
+      <button class="bb-social-btn x-btn" onclick="bbShareWithImage(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
+      <button class="bb-social-btn truth-btn" onclick="bbShareWithImage(${idx},'truth')">${icon('truth','w-4 h-4')} Post to Truth Social</button>
+      <button class="bb-social-btn linkedin-btn" onclick="bbShareWithImage(${idx},'linkedin')">${icon('linkedin','w-4 h-4')} Post to LinkedIn</button>
+    </div>` : `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 20px;border-top:1px solid #e8eae9;">
+      <button class="pill pill-primary" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
+      <button class="pill pill-primary" onclick="publishAction(${idx},'truth')">Post to Truth</button>
+      <button class="pill pill-primary" style="padding:6px 24px;" onclick="publishAction(${idx},'both')">Post to Both</button>
+      <button class="pill pill-outlined" onclick="scheduleAction(${idx})">${icon('calendar','w-4 h-4')} Schedule</button>
+      <button class="pill pill-danger" onclick="dismissAction(${idx})">Dismiss</button>
+    </div>`;
+
+  return `
+  <div class="post-block" style="background:#fff;border:1px solid #e8eae9;border-radius:16px;margin-bottom:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.04);opacity:0;transform:translateY(16px);transition:opacity 0.4s ease,transform 0.4s ease;">
+    <div id="${prefix}-embed-${idx}" data-tweet-id="${item.tweetId || ''}" style="min-height:80px;">
+      ${fallbackPost}
+    </div>
+    ${marketSection}
+    ${actionButtons}
+  </div>`;
+}
+
+function tryEmbedTweet(tweetId, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !tweetId) return;
+
+  const doEmbed = () => {
+    if (!window.twttr || !twttr.widgets) return false;
+    twttr.widgets.createTweet(tweetId, container, {
+      dnt: true, theme: 'light', conversation: 'none',
+    }).then(el => {
+      if (el && container.offsetHeight > 50) {
+        const fb = container.querySelector('.post-card');
+        if (fb) fb.style.display = 'none';
+      }
+    }).catch(() => {});
+    return true;
+  };
+
+  if (!doEmbed()) {
+    const interval = setInterval(() => {
+      if (doEmbed()) clearInterval(interval);
+    }, 500);
+    setTimeout(() => clearInterval(interval), 8000);
+  }
 }
 
 function buildTagLine(authorHandle, commenters) {

@@ -651,19 +651,25 @@ function bindTextareaCounters() {
 }
 
 async function loadFeed() {
-  APP.feedLoading = true;
-  updateFeedList();
-  try {
-    const data = await api(`/api/admin-feed?category=${APP.feedCategory}&limit=5`);
-    APP.feedItems = (data.items || []).map((item, i) => ({ ...item, isNew: i < 2 }));
-    APP.lastRefreshed = new Date();
-  } catch (e) {
-    APP.feedItems = getDemoFeedItems();
-    APP.lastRefreshed = new Date();
-  }
+  // Show demo data instantly while real data loads
+  APP.feedItems = getDemoFeedItems();
+  APP.lastRefreshed = new Date();
   APP.feedLoading = false;
   updateFeedList();
   bindTextareaCounters();
+  // Then fetch real data in background
+  try {
+    const data = await api(`/api/admin-feed?category=${APP.feedCategory}&limit=3`);
+    if (data.items && data.items.length > 0) {
+      APP.feedItems = data.items.map((item, i) => ({ ...item, isNew: true }));
+      APP.lastRefreshed = new Date();
+      updateFeedList();
+      bindTextareaCounters();
+      showToast('Live feed loaded', 'success');
+    }
+  } catch (e) {
+    // Demo data already showing — no action needed
+  }
 }
 
 function updateFeedList() {

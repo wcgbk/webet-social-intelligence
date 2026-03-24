@@ -95,7 +95,7 @@ exports.handler = async (event) => {
   try {
     const params = event.queryStringParameters || {};
     const category = params.category || 'trending';
-    const limit = Math.min(parseInt(params.limit) || 5, 10);
+    const limit = Math.min(parseInt(params.limit) || 3, 10);
     const siteURL = process.env.URL || 'https://webetsocial.com';
     const xaiKey = process.env.XAI_API_KEY;
 
@@ -158,20 +158,19 @@ exports.handler = async (event) => {
 
     const betResults = await Promise.all(betPromises);
 
-    // ── Step 3: Compose posts with Betty via xAI Grok ─────────────────────
-    console.log(`[admin-feed] Composing ${betResults.length} editorial cards`);
+    // ── Step 3: Compose posts with Betty + fetch commenters (ALL PARALLEL) ──
+    console.log(`[admin-feed] Composing ${betResults.length} editorial cards (parallel)`);
 
-    const cards = [];
-
-    for (const result of betResults) {
+    const cardPromises = betResults.map(async (result) => {
       const { post, markets, aiBet } = result;
 
-      let composed = null;
-      if (xaiKey && markets.length > 0) {
-        composed = await composeBettyPost(post, markets, xaiKey);
-      }
+      // Run Betty compose + commenter fetch in parallel
+      const [composed, commenters] = await Promise.all([
+        (xaiKey && markets.length > 0) ? composeBettyPost(post, markets, xaiKey) : null,
+        fetchTopCommenters(post, xaiKey),
+      ]);
 
-      const card = {
+      return {
         id: crypto.randomUUID(),
         category,
         createdAt: new Date().toISOString(),
@@ -185,22 +184,22 @@ exports.handler = async (event) => {
         },
         markets: markets.slice(0, 3),
         aiBet,
+        commenters: commenters || [],
         composed: composed || {
           xVersion: '',
           truthVersion: '',
           headline: post.text.slice(0, 60) + (post.text.length > 60 ? '...' : ''),
           summary: post.text.slice(0, 200),
         },
-        // Flatten composed fields for frontend consumption
         x_text: composed?.xVersion || '',
         truth_text: composed?.truthVersion || '',
         headline: composed?.headline || post.text.slice(0, 60),
         summary: composed?.summary || post.text.slice(0, 200),
         status: 'ready',
       };
+    });
 
-      cards.push(card);
-    }
+    const cards = await Promise.all(cardPromises);
 
     return {
       statusCode: 200,
@@ -236,7 +235,7 @@ async function composeBettyPost(post, markets, apiKey) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'grok-3-fast',
+        model: 'grok-3-mini-fast',
         messages: [
           { role: 'system', content: BETTY_SYSTEM_PROMPT },
           {
@@ -253,7 +252,7 @@ Compose the social posts now.`,
           },
         ],
         temperature: 0.7,
-        max_tokens: 800,
+        max_tokens: 500,
       }),
     });
 
@@ -284,4 +283,49 @@ function formatVolume(vol) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
   return n.toFixed(0);
+}
+
+// ── Fetch top commenters on an X post via xAI Grok ────────────────────────
+// Uses Grok's real-time X knowledge to identify top engaged commenters
+async function fetchTopCommenters(post, apiKey) {
+  if (!apiKey || !post.handle) return [];
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'grok-3-mini-fast',
+        messages: [
+          {
+            role: 'system',
+            content: 'You identify top commenters on X posts. Return ONLY a JSON array of up to 3 handles (without @) of the most engaged commenters based on likes/engagement on their replies. If you cannot find replies or commenters, return an empty array []. Return ONLY valid JSON, no markdown.'
+          },
+          {
+            role: 'user',
+            content: `Find the top 3 commenters by engagement on this recent post by @${post.handle}: "${post.text.slice(0, 200)}". Return their X handles as a JSON array like ["handle1","handle2","handle3"]. If no comments found, return [].`
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+      }),
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return [];
+    const data = await res.json();
+    let content = (data.choices?.[0]?.message?.content || '').trim();
+    if (content.startsWith('```')) content = content.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed) ? parsed.slice(0, 3).map(h => h.replace(/^@/, '')) : [];
+  } catch (err) {
+    console.error('[admin-feed] commenter fetch error:', err.message);
+    return [];
+  }
 }

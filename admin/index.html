@@ -105,6 +105,30 @@ body { font-family: 'Geist Sans', system-ui, sans-serif; background: #0a0a0a; co
 .bb-social-btn.x-btn { background: #000; }
 .bb-social-btn.truth-btn { background: #5448C8; }
 .bb-social-btn.linkedin-btn { background: #0077B5; }
+
+/* Market row expand (beta2 style) */
+.admin-market-row { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; transition: background 0.15s; border-bottom: 1px solid #f3f4f6; }
+.admin-market-row:hover { background: #f0fafa; }
+.admin-market-row.expanded { background: #f0fafa; }
+.admin-market-rank { width: 28px; height: 28px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #787878; flex-shrink: 0; }
+.admin-market-info { flex: 1; min-width: 0; }
+.admin-market-question { font-size: 13px; font-weight: 600; color: #252B1A; line-height: 1.3; }
+.admin-market-stats { display: flex; gap: 12px; margin-top: 3px; font-size: 11px; color: #787878; flex-wrap: wrap; }
+.admin-market-stats .reason { font-style: italic; }
+.admin-market-odds { display: flex; gap: 4px; flex-shrink: 0; }
+.admin-odds-pill { padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+.admin-odds-pill.yes { background: rgba(16,185,129,0.08); color: #10b981; }
+.admin-odds-pill.no { background: rgba(239,68,68,0.06); color: #ef4444; }
+.admin-market-expand { display: none; padding: 12px 20px 14px 58px; background: #f0fafa; border-bottom: 1px solid #d1e8e8; }
+.admin-market-expand.open { display: block; }
+.admin-bet-string { background: #fff; border: 1.5px solid #b8dede; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.admin-bet-string .ph { color: #006B6E; }
+.admin-bet-string .side-yes { color: #10b981; font-weight: 700; }
+.admin-bet-string .side-no { color: #ef4444; font-weight: 700; }
+.admin-bet-meta { font-size: 11px; color: #787878; margin-top: 6px; }
+.admin-bet-reason { font-size: 11px; color: #787878; font-style: italic; margin-top: 4px; }
+.admin-send-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: #006B6E; color: #fff; border: none; font-family: inherit; font-size: 13px; font-weight: 600; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: background 0.15s; margin-top: 10px; }
+.admin-send-btn:hover { background: #005558; }
 .bb-match-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .post-block.visible { opacity: 1 !important; transform: translateY(0) !important; }
@@ -333,7 +357,7 @@ const ICONS = {
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   builder: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/></svg>`,
   linkedin: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
-  truth: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 3h6l4 5.5L16 3h6L14 13v8h-4v-8L2 3z"/></svg>`,
+  truth: `<svg viewBox="0 0 900 900" fill="currentColor"><path d="M450 0C201.5 0 0 201.5 0 450s201.5 450 450 450 450-201.5 450-450S698.5 0 450 0zm208.3 316.2L479.5 578.8v132.7c0 16.3-13.2 29.5-29.5 29.5s-29.5-13.2-29.5-29.5V578.8L241.7 316.2c-9.7-14.3-5.9-33.8 8.4-43.5 14.3-9.7 33.8-5.9 43.5 8.4L450 504.4l156.4-223.3c9.7-14.3 29.2-18.1 43.5-8.4 14.3 9.7 18.1 29.2 8.4 43.5z"/></svg>`,
   clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   externalLink: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline w-3 h-3"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
 };
@@ -779,6 +803,7 @@ async function loadFeedPost(post, idx) {
         source: m.source || 'polymarket',
         matchScore: m.bettabilityScore ? m.bettabilityScore + '%' : ((75 + Math.floor(Math.random() * 20)) + '%'),
       };
+      item.allMarkets = data.markets; // store all markets for row #2
     }
 
     APP.feedItems[idx] = item;
@@ -803,15 +828,86 @@ async function loadFeedPost(post, idx) {
 function updateFeedList() {} // Progressive rendering handles this now
 
 function publishAction(idx, target) {
-  const labels = { x: 'X', truth: 'Truth Social', both: 'X and Truth Social' };
-  showModal('Confirm Publish', `Are you sure you want to post this to ${labels[target]}?`, async () => {
-    try {
-      await api('/api/admin-publish', { method: 'POST', body: { id: APP.feedItems[idx]?.id, target, x_text: APP.feedItems[idx]?.x_text, truth_text: APP.feedItems[idx]?.truth_text } });
-      showToast(`Posted to ${labels[target]} successfully!`, 'success');
-      APP.feedItems[idx].status = target === 'both' ? 'posted_both' : `posted_${target}`;
-      updateFeedList();
-    } catch (e) { /* toast already shown */ }
-  }, 'Publish', 'pill-primary');
+  const item = APP.feedItems[idx];
+  if (!item) return;
+
+  // Copy card image to clipboard first
+  const embedEl = document.getElementById('feed-embed-' + idx);
+  if (embedEl) {
+    html2canvas(embedEl, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
+      .then(canvas => canvas.toBlob(blob => {
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).catch(() => {});
+      }))
+      .catch(() => {});
+  }
+
+  const openPlatform = (p) => {
+    // Build platform-specific share text
+    const text = buildShareText(item, idx, p);
+    switch(p) {
+      case 'x':
+        window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=500');
+        break;
+      case 'truth':
+        window.open(`https://truthsocial.com/share?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=500');
+        break;
+      case 'linkedin':
+        window.open(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=600');
+        break;
+    }
+  };
+
+  if (target === 'both' || target === 'all') {
+    showToast('Card image copied! Paste it in each compose window.', 'success');
+    openPlatform('x');
+    setTimeout(() => openPlatform('truth'), 800);
+    setTimeout(() => openPlatform('linkedin'), 1600);
+  } else {
+    showToast('Opening compose window — card image copied to clipboard!', 'success');
+    openPlatform(target);
+  }
+
+  // Update status
+  if (item) {
+    item.status = target === 'both' || target === 'all' ? 'posted_both' : `posted_${target}`;
+  }
+}
+
+function buildShareText(item, idx, platform) {
+  const m = item.market || {};
+  const stake = item.stake || 5;
+  const betClaim = m.betClaim || m.question || 'This Outcome';
+  const betClaimTitle = betClaim.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  const yesPct = m.yes_odds || 50;
+  const noPct = m.no_odds || (100 - yesPct);
+  const sourceLabel = m.source === 'sportsbook' ? 'Sportsbook' : 'Polymarket';
+  const volume = m.volume || 0;
+  const handle = item.source?.handle || '';
+  const authorTag = handle ? `@${handle}` : '';
+  const commenters = item.commenters || [];
+  const tags = buildTagLine(handle, commenters);
+
+  // Build a clean, concise hook from the source post
+  const rawText = item.source?.text || 'Trending now';
+  const cleanText = rawText.replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+  const hook = cleanText.length > 120 ? cleanText.slice(0, 117).replace(/\s\S*$/, '') + '...' : cleanText;
+
+  // WeBet bet string (matches webetsocial.com format)
+  const betString = `@Friend WeBet $${stake} ${betClaimTitle}`;
+  const oddsLine = `${yesPct}% Yes · ${noPct}% No on ${sourceLabel} · ${formatNum(volume)} vol`;
+
+  if (platform === 'linkedin') {
+    // LinkedIn: Professional, longer, no hashtags
+    return `${hook}\n\nPrediction markets are pricing this at ${yesPct}% — here's the bet:\n\n${betString}\n${oddsLine}\n\n${tags}\n\nSee more trending bets at webetsocial.com/feed`;
+  } else if (platform === 'truth') {
+    // Truth Social: Direct, punchy, 500 char max
+    return `${hook}\n\n${betString}\n${oddsLine}\n\nThink otherwise? Build your bet.\n\n${tags}\n\nFull thread on X → @WeBetSocialAI\nwebetsocial.com/feed`;
+  } else {
+    // X: Sharp, 280 char limit, hashtag-ready
+    const xPost = `${hook}\n\n${betString}\n${oddsLine}\n\n${tags}\nwebetsocial.com/feed`;
+    // Trim to 280 if needed
+    return xPost.length <= 280 ? xPost : `${betString}\n${oddsLine}\n\n${tags}\nwebetsocial.com/feed`;
+  }
 }
 
 function scheduleAction(idx) {
@@ -1704,6 +1800,7 @@ async function loadBBPost(post, idx) {
         matchScore: m.bettabilityScore ? m.bettabilityScore + '%' : ((75 + Math.floor(Math.random() * 20)) + '%'),
       };
       item.selectedSide = m.side || 'YES';
+      item.allMarkets = data.markets; // store all markets for row #2
     }
 
     APP.bbItems[idx] = item;
@@ -1756,7 +1853,6 @@ function renderBeta2Card(item, idx, mode) {
   const yesPct = m.yes_odds || 50;
   const noPct = m.no_odds || 50;
   const side = item.selectedSide || m.side || 'YES';
-  const stake = item.stake || 5;
   const betClaim = m.betClaim || m.question || 'This Outcome';
   const volume = m.volume || 0;
   const sourceLabel = m.source === 'sportsbook' ? 'Sportsbook' : 'Polymarket';
@@ -1765,9 +1861,11 @@ function renderBeta2Card(item, idx, mode) {
   const initial = (item.source?.name || 'U')[0].toUpperCase();
   const prefix = mode === 'bb' ? 'bb' : 'feed';
   const hasMarket = m.question;
-
-  // WeBet bet string format: @Friend WeBet $[amount] [Claim] On [Date]
-  const betClaimTitle = betClaim.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  const sideClass = side === 'YES' ? 'side-yes' : 'side-no';
+  const outcome = `${side} — ${betClaim}`;
+  const sideOdds = side === 'YES' ? yesPct + '%' : (100 - yesPct) + '%';
+  const grokReason = m.grok_reason || m.grokReason || '';
+  const rowId = `${prefix}-${idx}-0`;
 
   // Fallback X post card (centered, shown until embed loads)
   const fallbackPost = `<div class="post-card" style="padding:16px 20px;max-width:550px;margin:0 auto;">
@@ -1788,68 +1886,132 @@ function renderBeta2Card(item, idx, mode) {
     </div>
   </div>`;
 
-  // Market section
-  const marketSection = hasMarket ? `
-    <div style="border-top:1px solid #e8eae9;">
-      <div style="padding:12px 20px 8px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#787878;text-transform:uppercase;letter-spacing:0.06em;">
-        <span class="bb-match-pulse"></span>
+  // Market row #1 ABOVE the post (auto-expanded)
+  const marketRowAbove = hasMarket ? `
+    <div style="border-bottom:1px solid #e8eae9;">
+      <div style="padding:8px 20px 4px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#787878;text-transform:uppercase;letter-spacing:0.06em;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#006B6E" stroke-width="2.5" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-        Matched Market
-        <span style="background:rgba(16,185,129,0.08);color:#10b981;padding:2px 8px;border-radius:99px;font-size:10px;border:1px solid rgba(16,185,129,0.15);margin-left:8px;">${matchScore} match</span>
-        <span style="background:#f0fafa;color:#006B6E;padding:2px 8px;border-radius:99px;font-size:10px;margin-left:auto;">${sourceLabel}</span>
+        Matched Markets
       </div>
-      <div style="padding:0 20px 16px;">
-        <div class="bb-bet-string" style="text-align:center;">
+      <div class="admin-market-row expanded" onclick="adminToggleMarket('${rowId}')" id="mrow-${rowId}">
+        <div class="admin-market-rank">1</div>
+        <div class="admin-market-info">
+          <div class="admin-market-question">${m.question}</div>
+          <div class="admin-market-stats">
+            <span>${formatNum(volume)} vol</span>
+            <span>${matchScore} match</span>
+            ${grokReason ? `<span class="reason">${grokReason}</span>` : ''}
+          </div>
+        </div>
+        <div class="admin-market-odds">
+          <span class="admin-odds-pill yes">${yesPct}%</span>
+          <span class="admin-odds-pill no">${noPct}%</span>
+        </div>
+      </div>
+      <div class="admin-market-expand open" id="mbet-${rowId}">
+        <div class="admin-bet-string">
           <div style="font-size:15px;font-weight:600;color:#252B1A;line-height:1.5;">
-            <span class="ph">@Friend</span> <span class="ph">WeBet $<span id="${prefix}-stake-display-${idx}">${stake}</span></span> <span style="color:#006B6E;font-weight:700;">${betClaimTitle}</span>
+            <span class="ph">@Friend</span> <span class="ph">WeBet $5</span> <span class="${sideClass}">${outcome}</span>
           </div>
+          <div class="admin-bet-meta">${sideOdds} ${side} on ${sourceLabel}${volume ? ' &middot; ' + formatNum(volume) + ' volume' : ''}</div>
+          ${grokReason ? `<div class="admin-bet-reason">${grokReason}</div>` : ''}
         </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:10px;font-size:11px;margin-bottom:12px;flex-wrap:wrap;">
-          <span class="bb-odds-chip yes" style="position:relative">${yesPct}% Yes<div class="odds-bar" style="width:${yesPct}%"></div></span>
-          <span class="bb-odds-chip no" style="position:relative">${noPct}% No<div class="odds-bar" style="width:${noPct}%"></div></span>
-          <span style="color:#787878">${formatNum(volume)} vol</span>
-          <span style="color:#787878">${sourceLabel}</span>
-        </div>
-        <div class="bb-side-toggle" style="max-width:400px;margin:0 auto 12px;">
-          <button class="bb-side-btn ${side === 'YES' ? 'active-yes' : ''}" onclick="${mode === 'bb' ? `bbPickSide(${idx},'YES')` : ''}">Yes &#10003;</button>
-          <button class="bb-side-btn ${side === 'NO' ? 'active-no' : ''}" onclick="${mode === 'bb' ? `bbPickSide(${idx},'NO')` : ''}">No &#10007;</button>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;">
-          <div style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#006B6E;font-weight:600;background:#f0fafa;padding:5px 14px;border-radius:8px;border:1px solid #b8dede;cursor:pointer;" onclick="${mode === 'bb' ? `bbCycleStake(${idx})` : ''}">
-            <span id="${prefix}-stake-${idx}" style="min-width:20px;text-align:center;">${stake}</span> credits
-          </div>
-          <span style="font-size:11px;color:#787878;">Tap to change</span>
-        </div>
-        <button class="bb-send-btn" style="position:relative;z-index:1;max-width:400px;margin:0 auto;display:flex;">
+        <button class="admin-send-btn" onclick="event.stopPropagation(); ${mode === 'bb' ? `bbOpenSheet(${idx})` : `feedOpenSheet(${idx})`}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           Send Bet
         </button>
       </div>
     </div>` : '';
 
-  // Admin action buttons (centered)
-  const actionButtons = mode === 'bb' ? `
+  // Market row #2 BELOW the post (collapsed) — use second market if available
+  const markets = item.allMarkets || [];
+  const m2 = markets[1] || null;
+  const rowId2 = `${prefix}-${idx}-1`;
+  const marketRowBelow = (hasMarket && m2) ? `
+    <div style="border-top:1px solid #e8eae9;">
+      <div class="admin-market-row" onclick="adminToggleMarket('${rowId2}')" id="mrow-${rowId2}">
+        <div class="admin-market-rank">2</div>
+        <div class="admin-market-info">
+          <div class="admin-market-question">${m2.question || m2.betClaim || ''}</div>
+          <div class="admin-market-stats">
+            <span>${formatNum(m2.volume || 0)} vol</span>
+            ${m2.bettabilityScore ? `<span>${m2.bettabilityScore}% match</span>` : ''}
+            ${m2.grokReason ? `<span class="reason">${m2.grokReason}</span>` : ''}
+          </div>
+        </div>
+        <div class="admin-market-odds">
+          <span class="admin-odds-pill yes">${m2.yesPrice || 50}%</span>
+          <span class="admin-odds-pill no">${m2.noPrice || 50}%</span>
+        </div>
+      </div>
+      <div class="admin-market-expand" id="mbet-${rowId2}">
+        <div class="admin-bet-string">
+          <div style="font-size:15px;font-weight:600;color:#252B1A;line-height:1.5;">
+            <span class="ph">@Friend</span> <span class="ph">WeBet $5</span> <span class="${(m2.side || 'YES') === 'YES' ? 'side-yes' : 'side-no'}">${m2.side || 'YES'} — ${m2.betClaim || m2.question || ''}</span>
+          </div>
+          <div class="admin-bet-meta">${m2.sideOdds || (m2.yesPrice || 50) + '%'} ${m2.side || 'YES'} on ${(m2.source === 'sportsbook') ? 'Sportsbook' : 'Polymarket'}</div>
+        </div>
+        <button class="admin-send-btn" onclick="event.stopPropagation(); ${mode === 'bb' ? `bbOpenSheet(${idx})` : `feedOpenSheet(${idx})`}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Send Bet
+        </button>
+      </div>
+    </div>` : '';
+
+  // Social share buttons (colorful, for both modes)
+  const socialBar = `
     <div class="bb-social-bar" style="background:#fff;justify-content:center;">
-      <button class="bb-social-btn x-btn" onclick="bbShareWithImage(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
-      <button class="bb-social-btn truth-btn" onclick="bbShareWithImage(${idx},'truth')">${icon('truth','w-4 h-4')} Post to Truth Social</button>
-      <button class="bb-social-btn linkedin-btn" onclick="bbShareWithImage(${idx},'linkedin')">${icon('linkedin','w-4 h-4')} Post to LinkedIn</button>
-    </div>` : `
-    <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 20px;border-top:1px solid #e8eae9;justify-content:center;">
-      <button class="pill pill-primary" onclick="publishAction(${idx},'x')">${icon('x','w-4 h-4')} Post to X</button>
-      <button class="pill pill-primary" onclick="publishAction(${idx},'truth')">Post to Truth</button>
-      <button class="pill pill-primary" style="padding:6px 24px;" onclick="publishAction(${idx},'both')">Post to Both</button>
-      <button class="pill pill-outlined" onclick="scheduleAction(${idx})">${icon('calendar','w-4 h-4')} Schedule</button>
-      <button class="pill pill-danger" onclick="dismissAction(${idx})">Dismiss</button>
+      <button class="bb-social-btn x-btn" onclick="${mode === 'bb' ? `bbShareWithImage(${idx},'x')` : `publishAction(${idx},'x')`}">${icon('x','w-4 h-4')} Post to X</button>
+      <button class="bb-social-btn truth-btn" onclick="${mode === 'bb' ? `bbShareWithImage(${idx},'truth')` : `publishAction(${idx},'truth')`}">${icon('truth','w-4 h-4')} Post to Truth Social</button>
+      <button class="bb-social-btn linkedin-btn" onclick="${mode === 'bb' ? `bbShareWithImage(${idx},'linkedin')` : `publishAction(${idx},'linkedin')`}">${icon('linkedin','w-4 h-4')} Post to LinkedIn</button>
     </div>`;
+
+  // Extra admin actions for feed mode
+  const adminActions = mode === 'feed' ? `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 20px 12px;justify-content:center;">
+      <button class="pill pill-outlined text-xs" onclick="scheduleAction(${idx})">${icon('calendar','w-3.5 h-3.5')} Schedule</button>
+      <button class="pill pill-outlined text-xs" onclick="queueAction(${idx})">Add to Queue</button>
+      <button class="pill pill-danger text-xs" onclick="dismissAction(${idx})">Dismiss</button>
+    </div>` : '';
+
+  // Extra builder controls
+  const builderControls = mode === 'bb' ? `
+    <div class="bb-action-row">
+      <button class="bb-action-btn" onclick="bbShareWithImage(${idx},'all')">${icon('externalLink','w-3 h-3')} Share All</button>
+      <button class="bb-action-btn" onclick="bbDownloadCard(${idx})">&#128229; Download Card</button>
+      <button class="bb-action-btn" onclick="bbCopyText(${idx})">${icon('edit','w-3 h-3')} Copy Text</button>
+      <button class="bb-action-btn" onclick="bbRegenerate(${idx})">${icon('refresh','w-3 h-3')} Regenerate</button>
+    </div>` : '';
 
   return `
   <div class="post-block" style="background:#fff;border:1px solid #e8eae9;border-radius:16px;margin-bottom:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.04);opacity:0;transform:translateY(16px);transition:opacity 0.4s ease,transform 0.4s ease;">
+    ${marketRowAbove}
     <div id="${prefix}-embed-${idx}" data-tweet-id="${item.tweetId || ''}" style="min-height:80px;display:flex;justify-content:center;">
       ${fallbackPost}
     </div>
-    ${marketSection}
-    ${actionButtons}
+    ${marketRowBelow}
+    ${socialBar}
+    ${adminActions}
+    ${builderControls}
   </div>`;
+}
+
+function adminToggleMarket(id) {
+  const el = document.getElementById('mbet-' + id);
+  const row = document.getElementById('mrow-' + id);
+  if (!el) return;
+  el.classList.toggle('open');
+  if (row) row.classList.toggle('expanded');
+}
+
+function feedOpenSheet(idx) {
+  // For feed mode, just show a toast — no sheet needed
+  showToast('Use the social buttons below to share this bet!', 'info');
+}
+
+function bbOpenSheet(idx) {
+  // For builder mode, just show a toast
+  showToast('Use the social buttons below to share this bet!', 'info');
 }
 
 function tryEmbedTweet(tweetId, containerId) {
@@ -1887,29 +2049,19 @@ function buildTagLine(authorHandle, commenters) {
   return tags.join(' ');
 }
 
-function bbBuildDefaultCaption(item, idx) {
-  const m = item.market || {};
-  const side = item.selectedSide || 'YES';
-  const stake = item.stake || 5;
-  const betClaim = m.betClaim || m.question || 'this outcome';
-  const yesPct = m.yes_odds || 50;
-  const sourceLabel = m.source === 'kalshi' ? 'Kalshi' : 'Polymarket';
-  const volume = m.volume || 0;
-  const authorHandle = item.source?.handle || 'unknown';
-  const commenters = item.commenters || [];
-  const tags = buildTagLine(authorHandle, commenters);
-  const hook = item.source?.text ? item.source.text.slice(0, 80) + '...' : 'Trending now';
-  return `${hook}\n\n@Friend WeBet $${stake} ${side} — ${betClaim}\n${yesPct}% ${side} on ${sourceLabel} · ${formatNum(volume)} vol\n\n${tags}\n\nBuild your bet → webetsocial.com/feed`;
+function bbBuildDefaultCaption(item, idx, platform) {
+  // Use the same polished copy builder as the Daily Digest
+  return buildShareText(item, idx, platform || 'x');
 }
 
-function bbGetShareText(idx) {
+function bbGetShareText(idx, platform) {
   // Use edited caption if available
   const captionEl = document.getElementById(`bb-caption-${idx}`);
   if (captionEl && captionEl.value.trim()) return captionEl.value.trim();
   const item = APP.bbItems[idx];
   if (!item) return '';
-  if (item.x_text) return item.x_text;
-  return bbBuildDefaultCaption(item, idx);
+  // Generate platform-specific polished copy
+  return bbBuildDefaultCaption(item, idx, platform);
 }
 
 // Capture the bet card as a PNG image
@@ -1976,9 +2128,8 @@ async function bbShareWithImage(idx, platform) {
     link.click();
   }
 
-  const text = bbGetShareText(idx);
-
   const openPlatform = (p) => {
+    const text = bbGetShareText(idx, p);
     switch(p) {
       case 'x':
         window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=500');
@@ -1987,24 +2138,24 @@ async function bbShareWithImage(idx, platform) {
         window.open(`https://truthsocial.com/share?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=500');
         break;
       case 'linkedin':
-        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent('https://webetsocial.com/feed')}`, '_blank', 'width=600,height=500');
+        window.open(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=600');
         break;
     }
   };
 
   if (platform === 'all') {
-    showToast('Card image copied! Paste it when each compose window opens.', 'success');
+    showToast('Card image copied! Paste it in each compose window.', 'success');
     openPlatform('x');
     setTimeout(() => openPlatform('truth'), 800);
     setTimeout(() => openPlatform('linkedin'), 1600);
   } else {
-    showToast('Card image copied to clipboard — paste it in the compose window!', 'success');
+    showToast('Card image copied — paste it in the compose window!', 'success');
     openPlatform(platform);
   }
 }
 
 function bbCopyText(idx) {
-  const text = bbGetShareText(idx);
+  const text = bbGetShareText(idx, 'x');
   navigator.clipboard.writeText(text).then(() => showToast('Post text copied to clipboard!', 'success')).catch(() => showToast('Failed to copy', 'error'));
 }
 

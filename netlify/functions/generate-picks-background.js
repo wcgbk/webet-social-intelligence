@@ -613,6 +613,92 @@ function applyPredictionMarketAdjustment(candidate, signal) {
   return adjustedUnits;
 }
 
+// ── Fetch real-time X intelligence via Grok for top candidates ──
+async function fetchXIntelligence(candidates) {
+  const xaiKey = process.env.XAI_API_KEY;
+  if (!xaiKey || candidates.length === 0) return {};
+
+  // Build a single Grok call for all top candidates (efficient — one API call)
+  const teamPairs = candidates.slice(0, 8).map(c => `${c.awayTeam} vs ${c.homeTeam} (${c.sport})`);
+
+  try {
+    const resp = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
+      body: JSON.stringify({
+        model: 'grok-3-mini',
+        max_tokens: 1500,
+        temperature: 0.1,
+        messages: [{
+          role: 'system',
+          content: 'You are a sports intelligence analyst. Return ONLY valid JSON. No markdown, no explanation.'
+        }, {
+          role: 'user',
+          content: `Check X/Twitter for the latest breaking news on these games happening today. Focus ONLY on: injury updates, lineup changes, goaltender confirmations (NHL), starting pitcher changes (MLB), weather issues, or any material news that would shift the betting line.
+
+Games to check:
+${teamPairs.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Return JSON: { "alerts": [ { "game": "Team A vs Team B", "alert": "brief news", "impact": "positive|negative|neutral", "affectedTeam": "team name" } ] }
+If no breaking news for a game, omit it. Only include confirmed news, not rumors.`
+        }],
+      }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        const alerts = {};
+        for (const a of (parsed.alerts || [])) {
+          const key = (a.game || '').toLowerCase();
+          alerts[key] = a;
+        }
+        console.log(`[v10] X Intelligence: ${Object.keys(alerts).length} alerts from Grok`);
+        return alerts;
+      }
+    }
+  } catch (e) {
+    console.log(`[v10] X Intelligence fetch failed: ${e.message}`);
+  }
+  return {};
+}
+
+// ── Apply X intelligence alerts to candidate context ──
+function applyXIntelligence(candidates, xAlerts) {
+  if (!xAlerts || Object.keys(xAlerts).length === 0) return;
+
+  for (const c of candidates) {
+    // Try to match alert to candidate
+    const matchKeys = [
+      `${c.awayTeam} vs ${c.homeTeam}`.toLowerCase(),
+      `${c.homeTeam} vs ${c.awayTeam}`.toLowerCase(),
+      c.awayTeam.toLowerCase().split(' ').pop(),
+      c.homeTeam.toLowerCase().split(' ').pop(),
+    ];
+
+    for (const [key, alert] of Object.entries(xAlerts)) {
+      const keyLower = key.toLowerCase();
+      if (matchKeys.some(mk => keyLower.includes(mk) || mk.includes(keyLower.split(' ').pop()))) {
+        c.xAlert = alert;
+        // If negative impact on the team we're betting ON, flag it
+        if (alert.impact === 'negative') {
+          const affectedNorm = (alert.affectedTeam || '').toLowerCase();
+          const pickSide = c.side.toLowerCase();
+          // Check if the affected team is the one in our pick
+          if (pickSide.includes(affectedNorm.split(' ').pop())) {
+            c.xAlertWarning = true;
+            console.log(`[v10-x] WARNING: ${c.side} — negative alert: ${alert.alert}`);
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+
 // ── Refresh ratings if stale ──
 async function refreshRatingsIfNeeded() {
   const siteURL = process.env.URL || "https://webetsocial.com";
@@ -1170,6 +1256,18 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
       if (c.homeStats.offensiveRating) prompt += `  ORtg: ${c.homeTeam} ${c.homeStats.offensiveRating} / ${c.awayTeam} ${c.awayStats?.offensiveRating || '?'} | DRtg: ${c.homeTeam} ${c.homeStats.defensiveRating} / ${c.awayTeam} ${c.awayStats?.defensiveRating || '?'}\n`;
       if (c.homeStats.pace) prompt += `  Pace: ${c.homeTeam} ${c.homeStats.pace} / ${c.awayTeam} ${c.awayStats?.pace || '?'}\n`;
     }
+    // X/Grok intelligence alert
+    if (c.xAlert) {
+      prompt += `  ⚡ X ALERT: ${c.xAlert.alert} (impact: ${c.xAlert.impact}, team: ${c.xAlert.affectedTeam || '?'})\n`;
+      if (c.xAlertWarning) prompt += `  ⚠️ WARNING: This alert affects the team in our pick — verify before selecting.\n`;
+    }
+
+    // Prediction market signal
+    if (c.predictionMarket) {
+      const pm = c.predictionMarket;
+      prompt += `  📊 ${pm.source}: ${pm.agrees ? 'CONFIRMS' : pm.disagrees ? 'DISAGREES' : 'NEUTRAL'} (market=${(pm.marketProb*100).toFixed(0)}% vs model=${(pm.modelProb*100).toFixed(0)}%)\n`;
+    }
+
     prompt += `\n`;
   }
 
@@ -1386,6 +1484,10 @@ exports.handler = async (event) => {
       allCandidates.forEach((c, i) => { c.rank = i + 1; });
       console.log(`[v10] Prediction market adjustments: ${confirms} confirmed, ${cautions} cautioned`);
     }
+
+    // ── PHASE 1D: X/GROK REAL-TIME INTELLIGENCE ──
+    const xAlerts = await fetchXIntelligence(allCandidates);
+    applyXIntelligence(allCandidates, xAlerts);
   } catch (edgeErr) {
     console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
     console.error(edgeErr.stack);

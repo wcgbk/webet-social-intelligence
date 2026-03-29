@@ -690,14 +690,68 @@ function findTeam(teams, name) {
 // ══════════════════════════════════════════════════════════════
 // PHASE 1: DETERMINISTIC COMPUTATION PIPELINE
 // All projections, edges, and Kelly sizing computed in JS.
-// ══════════════════════════════════════════════════════════════
+// Ensemble projection: averages multiple methods per sport.
+// ══════════════════════════════════════════════════════��═══════
 
+// ── Star player injury impact (points/goals per game shift when OUT) ──
+// Positive = team scores fewer points without this player
+const INJURY_IMPACT = {
+  // NBA — top impact players (estimated PPG swing when out)
+  "Nikola Jokic": 8.5, "Luka Doncic": 7.5, "Shai Gilgeous-Alexander": 7.0,
+  "Giannis Antetokounmpo": 7.5, "Joel Embiid": 7.0, "Jayson Tatum": 6.5,
+  "Stephen Curry": 6.5, "Kevin Durant": 6.5, "LeBron James": 6.0,
+  "Anthony Davis": 5.5, "Donovan Mitchell": 5.5, "Ja Morant": 5.5,
+  "Jimmy Butler": 5.0, "Damian Lillard": 5.0, "Trae Young": 5.0,
+  "Anthony Edwards": 5.5, "De'Aaron Fox": 5.0, "Tyrese Haliburton": 5.0,
+  "Paolo Banchero": 4.5, "Cade Cunningham": 4.5, "Scottie Barnes": 4.5,
+  "Devin Booker": 5.0, "Karl-Anthony Towns": 4.5, "Zion Williamson": 4.5,
+  "Jalen Brunson": 5.0, "Darius Garland": 4.0, "Lauri Markkanen": 4.0,
+  // NHL — top impact players (estimated goals/game swing when out)
+  "Connor McDavid": 0.4, "Auston Matthews": 0.35, "Nathan MacKinnon": 0.35,
+  "Nikita Kucherov": 0.3, "Leon Draisaitl": 0.3, "David Pastrnak": 0.3,
+  "Cale Makar": 0.25, "Kirill Kaprizov": 0.3, "Jack Hughes": 0.25,
+  "Mika Zibanejad": 0.2, "Matthew Tkachuk": 0.25, "Sidney Crosby": 0.25,
+  "Artemi Panarin": 0.25, "Tage Thompson": 0.25, "Alex Ovechkin": 0.2,
+  // NCAAB — top impact players (estimated PPG swing)
+  "Cooper Flagg": 5.0, "Dylan Harper": 4.5, "Ace Bailey": 4.5,
+  "Kasparas Jakucionis": 4.0, "Johni Broome": 4.5, "Mark Sears": 4.0,
+  "RJ Davis": 4.0, "Hunter Dickinson": 4.0, "Caleb Love": 3.5,
+};
+
+function computeInjuryAdjustment(injuries, sport) {
+  if (!injuries || injuries.length === 0) return 0;
+  let totalImpact = 0;
+  for (const inj of injuries) {
+    // Only count players who are OUT or Doubtful
+    const status = (inj.status || '').toLowerCase();
+    if (status === 'out' || status === 'doubtful' || status.includes('out for season')) {
+      const impact = INJURY_IMPACT[inj.name] || 0;
+      // Doubtful = 70% chance out, Out = 100%
+      const factor = status === 'doubtful' ? 0.7 : 1.0;
+      totalImpact += impact * factor;
+    }
+  }
+  return totalImpact;
+}
+
+// ── Ensemble projection: runs multiple methods and averages ──
 function computeProjection(game, leagueName, leagueConfig, homeRating, awayRating, teamStats) {
   const homeStats = teamStats?.[game.home];
   const awayStats = teamStats?.[game.away];
   const sportType = leagueConfig ? leagueConfig.sport : null;
-  let projHomeScore, projAwayScore, projMethod;
 
+  // Collect all available projection methods
+  const projections = []; // Array of { home, away, weight, method }
+
+  // ── METHOD 1: Elo-based historical averages (always available) ──
+  // Uses home/away splits from ratings blob
+  const eloHomeScore = ((homeRating.homeAvgScored || homeRating.avgScored10 || 100) + (awayRating.awayAvgAllowed || awayRating.avgAllowed10 || 100)) / 2;
+  const eloAwayScore = ((awayRating.awayAvgScored || awayRating.avgScored10 || 100) + (homeRating.homeAvgAllowed || homeRating.avgAllowed10 || 100)) / 2;
+  if (eloHomeScore > 0 && eloAwayScore > 0) {
+    projections.push({ home: eloHomeScore, away: eloAwayScore, weight: 1.0, method: "elo-historical" });
+  }
+
+  // ── METHOD 2: Sport-specific efficiency model (when ESPN stats available) ──
   if (sportType === 'hockey' && homeStats?.sport === 'hockey' && awayStats?.sport === 'hockey'
       && homeStats.shotsFor && awayStats.shotsFor && homeStats.savePct && awayStats.savePct) {
     const homeExpShots = (homeStats.shotsFor + (awayStats.shotsAgainst || homeStats.shotsFor)) / 2;
@@ -705,57 +759,84 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
     const lgAvgSavePct = 0.905;
     const homeSaveFactor = awayStats.savePct ? (1 - awayStats.savePct) / (1 - lgAvgSavePct) : 1.0;
     const awaySaveFactor = homeStats.savePct ? (1 - homeStats.savePct) / (1 - lgAvgSavePct) : 1.0;
-    projHomeScore = Math.max(homeExpShots * (homeStats.shootingPct || 0.10) * homeSaveFactor, 1.0);
-    projAwayScore = Math.max(awayExpShots * (awayStats.shootingPct || 0.10) * awaySaveFactor, 1.0);
-    projMethod = "nhl-shot-efficiency";
+    const effHome = Math.max(homeExpShots * (homeStats.shootingPct || 0.10) * homeSaveFactor, 1.0);
+    const effAway = Math.max(awayExpShots * (awayStats.shootingPct || 0.10) * awaySaveFactor, 1.0);
+    projections.push({ home: effHome, away: effAway, weight: 1.5, method: "nhl-shot-efficiency" });
 
   } else if (sportType === 'baseball' && homeStats?.sport === 'baseball' && awayStats?.sport === 'baseball'
              && homeStats.pointsPerGame && awayStats.pointsPerGame) {
+    let effHome, effAway, method;
     if (homeStats.era && awayStats.era) {
-      projHomeScore = homeStats.pointsPerGame * (awayStats.era / 4.00);
-      projAwayScore = awayStats.pointsPerGame * (homeStats.era / 4.00);
-      projMethod = "mlb-pitching-adjusted";
+      effHome = homeStats.pointsPerGame * (awayStats.era / 4.00);
+      effAway = awayStats.pointsPerGame * (homeStats.era / 4.00);
+      method = "mlb-pitching-adjusted";
     } else {
-      projHomeScore = (homeStats.pointsPerGame + (awayStats.pointsAllowed || homeStats.pointsPerGame)) / 2;
-      projAwayScore = (awayStats.pointsPerGame + (homeStats.pointsAllowed || awayStats.pointsPerGame)) / 2;
-      projMethod = "mlb-runs-average";
+      effHome = (homeStats.pointsPerGame + (awayStats.pointsAllowed || homeStats.pointsPerGame)) / 2;
+      effAway = (awayStats.pointsPerGame + (homeStats.pointsAllowed || awayStats.pointsPerGame)) / 2;
+      method = "mlb-runs-average";
     }
-    projHomeScore = Math.max(projHomeScore, 1.5);
-    projAwayScore = Math.max(projAwayScore, 1.5);
+    projections.push({ home: Math.max(effHome, 1.5), away: Math.max(effAway, 1.5), weight: 1.5, method });
 
   } else if (sportType === 'soccer' && homeStats?.sport === 'soccer' && awayStats?.sport === 'soccer'
              && homeStats.pointsPerGame && awayStats.pointsPerGame) {
+    let effHome, effAway, method;
     if (homeStats.shotsOnGoal && awayStats.shotsOnGoal && homeStats.conversionRate && awayStats.conversionRate) {
       const homeExpSOT = (homeStats.shotsOnGoal + awayStats.shotsOnGoal) / 2;
-      projHomeScore = homeExpSOT * homeStats.conversionRate;
-      projAwayScore = homeExpSOT * awayStats.conversionRate;
-      projMethod = "soccer-shot-efficiency";
+      effHome = homeExpSOT * homeStats.conversionRate;
+      effAway = homeExpSOT * awayStats.conversionRate;
+      method = "soccer-shot-efficiency";
     } else {
-      projHomeScore = (homeStats.pointsPerGame + (awayStats.pointsAllowed || homeStats.pointsPerGame)) / 2;
-      projAwayScore = (awayStats.pointsPerGame + (homeStats.pointsAllowed || awayStats.pointsPerGame)) / 2;
-      projMethod = "soccer-goal-average";
+      effHome = (homeStats.pointsPerGame + (awayStats.pointsAllowed || homeStats.pointsPerGame)) / 2;
+      effAway = (awayStats.pointsPerGame + (homeStats.pointsAllowed || awayStats.pointsPerGame)) / 2;
+      method = "soccer-goal-average";
     }
-    projHomeScore = Math.max(projHomeScore, 0.3);
-    projAwayScore = Math.max(projAwayScore, 0.3);
+    projections.push({ home: Math.max(effHome, 0.3), away: Math.max(effAway, 0.3), weight: 1.5, method });
 
   } else if (homeStats?.offensiveRating && homeStats?.defensiveRating && homeStats?.pace &&
       awayStats?.offensiveRating && awayStats?.defensiveRating && awayStats?.pace) {
+    // Basketball: pace-adjusted efficiency
     const avgPace = (homeStats.pace + awayStats.pace) / 2;
     const lgAvgDRtg = LEAGUE_AVG_DRTG[leagueName] || 110;
-    projHomeScore = avgPace * (homeStats.offensiveRating / 100) * (awayStats.defensiveRating / lgAvgDRtg);
-    projAwayScore = avgPace * (awayStats.offensiveRating / 100) * (homeStats.defensiveRating / lgAvgDRtg);
-    projMethod = "pace-adjusted-efficiency";
+    const effHome = avgPace * (homeStats.offensiveRating / 100) * (awayStats.defensiveRating / lgAvgDRtg);
+    const effAway = avgPace * (awayStats.offensiveRating / 100) * (homeStats.defensiveRating / lgAvgDRtg);
+    projections.push({ home: effHome, away: effAway, weight: 1.5, method: "pace-adjusted-efficiency" });
+  }
 
-  } else if (homeStats?.pointsPerGame && homeStats?.pointsAllowed &&
-             awayStats?.pointsPerGame && awayStats?.pointsAllowed) {
-    projHomeScore = (homeStats.pointsPerGame + awayStats.pointsAllowed) / 2;
-    projAwayScore = (awayStats.pointsPerGame + homeStats.pointsAllowed) / 2;
-    projMethod = "ppg-average";
+  // ── METHOD 3: PPG/PPG-allowed average (when available but efficiency isn't) ──
+  if (homeStats?.pointsPerGame && homeStats?.pointsAllowed &&
+      awayStats?.pointsPerGame && awayStats?.pointsAllowed &&
+      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace'))) {
+    const ppgHome = (homeStats.pointsPerGame + awayStats.pointsAllowed) / 2;
+    const ppgAway = (awayStats.pointsPerGame + homeStats.pointsAllowed) / 2;
+    projections.push({ home: ppgHome, away: ppgAway, weight: 1.2, method: "ppg-average" });
+  }
 
+  // ── ENSEMBLE: weighted average of all available methods ──
+  let projHomeScore, projAwayScore, projMethod;
+  if (projections.length === 1) {
+    projHomeScore = projections[0].home;
+    projAwayScore = projections[0].away;
+    projMethod = projections[0].method;
+  } else if (projections.length >= 2) {
+    const totalWeight = projections.reduce((s, p) => s + p.weight, 0);
+    projHomeScore = projections.reduce((s, p) => s + p.home * p.weight, 0) / totalWeight;
+    projAwayScore = projections.reduce((s, p) => s + p.away * p.weight, 0) / totalWeight;
+    projMethod = "ensemble(" + projections.map(p => p.method).join("+") + ")";
   } else {
-    projHomeScore = ((homeRating.homeAvgScored || 0) + (awayRating.awayAvgAllowed || 0)) / 2 || 100;
-    projAwayScore = ((awayRating.awayAvgScored || 0) + (homeRating.homeAvgAllowed || 0)) / 2 || 100;
-    projMethod = "elo-historical";
+    projHomeScore = 100;
+    projAwayScore = 100;
+    projMethod = "fallback";
+  }
+
+  // ── INJURY ADJUSTMENT: shift projections based on star player absence ──
+  const homeInjImpact = computeInjuryAdjustment(game.homeInjuries, sportType);
+  const awayInjImpact = computeInjuryAdjustment(game.awayInjuries, sportType);
+  if (homeInjImpact > 0 || awayInjImpact > 0) {
+    projHomeScore -= homeInjImpact;
+    projAwayScore -= awayInjImpact;
+    if (homeInjImpact > 0 || awayInjImpact > 0) {
+      projMethod += ` [inj: home-${homeInjImpact.toFixed(1)}, away-${awayInjImpact.toFixed(1)}]`;
+    }
   }
 
   // NCAAB neutral site detection

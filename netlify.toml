@@ -8,8 +8,8 @@
   # Background function — 15min timeout for Elo rating computation
 
 [functions."trigger-picks"]
-  schedule = "0 14 * * *"
-  # 14:00 UTC = 9am EST / 10am EDT. Picks generate daily, no human or machine needed.
+  schedule = "0 14,19 * * *"
+  # 14:00 UTC = 10am EDT (morning run), 19:00 UTC = 3pm EDT (afternoon refresh for late injuries/line moves).
 
 [functions."trigger-clv"]
   schedule = "0 18 * * *"

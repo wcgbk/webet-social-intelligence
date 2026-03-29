@@ -490,6 +490,129 @@ async function fetchCalibrationData() {
   return null;
 }
 
+// ── Fetch prediction market data (Kalshi + Polymarket) for cross-reference ──
+async function fetchPredictionMarkets() {
+  const markets = [];
+
+  // Kalshi — has sports props (team wins, totals)
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const tomorrow = now + 24 * 60 * 60;
+    const resp = await fetch(`https://api.elections.kalshi.com/trade-api/v2/markets?status=open&min_close_ts=${now}&max_close_ts=${tomorrow}&limit=200`);
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const m of (data.markets || [])) {
+        const title = (m.title || m.subtitle || '').toLowerCase();
+        // Only keep sports-related markets
+        if (/nba|nhl|mlb|ncaa|nfl|soccer|football|basketball|hockey|baseball|over|under|spread|win/.test(title)) {
+          const lastPrice = m.last_price_dollars || m.last_price || 0;
+          const yesBid = m.yes_bid_dollars || m.yes_bid || 0;
+          const yesAsk = m.yes_ask_dollars || m.yes_ask || 0;
+          const yesPrice = yesBid > 0 && yesAsk > 0 ? (yesBid + yesAsk) / 2 : lastPrice || 0.5;
+          markets.push({
+            source: 'Kalshi',
+            title: m.title || m.subtitle || '',
+            yesPrice, // implied probability
+            noPrice: 1 - yesPrice,
+            volume: parseFloat(m.volume_24h_fp || m.volume_24h) || 0,
+            ticker: m.ticker || '',
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.log(`[v10] Kalshi fetch failed: ${e.message}`);
+  }
+
+  // Polymarket — broader but less sports-specific
+  try {
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const resp = await fetch(`https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=50&order=volume24hr&ascending=false&end_date_min=${now.toISOString()}&end_date_max=${tomorrow.toISOString()}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const m of (data || [])) {
+        const q = (m.question || m.groupItemTitle || '').toLowerCase();
+        if (/nba|nhl|mlb|ncaa|nfl|soccer|over|under|spread|win|playoff|series/.test(q)) {
+          const prices = m.outcomePrices ? JSON.parse(m.outcomePrices) : [];
+          markets.push({
+            source: 'Polymarket',
+            title: m.question || m.groupItemTitle || '',
+            yesPrice: parseFloat(prices[0]) || 0.5,
+            noPrice: parseFloat(prices[1]) || 0.5,
+            volume: parseFloat(m.volume24hr) || 0,
+            ticker: m.slug || '',
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.log(`[v10] Polymarket fetch failed: ${e.message}`);
+  }
+
+  console.log(`[v10] Prediction markets: ${markets.length} sports markets found`);
+  return markets;
+}
+
+// ── Match prediction market to a candidate and compute agreement signal ──
+function getPredictionMarketSignal(candidate, predictionMarkets) {
+  if (!predictionMarkets || predictionMarkets.length === 0) return null;
+
+  const homeNorm = candidate.homeTeam.toLowerCase();
+  const awayNorm = candidate.awayTeam.toLowerCase();
+  const homeLast = homeNorm.split(' ').pop();
+  const awayLast = awayNorm.split(' ').pop();
+
+  for (const pm of predictionMarkets) {
+    const title = pm.title.toLowerCase();
+    // Match by team name (last word — "bucks", "leafs", etc.)
+    const matchesHome = title.includes(homeLast) && homeLast.length > 3;
+    const matchesAway = title.includes(awayLast) && awayLast.length > 3;
+    if (!matchesHome && !matchesAway) continue;
+
+    // Found a matching market — compare implied probability
+    // pm.yesPrice is the implied probability of the "yes" outcome
+    // We need to determine if the market agrees with our pick direction
+    const ourCoverProb = candidate.coverProb;
+    const marketProb = pm.yesPrice; // rough proxy
+
+    // Agreement: market and model within 10% → confirming signal
+    // Disagreement: market and model differ by 15%+ → caution signal
+    const gap = Math.abs(ourCoverProb - marketProb);
+
+    return {
+      source: pm.source,
+      title: pm.title,
+      marketProb: +marketProb.toFixed(3),
+      modelProb: +ourCoverProb.toFixed(3),
+      gap: +gap.toFixed(3),
+      agrees: gap < 0.10,
+      disagrees: gap > 0.15,
+      volume: pm.volume,
+    };
+  }
+  return null;
+}
+
+// ── Apply prediction market confidence adjustment to Kelly units ──
+function applyPredictionMarketAdjustment(candidate, signal) {
+  if (!signal) return candidate.kellyUnits; // no matching market — no change
+
+  let adjustedUnits = candidate.kellyUnits;
+
+  if (signal.agrees && signal.volume > 1000) {
+    // Market confirms our edge — boost units by 0.5u (max)
+    adjustedUnits = Math.min(candidate.kellyUnits + 0.5, 3.0);
+    console.log(`[v10-pm] CONFIRMING: ${candidate.side} — ${signal.source} agrees (model=${signal.modelProb}, market=${signal.marketProb}). Units: ${candidate.kellyUnits}u → ${adjustedUnits}u`);
+  } else if (signal.disagrees && signal.volume > 1000) {
+    // Market disagrees — reduce units by 0.5u (min 0.5)
+    adjustedUnits = Math.max(candidate.kellyUnits - 0.5, 0.5);
+    console.log(`[v10-pm] CAUTION: ${candidate.side} — ${signal.source} disagrees (model=${signal.modelProb}, market=${signal.marketProb}). Units: ${candidate.kellyUnits}u → ${adjustedUnits}u`);
+  }
+
+  return adjustedUnits;
+}
+
 // ── Refresh ratings if stale ──
 async function refreshRatingsIfNeeded() {
   const siteURL = process.env.URL || "https://webetsocial.com";
@@ -1217,12 +1340,13 @@ exports.handler = async (event) => {
   console.log(`[v10] Generating picks for ${dateISO}`);
 
   // ── PHASE 1: DETERMINISTIC DATA ASSEMBLY ──
-  const [oddsData, espnData, ratingsData, calibrationData, bankrollCtx] = await Promise.all([
+  const [oddsData, espnData, ratingsData, calibrationData, bankrollCtx, predictionMarkets] = await Promise.all([
     fetchOdds(dateISO),
     fetchESPNData(dateISO),
     fetchRatings(),
     fetchCalibrationData(),
     computeBankrollContext(),
+    fetchPredictionMarkets(),
   ]);
 
   const teamStats = await fetchTeamStats(espnData);
@@ -1240,6 +1364,28 @@ exports.handler = async (event) => {
   try {
     allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData);
     console.log(`[v10] Computed ${allCandidates.length} edge candidates across all sports`);
+
+    // ── PHASE 1C: PREDICTION MARKET CROSS-REFERENCE ──
+    if (predictionMarkets.length > 0) {
+      let confirms = 0, cautions = 0;
+      for (const c of allCandidates) {
+        const signal = getPredictionMarketSignal(c, predictionMarkets);
+        if (signal) {
+          c.predictionMarket = signal;
+          const adjusted = applyPredictionMarketAdjustment(c, signal);
+          if (adjusted !== c.kellyUnits) {
+            c.kellyUnits = adjusted;
+            c.kellyCalcStr += ` [PM ${signal.agrees ? 'CONFIRM' : 'CAUTION'}: ${signal.source} ${signal.marketProb}]`;
+            if (signal.agrees) confirms++;
+            else cautions++;
+          }
+        }
+      }
+      // Re-sort after adjustments (units changed → re-rank by EV)
+      allCandidates.sort((a, b) => b.ev - a.ev);
+      allCandidates.forEach((c, i) => { c.rank = i + 1; });
+      console.log(`[v10] Prediction market adjustments: ${confirms} confirmed, ${cautions} cautioned`);
+    }
   } catch (edgeErr) {
     console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
     console.error(edgeErr.stack);

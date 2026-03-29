@@ -36,6 +36,11 @@
   # Every 15 minutes. Process scheduled posts in the queue.
 
 [[redirects]]
+  from = "/finalboss"
+  to = "/finalboss/index.html"
+  status = 200
+
+[[redirects]]
   from = "/partners"
   to = "/partners/index.html"
   status = 200

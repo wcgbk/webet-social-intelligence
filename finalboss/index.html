@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Final Boss — 97-Day Backtest</title>
+  <meta name="description" content="v10.0 Deterministic Edge Model backtested over 97 days. 200+ picks graded against actual results." />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --red: #c0392b;
+      --red-light: #fdecea;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    .page-title { font-size: 1.25rem; font-weight: 700; margin-bottom: .25rem; }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1.25rem; }
+
+    /* ─── Stat Cards ─── */
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem;
+      margin-bottom: 1rem;
+    }
+    .stat-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: 8px; padding: .75rem .625rem; text-align: center;
+    }
+    .stat-value { font-size: 1.25rem; font-weight: 700; }
+    .stat-label { font-size: .6875rem; color: var(--txt-m); margin-top: .125rem; }
+    .stat-green { color: var(--green); }
+    .stat-red { color: var(--red); }
+
+    /* ─── Breakdown Row ─── */
+    .breakdown {
+      font-size: .8125rem; color: var(--txt-m); text-align: center;
+      margin-bottom: 1.25rem; padding: .5rem; background: var(--white);
+      border: 1px solid var(--border-lt); border-radius: 8px;
+    }
+
+    /* ─── Section Header ─── */
+    .section-title {
+      font-size: .875rem; font-weight: 600; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin: 1.5rem 0 .75rem; padding-bottom: .375rem;
+      border-bottom: 2px solid var(--teal);
+    }
+
+    /* ─── Sport/Market Breakdown Table ─── */
+    .breakdown-table {
+      width: 100%; border-collapse: collapse; font-size: .8125rem;
+      background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px;
+      overflow: hidden; margin-bottom: 1rem;
+    }
+    .breakdown-table th {
+      background: var(--olive); color: var(--white); padding: .5rem .625rem;
+      text-align: left; font-weight: 600; font-size: .75rem; text-transform: uppercase;
+    }
+    .breakdown-table td {
+      padding: .5rem .625rem; border-bottom: 1px solid var(--border-lt);
+    }
+    .breakdown-table tr:last-child td { border-bottom: none; }
+
+    /* ─── Day-by-Day Results Table ─── */
+    .results-table {
+      width: 100%; border-collapse: collapse; font-size: .8125rem;
+      background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px;
+      overflow: hidden;
+    }
+    .results-table th {
+      background: var(--olive); color: var(--white); padding: .5rem .625rem;
+      text-align: left; font-weight: 600; font-size: .75rem; text-transform: uppercase;
+    }
+    .results-table td {
+      padding: .5rem .625rem; border-bottom: 1px solid var(--border-lt);
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table .date-link { color: var(--teal); text-decoration: underline; cursor: pointer; font-weight: 500; }
+    .profit-pos { color: var(--green); font-weight: 600; }
+    .profit-neg { color: var(--red); font-weight: 600; }
+
+    /* ─── Expandable Day Detail ─── */
+    .day-detail { display: none; background: var(--off-white); }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: .5rem .625rem; }
+    .pick-row { display: flex; justify-content: space-between; align-items: center; padding: .25rem 0; font-size: .75rem; border-bottom: 1px solid var(--border-lt); }
+    .pick-row:last-child { border-bottom: none; }
+    .pick-sport { font-weight: 600; color: var(--teal); min-width: 50px; }
+    .pick-side { flex: 1; margin: 0 .5rem; }
+    .pick-result { font-weight: 600; min-width: 30px; text-align: right; }
+    .pick-win { color: var(--green); }
+    .pick-loss { color: var(--red); }
+    .pick-push { color: var(--txt-m); }
+
+    /* ─── Loading ─── */
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--txt-m); }
+    .loading-spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid var(--border-lt); border-top-color: var(--teal); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: .5rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── KPI Highlight ─── */
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-bottom: 1rem;
+    }
+    .kpi-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: 8px; padding: .625rem; text-align: center;
+    }
+    .kpi-card .stat-value { font-size: 1rem; }
+
+    @media (max-width: 480px) {
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .kpi-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <a href="/" class="logo">
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <span class="header-badge">FINAL BOSS</span>
+  </div>
+
+  <!-- Main -->
+  <div class="main" id="app">
+    <div class="loading" id="loading">
+      <div class="loading-spinner"></div>
+      <div>Loading 97-day backtest results...</div>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api/get-backtest';
+
+    async function loadResults() {
+      try {
+        const resp = await fetch(API);
+        const data = await resp.json();
+        if (data.error) {
+          document.getElementById('app').innerHTML = `<div class="loading">${data.error}</div>`;
+          return;
+        }
+        render(data);
+      } catch (e) {
+        document.getElementById('app').innerHTML = `<div class="loading">Failed to load results: ${e.message}</div>`;
+      }
+    }
+
+    function render(data) {
+      const c = data.cumulative;
+      const days = data.days || [];
+      const bySport = data.bySport || {};
+      const byMarket = data.byMarket || {};
+
+      const profitClass = c.totalProfit >= 0 ? 'stat-green' : 'stat-red';
+      const profitSign = c.totalProfit >= 0 ? '+' : '';
+
+      let html = `
+        <div class="page-title">PICK RESULTS & TRACK RECORD</div>
+        <div class="page-sub">v10.0 Deterministic Edge Model &mdash; ${data.backtestWindow?.picksStart || '?'} to ${data.backtestWindow?.end || '?'} (${data.backtestWindow?.picksDays || '?'} days)</div>
+
+        <!-- Cumulative Stats -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-value">${c.wins}-${c.losses}</div>
+            <div class="stat-label">Record (Straight)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${c.accuracy}</div>
+            <div class="stat-label">Accuracy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value ${profitClass}">${profitSign}$${Math.abs(c.totalProfit).toLocaleString()}</div>
+            <div class="stat-label">Profit/Loss</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value ${profitClass}">${c.roi}</div>
+            <div class="stat-label">ROI (All Bets)</div>
+          </div>
+        </div>
+
+        <div class="breakdown">
+          Straights: ${c.wins}-${c.losses} (${c.accuracy}) ${profitSign}$${Math.abs(c.totalProfit).toLocaleString()}
+          &nbsp;|&nbsp; Total Wagered: $${c.totalWagered.toLocaleString()}
+          &nbsp;|&nbsp; Picks: ${c.totalPicks}
+        </div>
+
+        <!-- KPI Highlights -->
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="stat-value">${data.longestLosingStreak || 0}</div>
+            <div class="stat-label">Max Losing Streak</div>
+          </div>
+          <div class="kpi-card">
+            <div class="stat-value stat-green">+$${(c.bestDayProfit || 0).toLocaleString()}</div>
+            <div class="stat-label">Best Day</div>
+          </div>
+          <div class="kpi-card">
+            <div class="stat-value stat-red">-$${Math.abs(c.worstDayProfit || 0).toLocaleString()}</div>
+            <div class="stat-label">Worst Day</div>
+          </div>
+        </div>
+      `;
+
+      // By Sport
+      html += `<div class="section-title">By Sport</div>`;
+      html += `<table class="breakdown-table"><tr><th>Sport</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
+      for (const [sport, d] of Object.entries(bySport)) {
+        const pClass = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        html += `<tr><td>${sport}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pClass}">${d.profit >= 0 ? '+' : ''}$${Math.abs(d.profit).toLocaleString()}</td><td class="${pClass}">${d.roi}</td></tr>`;
+      }
+      html += `</table>`;
+
+      // By Market
+      html += `<div class="section-title">By Market Type</div>`;
+      html += `<table class="breakdown-table"><tr><th>Market</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
+      for (const [mkt, d] of Object.entries(byMarket)) {
+        const pClass = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        html += `<tr><td>${mkt}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pClass}">${d.profit >= 0 ? '+' : ''}$${Math.abs(d.profit).toLocaleString()}</td><td class="${pClass}">${d.roi}</td></tr>`;
+      }
+      html += `</table>`;
+
+      // Day-by-Day
+      html += `<div class="section-title">Day-by-Day Results</div>`;
+      html += `<table class="results-table"><tr><th>Date</th><th>Record</th><th>Accuracy</th><th>P/L</th></tr>`;
+
+      for (let i = days.length - 1; i >= 0; i--) {
+        const day = days[i];
+        if (day.picks.length === 0) continue;
+        const graded = day.picks.filter(p => p.result !== 'no_data');
+        if (graded.length === 0) continue;
+
+        const pClass = day.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        const dateStr = new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        html += `<tr class="day-row" data-idx="${i}">
+          <td><span class="date-link" onclick="toggleDay(${i})">${dateStr}</span></td>
+          <td>${day.wins}W-${day.losses}L</td>
+          <td>${day.accuracy}%</td>
+          <td class="${pClass}">${day.profit >= 0 ? '+' : '-'}$${Math.abs(day.profit).toLocaleString()}</td>
+        </tr>`;
+
+        // Expandable detail
+        html += `<tr class="day-detail" id="detail-${i}"><td colspan="4">`;
+        for (const p of day.picks) {
+          if (p.result === 'no_data') continue;
+          const rClass = p.result === 'win' ? 'pick-win' : p.result === 'loss' ? 'pick-loss' : 'pick-push';
+          const rText = p.result === 'win' ? 'W' : p.result === 'loss' ? 'L' : 'P';
+          html += `<div class="pick-row">
+            <span class="pick-sport">${p.sport}</span>
+            <span class="pick-side">${p.pick} (${p.odds})</span>
+            <span class="pick-result ${rClass}">${rText}</span>
+          </div>`;
+        }
+        html += `</td></tr>`;
+      }
+      html += `</table>`;
+
+      document.getElementById('app').innerHTML = html;
+    }
+
+    function toggleDay(idx) {
+      const el = document.getElementById('detail-' + idx);
+      if (el) el.classList.toggle('open');
+    }
+
+    loadResults();
+  </script>
+</body>
+</html>

@@ -4,9 +4,28 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."build-ratings-background"]
+  # Background function — 15min timeout for Elo rating computation
+
 [functions."trigger-picks"]
   schedule = "0 14 * * *"
   # 14:00 UTC = 9am EST / 10am EDT. Picks generate daily, no human or machine needed.
+
+[functions."trigger-clv"]
+  schedule = "0 18 * * *"
+  # 18:00 UTC = 2pm EDT. Capture closing lines before games start for CLV tracking.
+
+[functions."trigger-picks-95"]
+  schedule = "0 14 * * *"
+  # 14:00 UTC = 10am EDT. /95 picks generate daily on same schedule as /edge.
+
+[functions."trigger-clv-95"]
+  schedule = "0 22 * * *"
+  # 22:00 UTC = 6pm EDT. Capture closing lines ~1hr before most NBA/NHL game times.
+
+[functions."calibrate-95"]
+  schedule = "0 8 * * *"
+  # 08:00 UTC = 4am EDT. Grade yesterday's picks and update calibration curves overnight.
 
 [functions."admin-auto-draft"]
   schedule = "0 12 * * *"
@@ -17,8 +36,28 @@
   # Every 15 minutes. Process scheduled posts in the queue.
 
 [[redirects]]
+  from = "/partners"
+  to = "/partners/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/95"
+  to = "/95/index.html"
+  status = 200
+
+[[redirects]]
   from = "/edge/optimization"
   to = "/edge/optimization/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/predictions"
+  to = "/predictions/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/brandon"
+  to = "/brandon/index.html"
   status = 200
 
 [[redirects]]
@@ -37,6 +76,11 @@
   status = 200
 
 [[redirects]]
+  from = "/feed/beta3"
+  to = "/feed/beta3/index.html"
+  status = 200
+
+[[redirects]]
   from = "/feed/beta2"
   to = "/feed/beta2/index.html"
   status = 200
@@ -49,6 +93,11 @@
 [[redirects]]
   from = "/feed"
   to = "/feed/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/chat"
+  to = "/chat/index.html"
   status = 200
 
 [[redirects]]

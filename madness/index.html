@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Bot farms are flooding your timeline. WeBetAI uses prediction markets to cut through the noise. Here's how we fight back — and how you can too." />
+  <meta name="author" content="Betty / WeBetAI" />
+  <meta property="og:title" content="Bot Farms Are Flooding Your Feed. Here's How WeBetAI Fights Back." />
+  <meta property="og:description" content="Foreign intel ops run AI-powered bot farms 24/7 to manipulate what you see. WeBetAI validates trending narratives with real-money prediction markets so you never fall for manufactured consensus." />
+  <meta property="og:type" content="article" />
+  <title>Bot Farms Are Flooding Your Feed. Here's How WeBetAI Fights Back. — Betty's Blog</title>
+
+  <!-- Geist Sans via Fontsource CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.3/700.css" />
+
+  <style>
+    /* --- Reset ---------------------------------------------------------- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* --- Design Tokens -------------------------------------------------- */
+    :root {
+      --bg:           hsl(260, 87%,  3%);
+      --fg:           hsl(40,   6%, 95%);
+      --primary:      hsl(121, 95%, 76%);
+      --primary-fg:   hsl(0,   0%,   5%);
+      --hero-heading: hsl(40,  10%, 96%);
+      --hero-sub:     hsl(40,   6%, 82%);
+      --muted:        hsl(240,  4%, 16%);
+      --border:       hsl(240,  4%, 20%);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Geist Sans', system-ui, -apple-system, sans-serif;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* --- Liquid Glass --------------------------------------------------- */
+    .liquid-glass {
+      position: relative;
+      background: rgba(255, 255, 255, 0.01);
+      background-blend-mode: luminosity;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: none;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+    .liquid-glass::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      padding: 1.4px;
+      border-radius: inherit;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 20%,
+        rgba(255,255,255,0)    40%, rgba(255,255,255,0)    60%,
+        rgba(255,255,255,0.15) 80%, rgba(255,255,255,0.45) 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* --- Utility -------------------------------------------------------- */
+    .container {
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .text-primary { color: var(--primary); }
+
+    /* --- Buttons -------------------------------------------------------- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-family: inherit; font-size: 1rem; font-weight: 500;
+      border: none; cursor: pointer; text-decoration: none;
+      transition: all 0.15s ease; white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--primary); color: var(--primary-fg);
+      border-radius: 9999px; padding: 13px 26px;
+    }
+    .btn-primary:hover { background: hsl(121, 95%, 68%); transform: translateY(-1px); }
+    .btn-secondary {
+      border-radius: 9999px; padding: 13px 26px;
+      color: var(--fg);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.07); }
+
+    /* --- Navbar --------------------------------------------------------- */
+    .navbar-wrap {
+      position: sticky; top: 0; z-index: 100;
+      width: 100%; display: flex; justify-content: center;
+      padding: 16px 16px 0;
+    }
+    .navbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; width: 100%; max-width: 850px;
+      border-radius: 1.5rem; padding: 10px 16px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 9px;
+      text-decoration: none; flex-shrink: 0;
+    }
+    .nav-logo-icon {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      background: linear-gradient(135deg, hsl(121, 95%, 60%) 0%, hsl(160, 80%, 50%) 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo-text {
+      font-size: 1rem; font-weight: 600; color: var(--fg); letter-spacing: -0.01em;
+    }
+    .nav-logo-text span { color: var(--primary); }
+    .nav-links { display: flex; align-items: center; gap: 2px; list-style: none; }
+    .nav-links a {
+      display: flex; align-items: center; gap: 3px;
+      padding: 6px 12px; font-size: 0.9375rem; color: rgba(241,237,230,0.85);
+      text-decoration: none; border-radius: 0.75rem; transition: background 0.15s;
+    }
+    .nav-links a:hover { background: rgba(255,255,255,0.07); }
+    .btn-sm {
+      font-size: 0.875rem; font-weight: 500;
+      background: var(--primary); color: var(--primary-fg);
+      border-radius: 0.75rem; padding: 7px 18px;
+      text-decoration: none;
+    }
+    .btn-sm:hover { background: hsl(121, 95%, 68%); }
+
+    /* --- Article Header ------------------------------------------------- */
+    .article-header {
+      padding: 120px 0 48px;
+      text-align: center;
+    }
+    .article-tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.13em;
+      text-transform: uppercase; color: var(--primary); margin-bottom: 20px;
+    }
+    .article-title {
+      font-size: clamp(1.75rem, 4.5vw, 3rem);
+      font-weight: 600; letter-spacing: -0.025em; line-height: 1.12;
+      color: var(--hero-heading); margin-bottom: 20px;
+      max-width: 700px; margin-left: auto; margin-right: auto;
+    }
+    .article-meta {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      font-size: 0.875rem; color: rgba(241,237,230,0.55);
+    }
+    .article-author {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .author-avatar {
+      width: 28px; height: 28px; border-radius: 9999px;
+      background: linear-gradient(135deg, var(--primary) 0%, hsl(160,70%,55%) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--primary-fg);
+    }
+    .article-date { color: rgba(241,237,230,0.40); }
+    .meta-sep { width: 4px; height: 4px; border-radius: 9999px; background: rgba(241,237,230,0.25); }
+
+    /* --- Article Body --------------------------------------------------- */
+    .article-body {
+      padding-bottom: 80px;
+    }
+    .article-body p {
+      font-size: 1.0625rem; line-height: 1.78; color: var(--hero-sub);
+      margin-bottom: 24px;
+    }
+    .article-body h2 {
+      font-size: 1.5rem; font-weight: 600; color: var(--hero-heading);
+      letter-spacing: -0.02em; margin: 48px 0 16px; line-height: 1.25;
+    }
+    .article-body h3 {
+      font-size: 1.1875rem; font-weight: 600; color: var(--hero-heading);
+      margin: 36px 0 12px; line-height: 1.3;
+    }
+    .article-body strong { color: var(--hero-heading); font-weight: 600; }
+    .article-body a {
+      color: var(--primary); text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .article-body a:hover { color: hsl(121, 95%, 68%); }
+    .article-body ul, .article-body ol {
+      margin: 0 0 24px 24px; color: var(--hero-sub);
+      font-size: 1.0625rem; line-height: 1.78;
+    }
+    .article-body li { margin-bottom: 8px; }
+    .article-body li::marker { color: var(--primary); }
+
+    /* --- Callout Box ---------------------------------------------------- */
+    .callout {
+      border-radius: 1rem; padding: 24px 28px; margin: 32px 0;
+    }
+    .callout-label {
+      font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--primary); margin-bottom: 10px;
+    }
+    .callout p { margin-bottom: 0; }
+    .callout p + p { margin-top: 12px; }
+
+    /* --- Pull Quote ----------------------------------------------------- */
+    .pull-quote {
+      border-left: 3px solid var(--primary);
+      padding: 4px 0 4px 24px;
+      margin: 36px 0;
+    }
+    .pull-quote p {
+      font-size: 1.25rem; font-weight: 500; color: var(--hero-heading);
+      line-height: 1.55; font-style: italic; margin-bottom: 8px;
+    }
+    .pull-quote cite {
+      font-size: 0.875rem; color: rgba(241,237,230,0.45); font-style: normal;
+    }
+
+    /* --- CTA Banner ----------------------------------------------------- */
+    .cta-banner {
+      text-align: center; padding: 56px 28px; border-radius: 1.25rem;
+      margin: 48px 0 0;
+    }
+    .cta-banner h3 {
+      font-size: 1.5rem; font-weight: 600; color: var(--hero-heading);
+      margin: 0 0 12px; letter-spacing: -0.02em;
+    }
+    .cta-banner p {
+      font-size: 1rem; color: var(--hero-sub); max-width: 460px;
+      margin: 0 auto 24px; line-height: 1.65;
+    }
+    .cta-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    /* --- Divider -------------------------------------------------------- */
+    .divider {
+      width: 100%; height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      border: none; margin: 0;
+    }
+
+    /* --- Footer --------------------------------------------------------- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0 32px;
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between; gap: 24px;
+      flex-wrap: wrap;
+    }
+    .footer-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+    .footer-logo-text { font-size: 0.9375rem; font-weight: 600; color: var(--fg); }
+    .footer-logo-text span { color: var(--primary); }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a {
+      font-size: 0.875rem; color: rgba(241,237,230,0.50);
+      text-decoration: none; transition: color 0.15s;
+    }
+    .footer-links a:hover { color: var(--fg); }
+    .footer-copy {
+      font-size: 0.8125rem; color: rgba(241,237,230,0.35);
+    }
+
+    /* --- Scroll Animations ---------------------------------------------- */
+    .fade-up {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.55s ease, transform 0.55s ease;
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .fade-up-delay-1 { transition-delay: 0.10s; }
+    .fade-up-delay-2 { transition-delay: 0.20s; }
+
+    /* --- Mobile --------------------------------------------------------- */
+    @media (max-width: 768px) {
+      .article-header { padding: 100px 0 36px; }
+      .article-title { font-size: clamp(1.5rem, 6vw, 2.25rem); }
+      .article-meta { flex-wrap: wrap; gap: 10px; }
+      .nav-links { display: none; }
+      .nav-desktop-cta { display: none; }
+      .callout { padding: 20px 22px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; gap: 20px; }
+      .footer-links { flex-wrap: wrap; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<div class="navbar-wrap" id="navbar-wrap">
+  <nav class="navbar liquid-glass">
+    <a href="/" class="nav-logo">
+      <div class="nav-logo-icon">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="9" r="2.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.5"/>
+          <circle cx="9" cy="3" r="1.5" fill="rgba(5,10,5,0.9)"/>
+          <circle cx="15" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+          <circle cx="3" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+          <line x1="9" y1="4.5" x2="9" y2="6.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="14.1" y1="11.7" x2="11.1" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="3.9" y1="11.7" x2="6.9" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="nav-logo-text">WeBet<span>AI</span></span>
+    </a>
+
+    <ul class="nav-links">
+      <li><a href="/">Home</a></li>
+      <li><a href="/#features">Features</a></li>
+      <li><a href="/#betty">Meet Betty</a></li>
+      <li><a href="/#digest">Digest</a></li>
+    </ul>
+
+    <a href="/#signup" class="btn-sm nav-desktop-cta">Start Free</a>
+  </nav>
+</div>
+
+<!-- ARTICLE HEADER -->
+<div class="container">
+  <header class="article-header fade-up">
+    <div class="article-tag">Betty's Blog</div>
+    <h1 class="article-title">
+      Bot Farms Are Flooding Your Feed. Here's How WeBetAI Fights Back.
+    </h1>
+    <div class="article-meta">
+      <div class="article-author">
+        <div class="author-avatar">B</div>
+        <span>Betty / WeBetAI</span>
+      </div>
+      <div class="meta-sep"></div>
+      <span class="article-date">April 8, 2026</span>
+      <div class="meta-sep"></div>
+      <span>6 min read</span>
+    </div>
+  </header>
+</div>
+
+<hr class="divider" />
+
+<!-- ARTICLE BODY -->
+<div class="container">
+  <article class="article-body fade-up fade-up-delay-1">
+
+    <p>
+      This morning, Rep. Anna Paulina Luna posted what hundreds of thousands of people have been
+      feeling but couldn't quite put into words: <strong>"Foreign intel ops are running bot farms to
+      flood timelines and manipulate the narrative. It's modern warfare. Wise up, don't fall for
+      the lies."</strong>
+    </p>
+
+    <p>
+      She was quote-tweeting a video from TaraBull showing Manus AI &mdash; a Chinese AI agent &mdash;
+      running <strong>50 social media accounts simultaneously, 24/7, automatically</strong>. Rows of
+      phones. Rows of accounts. All posting, replying, and amplifying on command. The post hit 140K
+      views before lunch.
+    </p>
+
+    <p>
+      This isn't hypothetical. It's happening right now, on the platform you scroll every day.
+      And the uncomfortable truth is that traditional social media gives you almost no way to tell
+      the difference between a real trending topic and one that was manufactured by a server rack
+      in a warehouse somewhere.
+    </p>
+
+    <h2>The Real Problem: Manufactured Consensus</h2>
+
+    <p>
+      Bot farms don't just spam. They're sophisticated enough to <em>simulate agreement</em>. When
+      50 coordinated accounts all amplify the same talking point, it looks like organic consensus.
+      Your timeline fills with a narrative that feels like "everyone is saying this" &mdash; but
+      nobody real is. The trending tab lights up. Real people start repeating the talking points
+      because they assume other real people started them.
+    </p>
+
+    <p>
+      This is the playbook: <strong>flood the zone, manufacture the trend, let humans do the
+      rest</strong>. And it works because social platforms measure what's trending by volume &mdash;
+      how many posts, how many reposts, how fast it's growing. Bots are very good at generating
+      volume. They're very bad at one thing: putting real money where their mouth is.
+    </p>
+
+    <h2>How WeBetAI Cuts Through the Noise</h2>
+
+    <p>
+      This is exactly the problem WeBetAI was built to solve. We don't just show you what's
+      trending &mdash; we show you what's <em>validated</em>.
+    </p>
+
+    <p>
+      Every day, Betty cross-references three independent data sources before anything reaches
+      your digest:
+    </p>
+
+    <ul>
+      <li><strong>X (Twitter)</strong> &mdash; What's trending in real-time conversation: the raw signal, volume included.</li>
+      <li><strong>Polymarket</strong> &mdash; Decentralized prediction markets where real people stake real money on outcomes. You can't bot your way to a $2M prediction market position.</li>
+      <li><strong>Kalshi</strong> &mdash; CFTC-regulated event contracts. The most legally compliant, financially audited signal available. Every contract represents real dollars from real participants.</li>
+    </ul>
+
+    <p>
+      Here's the key insight: <strong>bots can fake tweets, but they can't fake financial
+      markets</strong>. When a narrative is trending on X but there's zero corresponding action
+      on Polymarket or Kalshi, that's a red flag. When something is trending on X <em>and</em>
+      real money is flowing into prediction markets around it, that's signal you can trust.
+    </p>
+
+    <div class="callout liquid-glass">
+      <div class="callout-label">Betty's Take</div>
+      <p>
+        Think of it this way: anyone can make a claim on social media for free. But prediction
+        markets require you to back your claim with your wallet. That financial filter is
+        something no bot farm can bypass &mdash; and it's what makes your WeBetAI digest
+        fundamentally different from a raw trending page.
+      </p>
+    </div>
+
+    <h2>Price-Validated Intelligence vs. Volume-Gamed Feeds</h2>
+
+    <p>
+      Traditional trending algorithms are trivially gameable. Volume is cheap. Coordinated
+      amplification is cheap. What's <em>not</em> cheap is sustaining a position in a liquid
+      prediction market. When Polymarket shows 78% probability on an event, that number
+      represents millions of dollars of collective conviction &mdash; not a botnet running
+      overnight.
+    </p>
+
+    <p>
+      WeBetAI's daily digest gives you this <strong>price-validated</strong> view of the world.
+      Instead of asking "what are the most accounts talking about?" we ask "what are people
+      willing to bet real money on?" That's a fundamentally harder signal to manipulate, and
+      a fundamentally more useful one to consume.
+    </p>
+
+    <div class="pull-quote">
+      <p>"We don't guess what's important &mdash; we follow the money."</p>
+    </div>
+
+    <h2>How You Can Help Fight Back</h2>
+
+    <p>
+      Rep. Luna said "wise up." We agree &mdash; but we think you can do more than just be
+      skeptical. You can actively participate in building a better signal. Here's how:
+    </p>
+
+    <h3>1. Subscribe to Your Daily Digest</h3>
+    <p>
+      Every day at 5 PM EST, Betty delivers your curated intelligence drop &mdash; the top 5
+      trending topics cross-referenced with live prediction market data. This is your daily
+      inoculation against manufactured narratives. When you know what the money says, you
+      can spot what the bots are pushing.
+    </p>
+
+    <h3>2. Put Skin in the Game</h3>
+    <p>
+      When you see a trending topic in your digest, don't just scroll past it. Use Betty to
+      place a friendly micro bet with friends. When you stake even a small amount on an outcome,
+      you're contributing to the price-discovery mechanism that makes prediction markets
+      trustworthy. Every bet &mdash; even a $5 handshake wager &mdash; adds signal and subtracts
+      noise.
+    </p>
+
+    <h3>3. Bring Betty Into Your Group Chats</h3>
+    <p>
+      The best antidote to manufactured consensus is real conversation with real people.
+      Invite Betty to your group text. When a hot topic comes up, she'll surface the prediction
+      market data so your crew can debate with actual information instead of bot-amplified
+      talking points. Turn passive scrolling into active, informed discussion.
+    </p>
+
+    <h3>4. Share What You Learn</h3>
+    <p>
+      When you see a narrative blowing up on X but Polymarket and Kalshi show no corresponding
+      action, say something. Share your digest. Tell your friends about the disconnect. The more
+      people who understand the difference between volume-driven trends and price-validated
+      trends, the harder it becomes for bot farms to succeed.
+    </p>
+
+    <h2>The Bigger Picture</h2>
+
+    <p>
+      What Rep. Luna and TaraBull showed us today is real. AI-powered bot farms are not a future
+      threat &mdash; they are a current reality. Fifty phones running fifty accounts is what one
+      video caught on camera. The actual scale is orders of magnitude larger.
+    </p>
+
+    <p>
+      But here's the thing about information warfare: it only works when the audience can't
+      distinguish real signal from synthetic noise. WeBetAI exists to give you that ability.
+      By anchoring every trending topic to financial markets that require real human conviction,
+      we create a layer of truth that bot farms can't penetrate.
+    </p>
+
+    <p>
+      <strong>Social media shows you what's loud. Prediction markets show you what's real.
+      WeBetAI delivers both &mdash; so you can tell the difference.</strong>
+    </p>
+
+    <!-- CTA -->
+    <div class="cta-banner liquid-glass">
+      <h3>Don't Let Bots Think for You</h3>
+      <p>
+        Get Betty's daily intelligence digest &mdash; price-validated trending topics delivered
+        at 5 PM EST via text, email, or X DM. Free to start. No app required.
+      </p>
+      <div class="cta-buttons">
+        <a href="/#signup" class="btn btn-primary">Sign Up for Your Daily Digest</a>
+        <a href="sms:+1BETTYNUM" class="btn btn-secondary liquid-glass">Text Betty Now</a>
+      </div>
+    </div>
+
+  </article>
+</div>
+
+<hr class="divider" />
+
+<!-- FOOTER -->
+<footer>
+  <div class="container" style="max-width:1100px;">
+    <div class="footer-inner">
+      <a href="/" class="footer-logo">
+        <div class="nav-logo-icon" style="width:28px;height:28px;">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="2.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.5"/>
+            <circle cx="9" cy="3" r="1.5" fill="rgba(5,10,5,0.9)"/>
+            <circle cx="15" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+            <circle cx="3" cy="13" r="1.5" fill="rgba(5,10,5,0.9)"/>
+            <line x1="9" y1="4.5" x2="9" y2="6.5" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="14.1" y1="11.7" x2="11.1" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="3.9" y1="11.7" x2="6.9" y2="10.2" stroke="rgba(5,10,5,0.9)" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="footer-logo-text">WeBet<span>AI</span></span>
+      </a>
+
+      <div class="footer-links">
+        <a href="/">Home</a>
+        <a href="/#features">Features</a>
+        <a href="/#betty">Meet Betty</a>
+        <a href="/#digest">Digest</a>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+      </div>
+
+      <p class="footer-copy">&copy; 2026 WeBetAI Inc. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<!-- SCRIPTS -->
+<script>
+  /* Intersection Observer (fade-up) */
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+  /* Kickstart above-fold fade-ups */
+  document.querySelectorAll('.article-header .fade-up').forEach(el => {
+    setTimeout(() => el.classList.add('visible'), 100);
+  });
+
+  /* Navbar glass on scroll */
+  const navbarWrap = document.getElementById('navbar-wrap');
+  window.addEventListener('scroll', () => {
+    navbarWrap.style.paddingTop = window.scrollY > 40 ? '10px' : '16px';
+  }, { passive: true });
+</script>
+
+</body>
+</html>

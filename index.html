@@ -532,6 +532,14 @@
     .footer-copy {
       font-size: 0.8125rem; color: rgba(241,237,230,0.35);
     }
+    .footer-social { display: flex; align-items: center; gap: 12px; }
+    .footer-social a {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 8px;
+      color: rgba(241,237,230,0.50); text-decoration: none;
+      transition: color 0.15s, background 0.15s;
+    }
+    .footer-social a:hover { color: var(--fg); background: rgba(255,255,255,0.05); }
 
     /* âââ DIVIDER âââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
     .divider {
@@ -1223,6 +1231,14 @@
         <a href="#digest">Digest</a>
         <a href="#">Privacy</a>
         <a href="#">Terms</a>
+      </div>
+
+      <div class="footer-social">
+        <a href="https://x.com/mvanhorn/status/2042320564417937562?s=46" target="_blank" rel="noopener noreferrer" aria-label="Follow us on X">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+        </a>
       </div>
 
       <p class="footer-copy">Â© 2026 WeBetAI Inc. All rights reserved.</p>

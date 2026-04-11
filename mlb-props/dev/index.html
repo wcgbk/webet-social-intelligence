@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | MLB K Props Dev Notes</title>
+  <meta name="description" content="Development changelog and architecture notes for WeBetAI's MLB Strikeout Props betting engine." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/mlb-props/dev" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | MLB K Props Dev Notes" />
+  <meta property="og:description" content="Development changelog for the MLB Strikeout Props engine." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | MLB K Props Dev Notes" />
+  <meta name="twitter:description" content="Development changelog for the MLB Strikeout Props engine." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --red: #c0392b;
+      --red-light: #fce4e4;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg); color: var(--txt-b);
+      -webkit-font-smoothing: antialiased; min-height: 100vh;
+    }
+    .header {
+      background: var(--white); border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .hero {
+      background: linear-gradient(135deg, #4a1a1a 0%, #8b1a1a 100%);
+      border-radius: .875rem; padding: 1.25rem; margin-bottom: 1.25rem;
+      color: #fff; text-align: center;
+    }
+    .hero-title { font-size: 1.25rem; font-weight: 700; margin-bottom: .25rem; }
+    .hero-sub { font-size: .75rem; color: rgba(255,255,255,.7); letter-spacing: .05em; text-transform: uppercase; }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: 1rem;
+      border-left: 3px solid var(--teal);
+    }
+    .summary-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .625rem;
+    }
+    .summary-text { font-size: .8125rem; color: var(--txt-b); line-height: 1.65; }
+    .change-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1rem; margin-bottom: .625rem;
+    }
+    .change-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+    .change-version {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .125rem .5rem; text-transform: uppercase;
+    }
+    .change-date { font-size: .6875rem; color: var(--txt-l); font-weight: 500; }
+    .change-title { font-size: .9375rem; font-weight: 700; color: var(--olive); margin-bottom: .375rem; }
+    .change-body { font-size: .8125rem; color: var(--txt-m); line-height: 1.6; }
+    .change-tag {
+      display: inline-block; font-size: .5625rem; font-weight: 700; padding: .125rem .375rem;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; margin-right: .25rem;
+    }
+    .tag-arch { background: #e8f5e9; color: #2e7d32; }
+    .tag-fix { background: #fce4e4; color: #c0392b; }
+    .tag-feat { background: #e3f2fd; color: #1565c0; }
+    .tag-data { background: #fff8e1; color: #f9a825; }
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header" style="position:relative;">
+    <a href="/mlb-props" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/mlb-props" class="header-link">K Props</a>
+      <a href="/mlb-props/dev" class="header-link active">Dev Notes</a>
+      <a href="/mlb" class="header-link">MLB F5</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/mlb-props">K Props</a>
+      <a href="/mlb-props/dev">Dev Notes</a>
+      <a href="/mlb">MLB F5</a>
+    </div>
+  </header>
+
+<div class="main">
+
+  <div class="hero">
+    <div class="hero-title">MLB Strikeout Props</div>
+    <div class="hero-sub">Development Notes & Changelog</div>
+  </div>
+
+  <!-- How Picks Are Made -->
+  <div class="summary-card" style="border-left-color: var(--red);">
+    <div class="summary-title" style="color: var(--red);">How Picks Are Made — 10-Step Checklist</div>
+    <div class="summary-text">
+      Every pitcher on the daily slate is evaluated through a strict 10-step checklist before any pick is made. The system fetches real strikeout prop lines from The Odds API (Hard Rock Bet exclusively), pulls ESPN data for confirmed starters and venues, then sends the full slate to Claude with the checklist system prompt. Here is the process:
+      <br><br>
+      <strong>1. Injury & availability check</strong> — Claude web-searches for late scratches, pitch count limits, bullpen games, or injury report changes.<br>
+      <strong>2. Opening line vs current line</strong> — Compare the open K line to the current line to detect early sharp movement.<br>
+      <strong>3. Reverse Line Movement (RLM) check</strong> — If the line moves opposite to where the public money is flowing, that signals sharp action.<br>
+      <strong>4. Last 5 starts ATS</strong> — This is the heaviest-weighted factor. If a pitcher has gone Over in 4-5 of their last 5 starts, that's a Tier A signal.<br>
+      <strong>5. Opponent K vulnerability</strong> — Opponent's strikeout rate vs LHP/RHP. Top-10 K% teams are premium targets.<br>
+      <strong>6. Pitch mix & arsenal</strong> — Is the pitcher trending toward more whiff pitches (slider, sweeper, changeup)?<br>
+      <strong>7. Park & environment</strong> — Strikeout-specific park factors (e.g. Petco 105, Coors 90) adjust expectations. Weather and altitude matter.<br>
+      <strong>8. Game script probability</strong> — Blowout risk from the game total line. High totals suggest more pitching changes, limiting K upside.<br>
+      <strong>9. Sharp signal confirmation</strong> — Need 2+ of: RLM, last 5 ATS, opponent K% top-10, projection 3%+ edge, situational edge, pitch mix trending up.<br>
+      <strong>10. Commit or Pass</strong> — Only pitchers meeting tier thresholds get a pick. PASS is a valid and expected outcome.
+    </div>
+  </div>
+
+  <!-- Current Architecture -->
+  <div class="summary-card">
+    <div class="summary-title">Current Architecture Summary</div>
+    <div class="summary-text">
+      The K Props engine uses a <strong>Claude-driven analysis architecture</strong> where all raw data is pre-fetched and structured, then Claude performs the full 10-step evaluation for every pitcher. JavaScript fetches: (1) today's MLB events from The Odds API, (2) pitcher strikeout prop lines per event (Hard Rock Bet only), (3) game-level ML + totals for game script context, and (4) ESPN scoreboard data for confirmed starters and venues. All data is formatted into a structured context string and sent to Claude Sonnet with web search enabled (15 searches) for real-time injury/news verification. Claude returns structured JSON with up to 5 picks per day, sorted by tier.
+    </div>
+  </div>
+
+  <div class="summary-card" style="border-left-color: var(--green);">
+    <div class="summary-title" style="color: var(--green);">Tier System</div>
+    <div class="summary-text">
+      <strong>Tier A (2-3 units):</strong> Last 5 starts 4-5 Over, opponent K% top-10 vs handedness, RLM or 5%+ projection edge, line NOT moved 2+ from open.<br>
+      <strong>Tier B (1-2 units):</strong> Last 5 starts 3-5 Over, opponent K% above average, 1+ sharp signal, line within 1K of open.<br>
+      <strong>Tier C (0.5-1 unit):</strong> Matchup angle only, marginal 2-3% projection edge.<br>
+      <strong>Pass:</strong> Last 5 shows 2 or fewer Over, opponent is top-10 contact team, no signals, or line already moved 2+.
+    </div>
+  </div>
+
+  <div class="summary-card" style="border-left-color: var(--green);">
+    <div class="summary-title" style="color: var(--green);">Data Pipeline</div>
+    <div class="summary-text">
+      <strong>The Odds API (events):</strong> All MLB events for today with commence times and team names.<br>
+      <strong>The Odds API (K props):</strong> Per-event <code>pitcher_strikeouts</code> market from Hard Rock Bet (<code>hardrockbet</code>, <code>hardrockbet_oh</code>). Best over/under odds extracted per pitcher.<br>
+      <strong>The Odds API (game odds):</strong> Full-game h2h + totals for game script context (blowout risk, total line).<br>
+      <strong>ESPN Scoreboard:</strong> Confirmed starters (name, ID), venue for park factor lookup.<br>
+      <strong>Park Factors:</strong> 17 venue-specific K-factors (90-105 range). Higher = more Ks.<br>
+      <strong>Claude Sonnet + Web Search:</strong> Full analysis role — runs 10-step checklist for every pitcher, web-searches for injuries, lineup changes, and historical K data. Uses career/historical data when current season sample is insufficient.
+    </div>
+  </div>
+
+  <!-- Changelog -->
+  <div style="font-size:.75rem; font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.625rem; margin-top:1.25rem;">Changelog</div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.1</span>
+      <span class="change-date">Apr 11, 2026 — 10:00 AM</span>
+    </div>
+    <div class="change-title">Hard Rock Bet Exclusive + Historical Data Fallback</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      <span class="change-tag tag-data">Data</span>
+      Switched K props engine to use Hard Rock Bet lines exclusively, matching the MLB F5 pipeline. Added <code>HARD_ROCK_KEYS</code> filter (<code>hardrockbet</code>, <code>hardrockbet_oh</code>) to <code>extractKProps()</code> — all other sportsbooks are now ignored. Updated system prompt to instruct Claude to use career/historical data when current 2026 season sample is insufficient (early season, recent callups, etc.). Added dev notes page at <code>/mlb-props/dev</code>.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.0</span>
+      <span class="change-date">Apr 11, 2026 — 9:00 AM</span>
+    </div>
+    <div class="change-title">Initial MLB Strikeout Props Launch</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      <span class="change-tag tag-feat">Feature</span>
+      Built complete MLB Strikeout Props pipeline from scratch. Backend: <code>generate-picks-mlb-props-background.js</code> with full 10-step checklist system prompt. Fetches events from Odds API, per-event <code>pitcher_strikeouts</code> market, ESPN starters/venues, game-level odds for context. Claude Sonnet analyzes all pitchers with web search (15 searches) for real-time verification. Stores to <code>edge-picks-mlb-props</code> blob store with dual-write (SDK + REST API). Frontend at <code>/mlb-props</code> with red gradient hero, edge-style KPI cards, pick cards showing pitcher name, K line, Last 5 ATS, Opp K%, K/9, Sharp Signals, RLM alerts, core reasoning, risk factor, and bet summary. Tier badges: A (red), B (teal), C (gold). Separate P/L tracking via <code>get-results-mlb-props</code>. Daily cron at 10am EDT. Manual trigger at <code>/api/run-picks-mlb-props</code>.
+    </div>
+  </div>
+
+  <p class="footer-note">
+    MLB K Props Development Notes. Updated with each deployment.<br>
+    Architecture: Pre-fetched data + Full Claude analysis (Sonnet + web search).
+  </p>
+
+</div>
+<script>if(window.self!==window.top)document.body.classList.add("in-iframe")</script>
+</body>
+</html>

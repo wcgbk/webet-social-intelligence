@@ -8,20 +8,75 @@
   # Background function — 15min timeout for Elo rating computation
 
 [functions."trigger-picks"]
-  schedule = "0 14,19 * * *"
-  # 14:00 UTC = 10am EDT (morning run), 19:00 UTC = 3pm EDT (afternoon refresh for late injuries/line moves).
+  schedule = "0 14 * * *"
+  # 14:00 UTC = 10am EDT. Single daily run — picks are final once generated.
+
+[functions."trigger-picks-beta"]
+  schedule = "0 14 * * *"
+  # Beta pipeline — same schedule, writes to edge-picks-beta blob store
+
+[functions."trigger-picks-mlb"]
+  schedule = "0 14 * * *"
+  # MLB F5 pipeline — daily at 10am EDT, writes to edge-picks-mlb blob store
+
+[functions."generate-picks-mlb-background"]
+  # Background function — 15min timeout for MLB F5 pick generation
+
+[functions."trigger-picks-props"]
+  schedule = "0 14 * * *"
+  # Player Props pipeline — daily at 10am EDT, writes to edge-picks-props blob store
+
+[functions."generate-picks-props-background"]
+  # Background function — 15min timeout for player props pick generation
+
+[functions."trigger-picks-mlb-props"]
+  schedule = "0 14 * * *"
+  # MLB Strikeout Props — daily at 10am EDT, writes to edge-picks-mlb-props blob store
+
+[functions."generate-picks-mlb-props-background"]
+  # Background function — 15min timeout for MLB K props generation
+
+[functions."trigger-kalshi"]
+  schedule = "0 15 * * *"
+  # 15:00 UTC = 11am EDT. Runs 1 hour after daily picks to ensure they exist.
+
+[functions."trigger-kalshi-scan"]
+  schedule = "30 15,19,23 * * *"
+  # Independent scanner — 3x daily:
+  # 15:30 UTC = 11:30am EDT (after picks + execution)
+  # 19:00 UTC = 3:00pm EDT (afternoon price movement)
+  # 23:00 UTC = 7:00pm EDT (evening pre-game)
+
+[functions."generate-picks-beta-background"]
+  # Background function — 15min timeout for beta pick generation
+
+[functions."generate-picks-be-background"]
+  # Background function — 15min timeout for BettorEdge-enhanced pick generation
 
 [functions."trigger-clv"]
-  schedule = "0 18 * * *"
-  # 18:00 UTC = 2pm EDT. Capture closing lines before games start for CLV tracking.
+  schedule = "0 17,23 * * *"
+  # 17:00 UTC = 1pm EDT (afternoon games). 23:00 UTC = 7pm EDT (evening games). Merges results.
 
-[functions."trigger-picks-95"]
-  schedule = "0 14 * * *"
-  # 14:00 UTC = 10am EDT. /95 picks generate daily on same schedule as /edge.
+[functions."capture-opening-lines"]
+  schedule = "0 10 * * *"
+  # 10:00 UTC = 6am EDT. Capture early morning lines before US sharp action.
+  # 4-hour window before 10am picks maximizes line movement detection.
 
-[functions."trigger-clv-95"]
-  schedule = "0 22 * * *"
-  # 22:00 UTC = 6pm EDT. Capture closing lines ~1hr before most NBA/NHL game times.
+[functions."verify-picks"]
+  schedule = "30 14 * * *"
+  # 14:30 UTC = 10:30am EDT. Runs 30min after picks to verify math + narrative.
+
+[functions."self-optimize"]
+  schedule = "0 9 * * 0"
+  # 09:00 UTC = 5am EDT every Sunday. Weekly self-optimization cycle.
+
+# ── FOX: 3-AI Consensus Picks Pipeline (standalone) ──
+[functions."generate-fox-background"]
+  # Background function — 15min timeout for FOX 3-AI consensus pipeline
+
+[functions."trigger-fox"]
+  schedule = "30 14 * * *"
+  # 14:30 UTC = 10:30am EDT. Runs 30min after regular picks.
 
 [functions."calibrate-95"]
   schedule = "0 8 * * *"
@@ -34,6 +89,167 @@
 [functions."admin-queue-process"]
   schedule = "*/15 * * * *"
   # Every 15 minutes. Process scheduled posts in the queue.
+
+[functions."generate-webet-content-background"]
+  # Background function — 15min timeout for WeBet Truth Social content pipeline
+
+[functions."generate-truth-content-background"]
+  # Background function — 15min timeout for Authentic Press content generation
+
+[functions."trigger-truth"]
+  schedule = "0 12,14,16,18,20,22 * * *"
+  # Every 2 hours from 8am-6pm EDT (12-22 UTC). Generates stories + reply drafts.
+
+# ── GUARDIAN: Daily Digest Pipeline ──
+[functions."generate-guardian-background"]
+  # Background function — 15min timeout for Guardian digest generation
+
+[functions."trigger-guardian"]
+  schedule = "0 13 * * *"
+  # 13:00 UTC = 9am EDT. Daily Guardian digest scan.
+
+# ── MATCHING ENGINE: WeBet Social Feed (feed/beta2) ──
+[functions."matching-engine-background"]
+  # Background function — 15min timeout for topic matching + bet string generation
+  # Sources: Metaforecast, Reddit JSON, TrendsTools, X API, xAI Grok
+
+# [functions."trigger-matching"]
+#   schedule = "0 12,14,16,18,20,22 * * *"
+#   # Every 2 hours from 8am-6pm EDT (12-22 UTC)
+#   # PAUSED — manual runs only via /api/run-matching until dialed in
+
+# ── EXODUS: Authentic Press Briefing Pipeline (isolated) ──
+[functions."exodus-scan-background"]
+  # Background function — 15min timeout for X trending scan + Claude briefing generation
+
+# [functions."trigger-exodus"]
+#   schedule = "0 14,18,0 * * *"
+#   # 14:00 UTC = 10am EDT, 18:00 UTC = 2pm EDT, 00:00 UTC = 8pm EDT
+#   # PAUSED — manual runs only until dialed in
+  # Three daily briefings for the Authentic Press pipeline
+
+# ── BET: P2P Bet Settlement Engine ──
+# [functions."check-resolution"]
+#   schedule = "0 6,12,18,0 * * *"
+#   # Every 6 hours. Polls prediction markets for bet resolution.
+#   # PAUSED — manual runs only until v1 is live
+
+# Bet page — /bet/[id] routes to single-page app
+[[redirects]]
+  from = "/props"
+  to = "/props/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-picks-props"
+  to = "/.netlify/functions/get-picks-props"
+  status = 200
+
+[[redirects]]
+  from = "/api/run-picks-props"
+  to = "/.netlify/functions/run-picks-props"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-results-props"
+  to = "/.netlify/functions/get-results-props"
+  status = 200
+
+[[redirects]]
+  from = "/mlb-props/dev"
+  to = "/mlb-props/dev/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/mlb-props"
+  to = "/mlb-props/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-picks-mlb-props"
+  to = "/.netlify/functions/get-picks-mlb-props"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-results-mlb-props"
+  to = "/.netlify/functions/get-results-mlb-props"
+  status = 200
+
+[[redirects]]
+  from = "/api/run-picks-mlb-props"
+  to = "/.netlify/functions/generate-picks-mlb-props-background"
+  status = 200
+
+[[redirects]]
+  from = "/mlb/dev"
+  to = "/mlb/dev/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/mlb"
+  to = "/mlb/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-picks-mlb"
+  to = "/.netlify/functions/get-picks-mlb"
+  status = 200
+
+[[redirects]]
+  from = "/api/run-picks-mlb"
+  to = "/.netlify/functions/run-picks-mlb"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-results-mlb"
+  to = "/.netlify/functions/get-results-mlb"
+  status = 200
+
+[[redirects]]
+  from = "/edge-beta"
+  to = "/edge-beta/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/edge/beta"
+  to = "/edge-beta/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/bet"
+  to = "/bet/index.html"
+  status = 200
+
+# Bet pages with IDs get dynamic OG tags via serve-bet function
+[[redirects]]
+  from = "/bet/*"
+  to = "/.netlify/functions/serve-bet"
+  status = 200
+
+[[redirects]]
+  from = "/exodus"
+  to = "/exodus/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/truth/command"
+  to = "/truth/command.html"
+  status = 200
+
+[[redirects]]
+  from = "/truth"
+  to = "/truth/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/truth/*"
+  to = "/truth/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/scanner"
+  to = "/scanner/index.html"
+  status = 200
 
 [[redirects]]
   from = "/finalboss"
@@ -48,6 +264,36 @@
 [[redirects]]
   from = "/95"
   to = "/95/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/invite"
+  to = "/invite/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/backend"
+  to = "/backend/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/handshake"
+  to = "/handshake/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/handshake/*"
+  to = "/handshake/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/bettoredge"
+  to = "/bettoredge/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/edge/beta/better-edge"
+  to = "/edge/beta/better-edge/index.html"
   status = 200
 
 [[redirects]]
@@ -78,6 +324,11 @@
 [[redirects]]
   from = "/webetai/*"
   to = "/webetai/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/feed/alpha"
+  to = "/feed/alpha/index.html"
   status = 200
 
 [[redirects]]
@@ -151,6 +402,23 @@
   to = "/admin/index.html"
   status = 200
   force = true
+
+# Blog articles from blobs (static files take precedence, this catches blob-stored articles)
+[[redirects]]
+  from = "/betty/blog/*"
+  to = "/.netlify/functions/get-blog-post?slug=:splat"
+  status = 200
+
+# FOX — 3-AI Consensus Picks
+[[redirects]]
+  from = "/fox/dev"
+  to = "/fox/dev/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/fox"
+  to = "/fox/index.html"
+  status = 200
 
 [[redirects]]
   from = "/api/*"

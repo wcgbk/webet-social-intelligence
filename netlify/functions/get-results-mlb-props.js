@@ -30,9 +30,13 @@ async function fetchESPNEvents(dateISO) {
         awayAbbr: away.team?.abbreviation || '',
         homeTeam: home.team?.displayName || '',
         homeAbbr: home.team?.abbreviation || '',
+        awayScore: parseInt(away.score) || 0,
+        homeScore: parseInt(home.score) || 0,
         state: status.type?.state || 'pre',
         completed: status.type?.completed || false,
         inProgress: (status.type?.state === 'in'),
+        detail: comp.status?.detail || status.detail || '',
+        inning: comp.status?.period || 0,
       };
     }).filter(Boolean);
   } catch (e) {
@@ -85,10 +89,14 @@ function normalizeTeam(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function teamsMatch(pickTeam, espnTeam) {
+function teamsMatch(pickTeam, espnTeam, espnAbbr) {
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
-  if (!p || !e) return false;
+  const a = (espnAbbr || '').toLowerCase().trim();
+  if (!p) return false;
+  // Direct abbreviation match (NYM === NYM)
+  if (a && p === a) return true;
+  if (!e) return false;
   if (p === e || p.includes(e) || e.includes(p)) return true;
   const pLast = p.split(' ').pop();
   const eLast = e.split(' ').pop();
@@ -211,12 +219,16 @@ exports.handler = async (event) => {
       const espnEvents = await fetchESPNEvents(dateISO);
 
       // Find which events match our picks and fetch box scores for completed/in-progress games
+      // Helper to check if a pick matches an ESPN event
+      function pickMatchesEvent(pick, ev) {
+        return teamsMatch(pick.team, ev.awayTeam, ev.awayAbbr) || teamsMatch(pick.team, ev.homeTeam, ev.homeAbbr) ||
+               teamsMatch(pick.opponent, ev.awayTeam, ev.awayAbbr) || teamsMatch(pick.opponent, ev.homeTeam, ev.homeAbbr);
+      }
+
       const relevantEventIds = new Set();
       for (const pick of picks) {
         for (const ev of espnEvents) {
-          if ((ev.completed || ev.inProgress) &&
-              (teamsMatch(pick.team, ev.awayTeam) || teamsMatch(pick.team, ev.homeTeam) ||
-               teamsMatch(pick.opponent, ev.awayTeam) || teamsMatch(pick.opponent, ev.homeTeam))) {
+          if ((ev.completed || ev.inProgress) && pickMatchesEvent(pick, ev)) {
             relevantEventIds.add(ev.eventId);
           }
         }
@@ -248,10 +260,7 @@ exports.handler = async (event) => {
         let profit = 0;
 
         // Check if game is complete or in progress
-        const matchedEvent = espnEvents.find(ev =>
-          (teamsMatch(pick.team, ev.awayTeam) || teamsMatch(pick.team, ev.homeTeam) ||
-           teamsMatch(pick.opponent, ev.awayTeam) || teamsMatch(pick.opponent, ev.homeTeam))
-        );
+        const matchedEvent = espnEvents.find(ev => pickMatchesEvent(pick, ev));
 
         if (matchedEvent && (matchedEvent.completed || matchedEvent.inProgress)) {
           // Find the pitcher's K total
@@ -287,6 +296,36 @@ exports.handler = async (event) => {
 
         dayProfit += profit;
 
+        // Game score & status info
+        let gameScore = null;
+        let gameDetail = null;
+        let pitcherIP = null;
+        if (matchedEvent) {
+          gameScore = `${matchedEvent.awayAbbr} ${matchedEvent.awayScore} - ${matchedEvent.homeAbbr} ${matchedEvent.homeScore}`;
+          gameDetail = matchedEvent.detail; // e.g. "Bottom 3rd", "Final"
+        }
+        if (matchedEvent && (matchedEvent.completed || matchedEvent.inProgress)) {
+          const mp = allPitcherKs.find(p => namesMatch(pick.pitcher, p.name));
+          if (mp) pitcherIP = mp.ip;
+        }
+
+        // Progress toward K line
+        let kProgress = null;
+        const lineMatch = (pick.line || '').match(/^(O|U)\s*([\d.]+)$/i);
+        if (lineMatch && actualKs != null) {
+          const side = lineMatch[1].toUpperCase();
+          const kLine = parseFloat(lineMatch[2]);
+          const target = side === 'O' ? Math.ceil(kLine + 0.01) : Math.floor(kLine - 0.01); // Ks needed to win
+          kProgress = {
+            side,
+            kLine,
+            actual: actualKs,
+            target,
+            needed: side === 'O' ? Math.max(0, target - actualKs) : null,
+            pct: side === 'O' ? Math.min(100, Math.round((actualKs / target) * 100)) : Math.min(100, Math.round(((kLine - actualKs) / kLine) * 100)),
+          };
+        }
+
         dayPicks.push({
           pick: pick.pick,
           matchup: pick.matchup,
@@ -297,6 +336,10 @@ exports.handler = async (event) => {
           line: pick.line,
           pitcher: pick.pitcher,
           actualKs,
+          gameScore,
+          gameDetail,
+          pitcherIP,
+          kProgress,
         });
       }
 

@@ -16,21 +16,24 @@
   # Beta pipeline — same schedule, writes to edge-picks-beta blob store
 
 [functions."trigger-picks-mlb"]
-  schedule = "0 14 * * *"
+  # schedule = "0 14 * * *"
+  # PAUSED — cost reduction. Re-enable to restore /mlb daily picks.
   # MLB F5 pipeline — daily at 10am EDT, writes to edge-picks-mlb blob store
 
 [functions."generate-picks-mlb-background"]
   # Background function — 15min timeout for MLB F5 pick generation
 
 [functions."trigger-picks-props"]
-  schedule = "0 14 * * *"
+  # schedule = "0 14 * * *"
+  # PAUSED — cost reduction. Re-enable to restore /props daily picks.
   # Player Props pipeline — daily at 10am EDT, writes to edge-picks-props blob store
 
 [functions."generate-picks-props-background"]
   # Background function — 15min timeout for player props pick generation
 
 [functions."trigger-picks-mlb-props"]
-  schedule = "0 14 * * *"
+  # schedule = "0 14 * * *"
+  # PAUSED — cost reduction. Re-enable to restore /mlb-props daily picks.
   # MLB Strikeout Props — daily at 10am EDT, writes to edge-picks-mlb-props blob store
 
 [functions."generate-picks-mlb-props-background"]
@@ -75,7 +78,8 @@
   # Background function — 15min timeout for FOX 3-AI consensus pipeline
 
 [functions."trigger-fox"]
-  schedule = "30 14 * * *"
+  # schedule = "30 14 * * *"
+  # PAUSED — 3-AI consensus pipeline failing (only ChatGPT responding). Re-enable when fixed.
   # 14:30 UTC = 10:30am EDT. Runs 30min after regular picks.
 
 [functions."calibrate-95"]
@@ -97,7 +101,8 @@
   # Background function — 15min timeout for Authentic Press content generation
 
 [functions."trigger-truth"]
-  schedule = "0 12,14,16,18,20,22 * * *"
+  # schedule = "0 12,14,16,18,20,22 * * *"
+  # PAUSED — cost reduction. Re-enable to restore /truth 6x daily generation.
   # Every 2 hours from 8am-6pm EDT (12-22 UTC). Generates stories + reply drafts.
 
 # ── GUARDIAN: Daily Digest Pipeline ──

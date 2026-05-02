@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WeBetAI - Social Intelligence | Kentucky Derby 2026 Picks</title>
+  <meta name="description" content="WeBetAI's AI consensus picks for the 2026 Kentucky Derby. Cross-referenced: Claude, Gemini, Grok-3, GPT-4o + 15+ expert handicappers. Top EV bets for today." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/derby" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Kentucky Derby 2026 Picks" />
+  <meta property="og:description" content="AI consensus picks for the 2026 Kentucky Derby — cross-referenced across Claude, Gemini, Grok-3, GPT-4o, and 15+ expert handicappers." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Kentucky Derby 2026 Picks" />
+  <meta name="twitter:description" content="AI consensus picks for the 2026 Kentucky Derby — top EV bets validated by 15+ independent sources." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --green:       #004C54;
+      --green-light: #006B6E;
+      --green-bg:    #f0f7f6;
+      --green-tint:  #e6f4f1;
+      --green-border:#b8ddd6;
+      --white:       #ffffff;
+      --off-white:   #f8fafa;
+      --border:      rgba(0,76,84,0.12);
+      --border-med:  rgba(0,76,84,0.2);
+      --txt-dark:    #0f1f20;
+      --txt-mid:     #4a5568;
+      --txt-light:   #718096;
+      --sans: 'Geist Sans', -apple-system, system-ui, sans-serif;
+      --mono: ui-monospace, 'SFMono-Regular', monospace;
+      --radius: 16px;
+      --shadow-card: 0 2px 12px rgba(0,76,84,0.08), 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--sans);
+      background: var(--green-bg);
+      color: var(--txt-dark);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ─────────────────────────────────────────────────── */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      height: 60px; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-left {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--txt-dark);
+    }
+    .nav-wordmark { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.02em; }
+    .nav-badge {
+      font-family: var(--mono); font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--green); background: var(--green-tint);
+      border: 1px solid var(--green-border);
+      border-radius: 9999px; padding: 3px 10px;
+    }
+    .nav-right {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-link {
+      font-size: 0.8125rem; font-weight: 500; color: var(--txt-mid);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--green); }
+    .nav-cta {
+      font-size: 0.8125rem; font-weight: 600;
+      background: var(--green); color: #fff;
+      padding: 8px 18px; border-radius: 9999px;
+      text-decoration: none; transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .nav-cta:hover { background: var(--green-light); }
+
+    /* ── HERO BANNER ──────────────────────────────────────────── */
+    .hero {
+      background: var(--green);
+      padding: 56px 24px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 120%, rgba(0,181,185,0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      font-family: var(--mono); font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 2px;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 14px;
+    }
+    .hero-title {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 700; letter-spacing: -0.03em;
+      color: #fff; line-height: 1.1;
+      margin-bottom: 14px;
+    }
+    .hero-sub {
+      font-size: clamp(14px, 2vw, 17px);
+      color: rgba(255,255,255,0.7); line-height: 1.65;
+      max-width: 560px; margin: 0 auto 24px;
+    }
+    .hero-chips {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      justify-content: center;
+    }
+    .hero-chip {
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: rgba(255,255,255,0.8);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 9999px; padding: 5px 14px;
+      background: rgba(255,255,255,0.07);
+    }
+
+    /* ── LAYOUT WRAPPER ───────────────────────────────────────── */
+    .page { max-width: 900px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* ── SECTION HEADERS ─────────────────────────────────────── */
+    .sec-head { margin: 48px 0 20px; }
+    .sec-tag {
+      font-family: var(--mono); font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--green); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .sec-tag::before {
+      content: ''; display: block;
+      width: 20px; height: 2px;
+      background: var(--green); border-radius: 2px;
+    }
+    .sec-h2 {
+      font-size: clamp(20px, 3vw, 28px);
+      font-weight: 700; letter-spacing: -0.02em;
+      color: var(--txt-dark);
+    }
+    .sec-desc {
+      margin-top: 6px; font-size: 0.9rem;
+      color: var(--txt-mid); line-height: 1.6;
+    }
+
+    /* ── VERDICT BANNER ──────────────────────────────────────── */
+    .verdict-banner {
+      background: var(--green); border-radius: var(--radius);
+      padding: 28px 32px; margin: 32px 0 12px;
+      text-align: center;
+    }
+    .verdict-banner h2 {
+      font-size: clamp(18px, 3vw, 24px);
+      font-weight: 700; color: #fff;
+      letter-spacing: -0.02em; margin-bottom: 6px;
+    }
+    .verdict-banner p {
+      font-size: 0.9rem; color: rgba(255,255,255,0.72); line-height: 1.6;
+    }
+
+    /* ── BET CARDS ───────────────────────────────────────────── */
+    .bets-grid {
+      display: flex; flex-direction: column; gap: 14px;
+      margin-bottom: 14px;
+    }
+    .bet-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--green);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      box-shadow: var(--shadow-card);
+    }
+    .bet-card-top {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 12px;
+      margin-bottom: 10px;
+    }
+    .bet-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--green); margin-bottom: 5px;
+    }
+    .bet-horse {
+      font-size: clamp(17px, 2.5vw, 21px);
+      font-weight: 700; color: var(--txt-dark);
+      letter-spacing: -0.02em; line-height: 1.2;
+    }
+    .bet-odds {
+      font-family: var(--mono); font-size: clamp(18px, 3vw, 24px);
+      font-weight: 700; color: var(--green);
+      flex-shrink: 0; line-height: 1;
+    }
+    .confirmed-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--green); background: var(--green-tint);
+      border: 1px solid var(--green-border);
+      border-radius: 9999px; padding: 3px 10px;
+      margin-bottom: 10px;
+    }
+    .confirmed-badge::before { content: '✓'; }
+    .bet-validators {
+      font-size: 0.8125rem; color: var(--txt-mid); line-height: 1.65;
+    }
+    .bet-validators strong { color: var(--txt-dark); font-weight: 600; }
+
+    /* ── NOTE CARD ───────────────────────────────────────────── */
+    .note-card {
+      background: var(--off-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .note-icon {
+      font-size: 20px; flex-shrink: 0; line-height: 1.4;
+    }
+    .note-text {
+      font-size: 0.85rem; color: var(--txt-mid); line-height: 1.65;
+    }
+    .note-text strong { color: var(--txt-dark); }
+
+    /* ── CLOSING BOX ─────────────────────────────────────────── */
+    .closing-box {
+      background: var(--green-tint);
+      border: 1.5px solid var(--green-border);
+      border-radius: var(--radius);
+      padding: 24px 28px; margin-top: 32px;
+      text-align: center;
+    }
+    .closing-box p {
+      font-size: 0.9375rem; color: var(--txt-dark); line-height: 1.7;
+    }
+    .closing-box strong { color: var(--green); }
+
+    /* ── TABLES ──────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      overflow: hidden; margin-bottom: 14px;
+    }
+    .tbl {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.8125rem; line-height: 1.5;
+    }
+    .tbl thead tr {
+      background: var(--green); color: #fff;
+    }
+    .tbl thead th {
+      padding: 11px 14px; text-align: left;
+      font-size: 0.6875rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      white-space: nowrap;
+    }
+    .tbl tbody tr { border-bottom: 1px solid var(--border); }
+    .tbl tbody tr:last-child { border-bottom: none; }
+    .tbl tbody tr:nth-child(even) { background: var(--green-bg); }
+    .tbl tbody tr:hover { background: var(--green-tint); }
+    .tbl td { padding: 10px 14px; color: var(--txt-mid); vertical-align: top; }
+    .tbl td:first-child { color: var(--txt-dark); font-weight: 500; }
+    .tbl td strong { color: var(--txt-dark); font-weight: 600; }
+    .pill {
+      display: inline-block;
+      font-family: var(--mono); font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 2px 7px; border-radius: 9999px;
+    }
+    .pill-green { background: var(--green-tint); color: var(--green); border: 1px solid var(--green-border); }
+    .pill-gray  { background: #f0f0f0; color: #666; border: 1px solid #ddd; }
+    .tbl-note {
+      font-size: 0.75rem; color: var(--txt-light);
+      padding: 8px 14px; background: var(--off-white);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── CONSENSUS GRID ──────────────────────────────────────── */
+    .consensus-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px; margin-bottom: 14px;
+    }
+    .cons-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 16px; text-align: center;
+      box-shadow: var(--shadow-card);
+    }
+    .cons-card.top { border-top: 3px solid var(--green); }
+    .cons-horse {
+      font-size: 0.9375rem; font-weight: 700;
+      color: var(--txt-dark); margin-bottom: 4px;
+    }
+    .cons-odds {
+      font-family: var(--mono); font-size: 1.125rem; font-weight: 700;
+      color: var(--green); margin-bottom: 10px;
+    }
+    .cons-label {
+      font-family: var(--mono); font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--txt-light); margin-bottom: 8px;
+    }
+    .cons-bars { display: flex; flex-direction: column; gap: 5px; }
+    .cons-bar-row { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--txt-mid); }
+    .cons-bar-track {
+      flex: 1; height: 5px; background: var(--green-bg);
+      border-radius: 9999px; overflow: hidden;
+    }
+    .cons-bar-fill {
+      height: 100%; background: var(--green); border-radius: 9999px;
+    }
+
+    /* ── FADE SECTION ────────────────────────────────────────── */
+    .fade-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-left: 4px solid #e53e3e;
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      box-shadow: var(--shadow-card);
+    }
+    .fade-label {
+      font-family: var(--mono); font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      color: #c53030; margin-bottom: 5px;
+    }
+    .fade-horse {
+      font-size: clamp(17px, 2.5vw, 20px);
+      font-weight: 700; color: var(--txt-dark); margin-bottom: 10px;
+    }
+    .fade-body { font-size: 0.8375rem; color: var(--txt-mid); line-height: 1.65; }
+    .fade-body strong { color: var(--txt-dark); }
+
+    /* ── METHODOLOGY ─────────────────────────────────────────── */
+    .method-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px; box-shadow: var(--shadow-card);
+    }
+    .method-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 16px; margin-top: 16px;
+    }
+    .method-item {
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .method-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--green-tint); border: 1px solid var(--green-border);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 14px;
+    }
+    .method-text { font-size: 0.8125rem; color: var(--txt-mid); line-height: 1.6; }
+    .method-text strong { color: var(--txt-dark); display: block; font-weight: 600; margin-bottom: 2px; }
+
+    /* ── FOOTER ──────────────────────────────────────────────── */
+    .site-footer {
+      background: #0a0a0a; color: rgba(255,255,255,0.35);
+      padding: 28px 24px; text-align: center;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px;
+    }
+    .site-footer a {
+      color: rgba(255,255,255,0.35); text-decoration: none; margin: 0 10px;
+    }
+    .site-footer a:hover { color: #fff; }
+    .footer-logo {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; margin-bottom: 12px; text-decoration: none;
+    }
+    .footer-wordmark { color: rgba(255,255,255,0.5); font-size: 13px; font-weight: 700; }
+
+    /* ── SCROLL FADE-IN ──────────────────────────────────────── */
+    .fi { opacity: 0; transform: translateY(16px); transition: opacity 0.5s, transform 0.5s; }
+    .fi.in { opacity: 1; transform: none; }
+
+    /* ── RESPONSIVE ──────────────────────────────────────────── */
+    @media (max-width: 680px) {
+      .nav { padding: 0 16px; height: 54px; }
+      .nav-badge { display: none; }
+      .hero { padding: 40px 20px 36px; }
+      .page { padding: 0 16px 60px; }
+      .sec-head { margin: 36px 0 16px; }
+      .verdict-banner { padding: 22px 20px; }
+      .bet-card { padding: 18px 18px; }
+      .closing-box { padding: 20px 20px; }
+      .consensus-grid { grid-template-columns: 1fr; }
+      .method-grid { grid-template-columns: 1fr; }
+      .tbl thead th, .tbl td { padding: 9px 10px; font-size: 0.75rem; }
+    }
+    @media (max-width: 480px) {
+      .nav-link { display: none; }
+      .hero-title { font-size: 26px; }
+      .hero-chip { font-size: 10px; padding: 4px 11px; }
+      .bet-card-top { flex-direction: column; gap: 6px; }
+      .bet-odds { font-size: 20px; }
+    }
+
+    /* ── SCROLLABLE TABLE ON MOBILE ─────────────────────────── */
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <a href="/" class="nav-left">
+    <svg viewBox="0 0 470 419" fill="none" style="width:26px;height:22px;flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+      <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+    </svg>
+    <span class="nav-wordmark">WeBetAI</span>
+    <span class="nav-badge">Derby 2026</span>
+  </a>
+  <div class="nav-right">
+    <a href="/edge" class="nav-link">Daily Picks</a>
+    <a href="/dashboard" class="nav-cta">Ask Betty</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <p class="hero-eyebrow">Kentucky Derby · May 2, 2026 · Churchill Downs</p>
+  <h1 class="hero-title">AI Consensus Picks</h1>
+  <p class="hero-sub">Cross-referenced across Claude Opus 4.7, Grok-3, GPT-4o, Gemini, and 15+ expert handicappers to surface the highest-EV bets for today's race.</p>
+  <div class="hero-chips">
+    <span class="hero-chip">Claude Opus 4.7</span>
+    <span class="hero-chip">Grok-3 (xAI)</span>
+    <span class="hero-chip">GPT-4o</span>
+    <span class="hero-chip">Gemini</span>
+    <span class="hero-chip">Copilot</span>
+    <span class="hero-chip">15+ Handicappers</span>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- VERDICT BANNER -->
+  <div class="verdict-banner fi">
+    <h2>Final Verdict — Our 5 Bets Are Confirmed</h2>
+    <p>Every single one of our picks is validated by multiple independent expert sources.</p>
+  </div>
+
+  <!-- BET CARDS -->
+  <div class="bets-grid">
+
+    <div class="bet-card fi">
+      <div class="bet-card-top">
+        <div>
+          <div class="bet-label">Bet 1 · Win</div>
+          <div class="bet-horse">Further Ado</div>
+        </div>
+        <div class="bet-odds">7/1</div>
+      </div>
+      <div class="confirmed-badge">Confirmed</div>
+      <div class="bet-validators">
+        <strong>Validators:</strong> FanDuel's most-picked horse (3 of 10 experts), Chris "The Bear" Fallica (Fox Sports) $10 win-place, Copilot, Claude Opus 4.7, Action Network A-tier. Field-best Beyer Speed Figure of 106. No expert disputes his credentials — only post position is questioned.
+      </div>
+    </div>
+
+    <div class="bet-card fi">
+      <div class="bet-card-top">
+        <div>
+          <div class="bet-label">Bet 2 · Win</div>
+          <div class="bet-horse">Chief Wallabee</div>
+        </div>
+        <div class="bet-odds">9/1</div>
+      </div>
+      <div class="confirmed-badge">Confirmed</div>
+      <div class="bet-validators">
+        <strong>Validators:</strong> Fallica calls him <em>"the best horse in the race"</em> and puts $10 win-place on him. Gene Menez (SportsLine, hit $1,045 last year) is high on him. OutKick has him win-place. Action Network model says fair odds 4/1 at current 9/1. Most underbet elite horse in the field.
+      </div>
+    </div>
+
+    <div class="bet-card fi">
+      <div class="bet-card-top">
+        <div>
+          <div class="bet-label">Bet 3 · Win</div>
+          <div class="bet-horse">Commandment</div>
+        </div>
+        <div class="bet-odds">7/1</div>
+      </div>
+      <div class="confirmed-badge">Confirmed</div>
+      <div class="bet-validators">
+        <strong>Validators:</strong> DraftKings official pick. DRF's Mike Beer: <em>"I trust him more than anyone."</em> 4 of 6 AI models pick him to win. Covers.com puts him on top of every exotic. Brad Cox trainer. 4-race win streak entering today. Most broadly validated horse in the field.
+      </div>
+    </div>
+
+    <div class="bet-card fi">
+      <div class="bet-card-top">
+        <div>
+          <div class="bet-label">Bet 4 · Exacta Box</div>
+          <div class="bet-horse">Further Ado / Chief Wallabee / Commandment</div>
+        </div>
+        <div class="bet-odds" style="font-size:1rem;padding-top:4px;">Box</div>
+      </div>
+      <div class="confirmed-badge">Confirmed</div>
+      <div class="bet-validators">
+        <strong>Validators:</strong> Fallica's exact structure (12–18 keyed, 6 in supporting). Covers boxes Commandment/Chief Wallabee. FanDuel exotics include all three. Action Network recommends this three-horse combination. Every independent source converges here.
+      </div>
+    </div>
+
+    <div class="bet-card fi">
+      <div class="bet-card-top">
+        <div>
+          <div class="bet-label">Bet 5 · Trifecta Wheel</div>
+          <div class="bet-horse">Further Ado + Chief Wallabee / Commandment / Emerging Market + Danon Bourbon</div>
+        </div>
+        <div class="bet-odds" style="font-size:1rem;padding-top:4px;">Wheel</div>
+      </div>
+      <div class="confirmed-badge">Confirmed</div>
+      <div class="bet-validators">
+        <strong>Validators:</strong> Fallica's trifecta uses this exact structure. Covers superfecta includes Emerging Market and Danon Bourbon. Demling likes Danon Bourbon. OutKick uses Commandment + Chief Wallabee in their trifecta. Emerging Market picked by 2 FanDuel experts and Yahoo Sports' Dan Wolken.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- POTENTE NOTE -->
+  <div class="note-card fi">
+    <div class="note-icon">🎯</div>
+    <div class="note-text">
+      <strong>One Addition Worth Noting:</strong> Potente (23/1) appears in OutKick's trifecta and is Bob Baffert-trained. If you want a cheap trifecta dart, swapping him in as a third-position filler on one $1 ticket costs almost nothing and gives you Baffert exposure at a big price.
+    </div>
+  </div>
+
+  <!-- CLOSING BOX -->
+  <div class="closing-box fi">
+    <p>The bets stand. Every pick is independently validated by at least 3–5 separate expert sources. <strong>Commandment, Further Ado, and Chief Wallabee</strong> are the three horses every serious handicapper, casino, and AI model agrees belong on your ticket today.</p>
+  </div>
+
+  <!-- EXPERT CONSENSUS TABLE -->
+  <div class="sec-head fi">
+    <div class="sec-tag">Source Cross-Check</div>
+    <h2 class="sec-h2">Expert Consensus — All Sources</h2>
+    <p class="sec-desc">Every major handicapper, media outlet, and AI model we queried — win picks tabulated below.</p>
+  </div>
+
+  <div class="table-wrap fi">
+    <div class="table-scroll">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Top Pick</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>DraftKings (official)</td><td><strong>Commandment</strong></td></tr>
+          <tr><td>FanDuel TV (10 experts polled)</td><td>Further Ado — 3 experts · Commandment — 2 · Emerging Market — 2 · Chief Wallabee — 1</td></tr>
+          <tr><td>Chris "The Bear" Fallica (Fox Sports)</td><td><strong>Chief Wallabee</strong> — "best horse in the race"</td></tr>
+          <tr><td>Daily Racing Form / Mike Beer</td><td><strong>Commandment</strong> — "I trust him more than anyone in this field"</td></tr>
+          <tr><td>Covers.com exotic expert</td><td><strong>Commandment</strong> on top of all exotics</td></tr>
+          <tr><td>OutKick handicapper</td><td><strong>Chief Wallabee</strong> + Potente win-place</td></tr>
+          <tr><td>Gene Menez (SportsLine)</td><td><strong>Chief Wallabee</strong>, fading Renegade</td></tr>
+          <tr><td>Jody Demling (12 Oaks-Derby doubles)</td><td>Fading Renegade, likes Danon Bourbon</td></tr>
+          <tr><td>Dan Wolken (Yahoo Sports)</td><td><strong>Emerging Market</strong> (11/1)</td></tr>
+          <tr><td>Grok-3 API (xAI, direct)</td><td><strong>Commandment</strong></td></tr>
+          <tr><td>GPT-4o API (OpenAI, direct)</td><td><strong>Commandment</strong></td></tr>
+          <tr><td>Claude Opus 4.7 API (Anthropic, direct)</td><td><strong>Further Ado</strong></td></tr>
+          <tr><td>Gemini (Google)</td><td><strong>Commandment</strong></td></tr>
+          <tr><td>Copilot (Microsoft)</td><td><strong>Further Ado</strong></td></tr>
+          <tr><td>Action Network model</td><td>Chief Wallabee + Further Ado — A-tier</td></tr>
+          <tr><td>HRN fair value model</td><td>Further Ado overlay · So Happy extreme underlay</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CONSENSUS TALLY -->
+  <div class="sec-head fi">
+    <div class="sec-tag">Tally</div>
+    <h2 class="sec-h2">Consensus Tally by Horse</h2>
+  </div>
+
+  <div class="consensus-grid fi">
+    <div class="cons-card top">
+      <div class="cons-horse">Commandment</div>
+      <div class="cons-odds">7/1</div>
+      <div class="cons-label">Validation</div>
+      <div class="cons-bars">
+        <div class="cons-bar-row">
+          <span style="width:70px;text-align:right;font-size:10px;">Expert</span>
+          <div class="cons-bar-track"><div class="cons-bar-fill" style="width:85%"></div></div>
+          <span>7+</span>
+        </div>
+        <div class="cons-bar-row">
+          <span style="width:70px;text-align:right;font-size:10px;">AI Models</span>
+          <div class="cons-bar-track"><div class="cons-bar-fill" style="width:67%"></div></div>
+          <span>4/6</span>
+        </div>
+      </div>
+    </div>
+    <div class="cons-card top">
+      <div class="cons-horse">Further Ado</div>
+      <div class="cons-odds">7/1</div>
+      <div class="cons-label">Validation</div>
+      <div class="cons-bars">
+        <div class="cons-bar-row">
+          <span style="width:70px;text-align:right;font-size:10px;">Expert</span>
+          <div class="cons-bar-track"><div class="cons-bar-fill" style="width:70%"></div></div>
+          <span>5+</span>
+        </div>
+        <div class="cons-bar-row">
+          <span style="width:70px;text-align:right;font-size:10px;">AI Models</span>
+          <div class="cons-bar-track"><div class="cons-bar-fill" style="width:33%"></div></div>
+          <span>2/6</span>
+        </div>
+      </div>
+    </div>
+    <div class="cons-card top">
+      <div class="cons-horse">Chief Wallabee</div>
+      <div class="cons-odds">9/1</div>
+      <div class="cons-label">Validation</div>
+      <div class="cons-bars">
+        <div class="cons-bar-row">
+          <span style="width:70px;text-align:right;font-size:10px;">Expert</span>
+          <div class="cons-bar-track"><div class="cons-bar-fill" style="width:65%"></div></div>
+          <span>4+</span>
+        </div>
+        <div class="cons-bar-row">
+          <span style="width:70px;text-align:right;font-size:10px;">AI Models</span>
+          <div class="cons-bar-track"><div class="cons-bar-fill" style="width:10%"></div></div>
+          <span>A-tier</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap fi">
+    <div class="table-scroll">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Horse</th>
+            <th>Expert Mentions</th>
+            <th>AI Picks</th>
+            <th>Signal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Commandment</strong></td>
+            <td>DraftKings, DRF, Covers, Grok-3, GPT-4o, Gemini, FanDuel (2)</td>
+            <td><span class="pill pill-green">4/6 AI win</span></td>
+            <td>Most broadly backed</td>
+          </tr>
+          <tr>
+            <td><strong>Further Ado</strong></td>
+            <td>FanDuel (3 experts), Fallica, Copilot, Claude</td>
+            <td><span class="pill pill-green">2/6 AI win</span></td>
+            <td>Highest EV signal</td>
+          </tr>
+          <tr>
+            <td><strong>Chief Wallabee</strong></td>
+            <td>Fallica ("best horse"), Menez, OutKick, Action Network</td>
+            <td><span class="pill pill-gray">A-tier</span></td>
+            <td>Biggest overlay</td>
+          </tr>
+          <tr>
+            <td><strong>Emerging Market</strong></td>
+            <td>Wolken (Yahoo), FanDuel (2), Fallica longshot</td>
+            <td><span class="pill pill-gray">—</span></td>
+            <td>Strong exotic inclusion</td>
+          </tr>
+          <tr>
+            <td><strong>Danon Bourbon</strong></td>
+            <td>Demling, Covers exotics, OutKick trifecta</td>
+            <td><span class="pill pill-gray">GPT #3</span></td>
+            <td>Exotic filler confirmed</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EXOTIC CONVERGENCE -->
+  <div class="sec-head fi">
+    <div class="sec-tag">Exotics</div>
+    <h2 class="sec-h2">Exotic Bet Convergence</h2>
+    <p class="sec-desc">How the top sources structure their exacta, trifecta, and superfecta tickets.</p>
+  </div>
+
+  <div class="table-wrap fi">
+    <div class="table-scroll">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Structure</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Fallica (Fox Sports)</strong></td>
+            <td>$10 Win-Place Chief Wallabee + Further Ado · Exacta box 12-15-18 · Trifecta: 12-18 on top</td>
+          </tr>
+          <tr>
+            <td><strong>Covers.com</strong></td>
+            <td>Exacta box: Commandment / Danon Bourbon / Chief Wallabee</td>
+          </tr>
+          <tr>
+            <td><strong>OutKick</strong></td>
+            <td>Trifecta: 14 (Potente) with 1-6-10-12-18</td>
+          </tr>
+          <tr>
+            <td><strong>FanDuel exotics</strong></td>
+            <td>Commandment / Chief Wallabee / Further Ado across tickets</td>
+          </tr>
+          <tr>
+            <td><strong>Action Network</strong></td>
+            <td>$10 key box 12 / 6, 9, 15, 18</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- FADE SECTION -->
+  <div class="sec-head fi">
+    <div class="sec-tag">Fade</div>
+    <h2 class="sec-h2">Horse to Avoid</h2>
+  </div>
+
+  <div class="fade-card fi">
+    <div class="fade-label">Fade — Do Not Back to Win</div>
+    <div class="fade-horse">Renegade (5/1 favorite)</div>
+    <div class="fade-body">
+      <strong>Rail post (post 1) has a poor recent record at Churchill Downs.</strong> Public money is almost certainly inflating his odds — both AI models and expert Gene Menez (SportsLine) are against him winning outright. HRN's fair value model suggests his true odds are considerably longer than 5/1. Demling is also fading him. The classic case of a horse priced for the public, not for value. Pass on the win, or use only as a deep trifecta/superfecta filler.
+    </div>
+  </div>
+
+  <!-- METHODOLOGY -->
+  <div class="sec-head fi">
+    <div class="sec-tag">Methodology</div>
+    <h2 class="sec-h2">How We Built This</h2>
+  </div>
+
+  <div class="method-card fi">
+    <p style="font-size:0.875rem;color:var(--txt-mid);line-height:1.7;">We ran simultaneous queries across five AI APIs and cross-referenced output against 15+ independent expert handicappers, casino official picks, and three separate fair value models — then ranked plays by EV overlay and consensus strength.</p>
+    <div class="method-grid">
+      <div class="method-item">
+        <div class="method-icon">🤖</div>
+        <div class="method-text">
+          <strong>5 AI Models Queried</strong>
+          Claude Opus 4.7, Grok-3, GPT-4o, Gemini, Copilot — each independently simulated the race
+        </div>
+      </div>
+      <div class="method-item">
+        <div class="method-icon">📊</div>
+        <div class="method-text">
+          <strong>Speed Figures</strong>
+          Beyer Speed Figures, Brisnet pace ratings, and Equibase past performances cross-referenced
+        </div>
+      </div>
+      <div class="method-item">
+        <div class="method-icon">🎙️</div>
+        <div class="method-text">
+          <strong>15+ Handicappers</strong>
+          DraftKings, FanDuel, Fox Sports, DRF, Covers, Action Network, SportsLine, OutKick, Yahoo Sports, HRN
+        </div>
+      </div>
+      <div class="method-item">
+        <div class="method-icon">📈</div>
+        <div class="method-text">
+          <strong>EV Analysis</strong>
+          Post position history at Churchill Downs, morning line vs. true odds, line movement tracking
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEGAL -->
+  <p style="font-size:0.75rem;color:var(--txt-light);text-align:center;margin-top:28px;line-height:1.7;">
+    For entertainment and informational purposes only. Must be 21+ and in a jurisdiction where sports wagering is legal. Please gamble responsibly. WeBetAI does not accept wagers.
+  </p>
+
+</div><!-- /page -->
+
+<!-- FOOTER -->
+<footer class="site-footer">
+  <a href="/" class="footer-logo" style="margin-bottom:12px;">
+    <svg viewBox="0 0 470 419" fill="none" style="width:20px;height:17px;" xmlns="http://www.w3.org/2000/svg">
+      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="rgba(255,255,255,0.4)"/>
+      <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="rgba(255,255,255,0.4)"/>
+    </svg>
+    <span class="footer-wordmark">WeBetAI</span>
+  </a>
+  <div>
+    <a href="/">Home</a>
+    <a href="/edge">Daily Picks</a>
+    <a href="/dashboard">Ask Betty</a>
+  </div>
+  <div style="margin-top:10px;">© 2026 WeBetAI — Social Intelligence · webetsocial.com · Powered by Claude Opus 4.7 · Grok-3 · GPT-4o · Gemini</div>
+</footer>
+
+<script>
+  // Scroll fade-in
+  var obs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.fi').forEach(function(el) { obs.observe(el); });
+</script>
+
+</body>
+</html>

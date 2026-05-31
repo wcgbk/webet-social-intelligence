@@ -7,8 +7,7 @@
   NPM_FLAGS = "--prefer-offline"
 
 [functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["@netlify/blobs", "sharp", "puppeteer", "satori", "@resvg/resvg-wasm"]
+  node_bundler = "nft"
 
 [functions."build-ratings-background"]
   # Background function — 15min timeout for Elo rating computation

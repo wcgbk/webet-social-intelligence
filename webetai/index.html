@@ -3,20 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WeBet AI — Bet on What's Trending</title>
+  <title>WeBetAI - Social Intelligence | Bet on What's Trending</title>
   <meta name="description" content="Match X trending topics to prediction markets. Generate P2P bet challenges and share them with friends." />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/webetai" />
-  <meta property="og:title" content="WeBet AI — Bet on What's Trending" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Bet on What's Trending" />
   <meta property="og:description" content="Match X trending topics to prediction markets. Generate P2P bet challenges and share them with friends." />
   <meta property="og:image" content="https://webetsocial.com/og-image.png" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="WeBet AI — Bet on What's Trending" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Bet on What's Trending" />
   <meta name="twitter:description" content="Match X trending topics to prediction markets. Generate P2P bet challenges and share them with friends." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
@@ -24,7 +25,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
 
   <style>
-    /* ─── Design Tokens ─────────────────────────────────────────────────── */
+    /* ─── Design Tokens (matches webetsocial.com) ─────────────────────── */
     :root {
       --bg: hsl(260, 87%, 3%);
       --fg: hsl(40, 6%, 95%);
@@ -54,10 +55,11 @@
 
     a { color: inherit; text-decoration: none; }
 
-    /* ─── Liquid Glass ──────────────────────────────────────────────────── */
+    /* ─── Liquid Glass (from main site) ───────────────────────────────── */
     .liquid-glass {
       position: relative;
       background: rgba(255,255,255,0.01);
+      background-blend-mode: luminosity;
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
       border: none;
@@ -81,103 +83,106 @@
     }
     .liquid-glass > * { position: relative; z-index: 2; }
 
-    /* ─── Navbar ─────────────────────────────────────────────────────────── */
+    /* ─── Navbar (matches main site pill style) ───────────────────────── */
     .navbar {
       position: sticky; top: 0; z-index: 100;
       display: flex; justify-content: center;
-      padding: 16px 20px;
-      background: rgba(5,2,14,0.85);
+      padding: 16px 24px;
+      background: hsla(260, 87%, 3%, 0.85);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
     }
-    .navbar-inner {
+    .navbar-pill {
       display: flex; align-items: center; justify-content: space-between;
-      max-width: 1100px; width: 100%;
+      gap: 8px; padding: 10px 16px; border-radius: 24px;
+      max-width: 850px; width: 100%;
     }
     .logo {
-      display: flex; align-items: center; gap: 10px;
-      cursor: pointer; text-decoration: none;
-    }
-    .logo-mark {
-      width: 32px; height: 32px; border-radius: 8px;
-      background: var(--primary); color: var(--primary-fg);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 800; font-size: 0.875rem;
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; flex-shrink: 0; cursor: pointer;
     }
     .logo-text {
-      font-size: 1.25rem; font-weight: 700; color: #fff;
-      letter-spacing: -0.03em;
+      font-size: 1.375rem; font-weight: 900;
+      color: #ffffff; letter-spacing: -0.04em; line-height: 1;
     }
-    .logo-text span { color: var(--primary); }
     .nav-links {
-      display: flex; align-items: center; gap: 4px; list-style: none;
+      display: flex; align-items: center; gap: 2px; list-style: none;
     }
     .nav-link {
-      padding: 8px 14px; font-size: 0.875rem; color: var(--fg);
-      opacity: 0.7; border-radius: 8px; cursor: pointer;
-      transition: all 0.15s;
+      display: flex; align-items: center; gap: 3px;
+      padding: 7px 13px; font-size: 1rem; color: var(--fg);
+      opacity: 0.9; text-decoration: none; border-radius: 10px;
+      cursor: pointer; transition: opacity 0.15s; white-space: nowrap; font-weight: 400;
     }
-    .nav-link:hover, .nav-link.active { opacity: 1; background: rgba(255,255,255,0.05); }
-    .nav-right { display: flex; align-items: center; gap: 10px; }
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      font-family: inherit; font-weight: 500; border: none;
-      border-radius: 10px; cursor: pointer; transition: all 0.15s;
-      white-space: nowrap;
+    .nav-link:hover, .nav-link.active { opacity: 1; }
+    .btn-nav {
+      background: var(--primary); color: var(--primary-fg); border: none;
+      font-family: inherit; font-size: 0.875rem; font-weight: 500;
+      padding: 7px 16px; border-radius: 12px; cursor: pointer;
+      flex-shrink: 0; transition: background 0.15s;
     }
-    .btn-primary {
-      background: var(--primary); color: var(--primary-fg);
-      padding: 8px 18px; font-size: 0.875rem;
-    }
-    .btn-primary:hover { background: hsl(121,95%,68%); }
-    .btn-secondary {
-      background: rgba(255,255,255,0.06); color: var(--fg);
-      padding: 8px 18px; font-size: 0.875rem;
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
-    .btn-ghost {
-      background: transparent; color: var(--fg); opacity: 0.7;
-      padding: 8px 14px; font-size: 0.875rem;
-    }
-    .btn-ghost:hover { opacity: 1; background: rgba(255,255,255,0.05); }
-    .btn-lg { padding: 12px 24px; font-size: 1rem; border-radius: 12px; }
-    .btn-sm { padding: 6px 12px; font-size: 0.8125rem; border-radius: 8px; }
-    .btn-pill { border-radius: 9999px; }
-    .btn-icon {
-      width: 36px; height: 36px; padding: 0; border-radius: 10px;
-      background: rgba(255,255,255,0.06); color: var(--fg);
-      border: 1px solid var(--border);
-    }
-
-    /* ─── Mobile Menu ───────────────────────────────────────────────────── */
+    .btn-nav:hover { background: hsl(121,95%,68%); }
     .mobile-menu-btn {
       display: none; background: none; border: none; color: var(--fg);
-      cursor: pointer; padding: 4px;
+      cursor: pointer; padding: 4px; flex-shrink: 0;
     }
+    .nav-right { display: flex; align-items: center; gap: 10px; }
 
-    /* ─── Page Container ────────────────────────────────────────────────── */
+    /* ─── Page Container ──────────────────────────────────────────────── */
     .page { display: none; }
     .page.active { display: block; }
 
-    .page-header {
-      padding: 48px 20px 32px;
+    /* ─── Hero Header (matches main site above-fold) ──────────────────── */
+    .hero-header {
+      position: relative;
+      padding: 60px 24px 48px;
       text-align: center;
+      overflow: hidden;
     }
-    .page-header h1 {
-      font-size: clamp(2rem, 4vw, 3rem); font-weight: 700;
-      letter-spacing: -0.03em; color: var(--hero-heading);
-      margin-bottom: 12px;
+    .hero-header::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(135,251,137,0.06) 0%, transparent 60%);
+      pointer-events: none;
     }
-    .page-header p {
-      font-size: 1.0625rem; color: var(--hero-sub); opacity: 0.7;
-      max-width: 560px; margin: 0 auto; line-height: 1.6;
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 8px 6px 16px; border-radius: 9999px;
+      font-size: 0.875rem; margin-bottom: 24px;
+    }
+    .badge-label { font-weight: 500; color: var(--fg); opacity: 0.85; }
+    .badge-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: rgba(255,255,255,0.05); padding: 4px 10px 4px 12px;
+      border-radius: 9999px; font-size: 0.8125rem; font-weight: 500;
+      color: var(--primary); text-decoration: none;
+    }
+    .hero-heading {
+      font-size: clamp(2rem, 4vw, 3rem); font-weight: 600;
+      letter-spacing: -0.03em; line-height: 1.12;
+      color: var(--hero-heading); max-width: 680px;
+      margin: 0 auto 16px;
+    }
+    .hero-sub {
+      font-size: 1rem; color: var(--hero-sub); opacity: 0.7;
+      max-width: 560px; margin: 0 auto; line-height: 1.65;
     }
 
     .content { max-width: 1100px; margin: 0 auto; padding: 0 20px 80px; }
 
-    /* ─── Category Tabs ─────────────────────────────────────────────────── */
+    /* ─── Section Divider (+ cross pattern from main site) ────────────── */
+    .section-divider {
+      position: relative; height: 1px;
+      background: var(--border); margin: 0 24px;
+    }
+    .section-divider::before, .section-divider::after {
+      content: '+'; position: absolute; top: 50%; transform: translateY(-50%);
+      font-size: 1rem; line-height: 1; color: var(--border);
+    }
+    .section-divider::before { left: -10px; }
+    .section-divider::after  { right: -10px; }
+
+    /* ─── Category Tabs ───────────────────────────────────────────────── */
     .category-tabs {
       display: flex; gap: 6px; margin-bottom: 32px;
       overflow-x: auto; padding-bottom: 4px;
@@ -197,28 +202,65 @@
       border-color: var(--primary); opacity: 1;
     }
 
-    /* ─── Match Cards Grid ──────────────────────────────────────────────── */
-    .matches-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 16px;
+    /* ─── Feed Layout (single column, centered) ───────────────────────── */
+    .matches-feed {
+      display: flex; flex-direction: column; gap: 28px;
+      max-width: 560px; margin: 0 auto;
     }
-    .match-card {
+
+    /* ─── Feed Card ───────────────────────────────────────────────────── */
+    .feed-card {
       background: var(--card-bg);
-      border: 1px solid var(--border);
+      border: 1px solid rgba(255,255,255,0.08);
       border-radius: 16px;
-      padding: 24px;
-      cursor: pointer;
+      overflow: hidden;
       transition: all 0.2s;
-      display: flex; flex-direction: column; gap: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.3);
     }
-    .match-card:hover {
+    .feed-card:hover {
       border-color: rgba(255,255,255,0.15);
-      transform: translateY(-2px);
       box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     }
-    .match-card-header {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+
+    /* X Post Embed Area */
+    .feed-x-embed {
+      padding: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      min-height: 120px;
+    }
+    .feed-x-embed .twitter-tweet { margin: 0 !important; }
+    .feed-x-embed iframe { border-radius: 12px !important; }
+    .feed-x-loading {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px; color: var(--fg); opacity: 0.4;
+      font-size: 0.875rem;
+    }
+    .feed-x-loading svg { flex-shrink: 0; }
+    .feed-x-fallback {
+      display: block; padding: 20px 16px; text-decoration: none; color: inherit;
+      transition: background 0.15s; cursor: pointer;
+    }
+    .feed-x-fallback:hover { background: rgba(255,255,255,0.02); }
+    .feed-x-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    }
+    .feed-x-icon {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .feed-x-meta { display: flex; flex-direction: column; flex: 1; }
+    .feed-x-label { font-size: 0.8125rem; font-weight: 600; color: var(--fg); }
+    .feed-x-query { font-size: 0.75rem; color: var(--blue); opacity: 0.8; }
+
+    /* Bet Card Info */
+    .feed-bet-info {
+      padding: 20px;
+    }
+    .feed-bet-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+      margin-bottom: 14px;
     }
     .match-category {
       display: inline-flex; align-items: center; gap: 5px;
@@ -230,25 +272,18 @@
     .cat-crypto { background: rgba(245,158,11,0.15); color: hsl(38,92%,60%); }
     .cat-entertainment { background: rgba(168,85,247,0.15); color: hsl(270,80%,65%); }
     .cat-news { background: rgba(34,197,94,0.15); color: hsl(142,70%,55%); }
-    .match-volume {
+    .cat-tech { background: rgba(6,182,212,0.15); color: hsl(188,80%,55%); }
+    .feed-volume {
       font-size: 0.75rem; color: var(--fg); opacity: 0.4;
     }
-    .match-question {
+    .feed-question {
       font-size: 1.0625rem; font-weight: 600; color: var(--hero-heading);
       line-height: 1.35; letter-spacing: -0.01em;
+      margin-bottom: 14px; cursor: pointer;
     }
-    .match-source {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 0.8125rem; color: var(--fg); opacity: 0.5;
-    }
-    .match-source-avatar {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.625rem; font-weight: 700;
-    }
+    .feed-question:hover { color: var(--primary); }
     .match-odds-row {
-      display: flex; gap: 8px;
+      display: flex; gap: 8px; margin-bottom: 16px;
     }
     .odds-pill {
       flex: 1; padding: 10px 14px; border-radius: 10px;
@@ -265,9 +300,9 @@
     }
     .odds-yes { color: var(--primary); }
     .odds-no { color: var(--danger); }
-    .match-footer {
+    .feed-platform-row {
       display: flex; align-items: center; justify-content: space-between;
-      padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);
+      margin-bottom: 16px;
     }
     .match-platform {
       display: flex; align-items: center; gap: 6px;
@@ -277,15 +312,138 @@
       width: 6px; height: 6px; border-radius: 50%;
       background: var(--primary);
     }
-    .match-bet-btn {
-      padding: 6px 14px; font-size: 0.8125rem; font-weight: 600;
-      border-radius: 8px; border: none; cursor: pointer;
+    .feed-change { font-size: 0.75rem; font-weight: 600; }
+
+    /* Auto-generated Bet String (monospace callout like main site) */
+    .feed-bet-string {
+      background: hsl(240, 8%, 10%);
+      border: 1px solid rgba(135,251,137,0.25);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .feed-bet-string-label {
+      font-size: 0.6875rem; color: var(--fg); opacity: 0.35;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .feed-bet-string-label svg { color: var(--primary); }
+    .feed-bet-string-text {
+      font-size: 0.8125rem; font-weight: 600; color: var(--primary);
+      line-height: 1.5; word-break: break-word;
+      font-family: 'Courier New', monospace;
+    }
+    .feed-bet-meta {
+      font-size: 0.75rem; color: var(--fg); opacity: 0.4;
+      margin-top: 8px; line-height: 1.5;
+    }
+
+    /* Betty AI Insight */
+    .feed-betty-insight {
+      background: linear-gradient(135deg, rgba(135,251,137,0.06), rgba(135,251,137,0.02));
+      border: 1px solid rgba(135,251,137,0.12);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .feed-betty-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .feed-betty-avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), hsl(180,90%,60%));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.625rem; font-weight: 800; color: var(--primary-fg);
+      flex-shrink: 0;
+    }
+    .feed-betty-name {
+      font-size: 0.75rem; font-weight: 700; color: var(--primary);
+    }
+    .feed-betty-badge {
+      font-size: 0.625rem; font-weight: 600; color: var(--fg); opacity: 0.35;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .feed-betty-confidence {
+      margin-left: auto; font-size: 0.6875rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 9999px;
+    }
+    .confidence-high { background: rgba(135,251,137,0.15); color: var(--primary); }
+    .confidence-medium { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .confidence-low { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .feed-betty-text {
+      font-size: 0.8125rem; color: var(--fg); opacity: 0.85;
+      line-height: 1.55;
+    }
+    .feed-betty-taunt {
+      font-size: 0.8125rem; color: var(--fg); opacity: 0.6;
+      font-style: italic; margin-top: 6px; line-height: 1.4;
+    }
+    .feed-betty-xcontext {
+      font-size: 0.75rem; color: var(--blue); opacity: 0.7;
+      margin-top: 6px; display: flex; align-items: flex-start; gap: 6px;
+    }
+    .feed-betty-xcontext svg { flex-shrink: 0; margin-top: 1px; }
+    .feed-betty-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; color: var(--fg); opacity: 0.3;
+    }
+    .feed-betty-loading .dot-pulse {
+      display: inline-flex; gap: 3px;
+    }
+    .feed-betty-loading .dot-pulse span {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--primary); opacity: 0.4;
+      animation: pulse 1.2s ease infinite;
+    }
+    .feed-betty-loading .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+    .feed-betty-loading .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    /* Real X Post Embed */
+    .feed-x-post {
+      display: block; padding: 16px; text-decoration: none; color: inherit;
+      transition: background 0.15s;
+    }
+    .feed-x-post:hover { background: rgba(255,255,255,0.02); }
+    .feed-x-post-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+    }
+    .feed-x-post-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.875rem; color: var(--fg);
+      flex-shrink: 0;
+    }
+    .feed-x-post-author { font-size: 0.8125rem; font-weight: 600; color: var(--fg); }
+    .feed-x-post-handle { font-size: 0.75rem; color: var(--fg); opacity: 0.4; }
+    .feed-x-post-text {
+      font-size: 0.875rem; color: var(--fg); opacity: 0.8;
+      line-height: 1.55; margin-bottom: 10px;
+    }
+    .feed-x-post-stats {
+      display: flex; align-items: center; gap: 16px;
+      font-size: 0.75rem; color: var(--fg); opacity: 0.35;
+    }
+    .feed-x-post-stat { display: flex; align-items: center; gap: 4px; }
+
+    /* Send Bet Invite Button */
+    .feed-invite-btn {
+      width: 100%; padding: 12px 18px;
+      font-size: 0.9375rem; font-weight: 600;
+      border-radius: 9999px; border: none; cursor: pointer;
       background: var(--primary); color: var(--primary-fg);
       font-family: inherit; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
     }
-    .match-bet-btn:hover { background: hsl(121,95%,68%); }
+    .feed-invite-btn:hover { background: hsl(121,95%,68%); transform: translateY(-1px); }
+    .feed-invite-btn:active { transform: translateY(0); }
 
-    /* ─── Match Detail Page ─────────────────────────────────────────────── */
+    /* ─── Match Detail Page ────────────────────────────────────────────── */
     .detail-layout {
       display: grid; grid-template-columns: 1fr 380px; gap: 32px;
       align-items: start;
@@ -346,12 +504,6 @@
     .tweet-header {
       display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
     }
-    .tweet-avatar {
-      width: 44px; height: 44px; border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 1rem;
-    }
     .tweet-author-info { display: flex; flex-direction: column; }
     .tweet-name { font-weight: 600; font-size: 0.9375rem; }
     .tweet-handle { font-size: 0.8125rem; color: var(--fg); opacity: 0.4; }
@@ -359,30 +511,8 @@
       font-size: 1rem; line-height: 1.55; color: var(--fg); opacity: 0.85;
       margin-bottom: 16px;
     }
-    .tweet-stats {
-      display: flex; gap: 24px;
-      font-size: 0.8125rem; color: var(--fg); opacity: 0.35;
-    }
-    .tweet-stat { display: flex; align-items: center; gap: 5px; }
 
-    /* Top Commenters */
-    .commenters-list { display: flex; flex-direction: column; gap: 10px; }
-    .commenter {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; border-radius: 10px;
-      background: var(--card-inner);
-      border: 1px solid rgba(255,255,255,0.04);
-    }
-    .commenter-avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.6875rem; font-weight: 700; flex-shrink: 0;
-    }
-    .commenter-handle { font-size: 0.8125rem; font-weight: 500; flex: 1; }
-    .commenter-likes { font-size: 0.75rem; color: var(--fg); opacity: 0.4; }
-
-    /* ─── Bet Flow ──────────────────────────────────────────────────────── */
+    /* ─── Bet Flow ─────────────────────────────────────────────────────── */
     .bet-flow-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -411,15 +541,16 @@
     .form-hint { font-size: 0.75rem; color: var(--fg); opacity: 0.3; margin-top: 4px; }
 
     .bet-preview {
-      background: var(--card-inner);
-      border: 1px solid var(--border);
+      background: hsl(240, 8%, 10%);
+      border: 1px solid rgba(135,251,137,0.25);
       border-radius: 12px;
       padding: 20px;
       margin: 20px 0;
     }
     .bet-string {
-      font-size: 1.125rem; font-weight: 600; color: var(--primary);
-      line-height: 1.4; word-break: break-word;
+      font-size: 0.875rem; font-weight: 600; color: var(--primary);
+      line-height: 1.5; word-break: break-word;
+      font-family: 'Courier New', monospace;
     }
     .bet-link {
       font-size: 0.8125rem; color: var(--blue); margin-top: 8px;
@@ -429,7 +560,7 @@
     .share-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
     .share-btn {
       flex: 1; min-width: 120px;
-      padding: 12px 18px; border-radius: 12px;
+      padding: 12px 18px; border-radius: 9999px;
       font-family: inherit; font-size: 0.9375rem; font-weight: 600;
       border: none; cursor: pointer; transition: all 0.15s;
       display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -439,7 +570,6 @@
     .share-btn-copy { background: rgba(255,255,255,0.06); color: var(--fg); border: 1px solid var(--border); }
     .share-btn-copy:hover { background: rgba(255,255,255,0.1); }
 
-    /* Bet accepted confirmation */
     .bet-confirmed {
       text-align: center; padding: 40px 24px;
     }
@@ -457,7 +587,7 @@
       color: var(--fg); opacity: 0.6; margin-bottom: 24px;
     }
 
-    /* ─── Admin Dashboard ───────────────────────────────────────────────── */
+    /* ─── Admin Dashboard ──────────────────────────────────────────────── */
     .admin-stats {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 16px; margin-bottom: 32px;
@@ -477,9 +607,7 @@
       font-size: 2rem; font-weight: 800; color: var(--hero-heading);
       letter-spacing: -0.03em;
     }
-    .stat-change {
-      font-size: 0.8125rem; color: var(--primary); margin-top: 4px;
-    }
+    .stat-change { font-size: 0.8125rem; color: var(--primary); margin-top: 4px; }
 
     .admin-match {
       background: var(--card-bg);
@@ -509,9 +637,7 @@
       font-size: 0.875rem; color: var(--fg); opacity: 0.75;
       line-height: 1.55; white-space: pre-wrap;
     }
-    .admin-actions {
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
+    .admin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .admin-btn {
       padding: 8px 16px; font-size: 0.8125rem; font-weight: 600;
       border-radius: 8px; border: none; cursor: pointer;
@@ -525,7 +651,7 @@
     .admin-btn-tag { background: rgba(168,85,247,0.2); color: hsl(270,80%,65%); }
     .admin-btn-tag:hover { background: rgba(168,85,247,0.3); }
 
-    /* ─── Newsletter Section ────────────────────────────────────────────── */
+    /* ─── Newsletter Section ───────────────────────────────────────────── */
     .newsletter-section {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -560,14 +686,12 @@
       border-color: var(--primary); opacity: 1;
     }
 
-    /* ─── Auth Modal ────────────────────────────────────────────────────── */
+    /* ─── Auth Modal ───────────────────────────────────────────────────── */
     .modal-overlay {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
-      z-index: 200;
-      align-items: center; justify-content: center;
-      padding: 20px;
+      backdrop-filter: blur(4px); z-index: 200;
+      align-items: center; justify-content: center; padding: 20px;
     }
     .modal-overlay.show { display: flex; }
     .modal {
@@ -575,17 +699,10 @@
       border: 1px solid var(--border);
       border-radius: 20px;
       padding: 40px 32px;
-      max-width: 400px; width: 100%;
-      text-align: center;
+      max-width: 400px; width: 100%; text-align: center;
     }
-    .modal h2 {
-      font-size: 1.5rem; font-weight: 700; color: var(--hero-heading);
-      margin-bottom: 8px;
-    }
-    .modal p {
-      font-size: 0.9375rem; color: var(--fg); opacity: 0.5;
-      margin-bottom: 28px; line-height: 1.5;
-    }
+    .modal h2 { font-size: 1.5rem; font-weight: 700; color: var(--hero-heading); margin-bottom: 8px; }
+    .modal p { font-size: 0.9375rem; color: var(--fg); opacity: 0.5; margin-bottom: 28px; line-height: 1.5; }
     .x-sign-in-btn {
       width: 100%; padding: 14px; border-radius: 12px;
       background: #fff; color: #000; border: none;
@@ -598,50 +715,82 @@
     .modal-dismiss {
       margin-top: 16px; font-size: 0.8125rem;
       color: var(--fg); opacity: 0.35;
-      background: none; border: none; cursor: pointer;
-      font-family: inherit;
+      background: none; border: none; cursor: pointer; font-family: inherit;
     }
     .modal-dismiss:hover { opacity: 0.6; }
 
-    /* ─── User Avatar (logged in) ───────────────────────────────────────── */
+    /* ─── User Avatar ──────────────────────────────────────────────────── */
     .user-avatar {
       width: 32px; height: 32px; border-radius: 50%;
       background: var(--primary); color: var(--primary-fg);
       display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 0.8125rem;
-      cursor: pointer;
+      font-weight: 700; font-size: 0.8125rem; cursor: pointer;
     }
 
-    /* ─── Toast ─────────────────────────────────────────────────────────── */
+    /* ─── Toast ────────────────────────────────────────────────────────── */
     .toast {
       position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
       background: var(--primary); color: var(--primary-fg);
-      padding: 12px 24px; border-radius: 12px;
+      padding: 12px 24px; border-radius: 9999px;
       font-size: 0.9375rem; font-weight: 600;
       z-index: 300; opacity: 0; pointer-events: none;
       transition: opacity 0.3s;
     }
     .toast.show { opacity: 1; }
 
-    /* ─── Empty State ───────────────────────────────────────────────────── */
     .empty-state {
       text-align: center; padding: 60px 20px;
       color: var(--fg); opacity: 0.35;
     }
 
-    /* ─── Footer ────────────────────────────────────────────────────────── */
+    /* ─── Footer (matches main site) ──────────────────────────────────── */
     .site-footer {
       border-top: 1px solid var(--border);
-      padding: 32px 20px;
-      text-align: center;
-      font-size: 0.8125rem; color: var(--fg); opacity: 0.3;
+      padding: 48px 24px;
     }
+    .footer-inner {
+      max-width: 1080px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; flex-wrap: wrap;
+    }
+    .footer-left { display: flex; flex-direction: column; gap: 10px; }
+    .footer-logo { display: flex; align-items: center; gap: 8px; }
+    .footer-logo-icon {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: linear-gradient(135deg, hsl(121,95%,76%) 0%, hsl(180,90%,60%) 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .footer-logo-text { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; color: var(--fg); }
+    .footer-copy { font-size: 0.8125rem; color: var(--fg); opacity: 0.3; }
+    .footer-links { display: flex; gap: 32px; list-style: none; flex-wrap: wrap; }
+    .footer-link { font-size: 0.8125rem; color: var(--fg); opacity: 0.45; text-decoration: none; transition: opacity 0.15s; }
+    .footer-link:hover { opacity: 0.85; }
 
-    /* ─── Responsive ────────────────────────────────────────────────────── */
+    /* ─── Buttons ──────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-family: inherit; font-weight: 500; border: none;
+      border-radius: 10px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--primary); color: var(--primary-fg);
+      padding: 8px 18px; font-size: 0.875rem;
+    }
+    .btn-primary:hover { background: hsl(121,95%,68%); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); color: var(--fg);
+      padding: 8px 18px; font-size: 0.875rem;
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .btn-lg { padding: 12px 24px; font-size: 1rem; border-radius: 9999px; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8125rem; border-radius: 8px; }
+
+    /* ─── Responsive ───────────────────────────────────────────────────── */
     @media (max-width: 768px) {
       .nav-links { display: none; }
       .mobile-menu-btn { display: block; }
-      .matches-grid { grid-template-columns: 1fr; }
+      .matches-feed { max-width: 100%; }
       .detail-layout { grid-template-columns: 1fr; }
       .detail-sidebar { position: static; }
       .admin-stats { grid-template-columns: 1fr 1fr; }
@@ -656,7 +805,7 @@
       .admin-actions .admin-btn { width: 100%; justify-content: center; }
     }
 
-    /* ─── Animations ────────────────────────────────────────────────────── */
+    /* ─── Animations ───────────────────────────────────────────────────── */
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(12px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -669,21 +818,25 @@
 </head>
 <body>
 
-  <!-- Navbar -->
+  <!-- Navbar (pill style matching main site) -->
   <nav class="navbar">
-    <div class="navbar-inner">
+    <div class="navbar-pill liquid-glass">
       <a class="logo" onclick="navigate('home')">
-        <div class="logo-mark">W</div>
-        <div class="logo-text">WeBet<span>AI</span></div>
+        <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+          <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+          <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+        </svg>
+        <span class="logo-text">WeBetAI</span>
       </a>
       <ul class="nav-links">
         <li><a class="nav-link" data-page="home" onclick="navigate('home')">Today's Matches</a></li>
         <li><a class="nav-link" data-page="admin" onclick="navigate('admin')">Dashboard</a></li>
+        <li><a class="nav-link" href="/">Home</a></li>
       </ul>
       <div class="nav-right">
         <div id="auth-area"></div>
         <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h16M3 11h16M3 16h16"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
       </div>
     </div>
@@ -691,13 +844,20 @@
 
   <!-- ═══ HOME PAGE ═══ -->
   <div id="page-home" class="page active">
-    <div class="page-header">
-      <h1>Today's Matches</h1>
-      <p>Trending topics on X matched to live prediction markets on Polymarket and Kalshi. Pick a match, challenge a friend.</p>
+    <div class="hero-header">
+      <div class="hero-badge liquid-glass">
+        <span class="badge-label">Social Intelligence - Live Now</span>
+        <span class="badge-chip">Powered by Betty<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <h1 class="hero-heading">Today's Matches</h1>
+      <p class="hero-sub">X trending topics matched to live Polymarket odds. See the post, see the bet, send it to a friend.</p>
     </div>
-    <div class="content">
-      <div class="category-tabs" id="category-tabs"></div>
-      <div class="matches-grid" id="matches-grid"></div>
+
+    <div class="section-divider"></div>
+
+    <div class="content" style="padding-top: 32px;">
+      <div class="category-tabs" id="category-tabs" style="max-width:560px; margin:0 auto 32px;"></div>
+      <div class="matches-feed" id="matches-feed"></div>
 
       <!-- Newsletter -->
       <div class="newsletter-section">
@@ -743,11 +903,12 @@
 
   <!-- ═══ ADMIN DASHBOARD ═══ -->
   <div id="page-admin" class="page">
-    <div class="page-header">
-      <h1>Content Dashboard</h1>
-      <p>One-click publishing for today's matched content. All posting is human-in-the-loop.</p>
+    <div class="hero-header">
+      <h1 class="hero-heading">Content Dashboard</h1>
+      <p class="hero-sub">One-click publishing for today's matched content. All posting is human-in-the-loop.</p>
     </div>
-    <div class="content">
+    <div class="section-divider"></div>
+    <div class="content" style="padding-top: 32px;">
       <div class="admin-stats" id="admin-stats"></div>
       <div id="admin-matches"></div>
     </div>
@@ -770,16 +931,31 @@
   <div class="toast" id="toast"></div>
 
   <footer class="site-footer">
-    WeBet AI &mdash; Social Intelligence. Not financial advice. Bettor Edge handles all real-money infrastructure post-funding.
+    <div class="footer-inner">
+      <div class="footer-left">
+        <div class="footer-logo">
+          <div class="footer-logo-icon">
+            <svg viewBox="0 0 470 419" fill="none" style="width:14px;height:12px" xmlns="http://www.w3.org/2000/svg">
+              <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#fff"/>
+              <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+            </svg>
+          </div>
+          <span class="footer-logo-text">WeBetAI</span>
+        </div>
+        <span class="footer-copy">Social Intelligence. Not financial advice.</span>
+      </div>
+      <ul class="footer-links">
+        <li><a href="/" class="footer-link">Home</a></li>
+        <li><a href="/edge" class="footer-link">Edge Picks</a></li>
+        <li><a href="/webetai" class="footer-link">WeBet App</a></li>
+      </ul>
+    </div>
   </footer>
 
+<!-- Twitter widget for real embeds -->
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
 <script>
-// ─── API Config ──────────────────────────────────────────────────────────────
-const IS_LOCAL = window.location.hostname === 'localhost';
-const POLY_API = 'https://gamma-api.polymarket.com';
-
-const CATEGORIES = ['all', 'sports', 'politics', 'crypto', 'entertainment', 'news', 'tech'];
-
 // ─── State ───────────────────────────────────────────────────────────────────
 
 let MATCHES = [];
@@ -798,16 +974,12 @@ async function fetchMarkets() {
 
   try {
     let markets;
-
     const res = await fetch('/api/markets');
     if (!res.ok) throw new Error('API error ' + res.status);
     const data = await res.json();
 
-    // data.markets is either pre-formatted (Netlify function) or raw Polymarket array (local proxy)
     const rawMarkets = Array.isArray(data.markets) ? data.markets : [];
-    // Check if already formatted (has xSearchUrl) or raw Polymarket data (has outcomePrices)
     if (rawMarkets.length > 0 && rawMarkets[0].outcomePrices) {
-      // Raw Polymarket data — needs formatting
       markets = rawMarkets
         .filter(m => {
           const vol24h = parseFloat(m.volume24hr) || 0;
@@ -817,7 +989,6 @@ async function fetchMarkets() {
         .slice(0, 20)
         .map(formatPolymarketData);
     } else {
-      // Pre-formatted from Netlify function
       markets = rawMarkets;
     }
 
@@ -827,11 +998,10 @@ async function fetchMarkets() {
   } catch (err) {
     console.error('Failed to fetch markets:', err);
     isLoading = false;
-    // Show error state
-    const gridEl = document.getElementById('matches-grid');
-    if (gridEl) {
-      gridEl.innerHTML = `
-        <div class="empty-state" style="grid-column:1/-1">
+    const feedEl = document.getElementById('matches-feed');
+    if (feedEl) {
+      feedEl.innerHTML = `
+        <div class="empty-state">
           <p>Could not load markets. <button class="btn btn-secondary btn-sm" onclick="fetchMarkets()" style="margin-top:12px">Retry</button></p>
         </div>`;
     }
@@ -851,6 +1021,12 @@ function formatPolymarketData(m) {
   const volume24h = parseFloat(m.volume24hr) || 0;
   const searchTerms = extractKeywords(m.question);
 
+  // Build bet claim (title case, stripped of question prefixes)
+  const betClaim = toBetClaim(m.question);
+  const settleDateShort = m.endDate
+    ? new Date(m.endDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })
+    : null;
+
   return {
     id: m.id || m.slug || String(Math.random()).slice(2,10),
     question: m.question,
@@ -867,13 +1043,26 @@ function formatPolymarketData(m) {
     platform: 'Polymarket',
     image: m.image || null,
     endDate: m.endDate,
+    betClaim,
+    settleDateShort,
     polyUrl: `https://polymarket.com/event/${m.slug || m.conditionId || m.id}`,
     priceChange24h: m.oneDayPriceChange ? Math.round(m.oneDayPriceChange * 100) : null,
     xSearchUrl: `https://x.com/search?q=${encodeURIComponent(searchTerms)}&f=top`,
     xSearchQuery: searchTerms,
-    // Generate thread content
     thread: generateThread(m.question, yesPrice, formatVolume(volume), searchTerms),
   };
+}
+
+function toBetClaim(question) {
+  let claim = question
+    .replace(/^Will\s+/i, '').replace(/^Does\s+/i, '')
+    .replace(/^Is\s+/i, '').replace(/^Are\s+/i, '')
+    .replace(/^Can\s+/i, '').replace(/\?+$/, '').trim();
+  return claim.split(' ').map((w, i) => {
+    const lower = w.toLowerCase();
+    if (i > 0 && ['the','a','an','of','in','on','to','by','or','and','for','at','vs'].includes(lower)) return lower;
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }).join(' ');
 }
 
 function detectCategory(text) {
@@ -888,16 +1077,11 @@ function detectCategory(text) {
 
 function extractKeywords(question) {
   return question
-    .replace(/^Will\s+/i, '')
-    .replace(/^Does\s+/i, '')
-    .replace(/^Is\s+/i, '')
+    .replace(/^Will\s+/i, '').replace(/^Does\s+/i, '').replace(/^Is\s+/i, '')
     .replace(/\?+$/, '')
     .replace(/\b(the|a|an|of|in|on|to|by|or|and|for|at|vs|be|before|after|during)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .slice(0, 5)
-    .join(' ');
+    .replace(/\s+/g, ' ').trim()
+    .split(' ').slice(0, 5).join(' ');
 }
 
 function formatVolume(vol) {
@@ -912,6 +1096,16 @@ function generateThread(question, yesPrice, volume, searchTerms) {
   return `${claim}?\n\nPolymarket has this at ${yesPrice}% YES.\n\n${volume} in volume.\n\nThink you know how this ends? Challenge a friend:\nwebet.com`;
 }
 
+// Build the proper bet string (matches convert-bet.js format)
+function buildBetString(match) {
+  const dateStr = match.settleDateShort ? ` On ${match.settleDateShort}` : '';
+  return `@[Friend] WeBet $[Amount] ${match.betClaim}${dateStr}`;
+}
+
+function buildBetMeta(match) {
+  return `Verified by Price: ${match.odds_yes != null ? match.odds_yes + '%' : '—'} YES on Polymarket\n${match.volume} volume\nCreated with Betty · webetsocial.com`;
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 function renderAuthArea() {
@@ -919,43 +1113,27 @@ function renderAuthArea() {
   if (currentUser) {
     el.innerHTML = `<div class="user-avatar" onclick="signOut()" title="Sign out">${currentUser.avatar}</div>`;
   } else {
-    el.innerHTML = `<button class="btn btn-primary btn-sm" onclick="openAuthModal()">Sign in with X</button>`;
+    el.innerHTML = `<button class="btn-nav" onclick="openAuthModal()">Sign in with X</button>`;
   }
 }
 
-function openAuthModal() {
-  document.getElementById('auth-modal').classList.add('show');
-}
-
-function closeAuthModal() {
-  document.getElementById('auth-modal').classList.remove('show');
-}
+function openAuthModal() { document.getElementById('auth-modal').classList.add('show'); }
+function closeAuthModal() { document.getElementById('auth-modal').classList.remove('show'); }
 
 function mockSignIn() {
   currentUser = {
     id: 'user_' + Math.random().toString(36).slice(2, 10),
-    name: 'Ben Klein',
-    handle: '@BenKlein',
-    avatar: 'BK',
+    name: 'Ben Klein', handle: '@BenKlein', avatar: 'BK',
   };
   closeAuthModal();
   renderAuthArea();
   showToast('Signed in as @BenKlein');
-
-  if (pendingAction) {
-    pendingAction();
-    pendingAction = null;
-  }
+  if (pendingAction) { pendingAction(); pendingAction = null; }
 }
 
-function signOut() {
-  currentUser = null;
-  renderAuthArea();
-  showToast('Signed out');
-}
+function signOut() { currentUser = null; renderAuthArea(); showToast('Signed out'); }
 
 let pendingAction = null;
-
 function requireAuth(action) {
   if (currentUser) { action(); return; }
   pendingAction = action;
@@ -1005,66 +1183,265 @@ function toggleMobileMenu() {
 // ─── Home Page ───────────────────────────────────────────────────────────────
 
 function renderHome() {
-  // Category tabs
   const tabsEl = document.getElementById('category-tabs');
   const activeCats = ['all', ...new Set(MATCHES.map(m => m.category))];
   tabsEl.innerHTML = activeCats.map(c =>
     `<button class="cat-tab ${c === currentCategory ? 'active' : ''}" onclick="filterCategory('${c}')">${c === 'all' ? 'All' : c.charAt(0).toUpperCase() + c.slice(1)}</button>`
   ).join('');
 
-  const gridEl = document.getElementById('matches-grid');
+  const feedEl = document.getElementById('matches-feed');
 
   if (isLoading) {
-    gridEl.innerHTML = `
-      <div class="empty-state" style="grid-column:1/-1">
+    feedEl.innerHTML = `
+      <div class="empty-state">
         <div style="font-size:1.5rem; margin-bottom:12px;">Loading live markets...</div>
         <p>Fetching from Polymarket</p>
       </div>`;
     return;
   }
 
-  // Matches
   const filtered = currentCategory === 'all' ? MATCHES : MATCHES.filter(m => m.category === currentCategory);
 
   if (filtered.length === 0) {
-    gridEl.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No matches in this category today.</div>';
+    feedEl.innerHTML = '<div class="empty-state">No matches in this category today.</div>';
     return;
   }
 
-  gridEl.innerHTML = filtered.map((m, i) => `
-    <div class="match-card fade-in fade-in-delay-${i % 4}" onclick="navigateToDetail('${m.id}')">
-      <div class="match-card-header">
-        <span class="match-category cat-${m.category}">${m.category}</span>
-        <span class="match-volume">Vol: ${m.volume}</span>
-      </div>
-      <div class="match-question">${escapeHtml(m.question)}</div>
-      <div class="match-source">
-        <a href="${m.xSearchUrl}" target="_blank" onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:8px; color:inherit; text-decoration:none;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5; flex-shrink:0;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-          <span style="opacity:0.5">Search on X</span>
-        </a>
-      </div>
-      <div class="match-odds-row">
-        <div class="odds-pill">
-          <div class="odds-label">Yes</div>
-          <div class="odds-value odds-yes">${m.odds_yes != null ? m.odds_yes + '%' : '—'}</div>
-        </div>
-        <div class="odds-pill">
-          <div class="odds-label">No</div>
-          <div class="odds-value odds-no">${m.odds_no != null ? m.odds_no + '%' : '—'}</div>
-        </div>
-      </div>
-      <div class="match-footer">
-        <div class="match-platform">
-          <div class="platform-dot"></div>
-          <a href="${m.polyUrl || '#'}" target="_blank" onclick="event.stopPropagation()" style="color:inherit">${m.platform}</a>
-        </div>
-        <button class="match-bet-btn" onclick="event.stopPropagation(); navigateToBet('${m.id}')">Challenge a Friend</button>
-      </div>
-    </div>
-  `).join('');
+  feedEl.innerHTML = filtered.map((m, i) => {
+    const betStr = buildBetString(m);
+    const betMeta = buildBetMeta(m);
+    const changeColor = (m.priceChange24h || 0) >= 0 ? 'var(--primary)' : 'var(--danger)';
+    const changeStr = m.priceChange24h != null ? ((m.priceChange24h >= 0 ? '+' : '') + m.priceChange24h + '% 24h') : '';
 
+    return `
+    <div class="feed-card fade-in fade-in-delay-${i % 4}">
+      <!-- Embedded X Post -->
+      <div class="feed-x-embed" id="x-embed-${i}">
+        <div class="feed-x-loading">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          Loading post from X...
+        </div>
+      </div>
+
+      <!-- Bet Card Info -->
+      <div class="feed-bet-info">
+        <div class="feed-bet-header">
+          <span class="match-category cat-${m.category}">${m.category}</span>
+          <span class="feed-volume">Vol: ${m.volume}</span>
+        </div>
+        <div class="feed-question" onclick="navigateToDetail('${m.id}')">${escapeHtml(m.question)}</div>
+        <div class="match-odds-row">
+          <div class="odds-pill">
+            <div class="odds-label">Yes</div>
+            <div class="odds-value odds-yes">${m.odds_yes != null ? m.odds_yes + '%' : '—'}</div>
+          </div>
+          <div class="odds-pill">
+            <div class="odds-label">No</div>
+            <div class="odds-value odds-no">${m.odds_no != null ? m.odds_no + '%' : '—'}</div>
+          </div>
+        </div>
+        <div class="feed-platform-row">
+          <div class="match-platform">
+            <div class="platform-dot"></div>
+            <a href="${m.polyUrl || '#'}" target="_blank" style="color:inherit">${m.platform}</a>
+          </div>
+          ${changeStr ? `<span class="feed-change" style="color:${changeColor}">${changeStr}</span>` : ''}
+        </div>
+
+        <!-- Betty AI Insight -->
+        <div class="feed-betty-insight" id="betty-insight-${i}">
+          <div class="feed-betty-loading">
+            <div class="feed-betty-avatar">B</div>
+            <span>Betty is analyzing</span>
+            <div class="dot-pulse"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+
+        <!-- Bet String (monospace callout) -->
+        <div class="feed-bet-string">
+          <div class="feed-bet-string-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Bet String
+          </div>
+          <div class="feed-bet-string-text">${escapeHtml(betStr)}</div>
+          <div class="feed-bet-meta">${escapeHtml(betMeta)}</div>
+        </div>
+
+        <!-- Send Bet Invite -->
+        <button class="feed-invite-btn" onclick="sendBetInvite('${m.id}')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v4h14v-4M12 3v10M8 7l4-4 4 4"/></svg>
+          Send Bet Invite
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Load real X embeds and Betty AI analysis for each card
+  loadXEmbeds(filtered);
+  loadBettyInsights(filtered);
   renderNewsletterCats();
+}
+
+// ─── X Embed Loading (via xAI search-x function) ─────────────────────────────
+
+async function loadXEmbeds(markets) {
+  // Load X embeds in batches of 3 to avoid hammering the API
+  for (let i = 0; i < markets.length; i++) {
+    const container = document.getElementById('x-embed-' + i);
+    if (!container) continue;
+
+    const m = markets[i];
+    const searchUrl = m.xSearchUrl;
+
+    // Set initial fallback card
+    container.innerHTML = renderXFallback(m.xSearchQuery, searchUrl);
+
+    // Try to fetch real X posts via our search-x function
+    fetchRealXPost(container, m.xSearchQuery, searchUrl, i);
+  }
+}
+
+function renderXFallback(query, searchUrl) {
+  return `
+    <a href="${searchUrl}" target="_blank" class="feed-x-fallback">
+      <div class="feed-x-header">
+        <div class="feed-x-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </div>
+        <div class="feed-x-meta">
+          <span class="feed-x-label">Trending on X</span>
+          <span class="feed-x-query">${escapeHtml(query || '')}</span>
+        </div>
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.3; flex-shrink:0;"><path d="M5 3h8v8M13 3L5 11"/></svg>
+      </div>
+    </a>`;
+}
+
+async function fetchRealXPost(container, query, fallbackUrl, index) {
+  try {
+    const res = await fetch('/api/search-x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.posts || data.posts.length === 0) return;
+
+    // Pick the highest-engagement post
+    const post = data.posts[0];
+
+    // Try Twitter oembed for the real tweet URL
+    const embedded = await tryOembed(container, post.url);
+    if (embedded) return;
+
+    // Render our styled post card
+    container.innerHTML = `
+      <a href="${escapeHtml(post.url)}" target="_blank" class="feed-x-post">
+        <div class="feed-x-post-header">
+          <div class="feed-x-post-avatar">${escapeHtml((post.author || post.handle || '?')[0].toUpperCase())}</div>
+          <div>
+            <div class="feed-x-post-author">${escapeHtml(post.author || post.handle)}</div>
+            <div class="feed-x-post-handle">@${escapeHtml(post.handle)}</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.3; margin-left:auto;"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </div>
+        <div class="feed-x-post-text">${escapeHtml(post.text.slice(0, 280))}${post.text.length > 280 ? '...' : ''}</div>
+        <div class="feed-x-post-stats">
+          ${post.likes ? `<span class="feed-x-post-stat"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5C10.8 3.6 9 3 7.5 3 5 3 3 5 3 7.5c0 5 9 10.5 9 10.5s9-5.5 9-10.5C21 5 19 3 16.5 3 15 3 13.2 3.6 12 5z"/></svg>${formatEngagement(post.likes)}</span>` : ''}
+          ${post.retweets ? `<span class="feed-x-post-stat"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>${formatEngagement(post.retweets)}</span>` : ''}
+          <span class="feed-x-post-stat" style="margin-left:auto; color:var(--blue);">View on X <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 1h6v6M9 1L3 7"/></svg></span>
+        </div>
+      </a>`;
+  } catch (_) {
+    // Keep fallback card
+  }
+}
+
+async function tryOembed(container, tweetUrl) {
+  try {
+    const embedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&theme=dark&dnt=true&omit_script=true`;
+    const res = await fetch(embedUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.html) {
+        container.innerHTML = data.html;
+        if (window.twttr && window.twttr.widgets) {
+          window.twttr.widgets.load(container);
+        }
+        return true;
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+
+function formatEngagement(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+// ─── Betty AI Insights (via xAI xai-analyze function) ─────────────────────────
+
+async function loadBettyInsights(markets) {
+  // Load insights in parallel, max 5 at a time
+  const batch = markets.slice(0, 20);
+  const promises = batch.map((m, i) => loadSingleInsight(m, i));
+  await Promise.allSettled(promises);
+}
+
+async function loadSingleInsight(market, index) {
+  const container = document.getElementById('betty-insight-' + index);
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/xai-analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: market.question,
+        odds_yes: market.odds_yes,
+        odds_no: market.odds_no,
+        volume: market.volume,
+        category: market.category,
+        endDate: market.endDate,
+      }),
+    });
+
+    if (!res.ok) {
+      container.style.display = 'none';
+      return;
+    }
+
+    const data = await res.json();
+    if (!data.insight) {
+      container.style.display = 'none';
+      return;
+    }
+
+    const confClass = data.confidence === 'high' ? 'confidence-high' :
+                      data.confidence === 'low' ? 'confidence-low' : 'confidence-medium';
+    const confLabel = data.confidence === 'high' ? 'High Confidence' :
+                      data.confidence === 'low' ? 'Low Confidence' : 'Medium';
+
+    container.innerHTML = `
+      <div class="feed-betty-header">
+        <div class="feed-betty-avatar">B</div>
+        <span class="feed-betty-name">Betty</span>
+        <span class="feed-betty-badge">AI Analysis</span>
+        <span class="feed-betty-confidence ${confClass}">${confLabel}</span>
+      </div>
+      <div class="feed-betty-text">${escapeHtml(data.insight)}</div>
+      ${data.hotTake ? `<div class="feed-betty-taunt">"${escapeHtml(data.hotTake)}"</div>` : ''}
+      ${data.xContext ? `<div class="feed-betty-xcontext">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        <span>${escapeHtml(data.xContext)}</span>
+      </div>` : ''}
+    `;
+  } catch (err) {
+    container.style.display = 'none';
+  }
 }
 
 function filterCategory(cat) {
@@ -1083,10 +1460,7 @@ function renderNewsletterCats() {
 
 function subscribeNewsletter() {
   const email = document.getElementById('newsletter-email').value;
-  if (!email || !email.includes('@')) {
-    showToast('Please enter a valid email');
-    return;
-  }
+  if (!email || !email.includes('@')) { showToast('Please enter a valid email'); return; }
   showToast('Subscribed! You\'ll get daily matches at 4 PM EST.');
   document.getElementById('newsletter-email').value = '';
 }
@@ -1163,7 +1537,6 @@ function renderDetailPage(match) {
     </div>
 
     <div class="detail-sidebar fade-in fade-in-delay-1">
-      <!-- Market Info Card -->
       <div class="detail-card">
         <h3 style="font-size:0.875rem; color:var(--fg); opacity:0.4; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:16px;">Market Info</h3>
         <div style="display:flex; flex-direction:column; gap:12px;">
@@ -1189,14 +1562,12 @@ function renderDetailPage(match) {
         </div>
       </div>
 
-      <!-- Quick Bet Card -->
       <div class="detail-card" style="background: linear-gradient(135deg, rgba(135,251,137,0.05), rgba(135,251,137,0.01));">
         <h3 style="font-size:1rem; font-weight:700; color:var(--hero-heading); margin-bottom:8px;">Think you know the answer?</h3>
         <p style="font-size:0.875rem; color:var(--fg); opacity:0.5; margin-bottom:16px; line-height:1.5;">Generate a bet challenge and send it to a friend via text, iMessage, or WhatsApp.</p>
         <button class="btn btn-primary" style="width:100%" onclick="navigateToBet('${match.id}')">Create Bet Challenge</button>
       </div>
 
-      <!-- View on Polymarket -->
       <a href="${match.polyUrl || '#'}" target="_blank" class="detail-card" style="display:block; text-decoration:none; border-color:rgba(135,251,137,0.2); transition: border-color 0.15s;">
         <div style="display:flex; align-items:center; gap:10px;">
           <div style="width:32px;height:32px;border-radius:8px;background:rgba(135,251,137,0.1);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.75rem;color:var(--primary);">P</div>
@@ -1263,33 +1634,31 @@ function generateBet(matchId) {
   if (!amount || amount <= 0) { showToast('Enter a bet amount'); return; }
 
   const betId = 'bet_' + (++betCounter).toString(36);
-  const betClaim = match.question.replace(/^Will\s+/i, '').replace(/\?$/, '');
-  const betString = `@${friend} WeBet $${amount} ${betClaim}`;
+  const dateStr = match.settleDateShort ? ` On ${match.settleDateShort}` : '';
+  const betString = `@${friend} WeBet $${amount} ${match.betClaim}${dateStr}`;
+  const betMeta = `Verified by Price: ${match.odds_yes != null ? match.odds_yes + '%' : '—'} YES on Polymarket\n${match.volume} volume\nCreated with Betty · webetsocial.com`;
   const betLink = `webet.com/bet/${betId}`;
 
   const bet = {
-    id: betId,
-    matchId,
+    id: betId, matchId,
     challengerId: currentUser.id,
     challengerHandle: currentUser.handle,
     recipientName: friend,
     amount: parseInt(amount),
     question: match.question,
-    betString,
-    link: betLink,
+    betString, link: betLink,
     status: 'pending',
     createdAt: new Date().toISOString(),
   };
   bets.push(bet);
 
-  const escapedBetString = escapeHtml(betString);
   const resultEl = document.getElementById('bet-result');
   resultEl.innerHTML = `
     <div class="bet-flow-card fade-in">
       <h3>Your Bet Challenge</h3>
       <div class="bet-preview">
-        <div class="bet-string">${escapedBetString}</div>
-        <div class="bet-link">${betLink}</div>
+        <div class="bet-string">${escapeHtml(betString)}</div>
+        <div style="font-size:0.75rem; color:var(--fg); opacity:0.4; margin-top:8px; white-space:pre-wrap; font-family:'Courier New',monospace;">${escapeHtml(betMeta)}</div>
       </div>
       <div class="share-buttons">
         <button class="share-btn share-btn-native" onclick="shareBetChallenge()">
@@ -1302,26 +1671,42 @@ function generateBet(matchId) {
         </button>
       </div>
       <p style="font-size:0.8125rem; color:var(--fg); opacity:0.35; margin-top:16px; text-align:center; line-height:1.5;">
-        When ${escapeHtml(friend)} opens the link, they'll sign up and accept your challenge. Both of you get captured in our system.
+        When ${escapeHtml(friend)} opens the link, they'll sign up and accept your challenge.
       </p>
     </div>
   `;
 
-  // Store for share/copy
-  window._lastBet = { betString, betLink };
+  window._lastBet = { betString: betString + '\n\n' + betMeta, betLink };
   resultEl.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function sendBetInvite(matchId) {
+  const match = MATCHES.find(m => m.id === matchId || m.id === String(matchId));
+  if (!match) return;
+
+  const dateStr = match.settleDateShort ? ` On ${match.settleDateShort}` : '';
+  const betString = `@[Friend] WeBet $[Amount] ${match.betClaim}${dateStr}\n\nVerified by Price: ${match.odds_yes != null ? match.odds_yes + '%' : '—'} YES on Polymarket\n${match.volume} volume\n\nAccept the bet: https://webetsocial.com/webetai#match/${match.id}\nCreated with Betty · webetsocial.com`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'WeBet Challenge', text: betString });
+      return;
+    } catch (_) {}
+  }
+  try {
+    await navigator.clipboard.writeText(betString);
+    showToast('Bet invite copied to clipboard!');
+  } catch (_) {
+    navigateToBet(matchId);
+  }
 }
 
 async function shareBetChallenge() {
   const { betString, betLink } = window._lastBet || {};
   if (!betString) return;
   if (navigator.share) {
-    try {
-      await navigator.share({ title: 'WeBet Challenge', text: betString, url: 'https://' + betLink });
-    } catch (_) {}
-  } else {
-    copyBetChallenge();
-  }
+    try { await navigator.share({ title: 'WeBet Challenge', text: betString, url: 'https://' + betLink }); } catch (_) {}
+  } else { copyBetChallenge(); }
 }
 
 function copyBetChallenge() {
@@ -1332,17 +1717,13 @@ function copyBetChallenge() {
   }).catch(() => showToast('Could not copy'));
 }
 
-// ─── Bet Accept Page (friend lands here) ─────────────────────────────────────
+// ─── Bet Accept Page ─────────────────────────────────────────────────────────
 
 function renderBetAccept(betId) {
   const bet = bets.find(b => b.id === betId) || {
-    id: betId,
-    challengerHandle: '@BenKlein',
-    recipientName: 'Friend',
-    amount: 100,
-    question: 'Market Question',
-    betString: '@Friend WeBet $100 on a Prediction Market',
-    status: 'pending',
+    id: betId, challengerHandle: '@BenKlein', recipientName: 'Friend',
+    amount: 100, question: 'Market Question',
+    betString: '@Friend WeBet $100 on a Prediction Market', status: 'pending',
   };
 
   const el = document.getElementById('bet-accept-container');
@@ -1353,8 +1734,7 @@ function renderBetAccept(betId) {
         <h2>Bet Locked In!</h2>
         <p>Complete your account to play. Bettor Edge handles all real-money infrastructure.</p>
         <button class="btn btn-primary btn-lg" onclick="navigate('home')">Browse Today's Matches</button>
-      </div>
-    `;
+      </div>`;
   } else {
     el.innerHTML = `
       <div class="bet-flow-card fade-in">
@@ -1382,8 +1762,7 @@ function renderBetAccept(betId) {
         <p style="font-size:0.8125rem; color:var(--fg); opacity:0.35; margin-top:12px; text-align:center;">
           You'll need to sign in with X to accept.
         </p>
-      </div>
-    `;
+      </div>`;
   }
   navigate('bet-accept');
 }
@@ -1402,8 +1781,7 @@ function acceptBet(betId) {
 function renderAdmin() {
   const totalVol = MATCHES.reduce((s, m) => s + (m.volumeRaw || 0), 0);
 
-  const statsEl = document.getElementById('admin-stats');
-  statsEl.innerHTML = `
+  document.getElementById('admin-stats').innerHTML = `
     <div class="stat-card fade-in">
       <div class="stat-label">Markets Today</div>
       <div class="stat-value">${MATCHES.length}</div>
@@ -1426,12 +1804,10 @@ function renderAdmin() {
     </div>
   `;
 
-  const matchesEl = document.getElementById('admin-matches');
-  matchesEl.innerHTML = MATCHES.map((m, i) => {
+  document.getElementById('admin-matches').innerHTML = MATCHES.map((m, i) => {
     const thread = m.thread || generateThread(m.question, m.odds_yes, m.volume, m.xSearchQuery || '');
     const threadEncoded = encodeURIComponent(thread);
     const replyText = encodeURIComponent(`${m.question}\n\nPolymarket: ${m.odds_yes}% YES | ${m.volume} volume\n\nwebet.com`);
-    const searchText = encodeURIComponent(`${m.question}\n\n${m.odds_yes}% YES on Polymarket\n${m.volume} in volume\n\nwebet.com`);
 
     return `
       <div class="admin-match fade-in" style="animation-delay:${i * 0.05}s">
@@ -1445,20 +1821,16 @@ function renderAdmin() {
         <div class="admin-thread-preview">${escapeHtml(thread)}</div>
         <div class="admin-actions">
           <button class="admin-btn admin-btn-publish" onclick="window.open('https://x.com/intent/post?text=${threadEncoded}', '_blank')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l3-3 3 3M12 4L9 7 6 4"/></svg>
             Publish Thread
           </button>
           <button class="admin-btn admin-btn-reply" onclick="window.open('https://x.com/intent/post?text=${replyText}', '_blank')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l4-4 4 4"/></svg>
             Post to X
           </button>
           <button class="admin-btn admin-btn-tag" onclick="window.open('${m.xSearchUrl}', '_blank')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="5"/><path d="M7 4v6M4 7h6"/></svg>
             Find on X
           </button>
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
@@ -1502,9 +1874,8 @@ function handleRoute() {
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 window.addEventListener('hashchange', handleRoute);
-
 renderAuthArea();
-fetchMarkets(); // Fetch real data on load
+fetchMarkets();
 </script>
 </body>
 </html>

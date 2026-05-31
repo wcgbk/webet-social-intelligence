@@ -97,10 +97,16 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr) {
   // Direct abbreviation match (NYM === NYM)
   if (a && p === a) return true;
   if (!e) return false;
-  if (p === e || p.includes(e) || e.includes(p)) return true;
+  // Exact match
+  if (p === e) return true;
+  // Only do substring matching for strings longer than 3 chars
+  // (avoids "LAD" matching "phiLADelphia", "TEX" matching nothing weird, etc.)
+  if (p.length > 3 && (p.includes(e) || e.includes(p))) return true;
+  if (e.length > 3 && p.length > 3 && (p.includes(e) || e.includes(p))) return true;
+  // Last word match (e.g. "Rangers" === "Rangers")
   const pLast = p.split(' ').pop();
   const eLast = e.split(' ').pop();
-  return pLast.length > 2 && pLast === eLast;
+  return pLast.length > 3 && pLast === eLast;
 }
 
 function normalizeName(name) {

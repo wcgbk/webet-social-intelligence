@@ -196,9 +196,14 @@ async function fetchOdds(dateISO) {
   const allOdds = [];
   for (const sport of ODDS_SPORTS) {
     try {
-      const markets = "h2h,spreads,totals,alternate_spreads,alternate_totals";
-      const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
-      const resp = await fetch(url);
+      let markets = "h2h,spreads,totals,alternate_spreads,alternate_totals";
+      let url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
+      let resp = await fetch(url);
+      if (!resp.ok && resp.status === 422) {
+        markets = "h2h,spreads,totals";
+        url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
+        resp = await fetch(url);
+      }
       if (resp.ok) {
         const data = await resp.json();
         const todayGames = data.filter(g => {
@@ -240,8 +245,8 @@ async function fetchESPNData(dateISO) {
         const competition = event.competitions?.[0];
         if (!competition) continue;
         const gameState = event.status?.type?.state || "pre";
-        // Allow pre-game and in-progress games (for late-day re-runs where games have started)
-        if (gameState === "post") continue;
+        // Only evaluate pre-game — games already started do not qualify for picks
+        if (gameState !== "pre") continue;
 
         const home = competition.competitors?.find(c => c.homeAway === "home");
         const away = competition.competitors?.find(c => c.homeAway === "away");
@@ -1058,10 +1063,27 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
 
   const homeEloAdj = homeRating.elo + effectiveHomeAdv;
   const homeWinProb = eloExpected(homeEloAdj, awayRating.elo);
-  const projSpread = -(projHomeScore - projAwayScore);
-  const projTotal = projHomeScore + projAwayScore;
+  let projTotal = projHomeScore + projAwayScore;
 
-  return { projHomeScore, projAwayScore, projSpread, projTotal, projMethod, homeWinProb, homeEloAdj, effectiveHomeAdv };
+  // ── PROJECTION SANITY CAPS — prevent garbage projections from bad input data ──
+  // ── PROJECTION SANITY CAPS — exclude games with garbage projections ──
+  const TOTAL_CAPS = { soccer: 7, hockey: 12, basketball: 300, baseball: 25 };
+  const SPREAD_CAPS = { soccer: 4, hockey: 6, basketball: 40, baseball: 10 };
+  const totalCap = TOTAL_CAPS[sportType] || 300;
+  const spreadCap = SPREAD_CAPS[sportType] || 40;
+  let projSpread = -(projHomeScore - projAwayScore);
+  let poisoned = false;
+
+  if (projTotal > totalCap) {
+    console.log(`[v10-cap] POISONED: projTotal ${projTotal.toFixed(1)} exceeds ${totalCap} for ${sportType} (${game.away} @ ${game.home}) — excluding game`);
+    poisoned = true;
+  }
+  if (Math.abs(projSpread) > spreadCap) {
+    console.log(`[v10-cap] POISONED: projSpread ${projSpread.toFixed(1)} exceeds ${spreadCap} for ${sportType} (${game.away} @ ${game.home}) — excluding game`);
+    poisoned = true;
+  }
+
+  return { projHomeScore, projAwayScore, projSpread, projTotal, projMethod, homeWinProb, homeEloAdj, effectiveHomeAdv, poisoned };
 }
 
 function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData) {
@@ -1080,6 +1102,10 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       if (!homeRating || !awayRating) continue;
 
       const proj = computeProjection(game, league.league, leagueConfig, homeRating, awayRating, teamStats);
+      if (proj.poisoned) {
+        console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — poisoned projection`);
+        continue;
+      }
       const gameData = findConsensusLine(consensusLookup, game.home);
       if (!gameData || gameData.homeSpread === undefined) {
         console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — no consensus line found for "${game.home}"`);
@@ -1128,8 +1154,13 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 
       // ── SPREAD CANDIDATE ──
       const actualSpread = gameData.homeSpread;
+      // Filter out Asian handicap lines (.25/.75) — not available at US sportsbooks
+      const spreadFrac = Math.abs(actualSpread) % 1;
+      if (spreadFrac === 0.25 || spreadFrac === 0.75) {
+        console.log(`[v10-filter] SKIP Asian handicap ${actualSpread} for ${game.away} @ ${game.home}`);
+      }
       const spreadEdge = Math.abs(proj.projSpread - actualSpread);
-      if (spreadEdge >= minEdge) {
+      if ((spreadFrac !== 0.25 && spreadFrac !== 0.75) && spreadEdge >= minEdge) {
         const spreadZ = spreadEdge / std;
         // Determine bet type for calibration cap lookup
         let betType = "Spread";
@@ -1172,7 +1203,12 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       // ── TOTAL CANDIDATE ──
       const actualTotal = gameData.total;
       if (actualTotal) {
-        const totalEdge = Math.abs(proj.projTotal - actualTotal);
+        // Filter out Asian handicap totals (.25/.75) — not available at US sportsbooks
+        const totalFrac = Math.abs(actualTotal) % 1;
+        if (totalFrac === 0.25 || totalFrac === 0.75) {
+          console.log(`[v10-filter] SKIP Asian total ${actualTotal} for ${game.away} @ ${game.home}`);
+        }
+        const totalEdge = (totalFrac !== 0.25 && totalFrac !== 0.75) ? Math.abs(proj.projTotal - actualTotal) : 0;
         const totalMinEdge = league.league === "NHL" ? 0.5 : league.league === "MLB" ? 0.8 : 3.0;
         if (totalEdge >= totalMinEdge) {
           const totalZ = totalEdge / std;
@@ -1458,13 +1494,18 @@ exports.handler = async (event) => {
   console.log(`[v10] Consensus lookup keys (sample): ${Object.keys(consensusLookup).slice(0, 8).join(', ')}`);
 
   // ── PHASE 1B: COMPUTE ALL EDGES DETERMINISTICALLY ──
-  let allCandidates;
+  let allCandidates = [];
   try {
     allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData);
     console.log(`[v10] Computed ${allCandidates.length} edge candidates across all sports`);
+  } catch (edgeErr) {
+    console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
+    console.error(edgeErr.stack);
+  }
 
-    // ── PHASE 1C: PREDICTION MARKET CROSS-REFERENCE ──
-    if (predictionMarkets.length > 0) {
+  // ── PHASE 1C: PREDICTION MARKET CROSS-REFERENCE (non-fatal) ──
+  try {
+    if (predictionMarkets.length > 0 && allCandidates.length > 0) {
       let confirms = 0, cautions = 0;
       for (const c of allCandidates) {
         const signal = getPredictionMarketSignal(c, predictionMarkets);
@@ -1479,26 +1520,30 @@ exports.handler = async (event) => {
           }
         }
       }
-      // Re-sort after adjustments (units changed → re-rank by EV)
       allCandidates.sort((a, b) => b.ev - a.ev);
       allCandidates.forEach((c, i) => { c.rank = i + 1; });
       console.log(`[v10] Prediction market adjustments: ${confirms} confirmed, ${cautions} cautioned`);
     }
+  } catch (pmErr) {
+    console.error(`[v10] PM phase failed (non-fatal): ${pmErr.message}`);
+  }
 
-    // ── PHASE 1D: X/GROK REAL-TIME INTELLIGENCE ──
-    const xAlerts = await fetchXIntelligence(allCandidates);
-    applyXIntelligence(allCandidates, xAlerts);
-  } catch (edgeErr) {
-    console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
-    console.error(edgeErr.stack);
-    allCandidates = [];
+  // ── PHASE 1D: X/GROK REAL-TIME INTELLIGENCE (non-fatal) ──
+  try {
+    if (allCandidates.length > 0) {
+      const xAlerts = await fetchXIntelligence(allCandidates);
+      applyXIntelligence(allCandidates, xAlerts);
+    }
+  } catch (xErr) {
+    console.error(`[v10] Grok phase failed (non-fatal): ${xErr.message}`);
   }
 
   if (allCandidates.length === 0) {
-    console.log("[v10] No edge candidates found — storing no-plays result");
+    const failReason = `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.`;
+    console.log(`[v10] No edge candidates found — ${failReason}`);
     await storePicks(dateISO, {
       date: dateISO, dateFormatted, model: "v10.0-deterministic-edge",
-      picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
+      picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: failReason }],
       summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.0-deterministic-edge" },
       edgeSummary: "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
       generatedAt: now.toISOString(),

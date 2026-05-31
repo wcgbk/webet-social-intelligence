@@ -3,8 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WeBetAI - Social Intelligence | Final Boss — 97-Day Backtest</title>
-  <meta name="description" content="v10.0 Deterministic Edge Model backtested over 97 days. 200+ picks graded against actual results." />
+  <title>WeBetAI - Social Intelligence | Final Boss — v10 Backtest</title>
+  <meta name="description" content="v10.0 Deterministic Edge Model backtested with full production logic. 3 picks + parlay daily." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/finalboss" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Final Boss — v10 Backtest" />
+  <meta property="og:description" content="v10.0 Deterministic Edge Model backtested with full production logic. 3 picks + parlay daily." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Final Boss — v10 Backtest" />
+  <meta name="twitter:description" content="v10.0 Deterministic Edge Model backtested with full production logic. 3 picks + parlay daily." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
@@ -13,143 +24,145 @@
 
   <style>
     :root {
-      --white: #ffffff;
-      --off-white: #f8f9fa;
-      --bg: #f2f3f5;
-      --olive: #1a2e1a;
-      --teal: #004C54;
-      --teal-light: #e6f4f1;
-      --teal-border: #b8ddd6;
-      --green: #2e7d32;
-      --green-light: #e8f5e9;
-      --green-border: #a5d6a7;
-      --red: #c0392b;
-      --red-light: #fdecea;
-      --border-lt: #e0e3e8;
-      --txt-b: #1a2e1a;
-      --txt-m: #5f6b7a;
-      --txt-l: #8b95a3;
+      --white: #ffffff; --off-white: #f8f9fa; --bg: #f2f3f5;
+      --olive: #1a2e1a; --teal: #004C54; --teal-light: #e6f4f1; --teal-border: #b8ddd6;
+      --green: #2e7d32; --green-light: #e8f5e9; --green-border: #a5d6a7;
+      --red: #c0392b; --red-light: #fdecea;
+      --orange: #e67e22; --orange-light: #fef3e2;
+      --border-lt: #e0e3e8; --txt-b: #1a2e1a; --txt-m: #5f6b7a; --txt-l: #8b95a3;
     }
-
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist Sans', 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--txt-b); -webkit-font-smoothing: antialiased; min-height: 100vh; }
 
-    body {
-      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--txt-b);
-      -webkit-font-smoothing: antialiased;
-      min-height: 100vh;
-    }
-
-    .header {
-      background: var(--white);
-      border-bottom: 1px solid var(--border-lt);
-      padding: .875rem 1.25rem;
-      display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 100;
-    }
+    .header { background: var(--white); border-bottom: 1px solid var(--border-lt); padding: .875rem 1.25rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; position: relative; }
     .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
     .logo-text { font-size: 1rem; font-weight: 700; }
-    .header-badge {
-      font-size: .6875rem; font-weight: 600; color: var(--teal);
-      background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 9999px; padding: .2rem .6rem;
+    .header-nav { display: flex; gap: .75rem; align-items: center; }
+    .header-link { font-size: .75rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 9999px; padding: .2rem .6rem; text-decoration: none; }
+    .header-link:hover { background: var(--teal-border); }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
     }
 
-    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-
+    .main { max-width: 680px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
     .page-title { font-size: 1.25rem; font-weight: 700; margin-bottom: .25rem; }
     .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1.25rem; }
 
     /* ─── Stat Cards ─── */
-    .stat-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem;
-      margin-bottom: 1rem;
-    }
-    .stat-card {
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: 8px; padding: .75rem .625rem; text-align: center;
-    }
-    .stat-value { font-size: 1.25rem; font-weight: 700; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-bottom: 1rem; }
+    .stat-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; padding: .75rem .5rem; text-align: center; }
+    .stat-value { font-size: 1.15rem; font-weight: 700; }
     .stat-label { font-size: .6875rem; color: var(--txt-m); margin-top: .125rem; }
     .stat-green { color: var(--green); }
     .stat-red { color: var(--red); }
 
-    /* ─── Breakdown Row ─── */
-    .breakdown {
-      font-size: .8125rem; color: var(--txt-m); text-align: center;
-      margin-bottom: 1.25rem; padding: .5rem; background: var(--white);
-      border: 1px solid var(--border-lt); border-radius: 8px;
-    }
+    .breakdown { font-size: .8125rem; color: var(--txt-m); text-align: center; margin-bottom: 1.25rem; padding: .5rem; background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; line-height: 1.6; }
 
-    /* ─── Section Header ─── */
-    .section-title {
-      font-size: .875rem; font-weight: 600; color: var(--teal);
-      text-transform: uppercase; letter-spacing: .05em;
-      margin: 1.5rem 0 .75rem; padding-bottom: .375rem;
-      border-bottom: 2px solid var(--teal);
-    }
+    .section-title { font-size: .875rem; font-weight: 600; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; margin: 1.5rem 0 .75rem; padding-bottom: .375rem; border-bottom: 2px solid var(--teal); }
 
-    /* ─── Sport/Market Breakdown Table ─── */
-    .breakdown-table {
-      width: 100%; border-collapse: collapse; font-size: .8125rem;
-      background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px;
-      overflow: hidden; margin-bottom: 1rem;
-    }
-    .breakdown-table th {
-      background: var(--olive); color: var(--white); padding: .5rem .625rem;
-      text-align: left; font-weight: 600; font-size: .75rem; text-transform: uppercase;
-    }
-    .breakdown-table td {
-      padding: .5rem .625rem; border-bottom: 1px solid var(--border-lt);
-    }
-    .breakdown-table tr:last-child td { border-bottom: none; }
-
-    /* ─── Day-by-Day Results Table ─── */
-    .results-table {
-      width: 100%; border-collapse: collapse; font-size: .8125rem;
-      background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px;
-      overflow: hidden;
-    }
-    .results-table th {
-      background: var(--olive); color: var(--white); padding: .5rem .625rem;
-      text-align: left; font-weight: 600; font-size: .75rem; text-transform: uppercase;
-    }
-    .results-table td {
-      padding: .5rem .625rem; border-bottom: 1px solid var(--border-lt);
-    }
-    .results-table tr:last-child td { border-bottom: none; }
-    .results-table .date-link { color: var(--teal); text-decoration: underline; cursor: pointer; font-weight: 500; }
+    /* ─── Tables ─── */
+    .bd-table { width: 100%; border-collapse: collapse; font-size: .8125rem; background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; overflow: hidden; margin-bottom: 1rem; }
+    .bd-table th { background: var(--olive); color: var(--white); padding: .5rem .5rem; text-align: left; font-weight: 600; font-size: .75rem; text-transform: uppercase; }
+    .bd-table td { padding: .5rem; border-bottom: 1px solid var(--border-lt); }
+    .bd-table tr:last-child td { border-bottom: none; }
     .profit-pos { color: var(--green); font-weight: 600; }
     .profit-neg { color: var(--red); font-weight: 600; }
 
-    /* ─── Expandable Day Detail ─── */
-    .day-detail { display: none; background: var(--off-white); }
-    .day-detail.open { display: table-row; }
-    .day-detail td { padding: .5rem .625rem; }
-    .pick-row { display: flex; justify-content: space-between; align-items: center; padding: .25rem 0; font-size: .75rem; border-bottom: 1px solid var(--border-lt); }
-    .pick-row:last-child { border-bottom: none; }
-    .pick-sport { font-weight: 600; color: var(--teal); min-width: 50px; }
-    .pick-side { flex: 1; margin: 0 .5rem; }
-    .pick-result { font-weight: 600; min-width: 30px; text-align: right; }
-    .pick-win { color: var(--green); }
-    .pick-loss { color: var(--red); }
-    .pick-push { color: var(--txt-m); }
+    /* ─── Day Rows ─── */
+    .day-row { cursor: pointer; }
+    .day-row:hover { background: var(--off-white); }
+    .day-row td:first-child { color: var(--teal); font-weight: 500; text-decoration: underline; }
 
-    /* ─── Loading ─── */
+    /* ─── Expanded Day Detail ─── */
+    .day-detail { display: none; }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: 0; }
+    .day-inner { padding: .75rem; background: var(--off-white); }
+
+    /* ─── Pick Card (matches /edge) ─── */
+    .pick-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; padding: .75rem; margin-bottom: .5rem; }
+    .pick-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .375rem; }
+    .sport-tag { font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 4px; padding: .125rem .5rem; }
+    .rating-badge { font-size: .6875rem; font-weight: 700; border-radius: 4px; padding: .125rem .5rem; }
+    .rating-aplus { background: var(--green-light); color: var(--green); border: 1px solid var(--green-border); }
+    .rating-a { background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border); }
+    .rating-aminus { background: #e8eaf6; color: #3949ab; border: 1px solid #c5cae9; }
+    .rating-bplus { background: var(--orange-light); color: var(--orange); border: 1px solid #f5d89a; }
+    .pick-matchup { font-size: .8125rem; color: var(--txt-m); margin-bottom: .25rem; }
+    .pick-line { display: flex; justify-content: space-between; align-items: center; margin-bottom: .375rem; }
+    .pick-name { font-size: .9375rem; font-weight: 700; }
+    .pick-odds { font-size: .8125rem; color: var(--txt-m); }
+    .pick-edge { font-size: .75rem; color: var(--txt-l); margin-bottom: .375rem; }
+    .pick-bottom { display: flex; justify-content: space-between; align-items: center; font-size: .8125rem; }
+    .pick-units { font-weight: 600; }
+    .pick-pnl { font-weight: 700; }
+    .result-badge { display: inline-block; font-size: .6875rem; font-weight: 700; border-radius: 4px; padding: .1rem .4rem; margin-left: .375rem; }
+    .badge-win { background: var(--green-light); color: var(--green); }
+    .badge-loss { background: var(--red-light); color: var(--red); }
+    .badge-push { background: #f5f5f5; color: var(--txt-m); }
+    .badge-nodata { background: #f5f5f5; color: var(--txt-l); }
+
+    .score-bar { font-size: .75rem; color: var(--txt-m); margin-bottom: .25rem; }
+
+    /* ─── Parlay Card ─── */
+    .parlay-card { background: var(--white); border: 2px solid var(--teal); border-radius: 8px; padding: .75rem; margin-top: .5rem; }
+    .parlay-title { font-size: .8125rem; font-weight: 700; color: var(--teal); margin-bottom: .375rem; display: flex; justify-content: space-between; }
+    .parlay-leg { display: flex; justify-content: space-between; align-items: center; padding: .25rem 0; font-size: .75rem; border-bottom: 1px solid var(--border-lt); }
+    .parlay-leg:last-child { border-bottom: none; }
+    .parlay-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: .5rem; padding-top: .375rem; border-top: 1px solid var(--teal-border); font-size: .8125rem; }
+
+    /* ─── Day Summary Bar ─── */
+    .day-summary { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+    .day-chip { font-size: .6875rem; font-weight: 600; border-radius: 4px; padding: .125rem .5rem; }
+    .chip-units { background: var(--teal-light); color: var(--teal); }
+
+    /* ─── KPI Row ─── */
+    .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-bottom: 1rem; }
+    .kpi-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; padding: .625rem; text-align: center; }
+    .kpi-card .stat-value { font-size: 1rem; }
+
+    .pipeline-badge { background: var(--green-light); border: 1px solid var(--green-border); border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1.25rem; font-size: .8125rem; line-height: 1.7; }
+    .pipeline-row { display: flex; align-items: center; gap: .375rem; }
+    .pipe-check { color: var(--green); font-weight: 700; font-size: .875rem; }
+
     .loading { text-align: center; padding: 3rem 1rem; color: var(--txt-m); }
     .loading-spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid var(--border-lt); border-top-color: var(--teal); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: .5rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ─── KPI Highlight ─── */
-    .kpi-row {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-bottom: 1rem;
-    }
-    .kpi-card {
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: 8px; padding: .625rem; text-align: center;
-    }
-    .kpi-card .stat-value { font-size: 1rem; }
+    /* ─── Report Section ─── */
+    .report-section { margin-top: 2rem; }
+    .report-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+    .report-card h3 { font-size: .875rem; font-weight: 700; color: var(--teal); margin-bottom: .75rem; }
+    .report-card p, .report-card li { font-size: .8125rem; color: var(--txt-b); line-height: 1.6; }
+    .report-card ul { padding-left: 1.25rem; margin: .5rem 0; }
+    .report-card li { margin-bottom: .375rem; }
+    .report-mini-table { width: 100%; border-collapse: collapse; font-size: .8125rem; margin: .5rem 0; }
+    .report-mini-table th { text-align: left; font-weight: 600; font-size: .75rem; color: var(--txt-m); text-transform: uppercase; padding: .375rem .5rem; border-bottom: 2px solid var(--border-lt); }
+    .report-mini-table td { padding: .375rem .5rem; border-bottom: 1px solid var(--border-lt); }
+    .report-mini-table tr:last-child td { border-bottom: none; }
+    .opp-card { background: var(--white); border: 1px solid var(--border-lt); border-left: 3px solid var(--teal); border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; }
+    .opp-num { font-size: .75rem; font-weight: 700; color: var(--teal); text-transform: uppercase; margin-bottom: .25rem; }
+    .opp-title { font-size: .875rem; font-weight: 700; margin-bottom: .25rem; }
+    .opp-stat { font-size: .8125rem; color: var(--txt-m); margin-bottom: .25rem; }
+    .opp-rec { font-size: .8125rem; color: var(--green); font-weight: 500; }
+    .diverg-day { margin-bottom: .75rem; }
+    .diverg-date { font-size: .8125rem; font-weight: 600; color: var(--teal); margin-bottom: .25rem; }
+    .diverg-pick { font-size: .75rem; color: var(--txt-m); padding: .125rem 0; padding-left: .5rem; border-left: 2px solid var(--border-lt); margin-bottom: .125rem; }
+    .diverg-pick.prod { border-left-color: var(--orange); }
+    .diverg-pick.bt { border-left-color: var(--teal); }
+    .tag-prod { font-size: .6875rem; font-weight: 600; color: var(--orange); background: var(--orange-light); border-radius: 3px; padding: .0625rem .375rem; margin-right: .25rem; }
+    .tag-bt { font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border-radius: 3px; padding: .0625rem .375rem; margin-right: .25rem; }
+    .trend-down { color: var(--red); font-weight: 600; }
+    .trend-up { color: var(--green); font-weight: 600; }
 
     @media (max-width: 480px) {
       .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -158,38 +171,42 @@
   </style>
 </head>
 <body>
-
-  <!-- Header -->
-  <div class="header">
-    <a href="/" class="logo">
-      <span class="logo-text">WeBetAI</span>
-    </a>
-    <span class="header-badge">FINAL BOSS</span>
-  </div>
-
-  <!-- Main -->
-  <div class="main" id="app">
-    <div class="loading" id="loading">
-      <div class="loading-spinner"></div>
-      <div>Loading 97-day backtest results...</div>
+  <header class="header">
+    <a href="/" class="logo"><svg viewBox="0 0 470 419" fill="none" style="width:28px; height:24px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg><span class="logo-text">WeBetAI</span></a>
+    <nav class="header-nav">
+      <a href="/edge" class="header-link">Edge Picks</a>
+      <a href="/percentile" class="header-link">AI Scorecard</a>
+      <a href="/finalboss" class="header-link">Backtest</a>
+      <a href="/alive" class="header-link">It's Alive</a>
+      <a href="/partners" class="header-link">Partners</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/edge">Edge Picks</a>
+      <a href="/percentile">AI Scorecard</a>
+      <a href="/finalboss">Backtest</a>
+      <a href="/alive">It's Alive</a>
+      <a href="/partners">Partners</a>
     </div>
+  </header>
+  <div class="main" id="app">
+    <div class="loading" id="loading"><div class="loading-spinner"></div><div>Loading backtest results...</div></div>
   </div>
 
   <script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
     const API = '/api/get-backtest';
+    const DPU = 150;
 
     async function loadResults() {
       try {
         const resp = await fetch(API);
         const data = await resp.json();
-        if (data.error) {
-          document.getElementById('app').innerHTML = `<div class="loading">${data.error}</div>`;
-          return;
-        }
+        if (data.error) { document.getElementById('app').innerHTML = `<div class="loading">${data.error}</div>`; return; }
         render(data);
-      } catch (e) {
-        document.getElementById('app').innerHTML = `<div class="loading">Failed to load results: ${e.message}</div>`;
-      }
+      } catch (e) { document.getElementById('app').innerHTML = `<div class="loading">Failed: ${e.message}</div>`; }
     }
 
     function render(data) {
@@ -197,110 +214,270 @@
       const days = data.days || [];
       const bySport = data.bySport || {};
       const byMarket = data.byMarket || {};
-
       const profitClass = c.totalProfit >= 0 ? 'stat-green' : 'stat-red';
-      const profitSign = c.totalProfit >= 0 ? '+' : '';
+      const ps = c.totalProfit >= 0 ? '+' : '';
 
       let html = `
-        <div class="page-title">PICK RESULTS & TRACK RECORD</div>
-        <div class="page-sub">v10.0 Deterministic Edge Model &mdash; ${data.backtestWindow?.picksStart || '?'} to ${data.backtestWindow?.end || '?'} (${data.backtestWindow?.picksDays || '?'} days)</div>
+        <div class="page-title">HISTORICAL DATA BACKTESTING - UNDER CONSTRUCTION</div>
+        <div class="page-sub">v10.0 Deterministic Edge Model &mdash; ${data.backtestWindow?.picksStart || '?'} to ${data.backtestWindow?.end || '?'} (${data.backtestWindow?.picksDays || '?'} days) &bull; $${DPU}/unit &bull; All-Star break excluded</div>
 
-        <!-- Cumulative Stats -->
+        <div class="pipeline-badge">
+          <div class="pipeline-row"><span class="pipe-check">&#10003;</span> Fully deterministic JS pipeline &mdash; no AI math overrides</div>
+          <div class="pipeline-row"><span class="pipe-check">&#10003;</span> Quarter-Kelly sizing, 0.5u steps, 4.0u daily cap</div>
+          <div class="pipeline-row"><span class="pipe-check">&#10003;</span> Production-verified: SPORT_MIN_EDGE, total min edge, EV &gt; 3%</div>
+          <div class="pipeline-row"><span class="pipe-check">&#10003;</span> Calibration caps: NBA 72%, NHL PL 60%, NHL Total 75%</div>
+        </div>
+
         <div class="stat-grid">
-          <div class="stat-card">
-            <div class="stat-value">${c.wins}-${c.losses}</div>
-            <div class="stat-label">Record (Straight)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${c.accuracy}</div>
-            <div class="stat-label">Accuracy</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value ${profitClass}">${profitSign}$${Math.abs(c.totalProfit).toLocaleString()}</div>
-            <div class="stat-label">Profit/Loss</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value ${profitClass}">${c.roi}</div>
-            <div class="stat-label">ROI (All Bets)</div>
-          </div>
+          <div class="stat-card"><div class="stat-value">${c.wins}-${c.losses}</div><div class="stat-label">Straights Record</div></div>
+          <div class="stat-card"><div class="stat-value">${c.accuracy}</div><div class="stat-label">Accuracy</div></div>
+          <div class="stat-card"><div class="stat-value ${profitClass}">${ps}$${Math.abs(c.totalProfit).toLocaleString()}</div><div class="stat-label">Total P/L</div></div>
+          <div class="stat-card"><div class="stat-value ${profitClass}">${c.roi}</div><div class="stat-label">ROI (Combined)</div></div>
         </div>
 
         <div class="breakdown">
-          Straights: ${c.wins}-${c.losses} (${c.accuracy}) ${profitSign}$${Math.abs(c.totalProfit).toLocaleString()}
-          &nbsp;|&nbsp; Total Wagered: $${c.totalWagered.toLocaleString()}
-          &nbsp;|&nbsp; Picks: ${c.totalPicks}
+          <strong>Straights:</strong> ${c.wins}-${c.losses}-${c.pushes}P &bull; ${c.accuracy} &bull; ${c.straightProfit >= 0 ? '+' : ''}$${Math.abs(c.straightProfit).toLocaleString()} (${c.straightROI} ROI)
+          <br>
+          <strong>Parlays:</strong> ${c.parlayWins}W-${c.parlayLosses}L-${c.parlayPushes}P &bull; ${c.parlayProfit >= 0 ? '+' : ''}$${Math.abs(c.parlayProfit).toLocaleString()} (${c.parlayROI} ROI)
+          <br>
+          <strong>Total Wagered:</strong> $${c.totalWagered.toLocaleString()} &bull; <strong>Picks:</strong> ${c.totalPicks} straights + ${c.parlayTotal} parlays
         </div>
 
-        <!-- KPI Highlights -->
         <div class="kpi-row">
-          <div class="kpi-card">
-            <div class="stat-value">${data.longestLosingStreak || 0}</div>
-            <div class="stat-label">Max Losing Streak</div>
-          </div>
-          <div class="kpi-card">
-            <div class="stat-value stat-green">+$${(c.bestDayProfit || 0).toLocaleString()}</div>
-            <div class="stat-label">Best Day</div>
-          </div>
-          <div class="kpi-card">
-            <div class="stat-value stat-red">-$${Math.abs(c.worstDayProfit || 0).toLocaleString()}</div>
-            <div class="stat-label">Worst Day</div>
-          </div>
-        </div>
-      `;
+          <div class="kpi-card"><div class="stat-value">${data.longestLosingStreak || 0}</div><div class="stat-label">Max Losing Streak</div></div>
+          <div class="kpi-card"><div class="stat-value stat-green">+$${(c.bestDayProfit || 0).toLocaleString()}</div><div class="stat-label">Best Day</div></div>
+          <div class="kpi-card"><div class="stat-value stat-red">-$${Math.abs(c.worstDayProfit || 0).toLocaleString()}</div><div class="stat-label">Worst Day</div></div>
+        </div>`;
 
       // By Sport
       html += `<div class="section-title">By Sport</div>`;
-      html += `<table class="breakdown-table"><tr><th>Sport</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
+      html += `<table class="bd-table"><tr><th>Sport</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
       for (const [sport, d] of Object.entries(bySport)) {
-        const pClass = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
-        html += `<tr><td>${sport}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pClass}">${d.profit >= 0 ? '+' : ''}$${Math.abs(d.profit).toLocaleString()}</td><td class="${pClass}">${d.roi}</td></tr>`;
+        const pc = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        html += `<tr><td>${sport}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pc}">${d.profit >= 0 ? '+' : ''}$${Math.abs(d.profit).toLocaleString()}</td><td class="${pc}">${d.roi}</td></tr>`;
       }
       html += `</table>`;
 
       // By Market
       html += `<div class="section-title">By Market Type</div>`;
-      html += `<table class="breakdown-table"><tr><th>Market</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
+      html += `<table class="bd-table"><tr><th>Market</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
       for (const [mkt, d] of Object.entries(byMarket)) {
-        const pClass = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
-        html += `<tr><td>${mkt}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pClass}">${d.profit >= 0 ? '+' : ''}$${Math.abs(d.profit).toLocaleString()}</td><td class="${pClass}">${d.roi}</td></tr>`;
+        const pc = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        html += `<tr><td>${mkt}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pc}">${d.profit >= 0 ? '+' : ''}$${Math.abs(d.profit).toLocaleString()}</td><td class="${pc}">${d.roi}</td></tr>`;
       }
       html += `</table>`;
 
       // Day-by-Day
       html += `<div class="section-title">Day-by-Day Results</div>`;
-      html += `<table class="results-table"><tr><th>Date</th><th>Record</th><th>Accuracy</th><th>P/L</th></tr>`;
+      html += `<table class="bd-table"><tr><th>Date</th><th>Picks</th><th>Record</th><th>Straight</th><th>Parlay</th><th>Total P/L</th></tr>`;
 
       for (let i = days.length - 1; i >= 0; i--) {
         const day = days[i];
         if (day.picks.length === 0) continue;
         const graded = day.picks.filter(p => p.result !== 'no_data');
         if (graded.length === 0) continue;
-
-        const pClass = day.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        const pc = day.profit >= 0 ? 'profit-pos' : 'profit-neg';
+        const spc = day.straightProfit >= 0 ? 'profit-pos' : 'profit-neg';
         const dateStr = new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const parlayStr = day.parlay ? `<span class="${day.parlayProfit >= 0 ? 'profit-pos' : 'profit-neg'}">${day.parlayProfit >= 0 ? '+' : '-'}$${Math.abs(day.parlayProfit)}</span>` : '—';
 
-        html += `<tr class="day-row" data-idx="${i}">
-          <td><span class="date-link" onclick="toggleDay(${i})">${dateStr}</span></td>
+        html += `<tr class="day-row" onclick="toggleDay(${i})">
+          <td>${dateStr}</td>
+          <td>${day.numPicks}${day.parlay ? '+P' : ''}</td>
           <td>${day.wins}W-${day.losses}L</td>
-          <td>${day.accuracy}%</td>
-          <td class="${pClass}">${day.profit >= 0 ? '+' : '-'}$${Math.abs(day.profit).toLocaleString()}</td>
+          <td class="${spc}">${day.straightProfit >= 0 ? '+' : '-'}$${Math.abs(day.straightProfit)}</td>
+          <td>${parlayStr}</td>
+          <td class="${pc}">${day.profit >= 0 ? '+' : '-'}$${Math.abs(day.profit)}</td>
         </tr>`;
 
         // Expandable detail
-        html += `<tr class="day-detail" id="detail-${i}"><td colspan="4">`;
+        html += `<tr class="day-detail" id="detail-${i}"><td colspan="6"><div class="day-inner">`;
+
+        // Day summary chips
+        html += `<div class="day-summary">
+          <span class="day-chip chip-units">${day.totalUnits || '?'}u Total</span>
+          ${day.drawdownActive ? '<span class="day-chip" style="background:#fdecea;color:#c0392b;">DRAWDOWN MODE</span>' : ''}
+        </div>`;
+
+        // Pick cards
         for (const p of day.picks) {
-          if (p.result === 'no_data') continue;
-          const rClass = p.result === 'win' ? 'pick-win' : p.result === 'loss' ? 'pick-loss' : 'pick-push';
-          const rText = p.result === 'win' ? 'W' : p.result === 'loss' ? 'L' : 'P';
-          html += `<div class="pick-row">
-            <span class="pick-sport">${p.sport}</span>
-            <span class="pick-side">${p.pick} (${p.odds})</span>
-            <span class="pick-result ${rClass}">${rText}</span>
+          const rClass = p.rating === 'A+' ? 'rating-aplus' : p.rating === 'A' ? 'rating-a' : p.rating === 'A-' ? 'rating-aminus' : 'rating-bplus';
+          const bClass = p.result === 'win' ? 'badge-win' : p.result === 'loss' ? 'badge-loss' : p.result === 'push' ? 'badge-push' : 'badge-nodata';
+          const bText = p.result === 'win' ? 'W' : p.result === 'loss' ? 'L' : p.result === 'push' ? 'P' : '?';
+          const pnlClass = p.profit >= 0 ? 'profit-pos' : 'profit-neg';
+          const pnlSign = p.profit >= 0 ? '+' : '-';
+          const dec = p.oddsNum ? (p.oddsNum > 0 ? 1 + p.oddsNum/100 : 1 + 100/Math.abs(p.oddsNum)) : 1.909;
+          const risk = p.risk || Math.round((parseFloat(p.units) || 1) * DPU);
+          const toWin = p.toWin || Math.round(risk * (dec - 1));
+          const prob = p.winProbability || (p.cover ? (p.cover * 100).toFixed(0) + '%' : '');
+
+          html += `<div class="pick-card">
+            <div class="pick-card-header">
+              <span><span class="sport-tag">${p.sport}</span> <span style="font-size:.75rem;color:var(--txt-l);margin-left:.25rem;">${p.betType || p.market || ''}</span></span>
+              <span><span class="rating-badge ${rClass}">${p.rating}</span><span class="result-badge ${bClass}">${bText}</span></span>
+            </div>
+            <div class="pick-matchup">${p.matchup}</div>
+            ${p.score ? `<div class="score-bar">Final: ${p.score}</div>` : ''}
+            <div class="pick-line">
+              <span class="pick-name">${p.pick}</span>
+              <span class="pick-odds">${p.odds} ${prob ? prob + ' conf.' : ''}</span>
+            </div>
+            <div class="pick-edge">${p.modelEdge || ('Edge: ' + (typeof p.edge === 'number' ? p.edge.toFixed(1) : p.edge || '?'))}</div>
+            <div class="pick-bottom">
+              <span class="pick-units">${p.units} &mdash; Risk $${risk} &rarr; Win +$${toWin}</span>
+              <span class="pick-pnl ${pnlClass}">${pnlSign}$${Math.abs(p.profit)}</span>
+            </div>
           </div>`;
         }
-        html += `</td></tr>`;
+
+        // Parlay card
+        if (day.parlay) {
+          const pl = day.parlay;
+          const plClass = pl.profit >= 0 ? 'profit-pos' : 'profit-neg';
+          const plBadge = pl.result === 'win' ? 'badge-win' : pl.result === 'loss' ? 'badge-loss' : 'badge-push';
+          const plBText = pl.result === 'win' ? 'WIN' : pl.result === 'loss' ? 'LOSS' : 'PUSH';
+
+          html += `<div class="parlay-card">
+            <div class="parlay-title">
+              <span>3-Leg Parlay &bull; ${pl.combinedOdds}</span>
+              <span class="result-badge ${plBadge}">${plBText}</span>
+            </div>`;
+          for (const leg of pl.legs) {
+            const lbClass = leg.result === 'win' ? 'badge-win' : leg.result === 'loss' ? 'badge-loss' : 'badge-push';
+            const lbText = leg.result === 'win' ? 'W' : leg.result === 'loss' ? 'L' : leg.result === 'push' ? 'P' : '?';
+            html += `<div class="parlay-leg">
+              <span><strong>${leg.sport}</strong> ${leg.pick} (${leg.odds})</span>
+              <span><span class="result-badge ${lbClass}">${lbText}</span></span>
+            </div>`;
+          }
+          html += `<div class="parlay-bottom">
+            <span>0.5u &mdash; Risk $${pl.risk} &rarr; Win +$${pl.toWin}</span>
+            <span class="pick-pnl ${plClass}">${pl.profit >= 0 ? '+' : '-'}$${Math.abs(pl.profit)}</span>
+          </div></div>`;
+        }
+
+        html += `</div></td></tr>`;
       }
       html += `</table>`;
+
+      // ═══════════════════════════════════════════
+      // COMPARISON REPORT
+      // ═══════════════════════════════════════════
+      const rpt = data.comparisonReport;
+      if (rpt) {
+        html += `<div class="report-section">`;
+        html += `<div class="section-title">Backtest vs Production — Comparison Report</div>`;
+        html += `<div class="page-sub" style="margin-top:-.5rem">Overlapping window: ${rpt.overlapDates[0]} to ${rpt.overlapDates[rpt.overlapDates.length-1]} (${rpt.overlapDates.length} days) &bull; Generated ${new Date(rpt.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>`;
+
+        // ── Window Comparison ──
+        html += `<div class="report-card"><h3>Performance by Window</h3>`;
+        html += `<table class="report-mini-table"><tr><th>Window</th><th>Days</th><th>Record</th><th>Accuracy</th><th>Straight P/L</th><th>Combined P/L</th><th>ROI</th></tr>`;
+        const hw = rpt.windows.historical;
+        const ew = rpt.windows.extension;
+        html += `<tr><td>Historical (Jan 19–Mar 15)</td><td>${hw.days}</td><td>${hw.w}W-${hw.l}L</td><td>${hw.acc}</td><td class="${hw.prof >= 0 ? 'profit-pos' : 'profit-neg'}">$${hw.prof >= 0 ? '+' : ''}${hw.prof}</td><td class="${hw.combinedProf >= 0 ? 'profit-pos' : 'profit-neg'}">$${hw.combinedProf >= 0 ? '+' : ''}${hw.combinedProf}</td><td>${hw.combinedROI}</td></tr>`;
+        html += `<tr><td>Extension (Mar 16–28)</td><td>${ew.days}</td><td>${ew.w}W-${ew.l}L</td><td class="${parseFloat(ew.acc) < parseFloat(hw.acc) ? 'trend-down' : 'trend-up'}">${ew.acc}</td><td class="${ew.prof >= 0 ? 'profit-pos' : 'profit-neg'}">$${ew.prof >= 0 ? '+' : ''}${ew.prof}</td><td class="${ew.combinedProf >= 0 ? 'profit-pos' : 'profit-neg'}">$${ew.combinedProf >= 0 ? '+' : ''}${ew.combinedProf}</td><td>${ew.combinedROI}</td></tr>`;
+        html += `</table></div>`;
+
+        // ── Head-to-Head ──
+        html += `<div class="report-card"><h3>Head-to-Head: Overlap Dates</h3>`;
+        html += `<table class="report-mini-table"><tr><th>Date</th><th>Backtest</th><th>Production</th><th>Overlap</th><th>Model</th></tr>`;
+        for (const d of rpt.headToHead) {
+          const dateStr = new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+          const btPnl = d.bt.prof >= 0 ? 'profit-pos' : 'profit-neg';
+          const prPnl = d.prod.prof >= 0 ? 'profit-pos' : 'profit-neg';
+          const btStr = `${d.bt.w}W-${d.bt.l}L <span class="${btPnl}">$${d.bt.prof >= 0 ? '+' : ''}${d.bt.prof}</span>`;
+          const prStr = d.prod.w + d.prod.l > 0 ? `${d.prod.w}W-${d.prod.l}L <span class="${prPnl}">$${d.prod.prof >= 0 ? '+' : ''}${d.prod.prof}</span>` : '<span style="color:var(--txt-l)">ungraded</span>';
+          const modelTag = d.model === 'v10.0-deterministic-edge' ? '<span style="color:var(--green);font-weight:600">v10</span>' : d.model === 'v9.5-pace-kelly-edge' ? '<span style="color:var(--orange)">v9.5</span>' : '<span style="color:var(--txt-l)">freestyle</span>';
+          html += `<tr><td>${dateStr}</td><td>${btStr}</td><td>${prStr}</td><td>${d.same}/${d.total}</td><td>${modelTag}</td></tr>`;
+        }
+        const ot = rpt.overlapTotals;
+        html += `<tr style="font-weight:600;border-top:2px solid var(--border-lt)"><td>TOTAL</td><td>${ot.bt.w}W-${ot.bt.l}L (${ot.bt.acc})</td><td>${ot.prod.w}W-${ot.prod.l}L (${ot.prod.acc})</td><td>${ot.pickOverlap}/${ot.pickTotal} (${ot.pickTotal > 0 ? ((ot.pickOverlap/ot.pickTotal)*100).toFixed(0) : 0}%)</td><td></td></tr>`;
+        html += `</table></div>`;
+
+        // ── Market Type ──
+        html += `<div class="report-card"><h3>Market Type: Backtest vs Production</h3>`;
+        html += `<table class="report-mini-table"><tr><th colspan="5" style="color:var(--teal)">Backtest (${data.backtestWindow?.picksDays || '?'} days)</th></tr>`;
+        html += `<tr><th>Market</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
+        for (const [mkt, d] of Object.entries(data.byMarket || {})) {
+          const pc = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
+          html += `<tr><td>${mkt}</td><td>${d.wins}W-${d.losses}L</td><td>${d.accuracy}</td><td class="${pc}">$${d.profit >= 0 ? '+' : ''}${d.profit}</td><td class="${pc}">${d.roi}</td></tr>`;
+        }
+        html += `<tr><th colspan="5" style="color:var(--orange);padding-top:.75rem">Production (${rpt.prodMarkets.reduce((s,m) => s + m.count, 0)} picks)</th></tr>`;
+        html += `<tr><th>Market</th><th>Count</th><th>Accuracy</th><th>P/L</th><th>ROI</th></tr>`;
+        for (const m of rpt.prodMarkets.sort((a,b) => b.count - a.count)) {
+          html += `<tr><td>${m.market}</td><td>${m.count}</td><td>${m.acc}</td><td>$${m.prof >= 0 ? '+' : ''}${m.prof}</td><td>${m.roi}</td></tr>`;
+        }
+        html += `</table></div>`;
+
+        // ── Sport Comparison ──
+        html += `<div class="report-card"><h3>Sport-Level: Backtest vs Production</h3>`;
+        html += `<table class="report-mini-table"><tr><th>Sport</th><th>Backtest Record</th><th>BT P/L</th><th>BT ROI</th><th>Prod Count</th></tr>`;
+        const allSportKeys = [...new Set([...Object.keys(data.bySport || {}), ...rpt.prodSports.map(s => s.sport)])].sort();
+        for (const sport of allSportKeys) {
+          const bt = (data.bySport || {})[sport] || { wins: 0, losses: 0, profit: 0, accuracy: '-', roi: '-' };
+          const pr = rpt.prodSports.find(s => s.sport === sport) || { count: 0 };
+          const pc = bt.profit >= 0 ? 'profit-pos' : 'profit-neg';
+          html += `<tr><td>${sport}</td><td>${bt.wins}W-${bt.losses}L (${bt.accuracy})</td><td class="${pc}">$${bt.profit >= 0 ? '+' : ''}${bt.profit}</td><td class="${pc}">${bt.roi}</td><td>${pr.count}</td></tr>`;
+        }
+        html += `</table></div>`;
+
+        // ── Edge vs Accuracy ──
+        html += `<div class="report-card"><h3>Edge Size vs Accuracy</h3>`;
+        if (rpt.edgeBuckets.basketball.length > 0) {
+          html += `<p style="font-weight:600;font-size:.75rem;color:var(--txt-m);margin-bottom:.25rem">BASKETBALL / NCAAB (edges in points)</p>`;
+          html += `<table class="report-mini-table"><tr><th>Edge</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>Picks</th></tr>`;
+          for (const b of rpt.edgeBuckets.basketball) {
+            const pc = b.prof >= 0 ? 'profit-pos' : 'profit-neg';
+            html += `<tr><td>${b.label}</td><td>${b.w}W-${b.l}L</td><td>${b.acc}</td><td class="${pc}">$${b.prof >= 0 ? '+' : ''}${b.prof}</td><td>${b.count}</td></tr>`;
+          }
+          html += `</table>`;
+        }
+        if (rpt.edgeBuckets.nhl.length > 0) {
+          html += `<p style="font-weight:600;font-size:.75rem;color:var(--txt-m);margin-top:.75rem;margin-bottom:.25rem">NHL (edges in goals)</p>`;
+          html += `<table class="report-mini-table"><tr><th>Edge</th><th>Record</th><th>Accuracy</th><th>P/L</th><th>Picks</th></tr>`;
+          for (const b of rpt.edgeBuckets.nhl) {
+            const pc = b.prof >= 0 ? 'profit-pos' : 'profit-neg';
+            html += `<tr><td>${b.label}</td><td>${b.w}W-${b.l}L</td><td>${b.acc}</td><td class="${pc}">$${b.prof >= 0 ? '+' : ''}${b.prof}</td><td>${b.count}</td></tr>`;
+          }
+          html += `</table>`;
+        }
+        html += `</div>`;
+
+        // ── Divergent Picks ──
+        const divergentDays = rpt.headToHead.filter(d => d.btOnly.length > 0 || d.prOnly.length > 0);
+        if (divergentDays.length > 0) {
+          html += `<div class="report-card"><h3>Divergent Picks: Where Systems Disagree</h3>`;
+          html += `<p style="font-size:.8125rem;color:var(--txt-m);margin-bottom:.75rem">Pick overlap was only ${ot.pickOverlap}/${ot.pickTotal} (${ot.pickTotal > 0 ? ((ot.pickOverlap/ot.pickTotal)*100).toFixed(0) : 0}%). Here's what each system chose differently.</p>`;
+          for (const d of divergentDays) {
+            const dateStr = new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+            html += `<div class="diverg-day"><div class="diverg-date">${dateStr}</div>`;
+            for (const p of d.prOnly) {
+              const res = p.result ? (p.result === 'win' ? '<span class="profit-pos">W</span>' : p.result === 'loss' ? '<span class="profit-neg">L</span>' : 'P') : '<span style="color:var(--txt-l)">?</span>';
+              html += `<div class="diverg-pick prod"><span class="tag-prod">PROD</span> ${p.sport} ${p.pick} (${p.type}) ${p.units} ${p.odds} &rarr; ${res}</div>`;
+            }
+            for (const p of d.btOnly) {
+              const res = p.result === 'win' ? '<span class="profit-pos">W</span>' : p.result === 'loss' ? '<span class="profit-neg">L</span>' : p.result === 'push' ? 'P' : '?';
+              html += `<div class="diverg-pick bt"><span class="tag-bt">BT</span> ${p.sport} ${p.pick} (${p.type}) ${p.units} edge:${p.edge} &rarr; ${res} ($${p.profit >= 0 ? '+' : ''}${p.profit})</div>`;
+            }
+            html += `</div>`;
+          }
+          html += `</div>`;
+        }
+
+        // ── Improvement Opportunities ──
+        html += `<div class="section-title">Improvement Opportunities</div>`;
+        for (const opp of rpt.opportunities) {
+          html += `<div class="opp-card">
+            <div class="opp-num">Opportunity ${opp.num}</div>
+            <div class="opp-title">${opp.title}</div>
+            <div class="opp-stat">${opp.stat}</div>
+            <div class="opp-stat">${opp.detail}</div>
+            <div class="opp-rec">Recommendation: ${opp.rec}</div>
+          </div>`;
+        }
+
+        html += `</div>`; // end report-section
+      }
 
       document.getElementById('app').innerHTML = html;
     }

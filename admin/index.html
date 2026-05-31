@@ -44,6 +44,38 @@ body { font-family: 'Geist Sans', system-ui, sans-serif; background: #0a0a0a; co
 .login-input::placeholder { color: rgba(255,255,255,0.4); }
 
 /* Sidebar */
+/* Iframe embed mode — hide chrome when inside dashboard */
+.in-iframe .sidebar { display: none !important; }
+.in-iframe .main-content { margin-left: 0 !important; padding-bottom: 0 !important; }
+.in-iframe .main-content > header { display: none !important; }
+.in-iframe .mobile-nav { display: none !important; }
+.in-iframe .main-content > main { padding: 20px !important; }
+/* Category dropdown select */
+.cat-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23787878' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 32px 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Geist Sans', system-ui, sans-serif;
+  color: #006B6E;
+  cursor: pointer;
+  min-width: 140px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cat-select:focus { border-color: #006B6E; box-shadow: 0 0 0 3px rgba(0,107,110,0.1); outline: none; }
+.cat-select:hover { border-color: #006B6E; }
+.cat-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
 .sidebar { width: 220px; min-height: 100vh; background: #0a0a0a; border-right: 1px solid #1f1f1f; position: fixed; left: 0; top: 0; z-index: 40; transition: width 0.2s; }
 .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 20px; color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500; border-radius: 8px; margin: 2px 10px; transition: all 0.15s; cursor: pointer; text-decoration: none; }
 .sidebar-link:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
@@ -212,6 +244,10 @@ body { font-family: 'Geist Sans', system-ui, sans-serif; background: #0a0a0a; co
 <div id="modal-root"></div>
 
 <script>
+// Detect iframe embed (dashboard) and hide chrome
+if (window.self !== window.top) {
+  document.documentElement.classList.add('in-iframe');
+}
 // ─── State ───────────────────────────────────────────────────────────
 // Allow ?demo=1 to bypass auth
 const _urlParams = new URLSearchParams(window.location.search);
@@ -549,14 +585,11 @@ async function loadPageData(page) {
 function renderFeedPage() {
   const lastRefresh = APP.lastRefreshed ? `Last refreshed: ${APP.lastRefreshed.toLocaleTimeString()}` : '';
   return `
-    <div class="flex flex-wrap items-center gap-3 mb-6">
-      <div class="flex flex-wrap gap-2 flex-1">
-        ${CATEGORIES.map(c => `<button class="cat-pill ${APP.feedCategory === c.toLowerCase() ? 'active' : ''}" data-cat="${c.toLowerCase()}">${c}</button>`).join('')}
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="text-xs text-dim">${lastRefresh}</span>
-        <button class="pill pill-outlined flex items-center gap-2" id="refresh-feed-btn">${icon('refresh','w-4 h-4')} Refresh Feed</button>
-      </div>
+    <div class="cat-controls">
+      <select class="cat-select" id="feed-cat-select">
+        ${CATEGORIES.map(c => `<option value="${c.toLowerCase()}" ${APP.feedCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <button class="pill pill-outlined flex items-center gap-2" id="refresh-feed-btn">${icon('refresh','w-4 h-4')} Refresh</button>
     </div>
     <div id="feed-list" style="max-width:660px;margin:0 auto;">
       ${APP.feedLoading ? renderSkeletonCards(3) : renderFeedItems()}
@@ -689,12 +722,10 @@ function renderFeedCard(item, idx) {
 }
 
 function bindFeedEvents() {
-  document.querySelectorAll('.cat-pill').forEach(btn => {
-    btn.addEventListener('click', () => {
-      APP.feedCategory = btn.dataset.cat;
-      renderAndBindPage('feed');
-      loadFeed();
-    });
+  document.getElementById('feed-cat-select')?.addEventListener('change', (e) => {
+    APP.feedCategory = e.target.value;
+    renderAndBindPage('feed');
+    loadFeed();
   });
   document.getElementById('refresh-feed-btn')?.addEventListener('click', () => loadFeed());
   bindTextareaCounters();
@@ -1555,14 +1586,11 @@ APP.bbLastRefreshed = null;
 function renderBetBuilderPage() {
   const lastRefresh = APP.bbLastRefreshed ? `Last refreshed: ${APP.bbLastRefreshed.toLocaleTimeString()}` : '';
   return `
-    <div class="flex flex-wrap items-center gap-3 mb-2">
-      <div class="flex flex-wrap gap-2 flex-1">
-        ${CATEGORIES.map(c => `<button class="cat-pill ${APP.bbCategory === c.toLowerCase() ? 'active' : ''}" data-bbcat="${c.toLowerCase()}">${c}</button>`).join('')}
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="text-xs text-dim">${lastRefresh}</span>
-        <button class="pill pill-outlined flex items-center gap-2" id="bb-refresh-btn">${icon('refresh','w-4 h-4')} Refresh</button>
-      </div>
+    <div class="cat-controls">
+      <select class="cat-select" id="bb-cat-select">
+        ${CATEGORIES.map(c => `<option value="${c.toLowerCase()}" ${APP.bbCategory === c.toLowerCase() ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <button class="pill pill-outlined flex items-center gap-2" id="bb-refresh-btn">${icon('refresh','w-4 h-4')} Refresh</button>
     </div>
     <p class="text-xs text-dim mb-6">Select a trending topic below. Each card shows the bet exactly as it appears on the frontend. Click a social button to open that platform's compose window with the post pre-filled.</p>
     <div id="bb-list" style="max-width:660px;margin:0 auto;">
@@ -1709,12 +1737,10 @@ function renderBetBuilderCard(item, idx) {
 }
 
 function bindBetBuilderEvents() {
-  document.querySelectorAll('[data-bbcat]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      APP.bbCategory = btn.dataset.bbcat;
-      renderAndBindPage('betbuilder');
-      loadBetBuilder();
-    });
+  document.getElementById('bb-cat-select')?.addEventListener('change', (e) => {
+    APP.bbCategory = e.target.value;
+    renderAndBindPage('betbuilder');
+    loadBetBuilder();
   });
   document.getElementById('bb-refresh-btn')?.addEventListener('click', () => loadBetBuilder());
 }

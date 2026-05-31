@@ -550,7 +550,6 @@
         ${p.rlm && p.rlm !== 'No' ? `<div style="background:#fff8e1; border:1px solid #ffe082; border-radius:.5rem; padding:.375rem .625rem; margin-bottom:.625rem; font-size:.75rem; color:#e65100;"><strong>RLM:</strong> ${esc(p.rlm)}</div>` : ''}
         <div class="pick-divider"></div>
         <div class="pick-analysis">${esc(p.coreReasoning || '')}</div>
-        ${p.riskFactor ? `<div style="font-size:.75rem; color:#c0392b; margin-bottom:.625rem;"><strong>Risk:</strong> ${esc(p.riskFactor)}</div>` : ''}
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${risk.toLocaleString()} - To Win +$${Math.round(win).toLocaleString()}</div>
           <div style="display:flex; align-items:center; gap:.375rem;">

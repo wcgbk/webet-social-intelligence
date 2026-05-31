@@ -16,9 +16,8 @@
   # Beta pipeline — same schedule, writes to edge-picks-beta blob store
 
 [functions."trigger-picks-mlb"]
-  # schedule = "0 14 * * *"
-  # PAUSED — cost reduction. Re-enable to restore /mlb daily picks.
-  # MLB F5 pipeline — daily at 10am EDT, writes to edge-picks-mlb blob store
+  schedule = "0 14 * * *"
+  # 14:00 UTC = 10am EDT. MLB F5 pipeline — daily, writes to edge-picks-mlb blob store
 
 [functions."generate-picks-mlb-background"]
   # Background function — 15min timeout for MLB F5 pick generation

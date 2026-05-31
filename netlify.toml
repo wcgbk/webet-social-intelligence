@@ -8,6 +8,7 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["@netlify/blobs", "sharp", "puppeteer", "satori", "@resvg/resvg-wasm"]
 
 [functions."build-ratings-background"]
   # Background function — 15min timeout for Elo rating computation
@@ -21,8 +22,9 @@
   # Beta pipeline — same schedule, writes to edge-picks-beta blob store
 
 [functions."trigger-picks-mlb"]
-  schedule = "0 14 * * *"
-  # 14:00 UTC = 10am EDT. MLB F5 pipeline — daily, writes to edge-picks-mlb blob store
+  # schedule = "0 14 * * *"
+  # Re-enable once env vars are under 4KB (KALSHI_PRIVATE_KEY + system vars pushing limit).
+  # MLB F5 pipeline — daily at 10am EDT, writes to edge-picks-mlb blob store
 
 [functions."generate-picks-mlb-background"]
   # Background function — 15min timeout for MLB F5 pick generation

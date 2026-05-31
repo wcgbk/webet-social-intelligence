@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeBetAI — LLM Pricing Competitive Reference</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 40px 20px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 2.2rem; text-align: center; margin-bottom: 8px; color: #fff; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 40px; font-size: 0.95rem; }
+  .platform { background: #151515; border: 1px solid #2a2a2a; border-radius: 16px; padding: 32px; margin-bottom: 32px; }
+  .platform-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+  .platform-logo { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; }
+  .platform-name { font-size: 1.5rem; font-weight: 700; color: #fff; }
+  .platform-url { font-size: 0.85rem; color: #666; }
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .tier { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 20px; position: relative; }
+  .tier.popular { border-color: #4a9eff; }
+  .tier.popular::before { content: 'Most Popular'; position: absolute; top: -10px; right: 16px; background: #4a9eff; color: #fff; font-size: 0.7rem; padding: 2px 10px; border-radius: 10px; font-weight: 600; }
+  .tier-name { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .tier-desc { font-size: 0.8rem; color: #888; margin-bottom: 12px; }
+  .tier-price { font-size: 1.8rem; font-weight: 800; color: #4a9eff; margin-bottom: 4px; }
+  .tier-price span { font-size: 0.85rem; font-weight: 400; color: #666; }
+  .tier-features { list-style: none; margin-top: 16px; }
+  .tier-features li { font-size: 0.82rem; color: #aaa; padding: 4px 0; padding-left: 20px; position: relative; }
+  .tier-features li::before { content: '✓'; position: absolute; left: 0; color: #4a9eff; font-weight: 700; }
+  .divider { height: 1px; background: #2a2a2a; margin: 0 -32px; margin-top: 24px; margin-bottom: 0; }
+  .webet-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #4a9eff; border-radius: 16px; padding: 32px; margin-top: 48px; }
+  .webet-section h2 { color: #4a9eff; font-size: 1.4rem; margin-bottom: 8px; }
+  .webet-section .subtitle { color: #888; text-align: left; margin-bottom: 24px; }
+  .insight-box { background: #111; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-top: 24px; }
+  .insight-box h3 { color: #fff; font-size: 1rem; margin-bottom: 12px; }
+  .insight-box ul { list-style: none; }
+  .insight-box li { font-size: 0.85rem; color: #aaa; padding: 6px 0; padding-left: 24px; position: relative; }
+  .insight-box li::before { content: '→'; position: absolute; left: 4px; color: #4a9eff; }
+  .timestamp { text-align: center; color: #444; font-size: 0.8rem; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>LLM Pricing — Competitive Landscape</h1>
+<p class="subtitle">6 platforms side-by-side (X app + Grok standalone broken out) • Captured March 22, 2026 • For WeBetAI credit system benchmarking</p>
+
+<!-- 1. ChatGPT -->
+<div class="platform">
+  <div class="platform-header">
+    <div class="platform-logo" style="background:#10a37f;color:#fff;">G</div>
+    <div>
+      <div class="platform-name">ChatGPT (OpenAI)</div>
+      <div class="platform-url">chatgpt.com/pricing</div>
+    </div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-desc">Intelligence for everyday tasks</div>
+      <div class="tier-price">$0 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Access to GPT-4o mini</li>
+        <li>Limited access to GPT-4o</li>
+        <li>Limited access to file uploads, vision, web browsing</li>
+        <li>Use custom GPTs</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Go</div>
+      <div class="tier-desc">Keep chatting with expanded access</div>
+      <div class="tier-price">$8 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>More GPT-4o access</li>
+        <li>Standard voice chat</li>
+        <li>DALL·E image generation</li>
+        <li>Web browsing</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">Plus</div>
+      <div class="tier-desc">Do more with advanced intelligence</div>
+      <div class="tier-price">$20 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Full GPT-4o access</li>
+        <li>Access to o1, o3-mini, Deep Research</li>
+        <li>Advanced voice, vision, file analysis</li>
+        <li>DALL·E, web browsing, code interpreter</li>
+        <li>Create custom GPTs</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Pro</div>
+      <div class="tier-desc">Full access to the best of ChatGPT</div>
+      <div class="tier-price">$200 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Unlimited access to all models</li>
+        <li>Unlimited Deep Research & o1 pro mode</li>
+        <li>Advanced voice with video & screen sharing</li>
+        <li>Highest usage limits</li>
+        <li>Operator computer-use agent</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Claude -->
+<div class="platform">
+  <div class="platform-header">
+    <div class="platform-logo" style="background:#d4a574;color:#fff;">C</div>
+    <div>
+      <div class="platform-name">Claude (Anthropic)</div>
+      <div class="platform-url">claude.ai/upgrade</div>
+    </div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-desc">Basic access to Claude</div>
+      <div class="tier-price">$0 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Access to Claude Sonnet</li>
+        <li>Basic usage limits</li>
+        <li>Web search</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">Pro</div>
+      <div class="tier-desc">Research, code, and organize</div>
+      <div class="tier-price">$17 <span>/mo (annual) · $20/mo</span></div>
+      <ul class="tier-features">
+        <li>Claude Code directly in your codebase</li>
+        <li>Power through tasks with Cowork</li>
+        <li>Higher usage limits</li>
+        <li>Deep research and analysis</li>
+        <li>Memory that carries across conversations</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Max</div>
+      <div class="tier-desc">Higher limits, priority access</div>
+      <div class="tier-price">From $100 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Everything in Pro, plus:</li>
+        <li>Up to 20x more usage than Pro</li>
+        <li>Early access to advanced Claude features</li>
+        <li>Higher output limits for all tasks</li>
+        <li>Priority access at high traffic times</li>
+        <li>Claude in PowerPoint</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Gemini / Google AI -->
+<div class="platform">
+  <div class="platform-header">
+    <div class="platform-logo" style="background:linear-gradient(135deg,#4285f4,#ea4335,#fbbc04,#34a853);color:#fff;">G</div>
+    <div>
+      <div class="platform-name">Google AI (Gemini)</div>
+      <div class="platform-url">one.google.com/about/google-ai-plans</div>
+    </div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Google AI Plus</div>
+      <div class="tier-desc">More access to Google AI + 200 GB storage</div>
+      <div class="tier-price">$7.99 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Gemini app and more</li>
+        <li>200 GB cloud storage</li>
+        <li>Boost productivity</li>
+        <li>Unleash creativity</li>
+        <li>Study smarter</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">Google AI Pro</div>
+      <div class="tier-desc">Limitless productivity + 2 TB storage</div>
+      <div class="tier-price">$19.99 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Higher access to Google AI</li>
+        <li>2 TB cloud storage</li>
+        <li>Boost productivity</li>
+        <li>Unleash creativity</li>
+        <li>Study smarter</li>
+        <li>Code faster</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Google AI Ultra</div>
+      <div class="tier-desc">Highest access + 30 TB storage</div>
+      <div class="tier-price">$249.99 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Highest access to Google AI</li>
+        <li>30 TB cloud storage</li>
+        <li>All Pro features plus:</li>
+        <li>Code faster</li>
+        <li>Maximum storage & access</li>
+        <li>Project Genie (interactive worlds)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 4. X (The App) -->
+<div class="platform">
+  <div class="platform-header">
+    <div class="platform-logo" style="background:#000;color:#fff;border:1px solid #444;">𝕏</div>
+    <div>
+      <div class="platform-name">X (The App)</div>
+      <div class="platform-url">x.com/i/premium • x.com/settings/premium</div>
+    </div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-desc">Standard X experience</div>
+      <div class="tier-price">$0 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Basic posting and browsing</li>
+        <li>Limited Grok AI access</li>
+        <li>Standard feed algorithm</li>
+        <li>Ads in timeline</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Basic</div>
+      <div class="tier-desc">Essential creator tools</div>
+      <div class="tier-price">$3 <span>/mo · $32/year</span></div>
+      <ul class="tier-features">
+        <li>Edit posts</li>
+        <li>Longer posts (up to 10K chars)</li>
+        <li>Longer video uploads (up to 2 hrs)</li>
+        <li>Bookmark folders</li>
+        <li>No blue checkmark</li>
+        <li>Small reduction in ads</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">Premium</div>
+      <div class="tier-desc">Verified identity + Grok</div>
+      <div class="tier-price">$8 <span>/mo · $84/year</span></div>
+      <ul class="tier-features">
+        <li>Everything in Basic, plus:</li>
+        <li>Blue checkmark verification</li>
+        <li>Grok AI access (standard)</li>
+        <li>Reply boost — prioritized in conversations</li>
+        <li>Creator monetization eligibility</li>
+        <li>Media Studio access</li>
+        <li>Half the ads</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Premium+</div>
+      <div class="tier-desc">Full platform + SuperGrok bundle</div>
+      <div class="tier-price">$40 <span>/mo · $395/year</span></div>
+      <ul class="tier-features">
+        <li>Everything in Premium, plus:</li>
+        <li>SuperGrok — full Grok 4.1 access</li>
+        <li>Radar (beta) — real-time trend alerts</li>
+        <li>Articles — long-form publishing</li>
+        <li>Creator Studio + Analytics</li>
+        <li>X Pro (TweetDeck)</li>
+        <li>Ad-free experience</li>
+        <li>Largest reply boost</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 4b. Grok (Standalone AI) -->
+<div class="platform">
+  <div class="platform-header">
+    <div class="platform-logo" style="background:linear-gradient(135deg,#ff6b35,#ff8c42);color:#fff;">⚡</div>
+    <div>
+      <div class="platform-name">Grok (xAI — Standalone)</div>
+      <div class="platform-url">grok.com/plans</div>
+    </div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-desc">Try Grok with daily limits</div>
+      <div class="tier-price">$0 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Limited daily queries</li>
+        <li>Grok 3 model access</li>
+        <li>Basic Aurora image generation</li>
+        <li>Basic voice mode</li>
+        <li>Web search</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">SuperGrok</div>
+      <div class="tier-desc">Full AI power, no X required</div>
+      <div class="tier-price">$30 <span>/mo · $300/year</span></div>
+      <ul class="tier-features">
+        <li>3-day free trial</li>
+        <li>Grok 4.1 — Fast & Expert mode</li>
+        <li>128K token memory</li>
+        <li>DeepSearch (extended research)</li>
+        <li>Imagine 1.0 — images & 720p video</li>
+        <li>Longer Voice Mode & Companion chats</li>
+        <li>Priority access during peak times</li>
+        <li>Early access to new features</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">SuperGrok Heavy</div>
+      <div class="tier-desc">Maximum compute, Grok 4 Heavy</div>
+      <div class="tier-price">$300 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Everything in SuperGrok, plus:</li>
+        <li>Grok 4 Heavy preview model</li>
+        <li>428K token memory</li>
+        <li>Maximum compute priority</li>
+        <li>Extended thinking & multi-agent</li>
+        <li>Highest usage on Imagine 1.0</li>
+        <li>Highest usage on Voice Mode & Companions</li>
+        <li>Dedicated support</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 5. Perplexity -->
+<div class="platform">
+  <div class="platform-header">
+    <div class="platform-logo" style="background:#1a7f64;color:#fff;">P</div>
+    <div>
+      <div class="platform-name">Perplexity</div>
+      <div class="platform-url">perplexity.ai — Upgrade plan</div>
+    </div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-desc">Basic AI search</div>
+      <div class="tier-price">$0 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>Basic search and answers</li>
+        <li>Standard AI models</li>
+        <li>Limited Pro searches</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">Perplexity Pro</div>
+      <div class="tier-desc">Advanced answers and top AI models</div>
+      <div class="tier-price">$17 <span>/mo (annual) · $20/mo</span></div>
+      <ul class="tier-features">
+        <li>Access to Perplexity Computer</li>
+        <li>Latest AI models (Gemini 3.1 Pro, Sonar, Claude Sonnet 4.6)</li>
+        <li>Build reports, documents, and apps</li>
+        <li>Deeper sourcing (PitchBook, Wiley, etc.)</li>
+        <li>Usage limits best for most users</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Perplexity Max</div>
+      <div class="tier-desc">Highest usage and top performance</div>
+      <div class="tier-price">$167 <span>/mo (annual) · $200/mo</span></div>
+      <ul class="tier-features">
+        <li>Everything in Pro, plus:</li>
+        <li>10,000 monthly + 35,000 bonus credits for Computer</li>
+        <li>Most advanced AI reasoning models</li>
+        <li>Deep investigations at any scale</li>
+        <li>Massive datasets and files</li>
+        <li>Perplexity Model Council (compare across models)</li>
+        <li>Priority access to new features</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- WeBetAI Comparison -->
+<div class="webet-section">
+  <h2>WeBetAI — Our Positioning</h2>
+  <p class="subtitle" style="font-size:0.9rem;">How our credit system maps against the market</p>
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-desc">Daily drip, browse & explore</div>
+      <div class="tier-price">$0 <span>/month</span></div>
+      <ul class="tier-features">
+        <li>~50-100 credits/day (daily claim)</li>
+        <li>Browse prediction feed</li>
+        <li>Up to 3 predictions</li>
+        <li>Basic AI overview</li>
+        <li>Daily bonus eligibility</li>
+      </ul>
+    </div>
+    <div class="tier popular">
+      <div class="tier-name">Pro — "Most Popular"</div>
+      <div class="tier-desc">15,000 credits • AI compute for sharp intel</div>
+      <div class="tier-price">$97 <span>one-time</span></div>
+      <ul class="tier-features">
+        <li>12,000 + 3,000 bonus credits (25%)</li>
+        <li>$0.0065/credit</li>
+        <li>Unlimited predictions</li>
+        <li>Enhanced AI analysis</li>
+        <li>Context gathering & social signal mining</li>
+        <li>Premium Edge Picks</li>
+        <li>Daily digest customization</li>
+      </ul>
+    </div>
+    <div class="tier">
+      <div class="tier-name">Elite</div>
+      <div class="tier-desc">40,000 credits • Full AI arsenal</div>
+      <div class="tier-price">$197 <span>one-time</span></div>
+      <ul class="tier-features">
+        <li>30,000 + 10,000 bonus credits (33%)</li>
+        <li>$0.0049/credit</li>
+        <li>Everything in Pro, plus:</li>
+        <li>Advanced AI insights + strategies</li>
+        <li>Post-bet debrief & bet intel layer</li>
+        <li>Boost multipliers</li>
+        <li>Leaderboard perks + badges</li>
+        <li>VIP priority AI + early access</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="insight-box">
+    <h3>Key Competitive Insights</h3>
+    <ul>
+      <li>Market mid-tier sweet spot is $17-20/mo — WeBetAI's $97 one-time Pro is positioned as a "pay once" alternative to recurring subscriptions</li>
+      <li>Every platform uses a 3-tier structure (Free → Mid → Premium) — our 3-tier approach matches industry standard</li>
+      <li>"Most Popular" badge used by Perplexity Pro — validated CRO tactic we're applying to our Pro tier</li>
+      <li>Top tiers range from $100-300/mo — our $197 one-time Elite is a fraction of annual cost for comparable platforms</li>
+      <li>Credits-as-compute framing aligns with how Claude, ChatGPT, and Perplexity meter usage — familiar mental model for users</li>
+      <li>X bundles Grok into its social platform tiers ($3→$8→$40) while also offering standalone Grok ($30→$300) — two distinct funnels for the same AI. WeBetAI similarly bundles AI into a social/betting context</li>
+      <li>Grok's standalone SuperGrok ($30/mo) is the closest price analog to our $97 one-time — users would break even vs. SuperGrok in ~3 months</li>
+    </ul>
+  </div>
+</div>
+
+<p class="timestamp">Generated by Cowork for WeBetAI • March 22, 2026</p>
+
+</div>
+</body>
+</html>

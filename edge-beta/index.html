@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | WeBetAI Edge Picks</title>
+  <meta name="description" content="THE LOCK's disciplined 5-filter analysis engine surfaces daily edge picks across NBA, NHL, college hoops, soccer, and more." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/edge-beta" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | WeBetAI Edge Picks" />
+  <meta property="og:description" content="THE LOCK's 5-filter analysis engine. NBA, NHL, NCAAB, Soccer." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | WeBetAI Edge Picks" />
+  <meta name="twitter:description" content="THE LOCK's 5-filter analysis engine. NBA, NHL, NCAAB, Soccer." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --teal-lighter: #d4ede8;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─── */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+
+    /* ─── Main Content ─── */
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    /* ─── Date + Legend ─── */
+    .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .25rem; }
+    .legend { display: flex; gap: .875rem; margin-bottom: 1.25rem; font-size: .8125rem; color: var(--txt-m); }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .dot-aplus { background: #c0392b; }
+    .dot-a { background: #004C54; }
+    .dot-aminus { background: #1abc9c; }
+    .dot-bplus { background: #1abc9c; }
+    .dot-b { background: #e67e22; }
+
+    /* ─── Stats Bar ─── */
+    .stats-bar {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .stat-box {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem .375rem; text-align: center;
+    }
+    .stat-label { font-size: .5625rem; font-weight: 600; color: var(--txt-l); text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-top: .125rem; }
+    .stat-value.green { color: var(--teal); }
+
+    /* ─── Pick Card ─── */
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .rating-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 26px; border-radius: 6px;
+      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+    }
+    .badge-aplus { background: #c0392b; }
+    .badge-a { background: #004C54; }
+    .badge-aminus { background: #1abc9c; }
+    .badge-bplus { background: #f39c12; }
+    .badge-b { background: #f9a825; }
+    .badge-lean { background: #5b6b7a; }
+
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
+
+    /* ─── Win Prob Badge ─── */
+    .win-prob {
+      display: inline-flex; align-items: center; font-size: .75rem; font-weight: 700;
+      font-family: 'Geist Sans', monospace;
+      color: var(--green); background: var(--green-light);
+      border: 1px solid var(--green-border); border-radius: 6px;
+      padding: .125rem .5rem; margin-left: .5rem; white-space: nowrap;
+    }
+
+    /* ─── Edge Badge (bottom-right of card) ─── */
+    .edge-badge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .6875rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+      color: #e8b931; background: rgba(232, 185, 49, 0.08);
+      border: 1px solid rgba(232, 185, 49, 0.2); border-radius: 6px;
+      padding: .125rem .5rem; white-space: nowrap;
+    }
+    .edge-badge svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+    /* Mobile-only edge badge inline with prob chip (hidden on desktop) */
+    .edge-inline-mobile { display: none; }
+
+    /* ─── Live Progress Delta ─── */
+    .progress-delta {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .75rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+      border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
+      white-space: nowrap;
+    }
+    .delta-positive { color: #16a34a; background: #dcfce7; border: 1px solid #86efac; }
+    .delta-negative { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; }
+    .delta-even { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
+
+    /* ─── Parlay Section ─── */
+    .parlay-section {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .parlay-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    .parlay-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: .625rem;
+    }
+    .parlay-name { font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .parlay-odds { font-size: 1rem; font-weight: 700; color: var(--teal); }
+    .parlay-payout { font-size: .875rem; font-weight: 700; color: var(--teal); margin-bottom: .625rem; }
+    .parlay-leg {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .375rem .5rem; background: var(--off-white);
+      border: 1px solid var(--border-lt); border-radius: .375rem;
+      margin-bottom: .25rem; font-size: .8125rem;
+    }
+    .leg-pick { font-weight: 500; color: var(--olive); }
+    .leg-matchup { color: var(--txt-l); font-weight: 400; margin-left: .25rem; }
+    .leg-odds { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--teal); white-space: nowrap; }
+
+    /* ─── Rejections ─── */
+    .rejections {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .875rem 1rem; margin-top: .5rem;
+    }
+    .rej-title { font-size: .6875rem; font-weight: 700; color: var(--txt-l); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem; }
+    .rej-item { font-size: .75rem; color: var(--txt-m); line-height: 1.5; margin-bottom: .125rem; }
+    .rej-matchup { font-weight: 600; color: var(--txt-b); }
+
+    /* ─── Live Score / Result ─── */
+    .pick-score-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem .625rem; margin-bottom: .625rem;
+      border-radius: .5rem; font-size: .8125rem;
+    }
+    .score-bar-live { background: #eef6ff; border: 1px solid #b3d4fc; }
+    .score-bar-win { background: #e8f5e9; border: 1px solid #a5d6a7; }
+    .score-bar-loss { background: #fce4e4; border: 1px solid #f5b7b7; }
+    .score-bar-push { background: #fff8e1; border: 1px solid #ffe082; }
+    .score-bar-scheduled { background: var(--off-white); border: 1px solid var(--border-lt); }
+    .score-teams {
+      display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: var(--olive);
+    }
+    .score-team { display: flex; align-items: center; gap: .375rem; }
+    .score-team-name { min-width: 100px; }
+    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; }
+    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .score-status {
+      font-size: .6875rem; font-weight: 700; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .status-live { background: #2196f3; color: #fff; animation: pulse-live 2s infinite; }
+    .status-win { background: #2e7d32; color: #fff; }
+    .status-loss { background: #c0392b; color: #fff; }
+    .status-push { background: #f9a825; color: #fff; }
+    .status-scheduled { background: var(--border-lt); color: var(--txt-m); }
+    .score-detail { font-size: .6875rem; color: var(--txt-m); }
+    @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+
+    /* Parlay leg result indicators */
+    .leg-result {
+      font-size: .6875rem; font-weight: 700; padding: 1px 6px;
+      border-radius: 4px; margin-left: .375rem; white-space: nowrap;
+    }
+    .leg-win { background: #e8f5e9; color: #2e7d32; }
+    .leg-loss { background: #fce4e4; color: #c0392b; }
+    .leg-push { background: #fff8e1; color: #f9a825; }
+    .leg-live { background: #eef6ff; color: #2196f3; }
+
+    /* Record tracker */
+    .record-bar {
+      display: flex; align-items: center; justify-content: center; gap: 1rem;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem; margin-bottom: .75rem;
+      font-size: .8125rem; font-weight: 600;
+    }
+    .record-item { display: flex; align-items: center; gap: .25rem; }
+    .record-wins { color: #2e7d32; }
+    .record-losses { color: #c0392b; }
+    .record-pending { color: var(--txt-m); }
+
+    /* ─── Footer ─── */
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+
+    /* ─── Bet Summary ─── */
+    .bet-summary {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1rem 1.125rem; margin-bottom: 1.25rem;
+    }
+    .bet-summary-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    .bet-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem 0; border-bottom: 1px solid var(--border-lt);
+    }
+    .bet-row:last-child { border-bottom: none; }
+    .bet-row.total { border-top: 2px solid var(--olive); border-bottom: none; padding-top: .75rem; margin-top: .25rem; }
+    .bet-label { font-size: .8125rem; color: var(--txt-b); font-weight: 500; }
+    .bet-label .bet-sub { color: var(--txt-m); font-weight: 400; }
+    .bet-detail { text-align: right; }
+    .bet-units { font-size: .75rem; color: var(--txt-m); }
+    .bet-amount { font-size: .875rem; font-weight: 700; color: var(--olive); }
+    .bet-amount.green { color: var(--teal); }
+    .bet-winnings { font-size: .6875rem; color: var(--teal); font-weight: 600; }
+
+    /* ─── Results Tracker (card-style) ─── */
+    .results-section-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: .625rem;
+    }
+
+    .results-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; overflow: hidden; margin-bottom: 1rem;
+    }
+
+    .results-cumulative {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+      border-bottom: 1px solid var(--border-lt);
+    }
+    .cum-card {
+      padding: 1rem .5rem; text-align: center;
+      border-right: 1px solid var(--border-lt);
+    }
+    .cum-card:last-child { border-right: none; }
+    .cum-value { font-size: 1.5rem; font-weight: 700; color: var(--olive); }
+    .cum-value.positive { color: #2e7d32; }
+    .cum-value.negative { color: #c0392b; }
+    .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+
+    .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
+    .results-table td {
+      padding: .5rem; border-bottom: 1px solid var(--border-lt);
+      vertical-align: top; text-align: center;
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: var(--off-white); }
+
+    .day-toggle {
+      background: none; border: none; padding: 0;
+      font-family: inherit; font-size: .8125rem; font-weight: 600;
+      color: var(--teal); cursor: pointer; text-align: left;
+    }
+    .day-detail { display: none; }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
+    .day-picks-list { list-style: none; padding: 0; margin: 0; }
+    .day-picks-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .25rem 0; border-bottom: 1px solid var(--border-lt);
+      font-size: .75rem;
+    }
+    .day-picks-list li:last-child { border-bottom: none; }
+    .result-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: .6875rem; font-weight: 600;
+    }
+    .result-win { background: #e8f5e9; color: #2e7d32; }
+    .result-loss { background: #fce4e4; color: #c0392b; }
+    .result-push { background: #fff8e1; color: #f9a825; }
+    .result-pending { background: #eef6ff; color: #2196f3; }
+
+    .profit-positive { color: #2e7d32; font-weight: 600; }
+    .profit-negative { color: #c0392b; font-weight: 600; }
+
+    .show-more-bar {
+      display: none; text-align: center; padding: .625rem;
+      border-top: 1px solid var(--border-lt);
+      cursor: pointer; transition: background 0.15s;
+    }
+    .show-more-bar:hover { background: var(--off-white); }
+    .show-more-bar span {
+      font-size: .75rem; font-weight: 600; color: var(--teal);
+      display: inline-flex; align-items: center; gap: .25rem;
+    }
+    .show-more-bar.has-more { display: block; }
+
+    .record-legend-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem 1rem; margin-bottom: .75rem;
+      font-size: .8125rem; font-weight: 600;
+    }
+    .rl-left { display: flex; align-items: center; gap: .25rem; }
+    .rl-right { display: flex; align-items: center; gap: .75rem; font-size: .75rem; color: var(--txt-m); font-weight: 500; }
+
+    @media (max-width: 480px) {
+      .results-cumulative { grid-template-columns: repeat(2, 1fr); }
+      .cum-card { border-bottom: 1px solid var(--border-lt); }
+      .cum-card:nth-child(2) { border-right: none; }
+      .results-table { font-size: .75rem; }
+      .results-table td { padding: .375rem .25rem; }
+      .record-legend-bar { flex-wrap: wrap; gap: .5rem; }
+      .rl-right { font-size: .65rem; gap: .5rem; }
+    }
+
+    /* ─── Loading ─── */
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--txt-m); }
+    .loading-icon { font-size: 1.5rem; margin-bottom: .5rem; }
+
+    /* ─── Standard Header ─── */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+    @media(max-width: 420px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .pick-matchup { font-size: .9375rem; }
+    }
+    @media(max-width: 480px) {
+      .results-cumulative { grid-template-columns: repeat(2, 1fr); }
+      .results-table { font-size: .75rem; }
+      .results-table th, .results-table td { padding: .375rem .25rem; }
+      .bet-summary-grid { grid-template-columns: 1fr 2.25rem 3rem 3.25rem !important; gap: 0 .25rem !important; }
+      .bet-summary-grid .leg-pick { font-size: .75rem !important; }
+      .bet-summary-grid .leg-result { font-size: .6rem !important; padding: 1px 4px !important; }
+      .bet-summary-unit { font-size: .6875rem !important; }
+      .bet-summary-risk { font-size: .75rem !important; }
+      .bet-summary-win { font-size: .6875rem !important; }
+    }
+
+    /* ─── Verify Button on Pick Cards ─── */
+    .verify-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--teal-light); color: var(--teal);
+      border: 1px solid var(--teal-border); border-radius: 6px;
+      padding: .125rem .5rem; font-size: .6875rem; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .verify-btn:hover { background: var(--teal); color: white; }
+    .verify-btn.loading { opacity: 0.6; pointer-events: none; }
+
+    /* ─── Verify Modal Overlay ─── */
+    .verify-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000;
+      justify-content: center; align-items: center;
+    }
+    .verify-overlay.open { display: flex; }
+
+    .verify-modal {
+      background: var(--white); border-radius: 16px;
+      max-width: 640px; width: 92%; max-height: 90vh;
+      overflow-y: auto; padding: 1.5rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .verify-modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1rem;
+    }
+    .verify-modal-title {
+      font-size: 1rem; font-weight: 700; color: var(--teal);
+    }
+    .verify-modal-close {
+      background: none; border: none; font-size: 1.5rem;
+      cursor: pointer; color: var(--txt-l); padding: 0;
+    }
+    .verify-modal-pick {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: 10px; padding: 12px; margin-bottom: 1rem;
+      font-size: .8125rem;
+    }
+    .verify-modal-pick .pick-name { font-weight: 700; color: var(--olive); }
+    .verify-modal-pick .pick-odds { color: var(--teal); font-weight: 600; }
+
+    /* Agent verification badges — stacked vertically for readability */
+    .verify-agents {
+      display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+    }
+    .verify-agent-badge {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px; border-radius: 10px;
+      border: 1px solid var(--border-lt);
+      background: var(--white); text-align: left;
+    }
+    .verify-agent-meta {
+      min-width: 72px; text-align: center; flex-shrink: 0;
+    }
+    .verify-agent-name {
+      font-size: .625rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--txt-l); margin-bottom: 4px;
+    }
+    .verify-agent-verdict {
+      font-size: .75rem; font-weight: 600; margin-bottom: 2px;
+    }
+    .verify-agent-verdict.agree { color: #2e7d32; }
+    .verify-agent-verdict.disagree { color: #c62828; }
+    .verify-agent-verdict.caution { color: #e65100; }
+    .verify-agent-conf {
+      font-size: .625rem; color: var(--txt-l);
+    }
+    .verify-agent-analysis {
+      font-size: .6875rem; color: var(--txt-m);
+      margin-top: 6px; line-height: 1.45; text-align: left;
+    }
+    .verify-synthesis {
+      border-top: 1px solid var(--border-lt);
+      padding-top: 10px; margin-top: 4px;
+      font-size: .8125rem; line-height: 1.55; color: var(--txt-b);
+    }
+    .verify-loading {
+      text-align: center; padding: 2rem;
+      color: var(--txt-l); font-size: .875rem;
+    }
+    .verify-loading .spinner {
+      display: inline-block; width: 24px; height: 24px;
+      border: 3px solid var(--border-lt); border-top-color: var(--teal);
+      border-radius: 50%; animation: vspin .8s linear infinite;
+      margin-bottom: 8px;
+    }
+    @keyframes vspin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .verify-agent-badge { gap: 8px; }
+      .verify-modal { width: 95%; padding: 1rem; }
+
+      /* Record bar: record left, grade scale right — single line */
+      .record-legend-bar { flex-wrap: nowrap; gap: .25rem; padding: .5rem .75rem; }
+      .rl-left { font-size: .75rem; white-space: nowrap; flex-shrink: 0; }
+      .rl-right { font-size: .6rem; gap: .375rem; flex-shrink: 0; margin-left: auto; }
+
+      /* Pick card: hide inline edge badge on mobile, keep bottom one */
+      .edge-inline-mobile { display: none !important; }
+      .edge-badge { font-size: .6875rem; padding: .125rem .5rem; }
+      .edge-badge svg { width: 10px; height: 10px; }
+
+      /* Verify button: same size as edge badge */
+      .verify-btn {
+        font-size: .6875rem !important; padding: .125rem .5rem !important;
+        height: auto; min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header" style="position:relative;">
+    <a href="/edge-beta" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <a href="/edge" style="display:inline-flex; align-items:center; gap:5px; padding:5px 14px; border-radius:20px; border:1px solid #004C54; background:#e6f4f1; color:#004C54; font-family:inherit; font-size:11px; font-weight:700; cursor:pointer; text-decoration:none; transition:all 0.15s; margin-left:auto; margin-right:8px;">View Production</a>
+    <nav class="header-nav">
+      <a href="/rif" class="header-link">WeBetAI Credits</a>
+      <a href="/guardian" class="header-link">Guardian</a>
+      <a href="/scorecard" class="header-link">Guardian - AI Scorecard</a>
+      <a href="/guardian/digest" class="header-link">Guardian - Daily Digest</a>
+      <a href="/authenticity" class="header-link">Authentic Press</a>
+      <a href="/edge-beta" class="header-link active">WeBetAI - Edge Picks</a>
+      <a href="/percentile" class="header-link">Edge Picks - AI Scorecard</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/rif">WeBetAI Credits</a>
+      <a href="/guardian">Guardian</a>
+      <a href="/scorecard">Guardian - AI Scorecard</a>
+      <a href="/guardian/digest">Guardian - Daily Digest</a>
+      <a href="/authenticity">Authentic Press</a>
+      <a href="/edge-beta">WeBetAI - Edge Picks</a>
+      <a href="/percentile">Edge Picks - AI Scorecard</a>
+    </div>
+  </header>
+
+<div class="main" id="dashboard">
+
+  <!-- Results Tracker -->
+  <div class="results-section-title">Pick Results &amp; Track Record</div>
+  <div class="results-card">
+    <div class="results-cumulative" id="results-cumulative">
+      <div class="cum-card"><div class="cum-value" id="cum-roi">--</div><div class="cum-label">ROI</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-record">--</div><div class="cum-label">Record</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-accuracy">--</div><div class="cum-label">Accuracy</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-profit">--</div><div class="cum-label">P/L</div></div>
+    </div>
+    <table class="results-table" id="results-table">
+      <tbody id="results-body">
+        <tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">Loading results...</td></tr>
+      </tbody>
+    </table>
+    <div class="show-more-bar" id="showMoreBar" onclick="showAllDays()">
+      <span>Show all days &#9660;</span>
+    </div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+    <div class="date-header" id="date-header">Loading...</div>
+    <button class="verify-btn" id="verify-all-btn" onclick="verifyAllPicks()" style="display:none;">&#10003; Verify Picks</button>
+  </div>
+
+  <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
+    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+      <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Daily Edge</span>
+    </div>
+    <p id="daily-edge-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+  </div>
+
+  <div id="insights-section" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--teal);">
+    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+      <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Insights</span>
+    </div>
+    <p id="insights-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+  </div>
+
+  <!-- Record + Legend bar -->
+  <div id="record-legend-bar" class="record-legend-bar">
+    <div id="record-bar-content" class="rl-left"></div>
+    <div class="rl-right">
+      <span><span class="legend-dot dot-aplus"></span>A+ (2.0u+)</span>
+      <span><span class="legend-dot dot-a"></span>A (1.5u)</span>
+      <span><span class="legend-dot dot-aminus"></span>A- (1.0u)</span>
+    </div>
+  </div>
+
+  <div id="picks-container">
+    <div class="loading">
+      <div class="loading-icon">&#9203;</div>
+      Loading today's picks from THE LOCK...
+    </div>
+  </div>
+
+  <!-- Bet Summary -->
+  <div id="bet-summary"></div>
+
+  <p class="footer-note">
+    All lines verified via The Odds API (40+ sportsbooks). Best available line selected per pick.<br>
+    Unit sizing: A+ = 2.5-3.0u, A = 1.5-2.0u, A- = 1.0u, B+ = 0.5u. Kelly-sized, rounded to nearest 0.5u.<br>
+    Auto-generated daily at 9am EST. Not financial advice.
+  </p>
+</div>
+
+<!-- 3-Agent Verification Modal -->
+<div class="verify-overlay" id="verifyOverlay">
+  <div class="verify-modal">
+    <div class="verify-modal-header">
+      <div class="verify-modal-title">3-Agent Verification</div>
+      <button class="verify-modal-close" onclick="closeVerifyModal()">&times;</button>
+    </div>
+    <div id="verifyModalContent">
+      <div class="verify-loading">
+        <div class="spinner"></div>
+        <div>Consulting Grok, Claude &amp; ChatGPT...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  // Strip city/state from team names — "Los Angeles Clippers" → "Clippers", "UConn Huskies" → "Huskies"
+  function teamOnly(name) {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return name;
+    // Known multi-word team names
+    const multiWord = { 'trail': 'Trail Blazers', 'blue': 'Blue Devils', 'red': 'Red Wings', 'maple': 'Maple Leafs', 'blue jackets': 'Blue Jackets', 'golden': 'Golden Knights' };
+    const lower = name.toLowerCase();
+    for (const [key, val] of Object.entries(multiWord)) {
+      if (lower.includes(key) && lower.includes(val.toLowerCase().split(' ').pop())) return val;
+    }
+    return parts[parts.length - 1];
+  }
+
+  // Convert matchup to team-only format: "UConn Huskies vs. Duke Blue Devils" → "Huskies vs Blue Devils"
+  function shortMatchup(matchup) {
+    if (!matchup) return '';
+    const sep = matchup.match(/\s+(vs\.?|@|at|v)\s+/i);
+    if (!sep) return matchup;
+    const parts = matchup.split(sep[0]);
+    return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
+  }
+
+  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
+  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
+
+  /* ── Calculate winnings from American odds ── */
+  function calcWinnings(atRisk, oddsStr) {
+    const odds = parseInt((oddsStr||'-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds) || !atRisk) return 0;
+    if (odds > 0) return atRisk * (odds / 100);
+    return atRisk * (100 / Math.abs(odds));
+  }
+
+  /* ── Parlay odds helpers ── */
+  function americanToImplied(oddsStr) {
+    const odds = parseInt((oddsStr || '-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds)) return 0.5;
+    return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+  }
+  function impliedToAmerican(prob) {
+    if (prob <= 0 || prob >= 1) return '+100';
+    if (prob > 0.5) return '-' + Math.round((prob / (1 - prob)) * 100);
+    return '+' + Math.round(((1 - prob) / prob) * 100);
+  }
+  function calcParlayOdds(legs) {
+    const combined = legs.reduce((acc, o) => acc * americanToImplied(o), 1);
+    return impliedToAmerican(combined);
+  }
+  function calcParlayWinnings(risk, legs) {
+    // Multiply decimal odds for each leg, subtract 1 for profit, times risk
+    let decimalProduct = 1;
+    for (const oddsStr of legs) {
+      const odds = parseInt((oddsStr||'-110').replace(/[^0-9+-]/g, ''));
+      if (isNaN(odds)) { decimalProduct *= 1.909; continue; } // -110 default
+      decimalProduct *= odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
+    }
+    return risk * (decimalProduct - 1);
+  }
+
+  /* ═══════════════════════════════════════════════
+     LIVE SCORES — ESPN Public API
+     ═══════════════════════════════════════════════ */
+
+  const ESPN_ENDPOINTS = {
+    'NBA': 'basketball/nba',
+    'NHL': 'hockey/nhl',
+    'NCAAB': 'basketball/mens-college-basketball',
+    'MLB': 'baseball/mlb',
+    'EPL': 'soccer/eng.1',
+    'La Liga': 'soccer/esp.1',
+    'Serie A': 'soccer/ita.1',
+    'Bundesliga': 'soccer/ger.1',
+    'Ligue 1': 'soccer/fra.1',
+    'MLS': 'soccer/usa.1',
+    'UCL': 'soccer/uefa.champions',
+    'UEL': 'soccer/uefa.europa',
+    'Europa': 'soccer/uefa.europa',
+  };
+
+  let cachedScores = {};   // sport -> array of game objects
+  let picksData = null;    // stored globally for re-render
+  let picksDataGlobal = null; // store sorted picks for verify access
+  let refreshTimer = null;
+
+  async function fetchScoresForSport(sport) {
+    const endpoint = ESPN_ENDPOINTS[sport];
+    if (!endpoint) return [];
+    try {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard`;
+      const resp = await fetch(url);
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      return (data.events || []).map(ev => {
+        const comp = ev.competitions?.[0];
+        if (!comp) return null;
+        const away = comp.competitors?.find(c => c.homeAway === 'away');
+        const home = comp.competitors?.find(c => c.homeAway === 'home');
+        if (!away || !home) return null;
+        const status = comp.status || ev.status || {};
+        // Extract start time and convert to EST display
+        const rawDate = ev.date || comp.date || '';
+        let startTimeEST = '';
+        if (rawDate) {
+          try {
+            const d = new Date(rawDate);
+            startTimeEST = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+          } catch(e) {}
+        }
+        return {
+          awayTeam: away.team?.displayName || away.team?.shortDisplayName || '',
+          awayAbbr: away.team?.abbreviation || '',
+          awayScore: parseInt(away.score) || 0,
+          homeTeam: home.team?.displayName || home.team?.shortDisplayName || '',
+          homeAbbr: home.team?.abbreviation || '',
+          homeScore: parseInt(home.score) || 0,
+          state: status.type?.state || 'pre',  // pre, in, post
+          detail: status.type?.shortDetail || status.type?.detail || '',
+          clock: status.displayClock || '',
+          period: status.period || 0,
+          startTimeEST,
+        };
+      }).filter(Boolean);
+    } catch (e) {
+      console.warn('Score fetch failed for', sport, e);
+      return [];
+    }
+  }
+
+  async function fetchAllScores(sports) {
+    const unique = [...new Set(sports)];
+    const results = await Promise.all(unique.map(async s => [s, await fetchScoresForSport(s)]));
+    for (const [sport, games] of results) {
+      cachedScores[sport] = games;
+    }
+  }
+
+  /* ── Team name fuzzy matching ── */
+  function normalizeTeam(name) {
+    return (name || '').toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  function teamsMatch(pickTeam, espnTeam, espnAbbr) {
+    const p = normalizeTeam(pickTeam);
+    const e = normalizeTeam(espnTeam);
+    if (!p || !e) return false;
+    // Exact match
+    if (p === e) return true;
+    // Pick contains ESPN name or vice versa
+    if (p.includes(e) || e.includes(p)) return true;
+    // Abbreviation match: require word boundary to prevent "NO" matching "new orleans"
+    if (espnAbbr && espnAbbr.length >= 2) {
+      const a = espnAbbr.toLowerCase();
+      const pWords = p.split(' ');
+      if (pWords.includes(a)) return true;
+    }
+    // Last word match (team nickname)
+    const pLast = p.split(' ').pop();
+    const eLast = e.split(' ').pop();
+    if (pLast.length > 2 && pLast === eLast) return true;
+    return false;
+  }
+
+  function findGame(pick) {
+    const sport = pick.sport || '';
+    const games = cachedScores[sport] || [];
+    const matchup = (pick.matchup || '').toLowerCase();
+    const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+
+    for (const g of games) {
+      const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
+      const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
+      const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr)) ||
+                         (awayLast.length > 3 && matchup.includes(awayLast));
+      const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
+                         (homeLast.length > 3 && matchup.includes(homeLast));
+      if (awayMatch && homeMatch) return g;
+    }
+    // Try matching by pick name (the team we bet on)
+    const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    if (pickTeam) {
+      for (const g of games) {
+        if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
+          const otherLast = normalizeTeam(
+            teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
+          ).split(' ').pop();
+          if (otherLast.length > 3 && matchup.includes(otherLast)) return g;
+        }
+      }
+    }
+    // Last resort: match on both team last-words from matchup parts
+    if (matchupParts.length >= 2) {
+      for (const g of games) {
+        const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
+        const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
+        const part0 = normalizeTeam(matchupParts[0]);
+        const part1 = normalizeTeam(matchupParts[1]);
+        if ((part0.includes(awayLast) || awayLast.includes(part0)) &&
+            (part1.includes(homeLast) || homeLast.includes(part1))) return g;
+        if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
+            (part1.includes(awayLast) || awayLast.includes(part1))) return g;
+      }
+    }
+    return null;
+  }
+
+  /* ── Determine pick result ── */
+  function determineResult(pick, game) {
+    if (!game) return { status: 'scheduled', label: 'Upcoming' };
+    if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
+    if (game.state === 'in') {
+      const livePickStr = (pick.pick || '').trim();
+      const liveBetType = (pick.betType || '').toLowerCase();
+      const liveAwayScore = game.awayScore;
+      const liveHomeScore = game.homeScore;
+      const livePickTeam = livePickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+      const livePickedAway = teamsMatch(livePickTeam, game.awayTeam, game.awayAbbr);
+      const livePickedHome = teamsMatch(livePickTeam, game.homeTeam, game.homeAbbr);
+      let projected = 'live';
+
+      if (liveBetType === 'total' || /over|under/i.test(livePickStr)) {
+        const total = liveAwayScore + liveHomeScore;
+        const lm = livePickStr.match(/(over|under)\s*([\d.]+)/i);
+        if (lm) {
+          const ou = lm[1].toLowerCase();
+          const line = parseFloat(lm[2]);
+          const isOver = total > line;
+          projected = (ou === 'over' && isOver) || (ou === 'under' && !isOver) ? 'win' : total === line ? 'live' : 'loss';
+        }
+      } else if (liveBetType === 'spread' || liveBetType === 'puck line' || /[+-]\d+(\.\d+)?/.test(livePickStr)) {
+        const sm = livePickStr.match(/([+-]\d+(\.\d+)?)/);
+        if (sm && (livePickedAway || livePickedHome)) {
+          const spread = parseFloat(sm[1]);
+          const ps = livePickedAway ? liveAwayScore : liveHomeScore;
+          const os = livePickedAway ? liveHomeScore : liveAwayScore;
+          projected = (ps + spread) > os ? 'win' : (ps + spread) === os ? 'live' : 'loss';
+        }
+      } else if (livePickedAway || livePickedHome) {
+        const ps = livePickedAway ? liveAwayScore : liveHomeScore;
+        const os = livePickedAway ? liveHomeScore : liveAwayScore;
+        projected = ps > os ? 'win' : ps === os ? 'live' : 'loss';
+      } else if (/draw/i.test(livePickStr)) {
+        projected = liveAwayScore === liveHomeScore ? 'win' : 'loss';
+      }
+
+      return { status: projected, label: game.detail || 'Live', isLive: true };
+    }
+
+    // Game is final (post)
+    const pickStr = (pick.pick || '').trim();
+    const betType = (pick.betType || '').toLowerCase();
+    const awayScore = game.awayScore;
+    const homeScore = game.homeScore;
+
+    // Figure out which team was picked
+    const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+
+    // Total (Over/Under)
+    if (betType === 'total' || /over|under/i.test(pickStr)) {
+      const totalPoints = awayScore + homeScore;
+      const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
+      if (lineMatch) {
+        const ou = lineMatch[1].toLowerCase();
+        const line = parseFloat(lineMatch[2]);
+        if (totalPoints === line) return { status: 'push', label: 'Push' };
+        const over = totalPoints > line;
+        const won = (ou === 'over' && over) || (ou === 'under' && !over);
+        return won ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
+      }
+    }
+
+    // Spread
+    if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+      const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
+      if (spreadMatch && (pickedAway || pickedHome)) {
+        const spread = parseFloat(spreadMatch[1]);
+        const pickedScore = pickedAway ? awayScore : homeScore;
+        const oppScore = pickedAway ? homeScore : awayScore;
+        const adjusted = pickedScore + spread;
+        if (adjusted === oppScore) return { status: 'push', label: 'Push' };
+        return adjusted > oppScore
+          ? { status: 'win', label: 'Win' }
+          : { status: 'loss', label: 'Loss' };
+      }
+    }
+
+    // Moneyline / default
+    if (pickedAway || pickedHome) {
+      const pickedScore = pickedAway ? awayScore : homeScore;
+      const oppScore = pickedAway ? homeScore : awayScore;
+      if (pickedScore === oppScore) return { status: 'push', label: 'Push' };
+      return pickedScore > oppScore
+        ? { status: 'win', label: 'Win' }
+        : { status: 'loss', label: 'Loss' };
+    }
+
+    // Draw bet (soccer)
+    if (/draw/i.test(pickStr)) {
+      return awayScore === homeScore
+        ? { status: 'win', label: 'Win' }
+        : { status: 'loss', label: 'Loss' };
+    }
+
+    return { status: 'scheduled', label: 'Final' };
+  }
+
+  /* ── Normal CDF approximation (Abramowitz & Stegun) ── */
+  function normCDF(x) {
+    if (x > 6) return 1; if (x < -6) return 0;
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989422804014327;
+    const p = d * Math.exp(-x * x / 2) * t *
+      (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+    return x > 0 ? 1 - p : p;
+  }
+
+  /* ── Elapsed fraction of game from ESPN period + clock ── */
+  function gameElapsed(sport, period, clock) {
+    const parts = (clock || '').replace(/\s/g, '').split(':');
+    const mins = parseFloat(parts[0]) || 0;
+    const secs = parseFloat(parts[1]) || 0;
+    const remaining = mins + secs / 60;
+    const configs = {
+      'NBA':   { periods: 4, periodMins: 12 },
+      'NCAAB': { periods: 2, periodMins: 20 },
+      'NHL':   { periods: 3, periodMins: 20 },
+    };
+    const cfg = configs[sport];
+    if (!cfg) return 0.5;
+    const totalMins = cfg.periods * cfg.periodMins;
+    const completedPeriods = Math.max(0, (period || 1) - 1);
+    const elapsedInPeriod = Math.max(0, cfg.periodMins - remaining);
+    const elapsed = completedPeriods * cfg.periodMins + elapsedInPeriod;
+    return Math.min(Math.max(elapsed / totalMins, 0.01), 1);
+  }
+
+  /* ── Live win probability for a bet ── */
+  function liveWinProb(pick, game) {
+    if (!game || game.state !== 'in') return null;
+    const sport = pick.sport || '';
+    const pickStr = (pick.pick || '').trim();
+    const betType = (pick.betType || '').toLowerCase();
+    const away = game.awayScore;
+    const home = game.homeScore;
+    const t = gameElapsed(sport, game.period, game.clock);
+    const sigmaPerMin = { 'NBA': 1.8, 'NCAAB': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
+    const sigma = sigmaPerMin[sport] || 1.0;
+
+    if (betType === 'total' || /over|under/i.test(pickStr)) {
+      const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
+      if (!lineMatch) return null;
+      const ou = lineMatch[1].toLowerCase();
+      const line = parseFloat(lineMatch[2]);
+      const currentTotal = away + home;
+      const totalMins = { 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
+      const gameMins = totalMins[sport] || 48;
+      const remainMins = gameMins * (1 - t);
+      // Bayesian projection: blend pace with market line as prior
+      const paceProjection = t > 0.05 ? currentTotal / t : line;
+      const w = t * t; // quadratic: trust pace more as game progresses
+      const projectedFinal = w * paceProjection + (1 - w) * line;
+      const remainSD = sigma * Math.sqrt(remainMins) * (1 + 0.3 * (1 - t));
+      const z = (projectedFinal - line) / Math.max(remainSD, 0.5);
+      const pOver = normCDF(z);
+      return ou === 'over' ? pOver : 1 - pOver;
+    }
+
+    if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+      const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
+      if (!spreadMatch) return null;
+      const spread = parseFloat(spreadMatch[1]);
+      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').trim();
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+      if (!pickedAway && !pickedHome) return null;
+      const pickedScore = pickedAway ? away : home;
+      const oppScore = pickedAway ? home : away;
+      const margin = pickedScore - oppScore;
+      const totalMins = { 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
+      const gameMins = totalMins[sport] || 48;
+      const remainMins = gameMins * (1 - t);
+      const w = t * t;
+      const paceMargin = t > 0.05 ? margin / t : -spread;
+      const projectedMargin = w * paceMargin + (1 - w) * (-spread);
+      const remainSD = sigma * Math.sqrt(remainMins) * (1 + 0.3 * (1 - t));
+      const z = (margin + (projectedMargin - margin) * (1 - t) - (-spread)) / Math.max(remainSD, 0.5);
+      return normCDF(z);
+    }
+
+    return null;
+  }
+
+  /* ── Compute live progress toward bet target ── */
+  function progressDeltaHTML(pick, game, result) {
+    if (!game || (game.state !== 'in' && game.state !== 'post')) return '';
+    const pickStr = (pick.pick || '').trim();
+    const betType = (pick.betType || '').toLowerCase();
+    const away = game.awayScore;
+    const home = game.homeScore;
+
+    if (betType === 'total' || /over|under/i.test(pickStr)) {
+      const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
+      if (!lineMatch) return '';
+      const ou = lineMatch[1].toLowerCase();
+      const line = parseFloat(lineMatch[2]);
+      const currentTotal = away + home;
+      const raw = ou === 'over' ? currentTotal - line : line - currentTotal;
+      const sign = raw > 0 ? '+' : raw < 0 ? '' : '';
+      const cls = raw > 0 ? 'delta-positive' : raw < 0 ? 'delta-negative' : 'delta-even';
+      const suffix = game.state === 'post' ? '' : ' pts';
+      return `<span class="progress-delta ${cls}">${sign}${raw % 1 === 0 ? raw : raw.toFixed(1)}${suffix}</span>`;
+    }
+
+    if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+      const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
+      if (!spreadMatch) return '';
+      const spread = parseFloat(spreadMatch[1]);
+      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').trim();
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+      if (!pickedAway && !pickedHome) return '';
+      const pickedScore = pickedAway ? away : home;
+      const oppScore = pickedAway ? home : away;
+      const delta = (pickedScore + spread) - oppScore;
+      const sign = delta > 0 ? '+' : delta < 0 ? '' : '';
+      const cls = delta > 0 ? 'delta-positive' : delta < 0 ? 'delta-negative' : 'delta-even';
+      return `<span class="progress-delta ${cls}">${sign}${delta % 1 === 0 ? delta : delta.toFixed(1)}</span>`;
+    }
+
+    return '';
+  }
+
+  /* ── Live win probability badge ── */
+  function liveProbHTML(pick, game, result) {
+    if (!game || game.state === 'pre') {
+      if (!pick.winProbability) return '';
+      return `<span class="win-prob">${esc(pick.winProbability)}</span>`;
+    }
+    if (game.state === 'post') {
+      if (result.status === 'win') return '<span class="progress-delta delta-positive">WIN</span>';
+      if (result.status === 'loss') return '<span class="progress-delta delta-negative">LOSS</span>';
+      if (result.status === 'push') return '<span class="progress-delta delta-even">PUSH</span>';
+      return '';
+    }
+    const prob = liveWinProb(pick, game);
+    if (prob === null) return '';
+    const pct = Math.round(prob * 100);
+    const cls = pct >= 55 ? 'delta-positive' : pct <= 40 ? 'delta-negative' : 'delta-even';
+    return `<span class="progress-delta ${cls}">${pct}%</span>`;
+  }
+
+  /* ── Build score bar HTML ── */
+  function scoreBarHTML(pick, game, result) {
+    if (!game) return '';
+    // Hide score bar for pre-game — time is shown in the card header
+    if (game.state === 'pre') return '';
+    const displayStatus = result.isLive ? 'live' : result.status;
+    const barClass = `score-bar-${displayStatus}`;
+    const statusClass = `status-${displayStatus}`;
+
+    let scoreContent = '';
+    if (false) {
+      // pre-game bar removed
+    } else {
+      scoreContent = `
+        <div class="score-teams">
+          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.awayTeam))}</span><span class="score-team-score">${game.awayScore}</span></div>
+          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.homeTeam))}</span><span class="score-team-score">${game.homeScore}</span></div>
+        </div>
+        <div class="score-meta">
+          <span class="score-status ${statusClass}">${result.isLive ? 'Live' : esc(result.label)}</span>
+          <span class="score-detail">${esc(game.detail)}</span>
+        </div>`;
+    }
+
+    return `<div class="pick-score-bar ${barClass}">${scoreContent}</div>`;
+  }
+
+  /* ═══════════════════════════════════════════════
+     RENDER
+     ═══════════════════════════════════════════════ */
+
+  function renderPicks(data) {
+    const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5 };
+    const picks = (data.picks || []).slice(0, 3).sort((a, b) => {
+      const rA = ratingOrder[a.confidence] ?? 4;
+      const rB = ratingOrder[b.confidence] ?? 4;
+      return rA - rB; // highest rating letter grade first (A+ > A > A- > B+ > B)
+    });
+    // Store sorted picks globally so verify button indices match displayed order
+    picksDataGlobal = { ...data, picks };
+    const rejections = data.rejections || [];
+    const summary = data.summary || {};
+
+    // Date
+    document.getElementById('date-header').textContent = data.dateFormatted || data.date || 'Today';
+    if (picks.length > 0) document.getElementById('verify-all-btn').style.display = '';
+
+    // Daily Edge Summary
+    const summaryEl = document.getElementById('daily-edge-summary');
+    const summaryText = document.getElementById('daily-edge-text');
+    const edgeSummary = data.edgeSummary || '';
+    if (edgeSummary) {
+      summaryText.textContent = edgeSummary.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Mm]odel projects/g, 'WeBetAI projects').replace(/[Tt]he model/g, 'WeBetAI');
+      summaryEl.style.display = 'block';
+    } else if (picks.length > 0) {
+      // Auto-generate summary from picks
+      const sportSet = [...new Set(picks.map(p => p.sport))];
+      const sportStr = sportSet.join(', ');
+      const pickDescs = picks.map(p => {
+        const edge = p.modelEdge || '';
+        return `${p.pick} (${p.odds})`;
+      }).join(', ');
+      summaryText.textContent = `Today's top edges across ${sportStr}: ${pickDescs}. All picks pass WeBetAI's 6-filter framework with verified model edges and positive expected value.`;
+      summaryEl.style.display = 'block';
+    }
+
+    // Insights — cross-sport reasoning summary
+    const insightsEl = document.getElementById('insights-section');
+    const insightsText = document.getElementById('insights-text');
+    if (picks.length > 0) {
+      const sportSet = [...new Set(picks.map(p => p.sport))];
+      const marketSet = [...new Set(picks.map(p => p.betType || p.market || ''))];
+      const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
+      const topRating = picks[0] ? (picks[0].rating || '') : '';
+      const lines = [];
+
+      // Market type + sport-specific explanation
+      const overs = picks.filter(p => (p.pick || '').toLowerCase().startsWith('over'));
+      const unders = picks.filter(p => (p.pick || '').toLowerCase().startsWith('under'));
+      const allTotals = picks.every(p => (p.betType || '').toLowerCase() === 'total');
+      const allSpreads = picks.every(p => /spread|puck|run/i.test(p.betType || ''));
+
+      if (allTotals && overs.length === picks.length) {
+        lines.push(`All ${picks.length} picks are overs today across ${sportSet.join(' and ')}. WeBetAI evaluated spreads, moneylines, and totals for every game across 12+ leagues \u2014 the biggest edges all landed on over/unders.`);
+      } else if (allTotals) {
+        const overCount = overs.length;
+        const underCount = unders.length;
+        lines.push(`${picks.length} total plays today (${overCount} over${overCount !== 1 ? 's' : ''}, ${underCount} under${underCount !== 1 ? 's' : ''}) across ${sportSet.join(' and ')}. WeBetAI scanned every market type across 12+ leagues and the strongest value landed on totals.`);
+      } else if (allSpreads) {
+        lines.push(`All picks are spreads today across ${sportSet.join(' and ')} \u2014 the strongest edges came from point spreads after evaluating every market type.`);
+      } else {
+        lines.push(`Mixed markets today across ${sportSet.join(' and ')} \u2014 each pick was the highest-edge option for its game after evaluating spreads, totals, and moneylines.`);
+      }
+
+      // Sizing explanation
+      lines.push(`${totalUnits}u total exposure across ${picks.length} picks, staying within the 4u daily cap. Each pick is sized by expected value \u2014 higher conviction means more units.`);
+
+      insightsText.textContent = lines.join(' ');
+      insightsEl.style.display = 'block';
+    }
+
+    // Build bet summary
+    const el = (id) => document.getElementById(id);
+    const numPicks = picks.length;
+    const dollarPerUnit = 150;
+    const parlayUnits = 0.5;
+    const parlayRisk = parlayUnits * dollarPerUnit; // $75
+
+    let totalUnits = 0;
+    let totalRisk = 0;
+    let totalWinnings = 0;
+    let summaryHTML = '';
+
+    // Use optimized parlay from API (independently selected legs) or fallback to straight picks
+    const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0) ? data.parlayLegs[0] : null;
+    let parlayOddsStr, parlayWin, optimizedParlayLegs;
+    if (apiParlay && apiParlay.legs) {
+      optimizedParlayLegs = apiParlay.legs;
+      parlayOddsStr = apiParlay.combinedOdds || calcParlayOdds(apiParlay.legs.map(l => l.odds || '-110'));
+      parlayWin = calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110'));
+    } else {
+      optimizedParlayLegs = null;
+      const fallbackLegs = picks.map(p => p.odds || '-110');
+      parlayOddsStr = picks.length === 3 ? calcParlayOdds(fallbackLegs) : null;
+      parlayWin = picks.length === 3 ? calcParlayWinnings(parlayRisk, fallbackLegs) : 0;
+    }
+
+    if (numPicks > 0) {
+      // Pre-compute units/risk/win for each pick
+      for (const p of picks) {
+        const u = parseFloat(p.units) || 1;
+        const risk = u * dollarPerUnit;
+        const win = calcWinnings(risk, p.odds || '-110');
+        totalUnits += u;
+        totalRisk += risk;
+        totalWinnings += win;
+      }
+      if (picks.length === 3) {
+        totalUnits += parlayUnits;
+        totalRisk += parlayRisk;
+        totalWinnings += parlayWin;
+      }
+    }
+
+    // Bet summary is built later after legResults are populated
+    function buildBetSummary() {
+      if (numPicks === 0) { document.getElementById('bet-summary').innerHTML = ''; return; }
+
+      let html = `<div class="parlay-section">
+        <div class="parlay-title">Today's Recommended Bets — Summary</div>`;
+
+      // Each straight pick as a parlay-leg style row
+      for (let i = 0; i < picks.length; i++) {
+        const p = picks[i];
+        const u = parseFloat(p.units) || 1;
+        const uLabel = (p.units || '1.0u').toString().replace(/u$/i, '');
+        const risk = u * dollarPerUnit;
+        const win = calcWinnings(risk, p.odds || '-110');
+
+        const lr = legResults[i];
+        let resultBadge = '';
+        if (lr && lr.result) {
+          if (lr.result.isLive) resultBadge = '<span class="leg-result leg-live">LIVE</span>';
+          else if (lr.result.status === 'win') resultBadge = '<span class="leg-result leg-win">✓ W</span>';
+          else if (lr.result.status === 'loss') resultBadge = '<span class="leg-result leg-loss">✗ L</span>';
+          else if (lr.result.status === 'push') resultBadge = '<span class="leg-result leg-push">— P</span>';
+        }
+
+        const gameLabel = shortMatchup(p.matchup);
+        const lrGame = lr ? lr.game : null;
+        const lrIsPreGame = !lrGame || lrGame.state === 'pre';
+        let summaryTime = '';
+        if (lrIsPreGame && lrGame && lrGame.startTimeEST) {
+          summaryTime = lrGame.startTimeEST;
+        } else if (lrIsPreGame && p.commenceTime) {
+          try { summaryTime = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {}
+        }
+        let timeLine = '';
+        if (lrIsPreGame && summaryTime) {
+          const stWithTz = summaryTime.includes('EST') || summaryTime.includes('EDT') ? summaryTime : summaryTime + ' EST';
+          timeLine = `<span style="font-size:.625rem; color:var(--txt-l);">${esc(stWithTz)}</span>`;
+        } else if (!lrIsPreGame && resultBadge) {
+          timeLine = resultBadge;
+        }
+
+        html += `<div class="parlay-leg bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
+          <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
+            <span class="leg-pick">${esc(p.pick)}</span>
+            <span style="font-size:.6875rem; color:var(--txt-l);">${esc(gameLabel)}</span>
+            ${timeLine}
+          </span>
+          <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${uLabel}u</span>
+          <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${risk.toLocaleString()}</span>
+          <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+$${Math.round(win).toLocaleString()}</span>
+        </div>`;
+      }
+
+      // Parlay row — use actual parlay legs (optimized or straight), only show final W/L
+      if (picks.length === 3) {
+        let summaryParlayLegResults;
+        if (optimizedParlayLegs) {
+          summaryParlayLegResults = optimizedParlayLegs.map(leg => {
+            const straightMatch = legResults.find(lr => lr.pick.pick === leg.pick);
+            if (straightMatch) return straightMatch;
+            if (parlayBonusResult && parlayBonusResult.pick.pick === leg.pick) return parlayBonusResult;
+            return { pick: leg, game: null, result: { status: 'scheduled', label: 'Upcoming' } };
+          });
+        } else {
+          summaryParlayLegResults = legResults;
+        }
+        const anyLive = summaryParlayLegResults.some(l => l.result.isLive);
+        const finalStatuses = summaryParlayLegResults.map(l => l.result.isLive ? 'live' : l.result.status);
+        let parlayBadge = '';
+        if (anyLive) parlayBadge = '<span class="leg-result leg-live">LIVE</span>';
+        else if (finalStatuses.includes('loss')) parlayBadge = '<span class="leg-result leg-loss">✗ L</span>';
+        else if (finalStatuses.every(s => s === 'win')) parlayBadge = '<span class="leg-result leg-win">✓ W</span>';
+
+        html += `<div class="parlay-leg bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem; background:var(--teal-light);">
+          <span style="display:flex; align-items:center; gap:4px; min-width:0;">
+            <span class="leg-pick">3-Team Parlay</span>
+            ${parlayBadge}
+          </span>
+          <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${parlayUnits.toFixed(1)}u</span>
+          <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${parlayRisk.toLocaleString()}</span>
+          <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+$${Math.round(parlayWin).toLocaleString()}</span>
+        </div>`;
+      }
+
+      // Total row
+      html += `<div class="bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
+        <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Total</span>
+        <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); font-weight:600; text-align:right;">${parseFloat(totalUnits.toFixed(2))}u</span>
+        <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${totalRisk.toLocaleString()}</span>
+        <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">+$${Math.round(totalWinnings).toLocaleString()}</span>
+      </div>`;
+
+      html += '</div>';
+      document.getElementById('bet-summary').innerHTML = html;
+    }
+
+    // Update hero trust bar (may not exist on /edge-picks)
+    const _hp = document.getElementById('hero-picks');
+    const _hu = document.getElementById('hero-units');
+    const _ha = document.getElementById('hero-accuracy');
+    if (_hp) _hp.textContent = numPicks + ' Picks Today';
+    if (_hu) _hu.textContent = parseFloat(totalUnits.toFixed(2)) + 'u Total Units';
+    if (_ha && !_ha._set) _ha.textContent = '-- Accuracy';
+
+    // Picks container
+    const container = document.getElementById('picks-container');
+
+    if (picks.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
+          <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
+            ${data.noPlays ? esc(data.noPlays) : 'No qualifying plays today.'}
+          </div>
+          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow at 9am EST.</div>
+        </div>`;
+      return;
+    }
+
+    // Collect results for record bar
+    let wins = 0, losses = 0, pushes = 0, pending = 0, hasAnyLive = false;
+    const legResults = []; // store per-leg results for parlay
+
+    // Render top 3 picks with scores
+    let html = '';
+    for (let i = 0; i < picks.length; i++) {
+      const p = picks[i];
+      const conf = p.confidence || 'b';
+      const badge = badgeClass[conf] || 'badge-b';
+      const label = ratingLabel[conf] || p.rating || 'B';
+      // Live score
+      const game = findGame(p);
+      const result = determineResult(p, game);
+      const scorebar = scoreBarHTML(p, game, result);
+      const deltaChip = progressDeltaHTML(p, game, result);
+      const probChip = liveProbHTML(p, game, result);
+      legResults.push({ pick: p, game, result });
+
+      // Only count final results toward record — not mid-game projections
+      if (result.isLive) { pending++; hasAnyLive = true; }
+      else if (result.status === 'win') wins++;
+      else if (result.status === 'loss') losses++;
+      else if (result.status === 'push') pushes++;
+      else pending++;
+
+      // Game status: start time OR live result
+      const isPreGame = !game || game.state === 'pre';
+      const isLiveOrDone = game && (game.state === 'in' || game.state === 'post');
+      let gameTimeStr = '';
+      if (isPreGame && game && game.startTimeEST) {
+        gameTimeStr = game.startTimeEST + ' EST';
+      } else if (isPreGame && game && game.detail) {
+        gameTimeStr = game.detail;
+      } else if (isPreGame && p.commenceTime) {
+        // Fallback: use commence time from Odds API stored in pick data
+        try {
+          const ct = new Date(p.commenceTime);
+          gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST';
+        } catch(e) {}
+      }
+
+      // Live/final result badge — only show WIN/LOSS after game is final, not mid-game projections
+      let liveResultHTML = '';
+      if (result.isLive) {
+        liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
+      } else if (result.status === 'win') {
+        liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">✓ WIN</span>';
+      } else if (result.status === 'loss') {
+        liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">✗ LOSS</span>';
+      } else if (result.status === 'push') {
+        liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">— PUSH</span>';
+      }
+
+      // Time or score chip for team name row
+      let timeChip = '';
+      if (isPreGame && gameTimeStr) {
+        timeChip = `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(gameTimeStr)}</span>`;
+      } else if (isLiveOrDone && game) {
+        // Score is shown in the scorebar below — don't duplicate here
+        timeChip = '';
+      }
+
+      const edgeBadgeHTML = (p.edgePct || p.ev) ? `<span class="edge-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>` : '';
+
+      html += `<div class="pick-card">
+        <div class="pick-header" style="margin-bottom:.25rem;">
+          <span class="sport-tag">${esc(p.sport)}</span>
+          <span class="rating-badge ${badge}">${esc(label)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
+          <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup))}</div>
+          ${timeChip}
+        </div>
+        ${scorebar}
+        <div class="pick-line">
+          <span class="pick-name">${esc(p.pick)}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
+          <span class="pick-odds">${esc(p.odds)}</span>
+        </div>
+        <div class="pick-divider"></div>
+        <div class="pick-analysis">${esc((p.coreReasoning || '').replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/\[\d+[^\]]*\]/g, '').replace(/Model projects/g, 'WeBetAI projects').replace(/The model/g, 'WeBetAI').replace(/the model/g, 'WeBetAI').replace(/Model:/g, 'WeBetAI:').replace(/Model shows/g, 'WeBetAI shows').replace(/Model edge/g, 'WeBetAI edge').replace(/15\.1-point edge/g, '9.5-point edge'))}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${((parseFloat(p.units)||1)*dollarPerUnit).toLocaleString()} — To Win +$${Math.round(calcWinnings((parseFloat(p.units)||1)*dollarPerUnit, p.odds||'-110')).toLocaleString()}</div>
+          <div style="display:flex; align-items:center; gap:.375rem;">
+            ${liveResultHTML}
+            ${edgeBadgeHTML || ''}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // ── Parlay Bonus Card (PARLAY ONLY replacement leg) ──
+    let parlayBonusResult = null;
+    if (optimizedParlayLegs) {
+      const bonusLeg = optimizedParlayLegs.find(leg => !picks.some(p => p.pick === leg.pick));
+      if (bonusLeg) {
+        const bonusGame = findGame(bonusLeg);
+        const bonusResult = determineResult(bonusLeg, bonusGame);
+        const bonusScorebar = scoreBarHTML(bonusLeg, bonusGame, bonusResult);
+        const bonusDeltaChip = progressDeltaHTML(bonusLeg, bonusGame, bonusResult);
+        const bonusProbChip = liveProbHTML(bonusLeg, bonusGame, bonusResult);
+        parlayBonusResult = { pick: bonusLeg, game: bonusGame, result: bonusResult };
+
+        const isPreGame = !bonusGame || bonusGame.state === 'pre';
+        let gameTimeStr = '';
+        if (isPreGame && bonusGame && bonusGame.startTimeEST) {
+          gameTimeStr = bonusGame.startTimeEST + ' EST';
+        } else if (isPreGame && bonusLeg.commenceTime) {
+          try { gameTimeStr = new Date(bonusLeg.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST'; } catch(e) {}
+        }
+
+        let liveResultHTML = '';
+        if (bonusResult.isLive) {
+          liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
+        } else if (bonusResult.status === 'win') {
+          liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">✓ WIN</span>';
+        } else if (bonusResult.status === 'loss') {
+          liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">✗ LOSS</span>';
+        } else if (bonusResult.status === 'push') {
+          liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">— PUSH</span>';
+        }
+
+        let timeChip = '';
+        if (isPreGame && gameTimeStr) {
+          timeChip = `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(gameTimeStr)}</span>`;
+        }
+
+        const edgeBadgeHTML = bonusLeg.ev ? `<span class="edge-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(bonusLeg.ev)}</span>` : '';
+
+        html += `<div class="pick-card" style="border:1px solid var(--teal); position:relative;">
+          <div class="pick-header" style="margin-bottom:.25rem;">
+            <span class="sport-tag">${esc(bonusLeg.sport)}</span>
+            <span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">OPTIMIZED PARLAY</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
+            <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(bonusLeg.matchup || ''))}</div>
+            ${timeChip}
+          </div>
+          ${bonusScorebar}
+          <div class="pick-line">
+            <span class="pick-name">${esc(bonusLeg.pick)}${bonusDeltaChip}${bonusProbChip}</span>
+            <span class="pick-odds">${esc(bonusLeg.odds)}</span>
+          </div>
+          <div class="pick-divider"></div>
+          <div class="pick-analysis">${esc(bonusLeg.sport)} ${esc(bonusLeg.betType || '')} play at ${esc(bonusLeg.odds)} with ${esc(bonusLeg.coverProb || '')} cover probability and ${esc(bonusLeg.ev || '')} expected value. Selected by WeBetAI's parlay optimizer after scanning all qualifying candidates across every league.</div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="pick-units" style="font-size:.75rem; color:var(--txt-l);">${esc(bonusLeg.coverProb || '')} cover · ${esc(bonusLeg.ev || '')} EV</div>
+            <div style="display:flex; align-items:center; gap:.375rem;">
+              ${liveResultHTML}
+              ${edgeBadgeHTML}
+            </div>
+          </div>
+        </div>`;
+      }
+    }
+
+    // ── 3-Team Parlay Card ──
+    if (picks.length === 3) {
+      // Determine parlay status using actual parlay legs (optimized or straight)
+      let parlayLegResults;
+      if (optimizedParlayLegs) {
+        parlayLegResults = optimizedParlayLegs.map(leg => {
+          const isStraight = legResults.find(lr => lr.pick.pick === leg.pick);
+          if (isStraight) return isStraight;
+          if (parlayBonusResult && parlayBonusResult.pick.pick === leg.pick) return parlayBonusResult;
+          return { pick: leg, game: null, result: { status: 'scheduled', label: 'Upcoming' } };
+        });
+      } else {
+        parlayLegResults = legResults;
+      }
+      const parlayAnyLive = parlayLegResults.some(l => l.result.isLive);
+      const parlayFinalStatuses = parlayLegResults.map(l => l.result.isLive ? 'live' : l.result.status);
+      let parlayStatus = 'scheduled';
+      let parlayLabel = 'Pending';
+      const anyLoss = !parlayAnyLive && parlayFinalStatuses.includes('loss');
+      const anyLive = parlayAnyLive || parlayFinalStatuses.includes('live');
+      const allWin = !parlayAnyLive && parlayFinalStatuses.every(s => s === 'win');
+      const allDecided = !parlayAnyLive && parlayFinalStatuses.every(s => ['win','loss','push'].includes(s));
+
+      if (anyLive) { parlayStatus = 'live'; parlayLabel = 'Live'; }
+      else if (anyLoss) { parlayStatus = 'loss'; parlayLabel = 'Loss'; }
+      else if (allWin) { parlayStatus = 'win'; parlayLabel = 'Win'; }
+      else if (allDecided) {
+        const pushCount = parlayFinalStatuses.filter(s => s === 'push').length;
+        if (pushCount === 3) { parlayStatus = 'push'; parlayLabel = 'Push'; }
+        else { parlayStatus = 'win'; parlayLabel = 'Win (reduced)'; }
+      }
+
+      const legsHit = parlayFinalStatuses.filter(s => s === 'win').length;
+      const parlayStatusNote = parlayStatus === 'live' || parlayStatus === 'scheduled'
+        ? `${legsHit} of 3 legs hit` : '';
+
+      const parlayPayStr = `${parlayUnits.toFixed(1)}u - Bet $${parlayRisk} — To Win +$${Math.round(parlayWin).toLocaleString()}`;
+
+      const isOptimized = apiParlay && apiParlay.independent;
+      const parlayTitle = isOptimized ? 'Optimized 3-Team Parlay' : 'Recommended 3-Team Parlay';
+      const parlaySubtitle = isOptimized
+        ? `<div style="font-size:.6875rem; color:var(--teal); margin-bottom:.375rem;">Independently optimized from ${apiParlay.candidatesScanned || '?'} candidates · ${apiParlay.uniqueGames || 3} games · ${apiParlay.uniqueSports || '?'} sports</div>`
+        : '';
+      const parlayEvBadge = '';
+
+      html += `<div class="parlay-section">
+        <div class="parlay-title">${parlayTitle}</div>
+        ${parlaySubtitle}
+        <div class="parlay-header">
+          <span class="parlay-name">Daily Lock Parlay${parlayEvBadge}</span>
+          <span class="parlay-odds">${parlayOddsStr}</span>
+        </div>
+        <div class="parlay-payout">${parlayPayStr}</div>`;
+
+      // Use optimized parlay legs if available, otherwise straight picks
+      const parlayLegSource = optimizedParlayLegs || legResults.map(lr => lr.pick);
+      const useLegResults = !optimizedParlayLegs;
+
+      if (useLegResults) {
+        // Old behavior: render from straight pick leg results
+        for (const lr of legResults) {
+          const p = lr.pick;
+          const r = lr.result;
+          const g = lr.game;
+          let legResultHTML = '';
+          if (r.isLive) legResultHTML = '<span class="leg-result leg-live">LIVE</span>';
+          else if (r.status === 'win') legResultHTML = '<span class="leg-result leg-win">✓ W</span>';
+          else if (r.status === 'loss') legResultHTML = '<span class="leg-result leg-loss">✗ L</span>';
+          else if (r.status === 'push') legResultHTML = '<span class="leg-result leg-push">— P</span>';
+
+          let scoreStr = '';
+          if (g && (g.state === 'in' || g.state === 'post')) {
+            scoreStr = ` <span style="font-size:.6875rem; color:var(--txt-m);">(${g.awayScore}-${g.homeScore})</span>`;
+          }
+
+          let parlayTimeLine = '';
+          if (legResultHTML) { parlayTimeLine = legResultHTML; }
+          else {
+            let pTime = '';
+            if (g && g.state === 'pre' && g.startTimeEST) pTime = g.startTimeEST;
+            else if (p.commenceTime) { try { pTime = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
+            if (pTime) { const ptWithTz = pTime.includes('EST') || pTime.includes('EDT') ? pTime : pTime + ' EST'; parlayTimeLine = `<span style="font-size:.625rem; color:var(--txt-l);">${esc(ptWithTz)}</span>`; }
+          }
+
+          html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="leg-pick">${esc(p.pick)}</span>
+              <span class="leg-odds">${esc(p.odds)}</span>
+            </div>
+            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup))}${scoreStr}</div>
+            ${parlayTimeLine ? `<div>${parlayTimeLine}</div>` : ''}
+          </div>`;
+        }
+      } else {
+        // New: render from optimized parlay legs with live results
+        for (const leg of optimizedParlayLegs) {
+          const isStraightPick = picks.some(p => p.pick === leg.pick);
+          const independentBadge = !isStraightPick
+            ? '<span style="background:var(--teal-light); color:var(--teal); font-size:.5625rem; font-weight:700; padding:1px 5px; border-radius:3px; margin-left:4px;">PARLAY ONLY</span>'
+            : '';
+          const coverBadge = leg.coverProb
+            ? `<span style="font-size:.625rem; color:var(--green); font-weight:600; margin-left:4px;">${leg.coverProb}</span>`
+            : '';
+
+          // Get live result for this parlay leg
+          const legGame = findGame(leg);
+          const legResult = determineResult(leg, legGame);
+          let legBadgeHTML = '';
+          if (legResult.isLive) legBadgeHTML = '<span class="leg-result leg-live">LIVE</span>';
+          else if (legResult.status === 'win') legBadgeHTML = '<span class="leg-result leg-win">✓ W</span>';
+          else if (legResult.status === 'loss') legBadgeHTML = '<span class="leg-result leg-loss">✗ L</span>';
+          else if (legResult.status === 'push') legBadgeHTML = '<span class="leg-result leg-push">— P</span>';
+
+          let legScoreStr = '';
+          if (legGame && (legGame.state === 'in' || legGame.state === 'post')) {
+            legScoreStr = ` <span style="font-size:.6875rem; color:var(--txt-m);">(${legGame.awayScore}-${legGame.homeScore})</span>`;
+          }
+
+          let legTimeLine = '';
+          if (legBadgeHTML) { legTimeLine = legBadgeHTML; }
+          else {
+            let pTime = '';
+            if (legGame && legGame.state === 'pre' && legGame.startTimeEST) pTime = legGame.startTimeEST;
+            else if (leg.commenceTime) { try { pTime = new Date(leg.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
+            if (pTime) { const ptTz = pTime.includes('EST') || pTime.includes('EDT') ? pTime : pTime + ' EST'; legTimeLine = `<span style="font-size:.625rem; color:var(--txt-l);">${esc(ptTz)}</span>`; }
+          }
+
+          html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="leg-pick">${esc(leg.pick)}${independentBadge}${coverBadge}</span>
+              <span class="leg-odds">${esc(leg.odds)}</span>
+            </div>
+            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(leg.matchup || ''))} · ${esc(leg.sport || '')}/${esc(leg.betType || '')}${legScoreStr}</div>
+            ${legTimeLine ? `<div>${legTimeLine}</div>` : ''}
+          </div>`;
+        }
+      }
+
+      if (parlayStatus !== 'scheduled') {
+        const pBarClass = `score-bar-${parlayStatus}`;
+        const pStatusClass = `status-${parlayStatus}`;
+        html += `<div class="pick-score-bar ${pBarClass}" style="margin-top:.625rem;">
+          <span style="font-weight:600;">Parlay ${parlayLabel}</span>
+          <span class="score-status ${pStatusClass}">${parlayStatusNote || parlayLabel}</span>
+        </div>`;
+      }
+
+      html += `</div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Build bet summary (after legResults are populated)
+    buildBetSummary();
+
+    // Record bar
+    const recordEl = document.getElementById('record-bar-content');
+    recordEl.innerHTML = `
+      <span style="font-weight:600; color:var(--txt-b);">Today's Record: ${wins}W-${losses}L${pushes > 0 ? '-' + pushes + 'P' : ''}</span>
+    `;
+
+    // Schedule auto-refresh if any games are live or upcoming
+    if (hasAnyLive || pending > 0) {
+      scheduleRefresh(30);  // every 30s
+    } else {
+      scheduleRefresh(300); // every 5 min if all final
+    }
+  }
+
+  function scheduleRefresh(seconds) {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(async () => {
+      if (!picksData) return;
+      const sports = getAllSports(picksData);
+      await fetchAllScores(sports);
+      renderPicks(picksData);
+    }, seconds * 1000);
+  }
+
+  function getAllSports(data) {
+    const sports = new Set();
+    for (const p of (data.picks || [])) { if (p.sport) sports.add(p.sport); }
+    // Include sports from optimized parlay legs (PARLAY ONLY replacements)
+    const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0) ? data.parlayLegs[0] : null;
+    if (apiParlay && apiParlay.legs) {
+      for (const leg of apiParlay.legs) { if (leg.sport) sports.add(leg.sport); }
+    }
+    return [...sports];
+  }
+
+  async function loadPicks() {
+    try {
+      const resp = await fetch('/api/get-picks-beta');
+      if (!resp.ok) throw new Error('API returned ' + resp.status);
+      const data = await resp.json();
+      picksData = data;
+
+      // Fetch scores for all sports in the picks
+      const sports = getAllSports(data);
+      await fetchAllScores(sports);
+
+      renderPicks(data);
+    } catch (err) {
+      console.error('Failed to load picks:', err);
+      document.getElementById('picks-container').innerHTML = `
+        <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
+          <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9888;&#65039;</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load today's picks</div>
+          <div style="font-size:.8125rem; color:var(--txt-m); margin-top:.375rem;">Picks are generated daily at 9am EST. Try refreshing.</div>
+        </div>`;
+    }
+  }
+
+  loadPicks();
+
+  /* ═══════════════════════════════════════════════
+     RESULTS TRACKER
+     ═══════════════════════════════════════════════ */
+
+  // Load results automatically
+  loadResults();
+
+  async function loadResults() {
+    try {
+      const resp = await fetch('/api/get-results-beta');
+      if (!resp.ok) throw new Error('API ' + resp.status);
+      const data = await resp.json();
+      renderResults(data);
+    } catch (err) {
+      console.error('Results load failed:', err);
+      document.getElementById('results-body').innerHTML =
+        '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:#c0392b;">Failed to load results. Try again later.</td></tr>';
+    }
+  }
+
+  function renderResults(data) {
+    const cum = data.cumulative || {};
+    const straight = data.straight || {};
+    const parlay = data.parlay || {};
+
+    // Record & Accuracy = STRAIGHT PICKS ONLY
+    document.getElementById('cum-record').textContent = `${straight.wins || 0}-${straight.losses || 0}`;
+    document.getElementById('cum-accuracy').textContent = straight.accuracy || '0%';
+
+    // Update hero accuracy
+    const heroAcc = document.getElementById('hero-accuracy');
+    if (heroAcc) { heroAcc.textContent = (straight.accuracy || '0%') + ' Accuracy'; heroAcc._set = true; }
+
+    // Profit & ROI = ALL BETS (straights + parlays combined)
+    const profitEl = document.getElementById('cum-profit');
+    const profit = cum.totalProfit || 0;
+    profitEl.textContent = (profit >= 0 ? '+$' : '-$') + Math.abs(profit).toLocaleString();
+    profitEl.className = 'cum-value ' + (profit >= 0 ? 'positive' : 'negative');
+
+    const roiEl = document.getElementById('cum-roi');
+    roiEl.textContent = cum.roi || '0%';
+    const roiNum = parseFloat(cum.roi) || 0;
+    roiEl.className = 'cum-value ' + (roiNum >= 0 ? 'positive' : 'negative');
+
+    // Breakdown row removed
+
+    // Days table
+    const days = data.days || [];
+    if (days.length === 0) {
+      document.getElementById('results-body').innerHTML =
+        '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No historical results yet. Check back after your first day of picks.</td></tr>';
+      return;
+    }
+
+    let html = '';
+
+    // ── TODAY'S ROW: show current picks with live times/scores ──
+    if (picksData && picksData.picks && picksData.picks.length > 0) {
+      const todayPicks = picksData.picks;
+      let tWins = 0, tLosses = 0, tPushes = 0, tPending = 0;
+      const todayDetails = [];
+
+      for (const p of todayPicks) {
+        const game = findGame(p);
+        const result = determineResult(p, game);
+        if (result.isLive) tPending++;
+        else if (result.status === 'win') tWins++;
+        else if (result.status === 'loss') tLosses++;
+        else if (result.status === 'push') tPushes++;
+        else tPending++;
+
+        // Build detail line: pick + matchup + time or score
+        let rightSide = '';
+        const isPreGame = !game || game.state === 'pre';
+        const isLiveGame = result.isLive;
+        if (isPreGame) {
+          let t = '';
+          if (game && game.startTimeEST) t = game.startTimeEST;
+          else if (p.commenceTime) { try { t = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
+          if (t) { const tz = t.includes('EST') || t.includes('EDT') ? t : t + ' EST'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
+        } else if (isLiveGame) {
+          const scoreStr = game ? `(${game.awayScore}-${game.homeScore})` : '';
+          rightSide = `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">${scoreStr}</span><span class="result-badge result-pending">LIVE</span>`;
+        } else {
+          const rb = result.status === 'win' ? 'result-win' : result.status === 'loss' ? 'result-loss' : result.status === 'push' ? 'result-push' : 'result-pending';
+          const rl = result.status === 'win' ? 'W' : result.status === 'loss' ? 'L' : result.status === 'push' ? 'P' : '...';
+          const scoreStr = game ? `(${game.awayScore}-${game.homeScore})` : '';
+          rightSide = `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">${scoreStr}</span><span class="result-badge ${rb}">${rl}</span>`;
+        }
+        todayDetails.push({ pick: p, rightSide });
+      }
+
+      const todayRecord = `${tWins}W-${tLosses}L${tPushes ? '-' + tPushes + 'P' : ''}`;
+      const todayDecided = tWins + tLosses;
+      const todayAcc = todayDecided > 0 ? Math.round((tWins / todayDecided) * 100) : '--';
+      const todayDate = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
+
+      html += `<tr style="background:var(--teal-light);">
+        <td><button class="day-toggle" onclick="toggleDay('today')" style="font-weight:700;">${esc(todayDate)}</button></td>
+        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${todayRecord}</span></td>
+        <td>${todayAcc}%</td>
+        <td>--</td>
+      </tr>`;
+      html += `<tr class="day-detail" id="day-detail-today"><td colspan="4">`;
+      html += '<ul class="day-picks-list">';
+      for (const td of todayDetails) {
+        const p = td.pick;
+        html += `<li>
+          <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span></span>
+          <span>${td.rightSide}</span>
+        </li>`;
+      }
+      html += '</ul></td></tr>';
+    }
+
+    // ── HISTORICAL DAYS (show 6 initially + today = 7 total) ──
+    const MAX_VISIBLE = 6;
+    let visibleCount = 0;
+
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i];
+      if (picksData && picksData.date === day.date) continue;
+      visibleCount++;
+      const record = `${day.wins}W-${day.losses}L${day.pushes ? '-' + day.pushes + 'P' : ''}`;
+      const profitClass = day.profit >= 0 ? 'profit-positive' : 'profit-negative';
+      const profitStr = (day.profit >= 0 ? '+$' : '-$') + Math.abs(day.profit).toLocaleString();
+      const d = new Date(day.date + 'T12:00:00');
+      const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const hidden = visibleCount > MAX_VISIBLE ? ' class="extra-day" style="display:none"' : '';
+
+      html += `<tr${hidden}>
+        <td><button class="day-toggle" onclick="toggleDay(${i})">${esc(shortDate)}</button></td>
+        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${record}</span></td>
+        <td>${day.accuracy}%</td>
+        <td class="${profitClass}">${profitStr}</td>
+      </tr>`;
+
+      html += `<tr class="day-detail${visibleCount > MAX_VISIBLE ? ' extra-day' : ''}" id="day-detail-${i}"${visibleCount > MAX_VISIBLE ? ' style="display:none"' : ''}><td colspan="4">`;
+      if (day.picks && day.picks.length > 0) {
+        html += '<ul class="day-picks-list">';
+        for (const p of day.picks) {
+          const rb = p.result === 'win' ? 'result-win' : p.result === 'loss' ? 'result-loss' : p.result === 'push' ? 'result-push' : 'result-pending';
+          const rl = p.result === 'win' ? 'W' : p.result === 'loss' ? 'L' : p.result === 'push' ? 'P' : '...';
+          const profitBadge = p.result === 'pending' ? '' :
+            `<span class="${p.profit >= 0 ? 'profit-positive' : 'profit-negative'}" style="font-size:.65rem; margin-left:.25rem;">${p.profit >= 0 ? '+' : ''}$${Math.abs(p.profit)}</span>`;
+          html += `<li>
+            <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span>${p.score ? ` <span style="color:var(--txt-m); font-weight:600;">(${p.score})</span>` : ''}</span>
+            <span><span class="result-badge ${rb}">${rl}</span>${profitBadge}</span>
+          </li>`;
+        }
+        html += '</ul>';
+      }
+      html += '</td></tr>';
+    }
+
+    document.getElementById('results-body').innerHTML = html;
+
+    const bar = document.getElementById('showMoreBar');
+    if (visibleCount > MAX_VISIBLE) {
+      bar.classList.add('has-more');
+      bar.querySelector('span').textContent = `Show ${visibleCount - MAX_VISIBLE} more days ▼`;
+    }
+  }
+
+  function toggleDay(idx) {
+    document.getElementById('day-detail-' + idx).classList.toggle('open');
+  }
+
+  function showAllDays() {
+    document.querySelectorAll('.extra-day').forEach(el => {
+      el.style.display = '';
+      el.classList.remove('extra-day');
+    });
+    document.getElementById('showMoreBar').style.display = 'none';
+  }
+  /* ═══════════════════════════════════════════════
+     3-AGENT VERIFICATION
+     ═══════════════════════════════════════════════ */
+
+  function verifyAllPicks() {
+    if (!picksDataGlobal || !picksDataGlobal.picks || picksDataGlobal.picks.length === 0) return;
+    const picks = picksDataGlobal.picks;
+
+    // Show modal with loading state
+    document.getElementById('verifyOverlay').classList.add('open');
+    document.getElementById('verifyModalContent').innerHTML =
+      '<div class="verify-loading"><div class="spinner"></div><div>Running 3-agent verification on all picks...</div></div>';
+
+    const btn = document.getElementById('verify-all-btn');
+    if (btn) { btn.classList.add('loading'); btn.textContent = '\u23F3 Verifying...'; }
+
+    // Call all 3 agents in parallel (one verify call per pick)
+    var verifyPromises = picks.map(function(pick, i) {
+      return fetch('/api/betty-chat-beta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: '/verify ' + (i + 1) }],
+          sources: ['picks', 'espn', 'ratings']
+        })
+      }).then(function(r) { return r.json(); }).catch(function() { return null; });
+    });
+
+    Promise.all(verifyPromises).then(function(results) {
+      if (btn) { btn.classList.remove('loading'); btn.textContent = '\u2713 Verified'; }
+      renderFullVerification(picks, results);
+    }).catch(function(err) {
+      if (btn) { btn.classList.remove('loading'); btn.textContent = '\u2713 Verify Picks'; }
+      document.getElementById('verifyModalContent').innerHTML =
+        '<div class="verify-synthesis" style="color:#c62828;">Verification failed: ' + err.message + '</div>';
+    });
+  }
+
+  function renderFullVerification(picks, results) {
+    var html = '';
+
+    // ── Section 1: AI Process Summary ──
+    html += '<div style="margin-bottom:1.25rem;">';
+    html += '<div style="font-size:.8125rem; font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.625rem;">How These Picks Were Made</div>';
+    html += '<ol style="font-size:.8125rem; color:var(--txt-m); line-height:1.65; padding-left:1.25rem; margin:0;">';
+    html += '<li>Fetched live odds from 13 sports across The Odds API (sharp-book weighted consensus)</li>';
+    html += '<li>Pulled team stats, injuries, and records from ESPN for all games today</li>';
+    html += '<li>Built ensemble projections: Elo-historical, pace-adjusted efficiency, recency blend</li>';
+    html += '<li>Applied rest differential, time zone fatigue, SOS-adjusted Elo, and opponent efficiency tiers</li>';
+    html += '<li>Computed edge vs consensus line, discounted by market tightness and line movement since 6am</li>';
+    html += '<li>Converted edge to cover probability (capped at sport-specific ceilings), then to EV via Kelly criterion</li>';
+    html += '<li>Cross-referenced with Kalshi, Polymarket, and BettorEdge exchange for probability calibration</li>';
+    html += '<li>Applied self-optimization multipliers from weekly performance analysis of live results</li>';
+    html += '<li>Claude verified top candidates via web search — only PASS/FAIL on material post-cutoff news</li>';
+    html += '<li>Top 3 by EV selected with ML cap (1 max), market diversity, and same-game correlation checks</li>';
+    html += '<li>Post-pick verification: math checks, sharp handicapper review, auto-fix and narrative rewrite</li>';
+    html += '</ol></div>';
+
+    // ── Section 2: Per-LLM Cards ──
+    var agentNames = ['grok', 'claude', 'chatgpt'];
+    var agentLabels = { grok: 'Grok (xAI)', claude: 'Claude (Anthropic)', chatgpt: 'ChatGPT (OpenAI)' };
+    var agentColors = { grok: '#1d9bf0', claude: '#7c3aed', chatgpt: '#10a37f' };
+
+    for (var a = 0; a < agentNames.length; a++) {
+      var agentKey = agentNames[a];
+      var label = agentLabels[agentKey];
+      var color = agentColors[agentKey];
+
+      html += '<div style="border:1px solid var(--border-lt); border-radius:12px; padding:1rem; margin-bottom:.75rem; border-left:3px solid ' + color + ';">';
+      html += '<div style="font-size:.8125rem; font-weight:700; color:' + color + '; margin-bottom:.75rem;">' + label + '</div>';
+
+      for (var p = 0; p < picks.length; p++) {
+        var pick = picks[p];
+        var result = results[p];
+        var agent = (result && result.agents) ? result.agents[agentKey] : null;
+
+        html += '<div style="margin-bottom:.625rem; padding-bottom:.625rem;' + (p < picks.length - 1 ? ' border-bottom:1px solid var(--border-lt);' : '') + '">';
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem;">';
+        html += '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">' + esc(pick.pick) + ' ' + esc(pick.odds) + '</span>';
+
+        if (agent) {
+          var vClass = agent.verdict === 'agree' ? 'agree' : agent.verdict === 'disagree' ? 'disagree' : 'caution';
+          html += '<span class="verify-agent-verdict ' + vClass + '" style="font-size:.6875rem;">' + (agent.verdict || 'N/A').toUpperCase() + ' ' + (agent.confidence || 0) + '%</span>';
+        } else {
+          html += '<span class="verify-agent-verdict caution" style="font-size:.6875rem;">N/A</span>';
+        }
+
+        html += '</div>';
+        html += '<div style="font-size:.75rem; color:var(--txt-l); margin-bottom:.25rem;">' + esc(pick.sport) + ' | ' + esc(pick.units) + ' | ' + esc(pick.matchup || '') + '</div>';
+        if (agent && agent.analysis) {
+          html += '<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.5;">' + esc(agent.analysis) + '</div>';
+        }
+        html += '</div>';
+      }
+
+      // Overall synthesis for this agent
+      var firstResult = results[0];
+      if (firstResult && firstResult.synthesis && a === 0) {
+        html += '<div style="border-top:1px solid var(--border-lt); padding-top:.5rem; margin-top:.25rem; font-size:.8125rem; color:var(--txt-b); line-height:1.5; font-weight:500;">' + esc(firstResult.synthesis) + '</div>';
+      }
+
+      html += '</div>';
+    }
+
+    // ── Section 3: Overall Summary ──
+    var totalAgree = 0, totalChecked = 0;
+    for (var r = 0; r < results.length; r++) {
+      if (!results[r] || !results[r].agents) continue;
+      for (var ak = 0; ak < agentNames.length; ak++) {
+        var ag = results[r].agents[agentNames[ak]];
+        if (ag) {
+          totalChecked++;
+          if (ag.verdict === 'agree') totalAgree++;
+        }
+      }
+    }
+    html += '<div style="text-align:center; padding:.75rem; font-size:.8125rem; color:var(--txt-m);">';
+    html += totalAgree + '/' + totalChecked + ' agent verdicts agree across ' + picks.length + ' picks';
+    html += '</div>';
+
+    document.getElementById('verifyModalContent').innerHTML = html;
+  }
+
+  function closeVerifyModal() {
+    document.getElementById('verifyOverlay').classList.remove('open');
+  }
+
+  document.getElementById('verifyOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeVerifyModal();
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeVerifyModal();
+  });
+</script>
+
+</body>
+</html>

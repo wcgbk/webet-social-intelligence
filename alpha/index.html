@@ -652,17 +652,20 @@
   if (window.self !== window.top) document.body.classList.add('in-iframe');
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-  // Strip city/state from team names — "Los Angeles Clippers" → "Clippers", "UConn Huskies" → "Huskies"
+  // Strip city/state from team names — "Los Angeles Clippers" → "Clippers", "Boston Red Sox" → "Red Sox"
   function teamOnly(name) {
     if (!name) return '';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return name;
-    // Known multi-word team names
-    const multiWord = { 'trail': 'Trail Blazers', 'blue': 'Blue Devils', 'red': 'Red Wings', 'maple': 'Maple Leafs', 'blue jackets': 'Blue Jackets', 'golden': 'Golden Knights' };
-    const lower = name.toLowerCase();
-    for (const [key, val] of Object.entries(multiWord)) {
-      if (lower.includes(key) && lower.includes(val.toLowerCase().split(' ').pop())) return val;
+    // Multi-word nicknames that must not collapse to just the last word
+    const multiWordNicks = [
+      'Red Sox', 'White Sox', 'Blue Jays',
+      'Trail Blazers', 'Blue Jackets', 'Red Wings', 'Maple Leafs', 'Golden Knights',
+      'Blue Devils', 'Sun Devils', 'Mean Green', 'Tar Heels', 'Horned Frogs'
+    ];
+    const lower = name.toLowerCase().trim();
+    for (const nick of multiWordNicks) {
+      if (lower.endsWith(nick.toLowerCase())) return nick;
     }
+    const parts = name.trim().split(/\s+/);
     return parts[parts.length - 1];
   }
 

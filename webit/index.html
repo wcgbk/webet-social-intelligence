@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | WeBit Coin</title>
+  <meta name="description" content="WeBit is the WeBetAI cryptocurrency — the free credit coin powering peer-to-peer challenges, predictions, and the liquidity mission across the WeBetAI ecosystem." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/webit" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | WeBit Coin" />
+  <meta property="og:description" content="WeBit is the free credit coin powering WeBetAI challenges and predictions. Invest in the liquidity mission." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | WeBit Coin" />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --bar-track: #e8ebef;
+      --gold: #c5a03f;
+      --gold-light: #fdf6e3;
+      --gold-border: #e8d48b;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* --- Header --- */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .header-link.active:hover { background: #003d44; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* --- Main --- */
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    /* --- Coin Hero --- */
+    .coin-hero {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .coin-hero img {
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      object-fit: cover;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15), 0 0 0 4px var(--gold-border);
+      margin-bottom: 1rem;
+    }
+    .coin-name {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--olive);
+      letter-spacing: -0.02em;
+    }
+    .coin-ticker {
+      font-size: .875rem;
+      font-weight: 600;
+      color: var(--gold);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    /* --- Page Title --- */
+    .page-title { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-bottom: .125rem; }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1.25rem; line-height: 1.6; }
+
+    /* --- Version Tag --- */
+    .version-tag {
+      display: inline-block; font-size: .625rem; font-weight: 600;
+      color: var(--green); background: var(--green-light);
+      border: 1px solid var(--green-border); border-radius: 4px;
+      padding: .1rem .4rem; margin-left: .375rem; vertical-align: middle;
+    }
+
+    /* --- Summary Cards --- */
+    .summary-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .75rem; text-align: center;
+    }
+    .summary-label {
+      font-size: .625rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .summary-value {
+      font-size: 1.5rem; font-weight: 700; color: var(--teal); margin-top: .125rem;
+    }
+    .summary-suffix { font-size: .75rem; font-weight: 500; color: var(--txt-m); }
+
+    /* --- Scorecard --- */
+    .scorecard {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .scorecard-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem;
+    }
+
+    /* --- Gap Section --- */
+    .gap-card {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .875rem 1rem; margin-bottom: .75rem;
+    }
+    .gap-title {
+      font-size: .6875rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
+    .gap-item {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.6;
+      margin-bottom: .375rem;
+    }
+    .gap-item:last-child { margin-bottom: 0; }
+    .gap-label { font-weight: 600; color: var(--txt-b); }
+
+    /* --- Pipeline Steps --- */
+    .pipeline-step {
+      display: flex; gap: .75rem; align-items: flex-start;
+      margin-bottom: .875rem;
+    }
+    .pipeline-step:last-child { margin-bottom: 0; }
+    .step-num {
+      flex-shrink: 0; width: 1.5rem; height: 1.5rem;
+      background: var(--teal); color: var(--white);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: .6875rem; font-weight: 700; margin-top: .125rem;
+    }
+    .step-content { flex: 1; }
+    .step-title { font-size: .8125rem; font-weight: 600; color: var(--olive); margin-bottom: .125rem; }
+    .step-desc { font-size: .75rem; color: var(--txt-m); line-height: 1.5; }
+    .step-tag {
+      display: inline-block; font-size: .5625rem; font-weight: 600;
+      padding: .1rem .35rem; border-radius: 3px; margin-top: .25rem;
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    .tag-credit { background: #fff3cd; color: #856404; }
+    .tag-coin { background: var(--gold-light); color: var(--gold); border: 1px solid var(--gold-border); }
+    .tag-liquidity { background: #d1ecf1; color: #0c5460; }
+    .tag-free { background: var(--green-light); color: var(--green); }
+
+    /* --- Tier Blocks --- */
+    .tier-block { position: relative; }
+    .tier-block.featured-tier {
+      background: var(--teal-light);
+      border: 1.5px solid var(--teal-border);
+      border-radius: .75rem;
+      padding: 1rem;
+      margin: 0 -.25rem;
+      position: relative;
+    }
+    .tier-popular-badge {
+      position: absolute; top: -.5rem; left: 50%;
+      transform: translateX(-50%);
+      background: var(--teal); color: var(--white);
+      font-size: .5625rem; font-weight: 700;
+      padding: .15rem .5rem; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: .05em;
+      white-space: nowrap;
+    }
+    .tier-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: .625rem;
+    }
+    .price-tier {
+      font-size: .625rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em;
+      display: block; margin-bottom: .125rem;
+    }
+    .price-amount {
+      font-size: 1.75rem; font-weight: 700; color: var(--olive); line-height: 1;
+    }
+    .price-amount .mo { font-size: .75rem; font-weight: 400; color: var(--txt-m); }
+    .price-credits {
+      font-size: .8125rem; font-weight: 700; color: var(--olive); display: block;
+    }
+    .btn-contribute {
+      display: inline-block; font-size: .6875rem; font-weight: 700;
+      color: var(--white); background: var(--teal);
+      border: none; border-radius: 8px;
+      padding: .5rem .75rem; text-decoration: none;
+      white-space: nowrap; cursor: pointer;
+      text-align: center;
+    }
+    .btn-contribute:hover { background: #003d44; }
+    .btn-contribute.outline {
+      background: transparent; color: var(--teal);
+      border: 1.5px solid var(--teal-border);
+    }
+    .btn-contribute.outline:hover { background: var(--teal-light); }
+
+    /* --- Blockquote --- */
+    .pull-quote {
+      border-left: 3px solid var(--teal);
+      padding: .75rem 1rem; margin: .75rem 0;
+      background: var(--teal-light);
+      border-radius: 0 .5rem .5rem 0;
+    }
+    .pull-quote p {
+      font-size: .875rem; font-weight: 500; color: var(--teal);
+      line-height: 1.6; font-style: italic;
+    }
+
+    /* --- CTA Button --- */
+    .cta-row {
+      text-align: center; margin: 1rem 0;
+    }
+    .btn-cta {
+      display: inline-block; font-size: .875rem; font-weight: 700;
+      color: var(--white); background: var(--teal);
+      border: none; border-radius: 10px;
+      padding: .75rem 1.5rem; text-decoration: none;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-cta:hover { background: #003d44; }
+
+    /* --- Perks List --- */
+    .perks { list-style: none; margin-top: .625rem; }
+    .perks li {
+      font-size: .75rem; color: var(--txt-m); line-height: 1.5;
+      padding: .25rem 0; display: flex; align-items: flex-start; gap: .375rem;
+    }
+    .perks li svg { flex-shrink: 0; margin-top: .125rem; color: var(--teal); }
+
+    /* --- Footer --- */
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+    .footer-note a { color: var(--teal); text-decoration: none; }
+
+    @media (max-width: 480px) {
+      .summary-row { grid-template-columns: 1fr 1fr; }
+      .coin-hero img { width: 180px; height: 180px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <a href="/edge" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/webit" class="header-link active">WeBit Coin</a>
+      <a href="/rif" class="header-link">WeBetAI Credits</a>
+      <a href="/guardian" class="header-link">Guardian</a>
+      <a href="/edge" class="header-link">Edge Picks</a>
+      <a href="/betty/blog/solving-liquidity" class="header-link">Liquidity Mission</a>
+      <a href="/betty/blog" class="header-link">Betty's Blog</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/webit">WeBit Coin</a>
+      <a href="/rif">WeBetAI Credits</a>
+      <a href="/guardian">Guardian</a>
+      <a href="/edge">Edge Picks</a>
+      <a href="/betty/blog/solving-liquidity">Liquidity Mission</a>
+      <a href="/betty/blog">Betty's Blog</a>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- Coin Hero -->
+    <div class="coin-hero">
+      <img src="/webit/coin.png" alt="WeBit Coin — the WeBetAI cryptocurrency" />
+      <div class="coin-name">WeBit</div>
+      <div class="coin-ticker">$WEBIT</div>
+    </div>
+
+    <h1 class="page-title">WeBetAI Credits &mdash; Every Contribution Is An Investment</h1>
+    <p class="page-sub">WeBit is the native coin of the WeBetAI ecosystem &mdash; a free credit that powers every daily digest run, peer-to-peer challenge, prediction market and authenticity stake across the platform. Everyone starts with WeBit for free. For those who want to go deeper, WeBit is also a stablecoin that fuels the liquidity mission driving the entire WeBetAI economy.</p>
+
+    <!-- Summary Stats -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="summary-label">Starting Balance</div>
+        <div class="summary-value" style="font-size:.75rem; line-height:1.4;">1,000 WeBit</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Cost to Play</div>
+        <div class="summary-value" style="font-size:.75rem; line-height:1.4;">$0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Use Cases</div>
+        <div class="summary-value" style="font-size:.75rem; line-height:1.4;">Daily Digest, P2P Challenges, &amp; Picks</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Type</div>
+        <div class="summary-value" style="font-size:.75rem; color:var(--green);">Stablecoin</div>
+      </div>
+    </div>
+
+    <span class="version-tag" style="margin-bottom:.75rem; display:inline-block;">Free Credit Coin</span>
+
+    <!-- What is WeBit -->
+    <div class="scorecard">
+      <div class="scorecard-title">What Is WeBit?</div>
+      <div class="gap-item">
+        <span class="gap-label">WeBit is the free coin that makes WeBetAI work.</span> Every user gets WeBit credits when they join &mdash; no purchase required. These credits are staked in peer-to-peer challenges on trending topics, sports predictions through Edge Picks, and authenticity challenges through Guardian. Win and you earn more WeBit. Lose and you learn something real. Either way, the ecosystem gets smarter.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">Right now, it's a free in-game currency. Soon, it'll be worth something real.</span> WeBit powers every transaction in the WeBetAI ecosystem &mdash; challenges, predictions, Guardian authenticity stakes, Pick3 P2P parlays &mdash; all denominated in WeBit. As the algorithm generates revenue from users, truth verification, and market deployment, that yield creates a conversion path from free credits to real value. The more the ecosystem produces, the more every WeBit is worth.
+      </div>
+    </div>
+
+    <!-- How WeBit Works -->
+    <div class="scorecard">
+      <div class="scorecard-title">How WeBit Works</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Everyone Gets WeBit Free</div>
+          <div class="step-desc">Sign up and receive 1,000 WeBit credits instantly. No credit card, no wallet setup, no gas fees. WeBit is designed to remove every barrier to entry so anyone can challenge anyone on anything, immediately.</div>
+          <span class="step-tag tag-free">Free to Start</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Stake WeBit on Challenges</div>
+          <div class="step-desc">See a trending claim you disagree with? Challenge a friend on a sports pick? Stake WeBit on it. The AI resolves the outcome using Guardian's authenticity scoring or Edge Picks' model. Winner takes the pot.</div>
+          <span class="step-tag tag-credit">Peer-to-Peer Stakes</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Win &amp; Earn More WeBit</div>
+          <div class="step-desc">Good at spotting disinformation? Sharp on sports? Your WeBit balance grows as you win challenges. Top performers build reputation scores and leaderboard position that carries real weight in the ecosystem.</div>
+          <span class="step-tag tag-coin">Earn by Winning</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">WeBit Fuels the Liquidity Mission</div>
+          <div class="step-desc">Every WeBit transaction contributes to WeBetAI's liquidity flywheel &mdash; the same engine described in the Solving Liquidity article. Free challenges generate volume. Volume generates signal. Signal powers algorithmic deployment into prediction markets like Kalshi and Polymarket.</div>
+          <span class="step-tag tag-liquidity">Liquidity Engine</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Choose Your WeBit Package -->
+    <div class="scorecard">
+      <div class="scorecard-title">Choose Your WeBit Package</div>
+      <p style="font-size:.75rem; color:var(--txt-m); margin-bottom:1rem; line-height:1.5;">Your contribution powers the WeBetAI ecosystem and loads WeBit credits to your account. Credits fuel challenges, predictions, and authenticity stakes &mdash; every WeBit consumed represents real AI compute.</p>
+
+      <!-- Free -->
+      <div class="tier-block">
+        <div class="tier-header">
+          <div>
+            <span class="price-tier">Free</span>
+            <div class="price-amount">$0<span class="mo">/mo</span></div>
+            <span class="price-credits" style="font-size:.75rem;">1,000 WeBit/mo</span>
+          </div>
+          <a href="/webit" class="btn-contribute outline">Get Started</a>
+        </div>
+        <ul class="perks">
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            1,000 WeBit credits every month &mdash; free forever
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Peer-to-peer challenges on trending topics and social posts
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Edge Picks daily sports predictions
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Guardian authenticity scoring participation
+          </li>
+        </ul>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border-lt); margin:1rem 0;">
+
+      <!-- $100/mo -->
+      <div class="tier-block featured-tier">
+        <div class="tier-popular-badge">Most Popular</div>
+        <div class="tier-header">
+          <div>
+            <span class="price-tier">Contributor</span>
+            <div class="price-amount">$100<span class="mo">/mo</span></div>
+            <span class="price-credits" style="font-size:.75rem;">5,000 WeBit/mo</span>
+          </div>
+          <a href="/webit" class="btn-contribute">Contribute</a>
+        </div>
+        <ul class="perks">
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Everything in Free, plus:
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Enhanced AI analysis &amp; social signal mining
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Unlimited peer-to-peer challenges across all topics
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Custom daily digest personalized to your interests
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Advanced source accountability &amp; deep-dive authenticity analysis
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            5x the credits &mdash; 5x the liquidity contribution
+          </li>
+        </ul>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border-lt); margin:1rem 0;">
+
+      <!-- $200/mo -->
+      <div class="tier-block">
+        <div class="tier-header">
+          <div>
+            <span class="price-tier">Liquidity Partner</span>
+            <div class="price-amount">$200<span class="mo">/mo</span></div>
+            <span class="price-credits" style="font-size:.75rem;">10,000 WeBit/mo</span>
+          </div>
+          <a href="/webit" class="btn-contribute outline">Contribute</a>
+        </div>
+        <ul class="perks">
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Everything in Contributor, plus:
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Advanced AI debrief on resolved challenges
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Boost multipliers on peer-to-peer challenges
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Liquidity Partner badge &amp; leaderboard perks
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            VIP priority AI access &mdash; faster responses, deeper analysis
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Early access to new features before public launch
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Founding Liquidity Partner recognition
+          </li>
+        </ul>
+      </div>
+
+      <p style="font-size:.6875rem; color:var(--txt-l); text-align:center; line-height:1.5; margin-top:1rem;">Credits refresh monthly. Cancel anytime.<br>100% of contributions power the WeBetAI ecosystem and liquidity mission.</p>
+    </div>
+
+    <div class="pull-quote">
+      <p>Free challenges generate volume. Volume generates signal. Signal powers algorithmic deployment. Every WeBit staked makes the entire ecosystem smarter and more liquid.</p>
+    </div>
+
+    <!-- The Investment Layer -->
+    <div class="scorecard">
+      <div class="scorecard-title">The Investment Layer</div>
+      <div class="gap-item">
+        <span class="gap-label">WeBit is free to use, but investable for those who believe in the mission.</span> The WeBit cryptocurrency gives people a way to invest directly in the WeBetAI liquidity engine. When you invest in WeBit, you're backing the flywheel that turns social intelligence into market liquidity &mdash; and you become part of the infrastructure.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">Why invest?</span> The WeBetAI ecosystem generates value at every layer: Guardian scores authenticity. Edge Picks prices sports markets. Pick3 P2P originates zero-vig volume. The WeBetAI Fund deploys capital across prediction markets. WeBit is the thread that connects all of it &mdash; and as the ecosystem grows, every WeBit represents a stake in that growth.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">Liquidity is the mission.</span> Prediction markets today suffer from structural illiquidity &mdash; wide spreads, thin books, fragmented multi-leg markets. WeBetAI solves this by generating real volume from real users making real challenges. WeBit investors are funding the infrastructure that makes prediction markets actually work. Read the full thesis: <a href="/betty/blog/solving-liquidity" style="color:var(--teal); font-weight:600;">Solving the Liquidity Problem</a>.
+      </div>
+    </div>
+
+    <!-- Where WeBit Lives -->
+    <div class="scorecard">
+      <div class="scorecard-title">Where WeBit Lives in the Ecosystem</div>
+      <ul class="perks">
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Guardian Challenges</strong> &mdash; Stake WeBit to challenge anyone on the authenticity of any claim on X</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Edge Picks</strong> &mdash; Use WeBit to enter daily sports predictions powered by the v10 AI model</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Pick3 P2P</strong> &mdash; WeBit is the currency for zero-vig peer-to-peer micro-parlays</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Friendly Challenges</strong> &mdash; Challenge friends via text on trending topics with WeBit on the line</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Leaderboards &amp; Reputation</strong> &mdash; Your WeBit performance builds your credibility score</span>
+        </li>
+        <li>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Liquidity Pool</strong> &mdash; Invested WeBit backs the algorithmic deployment into prediction markets</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Free vs Invested -->
+    <div class="scorecard">
+      <div class="scorecard-title">Free WeBit vs. Invested WeBit</div>
+      <p style="font-size:.75rem; color:var(--txt-m); margin-bottom:1rem; line-height:1.5;">Two ways to hold WeBit &mdash; both power the same ecosystem.</p>
+
+      <div class="gap-item">
+        <span class="gap-label">Free WeBit (Credits)</span><br>
+        Earned by signing up, winning challenges, and daily engagement. Used to participate in peer-to-peer challenges, predictions, and authenticity stakes. Free WeBit keeps the ecosystem accessible to everyone and generates the volume that powers the liquidity flywheel.
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border-lt); margin:1rem 0;">
+
+      <div class="gap-item">
+        <span class="gap-label">Invested WeBit (Cryptocurrency)</span><br>
+        Purchased by investors who believe in the WeBetAI liquidity mission. Invested WeBit backs the WeBetAI Fund's capital deployment into prediction markets. As the ecosystem grows and generates real market volume, invested WeBit represents a stake in the infrastructure that produces that value.
+      </div>
+    </div>
+
+    <!-- The Liquidity Connection -->
+    <div class="gap-card">
+      <div class="gap-title">The Liquidity Connection</div>
+      <div class="gap-item">
+        <span class="gap-label">WeBit is the currency layer of the liquidity thesis.</span> The <a href="/betty/blog/solving-liquidity" style="color:var(--teal); font-weight:600;">Solving Liquidity</a> article lays out how WeBetAI generates real value in prediction markets: Guardian creates the signal, Edge Picks deploys the analytics, Pick3 P2P generates the volume, and the WeBetAI Fund deploys capital. WeBit is the unit of account that ties every layer together.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">The flywheel in action:</span> Free users stake WeBit on challenges. Challenges generate volume and signal. Signal informs algorithmic pricing. Algorithmic pricing deploys capital into prediction markets. Market returns flow back into the ecosystem. Every WeBit transaction &mdash; free or invested &mdash; makes the wheel spin faster.
+      </div>
+    </div>
+
+    <!-- Principles -->
+    <div class="gap-card">
+      <div class="gap-title">WeBit Principles</div>
+      <div class="gap-item">
+        <span class="gap-label">Free first:</span> Everyone gets WeBit for free. The ecosystem works at zero cost. Investment is an option, not a requirement.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Functional, not speculative:</span> WeBit has utility from day one. Every coin can be staked, challenged, and earned. Value comes from usage, not hype.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Liquidity-backed:</span> Invested WeBit funds real capital deployment into real prediction markets. The underlying value is the algorithmic edge and volume generation, not a promise.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Transparent economy:</span> Every WeBit flow is visible &mdash; from free credits earned to invested capital deployed. The ecosystem reports what it generates and where it goes.
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <a href="/betty/blog/solving-liquidity" class="btn-cta">Read the Liquidity Mission</a>
+    </div>
+
+    <div class="cta-row" style="margin-top:0;">
+      <a href="/rif" class="btn-cta" style="background:transparent; color:var(--teal); border:1.5px solid var(--teal-border);">Get Free WeBit Credits</a>
+    </div>
+
+    <div class="footer-note">
+      WeBit is the native cryptocurrency of the WeBetAI ecosystem.<br />
+      <a href="/betty/blog/solving-liquidity">Liquidity Mission</a> &bull; <a href="/rif">Credits</a> &bull; <a href="/guardian">Guardian</a> &bull; <a href="/edge">Edge Picks</a> &bull; <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a>
+    </div>
+
+  </main>
+
+<script>if(window.self!==window.top)document.body.classList.add("in-iframe")</script>
+</body>
+</html>

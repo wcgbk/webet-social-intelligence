@@ -114,7 +114,7 @@ exports.handler = async (event) => {
         'Authorization': `Bearer ${xaiKey}`,
       },
       body: JSON.stringify({
-        model: 'grok-3-fast',
+        model: 'grok-3-mini',
         messages: [
           { role: 'system', content: BETTY_SYSTEM_PROMPT },
           {

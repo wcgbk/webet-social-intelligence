@@ -476,6 +476,161 @@
   status = 200
 
 [[redirects]]
+  from = "/agent-battle-bots"
+  to = "/agent-battle-bots/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/ai"
+  to = "/ai/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/alive"
+  to = "/alive/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/askapai"
+  to = "/askapai/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/authenticity"
+  to = "/authenticity/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/battlebots"
+  to = "/battlebots/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/betty"
+  to = "/betty/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/brackets"
+  to = "/brackets/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/challenge"
+  to = "/challenge/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/credits"
+  to = "/credits/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/derby"
+  to = "/derby/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/fun"
+  to = "/fun/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/funnel"
+  to = "/funnel/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/guardian"
+  to = "/guardian/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homepage"
+  to = "/homepage/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/kalshi"
+  to = "/kalshi/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/live"
+  to = "/live/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/llm"
+  to = "/llm/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/octavius"
+  to = "/octavius/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/old"
+  to = "/old/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/p2p-sports"
+  to = "/p2p-sports/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/p2p-trending"
+  to = "/p2p-trending/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/percentile"
+  to = "/percentile/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/pick3p2p"
+  to = "/pick3p2p/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/priority"
+  to = "/priority/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/rif"
+  to = "/rif/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/scorecard"
+  to = "/scorecard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/summary"
+  to = "/summary/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/voicebet"
+  to = "/voicebet/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/webit"
+  to = "/webit/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/x"
+  to = "/x/index.html"
+  status = 200
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200

@@ -8,20 +8,33 @@
   # Background function — 15min timeout for Elo rating computation
 
 [functions."trigger-picks"]
-  schedule = "0 14 * * *"
-  # 14:00 UTC = 10am EDT. Single daily run — picks are final once generated.
+  # schedule = "0 14 * * *"
+  # PAUSED — alpha pipeline is now the primary picks pipeline
 
 [functions."trigger-picks-beta"]
-  schedule = "0 14 * * *"
-  # Beta pipeline — same schedule, writes to edge-picks-beta blob store
+  # schedule = "0 14 * * *"
+  # PAUSED — alpha pipeline is now the primary picks pipeline
+
+[functions."trigger-picks-alpha"]
+  schedule = "0 13 * * *"
+  # Alpha pipeline — 9am EDT (13:00 UTC), 1hr earlier than beta for max CLV runway
+  # Writes to edge-picks-alpha blob store. Model: v10.2-alpha-calibrated
+
+[functions."generate-picks-alpha-background"]
+  # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-mlb"]
-  # schedule = "0 14 * * *"
-  # Re-enable once env vars are under 4KB (KALSHI_PRIVATE_KEY + system vars pushing limit).
-  # MLB F5 pipeline — daily at 10am EDT, writes to edge-picks-mlb blob store
+  schedule = "0 14 * * *"
+  # Re-enabled: KALSHI_PRIVATE_KEY moved to Netlify Blob (webet-config/kalshi-private-key)
+  # freeing ~1.8KB of the 4KB env var budget. MLB F5 pipeline — daily at 10am EDT.
 
 [functions."generate-picks-mlb-background"]
   # Background function — 15min timeout for MLB F5 pick generation
+
+[functions."confirm-starters-mlb"]
+  schedule = "30 17 * * *"
+  # 17:30 UTC = 1:30pm EDT. Re-checks ESPN starters 3.5h after picks generate.
+  # Flags scratched starters with scratchWarning on the pick — no re-generation.
 
 [functions."trigger-picks-props"]
   # schedule = "0 14 * * *"
@@ -40,11 +53,13 @@
   # Background function — 15min timeout for MLB K props generation
 
 [functions."trigger-kalshi"]
-  schedule = "0 15 * * *"
-  # 15:00 UTC = 11am EDT. Runs 1 hour after daily picks to ensure they exist.
+  # schedule = "0 15 * * *"
+  # PAUSED — paper trading mode active. Live execution paused until /prediction-markets KPIs verified.
+  # Re-enable once accuracy targets confirmed (see webetsocial.com/prediction-markets).
 
 [functions."trigger-kalshi-scan"]
-  schedule = "30 15,19,23 * * *"
+  # schedule = "30 15,19,23 * * *"
+  # PAUSED — prediction-markets page paused 2026-06-03. Re-enable to resume Kalshi scanning.
   # Independent scanner — 3x daily:
   # 15:30 UTC = 11:30am EDT (after picks + execution)
   # 19:00 UTC = 3:00pm EDT (afternoon price movement)
@@ -87,11 +102,13 @@
   # 08:00 UTC = 4am EDT. Grade yesterday's picks and update calibration curves overnight.
 
 [functions."admin-auto-draft"]
-  schedule = "0 12 * * *"
+  # schedule = "0 12 * * *"
+  # PAUSED 2026-06-03 — AskAPAI/Truth processes paused. Re-enable to resume morning digest.
   # 12:00 UTC = 7am EST / 8am EDT. Auto-generate morning feed digest.
 
 [functions."admin-queue-process"]
-  schedule = "*/15 * * * *"
+  # schedule = "*/15 * * * *"
+  # PAUSED 2026-06-03 — AskAPAI/Truth processes paused. Re-enable to resume post queue.
   # Every 15 minutes. Process scheduled posts in the queue.
 
 [functions."generate-webet-content-background"]
@@ -110,7 +127,8 @@
   # Background function — 15min timeout for Guardian digest generation
 
 [functions."trigger-guardian"]
-  schedule = "0 13 * * *"
+  # schedule = "0 13 * * *"
+  # PAUSED 2026-06-03 — AskAPAI/Truth processes paused. Re-enable to resume Guardian digest.
   # 13:00 UTC = 9am EDT. Daily Guardian digest scan.
 
 # ── MATCHING ENGINE: WeBet Social Feed (feed/beta2) ──
@@ -138,6 +156,17 @@
 #   schedule = "0 6,12,18,0 * * *"
 #   # Every 6 hours. Polls prediction markets for bet resolution.
 #   # PAUSED — manual runs only until v1 is live
+
+# ── Prediction Markets — paper trading Kalshi ──
+[[redirects]]
+  from = "/prediction-markets"
+  to = "/prediction-markets/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-kalshi-paper"
+  to = "/.netlify/functions/get-kalshi-paper"
+  status = 200
 
 # Bet page — /bet/[id] routes to single-page app
 [[redirects]]
@@ -206,6 +235,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/confirm-starters-mlb"
+  to = "/.netlify/functions/confirm-starters-mlb"
+  status = 200
+
+[[redirects]]
   from = "/api/get-results-mlb"
   to = "/.netlify/functions/get-results-mlb"
   status = 200
@@ -218,6 +252,22 @@
 [[redirects]]
   from = "/edge/beta"
   to = "/edge-beta/index.html"
+  status = 200
+
+# ── Alpha ────────────────────────────────────────────────
+[[redirects]]
+  from = "/alpha"
+  to = "/alpha/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/dashboard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/alpha/dashboard"
+  to = "/alpha/dashboard/index.html"
   status = 200
 
 [[redirects]]

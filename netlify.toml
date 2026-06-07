@@ -87,7 +87,7 @@
   # 08:00 UTC = 4am EDT. Grade yesterday's picks and update calibration curves overnight.
 
 [functions."admin-auto-draft"]
-  schedule = "0 12 * * *"
+  # schedule = "0 12 * * *"  # PAUSED
   # 12:00 UTC = 7am EST / 8am EDT. Auto-generate morning feed digest.
 
 [functions."admin-queue-process"]

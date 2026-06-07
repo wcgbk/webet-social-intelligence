@@ -2903,7 +2903,7 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
   for (const c of top) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
     prompt += `  ${c.matchup}\n`;
-    prompt += `  PICK: ${c.side} | Odds: ${c.odds > 0 ? '+' : ''}${c.odds} | Edge: ${c.edge}${c.market === 'Total' ? 'pts' : c.sport === 'NHL' ? ' goals' : 'pts'}\n`;
+    prompt += `  PICK: ${c.side} | Odds: ${c.odds > 0 ? '+' : ''}${c.odds} | Edge: ${c.edge}${c.market === 'Total' ? (c.sport === 'NHL' ? ' goals' : c.sport === 'MLB' ? ' runs' : ' pts') : (c.sport === 'NHL' ? ' goals' : ' pts')}\n`;
     // Explicit narrative direction so Claude knows which side to argue for
     const isTotal = (c.market || '').toLowerCase() === 'total';
     if (isTotal) {
@@ -2965,14 +2965,14 @@ function fixNarrativeEdge(narrative, candidate) {
   if (!narrative || !candidate) return narrative;
   const c = candidate;
   const edgeVal = Math.abs(c.edge);
-  const unit = c.sport === 'NHL' ? 'goal' : 'point';
+  const unit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
   const isTotal = (c.market || '').toLowerCase() === 'total';
 
   // Build the JS-computed opening sentence
   const isML = (c.market || '').toLowerCase() === 'moneyline';
   let jsSentence;
   if (isTotal) {
-    jsSentence = `WeBetAI projects ${c.modelProjection} total ${c.sport === 'NHL' ? 'goals' : 'points'}, line is ${c.consensusLine}, creating a ${edgeVal}-${unit} edge.`;
+    jsSentence = `WeBetAI projects ${c.modelProjection} total ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points'}, line is ${c.consensusLine}, creating a ${edgeVal}-${unit} edge.`;
   } else if (isML) {
     // Moneyline: modelProjection is win probability %, consensusLine is implied prob %
     jsSentence = `WeBetAI gives this team a ${c.modelProjection}% win probability vs the market's ${c.consensusLine}%, creating a ${edgeVal}% edge.`;
@@ -3034,7 +3034,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
     const modelEdgeStr = isML
       ? `Model Win Prob: ${calibratedPct}%, Implied: ${implPct}%, Edge: ${edgePctVal}%`
-      : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : 'pts'}`;
+      : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'pts'}`;
 
     picks.push({
       sport: c.sport,
@@ -3138,7 +3138,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
       const modelEdgeStr = isML
         ? `Model Win Prob: ${calibratedPct}%, Implied: ${implPct}%, Edge: ${edgePctVal}%`
-        : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : 'pts'}`;
+        : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'pts'}`;
       const cMatchup = `${c.awayTeam} vs. ${c.homeTeam}`;
       console.log(`[v10-dedup] REPLACEMENT pick: ${c.side} (${cMatchup}) EV:${(c.ev*100).toFixed(1)}% units:${finalUnits}u`);
       picks.push({
@@ -4282,16 +4282,16 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
     if (isML) {
       reasoning = `WeBetAI's model gives ${c.side.replace(' ML', '')} a ${c.modelProjection}% win probability vs the market's implied ${c.consensusLine}%, creating a ${edgePctVal}% edge. The ${c.homeTeam} and ${c.awayTeam} matchup presents value at ${c.odds > 0 ? '+' : ''}${c.odds} odds based on Elo ratings, recent form, and injury analysis.`;
     } else if (isTotal) {
-      const unit = c.sport === 'NHL' ? 'goals' : 'points';
+      const unit = c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points';
       reasoning = `WeBetAI projects ${c.modelProjection} total ${unit}, ${c.edge} ${unit} ${c.side.includes('Over') ? 'above' : 'below'} the line of ${c.consensusLine}. This ${edgePctVal}% edge is driven by the matchup's pace, recent scoring trends, and confirmed lineup data.`;
     } else {
-      const unit = c.sport === 'NHL' ? 'goal' : 'point';
+      const unit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
       reasoning = `WeBetAI projects a ${Math.abs(c.modelProjection)}-${unit} margin vs the line of ${c.consensusLine}, creating a ${c.edge}-${unit} edge. This ${edgePctVal}% edge reflects the gap between the model's power rating projection and the consensus sportsbook line.`;
     }
 
     const modelEdgeStr = isML
       ? `Model Win Prob: ${c.modelProjection}%, Implied: ${c.consensusLine}%, Edge: ${edgePctVal}%`
-      : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : 'pts'}`;
+      : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'pts'}`;
 
     return {
       sport: c.sport,

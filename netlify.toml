@@ -12,7 +12,7 @@
   # 14:00 UTC = 10am EDT. Single daily run — picks are final once generated.
 
 [functions."trigger-picks-beta"]
-  schedule = "0 14 * * *"
+  # schedule = "0 14 * * *"  # PAUSED
   # Beta pipeline — same schedule, writes to edge-picks-beta blob store
 
 [functions."trigger-picks-mlb"]

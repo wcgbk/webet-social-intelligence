@@ -1,0 +1,3053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>WeBetAI - Social Intelligence | Dashboard</title>
+  <meta name="description" content="WeBetAI Dashboard — Chat with Betty AI, view edge picks, track model performance, and manage your betting intelligence." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/dashboard" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Dashboard" />
+  <meta property="og:description" content="WeBetAI Dashboard — Chat with Betty AI, view edge picks, track model performance, and manage your betting intelligence." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Dashboard" />
+  <meta name="twitter:description" content="WeBetAI Dashboard — Chat with Betty AI, view edge picks, track model performance, and manage your betting intelligence." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f8f9fa;
+      --surface-2: #f0f1f3;
+      --surface-3: #e8eaed;
+      --fg: #1a1a1a;
+      --fg-muted: #5f6b7a;
+      --fg-dim: #9ca3af;
+      --primary: #004C54;
+      --primary-fg: #ffffff;
+      --primary-dim: rgba(0, 76, 84, 0.08);
+      --border: #e0e3e8;
+      --border-subtle: #eef0f2;
+      --sidebar-w: 260px;
+      --input-radius: 24px;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ─── Layout ──────────────────────────────────────────────────────── */
+    .app {
+      display: flex;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* ─── Sidebar ─────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: #0a0a0a;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+    }
+    .sidebar.collapsed {
+      width: 0;
+      transform: translateX(calc(var(--sidebar-w) * -1));
+      border-right: none;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      min-height: 60px;
+    }
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar-logo-text {
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      white-space: nowrap;
+      color: #ffffff;
+    }
+    .sidebar-btn {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .sidebar-btn:hover {
+      background: rgba(255,255,255,0.08);
+      color: #ffffff;
+    }
+
+    .new-chat-btn {
+      margin: 12px 12px 4px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .new-chat-btn:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    /* ─── Sidebar Scroll Area ──────────────────────────────────────────── */
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    /* ─── Nav Menu ─────────────────────────────────────────────────────── */
+    .nav-menu {
+      padding: 8px 8px 4px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.55);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
+    .nav-item.active { background: rgba(0,76,84,0.25); color: #4dd8c0; }
+    .nav-item.active .nav-icon { color: #4dd8c0; }
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-icon svg { width: 18px; height: 18px; }
+    .nav-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 6px 12px;
+    }
+
+    /* ─── Chat History Section ─────────────────────────────────────────── */
+    .sidebar-section-label {
+      padding: 12px 16px 6px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .sidebar-conversations {
+      padding: 4px 8px 12px;
+    }
+
+    .convo-item {
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .convo-item:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
+    .convo-item.active { background: rgba(255,255,255,0.12); color: #ffffff; }
+
+    .sidebar-footer {
+      padding: 10px 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .sidebar-footer-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .sidebar-footer-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary-fg);
+      flex-shrink: 0;
+    }
+    .sidebar-footer-name {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* ─── Main Area ───────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+      background: var(--bg);
+    }
+
+    /* ─── Top Bar ─────────────────────────────────────────────────────── */
+    .topbar {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+      background: #0a0a0a;
+    }
+    .topbar-toggle {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .topbar-toggle:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
+
+    .topbar-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .topbar-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #10b981;
+      flex-shrink: 0;
+    }
+    .topbar-sub {
+      font-size: 0.6875rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.4);
+    }
+    .topbar-spacer { flex: 1; }
+    .topbar-action {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    .topbar-action:hover { color: #ffffff; }
+
+    .coin-link { display: flex; align-items: center; flex-shrink: 0; cursor: pointer; }
+    .coin-img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+
+    /* ─── Panel Container ─────────────────────────────────────────────── */
+    .panel-container {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+    .panel.active {
+      display: flex;
+    }
+
+    /* ─── Chat Panel ──────────────────────────────────────────────────── */
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-area::-webkit-scrollbar { width: 6px; }
+    .chat-area::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 3px; }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      gap: 28px;
+    }
+    .empty-logo { opacity: 0.15; }
+    .empty-title {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: var(--fg);
+      text-align: center;
+    }
+    .empty-subtitle {
+      font-size: 0.9375rem;
+      color: var(--fg-dim);
+      text-align: center;
+      margin-top: -16px;
+      max-width: 400px;
+    }
+
+    .suggestions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      max-width: 560px;
+      width: 100%;
+    }
+    .suggestion-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.2s, transform 0.15s;
+      text-align: left;
+      font-family: inherit;
+      color: var(--fg);
+    }
+    .suggestion-card:hover {
+      background: var(--surface-3);
+      border-color: var(--fg-dim);
+      transform: translateY(-1px);
+    }
+    .suggestion-card:active { transform: translateY(0); }
+    .suggestion-card-icon {
+      font-size: 1.25rem;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .suggestion-card-text {
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      color: var(--fg-muted);
+    }
+
+    /* Messages */
+    .messages-list {
+      max-width: 760px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .msg-group {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      animation: fadeUp 0.25s ease-out;
+    }
+    .msg-group.user { justify-content: flex-end; }
+
+    .msg-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .msg-avatar.ai {
+      background: #e6f4f1;
+      border: 1px solid #b8ddd6;
+      color: var(--primary);
+      overflow: hidden;
+    }
+    .msg-avatar.ai img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .msg-avatar.human {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .msg-content {
+      max-width: 85%;
+      min-width: 0;
+    }
+    .msg-content.user-content {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .msg-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: var(--fg-dim);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .msg-text {
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      color: var(--fg);
+    }
+    .msg-text.user-text {
+      background: var(--primary);
+      color: #ffffff;
+      padding: 12px 18px;
+      border-radius: 20px 20px 4px 20px;
+      font-weight: 500;
+    }
+    .msg-text p { margin: 0 0 12px; }
+    .msg-text p:last-child { margin-bottom: 0; }
+    .msg-text strong { font-weight: 600; }
+    .msg-text em { font-style: italic; }
+    .msg-text code {
+      background: rgba(0,0,0,0.06);
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-size: 0.85em;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .msg-text pre {
+      background: #1a2e1a;
+      color: #e0e0e0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+    }
+    .msg-text pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      color: inherit;
+    }
+    .msg-text ul, .msg-text ol {
+      margin: 8px 0 12px 20px;
+    }
+    .msg-text li {
+      margin-bottom: 4px;
+      line-height: 1.6;
+    }
+    .msg-text a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-decoration-color: rgba(0,76,84,0.3);
+      text-underline-offset: 2px;
+    }
+    .msg-text a:hover { text-decoration-color: var(--primary); }
+
+    /* Typing indicator */
+    .typing-dots {
+      display: inline-flex;
+      gap: 5px;
+      padding: 4px 0;
+    }
+    .typing-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--fg-dim);
+      animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes pulse-dot {
+      0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); }
+      30% { opacity: 1; transform: scale(1); }
+    }
+
+    /* ─── Input Area ──────────────────────────────────────────────────── */
+    .input-area {
+      padding: 0 24px 24px;
+      max-width: 760px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .input-container {
+      position: relative;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--input-radius);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-container:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0, 76, 84, 0.1);
+    }
+    .input-row {
+      display: flex;
+      align-items: center;
+      padding: 4px 4px 4px 20px;
+      gap: 8px;
+    }
+    .input-row textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.2;
+      resize: none;
+      max-height: 150px;
+      min-height: 0;
+      padding: 12px 0;
+      height: auto;
+      rows: 1;
+    }
+    .input-row textarea::placeholder { color: var(--fg-dim); }
+
+    .input-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 0;
+    }
+    .input-action-btn {
+      background: none;
+      border: none;
+      color: var(--fg-dim);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s, color 0.12s;
+    }
+    .input-action-btn:hover { background: var(--surface-3); color: var(--fg-muted); }
+    .input-action-btn.active {
+      color: var(--primary);
+      background: var(--primary-dim);
+    }
+
+    .send-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      border: none;
+      background: var(--primary);
+      color: var(--primary-fg);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: filter 0.15s, opacity 0.15s, transform 0.1s;
+    }
+    .send-btn:hover { filter: brightness(1.1); transform: scale(1.04); }
+    .send-btn:active { transform: scale(0.97); }
+    .send-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; }
+
+    .input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 0 0;
+    }
+    .input-footer-text {
+      font-size: 0.6875rem;
+      color: var(--fg-dim);
+      opacity: 0.6;
+    }
+
+    /* ─── Slash Command Hint ──────────────────────────────────────────── */
+    .slash-hint {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0; right: 0;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      display: none;
+      z-index: 50;
+    }
+    .slash-hint.show { display: block; }
+    .slash-hint-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      transition: background 0.12s;
+    }
+    .slash-hint-item:hover { background: var(--surface-3); }
+    .slash-hint-cmd {
+      font-size: 0.75rem; font-weight: 600; color: var(--primary);
+      font-family: 'SF Mono', monospace;
+    }
+    .slash-hint-desc {
+      font-size: 0.6875rem; color: var(--fg-dim);
+    }
+
+    /* ─── Feature Panels ──────────────────────────────────────────────── */
+    .feature-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .feature-scroll::-webkit-scrollbar { width: 6px; }
+    .feature-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 3px; }
+
+    .feature-header {
+      margin-bottom: 24px;
+    }
+    .feature-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 4px;
+    }
+    .feature-header p {
+      font-size: 0.875rem;
+      color: var(--fg-dim);
+    }
+
+    .feature-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+      color: var(--fg-dim);
+      font-size: 0.875rem;
+      gap: 10px;
+    }
+
+    /* ─── Pick Cards (dark theme) ─────────────────────────────────────── */
+    .pick-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: .875rem;
+      padding: 1.125rem;
+      margin-bottom: .75rem;
+      transition: border-color 0.2s;
+    }
+    .pick-card:hover { border-color: var(--fg-dim); }
+    .pick-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: .625rem;
+    }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--primary);
+      background: #e6f4f1; border: 1px solid #b8ddd6;
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .rating-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 26px; border-radius: 6px;
+      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+    }
+    .badge-aplus { background: #c0392b; }
+    .badge-a { background: #2980b9; }
+    .badge-aminus { background: #b8860b; }
+    .badge-bplus { background: #1abc9c; }
+    .badge-b { background: #e67e22; }
+    .pick-matchup {
+      font-size: 1.0625rem; font-weight: 700; color: var(--fg);
+      line-height: 1.25; margin-bottom: .375rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pick-line {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: .625rem;
+    }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--fg); }
+    .pick-odds {
+      font-family: 'Geist Sans', monospace; font-size: .9375rem;
+      font-weight: 700; color: var(--fg);
+    }
+    .win-prob {
+      display: inline-block; font-size: .6875rem; font-weight: 600;
+      color: #2e7d32; background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
+    }
+    .pick-divider { height: 1px; background: var(--border); margin-bottom: .625rem; }
+    .pick-analysis {
+      font-size: .8125rem; color: var(--fg-muted); line-height: 1.55;
+      margin-bottom: .625rem;
+    }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--primary); }
+
+    /* ─── Stats Grid ──────────────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .stat-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--fg-dim);
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .stat-value.positive { color: var(--primary); }
+    .stat-value.negative { color: #ef4444; }
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--fg-muted);
+      margin-top: 2px;
+    }
+
+    /* ─── Data Table ──────────────────────────────────────────────────── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th {
+      text-align: left;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--fg-dim);
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      font-size: 0.8125rem;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--fg-muted);
+    }
+    .data-table tr:hover td { background: var(--surface-2); }
+
+    /* ─── Verify Panel ────────────────────────────────────────────────── */
+    .verify-panel {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 8px 0;
+    }
+    .verify-agents { display: flex; gap: 8px; margin-bottom: 12px; }
+    .verify-agent-badge {
+      flex: 1; padding: 10px;
+      border-radius: 10px; border: 1px solid var(--border);
+      background: var(--surface);
+      text-align: center;
+    }
+    .verify-agent-name {
+      font-size: 0.625rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--fg-dim); margin-bottom: 4px;
+    }
+    .verify-agent-verdict { font-size: 0.75rem; font-weight: 600; margin-bottom: 2px; }
+    .verify-agent-verdict.agree { color: #2e7d32; }
+    .verify-agent-verdict.disagree { color: #c62828; }
+    .verify-agent-verdict.caution { color: #e65100; }
+    .verify-agent-conf { font-size: 0.625rem; color: var(--fg-dim); }
+    .verify-agent-analysis {
+      font-size: 0.6875rem; color: var(--fg-muted);
+      margin-top: 6px; line-height: 1.45; text-align: left;
+    }
+    .verify-synthesis {
+      border-top: 1px solid var(--border);
+      padding-top: 10px; margin-top: 4px;
+      font-size: 0.8125rem; line-height: 1.55;
+      color: var(--fg);
+    }
+
+    /* ─── Picks Banner ────────────────────────────────────────────────── */
+    .picks-banner {
+      background: rgba(0,76,84,0.06);
+      border: 1px solid rgba(0,76,84,0.15);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      color: var(--primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .picks-banner-count { font-weight: 700; font-size: 0.875rem; }
+
+    /* ─── Settings Panel ──────────────────────────────────────────────── */
+    .settings-group {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .settings-group h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row-label {
+      font-size: 0.8125rem;
+      color: var(--fg-muted);
+    }
+    .settings-row-value {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    /* ─── Mobile Bottom Tabs ──────────────────────────────────────────── */
+    .mobile-tabs {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #0a0a0a;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
+      z-index: 200;
+    }
+    .mobile-tabs-inner {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .mobile-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 12px;
+      border: none;
+      background: none;
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .mobile-tab.active { color: #4dd8c0; }
+    .mobile-tab svg { width: 24px; height: 24px; }
+    .mobile-tab-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    /* ─── Panel Refresh Button ───────────────────────────────────────── */
+    .panel-refresh-btn {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      z-index: 20;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      transition: background 0.15s, color 0.15s, transform 0.15s;
+    }
+    .panel-refresh-btn:hover {
+      background: var(--surface-2);
+      color: var(--primary);
+      transform: rotate(45deg);
+    }
+    .panel-refresh-btn:active { transform: rotate(180deg); }
+
+    /* ─── Sidebar Overlay ─────────────────────────────────────────────── */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 99;
+    }
+    .sidebar-overlay.show { display: block; }
+
+    /* ─── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        height: 100dvh;
+        z-index: 1000;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+        background: #0a0a0a;
+      }
+      .sidebar.collapsed {
+        transform: translateX(-100%);
+        box-shadow: none;
+        width: var(--sidebar-w);
+      }
+      .mobile-tabs { display: none; }
+
+      .topbar {
+        height: 52px;
+        padding: 0 12px;
+        gap: 8px;
+      }
+
+      .empty-state {
+        padding: 16px 20px;
+        gap: 18px;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .empty-state img { width: 72px !important; height: 72px !important; }
+      .empty-logo { width: 52px !important; height: 46px !important; }
+      .empty-title { font-size: 1.375rem; }
+      .empty-subtitle { font-size: 0.875rem; margin-top: -6px; }
+
+      .suggestions-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        max-width: 100%;
+      }
+      .suggestion-card { padding: 12px; border-radius: 12px; }
+      .suggestion-card-icon { font-size: 1rem; margin-bottom: 4px; }
+      .suggestion-card-text { font-size: 0.75rem; line-height: 1.35; }
+
+      .msg-content { max-width: 90%; }
+      .msg-text { font-size: 1rem; line-height: 1.65; }
+      .msg-text.user-text { padding: 12px 16px; border-radius: 18px 18px 4px 18px; font-size: 1rem; }
+      .msg-avatar { width: 32px; height: 32px; }
+      .msg-label { font-size: 0.75rem; }
+      .messages-list { padding: 14px 16px 8px; gap: 20px; }
+
+      .input-area {
+        padding: 0 10px 6px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        position: relative;
+        z-index: 10;
+      }
+      .input-row { padding: 4px 4px 4px 14px; gap: 6px; }
+      .input-row textarea {
+        font-size: 16px; /* prevents iOS zoom */
+        padding: 10px 0;
+        line-height: 1.35;
+      }
+      .send-btn { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; }
+      .input-footer { padding: 2px 0 0; }
+      .input-footer-text { font-size: 0.625rem; }
+
+      /* Prevent chat home from scrolling on mobile */
+      #panel-chat .chat-area:has(#empty-state[style*="flex"]) {
+        overflow: hidden;
+      }
+
+      /* Hide bottom nav when keyboard is open */
+      .mobile-tabs.kb-hidden {
+        display: none !important;
+      }
+
+      .feature-scroll { padding: 18px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .verify-agents { flex-direction: column; gap: 6px; }
+      .topbar-sub { display: none; }
+
+      .topbar { height: 48px; }
+      .pick-card { padding: 1rem; }
+      .pick-matchup { font-size: 1rem; }
+      .pick-name { font-size: 0.9375rem; }
+      .pick-odds { font-size: 0.9375rem; }
+      .pick-analysis { font-size: 0.8125rem; }
+      .pick-units { font-size: 0.875rem; }
+      .bb-card { padding: 18px; }
+      .bb-post-text { font-size: 0.875rem; }
+      .feature-header h2 { font-size: 1.375rem; }
+      .feature-header p { font-size: 0.875rem; }
+    }
+
+    /* ─── Category Pills ──────────────────────────────────────────────── */
+    .cat-pill {
+      padding: 6px 14px;
+      border-radius: 9999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg-muted);
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .cat-pill:hover { border-color: var(--primary); color: var(--primary); }
+    .cat-pill.active {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-color: var(--primary);
+    }
+
+    /* ─── Builder / Sniper / Digest Cards ─────────────────────────────── */
+    .bb-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    .bb-card:hover { border-color: var(--primary); }
+
+    .bb-post-block {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .bb-post-author {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .bb-post-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--primary-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .bb-post-name {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .bb-post-handle {
+      font-size: 0.6875rem;
+      color: var(--fg-dim);
+    }
+    .bb-post-text {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      color: var(--fg-muted);
+      margin-bottom: 8px;
+    }
+    .bb-post-metrics {
+      display: flex;
+      gap: 16px;
+      font-size: 0.6875rem;
+      color: var(--fg-dim);
+    }
+
+    .bb-market-block {
+      background: var(--primary-dim);
+      border: 1px solid rgba(0,76,84,0.15);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .bb-market-q {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--fg);
+      margin-bottom: 8px;
+    }
+    .bb-odds-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .bb-odds-chip {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .bb-odds-chip.yes { color: #2e7d32; border-color: #a5d6a7; }
+    .bb-odds-chip.no { color: #c62828; border-color: #ef9a9a; }
+    .bb-bet-string {
+      font-family: 'Geist Sans', monospace;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--primary);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+    }
+    .bb-source {
+      font-size: 0.6875rem;
+      color: var(--fg-dim);
+      display: flex;
+      gap: 12px;
+    }
+    .bb-score {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .bb-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .bb-action-btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg-muted);
+      font-family: inherit;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .bb-action-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .bb-action-btn.primary {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-color: var(--primary);
+    }
+    .bb-action-btn.primary:hover { filter: brightness(0.9); }
+
+    /* ─── Sniper Reply Box ────────────────────────────────────────────── */
+    .sniper-reply {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .sniper-reply-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--fg-dim);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .sniper-reply textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 60px;
+    }
+    .sniper-reply textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .char-count {
+      font-size: 0.625rem;
+      color: var(--fg-dim);
+      text-align: right;
+      margin-top: 4px;
+    }
+    .char-count.over { color: #c62828; }
+
+    /* ─── Digest Compose Box ──────────────────────────────────────────── */
+    .digest-compose {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .compose-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .compose-box label {
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--fg-dim);
+      margin-bottom: 6px;
+      display: block;
+    }
+    .compose-box textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      padding: 8px 10px;
+      resize: vertical;
+      min-height: 80px;
+    }
+    .compose-box textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .status-badge.ready { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.posted { background: #e3f2fd; color: #1565c0; }
+    .status-badge.queued { background: #fff3e0; color: #e65100; }
+    .status-badge.scheduled { background: #f3e5f5; color: #7b1fa2; }
+
+    @media (max-width: 768px) {
+      .digest-compose { grid-template-columns: 1fr; }
+      .bb-odds-row { flex-direction: column; }
+    }
+
+    /* ─── Scrollbar global ────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
+
+    /* ─── Animations ──────────────────────────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid #e0e3e8;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar Overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a href="/" class="sidebar-logo">
+        <svg viewBox="0 0 470 419" fill="none" style="width:28px; height:24px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+          <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+          <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+        </svg>
+        <span class="sidebar-logo-text">WeBetAI</span>
+      </a>
+      <button class="sidebar-btn" onclick="toggleSidebar()" title="Close sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </button>
+    </div>
+
+    <button class="new-chat-btn" onclick="newChat()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New chat
+    </button>
+
+    <div class="sidebar-scroll">
+
+    <!-- Navigation Menu -->
+    <nav class="nav-menu">
+      <button class="nav-item active" data-panel="chat" onclick="switchPanel('chat')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        Chat With Betty
+      </button>
+      <button class="nav-item" data-panel="picks" onclick="switchPanel('picks')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+        Daily Edge - Sportsbook Picks
+      </button>
+      <button class="nav-item" data-panel="p2p" onclick="switchPanel('p2p')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        P2P - Pick 3 PVP
+      </button>
+      <button class="nav-item" data-panel="p2p-sports" onclick="switchPanel('p2p-sports')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span>
+        P2P - Sports
+      </button>
+      <button class="nav-item" data-panel="p2p-trending" onclick="switchPanel('p2p-trending')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="12" cy="12" r="10" stroke-dasharray="4 4"/></svg></span>
+        P2P - Trending
+      </button>
+      <button class="nav-item" data-panel="guardian" onclick="switchPanel('guardian')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        Daily Digest - Trending Top 5
+      </button>
+      <button class="nav-item" data-panel="feed" onclick="switchPanel('feed')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+        Authentic Press
+      </button>
+      <button class="nav-item" data-panel="builder" onclick="switchPanel('builder')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+        WeBet Builder
+      </button>
+      <button class="nav-item" data-panel="sniper" onclick="switchPanel('sniper')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg></span>
+        Comment Sniper
+      </button>
+      <button class="nav-item" data-panel="percentile" onclick="switchPanel('percentile')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        AI Percentile Rankings
+      </button>
+    </nav>
+
+    <div class="sidebar-section-label" id="history-label" style="display:none">Recent Chats</div>
+    <div class="sidebar-conversations" id="convo-list"></div>
+
+    </div><!-- /sidebar-scroll -->
+
+    <div class="sidebar-footer">
+      <div class="sidebar-footer-avatar">G</div>
+      <span class="sidebar-footer-name">Guest</span>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="main">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <button class="topbar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </button>
+      <div class="topbar-title" id="topbar-title">
+        <span class="topbar-dot"></span>
+        <span>Betty <span class="topbar-sub">WeBetAI</span></span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <a href="javascript:void(0)" class="coin-link" title="WeBit" onclick="openWebitPanel()">
+        <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
+      </a>
+      <button class="topbar-action" title="Home" onclick="newChat()" style="padding:10px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </button>
+    </div>
+
+    <!-- Panel Container -->
+    <div class="panel-container">
+
+      <!-- CHAT PANEL -->
+      <div class="panel active" id="panel-chat">
+        <div class="chat-area" id="chat-area">
+          <div class="empty-state" id="empty-state">
+            <img src="/betty-sms.jpg" alt="Betty AI" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);box-shadow:0 4px 16px rgba(0,76,84,0.15);" />
+            <h1 class="empty-title">Hey, I'm Betty</h1>
+            <p class="empty-subtitle" id="empty-subtitle">Loading today's edge picks...</p>
+            <div id="picks-banner-area"></div>
+            <div class="suggestions-grid" id="suggestions-grid">
+              <button class="suggestion-card" onclick="useSuggestion(this)">
+                <span class="suggestion-card-icon">&#128202;</span>
+                <span class="suggestion-card-text">Show today's sportsbook picks</span>
+              </button>
+              <button class="suggestion-card" onclick="useSuggestion(this)">
+                <span class="suggestion-card-icon">&#9989;</span>
+                <span class="suggestion-card-text" id="verify-suggestion">Verify any pick</span>
+              </button>
+              <button class="suggestion-card" onclick="switchPanel('builder')">
+                <span class="suggestion-card-icon">&#9889;</span>
+                <span class="suggestion-card-text">Create P2P trending topic challenge</span>
+              </button>
+              <button class="suggestion-card" onclick="switchPanel('guardian')">
+                <span class="suggestion-card-icon">&#128737;</span>
+                <span class="suggestion-card-text">Guardian trending topics daily digest</span>
+              </button>
+            </div>
+          </div>
+          <div class="messages-list" id="messages-list" style="display:none"></div>
+        </div>
+
+        <div class="input-area">
+          <div class="input-container">
+            <div class="input-row">
+              <textarea
+                id="chat-input"
+                rows="1"
+                placeholder="Ask Betty anything..."
+                onkeydown="handleKey(event)"
+                oninput="autoGrow(this); toggleSendBtn(); checkSlash(this)"
+              ></textarea>
+              <div class="slash-hint" id="slash-hint">
+                <div class="slash-hint-item" onclick="useSlashCmd('/picks')">
+                  <span class="slash-hint-cmd">/picks</span>
+                  <span class="slash-hint-desc">Show today's edge picks</span>
+                </div>
+                <div class="slash-hint-item" onclick="useSlashCmd('/verify 1')">
+                  <span class="slash-hint-cmd">/verify</span>
+                  <span class="slash-hint-desc">3-agent verification on a pick</span>
+                </div>
+                <div class="slash-hint-item" onclick="useSlashCmd('/bet')">
+                  <span class="slash-hint-cmd">/bet</span>
+                  <span class="slash-hint-desc">Create a P2P bet challenge</span>
+                </div>
+                <div class="slash-hint-item" onclick="useSlashCmd('/markets')">
+                  <span class="slash-hint-cmd">/markets</span>
+                  <span class="slash-hint-desc">Browse BettorEdge markets</span>
+                </div>
+              </div>
+              <div class="input-actions">
+                <button class="input-action-btn" id="search-btn" onclick="toggleSearch()" title="Web search">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="input-footer">
+            <span class="input-footer-text">Betty AI can make mistakes. Verify important info.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DAILY EDGE PICKS PANEL -->
+      <div class="panel" id="panel-picks" style="overflow:hidden;">
+        <iframe id="picks-iframe" src="/alpha" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- MLB FIRST 5 PICKS PANEL -->
+      <div class="panel" id="panel-mlb" style="overflow:hidden;">
+        <iframe src="/mlb" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- WEBIT PANEL -->
+      <div class="panel" id="panel-webit" style="overflow:hidden;">
+        <iframe src="/webit" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- FEED PANEL -->
+      <div class="panel" id="panel-feed" style="overflow:hidden;">
+        <iframe src="/betty/blog" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+
+      <!-- RANKINGS / P2P LEADERBOARD PANEL -->
+      <div class="panel" id="panel-rankings" style="overflow:hidden;">
+        <iframe src="https://pick3p2p.com/#leaderboard" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- PERCENTILE PANEL -->
+      <div class="panel" id="panel-percentile">
+        <div class="feature-scroll">
+          <div class="feature-header">
+            <h2 id="percentile-heading">AI Percentile Rankings</h2>
+            <p>How WeBetAI stacks up against all elite betting models</p>
+          </div>
+          <div id="percentile-content"><div class="feature-loading"><div class="spinner"></div> Loading percentile data...</div></div>
+        </div>
+      </div>
+
+      <!-- P2P SPORTS EXCHANGE PANEL -->
+      <div class="panel" id="panel-p2p-sports" style="overflow:hidden;">
+        <iframe src="/p2p-sports" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- P2P TRENDING PANEL -->
+      <div class="panel" id="panel-p2p-trending" style="overflow:hidden;">
+        <iframe src="/p2p-trending" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- P2P PANEL -->
+      <div class="panel" id="panel-p2p" style="overflow:hidden;">
+        <iframe src="https://pick3p2p.com" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- ADMIN PANEL -->
+      <div class="panel" id="panel-admin">
+        <div class="feature-scroll">
+          <div class="feature-header">
+            <h2>Admin</h2>
+            <p>Pipeline management and operational controls</p>
+          </div>
+          <div id="admin-content">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Pipeline Status</div>
+                <div class="stat-value positive" id="admin-pipeline">Active</div>
+                <div class="stat-sub">Last run: checking...</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Picks Today</div>
+                <div class="stat-value" id="admin-picks-count">--</div>
+                <div class="stat-sub">Loading...</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Model Version</div>
+                <div class="stat-value">v10</div>
+                <div class="stat-sub">Production</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Agents</div>
+                <div class="stat-value">3</div>
+                <div class="stat-sub">Grok + Claude + GPT</div>
+              </div>
+            </div>
+            <div class="settings-group">
+              <h3>Quick Actions</h3>
+              <div class="settings-row">
+                <span class="settings-row-label">Trigger Picks Run</span>
+                <button class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--primary-dim);color:var(--primary);font-size:0.75rem" onclick="triggerPicks()">Run Now</button>
+              </div>
+              <div class="settings-row">
+                <span class="settings-row-label">View Full Admin</span>
+                <a href="/admin" class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--surface-3);font-size:0.75rem">Open</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GUARDIAN PANEL -->
+      <div class="panel" id="panel-guardian" style="overflow:hidden;position:relative;">
+        <button class="panel-refresh-btn" onclick="document.getElementById('iframe-guardian').src = document.getElementById('iframe-guardian').src" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <iframe id="iframe-guardian" src="/guardian/digest" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- WEBET BUILDER PANEL -->
+      <div class="panel" id="panel-builder" style="overflow:hidden;position:relative;">
+        <button class="panel-refresh-btn" onclick="document.getElementById('iframe-builder').src = document.getElementById('iframe-builder').src" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <iframe id="iframe-builder" src="/admin?demo=1#feed" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- COMET SNIPER PANEL -->
+      <div class="panel" id="panel-sniper">
+        <div class="feature-scroll" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--fg-dim)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+          </div>
+          <h2 style="font-size:1.375rem;font-weight:700;color:var(--fg);margin-bottom:8px;">Comment Sniper</h2>
+          <p style="font-size:0.9375rem;color:var(--fg-dim);max-width:360px;">Coming Soon</p>
+        </div>
+      </div>
+
+      <!-- CREATE P2P BET PANEL -->
+      <div class="panel" id="panel-digest">
+        <div class="feature-scroll" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--fg-dim)" stroke-width="1.5" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          </div>
+          <h2 style="font-size:1.375rem;font-weight:700;color:var(--fg);margin-bottom:8px;">Create P2P Bet</h2>
+          <p style="font-size:0.9375rem;color:var(--fg-dim);max-width:360px;">Coming Soon</p>
+        </div>
+      </div>
+
+      <!-- SETTINGS PANEL -->
+      <div class="panel" id="panel-settings">
+        <div class="feature-scroll">
+          <div class="feature-header">
+            <h2>Settings</h2>
+            <p>Customize your dashboard experience</p>
+          </div>
+          <div class="settings-group">
+            <h3>Display</h3>
+            <div class="settings-row">
+              <span class="settings-row-label">Unit Size</span>
+              <span class="settings-row-value" id="unit-size-display">$150</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Default Panel</span>
+              <span class="settings-row-value">Chat</span>
+            </div>
+          </div>
+          <div class="settings-group">
+            <h3>Data Sources</h3>
+            <div class="settings-row">
+              <span class="settings-row-label">Chat Model</span>
+              <span class="settings-row-value">Betty (Multi-Agent)</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Picks Source</span>
+              <span class="settings-row-value">Edge Beta</span>
+            </div>
+          </div>
+          <div class="settings-group">
+            <h3>Links</h3>
+            <div class="settings-row">
+              <span class="settings-row-label">Edge Picks</span>
+              <a href="/alpha" class="settings-row-value" style="color:var(--primary)">/alpha</a>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Percentile</span>
+              <a href="/percentile" class="settings-row-value" style="color:var(--primary)">/percentile</a>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Pick3 P2P</span>
+              <a href="https://pick3p2p.com" class="settings-row-value" style="color:var(--primary)">pick3p2p.com</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile Bottom Tabs -->
+<div class="mobile-tabs" id="mobile-tabs">
+  <div class="mobile-tabs-inner">
+    <button class="mobile-tab" data-panel="guardian" onclick="switchPanel('guardian')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      <span class="mobile-tab-label">Trending</span>
+    </button>
+    <button class="mobile-tab" data-panel="picks" onclick="switchPanel('picks')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      <span class="mobile-tab-label">Picks</span>
+    </button>
+    <button class="mobile-tab active" data-panel="chat" onclick="switchPanel('chat')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="mobile-tab-label">Betty</span>
+    </button>
+    <button class="mobile-tab" data-panel="p2p" onclick="switchPanel('p2p')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="mobile-tab-label">P2P</span>
+    </button>
+    <button class="mobile-tab" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      <span class="mobile-tab-label">Menu</span>
+    </button>
+  </div>
+</div>
+
+<script>
+  /* ─── State ─────────────────────────────────────────────────────── */
+  let messages = [];
+  let conversations = JSON.parse(localStorage.getItem('webetai-dash-convos') || '[]');
+  let activeConvoId = null;
+  let isLoading = false;
+  let searchEnabled = false;
+  let todaysPicks = null;
+  let activePanel = 'chat';
+  const loadedPanels = {};
+
+  const chatArea = document.getElementById('chat-area');
+  const emptyState = document.getElementById('empty-state');
+  const messagesList = document.getElementById('messages-list');
+  const chatInput = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('send-btn');
+
+  const BETTY_AVATAR = '<img src="/betty-sms.jpg" alt="Betty" />';
+
+  const API_URL = '/.netlify/functions/betty-chat-beta';
+  const DOLLAR_PER_UNIT = 150;
+
+  const panelTitles = {
+    chat: 'Chat With Betty <span class="topbar-sub">WeBetAI</span>',
+    picks: 'Daily Edge Picks',
+    mlb: 'MLB First 5 Picks',
+    webit: 'WeBit',
+    'p2p-sports': 'P2P Sports',
+    'p2p-trending': 'P2P Trending',
+    feed: 'Authentic Press',
+    rankings: 'Pick3 P2P Leaderboard',
+    percentile: 'AI Percentile Rankings',
+    p2p: 'Pick3 P2P',
+    guardian: 'Guardian Daily Digest',
+    builder: 'WeBet Builder',
+    sniper: 'Comment Sniper - Coming Soon',
+    digest: 'P2P Trending Topics',
+    admin: 'Admin',
+    settings: 'Settings',
+  };
+
+  /* ─── Init ──────────────────────────────────────────────────────── */
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.add('collapsed');
+  }
+  renderConvoList();
+  fetchTodaysPicks();
+
+  /* ─── Panel Switching ───────────────────────────────────────────── */
+  function switchPanel(panel) {
+    activePanel = panel;
+
+    // Update panels
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('panel-' + panel);
+    if (target) target.classList.add('active');
+
+    // Update sidebar nav
+    document.querySelectorAll('.nav-item[data-panel]').forEach(n => {
+      n.classList.toggle('active', n.dataset.panel === panel);
+    });
+
+    // Update mobile tabs
+    document.querySelectorAll('.mobile-tab[data-panel]').forEach(t => {
+      t.classList.toggle('active', t.dataset.panel === panel);
+    });
+
+    // Update topbar title
+    const titleEl = document.getElementById('topbar-title');
+    titleEl.innerHTML = (panel === 'chat' ? '<span class="topbar-dot"></span>' : '') +
+      '<span>' + panelTitles[panel] + '</span>';
+
+    // Load panel data on first visit
+    if (!loadedPanels[panel]) {
+      loadedPanels[panel] = true;
+      loadPanelData(panel);
+    }
+
+    // Close sidebar on mobile
+    if (window.innerWidth <= 768) {
+      const sidebar = document.getElementById('sidebar');
+      if (!sidebar.classList.contains('collapsed')) toggleSidebar();
+    }
+  }
+
+  /* ─── Load Panel Data ───────────────────────────────────────────── */
+  async function loadPanelData(panel) {
+    try {
+      switch (panel) {
+        case 'picks': await loadPicks(); break;
+        case 'percentile': await loadPercentile(); break;
+        case 'p2p': await loadP2P(); break;
+        case 'guardian': break;
+        case 'builder': break;
+        case 'sniper': await loadSniper('trending'); break;
+        case 'digest': break;
+      }
+    } catch (err) {
+      const el = document.getElementById(panel + '-content');
+      if (el) el.innerHTML = `<div style="color:var(--fg-dim);padding:40px;text-align:center">Failed to load data. <button onclick="loadedPanels['${panel}']=false;switchPanel('${panel}')" style="color:var(--primary);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline">Retry</button></div>`;
+    }
+  }
+
+  /* ─── Edge Picks Panel ──────────────────────────────────────────── */
+  async function loadPicks() {
+    const res = await fetch('/.netlify/functions/get-picks-alpha');
+    const data = await res.json();
+    const el = document.getElementById('picks-content');
+    if (!data || !data.picks || data.picks.length === 0) {
+      el.innerHTML = '<div style="color:var(--fg-dim);padding:40px;text-align:center">No picks available yet. Picks drop at 10am EST.</div>';
+      return;
+    }
+
+    const summary = data.summary || {};
+    let html = `<div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Picks</div><div class="stat-value">${data.picks.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Units</div><div class="stat-value">${summary.totalUnits || '--'}</div></div>
+      <div class="stat-card"><div class="stat-label">Sports</div><div class="stat-value">${(summary.sportsCovered || []).length}</div><div class="stat-sub">${(summary.sportsCovered || []).join(', ')}</div></div>
+      <div class="stat-card"><div class="stat-label">Generated</div><div class="stat-value" style="font-size:1rem">${data.date || '--'}</div></div>
+    </div>`;
+
+    data.picks.forEach(pick => {
+      const badgeCls = pick.rating === 'A+' ? 'badge-aplus' : pick.rating === 'A' ? 'badge-a' : pick.rating === 'A-' ? 'badge-aminus' : pick.rating === 'B+' ? 'badge-bplus' : 'badge-b';
+      const units = parseFloat(pick.units) || 1;
+      const risk = units * DOLLAR_PER_UNIT;
+      const win = Math.round(calcWinnings(risk, pick.odds || '-110'));
+      const prob = pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)} Win</span>` : '';
+
+      html += `<div class="pick-card">
+        <div class="pick-header">
+          <span class="sport-tag">${esc(pick.sport || 'SPORT')}</span>
+          <span class="rating-badge ${badgeCls}">${esc(pick.rating || 'A-')}</span>
+        </div>
+        <div class="pick-matchup">${esc(pick.matchup || 'TBD')}</div>
+        <div class="pick-line">
+          <span class="pick-name">${esc(pick.pick || '')}</span>
+          <span class="pick-odds">${esc(pick.odds || '')}${prob}</span>
+        </div>
+        <div class="pick-divider"></div>
+        <div class="pick-analysis">${esc(pick.coreReasoning || '')}</div>
+        <div class="pick-units">${esc(pick.units || '1.0u')} - Bet $${risk.toLocaleString()} &mdash; To Win +$${win.toLocaleString()}</div>
+      </div>`;
+    });
+
+    el.innerHTML = html;
+  }
+
+  /* ─── Feed Panel ────────────────────────────────────────────────── */
+  async function loadFeed() {
+    const el = document.getElementById('feed-content');
+    try {
+      const res = await fetch('/.netlify/functions/get-results-beta');
+      const data = await res.json();
+
+      if (data && data.results && data.results.length > 0) {
+        let html = '';
+        data.results.slice(0, 30).forEach(r => {
+          const isWin = (r.result || '').toLowerCase() === 'win';
+          const isLoss = (r.result || '').toLowerCase() === 'loss';
+          const color = isWin ? 'var(--primary)' : isLoss ? '#ef4444' : 'var(--fg-muted)';
+          html += `<div class="pick-card" style="border-left: 3px solid ${color}">
+            <div class="pick-header">
+              <span class="sport-tag">${esc(r.sport || '')}</span>
+              <span style="font-size:0.75rem;font-weight:700;color:${color}">${esc((r.result || 'PENDING').toUpperCase())}</span>
+            </div>
+            <div class="pick-matchup">${esc(r.matchup || '')}</div>
+            <div class="pick-line">
+              <span class="pick-name">${esc(r.pick || '')}</span>
+              <span class="pick-odds">${esc(r.odds || '')}</span>
+            </div>
+            <div style="font-size:0.75rem;color:var(--fg-dim);margin-top:4px">${esc(r.date || '')}</div>
+          </div>`;
+        });
+        el.innerHTML = html;
+        return;
+      }
+    } catch (_) {}
+
+    // Show today's picks as pending results when no results data exists
+    if (todaysPicks && todaysPicks.picks && todaysPicks.picks.length > 0) {
+      let html = `<div style="padding:12px 16px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:var(--primary);display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Today's picks are live — results will update as games finish
+      </div>`;
+      todaysPicks.picks.forEach(p => {
+        html += `<div class="pick-card" style="border-left: 3px solid var(--fg-dim)">
+          <div class="pick-header">
+            <span class="sport-tag">${esc(p.sport || '')}</span>
+            <span style="font-size:0.75rem;font-weight:700;color:var(--fg-dim)">PENDING</span>
+          </div>
+          <div class="pick-matchup">${esc(p.matchup || '')}</div>
+          <div class="pick-line">
+            <span class="pick-name">${esc(p.pick || '')}</span>
+            <span class="pick-odds">${esc(p.odds || '')}</span>
+          </div>
+          <div style="font-size:0.75rem;color:var(--fg-dim);margin-top:4px">${esc(todaysPicks.date || 'Today')}</div>
+        </div>`;
+      });
+      el.innerHTML = html;
+    } else {
+      el.innerHTML = `<div style="text-align:center;padding:60px 24px">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--fg-dim)" stroke-width="1.5" style="margin-bottom:16px;opacity:0.4"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+        <div style="font-size:1rem;font-weight:600;color:var(--fg);margin-bottom:6px">No results yet today</div>
+        <div style="font-size:0.8125rem;color:var(--fg-dim);max-width:300px;margin:0 auto;line-height:1.5">Results populate as games finish. Check back after tonight's games or view today's picks.</div>
+        <button class="bb-action-btn primary" style="margin-top:16px" onclick="switchPanel('picks')">View Today's Picks</button>
+      </div>`;
+    }
+  }
+
+  /* ─── Scorecard Panel ───────────────────────────────────────────── */
+  async function loadScorecard() {
+    const el = document.getElementById('scorecard-content');
+    let results = null;
+    try {
+      const res = await fetch('/.netlify/functions/get-results-beta');
+      const data = await res.json();
+      if (data && data.results && data.results.length > 0) results = data.results;
+    } catch (_) {}
+
+    if (results && results.length > 0) {
+      const wins = results.filter(r => (r.result || '').toLowerCase() === 'win').length;
+      const losses = results.filter(r => (r.result || '').toLowerCase() === 'loss').length;
+      const pushes = results.filter(r => (r.result || '').toLowerCase() === 'push').length;
+      const totalDecided = wins + losses;
+      const winRate = totalDecided > 0 ? ((wins / totalDecided) * 100).toFixed(1) : '--';
+      let totalPL = 0;
+      results.forEach(r => {
+        if ((r.result || '').toLowerCase() === 'win') {
+          totalPL += calcWinnings((parseFloat(r.units)||1)*DOLLAR_PER_UNIT, r.odds||'-110');
+        } else if ((r.result || '').toLowerCase() === 'loss') {
+          totalPL -= (parseFloat(r.units)||1)*DOLLAR_PER_UNIT;
+        }
+      });
+      const plClass = totalPL >= 0 ? 'positive' : 'negative';
+      const plStr = (totalPL >= 0 ? '+' : '') + '$' + Math.round(totalPL).toLocaleString();
+      el.innerHTML = `<div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Record</div><div class="stat-value">${wins}-${losses}${pushes?'-'+pushes:''}</div></div>
+        <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value">${winRate}%</div></div>
+        <div class="stat-card"><div class="stat-label">P/L</div><div class="stat-value ${plClass}">${plStr}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Picks</div><div class="stat-value">${results.length}</div></div>
+      </div>`;
+      return;
+    }
+
+    // Rich fallback: show model info + today's picks as the scorecard
+    const nPicks = todaysPicks?.picks?.length || 0;
+    const sports = todaysPicks?.summary?.sportsCovered || [];
+    const totalU = todaysPicks?.summary?.totalUnits || '0u';
+    el.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Model</div><div class="stat-value">v10</div><div class="stat-sub">Production</div></div>
+        <div class="stat-card"><div class="stat-label">Today's Picks</div><div class="stat-value">${nPicks}</div><div class="stat-sub">${totalU} wagered</div></div>
+        <div class="stat-card"><div class="stat-label">Sports Today</div><div class="stat-value">${sports.length}</div><div class="stat-sub">${sports.join(', ') || 'Pending'}</div></div>
+        <div class="stat-card"><div class="stat-label">Agents</div><div class="stat-value">3</div><div class="stat-sub">Grok + Claude + GPT</div></div>
+      </div>
+      <div class="settings-group">
+        <h3>v10 Model Architecture</h3>
+        <div class="settings-row"><span class="settings-row-label">Ensemble Projections</span><span class="settings-row-value" style="color:var(--primary)">Active</span></div>
+        <div class="settings-row"><span class="settings-row-label">Injury Impact Model</span><span class="settings-row-value" style="color:var(--primary)">Active</span></div>
+        <div class="settings-row"><span class="settings-row-label">Prediction Market Cross-Ref</span><span class="settings-row-value" style="color:var(--primary)">Kalshi + Polymarket</span></div>
+        <div class="settings-row"><span class="settings-row-label">X/Grok Intelligence</span><span class="settings-row-value" style="color:var(--primary)">Real-time</span></div>
+        <div class="settings-row"><span class="settings-row-label">Edge Discount Curve</span><span class="settings-row-value" style="color:var(--primary)">Calibrated</span></div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-row"><span class="settings-row-label">Edge Scorecard</span><span class="settings-row-value"><a href="/percentile" style="color:var(--primary)">View Percentile</a></span></div>
+      </div>
+      <div style="padding:12px 16px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;font-size:0.8125rem;color:var(--primary);display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Live record tracking starts as game results come in tonight
+      </div>`;
+  }
+
+  /* ─── Rankings Panel ────────────────────────────────────────────── */
+  async function loadRankings() {
+    const el = document.getElementById('rankings-content');
+    try {
+      const res = await fetch('/.netlify/functions/get-rankings');
+      const data = await res.json();
+      const rankings = data?.rankings || (Array.isArray(data) ? data : null);
+      if (rankings && rankings.length > 0) {
+        let html = '<table class="data-table"><thead><tr><th>#</th><th>Team</th><th>Elo</th><th>League</th></tr></thead><tbody>';
+        rankings.slice(0, 50).forEach((t, i) => {
+          html += `<tr>
+            <td style="font-weight:600;color:var(--fg)">${i + 1}</td>
+            <td style="font-weight:600;color:var(--fg)">${esc(t.team || t.name || '')}</td>
+            <td>${typeof t.elo === 'number' ? t.elo.toFixed(0) : (t.rating || '--')}</td>
+            <td><span class="sport-tag" style="font-size:0.5625rem">${esc(t.league || t.sport || '')}</span></td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+        return;
+      }
+    } catch (_) {}
+
+    // Rich fallback with Elo explanation + link to live rankings
+    const eloTeams = [
+      {team:'Cleveland Cavaliers',elo:1682,league:'NBA'},{team:'Boston Celtics',elo:1654,league:'NBA'},
+      {team:'Oklahoma City Thunder',elo:1648,league:'NBA'},{team:'Winnipeg Jets',elo:1612,league:'NHL'},
+      {team:'Minnesota Wild',elo:1598,league:'NHL'},{team:'Washington Capitals',elo:1590,league:'NHL'},
+      {team:'New York Knicks',elo:1586,league:'NBA'},{team:'Dallas Stars',elo:1582,league:'NHL'},
+      {team:'Denver Nuggets',elo:1574,league:'NBA'},{team:'Carolina Hurricanes',elo:1570,league:'NHL'},
+      {team:'LA Lakers',elo:1566,league:'NBA'},{team:'Florida Panthers',elo:1560,league:'NHL'},
+    ];
+    let html = `<div style="padding:12px 16px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:var(--primary);line-height:1.5">
+      <strong>WeBetAI Elo Power Rankings</strong> — Teams ranked by our proprietary Elo model. Updated daily as results come in. Rankings feed directly into the picks model.
+    </div>`;
+    html += '<table class="data-table"><thead><tr><th>#</th><th>Team</th><th>Elo</th><th>League</th></tr></thead><tbody>';
+    eloTeams.forEach((t, i) => {
+      html += `<tr>
+        <td style="font-weight:600;color:var(--fg)">${i + 1}</td>
+        <td style="font-weight:600;color:var(--fg)">${esc(t.team)}</td>
+        <td>${t.elo}</td>
+        <td><span class="sport-tag" style="font-size:0.5625rem">${t.league}</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    html += `<div style="text-align:center;padding-top:16px"><span style="font-size:0.75rem;color:var(--fg-dim)">Showing sample rankings — live data updates daily</span></div>`;
+    el.innerHTML = html;
+  }
+
+  /* ─── Percentile Panel ──────────────────────────────────────────── */
+  async function loadPercentile() {
+    const el = document.getElementById('percentile-content');
+    try {
+      const res = await fetch('/.netlify/functions/get-results-beta');
+      if (!res.ok) throw new Error('failed');
+      const data = await res.json();
+
+      const cum = data.cumulative || {};
+      const straight = data.straight || {};
+      const days = data.days || [];
+
+      const winRate = parseFloat(straight.accuracy || cum.accuracy || 0);
+      const roi = parseFloat(cum.roi || 0); // combined straight + parlays
+      const totalProfit = cum.totalProfit || 0;
+      const totalWagered = cum.totalWagered || 0;
+      const daysTracked = days.length;
+      const totalPicks = (straight.wins || 0) + (straight.losses || 0);
+      const avgUnitSize = totalPicks > 0 && totalWagered > 0 ? totalWagered / totalPicks : 150;
+      const unitsProfit = avgUnitSize > 0 ? totalProfit / avgUnitSize : 0; // includes parlays via cum
+
+      let wonDollars = 0, lostDollars = 0;
+      for (const d of days) {
+        for (const p of (d.picks || [])) {
+          if (p.result === 'win') wonDollars += (p.profit || 0);
+          else if (p.result === 'loss') lostDollars += Math.abs(p.profit || 0);
+        }
+      }
+      const profitFactor = lostDollars > 0 ? wonDollars / lostDollars : 0; // includes parlays
+
+      function interp(val, curve) {
+        if (val <= curve[0][0]) return curve[0][1];
+        if (val >= curve[curve.length - 1][0]) return curve[curve.length - 1][1];
+        for (let i = 0; i < curve.length - 1; i++) {
+          const [x0, y0] = curve[i], [x1, y1] = curve[i + 1];
+          if (val >= x0 && val <= x1)
+            return Math.round(y0 + (val - x0) / (x1 - x0) * (y1 - y0));
+        }
+        return 50;
+      }
+
+      document.getElementById('percentile-heading').textContent = 'AI Percentile Rankings';
+
+      const metrics = [
+        {
+          metric: 'ROI',
+          value: (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%',
+          pct: interp(roi, [[-10,10],[0,45],[5,60],[10,78],[15,88],[20,94],[25,97],[30,99]])
+        },
+        {
+          metric: 'Win Rate',
+          value: winRate.toFixed(1) + '%',
+          pct: interp(winRate, [[45,10],[50,40],[53,55],[55,65],[57,75],[59,87],[61,92],[63,96],[65,98]])
+        },
+        {
+          metric: 'Units Profit',
+          value: (unitsProfit >= 0 ? '+' : '') + unitsProfit.toFixed(1) + 'u',
+          pct: interp(unitsProfit, [[0,45],[5,55],[10,65],[15,75],[20,82],[25,88],[30,93],[40,97]])
+        },
+        {
+          metric: 'Profit Factor',
+          value: profitFactor.toFixed(2) + 'x',
+          pct: interp(profitFactor, [[0.8,20],[1.0,45],[1.2,60],[1.4,72],[1.6,82],[1.8,88],[2.0,92],[2.5,96]])
+        },
+      ];
+
+      let html = `<div style="padding:12px 16px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:20px;font-size:0.8125rem;color:var(--primary);line-height:1.5">
+        <strong>${totalPicks} Graded Picks · ${daysTracked} Days Live</strong>
+      </div>`;
+      metrics.forEach(m => {
+        const barColor = m.pct >= 90 ? 'var(--primary)' : m.pct >= 75 ? '#1abc9c' : '#e67e22';
+        html += `<div class="bb-card" style="padding:16px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+            <span style="font-size:0.875rem;font-weight:700;color:var(--fg)">${m.metric}</span>
+            <span style="font-size:1rem;font-weight:800;color:${barColor}">${m.pct}th</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="flex:1;height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden">
+              <div style="width:${m.pct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.6s ease"></div>
+            </div>
+            <span style="font-size:0.8125rem;font-weight:700;color:var(--fg);min-width:60px;text-align:right">${m.value}</span>
+          </div>
+        </div>`;
+      });
+      el.innerHTML = html;
+      return;
+    } catch (_) {}
+
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--fg-dim);font-size:0.875rem">
+      Unable to load live data. <a href="/edge" style="color:var(--primary)">View results on /edge</a>
+    </div>`;
+  }
+
+  /* ─── P2P Panel ─────────────────────────────────────────────────── */
+  async function loadP2P() {
+    const el = document.getElementById('p2p-content');
+    try {
+      const res = await fetch('/.netlify/functions/get-p2p-leaderboard');
+      const data = await res.json();
+      const lb = data?.leaderboard || (Array.isArray(data) ? data : null);
+      if (lb && lb.length > 0) {
+        let html = '<table class="data-table"><thead><tr><th>#</th><th>Player</th><th>W-L</th><th>Win%</th></tr></thead><tbody>';
+        lb.slice(0, 20).forEach((p, i) => {
+          const wr = (p.wins + p.losses) > 0 ? ((p.wins / (p.wins + p.losses)) * 100).toFixed(0) : '--';
+          html += `<tr>
+            <td style="font-weight:600;color:var(--fg)">${i + 1}</td>
+            <td style="font-weight:600;color:var(--fg)">${esc(p.name || p.phone || 'Unknown')}</td>
+            <td>${p.wins || 0}-${p.losses || 0}</td>
+            <td style="font-weight:700;color:var(--primary)">${wr}%</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+        return;
+      }
+    } catch (_) {}
+
+    // Rich fallback: explain Pick3 P2P concept + how it works
+    el.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card" style="background:var(--primary-dim);border-color:rgba(0,76,84,0.15)">
+          <div class="stat-label" style="color:var(--primary)">How It Works</div>
+          <div class="stat-value" style="font-size:1.125rem;color:var(--primary)">Pick 3</div>
+          <div class="stat-sub">Choose 3 games the AI rejected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Challenge</div>
+          <div class="stat-value" style="font-size:1.125rem">1v1</div>
+          <div class="stat-sub">Battle other cappers head-to-head</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Format</div>
+          <div class="stat-value" style="font-size:1.125rem">SMS</div>
+          <div class="stat-sub">Challenge via text message</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Leaderboard</div>
+          <div class="stat-value" style="font-size:1.125rem">Live</div>
+          <div class="stat-sub">Track your W-L record</div>
+        </div>
+      </div>
+      <div class="bb-card" style="border-color:var(--primary);border-width:2px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:44px;height:44px;border-radius:12px;background:var(--primary);display:flex;align-items:center;justify-content:center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:var(--fg)">Human vs. AI Rejected Games</div>
+            <div style="font-size:0.8125rem;color:var(--fg-muted)">The AI model passes on games it doesn't like. You pick 3 of them and prove the model wrong.</div>
+          </div>
+        </div>
+        <div style="font-size:0.8125rem;color:var(--fg-muted);line-height:1.6;margin-bottom:16px">
+          Every day, WeBetAI's model analyzes dozens of games but only picks a handful with real edge. The rest get rejected. <strong>Pick3 P2P</strong> lets you challenge friends to pick 3 games from the reject pile — whoever goes 2-1 or better wins. It's the ultimate test: can humans find value where AI can't?
+        </div>
+        <div class="bb-actions">
+          <button class="bb-action-btn primary" onclick="switchPanel('p2p')">Launch Pick3 P2P</button>
+          <button class="bb-action-btn" onclick="switchPanel('chat');chatInput.value='How does Pick3 P2P work?';sendBtn.disabled=false;sendMessage()">Ask Betty About P2P</button>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>Leaderboard</h3>
+        <div style="text-align:center;padding:20px;color:var(--fg-dim);font-size:0.8125rem">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--fg-dim)" stroke-width="1.5" style="margin-bottom:8px;opacity:0.4"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg><br>
+          No challenges yet — be the first to start one
+        </div>
+      </div>`;
+  }
+
+  /* ─── Guardian Daily Digest Panel ─────────────────────────────────── */
+  async function loadGuardian() {
+    const el = document.getElementById('guardian-content');
+    el.innerHTML = '<div class="feature-loading"><div class="spinner"></div> Loading Guardian digest...</div>';
+
+    try {
+      const res = await fetch('/.netlify/functions/get-guardian');
+      const data = await res.json();
+
+      if (!data || (!data.stories && !data.digest && !Array.isArray(data))) {
+        el.innerHTML = '<div style="color:var(--fg-dim);padding:40px;text-align:center">No Guardian digest available yet today.</div>';
+        return;
+      }
+
+      const stories = data.stories || data.digest || data || [];
+      if (!Array.isArray(stories) || stories.length === 0) {
+        el.innerHTML = '<div style="color:var(--fg-dim);padding:40px;text-align:center">No Guardian stories available.</div>';
+        return;
+      }
+
+      el.innerHTML = stories.map((story, i) => {
+        const score = story.authenticityScore || story.authenticity_score || story.score || null;
+        const verdict = story.verdict || story.factCheck || story.fact_check || '';
+        const headline = story.headline || story.title || story.topic || '';
+        const summary = story.summary || story.analysis || story.content || '';
+        const source = story.source || story.sources || '';
+        const betAngle = story.betAngle || story.bet_angle || story.micro_bet || '';
+
+        const scoreColor = score >= 80 ? '#2e7d32' : score >= 50 ? '#e65100' : score ? '#c62828' : 'var(--fg-dim)';
+        const scoreLabel = score >= 80 ? 'Verified' : score >= 50 ? 'Mixed' : score ? 'Disputed' : 'Unscored';
+
+        return `<div class="bb-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+            <div style="flex:1">
+              <div style="font-size:1rem;font-weight:700;color:var(--fg);line-height:1.3;margin-bottom:4px">${esc(headline)}</div>
+              ${source ? `<div style="font-size:0.6875rem;color:var(--fg-dim)">Source: ${esc(typeof source === 'string' ? source : JSON.stringify(source))}</div>` : ''}
+            </div>
+            ${score !== null ? `<div style="text-align:center;flex-shrink:0;margin-left:16px">
+              <div style="width:48px;height:48px;border-radius:50%;border:3px solid ${scoreColor};display:flex;align-items:center;justify-content:center;font-size:1.125rem;font-weight:800;color:${scoreColor}">${score}</div>
+              <div style="font-size:0.5625rem;font-weight:700;color:${scoreColor};margin-top:2px">${scoreLabel}</div>
+            </div>` : ''}
+          </div>
+          ${verdict ? `<div style="font-size:0.8125rem;font-weight:600;color:${scoreColor};margin-bottom:8px;padding:8px 12px;background:${scoreColor}11;border-radius:8px;border:1px solid ${scoreColor}22">${esc(verdict)}</div>` : ''}
+          <div style="font-size:0.8125rem;line-height:1.55;color:var(--fg-muted);margin-bottom:14px">${esc(summary.slice(0, 300))}${summary.length > 300 ? '...' : ''}</div>
+          ${betAngle ? `<div class="bb-market-block">
+            <div style="font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--primary);margin-bottom:6px">Micro-Bet Opportunity</div>
+            <div class="bb-market-q">${esc(betAngle)}</div>
+          </div>` : ''}
+          <div class="bb-actions">
+            <button class="bb-action-btn primary" onclick="postGuardianToChat(${i})">Ask Betty About This</button>
+            <button class="bb-action-btn" onclick="copyText(this, ${JSON.stringify(esc(headline + ' — ' + (betAngle || verdict || summary.slice(0,100))))})">Copy</button>
+            <a class="bb-action-btn" href="/guardian" target="_blank">Full Guardian</a>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Store for chat reference
+      window._guardianStories = stories;
+    } catch (err) {
+      el.innerHTML = '<div style="color:var(--fg-dim);padding:40px;text-align:center">Failed to load Guardian data. <button onclick="loadedPanels.guardian=false;switchPanel(\'guardian\')" style="color:var(--primary);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline">Retry</button></div>';
+    }
+  }
+
+  function postGuardianToChat(index) {
+    const stories = window._guardianStories || [];
+    const story = stories[index];
+    if (!story) return;
+    const q = 'What do you think about: ' + (story.headline || story.title || story.topic || 'this Guardian story') + '?';
+    chatInput.value = q;
+    sendBtn.disabled = false;
+    switchPanel('chat');
+    sendMessage();
+  }
+
+  /* ─── WeBet Builder Panel ─────────────────────────────────────────── */
+  async function loadBuilder(category) {
+    document.querySelectorAll('#panel-builder .cat-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.cat === category);
+    });
+    const el = document.getElementById('builder-content');
+    el.innerHTML = '<div class="feature-loading"><div class="spinner"></div> Searching trending posts...</div>';
+
+    try {
+      const res = await fetch('/.netlify/functions/admin-feed?category=' + category);
+      const data = await res.json();
+      const items = data.items || data.results || (Array.isArray(data) ? data : []);
+      if (items.length > 0) {
+        el.innerHTML = renderBuilderCards(items);
+        return;
+      }
+    } catch (_) {}
+
+    // Sample content so users understand the tool
+    const samples = [
+      {post:{name:'Shams Charania',handle:'ShamsCharania',text:'Breaking: LeBron James questionable for tonight\'s game vs. Celtics with ankle soreness. Lakers monitoring closely.',likes:24800,retweets:5200,views:1800000},market:{question:'Will LeBron James play tonight vs. Celtics?',yes_price:62,no_price:38,source:'Polymarket'},betString:'WeBet: LeBron sits tonight. NO 38% on Polymarket. Thoughts? 🏀',bettability:8},
+      {post:{name:'Adrian Wojnarowski',handle:'wojespn',text:'The NBA trade deadline is heating up. Multiple teams in discussions involving star players and first-round picks.',likes:18400,retweets:3100,views:950000},market:{question:'Will there be a blockbuster NBA trade this week?',yes_price:71,no_price:29,source:'Kalshi'},betString:'WeBet: Blockbuster trade incoming. YES 71% on Kalshi. Who gets moved? 🔥',bettability:7},
+      {post:{name:'Pat McAfee',handle:'PatMcAfeeShow',text:'The NHL playoffs are going to be absolutely ELECTRIC this year. So many good matchups setting up.',likes:12600,retweets:2800,views:620000},market:{question:'Will the Jets win the Stanley Cup?',yes_price:14,no_price:86,source:'Polymarket'},betString:'WeBet: Jets for the Cup? 14% on Polymarket seems low. Bet or fade? 🏒',bettability:6},
+    ];
+    el.innerHTML = `<div style="padding:10px 14px;background:rgba(233,168,0,0.08);border:1px solid rgba(233,168,0,0.2);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:#b8860b;display:flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+      Showing sample cards — live trending data loads when the pipeline runs
+    </div>` + renderBuilderCards(samples);
+  }
+
+  function renderBuilderCards(items) {
+    return items.map(item => {
+      const post = item.post || item.source || {};
+      const market = item.market || item.matched_market || {};
+      const bet = item.betString || item.bet_string || '';
+      const score = item.bettability || item.score || 0;
+      return `<div class="bb-card">
+        <div class="bb-post-block">
+          <div class="bb-post-author">
+            <div class="bb-post-avatar">${esc((post.name || 'X')[0])}</div>
+            <div>
+              <div class="bb-post-name">${esc(post.name || 'Unknown')}</div>
+              <div class="bb-post-handle">@${esc(post.handle || post.username || 'user')}</div>
+            </div>
+          </div>
+          <div class="bb-post-text">${esc((post.text || '').slice(0, 280))}</div>
+          <div class="bb-post-metrics">
+            <span>${formatNum(post.likes || 0)} likes</span>
+            <span>${formatNum(post.retweets || post.reposts || 0)} reposts</span>
+            <span>${formatNum(post.views || 0)} views</span>
+          </div>
+        </div>
+        ${market.question ? `<div class="bb-market-block">
+          <div class="bb-market-q">${esc(market.question)}</div>
+          <div class="bb-odds-row">
+            <div class="bb-odds-chip yes">YES ${market.yes_price || '--'}%</div>
+            <div class="bb-odds-chip no">NO ${market.no_price || '--'}%</div>
+          </div>
+          <div class="bb-source">
+            <span>${esc(market.source || 'Polymarket')}</span>
+            ${score ? `<span class="bb-score">Bettability: ${score}/10</span>` : ''}
+          </div>
+        </div>` : ''}
+        ${bet ? `<div class="bb-bet-string">${esc(bet)}</div>` : ''}
+        <div class="bb-actions">
+          <button class="bb-action-btn primary" onclick="copyText(this, '${esc(bet).replace(/'/g, "\\'")}')">Copy Bet String</button>
+          <button class="bb-action-btn" onclick="window.open('/admin', '_blank')">Open in Admin</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  /* ─── Comet Sniper Panel ────────────────────────────────────────── */
+  async function loadSniper(category) {
+    document.querySelectorAll('#panel-sniper .cat-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.cat === category);
+    });
+    const el = document.getElementById('sniper-content');
+    el.innerHTML = '<div class="feature-loading"><div class="spinner"></div> Finding sniper targets...</div>';
+
+    try {
+      const res = await fetch('/.netlify/functions/admin-sniper?category=' + category);
+      const data = await res.json();
+      const items = data.items || data.results || (Array.isArray(data) ? data : []);
+      if (items.length > 0) {
+        el.innerHTML = renderSniperCards(items, category);
+        return;
+      }
+    } catch (_) {}
+
+    // Sample sniper targets
+    const samples = [
+      {post:{name:'Stephen A Smith',handle:'stephenasmith',text:'I\'m telling you right now, the Cavaliers are NOT a championship team. They cannot win 4 games against Boston. Period.',likes:31200,retweets:4800},reply:'The market disagrees, Stephen A. Cavs to win the East is at 34% on Polymarket — up from 18% last month. WeBetAI has them at +142. Put your money where your mouth is 🎯 webetsocial.com/edge',market:{question:'Will Cavaliers make the NBA Finals?',yes_price:34,no_price:66}},
+      {post:{name:'Darren Rovell',handle:'darrenrovell',text:'The over/under on tonight\'s Celtics-Knicks game opened at 215.5. Already seeing sharp money on the under.',likes:8400,retweets:1200},reply:'Sharp money on the under? WeBetAI\'s model agrees — our ensemble projection has this at 209.3 total. Under 215.5 is an A- grade pick tonight. Full analysis: webetsocial.com/edge 📊',market:{question:'Celtics vs Knicks total over 215.5?',yes_price:48,no_price:52}},
+      {post:{name:'Bill Simmons',handle:'BillSimmons',text:'Can someone explain to me why the Jets are still getting futures action? This team has fundamental issues that aren\'t going away.',likes:15800,retweets:3600},reply:'Bill, the prediction markets have Jets at 14% to win the Cup — but WeBetAI\'s Elo model ranks them #1 in the NHL at 1612. The gap between market and model is where the edge lives. Agree or fade? 🏒 webetsocial.com/edge',market:{question:'Will Jets win the Stanley Cup?',yes_price:14,no_price:86}},
+    ];
+    el.innerHTML = `<div style="padding:10px 14px;background:rgba(233,168,0,0.08);border:1px solid rgba(233,168,0,0.2);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:#b8860b;display:flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+      Showing sample targets — live sniper data loads when the pipeline runs
+    </div>` + renderSniperCards(samples, category);
+  }
+
+  function renderSniperCards(items, category) {
+    return items.map((item, i) => {
+      const post = item.post || item.source || {};
+      const reply = item.reply || item.generated_reply || '';
+      const market = item.market || item.matched_market || {};
+      return `<div class="bb-card">
+        <div class="bb-post-block">
+          <div class="bb-post-author">
+            <div class="bb-post-avatar">${esc((post.name || 'X')[0])}</div>
+            <div>
+              <div class="bb-post-name">${esc(post.name || 'Unknown')}</div>
+              <div class="bb-post-handle">@${esc(post.handle || 'user')}</div>
+            </div>
+          </div>
+          <div class="bb-post-text">${esc((post.text || '').slice(0, 280))}</div>
+          <div class="bb-post-metrics">
+            <span>${formatNum(post.likes || 0)} likes</span>
+            <span>${formatNum(post.retweets || post.reposts || 0)} reposts</span>
+          </div>
+        </div>
+        ${market.question ? `<div class="bb-market-block">
+          <div class="bb-market-q">${esc(market.question)}</div>
+          <div class="bb-odds-row">
+            <div class="bb-odds-chip yes">YES ${market.yes_price || '--'}%</div>
+            <div class="bb-odds-chip no">NO ${market.no_price || '--'}%</div>
+          </div>
+        </div>` : ''}
+        <div class="sniper-reply">
+          <div class="sniper-reply-label">
+            <span>AI-Generated Reply</span>
+            <button class="bb-action-btn" style="padding:3px 8px;font-size:0.625rem" onclick="loadSniper('${category||'trending'}')">Regenerate</button>
+          </div>
+          <textarea id="sniper-reply-${i}" oninput="updateCharCount(this, 280)">${esc(reply)}</textarea>
+          <div class="char-count" id="sniper-cc-${i}">${(reply||'').length}/280</div>
+        </div>
+        <div class="bb-actions">
+          <button class="bb-action-btn primary" onclick="copyText(this, document.getElementById('sniper-reply-${i}').value)">Copy Reply</button>
+          <button class="bb-action-btn" onclick="window.open('/admin', '_blank')">Post via Admin</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  /* ─── Daily Digest Panel ────────────────────────────────────────── */
+  async function loadDigest(category) {
+    document.querySelectorAll('#panel-digest .cat-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.cat === category);
+    });
+    const el = document.getElementById('digest-content');
+    el.innerHTML = '<div class="feature-loading"><div class="spinner"></div> Building daily digest...</div>';
+
+    try {
+      const res = await fetch('/.netlify/functions/admin-feed?category=' + category + '&compose=true');
+      const data = await res.json();
+      const items = data.items || data.results || (Array.isArray(data) ? data : []);
+      if (items.length > 0) {
+        el.innerHTML = renderDigestCards(items);
+        return;
+      }
+    } catch (_) {}
+
+    // Sample digest with pre-composed posts
+    const samples = [
+      {post:{name:'ESPN',handle:'espn',text:'Tonight\'s NBA slate features 8 games including Celtics-Knicks and Lakers-Nuggets. Full preview inside.'},market:{question:'Celtics vs Knicks: Who wins tonight?',yes_price:58,no_price:42},composed_x:'🏀 Tonight\'s edge: WeBetAI model likes the under in Celtics-Knicks (209.3 projected vs 215.5 line). A- grade, 1.0u.\n\nFull picks + 3-agent verification: webetsocial.com/edge\n\n#NBA #SportsBetting #WeBetAI',composed_truth:'Big NBA night ahead. Our AI model found 3 edges across tonight\'s 8-game slate.\n\nTop play: Celtics-Knicks Under 215.5 — our ensemble projection has this game at 209.3 total. That\'s a 6.2 point edge.\n\nFull analysis with Grok + Claude + ChatGPT verification at webetsocial.com/edge',status:'ready'},
+      {post:{name:'NHL','handle':'NHL',text:'Playoff race heating up! Every game matters as teams fight for position in the final weeks.'},market:{question:'Will the Jets finish with the best record in the NHL?',yes_price:41,no_price:59},composed_x:'🏒 NHL playoff race update: WeBetAI Elo rankings have Jets #1 (1612) but the market only gives them 41% for best record.\n\nGap = edge. Full model: webetsocial.com/edge\n\n#NHL #HockeyTwitter #WeBetAI',composed_truth:'The NHL playoff race is where our model shines. WeBetAI\'s Elo power rankings have the Jets at #1 with a 1612 rating — highest in the league.\n\nBut prediction markets only give them 41% for best record. When our model and the market disagree, that\'s where we find edge.\n\nTonight\'s picks: webetsocial.com/edge',status:'ready'},
+    ];
+    el.innerHTML = `<div style="padding:10px 14px;background:rgba(233,168,0,0.08);border:1px solid rgba(233,168,0,0.2);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:#b8860b;display:flex;align-items:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+      Showing sample digest — live content loads when the pipeline runs
+    </div>` + renderDigestCards(samples);
+  }
+
+  function renderDigestCards(items) {
+    return items.map((item, i) => {
+      const post = item.post || item.source || {};
+      const market = item.market || item.matched_market || {};
+      const xPost = item.composed_x || item.x_post || '';
+      const truthPost = item.composed_truth || item.truth_post || '';
+      const status = item.status || 'ready';
+      const statusCls = status === 'ready' ? 'ready' : status.includes('posted') ? 'posted' : status === 'queued' ? 'queued' : 'scheduled';
+      return `<div class="bb-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="bb-post-author" style="margin-bottom:0">
+            <div class="bb-post-avatar">${esc((post.name || 'X')[0])}</div>
+            <div>
+              <div class="bb-post-name">${esc(post.name || 'Unknown')}</div>
+              <div class="bb-post-handle">@${esc(post.handle || 'user')}</div>
+            </div>
+          </div>
+          <span class="status-badge ${statusCls}">${esc(status)}</span>
+        </div>
+        <div class="bb-post-text" style="margin-bottom:14px">${esc((post.text || '').slice(0,200))}</div>
+        ${market.question ? `<div class="bb-market-block">
+          <div class="bb-market-q">${esc(market.question)}</div>
+          <div class="bb-odds-row">
+            <div class="bb-odds-chip yes">YES ${market.yes_price||'--'}%</div>
+            <div class="bb-odds-chip no">NO ${market.no_price||'--'}%</div>
+          </div>
+        </div>` : ''}
+        <div class="digest-compose">
+          <div class="compose-box">
+            <label>X Post</label>
+            <textarea id="digest-x-${i}" oninput="updateCharCount(this, 280)">${esc(xPost)}</textarea>
+            <div class="char-count" id="digest-xcc-${i}">${(xPost||'').length}/280</div>
+          </div>
+          <div class="compose-box">
+            <label>Truth Social</label>
+            <textarea id="digest-t-${i}" oninput="updateCharCount(this, 500)">${esc(truthPost)}</textarea>
+            <div class="char-count" id="digest-tcc-${i}">${(truthPost||'').length}/500</div>
+          </div>
+        </div>
+        <div class="bb-actions">
+          <button class="bb-action-btn primary" onclick="copyText(this, document.getElementById('digest-x-${i}').value)">Copy X</button>
+          <button class="bb-action-btn primary" onclick="copyText(this, document.getElementById('digest-t-${i}').value)">Copy Truth</button>
+          <button class="bb-action-btn" onclick="window.open('/admin', '_blank')">Publish via Admin</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  /* ─── Utility helpers ───────────────────────────────────────────── */
+  function formatNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  function copyText(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+
+  function updateCharCount(textarea, max) {
+    const countEl = textarea.parentElement.querySelector('.char-count');
+    if (countEl) {
+      const len = textarea.value.length;
+      countEl.textContent = len + '/' + max;
+      countEl.classList.toggle('over', len > max);
+    }
+  }
+
+  /* ─── Fetch today's picks on load ───────────────────────────────── */
+  async function fetchTodaysPicks() {
+    try {
+      const res = await fetch('/.netlify/functions/get-picks-alpha');
+      const data = await res.json();
+      todaysPicks = data;
+      updateEmptyState(data);
+      // Update admin panel count
+      const countEl = document.getElementById('admin-picks-count');
+      if (countEl && data && data.picks) countEl.textContent = data.picks.length;
+    } catch (err) {
+      document.getElementById('empty-subtitle').textContent = 'Your AI-powered betting assistant';
+    }
+  }
+
+  function updateEmptyState(data) {
+    const subtitle = document.getElementById('empty-subtitle');
+    const bannerArea = document.getElementById('picks-banner-area');
+
+    if (data && data.picks && data.picks.length > 0) {
+      subtitle.textContent = "I've got today's edge picks ready. Ask me anything.";
+      const sports = (data.summary?.sportsCovered || []).join(', ');
+      bannerArea.innerHTML = `<div class="picks-banner">
+        <span class="picks-banner-count">${data.picks.length} picks</span>
+        <span>${data.summary?.totalUnits || '0u'} total &middot; ${sports}</span>
+      </div>`;
+      const verifySug = document.getElementById('verify-suggestion');
+      if (verifySug && data.picks[0]) {
+        verifySug.textContent = 'Verify: ' + (data.picks[0].matchup || '').split(' vs ')[0] || 'Verify a pick';
+      }
+    } else {
+      subtitle.textContent = 'Your AI-powered betting assistant. Picks drop at 10am EST.';
+    }
+  }
+
+  /* ─── Sidebar ───────────────────────────────────────────────────── */
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.toggle('collapsed');
+    overlay.classList.toggle('show', !sidebar.classList.contains('collapsed'));
+  }
+
+  /* ─── Input handling ────────────────────────────────────────────── */
+  function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+  }
+
+  function toggleSendBtn() {
+    sendBtn.disabled = chatInput.value.trim().length === 0;
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+    if (e.key === 'Escape') {
+      document.getElementById('slash-hint').classList.remove('show');
+    }
+  }
+
+  function toggleSearch() {
+    searchEnabled = !searchEnabled;
+    document.getElementById('search-btn').classList.toggle('active', searchEnabled);
+  }
+
+  function checkSlash(el) {
+    const hint = document.getElementById('slash-hint');
+    hint.classList.toggle('show', el.value === '/');
+  }
+
+  function useSlashCmd(cmd) {
+    chatInput.value = cmd;
+    document.getElementById('slash-hint').classList.remove('show');
+    sendBtn.disabled = false;
+    chatInput.focus();
+  }
+
+  function useSuggestion(btn) {
+    const text = btn.querySelector('.suggestion-card-text').textContent;
+    emptyState.style.display = 'none';
+    messagesList.style.display = 'flex';
+    chatInput.value = text;
+    sendBtn.disabled = false;
+    sendMessage();
+  }
+
+  /* ─── New chat ──────────────────────────────────────────────────── */
+  function newChat() {
+    messages = [];
+    activeConvoId = null;
+    messagesList.innerHTML = '';
+    messagesList.style.display = 'none';
+    emptyState.style.display = 'flex';
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    sendBtn.disabled = true;
+    renderConvoList();
+    switchPanel('chat');
+  }
+
+  /* ─── Send message ──────────────────────────────────────────────── */
+  async function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text || isLoading) return;
+
+    // Switch to chat panel if not already there
+    if (activePanel !== 'chat') switchPanel('chat');
+
+    document.getElementById('slash-hint').classList.remove('show');
+    emptyState.style.display = 'none';
+    messagesList.style.display = 'flex';
+
+    if (!activeConvoId) {
+      activeConvoId = Date.now().toString();
+      conversations.unshift({ id: activeConvoId, title: text.slice(0, 50), ts: Date.now() });
+      saveConvos();
+      renderConvoList();
+    }
+
+    messages.push({ role: 'user', content: text });
+    appendMsg('user', text);
+
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    sendBtn.disabled = true;
+
+    isLoading = true;
+    const typingEl = showTyping();
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, search: searchEnabled }),
+      });
+
+      const data = await res.json();
+      typingEl.remove();
+      isLoading = false;
+
+      if (!res.ok) {
+        appendMsg('ai', 'Something went wrong. ' + (data.error || 'Please try again.'));
+        return;
+      }
+
+      if (data.type === 'verification') {
+        renderVerification(data);
+        messages.push({ role: 'assistant', content: data.synthesis || 'Verification complete.' });
+      } else if (data.type === 'picks' && data.picks && data.picks.length > 0) {
+        data.picks.forEach(pick => renderPickCard(pick));
+        if (data.content) {
+          messages.push({ role: 'assistant', content: data.content });
+          appendMsg('ai', data.content);
+        }
+      } else if (data.content) {
+        messages.push({ role: 'assistant', content: data.content });
+        appendMsg('ai', data.content);
+      } else {
+        appendMsg('ai', 'No response from Betty.');
+      }
+    } catch (err) {
+      typingEl.remove();
+      isLoading = false;
+      appendMsg('ai', 'Connection error. Please try again.');
+    }
+  }
+
+  /* ─── Helpers ───────────────────────────────────────────────────── */
+  function calcWinnings(atRisk, oddsStr) {
+    const odds = parseInt((oddsStr || '-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds) || !atRisk) return 0;
+    return odds > 0 ? atRisk * (odds / 100) : atRisk * (100 / Math.abs(odds));
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  /* ─── Render pick card (chat) ───────────────────────────────────── */
+  function renderPickCard(pick) {
+    const badgeCls = pick.rating === 'A+' ? 'badge-aplus' : pick.rating === 'A' ? 'badge-a' : pick.rating === 'A-' ? 'badge-aminus' : pick.rating === 'B+' ? 'badge-bplus' : 'badge-b';
+    const units = parseFloat(pick.units) || 1;
+    const risk = units * DOLLAR_PER_UNIT;
+    const win = Math.round(calcWinnings(risk, pick.odds || '-110'));
+    const prob = pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)} Win</span>` : '';
+
+    const group = document.createElement('div');
+    group.className = 'msg-group';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar ai';
+    avatar.innerHTML = BETTY_AVATAR;
+
+    const contentWrap = document.createElement('div');
+    contentWrap.className = 'msg-content';
+    contentWrap.style.maxWidth = '100%';
+
+    contentWrap.innerHTML = `<div class="pick-card">
+      <div class="pick-header">
+        <span class="sport-tag">${esc(pick.sport || 'SPORT')}</span>
+        <span class="rating-badge ${badgeCls}">${esc(pick.rating || 'A-')}</span>
+      </div>
+      <div class="pick-matchup">${esc(pick.matchup || 'TBD')}</div>
+      <div class="pick-line">
+        <span class="pick-name">${esc(pick.pick || '')}</span>
+        <span class="pick-odds">${esc(pick.odds || '')}${prob}</span>
+      </div>
+      <div class="pick-divider"></div>
+      <div class="pick-analysis">${esc(pick.coreReasoning || '')}</div>
+      <div class="pick-units">${esc(pick.units || '1.0u')} - Bet $${risk.toLocaleString()} &mdash; To Win +$${win.toLocaleString()}</div>
+    </div>`;
+
+    group.appendChild(avatar);
+    group.appendChild(contentWrap);
+    messagesList.appendChild(group);
+    scrollToBottom();
+  }
+
+  /* ─── Render verification panel ─────────────────────────────────── */
+  function renderVerification(data) {
+    const group = document.createElement('div');
+    group.className = 'msg-group';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar ai';
+    avatar.innerHTML = BETTY_AVATAR;
+
+    const contentWrap = document.createElement('div');
+    contentWrap.className = 'msg-content';
+    contentWrap.style.maxWidth = '100%';
+
+    const pick = data.pick || {};
+    const agents = data.agents || {};
+
+    function agentBadge(name, agent) {
+      return `<div class="verify-agent-badge">
+        <div class="verify-agent-name">${name}</div>
+        <div class="verify-agent-verdict ${agent.verdict || 'caution'}">${(agent.verdict || 'N/A').toUpperCase()}</div>
+        <div class="verify-agent-conf">${agent.confidence || 0}% confidence</div>
+        <div class="verify-agent-analysis">${agent.analysis || ''}</div>
+      </div>`;
+    }
+
+    const vBadgeCls = pick.rating === 'A+' ? 'badge-aplus' : pick.rating === 'A' ? 'badge-a' : pick.rating === 'A-' ? 'badge-aminus' : 'badge-bplus';
+    const vUnits = parseFloat(pick.units) || 1;
+    const vRisk = vUnits * DOLLAR_PER_UNIT;
+    const vWin = Math.round(calcWinnings(vRisk, pick.odds || '-110'));
+    const vProb = pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)} Win</span>` : '';
+
+    contentWrap.innerHTML = `
+      <div class="msg-label">Betty &middot; 3-Agent Verification</div>
+      <div class="pick-card" style="margin-top:4px">
+        <div class="pick-header">
+          <span class="sport-tag">${esc(pick.sport || '')}</span>
+          <span class="rating-badge ${vBadgeCls}">${esc(pick.rating || '')}</span>
+        </div>
+        <div class="pick-matchup">${esc(pick.matchup || '')}</div>
+        <div class="pick-line">
+          <span class="pick-name">${esc(pick.pick || '')}</span>
+          <span class="pick-odds">${esc(pick.odds || '')}${vProb}</span>
+        </div>
+        <div class="pick-divider"></div>
+        <div class="pick-analysis">${esc(pick.coreReasoning || '')}</div>
+        <div class="pick-units">${esc(pick.units || '1.0u')} - Bet $${vRisk.toLocaleString()} &mdash; To Win +$${vWin.toLocaleString()}</div>
+      </div>
+      <div class="verify-panel">
+        <div class="verify-agents">
+          ${agentBadge('Grok', agents.grok || {})}
+          ${agentBadge('Claude', agents.claude || {})}
+          ${agentBadge('ChatGPT', agents.chatgpt || {})}
+        </div>
+        <div class="verify-synthesis">${formatMarkdown(data.synthesis || '')}</div>
+      </div>`;
+
+    group.appendChild(avatar);
+    group.appendChild(contentWrap);
+    messagesList.appendChild(group);
+    scrollToBottom();
+  }
+
+  /* ─── Render message ────────────────────────────────────────────── */
+  function appendMsg(role, content) {
+    const group = document.createElement('div');
+    group.className = 'msg-group' + (role === 'user' ? ' user' : '');
+
+    if (role !== 'user') {
+      const avatar = document.createElement('div');
+      avatar.className = 'msg-avatar ai';
+      avatar.innerHTML = BETTY_AVATAR;
+      group.appendChild(avatar);
+    }
+
+    const contentWrap = document.createElement('div');
+    contentWrap.className = 'msg-content' + (role === 'user' ? ' user-content' : '');
+
+    if (role !== 'user') {
+      const label = document.createElement('div');
+      label.className = 'msg-label';
+      label.textContent = 'Betty';
+      contentWrap.appendChild(label);
+    }
+
+    const textEl = document.createElement('div');
+    textEl.className = 'msg-text' + (role === 'user' ? ' user-text' : '');
+
+    if (role === 'user') {
+      textEl.textContent = content;
+    } else {
+      textEl.innerHTML = formatMarkdown(content);
+    }
+
+    contentWrap.appendChild(textEl);
+    group.appendChild(contentWrap);
+    messagesList.appendChild(group);
+    scrollToBottom();
+  }
+
+  /* ─── Markdown formatter ────────────────────────────────────────── */
+  function formatMarkdown(text) {
+    if (!text) return '';
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    html = html.split(/\n\n+/).map(p => {
+      p = p.trim();
+      if (p.startsWith('<pre>') || p.startsWith('<ul>') || p.startsWith('<ol>')) return p;
+      return '<p>' + p + '</p>';
+    }).join('');
+    html = html.replace(/(?<!<\/li>|<\/p>|<\/pre>|<\/code>)\n(?!<)/g, '<br>');
+    return html;
+  }
+
+  /* ─── Typing indicator ──────────────────────────────────────────── */
+  function showTyping() {
+    const group = document.createElement('div');
+    group.className = 'msg-group';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar ai';
+    avatar.innerHTML = BETTY_AVATAR;
+
+    const contentWrap = document.createElement('div');
+    contentWrap.className = 'msg-content';
+
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = 'Betty';
+
+    const dots = document.createElement('div');
+    dots.className = 'typing-dots';
+    dots.innerHTML = '<span></span><span></span><span></span>';
+
+    contentWrap.appendChild(label);
+    contentWrap.appendChild(dots);
+    group.appendChild(avatar);
+    group.appendChild(contentWrap);
+    messagesList.appendChild(group);
+    scrollToBottom();
+    return group;
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
+  }
+
+  /* ─── Conversation persistence ──────────────────────────────────── */
+  function saveConvos() {
+    localStorage.setItem('webetai-dash-convos', JSON.stringify(conversations.slice(0, 20)));
+  }
+
+  function renderConvoList() {
+    const list = document.getElementById('convo-list');
+    const label = document.getElementById('history-label');
+    list.innerHTML = '';
+
+    if (conversations.length === 0) {
+      label.style.display = 'none';
+      return;
+    }
+    label.style.display = 'block';
+
+    conversations.slice(0, 15).forEach(c => {
+      const item = document.createElement('div');
+      item.className = 'convo-item' + (c.id === activeConvoId ? ' active' : '');
+      item.textContent = c.title;
+      item.onclick = () => {
+        activeConvoId = c.id;
+        renderConvoList();
+        switchPanel('chat');
+      };
+      list.appendChild(item);
+    });
+  }
+
+  /* ─── Admin: Trigger picks ──────────────────────────────────────── */
+  async function triggerPicks() {
+    try {
+      await fetch('/.netlify/functions/run-picks', { method: 'POST' });
+    } catch (_) {}
+  }
+
+  /* ─── Focus input on load (desktop) ─────────────────────────────── */
+  if (window.innerWidth > 768) chatInput.focus();
+
+  /* ─── Handle ?q= param from homepage redirect ──────────────────── */
+  (function() {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q) {
+      // Clean the URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Wait for picks to load, then send the message
+      setTimeout(function() {
+        chatInput.value = q;
+        sendBtn.disabled = false;
+        sendMessage();
+      }, 500);
+    }
+  })();
+
+  /* ─── WeBit coin panel ─── */
+  function openWebitPanel() { switchPanel('webit'); }
+
+  /* ─── Mobile: iOS keyboard handling ─────────────────────────────── */
+  (function() {
+    if (window.innerWidth > 768) return;
+
+    const inputArea = document.querySelector('.input-area');
+    const mobileTabs = document.querySelector('.mobile-tabs');
+    const msgList = document.getElementById('messages-list');
+    let kbOpen = false;
+
+    // Use visualViewport API for reliable keyboard detection
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function() {
+        const vvh = window.visualViewport.height;
+        const diff = window.innerHeight - vvh;
+        const isKeyboard = diff > 120;
+
+        if (isKeyboard && !kbOpen) {
+          kbOpen = true;
+          inputArea.classList.add('kb-open');
+          mobileTabs.classList.add('kb-hidden');
+          // Scroll messages to bottom
+          if (msgList) setTimeout(function() { msgList.scrollTop = msgList.scrollHeight; }, 50);
+        } else if (!isKeyboard && kbOpen) {
+          kbOpen = false;
+          inputArea.classList.remove('kb-open');
+          mobileTabs.classList.remove('kb-hidden');
+        }
+      });
+
+      window.visualViewport.addEventListener('scroll', function() {
+        // Keep input pinned to viewport bottom when keyboard scrolls
+        if (kbOpen && inputArea) {
+          inputArea.style.transform = 'translateY(' + (window.visualViewport.offsetTop * -1) + 'px)';
+        } else if (inputArea) {
+          inputArea.style.transform = '';
+        }
+      });
+    }
+
+    // Fallback: focus/blur detection
+    chatInput.addEventListener('focus', function() {
+      setTimeout(function() {
+        if (msgList) msgList.scrollTop = msgList.scrollHeight;
+      }, 350);
+    });
+
+    chatInput.addEventListener('blur', function() {
+      setTimeout(function() {
+        inputArea.classList.remove('kb-open');
+        if (mobileTabs) mobileTabs.classList.remove('kb-hidden');
+        inputArea.style.transform = '';
+      }, 100);
+    });
+  })();
+</script>
+
+</body>
+</html>

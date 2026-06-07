@@ -189,6 +189,42 @@
       background: rgba(255,255,255,0.08);
       margin: 6px 12px;
     }
+    /* Nav section grouping headers */
+    .nav-section-hd {
+      padding: 14px 16px 3px;
+      font-size: 0.5625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.22);
+      pointer-events: none;
+    }
+    /* Coming-soon nav items */
+    .nav-item.coming-soon {
+      opacity: 0.38;
+      cursor: default;
+      pointer-events: none;
+    }
+    .nav-soon-badge {
+      margin-left: auto;
+      font-size: 0.5rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.45);
+      border-radius: 4px;
+      padding: 2px 5px;
+    }
+    /* Message timestamp */
+    .msg-time {
+      font-size: 0.5625rem;
+      font-weight: 400;
+      color: var(--fg-dim);
+      margin-left: 6px;
+      letter-spacing: 0;
+      opacity: 0.7;
+    }
 
     /* ─── Chat History Section ─────────────────────────────────────────── */
     .sidebar-section-label {
@@ -1389,29 +1425,41 @@
 
     <!-- Navigation Menu -->
     <nav class="nav-menu">
+
+      <!-- Betty AI -->
       <button class="nav-item active" data-panel="chat" onclick="switchPanel('chat')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
         Chat With Betty
       </button>
       <button class="nav-item" data-panel="picks" onclick="switchPanel('picks')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
-        Daily Edge - Sportsbook Picks
+        Daily Edge Picks
       </button>
+      <button class="nav-item" data-panel="percentile" onclick="switchPanel('percentile')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        Percentile Rankings
+      </button>
+
+      <!-- P2P -->
+      <div class="nav-section-hd">P2P</div>
       <button class="nav-item" data-panel="p2p" onclick="switchPanel('p2p')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-        P2P - Pick 3 PVP
+        Pick 3 PVP
       </button>
       <button class="nav-item" data-panel="p2p-sports" onclick="switchPanel('p2p-sports')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span>
-        P2P - Sports
+        Sports Markets
       </button>
       <button class="nav-item" data-panel="p2p-trending" onclick="switchPanel('p2p-trending')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="12" cy="12" r="10" stroke-dasharray="4 4"/></svg></span>
-        P2P - Trending
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+        Trending Challenges
       </button>
+
+      <!-- Intelligence -->
+      <div class="nav-section-hd">Intelligence</div>
       <button class="nav-item" data-panel="guardian" onclick="switchPanel('guardian')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-        Daily Digest - Trending Top 5
+        Daily Digest
       </button>
       <button class="nav-item" data-panel="feed" onclick="switchPanel('feed')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
@@ -1421,14 +1469,12 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
         WeBet Builder
       </button>
-      <button class="nav-item" data-panel="sniper" onclick="switchPanel('sniper')">
+      <button class="nav-item coming-soon" data-panel="sniper">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg></span>
         Comment Sniper
+        <span class="nav-soon-badge">Soon</span>
       </button>
-      <button class="nav-item" data-panel="percentile" onclick="switchPanel('percentile')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
-        AI Percentile Rankings
-      </button>
+
     </nav>
 
     <div class="sidebar-section-label" id="history-label" style="display:none">Recent Chats</div>
@@ -1451,7 +1497,7 @@
       </button>
       <div class="topbar-title" id="topbar-title">
         <span class="topbar-dot"></span>
-        <span>Betty <span class="topbar-sub">WeBetAI</span></span>
+        <span>Chat With Betty</span>
       </div>
       <div class="topbar-spacer"></div>
       <a href="javascript:void(0)" class="coin-link" title="WeBit" onclick="openWebitPanel()">
@@ -1475,20 +1521,20 @@
             <div id="picks-banner-area"></div>
             <div class="suggestions-grid" id="suggestions-grid">
               <button class="suggestion-card" onclick="useSuggestion(this)">
-                <span class="suggestion-card-icon">&#128202;</span>
-                <span class="suggestion-card-text">Show today's sportsbook picks</span>
+                <span class="suggestion-card-icon">⚡</span>
+                <span class="suggestion-card-text">Show today's picks</span>
               </button>
               <button class="suggestion-card" onclick="useSuggestion(this)">
-                <span class="suggestion-card-icon">&#9989;</span>
-                <span class="suggestion-card-text" id="verify-suggestion">Verify any pick</span>
-              </button>
-              <button class="suggestion-card" onclick="switchPanel('builder')">
-                <span class="suggestion-card-icon">&#9889;</span>
-                <span class="suggestion-card-text">Create P2P trending topic challenge</span>
+                <span class="suggestion-card-icon">🔍</span>
+                <span class="suggestion-card-text" id="verify-suggestion">Verify a pick</span>
               </button>
               <button class="suggestion-card" onclick="switchPanel('guardian')">
-                <span class="suggestion-card-icon">&#128737;</span>
-                <span class="suggestion-card-text">Guardian trending topics daily digest</span>
+                <span class="suggestion-card-icon">🔥</span>
+                <span class="suggestion-card-text">Today's trending digest</span>
+              </button>
+              <button class="suggestion-card" onclick="switchPanel('p2p')">
+                <span class="suggestion-card-icon">🏆</span>
+                <span class="suggestion-card-text">Challenge someone Pick 3</span>
               </button>
             </div>
           </div>
@@ -1773,19 +1819,19 @@
   const DOLLAR_PER_UNIT = 150;
 
   const panelTitles = {
-    chat: 'Chat With Betty <span class="topbar-sub">WeBetAI</span>',
+    chat: 'Chat With Betty',
     picks: 'Daily Edge Picks',
     mlb: 'MLB First 5 Picks',
     webit: 'WeBit',
-    'p2p-sports': 'P2P Sports',
-    'p2p-trending': 'P2P Trending',
+    'p2p-sports': 'Sports Markets',
+    'p2p-trending': 'Trending Challenges',
     feed: 'Authentic Press',
-    rankings: 'Pick3 P2P Leaderboard',
-    percentile: 'AI Percentile Rankings',
-    p2p: 'Pick3 P2P',
-    guardian: 'Guardian Daily Digest',
+    rankings: 'Pick3 Leaderboard',
+    percentile: 'Percentile Rankings',
+    p2p: 'Pick 3 PVP',
+    guardian: 'Daily Digest',
     builder: 'WeBet Builder',
-    sniper: 'Comment Sniper - Coming Soon',
+    sniper: 'Comment Sniper',
     digest: 'P2P Trending Topics',
     admin: 'Admin',
     settings: 'Settings',
@@ -1819,8 +1865,8 @@
 
     // Update topbar title
     const titleEl = document.getElementById('topbar-title');
-    titleEl.innerHTML = (panel === 'chat' ? '<span class="topbar-dot"></span>' : '') +
-      '<span>' + panelTitles[panel] + '</span>';
+    const dot = panel === 'chat' ? '<span class="topbar-dot"></span>' : '';
+    titleEl.innerHTML = dot + '<span>' + (panelTitles[panel] || panel) + '</span>';
 
     // Load panel data on first visit
     if (!loadedPanels[panel]) {
@@ -2862,7 +2908,9 @@
     if (role !== 'user') {
       const label = document.createElement('div');
       label.className = 'msg-label';
-      label.textContent = 'Betty';
+      const now = new Date();
+      const t = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+      label.innerHTML = 'Betty<span class="msg-time">' + t + ' ET</span>';
       contentWrap.appendChild(label);
     }
 

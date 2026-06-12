@@ -6,7 +6,7 @@
 // 4. Calls Betty to compose posts
 // 5. Saves to queue with status 'needs_review'
 
-const crypto = require('crypto');
+const crypto = require('crypto')
 const { getStore } = require('@netlify/blobs');
 
 // ── Scheduled function config ────────────────────────────────────────────────
@@ -217,7 +217,7 @@ async function composeBettyPost(post, markets, apiKey) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'grok-3-fast',
+        model: 'grok-3-mini',
         messages: [
           { role: 'system', content: BETTY_SYSTEM_PROMPT },
           {

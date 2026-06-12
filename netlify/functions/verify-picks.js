@@ -358,7 +358,7 @@ async function postToDiscord(report, sharpResult) {
     }
   }
 
-  msg += `\n${report.summary}\nhttps://webetsocial.com/edge/beta`;
+  msg += `\n${report.summary}\nhttps://webetsocial.com/alpha`;
 
   // Truncate if too long for Discord (2000 char limit)
   if (msg.length > 1950) msg = msg.slice(0, 1950) + '...';

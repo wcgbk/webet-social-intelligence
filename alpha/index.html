@@ -545,8 +545,8 @@
       <a href="/alpha" class="header-link active">Alpha Picks</a>
       <a href="/alpha/dashboard" class="header-link">Dashboard</a>
       <a href="/percentile" class="header-link">Track Record</a>
-      <a href="/edge-beta" class="header-link">Beta Picks</a>
     </nav>
+    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
     <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
@@ -554,7 +554,6 @@
       <a href="/alpha">Alpha Picks</a>
       <a href="/alpha/dashboard">Dashboard</a>
       <a href="/percentile">Track Record</a>
-      <a href="/edge-beta">Beta Picks</a>
     </div>
   </header>
 
@@ -2072,6 +2071,7 @@
     if (e.key === 'Escape') closeVerifyModal();
   });
 </script>
+<script src="/nav.js" defer></script>
 
 </body>
 </html>

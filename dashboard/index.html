@@ -254,42 +254,6 @@
     .convo-item:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
     .convo-item.active { background: rgba(255,255,255,0.12); color: #ffffff; }
 
-    .sidebar-footer {
-      padding: 10px 12px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-    .sidebar-footer-actions {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    }
-    .sidebar-footer-avatar {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      background: var(--primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--primary-fg);
-      flex-shrink: 0;
-    }
-    .sidebar-footer-name {
-      font-size: 0.8125rem;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: rgba(255,255,255,0.7);
-    }
-
     /* ─── Main Area ───────────────────────────────────────────────────── */
     .main {
       flex: 1;
@@ -356,8 +320,58 @@
     }
     .topbar-action:hover { color: #ffffff; }
 
-    .coin-link { display: flex; align-items: center; flex-shrink: 0; cursor: pointer; }
-    .coin-img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+    /* ─── Topbar WeBit + user area ───────────────────────────────── */
+    .coin-img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .topbar-webit {
+      display: flex; align-items: center; gap: 7px;
+      background: none; border: none;
+      border-radius: 9999px; padding: 4px 8px 4px 4px;
+      cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .topbar-webit:hover { background: rgba(255,255,255,0.09); }
+    .topbar-webit-bal {
+      font-size: 0.8125rem; font-weight: 700;
+      color: rgba(255,255,255,0.4);   /* muted for guests */
+      letter-spacing: -0.01em; white-space: nowrap;
+    }
+    .topbar-webit.authed .topbar-webit-bal {
+      color: #ffffff;                 /* bright when logged in */
+    }
+    .topbar-user-area { display: flex; align-items: center; }
+    .topbar-login-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: #ffffff;
+      border: none;
+      color: #000000; border-radius: 9999px;
+      padding: 7px 15px 7px 11px;
+      font-family: inherit; font-size: 0.75rem; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .topbar-login-btn:hover { opacity: 0.88; }
+    .topbar-avatar-btn {
+      background: none; border: none; cursor: pointer;
+      padding: 2px; border-radius: 50%; flex-shrink: 0;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .topbar-avatar-btn:hover { transform: scale(1.06); opacity: 0.88; }
+    .topbar-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--primary); color: var(--primary-fg);
+      font-size: 0.75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; border: 2px solid rgba(255,255,255,0.18);
+    }
+    .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    @media (max-width: 600px) {
+      .topbar-login-text { display: none; }
+      .topbar-login-btn { padding: 10px 12px; gap: 0; min-height: 40px; min-width: 40px; justify-content: center; }
+      .topbar-login-btn svg { width: 16px; height: 16px; }
+      .topbar-webit-bal { display: none !important; }
+      .topbar-avatar-btn { padding: 4px; }
+      .topbar-avatar { width: 36px; height: 36px; }
+    }
 
     /* ─── Panel Container ─────────────────────────────────────────────── */
     .panel-container {
@@ -491,8 +505,66 @@
     }
     .msg-avatar.human {
       background: var(--primary);
-      color: #fff;
+      color: #000;
+      overflow: hidden;
     }
+    .msg-avatar.human img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+
+    /* ─── Profile Panel ───────────────────────────────────────────── */
+    .profile-panel-wrap { padding: 0; display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
+    .profile-hero {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 40px 24px 28px; gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .profile-avatar-lg {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: var(--primary); color: var(--primary-fg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.75rem; font-weight: 700; overflow: hidden;
+      border: 3px solid var(--primary); flex-shrink: 0;
+    }
+    .profile-avatar-lg img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .profile-name { font-size: 1.125rem; font-weight: 700; color: var(--fg); margin: 0; }
+    .profile-handle { font-size: 0.875rem; color: var(--fg-dim); margin: 0; }
+    .profile-meta { display: flex; gap: 20px; margin-top: 4px; }
+    .profile-meta-item { font-size: 0.75rem; color: var(--fg-dim); text-align: center; }
+    .profile-meta-item strong { display: block; font-size: 0.9375rem; font-weight: 700; color: var(--fg); }
+    .profile-stat-cards {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 20px 16px;
+    }
+    .profile-stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .profile-stat-card .psc-label { font-size: 0.6875rem; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+    .profile-stat-card .psc-value { font-size: 1.25rem; font-weight: 700; color: var(--fg); display: flex; align-items: center; gap: 6px; }
+    .profile-stat-card .psc-sub { font-size: 0.6875rem; color: var(--fg-dim); }
+    .profile-actions { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+    .profile-action-row { display: flex; gap: 10px; }
+    .profile-btn {
+      flex: 1; padding: 10px 16px; border-radius: 10px; font-family: inherit;
+      font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+      transition: background 0.15s;
+    }
+    .profile-btn:hover { background: var(--surface-2); }
+    .profile-btn.danger { color: #ef4444; border-color: rgba(239,68,68,0.3); }
+    .profile-btn.danger:hover { background: rgba(239,68,68,0.08); }
+    .profile-guest-cta {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      flex: 1; padding: 48px 24px; gap: 16px; text-align: center;
+    }
+    .profile-guest-cta h3 { font-size: 1.125rem; font-weight: 700; margin: 0; color: var(--fg); }
+    .profile-guest-cta p { font-size: 0.875rem; color: var(--fg-dim); margin: 0; }
+    .profile-x-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: #ffffff; color: #000000; border: none;
+      border-radius: 9999px; padding: 11px 22px;
+      font-family: inherit; font-size: 0.875rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .profile-x-btn:hover { opacity: 0.88; }
 
     .msg-content {
       max-width: 85%;
@@ -1372,6 +1444,80 @@
       .bb-odds-row { flex-direction: column; }
     }
 
+    /* ─── Login Nudge (slides DOWN from below topbar) ───────────────── */
+    .login-nudge {
+      background: #0d0d0d;
+      border-bottom: none;           /* no border when collapsed */
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1), padding 0.38s ease, border-color 0.38s ease;
+      flex-shrink: 0;
+      padding: 0 24px;
+    }
+    .login-nudge.show {
+      max-height: 72px;
+      padding: 10px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .login-nudge-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .login-nudge-text { flex: 1; min-width: 0; }
+    .login-nudge-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .login-nudge-sub {
+      font-size: 0.6875rem;
+      color: rgba(255,255,255,0.42);
+      white-space: nowrap;
+    }
+    .login-x-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      border-radius: 9999px;
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .login-x-btn:hover { opacity: 0.85; }
+    .login-nudge-dismiss {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.28);
+      cursor: pointer;
+      padding: 4px 6px;
+      font-size: 1rem;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color 0.12s;
+    }
+    .login-nudge-dismiss:hover { color: rgba(255,255,255,0.65); }
+    @media (max-width: 768px) {
+      .login-nudge { padding: 0 14px; }
+      .login-nudge.show { max-height: 90px; padding: 9px 14px; }
+      .login-nudge-sub { display: none; }
+      .login-nudge-title { font-size: 0.75rem; }
+      .login-x-btn { padding: 8px 14px; font-size: 0.75rem; }
+    }
+
     /* ─── Scrollbar global ────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -1393,9 +1539,46 @@
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
+
+    /* ─── Toast notifications ─────────────────────────────────────── */
+    .wb-toast {
+      position: fixed;
+      top: 68px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-12px);
+      background: #111111;
+      color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-family: 'Geist Sans', system-ui, sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+    .wb-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .wb-toast.success { border-color: rgba(135,251,137,0.4); }
+    .wb-toast.error   { border-color: rgba(239, 68, 68, 0.4); }
+
+    /* ─── Human avatar: white icon on primary bg ──────────────────── */
+    .msg-avatar.human { color: #ffffff; }
   </style>
 </head>
 <body>
+
+<!-- Toast notification -->
+<div class="wb-toast" id="wb-toast"></div>
 
 <div class="app">
   <!-- Sidebar Overlay (mobile) -->
@@ -1482,10 +1665,6 @@
 
     </div><!-- /sidebar-scroll -->
 
-    <div class="sidebar-footer">
-      <div class="sidebar-footer-avatar">G</div>
-      <span class="sidebar-footer-name">Guest</span>
-    </div>
   </aside>
 
   <!-- Main Content -->
@@ -1500,12 +1679,39 @@
         <span>Chat With Betty</span>
       </div>
       <div class="topbar-spacer"></div>
-      <a href="javascript:void(0)" class="coin-link" title="WeBit" onclick="openWebitPanel()">
+
+      <!-- WeBit coin + balance (muted for guests, bright when logged in) -->
+      <button class="topbar-webit" id="topbar-webit-btn" onclick="topbarCoinClick()" title="WeBit tokens">
         <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
-      </a>
-      <button class="topbar-action" title="Home" onclick="newChat()" style="padding:10px;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="topbar-webit-bal" id="topbar-webit-bal">1,000</span>
       </button>
+
+      <!-- User state: Sign in button (guest) ↔ avatar (logged in) -->
+      <div class="topbar-user-area" style="margin-left:6px;">
+        <button class="topbar-login-btn" id="topbar-login-btn" onclick="loginWithX()" title="Sign in with X">
+          <svg width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
+          <span class="topbar-login-text">Sign in</span>
+        </button>
+        <button class="topbar-avatar-btn" id="topbar-avatar-btn" onclick="openProfilePanel()" title="Your profile" style="display:none;">
+          <div class="topbar-avatar" id="topbar-avatar">G</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Login Nudge — slides down from header after first Betty response -->
+    <div class="login-nudge" id="login-nudge">
+      <div class="login-nudge-inner">
+        <span style="font-size:1.1rem;flex-shrink:0">🪙</span>
+        <div class="login-nudge-text">
+          <div class="login-nudge-title">Lock in your 1,000 WeBit — it's yours free</div>
+          <div class="login-nudge-sub">Save picks history &amp; challenges across devices</div>
+        </div>
+        <button class="login-x-btn" onclick="loginWithX()">
+          <svg width="14" height="14" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
+          Continue with X
+        </button>
+        <button class="login-nudge-dismiss" onclick="dismissLoginNudge()" title="Dismiss">✕</button>
+      </div>
     </div>
 
     <!-- Panel Container -->
@@ -1598,6 +1804,13 @@
       <!-- WEBIT PANEL -->
       <div class="panel" id="panel-webit" style="overflow:hidden;">
         <iframe src="/webit" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- PROFILE PANEL -->
+      <div class="panel" id="panel-profile">
+        <div class="profile-panel-wrap" id="profile-panel-content">
+          <!-- Rendered by renderProfilePanel() in JS -->
+        </div>
       </div>
 
       <!-- FEED PANEL -->
@@ -1797,6 +2010,105 @@
 </div>
 
 <script>
+  /* ─── Auth & Guest Session ──────────────────────────────────────── */
+  const GUEST_KEY = 'wbai_guest_v1';
+  const NUDGE_SESS_KEY = 'wbai_nudge_dismissed';
+  const X_CLIENT_ID = 'NXN6TlUyZnFKbFJFSU5LbU9tVGg6MTpjaQ';
+
+  // Persist a guest session ID so we can track anonymous usage
+  if (!localStorage.getItem(GUEST_KEY)) {
+    const arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    const uid = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(GUEST_KEY, uid);
+  }
+
+  let wbUser = null;        // null = guest, object = authenticated
+  let loginNudgeShown = false;
+  let justSignedIn = false; // set when returning from ?auth=success
+
+  // On load: handle ?auth= callback params, then restore session
+  (function initAuth() {
+    const params = new URLSearchParams(window.location.search);
+    const authStatus = params.get('auth');
+    if (authStatus) window.history.replaceState({}, '', '/dashboard');
+    if (authStatus === 'success') {
+      justSignedIn = true;
+    } else if (authStatus === 'error') {
+      setTimeout(() => showToast('⚠️ Sign-in failed. Please try again.', 'error'), 400);
+    }
+    fetchCurrentUser(); // always check for an active session cookie
+  })();
+
+  async function fetchCurrentUser() {
+    try {
+      const res = await fetch('/auth/me');
+      if (res.ok) {
+        const user = await res.json();
+        if (user && user.id) { wbUser = user; updateAuthUI(); }
+      }
+    } catch (_) {}
+  }
+
+  function updateAuthUI() {
+    if (!wbUser) return;
+
+    // Hide login nudge permanently for this session
+    const nudge = document.getElementById('login-nudge');
+    if (nudge) nudge.classList.remove('show');
+    sessionStorage.setItem(NUDGE_SESS_KEY, '1');
+
+    // ─── Topbar ──────────────────────────────────────────────────────
+    // Coin: bright balance + authed class
+    const webitBal = document.getElementById('topbar-webit-bal');
+    const webitBtn = document.getElementById('topbar-webit-btn');
+    if (webitBal) webitBal.textContent = (wbUser.credit_balance || 1000).toLocaleString();
+    if (webitBtn) webitBtn.classList.add('authed');
+    // Swap login button → avatar
+    const tbLoginBtn = document.getElementById('topbar-login-btn');
+    const tbAvatarBtn = document.getElementById('topbar-avatar-btn');
+    const tbAvatar = document.getElementById('topbar-avatar');
+    if (tbLoginBtn) tbLoginBtn.style.display = 'none';
+    if (tbAvatar) {
+      if (wbUser.avatar_url) {
+        tbAvatar.style.background = 'transparent';
+        tbAvatar.innerHTML = `<img src="${wbUser.avatar_url}" alt="${wbUser.handle || 'U'}" />`;
+      } else {
+        tbAvatar.textContent = (wbUser.name || wbUser.handle || 'U')[0].toUpperCase();
+      }
+    }
+    if (tbAvatarBtn) tbAvatarBtn.style.display = '';
+
+
+    // Welcome toast — only fires once after X OAuth redirect
+    if (justSignedIn) {
+      justSignedIn = false;
+      const displayName = wbUser.name || ('@' + wbUser.handle) || 'there';
+      setTimeout(() => showToast(`🎉 Welcome, ${displayName}! Your 1,000 WeBit are ready.`, 'success'), 300);
+    }
+  }
+
+  function showLoginNudge() {
+    if (wbUser) return;                                      // already logged in
+    if (sessionStorage.getItem(NUDGE_SESS_KEY)) return;     // dismissed this session
+    if (loginNudgeShown) return;                             // already shown
+    loginNudgeShown = true;
+    setTimeout(() => {
+      const nudge = document.getElementById('login-nudge');
+      if (nudge) nudge.classList.add('show');
+    }, 700);
+  }
+
+  function dismissLoginNudge() {
+    const nudge = document.getElementById('login-nudge');
+    if (nudge) nudge.classList.remove('show');
+    sessionStorage.setItem(NUDGE_SESS_KEY, '1'); // won't re-appear this session; resets on next visit
+  }
+
+  function loginWithX() {
+    window.location.href = '/.netlify/functions/auth-x-init';
+  }
+
   /* ─── State ─────────────────────────────────────────────────────── */
   let messages = [];
   let conversations = JSON.parse(localStorage.getItem('webetai-dash-convos') || '[]');
@@ -1835,6 +2147,7 @@
     digest: 'P2P Trending Topics',
     admin: 'Admin',
     settings: 'Settings',
+    profile: 'My Profile',
   };
 
   /* ─── Init ──────────────────────────────────────────────────────── */
@@ -2121,7 +2434,7 @@
   async function loadPercentile() {
     const el = document.getElementById('percentile-content');
     try {
-      const res = await fetch('/.netlify/functions/get-results-beta');
+      const res = await fetch('/.netlify/functions/get-results-alpha');
       if (!res.ok) throw new Error('failed');
       const data = await res.json();
 
@@ -2130,13 +2443,13 @@
       const days = data.days || [];
 
       const winRate = parseFloat(straight.accuracy || cum.accuracy || 0);
-      const roi = parseFloat(cum.roi || 0); // combined straight + parlays
+      const roi = parseFloat(cum.roi || 0);
       const totalProfit = cum.totalProfit || 0;
       const totalWagered = cum.totalWagered || 0;
       const daysTracked = days.length;
       const totalPicks = (straight.wins || 0) + (straight.losses || 0);
       const avgUnitSize = totalPicks > 0 && totalWagered > 0 ? totalWagered / totalPicks : 150;
-      const unitsProfit = avgUnitSize > 0 ? totalProfit / avgUnitSize : 0; // includes parlays via cum
+      const unitsProfit = avgUnitSize > 0 ? totalProfit / avgUnitSize : 0;
 
       let wonDollars = 0, lostDollars = 0;
       for (const d of days) {
@@ -2145,7 +2458,7 @@
           else if (p.result === 'loss') lostDollars += Math.abs(p.profit || 0);
         }
       }
-      const profitFactor = lostDollars > 0 ? wonDollars / lostDollars : 0; // includes parlays
+      const profitFactor = lostDollars > 0 ? wonDollars / lostDollars : 0;
 
       function interp(val, curve) {
         if (val <= curve[0][0]) return curve[0][1];
@@ -2160,11 +2473,20 @@
 
       document.getElementById('percentile-heading').textContent = 'AI Percentile Rankings';
 
+      // ── 4 KPI scorecards (live from /alpha track record) ──
+      const record = `${straight.wins || 0}-${straight.losses || 0}`;
+      const accuracy = straight.accuracy || '0%';
+      const roiNum = parseFloat(cum.roi) || 0;
+      const roiStr = (roiNum >= 0 ? '+' : '') + roiNum.toFixed(1) + '%';
+      const roiClass = roiNum >= 0 ? 'positive' : 'negative';
+      const profitClass = totalProfit >= 0 ? 'positive' : 'negative';
+      const profitStr = (totalProfit >= 0 ? '+$' : '-$') + Math.abs(totalProfit).toLocaleString();
+
       const metrics = [
         {
           metric: 'ROI',
-          value: (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%',
-          pct: interp(roi, [[-10,10],[0,45],[5,60],[10,78],[15,88],[20,94],[25,97],[30,99]])
+          value: (roiNum >= 0 ? '+' : '') + roiNum.toFixed(1) + '%',
+          pct: interp(roiNum, [[-10,10],[0,45],[5,60],[10,78],[15,88],[20,94],[25,97],[30,99]])
         },
         {
           metric: 'Win Rate',
@@ -2183,9 +2505,31 @@
         },
       ];
 
-      let html = `<div style="padding:12px 16px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:20px;font-size:0.8125rem;color:var(--primary);line-height:1.5">
-        <strong>${totalPicks} Graded Picks · ${daysTracked} Days Live</strong>
-      </div>`;
+      let html = `
+        <div class="stats-grid" style="grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px">
+          <div class="stat-card">
+            <div class="stat-label">ROI</div>
+            <div class="stat-value ${roiClass}">${roiStr}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Record</div>
+            <div class="stat-value">${record}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Accuracy</div>
+            <div class="stat-value positive">${accuracy}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">P/L</div>
+            <div class="stat-value ${profitClass}">${profitStr}</div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:20px;font-size:0.8125rem;color:var(--primary)">
+          <strong>${totalPicks} Graded Picks · ${daysTracked} Days Live</strong>
+        </div>
+        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:12px">Percentile vs Elite Models</div>
+      `;
+
       metrics.forEach(m => {
         const barColor = m.pct >= 90 ? 'var(--primary)' : m.pct >= 75 ? '#1abc9c' : '#e67e22';
         html += `<div class="bb-card" style="padding:16px;margin-bottom:10px">
@@ -2201,12 +2545,17 @@
           </div>
         </div>`;
       });
+
+      html += `<div style="text-align:center;margin-top:16px">
+        <a href="/alpha" style="font-size:0.8125rem;color:var(--primary);font-weight:600">View Full Track Record →</a>
+      </div>`;
+
       el.innerHTML = html;
       return;
     } catch (_) {}
 
     el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--fg-dim);font-size:0.875rem">
-      Unable to load live data. <a href="/edge" style="color:var(--primary)">View results on /edge</a>
+      Unable to load live data. <a href="/alpha" style="color:var(--primary)">View results on /alpha</a>
     </div>`;
   }
 
@@ -2451,9 +2800,9 @@
 
     // Sample sniper targets
     const samples = [
-      {post:{name:'Stephen A Smith',handle:'stephenasmith',text:'I\'m telling you right now, the Cavaliers are NOT a championship team. They cannot win 4 games against Boston. Period.',likes:31200,retweets:4800},reply:'The market disagrees, Stephen A. Cavs to win the East is at 34% on Polymarket — up from 18% last month. WeBetAI has them at +142. Put your money where your mouth is 🎯 webetsocial.com/edge',market:{question:'Will Cavaliers make the NBA Finals?',yes_price:34,no_price:66}},
-      {post:{name:'Darren Rovell',handle:'darrenrovell',text:'The over/under on tonight\'s Celtics-Knicks game opened at 215.5. Already seeing sharp money on the under.',likes:8400,retweets:1200},reply:'Sharp money on the under? WeBetAI\'s model agrees — our ensemble projection has this at 209.3 total. Under 215.5 is an A- grade pick tonight. Full analysis: webetsocial.com/edge 📊',market:{question:'Celtics vs Knicks total over 215.5?',yes_price:48,no_price:52}},
-      {post:{name:'Bill Simmons',handle:'BillSimmons',text:'Can someone explain to me why the Jets are still getting futures action? This team has fundamental issues that aren\'t going away.',likes:15800,retweets:3600},reply:'Bill, the prediction markets have Jets at 14% to win the Cup — but WeBetAI\'s Elo model ranks them #1 in the NHL at 1612. The gap between market and model is where the edge lives. Agree or fade? 🏒 webetsocial.com/edge',market:{question:'Will Jets win the Stanley Cup?',yes_price:14,no_price:86}},
+      {post:{name:'Stephen A Smith',handle:'stephenasmith',text:'I\'m telling you right now, the Cavaliers are NOT a championship team. They cannot win 4 games against Boston. Period.',likes:31200,retweets:4800},reply:'The market disagrees, Stephen A. Cavs to win the East is at 34% on Polymarket — up from 18% last month. WeBetAI has them at +142. Put your money where your mouth is 🎯 webetsocial.com/alpha',market:{question:'Will Cavaliers make the NBA Finals?',yes_price:34,no_price:66}},
+      {post:{name:'Darren Rovell',handle:'darrenrovell',text:'The over/under on tonight\'s Celtics-Knicks game opened at 215.5. Already seeing sharp money on the under.',likes:8400,retweets:1200},reply:'Sharp money on the under? WeBetAI\'s model agrees — our ensemble projection has this at 209.3 total. Under 215.5 is an A- grade pick tonight. Full analysis: webetsocial.com/alpha 📊',market:{question:'Celtics vs Knicks total over 215.5?',yes_price:48,no_price:52}},
+      {post:{name:'Bill Simmons',handle:'BillSimmons',text:'Can someone explain to me why the Jets are still getting futures action? This team has fundamental issues that aren\'t going away.',likes:15800,retweets:3600},reply:'Bill, the prediction markets have Jets at 14% to win the Cup — but WeBetAI\'s Elo model ranks them #1 in the NHL at 1612. The gap between market and model is where the edge lives. Agree or fade? 🏒 webetsocial.com/alpha',market:{question:'Will Jets win the Stanley Cup?',yes_price:14,no_price:86}},
     ];
     el.innerHTML = `<div style="padding:10px 14px;background:rgba(233,168,0,0.08);border:1px solid rgba(233,168,0,0.2);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:#b8860b;display:flex;align-items:center;gap:8px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
@@ -2524,8 +2873,8 @@
 
     // Sample digest with pre-composed posts
     const samples = [
-      {post:{name:'ESPN',handle:'espn',text:'Tonight\'s NBA slate features 8 games including Celtics-Knicks and Lakers-Nuggets. Full preview inside.'},market:{question:'Celtics vs Knicks: Who wins tonight?',yes_price:58,no_price:42},composed_x:'🏀 Tonight\'s edge: WeBetAI model likes the under in Celtics-Knicks (209.3 projected vs 215.5 line). A- grade, 1.0u.\n\nFull picks + 3-agent verification: webetsocial.com/edge\n\n#NBA #SportsBetting #WeBetAI',composed_truth:'Big NBA night ahead. Our AI model found 3 edges across tonight\'s 8-game slate.\n\nTop play: Celtics-Knicks Under 215.5 — our ensemble projection has this game at 209.3 total. That\'s a 6.2 point edge.\n\nFull analysis with Grok + Claude + ChatGPT verification at webetsocial.com/edge',status:'ready'},
-      {post:{name:'NHL','handle':'NHL',text:'Playoff race heating up! Every game matters as teams fight for position in the final weeks.'},market:{question:'Will the Jets finish with the best record in the NHL?',yes_price:41,no_price:59},composed_x:'🏒 NHL playoff race update: WeBetAI Elo rankings have Jets #1 (1612) but the market only gives them 41% for best record.\n\nGap = edge. Full model: webetsocial.com/edge\n\n#NHL #HockeyTwitter #WeBetAI',composed_truth:'The NHL playoff race is where our model shines. WeBetAI\'s Elo power rankings have the Jets at #1 with a 1612 rating — highest in the league.\n\nBut prediction markets only give them 41% for best record. When our model and the market disagree, that\'s where we find edge.\n\nTonight\'s picks: webetsocial.com/edge',status:'ready'},
+      {post:{name:'ESPN',handle:'espn',text:'Tonight\'s NBA slate features 8 games including Celtics-Knicks and Lakers-Nuggets. Full preview inside.'},market:{question:'Celtics vs Knicks: Who wins tonight?',yes_price:58,no_price:42},composed_x:'🏀 Tonight\'s edge: WeBetAI model likes the under in Celtics-Knicks (209.3 projected vs 215.5 line). A- grade, 1.0u.\n\nFull picks + 3-agent verification: webetsocial.com/alpha\n\n#NBA #SportsBetting #WeBetAI',composed_truth:'Big NBA night ahead. Our AI model found 3 edges across tonight\'s 8-game slate.\n\nTop play: Celtics-Knicks Under 215.5 — our ensemble projection has this game at 209.3 total. That\'s a 6.2 point edge.\n\nFull analysis with Grok + Claude + ChatGPT verification at webetsocial.com/alpha',status:'ready'},
+      {post:{name:'NHL','handle':'NHL',text:'Playoff race heating up! Every game matters as teams fight for position in the final weeks.'},market:{question:'Will the Jets finish with the best record in the NHL?',yes_price:41,no_price:59},composed_x:'🏒 NHL playoff race update: WeBetAI Elo rankings have Jets #1 (1612) but the market only gives them 41% for best record.\n\nGap = edge. Full model: webetsocial.com/alpha\n\n#NHL #HockeyTwitter #WeBetAI',composed_truth:'The NHL playoff race is where our model shines. WeBetAI\'s Elo power rankings have the Jets at #1 with a 1612 rating — highest in the league.\n\nBut prediction markets only give them 41% for best record. When our model and the market disagree, that\'s where we find edge.\n\nTonight\'s picks: webetsocial.com/alpha',status:'ready'},
     ];
     el.innerHTML = `<div style="padding:10px 14px;background:rgba(233,168,0,0.08);border:1px solid rgba(233,168,0,0.2);border-radius:10px;margin-bottom:16px;font-size:0.8125rem;color:#b8860b;display:flex;align-items:center;gap:8px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
@@ -2768,6 +3117,7 @@
       } else {
         appendMsg('ai', 'No response from Betty.');
       }
+      showLoginNudge(); // prompt after first successful Betty response
     } catch (err) {
       typingEl.remove();
       isLoading = false;
@@ -2925,6 +3275,23 @@
 
     contentWrap.appendChild(textEl);
     group.appendChild(contentWrap);
+
+    // User avatar — X profile pic if logged in, initial if guest
+    if (role === 'user') {
+      const ua = document.createElement('div');
+      ua.className = 'msg-avatar human';
+      if (wbUser && wbUser.avatar_url) {
+        ua.style.background = 'transparent';
+        ua.innerHTML = `<img src="${wbUser.avatar_url}" alt="${wbUser.handle || 'You'}" />`;
+      } else if (wbUser) {
+        ua.textContent = (wbUser.name || wbUser.handle || 'U')[0].toUpperCase();
+      } else {
+        // Guest: show a person icon
+        ua.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`;
+      }
+      group.appendChild(ua);
+    }
+
     messagesList.appendChild(group);
     scrollToBottom();
   }
@@ -3040,6 +3407,105 @@
 
   /* ─── WeBit coin panel ─── */
   function openWebitPanel() { switchPanel('webit'); }
+
+  /* ─── Toast ─────────────────────────────────────────────────────── */
+  function showToast(msg, type) {
+    const el = document.getElementById('wb-toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'wb-toast' + (type ? ' ' + type : '');
+    el.offsetWidth; // force reflow to re-trigger CSS transition
+    el.classList.add('show');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.classList.remove('show'); }, 4200);
+  }
+
+  function topbarCoinClick() {
+    if (wbUser) { openProfilePanel(); } else { loginWithX(); }
+  }
+
+  function openProfilePanel() {
+    renderProfilePanel();
+    switchPanel('profile');
+  }
+
+  function renderProfilePanel() {
+    const el = document.getElementById('profile-panel-content');
+    if (!el) return;
+
+    if (!wbUser) {
+      // Guest state
+      el.innerHTML = `
+        <div class="profile-guest-cta">
+          <div style="font-size:3rem">🪙</div>
+          <h3>Create your WeBetAI account</h3>
+          <p>Sign in with X to claim 1,000 free WeBit, save your picks history, and challenge friends.</p>
+          <button class="profile-x-btn" onclick="loginWithX()">
+            <svg width="16" height="16" viewBox="0 0 1200 1227" fill="currentColor"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
+            Continue with X
+          </button>
+        </div>`;
+      return;
+    }
+
+    const balance = (wbUser.credit_balance || 1000).toLocaleString();
+    const followers = (wbUser.followers || 0).toLocaleString();
+    const memberSince = wbUser.created_at
+      ? new Date(wbUser.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      : 'Today';
+    const avatarHTML = wbUser.avatar_url
+      ? `<img src="${wbUser.avatar_url}" alt="${wbUser.handle}" />`
+      : `<span>${(wbUser.name || wbUser.handle || 'U')[0].toUpperCase()}</span>`;
+
+    el.innerHTML = `
+      <div class="profile-hero">
+        <div class="profile-avatar-lg">${avatarHTML}</div>
+        <div style="text-align:center">
+          <p class="profile-name">${wbUser.name || wbUser.handle || 'User'}</p>
+          <p class="profile-handle">@${wbUser.handle || '—'}</p>
+        </div>
+        <div class="profile-meta">
+          <div class="profile-meta-item"><strong>${followers}</strong>Followers</div>
+          <div class="profile-meta-item"><strong>${memberSince}</strong>Member since</div>
+        </div>
+      </div>
+      <div class="profile-stat-cards">
+        <div class="profile-stat-card" style="grid-column:1/-1">
+          <div class="psc-label">WeBit Balance</div>
+          <div class="psc-value">
+            <img src="/webet-coin.png" style="width:22px;height:22px;border-radius:50%;" />
+            ${balance}
+          </div>
+          <div class="psc-sub">Earned from sign-up bonus</div>
+        </div>
+        <div class="profile-stat-card">
+          <div class="psc-label">Picks Verified</div>
+          <div class="psc-value">0</div>
+          <div class="psc-sub">Ask Betty to verify a pick</div>
+        </div>
+        <div class="profile-stat-card">
+          <div class="psc-label">Challenges</div>
+          <div class="psc-value">0</div>
+          <div class="psc-sub">Pick 3 PVP record</div>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <div class="profile-action-row">
+          <button class="profile-btn" onclick="switchPanel('webit')">🪙 WeBit Store</button>
+          <button class="profile-btn" onclick="switchPanel('p2p')">🏆 Challenges</button>
+        </div>
+        <button class="profile-btn danger" onclick="signOut()">Sign out</button>
+      </div>`;
+  }
+
+  async function signOut() {
+    try {
+      await fetch('/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    document.cookie = 'wbai_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    localStorage.removeItem('wbai_guest_v1');
+    window.location.href = '/dashboard';
+  }
 
   /* ─── Mobile: iOS keyboard handling ─────────────────────────────── */
   (function() {

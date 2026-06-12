@@ -23,6 +23,15 @@
 [functions."generate-picks-alpha-background"]
   # Background function — 15min timeout for Alpha pick generation
 
+[functions."trigger-picks-mvp"]
+  schedule = "0 12 * * *"
+  # MVP pipeline — 8am EDT (12:00 UTC), 1hr before alpha for max CLV runway comparison
+  # Writes to edge-picks-mvp blob store. Model: v11.0-mvp
+  # v11.0 improvements: Poisson soccer, grade Kelly mult, adversarial A+ check, sport-diverse parlays
+
+[functions."generate-picks-mvp-background"]
+  # Background function — 15min timeout for MVP pick generation
+
 [functions."trigger-picks-mlb"]
   schedule = "0 14 * * *"
   # Re-enabled: KALSHI_PRIVATE_KEY moved to Netlify Blob (webet-config/kalshi-private-key)
@@ -72,7 +81,9 @@
   # Background function — 15min timeout for BettorEdge-enhanced pick generation
 
 [functions."trigger-clv"]
-  schedule = "0 17,23 * * *"
+  schedule = "0 7,17,23 * * *"
+  # 07:00 UTC = 3am EDT (overnight settle — track-clv re-invokes itself for YESTERDAY so night
+  # games get results written before the 8am/9am pick runs read bankroll/drawdown state).
   # 17:00 UTC = 1pm EDT (afternoon games). 23:00 UTC = 7pm EDT (evening games). Merges results.
 
 [functions."capture-opening-lines"]
@@ -252,6 +263,27 @@
 [[redirects]]
   from = "/edge/beta"
   to = "/edge-beta/index.html"
+  status = 200
+
+# ── MVP Model Lab ────────────────────────────────────────
+[[redirects]]
+  from = "/mvp"
+  to = "/mvp/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-picks-mvp"
+  to = "/.netlify/functions/get-picks-mvp"
+  status = 200
+
+[[redirects]]
+  from = "/api/run-picks-mvp"
+  to = "/.netlify/functions/run-picks-mvp"
+  status = 200
+
+[[redirects]]
+  from = "/api/get-results-mvp"
+  to = "/.netlify/functions/get-results-mvp"
   status = 200
 
 # ── Alpha ────────────────────────────────────────────────
@@ -628,6 +660,22 @@
 [[redirects]]
   from = "/x"
   to = "/x/index.html"
+  status = 200
+
+# ── Auth: X OAuth (WeBetAI dashboard login) ──────────────────────────────────
+[[redirects]]
+  from = "/auth/x/callback"
+  to = "/.netlify/functions/auth-x-callback"
+  status = 200
+
+[[redirects]]
+  from = "/auth/me"
+  to = "/.netlify/functions/auth-me"
+  status = 200
+
+[[redirects]]
+  from = "/auth/logout"
+  to = "/.netlify/functions/auth-logout"
   status = 200
 
 [[redirects]]

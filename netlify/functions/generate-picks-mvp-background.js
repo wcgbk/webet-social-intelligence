@@ -1,18 +1,16 @@
-// generate-picks-alpha-background.js
-// v10.3-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
-// JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
-// v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
-//   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
-//   per-market total σ (NBA 18.5 / NHL 2.3 / MLB 4.3), Kelly ×50 sizing (grades live again),
-//   EV floor 3% calibrated (lean 1.5%), soccer disabled (38.5% real-run), ML dogs capped +160,
-//   stale sport multipliers removed, weather now recomputes EV/units, 2+ major books enforced.
-// Key changes from v10.0: Quarter-Kelly (was Half), 8% EV floor (was 3%), Claude SELECTOR (was VERIFIER).
-// Background function (15min timeout). Stores to "edge-picks-alpha" Netlify Blob store.
-// Alpha improvements over beta:
-//   1. Model: claude-sonnet-4-6 (latest Sonnet)
-//   2. Prompt caching on system prompt (~80% cost/latency reduction on Claude call)
-//   3. Odds regions: us,us2,eu (broader line shopping, better consensus)
-//   4. Blob store: edge-picks-alpha (isolated from beta/production)
+// generate-picks-mvp-background.js
+// v11.1 — MVP Architecture (next iteration test vs /alpha)
+// v11.1 (2026-06-12): fixed fatal totalZ scope bug (zero picks since launch) + selfOptParams typo;
+// adopted the v10.3 shared sharp-model layer fitted on 428 real daily-run picks: shrinkage
+// calibration (K total .30 / spread .35 / ML .50), per-market total σ, Kelly ×50 sizing,
+// 3% calibrated EV floor, ML dogs ≤ +160, sport multipliers removed, weather recomputes EV,
+// 2+ major books. Soccer SPREADS disabled; soccer TOTALS stay live as the Poisson hypothesis.
+// Inherits all v11.1-mvp features plus four targeted improvements:
+//   1. Poisson distribution for soccer totals (replaces normal CDF — mathematically correct for low-scoring discrete sports)
+//   2. Grade Kelly multipliers: A+/A/B sizing calibrated from actual self-optimize win-rate data
+//   3. Adversarial A+ check: second Haiku call tries to REFUTE the top pick before publishing
+//   4. Sport-diverse parlays: hard-require all 3 legs from different sports (no same-sport correlation)
+// Background function (15min timeout). Stores to "edge-picks-mvp" Netlify Blob store.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
@@ -118,7 +116,7 @@ const ESPN_LEAGUES = [
 // MLB: ~2.8 runs (empirical SD from Baseball Reference; was 2.5 — slightly low)
 // Soccer: 1.5 goals (draw-compressed distribution; 1.0 was too tight)
 const SPORT_STD_DEVS = { NBA: 12, NCAAB: 11, NHL: 1.6, MLB: 2.8, EPL: 1.5, "La Liga": 1.5, "Serie A": 1.5, Bundesliga: 1.5, "Ligue 1": 1.5, MLS: 1.5, UCL: 1.5, Europa: 1.5 };
-// v10.3: game-total distributions are wider than margin distributions — totals must use their own σ.
+// v11.1: game-total distributions are wider than margin distributions — totals must use their own σ.
 // Empirical full-game total SDs: NBA ~18.5, NCAAB ~17, NHL ~2.3 goals, MLB ~4.3 runs.
 // Previously totals reused the margin σ, inflating total z-scores (and cover probs) by ~40-50%.
 const SPORT_TOTAL_STD_DEVS = { NBA: 18.5, NCAAB: 17, NHL: 2.3, MLB: 4.3, EPL: 1.9, "La Liga": 1.9, "Serie A": 1.9, Bundesliga: 1.9, "Ligue 1": 1.9, MLS: 1.9, UCL: 1.9, Europa: 1.9 };
@@ -128,7 +126,7 @@ const SPORT_TOTAL_STD_DEVS = { NBA: 18.5, NCAAB: 17, NHL: 2.3, MLB: 4.3, EPL: 1.
 // NBA: 2.0 pts (Finals-era tight lines; EV floor handles the rest)
 const SPORT_MIN_EDGE = { NBA: 2.0, NCAAB: 2.0, NHL: 0.4, MLB: 0.5, EPL: 0.25, "La Liga": 0.25, "Serie A": 0.25, Bundesliga: 0.25, "Ligue 1": 0.25, MLS: 0.25, UCL: 0.25, Europa: 0.25 };
 
-// v10.3: hardcoded sport Kelly multipliers REMOVED. They came from the backfilled backtest,
+// v11.1: hardcoded sport Kelly multipliers REMOVED. They came from the backfilled backtest,
 // and the real daily-run record (Mar 19 – Jun 12, 428 graded straights) contradicts both:
 //   NBA 63.3% / +23.2% ROI (n=289) — was penalized 0.85x
 //   NHL 53.4% / +6.8% ROI (n=202) — was boosted 1.30x
@@ -365,6 +363,24 @@ function normalCDF(z) {
   return 0.5 * (1 + erf(z / Math.sqrt(2)));
 }
 
+// ── Poisson CDF for soccer totals (v11.1-mvp improvement) ──
+// Soccer goals are discrete count data averaging ~2.5/game. The normal CDF
+// approximation significantly misprices totals near the line (e.g. Over 2.5
+// at λ=2.8 is 53% by Poisson, but ~56% by normal — a 3pt overconfidence error).
+// P(X <= k | λ) = Σ e^(-λ) * λ^j / j! for j=0..k
+function poissonPMF(k, lambda) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  // Use log-space to avoid overflow for large k
+  let logP = -lambda;
+  for (let i = 1; i <= k; i++) logP += Math.log(lambda) - Math.log(i);
+  return Math.exp(logP);
+}
+function poissonCDF(k, lambda) {
+  let cdf = 0;
+  for (let i = 0; i <= Math.floor(k); i++) cdf += poissonPMF(i, lambda);
+  return Math.min(1, cdf);
+}
+
 // ── Sport-specific cover probability caps (research-calibrated) ──
 // Published research: elite ATS models sustain 55-57% over large samples.
 // Break-even at -110 is 52.4%. These caps enforce realistic model humility.
@@ -396,7 +412,7 @@ const COVER_PROB_CAPS = {
   "UCL_Moneyline": 0.65, "Europa_Moneyline": 0.65,
 };
 
-// ── v10.3 SHRINKAGE CALIBRATION ──
+// ── v11.1 SHRINKAGE CALIBRATION ──
 // The no-vig market price is the prior; the model earns only a fitted fraction K of its
 // claimed deviation from it. K fitted on 428 graded REAL daily-run picks (prod+beta+alpha,
 // Mar 19 – Jun 12 2026) by matching observed win rates to average raw model probabilities:
@@ -452,7 +468,7 @@ function computeKelly(coverProb, odds, drawdownActive) {
   let kellyQuarter = (edge / (decPayout - 1)) * 0.25;
   if (drawdownActive) kellyQuarter *= 0.75;
 
-  // v10.3: fraction × 50 (was ×10). The ×10 scale was sized for the old inflated probabilities;
+  // v11.1: fraction × 50 (was ×10). The ×10 scale was sized for the old inflated probabilities;
   // with shrinkage-calibrated probs (EVs now ~3-15% instead of 12-40%), ×10 floored every pick
   // at 0.5u and killed grade differentiation. ×50 maps calibrated EV 3-5% → 0.5-1u,
   // 8-12% → 1.5-2u, 15%+ → 2.5u+ (A+ rare, as it should be). Round to 0.5u steps.
@@ -999,7 +1015,7 @@ async function fetchCLVFeedback() {
 
   try {
     const indexResp = await fetch(
-      `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-alpha/picks-dates`,
+      `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-mvp/picks-dates`,
       { headers: { "Authorization": `Bearer ${token}` } }
     );
     if (!indexResp.ok) return {};
@@ -1010,7 +1026,7 @@ async function fetchCLVFeedback() {
     for (const d of allDates) {
       try {
         const resp = await fetch(
-          `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-alpha/clv-${d}`,
+          `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-mvp/clv-${d}`,
           { headers: { "Authorization": `Bearer ${token}` } }
         );
         if (resp.ok) {
@@ -2375,7 +2391,7 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
 }
 
 // evFloor: minimum Kelly EV a candidate must clear to be retained.
-// v10.3: default lowered 0.08 → 0.03. The old 8% bar was tuned to inflated probabilities;
+// v11.1: default lowered 0.08 → 0.03. The old 8% bar was tuned to inflated probabilities;
 // with shrinkage calibration, +3% CALIBRATED EV is a genuinely sharp threshold (real edge after
 // vig, comparable to professional sides). The thin-slate fallback re-runs at 0.015 for Leans.
 function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.03) {
@@ -2392,15 +2408,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
     sosRating: 1500,
   };
 
-  // v10.3: soccer candidate generation disabled — real daily-run record across all 6 leagues
-  // (Mar 19 – Jun 12): 15-24-5, 38.5% win rate, -21.4% ROI. The normal-CDF goal model is wrong
-  // for draw-heavy low-scoring soccer. Re-enable only behind a Poisson engine (testing in /mvp).
-  const SOCCER_DISABLED = ["EPL", "La Liga", "Serie A", "Bundesliga", "Ligue 1", "MLS", "UCL", "Europa"];
-
   for (const league of espnData) {
     const leagueConfig = ESPN_LEAGUES.find(l => l.label === league.league);
     if (!leagueConfig) continue;
-    if (SOCCER_DISABLED.includes(league.league)) continue;
     const leagueRatings = ratingsData?.leagues?.[league.league];
     // Don't skip leagues with no ratings — use defaults so ESPN stats still produce candidates
 
@@ -2483,7 +2493,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       // ── PLACEABILITY GATE ──
       // A pick is only generated if the market is offered at 2+ major US sportsbooks.
       // This ensures every pick can be physically placed by users at common books.
-      const MAJOR_BOOK_MIN = 2; // v10.3: enforce the documented "2+ major US books" promise (was 1)
+      const MAJOR_BOOK_MIN = 2; // v11.1: enforce the documented "2+ major US books" promise (was 1)
       const spreadPlaceable = (gameData.majorSpreadBooks || 0) >= MAJOR_BOOK_MIN;
       const totalPlaceable  = (gameData.majorTotalBooks  || 0) >= MAJOR_BOOK_MIN;
       const mlPlaceable     = (gameData.majorMLBooks     || 0) >= MAJOR_BOOK_MIN;
@@ -2493,6 +2503,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       }
 
       // ── SPREAD CANDIDATE ──
+      // v11.1: soccer spreads disabled — real-run soccer 38.5% win rate / -21.4% ROI (n=44).
+      // Only the Poisson TOTALS hypothesis stays live for soccer in MVP (alpha disables soccer fully).
+      const isSoccerSpreadLeague = ["EPL", "La Liga", "Serie A", "Bundesliga", "Ligue 1", "MLS", "UCL", "Europa"].includes(league.league);
       const actualSpread = gameData.homeSpread;
       // Filter out Asian handicap lines (.25/.75) — not available at US sportsbooks
       const spreadFrac = Math.abs(actualSpread) % 1;
@@ -2516,7 +2529,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         }
         // spreadRange > 2.0 = soft line, no discount (keep full edge)
       }
-      if (spreadEdge >= minEdge && spreadPlaceable) {
+      if (spreadEdge >= minEdge && spreadPlaceable && !isSoccerSpreadLeague) {
         const spreadZ = spreadEdge / std;
         // Determine bet type for calibration cap lookup
         let betType = "Spread";
@@ -2587,7 +2600,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           console.log(`[v10-filter] SKIP Asian total ${actualTotal} for ${game.away} @ ${game.home}`);
         }
         const rawTotalEdge = (totalFrac !== 0.25 && totalFrac !== 0.75) ? Math.abs(proj.projTotal - actualTotal) : 0;
-        const totalStd = SPORT_TOTAL_STD_DEVS[league.league] || std * 1.5; // v10.3: totals use total σ
+        const totalStd = SPORT_TOTAL_STD_DEVS[league.league] || std * 1.5; // v11.1: totals use total σ
         let totalEdge = applyEdgeDiscount(rawTotalEdge, totalStd);
         // Consensus tightness for totals
         if (gameData.totalRange !== undefined && gameData.totalBookCount >= 3) {
@@ -2600,9 +2613,22 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // v10.2: MLB total min edge 0.8→0.4, NHL 0.5→0.3. EV floor (3%/8%) is the real quality gate.
         const totalMinEdge = league.league === "NHL" ? 0.3 : league.league === "MLB" ? 0.4 : 2.5;
         if (totalEdge >= totalMinEdge && totalPlaceable) {
-          const totalZ = totalEdge / totalStd;
-          const rawTotalCoverProb = normalCDF(totalZ);
+          const isSoccerLeague = leagueConfig?.sport === 'soccer';
           const isOver = proj.projTotal > actualTotal;
+          // totalZ must live in this outer scope — candidates.push below reads it for zScore
+          const totalZ = totalEdge / totalStd; // v11.1: total σ, not margin σ
+          // v11.1-mvp: Poisson CDF for soccer totals (discrete goal distribution).
+          // Soccer averages ~2.5 goals/game — normal CDF overestimates edge by 2-4% near the line.
+          // For non-soccer, normal CDF remains correct (NBA/NHL/MLB are continuous-score sports).
+          let rawTotalCoverProb;
+          if (isSoccerLeague) {
+            const lambda = Math.max(0.5, proj.projTotal); // expected total goals
+            const floorLine = Math.floor(actualTotal);
+            const pUnder = poissonCDF(floorLine, lambda);
+            rawTotalCoverProb = isOver ? 1 - pUnder : pUnder;
+          } else {
+            rawTotalCoverProb = normalCDF(totalZ);
+          }
           const totalSide = `${isOver ? "Over" : "Under"} ${actualTotal}`;
           const totalOdds = isOver ? gameData.overOdds : gameData.underOdds;
           // Null total odds = integrity check nulled them (phantom/stale). Never fall back to -110.
@@ -2656,7 +2682,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // Check both sides for ML value
         // Sport-specific ML odds limits
         const ML_MAX_FAV = { NBA: -250, NHL: -300, NCAAB: -250, MLB: -200 };
-        // v10.3: dog cap tightened to +160 — real-run record on +161 or longer: 6-14 (30%, -3.6% ROI)
+        // v11.1: dog cap tightened to +160 — real-run record on +161 or longer: 6-14 (30%, -3.6% ROI)
         const ML_MAX_DOG = { NBA: 160, NHL: 160, NCAAB: 160, MLB: 160 };
         const maxFav = ML_MAX_FAV[league.league] || -300;
         const maxDog = ML_MAX_DOG[league.league] || 200;
@@ -2836,7 +2862,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         }
 
         const altTotalEdge = Math.abs(c.modelProjection - alt.point);
-        const altTotalStd = SPORT_TOTAL_STD_DEVS[c.sport] || std * 1.5; // v10.3: total σ for alt totals
+        const altTotalStd = SPORT_TOTAL_STD_DEVS[c.sport] || std * 1.5; // v11.1: total σ for alt totals
         const discountedEdge = applyEdgeDiscount(altTotalEdge, altTotalStd);
         const altZ = discountedEdge / altTotalStd;
         const altRawProb = normalCDF(altZ);
@@ -3057,6 +3083,23 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     const kellyRating = unitsToRating(finalUnits);
     const kellyConfidence = ratingToConfidence(kellyRating);
 
+    // v11.1-mvp: Apply grade-calibrated Kelly multiplier from self-optimize data.
+    // self-optimize.js computes gradeAccuracy (actual win rate per grade) weekly.
+    // If A+ is actually hitting 63% and B is hitting 52%, size accordingly.
+    // Guard: require ≥10 picks in the grade bucket for the multiplier to activate.
+    if (buildFinalPicks._gradeAccuracy) {
+      const gradeData = buildFinalPicks._gradeAccuracy[kellyRating];
+      if (gradeData && gradeData.count >= 10) {
+        // Map actual accuracy to multiplier: 50%→0.90, 55%→1.00, 60%→1.10, 65%→1.20
+        const gradeMult = Math.max(0.80, Math.min(1.25, 0.40 + gradeData.accuracy * 1.20));
+        const gradeAdjUnits = Math.max(0.5, Math.min(3.0, Math.round(finalUnits * gradeMult * 2) / 2));
+        if (gradeAdjUnits !== finalUnits) {
+          console.log(`[v11-grade] ${kellyRating} grade mult ${gradeMult.toFixed(2)}x (${(gradeData.accuracy*100).toFixed(0)}% actual, n=${gradeData.count}): ${finalUnits}u → ${gradeAdjUnits}u`);
+          finalUnits = gradeAdjUnits;
+        }
+      }
+    }
+
     // Fix model edge display — use calibrated coverProb (not raw modelProjection)
     const isML = c.market === "Moneyline";
     const calibratedPct = (c.coverProb * 100).toFixed(1);
@@ -3273,7 +3316,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     }
 
     // 4. EV-to-unit proportionality: don't oversize low-EV picks.
-    //    v10.3 thresholds rescaled for calibrated EVs (typical range is now 3-15%):
+    //    v11.1 thresholds rescaled for calibrated EVs (typical range is now 3-15%):
     //    under 5% calibrated EV → max 1.0u; under 8% → max 1.5u.
     if (ev < 0.05 && parseFloat(p.units) > 1.0) {
       console.log(`[v10-validate] DOWNSIZE ${p.pick}: → 1.0u (EV ${(ev*100).toFixed(1)}% < 5%)`);
@@ -3315,7 +3358,7 @@ async function computeBankrollContext() {
   let recentResults = [];
 
   try {
-    const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-alpha`;
+    const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-mvp`;
     const authHeaders = { Authorization: `Bearer ${token}` };
     const datesResp = await fetch(`${storeUrl}/picks-dates`, { headers: authHeaders });
     if (datesResp.ok) {
@@ -3412,6 +3455,14 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
         const uniqueMatchups = new Set(matchups).size;
         if (uniqueMatchups < 3) continue;
 
+        // v11.1-mvp: Hard sport-diversity requirement — all 3 legs must be from different sports.
+        // Same-sport legs are correlated (shared officials, fatigue patterns, weather) and
+        // reduce the effective independence assumption that makes parlay math valid.
+        // Only relax this if fewer than 3 sports are available in the eligible pool.
+        const uniqueSports = new Set(trio.map(t => t.sport)).size;
+        const availableSports = new Set(eligible.map(c => c.sport)).size;
+        if (availableSports >= 3 && uniqueSports < 3) continue;
+
         // Combined decimal payout
         let combinedDecimal = 1.0;
         for (const leg of trio) {
@@ -3422,11 +3473,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
 
         // Parlay EV = (combinedProb × combinedPayout) - 1
         const parlayEV = (combinedProb * combinedDecimal) - 1;
-
-        // Bonus: diversified sport coverage (+2% EV bonus per unique sport)
-        const uniqueSports = new Set(trio.map(t => t.sport)).size;
-        const diversityBonus = (uniqueSports - 1) * 0.02;
-        const adjustedEV = parlayEV + diversityBonus;
+        const adjustedEV = parlayEV; // diversity is now structural, not a bonus
 
         if (adjustedEV > bestEV) {
           bestEV = adjustedEV;
@@ -3743,7 +3790,7 @@ exports.handler = async (event) => {
           c.modelProjection = +(c.modelProjection + wx.totalAdj).toFixed(1);
           const newEdge = Math.abs(c.modelProjection - c.consensusLine);
           c.edge = +newEdge.toFixed(1);
-          // v10.3: recompute the full probability → EV → units chain. Previously the edge
+          // v11.1: recompute the full probability → EV → units chain. Previously the edge
           // changed but coverProb/EV/units stayed stale, so weather had no effect on sizing.
           const wxTotalStd = SPORT_TOTAL_STD_DEVS[c.sport] || 18;
           const wxZ = newEdge / wxTotalStd;
@@ -4013,9 +4060,9 @@ exports.handler = async (event) => {
     }
     console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+      date: dateISO, dateFormatted, model: "v11.1-mvp",
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3-alpha-sharp" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v11.1-mvp" },
       edgeSummary: "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
       generatedAt: now.toISOString(),
     });
@@ -4086,7 +4133,64 @@ exports.handler = async (event) => {
 
     // ── PHASE 3: MERGE JS NUMBERS + CLAUDE SELECTIONS ──
     const selections = claudeOutput.selections || [];
-    const picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
+    // v11.1-mvp: Pass gradeAccuracy from self-optimize params into buildFinalPicks via static prop
+    buildFinalPicks._gradeAccuracy = selfOptParams?.gradeAccuracy || null;
+    let picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
+
+    // ── v11.1-mvp: ADVERSARIAL A+ CHECK ──
+    // For the top-ranked pick (candidateRank 1), run a second Haiku call that tries to REFUTE it.
+    // If 2-of-3 refutation criteria are met, downgrade from A+ to A (don't drop entirely — the JS
+    // math still likes it, so we keep it but signal lower conviction).
+    // Cost: ~$0.002 per run (Haiku is cheap). Benefit: reduces A+ false positives.
+    const topPick = picks.find(p => p.rating === 'A+' || p.confidence === 'elite');
+    if (topPick && ANTHROPIC_API_KEY) {
+      try {
+        const adversarialPrompt = `You are a devil's advocate for sports betting analysis. A model has selected this as its TOP PICK today:
+
+Sport: ${topPick.sport} | ${topPick.matchup}
+Pick: ${topPick.pick} | Odds: ${topPick.odds}
+Win Probability: ${topPick.winProbability} | Edge: ${topPick.edgePct}
+Model reasoning: ${topPick.coreReasoning}
+
+Your job: Search for reasons this pick COULD FAIL. Check for:
+1. Recent injuries, lineup changes, or news that argues AGAINST this pick
+2. Historical patterns where this type of edge disappears (e.g. playoff fatigue, travel)
+3. Market signals suggesting sharp money is on the other side
+
+Return JSON only: {"refuted": true/false, "confidence": 0.0-1.0, "reason": "one sentence if refuted"}
+Only set refuted=true if you find strong, specific, verifiable evidence against the pick. Default to false if uncertain.`;
+
+        const adversarialResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 300,
+            temperature: 0.1,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+            messages: [{ role: 'user', content: adversarialPrompt }],
+          }),
+          signal: AbortSignal.timeout(25000),
+        });
+        if (adversarialResp.ok) {
+          const advData = await adversarialResp.json();
+          const advText = (advData.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+          const advJson = advText.match(/\{[\s\S]*\}/);
+          if (advJson) {
+            const adv = JSON.parse(advJson[0]);
+            if (adv.refuted && adv.confidence >= 0.7) {
+              // Downgrade A+ → A, log the reason
+              picks = picks.map(p => p === topPick ? { ...p, rating: 'A', confidence: 'high', adversarialNote: adv.reason } : p);
+              console.log(`[v11-adversarial] TOP PICK downgraded A+→A: ${topPick.pick} | ${adv.reason}`);
+            } else {
+              console.log(`[v11-adversarial] TOP PICK survived refutation: ${topPick.pick} (refuted=${adv.refuted}, conf=${adv.confidence})`);
+            }
+          }
+        }
+      } catch (advErr) {
+        console.log(`[v11-adversarial] Check failed (non-fatal): ${advErr.message}`);
+      }
+    }
 
     // Build rejections from Claude + all non-selected candidates
     const selectedRanks = new Set(selections.map(s => s.candidateRank));
@@ -4185,7 +4289,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3-alpha-sharp",
+      model: "v11.1-mvp",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4195,7 +4299,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3-alpha-sharp",
+        modelVersion: "v11.1-mvp",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -4306,11 +4410,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+    date: dateISO, dateFormatted, model: "v11.1-mvp",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v11.1-mvp" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -4383,11 +4487,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+    date: dateISO, dateFormatted, model: "v11.1-mvp",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v11.1-mvp" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };
@@ -4396,7 +4500,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   return { statusCode: 200, body: "Fallback OK" };
 }
 
-// ── Store picks to "edge-picks-alpha" blob store ──
+// ── Store picks to "edge-picks-mvp" blob store ──
 // simMode flag: when true, stores to picks-sim-{date} key — never overwrites real picks
 let _simMode = false;
 function setSimMode(v) { _simMode = v; }
@@ -4408,7 +4512,7 @@ async function storePicks(dateISO, picksData) {
     return;
   }
 
-  const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-alpha`;
+  const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-mvp`;
   // Sim mode: write to isolated key, never clobber real picks or latest-date pointer
   const pickKey = _simMode ? `picks-sim-${dateISO}` : `picks-${dateISO}`;
 

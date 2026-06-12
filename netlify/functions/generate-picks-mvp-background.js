@@ -3024,18 +3024,27 @@ function fixNarrativeEdge(narrative, candidate) {
   const unit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
   const isTotal = (c.market || '').toLowerCase() === 'total';
 
-  // Build the JS-computed opening sentence
+  // Build the JS-computed opening sentence.
+  // v11.1: the headline % must be the CALIBRATED edge (coverProb − implied) so the prose
+  // matches the Edge badge. The raw model view stays as context — quoting the raw gap as
+  // "the edge" overstated it ~3x vs what calibration credits.
   const isML = (c.market || '').toLowerCase() === 'moneyline';
+  const truePct = (c.coverProb != null && c.odds != null)
+    ? ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)
+    : null;
+  const calClause = truePct != null ? ` — a ${truePct}% calibrated edge at the price` : '';
   let jsSentence;
   if (isTotal) {
-    jsSentence = `WeBetAI projects ${c.modelProjection} total ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points'}, line is ${c.consensusLine}, creating a ${edgeVal}-${unit} edge.`;
+    jsSentence = `WeBetAI projects ${c.modelProjection} total ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points'} vs the ${c.consensusLine} line, a ${edgeVal}-${unit} model edge${calClause}.`;
   } else if (isML) {
-    // Moneyline: modelProjection is win probability %, consensusLine is implied prob %
-    jsSentence = `WeBetAI gives this team a ${c.modelProjection}% win probability vs the market's ${c.consensusLine}%, creating a ${edgeVal}% edge.`;
+    // Moneyline: modelProjection is raw win probability %, consensusLine is no-vig implied %
+    jsSentence = truePct != null
+      ? `WeBetAI's model puts this team at ${c.modelProjection}% to win vs the market's ${c.consensusLine}% — calibrated to a ${truePct}% true edge at the price.`
+      : `WeBetAI's model puts this team at ${c.modelProjection}% to win vs the market's ${c.consensusLine}%.`;
   } else {
     // Spread: modelProjection is projected margin
     const projMargin = Math.abs(c.modelProjection);
-    jsSentence = `WeBetAI projects a ${projMargin}-${unit} margin, line is ${c.consensusLine}, creating a ${edgeVal}-${unit} edge.`;
+    jsSentence = `WeBetAI projects a ${projMargin}-${unit} margin vs the ${c.consensusLine} line, a ${edgeVal}-${unit} model edge${calClause}.`;
   }
 
   // Strip any Claude sentence that restates projections/edges (starts with "WeBetAI projects" or mentions "[X]-point/goal edge")

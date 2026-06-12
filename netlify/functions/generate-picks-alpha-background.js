@@ -3999,6 +3999,9 @@ exports.handler = async (event) => {
     console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
     console.error(edgeErr.stack);
     allCandidates = [];
+    // Crash-vs-quiet disambiguation: a thrown edge table must NOT masquerade as a no-play day.
+    // (v11.0-mvp shipped with a fatal scope bug and stored "no edges" for 2 days undetected.)
+    allCandidates._pipelineError = `${edgeErr.message} | ${(edgeErr.stack || '').split('\n')[1] || ''}`.trim();
   }
 
   if (allCandidates.length === 0) {
@@ -4015,20 +4018,28 @@ exports.handler = async (event) => {
       leanCandidates.forEach((c, i) => { c.rank = i + 1; });
     } catch (leanErr) {
       console.error(`[v10-lean] Thin-slate re-run failed: ${leanErr.message}`);
+      if (!allCandidates._pipelineError) allCandidates._pipelineError = leanErr.message;
     }
     if (leanCandidates.length > 0) {
       console.log(`[v10-lean] Thin slate — ${leanCandidates.length} lean candidate(s) cleared +3% EV; publishing as Lean plays`);
       return await buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now);
     }
-    console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
+    const pipelineError = allCandidates._pipelineError || null;
+    if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
+    else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
       date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
-      picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
+      pipelineError,
+      picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
+        ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
+        : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
       summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3-alpha-sharp" },
-      edgeSummary: "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
+      edgeSummary: pipelineError
+        ? "Pick generation hit a system error today — no card published. The team has been flagged."
+        : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
       generatedAt: now.toISOString(),
     });
-    return { statusCode: 200, body: "No edge candidates" };
+    return { statusCode: 200, body: pipelineError ? "PIPELINE ERROR (stored crash marker)" : "No edge candidates" };
   }
 
   // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──

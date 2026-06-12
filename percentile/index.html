@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Model Percentile Scorecard</title>
+  <meta name="description" content="Architecture scorecard for WeBetAI's deterministic edge picks pipeline. Design capabilities, data sources, and system ratings." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/percentile" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Model Percentile Scorecard" />
+  <meta property="og:description" content="Architecture scorecard for WeBetAI's deterministic edge picks pipeline." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Model Percentile Scorecard" />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --bar-track: #e8ebef;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* --- Header --- */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .header-link:hover { background: var(--teal-border); }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* --- Main --- */
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    /* --- Page Title --- */
+    .page-title { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-bottom: .125rem; }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1.25rem; line-height: 1.5; }
+
+    /* --- Summary Cards --- */
+    .summary-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .75rem; text-align: center;
+    }
+    .summary-label {
+      font-size: .625rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .summary-value {
+      font-size: 1.5rem; font-weight: 700; color: var(--teal); margin-top: .125rem;
+    }
+    .summary-suffix { font-size: .75rem; font-weight: 500; color: var(--txt-m); }
+
+    /* --- Scorecard --- */
+    .scorecard {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .scorecard-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem;
+    }
+
+    .metric { margin-bottom: 1.25rem; }
+    .metric:last-child { margin-bottom: 0; }
+
+    .metric-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: .25rem;
+    }
+    .metric-name { font-size: .875rem; font-weight: 600; color: var(--olive); }
+    .metric-pct {
+      font-size: .875rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+    }
+    .pct-elite { color: var(--teal); }
+    .pct-strong { color: var(--green); }
+    .pct-good { color: #2980b9; }
+    .pct-mid { color: #e67e22; }
+
+    .metric-bar {
+      width: 100%; height: 6px; background: var(--bar-track);
+      border-radius: 3px; overflow: hidden; margin-bottom: .375rem;
+    }
+    .metric-fill {
+      height: 100%; border-radius: 3px;
+      transition: width .6s ease;
+    }
+    .fill-elite { background: var(--teal); }
+    .fill-strong { background: var(--green); }
+    .fill-good { background: #2980b9; }
+    .fill-mid { background: #e67e22; }
+
+    .metric-rationale {
+      font-size: .75rem; color: var(--txt-m); line-height: 1.5;
+    }
+
+    /* --- Divider --- */
+    .section-divider {
+      height: 1px; background: var(--border-lt); margin: .25rem 0 1.25rem;
+    }
+
+    /* --- Gap Section --- */
+    .gap-card {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .875rem 1rem; margin-bottom: .75rem;
+    }
+    .gap-title {
+      font-size: .6875rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
+    .gap-item {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.6;
+      margin-bottom: .375rem;
+    }
+    .gap-label { font-weight: 600; color: var(--txt-b); }
+
+    /* --- Data Sources --- */
+    .sources-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      margin-bottom: .75rem;
+    }
+    .source-chip {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .5rem; padding: .5rem .625rem;
+      font-size: .75rem; color: var(--txt-b);
+    }
+    .source-chip .source-name { font-weight: 600; display: block; margin-bottom: .125rem; }
+    .source-chip .source-desc { color: var(--txt-m); font-size: .6875rem; }
+
+    /* --- Footer --- */
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+    .footer-note a { color: var(--teal); text-decoration: none; }
+
+    /* --- Version Tag --- */
+    .version-tag {
+      display: inline-block; font-size: .625rem; font-weight: 600;
+      color: var(--green); background: var(--green-light);
+      border: 1px solid var(--green-border); border-radius: 4px;
+      padding: .1rem .4rem; margin-left: .375rem; vertical-align: middle;
+    }
+
+    /* --- Cost Table --- */
+    .cost-table { margin-bottom: 1rem; }
+    .cost-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .625rem 0; border-bottom: 1px solid var(--border-lt);
+    }
+    .cost-row:last-child { border-bottom: none; }
+    .cost-row.cost-free { opacity: .7; }
+    .cost-service { flex: 1; min-width: 0; }
+    .cost-name { font-size: .8125rem; font-weight: 600; color: var(--olive); display: block; }
+    .cost-detail { font-size: .6875rem; color: var(--txt-m); display: block; margin-top: .125rem; }
+    .cost-amount {
+      font-size: .875rem; font-weight: 700; color: var(--olive);
+      font-family: 'Geist Sans', monospace; white-space: nowrap; margin-left: 1rem;
+    }
+    .cost-amount.free { color: var(--green); font-size: .75rem; }
+
+    .cost-totals {
+      border-top: 2px solid var(--olive); padding-top: .75rem; margin-bottom: .75rem;
+    }
+    .cost-total-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: .25rem 0;
+    }
+    .cost-total-row.monthly {
+      padding-top: .375rem;
+    }
+    .cost-total-label { font-size: .8125rem; font-weight: 600; color: var(--txt-m); }
+    .cost-total-value { font-size: 1.125rem; font-weight: 700; color: var(--teal); font-family: 'Geist Sans', monospace; }
+    .cost-total-row.monthly .cost-total-value { font-size: 1.375rem; }
+    .cost-note {
+      font-size: .75rem; color: var(--txt-m); line-height: 1.5;
+      text-align: center; font-style: italic;
+    }
+
+    /* --- Pipeline Diagram --- */
+    .pipeline-step {
+      display: flex; gap: .75rem; align-items: flex-start;
+      margin-bottom: .875rem;
+    }
+    .pipeline-step:last-child { margin-bottom: 0; }
+    .step-num {
+      flex-shrink: 0; width: 1.5rem; height: 1.5rem;
+      background: var(--teal); color: var(--white);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: .6875rem; font-weight: 700; margin-top: .125rem;
+    }
+    .step-content { flex: 1; }
+    .step-title { font-size: .8125rem; font-weight: 600; color: var(--olive); margin-bottom: .125rem; }
+    .step-desc { font-size: .75rem; color: var(--txt-m); line-height: 1.5; }
+    .step-tag {
+      display: inline-block; font-size: .5625rem; font-weight: 600;
+      padding: .1rem .35rem; border-radius: 3px; margin-top: .25rem;
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    .tag-js { background: #fff3cd; color: #856404; }
+    .tag-ai { background: #d1ecf1; color: #0c5460; }
+    .tag-auto { background: var(--green-light); color: var(--green); }
+
+    /* --- Daily Summary Modal --- */
+    .summary-btn {
+      display: inline-flex; align-items: center; gap: .375rem;
+      font-size: .8125rem; font-weight: 600; color: #fff;
+      background: var(--teal); border: none; border-radius: 8px;
+      padding: .5rem 1rem; cursor: pointer; margin-top: .5rem;
+    }
+    .summary-btn:hover { background: #003d44; }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); justify-content: center; align-items: center;
+      padding: 1rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-content {
+      background: var(--white); border-radius: .875rem; max-width: 600px;
+      width: 100%; max-height: 85vh; overflow-y: auto; padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1rem;
+    }
+    .modal-title { font-size: 1rem; font-weight: 700; color: var(--teal); }
+    .modal-close {
+      background: none; border: 1px solid var(--border-lt); border-radius: 6px;
+      font-size: .875rem; padding: .25rem .625rem; cursor: pointer; color: var(--txt-m);
+    }
+    .modal-close:hover { background: var(--off-white); }
+    .modal-edge-summary {
+      font-size: .8125rem; color: var(--txt-b); line-height: 1.6;
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: .5rem; padding: .75rem; margin-bottom: 1rem;
+    }
+    .modal-pick {
+      border: 1px solid var(--border-lt); border-radius: .5rem;
+      padding: .75rem; margin-bottom: .625rem;
+    }
+    .modal-pick-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: .25rem;
+    }
+    .modal-pick-sport { font-size: .6875rem; font-weight: 600; color: var(--teal); text-transform: uppercase; }
+    .modal-pick-rating { font-size: .75rem; font-weight: 700; color: #fff; background: #1abc9c; border-radius: 4px; padding: 1px 6px; }
+    .modal-pick-matchup { font-size: .875rem; font-weight: 700; color: var(--olive); margin-bottom: .25rem; }
+    .modal-pick-line { font-size: .8125rem; font-weight: 600; color: var(--teal); margin-bottom: .375rem; }
+    .modal-pick-reasoning { font-size: .75rem; color: var(--txt-m); line-height: 1.55; }
+    .modal-context { font-size: .75rem; color: var(--txt-l); line-height: 1.5; margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--border-lt); }
+
+    /* --- Live Stats --- */
+    .live-stats-section {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .live-stats-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .875rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .live-badge {
+      font-size: .5625rem; font-weight: 700; color: #fff;
+      background: var(--teal); border-radius: 4px; padding: .15rem .4rem;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem;
+      margin-bottom: .875rem;
+    }
+    .kpi-card {
+      border: 1px solid var(--border-lt); border-radius: .5rem;
+      padding: .625rem .5rem; text-align: center;
+    }
+    .kpi-value {
+      font-size: 1.125rem; font-weight: 700; color: var(--teal);
+      line-height: 1.2;
+    }
+    .kpi-value.positive { color: var(--green); }
+    .kpi-label {
+      font-size: .5625rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .04em; margin-top: .25rem;
+    }
+    .split-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      margin-bottom: .875rem;
+    }
+    .split-card {
+      border: 1px solid var(--border-lt); border-radius: .5rem; padding: .625rem .75rem;
+    }
+    .split-card-title {
+      font-size: .625rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: .5rem;
+    }
+    .split-row-item {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: .75rem; padding: .15rem 0;
+    }
+    .split-row-label { color: var(--txt-m); }
+    .split-row-val { font-weight: 600; color: var(--olive); }
+    .split-row-val.pos { color: var(--green); }
+    .daily-mini-table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+    .daily-mini-table th {
+      font-size: .6rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .04em;
+      padding: .25rem .4rem; text-align: left; border-bottom: 1px solid var(--border-lt);
+    }
+    .daily-mini-table td {
+      padding: .3rem .4rem; border-bottom: 1px solid var(--off-white);
+      color: var(--txt-b);
+    }
+    .daily-mini-table td.right { text-align: right; }
+    .daily-mini-table td.pos { color: var(--green); font-weight: 600; }
+    .daily-mini-table td.neg { color: #c0392b; font-weight: 600; }
+    .daily-mini-table tr:last-child td { border-bottom: none; }
+    .daily-mini-table tr.totals-row td {
+      border-top: 1px solid var(--border-lt); font-weight: 700;
+      background: var(--off-white);
+    }
+    .stats-loading { text-align: center; padding: 1.5rem; color: var(--txt-l); font-size: .8125rem; }
+    .stats-date-range {
+      font-size: .6875rem; color: var(--txt-m); margin-bottom: .75rem;
+    }
+    .show-all-btn {
+      display: block; width: 100%; margin-top: .625rem;
+      font-size: .75rem; font-weight: 600; color: var(--teal);
+      background: none; border: 1px solid var(--teal-border);
+      border-radius: .5rem; padding: .4rem; cursor: pointer;
+      text-align: center;
+    }
+    .show-all-btn:hover { background: var(--teal-light); }
+
+    /* --- Responsive --- */
+    @media (max-width: 480px) {
+      .summary-row { grid-template-columns: 1fr 1fr; }
+      .sources-grid { grid-template-columns: 1fr; }
+      .modal-content { padding: 1rem; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="main">
+
+    <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">v10.3-alpha-sharp</span></h1>
+    <p class="page-sub">Architecture and design assessment of the v10.3 alpha pipeline — the primary picks model. v10.3 ships shrinkage calibration fitted on 428 graded real picks, market-correct total deviations, and live-rescaled Kelly sizing. Ratings reflect system capabilities, not results.</p>
+    <div style="text-align:center; margin-bottom:1.25rem;">
+      <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary Reasoning</button>
+    </div>
+
+    <!-- Live Alpha Performance Stats -->
+    <div class="live-stats-section">
+      <div class="live-stats-title">
+        Alpha Pick Performance
+        <span class="live-badge">Live</span>
+      </div>
+      <div id="live-stats-body"><div class="stats-loading">Loading stats...</div></div>
+    </div>
+
+    <!-- Capability Scorecard (ordered by percentile, highest first) -->
+    <div class="scorecard">
+      <div class="scorecard-title">Capability Breakdown</div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Execution Architecture</span>
+          <span class="metric-pct pct-elite">98th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:98%"></div></div>
+        <div class="metric-rationale">Fully deterministic JS pipeline computes all projections, edges, and Kelly sizing before the AI layer. Claude validates and writes narrative only — structurally cannot override math, add picks outside the candidate table, or increase units. Zero bypass paths.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Calibration Discipline</span>
+          <span class="metric-pct pct-elite">95th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:95%"></div></div>
+        <div class="metric-rationale">v10.3 shrinkage calibration: every cover probability starts from the no-vig market price and earns only a fitted fraction of the model's claimed deviation (totals 0.30, spreads 0.35, moneylines 0.50 — fitted on 428 graded real picks, Mar–Jun 2026). Displayed EV is honest 3-15%, not marketing numbers. Quarter-Kelly sizing with 0.5u steps, EV &gt; 3% calibrated floor, never worse than -250, moneyline dogs capped at +160. Every rule is enforced in code, not by prompt instruction.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Bankroll Management</span>
+          <span class="metric-pct pct-elite">92nd</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:92%"></div></div>
+        <div class="metric-rationale">4u daily exposure cap. 0.5u-3.0u range per pick. Drawdown detection triggers 25% Kelly reduction after 3+ consecutive losses. Parlay capped at 0.5u/day. Institutional bankroll management adapted for retail scale.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Edge Identification</span>
+          <span class="metric-pct pct-elite">90th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
+        <div class="metric-rationale">Cross-sport edge ranking via normalized z-scores. v10.3 gives totals their own standard deviations (NBA 18.5, NHL 2.3 goals, MLB 4.3 runs) instead of reusing margin deviations — total edges were previously overstated 40-50%. Edge discount curve compresses outlier edges (log compression above 1 std dev). Consensus-tightness and line-movement discounts shrink edges the market has already priced. The 3% calibrated EV floor filters noise that's indistinguishable from variance at -110.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Projection Engine</span>
+          <span class="metric-pct pct-strong">88th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
+        <div class="metric-rationale">Three-method ensemble: Elo-based power ratings, sport-specific efficiency models (pace-adjusted for basketball, shot-based for hockey), and PPG averaging. Injury impact model adjusts projections for star player absences. Back-to-back rest penalty (3% scoring reduction) applied for NBA/NHL. Home-court adjustment baked in. All computed deterministically in JS.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Speed to Market</span>
+          <span class="metric-pct pct-strong">88th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
+        <div class="metric-rationale">Automated daily at 9am ET via Netlify scheduled function (a parallel MVP test pipeline runs at 8am ET for A/B comparison). 15-minute background worker. Early generation maximizes closing-line-value runway. Picks are final once generated — no mid-day overrides. No human in the loop for generation or delivery.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Data Pipeline</span>
+          <span class="metric-pct pct-strong">87th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:87%"></div></div>
+        <div class="metric-rationale">Five independent data sources: real-time odds (13 sportsbooks), ESPN stats + injuries, daily-updated Elo ratings, prediction market cross-reference (Kalshi + Polymarket), and real-time breaking news (X/Grok). Each source fails independently without taking down the pipeline.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Sport Coverage</span>
+          <span class="metric-pct pct-strong">88th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
+        <div class="metric-rationale">NBA, NHL, and MLB active. NCAAB disabled (sub-50% real accuracy) and v10.3 disables all 8 soccer leagues — their real daily-run record was 38.5% across every league, and the normal-distribution goal model is structurally wrong for draw-heavy soccer (a Poisson engine is being tested in the MVP pipeline before re-enable). Quality over quantity: the cross-sport mandate still evaluates every game with available lines and selects the highest calibrated EV regardless of sport.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Market Selection</span>
+          <span class="metric-pct pct-strong">85th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:85%"></div></div>
+        <div class="metric-rationale">Spreads, totals, moneyline, and puck lines evaluated across all sports. Market-specific edge thresholds per sport. Alternate spreads and totals attempted with automatic fallback to core markets based on API plan. System considers every available market type per game before selecting highest-edge option.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Prediction Market Cross-Ref</span>
+          <span class="metric-pct pct-good">82nd</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-good" style="width:82%"></div></div>
+        <div class="metric-rationale">Type-aligned validation against Kalshi and Polymarket. Parses market titles to classify bet type (moneyline, spread, total) and only compares matching types — totals to totals, spreads to spreads. Multi-market aggregation weighted by volume and bid-ask quality. Proportional unit adjustments in 0.5u steps. Prevents false flags like comparing a moneyline market against a totals pick.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Self-Correction</span>
+          <span class="metric-pct pct-elite">90th</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
+        <div class="metric-rationale">The feedback loop is closed as of v10.3. CLV tracked 3x daily (including a 3am ET overnight run that settles night games before the morning pipeline reads bankroll state), with 14-day CLV beat rates feeding Kelly multipliers per sport and market. Weekly self-optimization learns from the live alpha track record. Daily 10:30am QA pass audits every published pick's math and narrative. All calibration constants were re-fitted from real graded results — and stale parameters that real data contradicted (backtest-era sport multipliers) were removed rather than kept for tradition.</div>
+      </div>
+
+    </div>
+
+    <!-- Data Sources (above Pipeline Architecture) -->
+    <div class="scorecard">
+      <div class="scorecard-title">5-Source Data Pipeline</div>
+      <div class="sources-grid">
+        <div class="source-chip">
+          <span class="source-name">The Odds API</span>
+          <span class="source-desc">Real-time lines from 13 US/EU sportsbooks</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">ESPN API</span>
+          <span class="source-desc">Team stats, injuries, schedules</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">Internal Elo</span>
+          <span class="source-desc">Daily-updated ratings, splits, streaks</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">Kalshi + Polymarket</span>
+          <span class="source-desc">Prediction market cross-reference</span>
+        </div>
+        <div class="source-chip" style="grid-column: span 2;">
+          <span class="source-name">X / Grok-3-mini</span>
+          <span class="source-desc">Real-time breaking news: injuries, lineup changes, weather alerts</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Architecture -->
+    <div class="scorecard">
+      <div class="scorecard-title">Pipeline Architecture</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Data Ingestion</div>
+          <div class="step-desc">Fetch real-time odds from 13 sportsbooks, team stats + injuries from ESPN, Elo ratings from internal store, prediction market prices from Kalshi/Polymarket, and breaking news via X/Grok.</div>
+          <span class="step-tag tag-js">Deterministic</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Projection Engine</div>
+          <div class="step-desc">Three-method ensemble per game: Elo-based power ratings, sport-specific efficiency models (pace-adjusted basketball, shot-based hockey, run-based baseball), and PPG averaging. All computed in JavaScript — no AI involved.</div>
+          <span class="step-tag tag-js">Deterministic</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Edge Computation</div>
+          <div class="step-desc">Compare model projections to consensus lines. Calculate spread, total, puck line, and moneyline edges — totals against their own (wider) standard deviations. Normalize across sports via z-scores. Apply sport-specific minimum edge thresholds (NBA 2.0 pts, NHL 0.4 goals, MLB 0.5 runs). Filter to calibrated EV &gt; 3%. Consensus tightness, line movement, and market misalignment each discount edges the market has already captured.</div>
+          <span class="step-tag tag-js">Deterministic</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Candidate Ranking</div>
+          <div class="step-desc">Rank all qualifying edges. Compute shrinkage-calibrated cover probabilities: no-vig market price plus a fitted fraction of the model's deviation (fitted on 428 graded real picks); legacy caps remain as guard rails only. Quarter-Kelly unit sizing scaled so calibrated EVs map cleanly across 0.5u-3.0u, with 0.5u step rounding. Top 15 candidates passed to validation.</div>
+          <span class="step-tag tag-js">Deterministic</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <div class="step-title">AI Validation + Narrative</div>
+          <div class="step-desc">Claude receives pre-computed candidate table. Web searches for injury updates, lineup changes, weather. Selects top 3 picks from the table — can reject or reduce units but cannot override math, add picks outside the table, or increase sizing.</div>
+          <span class="step-tag tag-ai">AI Layer</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <div class="step-title">Enforcement + Delivery</div>
+          <div class="step-desc">JS enforces 4u daily exposure cap, 0.5u-3.0u per-pick range, drawdown detection (25% Kelly reduction after 3+ consecutive losses). Picks stored to Netlify Blobs, served via API. CLV captured 3x daily, results settled back into the store overnight, and a 10:30am QA function audits the published card.</div>
+          <span class="step-tag tag-auto">Automated</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Design Principles -->
+    <div class="gap-card">
+      <div class="gap-title">Design Principles</div>
+      <div class="gap-item">
+        <span class="gap-label">Math in code, not in prompts:</span> Every projection, edge, and unit size is computed deterministically in JavaScript. Same inputs always produce the same outputs.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">AI validates, never overrides:</span> Claude receives a pre-ranked candidate table and can only select, reject, or reduce — structurally cannot inflate sizing or fabricate lines.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Cross-sport by default:</span> Every game with available lines is evaluated. The system picks the highest calibrated EV across all active leagues, not the most popular sport.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Fail gracefully:</span> Each data source is independent. ESPN down? Elo ratings and odds still produce picks. Prediction markets unavailable? Pipeline continues without that signal.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Caps enforced in code:</span> Cover probability caps, Kelly clamps, daily exposure limits, and minimum edges are all hard-coded — not prompt instructions that can be ignored.
+      </div>
+    </div>
+
+    <!-- Roadmap -->
+    <div class="gap-card">
+      <div class="gap-title">Profitability Roadmap</div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">Shrinkage calibration: SHIPPED (v10.3)</span> Cover probabilities anchored to the no-vig market price, earning only a fitted fraction of the model's claimed deviation. Fitted on 428 graded real daily-run picks — displayed EV and win probabilities are now honest numbers.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">Market-correct deviations: SHIPPED (v10.3)</span> Totals use full-game total standard deviations (NBA 18.5, NHL 2.3, MLB 4.3) instead of margin deviations, removing a 40-50% systematic overstatement of total edges.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">CLV feedback loop: SHIPPED</span> Closing line value tracked 3x daily (with overnight settlement); 14-day beat rates per sport and market feed Kelly multipliers automatically.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">Weekly self-optimization: SHIPPED</span> Sunday cycle learns from the live alpha track record: sport, market, and grade-level accuracy adjust parameters with conservative caps and mean reversion.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">Real-data pruning: SHIPPED (v10.3)</span> Soccer disabled (38.5% real win rate across 6 leagues), moneyline dogs capped at +160 (6-14 real record beyond it), and backtest-era sport multipliers removed after real results contradicted them.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">Edge discount curve: SHIPPED</span> Log compression on edges above 1 standard deviation prevents oversizing on inflated projections. Live since v10.0.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">PM type-aligned cross-ref: SHIPPED</span> Prediction market signals parsed by bet type, multi-market aggregated, and proportionally weighted. Eliminates false flags from mismatched market comparisons.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">MLB projection engine upgrade:</span> Starter FIP instead of raw ERA, park factors, bullpen fatigue, and platoon splits — the highest-leverage summer improvement now that MLB carries the slate.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Poisson soccer engine:</span> Discrete goal distribution replaces the normal approximation. Live in the 8am MVP test pipeline; soccer returns to the alpha card only if it proves an edge there.
+      </div>
+    </div>
+
+    <!-- Operating Cost -->
+    <div class="scorecard">
+      <div class="scorecard-title">Daily Operating Cost</div>
+
+      <div class="cost-table">
+        <div class="cost-row">
+          <div class="cost-service">
+            <span class="cost-name">The Odds API</span>
+            <span class="cost-detail">~91 calls/day across 13 sports, 2x daily runs + CLV</span>
+          </div>
+          <div class="cost-amount">$3.30</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-service">
+            <span class="cost-name">Claude API (Sonnet)</span>
+            <span class="cost-detail">~137K output tokens + web search validation, 5 daily function calls</span>
+          </div>
+          <div class="cost-amount">$3.50</div>
+        </div>
+        <div class="cost-row">
+          <div class="cost-service">
+            <span class="cost-name">xAI / Grok-3-mini</span>
+            <span class="cost-detail">Breaking news alerts, narrative assist</span>
+          </div>
+          <div class="cost-amount">$0.15</div>
+        </div>
+        <div class="cost-row cost-free">
+          <div class="cost-service">
+            <span class="cost-name">ESPN API</span>
+            <span class="cost-detail">Team stats, injuries, schedules — public API</span>
+          </div>
+          <div class="cost-amount free">Free</div>
+        </div>
+        <div class="cost-row cost-free">
+          <div class="cost-service">
+            <span class="cost-name">Kalshi + Polymarket</span>
+            <span class="cost-detail">Prediction market data — public APIs</span>
+          </div>
+          <div class="cost-amount free">Free</div>
+        </div>
+        <div class="cost-row cost-free">
+          <div class="cost-service">
+            <span class="cost-name">Netlify (Hosting + Functions + Blobs)</span>
+            <span class="cost-detail">Scheduled functions, blob storage, CDN — free tier</span>
+          </div>
+          <div class="cost-amount free">Free</div>
+        </div>
+        <div class="cost-row cost-free">
+          <div class="cost-service">
+            <span class="cost-name">Twilio SMS</span>
+            <span class="cost-detail">On-demand only, not scheduled</span>
+          </div>
+          <div class="cost-amount free">~$0</div>
+        </div>
+      </div>
+
+      <div class="cost-totals">
+        <div class="cost-total-row">
+          <span class="cost-total-label">Daily Total</span>
+          <span class="cost-total-value">~$6.95</span>
+        </div>
+        <div class="cost-total-row monthly">
+          <span class="cost-total-label">Monthly Total</span>
+          <span class="cost-total-value">~$208</span>
+        </div>
+      </div>
+
+      <div class="cost-note">5 independent data sources. Fully automated: 8am MVP test run, 9am alpha card, 3x daily CLV tracking, daily QA audit, weekly self-optimization. Full institutional-grade pipeline at retail cost.</div>
+    </div>
+
+    <div class="footer-note">
+      Ratings reflect architecture design and system capabilities.<br />
+      Model version: v10.3-alpha-sharp Deterministic Edge Architecture<br />
+      <a href="/alpha">Today's picks</a> &bull; <a href="/alpha">Live track record</a>
+    </div>
+
+  </main>
+
+  <!-- Daily Summary Modal -->
+  <div class="modal-overlay" id="summary-modal" onclick="if(event.target===this)closeDailySummary()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">Daily Pick Summary</span>
+        <button class="modal-close" onclick="closeDailySummary()">Close</button>
+      </div>
+      <div id="summary-modal-body">Loading...</div>
+    </div>
+  </div>
+
+<script>
+  // Live alpha stats
+  (function loadAlphaStats() {
+    fetch('/.netlify/functions/get-results-alpha')
+      .then(r => r.json())
+      .then(data => {
+        const days = (data.days || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+        if (!days.length) { document.getElementById('live-stats-body').innerHTML = '<div class="stats-loading">No data yet.</div>'; return; }
+
+        const cum = data.cumulative || {};
+        const str = data.straight || {};
+        const par = data.parlay || {};
+        const first = days[0].date, last = days[days.length - 1].date;
+        const fmt = d => { const [,m,dd] = d.split('-'); return (parseInt(m)) + '/' + parseInt(dd); };
+        const profitSign = (cum.totalProfit || 0) >= 0 ? '+' : '';
+        const strProfitSign = (str.totalProfit || 0) >= 0 ? '+' : '';
+        const parProfitSign = (par.totalProfit || 0) >= 0 ? '+' : '';
+
+        // Best/worst day
+        const sorted = [...days].sort((a, b) => a.profit - b.profit);
+        const best = sorted[sorted.length - 1], worst = sorted[0];
+        const profitDays = days.filter(d => d.profit > 0).length;
+
+        // Win/loss streaks
+        let maxW = 0, maxL = 0, curW = 0, curL = 0;
+        for (const d of days) {
+          if (d.wins > d.losses) { curW++; curL = 0; } else { curL++; curW = 0; }
+          maxW = Math.max(maxW, curW); maxL = Math.max(maxL, curL);
+        }
+
+        // Show last 10 days in table, rest behind toggle
+        const PREVIEW = 10;
+        const showAll = days.length <= PREVIEW;
+
+        function renderRows(slice) {
+          return slice.map(d => {
+            const pl = d.profit >= 0 ? `+$${d.profit}` : `-$${Math.abs(d.profit)}`;
+            const plClass = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : '';
+            const roi = d.wagered > 0 ? ((d.profit / d.wagered) * 100).toFixed(0) + '%' : '--';
+            const roiClass = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : '';
+            return `<tr>
+              <td>${fmt(d.date)}</td>
+              <td class="right">${d.wins}W-${d.losses}L</td>
+              <td class="right">${d.accuracy}</td>
+              <td class="right">$${d.wagered}</td>
+              <td class="right ${plClass}">${pl}</td>
+              <td class="right ${roiClass}">${roi}</td>
+            </tr>`;
+          }).join('');
+        }
+
+        const recentDays = days.slice(-PREVIEW);
+        const olderDays = days.slice(0, -PREVIEW);
+
+        const totalProfit = cum.totalProfit || 0;
+        const totalPl = totalProfit >= 0 ? `+$${totalProfit}` : `-$${Math.abs(totalProfit)}`;
+
+        let html = `
+          <div class="stats-date-range">${fmt(first)} – ${fmt(last)} &nbsp;·&nbsp; ${days.length} days &nbsp;·&nbsp; 3 straight + 1 parlay/day</div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-value">${cum.wins}W-${cum.losses}L</div>
+              <div class="kpi-label">Record</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value positive">${cum.accuracy}</div>
+              <div class="kpi-label">Accuracy</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value positive">${totalPl}</div>
+              <div class="kpi-label">Profit</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value positive">${cum.roi}</div>
+              <div class="kpi-label">ROI</div>
+            </div>
+          </div>
+          <div class="split-row">
+            <div class="split-card">
+              <div class="split-card-title">Straight ($150/unit)</div>
+              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${str.wins}W-${str.losses}L</span></div>
+              <div class="split-row-item"><span class="split-row-label">Accuracy</span><span class="split-row-val">${str.accuracy}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${str.totalWagered != null ? '$'+str.totalWagered : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val pos">${str.totalProfit != null ? strProfitSign+'$'+Math.abs(str.totalProfit) : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val pos">${str.totalWagered > 0 ? ((str.totalProfit/str.totalWagered)*100).toFixed(1)+'%' : '--'}</span></div>
+            </div>
+            <div class="split-card">
+              <div class="split-card-title">Parlay ($75/day)</div>
+              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${par.wins}W-${par.losses}L</span></div>
+              <div class="split-row-item"><span class="split-row-label">Hit Rate</span><span class="split-row-val">${par.accuracy}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${par.totalWagered != null ? '$'+par.totalWagered : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val pos">${par.totalProfit != null ? parProfitSign+'$'+Math.abs(par.totalProfit) : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val pos">${par.totalWagered > 0 ? ((par.totalProfit/par.totalWagered)*100).toFixed(1)+'%' : '--'}</span></div>
+            </div>
+          </div>
+          <table class="daily-mini-table">
+            <thead><tr>
+              <th>Date</th><th style="text-align:right">Record</th><th style="text-align:right">Acc</th>
+              <th style="text-align:right">Wagered</th><th style="text-align:right">P/L</th><th style="text-align:right">ROI</th>
+            </tr></thead>
+            <tbody id="daily-rows-preview">${renderRows(recentDays)}</tbody>
+            <tbody id="daily-rows-older" style="display:none">${renderRows(olderDays)}</tbody>
+            <tr class="totals-row">
+              <td>Total</td>
+              <td class="right">${cum.wins}W-${cum.losses}L</td>
+              <td class="right">${cum.accuracy}</td>
+              <td class="right">$${cum.totalWagered}</td>
+              <td class="right pos">${totalPl}</td>
+              <td class="right pos">${cum.roi}</td>
+            </tr>
+          </table>
+          ${olderDays.length ? `<button class="show-all-btn" id="show-all-btn" onclick="toggleOlderDays(this)">Show all ${days.length} days</button>` : ''}
+          <div style="margin-top:.75rem; display:grid; grid-template-columns:1fr 1fr; gap:.375rem; font-size:.75rem; color:var(--txt-m);">
+            <div>Best: <strong style="color:var(--green)">${fmt(best.date)} +$${best.profit}</strong></div>
+            <div>Worst: <strong style="color:#c0392b">${fmt(worst.date)} -$${Math.abs(worst.profit)}</strong></div>
+            <div>Profitable days: <strong>${profitDays}/${days.length}</strong></div>
+            <div>Max win streak: <strong>${maxW}d</strong> &nbsp; Max loss: <strong>${maxL}d</strong></div>
+          </div>`;
+
+        document.getElementById('live-stats-body').innerHTML = html;
+      })
+      .catch(() => { document.getElementById('live-stats-body').innerHTML = '<div class="stats-loading">Failed to load stats.</div>'; });
+  })();
+
+  function toggleOlderDays(btn) {
+    const older = document.getElementById('daily-rows-older');
+    const hidden = older.style.display === 'none';
+    older.style.display = hidden ? '' : 'none';
+    btn.textContent = hidden ? 'Show fewer' : `Show all ${document.querySelectorAll('#daily-rows-preview tr, #daily-rows-older tr').length} days`;
+  }
+
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function teamOnly(name) {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return name;
+    const multiWord = { 'trail': 'Trail Blazers', 'blue': 'Blue Devils', 'red': 'Red Wings', 'maple': 'Maple Leafs', 'golden': 'Golden Knights' };
+    const lower = name.toLowerCase();
+    for (const [key, val] of Object.entries(multiWord)) {
+      if (lower.includes(key) && lower.includes(val.toLowerCase().split(' ').pop())) return val;
+    }
+    return parts[parts.length - 1];
+  }
+
+  function shortMatchup(matchup) {
+    if (!matchup) return '';
+    const sep = matchup.match(/\s+(vs\.?|@|at|v)\s+/i);
+    if (!sep) return matchup;
+    const parts = matchup.split(sep[0]);
+    return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
+  }
+
+  function openDailySummary() {
+    document.getElementById('summary-modal').classList.add('open');
+    document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:var(--txt-m);">Loading today\'s picks...</div>';
+
+    fetch('/api/get-picks-alpha').then(r => r.json()).then(data => {
+      const picks = data.picks || [];
+      const edgeSummary = (data.edgeSummary || '').replace(/<cite[^>]*>/g,'').replace(/<\/cite>/g,'');
+
+      if (picks.length === 0) {
+        document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:var(--txt-m);">No picks generated yet today. Check back after 9am ET.</div>';
+        return;
+      }
+
+      const sportSet = [...new Set(picks.map(p => p.sport))];
+      const marketSet = [...new Set(picks.map(p => p.betType || ''))];
+      const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
+      const allOvers = picks.every(p => (p.pick || '').toLowerCase().startsWith('over'));
+      const allUnders = picks.every(p => (p.pick || '').toLowerCase().startsWith('under'));
+      const allTotals = picks.every(p => (p.betType || '').toLowerCase() === 'total');
+
+      let html = '';
+
+      // Edge summary
+      if (edgeSummary) {
+        html += `<div class="modal-edge-summary">${esc(edgeSummary)}</div>`;
+      }
+
+      // Each pick
+      for (const p of picks) {
+        const reasoning = (p.coreReasoning || '').replace(/<cite[^>]*>/g,'').replace(/<\/cite>/g,'').replace(/\[\d+[^\]]*\]/g,'');
+        html += `<div class="modal-pick">
+          <div class="modal-pick-header">
+            <span class="modal-pick-sport">${esc(p.sport)}</span>
+            <span class="modal-pick-rating">${esc(p.rating || 'A-')}</span>
+          </div>
+          <div class="modal-pick-matchup">${esc(shortMatchup(p.matchup))}</div>
+          <div class="modal-pick-line">${esc(p.pick)} ${esc(p.odds)} &mdash; ${esc(p.units)}</div>
+          <div class="modal-pick-reasoning">${esc(reasoning)}</div>
+        </div>`;
+      }
+
+      // Context section
+      let context = `<strong>Leagues scanned:</strong> NBA, NHL, MLB (NCAAB and soccer disabled by real-run results; ${sportSet.length} had qualifying edges today: ${sportSet.join(', ')}).`;
+      context += `<br><strong>Total exposure:</strong> ${totalUnits}u across ${picks.length} picks, within the 4u daily cap.`;
+
+      if (allTotals && allOvers) {
+        context += `<br><strong>Why all overs:</strong> The model evaluated spreads, totals, and moneylines for every game. The largest calibrated edges all landed on over/unders today. This happens when books shade totals conservatively — the model projects based on actual scoring efficiency, not narrative.`;
+      } else if (allTotals) {
+        context += `<br><strong>Why all totals:</strong> Totals edges outranked spread edges across all sports today after z-score normalization.`;
+      }
+
+      html += `<div class="modal-context">${context}</div>`;
+
+      document.getElementById('summary-modal-body').innerHTML = html;
+    }).catch(err => {
+      document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:#c0392b;">Failed to load picks. Try again.</div>';
+    });
+  }
+
+  function closeDailySummary() {
+    document.getElementById('summary-modal').classList.remove('open');
+  }
+</script>
+
+</body>
+</html>

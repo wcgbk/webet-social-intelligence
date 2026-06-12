@@ -10,7 +10,11 @@
     '.wb-ava{width:24px;height:24px;border-radius:50%;background:#004C54;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;overflow:hidden;flex-shrink:0}',
     '.wb-ava img{width:100%;height:100%;object-fit:cover;border-radius:50%}',
     '.wb-out{color:#7d9a98;font-size:11px;font-weight:600;margin-left:2px;cursor:pointer;background:none;border:none;font-family:inherit;padding:2px 4px}',
-    '.wb-out:hover{color:#004C54;text-decoration:underline}'
+    '.wb-out:hover{color:#004C54;text-decoration:underline}',
+    '.wb-nav-alpha-link{color:rgba(255,255,255,0.85);text-decoration:none;font-size:14px;font-weight:600;white-space:nowrap}',
+    '.wb-nav-alpha-link:hover{color:#fff}',
+    /* Mobile: collapse to avatar-only chip so headers never crowd at 390px */
+    '@media (max-width:560px){.wb-user>span:last-child{display:none}.wb-out{display:none}.wb-user{padding:4px}.wb-nav-alpha-link{display:none}}'
   ].join('\n');
   var style = document.createElement('style');
   style.textContent = css;

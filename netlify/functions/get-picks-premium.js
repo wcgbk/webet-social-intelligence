@@ -46,8 +46,9 @@ exports.handler = async (event) => {
     const userRecord = await users.get(`user_${userId}`, { type: 'json' }).catch(() => null);
     if (!userRecord) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'user_not_found' }) };
 
-    // Today's picks (READ-ONLY on the alpha store)
-    const picksStore = getStore('edge-picks-alpha');
+    // Today's picks (READ-ONLY on the alpha store) — explicit config required in this
+    // runtime (bare getStore lacks blob context here, unlike older bundled functions)
+    const picksStore = getStore({ name: 'edge-picks-alpha', siteID, token });
     let dateKey = null;
     const params = event.queryStringParameters || {};
     if (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) dateKey = params.date;

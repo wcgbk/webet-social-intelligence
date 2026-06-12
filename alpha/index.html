@@ -1453,7 +1453,7 @@
 
       const edgeBadgeHTML = (p.edgePct || p.ev) ? `<span class="edge-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>` : '';
 
-      html += `<div class="pick-card">
+      html += `<div class="pick-card" data-wb-pick="${esc(p.pick)}">
         <div class="pick-header" style="margin-bottom:.25rem;">
           <span class="sport-tag">${esc(p.sport)}</span>
           <span class="rating-badge ${badge}">${esc(label)}</span>
@@ -1476,6 +1476,7 @@
             ${edgeBadgeHTML || ''}
           </div>
         </div>
+        <div class="wb-depth-slot"></div>
       </div>`;
     }
 
@@ -2070,6 +2071,97 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeVerifyModal();
   });
+</script>
+<script>
+// ── Sharp Depth (premium gate v1) — WeBit-gated depth on today's card ──
+(function () {
+  var css = document.createElement('style');
+  css.textContent = [
+    '.wb-unlock-bar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;background:#eef6f5;border:1px solid rgba(0,76,84,.18);border-radius:12px;padding:.625rem .875rem;margin:0 0 1rem;}',
+    '.wb-unlock-txt{font-size:.8125rem;color:#0f3d42;font-weight:600;}',
+    '.wb-unlock-txt small{display:block;font-weight:500;color:#5b7d7a;font-size:.6875rem;margin-top:1px;}',
+    '.wb-unlock-btn{flex-shrink:0;background:#004C54;color:#fff;border:none;border-radius:18px;padding:.45rem .9rem;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;}',
+    '.wb-unlock-btn:disabled{opacity:.55;cursor:default;}',
+    '.wb-depth{background:#f0f7f6;border:1px solid rgba(0,76,84,.15);border-radius:10px;padding:.625rem .75rem;margin-top:.625rem;font-size:.75rem;color:#1d4a4f;line-height:1.5;}',
+    '.wb-depth .t{font-size:.625rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#00767c;margin-bottom:.375rem;display:flex;align-items:center;gap:.3rem;}',
+    '.wb-depth code{display:block;background:rgba(0,76,84,.06);border-radius:6px;padding:.375rem .5rem;font-size:.6875rem;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:.25rem 0;}',
+    '.wb-depth .row{margin:.2rem 0;}',
+    '@media (max-width:560px){.wb-unlock-bar{flex-direction:column;align-items:stretch;text-align:center;}}'
+  ].join('\n');
+  document.head.appendChild(css);
+
+  var depthData = null;
+
+  function renderDepth() {
+    if (!depthData) return;
+    depthData.forEach(function (d) {
+      var card = document.querySelector('.pick-card[data-wb-pick="' + (window.CSS && CSS.escape ? CSS.escape(d.pick) : d.pick) + '"]');
+      if (!card) {
+        var cards = document.querySelectorAll('.pick-card[data-wb-pick]');
+        for (var i = 0; i < cards.length; i++) if (cards[i].getAttribute('data-wb-pick') === d.pick) { card = cards[i]; break; }
+      }
+      if (!card) return;
+      var slot = card.querySelector('.wb-depth-slot');
+      if (!slot || slot.childNodes.length) return;
+      var el = document.createElement('div');
+      el.className = 'wb-depth';
+      var h = '<div class="t">🔓 Sharp Depth</div>';
+      if (d.kellyCalc) h += '<div class="row"><strong>Kelly math:</strong><code>' + escTxt(d.kellyCalc) + '</code></div>';
+      if (d.zScore != null) h += '<div class="row"><strong>Model z-score:</strong> ' + escTxt(String(d.zScore)) + (d.coverProb ? ' · <strong>Calibrated:</strong> ' + escTxt(d.coverProb) : '') + '</div>';
+      if (d.whatLoses) h += '<div class="row"><strong>What beats this pick:</strong> ' + escTxt(d.whatLoses) + '</div>';
+      if (d.clvExpectation) h += '<div class="row"><strong>Line move expectation:</strong> ' + escTxt(d.clvExpectation) + '</div>';
+      el.innerHTML = h;
+      slot.appendChild(el);
+    });
+  }
+
+  function escTxt(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function insertBar(user) {
+    if (document.getElementById('wb-unlock-bar')) return;
+    var firstCard = document.querySelector('.pick-card[data-wb-pick]');
+    if (!firstCard) return;
+    var bar = document.createElement('div');
+    bar.className = 'wb-unlock-bar';
+    bar.id = 'wb-unlock-bar';
+    var signedIn = !!user;
+    bar.innerHTML = '<span class="wb-unlock-txt">Sharp Depth: the full Kelly math, model z-scores, and failure scenarios behind today’s card.<small>' +
+      (signedIn ? '1 WeBit unlocks the whole day · your balance: ' + Number(user.credit_balance || 0).toLocaleString() : 'Sign in free — 1,000 WeBits included') + '</small></span>' +
+      '<button class="wb-unlock-btn" id="wb-unlock-btn" type="button">' + (signedIn ? '🔓 Unlock — 1 WeBit' : '𝕏 Sign in to unlock') + '</button>';
+    firstCard.parentNode.insertBefore(bar, firstCard);
+    document.getElementById('wb-unlock-btn').addEventListener('click', function () {
+      if (!signedIn) { location.href = '/.netlify/functions/auth-x-init'; return; }
+      var btn = this;
+      btn.disabled = true; btn.textContent = 'Unlocking…';
+      fetch('/.netlify/functions/get-picks-premium', { method: 'POST', credentials: 'include' })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+        .then(function (res) {
+          if (res.s === 401) { location.href = '/.netlify/functions/auth-x-init'; return; }
+          if (res.s === 402) { btn.disabled = false; btn.textContent = 'Need WeBits — get a pack'; btn.onclick = function () { location.href = '/credits'; }; return; }
+          if (!res.j || !res.j.ok) throw new Error('failed');
+          depthData = res.j.depth || [];
+          renderDepth();
+          btn.textContent = '✓ Unlocked · balance ' + Number(res.j.balance).toLocaleString();
+        })
+        .catch(function () { btn.disabled = false; btn.textContent = 'Try again'; });
+    });
+  }
+
+  var user = null;
+  fetch('/.netlify/functions/auth-me', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .catch(function () { return null; })
+    .then(function (u) {
+      if (u && u.error) u = null;
+      user = u;
+      var tries = 0;
+      var iv = setInterval(function () {
+        tries++;
+        if (document.querySelector('.pick-card[data-wb-pick]')) { clearInterval(iv); insertBar(user); }
+        else if (tries > 40) clearInterval(iv);
+      }, 500);
+    });
+})();
 </script>
 <script src="/nav.js" defer></script>
 

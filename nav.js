@@ -30,7 +30,7 @@
 
   function render(slot, user) {
     var compact = slot.hasAttribute('data-wb-compact');
-    var tokenLink = '<a class="wb-token" href="/credits" title="WeBits — your credits" aria-label="WeBits credits">' + TOKEN_SVG + '</a>';
+    var tokenLink = '<a class="wb-token" href="/webit" title="WeBit — your credits" aria-label="WeBit credits">' + TOKEN_SVG + '</a>';
     if (user) {
       var handle = user.handle || user.screen_name || user.username || user.name || (user.phone ? '•••' + String(user.phone).slice(-4) : 'Account');
       var monogramSrc = user.name || user.handle || user.screen_name || user.phone || 'W';

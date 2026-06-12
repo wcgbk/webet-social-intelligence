@@ -3421,7 +3421,8 @@
   }
 
   function topbarCoinClick() {
-    if (wbUser) { openProfilePanel(); } else { loginWithX(); }
+    // Token icon + balance → the WeBit page. Profile lives on the avatar, not the coin.
+    window.location.href = '/webit';
   }
 
   function openProfilePanel() {

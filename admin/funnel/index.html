@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Funnel Report</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Internal funnel analytics — admin only." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link href="https://cdn.jsdelivr.net/fontsource/css/geist-sans@latest/index.css" rel="stylesheet" />
+  <style>
+    :root {
+      --background: hsl(260, 87%, 3%);
+      --teal: #00b5b9;
+      --teal-deep: #004C54;
+      --txt: rgba(255,255,255,0.92);
+      --txt-m: rgba(255,255,255,0.6);
+      --txt-d: rgba(255,255,255,0.38);
+      --border: rgba(255,255,255,0.1);
+      --card-bg: rgba(255,255,255,0.03);
+      --green: #87fb89;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--background); color: var(--txt); font-family: 'Geist Sans', -apple-system, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    .top { width: 100%; max-width: 1040px; display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; }
+    .logo { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--txt); font-weight: 800; font-size: 18px; }
+    .admin-badge { background: rgba(0, 181, 185, 0.12); border: 1px solid rgba(0, 181, 185, 0.45); color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .08em; padding: 4px 10px; border-radius: 14px; text-transform: uppercase; }
+    .wrap { width: 100%; max-width: 1040px; padding: 8px 20px 60px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px 22px; }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+    .sub { color: var(--txt-m); font-size: 13.5px; line-height: 1.55; margin-bottom: 18px; }
+    .meta { color: var(--txt-d); font-size: 12px; margin-bottom: 18px; }
+    .state { padding: 40px 10px; text-align: center; color: var(--txt-m); font-size: 14px; }
+    .state.err { color: #ff8a80; }
+    .state a { color: var(--teal); font-weight: 700; }
+    .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 640px; }
+    th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th.lbl, td.lbl { text-align: left; position: sticky; left: 0; background: var(--background); font-weight: 600; }
+    thead th { color: var(--txt-m); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    tbody td { color: var(--txt); }
+    tbody td.zero { color: var(--txt-d); }
+    tr.total td { font-weight: 800; border-top: 2px solid var(--border); border-bottom: none; }
+    tr.total td.lbl { color: var(--green); }
+    .section-h { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--txt-m); margin: 26px 0 10px; }
+    .conv-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .conv { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+    .conv .step { font-size: 11px; color: var(--txt-m); line-height: 1.4; }
+    .conv .pct { font-size: 22px; font-weight: 800; color: var(--green); margin-top: 4px; }
+    .conv .raw { font-size: 11px; color: var(--txt-d); margin-top: 2px; }
+    .refresh { display: inline-block; margin-top: 18px; padding: 9px 16px; border-radius: 10px; background: var(--teal-deep); border: 1px solid var(--teal); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .refresh:hover { opacity: .88; }
+    .legend { margin-top: 14px; font-size: 11.5px; color: var(--txt-d); line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <a href="/dashboard" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:26px;height:22px;" xmlns="http://www.w3.org/2000/svg"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg>
+      WeBetAI
+    </a>
+    <span class="admin-badge">Admin</span>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <h1>Funnel Report</h1>
+      <p class="sub">Daily event counts across the onboarding and purchase funnel — last 14 days. Admin only.</p>
+      <div class="meta" id="meta"></div>
+      <div id="content"><div class="state" id="loading">Loading funnel data…</div></div>
+      <button class="refresh" id="refresh" type="button" style="display:none;">Refresh</button>
+      <div class="legend" id="legend" style="display:none;">
+        Funnel order: <b>onboard_shown → sports_chosen → edges_shown → signin_clicked → prefs_saved / skipped</b>.
+        Standalone events: login_view, pricing_view, checkout_view, checkout_paid, depth_unlock.
+        Conversion % is computed against the funnel entry (onboard_shown) over the full window.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var LABELS = {
+      onboard_shown: 'Onboard shown',
+      onboard_sports_chosen: 'Sports chosen',
+      onboard_edges_shown: 'Edges shown',
+      onboard_signin_clicked: 'Sign-in clicked',
+      onboard_prefs_saved: 'Prefs saved',
+      onboard_skipped: 'Skipped',
+      login_view: 'Login view',
+      pricing_view: 'Pricing view',
+      checkout_view: 'Checkout view',
+      checkout_paid: 'Checkout paid',
+      depth_unlock: 'Depth unlock'
+    };
+    // The conversion chain through onboarding (each step vs the previous one).
+    var FUNNEL = ['onboard_shown', 'onboard_sports_chosen', 'onboard_edges_shown', 'onboard_signin_clicked', 'onboard_prefs_saved'];
+
+    var contentEl = document.getElementById('content');
+    var metaEl = document.getElementById('meta');
+    var refreshBtn = document.getElementById('refresh');
+    var legendEl = document.getElementById('legend');
+
+    function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]; }); }
+    function shortDay(d) { return d.slice(5); } // MM-DD
+
+    function render(data) {
+      var days = data.days || [];
+      var events = data.events || [];
+      var counts = data.counts || {};
+      var totals = data.totals || {};
+
+      // --- Per-day table: rows = events, columns = days ---
+      var html = '<div class="tbl-scroll"><table><thead><tr><th class="lbl">Event</th>';
+      days.forEach(function (d) { html += '<th>' + esc(shortDay(d)) + '</th>'; });
+      html += '<th>Total</th></tr></thead><tbody>';
+      events.forEach(function (ev) {
+        var lbl = LABELS[ev] || ev;
+        html += '<tr><td class="lbl">' + esc(lbl) + '</td>';
+        days.forEach(function (d) {
+          var n = (counts[d] && counts[d][ev]) || 0;
+          html += '<td class="' + (n ? '' : 'zero') + '">' + n + '</td>';
+        });
+        html += '<td><b>' + (totals[ev] || 0) + '</b></td>';
+      });
+      // Daily totals row
+      html += '<tr class="total"><td class="lbl">All events</td>';
+      var grand = 0;
+      days.forEach(function (d) {
+        var sum = 0;
+        events.forEach(function (ev) { sum += (counts[d] && counts[d][ev]) || 0; });
+        grand += sum;
+        html += '<td>' + sum + '</td>';
+      });
+      html += '<td>' + grand + '</td></tr>';
+      html += '</tbody></table></div>';
+
+      // --- Conversion cards: each funnel step vs previous, plus entry->paid ---
+      html += '<div class="section-h">Conversion (full window)</div><div class="conv-grid">';
+      for (var i = 1; i < FUNNEL.length; i++) {
+        var prev = FUNNEL[i - 1], cur = FUNNEL[i];
+        var pv = totals[prev] || 0, cv = totals[cur] || 0;
+        var pct = pv > 0 ? Math.round((cv / pv) * 1000) / 10 : 0;
+        html += '<div class="conv"><div class="step">' + esc(LABELS[prev]) + ' → ' + esc(LABELS[cur]) + '</div>' +
+                '<div class="pct">' + (pv > 0 ? pct + '%' : '—') + '</div>' +
+                '<div class="raw">' + cv + ' / ' + pv + '</div></div>';
+      }
+      // Skip rate + overall paid conversion
+      var shown = totals['onboard_shown'] || 0;
+      var skipped = totals['onboard_skipped'] || 0;
+      var paid = totals['checkout_paid'] || 0;
+      html += '<div class="conv"><div class="step">Onboard shown → Skipped</div>' +
+              '<div class="pct">' + (shown > 0 ? (Math.round((skipped / shown) * 1000) / 10) + '%' : '—') + '</div>' +
+              '<div class="raw">' + skipped + ' / ' + shown + '</div></div>';
+      html += '<div class="conv"><div class="step">Onboard shown → Checkout paid</div>' +
+              '<div class="pct">' + (shown > 0 ? (Math.round((paid / shown) * 1000) / 10) + '%' : '—') + '</div>' +
+              '<div class="raw">' + paid + ' / ' + shown + '</div></div>';
+      html += '</div>';
+
+      contentEl.innerHTML = html;
+      metaEl.textContent = 'Generated ' + (data.generatedAt || '') + ' · ' + (data.eventsScanned || 0) + ' events scanned · ' + (data.windowDays || 14) + '-day window';
+      refreshBtn.style.display = 'inline-block';
+      legendEl.style.display = 'block';
+    }
+
+    function load() {
+      contentEl.innerHTML = '<div class="state">Loading funnel data…</div>';
+      fetch('/.netlify/functions/funnel-report', { credentials: 'include' })
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+        .then(function (res) {
+          if (res.status === 401) {
+            contentEl.innerHTML = '<div class="state">You need to sign in. <a href="/.netlify/functions/auth-x-init">Sign in with X</a></div>';
+            return;
+          }
+          if (res.status === 403) {
+            contentEl.innerHTML = '<div class="state err">Access denied — this account is not on the admin allowlist.</div>';
+            return;
+          }
+          if (!res.j || !res.j.ok) throw new Error((res.j && res.j.error) || 'load_failed');
+          render(res.j);
+        })
+        .catch(function (e) {
+          contentEl.innerHTML = '<div class="state err">Could not load funnel data (' + esc(e.message) + ').</div>';
+        });
+    }
+
+    refreshBtn.addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

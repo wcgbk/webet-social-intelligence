@@ -46,18 +46,22 @@ exports.handler = async (event) => {
     const userRecord = await users.get(`user_${userId}`, { type: 'json' }).catch(() => null);
     if (!userRecord) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'user_not_found' }) };
 
-    // Today's picks (READ-ONLY on the alpha store) — explicit config required in this
-    // runtime (bare getStore lacks blob context here, unlike older bundled functions)
-    const picksStore = getStore({ name: 'edge-picks-alpha', siteID, token });
+    // Today's picks (READ-ONLY on the alpha store) — via the blobs REST API with
+    // NETLIFY_AUTH_TOKEN, the proven pattern used by the deployed cron functions
+    // (track-clv, capture-opening-lines). SDK reads on this store return null here.
+    const apiToken = process.env.NETLIFY_AUTH_TOKEN || token;
+    const blobBase = `https://api.netlify.com/api/v1/blobs/${siteID}/edge-picks-alpha`;
+    const blobHeaders = { Authorization: `Bearer ${apiToken}` };
     let dateKey = null;
     const params = event.queryStringParameters || {};
     if (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) dateKey = params.date;
     else {
-      const latest = await picksStore.get('latest-date');
-      dateKey = latest ? latest.trim() : null;
+      const lr = await fetch(`${blobBase}/latest-date`, { headers: blobHeaders }).catch(() => null);
+      if (lr && lr.ok) dateKey = (await lr.text()).trim();
     }
     if (!dateKey) return { statusCode: 404, headers: CORS, body: JSON.stringify({ error: 'no_picks' }) };
-    const picksData = await picksStore.get(`picks-${dateKey}`, { type: 'json' }).catch(() => null);
+    const pr = await fetch(`${blobBase}/picks-${dateKey}`, { headers: blobHeaders }).catch(() => null);
+    const picksData = pr && pr.ok ? await pr.json().catch(() => null) : null;
     if (!picksData || !(picksData.picks || []).length) {
       return { statusCode: 404, headers: CORS, body: JSON.stringify({ error: 'no_picks', date: dateKey }) };
     }

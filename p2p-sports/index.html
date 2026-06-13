@@ -476,32 +476,42 @@ function gameCard(g){
   const matchup=`${away} vs ${home}`;
   const started=g.state==='in'||g.state==='post';
   const ords=g.orders||[];
-
-  // ML always bettable (even-money pick'em). Spread/Total only where the exchange has a line.
-  const awayMl=sideOdds(ords,'away','ml');
-  const homeMl=sideOdds(ords,'home','ml');
-  const awaySpread=sideOdds(ords,'away','spread');
-  const homeSpread=sideOdds(ords,'home','spread');
-  const over=totalOdds(ords,'over');
-  const under=totalOdds(ords,'under');
-
+  const L=g.lines||{};
   function betData(o){return JSON.stringify(o).replace(/'/g,"&#39;");}
-  // ML button — always available (defaults to even-money pick'em if no exchange order)
+  function lockBtn(){return`<button class="pb" disabled><span class="pb-price">🔒</span></button>`;}
+  function emptyBtn(){return`<button class="pb" disabled><span class="pb-line">--</span><span class="pb-price">--</span></button>`;}
+
+  // ML / Pick — prefer live BettorEdge order, fall back to Odds API consensus, then even-money pick'em
   function mlBtn(side,team){
-    if(started)return`<button class="pb" disabled><span class="pb-price">🔒</span></button>`;
-    const ord=side==='away'?awayMl:homeMl;
-    const odds=ord?ord.odds:100;
+    if(started)return lockBtn();
+    const be=sideOdds(ords,side,'ml');
+    const odds=be?be.odds:(L.ml&&L.ml[side]!=null?L.ml[side]:100);
     const d=betData({event:g.event,league:g.league,sport:g.sport,pick:team+' to win',odds:odds,line:0,matchup:matchup,side:side,market:'ml'});
-    return`<button class="pb" onclick='openBet(${d})'><span class="pb-line">${ord?'live':'pick'}</span><span class="pb-price">${fmtPrice(odds)}</span></button>`;
+    return`<button class="pb" onclick='openBet(${d})'><span class="pb-line">${be?'live':'pick'}</span><span class="pb-price">${fmtPrice(odds)}</span></button>`;
   }
-  // Spread/Total — only if the exchange has a real line; otherwise a quiet placeholder
-  function lineBtn(order){
-    if(started)return`<button class="pb" disabled><span class="pb-price">🔒</span></button>`;
-    if(!order)return`<button class="pb" disabled><span class="pb-line">--</span><span class="pb-price">--</span></button>`;
-    const ln=order.var1&&order.var1!==0?`${order.var1>0?'+':''}${order.var1}`:'';
-    const mkt=(order.side==='over'||order.side==='under')?'total':'spread';
-    const d=betData({event:g.event,league:g.league,sport:g.sport,pick:order.title,odds:order.odds,line:order.var1||0,matchup:matchup,side:order.side,market:mkt});
-    return`<button class="pb" onclick='openBet(${d})'>${ln?`<span class="pb-line">${ln}</span>`:`<span class="pb-line">&nbsp;</span>`}<span class="pb-price">${fmtPrice(order.odds)}</span></button>`;
+  // Spread — BettorEdge order, else Odds API line
+  function spreadBtn(side,team){
+    if(started)return lockBtn();
+    const be=sideOdds(ords,side,'spread');
+    let pt=null,odds=null,live=false;
+    if(be){pt=be.var1;odds=be.odds;live=true;}
+    else if(L.spread){pt=side==='away'?L.spread.awayPt:L.spread.homePt;odds=side==='away'?L.spread.awayOdds:L.spread.homeOdds;}
+    if(pt==null||odds==null)return emptyBtn();
+    const ln=`${pt>0?'+':''}${pt}`;
+    const d=betData({event:g.event,league:g.league,sport:g.sport,pick:team+' '+ln,odds:odds,line:pt,matchup:matchup,side:side,market:'spread'});
+    return`<button class="pb" onclick='openBet(${d})'><span class="pb-line">${ln}${live?' •':''}</span><span class="pb-price">${fmtPrice(odds)}</span></button>`;
+  }
+  // Total — BettorEdge order, else Odds API line
+  function totalBtn(dir){
+    if(started)return lockBtn();
+    const be=totalOdds(ords,dir);
+    let pt=null,odds=null,live=false;
+    if(be){pt=be.var1;odds=be.odds;live=true;}
+    else if(L.total){pt=L.total.point;odds=dir==='over'?L.total.overOdds:L.total.underOdds;}
+    if(pt==null||odds==null)return emptyBtn();
+    const lbl=(dir==='over'?'Over ':'Under ')+pt;
+    const d=betData({event:g.event,league:g.league,sport:g.sport,pick:lbl,odds:odds,line:pt,matchup:matchup,side:dir,market:'total'});
+    return`<button class="pb" onclick='openBet(${d})'><span class="pb-line">${dir==='over'?'O':'U'} ${pt}${live?' •':''}</span><span class="pb-price">${fmtPrice(odds)}</span></button>`;
   }
 
   const timeLabel=started?(g.state==='post'?'Final':'🔒 Live'):fmtTime(g.scheduled);
@@ -512,15 +522,15 @@ function gameCard(g){
     <div class="gc-body">
       <div class="trow">
         <div class="tinfo">${teamLogo(away)}<div class="tname">${away}</div></div>
-        ${lineBtn(awaySpread)}
+        ${spreadBtn('away',away)}
         ${mlBtn('away',away)}
-        ${lineBtn(over)}
+        ${totalBtn('over')}
       </div>
       <div class="trow">
         <div class="tinfo">${teamLogo(home)}<div class="tname">${home}</div></div>
-        ${lineBtn(homeSpread)}
+        ${spreadBtn('home',home)}
         ${mlBtn('home',home)}
-        ${lineBtn(under)}
+        ${totalBtn('under')}
       </div>
     </div>
   </div>`;

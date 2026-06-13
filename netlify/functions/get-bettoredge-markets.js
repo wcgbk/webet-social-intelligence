@@ -196,6 +196,40 @@ exports.handler = async (event) => {
         }
       } catch (e) { /* skip a league on error */ }
     }));
+    // ── REAL LINES from The Odds API (ML / spread / total) for every game ──
+    // ESPN gives the slate + state; The Odds API gives consensus odds + points so
+    // spread/total bets are fair even-money (they're ~50/50 by design).
+    const ODDS_KEY = process.env.ODDS_API_KEY;
+    if (ODDS_KEY && games.length) {
+      const ODDS_SPORTS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl" };
+      const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const linesByPair = {};
+      await Promise.all(Object.entries(ODDS_SPORTS).map(async ([sport, key]) => {
+        try {
+          const r = await fetch(`https://api.the-odds-api.com/v4/sports/${key}/odds?regions=us&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${ODDS_KEY}`);
+          if (!r.ok) return;
+          const arr = await r.json();
+          for (const g of (arr || [])) {
+            const book = (g.bookmakers || [])[0]; if (!book) continue;
+            const mk = {}; for (const m of (book.markets || [])) mk[m.key] = m.outcomes || [];
+            const ml = { away: null, home: null };
+            (mk.h2h || []).forEach(o => { if (norm(o.name) === norm(g.away_team)) ml.away = o.price; else if (norm(o.name) === norm(g.home_team)) ml.home = o.price; });
+            let spread = null;
+            const sp = mk.spreads || [];
+            if (sp.length) { const a = sp.find(o => norm(o.name) === norm(g.away_team)), h = sp.find(o => norm(o.name) === norm(g.home_team)); if (a && h) spread = { awayPt: a.point, awayOdds: a.price, homePt: h.point, homeOdds: h.price }; }
+            let total = null;
+            const tt = mk.totals || [];
+            if (tt.length) { const ov = tt.find(o => /over/i.test(o.name)), un = tt.find(o => /under/i.test(o.name)); if (ov && un) total = { point: ov.point, overOdds: ov.price, underOdds: un.price }; }
+            linesByPair[`${norm(g.away_team)}|${norm(g.home_team)}`] = { ml, spread, total };
+          }
+        } catch (e) { /* skip sport on error */ }
+      }));
+      for (const g of games) {
+        const L = linesByPair[`${norm(g.awayTeam)}|${norm(g.homeTeam)}`];
+        if (L) g.lines = L;
+      }
+    }
+
     // Upcoming first, then by scheduled time
     games.sort((a, b) => {
       const ap = a.state === "pre" ? 0 : 1, bp = b.state === "pre" ? 0 : 1;

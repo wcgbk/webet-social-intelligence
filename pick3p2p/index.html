@@ -782,36 +782,8 @@
 </head>
 <body>
 
-<!-- Sticky header (white) -->
-<div class="header">
-  <a href="/" class="header-logo">
-    <svg viewBox="0 0 470 419" fill="none" style="width:28px; height:24px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
-      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
-      <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
-    </svg>
-    <span class="header-logo-text">WeBetAI</span>
-    <span class="header-badge">PVP P2P</span>
-  </a>
-  <div class="header-links">
-    <a href="/invite" class="header-link">Invite</a>
-    <a href="https://webetsocial.com/edge-beta" class="header-link">Edge Picks</a>
-    <a href="#leaderboard" class="header-link">Leaderboard</a>
-    <a href="#challenge" class="header-link">Today's Board</a>
-  </div>
-  <button class="header-hamburger" onclick="document.getElementById('mobile-menu').classList.add('open')">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-  </button>
-</div>
-
-<div class="mobile-menu" id="mobile-menu" onclick="if(event.target===this)this.classList.remove('open')">
-  <div class="mobile-menu-panel">
-    <button class="mobile-menu-close" onclick="document.getElementById('mobile-menu').classList.remove('open')">&times;</button>
-    <a href="/invite" class="mobile-menu-link" onclick="document.getElementById('mobile-menu').classList.remove('open')">Invite</a>
-    <a href="https://webetsocial.com/edge-beta" class="mobile-menu-link">Edge Picks</a>
-    <a href="#leaderboard" class="mobile-menu-link" onclick="document.getElementById('mobile-menu').classList.remove('open')">Leaderboard</a>
-    <a href="#challenge" class="mobile-menu-link" onclick="document.getElementById('mobile-menu').classList.remove('open')">Today's Board</a>
-  </div>
-</div>
+<!-- Page header removed (founder directive 2026-06-13) — the WeBetAI strip is the only chrome -->
+<div class="mobile-menu" id="mobile-menu" onclick="if(event.target===this)this.classList.remove('open')" style="display:none;"></div>
 
 <!-- THE MAIN EVENT — Explainer + VS -->
 <section class="sec fi" id="main-event" style="padding-bottom:0; padding-top:32px;">
@@ -1801,7 +1773,7 @@
     document.getElementById('c-wager').parentElement.style.display = 'none';
 
     var sendBtn = document.getElementById('btn-send');
-    sendBtn.textContent = 'Lock My Picks';
+    sendBtn.textContent = 'Lock Picks';
     sendBtn.onclick = submitChallengeResponse;
 
     document.getElementById('c-name').value = '';
@@ -2206,7 +2178,7 @@
         if (u && u.error) u = null;
         window.wbaiUser = u || null;
         if (u) {
-          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><span class="w">ⓦ ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</span><a href="/credits">get more</a>');
+          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><a class="w" href="/webit" style="color:#fff;text-decoration:none;"><img src="/webet-coin.png" alt="WeBit" style="width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;"> ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</a><a href="/credits">get more</a>');
           // Adopt the unified identity for EVERY signed-in user — phone when they have one
           // (SMS-first), otherwise their wbai account id (X users). The page's own phone
           // login is gone; /login is the only gate.

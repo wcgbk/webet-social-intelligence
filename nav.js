@@ -25,8 +25,8 @@
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
-  // WeBit token: teal coin with W
-  var TOKEN_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="#e6f4f1" stroke="#004C54" stroke-width="1.5"/><circle cx="12" cy="12" r="8" fill="none" stroke="#00b5b9" stroke-width="1" stroke-dasharray="2 1.5"/><text x="12" y="16" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="10.5" font-weight="900" fill="#004C54">W</text></svg>';
+  // WeBit token icon = the real coin (founder directive — no W-in-circle glyphs)
+  var TOKEN_SVG = '<img src="/webet-coin.png" alt="WeBit" style="width:22px;height:22px;border-radius:50%;display:block;">';
 
   function render(slot, user) {
     var compact = slot.hasAttribute('data-wb-compact');

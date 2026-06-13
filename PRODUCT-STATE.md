@@ -21,6 +21,12 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - Feedback loops repointed to alpha store; 3am ET settle run; crash-vs-quiet markers in
   no-plays path; verify-picks QA → alpha store, Discord link → /alpha.
 - /percentile rewritten for v10.3, header removed.
+- /mvp RESTORED (was 404 — untracked dir dropped by every deploy; now git-tracked) + reformatted
+  to /alpha's exact design/layout (cloned, retargeted to get-picks-mvp/get-results-mvp, premium
+  Sharp-Depth gate stripped for the lab, experimental banner added). New /mvpalpha = champion-vs-
+  challenger A/B page (side-by-side ROI/record/accuracy/PL from both result stores, same-game
+  head-to-head w/ agree/differ, no-winner-until-25-graded guardrail). _redirects routes /mvpalpha
+  (netlify.toml left hash-pristine). Deployed from main; PR #3 funnel untouched.
 - Narrative opener quotes calibrated edge (matches badge).
 - WeBit funnel LIVE: /credits buttons wired → /checkout (TEST-badged, idempotent) →
   webit-mock-pay fn → webit-ledger (one blob per event) + credit_balance on wbai-users.

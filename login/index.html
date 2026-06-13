@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Sign In</title>
+  <meta name="description" content="Sign in to WeBetAI — save your picks, chat with Betty, and activate your 1,000 free WeBits. X or phone number, five seconds." />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Sign In" />
+  <meta property="og:description" content="Sign in to WeBetAI — save your picks, chat with Betty, and activate your 1,000 free WeBits." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/login" />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Sign In" />
+  <meta name="twitter:description" content="Sign in to WeBetAI — X or phone, five seconds." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link href="https://cdn.jsdelivr.net/fontsource/css/geist-sans@latest/index.css" rel="stylesheet" />
+  <style>
+    :root { --background: hsl(260,87%,3%); --teal:#00b5b9; --teal-deep:#004C54; --txt:rgba(255,255,255,.92); --txt-m:rgba(255,255,255,.6); --border:rgba(255,255,255,.1); --card:rgba(255,255,255,.03); --green:#87fb89; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--background);color:var(--txt);font-family:'Geist Sans',-apple-system,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 20px}
+    .top{width:100%;max-width:460px;padding:18px 0}
+    .logo{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--txt);font-weight:800;font-size:18px}
+    .wrap{width:100%;max-width:460px;padding-bottom:60px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 26px}
+    h1{font-size:22px;font-weight:800;margin-bottom:6px}
+    .sub{color:var(--txt-m);font-size:13.5px;line-height:1.55;margin-bottom:22px}
+    .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;border-radius:12px;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--txt);text-decoration:none;transition:opacity .15s;margin-bottom:10px}
+    .btn:hover{opacity:.85}
+    .btn.x{background:#fff;color:#000;border-color:#fff}
+    .btn[disabled],.btn.soon{opacity:.4;cursor:default;pointer-events:none}
+    .divider{display:flex;align-items:center;gap:10px;color:var(--txt-m);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:18px 0}
+    .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+    .field{width:100%;padding:13px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--txt);font-size:15px;font-family:inherit;margin-bottom:10px;outline:none}
+    .field:focus{border-color:var(--teal)}
+    .hint{font-size:11.5px;color:var(--txt-m);margin:-4px 0 10px}
+    .err{display:none;color:#ff8a80;font-size:12.5px;margin:4px 0 8px}
+    .ok{display:none;color:var(--green);font-size:12.5px;margin:4px 0 8px}
+    .soon-tag{font-size:9.5px;font-weight:800;letter-spacing:.06em;background:rgba(255,196,0,.12);border:1px solid rgba(255,196,0,.4);color:#ffd75e;border-radius:10px;padding:2px 7px;margin-left:6px}
+    .perk{margin-top:18px;font-size:12px;color:var(--txt-m);text-align:center;line-height:1.6}
+    .perk b{color:var(--green)}
+    #step-code{display:none}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <a href="/" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:26px;height:22px;" xmlns="http://www.w3.org/2000/svg"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg>
+      WeBetAI
+    </a>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <h1>Sign in</h1>
+      <p class="sub">Save your sports, keep your picks history, and activate your <b style="color:var(--green)">1,000 free WeBits</b>. Five seconds, no password.</p>
+
+      <a class="btn x" href="/.netlify/functions/auth-x-init" id="x-btn">𝕏 &nbsp;Continue with X</a>
+
+      <div class="divider">or use your phone</div>
+
+      <div id="step-phone">
+        <input class="field" id="phone" type="tel" inputmode="tel" placeholder="Phone number (US)" autocomplete="tel" />
+        <div class="err" id="err-phone"></div>
+        <button class="btn" id="send-btn" type="button">Text me a code</button>
+      </div>
+
+      <div id="step-code">
+        <input class="field" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" />
+        <div class="hint" id="sent-hint">Code sent. It expires in 10 minutes.</div>
+        <div class="err" id="err-code"></div>
+        <div class="ok" id="ok-code"></div>
+        <button class="btn" id="verify-btn" type="button">Verify & sign in</button>
+        <button class="btn" id="back-btn" type="button" style="font-weight:600;font-size:12.5px;padding:9px">Use a different number</button>
+      </div>
+
+      <div class="divider">more ways</div>
+      <button class="btn soon" type="button" disabled>✉️ &nbsp;Email magic link<span class="soon-tag">SOON</span></button>
+      <button class="btn soon" type="button" disabled>🇬 &nbsp;Continue with Google<span class="soon-tag">SOON</span></button>
+
+      <p class="perk">New accounts start with <b>1,000 WeBits</b> — they power Betty's pick analysis, Sharp Depth, and Pick 3 challenges.</p>
+    </div>
+  </div>
+
+  <script>
+    // funnel beacon
+    try { navigator.sendBeacon('/.netlify/functions/funnel-event', new Blob([JSON.stringify({ e: 'login_view' })], { type: 'application/json' })); } catch (e) {}
+
+    var phoneEl = document.getElementById('phone'), codeEl = document.getElementById('code');
+    var sendBtn = document.getElementById('send-btn'), verifyBtn = document.getElementById('verify-btn');
+    var errPhone = document.getElementById('err-phone'), errCode = document.getElementById('err-code'), okCode = document.getElementById('ok-code');
+    var ERRORS = {
+      invalid_phone: 'That number doesn’t look right — use a US number like (555) 123-4567.',
+      too_many_codes: 'Too many codes requested — try again in an hour.',
+      too_many_requests: 'Too many requests from this network — try again later.',
+      sms_send_failed: 'Couldn’t send the text. Double-check the number.',
+      sms_not_configured: 'Phone sign-in is temporarily unavailable — use X instead.',
+      no_code_requested: 'Request a code first.',
+      code_expired: 'That code expired — send a new one.',
+      wrong_code: 'Wrong code — check the text and try again.',
+      too_many_attempts: 'Too many tries — request a fresh code.',
+      server_error: 'Something hiccuped — try again.'
+    };
+
+    sendBtn.addEventListener('click', function () {
+      errPhone.style.display = 'none';
+      sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+      fetch('/.netlify/functions/auth-sms-start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phoneEl.value }) })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+        .then(function (res) {
+          sendBtn.disabled = false; sendBtn.textContent = 'Text me a code';
+          if (res.j && res.j.ok) {
+            document.getElementById('step-phone').style.display = 'none';
+            document.getElementById('step-code').style.display = 'block';
+            codeEl.focus();
+          } else {
+            errPhone.textContent = ERRORS[(res.j || {}).error] || ERRORS.server_error;
+            errPhone.style.display = 'block';
+          }
+        })
+        .catch(function () { sendBtn.disabled = false; sendBtn.textContent = 'Text me a code'; errPhone.textContent = ERRORS.server_error; errPhone.style.display = 'block'; });
+    });
+
+    verifyBtn.addEventListener('click', function () {
+      errCode.style.display = 'none';
+      verifyBtn.disabled = true; verifyBtn.textContent = 'Verifying…';
+      fetch('/.netlify/functions/auth-sms-verify', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phoneEl.value, code: codeEl.value }) })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+        .then(function (res) {
+          if (res.j && res.j.ok) {
+            okCode.textContent = '✓ Signed in — taking you to Betty…';
+            okCode.style.display = 'block';
+            setTimeout(function () { location.href = '/dashboard?auth=success'; }, 600);
+          } else {
+            verifyBtn.disabled = false; verifyBtn.textContent = 'Verify & sign in';
+            errCode.textContent = ERRORS[(res.j || {}).error] || ERRORS.server_error;
+            errCode.style.display = 'block';
+          }
+        })
+        .catch(function () { verifyBtn.disabled = false; verifyBtn.textContent = 'Verify & sign in'; errCode.textContent = ERRORS.server_error; errCode.style.display = 'block'; });
+    });
+
+    document.getElementById('back-btn').addEventListener('click', function () {
+      document.getElementById('step-code').style.display = 'none';
+      document.getElementById('step-phone').style.display = 'block';
+    });
+    codeEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') verifyBtn.click(); });
+    phoneEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') sendBtn.click(); });
+  </script>
+</body>
+</html>

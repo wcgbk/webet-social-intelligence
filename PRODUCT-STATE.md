@@ -39,6 +39,9 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- X-DM challenge delivery LIVE (loop-c7): create-modal toggle Text/X-DM; DM mode = deliver:'link'
+  (no friend phone needed; X users use wbai:{id} identity), opens prefilled x.com/messages/compose
+  with invite; invite links unified to webetsocial.com/pick3p2p/?challenge=; WeBits copy everywhere.
 - /login gateway LIVE (loop-c5): X primary + SMS code login via existing Twilio Messages API
   (HMAC OTP, 10-min TTL, 3/phone/hr + 10/IP/hr limits, 8-attempt cap); auth-sms-verify mints
   sessions identical to X callback; sms_ users get 1,000 WeBits; email/Google = SOON flags.

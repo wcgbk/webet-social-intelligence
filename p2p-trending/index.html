@@ -211,20 +211,23 @@ body.embed .side{display:none}
   <div class="hdr-r">
     <a href="/dashboard" class="hdr-lnk">Dashboard</a>
     <a href="/p2p-sports" class="hdr-lnk">P2P Sports</a>
-    <a href="/pick3p2p" class="hdr-lnk">Pick 3</a>
+    <a href="/betty/blog" class="hdr-lnk">Authentic Press</a>
     <div class="bal" id="balEl">···</div>
   </div>
 </header>
 
 <div class="lay">
   <nav class="side">
-    <div class="side-title">Open Challenges</div>
-    <div class="side-item on" onclick="setCat('all')">All</div>
-    <div id="sideLeagues"></div>
+    <div class="side-item on" onclick="setCat('all')">All Topics</div>
+    <div class="side-item" onclick="setCat('politics')">Politics</div>
+    <div class="side-item" onclick="setCat('culture')">Culture</div>
+    <div class="side-item" onclick="setCat('technology')">Technology</div>
+    <div class="side-item" onclick="setCat('sports')">Sports</div>
+    <div class="side-item" onclick="setCat('prediction-markets')">Prediction Markets</div>
+    <div class="side-item" onclick="setCat('social-intelligence')">Social Intelligence</div>
     <div class="side-divider"></div>
-    <div class="side-title">Start your own</div>
-    <a href="/p2p-sports" class="side-item" style="text-decoration:none">+ Bet a game</a>
-    <a href="/pick3p2p" class="side-item" style="text-decoration:none">+ Pick 3 challenge</a>
+    <div class="side-title">Powered by</div>
+    <a href="/betty/blog" class="side-item" style="text-decoration:none">Authentic Press</a>
   </nav>
   <div class="main-area">
     <div class="ltabs" id="catTabs"></div>
@@ -234,7 +237,7 @@ body.embed .side{display:none}
       <div class="stab">Resolved</div>
     </div>
     <div class="gg" id="grid">
-      <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading open challenges...</div></div>
+      <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading trending topics...</div></div>
     </div>
   </div>
 </div>
@@ -259,28 +262,185 @@ if(window.self!==window.top)document.body.classList.add('embed');
 let posts=[],cat='all',balance=10000,selectedBet=null,modalStep='form';
 
 /* ── Static blog articles with generated bet data ── */
-const STATIC_ARTICLES=[]; // legacy prediction-topic data removed (now uses live open-bets feed)
+const STATIC_ARTICLES=[
+  {
+    topic:'Prediction Market Liquidity',
+    category:'prediction-markets',
+    claim:'WeBetAI becomes a top-5 liquidity source for prediction markets',
+    deadline:'12/31/27',
+    guardianScore:{contention:72},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'likely',confidence:'high'}},
+    blog:{
+      title:'Solving the Liquidity Problem: How WeBetAI Adds Value to Prediction Markets',
+      slug:'solving-liquidity',
+      summary:'Thin liquidity kills prediction markets — wide spreads, slow fills, whale dominance. WeBetAI flips the script by injecting real liquidity backed by crowd-verified social intelligence instead of extracting value.'
+    },
+    headline:'The Liquidity Crisis Nobody\'s Talking About — And the Fix That Could Change Betting Forever',
+    summary:'Prediction markets are bleeding users to wide spreads and whale manipulation. WeBetAI\'s Guardian + Edge stack claims it can solve what Kalshi and Polymarket haven\'t. Believers say it\'s the future; skeptics call it vaporware.'
+  },
+  {
+    topic:'SAVE America Act',
+    category:'politics',
+    claim:'the SAVE America Act passes before the 2026 midterms',
+    deadline:'11/3/26',
+    guardianScore:{contention:91},
+    agents:{grok:{verdict:'unlikely',confidence:'high'},claude:{verdict:'unlikely',confidence:'medium'},chatgpt:{verdict:'unlikely',confidence:'medium'}},
+    blog:{
+      title:'SAVE America Act Faces Uncertain Path to Passage Before 2026 Midterms',
+      slug:'save-america-act-midterms',
+      summary:'As partisan divisions deepen over election integrity measures, the SAVE America Act remains stalled in Congress with AI analysts predicting low odds of passage before the 2026 midterm elections.'
+    },
+    headline:'Congress Is Running Out of Time — Will the SAVE Act Die Before Midterms?',
+    summary:'The most divisive election bill in a decade is stuck in committee with the clock ticking toward November. Three AI models agree it probably won\'t pass, but the margin is tighter than you\'d think. Pick a side.'
+  },
+  {
+    topic:'Pick3 P2P Parlays',
+    category:'technology',
+    claim:'P2P micro-parlays capture 5%+ of total parlay handle',
+    deadline:'4/1/28',
+    guardianScore:{contention:68},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'unlikely',confidence:'low'}},
+    blog:{
+      title:'The Pick3 P2P Parlay Killer',
+      slug:'pick3-p2p-parlay-killer',
+      summary:'How micro-parlays matched peer-to-peer with AI-weighted odds solve the fragmentation problem that plagues multi-leg bets.'
+    },
+    headline:'Sportsbooks Make Billions on Parlays. This P2P Model Wants to Kill Them.',
+    summary:'Parlays are the most profitable product in sports betting — and the worst deal for bettors. Pick3 matches micro-parlays peer-to-peer with AI-weighted odds. Could it actually disrupt the house?'
+  },
+  {
+    topic:'Guardian Truth Layer',
+    category:'social-intelligence',
+    claim:'AI-powered claim verification becomes standard in social betting',
+    deadline:'12/31/28',
+    guardianScore:{contention:58},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'likely',confidence:'medium'}},
+    blog:{
+      title:'The Guardian Truth Layer Behind Every WeBet',
+      slug:'guardian-truth-layer',
+      summary:'How WeBetAI\'s Guardian system verifies claims with 5 authenticity signals, 3 AI agents, and live prediction market data before any bet goes live.'
+    },
+    headline:'What If Every Bet Had a Built-In Lie Detector?',
+    summary:'The Guardian Truth Layer cross-references 3 AI agents, 5 authenticity signals, and live prediction market data before any WeBet goes live. It\'s designed to kill misinformation bets before they spread.'
+  },
+  {
+    topic:'Masters 2026',
+    category:'sports',
+    claim:'Scottie Scheffler three-peats at the 2026 Masters',
+    deadline:'4/13/26',
+    guardianScore:{contention:83},
+    agents:{grok:{verdict:'unlikely',confidence:'medium'},claude:{verdict:'unlikely',confidence:'medium'},chatgpt:{verdict:'unlikely',confidence:'low'}},
+    blog:{
+      title:'Can Scottie Scheffler Three-Peat at Augusta? What the Data Says About the 2026 Masters',
+      slug:'masters-2026-scheffler-three-peat',
+      summary:'Scheffler is +500 to three-peat at the Masters. McIlroy defends his Grand Slam. Rahm lurks. Betty breaks down who has the edge at Augusta.'
+    },
+    headline:'Three-Peat or Heartbreak? Scheffler\'s Augusta Odds Say More Than You Think.',
+    summary:'No one has three-peated at Augusta since the 1960s. Scheffler is +500, McIlroy is chasing a career Grand Slam, and Rahm is lurking. The data says one thing — history says another.'
+  },
+  {
+    topic:'NBA Play-In 2026',
+    category:'sports',
+    claim:'the Warriors survive the play-in and make the 2026 NBA playoffs',
+    deadline:'4/18/26',
+    guardianScore:{contention:79},
+    agents:{grok:{verdict:'likely',confidence:'low'},claude:{verdict:'unlikely',confidence:'medium'},chatgpt:{verdict:'likely',confidence:'low'}},
+    blog:{
+      title:'Warriors at the 10-Seed: Can Golden State Survive the NBA Play-In?',
+      slug:'nba-play-in-warriors-2026',
+      summary:'Golden State is the 10-seed facing Portland in the play-in. Steph Curry\'s legacy is on the line. Betty breaks down the matchup and the data.'
+    },
+    headline:'Steph Curry\'s Legacy Comes Down to One Game. Seriously.',
+    summary:'The Warriors are the 10-seed. One loss and the season is over. Curry is 36, the roster is aging, and Portland has nothing to lose. This might be the most consequential play-in game ever.'
+  },
+  {
+    topic:'Stanley Cup Playoffs 2026',
+    category:'sports',
+    claim:'the Colorado Avalanche win the 2026 Stanley Cup',
+    deadline:'6/30/26',
+    guardianScore:{contention:74},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'unlikely',confidence:'low'},chatgpt:{verdict:'likely',confidence:'low'}},
+    blog:{
+      title:'Avalanche Enter Stanley Cup Playoffs as Clear Favorites — But Buffalo Is the Story',
+      slug:'stanley-cup-playoffs-2026-avalanche',
+      summary:'Colorado is +300 to win the Cup. Tampa is +450. But Buffalo went from 150-1 to 15-1. Betty breaks down the 2026 Stanley Cup playoff picture.'
+    },
+    headline:'Buffalo Went From 150-to-1 to Legit Contender. Is This the Biggest NHL Story in Years?',
+    summary:'Colorado is the favorite at +300. Tampa lurks at +450. But Buffalo — yes, Buffalo — went from 150-1 to 15-1 and nobody saw it coming. The Sabres might be the most dangerous dark horse in the playoffs.'
+  }
+];
 
 // ── Unified WeBit bridge ──
 window.wbaiUser=null;
 async function refreshWebitAccount(){
   const u=await fetch('/.netlify/functions/auth-me',{credentials:'include'}).then(r=>r.ok?r.json():null).catch(()=>null);
   const el=document.getElementById('balEl');
-  if(u&&!u.error){window.wbaiUser=u;if(el)el.innerHTML='<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+Number(u.credit_balance||0).toLocaleString()+' WeBits</a>';}
+  if(u&&!u.error){window.wbaiUser=u;balance=Number(u.credit_balance)||0;if(el)el.innerHTML='<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBits</a>';}
   else{window.wbaiUser=null;if(el)el.innerHTML='<a href="/login" style="color:inherit;text-decoration:none;font-weight:700;">Sign in →</a>';}
 }
-function escH(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-function timeAgo(iso){if(!iso)return'';const s=(Date.now()-new Date(iso).getTime())/1000;if(s<3600)return Math.max(1,Math.round(s/60))+'m ago';if(s<86400)return Math.round(s/3600)+'h ago';return Math.round(s/86400)+'d ago';}
+var mbDeliver='dm';
+function setMbDeliver(m){mbDeliver=m;var t=document.getElementById('mdDlvText'),d=document.getElementById('mdDlvDm'),ph=document.getElementById('mdPhone');var on={borderColor:'var(--teal)',background:'var(--tl)',color:'var(--teal)'},off={borderColor:'var(--bdr)',background:'var(--white)',color:'var(--tm)'};if(t&&d){[[t,m==='sms'?on:off],[d,m==='dm'?on:off]].forEach(function(x){x[0].style.borderColor=x[1].borderColor;x[0].style.background=x[1].background;x[0].style.color=x[1].color;});}if(ph)ph.style.display=m==='dm'?'none':'block';}
 
-// Trending = live feed of OPEN WeBit P2P bets anyone can join
+// Invite landing: ?bet=ID → show the prediction bet, opponent takes the other side
+async function checkBetInvite(){
+  const id=new URLSearchParams(location.search).get('bet');
+  if(!id)return;
+  const bet=await fetch('/api/market-bet?id='+encodeURIComponent(id)).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!bet||!bet.id)return;
+  const banner=document.createElement('div');
+  banner.style.cssText='background:linear-gradient(135deg,#004C54,#1a2e1a);color:#fff;padding:1rem 1.25rem;text-align:center;';
+  const stakeLbl=bet.stake>0?('ⓦ '+bet.stake+' WeBits'):'bragging rights';
+  if(bet.status!=='open'){
+    banner.innerHTML='<div style="font-weight:700;">'+(bet.challenger.name||'Someone')+'’s prediction</div><div style="font-size:.85rem;opacity:.9;">'+(bet.pick||'')+' · '+stakeLbl+' · '+(bet.status==='active'?'Matched':bet.status)+'</div>';
+  }else{
+    banner.innerHTML='<div style="font-size:1.05rem;font-weight:700;">'+(bet.challenger.name||'Someone')+' bet you!</div>'+
+      '<div style="font-size:.9rem;opacity:.95;margin:.25rem 0 .6rem;">They took <b>'+(bet.pick||'')+'</b> — you take <b>'+(bet.opponent.side||'the other side')+'</b> for '+stakeLbl+'. Winner takes ⓦ '+(bet.stake*2)+'.</div>'+
+      '<button id="takeBetBtn" style="background:#fff;color:#004C54;border:none;border-radius:20px;padding:.5rem 1.1rem;font-weight:800;cursor:pointer;font-family:inherit;">Take the other side</button><div id="takeBetMsg" style="font-size:.8rem;margin-top:.4rem;opacity:.95;"></div>';
+  }
+  document.body.insertBefore(banner,document.body.firstChild);
+  const tb=document.getElementById('takeBetBtn');
+  if(tb)tb.addEventListener('click',function(){
+    const msg=document.getElementById('takeBetMsg');
+    if(!window.wbaiUser){location.href='/login';return;}
+    if(bet.stake>0&&balance<bet.stake){msg.innerHTML='Need '+bet.stake+' WeBits. <a href="/credits" style="color:#9be8ea;">Get a pack →</a>';return;}
+    tb.disabled=true;tb.textContent='Matching...';
+    fetch('/api/market-bet',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'accept',betId:bet.id})})
+      .then(r=>r.json()).then(function(j){
+        if(j.success){banner.style.background='linear-gradient(135deg,#2e7d32,#1a2e1a)';banner.innerHTML='<div style="font-weight:700;">Bet matched!</div><div style="font-size:.85rem;opacity:.9;">Winner takes ⓦ '+(bet.stake*2)+'. Resolves at the deadline.</div>';refreshWebitAccount();}
+        else if(j.error==='own_bet'){msg.textContent="That's your own bet.";tb.disabled=false;tb.textContent='Take the other side';}
+        else if(j.error==='insufficient_webits'){msg.innerHTML='Not enough WeBits. <a href="/credits" style="color:#9be8ea;">Get a pack →</a>';tb.disabled=false;tb.textContent='Take the other side';}
+        else{msg.textContent='Could not match.';tb.disabled=false;tb.textContent='Take the other side';}
+      }).catch(function(){msg.textContent='Network error.';tb.disabled=false;tb.textContent='Take the other side';});
+  });
+}
+
 async function init(){
   refreshWebitAccount();
+  checkBetInvite();
   try{
-    const r=await fetch('/api/get-trending-challenges?t='+Date.now());
+    const r=await fetch('/api/get-webet-content?t='+Date.now());
     const d=await r.json();
-    posts=d.challenges||[];
-  }catch(e){posts=[];}
-  renderTabs();renderGrid();
+    let pipeline=d.posts||[];
+
+    /* Enhance pipeline articles with attention-grabbing headlines */
+    pipeline.forEach(p=>{
+      if(!p._enhanced){
+        p.headline=makeHeadline(p);
+        p.summary=makeSummary(p);
+        p._enhanced=true;
+      }
+    });
+
+    /* Merge static blog articles (skip duplicates by slug) */
+    const slugs=new Set(pipeline.map(p=>(p.blog||{}).slug).filter(Boolean));
+    const statics=STATIC_ARTICLES.filter(s=>!slugs.has(s.blog.slug));
+    posts=[...pipeline,...statics];
+    renderTabs();renderGrid();
+  }catch(e){
+    /* Fallback: show static articles even if API fails */
+    posts=[...STATIC_ARTICLES];
+    renderTabs();renderGrid();
+  }
 }
 
 /* Generate attention-grabbing headlines from pipeline articles */
@@ -310,45 +470,68 @@ function makeSummary(p){
   return'';
 }
 
-function challengeTypes(){return [...new Set(posts.map(c=>c.sport||c.type))].filter(Boolean).sort();}
 function renderTabs(){
-  const ts=challengeTypes();
+  const cats=[...new Set(posts.map(p=>(p.category||'').replace(/\s+/g,'-').toLowerCase()))].filter(Boolean).sort();
   document.getElementById('catTabs').innerHTML=
-    `<button class="ltab ${cat==='all'?'on':''}" onclick="setCat('all')">All</button>`+
-    ts.map(t=>`<button class="ltab ${cat===t?'on':''}" onclick="setCat('${escH(t)}')">${escH(t)}</button>`).join('');
-  const sl=document.getElementById('sideLeagues');
-  if(sl)sl.innerHTML=ts.map(t=>`<div class="side-item ${cat===t?'on':''}" onclick="setCat('${escH(t)}')">${escH(t)}</div>`).join('');
+    `<button class="ltab ${cat==='all'?'on':''}" onclick="setCat('all')">All Topics</button>`+
+    cats.map(c=>`<button class="ltab ${cat===c?'on':''}" onclick="setCat('${c}')">${cap(c.replace(/-/g,' '))}</button>`).join('');
+  document.querySelectorAll('.side-item[onclick]').forEach(el=>{
+    const m=el.getAttribute('onclick').match(/setCat\('(.+?)'\)/);
+    if(m)el.classList.toggle('on',m[1]===cat);
+  });
 }
 
 function setCat(c){cat=c;renderTabs();renderGrid()}
 
 function renderGrid(){
-  let filtered=cat==='all'?posts:posts.filter(c=>(c.sport||c.type)===cat);
-  const ac=document.getElementById('activeCnt');if(ac)ac.textContent=filtered.length;
+  let filtered=cat==='all'?posts:posts.filter(p=>(p.category||'').replace(/\s+/g,'-').toLowerCase()===cat);
+  document.getElementById('activeCnt').textContent=filtered.length;
+
   if(!filtered.length){
-    document.getElementById('grid').innerHTML=`<div class="empty">No open challenges right now. <a href="/p2p-sports" style="color:var(--teal);font-weight:700;text-decoration:none;">Create one &rarr;</a></div>`;
+    document.getElementById('grid').innerHTML=`<div class="empty">No trending topics${cat!=='all'?' in '+cap(cat):''}</div>`;
     return;
   }
-  document.getElementById('grid').innerHTML=filtered.map(challengeCard).join('');
+
+  document.getElementById('grid').innerHTML=filtered.map(topicCard).join('');
 }
 
-/* Open WeBit bet card — anyone can take the other side */
-function challengeCard(c){
-  const stake=c.stake>0?('ⓦ '+c.stake+' WeBits'):'bragging rights';
-  const opp=c.oppositeSide?(' &middot; you take <b>'+escH(c.oppositeSide)+'</b>'):'';
-  const badge=c.type==='pick3'?'Pick 3':(escH(c.sport||'Bet'));
-  const winLine=c.stake>0?`Winner takes ⓦ ${c.stake*2} WeBits`:'Bragging rights';
+function topicCard(p){
+  const blog=p.blog||{};
+  const catKey=(p.category||'politics').replace(/\s+/g,'-').toLowerCase();
+  const catClass='cat-'+catKey;
+  const stripeClass='stripe-'+catKey;
+  const gs=p.guardianScore||{};
+  const bid=p.betId||Math.random().toString(36).slice(2,8);
+  const betStr=buildBetString(p.claim,p.deadline);
+  const displayTitle=p.headline||blog.title||p.topic||'Trending Topic';
+  const displaySummary=p.summary||blog.summary||'';
+  const catLabel=(p.category||'topic').replace(/-/g,' ');
+
   return`<div class="tc">
-    <div class="tc-stripe stripe-default" style="background:var(--teal)"></div>
+    <div class="tc-stripe ${stripeClass}"></div>
     <div class="tc-hdr">
-      <div class="tc-hdr-left"><span class="tc-cat" style="background:var(--tl);color:var(--teal)">${badge}</span></div>
-      <div class="tc-hdr-right"><span class="tc-deadline">${timeAgo(c.created)}</span></div>
+      <div class="tc-hdr-left">
+        <span class="tc-cat ${catClass}">${cap(catLabel)}</span>
+        ${gs.contention?`<span class="tc-score">&#128293; ${gs.contention}%</span>`:''}
+      </div>
+      <div class="tc-hdr-right">
+        ${p.deadline?`<span class="tc-deadline">By ${p.deadline}</span>`:''}
+      </div>
     </div>
     <div class="tc-body">
-      <div class="tc-title" style="margin:.15rem 0">${escH(c.challenger)} staked ${stake}</div>
-      <div class="tc-summary" style="margin:.15rem 0 .5rem">${escH(c.summary)}${c.detail?` &middot; <span style="color:var(--tm)">${escH(c.detail)}</span>`:''}${opp}</div>
-      <div style="font-size:.6875rem;color:var(--grn);font-weight:700;margin-bottom:.6rem">${winLine}</div>
-      <a class="tc-send" href="${c.inviteUrl}" style="text-decoration:none;justify-content:center;display:flex;">Take the other side &rarr;</a>
+      <div class="tc-row" style="grid-template-columns:1fr auto">
+        <div class="tc-topic" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <div style="display:flex;align-items:center;gap:.5rem;width:100%">
+            <div class="tc-icon"><svg viewBox="0 0 470 419" fill="none"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg></div>
+            <div class="tc-title">${displayTitle}</div>
+          </div>
+          ${displaySummary?`<div class="tc-summary">${displaySummary} ${blog.slug?`<button class="tc-readmore" onclick="openArticle('/betty/blog/${blog.slug}')">Read more</button>`:''}</div>`:''}
+        </div>
+      </div>
+      <div class="tc-row" style="grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem;">
+        <button class="tc-send" style="background:var(--grn);margin-left:0;justify-content:center;" onclick="openBet(${betData(p,'YES')})">Bet Yes &middot; stake ⓦ</button>
+        <button class="tc-send" style="background:var(--red);margin-left:0;justify-content:center;" onclick="openBet(${betData(p,'NO')})">Bet No &middot; stake ⓦ</button>
+      </div>
     </div>
   </div>`;
 }
@@ -540,9 +723,12 @@ function renderBetForm(){
         <button class="qa" onclick="setQty(100)">ALL<br>${Math.min(balance,100).toFixed(2)}</button>
       </div>
       <div class="md-challenge">
-        <div class="md-clabel">Challenge a Friend (Optional)</div>
-        <input class="md-cinp" id="mdOpp" placeholder="Name or @handle">
-        <input class="md-cinp" id="mdPhone" type="tel" placeholder="Phone — sends SMS challenge">
+        <div class="md-clabel">Send this bet — your friend takes the other side</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" id="mdDlvDm" onclick="setMbDeliver('dm')" style="flex:1;padding:.5rem;border-radius:8px;border:1px solid var(--teal);background:var(--tl);color:var(--teal);font-weight:700;font-size:.75rem;cursor:pointer;font-family:inherit;">𝕏 X DM</button>
+          <button type="button" id="mdDlvText" onclick="setMbDeliver('sms')" style="flex:1;padding:.5rem;border-radius:8px;border:1px solid var(--bdr);background:var(--white);color:var(--tm);font-weight:700;font-size:.75rem;cursor:pointer;font-family:inherit;">📱 Text</button>
+        </div>
+        <input class="md-cinp" id="mdPhone" type="tel" placeholder="Friend's phone (US)" style="display:none;">
       </div>
     </div>
     <div class="md-foot">
@@ -554,11 +740,8 @@ function renderBetForm(){
 
 function calcWin(){
   const qty=parseFloat(document.getElementById('mdQty')?.value)||0;
-  const odds=selectedBet.odds;
-  let win=0;
-  if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
-  const el=document.getElementById('mdWin');if(el)el.value=win.toFixed(2);
-  const est=document.getElementById('mdEst');if(est)est.textContent='EST. EARNINGS: E'+win.toFixed(2);
+  const el=document.getElementById('mdWin');if(el)el.value=qty.toFixed(2);   // even-money: you win their matching stake
+  const est=document.getElementById('mdEst');if(est)est.textContent='WINNER TAKES ⓦ'+(qty*2).toFixed(0);
 }
 
 function setQty(v){
@@ -572,9 +755,8 @@ function renderReview(){
   const qty=parseFloat(document.getElementById('mdQty')?.value)||10;
   const odds=b.odds;
   let win=0;if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
-  const opp=document.getElementById('mdOpp')?.value||'';
   const phone=document.getElementById('mdPhone')?.value||'';
-  selectedBet._qty=qty;selectedBet._win=win;selectedBet._opp=opp;selectedBet._phone=phone;
+  selectedBet._qty=qty;selectedBet._win=qty;selectedBet._deliver=mbDeliver;selectedBet._phone=phone;
 
   const price=Math.abs(odds)>=100?(odds>0?Math.round(10000/(odds+100))/100:Math.round(Math.abs(odds)*100/(Math.abs(odds)+100))/100):0.5;
 
@@ -583,8 +765,8 @@ function renderReview(){
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
       <div class="md-row"><span class="md-row-l">Odds</span><span class="md-row-v">${fmtOdds(odds)} (${(price*100).toFixed(0)}%)</span></div>
-      <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
-      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty+win).toFixed(2)}</span></div>
       ${opp?`<div class="md-row"><span class="md-row-l">Challenge</span><span class="md-row-v">${opp}</span></div>`:''}
     </div>
     <div class="md-foot">
@@ -594,25 +776,39 @@ function renderReview(){
 }
 
 async function submitBet(){
-  const btn=document.getElementById('mdSubmitBtn');
-  btn.disabled=true;btn.textContent='Submitting...';
   const b=selectedBet;
+  if(!window.wbaiUser){window.location.href='/login';return;}
+  if((b._qty||0)>balance){alert('Not enough WeBits — get a pack at /credits');return;}
+  const deliver=b._deliver||'dm';
+  if(deliver==='sms'){const ph=(b._phone||'').replace(/\D/g,'');if(ph.length<10){alert('Enter your friend\'s phone, or switch to X DM.');return;}}
+  // Yes/No side from the pick text ("Yes — ..." / "No — ...")
+  const side=/^no\b/i.test(b.pick)?'no':'yes';
+
+  const btn=document.getElementById('mdSubmitBtn');
+  btn.disabled=true;btn.textContent='Staking...';
   try{
-    const resp=await fetch('/api/create-p2p-bet-web',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+    const resp=await fetch('/api/market-bet',{
+      method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
       body:JSON.stringify({
-        initiatorName:'You',event:b.event,league:b.league,pick:b.pick,odds:b.odds,
-        amount:b._qty,matchup:b.matchup||b.event,
-        counterpartyName:b._opp||null,counterpartyPhone:b._phone||null,
-        counterpartyHandle:b._opp&&b._opp.startsWith('@')?b._opp:null
+        action:'create', market:'prediction', sport:'Prediction',
+        event:b.event, league:b.league||'Prediction', matchup:b.matchup||b.event,
+        pick:b.pick, side:side, odds:b.odds||100, line:0,
+        stake:Math.round(b._qty||0),
+        deliver:deliver==='dm'?'link':'sms', friendPhone:deliver==='sms'?b._phone:null
       })
     });
     const data=await resp.json();
     if(data.success){
-      balance-=b._qty;
-      selectedBet._betId=data.betId;selectedBet._shareUrl=data.shareUrl;
+      refreshWebitAccount();
+      selectedBet._betId=data.betId;selectedBet._shareUrl=data.inviteUrl;selectedBet._opp=data.oppositeSide;
+      if(deliver==='dm'){
+        const stakeN=Math.round(b._qty||0);
+        const msg='I bet you: '+b.pick+' for '+(stakeN>0?'ⓦ '+stakeN+' WeBits':'bragging rights')+'. Take the other side ('+(data.oppositeSide||'')+'): '+data.inviteUrl;
+        window.open('https://x.com/messages/compose?text='+encodeURIComponent(msg),'_blank');
+      }
       modalStep='success';renderModal();
-    }else{btn.disabled=false;btn.textContent='SUBMIT';alert('Error: '+(data.error||data.message))}
+    }else if(data.error==='insufficient_webits'){btn.disabled=false;btn.textContent='SUBMIT';alert('Not enough WeBits — get a pack at /credits');}
+    else{btn.disabled=false;btn.textContent='SUBMIT';alert('Error: '+(data.error||data.message||'failed'))}
   }catch(e){btn.disabled=false;btn.textContent='SUBMIT';alert('Network error: '+e.message)}
 }
 
@@ -625,12 +821,12 @@ function renderSuccess(){
     <div class="success-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><path d="M20 6L9 17l-5-5"/></svg>Order Created Successfully</div>
     <div style="padding:.75rem 1.25rem;font-size:1.125rem;font-weight:700;color:var(--olive);text-align:center">ORDER PLACED</div>
     <div class="fill-bar"><div class="fill-bar-inner"></div></div>
-    <div class="fill-info"><span>Placed: E${qty.toFixed(2)}</span><span>Order: E${qty.toFixed(2)}</span></div>
+    <div class="fill-info"><span>Placed: ⓦ${qty.toFixed(2)}</span><span>Order: ⓦ${qty.toFixed(2)}</span></div>
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
-      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
       <div class="md-row"><span class="md-row-l">Price</span><span class="md-row-v">${(price*100).toFixed(1)}% (${fmtOdds(odds)})</span></div>
-      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty+win).toFixed(2)}</span></div>
     </div>
     ${url?`<div class="share-area"><div class="share-link"><input id="shareUrl" value="${url}" readonly onclick="this.select()"><button onclick="copyLink()">Copy</button></div>
     <div class="share-btns"><button class="share-btn" onclick="window.open('sms:?body='+encodeURIComponent('I challenged you! ${url}'))">Text</button><button class="share-btn" onclick="window.open('https://x.com/intent/tweet?text='+encodeURIComponent('P2P bet on WeBetAI! ${url}'))">Post on X</button></div></div>`:''}

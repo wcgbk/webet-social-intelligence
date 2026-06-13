@@ -22,6 +22,7 @@ function genId() { const c = 'abcdefghijklmnopqrstuvwxyz0123456789'; let s = 'mb
 
 // Opposite side label for the opponent's display
 function oppositeSide(market, side, pick, matchup) {
+  if (market === 'prediction') return side === 'yes' ? 'No' : 'Yes';
   if (market === 'total') return side === 'over' ? 'Under' : 'Over';
   // ml/spread: flip the team. matchup = "Away vs Home"
   const parts = String(matchup || '').split(/\s+vs\.?\s+/i);
@@ -111,7 +112,7 @@ exports.handler = async (event) => {
   // ── CREATE ──
   if (body.action === 'create') {
     const stake = Math.min(MAX_STAKE, Math.max(MIN_STAKE, parseInt(body.stake, 10) || 0));
-    const market = ['ml', 'spread', 'total'].includes(body.market) ? body.market : 'ml';
+    const market = ['ml', 'spread', 'total', 'prediction'].includes(body.market) ? body.market : 'ml';
     const side = String(body.side || '').slice(0, 8);
     const pick = String(body.pick || '').slice(0, 80);
     const matchup = String(body.matchup || body.event || '').slice(0, 120);
@@ -140,7 +141,8 @@ exports.handler = async (event) => {
     await stores.bets.setJSON(betId, bet);
     await indexAdd(stores, u.id, betId);
 
-    const inviteUrl = `https://webetsocial.com/p2p-sports/?bet=${betId}`;
+    const invitePage = market === 'prediction' ? 'p2p-trending' : 'p2p-sports';
+    const inviteUrl = `https://webetsocial.com/${invitePage}/?bet=${betId}`;
     const stakeLbl = stake > 0 ? `${stake} WeBits` : 'bragging rights';
     if (deliver === 'sms' && friendPhone) {
       await sendSMS(friendPhone, `${myName} bet you on WeBetAI: ${pick} (${matchup}) for ${stakeLbl}. Take the other side: ${inviteUrl}`);

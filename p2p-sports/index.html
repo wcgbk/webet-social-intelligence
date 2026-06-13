@@ -334,9 +334,11 @@ async function refreshWebitAccount(){
     const u = await fetch('/.netlify/functions/auth-me',{credentials:'include'}).then(r=>r.ok?r.json():null).catch(()=>null);
     const el = document.getElementById('balEl');
     if(u && !u.error){
+      const firstResolve = !window.wbaiUser;
       window.wbaiUser = u;
       balance = Number(u.credit_balance)||0;
       if(el) el.innerHTML = '<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBits</a>';
+      if(firstResolve) settleMyBets();
     } else {
       window.wbaiUser = null;
       if(el) el.innerHTML = '<a href="/login" style="color:inherit;text-decoration:none;font-weight:700;">Sign in →</a>';
@@ -346,6 +348,7 @@ async function refreshWebitAccount(){
 
 async function init(){
   refreshWebitAccount();
+  checkBetInvite();
   try{
     const r=await fetch(`/api/get-bettoredge-markets?t=${Date.now()}`);
     raw=await r.json();
@@ -479,7 +482,7 @@ function gameCard(g){
       <div class="gc-hdr"><span class="gc-time">${fmtTime(g.scheduled)}</span><span class="gc-time">${g.league}</span></div>
       <div class="gc-body"><div class="trow" style="grid-template-columns:1fr 72px">
         <div class="tinfo">${teamLogo(away)}<div class="tname">${away}</div></div>
-        <button class="pb" onclick='openBet(${JSON.stringify({event:g.event,league:g.league,pick:o.title,odds:o.odds,line:o.var1||0,matchup:away}).replace(/'/g,"&#39;")})'><span class="pb-price">${fmtPrice(o.odds)}</span></button>
+        <button class="pb" onclick='openBet(${JSON.stringify({event:g.event,league:g.league,sport:g.league,pick:o.title,odds:o.odds,line:o.var1||0,matchup:away,side:o.side,market:(o.side==='over'||o.side==='under')?'total':(o.var1&&o.var1!==0?'spread':'ml')}).replace(/'/g,"&#39;")})'><span class="pb-price">${fmtPrice(o.odds)}</span></button>
       </div></div></div>`;
   }
 
@@ -497,7 +500,8 @@ function gameCard(g){
     if(!order)return`<button class="pb" disabled><span class="pb-line">--</span><span class="pb-price">--</span></button>`;
     const ln=order.var1&&order.var1!==0?`${order.var1>0?'+':''}${order.var1}`:'';
     const pickLabel=order.title||label;
-    const d=JSON.stringify({event:g.event,league:g.league,pick:pickLabel,odds:order.odds,line:order.var1||0,matchup:matchup}).replace(/'/g,"&#39;");
+    const mkt=(order.side==='over'||order.side==='under')?'total':(order.var1&&order.var1!==0?'spread':'ml');
+    const d=JSON.stringify({event:g.event,league:g.league,sport:g.league,pick:pickLabel,odds:order.odds,line:order.var1||0,matchup:matchup,side:order.side,market:mkt}).replace(/'/g,"&#39;");
     return`<button class="pb" onclick='openBet(${d})'>${ln?`<span class="pb-line">${ln}</span>`:`<span class="pb-line">&nbsp;</span>`}<span class="pb-price">${fmtPrice(order.odds)}</span></button>`;
   }
 
@@ -575,9 +579,12 @@ function renderBetForm(){
       </div>
 
       <div class="md-challenge">
-        <div class="md-clabel">Challenge a Friend (Optional)</div>
-        <input class="md-cinp" id="mdOpp" placeholder="Name or @handle">
-        <input class="md-cinp" id="mdPhone" type="tel" placeholder="Phone — sends SMS challenge">
+        <div class="md-clabel">Send this bet — your friend takes the other side</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" id="mdDlvText" onclick="setMdDeliver('sms')" style="flex:1;padding:.5rem;border-radius:8px;border:1px solid var(--teal);background:var(--tl);color:var(--teal);font-weight:700;font-size:.75rem;cursor:pointer;font-family:inherit;">📱 Text</button>
+          <button type="button" id="mdDlvDm" onclick="setMdDeliver('dm')" style="flex:1;padding:.5rem;border-radius:8px;border:1px solid var(--bdr);background:var(--white);color:var(--tm);font-weight:700;font-size:.75rem;cursor:pointer;font-family:inherit;">𝕏 X DM</button>
+        </div>
+        <input class="md-cinp" id="mdPhone" type="tel" placeholder="Friend's phone (US)">
       </div>
     </div>
     <div class="md-foot">
@@ -585,6 +592,14 @@ function renderBetForm(){
       <button class="btn-s btn-review" id="mdReviewBtn" onclick="modalStep='review';renderModal()">REVIEW</button>
     </div>`;
   calcWin();
+}
+var mdDeliver='sms';
+function setMdDeliver(m){
+  mdDeliver=m;
+  var t=document.getElementById('mdDlvText'),d=document.getElementById('mdDlvDm'),ph=document.getElementById('mdPhone');
+  var on={borderColor:'var(--teal)',background:'var(--tl)',color:'var(--teal)'},off={borderColor:'var(--bdr)',background:'var(--white)',color:'var(--tm)'};
+  [[t,m==='sms'?on:off],[d,m==='dm'?on:off]].forEach(function(x){x[0].style.borderColor=x[1].borderColor;x[0].style.background=x[1].background;x[0].style.color=x[1].color;});
+  if(ph)ph.style.display=m==='dm'?'none':'block';
 }
 
 function calcWin(){
@@ -612,11 +627,11 @@ function renderReview(){
   let win=0;
   if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
   const price=oddsToPrice(odds);
-  const opp=document.getElementById('mdOpp')?.value||'';
   const phone=document.getElementById('mdPhone')?.value||'';
+  const deliverLabel=mdDeliver==='dm'?'X DM':'Text';
 
   // Store for submit
-  selectedBet._qty=qty;selectedBet._win=win;selectedBet._opp=opp;selectedBet._phone=phone;
+  selectedBet._qty=qty;selectedBet._win=win;selectedBet._deliver=mdDeliver;selectedBet._phone=phone;
 
   document.getElementById('mdContent').innerHTML=`
     <div class="md-hdr">
@@ -627,8 +642,8 @@ function renderReview(){
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
       <div class="md-row"><span class="md-row-l">Odds</span><span class="md-row-v">${fmtOdds(odds)} (${(price*100).toFixed(0)}%)</span></div>
       <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
-      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty+win).toFixed(2)}</span></div>
-      ${opp?`<div class="md-row"><span class="md-row-l">Challenge</span><span class="md-row-v">${opp}</span></div>`:''}
+      <div class="md-row"><span class="md-row-l">Winner takes</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty*2).toFixed(0)} WeBits</span></div>
+      <div class="md-row"><span class="md-row-l">Send via</span><span class="md-row-v">${deliverLabel}</span></div>
     </div>
     <div class="md-foot">
       <button class="btn-c" onclick="modalStep='form';renderModal()">Back</button>
@@ -642,69 +657,117 @@ async function submitBet(){
   if(!window.wbaiUser){ window.location.href='/login'; return; }
   if((b._qty||0) > balance){ alert('Not enough WeBits — get a pack at /credits'); return; }
 
+  const deliver=b._deliver||'sms';
+  if(deliver==='sms'){ const ph=(b._phone||'').replace(/[^\d+]/g,''); if(ph.replace(/\D/g,'').length<10){ alert('Enter your friend\'s phone, or switch to X DM.'); return; } }
+
   const btn=document.getElementById('mdSubmitBtn');
-  btn.disabled=true;btn.textContent='Submitting...';
+  btn.disabled=true;btn.textContent='Staking...';
 
   try{
-    const me=window.wbaiUser;
-    const resp=await fetch('/api/create-p2p-bet-web',{
+    const resp=await fetch('/api/market-bet',{
       method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
       body:JSON.stringify({
-        initiatorName:(me.name||me.handle||'You'),
-        initiatorHandle:me.handle||null,
-        initiatorPhone:me.phone||('wbai:'+me.id),
-        event:b.event,league:b.league,pick:b.pick,odds:b.odds,
-        amount:b._qty,matchup:b.matchup||b.event,
-        counterpartyName:b._opp||null,counterpartyPhone:b._phone||null,
-        counterpartyHandle:b._opp&&b._opp.startsWith('@')?b._opp:null
+        action:'create',
+        sport:b.sport||b.league, league:b.league, event:b.event, matchup:b.matchup||b.event,
+        market:b.market||'ml', side:b.side||'', pick:b.pick, odds:b.odds, line:b.line||0,
+        stake:Math.round(b._qty||0),
+        deliver:deliver==='dm'?'link':'sms',
+        friendPhone:deliver==='sms'?b._phone:null
       })
     });
     const data=await resp.json();
     if(data.success){
-      balance-=b._qty;
       refreshWebitAccount();
-      selectedBet._betId=data.betId;selectedBet._shareUrl=data.shareUrl;
+      selectedBet._betId=data.betId;selectedBet._shareUrl=data.inviteUrl;selectedBet._opp=data.oppositeSide;
+      // X DM mode: open the composer prefilled with the invite
+      if(deliver==='dm'){
+        const stakeN=Math.round(b._qty||0);
+        const msg='I bet you: '+b.pick+' ('+(b.matchup||b.event)+') for '+(stakeN>0?'ⓦ '+stakeN+' WeBits':'bragging rights')+'. Take the other side ('+data.oppositeSide+'): '+data.inviteUrl;
+        window.open('https://x.com/messages/compose?text='+encodeURIComponent(msg),'_blank');
+      }
       modalStep='success';renderModal();
+    }else if(data.error==='insufficient_webits'){
+      btn.disabled=false;btn.textContent='SUBMIT';
+      alert('Not enough WeBits to stake — get a pack at /credits');
     }else{
       btn.disabled=false;btn.textContent='SUBMIT';
-      alert('Error: '+(data.error||data.message));
+      alert('Error: '+(data.error||data.message||'failed'));
     }
   }catch(e){btn.disabled=false;btn.textContent='SUBMIT';alert('Network error: '+e.message)}
 }
 
 function renderSuccess(){
   const b=selectedBet;
-  const qty=b._qty||10;
-  const odds=b.odds;
-  let win=0;if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
-  const price=oddsToPrice(odds);
+  const qty=Math.round(b._qty||0);
   const url=b._shareUrl||'';
+  const sent=b._deliver==='dm'?'X DM composer opened — pick your friend and send.':'Text sent with your bet invite.';
 
   document.getElementById('mdContent').innerHTML=`
     <div class="success-bar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-      Order Created Successfully
+      Bet Created &amp; Staked
     </div>
-    <div style="padding:.75rem 1.25rem;font-size:1.125rem;font-weight:700;color:var(--olive);text-align:center">ORDER PLACED</div>
-    <div class="fill-bar"><div class="fill-bar-inner" style="width:100%"></div></div>
-    <div class="fill-info"><span>Placed: ⓦ${qty.toFixed(2)}</span><span>Order: ⓦ${qty.toFixed(2)}</span></div>
+    <div style="padding:.75rem 1.25rem;font-size:1.05rem;font-weight:700;color:var(--olive);text-align:center">${qty>0?'ⓦ '+qty+' WeBits staked':'Bet created'}</div>
     <div class="md-body">
-      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
-      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
-      <div class="md-row"><span class="md-row-l">Price</span><span class="md-row-v">${(price*100).toFixed(1)}% (${fmtOdds(odds)})</span></div>
-      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty+win).toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Your side</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">They take</span><span class="md-row-v">${b._opp||'the other side'}</span></div>
+      <div class="md-row"><span class="md-row-l">Winner takes</span><span class="md-row-v" style="color:var(--grn)">ⓦ${qty*2} WeBits</span></div>
     </div>
+    <div style="padding:.5rem 1.25rem;font-size:.8125rem;color:var(--tm);text-align:center">${sent}</div>
     ${url?`<div class="share-area">
-      <div class="share-link"><input id="shareUrl" value="${url}" readonly onclick="this.select()"><button onclick="copyLink()">Copy</button></div>
+      <div class="share-link"><input id="shareUrl" value="${url}" readonly onclick="this.select()"><button onclick="copyLink()">Copy link</button></div>
       <div class="share-btns">
-        <button class="share-btn" onclick="window.open('sms:?body='+encodeURIComponent('I challenged you! ${url}'))">Text</button>
-        <button class="share-btn" onclick="window.open('https://x.com/intent/tweet?text='+encodeURIComponent('P2P bet on WeBetAI! ${url}'))">Post on X</button>
+        <button class="share-btn" onclick="window.open('https://x.com/messages/compose?text='+encodeURIComponent('Take the other side of my bet: ${url}'),'_blank')">𝕏 X DM</button>
+        <button class="share-btn" onclick="window.open('sms:?body='+encodeURIComponent('Take the other side of my bet: ${url}'))">Text</button>
       </div>
     </div>`:''}
-    <div class="md-foot" style="grid-template-columns:1fr 1fr">
-      <button class="btn-c" onclick="closeModal()">CLOSE</button>
-      <button class="btn-s btn-review" onclick="if(selectedBet._shareUrl)window.open(selectedBet._shareUrl,'_blank')">SHARE</button>
+    <div class="md-foot" style="grid-template-columns:1fr">
+      <button class="btn-c" onclick="closeModal()">DONE</button>
     </div>`;
+}
+
+// ── Invite landing: open a bet by ?bet=ID and let the opponent take the other side ──
+async function checkBetInvite(){
+  const id=new URLSearchParams(location.search).get('bet');
+  if(!id)return;
+  const bet=await fetch('/api/market-bet?id='+encodeURIComponent(id)).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!bet||!bet.id)return;
+  const banner=document.createElement('div');
+  banner.id='betInvite';
+  banner.style.cssText='background:linear-gradient(135deg,#004C54,#1a2e1a);color:#fff;padding:1rem 1.25rem;text-align:center;';
+  const stakeLbl=bet.stake>0?('ⓦ '+bet.stake+' WeBits'):'bragging rights';
+  if(bet.status!=='open'){
+    banner.innerHTML='<div style="font-weight:700;">'+(bet.challenger.name||'Someone')+'’s bet</div><div style="font-size:.85rem;opacity:.9;">'+esc2(bet.pick)+' · '+stakeLbl+' · '+(bet.status==='active'?'Already matched':bet.status)+'</div>';
+  }else{
+    banner.innerHTML='<div style="font-size:1.05rem;font-weight:700;">'+(bet.challenger.name||'Someone')+' bet you!</div>'+
+      '<div style="font-size:.9rem;opacity:.95;margin:.25rem 0 .6rem;">They took <b>'+esc2(bet.pick)+'</b> — you take <b>'+esc2(bet.opponent.side)+'</b> for '+stakeLbl+'. Winner takes ⓦ '+(bet.stake*2)+'.</div>'+
+      '<button id="takeBetBtn" style="background:#fff;color:#004C54;border:none;border-radius:20px;padding:.5rem 1.1rem;font-weight:800;cursor:pointer;font-family:inherit;">Take the other side</button>'+
+      '<div id="takeBetMsg" style="font-size:.8rem;margin-top:.4rem;opacity:.95;"></div>';
+  }
+  const layEl=document.querySelector('.lay')||document.body;
+  layEl.parentNode.insertBefore(banner,layEl);
+  const tb=document.getElementById('takeBetBtn');
+  if(tb)tb.addEventListener('click',function(){
+    const msg=document.getElementById('takeBetMsg');
+    if(!window.wbaiUser){ location.href='/login'; return; }
+    if(bet.stake>0 && balance<bet.stake){ msg.innerHTML='Need '+bet.stake+' WeBits. <a href="/credits" style="color:#9be8ea;">Get a pack →</a>'; return; }
+    tb.disabled=true;tb.textContent='Matching...';
+    fetch('/api/market-bet',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'accept',betId:bet.id})})
+      .then(r=>r.json()).then(function(j){
+        if(j.success){ banner.style.background='linear-gradient(135deg,#2e7d32,#1a2e1a)'; banner.innerHTML='<div style="font-weight:700;">Bet matched — game on!</div><div style="font-size:.85rem;opacity:.9;">Winner takes ⓦ '+(bet.stake*2)+'. Settles after the final.</div>'; refreshWebitAccount(); }
+        else if(j.error==='own_bet'){ msg.textContent="That's your own bet."; tb.disabled=false;tb.textContent='Take the other side'; }
+        else if(j.error==='insufficient_webits'){ msg.innerHTML='Not enough WeBits. <a href="/credits" style="color:#9be8ea;">Get a pack →</a>'; tb.disabled=false;tb.textContent='Take the other side'; }
+        else { msg.textContent='Could not match ('+(j.error||'error')+').'; tb.disabled=false;tb.textContent='Take the other side'; }
+      }).catch(function(){ msg.textContent='Network error.'; tb.disabled=false;tb.textContent='Take the other side'; });
+  });
+}
+function esc2(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+
+// Lazy-settle the signed-in user's due market bets on load
+function settleMyBets(){
+  if(!window.wbaiUser)return;
+  fetch('/api/market-bet-settle',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({mine:true})})
+    .then(r=>r.json()).then(function(j){ if((j&&j.results||[]).some(x=>x.result==='settled'||x.result==='expired_refund'))refreshWebitAccount(); }).catch(function(){});
 }
 
 function closeModal(){document.getElementById('modal').classList.remove('show');selectedBet=null;modalStep='form'}

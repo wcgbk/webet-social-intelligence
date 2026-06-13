@@ -211,23 +211,20 @@ body.embed .side{display:none}
   <div class="hdr-r">
     <a href="/dashboard" class="hdr-lnk">Dashboard</a>
     <a href="/p2p-sports" class="hdr-lnk">P2P Sports</a>
-    <a href="/betty/blog" class="hdr-lnk">Authentic Press</a>
-    <div class="bal">E10,000.00</div>
+    <a href="/pick3p2p" class="hdr-lnk">Pick 3</a>
+    <div class="bal" id="balEl">···</div>
   </div>
 </header>
 
 <div class="lay">
   <nav class="side">
-    <div class="side-item on" onclick="setCat('all')">All Topics</div>
-    <div class="side-item" onclick="setCat('politics')">Politics</div>
-    <div class="side-item" onclick="setCat('culture')">Culture</div>
-    <div class="side-item" onclick="setCat('technology')">Technology</div>
-    <div class="side-item" onclick="setCat('sports')">Sports</div>
-    <div class="side-item" onclick="setCat('prediction-markets')">Prediction Markets</div>
-    <div class="side-item" onclick="setCat('social-intelligence')">Social Intelligence</div>
+    <div class="side-title">Open Challenges</div>
+    <div class="side-item on" onclick="setCat('all')">All</div>
+    <div id="sideLeagues"></div>
     <div class="side-divider"></div>
-    <div class="side-title">Powered by</div>
-    <a href="/betty/blog" class="side-item" style="text-decoration:none">Authentic Press</a>
+    <div class="side-title">Start your own</div>
+    <a href="/p2p-sports" class="side-item" style="text-decoration:none">+ Bet a game</a>
+    <a href="/pick3p2p" class="side-item" style="text-decoration:none">+ Pick 3 challenge</a>
   </nav>
   <div class="main-area">
     <div class="ltabs" id="catTabs"></div>
@@ -237,7 +234,7 @@ body.embed .side{display:none}
       <div class="stab">Resolved</div>
     </div>
     <div class="gg" id="grid">
-      <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading trending topics...</div></div>
+      <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading open challenges...</div></div>
     </div>
   </div>
 </div>
@@ -370,31 +367,26 @@ const STATIC_ARTICLES=[
   }
 ];
 
+// ── Unified WeBit bridge ──
+window.wbaiUser=null;
+async function refreshWebitAccount(){
+  const u=await fetch('/.netlify/functions/auth-me',{credentials:'include'}).then(r=>r.ok?r.json():null).catch(()=>null);
+  const el=document.getElementById('balEl');
+  if(u&&!u.error){window.wbaiUser=u;if(el)el.innerHTML='<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+Number(u.credit_balance||0).toLocaleString()+' WeBits</a>';}
+  else{window.wbaiUser=null;if(el)el.innerHTML='<a href="/login" style="color:inherit;text-decoration:none;font-weight:700;">Sign in →</a>';}
+}
+function escH(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+function timeAgo(iso){if(!iso)return'';const s=(Date.now()-new Date(iso).getTime())/1000;if(s<3600)return Math.max(1,Math.round(s/60))+'m ago';if(s<86400)return Math.round(s/3600)+'h ago';return Math.round(s/86400)+'d ago';}
+
+// Trending = live feed of OPEN WeBit P2P bets anyone can join
 async function init(){
+  refreshWebitAccount();
   try{
-    const r=await fetch('/api/get-webet-content?t='+Date.now());
+    const r=await fetch('/api/get-trending-challenges?t='+Date.now());
     const d=await r.json();
-    let pipeline=d.posts||[];
-
-    /* Enhance pipeline articles with attention-grabbing headlines */
-    pipeline.forEach(p=>{
-      if(!p._enhanced){
-        p.headline=makeHeadline(p);
-        p.summary=makeSummary(p);
-        p._enhanced=true;
-      }
-    });
-
-    /* Merge static blog articles (skip duplicates by slug) */
-    const slugs=new Set(pipeline.map(p=>(p.blog||{}).slug).filter(Boolean));
-    const statics=STATIC_ARTICLES.filter(s=>!slugs.has(s.blog.slug));
-    posts=[...pipeline,...statics];
-    renderTabs();renderGrid();
-  }catch(e){
-    /* Fallback: show static articles even if API fails */
-    posts=[...STATIC_ARTICLES];
-    renderTabs();renderGrid();
-  }
+    posts=d.challenges||[];
+  }catch(e){posts=[];}
+  renderTabs();renderGrid();
 }
 
 /* Generate attention-grabbing headlines from pipeline articles */
@@ -424,81 +416,45 @@ function makeSummary(p){
   return'';
 }
 
+function challengeTypes(){return [...new Set(posts.map(c=>c.sport||c.type))].filter(Boolean).sort();}
 function renderTabs(){
-  const cats=[...new Set(posts.map(p=>(p.category||'').replace(/\s+/g,'-').toLowerCase()))].filter(Boolean).sort();
+  const ts=challengeTypes();
   document.getElementById('catTabs').innerHTML=
-    `<button class="ltab ${cat==='all'?'on':''}" onclick="setCat('all')">All Topics</button>`+
-    cats.map(c=>`<button class="ltab ${cat===c?'on':''}" onclick="setCat('${c}')">${cap(c.replace(/-/g,' '))}</button>`).join('');
-  document.querySelectorAll('.side-item[onclick]').forEach(el=>{
-    const m=el.getAttribute('onclick').match(/setCat\('(.+?)'\)/);
-    if(m)el.classList.toggle('on',m[1]===cat);
-  });
+    `<button class="ltab ${cat==='all'?'on':''}" onclick="setCat('all')">All</button>`+
+    ts.map(t=>`<button class="ltab ${cat===t?'on':''}" onclick="setCat('${escH(t)}')">${escH(t)}</button>`).join('');
+  const sl=document.getElementById('sideLeagues');
+  if(sl)sl.innerHTML=ts.map(t=>`<div class="side-item ${cat===t?'on':''}" onclick="setCat('${escH(t)}')">${escH(t)}</div>`).join('');
 }
 
 function setCat(c){cat=c;renderTabs();renderGrid()}
 
 function renderGrid(){
-  let filtered=cat==='all'?posts:posts.filter(p=>(p.category||'').replace(/\s+/g,'-').toLowerCase()===cat);
-  document.getElementById('activeCnt').textContent=filtered.length;
-
+  let filtered=cat==='all'?posts:posts.filter(c=>(c.sport||c.type)===cat);
+  const ac=document.getElementById('activeCnt');if(ac)ac.textContent=filtered.length;
   if(!filtered.length){
-    document.getElementById('grid').innerHTML=`<div class="empty">No trending topics${cat!=='all'?' in '+cap(cat):''}</div>`;
+    document.getElementById('grid').innerHTML=`<div class="empty">No open challenges right now. <a href="/p2p-sports" style="color:var(--teal);font-weight:700;text-decoration:none;">Create one &rarr;</a></div>`;
     return;
   }
-
-  document.getElementById('grid').innerHTML=filtered.map(topicCard).join('');
+  document.getElementById('grid').innerHTML=filtered.map(challengeCard).join('');
 }
 
-function topicCard(p){
-  const blog=p.blog||{};
-  const catKey=(p.category||'politics').replace(/\s+/g,'-').toLowerCase();
-  const catClass='cat-'+catKey;
-  const stripeClass='stripe-'+catKey;
-  const gs=p.guardianScore||{};
-  const bid=p.betId||Math.random().toString(36).slice(2,8);
-  const betStr=buildBetString(p.claim,p.deadline);
-  const displayTitle=p.headline||blog.title||p.topic||'Trending Topic';
-  const displaySummary=p.summary||blog.summary||'';
-  const catLabel=(p.category||'topic').replace(/-/g,' ');
-
+/* Open WeBit bet card — anyone can take the other side */
+function challengeCard(c){
+  const stake=c.stake>0?('ⓦ '+c.stake+' WeBits'):'bragging rights';
+  const opp=c.oppositeSide?(' &middot; you take <b>'+escH(c.oppositeSide)+'</b>'):'';
+  const badge=c.type==='pick3'?'Pick 3':(escH(c.sport||'Bet'));
+  const winLine=c.stake>0?`Winner takes ⓦ ${c.stake*2} WeBits`:'Bragging rights';
   return`<div class="tc">
-    <div class="tc-stripe ${stripeClass}"></div>
+    <div class="tc-stripe stripe-default" style="background:var(--teal)"></div>
     <div class="tc-hdr">
-      <div class="tc-hdr-left">
-        <span class="tc-cat ${catClass}">${cap(catLabel)}</span>
-        ${gs.contention?`<span class="tc-score">&#128293; ${gs.contention}%</span>`:''}
-      </div>
-      <div class="tc-hdr-right">
-        ${p.deadline?`<span class="tc-deadline">By ${p.deadline}</span>`:''}
-      </div>
+      <div class="tc-hdr-left"><span class="tc-cat" style="background:var(--tl);color:var(--teal)">${badge}</span></div>
+      <div class="tc-hdr-right"><span class="tc-deadline">${timeAgo(c.created)}</span></div>
     </div>
     <div class="tc-body">
-      <div class="tc-row" style="grid-template-columns:1fr auto">
-        <div class="tc-topic" style="flex-direction:column;align-items:flex-start;gap:.25rem">
-          <div style="display:flex;align-items:center;gap:.5rem;width:100%">
-            <div class="tc-icon"><svg viewBox="0 0 470 419" fill="none"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg></div>
-            <div class="tc-title">${displayTitle}</div>
-          </div>
-          ${displaySummary?`<div class="tc-summary">${displaySummary} ${blog.slug?`<button class="tc-readmore" onclick="openArticle('/betty/blog/${blog.slug}')">Read more</button>`:''}</div>`:''}
-        </div>
-      </div>
-      <div class="tc-row">
-        <button class="tc-bet" id="bt-${bid}" onclick="openBet(${betData(p,'YES')})">
-          <span class="tc-bet-label">WeBet Challenge</span>
-          <span class="tc-bet-text" id="ct-${bid}">WeBet $5 ${betStr}</span>
-        </button>
-      </div>
-      <div class="tc-actions">
-        <button class="wc" onclick="pickWager('${bid}',1,this,'${esc(betStr)}')">$1</button>
-        <button class="wc on" onclick="pickWager('${bid}',5,this,'${esc(betStr)}')">$5</button>
-        <button class="wc" onclick="pickWager('${bid}',10,this,'${esc(betStr)}')">$10</button>
-        <button class="wc" onclick="pickWager('${bid}',25,this,'${esc(betStr)}')">$25</button>
-        <button class="wc" onclick="pickWager('${bid}',50,this,'${esc(betStr)}')">$50</button>
-        <button class="tc-send" onclick="sendInvite(document.getElementById('ct-${bid}').textContent,'${esc(p.betUrl||'')}')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4z"/></svg>
-          Send WeBet Invite
-        </button>
-      </div>
+      <div class="tc-title" style="margin:.15rem 0">${escH(c.challenger)} staked ${stake}</div>
+      <div class="tc-summary" style="margin:.15rem 0 .5rem">${escH(c.summary)}${c.detail?` &middot; <span style="color:var(--tm)">${escH(c.detail)}</span>`:''}${opp}</div>
+      <div style="font-size:.6875rem;color:var(--grn);font-weight:700;margin-bottom:.6rem">${winLine}</div>
+      <a class="tc-send" href="${c.inviteUrl}" style="text-decoration:none;justify-content:center;display:flex;">Take the other side &rarr;</a>
     </div>
   </div>`;
 }

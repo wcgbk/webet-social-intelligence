@@ -31,6 +31,14 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - X OAuth: authorize moved twitter.com → x.com (mobile login-loop fix; founder retest pending).
 - Homepage: RESTORED TO ORIGINAL — do not add nav items/chips there again.
 - Betty picks delivery verified live (chat returns today's card, mobile, 0 console errors).
+- Pick3P2P unified-account v1 LIVE (loop-c6): dashboard P2P panel -> same-domain /pick3p2p;
+  WeBetAI bridge strip (handle + live WeBit balance, /login CTA when signed out); SMS-first
+  users auto-adopt verified phone (skip page phone-login); picks source beta->alpha; stake
+  select = WeBits (0/50/100/250); p2p-stake fn escrows idempotently to webit-ledger (verified:
+  50 escrowed, re-call alreadyEscrowed, bal 15,949). LIMITATIONS -> backlog: stake PAYOUT
+  resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
+  phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
+  external domain still separate — point its DNS at this site or deprecate.
 - /login gateway LIVE (loop-c5): X primary + SMS code login via existing Twilio Messages API
   (HMAC OTP, 10-min TTL, 3/phone/hr + 10/IP/hr limits, 8-attempt cap); auth-sms-verify mints
   sessions identical to X callback; sms_ users get 1,000 WeBits; email/Google = SOON flags.
@@ -47,13 +55,16 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   exactly 1 (16,000→15,999), re-click no double charge, 0 console errors.
 
 ## NEXT (top of backlog, in order)
-1. Admin funnel report — role-gated page + summary fn reading funnel-events store (SDK
+1. P2P stake resolution — payout/refund: aggregate webit-ledger evt_*_p2pstake_{challengeId}
+   escrows, grade challenges via check-resolution pattern, credit winner (idempotent), refund
+   on expiry/decline. Required before stakes are user-facing-final.
+2. Admin funnel report — role-gated page + summary fn reading funnel-events store (SDK
    namespace! REST list shows empty — SDK and legacy REST blobs are SEPARATE namespaces;
    edge-picks-* = REST-written, webit-ledger/funnel-events/wbai-users = SDK-written).
-2. Canonical identity (one userId, link X+phone — SMS-first users currently get a separate
+3. Canonical identity (one userId, link X+phone — SMS-first users currently get a separate
    sms_ account; linking merges balances/prefs) (one userId, link X+phone, ledger keyed on it).
-4. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
-5. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
+5. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
+(done: Pick3P2P v1 — see DONE)
 3. (moved to #1)
 
 ## Conventions every cycle MUST follow

@@ -1024,6 +1024,13 @@
         <label class="modal-label">Friend's Phone Number</label>
         <input class="modal-input" type="tel" placeholder="(555) 123-4567" id="c-friend" />
       </div>
+      <div class="modal-form-group" id="deliver-group">
+        <label class="modal-label">Send the challenge via</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="modal-select" id="dlv-sms" onclick="setDeliver('sms')" style="flex:1;cursor:pointer;font-weight:700;border-color:#004C54;background:#e6f4f1;">📱 Text — we send it</button>
+          <button type="button" class="modal-select" id="dlv-dm" onclick="setDeliver('dm')" style="flex:1;cursor:pointer;font-weight:700;opacity:.55;">𝕏 X DM — you send it</button>
+        </div>
+      </div>
       <div class="modal-form-group">
         <label class="modal-label">WeBit Stake</label>
         <select class="modal-select" id="c-wager">
@@ -1585,6 +1592,22 @@
   /* ═══════════════════════════════════════════════════════════════
      CHALLENGE — Create via p2p-challenge API
   ═══════════════════════════════════════════════════════════════ */
+  // Delivery mode: 'sms' (server texts the friend) | 'dm' (X DM composer opens with the invite link)
+  var deliverMode = 'sms';
+  function setDeliver(m) {
+    deliverMode = m;
+    var smsBtn = document.getElementById('dlv-sms'), dmBtn = document.getElementById('dlv-dm');
+    var friendGroup = document.getElementById('c-friend').parentElement;
+    var on = { borderColor: '#004C54', background: '#e6f4f1', opacity: '1' };
+    var off = { borderColor: '', background: '', opacity: '.55' };
+    [[smsBtn, m === 'sms' ? on : off], [dmBtn, m === 'dm' ? on : off]].forEach(function (x) {
+      x[0].style.borderColor = x[1].borderColor; x[0].style.background = x[1].background; x[0].style.opacity = x[1].opacity;
+    });
+    friendGroup.style.display = m === 'dm' ? 'none' : 'block';
+    var btn = document.getElementById('btn-send');
+    if (btn && btn.textContent.indexOf('Lock') === -1) btn.textContent = m === 'dm' ? 'Create & open X DM' : 'Send Challenge via Text';
+  }
+
   async function sendChallenge() {
     var name = document.getElementById('c-name').value.trim();
     var friendRaw = document.getElementById('c-friend').value.trim();
@@ -1592,13 +1615,17 @@
     var btn = document.getElementById('btn-send');
     var status = document.getElementById('modal-status');
     if (!name) { status.textContent = 'Please enter your name.'; status.style.color = '#c0392b'; return; }
-    var friendPhone = formatPhone(friendRaw);
-    if (!friendPhone) { status.textContent = 'Enter a valid 10-digit US phone number.'; status.style.color = '#c0392b'; return; }
+    var friendPhone = null;
+    if (deliverMode === 'sms') {
+      friendPhone = formatPhone(friendRaw);
+      if (!friendPhone) { status.textContent = 'Enter a valid 10-digit US phone number.'; status.style.color = '#c0392b'; return; }
+    }
     if (userSelections.length !== 3) { status.textContent = 'Select 3 picks first.'; status.style.color = '#c0392b'; return; }
 
-    // Need challenger phone — must be logged in
+    // Challenger identity: verified phone, or the unified WeBetAI account (X users) in DM mode
     var challengerPhone = currentUser ? currentUser.phone : null;
-    if (!challengerPhone) { status.textContent = 'Log in with your phone number first.'; status.style.color = '#c0392b'; return; }
+    if (!challengerPhone && deliverMode === 'dm' && window.wbaiUser) challengerPhone = 'wbai:' + window.wbaiUser.id;
+    if (!challengerPhone) { status.textContent = deliverMode === 'dm' ? 'Sign in first (webetsocial.com/login).' : 'Log in with your phone number first.'; status.style.color = '#c0392b'; return; }
 
     btn.disabled = true; btn.textContent = 'Sending...'; status.textContent = ''; status.style.color = '';
 
@@ -1607,8 +1634,9 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create',
+          deliver: deliverMode === 'dm' ? 'link' : 'sms',
           challengerPhone: challengerPhone,
-          challengerHandle: currentUser.handle || null,
+          challengerHandle: (currentUser && currentUser.handle) || (window.wbaiUser && window.wbaiUser.handle) || null,
           challengerName: name,
           picks: userSelections.map(function(s) {
             return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
@@ -1621,7 +1649,14 @@
       if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to send');
 
       btn.textContent = 'Challenge Sent!'; btn.style.background = '#2e7d32';
-      status.textContent = 'Text sent to ' + friendRaw + ' with your picks! Challenge ID: ' + data.challengeId; status.style.color = '#2e7d32';
+      if (deliverMode === 'dm') {
+        var stakeNum = parseInt(wager, 10) || 0;
+        var dmMsg = 'I just locked 3 picks on Pick3P2P 🎯 Match me — winner takes ' + (stakeNum > 0 ? 'ⓦ ' + stakeNum + ' WeBits' : 'the bragging rights') + '. ' + (data.inviteUrl || 'https://webetsocial.com/pick3p2p/?challenge=' + data.challengeId);
+        window.open('https://x.com/messages/compose?text=' + encodeURIComponent(dmMsg), '_blank');
+        status.textContent = 'Challenge created — X DM composer opened with your invite link. ID: ' + data.challengeId; status.style.color = '#2e7d32';
+      } else {
+        status.textContent = 'Text sent to ' + friendRaw + ' with your picks! Challenge ID: ' + data.challengeId; status.style.color = '#2e7d32';
+      }
 
       // WeBit stake escrow on the unified account (loop-c6) — requires wbai session
       try {

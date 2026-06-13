@@ -39,6 +39,11 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- P2P grading + settlement LIVE (loop-c9): p2p-settle grades picks vs ESPN finals (team-name=ML,
+  O/U vs total; spreads approximated as ML — v2 refinement), winner takes pot from webit-ledger
+  escrows, tie/expired refund, idempotent (settle marker + per-event keys); page lazily settles
+  the signed-in user's due challenges each visit. ⚠️ ALL functions must stay git-tracked —
+  untracked fns get DROPPED by deploys (this killed auth-x-callback/X login on 2026-06-13).
 - One login everywhere (loop-c8): Pick3P2P page phone-gate REMOVED — unified /login is the only
   auth; X users (no phone) pick, create, and respond via wbai:{id} identity end-to-end. Full game
   E2E verified in-product as X user: picks -> DM create -> escrow -> recipient landing.
@@ -61,7 +66,7 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   exactly 1 (16,000→15,999), re-click no double charge, 0 console errors.
 
 ## NEXT (top of backlog, in order)
-1. P2P stake resolution — payout/refund: aggregate webit-ledger evt_*_p2pstake_{challengeId}
+1. (done loop-c9: P2P settlement — see DONE) — payout/refund: aggregate webit-ledger evt_*_p2pstake_{challengeId}
    escrows, grade challenges via check-resolution pattern, credit winner (idempotent), refund
    on expiry/decline. Required before stakes are user-facing-final.
 2. Admin funnel report — role-gated page + summary fn reading funnel-events store (SDK

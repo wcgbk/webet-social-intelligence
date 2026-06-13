@@ -39,6 +39,10 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- Sports Markets full slate (loop-c17): shows ALL games regardless of BettorEdge liquidity —
+  backend merges full ESPN schedule (MLB/NBA/NHL) with exchange orders overlaid; ML always
+  bettable even-money pick'em, spread/total where exchange has a line, live games locked.
+  Even-money head-to-head (winner takes 2x) = the market-bet-settle model.
 - P2P MARKET BETS LIVE (loop-c16): BettorEdge methodology, free WeBit version. market-bet fn
   (create escrows WeBits, X-DM/Twilio delivery; accept=opponent takes other side+matches stake,
   self-guard) + market-bet-settle (grade line vs ESPN, winner takes pot, push/expiry refund,

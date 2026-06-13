@@ -65,6 +65,11 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - Deploy blackouts (UTC): 11:55–13:20 and 13:55–14:40.
 - Blob writes ONLY to: webit-ledger, funnel-events, user-profiles, wbai-users user records.
   NEVER edge-picks*.
+- POST-DEPLOY SMOKE CHECK (mandatory, added after the Jun-13 incident where --skip-functions-cache
+  deploys silently DROPPED function registrations — betty-chat 404'd for ~40 min): after EVERY
+  deploy, curl must return 200/expected on: betty-chat-beta (POST), get-picks-alpha, auth-x-init
+  (302 to x.com), webit-mock-pay (405 on GET is fine). If any fail, redeploy WITHOUT
+  --skip-functions-cache immediately.
 - QA: live-site verification required; auth/purchase flows tested LOGGED-OUT; anything
   auth-related gets flagged for founder real-iPhone retest (emulated 390px ≠ real device —
   proven 2026-06-12). Zero console errors. Commit per cycle (Co-Authored-By Claude).

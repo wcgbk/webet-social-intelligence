@@ -74,6 +74,10 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 3. (moved to #1)
 
 ## Conventions every cycle MUST follow
+- ⚠️ DEPLOY SHIPS ONLY GIT-TRACKED FILES (proven 2026-06-13: untracked images 404'd in prod —
+  the CLI walks the git index, not the directory). ANY new/needed static asset MUST be
+  `git add`-ed BEFORE deploying. The old curated live set (~266 files) was replaced by the
+  tracked set; if a legacy page 404s an asset, find it locally, git add, redeploy.
 - Deploy: `npx netlify deploy --prod --dir . --skip-functions-cache` (NETLIFY_AUTH_TOKEN
   env; token in founder's key doc, never in repo files).
 - RAILS before deploy: `shasum -a 256 -c PRODUCT-LOOP-BASELINE.sha256 --quiet` must pass

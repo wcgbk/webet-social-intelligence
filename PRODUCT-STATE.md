@@ -39,9 +39,13 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
-- Trending Challenges = open-bets feed (loop-c19): replaced stale prediction-topic content with
-  get-trending-challenges fn (live feed of OPEN market-bets + pending pick3 challenges anyone can
-  join); page rewired to WeBit bridge + 'Take the other side' cards linking to accept flows; removed
+- Trending Challenges = PREDICTION-MARKET topics + WeBit Yes/No bets (loop-c20, CORRECTED from c19
+  sports mistake): page shows trending prediction topics (politics/elections, get-webet-content);
+  Bet Yes/No -> WeBit modal (stake + X-DM/Text delivery, even-money winner takes 2x); market-bet
+  supports market=prediction (invites->/p2p-trending, settle skips ESPN +21d unresolved-refund);
+  WeBit bridge real balance. OPEN: content stale (Apr 13) — needs generate-webet-content-background
+  refresh. (c19 also built get-trending-challenges fn — repurposable as an open-bets discovery feed.)
+  Superseded note: 'Take the other side' cards linking to accept flows; removed
   107 lines dead STATIC_ARTICLES. Verified live (5 open challenges, real balance, 0 errors).
 - Sports Markets real lines via Odds API (loop-c18): get-bettoredge-markets also pulls The Odds
   API (h2h/spreads/totals) and attaches consensus ML/spread/total to every game; page renders

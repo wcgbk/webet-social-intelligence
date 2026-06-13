@@ -39,6 +39,11 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- Pick3P2P PERFECTED (loop-c13): two-sided wager — opponent MATCHES stake on accept (was
+  one-sided, pot was wrong); self-challenge guard; settlement shown in My Challenges (Won/Lost/
+  refunded); respond btn 'Lock Picks & Stake N'; dashboard leaderboard unified + WeBits currency.
+  Escrow keys reconcile across challenger/opponent/SMS. Remaining v2 polish: spread grading (ML
+  approx), escrow-before-respond atomicity (pre-check covers common case), real-game payout test.
 - P2P grading + settlement LIVE (loop-c9): p2p-settle grades picks vs ESPN finals (team-name=ML,
   O/U vs total; spreads approximated as ML — v2 refinement), winner takes pot from webit-ledger
   escrows, tie/expired refund, idempotent (settle marker + per-event keys); page lazily settles

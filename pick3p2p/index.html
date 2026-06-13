@@ -1481,7 +1481,13 @@
       if (mcs) { mcs.style.display = ''; mcs.classList.add('v'); }
       loadMyChallenges();
     } else {
+      // Logged-out (e.g. standalone /pick3p2p) — keep one sign-in CTA on the board,
+      // since the top-bar/strip is gone. Inside the dashboard the user is already signed in.
       if (heading) heading.textContent = 'Sign In to Make Your Pick 3';
+      if (loginBar) {
+        loginBar.style.display = 'flex';
+        loginBar.innerHTML = '<a href="/login" class="login-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">Sign in to WeBetAI →</a>';
+      }
       if (mcs) mcs.style.display = 'none';
     }
   }
@@ -2184,11 +2190,11 @@
     '.wbai-strip .w{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);border-radius:12px;padding:2px 9px}';
   document.head.appendChild(css);
 
-  function strip(html) {
-    var el = document.getElementById('wbai-strip');
-    if (!el) { el = document.createElement('div'); el.className = 'wbai-strip'; el.id = 'wbai-strip'; document.body.insertBefore(el, document.body.firstChild); }
-    el.innerHTML = html;
-  }
+  // The visible WeBetAI bar is removed (founder directive) — the dashboard top menu bar
+  // already shows login + WeBits. wbaiRefreshStrip still runs for its identity-adoption
+  // side effects (window.wbaiUser / currentUser); the signed-out sign-in CTA lives in
+  // renderLoginState's board prompt instead. strip() is now a no-op.
+  function strip(html) { /* no visible bar */ }
 
   // Lazy stake settlement: whenever a signed-in user opens the page, grade + settle
   // any of their due challenges (winner payout / tie refund / expired refund).

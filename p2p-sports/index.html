@@ -435,17 +435,18 @@ function oddsToPrice(odds){
 function fmtPrice(odds){return'$'+oddsToPrice(odds).toFixed(2)}
 function fmtOdds(o){const n=Math.round(o);return n>=0?'+'+n:''+n}
 
-/* League tabs */
+/* All games come from the full ESPN slate (raw.games), BettorEdge orders overlaid. */
+function allGames(){ return (raw && Array.isArray(raw.games)) ? raw.games : []; }
+function leagueList(){ return [...new Set(allGames().map(g=>g.league))].filter(Boolean).sort(); }
+
 function renderLeagueTabs(){
-  const ls=[...new Set(raw.orders.map(o=>o.league))].filter(l=>!l.includes('Futures')&&!/^\d+$/.test(l)).sort();
+  const ls=leagueList();
   document.getElementById('leagueTabs').innerHTML=
     `<button class="ltab ${league==='all'?'on':''}" onclick="setLg('all')"><span class="ltab-icon">ALL</span>All</button>`+
     ls.map(l=>`<button class="ltab ${league===l?'on':''}" onclick="setLg('${esc(l)}')">${l}</button>`).join('');
 }
-
 function renderSideLeagues(){
-  const ls=[...new Set(raw.orders.map(o=>o.league))].filter(l=>!l.includes('Futures')&&!/^\d+$/.test(l)).sort();
-  document.getElementById('sideLeagues').innerHTML=ls.map(l=>
+  document.getElementById('sideLeagues').innerHTML=leagueList().map(l=>
     `<div class="side-item ${league===l?'on':''}" onclick="setLg('${esc(l)}')">${l}</div>`
   ).join('');
 }
@@ -454,73 +455,72 @@ function setLg(l){league=l;renderLeagueTabs();renderSideLeagues();renderGames()}
 function setView(v){if(v==='live')setSt('live');else if(v==='home'){league='all';status='upcoming';renderLeagueTabs();renderSideLeagues();document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st==='upcoming'));renderGames()}}
 function setSt(s){status=s;document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st===s));renderGames()}
 
-/* Render game grid */
+/* Render game grid — EVERY game on the slate, regardless of exchange liquidity */
 function renderGames(){
-  let orders=league==='all'?raw.orders.filter(o=>!o.league.includes('Futures')&&!/^\d+$/.test(o.league)):raw.orders.filter(o=>o.league===league);
-  const games=group(orders).slice(0,12);
+  let games=allGames();
+  if(league!=='all')games=games.filter(g=>g.league===league);
+  const live=games.filter(g=>g.state==='in').length;
+  const upcoming=games.filter(g=>g.state==='pre').length;
+  document.getElementById('liveCnt').textContent=String(live);
+  document.getElementById('upCnt').textContent=String(upcoming);
+  if(status==='live')games=games.filter(g=>g.state==='in');
+  else if(status==='upcoming')games=games.filter(g=>g.state!=='post');
 
-  // Count live (has scheduled in past or contains "LIVE" context) - simplified
-  document.getElementById('liveCnt').textContent='0';
-  document.getElementById('upCnt').textContent=games.length;
-
-  if(!games.length){document.getElementById('gameGrid').innerHTML=`<div class="empty">No games available${league!=='all'?' for '+league:''}</div>`;return}
-
-  let html='';
-  for(const g of games)html+=gameCard(g);
+  if(!games.length){document.getElementById('gameGrid').innerHTML=`<div class="empty">No games${league!=='all'?' for '+league:''} right now.</div>`;return}
+  let html='';for(const g of games)html+=gameCard(g);
   document.getElementById('gameGrid').innerHTML=html;
 }
 
 function gameCard(g){
-  // Resolve full team names from order titles
-  const names=resolveTeamNames(g);
-  const away=names.away, home=names.home;
-
-  if(!home){
-    const o=g.orders[0];
-    return`<div class="gc">
-      ${leagueStripe(g.league)}
-      <div class="gc-hdr"><span class="gc-time">${fmtTime(g.scheduled)}</span><span class="gc-time">${g.league}</span></div>
-      <div class="gc-body"><div class="trow" style="grid-template-columns:1fr 72px">
-        <div class="tinfo">${teamLogo(away)}<div class="tname">${away}</div></div>
-        <button class="pb" onclick='openBet(${JSON.stringify({event:g.event,league:g.league,sport:g.league,pick:o.title,odds:o.odds,line:o.var1||0,matchup:away,side:o.side,market:(o.side==='over'||o.side==='under')?'total':(o.var1&&o.var1!==0?'spread':'ml')}).replace(/'/g,"&#39;")})'><span class="pb-price">${fmtPrice(o.odds)}</span></button>
-      </div></div></div>`;
-  }
-
-  // Use side field: away/home/over/under
-  const awaySpread=sideOdds(g.orders,'away','spread');
-  const homeSpread=sideOdds(g.orders,'home','spread');
-  const awayMl=sideOdds(g.orders,'away','ml');
-  const homeMl=sideOdds(g.orders,'home','ml');
-  const over=totalOdds(g.orders,'over');
-  const under=totalOdds(g.orders,'under');
-
+  const away=g.awayTeam||g.awayAbbr||'', home=g.homeTeam||g.homeAbbr||'';
   const matchup=`${away} vs ${home}`;
+  const started=g.state==='in'||g.state==='post';
+  const ords=g.orders||[];
 
-  function pb(order,label){
+  // ML always bettable (even-money pick'em). Spread/Total only where the exchange has a line.
+  const awayMl=sideOdds(ords,'away','ml');
+  const homeMl=sideOdds(ords,'home','ml');
+  const awaySpread=sideOdds(ords,'away','spread');
+  const homeSpread=sideOdds(ords,'home','spread');
+  const over=totalOdds(ords,'over');
+  const under=totalOdds(ords,'under');
+
+  function betData(o){return JSON.stringify(o).replace(/'/g,"&#39;");}
+  // ML button — always available (defaults to even-money pick'em if no exchange order)
+  function mlBtn(side,team){
+    if(started)return`<button class="pb" disabled><span class="pb-price">🔒</span></button>`;
+    const ord=side==='away'?awayMl:homeMl;
+    const odds=ord?ord.odds:100;
+    const d=betData({event:g.event,league:g.league,sport:g.sport,pick:team+' to win',odds:odds,line:0,matchup:matchup,side:side,market:'ml'});
+    return`<button class="pb" onclick='openBet(${d})'><span class="pb-line">${ord?'live':'pick'}</span><span class="pb-price">${fmtPrice(odds)}</span></button>`;
+  }
+  // Spread/Total — only if the exchange has a real line; otherwise a quiet placeholder
+  function lineBtn(order){
+    if(started)return`<button class="pb" disabled><span class="pb-price">🔒</span></button>`;
     if(!order)return`<button class="pb" disabled><span class="pb-line">--</span><span class="pb-price">--</span></button>`;
     const ln=order.var1&&order.var1!==0?`${order.var1>0?'+':''}${order.var1}`:'';
-    const pickLabel=order.title||label;
-    const mkt=(order.side==='over'||order.side==='under')?'total':(order.var1&&order.var1!==0?'spread':'ml');
-    const d=JSON.stringify({event:g.event,league:g.league,sport:g.league,pick:pickLabel,odds:order.odds,line:order.var1||0,matchup:matchup,side:order.side,market:mkt}).replace(/'/g,"&#39;");
+    const mkt=(order.side==='over'||order.side==='under')?'total':'spread';
+    const d=betData({event:g.event,league:g.league,sport:g.sport,pick:order.title,odds:order.odds,line:order.var1||0,matchup:matchup,side:order.side,market:mkt});
     return`<button class="pb" onclick='openBet(${d})'>${ln?`<span class="pb-line">${ln}</span>`:`<span class="pb-line">&nbsp;</span>`}<span class="pb-price">${fmtPrice(order.odds)}</span></button>`;
   }
 
-  return`<div class="gc">
+  const timeLabel=started?(g.state==='post'?'Final':'🔒 Live'):fmtTime(g.scheduled);
+  return`<div class="gc${started?' gc-started':''}">
     ${leagueStripe(g.league)}
-    <div class="gc-hdr"><span class="gc-time">${fmtTime(g.scheduled)}</span><span class="gc-view">View Game &rsaquo;</span></div>
-    <div class="gc-colhdr"><span></span><span>Spread</span><span>ML</span><span>Total</span></div>
+    <div class="gc-hdr"><span class="gc-time">${timeLabel}</span><span class="gc-time">${g.league}</span></div>
+    <div class="gc-colhdr"><span></span><span>Spread</span><span>Pick</span><span>Total</span></div>
     <div class="gc-body">
       <div class="trow">
         <div class="tinfo">${teamLogo(away)}<div class="tname">${away}</div></div>
-        ${pb(awaySpread,away)}
-        ${pb(awayMl,away+' ML')}
-        ${pb(over,'Over')}
+        ${lineBtn(awaySpread)}
+        ${mlBtn('away',away)}
+        ${lineBtn(over)}
       </div>
       <div class="trow">
         <div class="tinfo">${teamLogo(home)}<div class="tname">${home}</div></div>
-        ${pb(homeSpread,home)}
-        ${pb(homeMl,home+' ML')}
-        ${pb(under,'Under')}
+        ${lineBtn(homeSpread)}
+        ${mlBtn('home',home)}
+        ${lineBtn(under)}
       </div>
     </div>
   </div>`;
@@ -603,15 +603,12 @@ function setMdDeliver(m){
 }
 
 function calcWin(){
+  // Even-money head-to-head: your friend matches your stake, winner takes the pot.
   const qty=parseFloat(document.getElementById('mdQty')?.value)||0;
-  const odds=selectedBet.odds;
-  let win=0;
-  if(odds>=0)win=qty*(odds/100);
-  else win=qty*(100/Math.abs(odds));
   const el=document.getElementById('mdWin');
-  if(el)el.value=win.toFixed(2);
+  if(el)el.value=qty.toFixed(2);               // you win their matching stake
   const est=document.getElementById('mdEst');
-  if(est)est.textContent=`EST. EARNINGS: ⓦ${win.toFixed(2)}`;
+  if(est)est.textContent=`WINNER TAKES ⓦ${(qty*2).toFixed(0)}`;
 }
 
 function setQty(v){

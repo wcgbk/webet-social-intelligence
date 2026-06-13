@@ -155,6 +155,54 @@ exports.handler = async (event) => {
       console.error("[get-bettoredge-markets] Executed trades fetch error:", e.message);
     }
 
+    // ── FULL SLATE: every game from ESPN regardless of exchange liquidity ──
+    // Free WeBit P2P bets don't need exchange liquidity — players bet each other.
+    // Pull the full ESPN schedule and overlay BettorEdge orders where they exist.
+    const ESPN_SB = {
+      MLB: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+      NBA: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+      NHL: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+    };
+    const abbrKey = (a, b) => [a, b].map(x => (x || "").toUpperCase()).sort().join("|");
+    // Index orders by the abbreviations in their event title (e.g. "TEX - 0 vs BOS - 0")
+    const ordersByGame = {};
+    for (const o of orders) {
+      const m = String(o.event || "").toUpperCase().match(/([A-Z]{2,4})\s*-?\s*\d*\s*(?:VS|@|AT)\s*([A-Z]{2,4})/);
+      if (!m) continue;
+      const k = abbrKey(m[1], m[2]);
+      (ordersByGame[k] = ordersByGame[k] || []).push(o);
+    }
+    const games = [];
+    await Promise.all(Object.entries(ESPN_SB).map(async ([sport, url]) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const j = await r.json();
+        for (const ev of (j.events || [])) {
+          const c = (ev.competitions || [])[0]; if (!c) continue;
+          const away = (c.competitors || []).find(x => x.homeAway === "away");
+          const home = (c.competitors || []).find(x => x.homeAway === "home");
+          if (!away || !home) continue;
+          const aAbbr = (away.team || {}).abbreviation || "", hAbbr = (home.team || {}).abbreviation || "";
+          const st = c.status && c.status.type ? c.status.type.state : "pre";
+          games.push({
+            sport, league: sport,
+            event: `${(away.team || {}).displayName} vs ${(home.team || {}).displayName}`,
+            awayTeam: (away.team || {}).displayName || "", homeTeam: (home.team || {}).displayName || "",
+            awayAbbr: aAbbr, homeAbbr: hAbbr,
+            scheduled: ev.date || null, state: st,
+            orders: ordersByGame[abbrKey(aAbbr, hAbbr)] || [],
+          });
+        }
+      } catch (e) { /* skip a league on error */ }
+    }));
+    // Upcoming first, then by scheduled time
+    games.sort((a, b) => {
+      const ap = a.state === "pre" ? 0 : 1, bp = b.state === "pre" ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return new Date(a.scheduled || 0) - new Date(b.scheduled || 0);
+    });
+
     return {
       statusCode: 200,
       headers: { ...CORS, "Cache-Control": "public, max-age=120, s-maxage=120" },
@@ -165,6 +213,7 @@ exports.handler = async (event) => {
         uniqueBettors: uniquePlayers,
         leagues: uniqueLeagues,
         orders,
+        games,
         executedVolume,
       }),
     };

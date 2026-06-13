@@ -19,7 +19,7 @@ function normPhone(raw) {
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'method_not_allowed' }) };
-  const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN, from = process.env.TWILIO_FROM;
+  const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN, from = process.env.TWILIO_FROM || process.env.TWILIO_PHONE_NUMBER;
   if (!sid || !tok || !from) return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'sms_not_configured' }) };
 
   let body = {};

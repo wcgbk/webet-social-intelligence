@@ -2009,7 +2009,7 @@
       for (var i = 0; i < users.length; i++) {
         var u = users[i];
         var wr = u.winRate || 0, wrClass = wr >= 55 ? 'hot' : 'cold';
-        var pl = u.allTimePL || 0, plClass = pl >= 0 ? 'pos' : 'neg', plStr = (pl >= 0 ? '+$' : '-$') + Math.abs(pl).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+        var pl = u.allTimePL || u.webitsPL || 0, plClass = pl >= 0 ? 'pos' : 'neg', plStr = (pl >= 0 ? '+' : '−') + 'ⓦ' + Math.abs(pl).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
         var record = (u.wins || 0) + '-' + (u.losses || 0);
         var safeHandle = (u.handle || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         html += '<div class="board-row" style="cursor:pointer;" onclick="openProfile(\'' + safeHandle + '\')">' +

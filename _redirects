@@ -1,0 +1,4 @@
+# Clean-URL routing for pages added outside netlify.toml (which is hash-locked by the product loop).
+# Netlify processes these together with the netlify.toml [[redirects]]; first match wins, no conflicts.
+/mvpalpha     /mvpalpha/index.html     200
+/mvpalpha/    /mvpalpha/index.html     200

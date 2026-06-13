@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | MVP vs Alpha</title>
+  <meta name="description" content="Head-to-head comparison of WeBetAI's experimental MVP challenger model (v11.1) against the production Alpha picks — ROI, accuracy, record, and same-game divergence." />
+  <meta name="robots" content="noindex" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/mvpalpha" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | MVP vs Alpha" />
+  <meta property="og:description" content="Champion vs challenger: MVP (v11.1) tested head-to-head against production Alpha picks." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | MVP vs Alpha" />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white:#ffffff; --bg:#f2f3f5; --teal:#004C54; --teal-light:#e6f4f1; --teal-border:#b8ddd6;
+      --green:#2e7d32; --green-light:#e8f5e9; --green-border:#a5d6a7;
+      --amber:#b8860b; --amber-light:#fff8e6; --amber-border:#f0d68a;
+      --red:#c0392b; --border-lt:#e0e3e8; --txt-b:#1a2e1a; --txt-m:#5f6b7a; --txt-l:#8b95a3;
+    }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Geist Sans','Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt-b);-webkit-font-smoothing:antialiased;min-height:100vh;}
+    a{color:inherit;}
+
+    /* Header (matches /alpha) */
+    .accent{height:3px;background:linear-gradient(90deg,#004C54,#00b5b9,#004C54);position:fixed;top:0;left:0;right:0;z-index:200;}
+    .header{background:var(--white);border-bottom:1px solid var(--border-lt);padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:3px;z-index:100;}
+    .logo{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--teal);}
+    .logo-text{font-weight:700;font-size:1.05rem;letter-spacing:-.01em;}
+    .header-badge{margin-left:2px;font-size:.625rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:var(--teal-light);color:var(--teal);border:1px solid var(--teal-border);border-radius:6px;padding:.15rem .4rem;}
+    .header-nav{display:flex;align-items:center;gap:.25rem;margin-left:auto;}
+    .header-link{font-size:.8125rem;font-weight:600;color:var(--txt-m);text-decoration:none;padding:.4rem .7rem;border-radius:8px;transition:all .15s;}
+    .header-link:hover{background:var(--bg);color:var(--txt-b);}
+    .header-link.active{background:var(--teal-light);color:var(--teal);}
+    .mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;padding:4px;}
+    .mobile-dropdown{display:none;position:absolute;top:100%;right:1rem;background:var(--white);border:1px solid var(--border-lt);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);padding:.4rem;flex-direction:column;min-width:160px;}
+    .mobile-dropdown.open{display:flex;}
+    .mobile-dropdown a{padding:.6rem .8rem;border-radius:8px;text-decoration:none;color:var(--txt-b);font-size:.875rem;font-weight:600;}
+    .mobile-dropdown a:hover{background:var(--bg);}
+
+    .wrap{max-width:880px;margin:0 auto;padding:1.5rem 1.25rem 4rem;}
+
+    .hero{text-align:center;margin-bottom:1.75rem;}
+    .hero h1{font-size:1.6rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.4rem;}
+    .hero p{font-size:.875rem;color:var(--txt-m);line-height:1.6;max-width:600px;margin:0 auto;}
+
+    .vs-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem;}
+    .model-card{background:var(--white);border:1px solid var(--border-lt);border-radius:1rem;padding:1.25rem;position:relative;overflow:hidden;}
+    .model-card.alpha{border-top:3px solid var(--green);}
+    .model-card.mvp{border-top:3px solid var(--amber);}
+    .mc-tag{font-size:.625rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.18rem .5rem;border-radius:6px;display:inline-block;margin-bottom:.5rem;}
+    .alpha .mc-tag{background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
+    .mvp .mc-tag{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border);}
+    .mc-name{font-size:1.15rem;font-weight:700;margin-bottom:.15rem;}
+    .mc-sub{font-size:.72rem;color:var(--txt-l);margin-bottom:.9rem;}
+    .mc-roi{font-size:2.4rem;font-weight:700;letter-spacing:-.02em;line-height:1;}
+    .mc-roi-lbl{font-size:.7rem;color:var(--txt-l);text-transform:uppercase;letter-spacing:.05em;margin-top:.2rem;}
+    .pos{color:var(--green);} .neg{color:var(--red);}
+
+    .cmp-table{width:100%;background:var(--white);border:1px solid var(--border-lt);border-radius:1rem;border-collapse:separate;border-spacing:0;overflow:hidden;margin-bottom:1.25rem;}
+    .cmp-table th,.cmp-table td{padding:.7rem .9rem;text-align:center;font-size:.85rem;border-bottom:1px solid var(--border-lt);}
+    .cmp-table thead th{background:#fafbfc;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-l);font-weight:700;}
+    .cmp-table tbody tr:last-child td{border-bottom:none;}
+    .cmp-table .metric{text-align:left;font-weight:600;color:var(--txt-m);}
+    .cmp-table td.val{font-weight:700;font-variant-numeric:tabular-nums;}
+    .win-cell{position:relative;}
+    .win-cell::after{content:'▲';position:absolute;margin-left:.3rem;font-size:.6rem;color:var(--green);}
+
+    .verdict{background:var(--white);border:1px solid var(--border-lt);border-left:3px solid var(--teal);border-radius:.9rem;padding:1rem 1.15rem;margin-bottom:1.25rem;font-size:.85rem;line-height:1.6;color:var(--txt-b);}
+    .verdict strong{color:var(--teal);}
+    .caveat{background:var(--amber-light);border:1px solid var(--amber-border);border-left:3px solid var(--amber);border-radius:.9rem;padding:.85rem 1.1rem;margin-bottom:1.25rem;font-size:.8rem;line-height:1.55;color:#5f5320;}
+
+    .sec-title{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-l);margin:1.5rem 0 .6rem;}
+    .h2h{width:100%;background:var(--white);border:1px solid var(--border-lt);border-radius:1rem;border-collapse:separate;border-spacing:0;overflow:hidden;}
+    .h2h th,.h2h td{padding:.6rem .7rem;font-size:.78rem;border-bottom:1px solid var(--border-lt);text-align:left;vertical-align:top;}
+    .h2h thead th{background:#fafbfc;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em;color:var(--txt-l);font-weight:700;}
+    .h2h tbody tr:last-child td{border-bottom:none;}
+    .h2h .date{color:var(--txt-l);white-space:nowrap;font-variant-numeric:tabular-nums;}
+    .h2h .mu{font-weight:600;}
+    .pick-pill{display:inline-block;font-size:.72rem;font-weight:600;padding:.12rem .45rem;border-radius:5px;background:var(--bg);border:1px solid var(--border-lt);}
+    .agree{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;}
+    .agree.same{color:var(--green);} .agree.diff{color:var(--amber);}
+    .res{font-size:.66rem;font-weight:700;text-transform:uppercase;}
+    .res.win{color:var(--green);} .res.loss{color:var(--red);} .res.pending{color:var(--txt-l);} .res.push{color:var(--txt-m);}
+
+    .method{background:var(--white);border:1px solid var(--border-lt);border-radius:1rem;padding:1.1rem 1.25rem;margin-top:1.25rem;font-size:.8rem;line-height:1.65;color:var(--txt-m);}
+    .method b{color:var(--txt-b);}
+    .method ul{margin:.5rem 0 0 1.1rem;}
+    .method li{margin:.2rem 0;}
+    .foot{text-align:center;font-size:.72rem;color:var(--txt-l);margin-top:2rem;line-height:1.6;}
+    .loading{text-align:center;padding:3rem 1rem;color:var(--txt-m);}
+
+    @media (max-width:560px){
+      .header-nav{display:none;}
+      .mobile-menu-btn{display:block;}
+      .vs-grid{grid-template-columns:1fr;}
+      .hero h1{font-size:1.3rem;}
+      .cmp-table th,.cmp-table td{padding:.6rem .4rem;font-size:.8rem;}
+      .h2h .hide-sm{display:none;}
+    }
+  </style>
+</head>
+<body>
+  <div class="accent"></div>
+  <header class="header">
+    <a href="/mvpalpha" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px;height:28px;flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+      <span class="header-badge">A/B Lab</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/alpha" class="header-link">Alpha Picks</a>
+      <a href="/mvp" class="header-link">MVP Picks</a>
+      <a href="/mvpalpha" class="header-link active">MVP vs Alpha</a>
+      <a href="/percentile" class="header-link">Track Record</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('md').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="md">
+      <a href="/alpha">Alpha Picks</a>
+      <a href="/mvp">MVP Picks</a>
+      <a href="/mvpalpha">MVP vs Alpha</a>
+      <a href="/percentile">Track Record</a>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="hero">
+      <h1>Champion vs Challenger</h1>
+      <p><strong>Alpha</strong> is the production model users bet. <strong>MVP</strong> is the experimental challenger (v11.1) running the same slate 1 hour earlier. This page tracks them head-to-head — when MVP proves out, its winning ideas graft into Alpha.</p>
+    </div>
+
+    <div id="content">
+      <div class="loading">⏳ Loading head-to-head comparison…</div>
+    </div>
+  </div>
+
+  <script>
+  const fmtMoney = n => (n >= 0 ? '+$' : '-$') + Math.abs(Math.round(n || 0)).toLocaleString();
+  const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+  const MIN_SAMPLE = 25; // graded picks before the challenger result is meaningful
+
+  function summarize(d) {
+    if (!d) return null;
+    const c = d.cumulative || {}, s = d.straight || {}, p = d.parlay || {};
+    const graded = (c.wins || 0) + (c.losses || 0) + (c.pushes || 0);
+    return {
+      roi: c.roi || '—', roiNum: parseFloat(c.roi) || 0,
+      record: `${c.wins || 0}-${c.losses || 0}` + (c.pushes ? `-${c.pushes}` : ''),
+      accuracy: c.accuracy || '—', accNum: parseFloat(c.accuracy) || 0,
+      profit: c.totalProfit || 0, wagered: c.totalWagered || 0,
+      graded, pending: c.pending || 0, days: (d.days || []).length,
+      straight: `${s.wins || 0}-${s.losses || 0}`, straightProfit: s.totalProfit || 0,
+      parlay: `${p.wins || 0}-${p.losses || 0}`, parlayProfit: p.totalProfit || 0,
+    };
+  }
+
+  // higher-is-better winner flag, but only when BOTH have min sample
+  function better(a, m, key, enough) {
+    if (!a || !m || !enough) return { a: false, m: false };
+    if (a[key] === m[key]) return { a: false, m: false };
+    return a[key] > m[key] ? { a: true, m: false } : { a: false, m: true };
+  }
+
+  function roiCard(cls, tag, name, sub, s) {
+    const roiCls = s ? (s.roiNum >= 0 ? 'pos' : 'neg') : '';
+    return `<div class="model-card ${cls}">
+      <span class="mc-tag">${tag}</span>
+      <div class="mc-name">${name}</div>
+      <div class="mc-sub">${sub}</div>
+      <div class="mc-roi ${roiCls}">${s ? esc(s.roi) : '—'}</div>
+      <div class="mc-roi-lbl">Return on investment</div>
+    </div>`;
+  }
+
+  function row(label, av, mv, win) {
+    return `<tr>
+      <td class="metric">${label}</td>
+      <td class="val ${win.a ? 'win-cell' : ''}">${av}</td>
+      <td class="val ${win.m ? 'win-cell' : ''}">${mv}</td>
+    </tr>`;
+  }
+
+  function resClass(r) { r = (r || '').toLowerCase(); return ['win', 'loss', 'push', 'pending'].includes(r) ? r : 'pending'; }
+
+  function buildH2H(a, m) {
+    if (!a || !m) return [];
+    const idx = {};
+    (a.days || []).forEach(day => (day.picks || []).forEach(p => {
+      idx[day.date + '|' + norm(p.matchup)] = { date: day.date, matchup: p.matchup, a: p };
+    }));
+    const rows = [];
+    (m.days || []).forEach(day => (day.picks || []).forEach(p => {
+      const hit = idx[day.date + '|' + norm(p.matchup)];
+      if (hit) rows.push({ date: day.date, matchup: p.matchup, a: hit.a, m: p });
+    }));
+    return rows.sort((x, y) => String(y.date).localeCompare(String(x.date)));
+  }
+
+  function render(aData, mData) {
+    const a = summarize(aData), m = summarize(mData);
+    const enough = !!(a && m && m.graded >= MIN_SAMPLE);
+    let html = '';
+
+    // ROI hero cards
+    html += `<div class="vs-grid">
+      ${roiCard('alpha', 'Production · Champion', 'Alpha', 'v10.3-alpha-sharp · 9am ET', a)}
+      ${roiCard('mvp', 'Experimental · Challenger', 'MVP', 'v11.1-mvp · 8am ET', m)}
+    </div>`;
+
+    // Small-sample caveat
+    if (a && m && !enough) {
+      html += `<div class="caveat">⚠️ <strong>MVP sample is still small</strong> — ${m.graded} graded pick${m.graded === 1 ? '' : 's'} over ${m.days} day${m.days === 1 ? '' : 's'} (it only started producing valid picks after the 6/12 zero-picks fix). Winners aren't crowned below until MVP clears ${MIN_SAMPLE} graded picks. Alpha's ${a.graded} picks over ${a.days} days are the established baseline.</div>`;
+    }
+
+    // Comparison table
+    if (a && m) {
+      const wRoi = better(a, m, 'roiNum', enough);
+      const wAcc = better(a, m, 'accNum', enough);
+      const wPro = better(a, m, 'profit', enough);
+      html += `<table class="cmp-table">
+        <thead><tr><th class="metric" style="text-align:left;">Metric</th><th>Alpha</th><th>MVP</th></tr></thead>
+        <tbody>
+          ${row('ROI', esc(a.roi), esc(m.roi), wRoi)}
+          ${row('Record (W-L-P)', esc(a.record), esc(m.record), { a: false, m: false })}
+          ${row('Accuracy', esc(a.accuracy), esc(m.accuracy), wAcc)}
+          ${row('Net P/L', `<span class="${a.profit >= 0 ? 'pos' : 'neg'}">${fmtMoney(a.profit)}</span>`, `<span class="${m.profit >= 0 ? 'pos' : 'neg'}">${fmtMoney(m.profit)}</span>`, wPro)}
+          ${row('Total wagered', '$' + (a.wagered).toLocaleString(), '$' + (m.wagered).toLocaleString(), { a: false, m: false })}
+          ${row('Straight record', esc(a.straight), esc(m.straight), { a: false, m: false })}
+          ${row('Parlay record', esc(a.parlay), esc(m.parlay), { a: false, m: false })}
+          ${row('Graded picks', String(a.graded), String(m.graded), { a: false, m: false })}
+          ${row('Days live', String(a.days), String(m.days), { a: false, m: false })}
+          ${row('Pending', String(a.pending), String(m.pending), { a: false, m: false })}
+        </tbody>
+      </table>`;
+
+      // Verdict
+      let verdict;
+      if (!enough) {
+        verdict = `<strong>Verdict: keep testing.</strong> MVP needs ${Math.max(0, MIN_SAMPLE - m.graded)} more graded pick${MIN_SAMPLE - m.graded === 1 ? '' : 's'} before its numbers mean anything. So far it's tracking ${m.roiNum >= a.roiNum ? 'ahead of' : 'behind'} Alpha on ROI (${esc(m.roi)} vs ${esc(a.roi)}), but on a sample this small that's noise, not signal.`;
+      } else {
+        const roiLead = (m.roiNum - a.roiNum).toFixed(1);
+        if (m.roiNum > a.roiNum && m.accNum >= a.accNum) {
+          verdict = `<strong>Verdict: MVP is outperforming.</strong> The challenger leads Alpha by ${roiLead} pts of ROI (${esc(m.roi)} vs ${esc(a.roi)}) at ${esc(m.accuracy)} accuracy across ${m.graded} graded picks. Candidate for promoting its v11.1 changes into Alpha.`;
+        } else if (m.roiNum > a.roiNum) {
+          verdict = `<strong>Verdict: MVP leads on ROI, mixed on accuracy.</strong> ${esc(m.roi)} vs ${esc(a.roi)} ROI but ${esc(m.accuracy)} vs ${esc(a.accuracy)} accuracy — likely a sizing/variance effect. Worth more sample before promoting.`;
+        } else {
+          verdict = `<strong>Verdict: Alpha still ahead.</strong> Production holds at ${esc(a.roi)} ROI vs the challenger's ${esc(m.roi)} across ${m.graded} MVP graded picks. The v11.1 experiments haven't beaten the champion yet.`;
+        }
+      }
+      html += `<div class="verdict">${verdict}</div>`;
+    } else {
+      html += `<div class="caveat">Couldn't load ${!a ? 'Alpha' : ''}${(!a && !m) ? ' and ' : ''}${!m ? 'MVP' : ''} results right now. The pipelines run daily — try again shortly.</div>`;
+    }
+
+    // Head-to-head on same games
+    const h2h = buildH2H(aData, mData);
+    html += `<div class="sec-title">Same-game head-to-head ${h2h.length ? `(${h2h.length})` : ''}</div>`;
+    if (h2h.length) {
+      let rows = h2h.slice(0, 40).map(r => {
+        const same = norm(r.a.pick) === norm(r.m.pick);
+        const aRes = resClass(r.a.result), mRes = resClass(r.m.result);
+        return `<tr>
+          <td class="date">${esc(r.date)}</td>
+          <td class="mu">${esc(r.matchup)}</td>
+          <td><span class="pick-pill">${esc(r.a.pick)}</span> <span class="res ${aRes}">${aRes === 'pending' ? '·' : aRes}</span></td>
+          <td><span class="pick-pill">${esc(r.m.pick)}</span> <span class="res ${mRes}">${mRes === 'pending' ? '·' : mRes}</span></td>
+          <td><span class="agree ${same ? 'same' : 'diff'}">${same ? 'agree' : 'differ'}</span></td>
+        </tr>`;
+      }).join('');
+      html += `<table class="h2h">
+        <thead><tr><th>Date</th><th>Matchup</th><th>Alpha pick</th><th>MVP pick</th><th>—</th></tr></thead>
+        <tbody>${rows}</tbody></table>`;
+    } else {
+      html += `<div class="caveat" style="margin-top:0;">No overlapping games yet — once both models pick the same matchup on the same day, the divergence shows up here. (Both run the full slate, so overlaps appear as MVP accrues days.)</div>`;
+    }
+
+    // Methodology
+    html += `<div class="method">
+      <b>What MVP changes vs Alpha (the v11.1 experiments):</b>
+      <ul>
+        <li><b>Soccer totals stay live</b> via a Poisson model (Alpha disables soccer entirely after a weak real-run sample).</li>
+        <li><b>Grade-calibrated Kelly</b> — A+/A/B stake multipliers fit from actual self-optimize win-rate data (Alpha uses flat ×50 sizing).</li>
+        <li><b>Adversarial A+ check</b> — a second model call tries to refute the top pick before it publishes.</li>
+        <li><b>Sport-diverse parlays</b> — all 3 legs forced from different sports to kill correlation.</li>
+      </ul>
+      Both share the same v10.3 "sharp" core (shrinkage calibration, per-market σ, 3% EV floor, dogs ≤ +160) fitted on 428 real graded picks. ROI &amp; P/L are computed server-side identically for both pipelines.
+    </div>
+
+    <p class="foot">Auto-updated from the live alpha &amp; mvp results stores. Experimental A/B comparison — not financial advice.</p>`;
+
+    document.getElementById('content').innerHTML = html;
+  }
+
+  (async function () {
+    try {
+      const [a, m] = await Promise.all([
+        fetch('/.netlify/functions/get-results-alpha').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/.netlify/functions/get-results-mvp').then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      render(a, m);
+    } catch (e) {
+      console.error('compare load failed', e);
+      document.getElementById('content').innerHTML = '<div class="caveat">Failed to load the comparison. Please refresh.</div>';
+    }
+  })();
+  </script>
+  <script src="/nav.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Betty</title>
+  <meta name="description" content="Betty scans X, prediction markets, and sportsbooks 24/7 to deliver a curated daily digest of trending topics you can bet on with friends. Chat with Betty, convert any X post into a bet, and challenge your friends." />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/betty" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Betty" />
+  <meta property="og:description" content="Betty scans X, prediction markets, and sportsbooks to deliver trending topics you can bet on with friends." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Betty" />
+  <meta name="twitter:description" content="Betty scans X, prediction markets, and sportsbooks to deliver trending topics you can bet on with friends." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════════════════════════════════ */
+    :root {
+      /* Dark hero tokens */
+      --background:   hsl(260, 87%, 3%);
+      --foreground:   hsl(40, 6%, 95%);
+      --primary:      hsl(121, 95%, 76%);
+      --primary-fg:   hsl(0, 0%, 5%);
+      --hero-heading: hsl(40, 10%, 96%);
+      --hero-sub:     hsl(40, 6%, 82%);
+      --border:       hsl(240, 4%, 20%);
+
+      /* Light theme tokens */
+      --teal:         #006B6E;
+      --teal-hover:   #005558;
+      --teal-light:   #f0fafa;
+      --teal-lighter: #e4f4f4;
+      --teal-border:  #b8dede;
+      --olive:        #252B1A;
+      --white:        #ffffff;
+      --off-white:    #f8f8f6;
+      --txt-h:        #252B1A;
+      --txt-b:        #4a4a4a;
+      --txt-m:        #787878;
+      --border-lt:    #e4e4e4;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--white);
+      color: var(--txt-b);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       LIQUID GLASS
+    ═══════════════════════════════════════════════════════════════════════ */
+    .liquid-glass {
+      position: relative;
+      background: rgba(255,255,255,0.01);
+      background-blend-mode: luminosity;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: none;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.10);
+      overflow: hidden;
+    }
+    .liquid-glass::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      padding: 1.4px;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 20%,
+        rgba(255,255,255,0)   40%, rgba(255,255,255,0)   60%,
+        rgba(255,255,255,0.15) 80%, rgba(255,255,255,0.45) 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .liquid-glass > * { position: relative; z-index: 2; }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       HERO SECTION — Dark, full viewport with globe video
+    ═══════════════════════════════════════════════════════════════════════ */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+      background: var(--background);
+    }
+    .hero-video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
+    }
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom,
+        rgba(5,2,14,0.55) 0%, rgba(5,2,14,0.30) 50%, rgba(5,2,14,0.70) 100%);
+      z-index: 1;
+    }
+    .hero-content {
+      position: relative; z-index: 2;
+      width: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center;
+      gap: clamp(12px, 2vh, 32px);
+      min-height: 100vh;
+    }
+
+    /* ── Navbar ──────────────────────────────────────────────────── */
+    .navbar {
+      width: 100%; display: flex; justify-content: center;
+      padding: 24px 24px 0;
+    }
+    .navbar-pill {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 10px 16px; border-radius: 24px;
+      max-width: 900px; width: 100%;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; flex-shrink: 0;
+    }
+    .logo-text {
+      font-size: 1.375rem; font-weight: 900;
+      color: #ffffff; letter-spacing: -0.04em; line-height: 1;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 2px; list-style: none;
+    }
+    .nav-link {
+      display: flex; align-items: center; gap: 3px;
+      padding: 7px 13px; font-size: 0.9375rem; color: var(--foreground);
+      opacity: 0.9; text-decoration: none; border-radius: 10px;
+      cursor: pointer; transition: opacity 0.15s ease;
+      white-space: nowrap; font-weight: 400;
+    }
+    .nav-link:hover { opacity: 1; }
+    .btn-nav {
+      background: var(--primary); color: var(--primary-fg); border: none;
+      font-family: inherit; font-size: 0.875rem; font-weight: 500;
+      padding: 7px 16px; border-radius: 12px; cursor: pointer;
+      flex-shrink: 0; transition: background 0.15s ease;
+    }
+    .btn-nav:hover { background: hsl(121,95%,68%); }
+    .mobile-menu-btn {
+      display: none; background: none; border: none; color: var(--foreground);
+      cursor: pointer; padding: 4px; flex-shrink: 0;
+    }
+
+    /* ── Hero Main — two-column: copy left, Betty card right ── */
+    .hero-main {
+      display: grid; grid-template-columns: 1fr 320px;
+      gap: 48px; align-items: center;
+      padding: 0 40px;
+      max-width: 1200px; width: 100%;
+    }
+    .hero-copy {
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      gap: clamp(16px, 2.5vh, 32px);
+    }
+    .announcement-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 8px 6px 16px; border-radius: 9999px;
+      font-size: 0.875rem; cursor: default;
+      align-self: center;
+    }
+    .badge-label { font-weight: 500; color: var(--foreground); opacity: 0.85; }
+    .badge-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: rgba(255,255,255,0.05); padding: 4px 10px 4px 12px;
+      border-radius: 9999px; font-size: 0.8125rem; font-weight: 500;
+      color: var(--primary);
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--primary);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    .hero-heading {
+      font-size: clamp(2.25rem, 4vw, 3.25rem); font-weight: 600;
+      letter-spacing: -0.03em; line-height: 1.12;
+      color: var(--hero-heading); max-width: 600px;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.7), 0 0 40px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    .hero-sub {
+      font-size: 1rem; color: var(--hero-sub); opacity: 1;
+      max-width: 520px; line-height: 1.65; font-weight: 400;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 24px rgba(0,0,0,0.7);
+      text-align: center;
+    }
+    .hero-ctas {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap; justify-content: center;
+    }
+
+    /* ── Betty Hero Card (right side of hero) ──────────────────── */
+    .betty-hero-card {
+      width: 320px;
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.08);
+    }
+    .betty-stories {
+      display: flex; gap: 16px; padding: 16px 20px 8px;
+      justify-content: flex-start;
+    }
+    .betty-story {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .story-ring {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 2px solid var(--teal);
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,107,110,0.1);
+    }
+    .story-ring-inner {
+      font-size: 1.25rem; line-height: 1;
+    }
+    .story-label {
+      font-size: 0.6rem; font-weight: 600; color: rgba(255,255,255,0.6);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .betty-card-portrait {
+      width: 100%; aspect-ratio: 4/3.2; object-fit: cover;
+      display: block;
+    }
+    .betty-card-profile {
+      padding: 14px 20px 18px;
+    }
+    .betty-name-row {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+    }
+    .betty-name {
+      font-size: 1.125rem; font-weight: 700; color: #fff;
+    }
+    .betty-verified {
+      width: 18px; height: 18px;
+    }
+    .betty-handle {
+      font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 12px;
+    }
+    .betty-handle .accent { color: var(--teal); font-weight: 600; }
+    .betty-stats {
+      display: flex; gap: 0; margin-bottom: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 10px 0;
+    }
+    .betty-stat {
+      flex: 1; text-align: center;
+    }
+    .betty-stat-val {
+      font-size: 1.0625rem; font-weight: 700; color: #fff;
+    }
+    .betty-stat-lbl {
+      font-size: 0.6rem; font-weight: 500; color: rgba(255,255,255,0.45);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .betty-bio {
+      font-size: 0.75rem; color: rgba(255,255,255,0.65); line-height: 1.5;
+      margin-bottom: 14px;
+    }
+    .betty-card-cta {
+      width: 100%; padding: 10px 0; border-radius: 10px;
+      background: var(--teal); color: #fff;
+      font-family: inherit; font-size: 0.875rem; font-weight: 600;
+      border: none; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s ease;
+    }
+    .betty-card-cta:hover { background: var(--teal-hover); }
+    .btn-hero {
+      background: var(--primary); color: var(--primary-fg); border: none;
+      font-family: inherit; font-size: 1rem; font-weight: 500;
+      padding: 12px 24px; border-radius: 9999px; cursor: pointer;
+      transition: background 0.15s ease; white-space: nowrap;
+    }
+    .btn-hero:hover { background: hsl(121,95%,68%); }
+    .btn-hero-secondary {
+      font-family: inherit; font-size: 1rem; font-weight: 400;
+      padding: 12px 24px; border-radius: 9999px; border: none;
+      color: var(--foreground); cursor: pointer;
+      transition: background 0.15s ease; white-space: nowrap;
+      background: transparent;
+    }
+    .btn-hero-secondary:hover { background: rgba(255,255,255,0.05); }
+
+    /* Meet Betty section removed — card is now in hero */
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       PLATFORM / DASHBOARD SECTION
+    ═══════════════════════════════════════════════════════════════════════ */
+    .platform {
+      background: var(--white);
+      padding: 0 24px 80px;
+    }
+    .platform-inner {
+      max-width: 1200px; margin: 0 auto;
+    }
+
+    /* Welcome bar */
+    .welcome-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 32px 0 24px; flex-wrap: wrap; gap: 16px;
+    }
+    .welcome-left h2 {
+      font-size: 1.5rem; font-weight: 600; color: var(--txt-h);
+      letter-spacing: -0.02em;
+    }
+    .welcome-left p {
+      font-size: 0.875rem; color: var(--txt-m); margin-top: 2px;
+    }
+    .welcome-right {
+      display: flex; gap: 12px;
+    }
+
+    /* Stat snapshot cards */
+    .stat-card {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 14px 20px; border-radius: 12px;
+      background: var(--off-white);
+      border: 1px solid var(--border-lt);
+      min-width: 140px;
+    }
+    .stat-card-label {
+      font-size: 0.75rem; color: var(--txt-m); font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .stat-card-value {
+      font-size: 1.25rem; font-weight: 700; color: var(--txt-h);
+    }
+
+    /* Section header */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 0 16px; border-bottom: 1px solid var(--border-lt);
+      margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+    }
+    .section-header h3 {
+      font-size: 1.125rem; font-weight: 600; color: var(--txt-h);
+      letter-spacing: -0.01em;
+    }
+    .section-header-actions {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .refresh-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: none; border: 1px solid var(--border-lt);
+      font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+      color: var(--txt-b); padding: 6px 14px; border-radius: 8px;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .refresh-btn:hover {
+      background: var(--off-white); border-color: var(--teal-border);
+    }
+    .refresh-btn svg { transition: transform 0.3s ease; }
+    .refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .digest-count {
+      font-size: 0.8125rem; color: var(--txt-m); font-weight: 400;
+    }
+
+    /* Filter chips */
+    .filter-bar {
+      display: flex; gap: 6px; padding-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-chip {
+      padding: 6px 16px; border-radius: 8px;
+      font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+      border: 1px solid var(--border-lt);
+      background: var(--white); color: var(--txt-b);
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .filter-chip:hover {
+      border-color: var(--teal-border); background: var(--teal-light);
+    }
+    .filter-chip.active {
+      background: var(--teal); color: #fff; border-color: var(--teal);
+    }
+
+    /* Main dashboard grid */
+    .dashboard-grid {
+      display: grid; grid-template-columns: 1fr 380px; gap: 24px;
+      align-items: start;
+    }
+
+    /* Digest feed */
+    .digest-feed {
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* ── Digest cards ─────────────────────────────────────────── */
+    .digest-card {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 14px;
+      padding: 0;
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+      overflow: hidden;
+    }
+    .digest-card:hover {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      border-color: var(--teal-border);
+    }
+
+    .dc-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 20px 0; flex-wrap: wrap;
+    }
+    .dc-cat {
+      font-size: 0.6875rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 3px 10px; border-radius: 6px;
+      background: var(--teal-light); color: var(--teal);
+    }
+    .dc-cat.politics { background: #fef3f2; color: #b42318; }
+    .dc-cat.crypto { background: #fef6ee; color: #b54708; }
+    .dc-cat.sports { background: #f0f9ff; color: #175cd3; }
+    .dc-cat.entertainment { background: #fdf2fa; color: #c11574; }
+    .dc-cat.tech { background: var(--teal-light); color: var(--teal); }
+    .dc-cat.news { background: #f5f5f4; color: #57534e; }
+    .dc-time {
+      font-size: 0.75rem; color: var(--txt-m); margin-left: auto;
+    }
+
+    .dc-body { padding: 12px 20px 0; }
+    .dc-title {
+      font-size: 1rem; font-weight: 600; color: var(--txt-h);
+      line-height: 1.4; margin-bottom: 6px;
+    }
+    .dc-desc {
+      font-size: 0.8125rem; color: var(--txt-m); line-height: 1.55;
+    }
+
+    .dc-market { padding: 12px 20px; }
+    .dc-odds-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .dc-odds-yes {
+      font-size: 0.75rem; font-weight: 700; color: var(--teal);
+      white-space: nowrap;
+    }
+    .dc-odds-bar {
+      flex: 1; height: 6px; border-radius: 3px;
+      background: var(--border-lt);
+      overflow: hidden;
+    }
+    .dc-odds-fill {
+      height: 100%; border-radius: 3px;
+      background: linear-gradient(90deg, var(--teal), #00a0a4);
+      transition: width 0.4s ease;
+    }
+    .dc-odds-no {
+      font-size: 0.75rem; font-weight: 700; color: #b42318;
+      white-space: nowrap;
+    }
+    .dc-market-meta {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 0.6875rem; color: var(--txt-m); margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .dc-market-meta a {
+      color: var(--teal); font-weight: 500;
+      text-decoration: none;
+    }
+    .dc-market-meta a:hover { text-decoration: underline; }
+
+    .dc-x-context {
+      display: flex; align-items: center; gap: 6px;
+      padding: 10px 20px; font-size: 0.75rem; color: var(--txt-m);
+      background: var(--off-white); border-top: 1px solid var(--border-lt);
+    }
+    .dc-x-context a { color: var(--teal); font-weight: 500; }
+    .dc-x-context a:hover { text-decoration: underline; }
+    .x-icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .dc-betty {
+      padding: 14px 20px; border-top: 1px solid var(--border-lt);
+      background: var(--off-white);
+    }
+    .dc-betty-label {
+      font-size: 0.6875rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--teal); margin-bottom: 6px;
+    }
+    .dc-betty-loading {
+      font-size: 0.8125rem; color: var(--txt-m); font-style: italic;
+    }
+    .dc-betty-insight {
+      font-size: 0.8125rem; color: var(--txt-b); line-height: 1.55;
+    }
+    .dc-betty-row {
+      display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+    }
+    .dc-betty-chip {
+      font-size: 0.6875rem; font-weight: 600; text-transform: uppercase;
+      padding: 2px 10px; border-radius: 6px;
+      background: var(--teal-light); color: var(--teal);
+    }
+    .dc-betty-chip.high { background: #dcfce7; color: #166534; }
+    .dc-betty-chip.medium { background: #fef9c3; color: #854d0e; }
+    .dc-betty-chip.low { background: #fef3f2; color: #b42318; }
+    .dc-betty-hottake {
+      font-size: 0.8125rem; color: var(--txt-b); font-style: italic;
+      margin-top: 8px; padding-left: 10px;
+      border-left: 2px solid var(--teal-border);
+    }
+
+    .dc-bet {
+      padding: 14px 20px 16px; border-top: 1px solid var(--border-lt);
+    }
+    .dc-bet-label {
+      font-size: 0.6875rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--txt-m); margin-bottom: 8px;
+    }
+    .dc-bet-inputs {
+      display: flex; gap: 8px; margin-bottom: 8px;
+    }
+    .dc-bet-input {
+      font-family: inherit; font-size: 0.8125rem;
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border-lt);
+      background: var(--off-white); color: var(--txt-h);
+      outline: none; flex: 1; transition: border-color 0.15s ease;
+    }
+    .dc-bet-input:focus { border-color: var(--teal-border); }
+    .dc-bet-string {
+      font-size: 0.8125rem; font-weight: 500; color: var(--teal);
+      background: var(--teal-light); padding: 10px 14px; border-radius: 8px;
+      margin-bottom: 10px; line-height: 1.4;
+      border: 1px solid var(--teal-border);
+    }
+    .dc-bet-actions {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .btn-bet {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: inherit; font-size: 0.75rem; font-weight: 500;
+      padding: 7px 14px; border-radius: 8px; cursor: pointer;
+      border: none; transition: all 0.15s ease;
+    }
+    .btn-bet.primary {
+      background: var(--teal); color: #fff;
+    }
+    .btn-bet.primary:hover { background: var(--teal-hover); }
+    .btn-bet.secondary {
+      background: var(--off-white); color: var(--txt-b);
+      border: 1px solid var(--border-lt);
+    }
+    .btn-bet.secondary:hover {
+      background: var(--teal-light); border-color: var(--teal-border);
+    }
+
+    /* ── Sidebar ────────────────────────────────────────────────── */
+    .sidebar {
+      display: flex; flex-direction: column; gap: 20px;
+      position: sticky; top: 24px;
+    }
+
+    .sidebar-card {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: box-shadow 0.2s ease;
+    }
+    .sidebar-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+    }
+    .sidebar-card-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border-lt);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sidebar-card-header h4 {
+      font-size: 0.875rem; font-weight: 600; color: var(--txt-h);
+    }
+    .sidebar-card-header svg {
+      color: var(--teal); flex-shrink: 0;
+    }
+    .sidebar-card-body { padding: 16px 20px; }
+
+    /* Converter */
+    .converter-row {
+      display: flex; gap: 8px; margin-bottom: 12px;
+    }
+    .converter-input {
+      flex: 1; font-family: inherit; font-size: 0.8125rem;
+      padding: 9px 12px; border-radius: 8px;
+      border: 1px solid var(--border-lt);
+      background: var(--off-white); color: var(--txt-h);
+      outline: none; transition: border-color 0.15s ease;
+    }
+    .converter-input:focus { border-color: var(--teal-border); }
+    .converter-btn {
+      background: var(--teal); color: #fff; border: none;
+      font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+      padding: 9px 16px; border-radius: 8px; cursor: pointer;
+      white-space: nowrap; transition: background 0.15s ease;
+    }
+    .converter-btn:hover { background: var(--teal-hover); }
+    .converter-btn:disabled { opacity: 0.5; cursor: default; }
+    .converter-result { min-height: 20px; }
+    .bet-result {
+      padding: 12px; border-radius: 10px;
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      margin-bottom: 8px;
+    }
+    .bet-result-q {
+      font-size: 0.8125rem; font-weight: 600; color: var(--txt-h);
+      margin-bottom: 4px;
+    }
+    .bet-result-odds {
+      font-size: 0.75rem; color: var(--teal); margin-bottom: 6px;
+    }
+    .bet-result-string {
+      font-size: 0.75rem; font-weight: 500; color: var(--teal);
+      background: var(--teal-light); padding: 8px 10px; border-radius: 6px;
+      cursor: pointer; border: 1px solid var(--teal-border);
+      transition: background 0.15s ease;
+    }
+    .bet-result-string:hover { background: var(--teal-lighter); }
+
+    /* Chat */
+    .chat-messages {
+      height: 260px; overflow-y: auto; padding: 4px 0;
+      display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 12px;
+    }
+    .chat-msg {
+      font-size: 0.8125rem; line-height: 1.5; padding: 10px 14px;
+      border-radius: 12px; max-width: 92%;
+    }
+    .chat-msg.betty {
+      background: var(--off-white); color: var(--txt-b);
+      border: 1px solid var(--border-lt);
+      align-self: flex-start; border-bottom-left-radius: 4px;
+    }
+    .chat-msg.user {
+      background: var(--teal); color: #fff;
+      align-self: flex-end; border-bottom-right-radius: 4px;
+    }
+    .chat-input-row {
+      display: flex; gap: 8px;
+    }
+    .chat-input {
+      flex: 1; font-family: inherit; font-size: 0.8125rem;
+      padding: 9px 12px; border-radius: 8px;
+      border: 1px solid var(--border-lt);
+      background: var(--off-white); color: var(--txt-h);
+      outline: none; transition: border-color 0.15s ease;
+    }
+    .chat-input:focus { border-color: var(--teal-border); }
+    .chat-send-btn {
+      background: var(--teal); color: #fff; border: none;
+      font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+      padding: 9px 16px; border-radius: 8px; cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .chat-send-btn:hover { background: var(--teal-hover); }
+    .chat-send-btn:disabled { opacity: 0.5; cursor: default; }
+
+    /* ── Skeletons ───────────────────────────────────────────────── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--border-lt) 25%, #efefef 50%, var(--border-lt) 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease infinite;
+      border-radius: 6px;
+    }
+    .skeleton-line { height: 14px; margin-bottom: 10px; }
+    .w40 { width: 40%; }
+    .w60 { width: 60%; }
+    .w80 { width: 80%; }
+    @keyframes skeleton-pulse {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; padding: 48px 24px;
+      text-align: center; color: var(--txt-m); font-size: 0.875rem;
+    }
+
+    /* ── Toast ────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 32px; left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--txt-h); color: #fff;
+      padding: 10px 24px; border-radius: 10px;
+      font-size: 0.8125rem; font-weight: 500;
+      opacity: 0; transition: all 0.3s ease; z-index: 9999;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════════════════════════ */
+    .site-footer {
+      background: var(--off-white);
+      border-top: 1px solid var(--border-lt);
+      padding: 40px 24px;
+    }
+    .footer-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-brand {
+      font-size: 0.875rem; color: var(--txt-m);
+    }
+    .footer-links {
+      display: flex; gap: 20px; flex-wrap: wrap;
+    }
+    .footer-link {
+      font-size: 0.8125rem; color: var(--txt-m);
+      transition: color 0.15s ease;
+    }
+    .footer-link:hover { color: var(--teal); }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════════════════════════ */
+    @media (max-width: 960px) {
+      .nav-links { display: none; }
+      .mobile-menu-btn { display: block; }
+
+      .hero-main {
+        grid-template-columns: 1fr;
+        gap: 32px;
+        padding: 0 24px;
+      }
+      .announcement-badge { align-self: center; }
+      .betty-hero-card {
+        width: 280px; margin: 0 auto;
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: static;
+      }
+
+      .welcome-right {
+        flex-wrap: wrap;
+      }
+      .stat-card { min-width: 120px; }
+    }
+
+    @media (max-width: 600px) {
+      .hero-main { padding: 0 16px; gap: 24px; }
+      .hero-heading { font-size: 1.875rem; }
+      .hero-sub { font-size: 0.9375rem; }
+      .betty-hero-card { width: 260px; }
+      .betty-card-portrait { aspect-ratio: 4/2.8; }
+      .platform { padding: 0 16px 60px; }
+      .welcome-bar { padding: 24px 0 16px; }
+      .section-header { padding: 16px 0 12px; }
+      .dc-header { padding: 14px 16px 0; }
+      .dc-body { padding: 10px 16px 0; }
+      .dc-market { padding: 10px 16px; }
+      .dc-bet { padding: 12px 16px 14px; }
+      .dc-betty { padding: 12px 16px; }
+      .dc-x-context { padding: 8px 16px; }
+      .sidebar-card-header { padding: 14px 16px; }
+      .sidebar-card-body { padding: 14px 16px; }
+      .footer-inner {
+        flex-direction: column; align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     HERO — Dark, full viewport, globe video
+══════════════════════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <video class="hero-video" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260309_042944_4a2205b7-b061-490a-852b-92d9e9955ce9.mp4" autoplay loop muted playsinline></video>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+
+    <nav class="navbar">
+      <div class="navbar-pill liquid-glass">
+        <a href="/" class="logo">
+          <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+            <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+            <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+          </svg>
+          <span class="logo-text">WeBetAI</span>
+        </a>
+        <ul class="nav-links">
+          <li><a href="/" class="nav-link">Home</a></li>
+          <li><a href="#meet-betty" class="nav-link">Meet Betty</a></li>
+          <li><a href="#features" class="nav-link">Features</a></li>
+          <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
+          <li><a href="/edge" class="nav-link">Edge Picks</a></li>
+        </ul>
+        <button class="btn-nav">Get Free Daily Digest</button>
+        <button class="mobile-menu-btn" aria-label="Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </nav>
+
+    <div class="hero-main">
+
+      <!-- Left: Copy -->
+      <div class="hero-copy">
+        <div class="announcement-badge liquid-glass" style="border-radius:9999px;">
+          <span class="badge-label">Social Intelligence</span>
+          <span class="badge-chip"><span class="badge-dot"></span>&nbsp;Live Now</span>
+        </div>
+
+        <h1 class="hero-heading">Meet Betty, Your AI Social Intelligence Companion</h1>
+
+        <p class="hero-sub">Betty scans X, prediction markets, and sportsbooks 24/7 to deliver a curated daily digest of trending topics you can bet on with friends. No noise. Just sharp, social intelligence you can act on.</p>
+
+        <div class="hero-ctas">
+          <a href="#chat-betty" class="btn-hero-secondary liquid-glass" style="text-decoration:none; border-radius:9999px;">Text Betty</a>
+        </div>
+      </div>
+
+      <!-- Right: Betty Card -->
+      <div class="betty-hero-card">
+        <div class="betty-stories">
+          <div class="betty-story">
+            <div class="story-ring"><div class="story-ring-inner">&#127942;</div></div>
+            <span class="story-label">Wins</span>
+          </div>
+          <div class="betty-story">
+            <div class="story-ring"><div class="story-ring-inner">&#9889;</div></div>
+            <span class="story-label">Live Bets</span>
+          </div>
+          <div class="betty-story">
+            <div class="story-ring"><div class="story-ring-inner">&#128200;</div></div>
+            <span class="story-label">Trends</span>
+          </div>
+          <div class="betty-story">
+            <div class="story-ring"><div class="story-ring-inner">&#128176;</div></div>
+            <span class="story-label">Winnings</span>
+          </div>
+        </div>
+        <img class="betty-card-portrait" src="https://imagine-public.x.ai/imagine-public/share-images/79ef03da-8e8d-4fc2-8aa7-2d8d645b5b7f.jpg?cache=1" alt="Betty — WeBetAI Companion" />
+        <div class="betty-card-profile">
+          <div class="betty-name-row">
+            <span class="betty-name">Betty</span>
+            <svg class="betty-verified" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#006B6E"/><path d="M7 12l3.5 3.5L17 8.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="betty-handle">@BettyWeBetAI &middot; <span class="accent">AI Companion</span></div>
+          <div class="betty-stats">
+            <div class="betty-stat"><div class="betty-stat-val">2.4M</div><div class="betty-stat-lbl">Users</div></div>
+            <div class="betty-stat"><div class="betty-stat-val">847K</div><div class="betty-stat-lbl">Bets Placed</div></div>
+            <div class="betty-stat"><div class="betty-stat-val">67%</div><div class="betty-stat-lbl">Win Rate</div></div>
+          </div>
+          <p class="betty-bio">Your AI-powered social intelligence companion. Curating what's trending and trustworthy so you never miss a conversation worth having. Powered by xAI &amp; Polymarket.</p>
+          <button class="betty-card-cta" onclick="document.getElementById('chat-betty').scrollIntoView({behavior:'smooth'})">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Chat with Betty
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PLATFORM / DASHBOARD — xAI Console Aesthetic
+══════════════════════════════════════════════════════════════════════════ -->
+<section class="platform" id="features">
+  <div class="platform-inner">
+
+    <!-- Welcome bar -->
+    <div class="welcome-bar">
+      <div class="welcome-left">
+        <h2>Welcome back</h2>
+        <p>Here's what Betty found today</p>
+      </div>
+      <div class="welcome-right">
+        <div class="stat-card">
+          <span class="stat-card-label">Markets</span>
+          <span class="stat-card-value" id="stat-markets">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-label">Categories</span>
+          <span class="stat-card-value" id="stat-categories">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-label">Updated</span>
+          <span class="stat-card-value" id="stat-updated">--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section header -->
+    <div class="section-header" id="how-it-works">
+      <h3>Today's Digest</h3>
+      <div class="section-header-actions">
+        <span class="digest-count" id="digest-count">Loading markets...</span>
+        <button class="refresh-btn" id="refresh-btn" onclick="loadDigest()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <button class="filter-chip active" data-cat="all">All Topics</button>
+      <button class="filter-chip" data-cat="politics">Politics</button>
+      <button class="filter-chip" data-cat="crypto">Crypto</button>
+      <button class="filter-chip" data-cat="sports">Sports</button>
+      <button class="filter-chip" data-cat="tech">Tech &amp; AI</button>
+      <button class="filter-chip" data-cat="entertainment">Entertainment</button>
+      <button class="filter-chip" data-cat="news">News</button>
+    </div>
+
+    <!-- Dashboard grid -->
+    <div class="dashboard-grid">
+
+      <!-- Left: Digest feed -->
+      <div class="digest-feed" id="digest-feed">
+        <!-- Cards rendered by JS -->
+      </div>
+
+      <!-- Right: Sidebar -->
+      <div class="sidebar">
+
+        <!-- X Post to Bet Converter -->
+        <div class="sidebar-card">
+          <div class="sidebar-card-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231z"/></svg>
+            <h4>X Post &rarr; Bet Converter</h4>
+          </div>
+          <div class="sidebar-card-body">
+            <p style="font-size:0.8125rem;color:var(--txt-m);margin-bottom:12px;">Paste any X post URL and Betty will find matching prediction markets and build a ready-to-send bet.</p>
+            <div class="converter-row">
+              <input type="text" class="converter-input" id="x-url-input" placeholder="Paste X / Twitter URL..." />
+              <button class="converter-btn" id="convert-btn" onclick="convertXPost()">Convert</button>
+            </div>
+            <div class="converter-result" id="converter-result"></div>
+          </div>
+        </div>
+
+        <!-- Chat with Betty -->
+        <div class="sidebar-card" id="chat-betty">
+          <div class="sidebar-card-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <h4>Chat with Betty</h4>
+          </div>
+          <div class="sidebar-card-body">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-msg betty">Hey! I'm Betty, your social intelligence companion. Ask me anything about prediction markets, trending topics, or who's going to win the big game. I've got real-time data from X and live market odds.</div>
+            </div>
+            <div class="chat-input-row">
+              <input type="text" class="chat-input" id="chat-input" placeholder="Ask Betty anything..." onkeydown="if(event.key==='Enter')sendChat()" />
+              <button class="chat-send-btn" id="chat-send" onclick="sendChat()">Send</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     FOOTER
+══════════════════════════════════════════════════════════════════════════ -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-brand">&copy; 2026 WeBetAI &middot; Social Intelligence</span>
+    <div class="footer-links">
+      <a href="/" class="footer-link">Home</a>
+      <a href="/edge" class="footer-link">Edge Picks</a>
+      <a href="#chat-betty" class="footer-link">Ask Betty</a>
+      <a href="#features" class="footer-link">X &rarr; Bet</a>
+      <a href="/credits" class="footer-link">Credits</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT — All existing functionality preserved
+══════════════════════════════════════════════════════════════════════════ -->
+<script>
+const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const API_BASE = IS_LOCAL ? '/api' : '/.netlify/functions';
+let allMarkets = [];
+let activeCategory = 'all';
+
+// ─── INIT ────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadDigest();
+  setupFilters();
+});
+
+// ─── CATEGORY FILTERS ────────────────────────────────────────────
+function setupFilters() {
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeCategory = chip.dataset.cat;
+      renderDigest();
+    });
+  });
+}
+
+// ─── LOAD DIGEST (Markets API) ──────────────────────────────────
+async function loadDigest() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  document.getElementById('digest-count').textContent = 'Loading markets...';
+
+  document.getElementById('digest-feed').innerHTML = Array(3).fill(0).map(() => `
+    <div class="digest-card" style="padding:20px;">
+      <div class="skeleton skeleton-line w60"></div>
+      <div class="skeleton skeleton-line w80"></div>
+      <div class="skeleton skeleton-line w40"></div>
+    </div>
+  `).join('');
+
+  try {
+    const res = await fetch(`${API_BASE}/markets`);
+    if (!res.ok) throw new Error(`API returned ${res.status}`);
+    const data = await res.json();
+    allMarkets = data.markets || [];
+    updateStats();
+    renderDigest();
+  } catch (err) {
+    console.error('Failed to load digest:', err);
+    document.getElementById('digest-feed').innerHTML = `
+      <div class="empty-state" style="background:var(--off-white);border-radius:1rem;border:1px solid var(--border-lt);">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <p>Couldn't load markets. Check your connection and try again.</p>
+      </div>
+    `;
+    document.getElementById('digest-count').textContent = 'Error loading';
+  }
+  btn.classList.remove('spinning');
+}
+
+// ─── UPDATE STAT CARDS ──────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-markets').textContent = allMarkets.length;
+  const cats = new Set(allMarkets.map(m => m.category).filter(Boolean));
+  document.getElementById('stat-categories').textContent = cats.size;
+  const now = new Date();
+  document.getElementById('stat-updated').textContent = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// ─── RENDER DIGEST ──────────────────────────────────────────────
+function renderDigest() {
+  const feed = document.getElementById('digest-feed');
+  const filtered = activeCategory === 'all'
+    ? allMarkets
+    : allMarkets.filter(m => m.category === activeCategory);
+
+  document.getElementById('digest-count').textContent =
+    `${filtered.length} trending topic${filtered.length !== 1 ? 's' : ''}${activeCategory !== 'all' ? ' in ' + activeCategory : ''}`;
+
+  if (filtered.length === 0) {
+    feed.innerHTML = `
+      <div class="empty-state" style="background:var(--off-white);border-radius:1rem;border:1px solid var(--border-lt);">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 15h8"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="9" r="1"/></svg>
+        <p>No trending topics in this category right now. Try another or refresh.</p>
+      </div>
+    `;
+    return;
+  }
+
+  feed.innerHTML = filtered.map((m, i) => renderDigestCard(m, i)).join('');
+}
+
+function renderDigestCard(market, index) {
+  const catClass = market.category || 'news';
+  const catLabel = catClass.charAt(0).toUpperCase() + catClass.slice(1);
+  const yesWidth = market.yesPrice || 50;
+  const betClaim = toBetClaim(market.question);
+  const cardId = `card-${index}`;
+  const settleDateShort = market.endDate
+    ? new Date(market.endDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })
+    : '';
+
+  const xContextHtml = market.xTrend
+    ? `<div class="dc-x-context">
+        <svg class="x-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        Trending on X: <strong>${escHtml(market.xTrend.name)}</strong>${market.xTrend.tweetVolume ? ' &middot; ' + formatNum(market.xTrend.tweetVolume) + ' posts' : ''}
+      </div>`
+    : (market.xSearchUrl
+      ? `<div class="dc-x-context">
+          <svg class="x-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          <a href="${escHtml(market.xSearchUrl)}" target="_blank" rel="noopener">See what X is saying &rarr;</a>
+        </div>`
+      : '');
+
+  const priceChangeHtml = market.priceChange24h != null
+    ? `<span style="color:${market.priceChange24h >= 0 ? '#006B6E' : '#dc2626'}; font-size:0.75rem; font-weight:700;">${market.priceChange24h >= 0 ? '+' : ''}${market.priceChange24h}% 24h</span>`
+    : '';
+
+  return `
+    <div class="digest-card" data-category="${catClass}" id="${cardId}">
+      <div class="dc-header">
+        <span class="dc-cat ${catClass}">${catLabel}</span>
+        ${priceChangeHtml}
+        <span class="dc-time">${market.volume24h ? market.volume24h + ' 24h vol' : ''}</span>
+      </div>
+      <div class="dc-body">
+        <div class="dc-title">${escHtml(market.question)}</div>
+        <div class="dc-desc">${escHtml((market.description || '').slice(0, 180))}${market.description && market.description.length > 180 ? '...' : ''}</div>
+      </div>
+      <div class="dc-market">
+        <div class="dc-odds-row">
+          <span class="dc-odds-yes">${market.yesPrice != null ? market.yesPrice + '% YES' : '—'}</span>
+          <div class="dc-odds-bar"><div class="dc-odds-fill" style="width:${yesWidth}%"></div></div>
+          <span class="dc-odds-no">${market.noPrice != null ? market.noPrice + '% NO' : '—'}</span>
+        </div>
+        <div class="dc-market-meta">
+          <span>${market.volume || '—'} volume</span>
+          <span>${market.liquidity || '—'} liquidity</span>
+          ${market.endDate ? `<span>Resolves ${new Date(market.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : ''}
+          <a href="${escHtml(market.polyUrl || '#')}" target="_blank" rel="noopener" style="margin-left:auto;">Polymarket &rarr;</a>
+        </div>
+      </div>
+      ${xContextHtml}
+      <div class="dc-betty" id="betty-${index}">
+        <div class="dc-betty-label">Betty's Take</div>
+        <div class="dc-betty-loading">Analyzing with real-time X data...</div>
+      </div>
+      <div class="dc-bet">
+        <div class="dc-bet-label">Send This Bet</div>
+        <div class="dc-bet-inputs">
+          <input type="text" class="dc-bet-input" placeholder="Friend's name" value="" id="friend-${index}" oninput="updateBetString(${index})" />
+          <input type="number" class="dc-bet-input" placeholder="$ Amount" value="20" style="max-width:100px;" id="amount-${index}" oninput="updateBetString(${index})" />
+        </div>
+        <div class="dc-bet-string" id="betstr-${index}">@Friend WeBet $20 ${escHtml(betClaim)}${settleDateShort ? ' On ' + settleDateShort : ''}</div>
+        <div class="dc-bet-actions">
+          <button class="btn-bet primary" onclick="copyBet(${index})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy Bet
+          </button>
+          <button class="btn-bet secondary" onclick="shareBet(${index})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+            Share
+          </button>
+          <button class="btn-bet secondary" onclick="askBettyAbout(${index})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Ask Betty
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Lazy-load Betty analysis via IntersectionObserver
+const analysisLoaded = new Set();
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const card = entry.target;
+      const index = parseInt(card.id.replace('card-', ''));
+      if (!analysisLoaded.has(index) && allMarkets[index]) {
+        analysisLoaded.add(index);
+        fetchBettyAnalysis(allMarkets[index], index);
+      }
+    }
+  });
+}, { rootMargin: '100px' });
+
+function observeCards() {
+  document.querySelectorAll('.digest-card[id^="card-"]').forEach(card => observer.observe(card));
+}
+
+const _origRender = renderDigest;
+renderDigest = function() { _origRender(); setTimeout(observeCards, 50); };
+
+function fetchBettyAnalysis(market, index) {
+  const el = document.getElementById(`betty-${index}`);
+  if (!el) return;
+  fetch(`${API_BASE}/xai-analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question: market.question, odds_yes: market.yesPrice, odds_no: market.noPrice,
+      volume: market.volume, category: market.category, endDate: market.endDate,
+    }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      el.innerHTML = `
+        <div class="dc-betty-label">Betty's Take</div>
+        <div class="dc-betty-insight">${escHtml(data.insight || '')}</div>
+        <div class="dc-betty-row">
+          <span class="dc-betty-chip ${data.confidence || 'medium'}">${(data.confidence || 'medium').toUpperCase()} confidence</span>
+        </div>
+        ${data.hotTake ? `<div class="dc-betty-hottake">"${escHtml(data.hotTake)}"</div>` : ''}
+        ${data.xContext ? `<div style="font-size:0.75rem;color:#787878;margin-top:4px;">X says: ${escHtml(data.xContext)}</div>` : ''}
+      `;
+    })
+    .catch(() => {
+      el.innerHTML = `
+        <div class="dc-betty-label">Betty's Take</div>
+        <div class="dc-betty-insight" style="opacity:0.5;">Tap "Ask Betty" below for a live analysis of this market.</div>
+      `;
+    });
+}
+
+// ─── BET STRING BUILDER ─────────────────────────────────────────
+function updateBetString(index) {
+  const market = getFilteredMarkets()[index];
+  if (!market) return;
+  const friend = document.getElementById(`friend-${index}`)?.value || 'Friend';
+  const amount = document.getElementById(`amount-${index}`)?.value || '20';
+  const claim = toBetClaim(market.question);
+  const dateStr = market.endDate
+    ? new Date(market.endDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })
+    : '';
+  const el = document.getElementById(`betstr-${index}`);
+  if (el) el.textContent = `@${friend} WeBet $${amount} ${claim}${dateStr ? ' On ' + dateStr : ''}`;
+}
+
+function getFilteredMarkets() {
+  return activeCategory === 'all' ? allMarkets : allMarkets.filter(m => m.category === activeCategory);
+}
+
+function toBetClaim(question) {
+  let claim = question.replace(/^Will\s+/i,'').replace(/^Does\s+/i,'').replace(/^Is\s+/i,'').replace(/^Are\s+/i,'').replace(/^Can\s+/i,'').replace(/\?+$/,'').trim();
+  return claim.split(' ').map((w,i) => {
+    const lower = w.toLowerCase();
+    if (i > 0 && ['the','a','an','of','in','on','to','by','or','and','for','at','vs'].includes(lower)) return lower;
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }).join(' ');
+}
+
+// ─── COPY / SHARE ───────────────────────────────────────────────
+function copyBet(index) {
+  const el = document.getElementById(`betstr-${index}`);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(() => showToast('Bet string copied!')).catch(() => {
+    const ta = document.createElement('textarea'); ta.value = el.textContent;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); showToast('Copied!');
+  });
+}
+
+function shareBet(index) {
+  const el = document.getElementById(`betstr-${index}`);
+  if (!el) return;
+  const text = el.textContent + '\n\nCreated with Betty — webetsocial.com/betty';
+  if (navigator.share) navigator.share({ text }).catch(() => {});
+  else copyBet(index);
+}
+
+function askBettyAbout(index) {
+  const market = getFilteredMarkets()[index];
+  if (!market) return;
+  const input = document.getElementById('chat-input');
+  input.value = `What's your take on "${market.question}"? Current odds are ${market.yesPrice}% YES. Should I bet on this?`;
+  input.focus();
+  if (window.innerWidth <= 960) document.querySelector('.sidebar-card:last-child').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  sendChat();
+}
+
+// ─── X POST → BET CONVERTER ────────────────────────────────────
+async function convertXPost() {
+  const input = document.getElementById('x-url-input');
+  const resultEl = document.getElementById('converter-result');
+  const url = input.value.trim();
+  if (!url) { resultEl.innerHTML = '<span style="color:#dc2626;">Please paste an X/Twitter post URL.</span>'; return; }
+  if (!/x\.com|twitter\.com/.test(url)) { resultEl.innerHTML = '<span style="color:#dc2626;">That doesn\'t look like an X/Twitter URL.</span>'; return; }
+  resultEl.innerHTML = '<div class="skeleton skeleton-line w80"></div><div class="skeleton skeleton-line w60"></div>';
+  document.getElementById('convert-btn').disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/convert-bet`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (!data.markets || data.markets.length === 0) {
+      resultEl.innerHTML = `<div style="color:#b45309;">No matching prediction markets found.</div><div style="font-size:0.75rem;color:#787878;margin-top:8px;">Post: "${escHtml((data.tweetText||'').slice(0,120))}"</div>`;
+      return;
+    }
+    resultEl.innerHTML = `
+      <div style="font-size:0.75rem;color:#787878;margin-bottom:8px;">@${escHtml(data.tweetHandle||'?')} — "${escHtml((data.tweetText||'').slice(0,100))}${data.tweetText&&data.tweetText.length>100?'...':''}"</div>
+      ${data.markets.map(m => `
+        <div class="bet-result">
+          <div class="bet-result-q">${escHtml(m.question)}</div>
+          <div class="bet-result-odds">${m.yesPrice!=null?m.yesPrice+'% YES':'—'} &middot; ${m.volume?'$'+formatNum(parseFloat(m.volume)||0)+' vol':''}</div>
+          <div class="bet-result-string" onclick="navigator.clipboard.writeText(this.textContent);showToast('Copied!');" title="Click to copy">${escHtml(m.p2pText?m.p2pText.split('\n')[0]:'@Friend WeBet $20 '+(m.betClaim||m.question))}</div>
+        </div>
+      `).join('')}
+    `;
+  } catch (err) { resultEl.innerHTML = `<span style="color:#dc2626;">Error: ${escHtml(err.message)}</span>`; }
+  document.getElementById('convert-btn').disabled = false;
+}
+
+// ─── CHAT WITH BETTY ────────────────────────────────────────────
+const chatHistory = [];
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  addChatMsg('user', msg);
+  chatHistory.push({ role: 'user', content: msg });
+  const sendBtn = document.getElementById('chat-send');
+  sendBtn.disabled = true;
+  const typingId = 'typing-' + Date.now();
+  addChatMsg('betty', '<span style="opacity:0.5;">Betty is thinking...</span>', typingId);
+  try {
+    const res = await fetch(`${API_BASE}/grok-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: chatHistory, search: true }) });
+    const data = await res.json();
+    document.getElementById(typingId)?.remove();
+    if (data.error) throw new Error(data.error);
+    const reply = data.content || 'Sorry, I didn\'t get a response. Try again!';
+    chatHistory.push({ role: 'assistant', content: reply });
+    addChatMsg('betty', formatChatMsg(reply));
+  } catch (err) {
+    document.getElementById(typingId)?.remove();
+    addChatMsg('betty', `<span style="color:#dc2626;">Error: ${escHtml(err.message)}. Try again.</span>`);
+  }
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+function addChatMsg(who, html, id) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${who}`;
+  if (id) div.id = id;
+  div.innerHTML = html;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function formatChatMsg(text) {
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/\n/g, '<br>');
+}
+
+// ─── UTILS ──────────────────────────────────────────────────────
+function escHtml(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+function formatNum(n) { if (n >= 1e6) return (n/1e6).toFixed(1)+'M'; if (n >= 1e3) return (n/1e3).toFixed(0)+'K'; return String(n); }
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+</script>
+
+</body>
+</html>

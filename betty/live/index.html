@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WeBetAI - Social Intelligence | Betty Live</title>
+  <meta name="description" content="Talk to Betty live — WeBetAI's AI sports analyst avatar. Real-time conversation about picks, strategy, and sports analytics." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/live/" />
+  <meta property="og:title" content="WeBetAI - Betty Live Avatar" />
+  <meta property="og:description" content="Talk to Betty live — WeBetAI's AI sports analyst. Real-time conversation about picks, strategy, and analytics." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Betty Live Avatar" />
+  <meta name="twitter:description" content="Talk to Betty live — WeBetAI's AI sports analyst. Real-time conversation about picks, strategy, and analytics." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.1/400.css" />
+
+  <style>
+    :root {
+      --green: #004C54;
+      --green-light: #006B6E;
+      --teal: #00b5b9;
+      --sans: 'Geist Sans', -apple-system, system-ui, sans-serif;
+      --mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'Roboto Mono', monospace;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--sans);
+      background: var(--green);
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── NAV ─────────────────────────────────────────────── */
+    .nav {
+      height: 64px; padding: 0 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      flex-shrink: 0;
+    }
+    .nav-left {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none;
+    }
+    .nav-wordmark {
+      font-size: 1.125rem; font-weight: 700;
+      color: #ffffff; letter-spacing: -0.04em;
+    }
+    .nav-cta {
+      font-family: var(--mono); font-size: 13px; font-weight: 400;
+      color: #ffffff; text-decoration: none;
+      padding: 9px 20px; border-radius: 9999px;
+      border: 1.5px solid rgba(255,255,255,0.35);
+      letter-spacing: 1px; text-transform: uppercase;
+      transition: all 0.25s;
+    }
+    .nav-cta:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.6);
+    }
+
+    /* ─── MAIN ────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px;
+      gap: 32px;
+    }
+
+    .page-header {
+      text-align: center;
+      max-width: 600px;
+    }
+    .page-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono);
+      font-size: 12px; font-weight: 400;
+      text-transform: uppercase; letter-spacing: 2px;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 16px;
+    }
+    .page-badge .dot {
+      width: 8px; height: 8px;
+      background: #87fb89;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(135,251,137,0.6);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .page-title {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+    .page-sub {
+      font-size: 16px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.6;
+    }
+
+    /* ─── START BUTTON ────────────────────────────────────── */
+    .start-btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: var(--sans);
+      font-size: 16px; font-weight: 600;
+      color: var(--green); background: #fff;
+      border: none; border-radius: 9999px;
+      padding: 16px 36px;
+      cursor: pointer;
+      transition: all 0.25s;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+    .start-btn:hover {
+      background: #f0f7f6;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .start-btn:disabled {
+      opacity: 0.5; cursor: not-allowed;
+      transform: none; box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+    .start-btn .icon { font-size: 18px; }
+
+    /* ─── AVATAR CONTAINER ────────────────────────────────── */
+    .avatar-container {
+      width: 100%;
+      max-width: 1080px;
+      aspect-ratio: 16 / 9;
+      border-radius: 20px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.15);
+      position: relative;
+      box-shadow: 0 16px 64px rgba(0,0,0,0.25);
+    }
+    .avatar-container iframe {
+      width: 100%; height: 100%;
+      border: none;
+    }
+
+    /* Loading */
+    .avatar-loading {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px;
+    }
+    .avatar-loading.hidden { display: none; }
+
+    .loader {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .avatar-loading p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    /* Error */
+    .error-msg {
+      color: #fca5a5;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 12px;
+      padding: 12px 20px;
+      font-size: 14px;
+      text-align: center;
+      max-width: 500px;
+    }
+    .error-msg.hidden { display: none; }
+
+    /* Sandbox badge */
+    .sandbox-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 400;
+      text-transform: uppercase; letter-spacing: 1.5px;
+      color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 9999px;
+      padding: 6px 14px;
+    }
+
+    /* ─── INFO CARDS ──────────────────────────────────────── */
+    .info-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 1080px;
+    }
+    .info-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .info-card h3 {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 400;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 10px;
+    }
+    .info-card p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.55;
+    }
+
+    /* ─── FOOTER ──────────────────────────────────────────── */
+    .footer {
+      padding: 24px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none;
+    }
+    .footer-logo span {
+      font-size: 13px; font-weight: 600;
+      color: rgba(255,255,255,0.4);
+    }
+    .footer-links {
+      display: flex; gap: 20px;
+    }
+    .footer-links a {
+      font-family: var(--mono); font-size: 12px;
+      color: rgba(255,255,255,0.35); text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: rgba(255,255,255,0.7); }
+    .footer-copy {
+      font-size: 12px;
+      color: rgba(255,255,255,0.25);
+    }
+
+    @media (max-width: 640px) {
+      .page-title { font-size: 1.75rem; }
+      .avatar-container { aspect-ratio: 9 / 16; max-width: 400px; }
+      .main { padding: 32px 16px; gap: 24px; }
+      .footer { flex-direction: column; gap: 12px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav-left">
+      <svg viewBox="0 0 470 419" fill="none" style="width:28px;height:24px;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#FFFFFF"/>
+      </svg>
+      <span class="nav-wordmark">WeBetAI</span>
+    </a>
+    <a href="/" class="nav-cta">Home</a>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <div class="page-badge"><span class="dot"></span> Live Avatar</div>
+      <h1 class="page-title">Talk to Betty</h1>
+      <p class="page-sub">Real-time conversation with WeBetAI's AI sports analyst. Ask about today's picks, betting strategy, model methodology, and more.</p>
+    </div>
+
+    <button class="start-btn" id="startBtn" onclick="startSession()">
+      <span class="icon">&#9654;</span> Start Conversation
+    </button>
+
+    <div class="avatar-container" id="avatarContainer" style="display:none;">
+      <div class="avatar-loading" id="avatarLoading">
+        <div class="loader"></div>
+        <p>Connecting to Betty...</p>
+      </div>
+    </div>
+
+    <p class="error-msg hidden" id="errorMsg"></p>
+
+    <div class="sandbox-badge" id="sandboxBadge" style="display:none;">Sandbox Mode</div>
+
+    <div class="info-row">
+      <div class="info-card">
+        <h3>Picks & Strategy</h3>
+        <p>Ask about today's model picks, expected value, and which games have the best edge.</p>
+      </div>
+      <div class="info-card">
+        <h3>Model v10</h3>
+        <p>Learn how the WeBetAI model grades games from A+ to B using multi-factor analysis.</p>
+      </div>
+      <div class="info-card">
+        <h3>Bankroll Tips</h3>
+        <p>Get advice on unit sizing, line shopping, and responsible betting practices.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <a href="/" class="footer-logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:20px;height:18px;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="rgba(255,255,255,0.3)"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="rgba(255,255,255,0.3)"/>
+      </svg>
+      <span>WeBetAI</span>
+    </a>
+    <p class="footer-copy">&copy; 2026 WeBetAI. For entertainment purposes only. Always bet responsibly.</p>
+  </footer>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const container = document.getElementById('avatarContainer');
+    const loading = document.getElementById('avatarLoading');
+    const errorMsg = document.getElementById('errorMsg');
+    const sandboxBadge = document.getElementById('sandboxBadge');
+
+    async function startSession() {
+      startBtn.disabled = true;
+      startBtn.innerHTML = '<span class="icon">&#9654;</span> Connecting...';
+      container.style.display = 'block';
+      loading.classList.remove('hidden');
+      errorMsg.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/betty-liveavatar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || json.code !== 1000) {
+          throw new Error(json.message || json.data?.message || 'Failed to start session');
+        }
+
+        const embedData = json.data;
+
+        if (embedData.script) {
+          loading.classList.add('hidden');
+          container.innerHTML = embedData.script;
+          const scripts = container.querySelectorAll('script');
+          scripts.forEach(s => {
+            const ns = document.createElement('script');
+            if (s.src) ns.src = s.src;
+            else ns.textContent = s.textContent;
+            document.head.appendChild(ns);
+          });
+        } else if (embedData.url) {
+          loading.classList.add('hidden');
+          const iframe = document.createElement('iframe');
+          iframe.src = embedData.url;
+          iframe.allow = 'camera; microphone; autoplay';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.border = 'none';
+          container.innerHTML = '';
+          container.appendChild(iframe);
+        } else {
+          throw new Error('No embed URL returned');
+        }
+
+        startBtn.style.display = 'none';
+
+      } catch (err) {
+        loading.classList.add('hidden');
+        container.style.display = 'none';
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<span class="icon">&#9654;</span> Try Again';
+      }
+    }
+  </script>
+</body>
+</html>

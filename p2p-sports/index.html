@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | P2P Sports</title>
+  <meta name="description" content="Peer-to-peer sports betting — bet against real people, not the house. Powered by WeBetAI." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/p2p-sports" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | P2P Sports" />
+  <meta property="og:description" content="Peer-to-peer sports betting — bet against real people, not the house." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | P2P Sports" />
+  <meta name="twitter:description" content="Peer-to-peer sports betting — bet against real people, not the house." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+:root{--white:#fff;--off:#f8f9fa;--bg:#f2f3f5;--teal:#004C54;--tl:#e6f4f1;--tb:#b8ddd6;--grn:#2e7d32;--gl:#e8f5e9;--gb:#a5d6a7;--olive:#1a2e1a;--bdr:#e0e3e8;--t:#1a2e1a;--tm:#5f6b7a;--tl2:#8b95a3;--red:#c0392b;--sel:rgba(0,76,84,.1);--sb:rgba(0,76,84,.4)}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Geist Sans','Inter',system-ui,sans-serif;background:var(--bg);color:var(--t);-webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* Header */
+.hdr{background:var(--white);border-bottom:1px solid var(--bdr);padding:.625rem 1.25rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--olive)}
+.logo-t{font-size:1rem;font-weight:700}
+.hdr-r{display:flex;gap:.5rem;align-items:center}
+.hdr-lnk{font-size:.6875rem;font-weight:500;color:var(--tm);text-decoration:none;padding:.25rem .5rem;border-radius:6px;transition:.15s}
+.hdr-lnk:hover{background:var(--off);color:var(--olive)}
+.bal{font-size:.75rem;font-weight:700;color:var(--grn);background:var(--gl);border:1px solid var(--gb);border-radius:9999px;padding:.25rem .75rem;display:flex;align-items:center;gap:.375rem}
+.bal::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--grn)}
+
+/* Layout */
+.lay{display:flex;min-height:calc(100vh - 45px)}
+.side{width:200px;background:var(--white);border-right:1px solid var(--bdr);padding:1rem 0;overflow-y:auto;flex-shrink:0}
+.side-title{font-size:.625rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.06em;padding:0 1rem .5rem}
+.side-item{display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;font-size:.8125rem;font-weight:500;color:var(--tm);cursor:pointer;transition:.12s;border-left:3px solid transparent}
+.side-item:hover{background:var(--off);color:var(--olive)}
+.side-item.on{background:var(--tl);color:var(--teal);font-weight:600;border-left-color:var(--teal)}
+.side-dot{width:8px;height:8px;border-radius:2px}
+.side-divider{height:1px;background:var(--bdr);margin:.75rem 1rem}
+.main-area{flex:1;overflow-y:auto;padding:0}
+
+/* League tabs */
+.ltabs{display:flex;gap:.5rem;padding:1rem 1.5rem .75rem;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--bdr);background:var(--white)}
+.ltabs::-webkit-scrollbar{display:none}
+.ltab{font-family:inherit;font-size:.75rem;font-weight:600;padding:.375rem .75rem;border-radius:9999px;border:1px solid var(--bdr);background:var(--white);color:var(--tm);cursor:pointer;transition:.15s;white-space:nowrap;display:flex;align-items:center;gap:.375rem}
+.ltab:hover{border-color:var(--tb);color:var(--olive)}
+.ltab.on{background:var(--teal);color:var(--white);border-color:var(--teal)}
+.ltab-icon{width:16px;height:16px;border-radius:50%;background:var(--off);display:inline-flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700}
+.ltab.on .ltab-icon{background:rgba(255,255,255,.2)}
+
+/* Status tabs */
+.stabs{display:flex;gap:0;background:var(--white);border-bottom:1px solid var(--bdr)}
+.stab{flex:1;text-align:center;padding:.625rem;font-size:.75rem;font-weight:600;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+.stab:hover{color:var(--olive)}
+.stab.on{color:var(--teal);border-bottom-color:var(--teal)}
+.stab-cnt{font-size:.625rem;font-weight:700;background:var(--tl);color:var(--teal);border-radius:9999px;padding:.1rem .375rem;margin-left:.25rem}
+
+/* Game grid */
+.gg{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;padding:1rem 1.5rem 2rem}
+
+/* Game card */
+.gc{background:var(--white);border:1px solid var(--bdr);border-radius:10px;overflow:hidden;transition:box-shadow .15s}
+.gc:hover{box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.gc-hdr{display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border-bottom:1px solid #f0f1f3}
+.gc-time{font-size:.6875rem;font-weight:600;color:var(--tm)}
+.gc-view{font-size:.6875rem;font-weight:600;color:var(--teal);cursor:pointer;text-decoration:none}
+.gc-view:hover{text-decoration:underline}
+.gc-live{font-size:.5625rem;font-weight:700;color:var(--red);display:flex;align-items:center;gap:.25rem}
+.gc-live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Column headers */
+.gc-colhdr{display:grid;grid-template-columns:1fr 72px 56px 72px;gap:4px;padding:.25rem .75rem 0;align-items:center}
+.gc-colhdr span{font-size:.5rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.05em;text-align:center}
+.gc-colhdr span:first-child{text-align:left}
+
+/* Team row */
+.gc-body{padding:0 .75rem .5rem}
+.trow{display:grid;grid-template-columns:1fr 72px 56px 72px;gap:4px;align-items:center;padding:.375rem 0}
+.trow+.trow{border-top:1px solid #f5f5f5}
+.tinfo{display:flex;align-items:center;gap:.5rem;min-width:0}
+.tlogo{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.4375rem;font-weight:700;color:var(--white);flex-shrink:0;overflow:hidden;border:none}
+.tlogo img{width:100%;height:100%;object-fit:contain}
+.tname{font-size:.8125rem;font-weight:600;color:var(--olive);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* League color accents */
+.gc-stripe{height:3px;width:100%}
+.stripe-nba{background:linear-gradient(90deg,#1d428a,#c8102e)}
+.stripe-mlb{background:linear-gradient(90deg,#002d72,#d50032)}
+.stripe-nhl{background:linear-gradient(90deg,#000,#a2aaad)}
+.stripe-mls{background:linear-gradient(90deg,#80004c,#c39e6d)}
+.stripe-nfl{background:linear-gradient(90deg,#013369,#d50a0a)}
+.stripe-default{background:var(--teal)}
+
+/* Price button */
+.pb{font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.25rem .25rem;background:var(--off);border:1px solid var(--bdr);border-radius:6px;cursor:pointer;transition:.12s;text-align:center;width:100%}
+.pb:hover{border-color:var(--tb);background:var(--tl)}
+.pb.sel{background:var(--sel);border-color:var(--sb)}
+.pb-line{font-size:.5625rem;font-weight:600;color:var(--tm);line-height:1.1}
+.pb-price{font-size:.6875rem;font-weight:700;color:var(--olive);line-height:1.2}
+.pb.sel .pb-line,.pb.sel .pb-price{color:var(--teal)}
+.pb[disabled]{opacity:.3;cursor:default}
+
+/* Modal overlay */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;align-items:center;justify-content:center}
+.mo.show{display:flex}
+.md{background:var(--white);border-radius:16px;width:420px;max-width:calc(100% - 2rem);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+
+/* Modal header */
+.md-hdr{padding:1rem 1.25rem;border-bottom:1px solid var(--bdr)}
+.md-game{font-size:1rem;font-weight:700;color:var(--olive)}
+.md-sub{font-size:.6875rem;color:var(--tm)}
+
+/* Order type tabs */
+.md-tabs{display:flex;gap:0;border-bottom:1px solid var(--bdr)}
+.md-tab{flex:1;text-align:center;padding:.625rem;font-size:.75rem;font-weight:600;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:.15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.md-tab.on{color:var(--teal);border-bottom-color:var(--teal);background:var(--tl)}
+
+/* Modal body */
+.md-body{padding:1rem 1.25rem}
+.md-row{display:flex;justify-content:space-between;padding:.375rem 0;font-size:.8125rem}
+.md-row-l{color:var(--tm);font-weight:500}
+.md-row-v{color:var(--olive);font-weight:700}
+
+.md-inputs{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin:1rem 0}
+.md-field label{display:block;font-size:.5625rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.25rem}
+.md-inp{width:100%;font-family:inherit;font-size:1rem;font-weight:700;padding:.625rem .75rem;border:1px solid var(--bdr);border-radius:8px;background:var(--off);color:var(--olive);text-align:right}
+.md-inp:focus{outline:none;border-color:var(--teal);background:var(--white)}
+.md-avail{font-size:.625rem;font-weight:600;color:var(--grn);margin-top:.25rem}
+.md-est{font-size:.625rem;font-weight:600;color:var(--tm);margin-top:.25rem;text-align:right}
+
+/* Quick amounts */
+.qamt{display:grid;grid-template-columns:repeat(4,1fr);gap:.375rem;margin-bottom:1rem}
+.qa{font-family:inherit;font-size:.6875rem;font-weight:700;padding:.5rem;border:1px solid var(--bdr);border-radius:8px;background:var(--white);color:var(--olive);cursor:pointer;text-align:center;transition:.12s}
+.qa:hover{border-color:var(--teal);color:var(--teal)}
+.qa.on{background:var(--teal);color:var(--white);border-color:var(--teal)}
+
+/* Challenge section */
+.md-challenge{border-top:1px solid var(--bdr);padding-top:.75rem;margin-top:.5rem}
+.md-clabel{font-size:.5625rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem}
+.md-cinp{width:100%;font-family:inherit;font-size:.8125rem;padding:.5rem .625rem;border:1px solid var(--bdr);border-radius:8px;background:var(--off);color:var(--olive);margin-bottom:.5rem}
+.md-cinp:focus{outline:none;border-color:var(--teal);background:var(--white)}
+
+/* Modal footer */
+.md-foot{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;padding:1rem 1.25rem;border-top:1px solid var(--bdr)}
+.btn-c{font-family:inherit;font-size:.875rem;font-weight:600;padding:.75rem;border-radius:10px;cursor:pointer;transition:.15s;border:1px solid var(--bdr);background:var(--white);color:var(--tm)}
+.btn-c:hover{background:var(--off)}
+.btn-s{font-family:inherit;font-size:.875rem;font-weight:700;padding:.75rem;border-radius:10px;cursor:pointer;transition:.15s;border:none;color:var(--white)}
+.btn-review{background:var(--teal)}
+.btn-review:hover{background:#003a40}
+.btn-submit{background:var(--grn)}
+.btn-submit:hover{background:#1b5e20}
+.btn-s:disabled{opacity:.4;cursor:not-allowed}
+
+/* Success state */
+.success-bar{background:var(--grn);color:var(--white);padding:.75rem 1.25rem;font-size:.8125rem;font-weight:600;display:flex;align-items:center;gap:.5rem}
+.success-bar svg{width:20px;height:20px}
+.fill-bar{height:6px;background:var(--bdr);border-radius:3px;margin:0 1.25rem;overflow:hidden}
+.fill-bar-inner{height:100%;background:var(--grn);border-radius:3px;transition:width .5s}
+.fill-info{display:flex;justify-content:space-between;padding:.25rem 1.25rem;font-size:.625rem;color:var(--tm)}
+
+.share-area{text-align:center;padding:1rem 1.25rem}
+.share-link{display:flex;align-items:center;gap:.5rem;background:var(--off);border:1px solid var(--bdr);border-radius:8px;padding:.5rem .75rem;margin-bottom:.75rem}
+.share-link input{flex:1;font-family:inherit;font-size:.75rem;border:none;background:none;color:var(--olive);font-weight:600}
+.share-link button{font-family:inherit;font-size:.625rem;font-weight:600;padding:.3rem .5rem;border:1px solid var(--tb);border-radius:6px;background:var(--tl);color:var(--teal);cursor:pointer}
+.share-btns{display:flex;gap:.375rem;justify-content:center}
+.share-btn{font-family:inherit;font-size:.6875rem;font-weight:600;padding:.5rem .75rem;border-radius:8px;cursor:pointer;border:1px solid var(--bdr);background:var(--white);color:var(--olive);transition:.12s}
+.share-btn:hover{border-color:var(--teal);color:var(--teal)}
+
+/* Loading */
+.loading{text-align:center;padding:4rem 1rem}
+.spinner{width:28px;height:28px;border:3px solid var(--bdr);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto .75rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ld-txt{font-size:.8125rem;color:var(--tm)}
+.err{font-size:.8125rem;color:var(--red);text-align:center;padding:3rem 1rem}
+.empty{text-align:center;padding:3rem 1rem;color:var(--tl2);font-size:.875rem}
+
+/* Responsive */
+@media(max-width:900px){.gg{grid-template-columns:1fr}}
+@media(max-width:768px){
+  .side{display:none}
+  .gg{padding:1rem .75rem 2rem}
+  .ltabs{padding:.75rem .75rem .5rem}
+  .gc-colhdr,.trow{grid-template-columns:1fr 64px 48px 64px;gap:3px}
+  .pb-line{font-size:.5rem}.pb-price{font-size:.625rem}
+  .md{width:100%;max-width:100%;border-radius:12px 12px 0 0;align-self:flex-end}
+}
+body.embed .hdr{display:none}
+body.embed .side{display:none}
+  </style>
+</head>
+<body>
+<header class="hdr">
+  <a href="/" class="logo">
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#004C54"/><path d="M8 22L12 10l4 8 4-5 4 9" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="logo-t">WeBetAI</span>
+  </a>
+  <div class="hdr-r">
+    <a href="/dashboard" class="hdr-lnk">Dashboard</a>
+    <a href="/edge" class="hdr-lnk">Edge Picks</a>
+    <div class="bal" id="balEl">E10,000.00</div>
+  </div>
+</header>
+
+<div class="lay">
+  <nav class="side" id="sidebar">
+    <div class="side-item on" onclick="setView('home')">Home</div>
+    <div class="side-item" onclick="setView('live')">Live Markets</div>
+    <div class="side-item" onclick="setView('favorites')">Favorites</div>
+    <div class="side-divider"></div>
+    <div class="side-title">Active Leagues</div>
+    <div id="sideLeagues"></div>
+  </nav>
+  <div class="main-area">
+    <div class="ltabs" id="leagueTabs"></div>
+    <div class="stabs" id="statusTabs">
+      <div class="stab" data-st="live" onclick="setSt('live')">Live <span class="stab-cnt" id="liveCnt">0</span></div>
+      <div class="stab on" data-st="upcoming" onclick="setSt('upcoming')">Upcoming <span class="stab-cnt" id="upCnt">0</span></div>
+      <div class="stab" data-st="all" onclick="setSt('all')">All</div>
+    </div>
+    <div class="gg" id="gameGrid">
+      <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading markets...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bet Modal -->
+<div class="mo" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="md" id="mdContent"></div>
+</div>
+
+<script>
+if(window.self!==window.top)document.body.classList.add('embed');
+
+let raw=null,league='all',status='upcoming',balance=10000,selectedBet=null,modalStep='form';
+
+/* ESPN team logos + primary colors */
+const TEAMS={
+// NBA
+'Atlanta':{c:'#e03a3e',logo:'https://a.espncdn.com/i/teamlogos/nba/500/atl.png'},
+'Boston':{c:'#007a33',logo:'https://a.espncdn.com/i/teamlogos/nba/500/bos.png'},
+'Brooklyn':{c:'#000000',logo:'https://a.espncdn.com/i/teamlogos/nba/500/bkn.png'},
+'Charlotte':{c:'#1d1160',logo:'https://a.espncdn.com/i/teamlogos/nba/500/cha.png'},
+'Chicago':{c:'#ce1141',logo:'https://a.espncdn.com/i/teamlogos/nba/500/chi.png'},
+'Cleveland':{c:'#860038',logo:'https://a.espncdn.com/i/teamlogos/nba/500/cle.png'},
+'Dallas':{c:'#00538c',logo:'https://a.espncdn.com/i/teamlogos/nba/500/dal.png'},
+'Denver':{c:'#0e2240',logo:'https://a.espncdn.com/i/teamlogos/nba/500/den.png'},
+'Detroit':{c:'#c8102e',logo:'https://a.espncdn.com/i/teamlogos/nba/500/det.png'},
+'Golden State':{c:'#1d428a',logo:'https://a.espncdn.com/i/teamlogos/nba/500/gs.png'},
+'Houston':{c:'#ce1141',logo:'https://a.espncdn.com/i/teamlogos/nba/500/hou.png'},
+'Indiana':{c:'#002d62',logo:'https://a.espncdn.com/i/teamlogos/nba/500/ind.png'},
+'LA':{c:'#1d428a',logo:'https://a.espncdn.com/i/teamlogos/nba/500/lac.png'},
+'Los Angeles':{c:'#552583',logo:'https://a.espncdn.com/i/teamlogos/nba/500/lal.png'},
+'Memphis':{c:'#5d76a9',logo:'https://a.espncdn.com/i/teamlogos/nba/500/mem.png'},
+'Miami':{c:'#98002e',logo:'https://a.espncdn.com/i/teamlogos/nba/500/mia.png'},
+'Milwaukee':{c:'#00471b',logo:'https://a.espncdn.com/i/teamlogos/nba/500/mil.png'},
+'Minnesota':{c:'#0c2340',logo:'https://a.espncdn.com/i/teamlogos/nba/500/min.png'},
+'New Orleans':{c:'#0c2340',logo:'https://a.espncdn.com/i/teamlogos/nba/500/no.png'},
+'New York':{c:'#006bb6',logo:'https://a.espncdn.com/i/teamlogos/nba/500/ny.png'},
+'Oklahoma City':{c:'#007ac1',logo:'https://a.espncdn.com/i/teamlogos/nba/500/okc.png'},
+'Orlando':{c:'#0077c0',logo:'https://a.espncdn.com/i/teamlogos/nba/500/orl.png'},
+'Philadelphia':{c:'#006bb6',logo:'https://a.espncdn.com/i/teamlogos/nba/500/phi.png'},
+'Phoenix':{c:'#1d1160',logo:'https://a.espncdn.com/i/teamlogos/nba/500/phx.png'},
+'Portland':{c:'#e03a3e',logo:'https://a.espncdn.com/i/teamlogos/nba/500/por.png'},
+'Sacramento':{c:'#5a2d81',logo:'https://a.espncdn.com/i/teamlogos/nba/500/sac.png'},
+'San Antonio':{c:'#c4ced4',logo:'https://a.espncdn.com/i/teamlogos/nba/500/sa.png'},
+'Toronto':{c:'#ce1141',logo:'https://a.espncdn.com/i/teamlogos/nba/500/tor.png'},
+'Utah':{c:'#002b5c',logo:'https://a.espncdn.com/i/teamlogos/nba/500/uta.png'},
+'Washington':{c:'#002b5c',logo:'https://a.espncdn.com/i/teamlogos/nba/500/wsh.png'},
+// MLB
+'Arizona':{c:'#a71930',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/ari.png'},
+'Baltimore':{c:'#df4601',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/bal.png'},
+'Cincinnati':{c:'#c6011f',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/cin.png'},
+'Colorado':{c:'#333366',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/col.png'},
+'Kansas City':{c:'#004687',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/kc.png'},
+'Oakland':{c:'#003831',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/oak.png'},
+'Pittsburgh':{c:'#fdb827',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/pit.png'},
+'San Diego':{c:'#2f241d',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/sd.png'},
+'San Francisco':{c:'#fd5a1e',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/sf.png'},
+'Seattle':{c:'#0c2c56',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/sea.png'},
+'St. Louis':{c:'#c41e3a',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/stl.png'},
+'Tampa Bay':{c:'#092c5c',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/tb.png'},
+'Texas':{c:'#003278',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/tex.png'},
+// NHL
+'Buffalo':{c:'#002654',logo:'https://a.espncdn.com/i/teamlogos/nhl/500/buf.png'},
+// Fallbacks for common short names
+'Cubs':{c:'#0e3386',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/chc.png'},
+'White Sox':{c:'#27251f',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/chw.png'},
+'Red Sox':{c:'#bd3039',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/bos.png'},
+'Dodgers':{c:'#005a9c',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/lad.png'},
+'Yankees':{c:'#003087',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/nyy.png'},
+'Mets':{c:'#002d72',logo:'https://a.espncdn.com/i/teamlogos/mlb/500/nym.png'},
+};
+
+function teamInfo(name){
+  if(!name)return{c:'#666',logo:''};
+  // Try exact match first
+  if(TEAMS[name])return TEAMS[name];
+  // Try last word match
+  const last=name.split(/\s+/).pop();
+  if(TEAMS[last])return TEAMS[last];
+  // Try partial match
+  for(const[k,v]of Object.entries(TEAMS)){
+    if(name.toLowerCase().includes(k.toLowerCase())||k.toLowerCase().includes(name.toLowerCase()))return v;
+  }
+  return{c:'#666',logo:''};
+}
+
+function teamLogo(name){
+  const t=teamInfo(name);
+  if(t.logo)return`<div class="tlogo"><img src="${t.logo}" alt="${abbr(name)}" onerror="this.parentElement.style.background='${t.c}';this.parentElement.textContent='${abbr(name)}'"></div>`;
+  return`<div class="tlogo" style="background:${t.c}">${abbr(name)}</div>`;
+}
+
+function leagueStripe(lg){
+  const k=lg.toLowerCase().replace(/\s.*/,'');
+  const cls={'nba':'stripe-nba','mlb':'stripe-mlb','nhl':'stripe-nhl','mls':'stripe-mls','nfl':'stripe-nfl'}[k]||'stripe-default';
+  return`<div class="gc-stripe ${cls}"></div>`;
+}
+
+async function init(){
+  try{
+    const r=await fetch(`/api/get-bettoredge-markets?t=${Date.now()}`);
+    raw=await r.json();
+    if(raw.error){document.getElementById('gameGrid').innerHTML=`<div class="err">${raw.message}</div>`;return}
+    renderLeagueTabs();renderSideLeagues();renderGames();
+  }catch(e){document.getElementById('gameGrid').innerHTML=`<div class="err">Failed: ${e.message}</div>`}
+}
+
+/* Group into games */
+function group(orders){
+  const m={};
+  for(const o of orders){
+    const k=o.event;
+    if(!m[k])m[k]={event:o.event,league:o.league,scheduled:o.scheduled,type:o.type,orders:[],vol:0};
+    m[k].orders.push(o);m[k].vol+=(o.openAmt||0);
+  }
+  return Object.values(m).sort((a,b)=>b.vol-a.vol);
+}
+
+/* Clean event name: strip " - 0" scores for non-live */
+function cleanEvent(e){return e.replace(/\s*-\s*\d+/g,'').trim()}
+
+function parseTeams(e){
+  const clean=cleanEvent(e);
+  const p=clean.split(/\s+(?:vs\.?|at|@)\s+/i);
+  return p.length===2?{away:p[0].trim(),home:p[1].trim()}:{away:clean,home:''};
+}
+
+/* Extract full team names from order titles when event uses abbreviations */
+function resolveTeamNames(game){
+  const{away,home}=parseTeams(game.event);
+  let awayFull=away, homeFull=home;
+  // Try to find full names from ML orders
+  for(const o of game.orders){
+    if(!o.var1||o.var1===0){
+      const t=o.title.replace(/\s+to win.*/i,'').replace(/\s+will .*/i,'').trim();
+      if(o.side==='away'&&t.length>awayFull.length)awayFull=t;
+      if(o.side==='home'&&t.length>homeFull.length)homeFull=t;
+    }
+  }
+  // Also check spread orders for names
+  for(const o of game.orders){
+    if(o.var1&&o.var1!==0){
+      const t=o.title.replace(/\s+[+-][\d.]+$/,'').trim();
+      if(o.side==='away'&&t.length>awayFull.length)awayFull=t;
+      if(o.side==='home'&&t.length>homeFull.length)homeFull=t;
+    }
+  }
+  return{away:awayFull,home:homeFull};
+}
+
+function abbr(n){if(!n)return'?';const w=n.trim().split(/\s+/);return(w.length===1?w[0].substring(0,3):w[w.length-1].substring(0,3)).toUpperCase()}
+
+/* Match orders by side field (away/home/over/under) */
+function sideOdds(orders,sideVal,type){
+  const m=orders.filter(o=>{
+    if(o.side!==sideVal)return false;
+    if(type==='ml')return !o.var1||o.var1===0;
+    // Spreads: side is away/home AND has var1, AND title contains team name or +/- number
+    if(type==='spread')return o.var1&&o.var1!==0;
+    return false;
+  });
+  return m.length?m.sort((a,b)=>(b.openAmt||0)-(a.openAmt||0))[0]:null;
+}
+
+/* Find total (over/under) by side field */
+function totalOdds(orders,dir){
+  const m=orders.filter(o=>o.side===dir&&o.var1&&o.var1!==0);
+  return m.length?m.sort((a,b)=>(b.openAmt||0)-(a.openAmt||0))[0]:null;
+}
+
+function fmtTime(iso){
+  if(!iso)return'Today';
+  const d=new Date(iso);
+  return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
+
+function oddsToPrice(odds){
+  if(!odds)return 0;
+  if(odds>0)return Math.round(10000/(odds+100))/100;
+  return Math.round(Math.abs(odds)*100/(Math.abs(odds)+100))/100;
+}
+
+function fmtPrice(odds){return'$'+oddsToPrice(odds).toFixed(2)}
+function fmtOdds(o){const n=Math.round(o);return n>=0?'+'+n:''+n}
+
+/* League tabs */
+function renderLeagueTabs(){
+  const ls=[...new Set(raw.orders.map(o=>o.league))].filter(l=>!l.includes('Futures')&&!/^\d+$/.test(l)).sort();
+  document.getElementById('leagueTabs').innerHTML=
+    `<button class="ltab ${league==='all'?'on':''}" onclick="setLg('all')"><span class="ltab-icon">ALL</span>All</button>`+
+    ls.map(l=>`<button class="ltab ${league===l?'on':''}" onclick="setLg('${esc(l)}')">${l}</button>`).join('');
+}
+
+function renderSideLeagues(){
+  const ls=[...new Set(raw.orders.map(o=>o.league))].filter(l=>!l.includes('Futures')&&!/^\d+$/.test(l)).sort();
+  document.getElementById('sideLeagues').innerHTML=ls.map(l=>
+    `<div class="side-item ${league===l?'on':''}" onclick="setLg('${esc(l)}')">${l}</div>`
+  ).join('');
+}
+
+function setLg(l){league=l;renderLeagueTabs();renderSideLeagues();renderGames()}
+function setView(v){if(v==='live')setSt('live');else if(v==='home'){league='all';status='upcoming';renderLeagueTabs();renderSideLeagues();document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st==='upcoming'));renderGames()}}
+function setSt(s){status=s;document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st===s));renderGames()}
+
+/* Render game grid */
+function renderGames(){
+  let orders=league==='all'?raw.orders.filter(o=>!o.league.includes('Futures')&&!/^\d+$/.test(o.league)):raw.orders.filter(o=>o.league===league);
+  const games=group(orders).slice(0,12);
+
+  // Count live (has scheduled in past or contains "LIVE" context) - simplified
+  document.getElementById('liveCnt').textContent='0';
+  document.getElementById('upCnt').textContent=games.length;
+
+  if(!games.length){document.getElementById('gameGrid').innerHTML=`<div class="empty">No games available${league!=='all'?' for '+league:''}</div>`;return}
+
+  let html='';
+  for(const g of games)html+=gameCard(g);
+  document.getElementById('gameGrid').innerHTML=html;
+}
+
+function gameCard(g){
+  // Resolve full team names from order titles
+  const names=resolveTeamNames(g);
+  const away=names.away, home=names.home;
+
+  if(!home){
+    const o=g.orders[0];
+    return`<div class="gc">
+      ${leagueStripe(g.league)}
+      <div class="gc-hdr"><span class="gc-time">${fmtTime(g.scheduled)}</span><span class="gc-time">${g.league}</span></div>
+      <div class="gc-body"><div class="trow" style="grid-template-columns:1fr 72px">
+        <div class="tinfo">${teamLogo(away)}<div class="tname">${away}</div></div>
+        <button class="pb" onclick='openBet(${JSON.stringify({event:g.event,league:g.league,pick:o.title,odds:o.odds,line:o.var1||0,matchup:away}).replace(/'/g,"&#39;")})'><span class="pb-price">${fmtPrice(o.odds)}</span></button>
+      </div></div></div>`;
+  }
+
+  // Use side field: away/home/over/under
+  const awaySpread=sideOdds(g.orders,'away','spread');
+  const homeSpread=sideOdds(g.orders,'home','spread');
+  const awayMl=sideOdds(g.orders,'away','ml');
+  const homeMl=sideOdds(g.orders,'home','ml');
+  const over=totalOdds(g.orders,'over');
+  const under=totalOdds(g.orders,'under');
+
+  const matchup=`${away} vs ${home}`;
+
+  function pb(order,label){
+    if(!order)return`<button class="pb" disabled><span class="pb-line">--</span><span class="pb-price">--</span></button>`;
+    const ln=order.var1&&order.var1!==0?`${order.var1>0?'+':''}${order.var1}`:'';
+    const pickLabel=order.title||label;
+    const d=JSON.stringify({event:g.event,league:g.league,pick:pickLabel,odds:order.odds,line:order.var1||0,matchup:matchup}).replace(/'/g,"&#39;");
+    return`<button class="pb" onclick='openBet(${d})'>${ln?`<span class="pb-line">${ln}</span>`:`<span class="pb-line">&nbsp;</span>`}<span class="pb-price">${fmtPrice(order.odds)}</span></button>`;
+  }
+
+  return`<div class="gc">
+    ${leagueStripe(g.league)}
+    <div class="gc-hdr"><span class="gc-time">${fmtTime(g.scheduled)}</span><span class="gc-view">View Game &rsaquo;</span></div>
+    <div class="gc-colhdr"><span></span><span>Spread</span><span>ML</span><span>Total</span></div>
+    <div class="gc-body">
+      <div class="trow">
+        <div class="tinfo">${teamLogo(away)}<div class="tname">${away}</div></div>
+        ${pb(awaySpread,away)}
+        ${pb(awayMl,away+' ML')}
+        ${pb(over,'Over')}
+      </div>
+      <div class="trow">
+        <div class="tinfo">${teamLogo(home)}<div class="tname">${home}</div></div>
+        ${pb(homeSpread,home)}
+        ${pb(homeMl,home+' ML')}
+        ${pb(under,'Under')}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Bet modal */
+function openBet(data){
+  selectedBet=data;modalStep='form';
+  renderModal();
+  document.getElementById('modal').classList.add('show');
+}
+
+function renderModal(){
+  if(modalStep==='form')renderBetForm();
+  else if(modalStep==='review')renderReview();
+  else if(modalStep==='success')renderSuccess();
+}
+
+function renderBetForm(){
+  const b=selectedBet;
+  const price=oddsToPrice(b.odds);
+  const pct=(price*100).toFixed(0);
+
+  document.getElementById('mdContent').innerHTML=`
+    <div class="md-hdr">
+      <div class="md-game">${b.matchup||b.event}</div>
+      <div class="md-sub">${b.league}</div>
+    </div>
+    <div class="md-tabs">
+      <button class="md-tab on">Market</button>
+      <button class="md-tab">Limit</button>
+      <button class="md-tab">Head2Head</button>
+    </div>
+    <div class="md-body">
+      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">Odds (%)</span><span class="md-row-v">${fmtOdds(b.odds)} (${pct}%)</span></div>
+
+      <div class="md-inputs">
+        <div class="md-field">
+          <label>Quantity</label>
+          <input class="md-inp" id="mdQty" type="number" value="10" min="1" oninput="calcWin()">
+          <div class="md-avail">${balance.toLocaleString()} AVAILABLE</div>
+        </div>
+        <div class="md-field">
+          <label>To Win</label>
+          <input class="md-inp" id="mdWin" type="number" readonly>
+          <div class="md-est" id="mdEst"></div>
+        </div>
+      </div>
+
+      <div class="qamt">
+        <button class="qa on" onclick="setQty(10)">1x<br>10.00</button>
+        <button class="qa" onclick="setQty(20)">2x<br>20.00</button>
+        <button class="qa" onclick="setQty(50)">5x<br>50.00</button>
+        <button class="qa" onclick="setQty(100)">ALL<br>${Math.min(balance,100).toFixed(2)}</button>
+      </div>
+
+      <div class="md-challenge">
+        <div class="md-clabel">Challenge a Friend (Optional)</div>
+        <input class="md-cinp" id="mdOpp" placeholder="Name or @handle">
+        <input class="md-cinp" id="mdPhone" type="tel" placeholder="Phone — sends SMS challenge">
+      </div>
+    </div>
+    <div class="md-foot">
+      <button class="btn-c" onclick="closeModal()">Cancel</button>
+      <button class="btn-s btn-review" id="mdReviewBtn" onclick="modalStep='review';renderModal()">REVIEW</button>
+    </div>`;
+  calcWin();
+}
+
+function calcWin(){
+  const qty=parseFloat(document.getElementById('mdQty')?.value)||0;
+  const odds=selectedBet.odds;
+  let win=0;
+  if(odds>=0)win=qty*(odds/100);
+  else win=qty*(100/Math.abs(odds));
+  const el=document.getElementById('mdWin');
+  if(el)el.value=win.toFixed(2);
+  const est=document.getElementById('mdEst');
+  if(est)est.textContent=`EST. EARNINGS: E${win.toFixed(2)}`;
+}
+
+function setQty(v){
+  document.getElementById('mdQty').value=v;
+  document.querySelectorAll('.qa').forEach(q=>q.classList.toggle('on',parseFloat(q.textContent.split('\n').pop())===v));
+  calcWin();
+}
+
+function renderReview(){
+  const b=selectedBet;
+  const qty=parseFloat(document.getElementById('mdQty')?.value)||10;
+  const odds=b.odds;
+  let win=0;
+  if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
+  const price=oddsToPrice(odds);
+  const opp=document.getElementById('mdOpp')?.value||'';
+  const phone=document.getElementById('mdPhone')?.value||'';
+
+  // Store for submit
+  selectedBet._qty=qty;selectedBet._win=win;selectedBet._opp=opp;selectedBet._phone=phone;
+
+  document.getElementById('mdContent').innerHTML=`
+    <div class="md-hdr">
+      <div class="md-game">${b.matchup||b.event}</div>
+      <div class="md-sub">Confirm your order</div>
+    </div>
+    <div class="md-body">
+      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">Odds</span><span class="md-row-v">${fmtOdds(odds)} (${(price*100).toFixed(0)}%)</span></div>
+      <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+      ${opp?`<div class="md-row"><span class="md-row-l">Challenge</span><span class="md-row-v">${opp}</span></div>`:''}
+    </div>
+    <div class="md-foot">
+      <button class="btn-c" onclick="modalStep='form';renderModal()">Back</button>
+      <button class="btn-s btn-submit" id="mdSubmitBtn" onclick="submitBet()">SUBMIT</button>
+    </div>`;
+}
+
+async function submitBet(){
+  const btn=document.getElementById('mdSubmitBtn');
+  btn.disabled=true;btn.textContent='Submitting...';
+  const b=selectedBet;
+
+  try{
+    const resp=await fetch('/api/create-p2p-bet-web',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        initiatorName:'You',
+        event:b.event,league:b.league,pick:b.pick,odds:b.odds,
+        amount:b._qty,matchup:b.matchup||b.event,
+        counterpartyName:b._opp||null,counterpartyPhone:b._phone||null,
+        counterpartyHandle:b._opp&&b._opp.startsWith('@')?b._opp:null
+      })
+    });
+    const data=await resp.json();
+    if(data.success){
+      balance-=b._qty;
+      document.getElementById('balEl').textContent='E'+balance.toLocaleString(undefined,{minimumFractionDigits:2});
+      selectedBet._betId=data.betId;selectedBet._shareUrl=data.shareUrl;
+      modalStep='success';renderModal();
+    }else{
+      btn.disabled=false;btn.textContent='SUBMIT';
+      alert('Error: '+(data.error||data.message));
+    }
+  }catch(e){btn.disabled=false;btn.textContent='SUBMIT';alert('Network error: '+e.message)}
+}
+
+function renderSuccess(){
+  const b=selectedBet;
+  const qty=b._qty||10;
+  const odds=b.odds;
+  let win=0;if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
+  const price=oddsToPrice(odds);
+  const url=b._shareUrl||'';
+
+  document.getElementById('mdContent').innerHTML=`
+    <div class="success-bar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+      Order Created Successfully
+    </div>
+    <div style="padding:.75rem 1.25rem;font-size:1.125rem;font-weight:700;color:var(--olive);text-align:center">ORDER PLACED</div>
+    <div class="fill-bar"><div class="fill-bar-inner" style="width:100%"></div></div>
+    <div class="fill-info"><span>Placed: E${qty.toFixed(2)}</span><span>Order: E${qty.toFixed(2)}</span></div>
+    <div class="md-body">
+      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Price</span><span class="md-row-v">${(price*100).toFixed(1)}% (${fmtOdds(odds)})</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+    </div>
+    ${url?`<div class="share-area">
+      <div class="share-link"><input id="shareUrl" value="${url}" readonly onclick="this.select()"><button onclick="copyLink()">Copy</button></div>
+      <div class="share-btns">
+        <button class="share-btn" onclick="window.open('sms:?body='+encodeURIComponent('I challenged you! ${url}'))">Text</button>
+        <button class="share-btn" onclick="window.open('https://x.com/intent/tweet?text='+encodeURIComponent('P2P bet on WeBetAI! ${url}'))">Post on X</button>
+      </div>
+    </div>`:''}
+    <div class="md-foot" style="grid-template-columns:1fr 1fr">
+      <button class="btn-c" onclick="closeModal()">CLOSE</button>
+      <button class="btn-s btn-review" onclick="if(selectedBet._shareUrl)window.open(selectedBet._shareUrl,'_blank')">SHARE</button>
+    </div>`;
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('show');selectedBet=null;modalStep='form'}
+function copyLink(){const el=document.getElementById('shareUrl');el.select();navigator.clipboard.writeText(el.value).then(()=>{el.parentElement.querySelector('button').textContent='Copied!';setTimeout(()=>el.parentElement.querySelector('button').textContent='Copy',2000)})}
+function esc(s){return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+
+init();
+</script>
+</body>
+</html>

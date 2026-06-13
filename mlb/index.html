@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | MLB F5 Picks</title>
+  <meta name="description" content="WeBetAI's MLB First-Five-Innings betting machine. 9-layer sharp stack, Tier 1 locks only." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/mlb" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | MLB F5 Picks" />
+  <meta property="og:description" content="MLB First-Five-Innings betting machine. 9-layer sharp stack, Tier 1 locks only." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | MLB F5 Picks" />
+  <meta name="twitter:description" content="MLB First-Five-Innings betting machine. 9-layer sharp stack, Tier 1 locks only." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --teal-lighter: #d4ede8;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* Main */
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    /* MLB Hero */
+    .mlb-hero {
+      background: linear-gradient(135deg, #1a2e1a 0%, #004C54 100%);
+      border-radius: .875rem; padding: 1.25rem; margin-bottom: 1rem;
+      color: #fff; text-align: center;
+    }
+    .mlb-hero-title { font-size: 1.25rem; font-weight: 700; margin-bottom: .25rem; }
+    .mlb-hero-sub { font-size: .75rem; color: rgba(255,255,255,.7); letter-spacing: .05em; text-transform: uppercase; }
+
+    /* Legend */
+    .legend { display: flex; gap: .875rem; margin-bottom: 1.25rem; font-size: .8125rem; color: var(--txt-m); }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .dot-aplus { background: #c0392b; }
+    .dot-a { background: #004C54; }
+    .dot-aminus { background: #1abc9c; }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .stat-box {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem .375rem; text-align: center;
+    }
+    .stat-label { font-size: .5625rem; font-weight: 600; color: var(--txt-l); text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-top: .125rem; }
+    .stat-value.green { color: var(--teal); }
+
+    /* Pick Card */
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .rating-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 26px; border-radius: 6px;
+      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+    }
+    .badge-aplus { background: #c0392b; }
+    .badge-a { background: #004C54; }
+    .badge-aminus { background: #1abc9c; }
+
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
+
+    .win-prob {
+      display: inline-flex; align-items: center; font-size: .75rem; font-weight: 700;
+      font-family: 'Geist Sans', monospace;
+      color: var(--green); background: var(--green-light);
+      border: 1px solid var(--green-border); border-radius: 6px;
+      padding: .125rem .5rem; margin-left: .5rem; white-space: nowrap;
+    }
+
+    .edge-badge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .6875rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+      color: #e8b931; background: rgba(232, 185, 49, 0.08);
+      border: 1px solid rgba(232, 185, 49, 0.2); border-radius: 6px;
+      padding: .125rem .5rem; white-space: nowrap;
+    }
+    .edge-badge svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+    .progress-delta {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .75rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+      border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
+      white-space: nowrap;
+    }
+    .delta-positive { color: #16a34a; background: #dcfce7; border: 1px solid #86efac; }
+    .delta-negative { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; }
+    .delta-even { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
+
+    /* F5 Tag */
+    .f5-tag {
+      font-size: .5625rem; font-weight: 700; color: #fff; background: #c0392b;
+      border-radius: 4px; padding: .125rem .375rem; text-transform: uppercase;
+      letter-spacing: .05em; margin-left: .375rem;
+    }
+
+    /* Layer Summary */
+    .layer-summary {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .5rem; padding: .625rem .75rem; margin-bottom: .625rem;
+      font-size: .75rem; color: var(--txt-m); line-height: 1.6;
+    }
+    .layer-summary strong { color: var(--txt-b); }
+
+    /* Score bar */
+    .pick-score-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem .625rem; margin-bottom: .625rem;
+      border-radius: .5rem; font-size: .8125rem;
+    }
+    .score-bar-live { background: #eef6ff; border: 1px solid #b3d4fc; }
+    .score-bar-win { background: #e8f5e9; border: 1px solid #a5d6a7; }
+    .score-bar-loss { background: #fce4e4; border: 1px solid #f5b7b7; }
+    .score-bar-push { background: #fff8e1; border: 1px solid #ffe082; }
+    .score-bar-scheduled { background: var(--off-white); border: 1px solid var(--border-lt); }
+    .score-teams { display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: var(--olive); }
+    .score-team { display: flex; align-items: center; gap: .375rem; }
+    .score-team-name { min-width: 100px; }
+    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; }
+    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .score-status {
+      font-size: .6875rem; font-weight: 700; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .status-live { background: #2196f3; color: #fff; animation: pulse-live 2s infinite; }
+    .status-win { background: #2e7d32; color: #fff; }
+    .status-loss { background: #c0392b; color: #fff; }
+    .status-push { background: #f9a825; color: #fff; }
+    .status-scheduled { background: var(--border-lt); color: var(--txt-m); }
+    .score-detail { font-size: .6875rem; color: var(--txt-m); }
+    @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+
+    .leg-result {
+      font-size: .6875rem; font-weight: 700; padding: 1px 6px;
+      border-radius: 4px; margin-left: .375rem; white-space: nowrap;
+    }
+    .leg-win { background: #e8f5e9; color: #2e7d32; }
+    .leg-loss { background: #fce4e4; color: #c0392b; }
+    .leg-push { background: #fff8e1; color: #f9a825; }
+    .leg-live { background: #eef6ff; color: #2196f3; }
+
+    /* Record + Legend Bar */
+    .record-legend-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem .875rem; margin-bottom: .75rem;
+      font-size: .8125rem;
+    }
+    .rl-left { display: flex; align-items: center; gap: .75rem; font-weight: 600; }
+    .rl-right { display: flex; align-items: center; gap: .625rem; font-size: .75rem; color: var(--txt-m); }
+    .record-item { display: flex; align-items: center; gap: .25rem; }
+    .record-wins { color: #2e7d32; }
+    .record-losses { color: #c0392b; }
+    .record-pending { color: var(--txt-m); }
+
+    /* ─── Results Tracker (card-style) ─── */
+    .results-section-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: .625rem;
+    }
+
+    .results-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; overflow: hidden; margin-bottom: 1rem;
+    }
+
+    .results-cumulative {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+      border-bottom: 1px solid var(--border-lt);
+    }
+    .cum-card {
+      padding: 1rem .5rem; text-align: center;
+      border-right: 1px solid var(--border-lt);
+    }
+    .cum-card:last-child { border-right: none; }
+    .cum-value { font-size: 1.5rem; font-weight: 700; color: var(--olive); }
+    .cum-value.positive { color: #2e7d32; }
+    .cum-value.negative { color: #c0392b; }
+    .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+
+    .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
+    .results-table th {
+      background: var(--off-white);
+      color: var(--txt-m);
+      padding: .5rem; text-align: center;
+      font-weight: 600; font-size: .625rem;
+      text-transform: uppercase; letter-spacing: .04em;
+      border-bottom: 1px solid var(--border-lt);
+      width: 25%;
+    }
+    .results-table td {
+      padding: .5rem; border-bottom: 1px solid var(--border-lt);
+      vertical-align: top; text-align: center;
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: var(--off-white); }
+
+    .day-toggle {
+      background: none; border: none; padding: 0;
+      font-family: inherit; font-size: .8125rem; font-weight: 600;
+      color: var(--teal); cursor: pointer; text-align: left;
+    }
+    .day-detail { display: none; }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
+    .day-picks-list { list-style: none; padding: 0; margin: 0; }
+    .day-picks-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .25rem 0; border-bottom: 1px solid var(--border-lt);
+      font-size: .75rem;
+    }
+    .day-picks-list li:last-child { border-bottom: none; }
+    .result-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: .6875rem; font-weight: 600;
+    }
+    .result-win { background: #e8f5e9; color: #2e7d32; }
+    .result-loss { background: #fce4e4; color: #c0392b; }
+    .result-push { background: #fff8e1; color: #f9a825; }
+    .result-pending { background: #eef6ff; color: #2196f3; }
+
+    .profit-positive { color: #2e7d32; font-weight: 600; }
+    .profit-negative { color: #c0392b; font-weight: 600; }
+
+    .show-more-bar {
+      display: none; text-align: center; padding: .625rem;
+      border-top: 1px solid var(--border-lt);
+      cursor: pointer; transition: background 0.15s;
+    }
+    .show-more-bar:hover { background: var(--off-white); }
+    .show-more-bar span {
+      font-size: .75rem; font-weight: 600; color: var(--teal);
+      display: inline-flex; align-items: center; gap: .25rem;
+    }
+    .show-more-bar.has-more { display: block; }
+
+    /* Bet Summary */
+    .parlay-section {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .parlay-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    .parlay-leg {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .375rem .5rem; background: var(--off-white);
+      border: 1px solid var(--border-lt); border-radius: .375rem;
+      margin-bottom: .25rem; font-size: .8125rem;
+    }
+    .leg-pick { font-weight: 500; color: var(--olive); }
+    .leg-odds { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--teal); white-space: nowrap; }
+
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--txt-m); }
+    .loading-icon { font-size: 1.5rem; margin-bottom: .5rem; }
+
+    @media(max-width: 420px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .pick-matchup { font-size: .9375rem; }
+    }
+    @media(max-width: 480px) {
+      .results-cumulative { grid-template-columns: repeat(2, 1fr); }
+      .cum-card { border-bottom: 1px solid var(--border-lt); }
+      .cum-card:nth-child(2) { border-right: none; }
+      .results-table { font-size: .75rem; }
+      .results-table th, .results-table td { padding: .375rem .25rem; }
+      .record-legend-bar { flex-wrap: nowrap; gap: .25rem; padding: .5rem .75rem; }
+      .rl-left { font-size: .75rem; white-space: nowrap; flex-shrink: 0; }
+      .rl-right { font-size: .6rem; gap: .375rem; flex-shrink: 0; margin-left: auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header" style="position:relative;">
+    <a href="/mlb" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/mlb" class="header-link active">MLB F5</a>
+      <a href="/mlb/dev" class="header-link">Dev Notes</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/mlb">MLB F5</a>
+      <a href="/mlb/dev">Dev Notes</a>
+    </div>
+  </header>
+
+<div class="main" id="dashboard">
+
+  <!-- MLB Hero -->
+  <div class="mlb-hero">
+    <div class="mlb-hero-title">MLB First Five Innings<span class="f5-tag" style="margin-left:.5rem;">F5</span></div>
+    <div class="mlb-hero-sub">9-Layer Sharp Stack &middot; Tier 1 Locks Only &middot; Starters Must Be Confirmed</div>
+  </div>
+
+  <!-- Results Tracker -->
+  <div class="results-section-title">Pick Results &amp; Track Record</div>
+  <div class="results-card">
+    <div class="results-cumulative" id="results-cumulative">
+      <div class="cum-card"><div class="cum-value" id="cum-roi">--</div><div class="cum-label">ROI</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-record">--</div><div class="cum-label">Record</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-accuracy">--</div><div class="cum-label">Accuracy</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-profit">--</div><div class="cum-label">P/L</div></div>
+    </div>
+    <table class="results-table" id="results-table">
+      <tbody id="results-body">
+        <tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">Loading results...</td></tr>
+      </tbody>
+    </table>
+    <div class="show-more-bar" id="showMoreBar" onclick="showAllDays()">
+      <span>Show all days &#9660;</span>
+    </div>
+  </div>
+
+  <div class="date-header" id="date-header" style="font-size:.9375rem; color:var(--txt-b); font-weight:500; margin-bottom:1rem;">Loading...</div>
+
+  <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
+    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+      <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Daily Edge</span>
+      <span class="f5-tag">F5 Only</span>
+    </div>
+    <p id="daily-edge-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+  </div>
+
+  <!-- Record + Legend bar -->
+  <div id="record-legend-bar" class="record-legend-bar">
+    <div id="record-bar-content" class="rl-left"></div>
+    <div class="rl-right">
+      <span><span class="legend-dot dot-aplus"></span>A+ (2.0u+)</span>
+      <span><span class="legend-dot dot-a"></span>A (1.5u)</span>
+      <span><span class="legend-dot dot-aminus"></span>A- (1.0u)</span>
+    </div>
+  </div>
+
+  <div id="picks-container">
+    <div class="loading">
+      <div class="loading-icon">&#9918;</div>
+      Loading today's MLB F5 picks...
+    </div>
+  </div>
+
+  <div id="bet-summary"></div>
+
+  <!-- Analysis Breakdown — card format -->
+  <div id="analysis-breakdown" style="display:none; margin-top:1.25rem;">
+    <div style="background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem; padding:1.125rem; margin-bottom:.75rem; border-left:3px solid var(--teal);">
+      <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.625rem;">
+        <span style="font-size:.6875rem; font-weight:700; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-border); border-radius:6px; padding:.175rem .5rem; text-transform:uppercase;">Analysis Summary</span>
+      </div>
+      <p id="analysis-summary-text" style="font-size:.8125rem; color:var(--txt-b); line-height:1.65; font-weight:400;"></p>
+    </div>
+
+    <div style="font-size:.75rem; font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.5rem;">Full Slate Breakdown</div>
+    <div id="breakdown-cards"></div>
+  </div>
+
+  <p class="footer-note">
+    MLB First-Five-Innings picks only. All lines verified via The Odds API (40+ sportsbooks).<br>
+    Unit sizing: A+ = 2.0-3.0u, A = 1.0-1.5u, A- = 0.5u. Kelly-sized, rounded to nearest 0.5u.<br>
+    P/L tracking starts April 6, 2026. Not financial advice.
+  </p>
+</div>
+<script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function teamOnly(name) {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return name;
+    const multiWord = { 'red': 'Red Sox', 'white': 'White Sox', 'blue': 'Blue Jays' };
+    const lower = name.toLowerCase();
+    for (const [key, val] of Object.entries(multiWord)) {
+      if (lower.includes(key) && lower.includes(val.toLowerCase().split(' ').pop())) return val;
+    }
+    return parts[parts.length - 1];
+  }
+
+  function shortMatchup(matchup) {
+    if (!matchup) return '';
+    const sep = matchup.match(/\s+(vs\.?|@|at|v)\s+/i);
+    if (!sep) return matchup;
+    const parts = matchup.split(sep[0]);
+    return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
+  }
+
+  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus' };
+  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-' };
+
+  function calcWinnings(atRisk, oddsStr) {
+    const odds = parseInt(String(oddsStr||'-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds) || !atRisk) return 0;
+    if (odds > 0) return atRisk * (odds / 100);
+    return atRisk * (100 / Math.abs(odds));
+  }
+
+  /* ESPN Scores — MLB only */
+  let cachedScores = {};
+  let picksData = null;
+  let refreshTimer = null;
+
+  async function fetchScoresForSport(dateISO) {
+    try {
+      const dateParam = dateISO ? `?dates=${dateISO.replace(/-/g, '')}` : '';
+      const url = `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard${dateParam}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      return (data.events || []).map(ev => {
+        const comp = ev.competitions?.[0];
+        if (!comp) return null;
+        const away = comp.competitors?.find(c => c.homeAway === 'away');
+        const home = comp.competitors?.find(c => c.homeAway === 'home');
+        if (!away || !home) return null;
+        const status = comp.status || ev.status || {};
+        const rawDate = ev.date || comp.date || '';
+        let startTimeEST = '';
+        if (rawDate) {
+          try {
+            const d = new Date(rawDate);
+            startTimeEST = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+          } catch(e) {}
+        }
+        // F5 score from inning-by-inning linescores
+        const awayLS = away.linescores || [];
+        const homeLS = home.linescores || [];
+        const awayF5 = awayLS.slice(0, 5).reduce((s, inn) => s + (parseFloat(inn.value) || 0), 0);
+        const homeF5 = homeLS.slice(0, 5).reduce((s, inn) => s + (parseFloat(inn.value) || 0), 0);
+        const f5Complete = awayLS.length >= 5 && homeLS.length >= 5;
+
+        return {
+          awayTeam: away.team?.displayName || '',
+          awayAbbr: away.team?.abbreviation || '',
+          awayScore: parseInt(away.score) || 0,
+          homeTeam: home.team?.displayName || '',
+          homeAbbr: home.team?.abbreviation || '',
+          homeScore: parseInt(home.score) || 0,
+          awayF5, homeF5, f5Complete,
+          state: status.type?.state || 'pre',
+          detail: status.type?.shortDetail || status.type?.detail || '',
+          clock: status.displayClock || '',
+          period: status.period || 0,
+          startTimeEST,
+        };
+      }).filter(Boolean);
+    } catch (e) {
+      console.warn('Score fetch failed', e);
+      return [];
+    }
+  }
+
+  let picksDateISO = null;
+
+  async function fetchAllScores() {
+    cachedScores['MLB'] = await fetchScoresForSport(picksDateISO);
+  }
+
+  function normalizeTeam(name) {
+    return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function teamsMatch(pickTeam, espnTeam, espnAbbr) {
+    const p = normalizeTeam(pickTeam);
+    const e = normalizeTeam(espnTeam);
+    const a = normalizeTeam(espnAbbr);
+    if (!p || !e) return false;
+    if (p === e) return true;
+    if (p.includes(e) || e.includes(p)) return true;
+    if (a && p.includes(a)) return true;
+    const pLast = p.split(' ').pop();
+    const eLast = e.split(' ').pop();
+    if (pLast.length > 2 && pLast === eLast) return true;
+    return false;
+  }
+
+  function findGame(pick) {
+    const games = cachedScores['MLB'] || [];
+    const matchup = (pick.matchup || '').toLowerCase();
+    const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+
+    for (const g of games) {
+      const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr)) ||
+                         matchup.includes(normalizeTeam(g.awayTeam).split(' ').pop());
+      const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
+                         matchup.includes(normalizeTeam(g.homeTeam).split(' ').pop());
+      if (awayMatch && homeMatch) return g;
+    }
+    const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').replace(/F5\s*/i, '').trim();
+    if (pickTeam) {
+      for (const g of games) {
+        if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
+          return g;
+        }
+      }
+    }
+    return null;
+  }
+
+  function determineResult(pick, game) {
+    if (!game) return { status: 'scheduled', label: 'Upcoming' };
+    if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
+    // F5 bets settle as soon as 5 innings are complete
+    if (game.f5Complete) return determineF5Result(pick, game);
+    if (game.state === 'in') return { status: 'live', label: game.detail || 'Live' };
+    return { status: 'scheduled', label: 'Final' };
+  }
+
+  function determineF5Result(pick, game) {
+    const pickStr = (pick.pick || '').trim();
+    const awayScore = game.awayF5;
+    const homeScore = game.homeF5;
+
+    const pickTeamRaw = pickStr.replace(/F5\s*/i, '').replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+
+    // Total (Over/Under)
+    if (/over|under/i.test(pickStr)) {
+      const totalPoints = awayScore + homeScore;
+      const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
+      if (lineMatch) {
+        const ou = lineMatch[1].toLowerCase();
+        const line = parseFloat(lineMatch[2]);
+        if (totalPoints === line) return { status: 'push', label: 'Push' };
+        const over = totalPoints > line;
+        const won = (ou === 'over' && over) || (ou === 'under' && !over);
+        return won ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
+      }
+    }
+
+    // Run Line (spread)
+    if (/[+-]\d+(\.\d+)?/.test(pickStr)) {
+      const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
+      if (spreadMatch && (pickedAway || pickedHome)) {
+        const spread = parseFloat(spreadMatch[1]);
+        const pickedScore = pickedAway ? awayScore : homeScore;
+        const oppScore = pickedAway ? homeScore : awayScore;
+        const adjusted = pickedScore + spread;
+        if (adjusted === oppScore) return { status: 'push', label: 'Push' };
+        return adjusted > oppScore ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
+      }
+    }
+
+    // Moneyline
+    if (pickedAway || pickedHome) {
+      const pickedScore = pickedAway ? awayScore : homeScore;
+      const oppScore = pickedAway ? homeScore : awayScore;
+      if (pickedScore === oppScore) return { status: 'push', label: 'Push' };
+      return pickedScore > oppScore ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
+    }
+
+    return { status: 'scheduled', label: 'Final' };
+  }
+
+  function scoreBarHTML(pick, game, result) {
+    if (!game || game.state === 'pre') return '';
+    const barClass = `score-bar-${result.status}`;
+    const statusClass = `status-${result.status}`;
+    return `<div class="pick-score-bar ${barClass}">
+      <div class="score-teams">
+        <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.awayTeam))}</span><span class="score-team-score">${game.f5Complete ? game.awayF5 : game.awayScore}</span></div>
+        <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.homeTeam))}</span><span class="score-team-score">${game.f5Complete ? game.homeF5 : game.homeScore}</span></div>
+      </div>
+      <div class="score-meta">
+        <span class="score-status ${statusClass}">${esc(result.label)}</span>
+        <span class="score-detail">${esc(game.detail)}</span>
+      </div>
+    </div>`;
+  }
+
+  /* Render */
+  function renderPicks(data) {
+    const picks = (data.picks || []).sort((a, b) => {
+      const order = { aplus: 0, a: 1, aminus: 2 };
+      return (order[a.confidence] ?? 3) - (order[b.confidence] ?? 3);
+    });
+
+    document.getElementById('date-header').textContent = data.dateFormatted || data.date || 'Today';
+
+    // Daily Edge Summary
+    const summaryEl = document.getElementById('daily-edge-summary');
+    const summaryText = document.getElementById('daily-edge-text');
+    const edgeSummary = data.edgeSummary || '';
+    if (edgeSummary) {
+      summaryText.textContent = edgeSummary;
+      summaryEl.style.display = 'block';
+    } else if (picks.length > 0) {
+      const pickDescs = picks.map(p => `${p.pick} (${p.odds})`).join(', ');
+      summaryText.textContent = `Today's MLB F5 Tier 1 locks: ${pickDescs}. All picks pass the 9-layer sharp stack with confirmed starters.`;
+      summaryEl.style.display = 'block';
+    }
+
+    const container = document.getElementById('picks-container');
+    const dollarPerUnit = 150;
+
+    if (picks.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
+          <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9918;</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
+            ${data.noPlays ? esc(data.noPlays) : 'No Tier 1 F5 locks today.'}
+          </div>
+          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Not every slate produces a Tier 1 edge. Check back tomorrow.</div>
+        </div>`;
+      // Still render the analysis breakdown even with no picks
+      renderAnalysisBreakdown(data);
+      return;
+    }
+
+    let wins = 0, losses = 0, pushes = 0, pending = 0, hasAnyLive = false;
+    let html = '';
+
+    for (const p of picks) {
+      const conf = p.confidence || 'a';
+      const badge = badgeClass[conf] || 'badge-a';
+      const label = ratingLabel[conf] || p.rating || 'A';
+      const game = findGame(p);
+      const result = determineResult(p, game);
+      const scorebar = scoreBarHTML(p, game, result);
+
+      if (result.status === 'win') wins++;
+      else if (result.status === 'loss') losses++;
+      else if (result.status === 'push') pushes++;
+      else pending++;
+      if (result.status === 'live') hasAnyLive = true;
+
+      const isPreGame = !game || game.state === 'pre';
+      let gameTimeStr = '';
+      if (isPreGame && game && game.startTimeEST) gameTimeStr = game.startTimeEST + ' EST';
+      else if (isPreGame && p.commenceTime) {
+        try { gameTimeStr = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST'; } catch(e) {}
+      }
+
+      let liveResultHTML = '';
+      if (result.status === 'win') liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">WIN</span>';
+      else if (result.status === 'loss') liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">LOSS</span>';
+      else if (result.status === 'push') liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">PUSH</span>';
+      else if (result.status === 'live') liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
+
+      let timeChip = '';
+      if (isPreGame && gameTimeStr) {
+        timeChip = `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(gameTimeStr)}</span>`;
+      }
+
+      // Layer summary if available
+      let layerHTML = '';
+      if (p.layerSummary) {
+        layerHTML = `<div class="layer-summary">${esc(p.layerSummary)}</div>`;
+      }
+
+      const u = parseFloat(p.units) || 1;
+      const risk = u * dollarPerUnit;
+      const win = calcWinnings(risk, p.odds || '-110');
+
+      // KPI bar
+      const edgePct = p.edgePct || '';
+      const evStr = p.ev || '';
+      const kellyStr = p.kellyPct || '';
+      const modelStr = p.modelProb || '';
+      const marketStr = p.marketProb || '';
+
+      html += `<div class="pick-card">
+        <div class="pick-header" style="margin-bottom:.25rem;">
+          <span class="sport-tag">MLB<span class="f5-tag" style="margin-left:.375rem;">F5</span></span>
+          <span class="rating-badge ${badge}">${esc(label)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
+          <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup))}</div>
+          ${timeChip}
+        </div>
+        ${p.awaySP ? `<div style="font-size:.75rem; color:var(--txt-m); margin-bottom:.375rem;">
+          ${esc(p.awaySP)}${p.awayERA ? ' (' + p.awayERA + ' ERA' + (p.awayCareerERA ? ', career ' + p.awayCareerERA : '') + ')' : ''} vs
+          ${esc(p.homeSP || '')}${p.homeERA ? ' (' + p.homeERA + ' ERA' + (p.homeCareerERA ? ', career ' + p.homeCareerERA : '') + ')' : ''}
+          ${p.venue ? ' | ' + esc(p.venue) : ''}${p.parkFactor ? ' (PF: ' + p.parkFactor + ')' : ''}
+        </div>` : ''}
+        ${scorebar}
+        <div class="pick-line">
+          <span class="pick-name">${esc(p.pick)}</span>
+          <span class="pick-odds">${esc(p.odds)}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:.375rem; margin-bottom:.625rem;">
+          <div style="background:var(--off-white); border:1px solid var(--border-lt); border-radius:.5rem; padding:.375rem; text-align:center;">
+            <div style="font-size:.5rem; font-weight:600; color:var(--txt-l); text-transform:uppercase; letter-spacing:.04em;">Edge</div>
+            <div style="font-size:.875rem; font-weight:700; color:var(--green);">${esc(edgePct)}</div>
+          </div>
+          <div style="background:var(--off-white); border:1px solid var(--border-lt); border-radius:.5rem; padding:.375rem; text-align:center;">
+            <div style="font-size:.5rem; font-weight:600; color:var(--txt-l); text-transform:uppercase; letter-spacing:.04em;">EV</div>
+            <div style="font-size:.875rem; font-weight:700; color:var(--teal);">${esc(evStr)}</div>
+          </div>
+          <div style="background:var(--off-white); border:1px solid var(--border-lt); border-radius:.5rem; padding:.375rem; text-align:center;">
+            <div style="font-size:.5rem; font-weight:600; color:var(--txt-l); text-transform:uppercase; letter-spacing:.04em;">Model</div>
+            <div style="font-size:.875rem; font-weight:700; color:var(--olive);">${esc(modelStr)}</div>
+          </div>
+          <div style="background:var(--off-white); border:1px solid var(--border-lt); border-radius:.5rem; padding:.375rem; text-align:center;">
+            <div style="font-size:.5rem; font-weight:600; color:var(--txt-l); text-transform:uppercase; letter-spacing:.04em;">Market</div>
+            <div style="font-size:.875rem; font-weight:700; color:var(--txt-m);">${esc(marketStr)}</div>
+          </div>
+          <div style="background:var(--off-white); border:1px solid var(--border-lt); border-radius:.5rem; padding:.375rem; text-align:center;">
+            <div style="font-size:.5rem; font-weight:600; color:var(--txt-l); text-transform:uppercase; letter-spacing:.04em;">Kelly</div>
+            <div style="font-size:.875rem; font-weight:700; color:#e8b931;">${esc(kellyStr)}</div>
+          </div>
+        </div>
+        <div class="pick-divider"></div>
+        ${layerHTML}
+        <div class="pick-analysis">${esc((p.coreReasoning || p.whyThisBeatsTheNumber || '').replace(/Model/g, 'WeBetAI'))}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${risk.toLocaleString()} - To Win +$${Math.round(win).toLocaleString()}</div>
+          <div style="display:flex; align-items:center; gap:.375rem;">
+            ${liveResultHTML}
+            ${p.tierScore ? `<span class="edge-badge">${esc(p.tierScore)}/9</span>` : ''}
+          </div>
+        </div>
+        ${p.projF5Total ? `<div style="font-size:.6875rem; color:var(--txt-l); margin-top:.375rem;">Proj F5 Total: ${p.projF5Total} runs</div>` : ''}
+      </div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Bet summary
+    if (picks.length > 0) {
+      let totalUnits = 0, totalRisk = 0, totalWin = 0;
+      let summaryHTML = '<div class="parlay-section"><div class="parlay-title">MLB F5 Bet Summary</div>';
+      for (const p of picks) {
+        const u = parseFloat(p.units) || 1;
+        const risk = u * dollarPerUnit;
+        const win = calcWinnings(risk, p.odds || '-110');
+        totalUnits += u; totalRisk += risk; totalWin += win;
+        summaryHTML += `<div class="parlay-leg" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
+          <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
+            <span class="leg-pick">${esc(p.pick)}</span>
+            <span style="font-size:.6875rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span>
+          </span>
+          <span style="font-size:.75rem; color:var(--txt-m); text-align:right;">${u}u</span>
+          <span style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${risk.toLocaleString()}</span>
+          <span style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right;">+$${Math.round(win).toLocaleString()}</span>
+        </div>`;
+      }
+      summaryHTML += `<div style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
+        <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Total</span>
+        <span style="font-size:.75rem; color:var(--txt-m); font-weight:600; text-align:right;">${parseFloat(totalUnits.toFixed(1))}u</span>
+        <span style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${totalRisk.toLocaleString()}</span>
+        <span style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right;">+$${Math.round(totalWin).toLocaleString()}</span>
+      </div></div>`;
+      document.getElementById('bet-summary').innerHTML = summaryHTML;
+    }
+
+    // Record bar (inside legend bar) — always show, even pre-game
+    const recordEl = document.getElementById('record-bar-content');
+    recordEl.innerHTML = `<span style="font-weight:600; color:var(--txt-b);">Today's Record: ${wins}W-${losses}L${pushes > 0 ? '-' + pushes + 'P' : ''}</span>`;
+
+    if (hasAnyLive || pending > 0) scheduleRefresh(30);
+    else scheduleRefresh(300);
+
+    // ── Analysis Breakdown ──
+    renderAnalysisBreakdown(data);
+  }
+
+  function renderAnalysisBreakdown(data) {
+    const breakdown = document.getElementById('analysis-breakdown');
+    const summaryText = document.getElementById('analysis-summary-text');
+    const cardsContainer = document.getElementById('breakdown-cards');
+    const picks = data.picks || [];
+    const rejections = data.rejections || [];
+
+    if (picks.length === 0 && rejections.length === 0) {
+      breakdown.style.display = 'none';
+      return;
+    }
+
+    breakdown.style.display = 'block';
+
+    // Summary
+    const totalGames = picks.length + rejections.length;
+    const edgeSummary = data.edgeSummary || '';
+    let summaryLines = [];
+    if (picks.length > 0) {
+      summaryLines.push(`WeBetAI analyzed ${totalGames} MLB games through the 9-Layer Sharp Stack. ${picks.length} game${picks.length !== 1 ? 's' : ''} qualified as Tier 1 F5 locks.`);
+    } else {
+      summaryLines.push(`WeBetAI analyzed ${totalGames} MLB games through the 9-Layer Sharp Stack. No games qualified as Tier 1 F5 locks today.`);
+    }
+    if (edgeSummary) summaryLines.push(edgeSummary);
+    summaryText.textContent = summaryLines.join(' ');
+
+    // Layer pill helper
+    function layerDot(layerStr) {
+      if (!layerStr) return '';
+      return layerStr.split(/\s+/).map(l => {
+        const [label, status] = l.split(':');
+        if (!label || !status) return '';
+        const s = (status || '').toUpperCase();
+        let color, icon;
+        if (s === 'PASS' || s === 'CONFIRMS' || s === 'CONFIRM') { color = '#2e7d32'; icon = '\u2713'; }
+        else if (s === 'FAIL' || s === 'CONTRADICTS' || s === 'CONTRADICT') { color = '#c0392b'; icon = '\u2717'; }
+        else { color = '#d4a017'; icon = '~'; }
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;font-size:.5625rem;font-weight:700;color:${color};background:${s.includes('PASS') || s.includes('CONFIRM') ? '#e8f5e9' : s.includes('FAIL') || s.includes('CONTRADICT') ? '#fce4e4' : '#fff8e1'};border-radius:3px;margin-right:2px;" title="${label}: ${status}">${label.replace('L','')}</span>`;
+      }).join('');
+    }
+
+    // Tier badge
+    function tierBadge(score) {
+      const n = parseInt(score) || 0;
+      let bg, col;
+      if (n >= 7) { bg = '#2e7d32'; col = '#fff'; }
+      else if (n >= 5) { bg = '#f9a825'; col = '#fff'; }
+      else { bg = 'var(--border-lt)'; col = 'var(--txt-m)'; }
+      return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:22px;border-radius:6px;background:${bg};color:${col};font-size:.6875rem;font-weight:700;padding:0 .375rem;">${n}/9</span>`;
+    }
+
+    // Build cards — sorted by tier score descending
+    const allGames = [
+      ...picks.map(p => ({ ...p, isPick: true })),
+      ...rejections.map(r => ({ ...r, isPick: false })),
+    ].sort((a, b) => (parseInt(b.tierScore) || 0) - (parseInt(a.tierScore) || 0));
+
+    let html = '';
+    for (const g of allGames) {
+      const matchup = shortMatchup(g.matchup || '');
+      const starters = (g.awaySP && g.homeSP) ? `${g.awaySP} vs ${g.homeSP}` : '';
+      const edge = g.isPick ? `${g.pick} ${g.odds || ''}` : (g.bestEdge || '');
+      const reason = g.isPick ? (g.coreReasoning || g.whyThisBeatsTheNumber || '') : (g.reason || '');
+      const tierN = parseInt(g.tierScore) || 0;
+
+      // Card border color based on tier
+      let borderColor = 'var(--border-lt)';
+      if (g.isPick) borderColor = '#2e7d32';
+      else if (tierN >= 5) borderColor = '#f9a825';
+
+      html += `<div style="background:var(--white);border:1px solid var(--border-lt);border-radius:.875rem;padding:1rem;margin-bottom:.625rem;border-left:3px solid ${borderColor};">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <span style="font-size:.6875rem;font-weight:600;color:var(--teal);background:var(--teal-light);border:1px solid var(--teal-border);border-radius:6px;padding:.125rem .5rem;text-transform:uppercase;">MLB</span>
+            ${g.isPick ? '<span style="font-size:.5625rem;font-weight:700;color:#fff;background:#c0392b;border-radius:4px;padding:.125rem .375rem;text-transform:uppercase;">TIER 1 LOCK</span>' : ''}
+          </div>
+          ${tierBadge(g.tierScore)}
+        </div>
+        <div style="font-size:1rem;font-weight:700;color:var(--olive);margin-bottom:.25rem;">${esc(matchup)}</div>
+        ${starters ? `<div style="font-size:.75rem;color:var(--txt-m);margin-bottom:.5rem;">${esc(starters)}</div>` : ''}
+        ${edge ? `<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.5rem;">
+          <span style="font-size:.875rem;font-weight:600;color:var(--olive);">${esc(edge)}</span>
+        </div>` : ''}
+        <div style="height:1px;background:var(--border-lt);margin-bottom:.5rem;"></div>
+        <div style="display:flex;align-items:center;gap:.375rem;margin-bottom:.5rem;flex-wrap:wrap;">${layerDot(g.layers || '')}</div>
+        <div style="font-size:.8125rem;color:var(--txt-m);line-height:1.55;">${esc(reason)}</div>
+      </div>`;
+    }
+
+    cardsContainer.innerHTML = html;
+  }
+
+  function scheduleRefresh(seconds) {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(async () => {
+      if (!picksData) return;
+      await fetchAllScores();
+      renderPicks(picksData);
+    }, seconds * 1000);
+  }
+
+  async function loadPicks() {
+    try {
+      const resp = await fetch('/api/get-picks-mlb');
+      if (!resp.ok) throw new Error('API returned ' + resp.status);
+      const data = await resp.json();
+      picksData = data;
+      picksDateISO = data.date || null;
+      await fetchAllScores();
+      renderPicks(data);
+    } catch (err) {
+      console.error('Failed to load picks:', err);
+      document.getElementById('picks-container').innerHTML = `
+        <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
+          <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9918;</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load MLB F5 picks</div>
+          <div style="font-size:.8125rem; color:var(--txt-m); margin-top:.375rem;">Picks are generated daily. Try refreshing.</div>
+        </div>`;
+    }
+  }
+
+  loadPicks();
+
+  /* Results Tracker */
+  loadResults();
+
+  async function loadResults() {
+    try {
+      const resp = await fetch('/api/get-results-mlb');
+      if (!resp.ok) throw new Error('API ' + resp.status);
+      const data = await resp.json();
+      renderResults(data);
+    } catch (err) {
+      console.error('Results load failed:', err);
+      // Fresh start — no results yet
+      document.getElementById('cum-record').textContent = '0-0';
+      document.getElementById('cum-accuracy').textContent = '0%';
+      const profitEl = document.getElementById('cum-profit');
+      profitEl.textContent = '$0';
+      profitEl.className = 'cum-value';
+      document.getElementById('cum-roi').textContent = '0%';
+      document.getElementById('results-body').innerHTML =
+        '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">MLB F5 tracking starts June 1, 2026. Results will appear after the first day of picks.</td></tr>';
+    }
+  }
+
+  function renderResults(data) {
+    const cum = data.cumulative || {};
+    const straight = data.straight || {};
+
+    document.getElementById('cum-record').textContent = `${straight.wins || 0}-${straight.losses || 0}`;
+    document.getElementById('cum-accuracy').textContent = straight.accuracy || '0%';
+
+    const profitEl = document.getElementById('cum-profit');
+    const profit = cum.totalProfit || 0;
+    profitEl.textContent = (profit >= 0 ? '+$' : '-$') + Math.abs(profit).toLocaleString();
+    profitEl.className = 'cum-value ' + (profit >= 0 ? 'positive' : 'negative');
+
+    const roiEl = document.getElementById('cum-roi');
+    roiEl.textContent = cum.roi || '0%';
+    const roiNum = parseFloat(cum.roi) || 0;
+    roiEl.className = 'cum-value ' + (roiNum >= 0 ? 'positive' : 'negative');
+
+    const days = data.days || [];
+    if (days.length === 0) {
+      document.getElementById('results-body').innerHTML =
+        '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No historical results yet. Check back after your first day of picks.</td></tr>';
+      return;
+    }
+
+    let html = '';
+
+    // ── TODAY'S ROW: show current picks with live times/scores ──
+    if (picksData && picksData.picks && picksData.picks.length > 0) {
+      const todayPicks = picksData.picks;
+      let tWins = 0, tLosses = 0, tPushes = 0, tPending = 0;
+      const todayDetails = [];
+
+      for (const p of todayPicks) {
+        const game = findGame(p);
+        const result = determineResult(p, game);
+        if (result.status === 'win') tWins++;
+        else if (result.status === 'loss') tLosses++;
+        else if (result.status === 'push') tPushes++;
+        else tPending++;
+
+        let rightSide = '';
+        const isPreGame = !game || game.state === 'pre';
+        if (isPreGame) {
+          let t = '';
+          if (game && game.startTimeEST) t = game.startTimeEST;
+          else if (p.commenceTime) { try { t = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
+          if (t) { const tz = t.includes('EST') || t.includes('EDT') ? t : t + ' EST'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
+        } else {
+          const rb = result.status === 'win' ? 'result-win' : result.status === 'loss' ? 'result-loss' : result.status === 'push' ? 'result-push' : 'result-pending';
+          const rl = result.status === 'win' ? 'W' : result.status === 'loss' ? 'L' : result.status === 'push' ? 'P' : 'LIVE';
+          const scoreStr = game ? `(${game.f5Complete ? game.awayF5 : game.awayScore}-${game.f5Complete ? game.homeF5 : game.homeScore} F5)` : '';
+          rightSide = `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">${scoreStr}</span><span class="result-badge ${rb}">${rl}</span>`;
+        }
+        todayDetails.push({ pick: p, rightSide });
+      }
+
+      const todayRecord = `${tWins}W-${tLosses}L${tPushes ? '-' + tPushes + 'P' : ''}`;
+      const todayDecided = tWins + tLosses;
+      const todayAcc = todayDecided > 0 ? Math.round((tWins / todayDecided) * 100) : '--';
+      const todayDate = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
+
+      html += `<tr style="background:var(--teal-light);">
+        <td><button class="day-toggle" onclick="toggleDay('today')" style="font-weight:700;">${esc(todayDate)}</button></td>
+        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${todayRecord}</span></td>
+        <td>${todayAcc}%</td>
+        <td>--</td>
+      </tr>`;
+      html += `<tr class="day-detail" id="day-detail-today"><td colspan="4">`;
+      html += '<ul class="day-picks-list">';
+      for (const td of todayDetails) {
+        const p = td.pick;
+        html += `<li>
+          <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span></span>
+          <span>${td.rightSide}</span>
+        </li>`;
+      }
+      html += '</ul></td></tr>';
+    }
+
+    // ── HISTORICAL DAYS (show 6 initially + today = 7 total) ──
+    const MAX_VISIBLE = 6;
+    let visibleCount = 0;
+
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i];
+      if (picksData && picksData.date === day.date) continue;
+      visibleCount++;
+      const record = `${day.wins}W-${day.losses}L${day.pushes ? '-' + day.pushes + 'P' : ''}`;
+      const profitClass = day.profit >= 0 ? 'profit-positive' : 'profit-negative';
+      const profitStr = (day.profit >= 0 ? '+$' : '-$') + Math.abs(day.profit).toLocaleString();
+      const d = new Date(day.date + 'T12:00:00');
+      const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const hidden = visibleCount > MAX_VISIBLE ? ' class="extra-day" style="display:none"' : '';
+
+      html += `<tr${hidden}>
+        <td><button class="day-toggle" onclick="toggleDay(${i})">${esc(shortDate)}</button></td>
+        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${record}</span></td>
+        <td>${day.accuracy}%</td>
+        <td class="${profitClass}">${profitStr}</td>
+      </tr>`;
+
+      html += `<tr class="day-detail${visibleCount > MAX_VISIBLE ? ' extra-day' : ''}" id="day-detail-${i}"${visibleCount > MAX_VISIBLE ? ' style="display:none"' : ''}><td colspan="4">`;
+      if (day.picks && day.picks.length > 0) {
+        html += '<ul class="day-picks-list">';
+        for (const p of day.picks) {
+          const rb = p.result === 'win' ? 'result-win' : p.result === 'loss' ? 'result-loss' : p.result === 'push' ? 'result-push' : 'result-pending';
+          const rl = p.result === 'win' ? 'W' : p.result === 'loss' ? 'L' : p.result === 'push' ? 'P' : '...';
+          const profitBadge = p.result === 'pending' ? '' :
+            `<span class="${p.profit >= 0 ? 'profit-positive' : 'profit-negative'}" style="font-size:.65rem; margin-left:.25rem;">${p.profit >= 0 ? '+' : ''}$${Math.abs(p.profit)}</span>`;
+          html += `<li>
+            <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span>${p.score ? ` <span style="color:var(--txt-m); font-weight:600;">(${p.score})</span>` : ''}</span>
+            <span><span class="result-badge ${rb}">${rl}</span>${profitBadge}</span>
+          </li>`;
+        }
+        html += '</ul>';
+      }
+      html += '</td></tr>';
+    }
+
+    document.getElementById('results-body').innerHTML = html;
+
+    // Show "Show more" bar if there are hidden days
+    const bar = document.getElementById('showMoreBar');
+    if (visibleCount > MAX_VISIBLE) {
+      bar.classList.add('has-more');
+      bar.querySelector('span').textContent = `Show ${visibleCount - MAX_VISIBLE} more days \u25BC`;
+    }
+  }
+
+  function toggleDay(idx) {
+    document.getElementById('day-detail-' + idx).classList.toggle('open');
+  }
+
+  function showAllDays() {
+    document.querySelectorAll('.extra-day').forEach(el => {
+      el.style.display = '';
+      el.classList.remove('extra-day');
+    });
+    document.getElementById('showMoreBar').style.display = 'none';
+  }
+</script>
+</body>
+</html>

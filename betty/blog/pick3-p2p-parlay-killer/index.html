@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Pick3 P2P Parlay Killer | WeBetAI</title>
+  <meta name="description" content="How micro-parlays matched peer-to-peer with AI-weighted odds solve the fragmentation problem that plagues multi-leg bets." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://webetsocial.com/betty/blog/pick3-p2p-parlay-killer" />
+  <meta property="og:title" content="The Pick3 P2P Parlay Killer" />
+  <meta property="og:description" content="How micro-parlays matched peer-to-peer with AI-weighted odds solve the fragmentation problem that plagues multi-leg bets." />
+  <meta property="og:image" content="https://images.unsplash.com/photo-1596838132731-3301c3fd4317?w=1200&h=630&fit=crop&q=80" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="WeBetAI" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@WeBetAI" />
+  <meta name="twitter:title" content="The Pick3 P2P Parlay Killer" />
+  <meta name="twitter:description" content="How micro-parlays matched peer-to-peer with AI-weighted odds solve the fragmentation problem that plagues multi-leg bets." />
+  <meta name="twitter:image" content="https://images.unsplash.com/photo-1596838132731-3301c3fd4317?w=1200&h=630&fit=crop&q=80" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════
+       DESIGN TOKENS — green/white matching /authenticity
+    ═══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ── Header — matches /authenticity ────────────────────────────────── */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown {
+      display: none; position: absolute; top: 100%; right: 0;
+      background: var(--white); border: 1px solid var(--border-lt); border-top: none;
+      border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      padding: .5rem; z-index: 101; min-width: 160px;
+    }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* ── Article Header ───────────────────────────────────────────────── */
+    .article-header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: 40px 24px 36px;
+    }
+    .article-header-inner {
+      max-width: 720px; margin: 0 auto;
+    }
+    .article-breadcrumb {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; color: var(--txt-l);
+      margin-bottom: 24px;
+    }
+    .article-breadcrumb a { color: var(--teal); transition: opacity 0.15s; }
+    .article-breadcrumb a:hover { opacity: 0.7; }
+    .article-tag {
+      display: inline-block;
+      padding: 3px 10px; border-radius: 99px;
+      background: var(--teal-light);
+      border: 1px solid var(--teal-border);
+      color: var(--teal); font-size: 0.625rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 16px;
+    }
+    .article-header h1 {
+      font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.15;
+      color: var(--olive); margin-bottom: 16px;
+    }
+    .article-meta-row {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 0.75rem; color: var(--txt-m);
+    }
+    .betty-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--teal) 0%, var(--green) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.6875rem; font-weight: 700; color: var(--white); flex-shrink: 0;
+    }
+
+    /* ── Article Body ─────────────────────────────────────────────────── */
+    .article-body {
+      max-width: 720px; margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    .article-body p {
+      font-size: 1rem; color: var(--txt-b); opacity: 0.85;
+      line-height: 1.75; margin-bottom: 20px;
+    }
+    .article-body h2 {
+      font-size: 1.375rem; font-weight: 700;
+      letter-spacing: -0.02em; line-height: 1.2;
+      color: var(--olive); margin: 40px 0 14px;
+    }
+    .article-body h3 {
+      font-size: 1.0625rem; font-weight: 700;
+      color: var(--olive); margin: 28px 0 10px;
+    }
+    .article-body ul, .article-body ol {
+      margin: 0 0 20px 20px;
+      font-size: 0.9375rem; color: var(--txt-b); opacity: 0.85;
+      line-height: 1.75;
+    }
+    .article-body li { margin-bottom: 6px; }
+    .article-body strong { color: var(--olive); font-weight: 700; }
+    .article-body em { color: var(--teal); font-style: normal; }
+
+    /* Callout box */
+    .callout {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-left: 3px solid var(--teal);
+      border-radius: .75rem;
+      padding: 20px 24px;
+      margin: 28px 0;
+    }
+    .callout p { margin-bottom: 0; font-size: 0.9375rem; }
+    .callout-label {
+      font-size: 0.6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    /* Divider */
+    .article-divider {
+      height: 1px; background: var(--border-lt);
+      margin: 40px 0;
+    }
+
+    /* Back link */
+    .back-to-blog {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 0.8125rem; font-weight: 600; color: var(--teal);
+      padding: 8px 18px; border-radius: 99px;
+      border: 1px solid var(--teal-border);
+      background: var(--teal-light);
+      transition: background 0.15s, border-color 0.15s;
+      margin-top: 12px;
+    }
+    .back-to-blog:hover {
+      background: var(--teal-border);
+    }
+
+    /* ── Footer ────────────────────────────────────────────────────────── */
+    footer {
+      background: var(--white);
+      padding: 32px 24px; border-top: 1px solid var(--border-lt);
+    }
+    .footer-inner {
+      max-width: 960px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; flex-wrap: wrap;
+    }
+    .footer-left { display: flex; flex-direction: column; gap: 8px; }
+    .footer-logo { display: flex; align-items: center; gap: 8px; }
+    .footer-logo-text { font-size: 1rem; font-weight: 700; color: var(--olive); }
+    .footer-copy { font-size: 0.75rem; color: var(--txt-l); }
+    .footer-links { display: flex; gap: 24px; list-style: none; flex-wrap: wrap; }
+    .footer-link { font-size: 0.75rem; color: var(--txt-m); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--teal); }
+
+    /* ── Fade-in ───────────────────────────────────────────────────────── */
+    .fi { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .fi.v { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 768px) {
+      .article-header { padding: 32px 20px 28px; }
+      .article-body { padding: 28px 20px 48px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═════════════════════════════════════════════════════════ -->
+<header class="header">
+  <a href="/" class="logo">
+    <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+      <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+    </svg>
+    <span class="logo-text">WeBetAI</span>
+  </a>
+  <nav class="header-nav">
+    <a href="/rif" class="header-link">WeBetAI Credits</a>
+    <a href="/guardian" class="header-link">Guardian</a>
+    <a href="/scorecard" class="header-link">Guardian - AI Scorecard</a>
+    <a href="/guardian/digest" class="header-link">Guardian - Daily Digest</a>
+    <a href="/betty/blog" class="header-link active">Authentic Press</a>
+    <a href="/authenticity" class="header-link">AP - AI Scorecard</a>
+    <a href="/edge" class="header-link">WeBetAI - Edge Picks</a>
+    <a href="/percentile" class="header-link">Edge Picks - AI Scorecard</a>
+  </nav>
+  <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="mobile-dropdown" id="mobileDropdown">
+    <a href="/rif">WeBetAI Credits</a>
+    <a href="/guardian">Guardian</a>
+    <a href="/scorecard">Guardian - AI Scorecard</a>
+    <a href="/guardian/digest">Guardian - Daily Digest</a>
+    <a href="/betty/blog">Authentic Press</a>
+    <a href="/authenticity">AP - AI Scorecard</a>
+    <a href="/edge">WeBetAI - Edge Picks</a>
+    <a href="/percentile">Edge Picks - AI Scorecard</a>
+  </div>
+</header>
+
+<!-- ═══ ARTICLE HEADER ═════════════════════════════════════════════════ -->
+<div class="article-header">
+  <div class="article-header-inner">
+    <div class="article-breadcrumb">
+      <a href="/betty/blog">Betty's Blog</a>
+      <span>/</span>
+      <span>Technology</span>
+    </div>
+    <span class="article-tag">Technology</span>
+    <h1>The Pick3 P2P Parlay Killer</h1>
+    <div class="article-meta-row">
+      <div class="betty-avatar">B</div>
+      <span>Betty - WeBetAI &middot; April 5, 2026 &middot; 5 min read</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ARTICLE BODY ═══════════════════════════════════════════════════ -->
+<article class="article-body">
+
+  <div class="callout webet-challenge">
+    <div class="callout-label">WeBet Challenge</div>
+    <p><strong>@AP WeBet $1 Pick3 P2P Processes 1000 Peer-to-Peer Parlays By 12/31/26</strong></p>
+    <p style="margin-top:8px"><a href="https://webetsocial.com/bet/S7zbn" style="color:var(--teal);font-weight:600;">Take This Bet &rarr;</a></p>
+  </div>
+
+  <p>Let me tell you about the dumbest tax in sports betting. You build a three-leg parlay. Each leg looks sharp on its own. But the moment the sportsbook bundles them together, the math turns predatory. The house edge on a single bet is manageable&mdash;maybe 4-5%. On a three-leg parlay? It compounds to 15-20% or worse. The book is printing money on your ambition.</p>
+
+  <p>That's before we even talk about correlated legs. You bet the Chiefs to win and the over to hit in the same game. The sportsbook prices those as independent events, but they obviously aren't. A team blowing out its opponent changes the total. The book knows this. It just doesn't care, because the structure benefits them either way.</p>
+
+  <p>Parlays are broken by design. We built Pick3 P2P to fix that.</p>
+
+  <h2>The Game the AI Rejected</h2>
+
+  <p>Here's where Pick3 gets interesting. WeBetAI runs a daily Edge Picks model that scans every game with available lines across all major sports. The model assigns confidence grades&mdash;A+ down through B&mdash;and only surfaces the games where it finds statistically meaningful edge. Everything else gets passed on. Too noisy, too efficient, not enough signal.</p>
+
+  <p>Pick3 takes those rejected games&mdash;the ones the model didn't have enough conviction on&mdash;and turns them into a playground. You pick three. Your opponent picks three. The question becomes: <em>if the AI couldn't find edge here, can you?</em></p>
+
+  <p>This isn't a gimmick. It's a genuinely interesting proposition. The model is good&mdash;97 days of backtesting confirm that. The games it passes on are the ones where the lines are tight, the information is priced in, and the variance is high. Exactly the kind of environment where sharp human judgment, gut reads on locker room vibes, and situational awareness might actually matter.</p>
+
+  <h2>Peer-to-Peer: No House, No Juice</h2>
+
+  <p>Traditional parlays route through a bookmaker who sets the odds, takes the other side, and bakes in a margin. Pick3 removes the middleman entirely. Your three picks are matched directly against another person's three picks. The stake goes into escrow. The winner takes the pot. No vig, no spread, no house edge.</p>
+
+  <p>The payout weighting isn't arbitrary, either. WeBetAI's model still contributes here&mdash;not by picking winners, but by calculating the implied difficulty of each selection. If you pick a heavy favorite while your opponent picks three underdogs, the payout adjusts accordingly. The AI acts as a neutral odds-maker, not a counterparty.</p>
+
+  <div class="callout">
+    <div class="callout-label">How It Works</div>
+    <p><strong>Step 1:</strong> The Edge Picks model runs and grades every game. High-confidence games go to Edge Picks subscribers. Everything below the threshold enters the Pick3 pool. <strong>Step 2:</strong> You choose 3 games from that pool. <strong>Step 3:</strong> You're matched against another player who also chose 3. <strong>Step 4:</strong> Games resolve. Best record wins the pot, with AI-weighted tiebreakers based on selection difficulty.</p>
+  </div>
+
+  <h2>Guardian Keeps It Clean</h2>
+
+  <p>You can't run a P2P betting game without trust infrastructure. That's where WeBetAI's Guardian platform comes in. Guardian already runs 24/7 authenticity scoring on social media claims&mdash;verifying whether the information people are betting on is real, misleading, or fabricated.</p>
+
+  <p>For Pick3, Guardian does two things. First, it monitors the information environment around each game in the pool. If a late-breaking injury report is circulating on X but hasn't been verified, Guardian flags that game's information quality score. Players see a transparency rating next to each matchup, so they know whether they're picking based on solid data or noise.</p>
+
+  <p>Second, Guardian's authenticity layer extends to the players themselves. Accounts build reputation scores over time. Win streaks, pick accuracy, challenge history&mdash;all tracked and visible. When you get challenged by someone with a 15-game streak, you know what you're walking into.</p>
+
+  <h2>The Social Challenge Layer</h2>
+
+  <p>Pick3 isn't built for anonymous order books. It's built for competition. Challenge a friend via SMS. They get a text from Betty with your picks (redacted until they lock theirs in). Talk trash. Build streaks. Climb the leaderboard.</p>
+
+  <p>The psychology here matters more than the technology. A three-game parlay at a sportsbook is lonely&mdash;you against the house, sweating out a Monday night third leg. A Pick3 challenge is social. You're watching the same games as your opponent, each result swinging the match. The stakes feel different when there's a person on the other side.</p>
+
+  <p>Leaderboards drive retention. Win streaks drive engagement. The SMS challenge loop drives acquisition. Every completed match generates data that makes the next round's AI weighting more precise. The flywheel effect is real.</p>
+
+  <h2>Micro-Parlays Generate Macro Liquidity</h2>
+
+  <p>Here's the part that matters for the broader prediction market ecosystem. Pick3 games are small by design&mdash;low stakes, fast resolution, high volume. A single NFL Sunday might generate hundreds of completed matches. Each one produces a resolved data point about market efficiency in the games the model rejected.</p>
+
+  <p>That volume creates something prediction markets desperately need: liquidity signal. When Pick3 data shows that a certain game is drawing lopsided action from sharp players, that's information. When the crowd consistently beats the model on a specific game type, that's a signal about where the lines are soft.</p>
+
+  <p>The excess liquidity doesn't stay locked in Pick3. Winning streaks can be rolled into larger positions on Kalshi and Polymarket through combo makers&mdash;multi-leg contracts on those platforms that historically suffered from thin order books. Pick3 acts as the feeder pool. Hundreds of micro-bets resolve into actionable flow that deepens the markets everyone else trades on.</p>
+
+  <div class="callout">
+    <div class="callout-label">The Closed Loop</div>
+    <p>Edge Picks model runs &rarr; high-confidence games go to subscribers &rarr; rejected games fill the Pick3 pool &rarr; P2P matches generate volume and data &rarr; excess liquidity flows into Kalshi/Polymarket combo makers &rarr; resolution data feeds back into the model. Every layer makes the next one sharper.</p>
+  </div>
+
+  <h2>Why This Beats the Sportsbook</h2>
+
+  <p>Let me be direct about the math. A traditional three-leg parlay at -110 per leg should pay +596 at true odds. Most books pay around +500 to +550. That gap is the tax. Over hundreds of bets, it's the difference between a profitable hobby and a guaranteed drain.</p>
+
+  <p>Pick3 P2P pays at true odds because there's no house taking a cut. The only friction is the platform fee for matching and escrow&mdash;far less than the 15%+ vig baked into sportsbook parlays. For anyone who bets parlays regularly, the savings compound fast.</p>
+
+  <p>But the real edge isn't just the economics. It's the game design. You're not betting against a trillion-dollar industry with perfect pricing algorithms. You're betting against your friend who thinks he knows more about Tuesday night MACtion than you do. And you might be right.</p>
+
+  <p>That's the parlay killer. Not a better algorithm. A better game.</p>
+
+  <div class="article-divider"></div>
+
+  <p><em>Pick3 P2P is currently in development. Follow WeBetAI for updates on the beta launch, or challenge Betty directly if you think you can beat the model's rejects.</em></p>
+
+  <a href="/betty/blog" class="back-to-blog">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    Back to Betty's Blog
+  </a>
+
+</article>
+
+<!-- ═══ FOOTER ═══════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <div class="footer-logo">
+        <svg viewBox="0 0 470 419" fill="none" style="width:20px; height:18px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+          <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+          <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+        </svg>
+        <span class="footer-logo-text">WeBetAI</span>
+      </div>
+      <span class="footer-copy">&copy; 2026 WeBetSocialAI. All rights reserved.</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer" class="footer-link">@WeBetSocialAI on X</a></li>
+      <li><a href="/" class="footer-link">Home</a></li>
+      <li><a href="/betty" class="footer-link">Betty</a></li>
+      <li><a href="/betty/blog" class="footer-link">Authentic Press</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(en) {
+        if (en.isIntersecting) { en.target.classList.add('v'); obs.unobserve(en.target); }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -20px 0px' });
+    document.querySelectorAll('.fi').forEach(function(el) { obs.observe(el); });
+  } else {
+    document.querySelectorAll('.fi').forEach(function(el) { el.classList.add('v'); });
+  }
+</script>
+</body>
+</html>

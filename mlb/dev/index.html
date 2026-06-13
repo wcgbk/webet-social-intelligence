@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | MLB F5 Dev Notes</title>
+  <meta name="description" content="Development changelog and architecture notes for WeBetAI's MLB First-Five-Innings betting machine." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/mlb/dev" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | MLB F5 Dev Notes" />
+  <meta property="og:description" content="Development changelog for the MLB F5 betting machine." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | MLB F5 Dev Notes" />
+  <meta name="twitter:description" content="Development changelog for the MLB F5 betting machine." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg); color: var(--txt-b);
+      -webkit-font-smoothing: antialiased; min-height: 100vh;
+    }
+    .header {
+      background: var(--white); border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .hero {
+      background: linear-gradient(135deg, #1a2e1a 0%, #004C54 100%);
+      border-radius: .875rem; padding: 1.25rem; margin-bottom: 1.25rem;
+      color: #fff; text-align: center;
+    }
+    .hero-title { font-size: 1.25rem; font-weight: 700; margin-bottom: .25rem; }
+    .hero-sub { font-size: .75rem; color: rgba(255,255,255,.7); letter-spacing: .05em; text-transform: uppercase; }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: 1rem;
+      border-left: 3px solid var(--teal);
+    }
+    .summary-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .625rem;
+    }
+    .summary-text { font-size: .8125rem; color: var(--txt-b); line-height: 1.65; }
+    .change-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1rem; margin-bottom: .625rem;
+    }
+    .change-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+    .change-version {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .125rem .5rem; text-transform: uppercase;
+    }
+    .change-date { font-size: .6875rem; color: var(--txt-l); font-weight: 500; }
+    .change-title { font-size: .9375rem; font-weight: 700; color: var(--olive); margin-bottom: .375rem; }
+    .change-body { font-size: .8125rem; color: var(--txt-m); line-height: 1.6; }
+    .change-tag {
+      display: inline-block; font-size: .5625rem; font-weight: 700; padding: .125rem .375rem;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; margin-right: .25rem;
+    }
+    .tag-arch { background: #e8f5e9; color: #2e7d32; }
+    .tag-fix { background: #fce4e4; color: #c0392b; }
+    .tag-feat { background: #e3f2fd; color: #1565c0; }
+    .tag-data { background: #fff8e1; color: #f9a825; }
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header" style="position:relative;">
+    <a href="/mlb" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/mlb" class="header-link">MLB F5</a>
+      <a href="/mlb/dev" class="header-link active">Dev Notes</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/mlb">MLB F5</a>
+      <a href="/mlb/dev">Dev Notes</a>
+    </div>
+  </header>
+
+<div class="main">
+
+  <div class="hero">
+    <div class="hero-title">MLB First Five Innings</div>
+    <div class="hero-sub">Development Notes & Changelog</div>
+  </div>
+
+  <!-- Top 5 Changes from Original F5 Prompt -->
+  <div class="summary-card" style="border-left-color: #c0392b;">
+    <div class="summary-title" style="color: #c0392b;">Top 5 Changes from Original F5 Prompt</div>
+    <div class="summary-text">
+      The original WeBet F5 MLB prompt defined a 9-Layer Sharp Stack where Claude performed all analysis via web search — confirming starters, pulling F5 ERA stats, evaluating park factors, checking umpire zones, and reading line movement. Here are the five most significant architectural departures from that original strategy:
+      <br><br>
+      <strong>1. Claude demoted from analyst to verifier.</strong> The original prompt had Claude running the entire 9-layer analysis autonomously via web search. In production, Claude couldn't reliably find F5-specific data (F5 ERA, first-inning ERA, umpire assignments) through web search alone — it burned 15 search credits across 16 games and came back empty on most layers. The fix: JavaScript now pre-computes all projections, edges, and probabilities using ESPN and Odds API data. Claude only does a pass/fail verification check for late-breaking news (injuries, scratched starters, weather changes). This mirrors the proven /edge-beta architecture.
+      <br><br>
+      <strong>2. F5-specific historical data requirement removed for early season.</strong> The original prompt demanded F5 ERA (ERA through exactly 5 innings), first-inning ERA, last 5 starts F5 ATS record, and first-time-through-the-order stats. None of this exists in the first week of the season. The model now accepts career stats, 2025 season stats, and spring training performance as proxies. A trigger will re-enable the F5-specific requirement once 30+ games of 2026 data accumulate.
+      <br><br>
+      <strong>3. Edge calibration added (not in original prompt).</strong> The original prompt had no mathematical framework for computing edges — it relied on Claude's judgment to determine "dominant edge signals." The production model adds three calibration layers from the proven /edge-beta system: (a) edge discount curve that log-compresses large market disagreements, (b) cover probability caps at 57-60% matching industry benchmarks for sharp models, and (c) market respect blending that weights toward the market when model-market disagreement is large.
+      <br><br>
+      <strong>4. Tier scoring changed from subjective to mathematical.</strong> The original prompt scored layers as "CONFIRMS EDGE / NEUTRAL / CONTRADICTS EDGE" based on Claude's qualitative assessment. The production model computes a numerical edge percentage, Kelly fraction, and z-score for every game. Tier classification now derives from the math: 7+/9 layers confirmed with >2% calibrated edge = Tier 1. This eliminates Claude's tendency to conservatively mark layers as NEUTRAL when data exists but doesn't show a dramatic signal.
+      <br><br>
+      <strong>5. Data pipeline replaces web search for 7 of 9 layers.</strong> The original prompt required web search for all 9 layers. The production pipeline now fills 7 layers programmatically: L1 (ESPN confirmed starters), L2 (ESPN pitcher ERA/record), L3 (team stats: OPS, runs/game, batting avg), L4 (matchup implied by opposing team stats vs pitcher stats), L5 (team runs/game trends), L6 (hardcoded park factors for all 30 venues + temperature adjustment), L7 (ESPN weather data). Only L8 (umpire) and L9 (line movement/sharp signals) still benefit from Claude's web search — and these are the two layers where web search actually adds unique value.
+    </div>
+  </div>
+
+  <!-- Current State Summary -->
+  <div class="summary-card">
+    <div class="summary-title">Current Architecture Summary</div>
+    <div class="summary-text">
+      The MLB F5 machine uses a <strong>pre-computed edge architecture</strong> mirroring the proven /edge-beta model. JavaScript fetches all data from ESPN (starters, pitcher ERA, team stats, injuries, venue, weather) and The Odds API (moneyline, run line, totals from 40+ books), then computes F5 projections and edges mathematically. Claude receives a ranked candidate table and only performs <strong>pass/fail verification</strong> via web search for late-breaking injury news, lineup changes, or weather shifts. The model evaluates every game on the daily slate, ranks candidates by edge strength, and selects up to 3 Tier 1 F5 picks per day. Park factors for all 30 MLB venues are hardcoded from 2024-2025 data. Temperature adjustments modulate run projections (cold suppresses, hot elevates). P/L tracking is completely separate from /edge-beta, starting fresh from April 5, 2026.
+    </div>
+  </div>
+
+  <div class="summary-card" style="border-left-color: var(--green);">
+    <div class="summary-title" style="color: var(--green);">Data Pipeline</div>
+    <div class="summary-text">
+      <strong>ESPN API:</strong> Confirmed starters (name, hand, ERA, W-L record), team records, venue info, weather, injuries for both teams.<br>
+      <strong>The Odds API:</strong> Best available odds across 40+ US sportsbooks — full-game (h2h, spreads, totals) AND real F5 markets (h2h_1st_5_innings, spreads_1st_5_innings, totals_1st_5_innings).<br>
+      <strong>BettorEdge API:</strong> Real F5 moneyline prices (Market ID 70) from DraftKings, FanDuel, BetMGM, and others. Best odds selected across both sources.<br>
+      <strong>Park Factors:</strong> Hardcoded PF for all 30 venues (93-114 range) from 2024-2025 data.<br>
+      <strong>Edge Computation:</strong> F5 run projections based on team runs/game, opposing pitcher ERA, park factor, and temperature. Edges computed as model probability minus market implied probability.<br>
+      <strong>Claude (Sonnet):</strong> Verification-only role. Web search for injuries, lineup changes, weather updates. Pass/fail on pre-computed candidates.
+    </div>
+  </div>
+
+  <!-- Changelog -->
+  <div style="font-size:.75rem; font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.625rem; margin-top:1.25rem;">Changelog</div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.9</span>
+      <span class="change-date">Apr 6, 2026 — 9:30 PM</span>
+    </div>
+    <div class="change-title">Date-Scoped ESPN Scoreboard — Fix Cross-Day Collisions</div>
+    <div class="change-body">
+      <span class="change-tag tag-fix">Fix</span>
+      Frontend ESPN scoreboard fetch now passes the picks date (<code>?dates=YYYYMMDD</code>) to the ESPN API, ensuring only games from the correct date are returned. Previously, the scoreboard fetched today's games regardless of which date the picks were for, causing cross-day matchup collisions — e.g., if the same two teams played consecutive days, yesterday's completed game could incorrectly appear as a result for today's pick. The picks date is extracted from the API response and threaded through to all score lookups.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.8</span>
+      <span class="change-date">Apr 6, 2026 — 8:00 PM</span>
+    </div>
+    <div class="change-title">F5 Scoring — Grade on First 5 Innings Only</div>
+    <div class="change-body">
+      <span class="change-tag tag-fix">Fix</span>
+      <span class="change-tag tag-arch">Architecture</span>
+      Critical scoring fix: F5 bets now settle on the score through 5 innings, not the final score. Both the backend results API (<code>get-results-mlb</code>) and the frontend pick cards use ESPN's inning-by-inning linescores to extract the F5 score. Picks are graded as WIN/LOSS as soon as 5 innings are complete — no need to wait for the game to finish. Scorebar on pick cards displays F5 scores. Previously, a game tied after 5 innings but won in the 9th would incorrectly show as a win; now correctly graded as a push or loss depending on the bet type.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.7</span>
+      <span class="change-date">Apr 6, 2026 — 3:30 PM</span>
+    </div>
+    <div class="change-title">Hard Rock Bet Exclusive — BettorEdge Removed</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      Removed BettorEdge entirely from the MLB pipeline. Hard Rock Bet is now the sole line source for all edge calculations — moneyline, run line, and totals. No secondary fallback to any other book. When Hard Rock doesn't carry F5-specific markets, the model derives F5 lines from Hard Rock's full-game odds. BettorEdge fetch, token auth, and game matching code all bypassed.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.6</span>
+      <span class="change-date">Apr 6, 2026 — 3:00 PM</span>
+    </div>
+    <div class="change-title">Hard Rock Bet — Single-Book Line Source for MLB</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      <span class="change-tag tag-data">Data</span>
+      MLB picks now use Hard Rock Bet lines exclusively as the primary odds source. Added <code>us2</code> region to The Odds API requests to access Hard Rock Bet (bookmaker keys: <code>hardrockbet</code>, <code>hardrockbet_oh</code>). The <code>extractBestOdds</code> function filters to Hard Rock Bet only — all other sportsbooks are ignored for edge calculation. Pick output now includes <code>book</code> and <code>source</code> fields showing exactly which book and data path each line came from. Blob storage updated to dual-write (SDK + REST API) so picks survive deploys.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.5</span>
+      <span class="change-date">Apr 6, 2026 — 2:00 PM</span>
+    </div>
+    <div class="change-title">Odds API Fix — Split Market Requests + P/L Reset</div>
+    <div class="change-body">
+      <span class="change-tag tag-fix">Fix</span>
+      <span class="change-tag tag-data">Data</span>
+      Critical fix: v2.4 added F5 market keys (h2h_1st_5_innings, etc.) to the Odds API request, but these are not supported on the standard /odds endpoint — causing an HTTP 422 that silently killed the entire odds fetch. All 13 games rejected with "No odds available" on the first scheduled run. Fix: split into two API calls — standard markets (h2h, spreads, totals) in the primary call, and a separate optional call for alternate/F5 markets. Added _debug metadata to the stored result for future diagnostics. P/L tracking reset to start from April 6, 2026 (first day of verified live picks).
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.4</span>
+      <span class="change-date">Apr 5, 2026 — 5:00 PM</span>
+    </div>
+    <div class="change-title">Dual F5 Line Sources — Odds API + BettorEdge</div>
+    <div class="change-body">
+      <span class="change-tag tag-data">Data</span>
+      <span class="change-tag tag-arch">Architecture</span>
+      Added real F5 markets from The Odds API (h2h_1st_5_innings, spreads_1st_5_innings, totals_1st_5_innings) as a second source of actual first-five-innings lines. The model now has two independent F5 data feeds: BettorEdge (Market ID 70 — DraftKings, FanDuel, MGM, etc.) and The Odds API (40+ US sportsbooks). For each market type (ML, run line, total), the model uses the best available F5 price across both sources, falling back to full-game derivation only when neither source has F5-specific lines. <strong>Note:</strong> The F5 market keys caused an HTTP 422 on the standard endpoint — fixed in v2.5.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.3</span>
+      <span class="change-date">Apr 5, 2026 — 4:15 PM</span>
+    </div>
+    <div class="change-title">BettorEdge Real F5 Moneyline Integration</div>
+    <div class="change-body">
+      <span class="change-tag tag-data">Data</span>
+      Added real F5 moneyline prices from BettorEdge API (Market ID 70). The model was previously using full-game lines as F5 proxies, which caused totals to show as 10-11 instead of realistic F5 ranges (4.5-5.5). BettorEdge provides consensus and best-available F5 ML from DraftKings, FanDuel, BetMGM, and other books. F5 totals now derived from full-game × 0.55, F5 run lines use ±0.5. First pick with real F5 lines: Tigers -0.5 at +158.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.2</span>
+      <span class="change-date">Apr 5, 2026 — 3:30 PM</span>
+    </div>
+    <div class="change-title">Career Stats Regression + Blended ERA</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      <span class="change-tag tag-data">Data</span>
+      Critical fix for early-season accuracy. The model was using raw current-season ERA (e.g. Parker Messick 12.46 from one bad start, Chris Bassitt 8.31 from one outing) instead of regressing to career averages. Now fetches career pitching stats for every starter via ESPN's athlete stats API (career ERA, WHIP, K/9, IP, GB/FB ratio). Implements Marcel-style weighted blending: 0 GS = 100% career, 5 GS = 50/50, 10+ GS = 80% current season. This is the standard approach used by ZiPS, Steamer, and ATC projection systems. Example: Bassitt's 8.31 season ERA blends to ~3.80 (career 3.68), which is a dramatically more accurate pitcher input for edge computation. Also added started-game exclusion filter using commence_time check — games that have already started are excluded from picks but remain in the slate breakdown.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.1</span>
+      <span class="change-date">Apr 5, 2026 — 2:30 PM</span>
+    </div>
+    <div class="change-title">Calibrated Edge Model + KPI Dashboard</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      <span class="change-tag tag-data">Data</span>
+      Major calibration upgrade mirroring /edge-beta's proven techniques. Added: (1) edge discount curve — log-compresses edges when model disagrees with market by >0.5 std devs, (2) cover probability caps — MLB ML capped at 60%, Run Line at 57%, Totals at 60%, (3) market respect blending — larger disagreement = more weight to market, (4) explicit Kelly criterion with half-Kelly sizing, (5) cover prob gates — sub-42% capped at 0.5u, sub-50% capped at 1.0u. Added Polymarket and BettorEdge API fetches in parallel. Pick cards now show 5 KPI boxes: Edge%, EV, Model%, Market%, Kelly%. Added starter names, ERA, venue, park factor to each card. Added rule: games that have already started are excluded from picks but shown in slate breakdown.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v2.0</span>
+      <span class="change-date">Apr 5, 2026 — 1:00 PM</span>
+    </div>
+    <div class="change-title">Pre-computed Edge Architecture (Major Rewrite)</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      Complete rewrite from Claude-driven analysis to JS pre-computed edges. ESPN API now feeds pitcher stats (ERA, W-L), team stats (runs/game, OPS, batting avg), injuries, venue, and weather directly into the pipeline. Odds API provides best lines from 40+ books. Edge computation happens in JavaScript using normalCDF probability models. Claude's role reduced to verification-only via web search. This mirrors the proven /edge-beta architecture and is dramatically faster and more reliable.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.5</span>
+      <span class="change-date">Apr 5, 2026 — 12:15 PM</span>
+    </div>
+    <div class="change-title">Early Season Mode + Historical Data Fallback</div>
+    <div class="change-body">
+      <span class="change-tag tag-fix">Fix</span>
+      Removed rigid requirement for 2026 F5-specific stats (F5 ERA, first-inning ERA, F5 ATS record). Added Early Season Mode that accepts career/2025 stats as proxies. Changed "INSUFFICIENT" from valid layer status to forbidden — all layers must be PASS, NEUTRAL, or FAIL. Added rule that Claude must produce an edge estimate for every game even in rejections.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.4</span>
+      <span class="change-date">Apr 5, 2026 — 11:45 AM</span>
+    </div>
+    <div class="change-title">Enriched Rejection Data + Layer Breakdown</div>
+    <div class="change-body">
+      <span class="change-tag tag-feat">Feature</span>
+      Updated Claude output format to include enriched rejection data: awaySP, homeSP, tierScore, bestEdge, layer-by-layer breakdown (L1:PASS L2:FAIL etc.), and specific failure reasons per game. Frontend updated to display this data.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.3</span>
+      <span class="change-date">Apr 5, 2026 — 11:30 AM</span>
+    </div>
+    <div class="change-title">Card Layout for Game Breakdown</div>
+    <div class="change-body">
+      <span class="change-tag tag-feat">Feature</span>
+      Replaced ugly HTML table for game breakdown with clean pick-style cards matching the /edge-beta design language. Each game is now a card with matchup, starters, tier badge, best edge, layer pills (color-coded PASS/NEUTRAL/FAIL), and reasoning. Cards sorted by tier score descending.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.2</span>
+      <span class="change-date">Apr 5, 2026 — 11:00 AM</span>
+    </div>
+    <div class="change-title">ESPN Starter Data Integration</div>
+    <div class="change-body">
+      <span class="change-tag tag-data">Data</span>
+      Fixed critical data gap: previously Claude had to web-search for confirmed starters and was failing to find them (rejecting all 16 games at Layer 1). Added ESPN scoreboard API integration to pull confirmed starters (name, handedness, ERA, record), venue, weather, and team records. Starters are now pre-confirmed and fed directly to Claude.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.1</span>
+      <span class="change-date">Apr 5, 2026 — 10:30 AM</span>
+    </div>
+    <div class="change-title">Blob Storage Fallback + Analysis Table</div>
+    <div class="change-body">
+      <span class="change-tag tag-fix">Fix</span>
+      Fixed silent failures in background function. Added Netlify API fallback for blob storage when SDK isn't available. Added try/catch wrapper around entire handler. Added analysis breakdown table below picks showing all evaluated games with rejection reasons.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v1.0</span>
+      <span class="change-date">Apr 5, 2026 — 9:00 AM</span>
+    </div>
+    <div class="change-title">Initial MLB F5 Launch</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      Created entirely separate MLB F5 environment at /mlb. Page design mirrors /edge-beta (green/white, Geist Sans, liquid glass cards). Backend: generate-picks-mlb-background.js with full 9-Layer Sharp Stack F5 prompt from the WeBet F5 PDF. Separate blob store (edge-picks-mlb), separate P/L tracking, separate API endpoints. Daily cron at 10am EDT. Manual trigger at POST /api/run-picks-mlb.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v0.9</span>
+      <span class="change-date">Apr 5, 2026 — 8:30 AM</span>
+    </div>
+    <div class="change-title">API Endpoints + Netlify Config</div>
+    <div class="change-body">
+      <span class="change-tag tag-feat">Feature</span>
+      Created 5 Netlify functions: generate-picks-mlb-background (core engine), get-picks-mlb (API), run-picks-mlb (manual trigger), trigger-picks-mlb (daily cron), get-results-mlb (P/L tracker). Updated netlify.toml with schedule, redirects for /mlb, /api/get-picks-mlb, /api/run-picks-mlb, /api/get-results-mlb.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v0.8</span>
+      <span class="change-date">Apr 5, 2026 — 8:00 AM</span>
+    </div>
+    <div class="change-title">F5 Prompt Design (9-Layer Sharp Stack)</div>
+    <div class="change-body">
+      <span class="change-tag tag-arch">Architecture</span>
+      Implemented the full 9-Layer Sharp Stack from the WeBet F5 MLB PDF: L1 Confirmed Starters (hard gate), L2 F5 Pitcher Stats, L3 Advanced Metrics, L4 Pitcher vs Lineup, L5 Team Early-Inning Offense, L6 Park Factors, L7 Weather, L8 Umpire Zone, L9 Line Movement. Tier classification: 7+/9 = Tier 1 LOCK, 5-6 = Tier 2 LEAN (no bet), below = PASS. F5-only bet types: Moneyline, Run Line, Total.
+    </div>
+  </div>
+
+  <div class="change-card">
+    <div class="change-header">
+      <span class="change-version">v0.7</span>
+      <span class="change-date">Apr 5, 2026 — 7:30 AM</span>
+    </div>
+    <div class="change-title">Frontend: MLB F5 Page</div>
+    <div class="change-body">
+      <span class="change-tag tag-feat">Feature</span>
+      Built /mlb/index.html with full design system from /edge-beta: pick cards with sport tags, rating badges, live ESPN score integration (MLB-only), bet summary grid, results tracker with expandable day rows, cumulative record/accuracy/profit/ROI. Added MLB-specific features: F5 tag badges, baseball emoji loading state, team name handling for multi-word names (Red Sox, White Sox, Blue Jays).
+    </div>
+  </div>
+
+  <p class="footer-note">
+    MLB F5 Development Notes. Updated automatically with each deployment.<br>
+    Architecture: Pre-computed edges (JS) + Verification (Claude Sonnet + web search).
+  </p>
+
+</div>
+<script>if(window.self!==window.top)document.body.classList.add("in-iframe")</script>
+</body>
+</html>

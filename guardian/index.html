@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Guardian</title>
+  <meta name="description" content="WeBetAI Guardian — turning social intelligence into real conversations, authentic information, and better mental health." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/guardian" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Guardian" />
+  <meta property="og:description" content="Turn what you discover online into real conversations with real people. Authentic information. Less noise. More connection." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Guardian" />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --red: #c62828;
+      --red-light: #ffebee;
+      --red-border: #ef9a9a;
+      --amber: #e65100;
+      --amber-light: #fff3e0;
+      --amber-border: #ffcc80;
+      --blue: #1565c0;
+      --blue-light: #e3f2fd;
+      --blue-border: #90caf9;
+      --purple: #6a1b9a;
+      --purple-light: #f3e5f5;
+      --purple-border: #ce93d8;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --bar-track: #e8ebef;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* --- Header --- */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* --- Main --- */
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    /* --- Page Title --- */
+    .page-title { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-bottom: .125rem; }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1.25rem; line-height: 1.6; }
+
+    /* --- Version Tag --- */
+    .version-tag {
+      display: inline-block; font-size: .625rem; font-weight: 600;
+      color: var(--teal); background: var(--teal-light);
+      border: 1px solid var(--teal-border); border-radius: 4px;
+      padding: .1rem .4rem; margin-left: .375rem; vertical-align: middle;
+    }
+
+    /* --- Scorecard --- */
+    .scorecard {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .scorecard-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem;
+    }
+
+    /* --- Metric Bars --- */
+    .metric { margin-bottom: 1.25rem; }
+    .metric:last-child { margin-bottom: 0; }
+    .metric-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: .25rem;
+    }
+    .metric-name { font-size: .875rem; font-weight: 600; color: var(--olive); }
+    .metric-pct { font-size: .875rem; font-weight: 700; font-family: 'Geist Sans', monospace; }
+    .pct-teal { color: var(--teal); }
+    .pct-green { color: var(--green); }
+    .pct-blue { color: var(--blue); }
+    .pct-purple { color: var(--purple); }
+    .metric-bar {
+      width: 100%; height: 6px; background: var(--bar-track);
+      border-radius: 3px; overflow: hidden; margin-bottom: .375rem;
+    }
+    .metric-fill {
+      height: 100%; border-radius: 3px;
+      transition: width .6s ease;
+    }
+    .fill-teal { background: var(--teal); }
+    .fill-green { background: var(--green); }
+    .fill-blue { background: var(--blue); }
+    .fill-purple { background: var(--purple); }
+    .metric-rationale {
+      font-size: .75rem; color: var(--txt-m); line-height: 1.5;
+    }
+
+    /* --- Summary Cards --- */
+    .summary-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .75rem; text-align: center;
+    }
+    .summary-label {
+      font-size: .625rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .summary-value {
+      font-size: 1.5rem; font-weight: 700; color: var(--teal); margin-top: .125rem;
+    }
+    .summary-value.green { color: var(--green); }
+    .summary-value.blue { color: var(--blue); }
+    .summary-value.purple { color: var(--purple); }
+    .summary-suffix { font-size: .75rem; font-weight: 500; color: var(--txt-m); }
+
+    /* --- Gap Card --- */
+    .gap-card {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .875rem 1rem; margin-bottom: .75rem;
+    }
+    .gap-title {
+      font-size: .6875rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
+    .gap-item {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.6;
+      margin-bottom: .375rem;
+    }
+    .gap-item:last-child { margin-bottom: 0; }
+    .gap-label { font-weight: 600; color: var(--txt-b); }
+
+    /* --- Pipeline Steps --- */
+    .pipeline-step {
+      display: flex; gap: .75rem; align-items: flex-start;
+      margin-bottom: .875rem;
+    }
+    .pipeline-step:last-child { margin-bottom: 0; }
+    .step-num {
+      flex-shrink: 0; width: 1.5rem; height: 1.5rem;
+      background: var(--teal); color: var(--white);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: .6875rem; font-weight: 700; margin-top: .125rem;
+    }
+    .step-content { flex: 1; }
+    .step-title { font-size: .8125rem; font-weight: 600; color: var(--olive); margin-bottom: .125rem; }
+    .step-desc { font-size: .75rem; color: var(--txt-m); line-height: 1.5; }
+    .step-tag {
+      display: inline-block; font-size: .5625rem; font-weight: 600;
+      padding: .1rem .35rem; border-radius: 3px; margin-top: .25rem;
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    .tag-discover { background: #d1ecf1; color: #0c5460; }
+    .tag-validate { background: var(--teal-light); color: var(--teal); }
+    .tag-connect { background: var(--green-light); color: var(--green); }
+    .tag-health { background: var(--purple-light); color: var(--purple); }
+
+    /* --- Flow Diagram --- */
+    .flow {
+      display: flex; flex-direction: column; gap: 0; margin-bottom: .25rem;
+    }
+    .flow-step {
+      display: flex; align-items: center; gap: .625rem;
+      padding: .625rem .75rem;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .625rem;
+    }
+    .flow-arrow {
+      text-align: center; padding: .25rem 0;
+      color: var(--teal); font-size: .875rem; line-height: 1;
+    }
+    .flow-icon {
+      flex-shrink: 0; width: 2rem; height: 2rem;
+      border-radius: .5rem; display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .flow-icon.discover { background: var(--blue-light); }
+    .flow-icon.validate { background: var(--teal-light); }
+    .flow-icon.converse { background: var(--green-light); }
+    .flow-icon.connect { background: var(--purple-light); }
+    .flow-icon.health { background: #fce4ec; }
+    .flow-text { flex: 1; }
+    .flow-label { font-size: .8125rem; font-weight: 600; color: var(--olive); }
+    .flow-desc { font-size: .6875rem; color: var(--txt-m); line-height: 1.4; margin-top: .0625rem; }
+
+    /* --- Scan Results --- */
+    .scan-results { margin-top: .75rem; }
+    .scan-row {
+      display: flex; align-items: center; gap: .5rem;
+      padding: .5rem 0; border-bottom: 1px solid var(--border-lt);
+    }
+    .scan-row:last-child { border-bottom: none; }
+    .scan-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .scan-dot.verified { background: var(--green); }
+    .scan-dot.developing { background: var(--blue); }
+    .scan-dot.caution { background: var(--amber); }
+    .scan-name { font-size: .8125rem; font-weight: 600; color: var(--olive); flex: 1; }
+    .scan-tag {
+      font-size: .625rem; font-weight: 600; padding: .1rem .4rem;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .scan-tag.verified { background: var(--green-light); color: var(--green); border: 1px solid var(--green-border); }
+    .scan-tag.developing { background: var(--blue-light); color: var(--blue); border: 1px solid var(--blue-border); }
+    .scan-tag.caution { background: var(--amber-light); color: var(--amber); border: 1px solid var(--amber-border); }
+
+    /* --- Sources Grid --- */
+    .sources-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      margin-bottom: .75rem;
+    }
+    .source-chip {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .5rem; padding: .5rem .625rem;
+      font-size: .75rem; color: var(--txt-b);
+    }
+    .source-chip .source-name { font-weight: 600; display: block; margin-bottom: .125rem; }
+    .source-chip .source-desc { color: var(--txt-m); font-size: .6875rem; }
+
+    /* --- Blockquote --- */
+    .pull-quote {
+      border-left: 3px solid var(--teal);
+      padding: .75rem 1rem; margin: .75rem 0;
+      background: var(--teal-light);
+      border-radius: 0 .5rem .5rem 0;
+    }
+    .pull-quote p {
+      font-size: .875rem; font-weight: 500; color: var(--teal);
+      line-height: 1.6; font-style: italic;
+    }
+    .pull-quote .attribution {
+      font-size: .6875rem; font-weight: 600; color: var(--olive);
+      margin-top: .375rem; font-style: normal;
+    }
+
+    /* --- CTA Button --- */
+    .cta-row {
+      text-align: center; margin: 1rem 0;
+    }
+    .btn-cta {
+      display: inline-block; font-size: .875rem; font-weight: 700;
+      color: var(--white); background: var(--teal);
+      border: none; border-radius: 10px;
+      padding: .75rem 1.5rem; text-decoration: none;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-cta:hover { background: #003d44; }
+
+    /* --- Modal --- */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 1.25rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--white); border-radius: 1rem;
+      max-width: 580px; width: 100%; max-height: 80vh;
+      overflow-y: auto; padding: 1.5rem; position: relative;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-close {
+      position: sticky; top: 0; float: right;
+      background: var(--bg); border: 1px solid var(--border-lt);
+      border-radius: 50%; width: 2rem; height: 2rem;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1rem; color: var(--txt-m); z-index: 1;
+    }
+    .modal-close:hover { background: var(--border-lt); }
+    .modal-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .75rem; }
+    .modal-body p { font-size: .8125rem; color: var(--txt-m); line-height: 1.6; margin-bottom: .75rem; }
+    .modal-body .modal-label { font-weight: 600; color: var(--txt-b); }
+    .modal-body .modal-section {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin: 1rem 0 .5rem;
+    }
+    .modal-tier {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .875rem; margin-bottom: .625rem;
+    }
+    .modal-tier.featured { background: var(--teal-light); border-color: var(--teal-border); }
+    .modal-tier-name { font-size: .625rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; }
+    .modal-tier-price { font-size: 1.25rem; font-weight: 700; color: var(--olive); }
+    .modal-tier-price .mo { font-size: .6875rem; font-weight: 400; color: var(--txt-m); }
+    .modal-tier-credits { font-size: .75rem; font-weight: 700; color: var(--olive); }
+    .modal-tier-list { list-style: none; margin-top: .375rem; }
+    .modal-tier-list li { font-size: .6875rem; color: var(--txt-m); line-height: 1.5; padding: .125rem 0; }
+
+    /* --- Footer --- */
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+    .footer-note a { color: var(--teal); text-decoration: none; }
+
+    /* --- Responsive --- */
+    @media (max-width: 480px) {
+      .summary-row { grid-template-columns: 1fr 1fr; }
+      .sources-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <a href="/edge" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/rif" class="header-link">WeBetAI Credits</a>
+      <a href="/guardian" class="header-link active">Guardian</a>
+      <a href="/scorecard" class="header-link">Guardian - AI Scorecard</a>
+      <a href="/guardian/digest" class="header-link">Guardian - Daily Digest</a>
+      <a href="/authenticity" class="header-link">Authentic Press</a>
+      <a href="/edge" class="header-link">WeBetAI - Edge Picks</a>
+      <a href="/percentile" class="header-link">Edge Picks - AI Scorecard</a>
+    </nav>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/rif">WeBetAI Credits</a>
+      <a href="/guardian">Guardian</a>
+      <a href="/scorecard">Guardian - AI Scorecard</a>
+      <a href="/guardian/digest">Guardian - Daily Digest</a>
+      <a href="/authenticity">Authentic Press</a>
+      <a href="/edge">WeBetAI - Edge Picks</a>
+      <a href="/percentile">Edge Picks - AI Scorecard</a>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <h1 class="page-title">WeBetAI &mdash; Guardian <span class="version-tag">Social Intelligence For Mental Health</span></h1>
+    <p class="page-sub">What you see online shapes how you feel, what you believe, and who you talk to. WeBetAI Guardian uses social intelligence to surface what's authentic &mdash; so you can step away from the screen with confidence and bring real conversations to real people in your life.</p>
+
+    <!-- Summary Stats -->
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="summary-label">Conversations Sparked</div>
+        <div class="summary-value">12K+</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Authentic Topics Surfaced</div>
+        <div class="summary-value green">8.4K</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Avg. Screen Time Saved</div>
+        <div class="summary-value blue" style="font-size:1.125rem;">1 hour 27 minutes<span class="summary-suffix"> per day</span></div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Authenticity Rating</div>
+        <div class="summary-value purple">+34%</div>
+      </div>
+    </div>
+
+    <!-- The Problem -->
+    <div class="scorecard">
+      <div class="scorecard-title">The Mental Health Challenge</div>
+
+      <div class="gap-item">
+        <span class="gap-label">Information overload is real.</span> The average person scrolls through 300 feet of content per day. Most of it is noise. Some of it is deliberately misleading. And the mental toll &mdash; anxiety, distrust, isolation &mdash; compounds silently.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">The irony of social media</span> is that it was built to connect us, but the echo chamber effect often leaves us more isolated, more anxious, and less confident in what we actually know. Not because the platforms are broken &mdash; but because we're consuming without a filter for what's real.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">The missing piece isn't less information &mdash; it's authentic information.</span> When you know what's real, you feel confident enough to talk about it. When you talk about it, you connect with people. When you connect with people, everything else gets better.
+      </div>
+    </div>
+
+    <!-- Daily Digest -->
+    <div class="scorecard">
+      <div class="scorecard-title">Your Daily Digest</div>
+      <p style="font-size:.75rem; color:var(--txt-m); margin-bottom:.75rem; line-height:1.5;">Every morning, WeBetAI scans what's trending on X and delivers a personalized digest of authentic content &mdash; the stories worth your time, the claims that check out, and the conversations worth having.</p>
+
+      <div class="scan-results">
+        <div class="scan-row">
+          <div class="scan-dot verified"></div>
+          <span class="scan-name">Jobs report beats expectations by 40K</span>
+          <span class="scan-tag verified">Verified</span>
+        </div>
+        <div class="scan-row">
+          <div class="scan-dot verified"></div>
+          <span class="scan-name">NBA playoff clinch scenarios update</span>
+          <span class="scan-tag verified">Verified</span>
+        </div>
+        <div class="scan-row">
+          <div class="scan-dot developing"></div>
+          <span class="scan-name">New AI regulation proposal trending</span>
+          <span class="scan-tag developing">Developing</span>
+        </div>
+        <div class="scan-row">
+          <div class="scan-dot verified"></div>
+          <span class="scan-name">SpaceX launch window confirmed</span>
+          <span class="scan-tag verified">Verified</span>
+        </div>
+        <div class="scan-row">
+          <div class="scan-dot caution"></div>
+          <span class="scan-name">Viral health claim &mdash; missing context</span>
+          <span class="scan-tag caution">Check Sources</span>
+        </div>
+        <div class="scan-row">
+          <div class="scan-dot developing"></div>
+          <span class="scan-name">Trade deadline rumors heating up</span>
+          <span class="scan-tag developing">Developing</span>
+        </div>
+      </div>
+      <p style="font-size:.6875rem; color:var(--txt-l); margin-top:.75rem; line-height:1.4;">Delivered by WeBetAI. No app to open. No feed to scroll. Just the signal.</p>
+    </div>
+
+    <div class="cta-row">
+      <a href="/rif" class="btn-cta">Get Free Daily Digest Now &rarr;</a>
+    </div>
+
+    <!-- P2P Betting as Conversation -->
+    <div class="scorecard">
+      <div class="scorecard-title">Friendly Challenges, Real Conversations</div>
+
+      <div class="gap-item">
+        <span class="gap-label">WeBetAI turns authentic content into friendly challenges.</span> When you see something real trending and you have a take on it, challenge a friend. It's the reason to text someone, call your brother, or meet up for coffee to talk about something you both know is actually happening.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">Opinions backed by authentic information</span> feel different. You don't hedge. You don't qualify with "I saw something online but I don't know if it's true." You say what you think, because the foundation is solid. That confidence changes how you show up in every conversation.
+      </div>
+      <div class="gap-item" style="margin-top:.625rem;">
+        <span class="gap-label">Friendly stakes make it memorable.</span> Nobody remembers the 200th take they scrolled past. But everyone remembers the $5 challenge they made with their friend about whether the Fed would cut rates &mdash; and the dinner where they settled up.
+      </div>
+    </div>
+
+    <div class="pull-quote">
+      <p>"I used to spend an hour scrolling before I felt like I knew what was going on. Now WeBetAI sends me six things before I finish my coffee, and I'm already texting my group chat about it."</p>
+      <div class="attribution">&mdash; What Guardian is designed to feel like</div>
+    </div>
+
+    <!-- How It Works -->
+    <div class="scorecard">
+      <div class="scorecard-title">How Guardian Works</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Scan What's Trending</div>
+          <div class="step-desc">Guardian monitors X in real time using the same social intelligence engine that powers our sports picks. It identifies the stories gaining traction, the claims going viral, and the topics people actually care about.</div>
+          <span class="step-tag tag-discover">Discovery</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Filter for Authenticity</div>
+          <div class="step-desc">Every trending topic gets scored for authenticity. Guardian cross-references primary sources, checks for coordinated amplification patterns, and surfaces what's real. You see the receipts, not just the headline.</div>
+          <span class="step-tag tag-validate">Authenticity</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Personalize and Deliver</div>
+          <div class="step-desc">WeBetAI learns what matters to you. Sports, tech, markets, culture &mdash; your digest gets sharper over time. Delivered via text so you never need to open another app or scroll another feed.</div>
+          <span class="step-tag tag-connect">Personalized</span>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Spark the Conversation</div>
+          <div class="step-desc">Authentic stories become friendly challenges you can share with friends. A $5 challenge on something real gives you both a reason to talk, meet up, and engage with the world outside the screen.</div>
+          <span class="step-tag tag-connect">Connection</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <a href="/rif" class="btn-cta">Get WeBetAI Guardian Now &rarr;</a>
+    </div>
+
+    <!-- Mental Health Impact -->
+    <div class="scorecard">
+      <div class="scorecard-title">Mental Health Impact</div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Reduced Anxiety from Information Overload</span>
+          <span class="metric-pct pct-teal">High Impact</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-teal" style="width:92%"></div></div>
+        <div class="metric-rationale">When you trust that the information you have is authentic, the ambient anxiety of "am I being misled?" disappears. Guardian gives you permission to stop scrolling because you already know what's real.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Increased Confidence in Conversations</span>
+          <span class="metric-pct pct-green">High Impact</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-green" style="width:88%"></div></div>
+        <div class="metric-rationale">Authentic information changes how you communicate. You share openly, engage honestly, and contribute to conversations instead of second-guessing yourself. That's what informed confidence feels like.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">More In-Person Social Connection</span>
+          <span class="metric-pct pct-purple">Growing</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-purple" style="width:82%"></div></div>
+        <div class="metric-rationale">Every challenge is an invitation. "I'll challenge you $5" is the modern version of "let's talk about this over dinner." Guardian creates the on-ramp from screen to sidewalk, from scrolling to showing up.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Healthier Relationship with Social Media</span>
+          <span class="metric-pct pct-blue">Building</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill fill-blue" style="width:75%"></div></div>
+        <div class="metric-rationale">Guardian isn't anti-social-media. X is where stories break and conversations start. Guardian just makes sure you're spending your time on the signal &mdash; and taking the best parts offline where they belong.</div>
+      </div>
+    </div>
+
+    <!-- Making Social Media Social Again -->
+    <div class="gap-card">
+      <div class="gap-title">Making Social Media Social Again</div>
+      <div class="gap-item">
+        <span class="gap-label">Social media is at its best when it sparks something in the real world.</span> A story you discover on X should become a conversation at brunch, a debate at the office, a challenge with your best friend. Guardian is the bridge &mdash; it surfaces what's authentic and gives you a reason to bring it to the people in your life.
+      </div>
+      <div class="gap-item" style="margin-top:.5rem;">
+        <span class="gap-label">The echo chamber isn't the platform &mdash; it's the habit.</span> When the only place you engage with information is online, you hear the same voices saying the same things. Take an authentic take to someone who wasn't scrolling the same feed, and suddenly you're in a real conversation with a real person who has a different perspective. That's how echo chambers break &mdash; not with algorithms, but with face-to-face dialogue.
+      </div>
+      <div class="gap-item" style="margin-top:.5rem;">
+        <span class="gap-label">More conversations lead to more social events.</span> The person who texts you "I challenge you $5 the Celtics close it out tonight" is the same person who says "let's watch the game at my place." Guardian creates the spark. Life does the rest.
+      </div>
+    </div>
+
+    <!-- Your Personalized Guardian -->
+    <div class="scorecard">
+      <div class="scorecard-title">Your Guardian, Your Interests</div>
+      <p style="font-size:.75rem; color:var(--txt-m); margin-bottom:.75rem; line-height:1.5;">Guardian learns what you care about and filters everything else. Your daily digest reflects your personality &mdash; the topics you want to talk about, the communities you're part of, the things that make you interesting.</p>
+
+      <div class="sources-grid">
+        <div class="source-chip">
+          <span class="source-name">Sports</span>
+          <span class="source-desc">Scores, trades, playoff races &mdash; authentic takes for game day conversations</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">Markets & Economy</span>
+          <span class="source-desc">Jobs data, Fed moves, earnings &mdash; know what's authentic before the hot takes</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">Tech & Science</span>
+          <span class="source-desc">AI breakthroughs, launches, product drops &mdash; verified before you share</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">Culture & Entertainment</span>
+          <span class="source-desc">What's actually trending vs. what's being pushed &mdash; know the difference</span>
+        </div>
+        <div class="source-chip" style="grid-column: span 2;">
+          <span class="source-name">Powered by X + WeBetAI Social Intelligence</span>
+          <span class="source-desc">Real-time discovery from X, validated and delivered by Guardian &mdash; the best of both worlds</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Principles -->
+    <div class="gap-card">
+      <div class="gap-title">Guardian Principles</div>
+      <div class="gap-item">
+        <span class="gap-label">Authentic, not censored.</span> Guardian never tells you what to think or what to ignore. It surfaces what's real, gives you context, and lets you decide for yourself &mdash; and have that conversation with someone else.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Less screen time, more face time.</span> Every feature is measured by one question: did it give you a reason to put your phone down and talk to someone? If it keeps you scrolling, we failed. If it gets you to brunch, we won.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Mental health is the metric.</span> We don't optimize for engagement, retention, or time-on-app. We optimize for how you feel. Less anxious. More connected. More confident in what you know and who you talk to about it.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">Social media is the starting line, not the finish line.</span> X is where stories break, trends emerge, and culture moves. Guardian makes sure the best of that makes it into your real life &mdash; where it matters most.
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <a href="/rif" class="btn-cta">Get Authentic Content Now &rarr;</a>
+    </div>
+
+    <!-- Mission -->
+    <div class="gap-card">
+      <div class="gap-title">The Mission</div>
+      <div class="gap-item">
+        The best version of social media is the one that makes your real life better. WeBetAI Guardian takes what you discover online, surfaces what's authentic, and turns it into something you can share &mdash; not as a retweet, but as a real conversation with someone you actually care about. A $5 challenge with your brother. A debate at the bar. A reason to show up and talk about something that matters.
+      </div>
+      <div class="gap-item" style="margin-top:.5rem;">
+        <span class="gap-label">Your information, authentic. Your conversations, real. Your mental health, protected.</span>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      WeBetAI Guardian &mdash; Social Intelligence for Mental Health<br />
+      <a href="/">Home</a> &bull; <a href="/edge">Edge Picks</a> &bull; <a href="/percentile">AI Scorecard</a> &bull; <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a>
+    </div>
+
+  </main>
+
+  <!-- Credits/Contribution Modal -->
+  <div class="modal-overlay" id="creditsModal" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="modal-box">
+      <button class="modal-close" onclick="document.getElementById('creditsModal').classList.remove('open')">&times;</button>
+
+      <div class="modal-title">WeBetAI &mdash; Solving Disinformation Induced By Social Media Addiction</div>
+      <div class="modal-body">
+        <p>Social media addiction is fueling a disinformation crisis that affects everyone &mdash; adults making decisions based on manipulated content, and their kids growing up inside algorithms designed to exploit attention. Contributing to WeBetAI gives you the social credit to challenge anyone, at any time, on the authenticity of any social post on any topic.</p>
+
+        <div class="modal-section">Why This Matters</div>
+        <p><span class="modal-label">Disinformation needs new tools to fight it.</span> Lawsuits against Meta, TikTok, and other platforms are mounting &mdash; but legal action alone won't solve the problem. Algorithms exploit psychological vulnerabilities across every demographic, turning outrage and fear into engagement, and there's no mechanism to hold anyone accountable.</p>
+        <p><span class="modal-label">WeBetAI introduces that mechanism.</span> Our peer-to-peer challenge system lets you put credits on the line to challenge anyone on the accuracy of their content. If someone posts a claim, you can challenge it. If they're wrong, you win. If they're right, they prove it.</p>
+
+        <div class="modal-section">Choose Your Contribution</div>
+
+        <div class="modal-tier">
+          <div class="modal-tier-name">Free</div>
+          <div class="modal-tier-price">$0<span class="mo">/mo</span></div>
+          <div class="modal-tier-credits">1,000 Credits/mo</div>
+          <ul class="modal-tier-list">
+            <li>&#10003; WeBetAI Daily Digest &mdash; 5 authentic trending topics every morning</li>
+            <li>&#10003; Peer-to-peer challenges with credits on trending topics</li>
+            <li>&#10003; Challenge sources &mdash; hold content creators accountable</li>
+            <li>&#10003; Authenticity Score participation</li>
+            <li>&#10003; Basic Guardian AI overview</li>
+          </ul>
+        </div>
+
+        <div class="modal-tier featured">
+          <div class="modal-tier-name">Contributor &mdash; Most Popular</div>
+          <div class="modal-tier-price">$100<span class="mo">/mo</span></div>
+          <div class="modal-tier-credits">5,000 Credits/mo</div>
+          <ul class="modal-tier-list">
+            <li>&#10003; Everything in Free, plus:</li>
+            <li>&#10003; Enhanced AI analysis &amp; social signal mining</li>
+            <li>&#10003; Custom daily digest &mdash; personalized to your interests</li>
+            <li>&#10003; Unlimited peer-to-peer challenges</li>
+            <li>&#10003; Advanced source accountability</li>
+            <li>&#10003; Content authenticity reports on any X profile</li>
+          </ul>
+        </div>
+
+        <div class="modal-tier">
+          <div class="modal-tier-name">Guardian</div>
+          <div class="modal-tier-price">$200<span class="mo">/mo</span></div>
+          <div class="modal-tier-credits">10,000 Credits/mo</div>
+          <ul class="modal-tier-list">
+            <li>&#10003; Everything in Contributor, plus:</li>
+            <li>&#10003; Advanced AI debrief on resolved challenges</li>
+            <li>&#10003; Boost multipliers on peer-to-peer challenges</li>
+            <li>&#10003; Authenticity leaderboard perks + Guardian badges</li>
+            <li>&#10003; VIP priority AI access</li>
+            <li>&#10003; Early access to new features</li>
+            <li>&#10003; RIF Founding Contributor recognition</li>
+          </ul>
+        </div>
+
+        <p style="font-size:.6875rem; color:#8b95a3; text-align:center; line-height:1.5;">Credits refresh monthly. Cancel anytime.<br>100% of contributions fund AI operations and the Recovery Innovation Fund.</p>
+      </div>
+    </div>
+  </div>
+
+<script>if(window.self!==window.top)document.body.classList.add("in-iframe")</script>
+</body>
+</html>

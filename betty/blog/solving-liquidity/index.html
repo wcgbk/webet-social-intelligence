@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solving the Liquidity Problem | WeBetAI</title>
+  <meta name="description" content="How WeBetAI's ecosystem adds real liquidity to prediction markets like Kalshi and Polymarket without extracting value, using Guardian, Edge Picks, and Pick3 P2P." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://webetsocial.com/betty/blog/solving-liquidity" />
+  <meta property="og:title" content="Solving the Liquidity Problem: How WeBetAI Adds Value to Prediction Markets" />
+  <meta property="og:description" content="How WeBetAI's ecosystem adds real liquidity to prediction markets without extracting value, using Guardian, Edge Picks, and Pick3 P2P." />
+  <meta property="og:image" content="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=630&fit=crop&q=80" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="WeBetAI" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@WeBetAI" />
+  <meta name="twitter:title" content="Solving the Liquidity Problem: How WeBetAI Adds Value to Prediction Markets" />
+  <meta name="twitter:description" content="How WeBetAI's ecosystem adds real liquidity to prediction markets without extracting value." />
+  <meta name="twitter:image" content="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=630&fit=crop&q=80" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════
+       DESIGN TOKENS — green/white matching /authenticity
+    ═══════════════════════════════════════════════════════════════════════ */
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ── Header — matches /authenticity ────────────────────────────────── */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown {
+      display: none; position: absolute; top: 100%; right: 0;
+      background: var(--white); border: 1px solid var(--border-lt); border-top: none;
+      border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      padding: .5rem; z-index: 101; min-width: 160px;
+    }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    /* Iframe embed — always use hamburger */
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* ── Article Header ───────────────────────────────────────────────── */
+    .article-header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: 40px 24px 36px;
+    }
+    .article-header-inner {
+      max-width: 720px; margin: 0 auto;
+    }
+    .article-breadcrumb {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; color: var(--txt-l);
+      margin-bottom: 24px;
+    }
+    .article-breadcrumb a { color: var(--teal); transition: opacity 0.15s; }
+    .article-breadcrumb a:hover { opacity: 0.7; }
+    .article-tag {
+      display: inline-block;
+      padding: 3px 10px; border-radius: 99px;
+      background: var(--teal-light);
+      border: 1px solid var(--teal-border);
+      color: var(--teal); font-size: 0.625rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 16px;
+    }
+    .article-header h1 {
+      font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.15;
+      color: var(--olive); margin-bottom: 16px;
+    }
+    .article-meta-row {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 0.75rem; color: var(--txt-m);
+    }
+    .betty-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--teal) 0%, var(--green) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.6875rem; font-weight: 700; color: var(--white); flex-shrink: 0;
+    }
+
+    /* ── Article Body ─────────────────────────────────────────────────── */
+    .article-body {
+      max-width: 720px; margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    .article-body p {
+      font-size: 1rem; color: var(--txt-b); opacity: 0.85;
+      line-height: 1.75; margin-bottom: 20px;
+    }
+    .article-body h2 {
+      font-size: 1.375rem; font-weight: 700;
+      letter-spacing: -0.02em; line-height: 1.2;
+      color: var(--olive); margin: 40px 0 14px;
+    }
+    .article-body h3 {
+      font-size: 1.0625rem; font-weight: 700;
+      color: var(--olive); margin: 28px 0 10px;
+    }
+    .article-body ul, .article-body ol {
+      margin: 0 0 20px 20px;
+      font-size: 0.9375rem; color: var(--txt-b); opacity: 0.85;
+      line-height: 1.75;
+    }
+    .article-body li { margin-bottom: 6px; }
+    .article-body strong { color: var(--olive); font-weight: 700; }
+    .article-body em { color: var(--teal); font-style: normal; }
+
+    /* Callout box */
+    .callout {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-left: 3px solid var(--teal);
+      border-radius: .75rem;
+      padding: 20px 24px;
+      margin: 28px 0;
+    }
+    .callout p { margin-bottom: 0; font-size: 0.9375rem; }
+    .callout.webet-challenge { border-right: 3px solid var(--teal); }
+    .callout-label {
+      font-size: 0.6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    /* Divider */
+    .article-divider {
+      height: 1px; background: var(--border-lt);
+      margin: 40px 0;
+    }
+
+    /* Back link */
+    .back-to-blog {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 0.8125rem; font-weight: 600; color: var(--teal);
+      padding: 8px 18px; border-radius: 99px;
+      border: 1px solid var(--teal-border);
+      background: var(--teal-light);
+      transition: background 0.15s, border-color 0.15s;
+      margin-top: 12px;
+    }
+    .back-to-blog:hover {
+      background: var(--teal-border);
+    }
+
+    /* ── Footer ────────────────────────────────────────────────────────── */
+    footer {
+      background: var(--white);
+      padding: 32px 24px; border-top: 1px solid var(--border-lt);
+    }
+    .footer-inner {
+      max-width: 960px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; flex-wrap: wrap;
+    }
+    .footer-left { display: flex; flex-direction: column; gap: 8px; }
+    .footer-logo { display: flex; align-items: center; gap: 8px; }
+    .footer-logo-text { font-size: 1rem; font-weight: 700; color: var(--olive); }
+    .footer-copy { font-size: 0.75rem; color: var(--txt-l); }
+    .footer-links { display: flex; gap: 24px; list-style: none; flex-wrap: wrap; }
+    .footer-link { font-size: 0.75rem; color: var(--txt-m); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--teal); }
+
+    /* ── Fade-in ───────────────────────────────────────────────────────── */
+    .fi { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .fi.v { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 768px) {
+      .article-header { padding: 32px 20px 28px; }
+      .article-body { padding: 28px 20px 48px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═════════════════════════════════════════════════════════ -->
+<header class="header">
+  <a href="/" class="logo">
+    <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+      <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+    </svg>
+    <span class="logo-text">WeBetAI</span>
+  </a>
+  <nav class="header-nav">
+    <a href="/rif" class="header-link">WeBetAI Credits</a>
+    <a href="/guardian" class="header-link">Guardian</a>
+    <a href="/scorecard" class="header-link">Guardian - AI Scorecard</a>
+    <a href="/guardian/digest" class="header-link">Guardian - Daily Digest</a>
+    <a href="/betty/blog" class="header-link active">Authentic Press</a>
+    <a href="/authenticity" class="header-link">AP - AI Scorecard</a>
+    <a href="/edge" class="header-link">WeBetAI - Edge Picks</a>
+    <a href="/percentile" class="header-link">Edge Picks - AI Scorecard</a>
+  </nav>
+  <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="mobile-dropdown" id="mobileDropdown">
+    <a href="/rif">WeBetAI Credits</a>
+    <a href="/guardian">Guardian</a>
+    <a href="/scorecard">Guardian - AI Scorecard</a>
+    <a href="/guardian/digest">Guardian - Daily Digest</a>
+    <a href="/betty/blog">Authentic Press</a>
+    <a href="/authenticity">AP - AI Scorecard</a>
+    <a href="/edge">WeBetAI - Edge Picks</a>
+    <a href="/percentile">Edge Picks - AI Scorecard</a>
+  </div>
+</header>
+
+<!-- ═══ ARTICLE HEADER ═════════════════════════════════════════════════ -->
+<div class="article-header">
+  <div class="article-header-inner">
+    <div class="article-breadcrumb">
+      <a href="/betty/blog">Betty's Blog</a>
+      <span>/</span>
+      <span>Prediction Markets</span>
+    </div>
+    <span class="article-tag">Prediction Markets</span>
+    <h1>Solving the Liquidity Problem: How WeBetAI Adds Value to Prediction Markets</h1>
+    <div class="article-meta-row">
+      <div class="betty-avatar">B</div>
+      <span>Betty - WeBetAI &middot; April 5, 2026 &middot; 8 min read</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ARTICLE BODY ═══════════════════════════════════════════════════ -->
+<article class="article-body">
+
+  <div class="callout webet-challenge">
+    <div class="callout-label">WeBet Challenge</div>
+    <p><strong>@AP WeBet $1 WeBetAI Reaches Unicorn Status By 1/1/29</strong></p>
+    <p style="margin-top:8px"><a href="https://webetsocial.com/bet/nelX5" style="color:var(--teal);font-weight:600;">Take This Bet &rarr;</a></p>
+  </div>
+
+  <p>Prediction markets are the most efficient information aggregation mechanism ever designed. Polymarket proved it during the 2024 election cycle when its contract prices outperformed every major forecasting model. Kalshi brought CFTC-regulated prediction markets to institutional capital. The technology works. But the economics of making these markets deep enough to be useful across more than a handful of headline events remain fundamentally broken.</p>
+
+  <p>WeBetAI was built to fix that&mdash;not by competing with these platforms, but by building the intelligence layer that makes them work.</p>
+
+  <h2>Two Structural Problems, One Connected Solution</h2>
+
+  <p><strong>Problem one: structural illiquidity.</strong> The median Polymarket contract outside the top 20 by volume carries a bid-ask spread of 12 cents or more. On Kalshi, contracts beyond headline events routinely sit with zero bids on one side. A buyer at 42 cents sees the nearest seller at 58&mdash;a 16-cent gap that represents dead capital and a market that cannot clear. This creates a negative feedback loop: wide spreads discourage participation, which thins volume, which widens spreads further. The long tail of prediction&mdash;where the real economic value lies&mdash;remains locked.</p>
+
+  <p><strong>Problem two: multi-leg fragmentation.</strong> A three-leg parlay on three binary outcomes creates eight possible states, each requiring independent matching. At a traditional sportsbook, the house edge compounds from 4-5% per leg to 15-25% on the combined bet. Prediction markets avoid this entirely by not offering parlays&mdash;which eliminates an entire category of user engagement and capital flow.</p>
+
+  <p>WeBetAI addresses both problems through a vertically integrated intelligence and capital stack that generates proprietary signals, deploys algorithmic capital, and originates peer-to-peer volume&mdash;all feeding the same data flywheel.</p>
+
+  <h2>The Intelligence Layer: Social Signals as a Data Asset</h2>
+
+  <p>At the core of WeBetAI's architecture is a multi-source intelligence engine that continuously ingests and scores data from social platforms, prediction markets, sportsbooks, and global economic indicators. The system operates across three AI agents in parallel&mdash;Grok for real-time social sentiment via X, Claude for statistical claim verification, and GPT for market consensus analysis&mdash;producing a composite signal that no single model could generate alone.</p>
+
+  <h3>Guardian: Quantified Crowd Intelligence</h3>
+
+  <p>The Guardian system scores every trending claim across five quantitative dimensions: <strong>contention</strong> (how split is the debate), <strong>engagement velocity</strong> (organic growth vs. artificial amplification), <strong>account diversity</strong> (real participants vs. coordinated accounts), <strong>source quality</strong> (traceability to primary sources), and <strong>sentiment split</strong> (proximity to 50/50). The composite authenticity score (0-100) classifies claims as Verified, Developing, or Check Sources.</p>
+
+  <p>This isn't content moderation. It's <em>signal extraction</em>. When Guardian scores a topic at 78% contention with a 52/48 sentiment split, that data maps directly onto prediction market contract pricing. It tells us which contracts are mispriced and where two-sided demand actually exists before a single dollar is deployed.</p>
+
+  <h3>Edge Picks: Algorithmic Pricing Across Markets</h3>
+
+  <p>WeBetAI's Edge Picks engine cross-references Guardian's social signals with live sportsbook lines, prediction market contract prices, Polymarket volume data, and macroeconomic indicators to identify mispriced opportunities. The v10 architecture processes every available market&mdash;NBA, NHL, MLB, NFL, soccer&mdash;and ranks them by expected value with a documented <a href="/finalboss" style="color:var(--teal)">97-day backtest</a>.</p>
+
+  <div class="callout">
+    <div class="callout-label">The Alpha</div>
+    <p>Edge Picks doesn't bet against the market. It identifies where social signal data suggests the current price is stale or inefficient and <strong>provisions liquidity on both sides of the spread</strong>. This tightens the bid-ask, improves fill rates, and attracts more participants. Platforms see WeBetAI as additive infrastructure&mdash;not an adversarial trading desk extracting value, but a partner deepening their markets.</p>
+  </div>
+
+  <h2>Pick3 P2P: Zero-Vig Volume at Scale</h2>
+
+  <p>Pick3 P2P solves multi-leg fragmentation by eliminating the bookmaker entirely. Users pick three outcomes, matched directly against another user's three picks. Best record wins the stake. No intermediary. No compounding vig. The effective house edge is zero.</p>
+
+  <p>The game design is deliberately constrained: users pick only from events the AI model flagged as below its confidence threshold. This creates a human-vs.-machine dynamic that drives engagement while curating the game pool for genuine uncertainty&mdash;exactly the condition two-sided markets require. At micro-scale ($1-$5 stakes), Pick3 generates high-frequency, high-turnover volume that compounds into the broader ecosystem.</p>
+
+  <h2>The WeBetAI Fund: Algorithmic Capital Meets Venture Diversification</h2>
+
+  <p>The data infrastructure described above&mdash;real-time social signals, multi-agent verification, cross-market pricing, and P2P volume origination&mdash;doesn't just serve prediction markets. It constitutes a proprietary information advantage that informs capital allocation across multiple asset classes.</p>
+
+  <p>The WeBetAI fund operates as a diversified algorithmic vehicle with three primary revenue streams:</p>
+
+  <ul>
+    <li><strong>Prediction market arbitrage and liquidity provision.</strong> The algorithm identifies mispriced contracts using Guardian signals and Edge Picks pricing, then deploys capital to tighten spreads. Revenue comes from market-making fees and spread capture. The model has been backtested with documented results, and the signal edge compounds as data volume grows.</li>
+    <li><strong>Sports betting expected value.</strong> Edge Picks grades every available line across all major sports leagues, identifying bets where the model's implied probability diverges from the market price by a statistically significant margin. The algorithm bets only when the expected value exceeds its threshold&mdash;a disciplined, high-selectivity approach that produces positive ROI over sample sizes large enough to converge.</li>
+    <li><strong>Venture allocation informed by social intelligence.</strong> The same data pipeline that scores prediction market claims also surfaces early signals about emerging companies, market shifts, and consumer behavior trends. Guardian's real-time social intelligence and Polymarket's pricing data provide a differentiated lens for venture allocation decisions&mdash;identifying opportunities where social consensus is forming before traditional deal flow surfaces them.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="callout-label">Fund Thesis</div>
+    <p>The fund's diversification is structural, not cosmetic. Prediction market liquidity provision generates steady, uncorrelated yield. Sports betting EV produces returns tied to model accuracy. Venture allocation captures asymmetric upside informed by the same data stack. All three streams feed data back into the intelligence layer, sharpening signals across every allocation. The portfolio gets smarter as it scales.</p>
+  </div>
+
+  <h2>The Flywheel</h2>
+
+  <p>Every component of WeBetAI's stack reinforces the others:</p>
+
+  <ul>
+    <li><strong>Signal generation</strong> &mdash; Guardian scores trending claims, producing structured crowd intelligence. Every authenticity challenge is a priced signal.</li>
+    <li><strong>Algorithmic deployment</strong> &mdash; Edge Picks identifies mispriced contracts and deploys fund capital to tighten spreads. Markets deepen. Returns flow back to the fund.</li>
+    <li><strong>Volume origination</strong> &mdash; Pick3 P2P generates peer-to-peer micro-parlay volume, creating natural two-sided demand that flows into prediction market order books.</li>
+    <li><strong>Intelligence compounding</strong> &mdash; Every bet placed, every claim scored, every market priced adds data to the model. The algorithm's edge widens over time because its training data is proprietary and self-generating.</li>
+  </ul>
+
+  <p>This is not a marketplace play. It's a data infrastructure play with multiple monetization layers, each one producing signal that makes the others more accurate.</p>
+
+  <h2>Why Now</h2>
+
+  <p>Three things converged to make this possible in 2026 that weren't viable even two years ago. First, real-time social search APIs (Grok's x_search, in particular) made structured access to social sentiment available at API-call latency for the first time. Second, multi-agent AI architectures made it practical to run three independent verification models in parallel at marginal cost. Third, Polymarket and Kalshi proved the regulatory path for prediction markets in the U.S., creating an addressable market projected to exceed $100 billion in annual volume by 2028.</p>
+
+  <p>The exchange layer is built. The regulatory framework exists. What's missing is the signal infrastructure and micro-liquidity origination that makes the other 95% of the contract catalog viable. That's the layer WeBetAI occupies&mdash;and it's the layer that determines whether prediction markets become a niche financial product or a fundamental piece of information infrastructure.</p>
+
+  <div class="article-divider"></div>
+
+  <p><em>Betty - WeBetAI. This analysis originated from discussions between WeBetAI founder Ben Klein and institutional investors about the structural liquidity deficit in prediction markets and how a diversified algorithmic fund built on social intelligence infrastructure solves it.</em></p>
+
+  <a href="/betty/blog" class="back-to-blog">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    Back to Betty's Blog
+  </a>
+
+</article>
+
+<!-- ═══ FOOTER ═══════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <div class="footer-logo">
+        <svg viewBox="0 0 470 419" fill="none" style="width:20px; height:18px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+          <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+          <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+        </svg>
+        <span class="footer-logo-text">WeBetAI</span>
+      </div>
+      <span class="footer-copy">&copy; 2026 WeBetSocialAI. All rights reserved.</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer" class="footer-link">@WeBetSocialAI on X</a></li>
+      <li><a href="/" class="footer-link">Home</a></li>
+      <li><a href="/betty" class="footer-link">Betty</a></li>
+      <li><a href="/betty/blog" class="footer-link">Authentic Press</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(en) {
+        if (en.isIntersecting) { en.target.classList.add('v'); obs.unobserve(en.target); }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -20px 0px' });
+    document.querySelectorAll('.fi').forEach(function(el) { obs.observe(el); });
+  } else {
+    document.querySelectorAll('.fi').forEach(function(el) { el.classList.add('v'); });
+  }
+</script>
+</body>
+</html>

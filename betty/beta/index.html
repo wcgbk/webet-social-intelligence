@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>WeBetAI - Social Intelligence | Betty Beta</title>
+  <meta name="description" content="Betty Beta — chat with WeBetAI's social intelligence AI. Same brain as SMS, full data access." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/betty/beta" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Betty Beta" />
+  <meta property="og:description" content="Betty Beta — chat with WeBetAI's social intelligence AI." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Betty Beta" />
+  <meta name="twitter:description" content="Betty Beta — chat with WeBetAI's social intelligence AI." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+    :root {
+      --white: #ffffff; --off-white: #f8f9fa; --bg: #f2f3f5; --olive: #1a2e1a;
+      --teal: #004C54; --teal-light: #e6f4f1; --teal-border: #b8ddd6;
+      --green: #2e7d32; --green-light: #e8f5e9; --green-border: #a5d6a7;
+      --border-lt: #e0e3e8; --txt-b: #1a2e1a; --txt-m: #5f6b7a; --txt-l: #8b95a3;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist Sans', system-ui, sans-serif; background: var(--bg); color: var(--txt-b); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+
+    .header { background: var(--white); border-bottom: 1px solid var(--border-lt); padding: 14px 24px; display: flex; align-items: center; }
+    .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+
+    .page { display: flex; flex-direction: column; min-height: 100vh; }
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ─── Sidebar ─── */
+    .sidebar { width: 300px; min-width: 300px; background: var(--white); border-right: 1px solid var(--border-lt); display: flex; flex-direction: column; overflow-y: auto; }
+
+    .tab-header { display: flex; align-items: center; padding: 0; border-bottom: 1px solid var(--border-lt); cursor: pointer; user-select: none; }
+    .tab-btn { flex: 1; padding: 12px 16px; font-size: 12px; font-weight: 700; color: var(--txt-l); text-transform: uppercase; letter-spacing: 0.04em; text-align: center; border: none; background: none; cursor: pointer; transition: all 0.15s; border-bottom: 2px solid transparent; }
+    .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+    .tab-btn:hover { color: var(--olive); }
+
+    .tab-panel { display: none; flex: 1; flex-direction: column; overflow-y: auto; }
+    .tab-panel.active { display: flex; }
+
+    /* Sources */
+    .source-list { padding: 8px 12px; flex: 1; }
+    .source-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; margin-bottom: 2px; }
+    .source-item:hover { background: var(--teal-light); }
+    .source-toggle { width: 36px; height: 20px; border-radius: 10px; background: var(--border-lt); border: 1px solid #d0d4da; position: relative; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+    .source-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--txt-l); transition: all 0.2s; }
+    .source-toggle.active { background: var(--teal); border-color: var(--teal); }
+    .source-toggle.active::after { left: 18px; background: var(--white); }
+    .source-info { flex: 1; min-width: 0; }
+    .source-name { font-size: 12px; font-weight: 600; color: var(--olive); }
+    .source-desc { font-size: 10px; color: var(--txt-l); margin-top: 1px; }
+    .source-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .source-status.live { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .source-status.off { background: var(--border-lt); }
+    .sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--border-lt); }
+    .ctx-meter { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--txt-l); }
+    .ctx-bar { flex: 1; height: 3px; border-radius: 2px; background: var(--border-lt); overflow: hidden; }
+    .ctx-bar-fill { height: 100%; border-radius: 2px; background: var(--teal); transition: width 0.3s; }
+
+    /* Conversations */
+    .convo-list { flex: 1; overflow-y: auto; }
+    .convo-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border-lt); cursor: pointer; transition: background 0.15s; }
+    .convo-item:hover { background: var(--teal-light); }
+    .convo-item.active { background: var(--teal-light); border-left: 3px solid var(--teal); }
+    .convo-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--teal); color: var(--white); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .convo-info { flex: 1; min-width: 0; }
+    .convo-phone { font-size: 12px; font-weight: 600; color: var(--olive); }
+    .convo-preview { font-size: 10px; color: var(--txt-l); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .convo-meta { font-size: 9px; color: var(--txt-l); text-align: right; white-space: nowrap; }
+    .convo-count { font-size: 9px; font-weight: 700; color: var(--teal); background: var(--teal-light); border-radius: 99px; padding: 1px 6px; margin-top: 3px; display: inline-block; }
+    .convo-loading { padding: 24px; text-align: center; font-size: 12px; color: var(--txt-l); }
+    .convo-back { display: none; padding: 10px 14px; border-bottom: 1px solid var(--border-lt); font-size: 11px; font-weight: 600; color: var(--teal); cursor: pointer; }
+    .convo-back:hover { background: var(--teal-light); }
+
+    .convo-actions { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border-lt); }
+    .convo-action-btn { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--teal-border); background: var(--teal-light); color: var(--teal); font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; }
+    .convo-action-btn:hover { background: var(--teal-border); }
+    .convo-action-btn.primary { background: var(--teal); color: var(--white); border-color: var(--teal); }
+    .convo-action-btn.primary:hover { opacity: 0.85; }
+
+    .new-convo-form { display: none; padding: 12px; border-bottom: 1px solid var(--border-lt); background: var(--off-white); }
+    .new-convo-form.open { display: block; }
+    .new-convo-form label { font-size: 11px; font-weight: 600; color: var(--olive); display: block; margin-bottom: 4px; }
+    .new-convo-form input, .new-convo-form textarea { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-lt); background: var(--white); color: var(--txt-b); font-family: inherit; font-size: 12px; outline: none; margin-bottom: 8px; }
+    .new-convo-form input:focus, .new-convo-form textarea:focus { border-color: var(--teal); }
+    .new-convo-form textarea { min-height: 60px; resize: vertical; }
+    .new-convo-form .form-row { display: flex; gap: 6px; }
+
+    .intros-panel { display: none; padding: 12px; border-bottom: 1px solid var(--border-lt); background: var(--off-white); max-height: 300px; overflow-y: auto; }
+    .intros-panel.open { display: block; }
+    .intros-panel h4 { font-size: 12px; font-weight: 700; color: var(--olive); margin-bottom: 8px; }
+    .intro-item { background: var(--white); border: 1px solid var(--border-lt); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s; }
+    .intro-item:hover { border-color: var(--teal); }
+    .intro-item.active { border-color: var(--teal); background: var(--teal-light); }
+    .intro-label { font-size: 11px; font-weight: 600; color: var(--olive); margin-bottom: 2px; }
+    .intro-text { font-size: 10px; color: var(--txt-m); line-height: 1.4; }
+    .intro-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .intro-btn { font-size: 9px; font-weight: 600; padding: 2px 8px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; }
+    .intro-btn-edit { background: var(--teal-light); color: var(--teal); }
+    .intro-btn-del { background: #ffebee; color: #c62828; }
+    .intro-add-row { display: flex; gap: 6px; margin-top: 8px; }
+    .intro-add-row input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-lt); font-size: 11px; font-family: inherit; }
+    .intro-add-row textarea { flex: 2; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-lt); font-size: 11px; font-family: inherit; min-height: 36px; resize: vertical; }
+    .intro-save-btn { padding: 6px 12px; border-radius: 6px; background: var(--teal); color: var(--white); border: none; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
+
+    /* ─── Chat area ─── */
+    .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--white); max-height: calc(100vh - 55px); }
+    .chat-header { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border-lt); background: var(--white); }
+    .chat-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--teal), var(--green)); color: var(--white); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+    .chat-title { font-size: 14px; font-weight: 700; color: var(--olive); }
+    .chat-subtitle { font-size: 11px; color: var(--txt-l); }
+    .chat-mode-badge { margin-left: auto; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 99px; background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border); }
+
+    .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 14px; background: var(--bg); }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border-lt); border-radius: 2px; }
+    .msg { max-width: 75%; padding: 12px 16px; border-radius: 16px; font-size: 13px; line-height: 1.55; word-wrap: break-word; }
+    .msg-user { align-self: flex-end; background: var(--teal); color: var(--white); border-bottom-right-radius: 4px; }
+    .msg-betty { align-self: flex-start; background: var(--white); color: var(--txt-b); border: 1px solid var(--border-lt); border-bottom-left-radius: 4px; }
+    .msg-betty strong { color: var(--teal); }
+    .msg-system { align-self: center; font-size: 11px; color: var(--txt-l); background: transparent; padding: 6px 14px; border: 1px dashed var(--border-lt); border-radius: 8px; }
+    .msg-time { font-size: 9px; color: var(--txt-l); margin-top: 3px; }
+    .msg-label { font-size: 9px; font-weight: 700; color: var(--txt-l); text-transform: uppercase; margin-bottom: 2px; }
+
+    .typing { align-self: flex-start; display: flex; gap: 4px; padding: 14px 18px; background: var(--white); border: 1px solid var(--border-lt); border-radius: 16px; border-bottom-left-radius: 4px; }
+    .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--txt-l); animation: blink 1.4s infinite both; }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:0.3} 40%{opacity:1} }
+
+    .verify-card { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 10px; padding: 14px; margin-top: 8px; }
+    .verify-card h4 { font-size: 12px; color: var(--teal); margin-bottom: 10px; font-weight: 700; }
+    .agent-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-lt); }
+    .agent-row:last-child { border-bottom: none; }
+    .agent-name { font-size: 11px; font-weight: 700; width: 60px; color: var(--olive); }
+    .agent-verdict { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .agent-verdict.agree { background: var(--green-light); color: var(--green); }
+    .agent-verdict.disagree { background: #fef2f2; color: #dc2626; }
+    .agent-verdict.caution { background: #fffbeb; color: #d97706; }
+    .agent-conf { font-size: 10px; color: var(--txt-l); width: 36px; text-align: right; }
+    .agent-analysis { font-size: 11px; color: var(--txt-m); flex: 1; }
+
+    .input-area { padding: 14px 24px; border-top: 1px solid var(--border-lt); background: var(--white); flex-shrink: 0; }
+    .input-row { display: flex; gap: 8px; align-items: flex-end; }
+    .input-wrap { flex: 1; position: relative; }
+    .input-wrap textarea { width: 100%; resize: none; padding: 10px 14px; border-radius: 10px; background: var(--bg); color: var(--txt-b); border: 1px solid var(--border-lt); font-family: inherit; font-size: 13px; outline: none; transition: border-color 0.15s; min-height: 42px; max-height: 120px; }
+    .input-wrap textarea:focus { border-color: var(--teal); }
+    .input-wrap textarea::placeholder { color: var(--txt-l); }
+    .attach-btn { width: 42px; height: 42px; border-radius: 10px; background: var(--bg); color: var(--txt-m); border: 1px solid var(--border-lt); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+    .attach-btn:hover { background: var(--teal-light); border-color: var(--teal-border); color: var(--teal); }
+    .send-btn { width: 42px; height: 42px; border-radius: 10px; background: var(--teal); color: var(--white); border: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s; flex-shrink: 0; }
+    .send-btn:hover { opacity: 0.85; }
+    .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .attach-preview { display: none; padding: 8px 14px; background: var(--off-white); border-bottom: 1px solid var(--border-lt); }
+    .attach-preview.visible { display: flex; align-items: center; gap: 10px; }
+    .attach-preview img { max-height: 60px; max-width: 120px; border-radius: 6px; border: 1px solid var(--border-lt); object-fit: cover; }
+    .attach-preview .attach-name { font-size: 11px; color: var(--txt-m); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attach-preview .attach-remove { font-size: 10px; font-weight: 600; color: #c62828; cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px solid #ef9a9a; background: #ffebee; }
+    .attach-preview .attach-remove:hover { background: #ffcdd2; }
+
+    /* Admin reply mode indicator */
+    .admin-mode { display: none; padding: 6px 14px; background: #fef3c7; border-bottom: 1px solid #fde68a; font-size: 11px; font-weight: 600; color: #92400e; }
+    .admin-mode span { cursor: pointer; text-decoration: underline; margin-left: 8px; }
+
+    /* ─── Nav Grid (2×2) ─── */
+    .nav-grid { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border-lt); }
+    .nav-grid-btn { padding: 12px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; border: none; cursor: pointer; transition: all 0.15s; font-family: inherit; background: var(--white); color: var(--txt-l); border-bottom: 1px solid var(--border-lt); border-right: 1px solid var(--border-lt); }
+    .nav-grid-btn:nth-child(2n) { border-right: none; }
+    .nav-grid-btn:nth-child(n+3) { border-bottom: none; }
+    .nav-grid-btn:hover { background: var(--teal-light); color: var(--teal); }
+    .nav-grid-btn.active { background: var(--teal); color: var(--white); }
+    .nav-grid-btn.active:hover { background: #003a40; }
+
+    /* ─── Playbook Panel ─── */
+    .playbook-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .playbook-panel.active { display: flex; }
+    .playbook-panel iframe { width: 100%; flex: 1; border: none; }
+
+    /* ─── Intros Panel (main content) ─── */
+    .intros-main { display: none; flex: 1; flex-direction: column; overflow-y: auto; background: var(--bg); padding: 24px; }
+    .intros-main.active { display: flex; }
+    .intros-main-inner { max-width: 640px; margin: 0 auto; width: 100%; }
+    .intros-main h2 { font-size: 16px; font-weight: 700; color: var(--olive); margin-bottom: 16px; }
+    .intros-main .intro-item { background: var(--white); border: 1px solid var(--border-lt); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+    .intros-main .intro-item:hover { border-color: var(--teal); }
+    .intros-main .intro-item.active { border-color: var(--teal); background: var(--teal-light); }
+    .intros-main .intro-label { font-size: 13px; font-weight: 700; color: var(--olive); margin-bottom: 4px; }
+    .intros-main .intro-text { font-size: 12px; color: var(--txt-m); line-height: 1.5; }
+    .intros-main .intro-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .intros-main .intro-btn { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 6px; border: none; cursor: pointer; font-family: inherit; }
+    .intros-main .intro-btn-edit { background: var(--teal-light); color: var(--teal); }
+    .intros-main .intro-btn-del { background: #ffebee; color: #c62828; }
+    .intros-add-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: 10px; padding: 16px; margin-top: 16px; }
+    .intros-add-card label { font-size: 12px; font-weight: 600; color: var(--olive); display: block; margin-bottom: 4px; }
+    .intros-add-card input, .intros-add-card textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-lt); background: var(--off-white); color: var(--txt-b); font-family: inherit; font-size: 13px; outline: none; margin-bottom: 10px; }
+    .intros-add-card input:focus, .intros-add-card textarea:focus { border-color: var(--teal); background: var(--white); }
+    .intros-add-card textarea { min-height: 80px; resize: vertical; }
+
+    /* ─── Article list in sidebar ─── */
+    .article-list { display: none; flex: 1; overflow-y: auto; padding: 8px 10px; }
+    .article-list.visible { display: block; }
+    .article-list-title { font-size: 9px; font-weight: 700; color: var(--txt-l); text-transform: uppercase; letter-spacing: 0.06em; padding: 6px 4px 8px; }
+    .art-card { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 8px; padding: 10px; margin-bottom: 6px; transition: border-color 0.15s; }
+    .art-card:hover { border-color: var(--teal-border); }
+    .art-title { font-size: 11px; font-weight: 600; color: var(--olive); line-height: 1.35; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .art-bet { font-size: 9px; color: var(--teal); font-weight: 600; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+    .art-actions { display: flex; gap: 4px; }
+    .art-btn { font-size: 9px; font-weight: 600; padding: 3px 8px; border-radius: 4px; border: none; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .art-btn-view { background: var(--teal-light); color: var(--teal); }
+    .art-btn-view:hover { background: var(--teal-border); }
+    .art-btn-edit { background: #fff3e0; color: #e65100; }
+    .art-btn-edit:hover { background: #ffe0b2; }
+
+    /* Command center right panel */
+    .cmd-panel { display: none; flex: 1; flex-direction: column; overflow-y: auto; background: var(--bg); }
+    .cmd-panel.active { display: flex; }
+    .cmd-dash { max-width: 960px; margin: 0 auto; padding: 20px 16px 48px; width: 100%; }
+    .cmd-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    .cmd-stat { background: var(--white); border: 1px solid var(--border-lt); border-radius: 12px; padding: 14px; text-align: center; }
+    .cmd-stat-val { font-size: 1.5rem; font-weight: 700; color: var(--teal); }
+    .cmd-stat-label { font-size: 9px; font-weight: 600; color: var(--txt-l); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+    .cmd-section-label { font-size: 11px; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .cmd-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border-lt); }
+
+    /* Topic Card */
+    .tc { background: var(--white); border: 1px solid var(--border-lt); border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+    .tc:hover { box-shadow: 0 4px 16px rgba(0,76,84,0.06); }
+    .tc-hd { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border-lt); }
+    .tc-av { width: 32px; height: 32px; border-radius: 8px; background: var(--teal-light); border: 1px solid var(--teal-border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--teal); flex-shrink: 0; }
+    .tc-info2 { flex: 1; min-width: 0; }
+    .tc-topic2 { font-size: 13px; font-weight: 700; color: var(--olive); }
+    .tc-meta2 { display: flex; align-items: center; gap: 5px; margin-top: 2px; flex-wrap: wrap; }
+    .tc-tg { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+    .tg-cat { background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border); }
+    .tg-ver { background: var(--green-light); color: var(--green); border: 1px solid var(--green-border); }
+    .tg-dev { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .tg-chk { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+    .tc-bd { padding: 12px 14px; }
+
+    .x-emb { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; cursor: pointer; }
+    .x-emb:hover { border-color: #2563eb; }
+    .x-emb-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .x-emb-av { width: 20px; height: 20px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--txt-m); }
+    .x-emb-h { font-size: 11px; font-weight: 600; color: #2563eb; }
+    .x-emb-p { margin-left: auto; font-size: 9px; font-weight: 600; color: var(--txt-l); }
+    .x-emb-t { font-size: 12px; color: var(--txt-m); line-height: 1.5; }
+    .x-emb-s { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--txt-l); }
+
+    .mkt-pill { display: flex; align-items: center; gap: 8px; background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 8px; padding: 8px 12px; margin-bottom: 5px; cursor: pointer; }
+    .mkt-pill:hover { border-color: var(--teal-border); }
+    .mkt-title { flex: 1; font-size: 12px; color: var(--txt-b); font-weight: 500; }
+    .mkt-bar { width: 60px; height: 5px; border-radius: 3px; background: var(--bg); overflow: hidden; }
+    .mkt-bar-f { height: 100%; border-radius: 3px; background: var(--green); }
+    .mkt-prob { font-size: 13px; font-weight: 700; color: var(--teal); min-width: 32px; text-align: right; }
+
+    .ag-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
+    .ag-chip { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 6px; padding: 6px 8px; }
+    .ag-name { font-size: 9px; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+    .ag-verd { font-size: 11px; color: var(--txt-m); line-height: 1.4; }
+
+    .wb-box { background: var(--green-light); border: 1px solid var(--green-border); border-left: 3px solid var(--teal); border-radius: 8px; padding: 10px 14px; text-align: center; margin-bottom: 10px; }
+    .wb-label { font-size: 9px; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+    .wb-str { font-size: 13px; font-weight: 700; color: var(--green); line-height: 1.4; }
+
+    .cmd-act-row { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+    .cmd-act-btn { flex: 1; min-width: 60px; background: var(--white); border: 1px solid var(--border-lt); border-radius: 6px; padding: 6px 8px; cursor: pointer; text-align: center; font-family: inherit; transition: all 0.15s; }
+    .cmd-act-btn:hover { border-color: var(--teal-border); background: var(--teal-light); }
+    .cmd-act-icon { font-size: 14px; display: block; margin-bottom: 1px; }
+    .cmd-act-label { font-size: 9px; font-weight: 600; color: var(--txt-m); text-transform: uppercase; }
+    .cmd-act-detail { font-size: 10px; color: var(--txt-l); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cmd-act-live { font-size: 8px; font-weight: 700; color: var(--green); text-transform: uppercase; }
+
+    .cmd-composer { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+    .cmd-ta { width: 100%; min-height: 50px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-lt); background: var(--white); color: var(--txt-b); font-family: inherit; font-size: 12px; resize: vertical; outline: none; }
+    .cmd-ta:focus { border-color: var(--teal); }
+    .cmd-cbar { display: flex; align-items: center; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+    .cmd-cc { font-size: 10px; color: var(--txt-l); }
+    .cmd-cc.over { color: #c62828; font-weight: 600; }
+    .cmd-cbar .spacer { flex: 1; }
+    .cmd-pub { padding: 5px 12px; border-radius: 6px; border: none; font-family: inherit; font-size: 10px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 3px; }
+    .cmd-pub-truth { background: #5c3dce; color: #fff; }
+    .cmd-pub-x { background: var(--olive); color: #fff; }
+    .cmd-pub-sms { background: var(--green); color: #fff; }
+    .cmd-pub-copy { background: var(--white); color: var(--teal); border: 1px solid var(--border-lt); }
+
+    .opp-section { padding-top: 8px; border-top: 1px solid var(--border-lt); }
+    .opp-hdr { font-size: 9px; font-weight: 700; color: #c62828; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .opp-card2 { display: flex; align-items: flex-start; gap: 8px; background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 6px; padding: 8px 10px; margin-bottom: 5px; }
+    .opp-card2:hover { border-color: #c62828; }
+    .opp-handle2 { font-size: 11px; font-weight: 700; color: #2563eb; }
+    .opp-take2 { font-size: 10px; color: var(--txt-m); line-height: 1.4; margin-top: 1px; }
+    .opp-btns { display: flex; gap: 3px; flex-shrink: 0; }
+    .opp-b { padding: 3px 8px; border-radius: 4px; font-size: 9px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .opp-bv { background: var(--white); border: 1px solid var(--border-lt); color: var(--txt-m); }
+    .opp-br { background: #ffebee; border: 1px solid rgba(198,40,40,0.2); color: #c62828; }
+
+    .cmd-qc { background: var(--white); border: 1px solid var(--border-lt); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start; }
+    .cmd-qc-body { flex: 1; }
+    .cmd-qc-input { width: 100%; background: transparent; border: none; color: var(--txt-b); font-family: inherit; font-size: 13px; resize: none; outline: none; min-height: 32px; line-height: 1.5; }
+    .cmd-qc-input::placeholder { color: var(--txt-l); }
+    .cmd-qc-acts { display: flex; align-items: center; gap: 5px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-lt); flex-wrap: wrap; }
+
+    /* Preview overlay */
+    .cmd-preview { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; align-items: center; justify-content: center; }
+    .cmd-preview.open { display: flex; }
+    .cmd-preview-pane { background: var(--white); border-radius: 12px; width: 90%; max-width: 700px; height: 80vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.15); }
+    .cmd-preview-bar { display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border-lt); gap: 6px; }
+    .cmd-preview-title { flex: 1; font-size: 12px; font-weight: 600; color: var(--olive); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cmd-preview-close { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-lt); background: var(--white); color: var(--txt-m); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .cmd-preview-close:hover { background: #ffebee; color: #c62828; }
+    .cmd-preview-iframe { flex: 1; border: none; width: 100%; }
+    .cmd-regen { background: var(--white); border: 1px solid var(--border-lt); color: var(--teal); padding: 6px 14px; border-radius: 8px; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; margin-bottom: 16px; }
+    .cmd-regen:hover { background: var(--teal-light); }
+
+    @media (max-width: 640px) {
+      .cmd-stats-row { gap: 6px; }
+      .ag-row { grid-template-columns: 1fr; }
+      .cmd-act-row { flex-wrap: wrap; }
+      .cmd-act-btn { min-width: calc(50% - 3px); }
+    }
+
+    @media (max-width: 768px) {
+      html, body { height: 100%; overflow: hidden; position: fixed; width: 100%; }
+      .page { height: 100%; min-height: 0; }
+      .main { flex-direction: column; height: calc(100% - 55px); overflow: hidden; }
+
+      /* Sidebar: collapsed by default on mobile, togglable */
+      .sidebar { width: 100%; min-width: 100%; max-height: 0; overflow: hidden; border-right: none; border-bottom: none; transition: max-height 0.3s ease; }
+      .sidebar.mobile-open { max-height: 50vh; overflow-y: auto; border-bottom: 1px solid var(--border-lt); }
+
+      /* Chat takes full remaining space */
+      .chat-area { flex: 1; max-height: none; min-height: 0; }
+      .chat-header { padding: 10px 16px; }
+      .chat-avatar { width: 28px; height: 28px; font-size: 11px; }
+      .chat-title { font-size: 13px; }
+      .chat-subtitle { font-size: 10px; }
+
+      /* Messages: fill available space, scroll */
+      .messages { padding: 12px 14px; gap: 10px; flex: 1; min-height: 0; }
+      .msg { max-width: 88%; padding: 10px 14px; font-size: 15px; line-height: 1.45; border-radius: 18px; }
+      .msg-user { border-bottom-right-radius: 4px; }
+      .msg-betty { border-bottom-left-radius: 4px; }
+
+      /* Input: fixed feel, iMessage-style */
+      .input-area { padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+      .input-row { gap: 6px; }
+      .input-wrap textarea {
+        font-size: 16px; /* prevents iOS zoom on focus */
+        padding: 10px 14px;
+        border-radius: 20px;
+        min-height: 40px;
+        max-height: 100px;
+        line-height: 1.4;
+      }
+      .attach-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
+      .send-btn { width: 36px; height: 36px; border-radius: 50%; font-size: 16px; }
+
+      /* Slim header on mobile */
+      .header { padding: 10px 16px; }
+      .logo-text { font-size: 14px; }
+      .mobile-sidebar-toggle { display: flex; }
+
+      /* Admin mode bar */
+      .admin-mode { font-size: 10px; padding: 5px 12px; }
+
+      /* Command center responsive */
+      .cmd-panel { max-height: none; }
+      .cmd-dash { padding: 12px 10px 24px; }
+
+      /* Attach preview */
+      .attach-preview { padding: 6px 10px; }
+      .attach-preview img { max-height: 40px; max-width: 80px; }
+    }
+
+    /* Mobile sidebar toggle button */
+    .mobile-sidebar-toggle {
+      display: none;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      color: var(--teal); cursor: pointer;
+      align-items: center; justify-content: center;
+      font-size: 14px; margin-left: auto; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header class="header">
+    <a href="/" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:30px; height:26px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <button class="mobile-sidebar-toggle" id="mobileSidebarBtn" onclick="toggleMobileSidebar()" title="Menu">&#9776;</button>
+  </header>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="nav-grid">
+        <button class="nav-grid-btn" id="navCmd" onclick="switchView('command')">Command Center</button>
+        <button class="nav-grid-btn" id="navPlaybook" onclick="switchView('playbook')">Playbook</button>
+        <button class="nav-grid-btn active" id="navConvos" onclick="switchView('convos')">Conversations</button>
+        <button class="nav-grid-btn" id="navBrain" onclick="switchView('brain')">Betty Brain</button>
+      </div>
+
+      <!-- Article list (visible when Command Center active) -->
+      <div class="article-list" id="articleList">
+        <div class="article-list-title">Authentic Press Articles</div>
+        <div class="art-card">
+          <div class="art-title">Avalanche Enter Stanley Cup Playoffs as Clear Favorites</div>
+          <div class="art-bet">$1 Colorado Avalanche Win 2026 Stanley Cup By 6/30/26</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/stanley-cup-playoffs-2026-avalanche/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/stanley-cup-playoffs-2026-avalanche/')">Edit</button>
+          </div>
+        </div>
+        <div class="art-card">
+          <div class="art-title">Can Scottie Scheffler Three-Peat at Augusta?</div>
+          <div class="art-bet">$1 Scottie Scheffler Wins 2026 Masters By 4/13/26</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/masters-2026-scheffler-three-peat/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/masters-2026-scheffler-three-peat/')">Edit</button>
+          </div>
+        </div>
+        <div class="art-card">
+          <div class="art-title">Warriors at the 10-Seed: Can Golden State Survive the Play-In?</div>
+          <div class="art-bet">$1 Warriors Make 2026 NBA Playoffs By 4/17/26</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/nba-play-in-warriors-2026/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/nba-play-in-warriors-2026/')">Edit</button>
+          </div>
+        </div>
+        <div class="art-card">
+          <div class="art-title">SAVE America Act Faces Uncertain Path Before 2026 Midterms</div>
+          <div class="art-bet">$1 SAVE America Act Signed Into Law By 11/1/26</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/save-america-act-midterms/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/save-america-act-midterms/')">Edit</button>
+          </div>
+        </div>
+        <div class="art-card">
+          <div class="art-title">The Guardian Truth Layer Behind Every WeBet</div>
+          <div class="art-bet">$1 Guardian Scores 10000 Claims 80%+ Accuracy By 12/31/26</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/guardian-truth-layer/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/guardian-truth-layer/')">Edit</button>
+          </div>
+        </div>
+        <div class="art-card">
+          <div class="art-title">Solving the Liquidity Problem: How WeBetAI Adds Value</div>
+          <div class="art-bet">$1 WeBetAI Reaches Unicorn Status By 1/1/29</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/solving-liquidity/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/solving-liquidity/')">Edit</button>
+          </div>
+        </div>
+        <div class="art-card">
+          <div class="art-title">The Pick3 P2P Parlay Killer</div>
+          <div class="art-bet">$1 Pick3 P2P Processes 1000 Parlays By 12/31/26</div>
+          <div class="art-actions">
+            <button class="art-btn art-btn-view" onclick="cmdOpenPreview('/betty/blog/pick3-p2p-parlay-killer/')">View</button>
+            <button class="art-btn art-btn-edit" onclick="cmdOpenPreview('/betty/blog/pick3-p2p-parlay-killer/')">Edit</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversations tab -->
+      <div class="tab-panel active" id="tab-convos">
+        <div class="convo-back" id="convoBack" onclick="exitConvoView()">&#8592; Back to conversations</div>
+        <div class="convo-actions" id="convoActions">
+          <button class="convo-action-btn primary" onclick="toggleNewConvo()">+ New Conversation</button>
+          <button class="convo-action-btn" onclick="switchView('intros')">Manage Intros</button>
+        </div>
+        <div class="new-convo-form" id="newConvoForm">
+          <label>Phone Number</label>
+          <input type="tel" id="newConvoPhone" placeholder="+1 (917) 855-0103" />
+          <label>Intro Message</label>
+          <textarea id="newConvoMsg"></textarea>
+          <div class="form-row">
+            <button class="convo-action-btn" onclick="toggleNewConvo()">Cancel</button>
+            <button class="convo-action-btn primary" onclick="sendNewConvo()">Send Intro</button>
+          </div>
+        </div>
+        <div class="intros-panel" id="introsPanel">
+          <h4>Intro Message Templates</h4>
+          <div id="introsList"></div>
+          <div style="border-top:1px solid var(--border-lt); padding-top:8px; margin-top:8px;">
+            <label style="font-size:10px; font-weight:600; color:var(--olive); margin-bottom:3px; display:block;">Add New Template</label>
+            <div class="intro-add-row">
+              <input id="newIntroLabel" placeholder="Label (e.g. VIP Invite)" />
+              <textarea id="newIntroText" placeholder="Message text..."></textarea>
+            </div>
+            <button class="intro-save-btn" style="margin-top:6px;" onclick="addIntroTemplate()">Save Template</button>
+          </div>
+        </div>
+        <div class="convo-list" id="convoList"><div class="convo-loading">Loading conversations...</div></div>
+      </div>
+
+      <!-- Data Sources tab -->
+      <div class="tab-panel" id="tab-sources">
+        <div class="source-list" id="sourceList"></div>
+        <div class="sidebar-footer">
+          <div class="ctx-meter">
+            <span id="ctxLabel">0 sources</span>
+            <div class="ctx-bar"><div class="ctx-bar-fill" id="ctxFill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="chat-area">
+      <div class="chat-header">
+        <div class="chat-avatar">B</div>
+        <div>
+          <div class="chat-title" id="chatTitle">Betty</div>
+          <div class="chat-subtitle" id="chatSubtitle">Same brain as SMS &middot; Full data access</div>
+        </div>
+        <div class="chat-mode-badge" id="modeBadge">Beta</div>
+      </div>
+      <div class="admin-mode" id="adminMode">Replying as Betty to <strong id="adminPhone"></strong><span onclick="exitAdminMode()">Exit</span></div>
+
+      <div class="messages" id="messages">
+        <div class="msg msg-betty">What can I help you with?</div>
+      </div>
+
+      <div class="attach-preview" id="attachPreview">
+        <img id="attachThumb" src="" alt="" />
+        <span class="attach-name" id="attachName"></span>
+        <span class="attach-remove" onclick="clearAttachment()">Remove</span>
+      </div>
+      <div class="input-area">
+        <div class="input-row">
+          <button class="attach-btn" id="attachBtn" title="Attach file or image" onclick="document.getElementById('fileInput').click()">+</button>
+          <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="handleFileSelect(event)" />
+          <div class="input-wrap">
+            <textarea id="chatInput" rows="1" placeholder="Message Betty..." autofocus></textarea>
+          </div>
+          <button class="send-btn" id="sendBtn" title="Send">&#8593;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Command Center Panel (replaces chat area when active) -->
+    <div class="cmd-panel" id="cmdPanel">
+      <div class="cmd-dash">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="font-size:14px;font-weight:700;color:var(--olive)">Command Center</span>
+          <span style="font-size:11px;color:var(--txt-l)" id="cmdGenTime"></span>
+          <div class="spacer" style="flex:1"></div>
+          <button class="cmd-regen" onclick="cmdRegenerate()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Regenerate
+          </button>
+        </div>
+        <div class="cmd-stats-row">
+          <div class="cmd-stat"><div class="cmd-stat-val" id="cmdStatTopics">-</div><div class="cmd-stat-label">Trending Topics</div></div>
+          <div class="cmd-stat"><div class="cmd-stat-val" id="cmdStatBlogs">-</div><div class="cmd-stat-label">Articles Live</div></div>
+          <div class="cmd-stat"><div class="cmd-stat-val" id="cmdStatBets">-</div><div class="cmd-stat-label">Bets Created</div></div>
+        </div>
+        <div class="cmd-qc">
+          <div class="cmd-qc-body">
+            <textarea id="cmdComposeText" class="cmd-qc-input" placeholder="Create a WeBet challenge post..." rows="2" maxlength="500" oninput="cmdUpdateCount('cmdComposeText','cmdComposeCount')"></textarea>
+            <div class="cmd-qc-acts">
+              <span id="cmdComposeCount" class="cmd-cc">0/500</span>
+              <div style="flex:1"></div>
+              <button class="cmd-pub cmd-pub-truth" onclick="cmdOpenTruth(document.getElementById('cmdComposeText').value)">Truth Social</button>
+              <button class="cmd-pub cmd-pub-x" onclick="cmdOpenX(document.getElementById('cmdComposeText').value)">Post to X</button>
+            </div>
+          </div>
+        </div>
+        <div class="cmd-section-label">Trending Topics &mdash; Ready to Post</div>
+        <div id="cmdContentQueue"></div>
+      </div>
+    </div>
+    <!-- Playbook Panel (replaces chat area when active) -->
+    <div class="playbook-panel" id="playbookPanel">
+      <iframe src="/priority/playbook" id="playbookIframe"></iframe>
+    </div>
+
+    <!-- Intros Panel (replaces chat area when active) -->
+    <div class="intros-main" id="introsMain">
+      <div class="intros-main-inner">
+        <h2>Manage Intro Templates</h2>
+        <div id="introsMainList"></div>
+        <div class="intros-add-card">
+          <label>Template Name</label>
+          <input id="newIntroLabelMain" placeholder="e.g. VIP Invite, Cold Outreach" />
+          <label>Message Text</label>
+          <textarea id="newIntroTextMain" placeholder="Hey {name}, this is Betty from WeBetAI..."></textarea>
+          <button class="convo-action-btn primary" style="width:auto;padding:10px 24px;" onclick="addIntroMain()">Save Template</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Command Center Preview Overlay -->
+<div class="cmd-preview" id="cmdPreviewOverlay" onclick="if(event.target===this)cmdClosePreview()">
+  <div class="cmd-preview-pane">
+    <div class="cmd-preview-bar">
+      <span class="cmd-preview-title" id="cmdPreviewTitle">Preview</span>
+      <button class="cmd-preview-close" onclick="cmdClosePreview()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <iframe class="cmd-preview-iframe" id="cmdPreviewIframe" src="about:blank"></iframe>
+  </div>
+</div>
+
+<div class="toast" id="cmdToast" style="position:fixed;bottom:20px;right:20px;z-index:600;background:var(--white);border:1px solid var(--green-border);color:var(--txt-b);padding:10px 16px;border-radius:10px;font-size:12px;font-weight:500;opacity:0;transform:translateY(8px);transition:all 0.3s;box-shadow:0 4px 16px rgba(0,0,0,0.08)"></div>
+
+<script>
+  const ADMIN_KEY = 'webet95picks2026';
+  const API_URL = window.location.hostname === 'localhost' ? '/.netlify/functions/betty-chat-beta' : 'https://webetsocial.com/.netlify/functions/betty-chat-beta';
+
+  const DATA_SOURCES = [
+    { id: 'picks', name: 'Edge Picks', desc: 'Daily model picks with ratings, odds, reasoning', default: true },
+    { id: 'results', name: 'Track Record', desc: 'Win/loss history, accuracy, ROI', default: true },
+    { id: 'ratings', name: 'Team Ratings', desc: 'Elo ratings, efficiency metrics by league', default: true },
+    { id: 'guardian', name: 'Guardian Digest', desc: 'Fact-checking, authenticity verification', default: true },
+    { id: 'espn', name: 'ESPN Live Scores', desc: 'Live, final, upcoming across NBA, NHL, MLB, MLS', default: true },
+    { id: 'polymarket', name: 'Polymarket', desc: 'Trending prediction markets', default: true },
+    { id: 'kalshi', name: 'Kalshi', desc: 'Event contract markets', default: true },
+    { id: 'markets', name: 'BettorEdge', desc: 'Sportsbook odds, moneylines', default: true },
+    { id: 'p2p', name: 'P2P Leaderboard', desc: 'Peer-to-peer bet standings', default: true },
+  ];
+
+  let enabledSources = new Set(DATA_SOURCES.filter(s => s.default).map(s => s.id));
+  let conversationHistory = [];
+  let isLoading = false;
+  let adminMode = null; // { phone, key } when replying as Betty to a user
+
+  // ─── Conversations ───
+  async function loadConversations() {
+    const list = document.getElementById('convoList');
+    try {
+      const resp = await fetch('/api/get-betty-convos?key=' + ADMIN_KEY);
+      const data = await resp.json();
+      if (data.error) { list.innerHTML = '<div class="convo-loading">' + data.error + '</div>'; return; }
+      const convos = data.conversations || [];
+      if (!convos.length) { list.innerHTML = '<div class="convo-loading">No conversations yet</div>'; return; }
+
+      list.innerHTML = convos.map(c => {
+        const phone = c.phone || c.key;
+        const masked = phone.length > 6 ? '***' + phone.slice(-4) : phone;
+        let preview = c.lastMessage ? c.lastMessage.content : '';
+        if (preview.length > 40) preview = preview.substring(0, 40) + '...';
+        const time = c.lastMessage?.ts ? new Date(c.lastMessage.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+        const role = c.lastMessage?.role === 'assistant' ? 'Betty' : 'User';
+        return `<div class="convo-item" data-key="${c.key || phone.replace(/\\D/g, '')}" data-phone="${phone}">
+          <div class="convo-avatar">${phone.slice(-2) || '?'}</div>
+          <div class="convo-info">
+            <div class="convo-phone">${phone}</div>
+            <div class="convo-preview">${role}: ${esc(preview)}</div>
+          </div>
+          <div class="convo-meta">${time}<br><span class="convo-count">${c.messageCount} msgs</span></div>
+        </div>`;
+      }).join('');
+
+      list.querySelectorAll('.convo-item').forEach(el => {
+        el.addEventListener('click', () => openConvo(el.dataset.key, el.dataset.phone));
+      });
+    } catch (e) {
+      list.innerHTML = '<div class="convo-loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  async function openConvo(key, phone) {
+    // Highlight active
+    document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.convo-item[data-key="${key}"]`)?.classList.add('active');
+
+    // Enter admin mode — typing in the input sends as Betty to this user
+    adminMode = { phone, key };
+    document.getElementById('adminMode').style.display = 'block';
+    document.getElementById('adminPhone').textContent = phone;
+    document.getElementById('chatTitle').textContent = 'Conversation: ' + phone;
+    document.getElementById('chatSubtitle').textContent = 'Replying as Betty via SMS';
+    document.getElementById('modeBadge').textContent = 'Admin';
+    document.getElementById('chatInput').placeholder = 'Reply as Betty...';
+    // hint chips removed
+    document.getElementById('convoBack').style.display = 'block';
+
+    // Load messages
+    const messagesEl = document.getElementById('messages');
+    messagesEl.innerHTML = '<div class="convo-loading">Loading...</div>';
+
+    try {
+      const resp = await fetch('/api/get-betty-convos?key=' + ADMIN_KEY + '&phone=' + key);
+      const data = await resp.json();
+      const msgs = data.messages || [];
+
+      if (!msgs.length) { messagesEl.innerHTML = '<div class="convo-loading">No messages</div>'; return; }
+
+      messagesEl.innerHTML = msgs.map(m => {
+        const isUser = m.role === 'user';
+        const time = m.ts ? new Date(m.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+        return `<div style="align-self:${isUser ? 'flex-end' : 'flex-start'}; max-width:75%;">
+          <div class="msg-label">${isUser ? 'User' : 'Betty'}</div>
+          <div class="msg ${isUser ? 'msg-user' : 'msg-betty'}">${esc(m.content)}</div>
+          <div class="msg-time">${time}</div>
+        </div>`;
+      }).join('');
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } catch (e) {
+      messagesEl.innerHTML = '<div class="convo-loading">Error: ' + e.message + '</div>';
+    }
+  }
+
+  function exitConvoView() {
+    exitAdminMode();
+    loadConversations();
+  }
+
+  function exitAdminMode() {
+    adminMode = null;
+    document.getElementById('adminMode').style.display = 'none';
+    document.getElementById('chatTitle').textContent = 'Betty';
+    document.getElementById('chatSubtitle').textContent = 'Same brain as SMS \u00b7 Full data access';
+    document.getElementById('modeBadge').textContent = 'Beta';
+    document.getElementById('chatInput').placeholder = 'Message Betty...';
+    // hint chips removed
+    document.getElementById('convoBack').style.display = 'none';
+    // Restore Betty chat
+    document.getElementById('messages').innerHTML = '<div class="msg msg-betty">What can I help you with?</div>';
+    conversationHistory = [];
+  }
+
+  // ─── Data Sources ───
+  function renderSources() {
+    const list = document.getElementById('sourceList');
+    list.innerHTML = DATA_SOURCES.map(s => `
+      <div class="source-item" data-id="${s.id}">
+        <div class="source-toggle ${enabledSources.has(s.id) ? 'active' : ''}" data-id="${s.id}"></div>
+        <div class="source-info"><div class="source-name">${s.name}</div><div class="source-desc">${s.desc}</div></div>
+        <div class="source-status ${enabledSources.has(s.id) ? 'live' : 'off'}"></div>
+      </div>
+    `).join('');
+    const count = enabledSources.size;
+    document.getElementById('ctxLabel').textContent = count + ' source' + (count !== 1 ? 's' : '') + ' active';
+    document.getElementById('ctxFill').style.width = (count / DATA_SOURCES.length * 100) + '%';
+    list.querySelectorAll('.source-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.dataset.id;
+        if (enabledSources.has(id)) enabledSources.delete(id); else enabledSources.add(id);
+        renderSources();
+      });
+    });
+  }
+
+  // ─── Chat / Send ───
+  const messagesEl = document.getElementById('messages');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('sendBtn');
+
+  function addMessage(role, content, extra) {
+    const div = document.createElement('div');
+    if (role === 'user') { div.className = 'msg msg-user'; div.textContent = content; }
+    else { div.className = 'msg msg-betty'; div.innerHTML = formatMsg(content); if (extra?.type === 'verification') div.appendChild(buildVerifyCard(extra)); }
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function formatMsg(t) {
+    if (!t) return '';
+    return t.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/^- (.+)/gm, '\u2022 $1').replace(/\n/g, '<br>');
+  }
+
+  function buildVerifyCard(data) {
+    const card = document.createElement('div'); card.className = 'verify-card';
+    const agents = ['grok', 'claude', 'chatgpt'];
+    const labels = { grok: 'Grok', claude: 'Claude', chatgpt: 'ChatGPT' };
+    card.innerHTML = `<h4>${data.agreeCount}/3 Agents Agree \u00b7 ${data.avgConfidence}% Avg Confidence</h4>` +
+      agents.map(a => { const ag = data.agents[a]; return `<div class="agent-row"><span class="agent-name">${labels[a]}</span><span class="agent-verdict ${ag.verdict}">${ag.verdict}</span><span class="agent-conf">${ag.confidence}%</span><span class="agent-analysis">${ag.analysis}</span></div>`; }).join('');
+    return card;
+  }
+
+  function showTyping() { const d = document.createElement('div'); d.className = 'typing'; d.id = 'typingIndicator'; d.innerHTML = '<span></span><span></span><span></span>'; messagesEl.appendChild(d); messagesEl.scrollTop = messagesEl.scrollHeight; }
+  function hideTyping() { const el = document.getElementById('typingIndicator'); if (el) el.remove(); }
+
+  async function sendMessage(text) {
+    if (!text.trim() || isLoading) return;
+    isLoading = true; sendBtn.disabled = true;
+    const msg = text.trim();
+    chatInput.value = ''; chatInput.style.height = 'auto';
+
+    // Admin mode: send as Betty via SMS (with optional image attachment)
+    if (adminMode) {
+      if (pendingAttachment && pendingAttachment.type.startsWith('image/')) {
+        addMessage('betty', msg || '[Image]');
+        // Show image preview in chat
+        const imgDiv = document.createElement('div');
+        imgDiv.style.cssText = 'align-self:flex-start;max-width:75%';
+        imgDiv.innerHTML = '<img src="' + pendingAttachment.dataUrl + '" style="max-width:200px;border-radius:10px;border:1px solid var(--border-lt)" />';
+        messagesEl.appendChild(imgDiv);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else {
+        addMessage('betty', msg);
+      }
+      showTyping();
+      try {
+        const payload = { phone: adminMode.phone, message: msg, key: ADMIN_KEY };
+
+        // Upload image to get a public URL for Twilio MMS
+        if (pendingAttachment && pendingAttachment.type.startsWith('image/')) {
+          try {
+            const upRes = await fetch('/api/upload-media', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: pendingAttachment.dataUrl, type: pendingAttachment.type, name: pendingAttachment.name, key: ADMIN_KEY }),
+            });
+            const upData = await upRes.json();
+            if (upData.url) payload.mediaUrl = upData.url;
+          } catch (e) { console.error('Image upload failed:', e); }
+        }
+
+        const res = await fetch('/api/betty-admin-reply', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        hideTyping();
+        const data = await res.json();
+        if (data.error) addMessage('user', 'Error: ' + data.error);
+        else {
+          const sent = document.createElement('div');
+          sent.style.cssText = 'align-self:center;font-size:10px;color:var(--txt-l);padding:4px 10px';
+          sent.textContent = pendingAttachment ? 'SMS + attachment sent' : 'SMS sent';
+          messagesEl.appendChild(sent);
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+      } catch (e) { hideTyping(); addMessage('user', 'Send failed: ' + e.message); }
+      clearAttachment();
+      isLoading = false; sendBtn.disabled = false; chatInput.focus(); return;
+    }
+
+    // Normal Betty chat
+    addMessage('user', msg);
+    conversationHistory.push({ role: 'user', content: msg });
+    showTyping();
+    try {
+      const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: conversationHistory, sources: [...enabledSources] }) });
+      hideTyping();
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (data.error) { addMessage('betty', 'Something went wrong: ' + data.error); return; }
+      const content = data.content || data.synthesis || 'I got nothing. Try again?';
+      conversationHistory.push({ role: 'assistant', content });
+      if (data.type === 'verification') addMessage('betty', data.synthesis || content, data);
+      else addMessage('betty', content);
+    } catch (e) { hideTyping(); addMessage('betty', 'Connection error: ' + e.message); }
+    finally { isLoading = false; sendBtn.disabled = false; chatInput.focus(); }
+  }
+
+  function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  // ─── File / Image Attachment ───
+  let pendingAttachment = null; // { file, dataUrl, type }
+
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+    e.target.value = '';
+  }
+
+  function processFile(file) {
+    if (file.size > 5 * 1024 * 1024) { alert('File must be under 5MB'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingAttachment = { file, dataUrl: reader.result, type: file.type, name: file.name };
+      const preview = document.getElementById('attachPreview');
+      const thumb = document.getElementById('attachThumb');
+      const name = document.getElementById('attachName');
+      if (file.type.startsWith('image/')) {
+        thumb.src = reader.result; thumb.style.display = 'block';
+      } else {
+        thumb.style.display = 'none';
+      }
+      name.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + 'KB)';
+      preview.classList.add('visible');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearAttachment() {
+    pendingAttachment = null;
+    document.getElementById('attachPreview').classList.remove('visible');
+    document.getElementById('attachThumb').src = '';
+    document.getElementById('attachName').textContent = '';
+  }
+
+  // Paste support for images
+  chatInput.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) processFile(file);
+        return;
+      }
+      // Allow pasting URLs/text normally
+    }
+  });
+
+  // Upload image to a public URL for MMS (base64 → blob URL won't work for Twilio)
+  // We'll use a simple approach: convert to hosted URL via data URI in the API
+  async function uploadAttachmentForMMS() {
+    if (!pendingAttachment) return null;
+    // For admin reply via MMS, Twilio needs a publicly accessible URL
+    // We'll send the base64 data to a simple upload endpoint or use inline data
+    // For now, if it's an image, we can use the data URL directly in the message text
+    // or upload to Netlify Blobs and return a URL
+    try {
+      const { file, dataUrl } = pendingAttachment;
+      const formData = new FormData();
+      formData.append('file', file);
+      // Upload to a blob and get public URL
+      // For simplicity, we'll include the image as a Twilio-compatible media URL
+      // Twilio accepts public URLs - we need to host it
+      // Use a temporary approach: store in blob, serve via function
+      return dataUrl; // Will handle in the admin reply function
+    } catch (e) {
+      console.error('Upload failed:', e);
+      return null;
+    }
+  }
+
+  sendBtn.addEventListener('click', () => sendMessage(chatInput.value));
+  chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(chatInput.value); } });
+  chatInput.addEventListener('input', () => { chatInput.style.height = 'auto'; chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px'; });
+
+  // ─── View Switching ───
+  let currentView = 'convos';
+
+  function switchView(view) {
+    currentView = view;
+    const chatArea = document.querySelector('.chat-area');
+    const cmdPanel = document.getElementById('cmdPanel');
+    const playbookPanel = document.getElementById('playbookPanel');
+    const introsMain = document.getElementById('introsMain');
+    const convosTab = document.getElementById('tab-convos');
+    const sourcesTab = document.getElementById('tab-sources');
+    const articleList = document.getElementById('articleList');
+
+    // Reset all nav buttons
+    document.querySelectorAll('.nav-grid-btn').forEach(b => b.classList.remove('active'));
+
+    // Hide all right-side panels
+    chatArea.style.display = 'none';
+    cmdPanel.classList.remove('active');
+    playbookPanel.classList.remove('active');
+    introsMain.classList.remove('active');
+
+    // Hide all sidebar tab panels
+    convosTab.classList.remove('active');
+    sourcesTab.classList.remove('active');
+
+    // Hide article list by default
+    articleList.classList.remove('visible');
+
+    if (view === 'command') {
+      document.getElementById('navCmd').classList.add('active');
+      cmdPanel.classList.add('active');
+      articleList.classList.add('visible');
+      cmdInit();
+    } else if (view === 'playbook') {
+      document.getElementById('navPlaybook').classList.add('active');
+      playbookPanel.classList.add('active');
+    } else if (view === 'convos') {
+      document.getElementById('navConvos').classList.add('active');
+      chatArea.style.display = 'flex';
+      convosTab.classList.add('active');
+    } else if (view === 'brain') {
+      document.getElementById('navBrain').classList.add('active');
+      chatArea.style.display = 'flex';
+      sourcesTab.classList.add('active');
+    } else if (view === 'intros') {
+      document.getElementById('navConvos').classList.add('active');
+      introsMain.classList.add('active');
+      convosTab.classList.add('active');
+      renderIntrosMain();
+    }
+  }
+
+  function renderIntrosMain() {
+    const templates = getIntroTemplates();
+    const list = document.getElementById('introsMainList');
+    list.innerHTML = templates.map((t, i) => `
+      <div class="intro-item ${i === selectedIntroIdx ? 'active' : ''}" onclick="selectIntro(${i})">
+        <div class="intro-label">${esc(t.label)}</div>
+        <div class="intro-text">${esc(t.text)}</div>
+        <div class="intro-actions">
+          <button class="intro-btn intro-btn-edit" onclick="event.stopPropagation();editIntro(${i})">Edit</button>
+          ${!t.default ? '<button class="intro-btn intro-btn-del" onclick="event.stopPropagation();deleteIntro(' + i + ')">Delete</button>' : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function addIntroMain() {
+    const label = document.getElementById('newIntroLabelMain').value.trim();
+    const text = document.getElementById('newIntroTextMain').value.trim();
+    if (!label || !text) return;
+    const templates = getIntroTemplates();
+    templates.push({ label, text });
+    saveIntroTemplates(templates);
+    document.getElementById('newIntroLabelMain').value = '';
+    document.getElementById('newIntroTextMain').value = '';
+    renderIntrosMain();
+    renderIntros();
+  }
+
+  // Init default view
+  switchView('convos');
+
+  // ─── Command Center Logic ───
+  let cmdPosts = [];
+  let cmdLoaded = false;
+
+  async function cmdInit() {
+    if (cmdLoaded) return;
+    const el = document.getElementById('cmdContentQueue');
+    el.innerHTML = '<div class="convo-loading">Loading command center...</div>';
+    try {
+      const res = await fetch('/api/get-webet-content').then(r => r.json());
+      if (res.posts) {
+        cmdPosts = res.posts;
+        cmdLoaded = true;
+        document.getElementById('cmdGenTime').textContent = res.generatedAt ? new Date(res.generatedAt).toLocaleString() : '';
+        document.getElementById('cmdStatTopics').textContent = cmdPosts.length;
+        document.getElementById('cmdStatBlogs').textContent = cmdPosts.filter(p => (p.blog || {}).published).length;
+        document.getElementById('cmdStatBets').textContent = cmdPosts.filter(p => p.betId).length;
+        cmdRender();
+      } else {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--txt-m)">No content generated yet. Click Regenerate.</div>';
+      }
+    } catch (e) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--txt-m)">Error: ' + e.message + '</div>';
+    }
+  }
+
+  function cmdRender() {
+    const el = document.getElementById('cmdContentQueue');
+    if (!cmdPosts.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--txt-m)">No topics</div>'; return; }
+
+    el.innerHTML = cmdPosts.map((p, i) => {
+      const gs = p.guardianScore || {};
+      const badge = gs.authenticity >= 75 ? '<span class="tc-tg tg-ver">Verified</span>'
+        : gs.authenticity >= 50 ? '<span class="tc-tg tg-dev">Developing</span>'
+        : gs.authenticity ? '<span class="tc-tg tg-chk">Check Sources</span>' : '';
+
+      const xSrc = p.xSourcePost || {};
+      const xEmbed = xSrc.handle ? `<div class="x-emb" onclick="cmdOpenPreview('${esc(xSrc.url||'')}','@${esc(xSrc.handle)}')">
+        <div class="x-emb-top"><div class="x-emb-av">${esc((xSrc.handle||'U')[0].toUpperCase())}</div><span class="x-emb-h">@${esc(xSrc.handle)}</span><span class="x-emb-p">on X</span></div>
+        <div class="x-emb-t">${esc((xSrc.text||'').slice(0,280))}</div>
+        ${xSrc.likes||xSrc.retweets?'<div class="x-emb-s">'+(xSrc.likes?'<span>'+cmdFmtN(xSrc.likes)+' likes</span>':'')+(xSrc.retweets?'<span>'+cmdFmtN(xSrc.retweets)+' rt</span>':'')+'</div>':''}
+      </div>` : '';
+
+      const markets = (p.markets||[]).map(m => {
+        const prob = parseInt(m.probability)||50;
+        return `<div class="mkt-pill" onclick="cmdOpenPreview('${esc(m.url||'')}','${esc((m.title||'').slice(0,40))}')">
+          <span class="mkt-title">${esc((m.title||'').slice(0,50))}</span>
+          <div class="mkt-bar"><div class="mkt-bar-f" style="width:${prob}%"></div></div>
+          <span class="mkt-prob">${prob}%</span>
+        </div>`;
+      }).join('');
+
+      const agents = p.agents ? '<div class="ag-row">'+['grok','claude','chatgpt'].map(a => p.agents[a] ? `<div class="ag-chip"><div class="ag-name">${a}</div><div class="ag-verd">${esc((p.agents[a].verdict||'').slice(0,100))}</div></div>` : '').join('')+'</div>' : '';
+
+      const webetBox = p.webetString ? `<div class="wb-box"><div class="wb-label">WeBet Challenge</div><div class="wb-str">${esc(p.webetString)}</div></div>` : '';
+
+      const blog = p.blog||{};
+      const xSrcUrl = p.xSourceUrl || xSrc.url || '';
+      const actions = `<div class="cmd-act-row">
+        ${blog.title?`<button class="cmd-act-btn" onclick="cmdOpenPreview('${esc(blog.url||'')}','Article')"><span class="cmd-act-icon">&#128196;</span><span class="cmd-act-label">Article</span><span class="cmd-act-detail">${esc((blog.title||'').slice(0,20))}</span>${blog.published?'<span class="cmd-act-live">Live</span>':''}</button>`:''}
+        ${p.webetString?`<button class="cmd-act-btn" onclick="cmdOpenPreview('${esc(p.betUrl||'')}','Bet')"><span class="cmd-act-icon">&#127922;</span><span class="cmd-act-label">Bet</span><span class="cmd-act-detail">${esc((p.webetString||'').slice(0,20))}</span></button>`:''}
+        ${xSrcUrl?`<button class="cmd-act-btn" onclick="cmdOpenPreview('${esc(xSrcUrl)}','Source')"><span class="cmd-act-icon">&#128279;</span><span class="cmd-act-label">Source</span><span class="cmd-act-detail">@${esc(xSrc.handle||'source')}</span></button>`:''}
+      </div>`;
+
+      const postText = p.truthPost || p.postText || '';
+
+      const opposing = (p.opposingUsers||[]).length ? `<div class="opp-section"><div class="opp-hdr">Opposing Takes</div>${p.opposingUsers.map(u => {
+        const uUrl = u.postUrl||'https://x.com/'+(u.handle||'');
+        return `<div class="opp-card2"><div style="flex:1;min-width:0"><span class="opp-handle2">@${esc(u.handle)}</span><div class="opp-take2">${esc(u.opposingTake||'')}</div></div>
+          <div class="opp-btns"><button class="opp-b opp-bv" onclick="cmdOpenPreview('${esc(uUrl)}','@${esc(u.handle)}')">View</button><button class="opp-b opp-br" onclick="cmdOpenReply('${esc(uUrl)}','${esc((p.webetString||'').replace(/'/g,''))}')">Reply</button></div></div>`;
+      }).join('')}</div>` : '';
+
+      return `<div class="tc">
+        <div class="tc-hd"><div class="tc-av">${esc((p.topic||'T')[0])}</div><div class="tc-info2"><div class="tc-topic2">${esc(p.topic||'')}</div><div class="tc-meta2"><span class="tc-tg tg-cat">${esc(p.category||'')}</span>${badge}</div></div></div>
+        <div class="tc-bd">
+          ${xEmbed}${markets?'<div style="margin-bottom:10px">'+markets+'</div>':''}${agents}${webetBox}${actions}
+          <div class="cmd-composer">
+            <textarea class="cmd-ta" id="cmd-post-${i}" oninput="cmdUpdateCount('cmd-post-${i}','cmd-count-${i}')" maxlength="500">${esc(postText)}</textarea>
+            <div class="cmd-cbar">
+              <span id="cmd-count-${i}" class="cmd-cc">${postText.length}/500</span>
+              <div style="flex:1"></div>
+              <button class="cmd-pub cmd-pub-truth" onclick="cmdOpenTruth(document.getElementById('cmd-post-${i}').value)">Truth</button>
+              <button class="cmd-pub cmd-pub-x" onclick="cmdOpenX(document.getElementById('cmd-post-${i}').value)">X</button>
+              <button class="cmd-pub cmd-pub-sms" onclick="cmdOpenSMS(document.getElementById('cmd-post-${i}').value)">SMS</button>
+              <button class="cmd-pub cmd-pub-copy" onclick="cmdCopyText(${i})">Copy</button>
+            </div>
+          </div>
+          ${opposing}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function cmdOpenTruth(t) { if(!t) return cmdToast('Write something first'); window.open('https://truthsocial.com/share?text='+encodeURIComponent(t),'_blank'); }
+  function cmdOpenX(t) { if(!t) return cmdToast('Write something first'); window.open('https://x.com/intent/tweet?text='+encodeURIComponent(t),'_blank'); }
+  function cmdOpenReply(url,t) { window.open('https://x.com/intent/tweet?in_reply_to='+encodeURIComponent(url)+'&text='+encodeURIComponent(t||''),'_blank'); }
+  function cmdOpenSMS(t) { if(t) window.open('sms:?body='+encodeURIComponent(t),'_blank'); }
+  function cmdOpenPreview(url,title) { if(!url) return; document.getElementById('cmdPreviewTitle').textContent=title||'Preview'; document.getElementById('cmdPreviewIframe').src=url; document.getElementById('cmdPreviewOverlay').classList.add('open'); }
+  function cmdClosePreview() { document.getElementById('cmdPreviewOverlay').classList.remove('open'); document.getElementById('cmdPreviewIframe').src='about:blank'; }
+  function cmdCopyText(i) { navigator.clipboard.writeText(document.getElementById('cmd-post-'+i).value).then(()=>cmdToast('Copied!')); }
+  function cmdUpdateCount(tid,cid) { const l=document.getElementById(tid).value.length; const e=document.getElementById(cid); e.textContent=l+'/500'; e.className='cmd-cc'+(l>500?' over':''); }
+  function cmdFmtN(n) { return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':n; }
+  async function cmdRegenerate() { const k=prompt('Admin key:'); if(!k)return; cmdToast('Generating... refresh in ~5 min'); try{await fetch('/api/run-truth-bets?key='+encodeURIComponent(k),{method:'POST'})}catch(e){cmdToast('Error: '+e.message)} }
+  function cmdToast(m) { const e=document.getElementById('cmdToast'); e.textContent=m; e.style.opacity='1'; e.style.transform='translateY(0)'; clearTimeout(e._t); e._t=setTimeout(()=>{e.style.opacity='0';e.style.transform='translateY(8px)'},3500); }
+  document.addEventListener('keydown', e => { if(e.key==='Escape') cmdClosePreview(); });
+
+  // ─── Intro Templates (localStorage) ───
+  const DEFAULT_INTROS = [
+    { label: 'Default Intro', text: "Hi! I'm Betty from WeBetAI — save me in your contacts!", default: true },
+    { label: 'VIP Invite', text: "You've been invited to WeBetAI. I'm Betty — your AI sports companion. Ask me anything about today's games, picks, or prediction markets." },
+    { label: 'Brain Upgrade', text: "Just got a major brain upgrade. I now pull from ALL the WeBetAI data — edge picks, track record, team ratings, guardian digest, live markets. Ask me anything." },
+  ];
+
+  function getIntroTemplates() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('betty-intro-templates'));
+      if (saved && saved.length) return saved;
+    } catch (_) {}
+    return DEFAULT_INTROS;
+  }
+
+  function saveIntroTemplates(templates) {
+    localStorage.setItem('betty-intro-templates', JSON.stringify(templates));
+  }
+
+  let selectedIntroIdx = 0;
+
+  function renderIntros() {
+    const templates = getIntroTemplates();
+    const list = document.getElementById('introsList');
+    list.innerHTML = templates.map((t, i) => `
+      <div class="intro-item ${i === selectedIntroIdx ? 'active' : ''}" onclick="selectIntro(${i})">
+        <div class="intro-label">${esc(t.label)}</div>
+        <div class="intro-text">${esc(t.text.slice(0, 100))}${t.text.length > 100 ? '...' : ''}</div>
+        <div class="intro-actions">
+          <button class="intro-btn intro-btn-edit" onclick="event.stopPropagation();editIntro(${i})">Edit</button>
+          ${!t.default ? `<button class="intro-btn intro-btn-del" onclick="event.stopPropagation();deleteIntro(${i})">Delete</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+    // Preload selected intro into new convo form
+    document.getElementById('newConvoMsg').value = templates[selectedIntroIdx]?.text || '';
+  }
+
+  function selectIntro(idx) {
+    selectedIntroIdx = idx;
+    const templates = getIntroTemplates();
+    document.getElementById('newConvoMsg').value = templates[idx]?.text || '';
+    renderIntros();
+  }
+
+  function addIntroTemplate() {
+    const label = document.getElementById('newIntroLabel').value.trim();
+    const text = document.getElementById('newIntroText').value.trim();
+    if (!label || !text) return;
+    const templates = getIntroTemplates();
+    templates.push({ label, text });
+    saveIntroTemplates(templates);
+    document.getElementById('newIntroLabel').value = '';
+    document.getElementById('newIntroText').value = '';
+    renderIntros();
+  }
+
+  function editIntro(idx) {
+    const templates = getIntroTemplates();
+    const t = templates[idx];
+    const newText = prompt('Edit intro message:', t.text);
+    if (newText === null) return;
+    const newLabel = prompt('Edit label:', t.label);
+    if (newLabel === null) return;
+    templates[idx] = { ...t, label: newLabel.trim() || t.label, text: newText.trim() || t.text };
+    saveIntroTemplates(templates);
+    renderIntros();
+  }
+
+  function deleteIntro(idx) {
+    const templates = getIntroTemplates();
+    templates.splice(idx, 1);
+    if (selectedIntroIdx >= templates.length) selectedIntroIdx = 0;
+    saveIntroTemplates(templates);
+    renderIntros();
+  }
+
+  function toggleNewConvo() {
+    const form = document.getElementById('newConvoForm');
+    const panel = document.getElementById('introsPanel');
+    panel.classList.remove('open');
+    form.classList.toggle('open');
+    if (form.classList.contains('open')) {
+      renderIntros();
+      document.getElementById('newConvoPhone').focus();
+    }
+  }
+
+  function toggleIntrosPanel() {
+    const panel = document.getElementById('introsPanel');
+    const form = document.getElementById('newConvoForm');
+    form.classList.remove('open');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) renderIntros();
+  }
+
+  async function sendNewConvo() {
+    const phoneRaw = document.getElementById('newConvoPhone').value.trim();
+    const msg = document.getElementById('newConvoMsg').value.trim();
+    if (!phoneRaw) { alert('Enter a phone number'); return; }
+
+    // Normalize phone
+    let phone = phoneRaw.replace(/\D/g, '');
+    if (phone.length === 10) phone = '+1' + phone;
+    else if (phone.length === 11 && phone.startsWith('1')) phone = '+' + phone;
+    else if (!phone.startsWith('+')) phone = '+' + phone;
+
+    if (!/^\+1\d{10}$/.test(phone)) { alert('Enter a valid US phone number'); return; }
+
+    const btn = document.querySelector('#newConvoForm .primary');
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+
+    try {
+      const payload = { phone };
+      if (msg) payload.message = msg;
+      const res = await fetch('/api/betty-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.error) { alert('Error: ' + data.error); return; }
+
+      // Success — close form, refresh list
+      document.getElementById('newConvoForm').classList.remove('open');
+      document.getElementById('newConvoPhone').value = '';
+      loadConversations();
+
+      // Open the new conversation
+      setTimeout(() => openConvo(phone.replace(/\D/g, ''), phone), 1000);
+    } catch (e) {
+      alert('Failed: ' + e.message);
+    } finally {
+      btn.textContent = 'Send Intro';
+      btn.disabled = false;
+    }
+  }
+
+  // Init intro templates on load
+  renderIntros();
+
+  // ─── Mobile: sidebar toggle ───
+  function toggleMobileSidebar() {
+    document.querySelector('.sidebar').classList.toggle('mobile-open');
+  }
+  // Close sidebar when a conversation is clicked on mobile
+  const origOpenConvo = openConvo;
+  openConvo = async function(key, phone) {
+    document.querySelector('.sidebar').classList.remove('mobile-open');
+    await origOpenConvo(key, phone);
+  };
+
+  // ─── Mobile: iOS keyboard handling ───
+  // Resize chat when virtual keyboard opens/closes
+  if (window.visualViewport) {
+    const inputArea = document.querySelector('.input-area');
+    window.visualViewport.addEventListener('resize', () => {
+      const vvh = window.visualViewport.height;
+      const offset = window.innerHeight - vvh;
+      if (offset > 100) {
+        // Keyboard is open — adjust
+        document.querySelector('.chat-area').style.maxHeight = vvh - 55 + 'px';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else {
+        document.querySelector('.chat-area').style.maxHeight = '';
+      }
+    });
+  }
+
+  // Auto-scroll to input on focus (mobile)
+  chatInput.addEventListener('focus', () => {
+    setTimeout(() => {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }, 300);
+  });
+
+  // Init
+  renderSources();
+  loadConversations();
+  setInterval(loadConversations, 30000);
+</script>
+</body>
+</html>

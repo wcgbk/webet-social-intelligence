@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | P2P Trending</title>
+  <meta name="description" content="Peer-to-peer bets on trending topics — politics, culture, technology. Powered by Authentic Press." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/p2p-trending" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | P2P Trending" />
+  <meta property="og:description" content="Peer-to-peer bets on trending topics — politics, culture, tech. Bet on what's real." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | P2P Trending" />
+  <meta name="twitter:description" content="Peer-to-peer bets on trending topics — politics, culture, tech. Bet on what's real." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+:root{--white:#fff;--off:#f8f9fa;--bg:#f2f3f5;--teal:#004C54;--tl:#e6f4f1;--tb:#b8ddd6;--grn:#2e7d32;--gl:#e8f5e9;--gb:#a5d6a7;--olive:#1a2e1a;--bdr:#e0e3e8;--t:#1a2e1a;--tm:#5f6b7a;--tl2:#8b95a3;--red:#c0392b;--amber:#f39c12;--sel:rgba(0,76,84,.1);--sb:rgba(0,76,84,.4)}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Geist Sans','Inter',system-ui,sans-serif;background:var(--bg);color:var(--t);-webkit-font-smoothing:antialiased;min-height:100vh}
+
+.hdr{background:var(--white);border-bottom:1px solid var(--bdr);padding:.625rem 1.25rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--olive)}
+.logo-t{font-size:1rem;font-weight:700}
+.hdr-r{display:flex;gap:.5rem;align-items:center}
+.hdr-lnk{font-size:.6875rem;font-weight:500;color:var(--tm);text-decoration:none;padding:.25rem .5rem;border-radius:6px;transition:.15s}
+.hdr-lnk:hover{background:var(--off);color:var(--olive)}
+.bal{font-size:.75rem;font-weight:700;color:var(--grn);background:var(--gl);border:1px solid var(--gb);border-radius:9999px;padding:.25rem .75rem;display:flex;align-items:center;gap:.375rem}
+.bal::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--grn)}
+
+.lay{display:flex;min-height:calc(100vh - 45px)}
+.side{width:200px;background:var(--white);border-right:1px solid var(--bdr);padding:1rem 0;overflow-y:auto;flex-shrink:0}
+.side-title{font-size:.625rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.06em;padding:0 1rem .5rem}
+.side-item{display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;font-size:.8125rem;font-weight:500;color:var(--tm);cursor:pointer;transition:.12s;border-left:3px solid transparent}
+.side-item:hover{background:var(--off);color:var(--olive)}
+.side-item.on{background:var(--tl);color:var(--teal);font-weight:600;border-left-color:var(--teal)}
+.side-divider{height:1px;background:var(--bdr);margin:.75rem 1rem}
+
+.main-area{flex:1;overflow-y:auto}
+
+.ltabs{display:flex;gap:.5rem;padding:1rem 1.5rem .75rem;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--bdr);background:var(--white)}
+.ltabs::-webkit-scrollbar{display:none}
+.ltab{font-family:inherit;font-size:.75rem;font-weight:600;padding:.375rem .75rem;border-radius:9999px;border:1px solid var(--bdr);background:var(--white);color:var(--tm);cursor:pointer;transition:.15s;white-space:nowrap}
+.ltab:hover{border-color:var(--tb);color:var(--olive)}
+.ltab.on{background:var(--teal);color:var(--white);border-color:var(--teal)}
+
+.stabs{display:flex;gap:0;background:var(--white);border-bottom:1px solid var(--bdr)}
+.stab{flex:1;text-align:center;padding:.625rem;font-size:.75rem;font-weight:600;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+.stab:hover{color:var(--olive)}
+.stab.on{color:var(--teal);border-bottom-color:var(--teal)}
+.stab-cnt{font-size:.625rem;font-weight:700;background:var(--tl);color:var(--teal);border-radius:9999px;padding:.1rem .375rem;margin-left:.25rem}
+
+/* Topic cards grid — matches p2p-sports */
+.gg{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;padding:1rem 1.5rem 2rem}
+
+/* Topic card — compact, matching sports card height */
+.tc{background:var(--white);border:1px solid var(--bdr);border-radius:10px;overflow:hidden;transition:box-shadow .15s}
+.tc:hover{box-shadow:0 2px 12px rgba(0,0,0,.06)}
+
+/* Category color stripe */
+.tc-stripe{height:3px;width:100%}
+.stripe-politics{background:linear-gradient(90deg,#4338ca,#7c3aed)}
+.stripe-culture{background:linear-gradient(90deg,#be185d,#ec4899)}
+.stripe-technology{background:linear-gradient(90deg,#047857,#10b981)}
+.stripe-sports{background:linear-gradient(90deg,#004C54,#00838f)}
+.stripe-prediction-markets{background:linear-gradient(90deg,#0369a1,#38bdf8)}
+.stripe-social-intelligence{background:linear-gradient(90deg,#92400e,#f59e0b)}
+
+.tc-hdr{display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border-bottom:1px solid #f0f1f3}
+.tc-hdr-left{display:flex;align-items:center;gap:.375rem}
+.tc-cat{font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:4px;padding:.125rem .35rem}
+.cat-politics{background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe}
+.cat-culture{background:#fdf2f8;color:#be185d;border:1px solid #fbcfe8}
+.cat-technology{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+.cat-sports{background:var(--tl);color:var(--teal);border:1px solid var(--tb)}
+.cat-prediction-markets{background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc}
+.cat-social-intelligence{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.tc-score{font-size:.5625rem;font-weight:700;color:#d97706;background:#fef3c7;border:1px solid #fde68a;border-radius:4px;padding:.1rem .35rem;display:flex;align-items:center;gap:.2rem}
+.tc-hdr-right{display:flex;align-items:center;gap:.5rem}
+.tc-deadline{font-size:.5625rem;font-weight:600;color:var(--tl2)}
+.tc-view{font-size:.5625rem;font-weight:600;color:var(--teal);cursor:pointer;background:none;border:none;font-family:inherit}
+.tc-view:hover{text-decoration:underline}
+
+/* Card body — compact like sports cards */
+.tc-body{padding:.5rem .75rem .625rem}
+
+/* Topic title row — like team name row */
+.tc-row{display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:center;padding:.25rem 0}
+.tc-row+.tc-row{border-top:1px solid #f5f5f5}
+.tc-topic{display:flex;align-items:center;gap:.5rem;min-width:0}
+.tc-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1.5px solid var(--bdr);flex-shrink:0;overflow:hidden}
+.tc-icon svg{width:14px;height:12px}
+.tc-title{font-size:.75rem;font-weight:600;color:var(--olive);white-space:normal;line-height:1.3}
+.tc-summary{font-size:.625rem;color:var(--tm);line-height:1.4;margin-top:.25rem}
+.tc-readmore{font-size:.625rem;font-weight:600;color:var(--teal);cursor:pointer;background:none;border:none;font-family:inherit;padding:0}
+.tc-readmore:hover{text-decoration:underline}
+
+/* WeBet price button — like the sports price buttons */
+.tc-bet{font-family:inherit;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-width:140px;padding:.375rem .625rem;background:var(--off);border:1px solid var(--bdr);border-left:3px solid var(--teal);border-radius:6px;cursor:pointer;transition:.12s;text-align:left}
+.tc-bet:hover{border-color:var(--tb);background:var(--tl)}
+.tc-bet-label{font-size:.5rem;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.04em}
+.tc-bet-text{font-size:.625rem;font-weight:600;color:var(--olive);line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Wager + action row at bottom */
+.tc-actions{display:flex;gap:.25rem;align-items:center;padding:.375rem 0 0;border-top:1px solid #f0f1f3;margin-top:.25rem}
+.wc{font-family:inherit;font-size:.5625rem;font-weight:700;padding:.25rem .375rem;border:1px solid var(--bdr);border-radius:4px;background:var(--white);color:var(--olive);cursor:pointer;transition:.12s;text-align:center}
+.wc:hover{border-color:var(--teal);color:var(--teal)}
+.wc.on{background:var(--teal);color:var(--white);border-color:var(--teal)}
+.tc-send{font-family:inherit;display:flex;align-items:center;gap:.375rem;padding:.375rem .75rem;border-radius:6px;font-size:.625rem;font-weight:700;cursor:pointer;transition:.12s;border:none;background:var(--teal);color:var(--white);margin-left:auto;white-space:nowrap}
+.tc-send:hover{background:#003a40}
+.tc-send svg{width:12px;height:12px}
+
+/* Logo in card */
+.tc-logo-wrap{width:22px;height:22px;border-radius:6px;border:1px solid var(--bdr);background:var(--white);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.tc-logo-wrap svg{width:14px;height:13px}
+
+/* Article popup overlay */
+.article-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:center;justify-content:center;padding:1rem}
+.article-overlay.show{display:flex}
+.article-frame{background:var(--white);border-radius:16px;width:680px;max-width:100%;height:85vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);display:flex;flex-direction:column;position:relative}
+.af-close{position:absolute;top:.5rem;right:.5rem;z-index:5;width:32px;height:32px;border-radius:50%;background:var(--white);border:1px solid var(--bdr);color:var(--tl2);cursor:pointer;font-size:1.125rem;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.af-close:hover{color:var(--olive);background:var(--off)}
+.af-body{flex:1;overflow-y:auto;padding:0}
+.af-body iframe{width:100%;height:100%;border:none}
+@media(max-width:768px){
+  .article-overlay{padding:0}
+  .article-frame{width:100%;height:100%;max-width:100%;border-radius:0}
+  .af-close{top:.75rem;right:.75rem}
+}
+
+/* Bet modal — identical to /p2p-sports */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;align-items:center;justify-content:center}
+.mo.show{display:flex}
+.md{background:var(--white);border-radius:16px;width:440px;max-width:calc(100% - 2rem);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.md-hdr{padding:1rem 1.25rem;border-bottom:1px solid var(--bdr)}
+.md-game{font-size:1rem;font-weight:700;color:var(--olive);line-height:1.3}
+.md-sub{font-size:.6875rem;color:var(--tm);margin-top:.125rem}
+.md-tabs{display:flex;gap:0;border-bottom:1px solid var(--bdr)}
+.md-tab{flex:1;text-align:center;padding:.625rem;font-size:.75rem;font-weight:600;color:var(--tm);cursor:pointer;border-bottom:2px solid transparent;transition:.15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.md-tab.on{color:var(--teal);border-bottom-color:var(--teal);background:var(--tl)}
+.md-body{padding:1rem 1.25rem}
+.md-row{display:flex;justify-content:space-between;padding:.375rem 0;font-size:.8125rem}
+.md-row-l{color:var(--tm);font-weight:500}
+.md-row-v{color:var(--olive);font-weight:700;text-align:right;max-width:60%}
+.md-inputs{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin:1rem 0}
+.md-field label{display:block;font-size:.5625rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.25rem}
+.md-inp{width:100%;font-family:inherit;font-size:1rem;font-weight:700;padding:.625rem .75rem;border:1px solid var(--bdr);border-radius:8px;background:var(--off);color:var(--olive);text-align:right}
+.md-inp:focus{outline:none;border-color:var(--teal);background:var(--white)}
+.md-avail{font-size:.625rem;font-weight:600;color:var(--grn);margin-top:.25rem}
+.md-est{font-size:.625rem;font-weight:600;color:var(--tm);margin-top:.25rem;text-align:right}
+.qamt{display:grid;grid-template-columns:repeat(4,1fr);gap:.375rem;margin-bottom:1rem}
+.qa{font-family:inherit;font-size:.6875rem;font-weight:700;padding:.5rem;border:1px solid var(--bdr);border-radius:8px;background:var(--white);color:var(--olive);cursor:pointer;text-align:center;transition:.12s}
+.qa:hover{border-color:var(--teal);color:var(--teal)}
+.qa.on{background:var(--teal);color:var(--white);border-color:var(--teal)}
+.md-challenge{border-top:1px solid var(--bdr);padding-top:.75rem;margin-top:.5rem}
+.md-clabel{font-size:.5625rem;font-weight:700;color:var(--tl2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem}
+.md-cinp{width:100%;font-family:inherit;font-size:.8125rem;padding:.5rem .625rem;border-radius:8px;border:1px solid var(--bdr);background:var(--off);color:var(--olive);margin-bottom:.5rem}
+.md-cinp:focus{outline:none;border-color:var(--teal);background:var(--white)}
+.md-foot{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;padding:1rem 1.25rem;border-top:1px solid var(--bdr)}
+.btn-c{font-family:inherit;font-size:.875rem;font-weight:600;padding:.75rem;border-radius:10px;cursor:pointer;transition:.15s;border:1px solid var(--bdr);background:var(--white);color:var(--tm)}
+.btn-c:hover{background:var(--off)}
+.btn-s{font-family:inherit;font-size:.875rem;font-weight:700;padding:.75rem;border-radius:10px;cursor:pointer;transition:.15s;border:none;color:var(--white)}
+.btn-review{background:var(--teal)}.btn-review:hover{background:#003a40}
+.btn-submit{background:var(--grn)}.btn-submit:hover{background:#1b5e20}
+.btn-s:disabled{opacity:.4;cursor:not-allowed}
+
+/* Success */
+.success-bar{background:var(--grn);color:var(--white);padding:.75rem 1.25rem;font-size:.8125rem;font-weight:600;display:flex;align-items:center;gap:.5rem}
+.fill-bar{height:6px;background:var(--bdr);border-radius:3px;margin:0 1.25rem;overflow:hidden}
+.fill-bar-inner{height:100%;background:var(--grn);border-radius:3px;width:100%}
+.fill-info{display:flex;justify-content:space-between;padding:.25rem 1.25rem;font-size:.625rem;color:var(--tm)}
+.share-area{text-align:center;padding:1rem 1.25rem}
+.share-link{display:flex;align-items:center;gap:.5rem;background:var(--off);border:1px solid var(--bdr);border-radius:8px;padding:.5rem .75rem;margin-bottom:.75rem}
+.share-link input{flex:1;font-family:inherit;font-size:.75rem;border:none;background:none;color:var(--olive);font-weight:600}
+.share-link button{font-family:inherit;font-size:.625rem;font-weight:600;padding:.3rem .5rem;border:1px solid var(--tb);border-radius:6px;background:var(--tl);color:var(--teal);cursor:pointer}
+.share-btns{display:flex;gap:.375rem;justify-content:center}
+.share-btn{font-family:inherit;font-size:.6875rem;font-weight:600;padding:.5rem .75rem;border-radius:8px;cursor:pointer;border:1px solid var(--bdr);background:var(--white);color:var(--olive);transition:.12s}
+.share-btn:hover{border-color:var(--teal);color:var(--teal)}
+
+.loading{text-align:center;padding:4rem 1rem}
+.spinner{width:28px;height:28px;border:3px solid var(--bdr);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto .75rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ld-txt{font-size:.8125rem;color:var(--tm)}
+.err{font-size:.8125rem;color:var(--red);text-align:center;padding:3rem 1rem}
+.empty{text-align:center;padding:3rem 1rem;color:var(--tl2);font-size:.875rem}
+
+@media(max-width:900px){.gg{grid-template-columns:1fr}}
+@media(max-width:768px){
+  .side{display:none}
+  .gg{padding:1rem .75rem 2rem}
+  .ltabs{padding:.75rem .75rem .5rem}
+  .tc-img{height:120px}
+  .md{width:100%;max-width:100%;border-radius:12px 12px 0 0;align-self:flex-end}
+}
+body.embed .hdr{display:none}
+body.embed .side{display:none}
+  </style>
+</head>
+<body>
+<header class="hdr">
+  <a href="/" class="logo">
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#004C54"/><path d="M8 22L12 10l4 8 4-5 4 9" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="logo-t">WeBetAI</span>
+  </a>
+  <div class="hdr-r">
+    <a href="/dashboard" class="hdr-lnk">Dashboard</a>
+    <a href="/p2p-sports" class="hdr-lnk">P2P Sports</a>
+    <a href="/betty/blog" class="hdr-lnk">Authentic Press</a>
+    <div class="bal">E10,000.00</div>
+  </div>
+</header>
+
+<div class="lay">
+  <nav class="side">
+    <div class="side-item on" onclick="setCat('all')">All Topics</div>
+    <div class="side-item" onclick="setCat('politics')">Politics</div>
+    <div class="side-item" onclick="setCat('culture')">Culture</div>
+    <div class="side-item" onclick="setCat('technology')">Technology</div>
+    <div class="side-item" onclick="setCat('sports')">Sports</div>
+    <div class="side-item" onclick="setCat('prediction-markets')">Prediction Markets</div>
+    <div class="side-item" onclick="setCat('social-intelligence')">Social Intelligence</div>
+    <div class="side-divider"></div>
+    <div class="side-title">Powered by</div>
+    <a href="/betty/blog" class="side-item" style="text-decoration:none">Authentic Press</a>
+  </nav>
+  <div class="main-area">
+    <div class="ltabs" id="catTabs"></div>
+    <div class="stabs">
+      <div class="stab on">Active <span class="stab-cnt" id="activeCnt">0</span></div>
+      <div class="stab">Upcoming</div>
+      <div class="stab">Resolved</div>
+    </div>
+    <div class="gg" id="grid">
+      <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading trending topics...</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="md" id="mdContent"></div>
+</div>
+
+<!-- Article popup overlay -->
+<div class="article-overlay" id="articleOverlay" onclick="if(event.target===this)closeArticle()">
+  <div class="article-frame">
+    <button class="af-close" onclick="closeArticle()">&times;</button>
+    <div class="af-body">
+      <iframe id="afIframe" src="about:blank"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+if(window.self!==window.top)document.body.classList.add('embed');
+
+let posts=[],cat='all',balance=10000,selectedBet=null,modalStep='form';
+
+/* ── Static blog articles with generated bet data ── */
+const STATIC_ARTICLES=[
+  {
+    topic:'Prediction Market Liquidity',
+    category:'prediction-markets',
+    claim:'WeBetAI becomes a top-5 liquidity source for prediction markets',
+    deadline:'12/31/27',
+    guardianScore:{contention:72},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'likely',confidence:'high'}},
+    blog:{
+      title:'Solving the Liquidity Problem: How WeBetAI Adds Value to Prediction Markets',
+      slug:'solving-liquidity',
+      summary:'Thin liquidity kills prediction markets — wide spreads, slow fills, whale dominance. WeBetAI flips the script by injecting real liquidity backed by crowd-verified social intelligence instead of extracting value.'
+    },
+    headline:'The Liquidity Crisis Nobody\'s Talking About — And the Fix That Could Change Betting Forever',
+    summary:'Prediction markets are bleeding users to wide spreads and whale manipulation. WeBetAI\'s Guardian + Edge stack claims it can solve what Kalshi and Polymarket haven\'t. Believers say it\'s the future; skeptics call it vaporware.'
+  },
+  {
+    topic:'SAVE America Act',
+    category:'politics',
+    claim:'the SAVE America Act passes before the 2026 midterms',
+    deadline:'11/3/26',
+    guardianScore:{contention:91},
+    agents:{grok:{verdict:'unlikely',confidence:'high'},claude:{verdict:'unlikely',confidence:'medium'},chatgpt:{verdict:'unlikely',confidence:'medium'}},
+    blog:{
+      title:'SAVE America Act Faces Uncertain Path to Passage Before 2026 Midterms',
+      slug:'save-america-act-midterms',
+      summary:'As partisan divisions deepen over election integrity measures, the SAVE America Act remains stalled in Congress with AI analysts predicting low odds of passage before the 2026 midterm elections.'
+    },
+    headline:'Congress Is Running Out of Time — Will the SAVE Act Die Before Midterms?',
+    summary:'The most divisive election bill in a decade is stuck in committee with the clock ticking toward November. Three AI models agree it probably won\'t pass, but the margin is tighter than you\'d think. Pick a side.'
+  },
+  {
+    topic:'Pick3 P2P Parlays',
+    category:'technology',
+    claim:'P2P micro-parlays capture 5%+ of total parlay handle',
+    deadline:'4/1/28',
+    guardianScore:{contention:68},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'unlikely',confidence:'low'}},
+    blog:{
+      title:'The Pick3 P2P Parlay Killer',
+      slug:'pick3-p2p-parlay-killer',
+      summary:'How micro-parlays matched peer-to-peer with AI-weighted odds solve the fragmentation problem that plagues multi-leg bets.'
+    },
+    headline:'Sportsbooks Make Billions on Parlays. This P2P Model Wants to Kill Them.',
+    summary:'Parlays are the most profitable product in sports betting — and the worst deal for bettors. Pick3 matches micro-parlays peer-to-peer with AI-weighted odds. Could it actually disrupt the house?'
+  },
+  {
+    topic:'Guardian Truth Layer',
+    category:'social-intelligence',
+    claim:'AI-powered claim verification becomes standard in social betting',
+    deadline:'12/31/28',
+    guardianScore:{contention:58},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'likely',confidence:'medium'}},
+    blog:{
+      title:'The Guardian Truth Layer Behind Every WeBet',
+      slug:'guardian-truth-layer',
+      summary:'How WeBetAI\'s Guardian system verifies claims with 5 authenticity signals, 3 AI agents, and live prediction market data before any bet goes live.'
+    },
+    headline:'What If Every Bet Had a Built-In Lie Detector?',
+    summary:'The Guardian Truth Layer cross-references 3 AI agents, 5 authenticity signals, and live prediction market data before any WeBet goes live. It\'s designed to kill misinformation bets before they spread.'
+  },
+  {
+    topic:'Masters 2026',
+    category:'sports',
+    claim:'Scottie Scheffler three-peats at the 2026 Masters',
+    deadline:'4/13/26',
+    guardianScore:{contention:83},
+    agents:{grok:{verdict:'unlikely',confidence:'medium'},claude:{verdict:'unlikely',confidence:'medium'},chatgpt:{verdict:'unlikely',confidence:'low'}},
+    blog:{
+      title:'Can Scottie Scheffler Three-Peat at Augusta? What the Data Says About the 2026 Masters',
+      slug:'masters-2026-scheffler-three-peat',
+      summary:'Scheffler is +500 to three-peat at the Masters. McIlroy defends his Grand Slam. Rahm lurks. Betty breaks down who has the edge at Augusta.'
+    },
+    headline:'Three-Peat or Heartbreak? Scheffler\'s Augusta Odds Say More Than You Think.',
+    summary:'No one has three-peated at Augusta since the 1960s. Scheffler is +500, McIlroy is chasing a career Grand Slam, and Rahm is lurking. The data says one thing — history says another.'
+  },
+  {
+    topic:'NBA Play-In 2026',
+    category:'sports',
+    claim:'the Warriors survive the play-in and make the 2026 NBA playoffs',
+    deadline:'4/18/26',
+    guardianScore:{contention:79},
+    agents:{grok:{verdict:'likely',confidence:'low'},claude:{verdict:'unlikely',confidence:'medium'},chatgpt:{verdict:'likely',confidence:'low'}},
+    blog:{
+      title:'Warriors at the 10-Seed: Can Golden State Survive the NBA Play-In?',
+      slug:'nba-play-in-warriors-2026',
+      summary:'Golden State is the 10-seed facing Portland in the play-in. Steph Curry\'s legacy is on the line. Betty breaks down the matchup and the data.'
+    },
+    headline:'Steph Curry\'s Legacy Comes Down to One Game. Seriously.',
+    summary:'The Warriors are the 10-seed. One loss and the season is over. Curry is 36, the roster is aging, and Portland has nothing to lose. This might be the most consequential play-in game ever.'
+  },
+  {
+    topic:'Stanley Cup Playoffs 2026',
+    category:'sports',
+    claim:'the Colorado Avalanche win the 2026 Stanley Cup',
+    deadline:'6/30/26',
+    guardianScore:{contention:74},
+    agents:{grok:{verdict:'likely',confidence:'medium'},claude:{verdict:'unlikely',confidence:'low'},chatgpt:{verdict:'likely',confidence:'low'}},
+    blog:{
+      title:'Avalanche Enter Stanley Cup Playoffs as Clear Favorites — But Buffalo Is the Story',
+      slug:'stanley-cup-playoffs-2026-avalanche',
+      summary:'Colorado is +300 to win the Cup. Tampa is +450. But Buffalo went from 150-1 to 15-1. Betty breaks down the 2026 Stanley Cup playoff picture.'
+    },
+    headline:'Buffalo Went From 150-to-1 to Legit Contender. Is This the Biggest NHL Story in Years?',
+    summary:'Colorado is the favorite at +300. Tampa lurks at +450. But Buffalo — yes, Buffalo — went from 150-1 to 15-1 and nobody saw it coming. The Sabres might be the most dangerous dark horse in the playoffs.'
+  }
+];
+
+async function init(){
+  try{
+    const r=await fetch('/api/get-webet-content?t='+Date.now());
+    const d=await r.json();
+    let pipeline=d.posts||[];
+
+    /* Enhance pipeline articles with attention-grabbing headlines */
+    pipeline.forEach(p=>{
+      if(!p._enhanced){
+        p.headline=makeHeadline(p);
+        p.summary=makeSummary(p);
+        p._enhanced=true;
+      }
+    });
+
+    /* Merge static blog articles (skip duplicates by slug) */
+    const slugs=new Set(pipeline.map(p=>(p.blog||{}).slug).filter(Boolean));
+    const statics=STATIC_ARTICLES.filter(s=>!slugs.has(s.blog.slug));
+    posts=[...pipeline,...statics];
+    renderTabs();renderGrid();
+  }catch(e){
+    /* Fallback: show static articles even if API fails */
+    posts=[...STATIC_ARTICLES];
+    renderTabs();renderGrid();
+  }
+}
+
+/* Generate attention-grabbing headlines from pipeline articles */
+function makeHeadline(p){
+  const blog=p.blog||{};
+  const title=blog.title||p.topic||'';
+  const claim=(p.claim||'').toLowerCase();
+  /* If it's a question, punch it up */
+  if(title.includes('?'))return title;
+  /* If it has a strong verb, keep it but add urgency */
+  if(title.length>60)return title;
+  return title;
+}
+
+/* Generate 2-3 line summary from pipeline article data */
+function makeSummary(p){
+  const blog=p.blog||{};
+  if(blog.summary)return blog.summary;
+  if(p.claim){
+    const agents=p.agents||{};
+    const verdicts=[];
+    for(const k of['grok','claude','chatgpt']){
+      if(agents[k]&&agents[k].verdict)verdicts.push(k.charAt(0).toUpperCase()+k.slice(1)+' says '+agents[k].verdict);
+    }
+    return(p.claim+(verdicts.length?' '+verdicts.join('. ')+'.':''));
+  }
+  return'';
+}
+
+function renderTabs(){
+  const cats=[...new Set(posts.map(p=>(p.category||'').replace(/\s+/g,'-').toLowerCase()))].filter(Boolean).sort();
+  document.getElementById('catTabs').innerHTML=
+    `<button class="ltab ${cat==='all'?'on':''}" onclick="setCat('all')">All Topics</button>`+
+    cats.map(c=>`<button class="ltab ${cat===c?'on':''}" onclick="setCat('${c}')">${cap(c.replace(/-/g,' '))}</button>`).join('');
+  document.querySelectorAll('.side-item[onclick]').forEach(el=>{
+    const m=el.getAttribute('onclick').match(/setCat\('(.+?)'\)/);
+    if(m)el.classList.toggle('on',m[1]===cat);
+  });
+}
+
+function setCat(c){cat=c;renderTabs();renderGrid()}
+
+function renderGrid(){
+  let filtered=cat==='all'?posts:posts.filter(p=>(p.category||'').replace(/\s+/g,'-').toLowerCase()===cat);
+  document.getElementById('activeCnt').textContent=filtered.length;
+
+  if(!filtered.length){
+    document.getElementById('grid').innerHTML=`<div class="empty">No trending topics${cat!=='all'?' in '+cap(cat):''}</div>`;
+    return;
+  }
+
+  document.getElementById('grid').innerHTML=filtered.map(topicCard).join('');
+}
+
+function topicCard(p){
+  const blog=p.blog||{};
+  const catKey=(p.category||'politics').replace(/\s+/g,'-').toLowerCase();
+  const catClass='cat-'+catKey;
+  const stripeClass='stripe-'+catKey;
+  const gs=p.guardianScore||{};
+  const bid=p.betId||Math.random().toString(36).slice(2,8);
+  const betStr=buildBetString(p.claim,p.deadline);
+  const displayTitle=p.headline||blog.title||p.topic||'Trending Topic';
+  const displaySummary=p.summary||blog.summary||'';
+  const catLabel=(p.category||'topic').replace(/-/g,' ');
+
+  return`<div class="tc">
+    <div class="tc-stripe ${stripeClass}"></div>
+    <div class="tc-hdr">
+      <div class="tc-hdr-left">
+        <span class="tc-cat ${catClass}">${cap(catLabel)}</span>
+        ${gs.contention?`<span class="tc-score">&#128293; ${gs.contention}%</span>`:''}
+      </div>
+      <div class="tc-hdr-right">
+        ${p.deadline?`<span class="tc-deadline">By ${p.deadline}</span>`:''}
+      </div>
+    </div>
+    <div class="tc-body">
+      <div class="tc-row" style="grid-template-columns:1fr auto">
+        <div class="tc-topic" style="flex-direction:column;align-items:flex-start;gap:.25rem">
+          <div style="display:flex;align-items:center;gap:.5rem;width:100%">
+            <div class="tc-icon"><svg viewBox="0 0 470 419" fill="none"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg></div>
+            <div class="tc-title">${displayTitle}</div>
+          </div>
+          ${displaySummary?`<div class="tc-summary">${displaySummary} ${blog.slug?`<button class="tc-readmore" onclick="openArticle('/betty/blog/${blog.slug}')">Read more</button>`:''}</div>`:''}
+        </div>
+      </div>
+      <div class="tc-row">
+        <button class="tc-bet" id="bt-${bid}" onclick="openBet(${betData(p,'YES')})">
+          <span class="tc-bet-label">WeBet Challenge</span>
+          <span class="tc-bet-text" id="ct-${bid}">WeBet $5 ${betStr}</span>
+        </button>
+      </div>
+      <div class="tc-actions">
+        <button class="wc" onclick="pickWager('${bid}',1,this,'${esc(betStr)}')">$1</button>
+        <button class="wc on" onclick="pickWager('${bid}',5,this,'${esc(betStr)}')">$5</button>
+        <button class="wc" onclick="pickWager('${bid}',10,this,'${esc(betStr)}')">$10</button>
+        <button class="wc" onclick="pickWager('${bid}',25,this,'${esc(betStr)}')">$25</button>
+        <button class="wc" onclick="pickWager('${bid}',50,this,'${esc(betStr)}')">$50</button>
+        <button class="tc-send" onclick="sendInvite(document.getElementById('ct-${bid}').textContent,'${esc(p.betUrl||'')}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4z"/></svg>
+          Send WeBet Invite
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function betData(p,side){
+  const blog=p.blog||{};
+  const agents=p.agents||{};
+  const yp=agentYesPrice(agents);
+  const price=side==='YES'?yp:(1-yp);
+  const odds=priceToOdds(price);
+  const d={
+    event:blog.title||p.topic,
+    league:cap(p.category||'trending'),
+    pick:side==='YES'?'Yes — '+shortClaim(p.claim):'No — '+shortClaim(p.claim),
+    odds:odds,
+    line:0,
+    matchup:blog.title||p.topic,
+    betId:p.betId,
+    betUrl:p.betUrl,
+    deadline:p.deadline
+  };
+  return JSON.stringify(d).replace(/'/g,"&#39;");
+}
+
+/* Derive implied probability from agent consensus */
+function agentYesPrice(agents){
+  let scores=[];
+  for(const k of ['grok','claude','chatgpt']){
+    const a=agents[k];
+    if(!a)continue;
+    const v=(a.verdict||'').toLowerCase();
+    const c=a.confidence||'medium';
+    let base=0.5;
+    if(v.includes('likely')||v.includes('probable'))base=0.65;
+    if(v.includes('unlikely')||v.includes('improbable'))base=0.35;
+    if(v.includes('highly likely')||v.includes('very likely'))base=0.8;
+    if(v.includes('highly unlikely'))base=0.2;
+    if(c==='high')base=base>0.5?Math.min(base+0.1,0.9):Math.max(base-0.1,0.1);
+    scores.push(base);
+  }
+  if(!scores.length)return 0.50;
+  return Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100)/100;
+}
+
+function priceToOdds(price){
+  if(price<=0||price>=1)return 100;
+  if(price>=0.5)return Math.round(-100*price/(1-price));
+  return Math.round(100*(1-price)/price);
+}
+
+function shortClaim(c){
+  if(!c)return'';
+  return c.length>60?c.substring(0,57)+'...':c;
+}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):''}
+function esc(s){return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+function stripHtml(h){return h?h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim():''}
+
+/* Build grammatical bet string from claim */
+function buildBetString(claim,deadline){
+  if(!claim)return'';
+  // Strip "Will " prefix and "?" suffix, clean up for bet format
+  let s=claim.replace(/^\s*will\s+/i,'').replace(/\?\s*$/,'').trim();
+  // Capitalize first letter
+  s=s.charAt(0).toUpperCase()+s.slice(1);
+  // Format deadline
+  let dl='';
+  if(deadline){
+    const parts=deadline.split('/');
+    if(parts.length>=2){
+      const months=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+      const m=parseInt(parts[0]);const d=parseInt(parts[1]);const y=parts[2]||'26';
+      const fmtDate=`${months[m]||parts[0]} ${d}, 20${y.length===2?y:y}`;
+      // Avoid redundancy: skip deadline if claim already contains year/date info
+      if(!s.toLowerCase().includes(String(20+(y.length===2?y:y)).slice(-4))){
+        dl=` by ${fmtDate}`;
+      }
+    }else{
+      if(!s.toLowerCase().includes(deadline.toLowerCase()))dl=' by '+deadline;
+    }
+  }
+  // Clean up double periods
+  return(s+dl).replace(/\.+$/,'').trim()+'.';
+}
+
+/* Wager picker per card — updates callout text */
+const wagers={};
+function pickWager(bid,amt,el,betStr){
+  wagers[bid]=amt;
+  el.parentElement.querySelectorAll('.wc').forEach(b=>b.classList.toggle('on',b===el));
+  // Update the callout text with new amount
+  const ct=document.getElementById('ct-'+bid);
+  if(ct)ct.textContent='WeBet $'+amt+' '+betStr;
+}
+function getWager(bid){return wagers[bid]||5}
+
+/* Show more / less toggle */
+function toggleMore(bid){
+  const exc=document.getElementById('exc-'+bid);
+  const btn=document.getElementById('sm-'+bid);
+  if(!exc||!btn)return;
+  if(exc.classList.contains('clamped')){
+    exc.classList.remove('clamped');
+    btn.textContent='Show less';
+  }else{
+    exc.classList.add('clamped');
+    btn.textContent='Show more';
+  }
+}
+
+function sendInvite(betText,url){
+  const shareUrl=url||'https://webetsocial.com/p2p-trending';
+  const text=`${betText}\n\nTake this bet on WeBetAI:\n${shareUrl}`;
+  if(navigator.share){
+    navigator.share({title:'WeBetAI',text:text,url:shareUrl}).catch(()=>{});
+  }else{
+    /* Fallback: try SMS, then clipboard */
+    const isMobile=/iPhone|iPad|Android/i.test(navigator.userAgent);
+    if(isMobile){
+      window.open('sms:?body='+encodeURIComponent(text),'_blank');
+    }else{
+      navigator.clipboard.writeText(text).then(()=>alert('WeBet invite copied to clipboard!')).catch(()=>{
+        window.open('https://x.com/intent/tweet?text='+encodeURIComponent(text),'_blank');
+      });
+    }
+  }
+}
+
+/* Article popup */
+function openArticle(url){
+  document.getElementById('afIframe').src=url;
+  document.getElementById('articleOverlay').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function closeArticle(){
+  document.getElementById('articleOverlay').classList.remove('show');
+  document.getElementById('afIframe').src='about:blank';
+  document.body.style.overflow='';
+}
+
+/* ── Bet Modal ── */
+function openBet(data){
+  selectedBet=data;modalStep='form';
+  renderModal();
+  document.getElementById('modal').classList.add('show');
+}
+
+function renderModal(){
+  if(modalStep==='form')renderBetForm();
+  else if(modalStep==='review')renderReview();
+  else if(modalStep==='success')renderSuccess();
+}
+
+function renderBetForm(){
+  const b=selectedBet;
+  const price=Math.abs(b.odds)>=100?
+    (b.odds>0?Math.round(10000/(b.odds+100))/100:Math.round(Math.abs(b.odds)*100/(Math.abs(b.odds)+100))/100):0.5;
+  const pct=(price*100).toFixed(0);
+
+  document.getElementById('mdContent').innerHTML=`
+    <div class="md-hdr">
+      <div class="md-game">${b.matchup||b.event}</div>
+      <div class="md-sub">${b.league}${b.deadline?' &middot; Resolves by '+b.deadline:''}</div>
+    </div>
+    <div class="md-tabs">
+      <button class="md-tab on">Market</button>
+      <button class="md-tab">Limit</button>
+      <button class="md-tab">Head2Head</button>
+    </div>
+    <div class="md-body">
+      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">Odds (%)</span><span class="md-row-v">${fmtOdds(b.odds)} (${pct}%)</span></div>
+      <div class="md-inputs">
+        <div class="md-field">
+          <label>Quantity</label>
+          <input class="md-inp" id="mdQty" type="number" value="10" min="1" oninput="calcWin()">
+          <div class="md-avail">${balance.toLocaleString()} AVAILABLE</div>
+        </div>
+        <div class="md-field">
+          <label>To Win</label>
+          <input class="md-inp" id="mdWin" type="number" readonly>
+          <div class="md-est" id="mdEst"></div>
+        </div>
+      </div>
+      <div class="qamt">
+        <button class="qa on" onclick="setQty(10)">1x<br>10.00</button>
+        <button class="qa" onclick="setQty(20)">2x<br>20.00</button>
+        <button class="qa" onclick="setQty(50)">5x<br>50.00</button>
+        <button class="qa" onclick="setQty(100)">ALL<br>${Math.min(balance,100).toFixed(2)}</button>
+      </div>
+      <div class="md-challenge">
+        <div class="md-clabel">Challenge a Friend (Optional)</div>
+        <input class="md-cinp" id="mdOpp" placeholder="Name or @handle">
+        <input class="md-cinp" id="mdPhone" type="tel" placeholder="Phone — sends SMS challenge">
+      </div>
+    </div>
+    <div class="md-foot">
+      <button class="btn-c" onclick="closeModal()">Cancel</button>
+      <button class="btn-s btn-review" onclick="modalStep='review';renderModal()">REVIEW</button>
+    </div>`;
+  calcWin();
+}
+
+function calcWin(){
+  const qty=parseFloat(document.getElementById('mdQty')?.value)||0;
+  const odds=selectedBet.odds;
+  let win=0;
+  if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
+  const el=document.getElementById('mdWin');if(el)el.value=win.toFixed(2);
+  const est=document.getElementById('mdEst');if(est)est.textContent='EST. EARNINGS: E'+win.toFixed(2);
+}
+
+function setQty(v){
+  document.getElementById('mdQty').value=v;
+  document.querySelectorAll('.qa').forEach(q=>q.classList.toggle('on',parseFloat(q.textContent.split('\n').pop())===v));
+  calcWin();
+}
+
+function renderReview(){
+  const b=selectedBet;
+  const qty=parseFloat(document.getElementById('mdQty')?.value)||10;
+  const odds=b.odds;
+  let win=0;if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
+  const opp=document.getElementById('mdOpp')?.value||'';
+  const phone=document.getElementById('mdPhone')?.value||'';
+  selectedBet._qty=qty;selectedBet._win=win;selectedBet._opp=opp;selectedBet._phone=phone;
+
+  const price=Math.abs(odds)>=100?(odds>0?Math.round(10000/(odds+100))/100:Math.round(Math.abs(odds)*100/(Math.abs(odds)+100))/100):0.5;
+
+  document.getElementById('mdContent').innerHTML=`
+    <div class="md-hdr"><div class="md-game">${b.matchup||b.event}</div><div class="md-sub">Confirm your order</div></div>
+    <div class="md-body">
+      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">Odds</span><span class="md-row-v">${fmtOdds(odds)} (${(price*100).toFixed(0)}%)</span></div>
+      <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+      ${opp?`<div class="md-row"><span class="md-row-l">Challenge</span><span class="md-row-v">${opp}</span></div>`:''}
+    </div>
+    <div class="md-foot">
+      <button class="btn-c" onclick="modalStep='form';renderModal()">Back</button>
+      <button class="btn-s btn-submit" id="mdSubmitBtn" onclick="submitBet()">SUBMIT</button>
+    </div>`;
+}
+
+async function submitBet(){
+  const btn=document.getElementById('mdSubmitBtn');
+  btn.disabled=true;btn.textContent='Submitting...';
+  const b=selectedBet;
+  try{
+    const resp=await fetch('/api/create-p2p-bet-web',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        initiatorName:'You',event:b.event,league:b.league,pick:b.pick,odds:b.odds,
+        amount:b._qty,matchup:b.matchup||b.event,
+        counterpartyName:b._opp||null,counterpartyPhone:b._phone||null,
+        counterpartyHandle:b._opp&&b._opp.startsWith('@')?b._opp:null
+      })
+    });
+    const data=await resp.json();
+    if(data.success){
+      balance-=b._qty;
+      selectedBet._betId=data.betId;selectedBet._shareUrl=data.shareUrl;
+      modalStep='success';renderModal();
+    }else{btn.disabled=false;btn.textContent='SUBMIT';alert('Error: '+(data.error||data.message))}
+  }catch(e){btn.disabled=false;btn.textContent='SUBMIT';alert('Network error: '+e.message)}
+}
+
+function renderSuccess(){
+  const b=selectedBet;const qty=b._qty||10;const odds=b.odds;
+  let win=0;if(odds>=0)win=qty*(odds/100);else win=qty*(100/Math.abs(odds));
+  const price=Math.abs(odds)>=100?(odds>0?Math.round(10000/(odds+100))/100:Math.round(Math.abs(odds)*100/(Math.abs(odds)+100))/100):0.5;
+  const url=b._shareUrl||'';
+  document.getElementById('mdContent').innerHTML=`
+    <div class="success-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><path d="M20 6L9 17l-5-5"/></svg>Order Created Successfully</div>
+    <div style="padding:.75rem 1.25rem;font-size:1.125rem;font-weight:700;color:var(--olive);text-align:center">ORDER PLACED</div>
+    <div class="fill-bar"><div class="fill-bar-inner"></div></div>
+    <div class="fill-info"><span>Placed: E${qty.toFixed(2)}</span><span>Order: E${qty.toFixed(2)}</span></div>
+    <div class="md-body">
+      <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
+      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Price</span><span class="md-row-v">${(price*100).toFixed(1)}% (${fmtOdds(odds)})</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+    </div>
+    ${url?`<div class="share-area"><div class="share-link"><input id="shareUrl" value="${url}" readonly onclick="this.select()"><button onclick="copyLink()">Copy</button></div>
+    <div class="share-btns"><button class="share-btn" onclick="window.open('sms:?body='+encodeURIComponent('I challenged you! ${url}'))">Text</button><button class="share-btn" onclick="window.open('https://x.com/intent/tweet?text='+encodeURIComponent('P2P bet on WeBetAI! ${url}'))">Post on X</button></div></div>`:''}
+    <div class="md-foot" style="grid-template-columns:1fr 1fr">
+      <button class="btn-c" onclick="closeModal()">CLOSE</button>
+      <button class="btn-s btn-review" onclick="if(selectedBet._shareUrl)window.open(selectedBet._shareUrl,'_blank')">SHARE</button>
+    </div>`;
+}
+
+function closeModal(){document.getElementById('modal').classList.remove('show');selectedBet=null;modalStep='form'}
+function copyLink(){const el=document.getElementById('shareUrl');el.select();navigator.clipboard.writeText(el.value).then(()=>{el.parentElement.querySelector('button').textContent='Copied!';setTimeout(()=>el.parentElement.querySelector('button').textContent='Copy',2000)})}
+function fmtOdds(o){const n=Math.round(o);return n>=0?'+'+n:''+n}
+
+init();
+</script>
+</body>
+</html>

@@ -3563,6 +3563,139 @@
     });
   })();
 </script>
+<script>
+/* ── Betty-led onboarding v1 (loop-c4) ─────────────────────────────────
+   New guests get a short conversation: sports → today's matching edges →
+   save-via-X-signin → WeBits welcome. Scripted client-side (no LLM calls),
+   rides existing chat primitives (appendMsg/renderPickCard/loginWithX).
+   Test hook: ?onboard=force re-runs the flow even when signed in. */
+(function () {
+  function FE(e, p) {
+    try {
+      var payload = JSON.stringify({ e: e, p: p || null });
+      if (navigator.sendBeacon) navigator.sendBeacon('/.netlify/functions/funnel-event', new Blob([payload], { type: 'application/json' }));
+      else fetch('/.netlify/functions/funnel-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload });
+    } catch (_) {}
+  }
+
+  var css = document.createElement('style');
+  css.textContent = '.wb-ob-chips{display:flex;flex-wrap:wrap;gap:.5rem;margin:.25rem 0 .75rem;padding-left:44px;}' +
+    '.wb-ob-chip{background:#fff;border:1.5px solid #004C54;color:#004C54;border-radius:18px;padding:.4rem .85rem;font-size:.8125rem;font-weight:700;cursor:pointer;font-family:inherit;}' +
+    '.wb-ob-chip:hover{background:#e6f4f1;}.wb-ob-chip.primary{background:#004C54;color:#fff;}' +
+    '@media (max-width:560px){.wb-ob-chips{padding-left:0;}}';
+  document.head.appendChild(css);
+
+  function authedUser() {
+    return fetch('/.netlify/functions/auth-me', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (u) { return (u && !u.error) ? u : null; });
+  }
+
+  function betty(text) {
+    try {
+      emptyState.style.display = 'none';
+      messagesList.style.display = 'flex';
+      appendMsg('ai', text);
+    } catch (e) {}
+  }
+
+  function chipRow(opts) {
+    var row = document.createElement('div');
+    row.className = 'wb-ob-chips';
+    opts.forEach(function (o) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'wb-ob-chip' + (o.primary ? ' primary' : '');
+      b.textContent = o.label;
+      b.addEventListener('click', function () { row.remove(); o.fn(o.label); });
+      row.appendChild(b);
+    });
+    messagesList.appendChild(row);
+    messagesList.scrollTop = messagesList.scrollHeight;
+  }
+
+  function showEdges(sport, picksData) {
+    var picks = (picksData && picksData.picks) || [];
+    var matches = sport === 'All' ? picks : picks.filter(function (p) { return (p.sport || '').toUpperCase() === sport.toUpperCase(); });
+    if (matches.length) {
+      betty(sport === 'All' ? "Here's everything on today's card — each one cleared the calibrated-edge bar:" : "Here's what WeBetAI found in " + sport + " today:");
+      matches.forEach(function (p) { try { renderPickCard(p); } catch (e) {} });
+    } else if (picks.length) {
+      betty("No " + sport + " edges today — WeBetAI only plays when the math clears the bar, no forcing it. Here's where the value landed instead:");
+      picks.forEach(function (p) { try { renderPickCard(p); } catch (e) {} });
+    } else {
+      betty("Today's card hasn't dropped yet (it lands 9am ET). Ask me anything in the meantime.");
+    }
+    FE('onboard_edges_shown', { sport: sport, matches: matches.length });
+  }
+
+  function offerSave(sport) {
+    setTimeout(function () {
+      betty('Want me to remember ' + (sport === 'All' ? 'your taste' : sport) + " and have your card ready every morning? Sign in with X — free, takes five seconds, and your 1,000 WeBits come with it.");
+      chipRow([
+        { label: '𝕏 Sign in', primary: true, fn: function () { FE('onboard_signin_clicked'); localStorage.setItem('wb_onboarded', '1'); loginWithX(); } },
+        { label: 'Maybe later', fn: function () { FE('onboard_skipped'); localStorage.setItem('wb_onboarded', '1'); betty("All good — I'm here when you need me. Ask me anything."); } }
+      ]);
+    }, 450);
+  }
+
+  function choose(sport) {
+    try { appendMsg('user', sport === 'All' ? 'All of it' : sport); } catch (e) {}
+    try { localStorage.setItem('wb_prefs', JSON.stringify({ sports: [sport] })); } catch (e) {}
+    FE('onboard_sports_chosen', { sport: sport });
+    fetch('/api/get-picks-alpha')
+      .then(function (r) { return r.json(); })
+      .then(function (d) { showEdges(sport, d); offerSave(sport); })
+      .catch(function () { betty("Couldn't load today's card right now — try 'Show today's picks' in a minute."); });
+  }
+
+  function start() {
+    FE('onboard_shown');
+    betty("Hey, I'm Betty 👋 I read the markets, the injury reports, and all of social media so you don't have to — and today's edge card is ready. Quick one so I can tailor it: which sports do you bet?");
+    chipRow([
+      { label: 'NBA', fn: choose },
+      { label: 'MLB', fn: choose },
+      { label: 'NHL', fn: choose },
+      { label: 'All of it', fn: function () { choose('All'); } }
+    ]);
+  }
+
+  function mergePrefs() {
+    var raw = null;
+    try { raw = localStorage.getItem('wb_prefs'); } catch (e) {}
+    if (!raw || localStorage.getItem('wb_prefs_saved')) return;
+    var prefs; try { prefs = JSON.parse(raw); } catch (e) { return; }
+    if (!prefs || !Array.isArray(prefs.sports) || !prefs.sports.length) return;
+    fetch('/.netlify/functions/user-prefs', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sports: prefs.sports })
+    }).then(function (r) {
+      if (r.ok) {
+        try { localStorage.setItem('wb_prefs_saved', '1'); } catch (e) {}
+        FE('onboard_prefs_saved');
+        if (typeof showToast === 'function') showToast('✓ Sports preference saved to your account', 'success');
+      }
+    }).catch(function () {});
+  }
+
+  window.addEventListener('load', function () {
+    var force = /[?&]onboard=force/.test(location.search);
+    setTimeout(function () {
+      authedUser().then(function (u) {
+        if (u) mergePrefs();
+        if (!force) {
+          if (u) return; // signed-in users are past onboarding
+          try { if (localStorage.getItem('wb_onboarded')) return; } catch (e) {}
+          try { if (typeof messages !== 'undefined' && messages.length) return; } catch (e) {}
+        }
+        start();
+      });
+    }, 1400);
+  });
+})();
+</script>
 
 </body>
 </html>

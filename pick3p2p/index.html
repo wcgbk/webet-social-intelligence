@@ -1791,8 +1791,10 @@
           action: 'respond',
           challengeId: pendingChallengeId,
           responderPhone: responderPhone,
-          responderHandle: currentUser.handle || null,
-          responderName: name,
+          // Prefer the real signed-in WeBetAI handle/name over the free-text field,
+          // so accepted challenges show the correct opponent (e.g. @AskApai), not a typo.
+          responderHandle: (window.wbaiUser && window.wbaiUser.handle) || (currentUser && currentUser.handle) || null,
+          responderName: (window.wbaiUser && (window.wbaiUser.name || window.wbaiUser.handle)) || name || (currentUser && currentUser.handle) || 'Opponent',
           picks: userSelections.map(function(s) {
             return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
           }),

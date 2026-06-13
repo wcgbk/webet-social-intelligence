@@ -1,59 +1,64 @@
-// generate-picks-background.js
-// v10.0 — Deterministic Edge Architecture
-// JS computes ALL projections, edges, and Kelly sizing. Claude validates and narrates.
-// Background function (15min timeout). Stores to "edge-picks" Netlify Blob store.
+// generate-picks-be-background.js
+// v10.0 — BettorEdge Enhanced Edge Architecture
+// Isolated pipeline: same core math as v10, PLUS BettorEdge exchange data.
+// Adds: vig-free exchange probabilities, per-book vig%, sharpest-line Kelly.
+// Background function (15min timeout). Stores to "edge-picks-be" Netlify Blob store.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+const { bettoredgeFetch } = require("./bettoredge-auth");
 
-// ── Slim system prompt: Claude as VALIDATOR + NARRATOR only ──
-const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
+// ── BETA system prompt: Claude as VERIFIER only — does NOT select picks ──
+const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting verification engine. You VERIFY pre-computed statistical edges using web search. You do NOT select picks, compute projections, or adjust unit sizing — the statistical model handles all of that.
 
 YOUR INPUTS:
-A ranked table of the top candidate picks with pre-computed edges, cover probabilities, Kelly units, and supporting team context.
+A ranked table of the top candidate picks with pre-computed edges, cover probabilities, Kelly units, and supporting team context. Candidates are ranked by expected value (EV). The system will automatically select the top 3 candidates that pass your verification.
 
 YOUR JOB:
 1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), and recent form for the top 8 candidates.
-2. SELECT your top 3 picks from the candidate table (or fewer if web search reveals disqualifying info). If fewer than 3 genuine edges survive verification, output only what you have conviction on.
-3. Write 3-5 sentence coreReasoning narrative for each selected pick.
-4. You MAY reject candidates if web search reveals material changes after the data cutoff:
-   - Star player ruled out / downgraded after data cutoff
+2. For EACH candidate, return a PASS or FAIL verdict. You must verify all 8.
+3. You may only FAIL a candidate if web search reveals a MATERIAL change after the data cutoff:
+   - Star player ruled out / downgraded AFTER the data was pulled (not already reflected in the injury list)
    - Goaltender change (NHL) not reflected in pre-computed data
    - Starting pitcher change (MLB)
    - Severe weather for outdoor sports
-   - Material lineup or coaching change
-5. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
-6. You MUST NOT pick outside the provided candidate table.
-7. You MUST NOT override model direction, invent probabilities, or recompute edges.
+   - Material lineup or coaching change announced AFTER data cutoff
+4. Write a 3-4 sentence coreReasoning narrative for each PASS candidate.
+5. You MUST NOT override model direction, rankings, or recompute edges.
+6. You MUST NOT adjust units. Unit sizing is final from the Kelly model.
+7. You MUST NOT fail a candidate based on narrative preference, gut feeling, recent team record, vibes, or because you prefer a different pick. ONLY fail on material post-cutoff information discovered via web search.
 8. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
 
 NARRATIVE RULES (for coreReasoning field):
-- Lead with the edge: "WeBetAI projects [X], line is [Y], creating a [Z]-point edge."
-- Support with 2-3 distinct verified facts from web search (form, injuries, rest, matchup factor).
+- DO NOT write a projection/line/edge sentence. The system will prepend the correct math automatically.
+- Your narrative must argue IN FAVOR of the pick side. If the pick is "Team X +17.5", explain why Team X covers that spread — NOT why the opponent wins. Frame the edge as the spread being too wide, the picked team being undervalued, or situational factors favoring a cover.
+- "The team you're picking" = the team or direction named in the PICK field. For spreads, that's the team getting or giving points. For totals, that's the Over or Under direction.
+- Start your coreReasoning with your first supporting fact — a verified insight from web search.
+- Support with 2-3 distinct verified facts (form, injuries, rest, matchup factor).
 - End with value statement explaining why the odds offer value.
-- Max 5 sentences. No padding. No duplicate stats. Every sentence must add new information.
-- NEVER lead with negative data about the team you're picking.
-
-REJECTION RULES (for rejections array):
-- For each candidate NOT selected, provide a brief reason why.
-- If you skip a top-5 ranked candidate, the reason must cite specific web-search findings.
+- Max 4 sentences. No padding. No duplicate stats. Every sentence must add new information.
+- DO NOT restate projections, lines, edges, cover probabilities, or any numbers from the candidate table.
+- NEVER lead with negative data about the team you're picking. Do NOT build a case for the opponent — build the case for the PICK SIDE covering.
+- NEVER use technical jargon like ORtg, DRtg, pace numbers, DVOA, ATS, or advanced stat abbreviations.
 
 OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
 {
-  "selections": [
+  "verifications": [
     {
       "candidateRank": 1,
-      "adjustedUnits": "1.0u",
-      "unitAdjustmentReason": "",
-      "coreReasoning": "WeBetAI projects...",
+      "verdict": "PASS",
+      "coreReasoning": "Start with a supporting fact, not projections...",
       "whatLoses": "One sentence — the specific scenario that beats this pick.",
       "dataVerified": "Brief note on what data you verified via web search.",
       "clvExpectation": "Your expectation for closing line movement."
+    },
+    {
+      "candidateRank": 4,
+      "verdict": "FAIL",
+      "failReason": "Specific post-cutoff material change discovered via web search.",
+      "dataVerified": "What you found in web search that triggered the fail."
     }
   ],
-  "rejections": [
-    { "candidateRank": 4, "reason": "Why no edge or why disqualified." }
-  ],
-  "edgeSummary": "1-2 sentence editorial-style Daily Edge Summary. Write it like a sharp sports analyst — confident, specific, compelling. Reference actual matchups and WHY the edge exists. Use 'WeBetAI' not 'the model'."
+  "edgeSummary": "1-2 sentence editorial-style Daily Edge Summary. Write it like a sharp sports analyst for a general audience — confident, specific, compelling. Reference actual matchups and WHY the edge exists. Use 'WeBetAI' not 'the model'. No advanced stat abbreviations (ORtg, DRtg, DVOA, ATS) — plain English only."
 }`;
 
 // ── Sport keys for The Odds API ──
@@ -92,7 +97,26 @@ const ESPN_LEAGUES = [
 // ── Sport-specific standard deviations for edge → probability conversion ──
 const SPORT_STD_DEVS = { NBA: 12, NCAAB: 11, NHL: 1.2, MLB: 2.5, EPL: 1.0, "La Liga": 1.0, "Serie A": 1.0, Bundesliga: 1.0, "Ligue 1": 1.0, MLS: 1.0, UCL: 1.0, Europa: 1.0 };
 const SPORT_MIN_EDGE = { NBA: 2.0, NCAAB: 2.0, NHL: 0.3, MLB: 0.5, EPL: 0.3, "La Liga": 0.3, "Serie A": 0.3, Bundesliga: 0.3, "Ligue 1": 0.3, MLS: 0.3, UCL: 0.3, Europa: 0.3 };
+
+// Sport-specific Kelly multipliers — all equal until CLV feedback loop provides data-driven weighting
+const SPORT_KELLY_MULT = {};
 const LEAGUE_AVG_DRTG = { NBA: 112.0, NCAAB: 100.0, NHL: 100.0 };
+
+// ── Edge discount curve: diminishing returns on large edges ──
+// Edges above 10pts (or sport-equivalent) get log-compressed before Kelly sizing.
+// Prevents oversizing on inflated projections that don't improve accuracy.
+function applyEdgeDiscount(rawEdge, std) {
+  const edgeInStdDevs = rawEdge / std;
+  if (edgeInStdDevs <= 1.0) return rawEdge; // normal range, no discount
+  // Log compression above 1 std dev: edge grows as log(1 + excess)
+  const excess = edgeInStdDevs - 1.0;
+  const discounted = 1.0 + Math.log(1 + excess);
+  return discounted * std;
+}
+
+// ── B2B rest adjustment constants ──
+// Teams on back-to-back score ~2-3% less (NBA/NHL empirical)
+const B2B_SCORING_PENALTY = { NBA: 0.97, NHL: 0.97, NCAAB: 1.0, MLB: 1.0 };
 
 // ── Math helpers ──
 function erf(x) {
@@ -197,11 +221,11 @@ async function fetchOdds(dateISO) {
   for (const sport of ODDS_SPORTS) {
     try {
       let markets = "h2h,spreads,totals,alternate_spreads,alternate_totals";
-      let url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
+      let url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
       let resp = await fetch(url);
       if (!resp.ok && resp.status === 422) {
         markets = "h2h,spreads,totals";
-        url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
+        url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
         resp = await fetch(url);
       }
       if (resp.ok) {
@@ -245,8 +269,8 @@ async function fetchESPNData(dateISO) {
         const competition = event.competitions?.[0];
         if (!competition) continue;
         const gameState = event.status?.type?.state || "pre";
-        // Only evaluate pre-game — games already started do not qualify for picks
-        if (gameState !== "pre") continue;
+        // Allow pre-game and in-progress games (for late-day re-runs where games have started)
+        if (gameState === "post") continue;
 
         const home = competition.competitors?.find(c => c.homeAway === "home");
         const away = competition.competitors?.find(c => c.homeAway === "away");
@@ -495,6 +519,106 @@ async function fetchCalibrationData() {
   return null;
 }
 
+// ── Parse prediction market title to extract bet type, handicap, direction, sport ─���
+function parseMarketTitle(title, description) {
+  const text = ((title || '') + ' ' + (description || '')).toLowerCase();
+  let type = 'unknown', handicap = null, team = null, direction = null, sport = null;
+
+  // Sport detection
+  if (/\bnba\b|basketball/.test(text) && !/ncaa|college/.test(text)) sport = 'NBA';
+  else if (/\bnhl\b|hockey/.test(text)) sport = 'NHL';
+  else if (/\bmlb\b|baseball/.test(text)) sport = 'MLB';
+  else if (/\bncaa\b|college basketball|march madness/.test(text)) sport = 'NCAAB';
+  else if (/\bepl\b|premier league/.test(text)) sport = 'EPL';
+  else if (/\bla liga\b/.test(text)) sport = 'La Liga';
+  else if (/\bserie a\b/.test(text)) sport = 'Serie A';
+  else if (/\bbundesliga\b/.test(text)) sport = 'Bundesliga';
+  else if (/\bligue 1\b/.test(text)) sport = 'Ligue 1';
+  else if (/\bmls\b/.test(text)) sport = 'MLS';
+  else if (/\bucl\b|champions league/.test(text)) sport = 'UCL';
+  else if (/\beuropa league\b/.test(text)) sport = 'Europa';
+
+  // Total detection (check first — "over 225.5" is unambiguous)
+  let m;
+  if ((m = text.match(/over\s+([\d.]+)/))) {
+    type = 'total'; handicap = parseFloat(m[1]); direction = 'over';
+  } else if ((m = text.match(/under\s+([\d.]+)/))) {
+    type = 'total'; handicap = parseFloat(m[1]); direction = 'under';
+  } else if ((m = text.match(/total[s]?\s*(?:points?|goals?)?\s*(?:over|o\/u)?\s*([\d.]+)/))) {
+    type = 'total'; handicap = parseFloat(m[1]); direction = 'over';
+  }
+
+  // Spread detection (team followed by +/- number)
+  if (type === 'unknown') {
+    if ((m = text.match(/(.+?)\s+([+-]\d+\.?\d*)\s*(?:spread|pts|points)?/))) {
+      type = 'spread'; team = m[1].trim(); handicap = parseFloat(m[2]);
+    } else if ((m = text.match(/spread\s*[:\-]?\s*(.+?)\s+([+-]?\d+\.?\d*)/))) {
+      type = 'spread'; team = m[1].trim(); handicap = parseFloat(m[2]);
+    } else if ((m = text.match(/cover\s+([+-]?\d+\.?\d*)/))) {
+      type = 'spread'; handicap = parseFloat(m[1]);
+    }
+  }
+
+  // Moneyline detection
+  if (type === 'unknown') {
+    if ((m = text.match(/will\s+(?:the\s+)?(.+?)\s+(?:win|beat|defeat)/))) {
+      type = 'moneyline'; team = m[1].trim();
+    } else if ((m = text.match(/(.+?)\s+to\s+win/))) {
+      type = 'moneyline'; team = m[1].trim();
+    } else if (/\bmoneyline\b|\bml\b|\bwin\b/.test(text)) {
+      type = 'moneyline';
+    }
+  }
+
+  return { type, handicap, team, direction, sport };
+}
+
+// ── Classify candidate bet type to canonical form ──
+function classifyCandidateBetType(candidate) {
+  const mkt = (candidate.market || '').toLowerCase();
+  let type = 'unknown', handicap = null, direction = null;
+
+  if (mkt === 'total') {
+    type = 'total';
+    const m = (candidate.side || '').match(/(over|under)\s+([\d.]+)/i);
+    if (m) { direction = m[1].toLowerCase(); handicap = parseFloat(m[2]); }
+  } else if (/spread|puck line|run line/.test(mkt)) {
+    type = 'spread';
+    const m = (candidate.side || '').match(/([+-]?\d+\.?\d*)/);
+    if (m) handicap = parseFloat(m[1]);
+  }
+
+  return { type, handicap, direction };
+}
+
+// ── Compute quality weight for a prediction market signal (0.0-1.0) ──
+function computeMarketQuality(market, alignmentType) {
+  // Volume: continuous log scale
+  const vol = Math.max(market.volume || 1, 1);
+  const volumeWeight = Math.min(1.0, Math.log10(vol) / 5); // 100→0.4, 1K→0.6, 10K→0.8, 100K→1.0
+
+  // Bid-ask spread (Kalshi only)
+  let bidAskWeight = 1.0;
+  if (market.bidAskSpread !== null && market.bidAskSpread !== undefined) {
+    if (market.bidAskSpread < 0.03) bidAskWeight = 1.0;
+    else if (market.bidAskSpread < 0.08) bidAskWeight = 0.8;
+    else if (market.bidAskSpread < 0.15) bidAskWeight = 0.5;
+    else bidAskWeight = 0.2;
+  }
+
+  // Alignment: exact match = 1.0, partial (ML→spread) = 0.5, none = 0.0
+  let alignWeight = 0.0;
+  if (alignmentType === 'exact') alignWeight = 1.0;
+  else if (alignmentType === 'partial') alignWeight = 0.5;
+
+  return volumeWeight * bidAskWeight * alignWeight;
+}
+
+// ── Convert moneyline win prob to approximate spread cover prob ──
+function moneylineToSpreadCoverApprox(mlProb) {
+  return 0.5 + (mlProb - 0.5) * 0.6;
+}
+
 // ── Fetch prediction market data (Kalshi + Polymarket) for cross-reference ──
 async function fetchPredictionMarkets() {
   const markets = [];
@@ -514,13 +638,21 @@ async function fetchPredictionMarkets() {
           const yesBid = m.yes_bid_dollars || m.yes_bid || 0;
           const yesAsk = m.yes_ask_dollars || m.yes_ask || 0;
           const yesPrice = yesBid > 0 && yesAsk > 0 ? (yesBid + yesAsk) / 2 : lastPrice || 0.5;
+          const parsed = parseMarketTitle(m.title || m.subtitle || '', m.category || m.subtitle || '');
+          const bidAskSpread = (yesBid > 0 && yesAsk > 0) ? (yesAsk - yesBid) : null;
           markets.push({
             source: 'Kalshi',
             title: m.title || m.subtitle || '',
-            yesPrice, // implied probability
+            yesPrice,
             noPrice: 1 - yesPrice,
             volume: parseFloat(m.volume_24h_fp || m.volume_24h) || 0,
             ticker: m.ticker || '',
+            parsedType: parsed.type,
+            parsedHandicap: parsed.handicap,
+            parsedTeam: parsed.team,
+            parsedDirection: parsed.direction,
+            parsedSport: parsed.sport,
+            bidAskSpread,
           });
         }
       }
@@ -540,6 +672,7 @@ async function fetchPredictionMarkets() {
         const q = (m.question || m.groupItemTitle || '').toLowerCase();
         if (/nba|nhl|mlb|ncaa|nfl|soccer|over|under|spread|win|playoff|series/.test(q)) {
           const prices = m.outcomePrices ? JSON.parse(m.outcomePrices) : [];
+          const parsed = parseMarketTitle(m.question || m.groupItemTitle || '', m.description || '');
           markets.push({
             source: 'Polymarket',
             title: m.question || m.groupItemTitle || '',
@@ -547,6 +680,12 @@ async function fetchPredictionMarkets() {
             noPrice: parseFloat(prices[1]) || 0.5,
             volume: parseFloat(m.volume24hr) || 0,
             ticker: m.slug || '',
+            parsedType: parsed.type,
+            parsedHandicap: parsed.handicap,
+            parsedTeam: parsed.team,
+            parsedDirection: parsed.direction,
+            parsedSport: parsed.sport,
+            bidAskSpread: null,
           });
         }
       }
@@ -559,63 +698,111 @@ async function fetchPredictionMarkets() {
   return markets;
 }
 
-// ── Match prediction market to a candidate and compute agreement signal ──
+// ── Match prediction market to a candidate — multi-match, type-aligned aggregation ──
 function getPredictionMarketSignal(candidate, predictionMarkets) {
   if (!predictionMarkets || predictionMarkets.length === 0) return null;
 
-  const homeNorm = candidate.homeTeam.toLowerCase();
-  const awayNorm = candidate.awayTeam.toLowerCase();
-  const homeLast = homeNorm.split(' ').pop();
-  const awayLast = awayNorm.split(' ').pop();
+  const homeLast = candidate.homeTeam.toLowerCase().split(' ').pop();
+  const awayLast = candidate.awayTeam.toLowerCase().split(' ').pop();
+  const candidateBet = classifyCandidateBetType(candidate);
 
+  // Phase A: Collect all team-matched markets
+  const matched = [];
   for (const pm of predictionMarkets) {
     const title = pm.title.toLowerCase();
-    // Match by team name (last word — "bucks", "leafs", etc.)
-    const matchesHome = title.includes(homeLast) && homeLast.length > 3;
-    const matchesAway = title.includes(awayLast) && awayLast.length > 3;
+    const matchesHome = homeLast.length > 3 && title.includes(homeLast);
+    const matchesAway = awayLast.length > 3 && title.includes(awayLast);
     if (!matchesHome && !matchesAway) continue;
 
-    // Found a matching market — compare implied probability
-    // pm.yesPrice is the implied probability of the "yes" outcome
-    // We need to determine if the market agrees with our pick direction
-    const ourCoverProb = candidate.coverProb;
-    const marketProb = pm.yesPrice; // rough proxy
+    // Sport validation — skip if market sport doesn't match candidate
+    if (pm.parsedSport && pm.parsedSport !== candidate.sport) continue;
 
-    // Agreement: market and model within 10% → confirming signal
-    // Disagreement: market and model differ by 15%+ → caution signal
-    const gap = Math.abs(ourCoverProb - marketProb);
-
-    return {
-      source: pm.source,
-      title: pm.title,
-      marketProb: +marketProb.toFixed(3),
-      modelProb: +ourCoverProb.toFixed(3),
-      gap: +gap.toFixed(3),
-      agrees: gap < 0.10,
-      disagrees: gap > 0.15,
-      volume: pm.volume,
-    };
+    matched.push(pm);
   }
-  return null;
+
+  if (matched.length === 0) return null;
+
+  // Phase B: Type-align and compute comparable probabilities
+  let weightedGapSum = 0, totalWeight = 0, totalVolume = 0, marketCount = 0;
+  let weightedMarketProbSum = 0;
+  let bestSource = matched[0].source, bestTitle = matched[0].title;
+  let hasExact = false;
+
+  for (const pm of matched) {
+    let comparableProb = null;
+    let alignmentType = 'none';
+
+    if (candidateBet.type === pm.parsedType) {
+      // Exact match: total→total, spread→spread
+      alignmentType = 'exact';
+      hasExact = true;
+      if (candidateBet.type === 'total') {
+        // If candidate is "Over" and market is "over", use yesPrice
+        // If candidate is "Under" and market is "over", use noPrice
+        if (candidateBet.direction === pm.parsedDirection || !pm.parsedDirection) {
+          comparableProb = pm.yesPrice;
+        } else {
+          comparableProb = pm.noPrice;
+        }
+      } else {
+        comparableProb = pm.yesPrice;
+      }
+    } else if (candidateBet.type === 'spread' && pm.parsedType === 'moneyline') {
+      // Partial: convert ML win prob to approximate spread cover prob
+      alignmentType = 'partial';
+      comparableProb = moneylineToSpreadCoverApprox(pm.yesPrice);
+    } else if (candidateBet.type === 'total' && pm.parsedType === 'moneyline') {
+      // No alignment: ML tells us nothing about totals — skip
+      continue;
+    } else {
+      continue;
+    }
+
+    if (comparableProb === null || comparableProb <= 0 || comparableProb >= 1) continue;
+
+    const quality = computeMarketQuality(pm, alignmentType);
+    if (quality < 0.05) continue; // skip negligible signals
+
+    const gap = candidate.coverProb - comparableProb; // signed: positive = model more confident
+    weightedGapSum += gap * quality;
+    weightedMarketProbSum += comparableProb * quality;
+    totalWeight += quality;
+    totalVolume += pm.volume || 0;
+    marketCount++;
+
+    // Track highest-quality source for display
+    if (quality > 0.5) { bestSource = pm.source; bestTitle = pm.title; }
+  }
+
+  if (totalWeight < 0.1 || marketCount === 0) return null;
+
+  const aggregateGap = weightedGapSum / totalWeight;
+  const avgMarketProb = weightedMarketProbSum / totalWeight;
+  const avgQuality = totalWeight / marketCount;
+
+  return {
+    source: bestSource,
+    title: bestTitle,
+    marketProb: +avgMarketProb.toFixed(3),
+    modelProb: +candidate.coverProb.toFixed(3),
+    gap: +Math.abs(aggregateGap).toFixed(3),
+    gapSigned: +aggregateGap.toFixed(3),
+    agrees: Math.abs(aggregateGap) <= 0.08,
+    disagrees: Math.abs(aggregateGap) > 0.12,
+    volume: totalVolume,
+    marketCount,
+    avgQuality: +avgQuality.toFixed(3),
+    alignmentType: hasExact ? 'exact' : 'partial',
+    confidence: +totalWeight.toFixed(3),
+  };
 }
 
-// ── Apply prediction market confidence adjustment to Kelly units ──
+// ── Prediction market adjustment DISABLED (beta) — units come from Kelly only ──
 function applyPredictionMarketAdjustment(candidate, signal) {
-  if (!signal) return candidate.kellyUnits; // no matching market — no change
-
-  let adjustedUnits = candidate.kellyUnits;
-
-  if (signal.agrees && signal.volume > 1000) {
-    // Market confirms our edge — boost units by 0.5u (max)
-    adjustedUnits = Math.min(candidate.kellyUnits + 0.5, 3.0);
-    console.log(`[v10-pm] CONFIRMING: ${candidate.side} — ${signal.source} agrees (model=${signal.modelProb}, market=${signal.marketProb}). Units: ${candidate.kellyUnits}u → ${adjustedUnits}u`);
-  } else if (signal.disagrees && signal.volume > 1000) {
-    // Market disagrees — reduce units by 0.5u (min 0.5)
-    adjustedUnits = Math.max(candidate.kellyUnits - 0.5, 0.5);
-    console.log(`[v10-pm] CAUTION: ${candidate.side} — ${signal.source} disagrees (model=${signal.modelProb}, market=${signal.marketProb}). Units: ${candidate.kellyUnits}u → ${adjustedUnits}u`);
+  if (signal) {
+    console.log(`[v10-beta-pm] SKIPPED adjustment for ${candidate.side} — prediction markets do not modify units in beta`);
   }
-
-  return adjustedUnits;
+  return candidate.kellyUnits;
 }
 
 // ── Fetch real-time X intelligence via Grok for top candidates ──
@@ -774,7 +961,7 @@ function buildConsensusLookup(oddsData) {
     for (const game of sportOdds.games) {
       const homeTeam = game.home_team;
       const awayTeam = game.away_team;
-      const entry = { homeTeam, awayTeam, sport: sportOdds.sport };
+      const entry = { homeTeam, awayTeam, sport: sportOdds.sport, commenceTime: game.commence_time || '' };
 
       const allSpreads = [], allTotals = [], spreadOdds = {}, totalOdds = { Over: [], Under: [] }, allH2H = {};
       for (const book of (game.bookmakers || [])) {
@@ -1053,6 +1240,20 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
     }
   }
 
+  // ── B2B REST ADJUSTMENT: teams on back-to-back score ~3% less ──
+  const sportKey = sportType === 'hockey' ? 'NHL' : sportType === 'basketball' ? (leagueName === 'NCAAB' ? 'NCAAB' : 'NBA') : 'MLB';
+  const b2bPenalty = B2B_SCORING_PENALTY[sportKey] || 1.0;
+  const homeB2B = homeRating.daysSinceLastGame !== undefined && homeRating.daysSinceLastGame <= 1;
+  const awayB2B = awayRating.daysSinceLastGame !== undefined && awayRating.daysSinceLastGame <= 1;
+  if (homeB2B) {
+    projHomeScore *= b2bPenalty;
+    projMethod += ` [B2B: home]`;
+  }
+  if (awayB2B) {
+    projAwayScore *= b2bPenalty;
+    projMethod += ` [B2B: away]`;
+  }
+
   // NCAAB neutral site detection
   let effectiveHomeAdv = leagueConfig?.homeAdv || 80;
   if (leagueName === 'NCAAB' && game.venue) {
@@ -1063,27 +1264,10 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
 
   const homeEloAdj = homeRating.elo + effectiveHomeAdv;
   const homeWinProb = eloExpected(homeEloAdj, awayRating.elo);
-  let projTotal = projHomeScore + projAwayScore;
+  const projSpread = -(projHomeScore - projAwayScore);
+  const projTotal = projHomeScore + projAwayScore;
 
-  // ── PROJECTION SANITY CAPS — prevent garbage projections from bad input data ──
-  // ── PROJECTION SANITY CAPS — exclude games with garbage projections ──
-  const TOTAL_CAPS = { soccer: 7, hockey: 12, basketball: 300, baseball: 25 };
-  const SPREAD_CAPS = { soccer: 4, hockey: 6, basketball: 40, baseball: 10 };
-  const totalCap = TOTAL_CAPS[sportType] || 300;
-  const spreadCap = SPREAD_CAPS[sportType] || 40;
-  let projSpread = -(projHomeScore - projAwayScore);
-  let poisoned = false;
-
-  if (projTotal > totalCap) {
-    console.log(`[v10-cap] POISONED: projTotal ${projTotal.toFixed(1)} exceeds ${totalCap} for ${sportType} (${game.away} @ ${game.home}) — excluding game`);
-    poisoned = true;
-  }
-  if (Math.abs(projSpread) > spreadCap) {
-    console.log(`[v10-cap] POISONED: projSpread ${projSpread.toFixed(1)} exceeds ${spreadCap} for ${sportType} (${game.away} @ ${game.home}) — excluding game`);
-    poisoned = true;
-  }
-
-  return { projHomeScore, projAwayScore, projSpread, projTotal, projMethod, homeWinProb, homeEloAdj, effectiveHomeAdv, poisoned };
+  return { projHomeScore, projAwayScore, projSpread, projTotal, projMethod, homeWinProb, homeEloAdj, effectiveHomeAdv };
 }
 
 function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData) {
@@ -1102,10 +1286,6 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       if (!homeRating || !awayRating) continue;
 
       const proj = computeProjection(game, league.league, leagueConfig, homeRating, awayRating, teamStats);
-      if (proj.poisoned) {
-        console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — poisoned projection`);
-        continue;
-      }
       const gameData = findConsensusLine(consensusLookup, game.home);
       if (!gameData || gameData.homeSpread === undefined) {
         console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — no consensus line found for "${game.home}"`);
@@ -1126,6 +1306,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         homeTeam: game.home,
         awayTeam: game.away,
         venue: game.venue || "",
+        commenceTime: gameData.commenceTime || "",
         homeElo: homeRating.elo,
         awayElo: awayRating.elo,
         homeWinProb: +(proj.homeWinProb * 100).toFixed(1),
@@ -1154,13 +1335,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 
       // ── SPREAD CANDIDATE ──
       const actualSpread = gameData.homeSpread;
-      // Filter out Asian handicap lines (.25/.75) — not available at US sportsbooks
-      const spreadFrac = Math.abs(actualSpread) % 1;
-      if (spreadFrac === 0.25 || spreadFrac === 0.75) {
-        console.log(`[v10-filter] SKIP Asian handicap ${actualSpread} for ${game.away} @ ${game.home}`);
-      }
-      const spreadEdge = Math.abs(proj.projSpread - actualSpread);
-      if ((spreadFrac !== 0.25 && spreadFrac !== 0.75) && spreadEdge >= minEdge) {
+      const rawSpreadEdge = Math.abs(proj.projSpread - actualSpread);
+      const spreadEdge = applyEdgeDiscount(rawSpreadEdge, std);
+      if (spreadEdge >= minEdge) {
         const spreadZ = spreadEdge / std;
         // Determine bet type for calibration cap lookup
         let betType = "Spread";
@@ -1179,6 +1356,10 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         if (odds >= -250) {
           const kelly = computeKelly(coverProb, odds, drawdownActive);
           if (kelly.ev > 0.03) {
+            // Apply sport-specific Kelly multiplier
+            const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
+            let adjUnits = Math.round(kelly.units * sportMult * 2) / 2; // round to 0.5u
+            adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
             candidates.push({
               ...baseCandidate,
               market: betType,
@@ -1192,9 +1373,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
               impliedProb: +impliedProb(odds).toFixed(4),
               ev: +kelly.ev.toFixed(4),
               kellyFraction: +kelly.kellyFraction.toFixed(4),
-              kellyUnits: kelly.units,
+              kellyUnits: adjUnits,
               decimalPayout: +kelly.decPayout.toFixed(3),
-              kellyCalcStr: `coverProb=${coverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_quarter=${kelly.kellyFraction.toFixed(4)}, units=${kelly.units}u`,
+              kellyCalcStr: `coverProb=${coverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_quarter=${kelly.kellyFraction.toFixed(4)}, units=${adjUnits}u${sportMult !== 1.0 ? ` [${league.league} ${sportMult}x]` : ''}`,
             });
           }
         }
@@ -1203,12 +1384,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       // ── TOTAL CANDIDATE ──
       const actualTotal = gameData.total;
       if (actualTotal) {
-        // Filter out Asian handicap totals (.25/.75) — not available at US sportsbooks
-        const totalFrac = Math.abs(actualTotal) % 1;
-        if (totalFrac === 0.25 || totalFrac === 0.75) {
-          console.log(`[v10-filter] SKIP Asian total ${actualTotal} for ${game.away} @ ${game.home}`);
-        }
-        const totalEdge = (totalFrac !== 0.25 && totalFrac !== 0.75) ? Math.abs(proj.projTotal - actualTotal) : 0;
+        const rawTotalEdge = Math.abs(proj.projTotal - actualTotal);
+        const totalEdge = applyEdgeDiscount(rawTotalEdge, std);
         const totalMinEdge = league.league === "NHL" ? 0.5 : league.league === "MLB" ? 0.8 : 3.0;
         if (totalEdge >= totalMinEdge) {
           const totalZ = totalEdge / std;
@@ -1221,6 +1398,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           if (totalOdds >= -250) {
             const kelly = computeKelly(totalCoverProb, totalOdds, drawdownActive);
             if (kelly.ev > 0.03) {
+              const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
+              let adjUnits = Math.round(kelly.units * sportMult * 2) / 2;
+              adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
               candidates.push({
                 ...baseCandidate,
                 market: "Total",
@@ -1234,9 +1414,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
                 impliedProb: +impliedProb(totalOdds).toFixed(4),
                 ev: +kelly.ev.toFixed(4),
                 kellyFraction: +kelly.kellyFraction.toFixed(4),
-                kellyUnits: kelly.units,
+                kellyUnits: adjUnits,
                 decimalPayout: +kelly.decPayout.toFixed(3),
-                kellyCalcStr: `coverProb=${totalCoverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_quarter=${kelly.kellyFraction.toFixed(4)}, units=${kelly.units}u`,
+                kellyCalcStr: `coverProb=${totalCoverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_quarter=${kelly.kellyFraction.toFixed(4)}, units=${adjUnits}u${sportMult !== 1.0 ? ` [${league.league} ${sportMult}x]` : ''}`,
               });
             }
           }
@@ -1265,6 +1445,16 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
     prompt += `  ${c.matchup}\n`;
     prompt += `  PICK: ${c.side} | Odds: ${c.odds > 0 ? '+' : ''}${c.odds} | Edge: ${c.edge}${c.market === 'Total' ? 'pts' : c.sport === 'NHL' ? ' goals' : 'pts'}\n`;
+    // Explicit narrative direction so Claude knows which side to argue for
+    const isTotal = (c.market || '').toLowerCase() === 'total';
+    if (isTotal) {
+      const overUnder = (c.side || '').match(/(over|under)/i);
+      prompt += `  👉 NARRATIVE DIRECTION: Write narrative supporting ${overUnder ? overUnder[1] : c.side} hitting\n`;
+    } else {
+      const pickedTeam = (c.side || '').replace(/[+-][\d.]+/g, '').trim();
+      const handicap = (c.side || '').match(/([+-][\d.]+)/);
+      prompt += `  👉 NARRATIVE DIRECTION: Write narrative supporting ${pickedTeam} covering ${handicap ? handicap[1] : 'the spread'}\n`;
+    }
     prompt += `  Cover%: ${(c.coverProb * 100).toFixed(1)}% | Kelly: ${c.kellyUnits}u | EV: ${(c.ev * 100).toFixed(1)}%\n`;
     prompt += `  Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge}\n`;
     prompt += `  Elo: ${c.homeTeam} ${c.homeElo} / ${c.awayTeam} ${c.awayElo} | WinProb: ${c.homeTeam} ${c.homeWinProb}%\n`;
@@ -1301,7 +1491,21 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
     // Prediction market signal
     if (c.predictionMarket) {
       const pm = c.predictionMarket;
-      prompt += `  📊 ${pm.source}: ${pm.agrees ? 'CONFIRMS' : pm.disagrees ? 'DISAGREES' : 'NEUTRAL'} (market=${(pm.marketProb*100).toFixed(0)}% vs model=${(pm.modelProb*100).toFixed(0)}%)\n`;
+      const status = pm.agrees ? 'CONFIRMS' : pm.disagrees ? 'DISAGREES' : 'NEUTRAL';
+      prompt += `  PM: ${pm.marketCount}x ${pm.alignmentType} markets ${status} (market=${(pm.marketProb*100).toFixed(0)}% vs model=${(pm.modelProb*100).toFixed(0)}%, quality=${pm.avgQuality})\n`;
+    }
+
+    // BettorEdge exchange data
+    if (c.bettorEdge?.matched) {
+      const be = c.bettorEdge;
+      prompt += `  🔄 BETTOREDGE: `;
+      if (be.exchangeProb) {
+        prompt += `Exchange prob=${(be.exchangeProb*100).toFixed(0)}% vs model=${(be.modelCoverProb*100).toFixed(0)}% (${be.signal})`;
+      }
+      if (be.sharpestBook) {
+        prompt += ` | Sharpest: ${be.sharpestBook} @ ${be.sharpestOdds > 0 ? '+' : ''}${be.sharpestOdds} (vig ${be.sharpestVig}%)`;
+      }
+      prompt += ` | ${be.exchangeTradeCount} trades, ${be.externalPriceCount} prices\n`;
     }
 
     prompt += `\n`;
@@ -1310,24 +1514,70 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
   return prompt;
 }
 
-// ── Build final picks from JS candidates + Claude selections ──
-function buildFinalPicks(candidateTable, claudeSelections, allCandidates) {
-  const picks = [];
-  for (const sel of claudeSelections) {
-    const c = candidateTable.find(x => x.rank === sel.candidateRank);
-    if (!c) {
-      console.log(`[v10] WARNING: Claude selected rank ${sel.candidateRank} which is not in candidate table — skipping`);
-      continue;
-    }
+// ── Enforce JS-computed math in narrative: prepend projection sentence, strip any Claude math ──
+function fixNarrativeEdge(narrative, candidate) {
+  if (!narrative || !candidate) return narrative;
+  const c = candidate;
+  const edgeVal = Math.abs(c.edge);
+  const unit = c.sport === 'NHL' ? 'goal' : 'point';
+  const isTotal = (c.market || '').toLowerCase() === 'total';
 
-    // Enforce: Claude can reduce units but never increase
-    let finalUnits = c.kellyUnits;
-    if (sel.adjustedUnits) {
-      const claudeUnits = parseFloat(String(sel.adjustedUnits).replace(/[^0-9.]/g, ''));
-      if (!isNaN(claudeUnits) && claudeUnits < c.kellyUnits) {
-        finalUnits = Math.max(0.5, Math.round(claudeUnits * 2) / 2); // round to 0.5
-      }
+  // Build the JS-computed opening sentence
+  let jsSentence;
+  if (isTotal) {
+    jsSentence = `WeBetAI projects ${c.modelProjection} total ${c.sport === 'NHL' ? 'goals' : 'points'}, line is ${c.consensusLine}, creating a ${edgeVal}-${unit} edge.`;
+  } else {
+    // Spread: modelProjection is projected margin (negative = away team favored)
+    const projMargin = Math.abs(c.modelProjection);
+    const side = c.side || '';
+    // Determine if the pick is on the underdog or favorite
+    const spreadLine = Math.abs(c.consensusLine);
+    jsSentence = `WeBetAI projects a ${projMargin}-point margin, line is ${c.consensusLine}, creating a ${edgeVal}-${unit} edge.`;
+  }
+
+  // Strip any Claude sentence that restates projections/edges (starts with "WeBetAI projects" or mentions "[X]-point/goal edge")
+  let cleaned = narrative
+    .replace(/WeBetAI projects[^.]*\./i, '')
+    .replace(/[^.]*\d+\.?\d*-(point|goal) edge[^.]*\./g, '')
+    .trim();
+
+  // Pick-direction sanity check: for spreads, warn if narrative mentions opponent more than picked team
+  if (!isTotal && c.homeTeam && c.awayTeam) {
+    const pickedTeam = (c.side || '').replace(/[+-][\d.]+/g, '').trim().toLowerCase();
+    const opponent = (c.homeTeam.toLowerCase() === pickedTeam || c.homeTeam.toLowerCase().includes(pickedTeam.split(' ').pop()))
+      ? c.awayTeam : c.homeTeam;
+    const lowerNarrative = cleaned.toLowerCase();
+    const pickedMentions = (lowerNarrative.match(new RegExp(pickedTeam.split(' ').pop(), 'g')) || []).length;
+    const opponentMentions = (lowerNarrative.match(new RegExp(opponent.split(' ').pop().toLowerCase(), 'g')) || []).length;
+    if (opponentMentions > pickedMentions + 1) {
+      console.log(`[v10-beta] ⚠️ NARRATIVE DIRECTION WARNING: "${c.side}" narrative mentions opponent "${opponent}" ${opponentMentions}x vs picked team ${pickedMentions}x — may be arguing against the pick`);
     }
+  }
+
+  return jsSentence + ' ' + cleaned;
+}
+
+// ── Build final picks: top 3 by EV that passed Claude verification ──
+function buildFinalPicks(candidateTable, claudeVerifications, allCandidates) {
+  // Build a set of failed candidate ranks
+  const failedRanks = new Set();
+  const verificationMap = {};
+  for (const v of claudeVerifications) {
+    verificationMap[v.candidateRank] = v;
+    if (v.verdict === 'FAIL') {
+      failedRanks.add(v.candidateRank);
+      console.log(`[v10-beta] FAILED rank ${v.candidateRank}: ${v.failReason || 'no reason'}`);
+    }
+  }
+
+  // Take top 3 candidates by EV rank that passed verification (candidateTable is already sorted by EV)
+  const picks = [];
+  for (const c of candidateTable) {
+    if (picks.length >= 3) break;
+    if (failedRanks.has(c.rank)) continue;
+
+    const v = verificationMap[c.rank];
+    const finalUnits = c.kellyUnits; // Units come from Kelly only — Claude cannot adjust
 
     picks.push({
       sport: c.sport,
@@ -1340,12 +1590,14 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates) {
       units: `${finalUnits}u`,
       kellyCalc: c.kellyCalcStr,
       winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
-      coreReasoning: sel.coreReasoning || "",
-      whatLoses: sel.whatLoses || "",
-      dataVerified: sel.dataVerified || "",
-      clvExpectation: sel.clvExpectation || "",
+      coreReasoning: fixNarrativeEdge(v?.coreReasoning || "", c),
+      whatLoses: v?.whatLoses || "",
+      dataVerified: v?.dataVerified || "",
+      clvExpectation: v?.clvExpectation || "",
       modelEdge: `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : 'pts'}`,
+      commenceTime: c.commenceTime || "",
     });
+    console.log(`[v10-beta] SELECTED rank ${c.rank}: ${c.side} (EV: ${(c.ev * 100).toFixed(1)}%, units: ${finalUnits}u)`);
   }
 
   // Enforce 4.0u daily cap
@@ -1494,18 +1746,13 @@ exports.handler = async (event) => {
   console.log(`[v10] Consensus lookup keys (sample): ${Object.keys(consensusLookup).slice(0, 8).join(', ')}`);
 
   // ── PHASE 1B: COMPUTE ALL EDGES DETERMINISTICALLY ──
-  let allCandidates = [];
+  let allCandidates;
   try {
     allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData);
     console.log(`[v10] Computed ${allCandidates.length} edge candidates across all sports`);
-  } catch (edgeErr) {
-    console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
-    console.error(edgeErr.stack);
-  }
 
-  // ── PHASE 1C: PREDICTION MARKET CROSS-REFERENCE (non-fatal) ──
-  try {
-    if (predictionMarkets.length > 0 && allCandidates.length > 0) {
+    // ── PHASE 1C: PREDICTION MARKET CROSS-REFERENCE ──
+    if (predictionMarkets.length > 0) {
       let confirms = 0, cautions = 0;
       for (const c of allCandidates) {
         const signal = getPredictionMarketSignal(c, predictionMarkets);
@@ -1514,37 +1761,185 @@ exports.handler = async (event) => {
           const adjusted = applyPredictionMarketAdjustment(c, signal);
           if (adjusted !== c.kellyUnits) {
             c.kellyUnits = adjusted;
-            c.kellyCalcStr += ` [PM ${signal.agrees ? 'CONFIRM' : 'CAUTION'}: ${signal.source} ${signal.marketProb}]`;
+            c.kellyCalcStr += ` [PM ${signal.agrees ? 'CONFIRM' : 'CAUTION'}: ${signal.marketCount}x ${signal.alignmentType} ${signal.source} q=${signal.avgQuality}]`;
             if (signal.agrees) confirms++;
             else cautions++;
           }
         }
       }
+      // Re-sort after adjustments (units changed → re-rank by EV)
       allCandidates.sort((a, b) => b.ev - a.ev);
       allCandidates.forEach((c, i) => { c.rank = i + 1; });
-      console.log(`[v10] Prediction market adjustments: ${confirms} confirmed, ${cautions} cautioned`);
+      const pmSignals = allCandidates.filter(c => c.predictionMarket).length;
+      console.log(`[v10] Prediction market: ${pmSignals} candidates matched, ${confirms} confirmed, ${cautions} cautioned (type-aligned)`);
     }
-  } catch (pmErr) {
-    console.error(`[v10] PM phase failed (non-fatal): ${pmErr.message}`);
-  }
 
-  // ── PHASE 1D: X/GROK REAL-TIME INTELLIGENCE (non-fatal) ──
-  try {
-    if (allCandidates.length > 0) {
-      const xAlerts = await fetchXIntelligence(allCandidates);
-      applyXIntelligence(allCandidates, xAlerts);
+    // ── PHASE 1D: X/GROK REAL-TIME INTELLIGENCE ──
+    const xAlerts = await fetchXIntelligence(allCandidates);
+    applyXIntelligence(allCandidates, xAlerts);
+
+    // ── PHASE 1E: BETTOREDGE EXCHANGE INTEGRATION ──
+    try {
+      console.log("[v10-BE] Fetching BettorEdge exchange data...");
+      const EVENTS_BASE = "https://api.events.bettoredge.com/v1";
+      const MARKETS_BASE = "https://api.markets.bettoredge.com/v1";
+
+      // Fetch leagues + active events + exchange trades in parallel
+      const [beLeaguesResp, beEventsResp] = await Promise.all([
+        bettoredgeFetch(`${EVENTS_BASE}/leagues?status=active`),
+        bettoredgeFetch(`${EVENTS_BASE}/events/active?expanded=true`),
+      ]);
+
+      const beLeagues = beLeaguesResp.ok ? (await beLeaguesResp.json()).leagues || [] : [];
+      const beEventsRaw = beEventsResp.ok ? (await beEventsResp.json()).events || [] : [];
+      console.log(`[v10-BE] BettorEdge: ${beLeagues.length} leagues, ${beEventsRaw.length} active events`);
+
+      // Fetch external prices + exchange trades for each event (batch of 10)
+      const beEventData = {};
+      for (let i = 0; i < beEventsRaw.length; i += 10) {
+        const batch = beEventsRaw.slice(i, i + 10);
+        const results = await Promise.allSettled(batch.map(async (evt) => {
+          const [pricesResp, tradesResp] = await Promise.all([
+            bettoredgeFetch(`${EVENTS_BASE}/prices/latest/${evt.event_id}/team`).catch(() => null),
+            bettoredgeFetch(`${MARKETS_BASE}/trades/event/latest/${evt.event_id}/team`).catch(() => null),
+          ]);
+          const prices = pricesResp?.ok ? (await pricesResp.json()).prices || [] : [];
+          const trades = tradesResp?.ok ? (await tradesResp.json()).trades || [] : [];
+          return { evt, prices, trades };
+        }));
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            const { evt, prices, trades } = r.value;
+            const homeKey = (evt.home?.name || "").toLowerCase().replace(/[^a-z]/g, "");
+            const awayKey = (evt.away?.name || "").toLowerCase().replace(/[^a-z]/g, "");
+            const key = `${awayKey}_${homeKey}`;
+            beEventData[key] = { prices, trades, home: evt.home?.name, away: evt.away?.name, eventId: evt.event_id };
+          }
+        }
+      }
+      console.log(`[v10-BE] BettorEdge event data built for ${Object.keys(beEventData).length} matchups`);
+
+      // Helper: normalize team name for matching
+      function beNormalize(name) {
+        return (name || "").toLowerCase().replace(/[^a-z]/g, "");
+      }
+
+      // Apply BettorEdge data to each candidate
+      let beMatches = 0, beBoosts = 0, beCautions = 0;
+      for (const c of allCandidates) {
+        // Try to match candidate to BettorEdge event
+        const matchupParts = (c.matchup || "").split(/\s+(?:vs\.?|@|at)\s+/i);
+        if (matchupParts.length < 2) continue;
+        const team1 = beNormalize(matchupParts[0]);
+        const team2 = beNormalize(matchupParts[1]);
+
+        let beMatch = null;
+        for (const [key, data] of Object.entries(beEventData)) {
+          const h = beNormalize(data.home);
+          const a = beNormalize(data.away);
+          if ((team1.includes(h) || h.includes(team1) || team2.includes(h) || h.includes(team2)) &&
+              (team1.includes(a) || a.includes(team1) || team2.includes(a) || a.includes(team2))) {
+            beMatch = data;
+            break;
+          }
+        }
+
+        if (!beMatch) continue;
+        beMatches++;
+
+        // Extract exchange probability (vig-free signal)
+        const exchangeTrades = beMatch.trades.filter(t => {
+          const matchesBetType = (c.betType === "Spread" || c.betType === "Puck Line" || c.betType === "Run Line")
+            ? t.var_1 != null && t.var_1 !== 0
+            : c.betType === "Total"
+              ? (t.side === "over" || t.side === "under")
+              : (t.side === "home" || t.side === "away") && (!t.var_1 || t.var_1 === 0);
+          return matchesBetType;
+        });
+
+        // Find consensus and lowest-vig external price
+        const relevantPrices = beMatch.prices.filter(p => {
+          if (c.betType === "Spread" || c.betType === "Puck Line" || c.betType === "Run Line") return p.market === "Spread" && p.var_1 != null;
+          if (c.betType === "Total") return p.market === "Total";
+          return p.market === "Winner";
+        });
+
+        // Get BettorEdge consensus
+        const consensusPrices = relevantPrices.filter(p => p.external_name === "Consensus");
+        // Get lowest vig price (sharpest book)
+        const vigPrices = relevantPrices.filter(p => p.vig_pct > 0 && p.vig_pct < 20).sort((a, b) => a.vig_pct - b.vig_pct);
+        const sharpestLine = vigPrices[0] || null;
+
+        // Exchange probability (vig-free)
+        let exchangeProb = null;
+        if (exchangeTrades.length > 0) {
+          const probs = exchangeTrades.map(t => t.probability).filter(p => p > 0 && p < 1);
+          if (probs.length > 0) exchangeProb = probs.reduce((a, b) => a + b, 0) / probs.length;
+        }
+
+        // Store BettorEdge data on candidate
+        c.bettorEdge = {
+          matched: true,
+          exchangeProb: exchangeProb ? Math.round(exchangeProb * 1000) / 1000 : null,
+          modelCoverProb: c.coverProb,
+          probDelta: exchangeProb ? Math.round((c.coverProb - exchangeProb) * 1000) / 1000 : null,
+          sharpestBook: sharpestLine ? sharpestLine.external_name : null,
+          sharpestOdds: sharpestLine ? sharpestLine.odds : null,
+          sharpestVig: sharpestLine ? Math.round(sharpestLine.vig_pct * 100) / 100 : null,
+          consensusOdds: consensusPrices[0]?.odds || null,
+          exchangeTradeCount: exchangeTrades.length,
+          externalPriceCount: relevantPrices.length,
+        };
+
+        // Confidence adjustment based on exchange agreement
+        if (exchangeProb) {
+          const gap = Math.abs(c.coverProb - exchangeProb);
+          if (gap <= 0.05) {
+            // Model and exchange agree — boost confidence
+            const prevUnits = c.kellyUnits;
+            c.kellyUnits = Math.min(3.0, Math.round((c.kellyUnits + 0.5) * 2) / 2);
+            c.bettorEdge.signal = "AGREE";
+            c.kellyCalcStr += ` [BE AGREE: exchange=${(exchangeProb*100).toFixed(0)}% vs model=${(c.coverProb*100).toFixed(0)}%, +0.5u boost]`;
+            beBoosts++;
+          } else if (gap > 0.10) {
+            // Model and exchange disagree — reduce confidence
+            const prevUnits = c.kellyUnits;
+            c.kellyUnits = Math.max(0.5, Math.round((c.kellyUnits - 0.5) * 2) / 2);
+            c.bettorEdge.signal = "DISAGREE";
+            c.kellyCalcStr += ` [BE DISAGREE: exchange=${(exchangeProb*100).toFixed(0)}% vs model=${(c.coverProb*100).toFixed(0)}%, -0.5u caution]`;
+            beCautions++;
+          } else {
+            c.bettorEdge.signal = "NEUTRAL";
+            c.kellyCalcStr += ` [BE NEUTRAL: exchange=${(exchangeProb*100).toFixed(0)}% vs model=${(c.coverProb*100).toFixed(0)}%]`;
+          }
+        }
+
+        // Update rating after unit adjustment
+        c.rating = unitsToRating(c.kellyUnits);
+        c.confidence = unitsToConfidence(c.kellyUnits);
+      }
+
+      // Re-sort after BettorEdge adjustments
+      allCandidates.sort((a, b) => b.ev - a.ev);
+      allCandidates.forEach((c, i) => { c.rank = i + 1; });
+      console.log(`[v10-BE] BettorEdge: ${beMatches} candidates matched, ${beBoosts} boosted, ${beCautions} cautioned`);
+    } catch (beErr) {
+      console.error(`[v10-BE] BettorEdge integration failed (non-fatal): ${beErr.message}`);
+      // Continue without BettorEdge data — pipeline still works with Odds API alone
     }
-  } catch (xErr) {
-    console.error(`[v10] Grok phase failed (non-fatal): ${xErr.message}`);
+
+  } catch (edgeErr) {
+    console.error(`[v10] EDGE TABLE COMPUTATION FAILED: ${edgeErr.message}`);
+    console.error(edgeErr.stack);
+    allCandidates = [];
   }
 
   if (allCandidates.length === 0) {
-    const failReason = `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.`;
-    console.log(`[v10] No edge candidates found — ${failReason}`);
+    console.log("[v10] No edge candidates found — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.0-deterministic-edge",
-      picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: failReason }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.0-deterministic-edge" },
+      date: dateISO, dateFormatted, model: "v10.0-bettoredge-edge",
+      picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.0-bettoredge-edge" },
       edgeSummary: "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
       generatedAt: now.toISOString(),
     });
@@ -1564,13 +1959,12 @@ exports.handler = async (event) => {
         "Content-Type": "application/json",
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "prompt-caching-2024-07-31",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
         temperature: 0.2,
-        system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
+        system: THE_LOCK_V10_SYSTEM,
         tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
         messages: [{ role: "user", content: userMessage }],
       }),
@@ -1610,30 +2004,29 @@ exports.handler = async (event) => {
       return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now);
     }
 
-    // ── PHASE 3: MERGE JS NUMBERS + CLAUDE NARRATIVES ──
-    const selections = claudeOutput.selections || [];
-    const picks = buildFinalPicks(candidateTable, selections, allCandidates);
+    // ── PHASE 3: MERGE JS NUMBERS + CLAUDE VERIFICATIONS ──
+    const verifications = claudeOutput.verifications || [];
+    const picks = buildFinalPicks(candidateTable, verifications, allCandidates);
 
-    // Build rejections from Claude + all non-selected candidates
-    const selectedRanks = new Set(picks.map(p => {
-      const sel = selections.find(s => candidateTable.find(c => c.rank === s.candidateRank)?.side === p.pick);
-      return sel?.candidateRank;
-    }).filter(Boolean));
+    // Build rejections: failed verifications + non-selected candidates
+    const selectedSides = new Set(picks.map(p => p.pick));
 
     const rejections = [];
-    // Add Claude's explicit rejections
-    for (const r of (claudeOutput.rejections || [])) {
-      const c = candidateTable.find(x => x.rank === r.candidateRank);
-      rejections.push({
-        matchup: c ? c.matchup : `Candidate #${r.candidateRank}`,
-        side: c ? c.side : "N/A",
-        reason: r.reason || "No reason given",
-      });
+    // Add Claude's failed verifications
+    for (const v of verifications) {
+      if (v.verdict === 'FAIL') {
+        const c = candidateTable.find(x => x.rank === v.candidateRank);
+        rejections.push({
+          matchup: c ? c.matchup : `Candidate #${v.candidateRank}`,
+          side: c ? c.side : "N/A",
+          reason: v.failReason || "Failed verification",
+        });
+      }
     }
     // Add remaining non-selected candidates as rejections
     for (const c of allCandidates.slice(0, 15)) {
-      if (!selections.find(s => s.candidateRank === c.rank) && !rejections.find(r => r.matchup === c.matchup && r.side === c.side)) {
-        rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." });
+      if (!selectedSides.has(c.side) && !rejections.find(r => r.side === c.side)) {
+        rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower EV priority." });
       }
     }
 
@@ -1661,7 +2054,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.0-deterministic-edge",
+      model: "v10.0-bettoredge-edge",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -1671,13 +2064,28 @@ exports.handler = async (event) => {
         totalUnits: `${totalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.0-deterministic-edge",
+        modelVersion: "v10.0-bettoredge-edge",
       },
       generatedAt: now.toISOString(),
       parlayLegs: [],
       sgps: [],
       modelProjections,
       edgeCandidatesCount: allCandidates.length,
+      candidateTable: candidateTable.map(c => ({
+        rank: c.rank,
+        sport: c.sport,
+        side: c.side,
+        market: c.market,
+        odds: c.odds,
+        modelProjection: c.modelProjection,
+        consensusLine: c.consensusLine,
+        edge: c.edge,
+        coverProb: c.coverProb,
+        ev: c.ev,
+        kellyUnits: c.kellyUnits,
+        matchup: c.matchup,
+        verification: verifications.find(v => v.candidateRank === c.rank)?.verdict || 'NOT_VERIFIED',
+      })),
     };
 
     // Store thinking text if present
@@ -1716,15 +2124,16 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
     dataVerified: "Auto-generated from deterministic model — Claude narrative unavailable.",
     clvExpectation: "Line may move toward pick as sharp money arrives.",
     modelEdge: `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge}`,
+    commenceTime: c.commenceTime || "",
   }));
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.0-deterministic-edge",
+    date: dateISO, dateFormatted, model: "v10.0-bettoredge-edge",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.0-deterministic-edge" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.0-bettoredge-edge" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };
@@ -1733,15 +2142,15 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   return { statusCode: 200, body: "Fallback OK" };
 }
 
-// ── Store picks to "edge-picks" blob store ──
+// ── Store picks to "edge-picks-be" blob store ──
 async function storePicks(dateISO, picksData) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) {
-    console.error("[v10] NETLIFY_AUTH_TOKEN not set, cannot store picks");
+    console.error("[v10-beta] NETLIFY_AUTH_TOKEN not set, cannot store picks");
     return;
   }
 
-  const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks`;
+  const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-be`;
 
   try {
     const putPicks = await fetch(`${storeUrl}/picks-${dateISO}`, {
@@ -1783,4 +2192,7 @@ async function storePicks(dateISO, picksData) {
   } catch (err) {
     console.error(`[v10] Blob store error: ${err.message}`);
   }
+
+  // No Kalshi auto-execution for BettorEdge test pipeline
+  console.log("[v10-BE] BettorEdge picks stored — no Kalshi trigger (test pipeline)");
 }

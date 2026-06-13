@@ -101,8 +101,9 @@ const ESPN_LEAGUES = [
 // Soccer std dev raised to 1.5 — at 1.0, even a 0.3 goal edge hits the cover prob cap.
 // 1.5 means a 0.3 edge = 0.2 z-scores = 58% raw prob (under cap), producing realistic EV.
 const SPORT_STD_DEVS = { NBA: 12, NCAAB: 11, NHL: 1.2, MLB: 2.5, EPL: 1.5, "La Liga": 1.5, "Serie A": 1.5, Bundesliga: 1.5, "Ligue 1": 1.5, MLS: 1.5, UCL: 1.5, Europa: 1.5 };
-// v10.1: NBA min edge raised to 3.0 (was 2.0) — model's 50% NBA accuracy means small edges are noise
-const SPORT_MIN_EDGE = { NBA: 3.0, NCAAB: 2.0, NHL: 0.3, MLB: 0.5, EPL: 0.3, "La Liga": 0.3, "Serie A": 0.3, Bundesliga: 0.3, "Ligue 1": 0.3, MLS: 0.3, UCL: 0.3, Europa: 0.3 };
+// v10.2: NBA min edge lowered to 2.0 for post-season; MLB min edge 0.5→0.2 so
+// Run-Line candidates reach the EV filter on MLB-only slates. EV floor is the quality gate.
+const SPORT_MIN_EDGE = { NBA: 2.0, NCAAB: 2.0, NHL: 0.25, MLB: 0.2, EPL: 0.25, "La Liga": 0.25, "Serie A": 0.25, Bundesliga: 0.25, "Ligue 1": 0.25, MLS: 0.25, UCL: 0.25, Europa: 0.25 };
 
 // Sport-specific Kelly multipliers — derived from backtest ROI:
 // NHL: 66.7% accuracy, +35.1% ROI (strongest edge) → 1.30x boost (was 1.15x)
@@ -2080,18 +2081,25 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
 // this at 0.03 (+3%) to surface disciplined "Lean" plays when no conviction edge exists.
 function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.08) {
   const candidates = [];
-  if (!espnData || !ratingsData) return candidates;
+  if (!espnData) return candidates;
+  // ratingsData can be null (stale/missing blob) — fall back to default Elo so ESPN stats still drive edges.
+  // Root cause fix: previously bailing out here produced zero candidates, killing even the 3% lean tier.
+
+  const DEFAULT_RATING = {
+    elo: 1500, coverRate: 50, streak: 0, daysSinceLastGame: 1, last5: [],
+    homeAvgScored: null, awayAvgScored: null, avgScored10: null, avgAllowed10: null,
+    homeAvgAllowed: null, awayAvgAllowed: null, avgScored5: null, avgAllowed5: null,
+    sosRating: 1500,
+  };
 
   for (const league of espnData) {
     const leagueConfig = ESPN_LEAGUES.find(l => l.label === league.league);
     if (!leagueConfig) continue;
     const leagueRatings = ratingsData?.leagues?.[league.league];
-    if (!leagueRatings?.teams) continue;
 
     for (const game of league.games) {
-      const homeRating = findTeam(leagueRatings.teams, game.home);
-      const awayRating = findTeam(leagueRatings.teams, game.away);
-      if (!homeRating || !awayRating) continue;
+      const homeRating = (leagueRatings?.teams ? findTeam(leagueRatings.teams, game.home) : null) || DEFAULT_RATING;
+      const awayRating = (leagueRatings?.teams ? findTeam(leagueRatings.teams, game.away) : null) || DEFAULT_RATING;
 
       let proj;
       try {
@@ -2101,9 +2109,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         console.error(projErr.stack?.split('\n').slice(0, 3).join('\n'));
         continue;
       }
+      const skipTotal = proj.poisoned;
       if (proj.poisoned) {
-        console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — poisoned projection`);
-        continue;
+        console.log(`[v10-edge] POISON: projTotal=${proj.projTotal.toFixed(1)} for ${league.league} (${game.away} @ ${game.home}) — skipping total candidates only, spread/ML still evaluated`);
       }
       const gameData = findConsensusLine(consensusLookup, game.home);
       if (!gameData || gameData.homeSpread === undefined) {
@@ -2233,7 +2241,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 
       // ── TOTAL CANDIDATE ──
       const actualTotal = gameData.total;
-      if (actualTotal) {
+      if (actualTotal && !skipTotal) {
         // Filter out Asian handicap totals (.25/.75) — not available at US sportsbooks
         const totalFrac = Math.abs(actualTotal) % 1;
         if (totalFrac === 0.25 || totalFrac === 0.75) {
@@ -2249,7 +2257,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
             totalEdge *= 0.95; // moderate consensus — 5% discount
           }
         }
-        const totalMinEdge = league.league === "NHL" ? 0.5 : league.league === "MLB" ? 0.8 : 3.0;
+        // v10.2: MLB total min edge 0.8→0.4, NHL 0.5→0.3. EV floor is the quality gate.
+        const totalMinEdge = league.league === "NHL" ? 0.3 : league.league === "MLB" ? 0.4 : 2.5;
         if (totalEdge >= totalMinEdge) {
           const totalZ = totalEdge / std;
           const rawTotalCoverProb = normalCDF(totalZ);
@@ -3494,12 +3503,13 @@ exports.handler = async (event) => {
         "Content-Type": "application/json",
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "prompt-caching-2024-07-31",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 8000,
         temperature: 0.2,
-        system: THE_LOCK_V10_SYSTEM,
+        system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
         tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
         messages: [{ role: "user", content: userMessage }],
       }),

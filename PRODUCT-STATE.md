@@ -39,6 +39,9 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- Pick3P2P game times + started-lock (loop-c14): rows show ET start time (AI=commenceTime,
+  avail=matched ESPN startTime); started games lock (ESPN in/post or time passed) — only
+  not-yet-started games pickable. gameStartInfo() helper; pickSide JS guard + disabled row.
 - Pick3P2P PERFECTED (loop-c13): two-sided wager — opponent MATCHES stake on accept (was
   one-sided, pot was wrong); self-challenge guard; settlement shown in My Challenges (Won/Lost/
   refunded); respond btn 'Lock Picks & Stake N'; dashboard leaderboard unified + WeBits currency.

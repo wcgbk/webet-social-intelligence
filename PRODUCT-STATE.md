@@ -2,7 +2,7 @@
 
 > Any agent (cloud routine, fresh session, overnight run) starts HERE. Read this + the
 > Iteration Backlog in the charter, do the work, then UPDATE both. Never redo items
-> listed under DONE. Last updated: 2026-06-13 (late night ET, Jun 12 session).
+> listed under DONE. Last updated: 2026-06-13 00:15 ET. X login fixed + founder-confirmed on real iPhone.
 
 ## What this product is
 AI sports-picks platform. Betty (the LLM, /dashboard chat) is the primary interface —
@@ -31,20 +31,21 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - X OAuth: authorize moved twitter.com → x.com (mobile login-loop fix; founder retest pending).
 - Homepage: RESTORED TO ORIGINAL — do not add nav items/chips there again.
 - Betty picks delivery verified live (chat returns today's card, mobile, 0 console errors).
+- Premium gate v1 LIVE (2026-06-12 loop-c3): get-picks-premium fn (session+balance, idempotent
+  1-WeBit daily unlock, audit event in webit-ledger, picks read via blobs REST API — SDK store
+  reads return null in fn runtime); public get-picks-alpha strips kellyCalc/kellyFraction/zScore
+  (never rendered free); /alpha Sharp Depth bar + per-card depth blocks. E2E: unlock charged
+  exactly 1 (16,000→15,999), re-click no double charge, 0 console errors.
 
 ## NEXT (top of backlog, in order)
-1. Premium gate v1 — net-new depth only (full kellyCalc breakdown, calibrated-prob detail,
-   Betty deep-dive, deeper parlay) behind WeBit balance; ENFORCED SERVER-SIDE via new
-   get-picks-premium fn; strip premium fields from public picks endpoints (get-picks*.js
-   serving layer is in scope; generation pipeline is NOT).
-2. Onboarding v1 — Betty-led, in-conversation (sports → today's edges → save via login →
+1. Onboarding v1 — Betty-led, in-conversation (sports → today's edges → save via login →
    WeBit nudge). NOT a modal/wizard bolted on chrome.
-3. /login gateway — X (live) + SMS via Twilio Verify (rate-limit phone+IP); email/Google
+2. /login gateway — X (live) + SMS via Twilio Verify (rate-limit phone+IP); email/Google
    UI behind PROVIDER_READY flags (no creds yet).
-4. Canonical identity (one userId, link X+phone, ledger keyed on it).
-5. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
-6. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
-7. Funnel events (one blob per event in funnel-events) + admin funnel report.
+3. Canonical identity (one userId, link X+phone, ledger keyed on it).
+4. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
+5. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
+6. Funnel events (one blob per event in funnel-events) + admin funnel report.
 
 ## Conventions every cycle MUST follow
 - Deploy: `npx netlify deploy --prod --dir . --skip-functions-cache` (NETLIFY_AUTH_TOKEN
@@ -65,7 +66,6 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 ## Pending founder inputs (blocked items — skip, don't stall)
 - Stripe account + TEST keys → swaps mock processor for real checkout (charter 3b).
 - Google OAuth client + email provider key (Resend/Postmark) → activates last 2 logins.
-- Real-iPhone retest of X login post-x.com-fix.
 
 ## Verification endpoints (quick health)
 - /api/get-picks-alpha , /api/get-picks-mvp (model version + picks count)

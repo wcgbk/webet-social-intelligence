@@ -31,6 +31,10 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - X OAuth: authorize moved twitter.com → x.com (mobile login-loop fix; founder retest pending).
 - Homepage: RESTORED TO ORIGINAL — do not add nav items/chips there again.
 - Betty picks delivery verified live (chat returns today's card, mobile, 0 console errors).
+- Onboarding v1 LIVE (loop-c4): Betty-led, in-conversation on /dashboard — sports chips ->
+  matching pick cards render in chat (honest empty note) -> X sign-in offer + WeBits welcome;
+  guest prefs merge to wbai-users on login (user-prefs fn); funnel-event fn instruments
+  shown/chosen/edges/signin/saved/skipped (funnel-events store). Test hook ?onboard=force.
 - Premium gate v1 LIVE (2026-06-12 loop-c3): get-picks-premium fn (session+balance, idempotent
   1-WeBit daily unlock, audit event in webit-ledger, picks read via blobs REST API — SDK store
   reads return null in fn runtime); public get-picks-alpha strips kellyCalc/kellyFraction/zScore
@@ -38,14 +42,12 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   exactly 1 (16,000→15,999), re-click no double charge, 0 console errors.
 
 ## NEXT (top of backlog, in order)
-1. Onboarding v1 — Betty-led, in-conversation (sports → today's edges → save via login →
-   WeBit nudge). NOT a modal/wizard bolted on chrome.
-2. /login gateway — X (live) + SMS via Twilio Verify (rate-limit phone+IP); email/Google
+1. /login gateway — X (live) + SMS via Twilio Verify (rate-limit phone+IP); email/Google
    UI behind PROVIDER_READY flags (no creds yet).
-3. Canonical identity (one userId, link X+phone, ledger keyed on it).
-4. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
-5. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
-6. Funnel events (one blob per event in funnel-events) + admin funnel report.
+2. Canonical identity (one userId, link X+phone, ledger keyed on it).
+3. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
+4. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
+5. Admin funnel report page (funnel-events store now collecting; report is role-gated admin page).
 
 ## Conventions every cycle MUST follow
 - Deploy: `npx netlify deploy --prod --dir . --skip-functions-cache` (NETLIFY_AUTH_TOKEN

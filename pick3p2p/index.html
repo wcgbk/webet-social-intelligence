@@ -1201,12 +1201,25 @@
     return last;
   }
 
+  // Resolve a game's start time + whether it has already started (from its own
+  // commenceTime or the matched ESPN game's state). Games that have started lock.
+  function gameStartInfo(game) {
+    var espn = null;
+    try { espn = findGame(game); } catch (e) {}
+    var iso = game.startTime || (espn && espn.startTime) || '';
+    var started = false;
+    if (espn && (espn.state === 'in' || espn.state === 'post')) started = true;
+    else if (iso) { var t = new Date(iso).getTime(); if (!isNaN(t) && t <= Date.now()) started = true; }
+    var label = '';
+    if (iso) { try { label = new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET'; } catch (e) {} }
+    return { iso: iso, started: started, label: label };
+  }
+
   function gameRowHTML(game, idx, type) {
     var matchup = game.awayTeam + ' @ ' + game.homeTeam;
-    var timeStr = '';
-    if (game.startTime) {
-      try { timeStr = new Date(game.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); } catch(e) {}
-    }
+    var startInfo = gameStartInfo(game);
+    var started = startInfo.started;
+    var timeStr = startInfo.label;
     if (!timeStr && type === 'avail' && game.detail) timeStr = 'AI passed';
     var ratingHTML = '';
     if (type === 'ai' && game.rating) {
@@ -1230,18 +1243,22 @@
       sideAwayVal = 'away'; sideHomeVal = 'home';
     }
 
-    return '<div class="game-row" data-type="' + type + '" data-idx="' + idx + '" data-is-total="' + (isTotal ? '1' : '0') + '" id="row-' + type + '-' + idx + '">' +
+    var timeHTML = timeStr ? '<div class="game-time">' + (started ? '🔒 Started' + (timeStr !== 'AI passed' ? ' · ' + esc(timeStr) : '') : esc(timeStr)) + '</div>' : '';
+    var sidesHTML = started
+      ? '<div class="game-sides"><span style="font-size:.6875rem; font-weight:600; color:var(--txt-l); padding:.375rem .5rem;">Locked</span></div>'
+      : '<div class="game-sides">' +
+          '<button class="side-btn" data-side="' + sideAwayVal + '" onclick="pickSide(event,\'' + type + '\',' + idx + ',\'' + sideAwayVal + '\')">' + esc(sideAwayLabel) + '</button>' +
+          '<button class="side-btn" data-side="' + sideHomeVal + '" onclick="pickSide(event,\'' + type + '\',' + idx + ',\'' + sideHomeVal + '\')">' + esc(sideHomeLabel) + '</button>' +
+        '</div>';
+    return '<div class="game-row' + (started ? ' disabled started' : '') + '" data-type="' + type + '" data-idx="' + idx + '" data-is-total="' + (isTotal ? '1' : '0') + '" id="row-' + type + '-' + idx + '">' +
       '<div class="game-check">' + checkSVG + '</div>' +
       '<span class="game-sport">' + esc(game.sport || '') + '</span>' +
       '<div class="game-info">' +
         '<div class="game-matchup">' + esc(matchup) + '</div>' +
         (betInfo ? '<div class="game-bet">' + esc(betInfo) + '</div>' : '') +
-        (timeStr && !betInfo ? '<div class="game-time">' + esc(timeStr) + '</div>' : '') +
+        timeHTML +
       '</div>' +
-      '<div class="game-sides">' +
-        '<button class="side-btn" data-side="' + sideAwayVal + '" onclick="pickSide(event,\'' + type + '\',' + idx + ',\'' + sideAwayVal + '\')">' + esc(sideAwayLabel) + '</button>' +
-        '<button class="side-btn" data-side="' + sideHomeVal + '" onclick="pickSide(event,\'' + type + '\',' + idx + ',\'' + sideHomeVal + '\')">' + esc(sideHomeLabel) + '</button>' +
-      '</div>' +
+      sidesHTML +
       '<div class="game-rating">' + ratingHTML + '</div>' +
     '</div>';
   }
@@ -1270,6 +1287,8 @@
     if (userSelections.length >= 3) return;
 
     var game = type === 'ai' ? aiPicks[idx] : availGames[idx];
+    // Can't pick a game that has already started (belt-and-suspenders; row is also disabled)
+    if (gameStartInfo(game).started) { return; }
     var isTotal = /^over|^under/i.test((game.pick || '').trim());
     var sideName;
     if (isTotal) {
@@ -1404,7 +1423,7 @@
           return {
             sport: p.sport || '', awayTeam: '', homeTeam: '', awayAbbr: '', homeAbbr: '',
             matchup: p.matchup || '', pick: p.pick || '', odds: p.odds || '-110',
-            rating: p.confidence || p.rating || 'b', startTime: p.startTime || '',
+            rating: p.confidence || p.rating || 'b', startTime: p.commenceTime || p.startTime || '',
             detail: '', state: 'pre', raw: p,
           };
         });

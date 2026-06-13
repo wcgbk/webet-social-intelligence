@@ -39,6 +39,10 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- Sports Markets QA + WeBit unify (loop-c15): BettorEdge pull VERIFIED CORRECT (/api/get-bettoredge-markets
+  returns live orders/odds/volume; '----' cells = real thin exchange liquidity, not a bug). Page unified
+  with WeBit account: real balance (auth-me, was fake E10,000), currency=WeBits, sign-in gate, unified
+  identity on created bets. v2 follow-up: WeBit escrow + settlement for single-line market wagers.
 - Pick3P2P game times + started-lock (loop-c14): rows show ET start time (AI=commenceTime,
   avail=matched ESPN startTime); started games lock (ESPN in/post or time passed) — only
   not-yet-started games pickable. gameStartInfo() helper; pickSide JS guard + disabled row.

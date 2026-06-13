@@ -39,6 +39,10 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- Sports Markets real lines via Odds API (loop-c18): get-bettoredge-markets also pulls The Odds
+  API (h2h/spreads/totals) and attaches consensus ML/spread/total to every game; page renders
+  full spread/pick/total board for ALL games (live BettorEdge order marked • > Odds API line >
+  even-money pick'em). Env ODDS_API_KEY. Verified: zero-liquidity games now fully bettable.
 - Sports Markets full slate (loop-c17): shows ALL games regardless of BettorEdge liquidity —
   backend merges full ESPN schedule (MLB/NBA/NHL) with exchange orders overlaid; ML always
   bettable even-money pick'em, spread/total where exchange has a line, live games locked.

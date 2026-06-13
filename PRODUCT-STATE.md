@@ -79,6 +79,7 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 3. (moved to #1)
 
 ## Conventions every cycle MUST follow
+- ⚠️ KNOWN UNTRACKED RISK: the old live site had ~266 curated files; the git-tracked set is smaller, so untracked-but-live pages/assets/functions get DROPPED by every deploy. Already restored: dashboard menu pages (betty,guardian,mlb,p2p-sports,p2p-trending), site images, ALL 168 functions. STILL UNTRACKED (may 404 from non-dashboard links): authenticity, rif, prediction-markets, scorecard, fox, predictions, props, scanner, etc. — restore on report or do a full sweep. Before deleting/assuming a 404 is intentional, check if the dir exists locally & is just untracked.
 - ⚠️ DEPLOY SHIPS ONLY GIT-TRACKED FILES (proven 2026-06-13: untracked images 404'd in prod —
   the CLI walks the git index, not the directory). ANY new/needed static asset MUST be
   `git add`-ed BEFORE deploying. The old curated live set (~266 files) was replaced by the

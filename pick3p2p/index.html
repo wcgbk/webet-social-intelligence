@@ -1,0 +1,2172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pick3P2P | Pick the Games the AI Passed On</title>
+  <meta name="description" content="Pick3P2P — pick 3 games the AI rejected. Challenge a friend P2P. Best record wins. Prove you see edges the algorithm missed." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pick3p2p.com" />
+  <meta property="og:title" content="Pick3P2P | Pick the Games the AI Passed On" />
+  <meta property="og:description" content="Pick 3 games the AI rejected. Challenge a friend P2P. Best record wins." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pick3P2P | Pick the Games the AI Passed On" />
+  <meta name="twitter:description" content="Pick 3 games the AI rejected. Challenge a friend P2P. Best record wins." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    /* ─── CSS Variables ─── */
+    :root {
+      /* Hero (dark) */
+      --background:   hsl(260, 87%,  3%);
+      --foreground:   hsl(40,  6%,  95%);
+      --primary:      hsl(121, 95%, 76%);
+      --primary-fg:   hsl(0,   0%,   5%);
+      --hero-heading: hsl(40,  10%, 96%);
+      --hero-sub:     hsl(40,   6%, 82%);
+      --border:       hsl(240,  4%, 20%);
+      /* Below-fold (white/green) */
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg-light: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg-light);
+      color: var(--txt-b);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Liquid Glass (hero only) ─── */
+    .liquid-glass {
+      position: relative;
+      background: rgba(255,255,255,0.01);
+      background-blend-mode: luminosity;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: none;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.10);
+      overflow: hidden;
+    }
+    .liquid-glass::before {
+      content: '';
+      position: absolute; inset: 0; padding: 1.4px;
+      background: linear-gradient(180deg,
+        rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 20%,
+        rgba(255,255,255,0) 40%, rgba(255,255,255,0) 60%,
+        rgba(255,255,255,0.15) 80%, rgba(255,255,255,0.45) 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      border-radius: inherit; pointer-events: none; z-index: 1;
+    }
+    .liquid-glass > * { position: relative; z-index: 2; }
+
+    /* ─── Hero (dark, above fold) ─── */
+    .hero {
+      position: relative; min-height: auto;
+      display: flex; flex-direction: column; align-items: center; overflow: hidden;
+    }
+    .hero-video {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
+    }
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(5,2,14,0.55) 0%, rgba(5,2,14,0.30) 50%, rgba(5,2,14,0.70) 100%);
+      z-index: 1;
+    }
+    .hero-content {
+      position: relative; z-index: 2; width: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: clamp(18px, 3vh, 54px); min-height: auto; padding-bottom: 24px;
+    }
+
+    /* ─── Navbar (hero) ─── */
+    .navbar { width: 100%; display: flex; justify-content: center; padding: 24px 24px 0; }
+    .navbar-pill {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 10px 16px; border-radius: 24px; max-width: 850px; width: 100%;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
+    .logo-icon { display: none; }
+    .logo-text { font-size: 1.375rem; font-weight: 900; color: #ffffff; letter-spacing: -0.04em; line-height: 1; }
+    .nav-links { display: flex; align-items: center; gap: 2px; list-style: none; }
+    .nav-link {
+      display: flex; align-items: center; gap: 3px; padding: 7px 13px; font-size: 1rem;
+      color: var(--foreground); opacity: 0.9; text-decoration: none; border-radius: 10px;
+      cursor: pointer; transition: opacity 0.15s ease; white-space: nowrap; font-weight: 400;
+    }
+    .nav-link:hover { opacity: 1; }
+    .btn-nav {
+      background: var(--primary); color: var(--primary-fg); border: none;
+      font-family: inherit; font-size: 0.875rem; font-weight: 500;
+      padding: 7px 16px; border-radius: 12px; cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s ease; text-decoration: none;
+    }
+    .btn-nav:hover { background: hsl(121,95%,68%); }
+    .mobile-menu-btn { display: none; background: none; border: none; color: var(--foreground); cursor: pointer; padding: 4px; flex-shrink: 0; }
+
+    /* ─── Hero Main ─── */
+    .hero-main {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 0 24px; gap: clamp(18px, 3vh, 54px); max-width: 1200px; width: 100%;
+    }
+    .announcement-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 8px 6px 16px; border-radius: 9999px; font-size: 0.875rem; cursor: default;
+    }
+    .badge-label { font-weight: 500; color: var(--foreground); opacity: 0.85; }
+    .badge-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: rgba(255,255,255,0.05); padding: 4px 10px 4px 12px;
+      border-radius: 9999px; font-size: 0.8125rem; font-weight: 500;
+      color: var(--primary); text-decoration: none;
+    }
+    .hero-heading {
+      font-size: clamp(2.25rem,5vw,3.75rem); font-weight: 600;
+      letter-spacing: -0.03em; line-height: 1.15;
+      color: var(--hero-heading); max-width: 800px;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.7), 0 0 40px rgba(0,0,0,0.5); text-align: center;
+    }
+    .hero-sub {
+      font-size: 1rem; color: var(--hero-sub); max-width: 650px; line-height: 1.65; font-weight: 400;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 24px rgba(0,0,0,0.7), 0 4px 32px rgba(0,0,0,0.5);
+      background: radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.2) 60%, transparent 80%);
+      padding: 16px 24px; border-radius: 16px;
+    }
+    .hero-ctas { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn-hero {
+      background: var(--primary); color: var(--primary-fg); border: none;
+      font-family: inherit; font-size: 1rem; font-weight: 500;
+      padding: 12px 24px; border-radius: 9999px; cursor: pointer;
+      transition: background 0.15s ease; white-space: nowrap; text-decoration: none;
+    }
+    .btn-hero:hover { background: hsl(121,95%,68%); }
+    .btn-hero-secondary {
+      font-family: inherit; font-size: 1rem; font-weight: 400;
+      padding: 12px 24px; border-radius: 9999px; border: none;
+      color: var(--foreground); cursor: pointer; transition: background 0.15s ease;
+      white-space: nowrap; text-decoration: none;
+    }
+    .btn-hero-secondary:hover { background: rgba(255,255,255,0.05) !important; }
+    .hero-trust {
+      display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+      justify-content: center; font-size: .8125rem; color: rgba(255,255,255,0.5);
+    }
+    .trust-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.3); flex-shrink: 0; }
+
+    /* ─── Marquee (hero) ─── */
+    .social-proof { width: 100%; padding: 16px 0; }
+    .social-proof-inner { display: flex; align-items: center; gap: 32px; overflow: hidden; }
+    .social-proof-label {
+      font-size: 0.875rem; color: var(--foreground); opacity: 0.5;
+      flex-shrink: 0; padding-left: 40px; white-space: nowrap;
+    }
+    .marquee-wrapper {
+      flex: 1; overflow: hidden;
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, #fff 8%, #fff 92%, transparent 100%);
+      mask-image: linear-gradient(to right, transparent 0%, #fff 8%, #fff 92%, transparent 100%);
+    }
+    .marquee-track { display: flex; align-items: center; gap: 12px; width: max-content; animation: marquee-scroll 20s linear infinite; }
+    .marquee-item {
+      display: flex; align-items: center; gap: 10px; padding: 7px 16px 7px 8px;
+      border-radius: 12px; flex-shrink: 0;
+    }
+    .brand-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.875rem; font-weight: 700; color: var(--foreground);
+      background: rgba(255,255,255,0.07); flex-shrink: 0;
+    }
+    .brand-name { font-size: 1rem; font-weight: 600; color: var(--foreground); opacity: 0.80; letter-spacing: -0.01em; }
+    @keyframes marquee-scroll { from { transform: translateX(0%); } to { transform: translateX(-50%); } }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       BELOW-FOLD — WHITE / TEAL SECTIONS
+    ═══════════════════════════════════════════════════════════════════════════ */
+
+    /* ─── Sticky Header (white) ─── */
+    .header {
+      background: var(--white); border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .header-logo-icon {
+      width: 28px; height: 28px; border-radius: 7px; background: var(--teal);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 900; color: #fff;
+    }
+    .header-logo-text { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.02em; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+    .header-links { display: flex; align-items: center; gap: 1rem; }
+    .header-link { font-size: .8125rem; font-weight: 500; color: var(--txt-m); text-decoration: none; transition: color 0.15s; }
+    .header-link:hover { color: var(--txt-b); }
+    .header-hamburger { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .header-hamburger svg { width: 24px; height: 24px; stroke: var(--olive); }
+    .mobile-menu { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.5); z-index: 200; }
+    .mobile-menu.open { display: flex; justify-content: flex-end; }
+    .mobile-menu-panel { background: var(--white); width: 240px; padding: 1.5rem; display: flex; flex-direction: column; gap: .25rem; box-shadow: -4px 0 24px rgba(0,0,0,.1); }
+    .mobile-menu-close { align-self: flex-end; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--txt-m); padding: 0 4px; }
+    .mobile-menu-link { font-size: 1rem; font-weight: 500; color: var(--olive); text-decoration: none; padding: .75rem 0; border-bottom: 1px solid var(--border-lt); }
+    .mobile-menu-link:last-child { border-bottom: none; }
+
+    /* ─── Section (white) ─── */
+    .sec { padding: 64px 24px; background: var(--white); border-bottom: 1px solid var(--border-lt); }
+    .sec.alt { background: var(--off-white); }
+    .sec.teal-bg { background: var(--teal); color: #fff; }
+    .sec-inner { max-width: 800px; margin: 0 auto; }
+    .sec-label {
+      font-size: .6875rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--teal); margin-bottom: .5rem;
+    }
+    .sec-label.white { color: rgba(255,255,255,0.7); }
+    .sec h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; color: var(--olive); margin-bottom: .5rem; }
+    .sec h2.white { color: #fff; }
+    .sec-sub { font-size: .9375rem; color: var(--txt-m); line-height: 1.6; margin-bottom: 2rem; }
+    .sec-sub.white { color: rgba(255,255,255,0.75); }
+
+    /* ─── VS Matchup ─── */
+    .vs-section { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin-top: 2rem; }
+    .vs-bot {
+      flex: 1; max-width: 240px; text-align: center; padding: 1.5rem; border-radius: 14px;
+      background: var(--off-white); border: 1px solid var(--border-lt);
+    }
+    .vs-bot-icon { font-size: 2.25rem; margin-bottom: .375rem; }
+    .vs-bot-label { font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--txt-l); margin-bottom: .125rem; }
+    .vs-bot-name { font-size: 1.0625rem; font-weight: 700; color: var(--teal); }
+    .vs-badge {
+      width: 52px; height: 52px; border-radius: 50%; background: var(--teal); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 800; flex-shrink: 0; box-shadow: 0 4px 16px rgba(0,76,84,0.25);
+    }
+
+    /* ─── Rules Grid ─── */
+    .rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 1.5rem; }
+    .rule-item {
+      display: flex; gap: .75rem; padding: 1.125rem; background: var(--white);
+      border: 1px solid var(--border-lt); border-radius: 12px;
+    }
+    .sec.alt .rule-item { background: var(--white); }
+    .rule-icon {
+      font-size: 1rem; flex-shrink: 0; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--teal-light); border-radius: 10px;
+    }
+    .rule-item h4 { font-size: .875rem; font-weight: 600; color: var(--olive); margin-bottom: .25rem; }
+    .rule-item p { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; }
+
+    /* ─── Steps Grid ─── */
+    .steps-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-top: 2rem; }
+    .step-card {
+      padding: 1.25rem; border-radius: 12px; background: var(--white);
+      border: 1px solid var(--border-lt); display: flex; flex-direction: column; gap: 10px;
+    }
+    .step-num { font-size: .75rem; font-weight: 700; color: var(--teal); letter-spacing: 0.05em; }
+    .step-title { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .step-desc { font-size: .8125rem; color: var(--txt-m); line-height: 1.6; flex: 1; }
+
+    /* ─── Weight Classes ─── */
+    .classes-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-top: 1.5rem; }
+    .class-card {
+      padding: 1.5rem; border-radius: 12px; background: var(--off-white);
+      border: 1px solid var(--border-lt); transition: border-color 0.2s;
+    }
+    .class-card:hover { border-color: var(--teal-border); }
+    .class-icon { font-size: 1.75rem; margin-bottom: .625rem; }
+    .class-card h3 { font-size: .9375rem; font-weight: 600; color: var(--olive); margin-bottom: .375rem; }
+    .class-card p { font-size: .8125rem; color: var(--txt-m); line-height: 1.6; }
+    .class-tag {
+      display: inline-block; margin-top: .75rem; font-size: .6875rem; font-weight: 600;
+      color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border);
+      padding: .2rem .5rem; border-radius: 9999px;
+    }
+
+    /* ─── Arena Board (Leaderboard) ─── */
+    .arena-board {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: 12px; overflow: hidden; margin-top: 1.5rem;
+    }
+    .board-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .875rem 1.25rem; border-bottom: 1px solid var(--border-lt);
+    }
+    .board-header h3 { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .board-live {
+      font-size: .6875rem; font-weight: 600; color: var(--green);
+      background: var(--green-light); border: 1px solid var(--green-border);
+      padding: .2rem .5rem; border-radius: 9999px;
+    }
+    .board-row {
+      display: grid; grid-template-columns: 36px 1fr 80px 64px 72px;
+      align-items: center; padding: .625rem 1.25rem; gap: .625rem;
+      border-bottom: 1px solid var(--border-lt); transition: background 0.15s;
+    }
+    .board-row:hover { background: var(--off-white); }
+    .board-row:last-child { border-bottom: none; }
+    .board-row.head {
+      font-size: .6875rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .board-rank { font-size: .8125rem; font-weight: 700; color: var(--teal); }
+    .board-agent { display: flex; flex-direction: column; gap: .0625rem; }
+    .board-agent-name { font-size: .8125rem; font-weight: 600; color: var(--olive); }
+    .board-agent-owner { font-size: .6875rem; color: var(--txt-l); }
+    .board-record { font-size: .8125rem; font-weight: 500; color: var(--txt-m); }
+    .board-winrate { font-size: .8125rem; font-weight: 600; }
+    .board-winrate.hot { color: var(--green); }
+    .board-winrate.cold { color: #c0392b; }
+    .board-pnl { font-size: .8125rem; font-weight: 600; }
+    .board-pnl.pos { color: var(--green); }
+    .board-pnl.neg { color: #c0392b; }
+
+    /* ─── CTA (teal) ─── */
+    .cta-sub { color: rgba(255,255,255,0.75); margin-bottom: 2rem; }
+    .btn-cta {
+      background: #1a2e1a; color: #fff; border: none;
+      font-family: inherit; font-size: .9375rem; font-weight: 600;
+      padding: 12px 28px; border-radius: 9999px; cursor: pointer;
+      transition: background 0.15s; text-decoration: none;
+    }
+    .btn-cta:hover { background: #004C54; }
+    .btn-cta-outline {
+      font-family: inherit; font-size: .9375rem; font-weight: 500;
+      padding: 12px 28px; border-radius: 9999px; cursor: pointer;
+      background: transparent; border: 1px solid rgba(255,255,255,0.3);
+      color: #fff; text-decoration: none; transition: border-color 0.15s;
+    }
+    .btn-cta-outline:hover { border-color: rgba(255,255,255,0.6); }
+    .cta-note { margin-top: 1.25rem; font-size: .8125rem; color: rgba(255,255,255,0.45); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       DASHBOARD — PICKS & RESULTS (inside .sec wrapper)
+    ═══════════════════════════════════════════════════════════════════════════ */
+
+    .dash { max-width: 640px; margin: 0 auto; }
+
+    /* ─── Pick Card ─── */
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .rating-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 26px; border-radius: 6px;
+      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+    }
+    .badge-aplus { background: #c0392b; }
+    .badge-a { background: #2980b9; }
+    .badge-aminus { background: #b8860b; }
+    .badge-bplus { background: #1abc9c; }
+    .badge-b { background: #e67e22; }
+
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
+    .win-prob {
+      display: inline-block; font-size: .6875rem; font-weight: 600;
+      color: var(--green); background: var(--green-light); border: 1px solid var(--green-border);
+      border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
+    }
+
+    /* ─── Parlay Section ─── */
+    .parlay-section {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .parlay-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    .parlay-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .parlay-name { font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .parlay-odds { font-size: 1rem; font-weight: 700; color: var(--teal); }
+    .parlay-payout { font-size: .875rem; font-weight: 700; color: var(--teal); margin-bottom: .625rem; }
+    .parlay-leg {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .375rem .5rem; background: var(--off-white);
+      border: 1px solid var(--border-lt); border-radius: .375rem;
+      margin-bottom: .25rem; font-size: .8125rem;
+    }
+    .leg-pick { font-weight: 500; color: var(--olive); }
+    .leg-odds { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--teal); white-space: nowrap; }
+
+    /* ─── Live Score / Result ─── */
+    .pick-score-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem .625rem; margin-bottom: .625rem; border-radius: .5rem; font-size: .8125rem;
+    }
+    .score-bar-live { background: #eef6ff; border: 1px solid #b3d4fc; }
+    .score-bar-win { background: #e8f5e9; border: 1px solid #a5d6a7; }
+    .score-bar-loss { background: #fce4e4; border: 1px solid #f5b7b7; }
+    .score-bar-push { background: #fff8e1; border: 1px solid #ffe082; }
+    .score-bar-scheduled { background: var(--off-white); border: 1px solid var(--border-lt); }
+    .score-teams { display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: var(--olive); }
+    .score-team { display: flex; align-items: center; gap: .375rem; }
+    .score-team-name { min-width: 100px; }
+    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; }
+    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .score-status {
+      font-size: .6875rem; font-weight: 700; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .status-live { background: #2196f3; color: #fff; animation: pulse-live 2s infinite; }
+    .status-win { background: #2e7d32; color: #fff; }
+    .status-loss { background: #c0392b; color: #fff; }
+    .status-push { background: #f9a825; color: #fff; }
+    .status-scheduled { background: var(--border-lt); color: var(--txt-m); }
+    .score-detail { font-size: .6875rem; color: var(--txt-m); }
+    @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+
+    .leg-result { font-size: .6875rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; margin-left: .375rem; white-space: nowrap; }
+    .leg-win { background: #e8f5e9; color: #2e7d32; }
+    .leg-loss { background: #fce4e4; color: #c0392b; }
+    .leg-push { background: #fff8e1; color: #f9a825; }
+    .leg-live { background: #eef6ff; color: #2196f3; }
+
+    .record-bar {
+      display: flex; align-items: center; justify-content: center; gap: 1rem;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem; margin-bottom: .75rem;
+      font-size: .8125rem; font-weight: 600;
+    }
+    .record-wins { color: #2e7d32; }
+    .record-losses { color: #c0392b; }
+
+    /* ─── Results Tracker ─── */
+    .results-section-title {
+      font-size: .75rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
+    .results-cumulative { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-bottom: 1rem; }
+    .cum-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .75rem .5rem; text-align: center;
+    }
+    .cum-value { font-size: 1.25rem; font-weight: 700; color: var(--olive); }
+    .cum-value.positive { color: #2e7d32; }
+    .cum-value.negative { color: #c0392b; }
+    .cum-label { font-size: .6875rem; color: var(--txt-m); margin-top: .125rem; }
+
+    .results-table-wrap {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; overflow: hidden; margin-bottom: 1.25rem;
+    }
+    .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+    .results-table th {
+      background: var(--olive); color: #fff; padding: .625rem .5rem; text-align: left;
+      font-weight: 600; font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .results-table td { padding: .5rem; border-bottom: 1px solid var(--border-lt); vertical-align: top; }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: var(--off-white); }
+    .day-toggle {
+      background: none; border: none; padding: 0; font-family: inherit; font-size: .8125rem;
+      font-weight: 600; color: var(--teal); cursor: pointer; text-align: left;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .day-detail { display: none; }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
+    .day-picks-list { list-style: none; padding: 0; margin: 0; }
+    .day-picks-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .25rem 0; border-bottom: 1px solid var(--border-lt); font-size: .75rem;
+    }
+    .day-picks-list li:last-child { border-bottom: none; }
+    .result-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: .6875rem; font-weight: 600; }
+    .result-win { background: #e8f5e9; color: #2e7d32; }
+    .result-loss { background: #fce4e4; color: #c0392b; }
+    .result-push { background: #fff8e1; color: #f9a825; }
+    .result-pending { background: #eef6ff; color: #2196f3; }
+    .profit-positive { color: #2e7d32; font-weight: 600; }
+    .profit-negative { color: #c0392b; font-weight: 600; }
+
+    .legend { display: flex; gap: .875rem; margin-bottom: 1.25rem; font-size: .8125rem; color: var(--txt-m); }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .dot-aplus { background: #c0392b; }
+    .dot-a { background: #2980b9; }
+    .dot-b { background: #e67e22; }
+
+    .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .25rem; }
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--txt-m); }
+    .loading-icon { font-size: 1.5rem; margin-bottom: .5rem; }
+    .footer-note { margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l); text-align: center; line-height: 1.5; }
+
+    /* ─── Challenge Modal ─── */
+    .challenge-cta { text-align: center; padding: 2rem 0 0; }
+    .btn-challenge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #004C54; color: #fff;
+      border: none; font-family: inherit; font-size: 1.0625rem; font-weight: 600;
+      padding: 14px 28px; border-radius: 9999px; cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease;
+      box-shadow: 0 2px 12px rgba(0,76,84,0.25);
+    }
+    .btn-challenge:hover:not(:disabled) { background: #003a40; color: #fff; transform: translateY(-1px); }
+    .btn-challenge:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .challenge-sub { font-size: .8125rem; color: var(--txt-m); margin-top: .5rem; line-height: 1.5; }
+
+    /* ─── Betty Chat Window ─── */
+    .betty-chat { background: var(--white); border: 1px solid var(--border-lt); border-radius: 1rem; overflow: hidden; margin-top: 2rem; text-align: left; }
+    .betty-chat-header { display: flex; align-items: center; gap: .5rem; padding: .625rem 1rem; border-bottom: 1px solid var(--border-lt); background: var(--off-white); }
+    .betty-chat-header svg { width: 22px; height: 19px; }
+    .betty-chat-header-title { font-size: .8125rem; font-weight: 700; color: var(--olive); }
+    .betty-chat-header-sub { font-size: .625rem; color: var(--txt-l); margin-left: auto; }
+    .betty-chat-messages { height: 280px; overflow-y: auto; padding: .75rem; display: flex; flex-direction: column; gap: .625rem; }
+    .betty-msg { display: flex; gap: .5rem; max-width: 88%; }
+    .betty-msg.user { flex-direction: row-reverse; align-self: flex-end; }
+    .betty-avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; object-fit: cover; object-position: center 35%; }
+    .betty-bubble { padding: .5rem .75rem; border-radius: 1rem; font-size: .8125rem; line-height: 1.5; }
+    .betty-bubble.ai { background: var(--off-white); border: 1px solid var(--border-lt); color: var(--txt-b); border-bottom-left-radius: 4px; }
+    .betty-bubble.user { background: var(--teal); color: #fff; border-bottom-right-radius: 4px; }
+    .betty-input-area { display: flex; gap: .5rem; padding: .625rem .75rem; border-top: 1px solid var(--border-lt); }
+    .betty-textarea { flex: 1; font-family: inherit; font-size: .8125rem; padding: .5rem .625rem; border: 1px solid var(--border-lt); border-radius: 1.25rem; background: var(--off-white); resize: none; outline: none; max-height: 80px; line-height: 1.4; }
+    .betty-textarea:focus { border-color: var(--teal); background: var(--white); }
+    .betty-send { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--teal); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .betty-send:hover { background: var(--olive); }
+    .betty-send:disabled { opacity: .4; }
+    .betty-send svg { width: 16px; height: 16px; }
+    .betty-typing { display: inline-flex; gap: 4px; padding: 4px 0; }
+    .betty-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--txt-l); animation: bdot 1.4s ease-in-out infinite; }
+    .betty-typing span:nth-child(2) { animation-delay: .2s; }
+    .betty-typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bdot { 0%,80%,100% { opacity: .3; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+
+    /* ─── Pick Board (selection table) ─── */
+    .pick-board-wrap { background: var(--white); border: 1px solid var(--border-lt); border-radius: 1rem; overflow: hidden; margin-bottom: 1.5rem; }
+    .pick-board-header { display: flex; align-items: center; justify-content: space-between; padding: .75rem 1rem; border-bottom: 1px solid var(--border-lt); background: var(--off-white); }
+    .pick-board-title { font-size: .8125rem; font-weight: 700; color: var(--olive); }
+    .pick-counter { display: flex; align-items: center; gap: 6px; font-size: .75rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); padding: .2rem .6rem; border-radius: 9999px; }
+    .pick-counter.full { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+    .board-section { border-bottom: 1px solid var(--border-lt); }
+    .board-section:last-child { border-bottom: none; }
+    .board-section-label { font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--txt-l); padding: .5rem 1rem; background: var(--off-white); border-bottom: 1px solid var(--border-lt); }
+    .board-section-label .label-rule { font-weight: 400; color: var(--teal); margin-left: .5rem; }
+    .game-row { display: grid; grid-template-columns: 26px 40px 1fr auto auto; align-items: center; gap: .5rem; padding: .75rem 1rem; border-bottom: 1px solid var(--border-lt); transition: background .15s; cursor: pointer; }
+    .game-row:last-child { border-bottom: none; }
+    .game-row:hover { background: var(--off-white); }
+    .game-row.selected { background: var(--teal-light); border-color: var(--teal-border); }
+    .game-row.disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+    .game-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border-lt); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .game-row.selected .game-check { background: var(--teal); border-color: var(--teal); }
+    .game-check svg { width: 12px; height: 12px; display: none; }
+    .game-row.selected .game-check svg { display: block; }
+    .game-sport { font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 4px; padding: .1rem .35rem; text-transform: uppercase; flex-shrink: 0; min-width: 36px; text-align: center; }
+    .game-info { min-width: 0; }
+    .game-matchup { font-size: .8125rem; font-weight: 600; color: var(--olive); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .game-bet { font-size: .6875rem; color: var(--teal); font-weight: 600; margin-top: 1px; }
+    .game-time { font-size: .6875rem; color: var(--txt-l); margin-top: 1px; }
+    .game-sides { display: flex; gap: 4px; flex-shrink: 0; }
+    .side-btn { font-family: inherit; font-size: .75rem; font-weight: 600; padding: .375rem 0; border-radius: 6px; border: 1px solid var(--border-lt); background: var(--white); color: var(--txt-m); cursor: pointer; transition: all .15s; white-space: nowrap; width: 72px; text-align: center; }
+    .side-btn:hover { border-color: var(--teal-border); color: var(--teal); }
+    .side-btn.active { background: var(--teal); color: #fff; border-color: var(--teal); }
+    .game-rating { flex-shrink: 0; }
+    .game-row .rating-badge { font-size: .625rem; min-width: 26px; height: 22px; }
+
+    /* ─── My Picks Summary ─── */
+    .my-picks { background: var(--white); border: 1px solid var(--teal-border); border-radius: 1rem; padding: 1rem; margin-bottom: 1rem; display: none; }
+    .my-picks.visible { display: block; }
+    .my-picks-title { font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--teal); margin-bottom: .5rem; }
+    .my-pick-row { display: flex; align-items: center; justify-content: space-between; padding: .375rem 0; border-bottom: 1px solid var(--border-lt); font-size: .8125rem; }
+    .my-pick-row:last-child { border-bottom: none; }
+    .my-pick-label { font-weight: 600; color: var(--olive); }
+    .my-pick-detail { color: var(--txt-m); font-size: .75rem; }
+    .my-pick-tag { font-size: .6rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); padding: .1rem .3rem; border-radius: 4px; margin-left: .375rem; }
+
+    /* ─── Login Bar ─── */
+    .login-bar { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .75rem; padding: .75rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .login-bar-text { font-size: .8125rem; color: var(--txt-m); flex-shrink: 0; }
+    .login-bar-text strong { color: var(--olive); }
+    .login-input { font-family: inherit; font-size: .8125rem; padding: .375rem .625rem; border: 1px solid var(--border-lt); border-radius: .5rem; background: var(--white); outline: none; width: 140px; }
+    .login-input:focus { border-color: var(--teal); }
+    .login-btn { font-family: inherit; font-size: .75rem; font-weight: 600; padding: .375rem .75rem; border: none; border-radius: .5rem; background: var(--teal); color: #fff; cursor: pointer; white-space: nowrap; }
+    .login-btn:hover { background: var(--olive); }
+    .login-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .login-user { display: flex; align-items: center; gap: .5rem; font-size: .8125rem; font-weight: 600; color: var(--olive); }
+    .login-handle { color: var(--teal); }
+    .login-logout { font-size: .6875rem; color: var(--txt-l); cursor: pointer; text-decoration: underline; }
+    .login-logout:hover { color: #c0392b; }
+
+    /* ─── Profile Modal ─── */
+    .profile-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: 1rem; overflow: hidden; max-width: 440px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: modal-in 0.2s ease; }
+    .profile-header { background: var(--teal); padding: 1.5rem 1.25rem; color: #fff; text-align: center; position: relative; }
+    .profile-avatar { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; margin: 0 auto .5rem; }
+    .profile-handle { font-size: 1.125rem; font-weight: 700; }
+    .profile-name { font-size: .8125rem; opacity: .8; margin-top: .125rem; }
+    .profile-close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: rgba(255,255,255,0.7); font-size: 1.25rem; cursor: pointer; }
+    .profile-close:hover { color: #fff; }
+    .profile-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-lt); }
+    .profile-stat { text-align: center; }
+    .profile-stat-val { font-size: 1.125rem; font-weight: 700; color: var(--olive); }
+    .profile-stat-val.pos { color: #2e7d32; }
+    .profile-stat-val.neg { color: #c0392b; }
+    .profile-stat-lbl { font-size: .625rem; color: var(--txt-l); text-transform: uppercase; letter-spacing: .04em; margin-top: .125rem; }
+    .profile-picks-title { font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--teal); padding: .75rem 1.25rem .25rem; }
+    .profile-pick-card { margin: .5rem 1.25rem; background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .75rem; padding: .75rem; }
+    .profile-pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .25rem; }
+    .profile-pick-matchup { font-size: .8125rem; font-weight: 600; color: var(--olive); }
+    .profile-pick-side { font-size: .75rem; color: var(--teal); font-weight: 600; }
+    .profile-no-picks { font-size: .8125rem; color: var(--txt-l); text-align: center; padding: 1.5rem 1.25rem; }
+
+    @media (max-width: 768px) {
+      .header-links { display: none; }
+      .header-hamburger { display: block; }
+      .game-row { grid-template-columns: 22px 1fr; gap: .375rem .5rem; padding: .625rem .75rem; }
+      .game-sport { grid-column: 2; justify-self: start; }
+      .game-info { grid-column: 2; }
+      .game-sides { grid-column: 2; justify-self: start; }
+      .game-rating { grid-column: 2; justify-self: start; }
+      .side-btn { width: 80px; font-size: .75rem; }
+      .game-check { grid-row: 1 / 5; align-self: center; }
+      .login-bar { flex-direction: column; align-items: stretch; gap: .5rem; }
+      .login-input { width: 100%; }
+      .profile-stats { grid-template-columns: repeat(2, 1fr); }
+      .vs-section { flex-direction: row; gap: .75rem; margin-top: 1.25rem; }
+      .vs-bot { padding: .75rem .5rem; max-width: 140px; }
+      .vs-bot-icon { font-size: 1.5rem; margin-bottom: .125rem; }
+      .vs-bot-name { font-size: .875rem; }
+      .vs-badge { width: 40px; height: 40px; font-size: .8125rem; }
+    }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 1rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--white); border-radius: 1rem;
+      max-width: 440px; width: 100%; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: modal-in 0.2s ease;
+    }
+    @keyframes modal-in { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.25rem 1.25rem .75rem; border-bottom: 1px solid var(--border-lt);
+    }
+    .modal-title { font-size: 1.125rem; font-weight: 700; color: var(--olive); }
+    .modal-close { background: none; border: none; cursor: pointer; padding: 4px; color: var(--txt-m); font-size: 1.25rem; line-height: 1; }
+    .modal-close:hover { color: var(--olive); }
+    .modal-body { padding: 1.25rem; }
+    .modal-step { display: flex; gap: .75rem; margin-bottom: 1.25rem; }
+    .m-step-num {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--teal); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    }
+    .step-content { flex: 1; }
+    .m-step-title { font-size: .9375rem; font-weight: 600; color: var(--olive); margin-bottom: .25rem; }
+    .m-step-desc { font-size: .8125rem; color: var(--txt-m); line-height: 1.5; }
+    .modal-divider { height: 1px; background: var(--border-lt); margin: .25rem 0 1.25rem; }
+    .modal-form-group { margin-bottom: 1rem; }
+    .modal-label { display: block; font-size: .75rem; font-weight: 600; color: var(--txt-m); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .375rem; }
+    .modal-input {
+      width: 100%; padding: .625rem .75rem; font-family: inherit; font-size: .9375rem;
+      border: 1px solid var(--border-lt); border-radius: .5rem; color: var(--olive);
+      background: var(--off-white); outline: none; transition: border-color 0.15s;
+    }
+    .modal-input:focus { border-color: var(--teal); }
+    .modal-select {
+      width: 100%; padding: .625rem .75rem; font-family: inherit; font-size: .9375rem;
+      border: 1px solid var(--border-lt); border-radius: .5rem; color: var(--olive);
+      background: var(--off-white); outline: none; cursor: pointer;
+    }
+    .btn-send-challenge {
+      width: 100%; padding: .75rem; border: none; border-radius: .5rem;
+      background: var(--teal); color: #fff; font-family: inherit;
+      font-size: .9375rem; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: .5rem;
+    }
+    .btn-send-challenge:hover { background: #003a40; }
+
+    /* ─── Fade-in ─── */
+    .fi { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .fi.v { opacity: 1; transform: translateY(0); }
+
+    /* ─── Footer ─── */
+    footer { padding: 2rem 1.25rem; background: var(--white); border-top: 1px solid var(--border-lt); }
+    .footer-inner {
+      max-width: 800px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .footer-logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; }
+    .footer-logo-text { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .footer-links { display: flex; gap: 24px; list-style: none; flex-wrap: wrap; }
+    .footer-link { font-size: .8125rem; color: var(--txt-l); text-decoration: none; transition: color 0.15s; }
+    .footer-link:hover { color: var(--txt-b); }
+    .footer-copy { font-size: .75rem; color: var(--txt-l); }
+
+    /* Iframe embed — always use hamburger */
+    .in-iframe .nav-links { display: none !important; }
+    .in-iframe .btn-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: flex !important; align-items: center; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) { .steps-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 768px) {
+      /* Hero navbar — match webetsocial.com homepage */
+      .navbar { padding: 12px 16px 0; }
+      .navbar-pill { padding: 8px 12px; }
+      .nav-links { display: none; }
+      .btn-nav { display: none; }
+      .mobile-menu-btn { display: flex; align-items: center; }
+      .hero { min-height: 100svh; }
+      .hero-content { min-height: 100svh; }
+      .hero-main { gap: clamp(14px, 2.5vh, 32px); padding: 0 20px; }
+      .hero-heading { font-size: clamp(1.625rem, 7vw, 2.25rem); }
+      .hero-sub { font-size: .875rem; padding: 12px 16px; max-width: 420px; }
+      .hero-ctas { gap: 8px; margin-top: 0; flex-wrap: nowrap; }
+      .btn-hero, .btn-hero-secondary { font-size: .8125rem; padding: 10px 14px; }
+      .hero-trust { font-size: .75rem; gap: .5rem; }
+      .announcement-badge { font-size: .75rem; padding: 5px 6px 5px 12px; }
+      .badge-chip { font-size: .7rem; padding: 3px 8px 3px 10px; }
+      .social-proof-label { display: none; }
+
+      /* Sticky header — compact on mobile */
+      .header { padding: .625rem .75rem; }
+      .header-badge { font-size: .6rem; padding: .15rem .4rem; }
+      .header-logo-text { font-size: .9375rem; }
+      .rules-grid { grid-template-columns: 1fr; }
+      .board-row { grid-template-columns: 32px 1fr 64px 56px; }
+      .board-pnl { display: none; }
+      .sec { padding: 48px 16px; }
+      .sec h2 { font-size: 1.25rem; }
+      .sec-sub { font-size: .875rem; }
+      .results-cumulative { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 550px) {
+      .steps-grid { grid-template-columns: 1fr; }
+      .classes-grid { grid-template-columns: 1fr; }
+      .hero-heading { font-size: 1.5rem; }
+    }
+    @media(max-width: 480px) {
+      .bet-summary-grid { grid-template-columns: 1fr 2.25rem 3rem 3.25rem !important; gap: 0 .25rem !important; }
+      .bet-summary-grid .leg-pick { font-size: .75rem !important; }
+      .bet-summary-grid .leg-result { font-size: .6rem !important; padding: 1px 4px !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Sticky header (white) -->
+<div class="header">
+  <a href="/" class="header-logo">
+    <svg viewBox="0 0 470 419" fill="none" style="width:28px; height:24px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+      <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+    </svg>
+    <span class="header-logo-text">WeBetAI</span>
+    <span class="header-badge">PVP P2P</span>
+  </a>
+  <div class="header-links">
+    <a href="/invite" class="header-link">Invite</a>
+    <a href="https://webetsocial.com/edge-beta" class="header-link">Edge Picks</a>
+    <a href="#leaderboard" class="header-link">Leaderboard</a>
+    <a href="#challenge" class="header-link">Today's Board</a>
+  </div>
+  <button class="header-hamburger" onclick="document.getElementById('mobile-menu').classList.add('open')">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+</div>
+
+<div class="mobile-menu" id="mobile-menu" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="mobile-menu-panel">
+    <button class="mobile-menu-close" onclick="document.getElementById('mobile-menu').classList.remove('open')">&times;</button>
+    <a href="/invite" class="mobile-menu-link" onclick="document.getElementById('mobile-menu').classList.remove('open')">Invite</a>
+    <a href="https://webetsocial.com/edge-beta" class="mobile-menu-link">Edge Picks</a>
+    <a href="#leaderboard" class="mobile-menu-link" onclick="document.getElementById('mobile-menu').classList.remove('open')">Leaderboard</a>
+    <a href="#challenge" class="mobile-menu-link" onclick="document.getElementById('mobile-menu').classList.remove('open')">Today's Board</a>
+  </div>
+</div>
+
+<!-- THE MAIN EVENT — Explainer + VS -->
+<section class="sec fi" id="main-event" style="padding-bottom:0; padding-top:32px;">
+  <div class="sec-inner" style="text-align:center;">
+    <div class="sec-label">The Daily Main Event</div>
+    <h2>Your Picks vs. Theirs</h2>
+
+    <!-- VS Cards -->
+    <div class="vs-section">
+      <div class="vs-bot">
+        <div class="vs-bot-icon">&#127919;</div>
+        <div class="vs-bot-label">You</div>
+        <div class="vs-bot-name">Your 3 Picks</div>
+      </div>
+      <div class="vs-badge">VS</div>
+      <div class="vs-bot">
+        <div class="vs-bot-icon">&#128293;</div>
+        <div class="vs-bot-label">Opponent</div>
+        <div class="vs-bot-name">Their 3 Picks</div>
+      </div>
+    </div>
+
+    <!-- 3 Steps -->
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num">STEP 1</div>
+        <div class="step-title">Pick Your 3</div>
+        <div class="step-desc">Choose only one of the AI's top selections. Then two from the remaining top 10 evaluated games.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">STEP 2</div>
+        <div class="step-title">Challenge a Friend</div>
+        <div class="step-desc">Lock your picks and send a text challenge. They'll get a link to come back and build their own 3.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">STEP 3</div>
+        <div class="step-title">Best Record Wins</div>
+        <div class="step-desc">Whoever has the best record wins. If it's a tie, it pushes to the next day.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PICK BOARD -->
+<section class="sec fi" id="challenge" style="padding-top:2rem;">
+  <div class="sec-inner">
+    <div style="text-align:center;">
+      <div class="sec-label">Today's Board</div>
+      <h2 id="board-heading">Log In to Make Your Pick 3</h2>
+    </div>
+
+    <!-- Login Bar -->
+    <div class="login-bar" id="login-bar" style="justify-content:center; text-align:center;">
+      <span class="login-bar-text" id="login-text">Enter your phone to start picking</span>
+      <div id="login-form" style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; justify-content:center;">
+        <input class="login-input" id="login-phone" type="tel" placeholder="Phone number" autocomplete="tel" />
+        <button class="login-btn" id="login-btn" onclick="handleLogin()">Send Code</button>
+      </div>
+      <div id="login-otp" style="display:none; align-items:center; gap:.5rem;">
+        <input class="login-input" id="login-code" type="text" placeholder="6-digit code" maxlength="6" inputmode="numeric" style="width:100px;" />
+        <input class="login-input" id="login-handle" type="text" placeholder="Handle (optional)" style="width:110px;" />
+        <button class="login-btn" id="verify-btn" onclick="handleVerify()">Verify</button>
+      </div>
+      <div id="login-user" style="display:none;" class="login-user">
+        <span id="login-welcome"></span>
+        <span class="login-logout" onclick="handleLogout()">Log out</span>
+      </div>
+    </div>
+
+    <!-- Pick Selection Board -->
+    <div class="pick-board-wrap" id="pick-board">
+      <div class="pick-board-header">
+        <span class="pick-board-title">Select Your 3 Picks</span>
+        <span class="pick-counter" id="pick-counter">0 / 3 Selected</span>
+      </div>
+
+      <!-- AI's Top 3 -->
+      <div class="board-section" id="ai-section">
+        <div class="board-section-label">AI's Picks<span class="label-rule">— Select 1</span></div>
+        <div id="ai-rows">
+          <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">Loading AI picks...</div>
+        </div>
+      </div>
+
+      <!-- Available Games -->
+      <div class="board-section" id="avail-section">
+        <div class="board-section-label">Remaining Top 10<span class="label-rule">— Select 2</span></div>
+        <div id="avail-rows">
+          <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">Loading today's games...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- My Picks Summary -->
+    <div class="my-picks" id="my-picks">
+      <div class="my-picks-title">Your Pick 3</div>
+      <div id="my-picks-list"></div>
+    </div>
+
+    <!-- Challenge CTA -->
+    <div class="challenge-cta" style="text-align:center;">
+      <button class="btn-challenge" id="btn-challenge" disabled onclick="openChallengeWithPicks()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Select 3 Picks to Challenge
+      </button>
+      <p class="challenge-sub">Send a text challenge to a friend, and they'll come back and build their Pick 3.</p>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- MY CHALLENGES (visible when logged in) -->
+<section class="sec fi" id="my-challenges-section" style="display:none;">
+  <div class="sec-inner">
+    <div class="sec-label">My Challenges</div>
+    <h2>Active & Past Challenges</h2>
+    <div id="my-challenges" style="margin-top:1rem;">
+      <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Loading...</div>
+    </div>
+  </div>
+</section>
+
+<!-- LEADERBOARD -->
+<section class="sec fi" id="leaderboard" style="padding-top:2rem;">
+  <div class="sec-inner" style="text-align:center;">
+    <div class="sec-label">Capper Rankings</div>
+    <h2>Top Cappers This Season</h2>
+  </div>
+  <div class="sec-inner">
+    <div class="arena-board">
+      <div class="board-header">
+        <h3>Season 1 Leaderboard</h3>
+        <span class="board-live">LIVE</span>
+      </div>
+      <div class="board-row head">
+        <span>#</span>
+        <span>Capper</span>
+        <span>Record</span>
+        <span>Win %</span>
+        <span>P/L</span>
+      </div>
+      <div id="leaderboard-rows">
+        <div style="padding:1.5rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Loading leaderboard...</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <a href="/" class="footer-logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:24px; height:20px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="footer-logo-text">WeBetAI</span>
+    </a>
+    <div class="footer-links">
+      <a href="/invite" class="footer-link">Invite</a>
+      <a href="https://webetsocial.com/edge-beta" class="footer-link">Edge Picks</a>
+      <a href="#leaderboard" class="footer-link">Leaderboard</a>
+      <a href="#challenge" class="footer-link">Today's Board</a>
+    </div>
+    <span class="footer-copy">&copy; 2026 Pick3P2P. All rights reserved.</span>
+  </div>
+</footer>
+
+<!-- PROFILE MODAL -->
+<div class="modal-overlay" id="profile-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="profile-card">
+    <div class="profile-header">
+      <button class="profile-close" onclick="document.getElementById('profile-modal').classList.remove('open')">&times;</button>
+      <div class="profile-avatar" id="profile-avatar">?</div>
+      <div class="profile-handle" id="profile-handle">@handle</div>
+      <div class="profile-name" id="profile-name"></div>
+    </div>
+    <div class="profile-stats" id="profile-stats">
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-record">--</div><div class="profile-stat-lbl">Record</div></div>
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-winrate">--</div><div class="profile-stat-lbl">Win %</div></div>
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-pl">--</div><div class="profile-stat-lbl">P/L</div></div>
+      <div class="profile-stat"><div class="profile-stat-val" id="prof-streak">--</div><div class="profile-stat-lbl">Streak</div></div>
+    </div>
+    <div class="profile-picks-title">Today's Picks</div>
+    <div id="profile-picks">
+      <div class="profile-no-picks">No picks submitted today.</div>
+    </div>
+    <div style="padding:.75rem 1.25rem 1.25rem;"></div>
+  </div>
+</div>
+
+<!-- CHALLENGE MODAL -->
+<div class="modal-overlay" id="challenge-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Challenge a Friend</span>
+      <button class="modal-close" onclick="document.getElementById('challenge-modal').classList.remove('open')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Your selected picks summary -->
+      <div id="modal-picks-summary" style="margin-bottom:1rem;"></div>
+      <div class="modal-divider"></div>
+      <div class="modal-form-group">
+        <label class="modal-label">Your Name</label>
+        <input class="modal-input" type="text" placeholder="e.g. Brandon" id="c-name" />
+      </div>
+      <div class="modal-form-group">
+        <label class="modal-label">Friend's Phone Number</label>
+        <input class="modal-input" type="tel" placeholder="(555) 123-4567" id="c-friend" />
+      </div>
+      <div class="modal-form-group">
+        <label class="modal-label">WeBit Stake</label>
+        <select class="modal-select" id="c-wager">
+          <option value="0">No stake — bragging rights</option>
+          <option value="50" selected>ⓦ 50 WeBits — Casual</option>
+          <option value="100">ⓦ 100 WeBits — Competitive</option>
+          <option value="250">ⓦ 250 WeBits — Main Event</option>
+        </select>
+      </div>
+      <button class="btn-send-challenge" id="btn-send" onclick="sendChallenge()">Send Challenge via Text</button>
+      <p style="font-size:.6875rem; color:var(--txt-l); text-align:center; margin-top:.75rem; line-height:1.4;" id="modal-status">Your friend will get a text with the challenge link.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  /* ═══════════════════════════════════════════════════════════════
+     PICK3P2P — Full Application Script
+  ═══════════════════════════════════════════════════════════════ */
+
+  var API_BASE = 'https://webetsocial.com';
+
+  /* ── Marquee (skip if element not present) ── */
+  var track = document.getElementById('marquee-track');
+  if (track) {
+    var sources = ['DraftKings','FanDuel','BetMGM','ESPN','Pinnacle','Pick3P2P','The Odds API','Bettor Edge'];
+    sources.concat(sources).forEach(function(name) {
+      var el = document.createElement('div');
+      el.className = 'marquee-item liquid-glass';
+      el.innerHTML = '<div class="brand-icon">' + name[0] + '</div><span class="brand-name">' + name + '</span>';
+      track.appendChild(el);
+    });
+  }
+
+  /* ── Scroll fade-in ── */
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(en) { if (en.isIntersecting) { en.target.classList.add('v'); obs.unobserve(en.target); } });
+    }, { threshold: 0.08, rootMargin: '0px 0px -20px 0px' });
+    document.querySelectorAll('.fi').forEach(function(el) { obs.observe(el); });
+  } else { document.querySelectorAll('.fi').forEach(function(el) { el.classList.add('v'); }); }
+
+  /* ── Helpers ── */
+  function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  var badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b' };
+  var ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B' };
+
+  function calcWinnings(atRisk, oddsStr) {
+    var odds = parseInt((oddsStr||'-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds) || !atRisk) return 0;
+    return odds > 0 ? atRisk * (odds / 100) : atRisk * (100 / Math.abs(odds));
+  }
+  function americanToImplied(oddsStr) {
+    var odds = parseInt((oddsStr || '-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds)) return 0.5;
+    return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+  }
+  function impliedToAmerican(prob) {
+    if (prob <= 0 || prob >= 1) return '+100';
+    return prob > 0.5 ? '-' + Math.round((prob / (1 - prob)) * 100) : '+' + Math.round(((1 - prob) / prob) * 100);
+  }
+  function calcParlayOdds(legs) { return impliedToAmerican(legs.reduce(function(a, o) { return a * americanToImplied(o); }, 1)); }
+  function calcParlayWinnings(risk, legs) {
+    var d = 1;
+    for (var i = 0; i < legs.length; i++) {
+      var odds = parseInt((legs[i]||'-110').replace(/[^0-9+-]/g, ''));
+      if (isNaN(odds)) { d *= 1.909; continue; }
+      d *= odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
+    }
+    return risk * (d - 1);
+  }
+  function formatPhone(raw) {
+    var digits = raw.replace(/\D/g, '');
+    if (digits.length === 10) return '+1' + digits;
+    if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+    return null;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     ESPN LIVE SCORES
+  ═══════════════════════════════════════════════════════════════ */
+  var ESPN_ENDPOINTS = {
+    'NBA': 'basketball/nba', 'NHL': 'hockey/nhl', 'MLB': 'baseball/mlb',
+    'NCAAB': 'basketball/mens-college-basketball',
+    'EPL': 'soccer/eng.1', 'La Liga': 'soccer/esp.1', 'Serie A': 'soccer/ita.1',
+    'Bundesliga': 'soccer/ger.1', 'Ligue 1': 'soccer/fra.1', 'MLS': 'soccer/usa.1',
+    'UCL': 'soccer/uefa.champions', 'UEL': 'soccer/uefa.europa', 'Europa': 'soccer/uefa.europa',
+  };
+  var cachedScores = {}, allGames = [], picksData = null, refreshTimer = null;
+
+  async function fetchScoresForSport(sport) {
+    var endpoint = ESPN_ENDPOINTS[sport]; if (!endpoint) return [];
+    try {
+      var resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/' + endpoint + '/scoreboard');
+      if (!resp.ok) return [];
+      var data = await resp.json();
+      return (data.events || []).map(function(ev) {
+        var comp = ev.competitions && ev.competitions[0]; if (!comp) return null;
+        var away = comp.competitors && comp.competitors.find(function(c) { return c.homeAway === 'away'; });
+        var home = comp.competitors && comp.competitors.find(function(c) { return c.homeAway === 'home'; });
+        if (!away || !home) return null;
+        var status = comp.status || ev.status || {};
+        return {
+          sport: sport,
+          awayTeam: (away.team && away.team.displayName) || '', awayAbbr: (away.team && away.team.abbreviation) || '', awayScore: parseInt(away.score) || 0,
+          homeTeam: (home.team && home.team.displayName) || '', homeAbbr: (home.team && home.team.abbreviation) || '', homeScore: parseInt(home.score) || 0,
+          state: (status.type && status.type.state) || 'pre',
+          detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
+          startTime: ev.date || '',
+        };
+      }).filter(Boolean);
+    } catch (e) { return []; }
+  }
+  async function fetchAllScores(sports) {
+    var unique = [...new Set(sports)];
+    var results = await Promise.all(unique.map(async function(s) { return [s, await fetchScoresForSport(s)]; }));
+    for (var r of results) cachedScores[r[0]] = r[1];
+  }
+  function normalizeTeam(name) { return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
+  function teamsMatch(p, e, a) {
+    p = normalizeTeam(p); e = normalizeTeam(e); a = normalizeTeam(a);
+    if (!p || !e) return false;
+    if (p === e || p.includes(e) || e.includes(p)) return true;
+    if (a && p.includes(a)) return true;
+    var pL = p.split(' ').pop(), eL = e.split(' ').pop();
+    return pL.length > 2 && pL === eL;
+  }
+  function findGame(pick) {
+    var games = cachedScores[pick.sport] || [];
+    var matchup = (pick.matchup || '').toLowerCase();
+    var parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(function(s) { return s.trim(); }).filter(Boolean);
+    for (var g of games) {
+      if (parts.some(function(p) { return teamsMatch(p, g.awayTeam, g.awayAbbr); }) &&
+          (parts.some(function(p) { return teamsMatch(p, g.homeTeam, g.homeAbbr); }) ||
+           matchup.includes(normalizeTeam(g.homeTeam).split(' ').pop()))) return g;
+    }
+    return null;
+  }
+  function determineResult(pick, game) {
+    if (!game) return { status: 'scheduled', label: 'Upcoming' };
+    if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
+    if (game.state === 'in') return { status: 'live', label: game.detail || 'Live' };
+    var pickStr = (pick.pick || '').trim();
+    var pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    var pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+    var pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+    if (/over|under/i.test(pickStr)) {
+      var total = game.awayScore + game.homeScore;
+      var m = pickStr.match(/(over|under)\s*([\d.]+)/i);
+      if (m) { var line = parseFloat(m[2]); if (total === line) return { status: 'push', label: 'Push' }; var won = (m[1].toLowerCase() === 'over' && total > line) || (m[1].toLowerCase() === 'under' && total < line); return won ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' }; }
+    }
+    if (/[+-]\d+(\.\d+)?/.test(pickStr) && (pickedAway || pickedHome)) {
+      var sm = pickStr.match(/([+-]\d+(\.\d+)?)/);
+      if (sm) { var spread = parseFloat(sm[1]); var ps = pickedAway ? game.awayScore : game.homeScore; var os = pickedAway ? game.homeScore : game.awayScore; var adj = ps + spread; if (adj === os) return { status: 'push', label: 'Push' }; return adj > os ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' }; }
+    }
+    if (pickedAway || pickedHome) { var ps2 = pickedAway ? game.awayScore : game.homeScore; var os2 = pickedAway ? game.homeScore : game.awayScore; if (ps2 === os2) return { status: 'push', label: 'Push' }; return ps2 > os2 ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' }; }
+    if (/draw/i.test(pickStr)) return game.awayScore === game.homeScore ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
+    return { status: 'scheduled', label: 'Final' };
+  }
+  function scoreBarHTML(pick, game, result) {
+    if (!game) return '';
+    var bc = 'score-bar-' + result.status, sc = 'status-' + result.status;
+    if (game.state === 'pre') return '<div class="pick-score-bar ' + bc + '"><div class="score-teams"><div class="score-team"><span class="score-team-name">' + esc(game.awayTeam) + '</span></div><div class="score-team"><span class="score-team-name">' + esc(game.homeTeam) + '</span></div></div><div class="score-meta"><span class="score-status ' + sc + '">' + esc(result.label) + '</span></div></div>';
+    return '<div class="pick-score-bar ' + bc + '"><div class="score-teams"><div class="score-team"><span class="score-team-name">' + esc(game.awayTeam) + '</span><span class="score-team-score">' + game.awayScore + '</span></div><div class="score-team"><span class="score-team-name">' + esc(game.homeTeam) + '</span><span class="score-team-score">' + game.homeScore + '</span></div></div><div class="score-meta"><span class="score-status ' + sc + '">' + esc(result.label) + '</span><span class="score-detail">' + esc(game.detail) + '</span></div></div>';
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PICK BOARD — Selection Table
+  ═══════════════════════════════════════════════════════════════ */
+  var userSelections = []; // { type: 'ai'|'avail', idx: number, side: string, matchup: string, sport: string }
+  var aiPicks = [];        // from API
+  var availGames = [];     // from ESPN (filtered)
+
+  var SHORT_NAMES = {
+    'Sporting Kansas City': 'SKC', 'Real Salt Lake': 'RSL', 'Inter Miami CF': 'Miami',
+    'Austin FC': 'Austin', 'Charlotte FC': 'Charlotte', 'Toronto FC': 'Toronto',
+    'CF Montréal': 'Montréal', 'New York Red Bulls': 'NYRB', 'New York City FC': 'NYCFC',
+    'Los Angeles FC': 'LAFC', 'LA Galaxy': 'Galaxy', 'San Jose Earthquakes': 'SJ',
+    'New England Revolution': 'NE Rev', 'Columbus Crew': 'Crew', 'Minnesota United FC': 'Minn',
+    'Portland Timbers': 'Portland', 'Seattle Sounders FC': 'Seattle', 'Philadelphia Union': 'Philly',
+    'Colorado Rapids': 'Colorado', 'FC Cincinnati': 'Cincy', 'FC Dallas': 'Dallas',
+    'Nashville SC': 'Nashville', 'St. Louis City SC': 'St. Louis', 'D.C. United': 'DC',
+    'Vancouver Whitecaps FC': 'Vancouver', 'Houston Dynamo FC': 'Houston',
+    'Chicago Fire FC': 'Chicago', 'Atlanta United FC': 'Atlanta',
+    'Illinois Fighting Illini': 'Illinois', 'UConn Huskies': 'UConn',
+  };
+  function shortName(team) {
+    if (SHORT_NAMES[team]) return SHORT_NAMES[team];
+    var words = team.split(' ');
+    if (words.length <= 1) return team;
+    var last = words[words.length - 1];
+    if (['FC', 'CF', 'SC', 'City', 'Lake', 'United'].indexOf(last) >= 0 && words.length > 2) {
+      return words[words.length - 2];
+    }
+    return last;
+  }
+
+  function gameRowHTML(game, idx, type) {
+    var matchup = game.awayTeam + ' @ ' + game.homeTeam;
+    var timeStr = '';
+    if (game.startTime) {
+      try { timeStr = new Date(game.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); } catch(e) {}
+    }
+    if (!timeStr && type === 'avail' && game.detail) timeStr = 'AI passed';
+    var ratingHTML = '';
+    if (type === 'ai' && game.rating) {
+      var bc = badgeClass[game.rating] || 'badge-b', rl = ratingLabel[game.rating] || 'B';
+      ratingHTML = '<span class="rating-badge ' + bc + '">' + rl + '</span>';
+    }
+    var awayAbbr = game.awayAbbr || shortName(game.awayTeam);
+    var homeAbbr = game.homeAbbr || shortName(game.homeTeam);
+    var betInfo = game.pick || '';
+    if (game.odds) betInfo += ' (' + game.odds + ')';
+    var checkSVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+
+    // Determine side button labels — Over/Under for totals, team names for sides
+    var isTotal = /^over|^under/i.test((game.pick || '').trim());
+    var sideAwayLabel, sideHomeLabel, sideAwayVal, sideHomeVal;
+    if (isTotal) {
+      sideAwayLabel = 'Over'; sideHomeLabel = 'Under';
+      sideAwayVal = 'over'; sideHomeVal = 'under';
+    } else {
+      sideAwayLabel = awayAbbr; sideHomeLabel = homeAbbr;
+      sideAwayVal = 'away'; sideHomeVal = 'home';
+    }
+
+    return '<div class="game-row" data-type="' + type + '" data-idx="' + idx + '" data-is-total="' + (isTotal ? '1' : '0') + '" id="row-' + type + '-' + idx + '">' +
+      '<div class="game-check">' + checkSVG + '</div>' +
+      '<span class="game-sport">' + esc(game.sport || '') + '</span>' +
+      '<div class="game-info">' +
+        '<div class="game-matchup">' + esc(matchup) + '</div>' +
+        (betInfo ? '<div class="game-bet">' + esc(betInfo) + '</div>' : '') +
+        (timeStr && !betInfo ? '<div class="game-time">' + esc(timeStr) + '</div>' : '') +
+      '</div>' +
+      '<div class="game-sides">' +
+        '<button class="side-btn" data-side="' + sideAwayVal + '" onclick="pickSide(event,\'' + type + '\',' + idx + ',\'' + sideAwayVal + '\')">' + esc(sideAwayLabel) + '</button>' +
+        '<button class="side-btn" data-side="' + sideHomeVal + '" onclick="pickSide(event,\'' + type + '\',' + idx + ',\'' + sideHomeVal + '\')">' + esc(sideHomeLabel) + '</button>' +
+      '</div>' +
+      '<div class="game-rating">' + ratingHTML + '</div>' +
+    '</div>';
+  }
+
+  function pickSide(event, type, idx, side) {
+    event.stopPropagation();
+    var existing = userSelections.findIndex(function(s) { return s.type === type && s.idx === idx; });
+    var aiCount = userSelections.filter(function(s) { return s.type === 'ai'; }).length;
+    var availCount = userSelections.filter(function(s) { return s.type === 'avail'; }).length;
+
+    // If already selected with same side, deselect
+    if (existing >= 0 && userSelections[existing].side === side) {
+      userSelections.splice(existing, 1);
+      updateBoardUI();
+      return;
+    }
+    // If already selected with different side, switch side
+    if (existing >= 0) {
+      userSelections[existing].side = side;
+      updateBoardUI();
+      return;
+    }
+    // Check limits: max 1 from AI, max 2 from available
+    if (type === 'ai' && aiCount >= 1) return;
+    if (type === 'avail' && availCount >= 2) return;
+    if (userSelections.length >= 3) return;
+
+    var game = type === 'ai' ? aiPicks[idx] : availGames[idx];
+    var isTotal = /^over|^under/i.test((game.pick || '').trim());
+    var sideName;
+    if (isTotal) {
+      // For totals, use the pick line (e.g. "Over 234") or opposite
+      var pickStr = (game.pick || '').trim();
+      if (side === 'over') {
+        sideName = pickStr.match(/^over/i) ? pickStr : pickStr.replace(/^under/i, 'Over');
+      } else {
+        sideName = pickStr.match(/^under/i) ? pickStr : pickStr.replace(/^over/i, 'Under');
+      }
+    } else {
+      sideName = side === 'away' ? game.awayTeam : game.homeTeam;
+    }
+    userSelections.push({
+      type: type, idx: idx, side: side,
+      matchup: game.awayTeam + ' @ ' + game.homeTeam,
+      sideName: sideName,
+      sport: game.sport || '',
+      rating: game.rating || null,
+      odds: game.odds || null,
+    });
+    updateBoardUI();
+  }
+
+  function updateBoardUI() {
+    var aiCount = userSelections.filter(function(s) { return s.type === 'ai'; }).length;
+    var availCount = userSelections.filter(function(s) { return s.type === 'avail'; }).length;
+    var total = userSelections.length;
+
+    // Update counter
+    var counter = document.getElementById('pick-counter');
+    counter.textContent = total + ' / 3 Selected';
+    counter.className = 'pick-counter' + (total === 3 ? ' full' : '');
+
+    // Update all rows
+    document.querySelectorAll('.game-row').forEach(function(row) {
+      var t = row.dataset.type, i = parseInt(row.dataset.idx);
+      var sel = userSelections.find(function(s) { return s.type === t && s.idx === parseInt(i); });
+      row.classList.toggle('selected', !!sel);
+
+      // Disable rows at limit
+      var atLimit = false;
+      if (t === 'ai' && !sel && aiCount >= 1) atLimit = true;
+      if (t === 'avail' && !sel && availCount >= 2) atLimit = true;
+      if (!sel && total >= 3) atLimit = true;
+      row.classList.toggle('disabled', atLimit);
+
+      // Update side buttons
+      row.querySelectorAll('.side-btn').forEach(function(btn) {
+        btn.classList.toggle('active', sel && sel.side === btn.dataset.side);
+      });
+    });
+
+    // Update summary
+    var summaryEl = document.getElementById('my-picks');
+    var listEl = document.getElementById('my-picks-list');
+    if (total > 0) {
+      summaryEl.classList.add('visible');
+      var html = '';
+      for (var i = 0; i < userSelections.length; i++) {
+        var s = userSelections[i];
+        var tag = s.type === 'ai' ? '<span class="my-pick-tag">AI Pick</span>' : '';
+        html += '<div class="my-pick-row"><span class="my-pick-label">' + (i + 1) + '. ' + esc(s.sideName) + tag + '</span><span class="my-pick-detail">' + esc(s.sport) + ' — ' + esc(s.matchup) + '</span></div>';
+      }
+      listEl.innerHTML = html;
+    } else {
+      summaryEl.classList.remove('visible');
+    }
+
+    // Update challenge button
+    var btn = document.getElementById('btn-challenge');
+    if (total === 3) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Challenge a Friend via Text';
+    } else {
+      btn.disabled = true;
+      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Select ' + (3 - total) + ' More Pick' + (3 - total > 1 ? 's' : '');
+    }
+  }
+
+  function openChallengeWithPicks() {
+    if (userSelections.length !== 3) return;
+    // Populate modal with picks summary
+    var html = '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); margin-bottom:.5rem;">Your Pick 3</div>';
+    for (var i = 0; i < userSelections.length; i++) {
+      var s = userSelections[i];
+      var tag = s.type === 'ai' ? ' <span style="font-size:.6rem; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-border); padding:1px 4px; border-radius:4px;">AI</span>' : '';
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;"><span style="font-weight:600; color:var(--olive);">' + esc(s.sideName) + tag + '</span><span style="color:var(--txt-m); font-size:.75rem;">' + esc(s.sport) + '</span></div>';
+    }
+    document.getElementById('modal-picks-summary').innerHTML = html;
+
+    // Pre-fill name if logged in
+    if (currentUser && currentUser.handle) {
+      document.getElementById('c-name').value = currentUser.displayName || currentUser.handle;
+    }
+    document.getElementById('challenge-modal').classList.add('open');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     LOAD PICK BOARD — AI picks + remaining top 10 from evaluation
+  ═══════════════════════════════════════════════════════════════ */
+
+  // Infer sport from matchup teams using known team lists
+  var SPORT_TEAMS = {
+    'NBA': ['Hawks','Celtics','Nets','Hornets','Bulls','Cavaliers','Mavericks','Nuggets','Pistons','Warriors','Rockets','Pacers','Clippers','Lakers','Grizzlies','Heat','Bucks','Timberwolves','Pelicans','Knicks','Thunder','Magic','76ers','Suns','Blazers','Kings','Spurs','Raptors','Jazz','Wizards','Trail Blazers'],
+    'NHL': ['Ducks','Coyotes','Bruins','Sabres','Flames','Hurricanes','Blackhawks','Avalanche','Blue Jackets','Stars','Red Wings','Oilers','Panthers','Canadiens','Golden Knights','Wild','Predators','Devils','Islanders','Rangers','Senators','Flyers','Penguins','Sharks','Kraken','Blues','Lightning','Maple Leafs','Canucks','Capitals','Jets'],
+    'MLB': ['Diamondbacks','Braves','Orioles','Red Sox','Cubs','White Sox','Reds','Guardians','Rockies','Tigers','Astros','Royals','Angels','Dodgers','Marlins','Brewers','Twins','Mets','Yankees','Athletics','Phillies','Pirates','Padres','Giants','Mariners','Cardinals','Rays','Rangers','Blue Jays','Nationals'],
+    'MLS': ['Atlanta United','Austin FC','Charlotte FC','Chicago Fire','FC Cincinnati','Colorado Rapids','Columbus Crew','D.C. United','FC Dallas','Houston Dynamo','Inter Miami','LA Galaxy','LAFC','Minnesota United','CF Montréal','Nashville SC','New England Revolution','New York City FC','New York Red Bulls','Orlando City','Philadelphia Union','Portland Timbers','Real Salt Lake','San Jose Earthquakes','Seattle Sounders','Sporting Kansas City','St. Louis CITY SC','Toronto FC','Vancouver Whitecaps'],
+    'NCAAB': ['Fighting Illini','Huskies','Wildcats','Bulldogs','Tigers','Wolverines','Spartans','Buckeyes','Hoosiers','Hawkeyes','Jayhawks','Blue Devils','Tar Heels','Crimson Tide','Volunteers','Gators','Razorbacks','Bears','Longhorns','Aggies','Seminoles','Cardinals','Cavaliers','Orangemen','Panthers','Boilermakers','Badgers','Golden Gophers','Cyclones','Red Raiders','Cougars','Mountaineers','Cowboys'],
+  };
+
+  function inferSport(matchup) {
+    if (!matchup) return '';
+    for (var sport in SPORT_TEAMS) {
+      for (var i = 0; i < SPORT_TEAMS[sport].length; i++) {
+        if (matchup.indexOf(SPORT_TEAMS[sport][i]) !== -1) return sport;
+      }
+    }
+    // Check for FC/SC/CF patterns for MLS/soccer
+    if (/\b(FC|SC|CF|United|City|Dynamo|Galaxy|LAFC|Crew|Timbers|Sounders|Revolution|Rapids)\b/.test(matchup)) return 'MLS';
+    return '';
+  }
+
+  async function loadPickBoard() {
+    // Fetch AI picks (includes rejections for remaining top 10)
+    try {
+      var resp = await fetch(API_BASE + '/api/get-picks-alpha');
+      if (resp.ok) {
+        var data = await resp.json();
+        picksData = data;
+        aiPicks = (data.picks || []).slice(0, 3).map(function(p) {
+          return {
+            sport: p.sport || '', awayTeam: '', homeTeam: '', awayAbbr: '', homeAbbr: '',
+            matchup: p.matchup || '', pick: p.pick || '', odds: p.odds || '-110',
+            rating: p.confidence || p.rating || 'b', startTime: p.startTime || '',
+            detail: '', state: 'pre', raw: p,
+          };
+        });
+        // Parse matchup into away/home
+        aiPicks.forEach(function(ap) {
+          var parts = ap.matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i);
+          if (parts.length >= 2) { ap.awayTeam = parts[0].trim(); ap.homeTeam = parts[1].trim(); }
+          else { ap.awayTeam = ap.matchup; ap.homeTeam = ''; }
+          ap.awayAbbr = shortName(ap.awayTeam);
+          ap.homeAbbr = shortName(ap.homeTeam);
+        });
+
+        // Build remaining 7 from rejections
+        var rejections = (data.rejections || []).slice(0, 7);
+        availGames = rejections.map(function(r) {
+          var matchup = r.matchup || '';
+          var sport = inferSport(matchup);
+          var parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i);
+          var away = parts.length >= 2 ? parts[0].trim() : matchup;
+          var home = parts.length >= 2 ? parts[1].trim() : '';
+          return {
+            sport: sport, awayTeam: away, homeTeam: home,
+            awayAbbr: shortName(away), homeAbbr: shortName(home),
+            matchup: matchup, pick: r.side || '', odds: r.odds || '',
+            rating: '', startTime: '', detail: r.reason || '', state: 'pre',
+          };
+        });
+      }
+    } catch(e) { console.warn('Failed to load picks:', e); }
+
+    // Also fetch ESPN scores for live tracking of AI picks
+    var sportsList = ['NBA', 'NHL', 'MLB'];
+    await Promise.all(sportsList.map(async function(sport) {
+      var games = await fetchScoresForSport(sport);
+      cachedScores[sport] = games;
+    }));
+
+    // Render AI rows
+    var aiHTML = '';
+    if (aiPicks.length === 0) {
+      aiHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">No AI picks today — full board is open.</div>';
+    } else {
+      for (var i = 0; i < aiPicks.length; i++) aiHTML += gameRowHTML(aiPicks[i], i, 'ai');
+    }
+    document.getElementById('ai-rows').innerHTML = aiHTML;
+
+    // Render remaining top 10 rows
+    var availHTML = '';
+    if (availGames.length === 0) {
+      availHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">No additional evaluated games today.</div>';
+    } else {
+      for (var i = 0; i < availGames.length; i++) availHTML += gameRowHTML(availGames[i], i, 'avail');
+    }
+    document.getElementById('avail-rows').innerHTML = availHTML;
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════════
+     LOGIN SYSTEM (Phone OTP)
+  ═══════════════════════════════════════════════════════════════ */
+  var currentUser = JSON.parse(localStorage.getItem('p2p_user') || 'null');
+  var loginPhone = null;
+
+  function renderLoginState() {
+    var form = document.getElementById('login-form');
+    var otp = document.getElementById('login-otp');
+    var userEl = document.getElementById('login-user');
+    var text = document.getElementById('login-text');
+
+    var heading = document.getElementById('board-heading');
+    if (currentUser) {
+      form.style.display = 'none';
+      otp.style.display = 'none';
+      userEl.style.display = 'flex';
+      text.innerHTML = '<strong>Logged in</strong>';
+      document.getElementById('login-welcome').innerHTML = '<span class="login-handle">@' + esc(currentUser.handle) + '</span>';
+      if (heading) heading.textContent = 'Make Your Pick 3';
+      // Show My Challenges section (add .v since IntersectionObserver missed it while hidden)
+      var mcs = document.getElementById('my-challenges-section');
+      if (mcs) { mcs.style.display = ''; mcs.classList.add('v'); }
+      loadMyChallenges();
+    } else {
+      form.style.display = 'flex';
+      otp.style.display = 'none';
+      userEl.style.display = 'none';
+      text.textContent = 'Enter your phone to start picking';
+      if (heading) heading.textContent = 'Log In to Make Your Pick 3';
+      var mcs = document.getElementById('my-challenges-section');
+      if (mcs) mcs.style.display = 'none';
+    }
+  }
+
+  async function handleLogin() {
+    var phoneInput = document.getElementById('login-phone');
+    var btn = document.getElementById('login-btn');
+    var raw = phoneInput.value.trim();
+    var phone = formatPhone(raw);
+    if (!phone) { phoneInput.style.borderColor = '#c0392b'; return; }
+    phoneInput.style.borderColor = '';
+    loginPhone = phone;
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      var resp = await fetch(API_BASE + '/api/phone-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', phone: raw.replace(/\D/g, '') }),
+      });
+      var data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Failed');
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('login-otp').style.display = 'flex';
+      document.getElementById('login-text').textContent = 'Enter the code sent to ' + raw;
+    } catch(e) {
+      btn.textContent = 'Send Code'; btn.disabled = false;
+      document.getElementById('login-text').innerHTML = '<span style="color:#c0392b;">Failed: ' + esc(e.message) + '</span>';
+    }
+  }
+
+  async function handleVerify() {
+    var codeInput = document.getElementById('login-code');
+    var handleInput = document.getElementById('login-handle');
+    var btn = document.getElementById('verify-btn');
+    var code = codeInput.value.trim();
+    if (code.length !== 6) { codeInput.style.borderColor = '#c0392b'; return; }
+    codeInput.style.borderColor = '';
+    btn.disabled = true; btn.textContent = 'Verifying...';
+    try {
+      var body = { action: 'verify', phone: loginPhone.replace(/\D/g, ''), code: code };
+      var handle = handleInput.value.trim();
+      if (handle) body.handle = handle;
+      var resp = await fetch(API_BASE + '/api/phone-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Invalid code');
+      currentUser = { handle: data.handle, phone: data.phone, firstName: data.firstName };
+      localStorage.setItem('p2p_user', JSON.stringify(currentUser));
+      renderLoginState();
+    } catch(e) {
+      btn.textContent = 'Verify'; btn.disabled = false;
+      document.getElementById('login-text').innerHTML = '<span style="color:#c0392b;">' + esc(e.message) + '</span>';
+    }
+  }
+
+  function handleLogout() {
+    currentUser = null;
+    localStorage.removeItem('p2p_user');
+    loginPhone = null;
+    document.getElementById('login-phone').value = '';
+    document.getElementById('login-code').value = '';
+    document.getElementById('login-handle').value = '';
+    document.getElementById('login-btn').disabled = false;
+    document.getElementById('login-btn').textContent = 'Send Code';
+    renderLoginState();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     CHALLENGE — Create via p2p-challenge API
+  ═══════════════════════════════════════════════════════════════ */
+  async function sendChallenge() {
+    var name = document.getElementById('c-name').value.trim();
+    var friendRaw = document.getElementById('c-friend').value.trim();
+    var wager = document.getElementById('c-wager').value;
+    var btn = document.getElementById('btn-send');
+    var status = document.getElementById('modal-status');
+    if (!name) { status.textContent = 'Please enter your name.'; status.style.color = '#c0392b'; return; }
+    var friendPhone = formatPhone(friendRaw);
+    if (!friendPhone) { status.textContent = 'Enter a valid 10-digit US phone number.'; status.style.color = '#c0392b'; return; }
+    if (userSelections.length !== 3) { status.textContent = 'Select 3 picks first.'; status.style.color = '#c0392b'; return; }
+
+    // Need challenger phone — must be logged in
+    var challengerPhone = currentUser ? currentUser.phone : null;
+    if (!challengerPhone) { status.textContent = 'Log in with your phone number first.'; status.style.color = '#c0392b'; return; }
+
+    btn.disabled = true; btn.textContent = 'Sending...'; status.textContent = ''; status.style.color = '';
+
+    try {
+      var resp = await fetch(API_BASE + '/api/p2p-challenge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          challengerPhone: challengerPhone,
+          challengerHandle: currentUser.handle || null,
+          challengerName: name,
+          picks: userSelections.map(function(s) {
+            return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
+          }),
+          friendPhone: friendPhone,
+          wager: wager,
+        }),
+      });
+      var data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to send');
+
+      btn.textContent = 'Challenge Sent!'; btn.style.background = '#2e7d32';
+      status.textContent = 'Text sent to ' + friendRaw + ' with your picks! Challenge ID: ' + data.challengeId; status.style.color = '#2e7d32';
+
+      // WeBit stake escrow on the unified account (loop-c6) — requires wbai session
+      try {
+        var stakeSel = parseInt(document.getElementById('c-wager').value, 10);
+        if (typeof wbaiFE === 'function') wbaiFE('p2p_challenge_created', { stake: stakeSel || 0 });
+        if (window.wbaiUser && stakeSel > 0 && data.challengeId) {
+          fetch('/.netlify/functions/p2p-stake', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: String(data.challengeId), stake: stakeSel }) })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              if (j && j.ok) {
+                status.textContent += ' · 🪙 ' + stakeSel + ' WeBits escrowed (balance ' + Number(j.balance).toLocaleString() + ')';
+                if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: stakeSel });
+                if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
+              } else if (j && j.error === 'insufficient_webits') {
+                status.textContent += ' · Not enough WeBits to stake — get a pack at webetsocial.com/credits';
+              }
+            }).catch(function () {});
+        } else if (stakeSel > 0 && !window.wbaiUser) {
+          status.textContent += ' · Sign in at webetsocial.com/login to stake WeBits on challenges.';
+        }
+      } catch (e) {}
+      setTimeout(function() {
+        document.getElementById('challenge-modal').classList.remove('open');
+        btn.textContent = 'Send Challenge via Text'; btn.style.background = ''; btn.disabled = false;
+        status.textContent = 'Your friend will get a text with the challenge link.'; status.style.color = '';
+        document.getElementById('c-name').value = ''; document.getElementById('c-friend').value = '';
+      }, 3000);
+    } catch (err) {
+      btn.textContent = 'Send Challenge via Text'; btn.disabled = false;
+      status.textContent = 'Failed to send: ' + err.message; status.style.color = '#c0392b';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     CHALLENGE RESPONSE FLOW — User B arrives via ?challenge=ID
+  ═══════════════════════════════════════════════════════════════ */
+  var pendingChallengeId = null;
+  var pendingChallenge = null;
+
+  async function checkForChallenge() {
+    var params = new URLSearchParams(window.location.search);
+    var challengeId = params.get('challenge');
+    if (!challengeId) return;
+
+    try {
+      var resp = await fetch(API_BASE + '/api/p2p-challenge?id=' + encodeURIComponent(challengeId));
+      if (!resp.ok) return;
+      var challenge = await resp.json();
+      if (challenge.status !== 'pending') {
+        // Already responded — show status
+        showChallengeStatus(challenge);
+        return;
+      }
+      pendingChallengeId = challengeId;
+      pendingChallenge = challenge;
+      showChallengeBanner(challenge);
+    } catch(e) { console.warn('Failed to load challenge:', e); }
+  }
+
+  function showChallengeBanner(challenge) {
+    var banner = document.getElementById('challenge-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'challenge-banner';
+      banner.style.cssText = 'background:linear-gradient(135deg,#004C54,#1a2e1a); color:#fff; padding:1rem 1.25rem; text-align:center; position:relative; z-index:90;';
+      // Insert after the sticky header
+      var header = document.querySelector('.header');
+      if (header) header.insertAdjacentElement('afterend', banner);
+      else document.body.prepend(banner);
+    }
+    var challengerName = challenge.challenger.name || 'Someone';
+    var picksHtml = challenge.challenger.picks.map(function(p, i) {
+      return '<div style="display:inline-block; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px; margin:3px; font-size:.8125rem;">' + (i+1) + '. ' + esc(p.side) + ' <span style="opacity:.7;">(' + esc(p.sport) + ')</span></div>';
+    }).join('');
+    banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700; margin-bottom:.375rem;">You\'ve Been Challenged!</div>' +
+      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">' + esc(challengerName) + ' challenged you for <strong>$' + challenge.wager + '</strong></div>' +
+      '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.6; margin-bottom:.375rem;">Their picks</div>' +
+      '<div style="margin-bottom:.75rem;">' + picksHtml + '</div>' +
+      '<div style="font-size:.875rem; font-weight:600; background:rgba(255,255,255,0.15); display:inline-block; padding:6px 16px; border-radius:8px;">Select your 3 picks below, then lock them in</div>';
+
+    // Change the challenge button to "Lock My Picks" mode
+    var btn = document.getElementById('btn-challenge');
+    btn.setAttribute('data-response-mode', 'true');
+  }
+
+  function showChallengeStatus(challenge) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:#f0f7f0; border:1px solid #a5d6a7; color:#1a2e1a; padding:1rem 1.25rem; text-align:center; position:relative; z-index:90;';
+    var header = document.querySelector('.header');
+    if (header) header.insertAdjacentElement('afterend', banner);
+    else document.body.prepend(banner);
+
+    var statusText = challenge.status === 'active' ? 'Challenge Active — Waiting for Games to Finish' : challenge.status === 'graded' ? 'Challenge Complete' : challenge.status;
+    banner.innerHTML = '<div style="font-size:1rem; font-weight:700; margin-bottom:.25rem;">' + esc(statusText) + '</div>' +
+      '<div style="font-size:.8125rem; color:#5f6b7a;">' + esc(challenge.challenger.name || 'Challenger') + ' vs ' + esc(challenge.opponent.name || 'Opponent') + ' for $' + challenge.wager + '</div>' +
+      '<div style="margin-top:.5rem;"><a href="/?challenge=' + challenge.id + '" style="font-size:.8125rem; color:#004C54; font-weight:600;">View Details</a></div>';
+  }
+
+  // Override the challenge button behavior when in response mode
+  var origOpenChallenge = openChallengeWithPicks;
+  openChallengeWithPicks = function() {
+    var btn = document.getElementById('btn-challenge');
+    if (btn.getAttribute('data-response-mode') === 'true' && pendingChallenge) {
+      openResponseModal();
+    } else {
+      origOpenChallenge();
+    }
+  };
+
+  function openResponseModal() {
+    if (userSelections.length !== 3) return;
+    var modal = document.getElementById('challenge-modal');
+    var summary = document.getElementById('modal-picks-summary');
+
+    // Show both sides' picks
+    var html = '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); margin-bottom:.375rem;">' + esc(pendingChallenge.challenger.name || 'Challenger') + '\'s Picks</div>';
+    for (var i = 0; i < pendingChallenge.challenger.picks.length; i++) {
+      var cp = pendingChallenge.challenger.picks[i];
+      html += '<div style="display:flex; justify-content:space-between; padding:.25rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem; opacity:.7;"><span>' + esc(cp.side) + '</span><span style="font-size:.75rem;">' + esc(cp.sport) + '</span></div>';
+    }
+    html += '<div style="height:.75rem;"></div>';
+    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); margin-bottom:.375rem;">Your Pick 3</div>';
+    for (var j = 0; j < userSelections.length; j++) {
+      var s = userSelections[j];
+      var tag = s.type === 'ai' ? ' <span style="font-size:.6rem; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-border); padding:1px 4px; border-radius:4px;">AI</span>' : '';
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;"><span style="font-weight:600; color:var(--olive);">' + esc(s.sideName) + tag + '</span><span style="color:var(--txt-m); font-size:.75rem;">' + esc(s.sport) + '</span></div>';
+    }
+    summary.innerHTML = html;
+
+    // Must be logged in to respond
+    if (!currentUser || !currentUser.phone) {
+      alert('Log in with your phone number first, then lock your picks.');
+      return;
+    }
+
+    // Hide friend/wager fields, show lock button
+    document.getElementById('c-name').parentElement.style.display = 'block';
+    document.getElementById('c-friend').parentElement.style.display = 'none';
+    document.getElementById('c-wager').parentElement.style.display = 'none';
+
+    var sendBtn = document.getElementById('btn-send');
+    sendBtn.textContent = 'Lock My Picks';
+    sendBtn.onclick = submitChallengeResponse;
+
+    document.getElementById('c-name').value = '';
+    if (currentUser && currentUser.handle) {
+      document.getElementById('c-name').value = currentUser.displayName || currentUser.handle;
+    }
+
+    document.getElementById('modal-status').textContent = 'Lock your picks to accept the $' + pendingChallenge.wager + ' challenge.';
+    modal.classList.add('open');
+  }
+
+  async function submitChallengeResponse() {
+    var name = document.getElementById('c-name').value.trim();
+    var btn = document.getElementById('btn-send');
+    var status = document.getElementById('modal-status');
+
+    if (!name) { status.textContent = 'Enter your name.'; status.style.color = '#c0392b'; return; }
+
+    var responderPhone = currentUser ? currentUser.phone : null;
+    if (!responderPhone) { status.textContent = 'Log in with your phone number first.'; status.style.color = '#c0392b'; return; }
+
+    btn.disabled = true; btn.textContent = 'Locking...'; status.textContent = ''; status.style.color = '';
+
+    try {
+      var resp = await fetch(API_BASE + '/api/p2p-challenge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'respond',
+          challengeId: pendingChallengeId,
+          responderPhone: responderPhone,
+          responderHandle: currentUser.handle || null,
+          responderName: name,
+          picks: userSelections.map(function(s) {
+            return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
+          }),
+        }),
+      });
+      var data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to respond');
+
+      btn.textContent = 'Picks Locked!'; btn.style.background = '#2e7d32';
+      status.textContent = 'You\'re in! Both players have been notified. Game on!'; status.style.color = '#2e7d32';
+
+      // Update banner
+      var banner = document.getElementById('challenge-banner');
+      if (banner) {
+        banner.style.background = 'linear-gradient(135deg,#2e7d32,#1a2e1a)';
+        banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700;">Challenge Accepted!</div><div style="font-size:.875rem; opacity:.9;">Results will be graded after all games finish.</div>';
+      }
+
+      // Remove ?challenge param from URL
+      var url = new URL(window.location);
+      url.searchParams.delete('challenge');
+      window.history.replaceState({}, '', url);
+
+      setTimeout(function() {
+        document.getElementById('challenge-modal').classList.remove('open');
+        btn.textContent = 'Send Challenge via Text'; btn.style.background = ''; btn.disabled = false;
+        btn.onclick = sendChallenge;
+        status.textContent = 'Your friend will get a text with the challenge link.'; status.style.color = '';
+        document.getElementById('c-friend').parentElement.style.display = 'block';
+        document.getElementById('c-wager').parentElement.style.display = 'block';
+        pendingChallengeId = null; pendingChallenge = null;
+        document.getElementById('btn-challenge').removeAttribute('data-response-mode');
+      }, 3000);
+    } catch (err) {
+      btn.textContent = 'Lock My Picks'; btn.disabled = false;
+      status.textContent = 'Failed: ' + err.message; status.style.color = '#c0392b';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     MY CHALLENGES — Show active/completed challenges for logged-in user
+  ═══════════════════════════════════════════════════════════════ */
+  var myChallengesData = [];
+
+  async function loadMyChallenges() {
+    if (!currentUser || !currentUser.phone) return;
+    var container = document.getElementById('my-challenges');
+    if (!container) return;
+
+    try {
+      var resp = await fetch(API_BASE + '/api/p2p-challenge?phone=' + encodeURIComponent(currentUser.phone));
+      if (!resp.ok) throw new Error('Failed');
+      var data = await resp.json();
+      myChallengesData = data.challenges || [];
+      if (myChallengesData.length === 0) {
+        container.innerHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">No challenges yet. Pick 3 and challenge a friend!</div>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < myChallengesData.length; i++) {
+        var ch = myChallengesData[i];
+        var isChallenger = ch.challenger.phone === currentUser.phone;
+        var opponent = isChallenger ? (ch.opponent.name || 'Waiting...') : (ch.challenger.name || 'Challenger');
+        var statusBg = ch.status === 'pending' ? 'background:#fff3e0; color:#e65100;' : ch.status === 'active' ? 'background:var(--teal-light); color:var(--teal);' : 'background:var(--green-light); color:var(--green);';
+        var statusLabel = ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Graded';
+        var myPicks = isChallenger ? ch.challenger.picks : ch.opponent.picks;
+        var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return p.side; }).join(' / ') : 'Awaiting picks';
+
+        html += '<div class="my-challenge-card" onclick="viewChallenge(' + i + ')" style="padding:.75rem; border:1px solid var(--border-lt); border-radius:10px; margin-bottom:.5rem; background:var(--white); cursor:pointer; transition:border-color .15s;"' +
+          ' onmouseover="this.style.borderColor=\'var(--teal-border)\'" onmouseout="this.style.borderColor=\'var(--border-lt)\'">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">' +
+            '<span style="font-size:.875rem; font-weight:600; color:var(--olive);">vs ' + esc(opponent) + '</span>' +
+            '<span style="font-size:.6875rem; font-weight:600; padding:2px 8px; border-radius:9999px; ' + statusBg + '">' + esc(statusLabel) + '</span>' +
+          '</div>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<span style="font-size:.75rem; color:var(--txt-m);">$' + ch.wager + ' &middot; ' + esc(ch.date) + '</span>' +
+            '<span style="font-size:.6875rem; color:var(--teal); font-weight:500;">View &rarr;</span>' +
+          '</div>' +
+          '<div style="font-size:.75rem; color:var(--txt-l); margin-top:.375rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(picksStr) + '</div>' +
+        '</div>';
+      }
+      container.innerHTML = html;
+      container.parentElement.style.display = 'block';
+    } catch(e) {
+      container.innerHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Could not load challenges.</div>';
+    }
+  }
+
+  function viewChallenge(idx) {
+    var ch = myChallengesData[idx];
+    if (!ch) return;
+    var isChallenger = currentUser && ch.challenger.phone === currentUser.phone;
+    var me = isChallenger ? ch.challenger : ch.opponent;
+    var them = isChallenger ? ch.opponent : ch.challenger;
+
+    var html = '';
+    // Header
+    html += '<div style="background:var(--teal); color:#fff; padding:1.25rem; text-align:center;">';
+    html += '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.7; margin-bottom:.25rem;">' + esc(ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Complete') + '</div>';
+    html += '<div style="font-size:1.25rem; font-weight:700;">' + esc(me.name || 'You') + ' vs ' + esc(them.name || 'Opponent') + '</div>';
+    html += '<div style="font-size:.875rem; opacity:.8; margin-top:.25rem;">$' + ch.wager + ' &middot; ' + esc(ch.date) + '</div>';
+    html += '</div>';
+
+    // Your picks
+    html += '<div style="padding:1rem 1.25rem;">';
+    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); margin-bottom:.5rem;">Your Picks</div>';
+    if (me.picks && me.picks.length > 0) {
+      for (var i = 0; i < me.picks.length; i++) {
+        var p = me.picks[i];
+        var resultBadge = '';
+        if (p.result === 'win') resultBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">W</span>';
+        else if (p.result === 'loss') resultBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#fce4e4; color:#c0392b;">L</span>';
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
+        html += '<span style="font-weight:600; color:var(--olive);">' + esc(p.side) + ' ' + resultBadge + '</span>';
+        html += '<span style="font-size:.75rem; color:var(--txt-m);">' + esc(p.sport) + '</span>';
+        html += '</div>';
+      }
+    } else {
+      html += '<div style="font-size:.8125rem; color:var(--txt-l); text-align:center; padding:.5rem 0;">No picks yet</div>';
+    }
+
+    // Opponent picks
+    html += '<div style="height:.75rem;"></div>';
+    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--txt-l); margin-bottom:.5rem;">' + esc(them.name || 'Opponent') + '\'s Picks</div>';
+    if (them.picks && them.picks.length > 0) {
+      for (var j = 0; j < them.picks.length; j++) {
+        var tp = them.picks[j];
+        var rBadge = '';
+        if (tp.result === 'win') rBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">W</span>';
+        else if (tp.result === 'loss') rBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#fce4e4; color:#c0392b;">L</span>';
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
+        html += '<span style="font-weight:500; color:var(--txt-m);">' + esc(tp.side) + ' ' + rBadge + '</span>';
+        html += '<span style="font-size:.75rem; color:var(--txt-l);">' + esc(tp.sport) + '</span>';
+        html += '</div>';
+      }
+    } else {
+      html += '<div style="font-size:.8125rem; color:var(--txt-l); text-align:center; padding:.5rem 0;">Waiting for response...</div>';
+    }
+    html += '</div>';
+
+    // Show in profile modal (reuse it)
+    var modal = document.getElementById('profile-modal');
+    var card = modal.querySelector('.profile-card');
+    card.innerHTML = '<button class="profile-close" onclick="document.getElementById(\'profile-modal\').classList.remove(\'open\')">&times;</button>' + html;
+    modal.classList.add('open');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     LEADERBOARD (dynamic from API)
+  ═══════════════════════════════════════════════════════════════ */
+  async function loadLeaderboard() {
+    var container = document.getElementById('leaderboard-rows');
+    try {
+      var resp = await fetch(API_BASE + '/api/get-p2p-leaderboard?sort=wins');
+      if (!resp.ok) throw new Error('API ' + resp.status);
+      var data = await resp.json();
+      var users = data.users || [];
+      if (users.length === 0) {
+        container.innerHTML = '<div style="padding:1.5rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">No cappers ranked yet. Be the first to challenge a friend!</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < users.length; i++) {
+        var u = users[i];
+        var wr = u.winRate || 0, wrClass = wr >= 55 ? 'hot' : 'cold';
+        var pl = u.allTimePL || 0, plClass = pl >= 0 ? 'pos' : 'neg', plStr = (pl >= 0 ? '+$' : '-$') + Math.abs(pl).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+        var record = (u.wins || 0) + '-' + (u.losses || 0);
+        var safeHandle = (u.handle || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        html += '<div class="board-row" style="cursor:pointer;" onclick="openProfile(\'' + safeHandle + '\')">' +
+          '<span class="board-rank">' + (i + 1) + '</span>' +
+          '<div class="board-agent"><span class="board-agent-name">' + esc(u.displayName || u.handle || 'Player') + '</span><span class="board-agent-owner">@' + esc(u.handle || '') + '</span></div>' +
+          '<span class="board-record">' + record + '</span>' +
+          '<span class="board-winrate ' + wrClass + '">' + wr.toFixed(1) + '%</span>' +
+          '<span class="board-pnl ' + plClass + '">' + plStr + '</span>' +
+        '</div>';
+      }
+      container.innerHTML = html;
+    } catch(e) {
+      container.innerHTML = '<div style="padding:1.5rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Could not load leaderboard.</div>';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     USER PROFILES — Rebuilt each open to avoid viewChallenge conflicts
+  ═══════════════════════════════════════════════════════════════ */
+  async function openProfile(handle) {
+    if (!handle) return;
+    var modal = document.getElementById('profile-modal');
+    var card = modal.querySelector('.profile-card');
+
+    // Restore profile card structure (viewChallenge may have overwritten it)
+    card.innerHTML = '<div class="profile-header">' +
+      '<button class="profile-close" onclick="document.getElementById(\'profile-modal\').classList.remove(\'open\')">&times;</button>' +
+      '<div class="profile-avatar" id="profile-avatar">' + esc(handle[0].toUpperCase()) + '</div>' +
+      '<div class="profile-handle" id="profile-handle">@' + esc(handle) + '</div>' +
+      '<div class="profile-name" id="profile-name"></div>' +
+    '</div>' +
+    '<div class="profile-stats" id="profile-stats">' +
+      '<div class="profile-stat"><div class="profile-stat-val" id="prof-record">--</div><div class="profile-stat-lbl">Record</div></div>' +
+      '<div class="profile-stat"><div class="profile-stat-val" id="prof-winrate">--</div><div class="profile-stat-lbl">Win %</div></div>' +
+      '<div class="profile-stat"><div class="profile-stat-val" id="prof-pl">--</div><div class="profile-stat-lbl">P/L</div></div>' +
+      '<div class="profile-stat"><div class="profile-stat-val" id="prof-streak">--</div><div class="profile-stat-lbl">Streak</div></div>' +
+    '</div>' +
+    '<div class="profile-picks-title">Recent Challenges</div>' +
+    '<div id="profile-picks"><div class="profile-no-picks">Loading...</div></div>' +
+    '<div style="padding:.75rem 1.25rem 1.25rem;"></div>';
+
+    modal.classList.add('open');
+
+    try {
+      var resp = await fetch(API_BASE + '/api/get-p2p-user?handle=' + encodeURIComponent(handle));
+      if (!resp.ok) throw new Error('Not found');
+      var user = await resp.json();
+
+      document.getElementById('profile-handle').textContent = '@' + (user.handle || handle);
+      if (user.displayName || user.firstName) {
+        document.getElementById('profile-name').textContent = user.displayName || user.firstName;
+      }
+      document.getElementById('profile-avatar').textContent = (user.handle || handle)[0].toUpperCase();
+
+      var record = (user.wins || 0) + '-' + (user.losses || 0);
+      document.getElementById('prof-record').textContent = record;
+
+      var wr = user.winRate || 0;
+      var wrEl = document.getElementById('prof-winrate');
+      wrEl.textContent = wr.toFixed(1) + '%';
+      wrEl.className = 'profile-stat-val ' + (wr >= 55 ? 'pos' : wr < 45 ? 'neg' : '');
+
+      var pl = user.allTimePL || 0;
+      var plEl = document.getElementById('prof-pl');
+      plEl.textContent = (pl >= 0 ? '+$' : '-$') + Math.abs(pl).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+      plEl.className = 'profile-stat-val ' + (pl >= 0 ? 'pos' : 'neg');
+
+      document.getElementById('prof-streak').textContent = (user.currentStreak || 0) + (user.currentStreak > 0 ? 'W' : user.currentStreak < 0 ? 'L' : '');
+
+      // Recent challenges as cards
+      if (user.recentChallenges && user.recentChallenges.length > 0) {
+        var chHTML = '';
+        for (var i = 0; i < user.recentChallenges.length; i++) {
+          var rc = user.recentChallenges[i];
+          var statusBg = rc.status === 'pending' ? 'background:#fff3e0; color:#e65100;' : rc.status === 'active' ? 'background:var(--teal-light); color:var(--teal);' : 'background:var(--green-light); color:var(--green);';
+          var statusLbl = rc.status === 'pending' ? 'Pending' : rc.status === 'active' ? 'Active' : 'Graded';
+          var vs = rc.isChallenger ? (rc.opponentName || 'Opponent') : (rc.challengerName || 'Challenger');
+          var myPicks = rc.isChallenger ? rc.challengerPicks : rc.opponentPicks;
+          var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return p.side; }).join(' / ') : 'Awaiting picks';
+          chHTML += '<div style="padding:.625rem; border:1px solid var(--border-lt); border-radius:8px; margin-bottom:.5rem; background:var(--off-white);">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem;">' +
+              '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">vs ' + esc(vs) + '</span>' +
+              '<span style="font-size:.625rem; font-weight:600; padding:2px 6px; border-radius:9999px; ' + statusBg + '">' + statusLbl + '</span>' +
+            '</div>' +
+            '<div style="font-size:.75rem; color:var(--txt-m);">$' + (rc.wager || 0) + ' &middot; ' + esc(rc.date || '') + '</div>' +
+            '<div style="font-size:.6875rem; color:var(--txt-l); margin-top:.25rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(picksStr) + '</div>' +
+          '</div>';
+        }
+        document.getElementById('profile-picks').innerHTML = chHTML;
+      } else {
+        document.getElementById('profile-picks').innerHTML = '<div class="profile-no-picks">No challenges yet.</div>';
+      }
+    } catch(e) {
+      document.getElementById('profile-picks').innerHTML = '<div class="profile-no-picks">Could not load profile.</div>';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     BETTY CHAT
+  ═══════════════════════════════════════════════════════════════ */
+  var bettyHistory = [];
+  var bettyLoading = false;
+
+  function appendBettyMsg(role, text) {
+    var container = document.getElementById('betty-msgs');
+    if (!container) return;
+    var div = document.createElement('div');
+    div.className = 'betty-msg' + (role === 'user' ? ' user' : '');
+    var avatar = role === 'user'
+      ? '<div style="width:28px;height:28px;border-radius:50%;background:#004C54;color:#fff;font-size:.6875rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">U</div>'
+      : '<img class="betty-avatar" src="https://imagine-public.x.ai/imagine-public/share-images/79ef03da-8e8d-4fc2-8aa7-2d8d645b5b7f.jpg?cache=1" />';
+    div.innerHTML = avatar + '<div class="betty-bubble ' + (role === 'user' ? 'user' : 'ai') + '">' + text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>') + '</div>';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function sendBettyMsg() {
+    var input = document.getElementById('betty-input');
+    var text = (input.value || '').trim();
+    if (!text || bettyLoading) return;
+    input.value = '';
+    appendBettyMsg('user', text);
+    bettyHistory.push({ role: 'user', content: text });
+    bettyLoading = true;
+    var container = document.getElementById('betty-msgs');
+    var typing = document.createElement('div');
+    typing.className = 'betty-msg'; typing.id = 'betty-typing';
+    typing.innerHTML = '<img class="betty-avatar" src="https://imagine-public.x.ai/imagine-public/share-images/79ef03da-8e8d-4fc2-8aa7-2d8d645b5b7f.jpg?cache=1" /><div class="betty-bubble ai"><div class="betty-typing"><span></span><span></span><span></span></div></div>';
+    container.appendChild(typing); container.scrollTop = container.scrollHeight;
+    try {
+      var resp = await fetch(API_BASE + '/api/betty-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: bettyHistory }) });
+      var data = await resp.json();
+      var el = document.getElementById('betty-typing'); if (el) el.remove();
+      var reply = data.content || data.message || 'Let me think on that...';
+      bettyHistory.push({ role: 'assistant', content: reply });
+      appendBettyMsg('ai', reply);
+    } catch (e) {
+      var el = document.getElementById('betty-typing'); if (el) el.remove();
+      appendBettyMsg('ai', 'Something went wrong — try again!');
+    }
+    bettyLoading = false; input.focus();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     INIT — Load everything
+  ═══════════════════════════════════════════════════════════════ */
+  renderLoginState();
+  loadPickBoard();
+  loadLeaderboard();
+  checkForChallenge();
+  loadMyChallenges();
+</script>
+<script>
+/* ── WeBetAI unified account bridge (loop-c6) ──────────────────────────
+   When served same-domain (webetsocial.com/pick3p2p), the wbai_session
+   cookie flows: signed-in users get their handle + WeBit balance up top,
+   SMS-first users (who have a phone) skip the page's own phone login,
+   and stakes escrow against the unified webit-ledger. pick3p2p.com
+   visitors without a session see a sign-in strip → /login. */
+(function () {
+  window.wbaiFE = function (e, p) {
+    try {
+      var payload = JSON.stringify({ e: e, p: p || null });
+      if (navigator.sendBeacon) navigator.sendBeacon('/.netlify/functions/funnel-event', new Blob([payload], { type: 'application/json' }));
+      else fetch('/.netlify/functions/funnel-event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload });
+    } catch (_) {}
+  };
+
+  var css = document.createElement('style');
+  css.textContent = '.wbai-strip{position:sticky;top:0;z-index:90;display:flex;align-items:center;justify-content:center;gap:10px;background:#004C54;color:#fff;font-size:12.5px;font-weight:700;padding:7px 12px;font-family:inherit}' +
+    '.wbai-strip a{color:#9be8ea;text-decoration:none;font-weight:800}' +
+    '.wbai-strip .w{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);border-radius:12px;padding:2px 9px}';
+  document.head.appendChild(css);
+
+  function strip(html) {
+    var el = document.getElementById('wbai-strip');
+    if (!el) { el = document.createElement('div'); el.className = 'wbai-strip'; el.id = 'wbai-strip'; document.body.insertBefore(el, document.body.firstChild); }
+    el.innerHTML = html;
+  }
+
+  window.wbaiRefreshStrip = function () {
+    fetch('/.netlify/functions/auth-me', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (u) {
+        if (u && u.error) u = null;
+        window.wbaiUser = u || null;
+        if (u) {
+          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><span class="w">ⓦ ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</span><a href="/credits">get more</a>');
+          // SMS-first users carry a verified phone — adopt it so the page's own phone login is unnecessary
+          if (!window.currentUser && u.phone) {
+            try {
+              window.currentUser = { phone: u.phone, handle: u.handle || null, name: u.name || 'WeBetAI Member' };
+              if (typeof renderLoginState === 'function') renderLoginState();
+            } catch (e) {}
+          }
+        } else {
+          strip('Challenge friends with WeBit stakes — <a href="/login">sign in to WeBetAI →</a>');
+        }
+      });
+  };
+  wbaiRefreshStrip();
+  wbaiFE('p2p_view');
+})();
+</script>
+</body>
+</html>

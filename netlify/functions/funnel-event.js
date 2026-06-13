@@ -21,6 +21,7 @@ const ALLOWED_EVENTS = new Set([
   'onboard_shown', 'onboard_sports_chosen', 'onboard_edges_shown', 'onboard_signin_clicked',
   'onboard_prefs_saved', 'onboard_skipped',
   'pricing_view', 'checkout_view', 'checkout_paid', 'depth_unlock', 'login_view',
+  'p2p_view', 'p2p_challenge_created', 'p2p_stake_escrowed',
 ]);
 
 exports.handler = async (event) => {

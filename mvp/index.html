@@ -540,10 +540,10 @@
       <span class="logo-text">WeBetAI</span>
       <span class="header-badge" style="margin-left:2px;">MVP · Lab</span>
     </a>
-    <a href="/mvpalpha" style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;border:1px solid #004C54;background:#e6f4f1;color:#004C54;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;transition:all 0.15s;margin-left:auto;margin-right:8px;">⚖ vs Alpha</a>
+    <a href="/mvpalpha" style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;border:1px solid #004C54;background:#e6f4f1;color:#004C54;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;transition:all 0.15s;margin-left:auto;margin-right:8px;">vs Alpha</a>
     <nav class="header-nav">
       <a href="/mvp" class="header-link active">MVP Picks</a>
-      <a href="/mvpalpha" class="header-link">⚖ vs Alpha</a>
+      <a href="/mvpalpha" class="header-link">vs Alpha</a>
       <a href="/percentile" class="header-link">Track Record</a>
     </nav>
     <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
@@ -552,7 +552,7 @@
     </button>
     <div class="mobile-dropdown" id="mobileDropdown">
       <a href="/mvp">MVP Picks</a>
-      <a href="/mvpalpha">⚖ vs Alpha</a>
+      <a href="/mvpalpha">vs Alpha</a>
       <a href="/percentile">Track Record</a>
     </div>
   </header>
@@ -571,7 +571,10 @@
 <div class="main" id="dashboard">
 
   <!-- Results Tracker -->
-  <div class="results-section-title">Pick Results &amp; Track Record</div>
+  <div class="results-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;">
+    <span>Pick Results &amp; Track Record — MVP Version</span>
+    <a href="/alpha" title="Back to the production Alpha picks" style="text-transform:none;letter-spacing:normal;display:inline-flex;align-items:center;gap:5px;padding:5px 13px;border-radius:20px;border:1px solid #004C54;background:#e6f4f1;color:#004C54;font-family:inherit;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;">← View Alpha Version</a>
+  </div>
   <div class="results-card">
     <div class="results-cumulative" id="results-cumulative">
       <div class="cum-card"><div class="cum-value" id="cum-roi">--</div><div class="cum-label">ROI</div></div>

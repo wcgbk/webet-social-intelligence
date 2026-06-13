@@ -1732,7 +1732,7 @@
       return '<div style="display:inline-block; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px; margin:3px; font-size:.8125rem;">' + (i+1) + '. ' + esc(p.side) + ' <span style="opacity:.7;">(' + esc(p.sport) + ')</span></div>';
     }).join('');
     banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700; margin-bottom:.375rem;">You\'ve Been Challenged!</div>' +
-      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">' + esc(challengerName) + ' challenged you for <strong>$' + challenge.wager + '</strong></div>' +
+      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">' + esc(challengerName) + ' challenged you for <strong>' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBits' : 'bragging rights') + '</strong></div>' +
       '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.6; margin-bottom:.375rem;">Their picks</div>' +
       '<div style="margin-bottom:.75rem;">' + picksHtml + '</div>' +
       '<div style="font-size:.875rem; font-weight:600; background:rgba(255,255,255,0.15); display:inline-block; padding:6px 16px; border-radius:8px;">Select your 3 picks below, then lock them in</div>';

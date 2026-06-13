@@ -39,6 +39,12 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   resolution (read escrow events by challengeId + grade via check-resolution); X-users w/o
   phone still use page's own phone step to pick (fixed by canonical identity); pick3p2p.com
   external domain still separate — point its DNS at this site or deprecate.
+- P2P MARKET BETS LIVE (loop-c16): BettorEdge methodology, free WeBit version. market-bet fn
+  (create escrows WeBits, X-DM/Twilio delivery; accept=opponent takes other side+matches stake,
+  self-guard) + market-bet-settle (grade line vs ESPN, winner takes pot, push/expiry refund,
+  idempotent); market-bets store. p2p-sports: WeBit stake + X-DM/Text toggle + invite-accept
+  (?bet=) + lazy settle. E2E verified live (escrow 999->949, invite landing, self-guard, 0 errors).
+  Swap to real-money BettorEdge later. v2: cross-account settlement payout test (needs 2 accts+final).
 - Sports Markets QA + WeBit unify (loop-c15): BettorEdge pull VERIFIED CORRECT (/api/get-bettoredge-markets
   returns live orders/odds/volume; '----' cells = real thin exchange liquidity, not a bug). Page unified
   with WeBit account: real balance (auth-me, was fake E10,000), currency=WeBits, sign-in gate, unified

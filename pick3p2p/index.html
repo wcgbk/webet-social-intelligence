@@ -1753,13 +1753,16 @@
       return;
     }
 
-    // Hide friend/wager fields, show lock button
+    // Hide friend/wager/delivery fields, show lock button
     document.getElementById('c-name').parentElement.style.display = 'block';
     document.getElementById('c-friend').parentElement.style.display = 'none';
     document.getElementById('c-wager').parentElement.style.display = 'none';
+    var dlvGroup = document.getElementById('deliver-group');
+    if (dlvGroup) dlvGroup.style.display = 'none';
 
     var sendBtn = document.getElementById('btn-send');
-    sendBtn.textContent = 'Lock Picks';
+    var respStake = (pendingChallenge && pendingChallenge.wager > 0) ? pendingChallenge.wager : 0;
+    sendBtn.textContent = respStake > 0 ? ('Lock Picks & Stake ' + respStake) : 'Lock Picks';
     sendBtn.onclick = submitChallengeResponse;
 
     document.getElementById('c-name').value = '';
@@ -1782,6 +1785,21 @@
     if (!responderPhone && window.wbaiUser) responderPhone = 'wbai:' + window.wbaiUser.id;
     if (!responderPhone) { status.textContent = 'Sign in first (webetsocial.com/login).'; status.style.color = '#c0392b'; return; }
 
+    // Can't accept your own challenge
+    if (pendingChallenge && pendingChallenge.challenger && pendingChallenge.challenger.phone === responderPhone) {
+      status.textContent = "That's your own challenge — send it to a friend instead."; status.style.color = '#c0392b'; return;
+    }
+
+    // To accept a staked challenge you must match the stake — pre-check balance
+    var matchStake = (pendingChallenge && pendingChallenge.wager > 0) ? pendingChallenge.wager : 0;
+    if (matchStake > 0) {
+      var bal = (window.wbaiUser && Number(window.wbaiUser.credit_balance)) || 0;
+      if (bal < matchStake) {
+        status.innerHTML = 'You need ' + matchStake + ' WeBits to match this stake. <a href="/credits" style="color:#004C54;font-weight:700;">Get a pack →</a>';
+        status.style.color = '#c0392b'; return;
+      }
+    }
+
     btn.disabled = true; btn.textContent = 'Locking...'; status.textContent = ''; status.style.color = '';
 
     try {
@@ -1803,14 +1821,28 @@
       var data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to respond');
 
+      // Match the challenger's stake — both sides now have WeBits in the pot
+      var stakeNote = '';
+      if (matchStake > 0 && window.wbaiUser) {
+        try {
+          var sres = await fetch('/.netlify/functions/p2p-stake', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: String(pendingChallengeId), stake: matchStake }) }).then(function (r) { return r.json(); });
+          if (sres && sres.ok) {
+            stakeNote = ' · 🪙 ' + matchStake + ' WeBits staked (balance ' + Number(sres.balance).toLocaleString() + ')';
+            if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: matchStake });
+            if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
+          }
+        } catch (e) {}
+      }
+
       btn.textContent = 'Picks Locked!'; btn.style.background = '#2e7d32';
-      status.textContent = 'You\'re in! Both players have been notified. Game on!'; status.style.color = '#2e7d32';
+      status.textContent = 'You\'re in! Both players are staked. Game on!' + stakeNote; status.style.color = '#2e7d32';
 
       // Update banner
       var banner = document.getElementById('challenge-banner');
       if (banner) {
         banner.style.background = 'linear-gradient(135deg,#2e7d32,#1a2e1a)';
-        banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700;">Challenge Accepted!</div><div style="font-size:.875rem; opacity:.9;">Results will be graded after all games finish.</div>';
+        var potLine = matchStake > 0 ? 'Winner takes ⓦ ' + (matchStake * 2) + ' WeBits. ' : '';
+        banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700;">Challenge Accepted!</div><div style="font-size:.875rem; opacity:.9;">' + potLine + 'Results graded after all games finish.</div>';
       }
 
       // Remove ?challenge param from URL
@@ -1864,6 +1896,21 @@
         var myPicks = isChallenger ? ch.challenger.picks : ch.opponent.picks;
         var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return p.side; }).join(' / ') : 'Awaiting picks';
 
+        // Settled outcome from the viewing user's perspective
+        var resultHtml = '';
+        if (ch.settled) {
+          var o = ch.settled.outcome || '';
+          var mySide = isChallenger ? 'challenger' : 'opponent';
+          if (o.indexOf('_wins') > -1) {
+            var iWon = (ch.winner === mySide);
+            resultHtml = iWon
+              ? '<div style="font-size:.8125rem; font-weight:700; color:#2e7d32; margin-top:.375rem;">🏆 You won' + (ch.settled.pot ? ' +' + ch.settled.pot + ' WeBits' : '') + '</div>'
+              : '<div style="font-size:.8125rem; font-weight:700; color:#c0392b; margin-top:.375rem;">Lost' + (ch.wager > 0 ? ' −' + ch.wager + ' WeBits' : '') + '</div>';
+          } else if (o.indexOf('refund') > -1) {
+            resultHtml = '<div style="font-size:.8125rem; font-weight:600; color:var(--txt-m); margin-top:.375rem;">' + (o.indexOf('tie') > -1 ? 'Tie' : 'Expired') + ' — stake refunded</div>';
+          }
+        }
+
         html += '<div class="my-challenge-card" onclick="viewChallenge(' + i + ')" style="padding:.75rem; border:1px solid var(--border-lt); border-radius:10px; margin-bottom:.5rem; background:var(--white); cursor:pointer; transition:border-color .15s;"' +
           ' onmouseover="this.style.borderColor=\'var(--teal-border)\'" onmouseout="this.style.borderColor=\'var(--border-lt)\'">' +
           '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">' +
@@ -1875,6 +1922,7 @@
             '<span style="font-size:.6875rem; color:var(--teal); font-weight:500;">View &rarr;</span>' +
           '</div>' +
           '<div style="font-size:.75rem; color:var(--txt-l); margin-top:.375rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(picksStr) + '</div>' +
+          resultHtml +
         '</div>';
       }
       container.innerHTML = html;

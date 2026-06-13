@@ -243,7 +243,9 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Challenge already responded to' }) };
     }
 
-    const normResponder = normalizePhone(responderPhone);
+    // Unified-account responders (X users without a phone) use wbai:{id} identities
+    const respIsWbai = /^wbai:/.test(String(responderPhone));
+    const normResponder = respIsWbai ? String(responderPhone).slice(0, 40) : normalizePhone(responderPhone);
     if (!normResponder) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid phone' }) };
     }
@@ -271,14 +273,17 @@ exports.handler = async (event) => {
     const opponentPicks = challenge.opponent.picks.map((p, i) => `${i + 1}. ${p.side} (${p.sport})`).join('\n');
     const challengerPicks = challenge.challenger.picks.map((p, i) => `${i + 1}. ${p.side} (${p.sport})`).join('\n');
 
-    // Notify challenger that opponent responded
-    await sendSMS(challenge.challenger.phone,
-      `${responderName || 'Your opponent'} accepted your $${challenge.wager} Pick3P2P!\n\nTheir picks:\n${opponentPicks}\n\nYour picks:\n${challengerPicks}\n\nGame on! Results post after final scores.\nhttps://pick3p2p.com/?challenge=${challengeId}`
+    const stakeLbl = challenge.wager > 0 ? `${challenge.wager}-WeBit` : 'bragging-rights';
+    const gameUrl = `https://webetsocial.com/pick3p2p/?challenge=${challengeId}`;
+
+    // Notify challenger that opponent responded (only deliverable to real phones)
+    if (!/^wbai:/.test(String(challenge.challenger.phone))) await sendSMS(challenge.challenger.phone,
+      `${responderName || 'Your opponent'} accepted your ${stakeLbl} Pick3P2P!\n\nTheir picks:\n${opponentPicks}\n\nYour picks:\n${challengerPicks}\n\nGame on! Results post after final scores.\n${gameUrl}`
     );
 
-    // Confirm to responder
-    await sendSMS(normResponder,
-      `Locked in! $${challenge.wager} Pick3P2P vs ${challenge.challenger.name || 'opponent'}.\n\nYour picks:\n${opponentPicks}\n\nTheir picks:\n${challengerPicks}\n\nResults post after final scores.\nhttps://pick3p2p.com/?challenge=${challengeId}`
+    // Confirm to responder (only deliverable to real phones)
+    if (!respIsWbai) await sendSMS(normResponder,
+      `Locked in! ${stakeLbl} Pick3P2P vs ${challenge.challenger.name || 'opponent'}.\n\nYour picks:\n${opponentPicks}\n\nTheir picks:\n${challengerPicks}\n\nResults post after final scores.\n${gameUrl}`
     );
 
     return {

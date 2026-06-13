@@ -1515,11 +1515,14 @@
       if (mcs) { mcs.style.display = ''; mcs.classList.add('v'); }
       loadMyChallenges();
     } else {
+      // Unified login only — no page-level phone gate (founder directive 2026-06-13).
+      // One WeBetAI account covers picks, WeBits, and challenges.
       form.style.display = 'flex';
       otp.style.display = 'none';
       userEl.style.display = 'none';
-      text.textContent = 'Enter your phone to start picking';
-      if (heading) heading.textContent = 'Log In to Make Your Pick 3';
+      text.textContent = 'One account for picks, WeBits, and challenges';
+      form.innerHTML = '<a href="/login" class="login-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">Sign in to WeBetAI →</a>';
+      if (heading) heading.textContent = 'Sign In to Make Your Pick 3';
       var mcs = document.getElementById('my-challenges-section');
       if (mcs) mcs.style.display = 'none';
     }
@@ -1818,7 +1821,8 @@
     if (!name) { status.textContent = 'Enter your name.'; status.style.color = '#c0392b'; return; }
 
     var responderPhone = currentUser ? currentUser.phone : null;
-    if (!responderPhone) { status.textContent = 'Log in with your phone number first.'; status.style.color = '#c0392b'; return; }
+    if (!responderPhone && window.wbaiUser) responderPhone = 'wbai:' + window.wbaiUser.id;
+    if (!responderPhone) { status.textContent = 'Sign in first (webetsocial.com/login).'; status.style.color = '#c0392b'; return; }
 
     btn.disabled = true; btn.textContent = 'Locking...'; status.textContent = ''; status.style.color = '';
 
@@ -2187,10 +2191,12 @@
         window.wbaiUser = u || null;
         if (u) {
           strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><span class="w">ⓦ ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</span><a href="/credits">get more</a>');
-          // SMS-first users carry a verified phone — adopt it so the page's own phone login is unnecessary
-          if (!window.currentUser && u.phone) {
+          // Adopt the unified identity for EVERY signed-in user — phone when they have one
+          // (SMS-first), otherwise their wbai account id (X users). The page's own phone
+          // login is gone; /login is the only gate.
+          if (!window.currentUser) {
             try {
-              window.currentUser = { phone: u.phone, handle: u.handle || null, name: u.name || 'WeBetAI Member' };
+              window.currentUser = { phone: u.phone || ('wbai:' + u.id), handle: u.handle || null, name: u.name || 'WeBetAI Member' };
               if (typeof renderLoginState === 'function') renderLoginState();
             } catch (e) {}
           }

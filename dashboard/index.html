@@ -3421,8 +3421,9 @@
   }
 
   function topbarCoinClick() {
-    // Token icon + balance → the WeBit page. Profile lives on the avatar, not the coin.
-    window.location.href = '/webit';
+    // Token icon + balance → open the WeBit page as an in-dashboard panel (stay in the app).
+    // Profile lives on the avatar, not the coin.
+    switchPanel('webit');
   }
 
   function openProfilePanel() {

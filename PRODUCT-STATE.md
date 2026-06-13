@@ -31,6 +31,11 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - X OAuth: authorize moved twitter.com → x.com (mobile login-loop fix; founder retest pending).
 - Homepage: RESTORED TO ORIGINAL — do not add nav items/chips there again.
 - Betty picks delivery verified live (chat returns today's card, mobile, 0 console errors).
+- /login gateway LIVE (loop-c5): X primary + SMS code login via existing Twilio Messages API
+  (HMAC OTP, 10-min TTL, 3/phone/hr + 10/IP/hr limits, 8-attempt cap); auth-sms-verify mints
+  sessions identical to X callback; sms_ users get 1,000 WeBits; email/Google = SOON flags.
+  NOTE env name: TWILIO_PHONE_NUMBER (TWILIO_FROM does not exist). Real-SMS send untested —
+  founder 30-sec test pending. Funnel beacon login_view live.
 - Onboarding v1 LIVE (loop-c4): Betty-led, in-conversation on /dashboard — sports chips ->
   matching pick cards render in chat (honest empty note) -> X sign-in offer + WeBits welcome;
   guest prefs merge to wbai-users on login (user-prefs fn); funnel-event fn instruments
@@ -42,12 +47,14 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
   exactly 1 (16,000→15,999), re-click no double charge, 0 console errors.
 
 ## NEXT (top of backlog, in order)
-1. /login gateway — X (live) + SMS via Twilio Verify (rate-limit phone+IP); email/Google
-   UI behind PROVIDER_READY flags (no creds yet).
-2. Canonical identity (one userId, link X+phone, ledger keyed on it).
-3. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
-4. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
-5. Admin funnel report page (funnel-events store now collecting; report is role-gated admin page).
+1. Admin funnel report — role-gated page + summary fn reading funnel-events store (SDK
+   namespace! REST list shows empty — SDK and legacy REST blobs are SEPARATE namespaces;
+   edge-picks-* = REST-written, webit-ledger/funnel-events/wbai-users = SDK-written).
+2. Canonical identity (one userId, link X+phone — SMS-first users currently get a separate
+   sms_ account; linking merges balances/prefs) (one userId, link X+phone, ledger keyed on it).
+4. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).
+5. Pick3P2P same-login integration (local pick3p2p/ + pick3p2p.com site d8231945).
+3. (moved to #1)
 
 ## Conventions every cycle MUST follow
 - Deploy: `npx netlify deploy --prod --dir . --skip-functions-cache` (NETLIFY_AUTH_TOKEN

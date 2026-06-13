@@ -106,6 +106,11 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 2. Admin funnel report — role-gated page + summary fn reading funnel-events store (SDK
    namespace! REST list shows empty — SDK and legacy REST blobs are SEPARATE namespaces;
    edge-picks-* = REST-written, webit-ledger/funnel-events/wbai-users = SDK-written).
+   [IN PR — branch loop/admin-funnel-report] funnel-report.js (session->admin-allowlist gate,
+   SDK list of funnel-events, 14-day per-event/per-day counts) + admin/funnel/index.html
+   (dark /checkout-styled table + step conversions, noindex) + admin/funnel/README.md
+   (how to seed wbai-users key `admin-allowlist`). Page shell + render() verified locally
+   (0 console errors); LIVE fn verification pending deploy (admin-gated, needs blob env).
 3. Canonical identity (one userId, link X+phone — SMS-first users currently get a separate
    sms_ account; linking merges balances/prefs) (one userId, link X+phone, ledger keyed on it).
 5. /app shell consolidation (dashboard content merges; admin stays separate role-gated URL).

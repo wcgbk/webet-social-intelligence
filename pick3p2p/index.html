@@ -2182,6 +2182,22 @@
     el.innerHTML = html;
   }
 
+  // Lazy stake settlement: whenever a signed-in user opens the page, grade + settle
+  // any of their due challenges (winner payout / tie refund / expired refund).
+  // Idempotent server-side, so calling on every load is safe.
+  window.wbaiSettleMine = function () {
+    try {
+      var ident = (window.currentUser && window.currentUser.phone) || (window.wbaiUser && ('wbai:' + window.wbaiUser.id));
+      if (!ident) return;
+      fetch('/.netlify/functions/p2p-settle', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity: ident.replace(/^wbai:/, '') }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var settled = ((j && j.results) || []).filter(function (x) { return x.result === 'settled' || x.result === 'expired_refund'; });
+          if (settled.length) { wbaiRefreshStrip(); if (typeof loadMyChallenges === 'function') loadMyChallenges(); }
+        }).catch(function () {});
+    } catch (e) {}
+  };
+
   window.wbaiRefreshStrip = function () {
     fetch('/.netlify/functions/auth-me', { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -2206,6 +2222,7 @@
       });
   };
   wbaiRefreshStrip();
+  setTimeout(function () { wbaiSettleMine(); }, 2500);
   wbaiFE('p2p_view');
 })();
 </script>

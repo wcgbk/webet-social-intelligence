@@ -1469,33 +1469,19 @@
   var loginPhone = null;
 
   function renderLoginState() {
-    var form = document.getElementById('login-form');
-    var otp = document.getElementById('login-otp');
-    var userEl = document.getElementById('login-user');
-    var text = document.getElementById('login-text');
+    // The unified WeBetAI strip / dashboard top bar is the only auth + token UI.
+    // The page's own login bar (and "Logged in / Log out") is retired (founder directive).
+    var loginBar = document.getElementById('login-bar');
+    if (loginBar) loginBar.style.display = 'none';
 
     var heading = document.getElementById('board-heading');
+    var mcs = document.getElementById('my-challenges-section');
     if (currentUser) {
-      form.style.display = 'none';
-      otp.style.display = 'none';
-      userEl.style.display = 'flex';
-      text.innerHTML = '<strong>Logged in</strong>';
-      document.getElementById('login-welcome').innerHTML = '<span class="login-handle">@' + esc(currentUser.handle) + '</span>';
       if (heading) heading.textContent = 'Make Your Pick 3';
-      // Show My Challenges section (add .v since IntersectionObserver missed it while hidden)
-      var mcs = document.getElementById('my-challenges-section');
       if (mcs) { mcs.style.display = ''; mcs.classList.add('v'); }
       loadMyChallenges();
     } else {
-      // Unified login only — no page-level phone gate (founder directive 2026-06-13).
-      // One WeBetAI account covers picks, WeBits, and challenges.
-      form.style.display = 'flex';
-      otp.style.display = 'none';
-      userEl.style.display = 'none';
-      text.textContent = 'One account for picks, WeBits, and challenges';
-      form.innerHTML = '<a href="/login" class="login-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">Sign in to WeBetAI →</a>';
       if (heading) heading.textContent = 'Sign In to Make Your Pick 3';
-      var mcs = document.getElementById('my-challenges-section');
       if (mcs) mcs.style.display = 'none';
     }
   }
@@ -1726,7 +1712,7 @@
 
     var statusText = challenge.status === 'active' ? 'Challenge Active — Waiting for Games to Finish' : challenge.status === 'graded' ? 'Challenge Complete' : challenge.status;
     banner.innerHTML = '<div style="font-size:1rem; font-weight:700; margin-bottom:.25rem;">' + esc(statusText) + '</div>' +
-      '<div style="font-size:.8125rem; color:#5f6b7a;">' + esc(challenge.challenger.name || 'Challenger') + ' vs ' + esc(challenge.opponent.name || 'Opponent') + ' for $' + challenge.wager + '</div>' +
+      '<div style="font-size:.8125rem; color:#5f6b7a;">' + esc(challenge.challenger.name || 'Challenger') + ' vs ' + esc(challenge.opponent.name || 'Opponent') + ' for ' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBits' : 'bragging rights') + '</div>' +
       '<div style="margin-top:.5rem;"><a href="/?challenge=' + challenge.id + '" style="font-size:.8125rem; color:#004C54; font-weight:600;">View Details</a></div>';
   }
 
@@ -1781,7 +1767,7 @@
       document.getElementById('c-name').value = currentUser.displayName || currentUser.handle;
     }
 
-    document.getElementById('modal-status').textContent = 'Lock your picks to accept the $' + pendingChallenge.wager + ' challenge.';
+    document.getElementById('modal-status').textContent = pendingChallenge.wager > 0 ? 'Lock your picks to accept the ' + pendingChallenge.wager + '-WeBit challenge.' : 'Lock your picks to accept the challenge.';
     modal.classList.add('open');
   }
 
@@ -1883,7 +1869,7 @@
             '<span style="font-size:.6875rem; font-weight:600; padding:2px 8px; border-radius:9999px; ' + statusBg + '">' + esc(statusLabel) + '</span>' +
           '</div>' +
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<span style="font-size:.75rem; color:var(--txt-m);">$' + ch.wager + ' &middot; ' + esc(ch.date) + '</span>' +
+            '<span style="font-size:.75rem; color:var(--txt-m);">' + (ch.wager > 0 ? 'ⓦ ' + ch.wager + ' WeBits' : 'bragging rights') + ' &middot; ' + esc(ch.date) + '</span>' +
             '<span style="font-size:.6875rem; color:var(--teal); font-weight:500;">View &rarr;</span>' +
           '</div>' +
           '<div style="font-size:.75rem; color:var(--txt-l); margin-top:.375rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(picksStr) + '</div>' +
@@ -1908,7 +1894,7 @@
     html += '<div style="background:var(--teal); color:#fff; padding:1.25rem; text-align:center;">';
     html += '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.7; margin-bottom:.25rem;">' + esc(ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Complete') + '</div>';
     html += '<div style="font-size:1.25rem; font-weight:700;">' + esc(me.name || 'You') + ' vs ' + esc(them.name || 'Opponent') + '</div>';
-    html += '<div style="font-size:.875rem; opacity:.8; margin-top:.25rem;">$' + ch.wager + ' &middot; ' + esc(ch.date) + '</div>';
+    html += '<div style="font-size:.875rem; opacity:.8; margin-top:.25rem;">' + (ch.wager > 0 ? 'ⓦ ' + ch.wager + ' WeBits' : 'bragging rights') + ' &middot; ' + esc(ch.date) + '</div>';
     html += '</div>';
 
     // Your picks

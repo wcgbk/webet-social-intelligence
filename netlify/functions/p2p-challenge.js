@@ -114,14 +114,18 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: CORS, body: JSON.stringify(challenge) };
     }
 
-    // List challenges for a phone number
+    // List challenges for an identity (phone OR wbai:{id} for X users)
     if (params.phone) {
-      const phone = normalizePhone(params.phone);
-      if (!phone) {
-        return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid phone' }) };
+      const raw = String(params.phone);
+      // wbai identities aren't phone numbers — index on their raw digits, same as create/respond
+      const idDigits = /^wbai:/.test(raw)
+        ? raw.replace(/\D/g, '')
+        : (normalizePhone(raw) || '').replace(/\D/g, '');
+      if (!idDigits) {
+        return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid identity' }) };
       }
       // Get user's challenge index
-      const index = await blobGet('p2p-challenges', 'index-' + phone.replace(/\D/g, ''));
+      const index = await blobGet('p2p-challenges', 'index-' + idDigits);
       if (!index || !index.challenges) {
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ challenges: [] }) };
       }
@@ -268,6 +272,15 @@ exports.handler = async (event) => {
 
     // Update responder's user record
     await upsertUser('p2p-users', normResponder, responderName, responderHandle);
+
+    // Index the challenge for the responder too, so it shows in THEIR "My Challenges"
+    const respIdxKey = 'index-' + normResponder.replace(/\D/g, '');
+    const respIdx = (await blobGet('p2p-challenges', respIdxKey)) || { challenges: [] };
+    if (!respIdx.challenges.includes(challengeId)) {
+      respIdx.challenges.unshift(challengeId);
+      respIdx.challenges = respIdx.challenges.slice(0, 50);
+      await blobPut('p2p-challenges', respIdxKey, respIdx);
+    }
 
     // Notify both users
     const opponentPicks = challenge.opponent.picks.map((p, i) => `${i + 1}. ${p.side} (${p.sport})`).join('\n');

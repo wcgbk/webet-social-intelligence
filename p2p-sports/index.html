@@ -205,7 +205,7 @@ body.embed .side{display:none}
   <div class="hdr-r">
     <a href="/dashboard" class="hdr-lnk">Dashboard</a>
     <a href="/edge" class="hdr-lnk">Edge Picks</a>
-    <div class="bal" id="balEl">E10,000.00</div>
+    <div class="bal" id="balEl">···</div>
   </div>
 </header>
 
@@ -325,7 +325,27 @@ function leagueStripe(lg){
   return`<div class="gc-stripe ${cls}"></div>`;
 }
 
+// ── Unified WeBit account bridge ──────────────────────────────────────
+// Real WeBit balance + identity from the shared session (same as Pick3P2P).
+// Sports Markets bets are WeBit plays tied to the signed-in WeBetAI account.
+window.wbaiUser = null;
+async function refreshWebitAccount(){
+  try{
+    const u = await fetch('/.netlify/functions/auth-me',{credentials:'include'}).then(r=>r.ok?r.json():null).catch(()=>null);
+    const el = document.getElementById('balEl');
+    if(u && !u.error){
+      window.wbaiUser = u;
+      balance = Number(u.credit_balance)||0;
+      if(el) el.innerHTML = '<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBits</a>';
+    } else {
+      window.wbaiUser = null;
+      if(el) el.innerHTML = '<a href="/login" style="color:inherit;text-decoration:none;font-weight:700;">Sign in →</a>';
+    }
+  }catch(e){}
+}
+
 async function init(){
+  refreshWebitAccount();
   try{
     const r=await fetch(`/api/get-bettoredge-markets?t=${Date.now()}`);
     raw=await r.json();
@@ -538,7 +558,7 @@ function renderBetForm(){
         <div class="md-field">
           <label>Quantity</label>
           <input class="md-inp" id="mdQty" type="number" value="10" min="1" oninput="calcWin()">
-          <div class="md-avail">${balance.toLocaleString()} AVAILABLE</div>
+          <div class="md-avail">ⓦ ${balance.toLocaleString()} AVAILABLE</div>
         </div>
         <div class="md-field">
           <label>To Win</label>
@@ -576,7 +596,7 @@ function calcWin(){
   const el=document.getElementById('mdWin');
   if(el)el.value=win.toFixed(2);
   const est=document.getElementById('mdEst');
-  if(est)est.textContent=`EST. EARNINGS: E${win.toFixed(2)}`;
+  if(est)est.textContent=`EST. EARNINGS: ⓦ${win.toFixed(2)}`;
 }
 
 function setQty(v){
@@ -606,8 +626,8 @@ function renderReview(){
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
       <div class="md-row"><span class="md-row-l">Odds</span><span class="md-row-v">${fmtOdds(odds)} (${(price*100).toFixed(0)}%)</span></div>
-      <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
-      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty+win).toFixed(2)}</span></div>
       ${opp?`<div class="md-row"><span class="md-row-l">Challenge</span><span class="md-row-v">${opp}</span></div>`:''}
     </div>
     <div class="md-foot">
@@ -617,15 +637,22 @@ function renderReview(){
 }
 
 async function submitBet(){
+  const b=selectedBet;
+  // Must be signed in to wager WeBits
+  if(!window.wbaiUser){ window.location.href='/login'; return; }
+  if((b._qty||0) > balance){ alert('Not enough WeBits — get a pack at /credits'); return; }
+
   const btn=document.getElementById('mdSubmitBtn');
   btn.disabled=true;btn.textContent='Submitting...';
-  const b=selectedBet;
 
   try{
+    const me=window.wbaiUser;
     const resp=await fetch('/api/create-p2p-bet-web',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
       body:JSON.stringify({
-        initiatorName:'You',
+        initiatorName:(me.name||me.handle||'You'),
+        initiatorHandle:me.handle||null,
+        initiatorPhone:me.phone||('wbai:'+me.id),
         event:b.event,league:b.league,pick:b.pick,odds:b.odds,
         amount:b._qty,matchup:b.matchup||b.event,
         counterpartyName:b._opp||null,counterpartyPhone:b._phone||null,
@@ -635,7 +662,7 @@ async function submitBet(){
     const data=await resp.json();
     if(data.success){
       balance-=b._qty;
-      document.getElementById('balEl').textContent='E'+balance.toLocaleString(undefined,{minimumFractionDigits:2});
+      refreshWebitAccount();
       selectedBet._betId=data.betId;selectedBet._shareUrl=data.shareUrl;
       modalStep='success';renderModal();
     }else{
@@ -660,12 +687,12 @@ function renderSuccess(){
     </div>
     <div style="padding:.75rem 1.25rem;font-size:1.125rem;font-weight:700;color:var(--olive);text-align:center">ORDER PLACED</div>
     <div class="fill-bar"><div class="fill-bar-inner" style="width:100%"></div></div>
-    <div class="fill-info"><span>Placed: E${qty.toFixed(2)}</span><span>Order: E${qty.toFixed(2)}</span></div>
+    <div class="fill-info"><span>Placed: ⓦ${qty.toFixed(2)}</span><span>Order: ⓦ${qty.toFixed(2)}</span></div>
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
-      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">E${qty.toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Amount</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
       <div class="md-row"><span class="md-row-l">Price</span><span class="md-row-v">${(price*100).toFixed(1)}% (${fmtOdds(odds)})</span></div>
-      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">E${(qty+win).toFixed(2)}</span></div>
+      <div class="md-row"><span class="md-row-l">Potential Winnings</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty+win).toFixed(2)}</span></div>
     </div>
     ${url?`<div class="share-area">
       <div class="share-link"><input id="shareUrl" value="${url}" readonly onclick="this.select()"><button onclick="copyLink()">Copy</button></div>

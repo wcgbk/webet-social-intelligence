@@ -1358,14 +1358,14 @@
     for (var i = 0; i < userSelections.length; i++) {
       var s = userSelections[i];
       var tag = s.type === 'ai' ? ' <span style="font-size:.6rem; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-border); padding:1px 4px; border-radius:4px;">AI</span>' : '';
-      html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;"><span style="font-weight:600; color:var(--olive);">' + esc(s.sideName) + tag + '</span><span style="color:var(--txt-m); font-size:.75rem;">' + esc(s.sport) + '</span></div>';
+      var sm = shortTeams(s.matchup);
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;"><span style="min-width:0; margin-right:.5rem;">' + (sm ? '<span style="font-size:.6875rem; color:var(--txt-l); display:block;">' + esc(sm) + '</span>' : '') + '<span style="font-weight:600; color:var(--olive);">' + esc(s.sideName) + tag + '</span></span><span style="color:var(--txt-m); font-size:.75rem; flex-shrink:0;">' + esc(s.sport) + '</span></div>';
     }
     document.getElementById('modal-picks-summary').innerHTML = html;
 
-    // Pre-fill name if logged in
-    if (currentUser && currentUser.handle) {
-      document.getElementById('c-name').value = currentUser.displayName || currentUser.handle;
-    }
+    // Pre-fill with the user's real name (falls back to handle)
+    var cn = document.getElementById('c-name');
+    if (cn && !cn.value.trim()) cn.value = bestMyName();
     document.getElementById('challenge-modal').classList.add('open');
   }
 
@@ -1468,6 +1468,82 @@
   ═══════════════════════════════════════════════════════════════ */
   var currentUser = JSON.parse(localStorage.getItem('p2p_user') || 'null');
   var loginPhone = null;
+
+  /* ── Identity + pick display helpers ── */
+  function cleanName(n) {
+    n = (n || '').toString().trim();
+    if (!n || n === 'WeBetAI Member' || n.toLowerCase() === 'member' || n.toLowerCase() === 'anonymous') return '';
+    return n;
+  }
+  function personName(person, fallback) {
+    if (!person) return fallback || 'Opponent';
+    var n = cleanName(person.name);
+    if (n) return n;
+    if (person.handle && !/^[•·.]/.test(person.handle)) return '@' + String(person.handle).replace(/^@/, '');
+    return fallback || 'Opponent';
+  }
+  function bestMyName() {
+    return (window.wbaiUser && cleanName(window.wbaiUser.name)) ||
+           cleanName(currentUser && currentUser.name) ||
+           ((currentUser && currentUser.handle) ? String(currentUser.handle) : '') ||
+           ((window.wbaiUser && window.wbaiUser.handle) ? String(window.wbaiUser.handle) : '');
+  }
+  function shortTeams(matchup) {
+    if (!matchup) return '';
+    return String(matchup).split(/\s+(?:vs\.?|@|at)\s+/i).map(function (t) {
+      var w = t.trim().split(/\s+/);
+      return w.length > 1 ? w[w.length - 1] : t.trim();
+    }).join(' @ ');
+  }
+  function pickLabel(p) {
+    var side = p.side || p.sideName || '';
+    var m = shortTeams(p.matchup);
+    return m ? m + ' · ' + side : side;
+  }
+
+  /* ── First/Last name capture (so friends see a real name, not "WeBetAI Member") ── */
+  function maybePromptName(u) {
+    if (!u) return;
+    if (u.firstName) return; // already structured
+    var nm = cleanName(u.name);
+    if (nm && nm.indexOf(' ') > 0) {
+      var parts = nm.split(/\s+/); var fn = parts.shift(); var ln = parts.join(' ');
+      saveNameSilent(fn, ln); return; // real name (e.g. from X) — capture into first/last, no prompt
+    }
+    showNameModal();
+  }
+  function applySavedName(j) {
+    if (!j || !j.name) return;
+    if (window.wbaiUser) { window.wbaiUser.name = j.name; window.wbaiUser.firstName = j.firstName; window.wbaiUser.lastName = j.lastName; }
+    if (window.currentUser) window.currentUser.name = j.name;
+    var ci = document.getElementById('c-name'); if (ci && !ci.value.trim()) ci.value = j.name;
+  }
+  function saveNameSilent(fn, ln) {
+    fetch('/.netlify/functions/user-prefs', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ firstName: fn, lastName: ln }) })
+      .then(function (r) { return r.ok ? r.json() : null; }).then(applySavedName).catch(function () {});
+  }
+  function showNameModal() {
+    var m = document.getElementById('name-modal'); if (!m) return;
+    var st = document.getElementById('nm-status'); if (st) st.textContent = '';
+    m.classList.add('open');
+    setTimeout(function () { var f = document.getElementById('nm-first'); if (f) f.focus(); }, 60);
+  }
+  function closeNameModal() { var m = document.getElementById('name-modal'); if (m) m.classList.remove('open'); }
+  async function saveName() {
+    var fn = (document.getElementById('nm-first').value || '').trim();
+    var ln = (document.getElementById('nm-last').value || '').trim();
+    var st = document.getElementById('nm-status');
+    if (!fn) { st.textContent = 'Please enter your first name.'; st.style.color = '#c0392b'; return; }
+    var btn = document.getElementById('nm-save'); btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      var r = await fetch('/.netlify/functions/user-prefs', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ firstName: fn, lastName: ln }) });
+      var j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save');
+      applySavedName(j);
+      closeNameModal();
+      if (typeof loadMyChallenges === 'function' && window.currentUser) loadMyChallenges();
+    } catch (e) { st.textContent = e.message; st.style.color = '#c0392b'; btn.disabled = false; btn.textContent = 'Save'; }
+  }
 
   function renderLoginState() {
     // The unified WeBetAI strip / dashboard top bar is the only auth + token UI.
@@ -1750,7 +1826,8 @@
     for (var j = 0; j < userSelections.length; j++) {
       var s = userSelections[j];
       var tag = s.type === 'ai' ? ' <span style="font-size:.6rem; color:var(--teal); background:var(--teal-light); border:1px solid var(--teal-border); padding:1px 4px; border-radius:4px;">AI</span>' : '';
-      html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;"><span style="font-weight:600; color:var(--olive);">' + esc(s.sideName) + tag + '</span><span style="color:var(--txt-m); font-size:.75rem;">' + esc(s.sport) + '</span></div>';
+      var sm = shortTeams(s.matchup);
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;"><span style="min-width:0; margin-right:.5rem;">' + (sm ? '<span style="font-size:.6875rem; color:var(--txt-l); display:block;">' + esc(sm) + '</span>' : '') + '<span style="font-weight:600; color:var(--olive);">' + esc(s.sideName) + tag + '</span></span><span style="color:var(--txt-m); font-size:.75rem; flex-shrink:0;">' + esc(s.sport) + '</span></div>';
     }
     summary.innerHTML = html;
 
@@ -1819,7 +1896,7 @@
           // Prefer the real signed-in WeBetAI handle/name over the free-text field,
           // so accepted challenges show the correct opponent (e.g. @AskApai), not a typo.
           responderHandle: (window.wbaiUser && window.wbaiUser.handle) || (currentUser && currentUser.handle) || null,
-          responderName: (window.wbaiUser && (window.wbaiUser.name || window.wbaiUser.handle)) || name || (currentUser && currentUser.handle) || 'Opponent',
+          responderName: bestMyName() || name || 'Opponent',
           picks: userSelections.map(function(s) {
             return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
           }),
@@ -1897,11 +1974,11 @@
       for (var i = 0; i < myChallengesData.length; i++) {
         var ch = myChallengesData[i];
         var isChallenger = ch.challenger.phone === currentUser.phone;
-        var opponent = isChallenger ? (ch.opponent.name || 'Waiting...') : (ch.challenger.name || 'Challenger');
+        var opponent = isChallenger ? ((ch.opponent && ch.opponent.phone) ? personName(ch.opponent) : 'Waiting…') : personName(ch.challenger, 'Challenger');
         var statusBg = ch.status === 'pending' ? 'background:#fff3e0; color:#e65100;' : ch.status === 'active' ? 'background:var(--teal-light); color:var(--teal);' : 'background:var(--green-light); color:var(--green);';
         var statusLabel = ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Graded';
         var myPicks = isChallenger ? ch.challenger.picks : ch.opponent.picks;
-        var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return p.side; }).join(' / ') : 'Awaiting picks';
+        var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return pickLabel(p); }).join('  •  ') : 'Awaiting picks';
 
         // Settled outcome from the viewing user's perspective
         var resultHtml = '';
@@ -1950,7 +2027,7 @@
     // Header
     html += '<div style="background:var(--teal); color:#fff; padding:1.25rem; text-align:center;">';
     html += '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.7; margin-bottom:.25rem;">' + esc(ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Complete') + '</div>';
-    html += '<div style="font-size:1.25rem; font-weight:700;">' + esc(me.name || 'You') + ' vs ' + esc(them.name || 'Opponent') + '</div>';
+    html += '<div style="font-size:1.25rem; font-weight:700;">' + esc(personName(me, 'You')) + ' vs ' + esc(personName(them, 'Opponent')) + '</div>';
     html += '<div style="font-size:.875rem; opacity:.8; margin-top:.25rem;">' + (ch.wager > 0 ? 'ⓦ ' + ch.wager + ' WeBits' : 'bragging rights') + ' &middot; ' + esc(ch.date) + '</div>';
     html += '</div>';
 
@@ -1963,9 +2040,10 @@
         var resultBadge = '';
         if (p.result === 'win') resultBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">W</span>';
         else if (p.result === 'loss') resultBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#fce4e4; color:#c0392b;">L</span>';
-        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
-        html += '<span style="font-weight:600; color:var(--olive);">' + esc(p.side) + ' ' + resultBadge + '</span>';
-        html += '<span style="font-size:.75rem; color:var(--txt-m);">' + esc(p.sport) + '</span>';
+        var pm = shortTeams(p.matchup);
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
+        html += '<span style="min-width:0; margin-right:.5rem;">' + (pm ? '<span style="font-size:.6875rem; color:var(--txt-l); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(pm) + '</span>' : '') + '<span style="font-weight:600; color:var(--olive);">' + esc(p.side) + ' ' + resultBadge + '</span></span>';
+        html += '<span style="font-size:.75rem; color:var(--txt-m); flex-shrink:0;">' + esc(p.sport) + '</span>';
         html += '</div>';
       }
     } else {
@@ -1974,16 +2052,17 @@
 
     // Opponent picks
     html += '<div style="height:.75rem;"></div>';
-    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--txt-l); margin-bottom:.5rem;">' + esc(them.name || 'Opponent') + '\'s Picks</div>';
+    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--txt-l); margin-bottom:.5rem;">' + esc(personName(them, 'Opponent')) + '\'s Picks</div>';
     if (them.picks && them.picks.length > 0) {
       for (var j = 0; j < them.picks.length; j++) {
         var tp = them.picks[j];
         var rBadge = '';
         if (tp.result === 'win') rBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">W</span>';
         else if (tp.result === 'loss') rBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#fce4e4; color:#c0392b;">L</span>';
-        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.375rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
-        html += '<span style="font-weight:500; color:var(--txt-m);">' + esc(tp.side) + ' ' + rBadge + '</span>';
-        html += '<span style="font-size:.75rem; color:var(--txt-l);">' + esc(tp.sport) + '</span>';
+        var tpm = shortTeams(tp.matchup);
+        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
+        html += '<span style="min-width:0; margin-right:.5rem;">' + (tpm ? '<span style="font-size:.6875rem; color:var(--txt-l); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(tpm) + '</span>' : '') + '<span style="font-weight:500; color:var(--txt-m);">' + esc(tp.side) + ' ' + rBadge + '</span></span>';
+        html += '<span style="font-size:.75rem; color:var(--txt-l); flex-shrink:0;">' + esc(tp.sport) + '</span>';
         html += '</div>';
       }
     } else {
@@ -2095,7 +2174,7 @@
           var statusLbl = rc.status === 'pending' ? 'Pending' : rc.status === 'active' ? 'Active' : 'Graded';
           var vs = rc.isChallenger ? (rc.opponentName || 'Opponent') : (rc.challengerName || 'Challenger');
           var myPicks = rc.isChallenger ? rc.challengerPicks : rc.opponentPicks;
-          var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return p.side; }).join(' / ') : 'Awaiting picks';
+          var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return pickLabel(p); }).join('  •  ') : 'Awaiting picks';
           chHTML += '<div style="padding:.625rem; border:1px solid var(--border-lt); border-radius:8px; margin-bottom:.5rem; background:var(--off-white);">' +
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem;">' +
               '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">vs ' + esc(vs) + '</span>' +
@@ -2227,10 +2306,13 @@
           // login is gone; /login is the only gate.
           if (!window.currentUser) {
             try {
-              window.currentUser = { phone: u.phone || ('wbai:' + u.id), handle: u.handle || null, name: u.name || 'WeBetAI Member' };
+              window.currentUser = { phone: u.phone || ('wbai:' + u.id), handle: u.handle || null, name: cleanName(u.name) || null };
               if (typeof renderLoginState === 'function') renderLoginState();
             } catch (e) {}
+          } else if (!cleanName(window.currentUser.name) && cleanName(u.name)) {
+            window.currentUser.name = cleanName(u.name);
           }
+          if (typeof maybePromptName === 'function') maybePromptName(u);
         } else {
           strip('Challenge friends with WeBit stakes — <a href="/login">sign in to WeBetAI →</a>');
         }
@@ -2241,5 +2323,31 @@
   wbaiFE('p2p_view');
 })();
 </script>
+<style>
+  .name-modal-overlay { position:fixed; inset:0; background:rgba(20,30,20,.55); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:99999; padding:1rem; }
+  .name-modal-overlay.open { display:flex; }
+  .name-modal-card { background:#fff; border-radius:16px; padding:1.5rem 1.25rem; max-width:380px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.28); }
+  .name-modal-title { font-size:1.15rem; font-weight:700; color:var(--olive); margin-bottom:.25rem; }
+  .name-modal-sub { font-size:.8125rem; color:var(--txt-m); line-height:1.5; margin-bottom:1rem; }
+  .nm-row { display:flex; gap:.5rem; }
+  .nm-input { width:100%; font-family:inherit; font-size:1rem; padding:.7rem .85rem; border:1px solid var(--border-lt); border-radius:10px; margin-bottom:.6rem; box-sizing:border-box; }
+  .nm-input:focus { outline:none; border-color:var(--teal); }
+  .nm-save { width:100%; font-family:inherit; font-size:.95rem; font-weight:700; padding:.8rem; border:none; border-radius:10px; background:var(--teal); color:#fff; cursor:pointer; margin-top:.25rem; }
+  .nm-save:disabled { opacity:.6; cursor:default; }
+  .nm-status { font-size:.8125rem; margin-top:.6rem; min-height:1em; text-align:center; }
+  @media (max-width:420px) { .nm-row { flex-direction:column; gap:0; } }
+</style>
+<div id="name-modal" class="name-modal-overlay" role="dialog" aria-modal="true" aria-label="Add your name">
+  <div class="name-modal-card">
+    <div class="name-modal-title">👋 What's your name?</div>
+    <div class="name-modal-sub">So friends see who they're betting against — not "WeBetAI Member."</div>
+    <div class="nm-row">
+      <input id="nm-first" class="nm-input" type="text" placeholder="First name" autocomplete="given-name" maxlength="40" />
+      <input id="nm-last" class="nm-input" type="text" placeholder="Last name" autocomplete="family-name" maxlength="40" />
+    </div>
+    <button id="nm-save" class="nm-save" onclick="saveName()">Save</button>
+    <div id="nm-status" class="nm-status"></div>
+  </div>
+</div>
 </body>
 </html>

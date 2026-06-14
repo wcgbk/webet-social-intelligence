@@ -1,6 +1,7 @@
-// user-prefs.js — save user preferences (sports etc.) onto the wbai-users record
-// POST {sports: ["NBA","MLB"]} with wbai_session cookie. Used by Betty-led onboarding
-// to merge guest localStorage prefs into the account after sign-in.
+// user-prefs.js — save user preferences onto the wbai-users record.
+// POST with wbai_session cookie. Accepts {sports:[...]} (onboarding sport prefs)
+// and/or {firstName, lastName} (real identity for P2P — so friends see a real name,
+// not "WeBetAI Member"). Either field group is optional; at least one required.
 
 function parseCookies(str) {
   const out = {};
@@ -31,8 +32,13 @@ exports.handler = async (event) => {
   const sports = Array.isArray(body.sports)
     ? body.sports.map(s => String(s).slice(0, 12)).filter(s => ALLOWED_SPORTS.includes(s)).slice(0, 6)
     : null;
-  if (!sports || !sports.length) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'no_valid_sports' }) };
+  const cleanNm = s => (typeof s === 'string' ? s.replace(/[<>]/g, '').trim().slice(0, 40) : '');
+  const firstName = cleanNm(body.firstName);
+  const lastName = cleanNm(body.lastName);
+  const hasSports = !!(sports && sports.length);
+  const hasName = !!(firstName || lastName);
+  if (!hasSports && !hasName) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'nothing_to_update' }) };
   }
 
   try {
@@ -51,9 +57,18 @@ exports.handler = async (event) => {
     const userRecord = await users.get(`user_${sessionData.user_id}`, { type: 'json' }).catch(() => null);
     if (!userRecord) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'user_not_found' }) };
 
-    userRecord.prefs = { ...(userRecord.prefs || {}), sports, updated_at: new Date().toISOString() };
+    if (hasSports) {
+      userRecord.prefs = { ...(userRecord.prefs || {}), sports, updated_at: new Date().toISOString() };
+    }
+    if (hasName) {
+      if (firstName) userRecord.firstName = firstName;
+      if (lastName) userRecord.lastName = lastName;
+      const composed = [userRecord.firstName, userRecord.lastName].filter(Boolean).join(' ').trim();
+      if (composed) userRecord.name = composed;
+      userRecord.name_updated_at = new Date().toISOString();
+    }
     await users.setJSON(`user_${sessionData.user_id}`, userRecord);
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, prefs: userRecord.prefs }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, name: userRecord.name || null, firstName: userRecord.firstName || null, lastName: userRecord.lastName || null, prefs: userRecord.prefs || null }) };
   } catch (err) {
     console.error('[user-prefs] Error:', err.message);
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'server_error' }) };

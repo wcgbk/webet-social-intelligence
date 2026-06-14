@@ -60,6 +60,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         id: userRecord.id,
         name: userRecord.name,
+        firstName: userRecord.firstName || null,
+        lastName: userRecord.lastName || null,
         handle: userRecord.handle,
         avatar_url: userRecord.avatar_url,
         description: userRecord.description,

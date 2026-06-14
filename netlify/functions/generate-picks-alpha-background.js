@@ -47,6 +47,7 @@ NARRATIVE RULES (for coreReasoning field):
 - End with value statement explaining why the odds offer value.
 - Max 5 sentences. No padding. No duplicate stats. Every sentence must add new information.
 - DO NOT restate projections, lines, edges, cover probabilities, or any numbers from the candidate table.
+- RECORDS & SPLITS: Cite team win-loss records and home/road records ONLY from the "Records (ESPN, authoritative)" line in the candidate table. Never state a record from web search or memory. If a record is not in the table, describe it qualitatively (e.g., "a strong home team") with no numbers.
 - NEVER lead with negative data about the team you're picking. Do NOT build a case for the opponent — build the case for the PICK SIDE covering.
 - NEVER use technical jargon like ORtg, DRtg, pace numbers, DVOA, ATS, or advanced stat abbreviations.
 
@@ -689,9 +690,13 @@ async function fetchTeamStats(espnData) {
         }
 
         let ppgFor = null, ppgAgainst = null;
+        let recordTotal = null, recordHome = null, recordRoad = null;
         if (teamResp?.ok) {
           const teamData = await teamResp.json();
           const recordItems = teamData.team?.record?.items || [];
+          recordTotal = (recordItems.find(i => i.type === 'total') || {}).summary || null;
+          recordHome = (recordItems.find(i => i.type === 'home') || {}).summary || null;
+          recordRoad = (recordItems.find(i => i.type === 'road') || {}).summary || null;
           for (const item of recordItems) {
             if (item.type === 'total') {
               for (const s of (item.stats || [])) {
@@ -809,6 +814,11 @@ async function fetchTeamStats(espnData) {
               pointsPerGame: pointsPerGame ? Math.round(pointsPerGame * 10) / 10 : null,
               pointsAllowed: pointsAllowed ? Math.round(pointsAllowed * 10) / 10 : null,
             };
+          }
+          if (teamStats[teamName]) {
+            teamStats[teamName].recordTotal = recordTotal;
+            teamStats[teamName].recordHome = recordHome;
+            teamStats[teamName].recordRoad = recordRoad;
           }
         }
       } catch (e) { /* continue */ }
@@ -2955,7 +2965,17 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
     prompt += `  Streaks: ${c.homeTeam} ${formatStreak(c.homeStreak)} / ${c.awayTeam} ${formatStreak(c.awayStreak)}\n`;
     if (c.homeLast5) prompt += `  Last 5: ${c.homeTeam} ${c.homeLast5} (${c.homeAvgScored5 || '?'}/${c.homeAvgAllowed5 || '?'}) | ${c.awayTeam} ${c.awayLast5} (${c.awayAvgScored5 || '?'}/${c.awayAvgAllowed5 || '?'})\n`;
     if (c.homeCoverRate !== undefined) prompt += `  Cover Rate: ${c.homeTeam} ${c.homeCoverRate}% / ${c.awayTeam} ${c.awayCoverRate || '?'}%\n`;
-    if (c.homeRecord) prompt += `  Records: ${c.homeTeam} ${c.homeRecord} / ${c.awayTeam} ${c.awayRecord}\n`;
+    {
+      const hRec = c.homeStats?.recordTotal || c.homeRecord;
+      const aRec = c.awayStats?.recordTotal || c.awayRecord;
+      if (hRec || aRec) {
+        prompt += `  Records (ESPN, authoritative): ${c.homeTeam} ${hRec || '?'}`;
+        if (c.homeStats?.recordHome) prompt += ` [home ${c.homeStats.recordHome}]`;
+        prompt += ` / ${c.awayTeam} ${aRec || '?'}`;
+        if (c.awayStats?.recordRoad) prompt += ` [road ${c.awayStats.recordRoad}]`;
+        prompt += `\n`;
+      }
+    }
 
     // Key injuries
     const homeInj = (c.homeInjuries || []).filter(i => i.status !== 'Active').slice(0, 3);

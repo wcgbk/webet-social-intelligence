@@ -2026,6 +2026,9 @@
   let wbUser = null;        // null = guest, object = authenticated
   let loginNudgeShown = false;
   let justSignedIn = false; // set when returning from ?auth=success
+  let guestSends = 0;                 // Betty questions asked as a guest
+  const GUEST_FREE_SENDS = 2;         // free answers before the forced sign-in gate
+  let gateForced = false;             // forced login pop-up already open this load
 
   // On load: handle ?auth= callback params, then restore session
   (function initAuth() {
@@ -2108,6 +2111,21 @@
   function loginWithX() {
     window.location.href = '/.netlify/functions/auth-x-init';
   }
+
+  /* ─── Conversion gate: value first, then a FORCED all-options sign-in pop-up ─────
+     High-intent trigger points (chosen for max conversion):
+       1. soft slide-down nudge after the 1st Betty answer (existing)
+       2. FORCED pop-up on the 3rd question — they got value, now they want more
+       3. FORCED pop-up after 90s of engaged guest time (time backstop)
+     The pop-up (wbai-login.js) carries every option: X, phone, email/Google (soon). */
+  function onGateAuthed() { if (window.WBLogin) WBLogin.close(); fetchCurrentUser(); }
+  function forceLoginGate(reason) {
+    if (wbUser || gateForced || !window.WBLogin) return;
+    gateForced = true;
+    WBLogin.open({ force: true, reason: reason || 'Sign in to keep going — your <b>1,000 free WeBits</b> are waiting.', onSuccess: onGateAuthed });
+  }
+  // Time backstop — an engaged guest who lingers gets gated after 90s
+  setTimeout(function () { if (!wbUser && guestSends >= 1) forceLoginGate('You’re into it — sign in to keep chatting with Betty and lock your <b>1,000 free WeBits</b>. Five seconds, no password.'); }, 90000);
 
   /* ─── State ─────────────────────────────────────────────────────── */
   let messages = [];
@@ -3062,6 +3080,15 @@
     const text = chatInput.value.trim();
     if (!text || isLoading) return;
 
+    // Guest conversion gate — 2 free Betty answers, then force the all-options sign-in pop-up
+    if (!wbUser) {
+      if (guestSends >= GUEST_FREE_SENDS) {
+        forceLoginGate('Loving Betty? Sign in to keep chatting and claim your <b>1,000 free WeBits</b> — free, five seconds, no password.');
+        return;
+      }
+      guestSends++;
+    }
+
     // Switch to chat panel if not already there
     if (activePanel !== 'chat') switchPanel('chat');
 
@@ -3698,5 +3725,6 @@
 })();
 </script>
 
+<script src="/wbai-login.js" defer></script>
 </body>
 </html>

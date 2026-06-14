@@ -901,6 +901,7 @@
   <div class="sec-inner">
     <div class="sec-label">My Challenges</div>
     <h2>Active & Past Challenges</h2>
+    <div id="playing-as" style="font-size:.8125rem; color:var(--txt-m); margin-top:.4rem;"></div>
     <div id="my-challenges" style="margin-top:1rem;">
       <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Loading...</div>
     </div>
@@ -1517,18 +1518,28 @@
     if (window.wbaiUser) { window.wbaiUser.name = j.name; window.wbaiUser.firstName = j.firstName; window.wbaiUser.lastName = j.lastName; }
     if (window.currentUser) window.currentUser.name = j.name;
     var ci = document.getElementById('c-name'); if (ci && !ci.value.trim()) ci.value = j.name;
+    if (typeof renderPlayingAs === 'function') renderPlayingAs();
   }
   function saveNameSilent(fn, ln) {
     fetch('/.netlify/functions/user-prefs', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ firstName: fn, lastName: ln }) })
       .then(function (r) { return r.ok ? r.json() : null; }).then(applySavedName).catch(function () {});
   }
-  function showNameModal() {
+  function showNameModal(isEdit) {
     var m = document.getElementById('name-modal'); if (!m) return;
     var st = document.getElementById('nm-status'); if (st) st.textContent = '';
+    var u = window.wbaiUser || {};
+    var fn = document.getElementById('nm-first'), ln = document.getElementById('nm-last');
+    if (isEdit) { if (fn) fn.value = u.firstName || ''; if (ln) ln.value = u.lastName || ''; }
+    var x = document.getElementById('nm-close'); if (x) x.style.display = 'block';
     m.classList.add('open');
-    setTimeout(function () { var f = document.getElementById('nm-first'); if (f) f.focus(); }, 60);
+    setTimeout(function () { if (fn) fn.focus(); }, 60);
   }
   function closeNameModal() { var m = document.getElementById('name-modal'); if (m) m.classList.remove('open'); }
+  function renderPlayingAs() {
+    var el = document.getElementById('playing-as'); if (!el) return;
+    var nm = bestMyName();
+    el.innerHTML = nm ? 'Playing as <strong style="color:var(--olive);">' + esc(nm) + '</strong> · <a href="#" onclick="showNameModal(true);return false;" style="color:var(--teal); font-weight:600; text-decoration:none;">✎ Edit name</a>' : '';
+  }
   async function saveName() {
     var fn = (document.getElementById('nm-first').value || '').trim();
     var ln = (document.getElementById('nm-last').value || '').trim();
@@ -1557,6 +1568,7 @@
       if (heading) heading.textContent = 'Make Your Pick 3';
       if (mcs) { mcs.style.display = ''; mcs.classList.add('v'); }
       loadMyChallenges();
+      if (typeof renderPlayingAs === 'function') renderPlayingAs();
     } else {
       // Logged-out (e.g. standalone /pick3p2p) — keep one sign-in CTA on the board,
       // since the top-bar/strip is gone. Inside the dashboard the user is already signed in.
@@ -2338,7 +2350,8 @@
   @media (max-width:420px) { .nm-row { flex-direction:column; gap:0; } }
 </style>
 <div id="name-modal" class="name-modal-overlay" role="dialog" aria-modal="true" aria-label="Add your name">
-  <div class="name-modal-card">
+  <div class="name-modal-card" style="position:relative;">
+    <button id="nm-close" onclick="closeNameModal()" aria-label="Close" style="display:none; position:absolute; top:.5rem; right:.7rem; background:none; border:none; font-size:1.5rem; line-height:1; color:var(--txt-l); cursor:pointer;">&times;</button>
     <div class="name-modal-title">👋 What's your name?</div>
     <div class="name-modal-sub">So friends see who they're betting against — not "WeBetAI Member."</div>
     <div class="nm-row">

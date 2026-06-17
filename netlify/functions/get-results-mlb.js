@@ -274,6 +274,7 @@ exports.handler = async (event) => {
         accuracy: decided > 0 ? Math.round((dayWins / decided) * 100) : 0,
         profit: Math.round(dayProfit),
         wagered: Math.round(dayWagered),
+        roi: dayWagered > 0 ? (dayProfit / dayWagered * 100).toFixed(1) : null,
         picks: dayPicks,
       });
     }

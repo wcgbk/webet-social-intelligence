@@ -998,6 +998,12 @@ async function aggregateIntoMvp(f5Picks, dateISO) {
     for (const p of merged) {
       if (card.filter(x => dirKey(x) === dirKey(p)).length >= 2) continue; // de-correlation
       const { _ev, _evRaw, ...clean } = p;
+      // Honesty: F5 EV is unvalidated + overconfident — DISPLAY the discounted EV (what we
+      // actually trust), keep the model's raw F5 EV in evRaw for transparency.
+      if (clean.source === 'F5' && _ev != null) {
+        clean.evRaw = clean.ev;
+        clean.ev = `+${Math.round(_ev * 100)}%`;
+      }
       card.push(clean);
       if (card.length >= DAILY_CAP) break;
     }
@@ -1392,6 +1398,7 @@ exports.handler = async (event) => {
     const finalResult = {
       date: dateISO,
       dateFormatted,
+      model: "v2.4-f5",
       generatedAt: now.toISOString(),
       picks,
       rejections,

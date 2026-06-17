@@ -950,6 +950,87 @@ async function appendPicksDate(dateISO) {
 }
 
 // ── Main handler ──
+// ── A/B EXPANDED MENU: merge top F5 picks into the MVP card (treatment arm) ──
+// Alpha = MLB full-game only (control). MVP = full-game + F5 (+ props later).
+// F5 EV is UNVALIDATED (can't backtest) → DISCOUNT x0.5 + CAP 2 until CLV proves it,
+// keeping the A/B KPIs honest. Each pick tagged `source` so get-results-mvp grades F5
+// by first-5 linescore, full-game by final. Robust: never throws into the F5 run;
+// leaves the MVP card unchanged on any error or if nothing clears.
+async function aggregateIntoMvp(f5Picks, dateISO) {
+  try {
+    const token = process.env.NETLIFY_AUTH_TOKEN;
+    const siteId = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+    if (!token) return;
+    const mvpUrl = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-mvp/picks-${dateISO}`;
+    const mvpResp = await fetch(mvpUrl, { headers: { "Authorization": `Bearer ${token}` } });
+    if (!mvpResp.ok) { console.log(`[mvp-merge] no MVP card for ${dateISO} — skip`); return; }
+    const mvp = await mvpResp.json();
+    if (!mvp || !Array.isArray(mvp.picks)) { console.log(`[mvp-merge] MVP card malformed — skip`); return; }
+
+    const pev = (v) => {
+      if (v == null) return null;
+      if (typeof v === 'number') return v;
+      const f = parseFloat(String(v).replace('%', '').replace('+', '').trim());
+      if (isNaN(f)) return null;
+      return Math.abs(f) > 1.5 ? f / 100 : f; // 9.2 -> 0.092 ; 0.092 stays
+    };
+    const F5_DISCOUNT = 0.5, F5_CAP = 2, EV_FLOOR = 0.03, DAILY_CAP = 6;
+    // Idempotent: strip any prior-merged F5 so a re-run rebuilds cleanly
+    const fg = mvp.picks
+      .filter(p => p.sport !== 'PARLAY' && p.source !== 'F5')
+      .map(p => ({ ...p, source: 'full-game', _ev: pev(p.ev) }));
+    const f5 = (f5Picks || [])
+      .map(p => ({ ...p, source: 'F5', _evRaw: pev(p.ev), _ev: (pev(p.ev) ?? 0) * F5_DISCOUNT }))
+      .filter(p => p._evRaw != null && p._ev >= EV_FLOOR)
+      .sort((a, b) => b._ev - a._ev)
+      .slice(0, F5_CAP);
+    if (f5.length === 0) { console.log(`[mvp-merge] no F5 cleared discount+floor — MVP unchanged`); return; }
+
+    const dirKey = (p) => {
+      const s = String(p.pick || p.side || '').toLowerCase();
+      const dir = s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'side';
+      return `${p.sport}|${dir}`;
+    };
+    const merged = [...fg, ...f5]
+      .filter(p => (p._ev ?? 0) >= EV_FLOOR)
+      .sort((a, b) => (b._ev ?? 0) - (a._ev ?? 0));
+    const card = [];
+    for (const p of merged) {
+      if (card.filter(x => dirKey(x) === dirKey(p)).length >= 2) continue; // de-correlation
+      const { _ev, _evRaw, ...clean } = p;
+      card.push(clean);
+      if (card.length >= DAILY_CAP) break;
+    }
+    if (!card.some(p => p.source === 'F5')) { console.log(`[mvp-merge] F5 didn't survive ranking — MVP unchanged`); return; }
+
+    const expanded = {
+      ...mvp,
+      picks: card,
+      model: String(mvp.model || 'v11.1-mvp').replace('+F5', '') + '+F5',
+      expandedAt: new Date().toISOString(),
+      sources: {
+        fullGame: card.filter(p => p.source === 'full-game').length,
+        f5: card.filter(p => p.source === 'F5').length,
+      },
+    };
+    const bodyStr = JSON.stringify(expanded);
+    // Write BOTH stores (SDK deploy-scoped + REST site-level), like storeBlob, because
+    // get-picks-mvp reads the SDK store FIRST — REST-only would be shadowed by the 8am card.
+    try {
+      const { getStore } = await import("@netlify/blobs");
+      await getStore("edge-picks-mvp").set(`picks-${dateISO}`, bodyStr);
+    } catch (e) { console.log(`[mvp-merge] SDK write failed: ${e.message}`); }
+    const put = await fetch(mvpUrl, {
+      method: "PUT",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: bodyStr,
+    });
+    console.log(`[mvp-merge] MVP expanded SDK+REST ${put.ok ? 'OK' : 'PUT-FAILED-' + put.status}: ${expanded.sources.fullGame} full-game + ${expanded.sources.f5} F5`);
+  } catch (e) {
+    console.error(`[mvp-merge] failed (MVP unchanged): ${e.message}`);
+  }
+}
+
 exports.handler = async (event) => {
   console.log("[mlb-f5] v2 — Pre-computed edge architecture started");
 
@@ -1348,6 +1429,10 @@ exports.handler = async (event) => {
     await storeBlob(`picks-${dateISO}`, finalResult);
     await storeBlob("latest-date", dateISO);
     await appendPicksDate(dateISO);
+
+    // A/B expanded menu: feed today's F5 options into the MVP card (treatment arm).
+    // Self-contained + never throws; leaves the MVP card unchanged on any error.
+    await aggregateIntoMvp(picks, dateISO);
 
     return { statusCode: 200, body: JSON.stringify({ success: true, picks: picks.length, rejections: rejections.length, date: dateISO }) };
 

@@ -47,6 +47,11 @@ async function fetchESPNScores(dateISO, sport) {
         homeTeam: home.team?.displayName || '',
         homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
+        // F5 (first-5-innings) scores for grading MVP's F5 picks — MLB per-inning linescores.
+        // Verified 0/15 vs StatsAPI: ESPN linescores[].value is runs PER inning, so slice(0,5) = first 5.
+        awayF5: (away.linescores || []).slice(0, 5).reduce((s, i) => s + (parseFloat(i.value) || 0), 0),
+        homeF5: (home.linescores || []).slice(0, 5).reduce((s, i) => s + (parseFloat(i.value) || 0), 0),
+        f5Complete: (away.linescores || []).length >= 5 && (home.linescores || []).length >= 5,
         state: status.type?.state || 'pre',
       };
     }).filter(Boolean);
@@ -122,8 +127,12 @@ function gradePick(pick, game) {
 
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
-  const awayScore = game.awayScore;
-  const homeScore = game.homeScore;
+  // A/B expanded menu: F5 picks (MVP treatment arm) grade on the first-5-innings score,
+  // not the full-game final — else the A/B KPIs would be wrong. Same ML/total/spread routing.
+  const isF5 = pick.source === 'F5' || /\bF5\b/i.test(pickStr);
+  if (isF5 && !game.f5Complete) return 'pending';
+  const awayScore = isF5 ? game.awayF5 : game.awayScore;
+  const homeScore = isF5 ? game.homeF5 : game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);

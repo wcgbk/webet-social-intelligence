@@ -1887,10 +1887,16 @@ function buildConsensusLookup(oddsData) {
         if (oddsAtConsensus.Over.length > 0) {
           oddsAtConsensus.Over.sort((a, b) => a - b);
           entry.overOdds = oddsAtConsensus.Over[Math.floor(oddsAtConsensus.Over.length / 2)];
+          // v11.1.1 line-shop: bet the best-paying price across books (highest American = best
+          // payout). Drop the single top price when ≥4 books, so a stale/outlier quote can't set it.
+          const ov = oddsAtConsensus.Over;
+          entry.overOddsBest = ov.length >= 4 ? ov[ov.length - 2] : ov[ov.length - 1];
         }
         if (oddsAtConsensus.Under.length > 0) {
           oddsAtConsensus.Under.sort((a, b) => a - b);
           entry.underOdds = oddsAtConsensus.Under[Math.floor(oddsAtConsensus.Under.length / 2)];
+          const un = oddsAtConsensus.Under;
+          entry.underOddsBest = un.length >= 4 ? un[un.length - 2] : un[un.length - 1];
         }
       }
 
@@ -2648,7 +2654,11 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
             rawTotalCoverProb = normalCDF(totalZ);
           }
           const totalSide = `${isOver ? "Over" : "Under"} ${actualTotal}`;
-          const totalOdds = isOver ? gameData.overOdds : gameData.underOdds;
+          // v11.1.1 line-shop: bet the best price for our side, but only if the integrity-checked
+          // median is valid (null median = phantom/stale line → skip, never line-shop a bad number).
+          const totalOdds = isOver
+            ? (gameData.overOdds == null ? null : (gameData.overOddsBest ?? gameData.overOdds))
+            : (gameData.underOdds == null ? null : (gameData.underOddsBest ?? gameData.underOdds));
           // Null total odds = integrity check nulled them (phantom/stale). Never fall back to -110.
           if (totalOdds == null) {
             console.log(`[v10-skip] No valid total odds for ${game.away} @ ${game.home} — skipping total candidate`);

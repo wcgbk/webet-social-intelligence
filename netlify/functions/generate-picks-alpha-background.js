@@ -2168,8 +2168,16 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
     const homeERA = homePitcher?.era || homeStats.era;
     const awayERA = awayPitcher?.era || awayStats.era;
     if (homeERA && awayERA) {
-      effHome = homeStats.pointsPerGame * (awayERA / 4.00);
-      effAway = awayStats.pointsPerGame * (homeERA / 4.00);
+      // v10.3.1 (2026-06-17): regress starter ERA toward the league mean and clamp the
+      // run multiplier. The old `oppERA / 4.00` was unbounded and convex — a small-sample
+      // blow-up ERA (e.g. 10+) scaled the opposing offense ~2.5x, systematically inflating
+      // run totals and flooding the card with MLB Overs (the dominant losing-bet driver).
+      const LG_ERA = 4.20; // approx MLB run-scoring environment
+      const regAwayERA = (awayERA + LG_ERA) / 2; // 50% shrink toward league mean
+      const regHomeERA = (homeERA + LG_ERA) / 2;
+      const clampMult = (m) => Math.min(1.18, Math.max(0.82, m)); // one starter swings runs <=18%
+      effHome = homeStats.pointsPerGame * clampMult(regAwayERA / LG_ERA);
+      effAway = awayStats.pointsPerGame * clampMult(regHomeERA / LG_ERA);
       method = homePitcher?.era || awayPitcher?.era
         ? `mlb-starter-adjusted(${homePitcher?.pitcher || 'team'}/${awayPitcher?.pitcher || 'team'})`
         : "mlb-pitching-adjusted";
@@ -3455,7 +3463,17 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
         // Bonus: diversified sport coverage (+2% EV bonus per unique sport)
         const uniqueSports = new Set(trio.map(t => t.sport)).size;
         const diversityBonus = (uniqueSports - 1) * 0.02;
-        const adjustedEV = parlayEV + diversityBonus;
+        // v10.3.1 (2026-06-17): correlation penalty. Three same-direction totals (all Over /
+        // all Under) move together — one high- or low-scoring environment loses all three at
+        // once, and the product-of-probs overstates the true combo edge. Haircut these so the
+        // optimizer prefers a de-correlated trio whenever an alternative exists.
+        const legDirs = trio.map(t => {
+          const s = (t.side || '').toLowerCase();
+          return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
+        });
+        const allSameTotalsDir = legDirs.every(d => d === 'over') || legDirs.every(d => d === 'under');
+        const correlationPenalty = allSameTotalsDir ? 0.08 : 0;
+        const adjustedEV = parlayEV + diversityBonus - correlationPenalty;
 
         if (adjustedEV > bestEV) {
           bestEV = adjustedEV;

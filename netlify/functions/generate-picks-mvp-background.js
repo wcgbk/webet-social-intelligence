@@ -2184,8 +2184,16 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
     const homeERA = homePitcher?.era || homeStats.era;
     const awayERA = awayPitcher?.era || awayStats.era;
     if (homeERA && awayERA) {
-      effHome = homeStats.pointsPerGame * (awayERA / 4.00);
-      effAway = awayStats.pointsPerGame * (homeERA / 4.00);
+      // v11.1.1 (2026-06-17): regress starter ERA toward the league mean and clamp the
+      // run multiplier. The old `oppERA / 4.00` was unbounded and convex — a small-sample
+      // blow-up ERA (e.g. 10+) scaled the opposing offense ~2.5x, systematically inflating
+      // run totals and flooding the card with MLB Overs (the dominant losing-bet driver).
+      const LG_ERA = 4.20; // approx MLB run-scoring environment
+      const regAwayERA = (awayERA + LG_ERA) / 2; // 50% shrink toward league mean
+      const regHomeERA = (homeERA + LG_ERA) / 2;
+      const clampMult = (m) => Math.min(1.18, Math.max(0.82, m)); // one starter swings runs <=18%
+      effHome = homeStats.pointsPerGame * clampMult(regAwayERA / LG_ERA);
+      effAway = awayStats.pointsPerGame * clampMult(regHomeERA / LG_ERA);
       method = homePitcher?.era || awayPitcher?.era
         ? `mlb-starter-adjusted(${homePitcher?.pitcher || 'team'}/${awayPitcher?.pitcher || 'team'})`
         : "mlb-pitching-adjusted";
@@ -3502,7 +3510,17 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
 
         // Parlay EV = (combinedProb × combinedPayout) - 1
         const parlayEV = (combinedProb * combinedDecimal) - 1;
-        const adjustedEV = parlayEV; // diversity is now structural, not a bonus
+        // v11.1.1 (2026-06-17): correlation penalty. When only one sport is available the hard
+        // sport-diversity rule above is relaxed, so the optimizer was free to stack 3 correlated
+        // same-direction totals (all Over / all Under) — one scoring environment loses all three
+        // at once. Haircut same-direction-totals trios so a de-correlated combo wins when possible.
+        const legDirs = trio.map(t => {
+          const s = (t.side || '').toLowerCase();
+          return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
+        });
+        const allSameTotalsDir = legDirs.every(d => d === 'over') || legDirs.every(d => d === 'under');
+        const correlationPenalty = allSameTotalsDir ? 0.08 : 0;
+        const adjustedEV = parlayEV - correlationPenalty; // diversity structural; de-correlate same-dir totals
 
         if (adjustedEV > bestEV) {
           bestEV = adjustedEV;

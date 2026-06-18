@@ -576,30 +576,31 @@ async function fetchMLBOdds(dateISO) {
     // F5 markets — separate call using first-5-innings market keys
     // h2h_1st_5_innings / spreads_1st_5_innings / totals_1st_5_innings are the correct Odds API keys
     // Expanded to eu region since some books only list F5 lines there
+    // F5 markets are ONLY available on the PER-EVENT endpoint. The bulk /odds endpoint REJECTS them
+    // ("Markets not supported by this endpoint: h2h_1st_5_innings,...") — which is why F5 was always
+    // empty and the machine fell back to FG-proxies every run. Fixed 2026-06-18: fetch F5 per game and
+    // merge the real lines. extractBestOdds then filters to US books, so offshore F5 lines are dropped.
     let f5Merged = 0;
-    try {
-      const f5Url = `https://api.the-odds-api.com/v4/sports/${MLB_ODDS_SPORT}/odds?regions=us,us2,eu&markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&apiKey=${apiKey}`;
-      const f5Resp = await fetch(f5Url);
-      if (f5Resp.ok) {
-        const f5Data = await f5Resp.json();
-        const f5Filtered = filterByDate(f5Data);
-        // Merge F5 bookmaker data into the main games
-        for (const fg of f5Filtered) {
-          const match = filtered.find(g => g.id === fg.id);
-          if (match) {
-            for (const bk of (fg.bookmakers || [])) {
-              const existing = match.bookmakers.find(b => b.key === bk.key);
-              if (existing) {
-                existing.markets.push(...bk.markets);
-              } else {
-                match.bookmakers.push(bk);
-              }
-            }
-            f5Merged++;
-          }
+    const F5_MARKETS = 'h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings';
+    await Promise.all(filtered.map(async (match) => {
+      try {
+        const evUrl = `https://api.the-odds-api.com/v4/sports/${MLB_ODDS_SPORT}/events/${match.id}/odds?regions=us,us2&markets=${F5_MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
+        const evResp = await fetch(evUrl);
+        if (!evResp.ok) return;
+        const ev = await evResp.json();
+        if (!ev || !Array.isArray(ev.bookmakers)) return;
+        let merged = false;
+        for (const bk of ev.bookmakers) {
+          const f5mkts = (bk.markets || []).filter(m => (m.key || '').includes('1st_5_innings'));
+          if (!f5mkts.length) continue;
+          const existing = match.bookmakers.find(b => b.key === bk.key);
+          if (existing) existing.markets.push(...f5mkts);
+          else match.bookmakers.push({ ...bk, markets: f5mkts });
+          merged = true;
         }
-      }
-    } catch (e) { /* F5 markets optional */ }
+        if (merged) f5Merged++;
+      } catch (e) { /* per-game F5 optional */ }
+    }));
 
     filtered._meta = { rawCount: stdData.length, filtered: filtered.length, f5Merged, status: stdResp.status };
     return filtered;

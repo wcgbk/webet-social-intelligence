@@ -121,6 +121,19 @@ const SPORT_STD_DEVS = { NBA: 12, NCAAB: 11, NHL: 1.6, MLB: 2.8, EPL: 1.5, "La L
 // Empirical full-game total SDs: NBA ~18.5, NCAAB ~17, NHL ~2.3 goals, MLB ~4.3 runs.
 // Previously totals reused the margin σ, inflating total z-scores (and cover probs) by ~40-50%.
 const SPORT_TOTAL_STD_DEVS = { NBA: 18.5, NCAAB: 17, NHL: 2.3, MLB: 4.3, EPL: 1.9, "La Liga": 1.9, "Serie A": 1.9, Bundesliga: 1.9, "Ligue 1": 1.9, MLS: 1.9, UCL: 1.9, Europa: 1.9 };
+
+// MLB park factors (2024-25 run environment; 100 = neutral, >100 hitter-friendly). Ported from the
+// F5 machine. Applied DAMPENED (x0.5) to the full-game total so we don't double-count the home park
+// (a team's R/G already reflects its home games) and don't reintroduce the Over-bias.
+const MLB_PARK_FACTORS = {
+  "Coors Field": 114, "Great American Ball Park": 108, "Fenway Park": 106, "Globe Life Field": 105,
+  "Wrigley Field": 104, "Citizens Bank Park": 104, "Yankee Stadium": 103, "Camden Yards": 102,
+  "Chase Field": 101, "Guaranteed Rate Field": 101, "Minute Maid Park": 101, "Kauffman Stadium": 100,
+  "Angel Stadium": 100, "American Family Field": 100, "Busch Stadium": 99, "Target Field": 99,
+  "Nationals Park": 99, "Progressive Field": 98, "Truist Park": 98, "Comerica Park": 97,
+  "PNC Park": 97, "Dodger Stadium": 97, "Citi Field": 96, "loanDepot park": 96, "Rogers Centre": 96,
+  "T-Mobile Park": 95, "Tropicana Field": 95, "Oakland Coliseum": 95, "Oracle Park": 94, "Petco Park": 93,
+};
 // Min edge thresholds: amount of point/goal/run disagreement before a candidate is evaluated.
 // MLB: 0.5 runs (matches beta — 0.2 was noise-level, below model resolution for run lines)
 // NHL: 0.4 goals (0.25 was too loose given puck line is fixed ±1.5)
@@ -1291,8 +1304,8 @@ function computeWeatherAdjustment(candidate, weatherData) {
     // Temperature effect
     if (wx.tempF > 85) { totalAdj += 0.3; parts.push(`hot ${wx.tempF}°F→+0.3`); }
     else if (wx.tempF < 45) { totalAdj -= 0.3; parts.push(`cold ${wx.tempF}°F→-0.3`); }
-    // Coors Field altitude (always adds runs)
-    if (wx.venue && /coors/i.test(wx.venue)) { totalAdj += 0.8; parts.push(`altitude→+0.8`); }
+    // Coors altitude now handled by MLB_PARK_FACTORS (Coors 114) in computeProjection — removed here
+    // to avoid double-counting.
   } else {
     // Soccer: rain/cold suppress scoring
     if (wx.precipMM > 1) { totalAdj -= 0.15; parts.push(`rain→-0.15`); }
@@ -2392,6 +2405,14 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
     projMethod += ' [playoff-elo-regress-20%]';
   }
   // Rest differential adjusts spread (positive spreadAdj = favors home = more negative projected spread)
+  // ── PARK FACTOR: stadium run environment (Coors +, Petco/Oracle -). Dampened x0.5 — a team's R/G
+  // already partly reflects its home park, so full pf would double-count and re-tilt toward Overs.
+  if (sportType === 'baseball' && game.venue && MLB_PARK_FACTORS[game.venue]) {
+    const parkMult = 1 + (MLB_PARK_FACTORS[game.venue] / 100 - 1) * 0.5;
+    projHomeScore *= parkMult;
+    projAwayScore *= parkMult;
+    projMethod += ` [park ${MLB_PARK_FACTORS[game.venue]}→x${parkMult.toFixed(3)}]`;
+  }
   let projTotal = projHomeScore + projAwayScore;
 
   // ── PROJECTION SANITY CAPS — exclude games with garbage projections ──

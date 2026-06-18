@@ -1755,6 +1755,9 @@ function buildConsensusLookup(oddsData) {
       let majorSpreadBooks = 0, majorTotalBooks = 0, majorMLBooks = 0;
 
       for (const book of (game.bookmakers || [])) {
+        // MVP only recommends bets placeable at a US regulated book — skip offshore entirely
+        // (no lowvig/mybookie/betonline/bovada line-shopping). Per Ben 2026-06-17.
+        if (!isMajorBook(book.key)) continue;
         const w = getBookWeight(book.key);
         const isMajor = isMajorBook(book.key);
         for (const mkt of (book.markets || [])) {
@@ -3585,7 +3588,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
 
 // Fallback: use straight picks as parlay legs (old behavior)
 function buildFallbackParlay(picks) {
-  if (!picks || picks.length < 2) return [];
+  if (!picks || picks.length < 3) return []; // a real parlay is >=3 legs — never a mislabeled 2-leg
   // If all straight picks are from the same game, no valid standard parlay exists
   const matchupSet = new Set((picks || []).slice(0, 3).map(p => (p.matchup || '').toLowerCase().trim()));
   if (matchupSet.size < 2) return [];

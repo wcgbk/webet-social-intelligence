@@ -615,54 +615,53 @@ async function fetchMLBOdds(dateISO) {
 // Now: full-game markets use best price from all available books.
 // Hard Rock is still preferred by priority order (processed last = overwrites if better).
 const HARD_ROCK_KEYS = new Set(['hardrockbet', 'hardrockbet_oh']);
-const SHARP_BOOKS = new Set(['pinnacle', 'betfair', 'betonlineag', 'lowvig', 'mybookieag']);
+// Top regulated US sportsbooks only — NO offshore (lowvig/mybookie/betonline/bovada/pinnacle).
+// Per Ben 2026-06-17: only recommend bets users can actually place at a US book.
+const US_BOOKS = new Set([
+  'draftkings', 'fanduel', 'betmgm', 'caesars', 'williamhill_us', 'espnbet',
+  'betrivers', 'fanatics', 'hardrockbet', 'hardrockbet_oh', 'ballybet',
+  'fliff', 'bet365', 'pointsbetus', 'wynnbet', 'superbook',
+]);
 
 function extractBestOdds(oddsGame) {
   let bestML = {}, bestRL = {}, bestTotal = {};
   let f5ML = {}, f5RL = {}, f5Total = {};
+  // Hard Rock's own price per outcome, so picks can be confirmed PLACEABLE at Hard Rock.
+  const hr = { ml: {}, rl: {}, total: {}, f5ML: {}, f5RL: {}, f5Total: {} };
 
-  // Two passes: soft books first, sharp books second (so sharp prices overwrite when better)
-  const bookmakers = oddsGame.bookmakers || [];
-  const softBooks = bookmakers.filter(b => !HARD_ROCK_KEYS.has(b.key) && !SHARP_BOOKS.has(b.key));
-  const sharpBooks = bookmakers.filter(b => SHARP_BOOKS.has(b.key) || HARD_ROCK_KEYS.has(b.key));
+  // ONLY US regulated books — offshore is excluded entirely from selection.
+  const bookmakers = (oddsGame.bookmakers || []).filter(b => US_BOOKS.has((b.key || '').toLowerCase()));
 
-  for (const bk of [...softBooks, ...sharpBooks]) {
+  for (const bk of bookmakers) {
+    const isHR = HARD_ROCK_KEYS.has((bk.key || '').toLowerCase());
     for (const mkt of (bk.markets || [])) {
-      // Full-game markets: best price from ANY book (removed Hard Rock-only gate)
-      if (mkt.key === 'h2h') {
-        for (const o of mkt.outcomes) {
-          if (!bestML[o.name] || o.price > bestML[o.name].price) bestML[o.name] = { price: o.price, book: bk.title };
-        }
+      if (mkt.key === 'h2h') for (const o of mkt.outcomes) {
+        if (!bestML[o.name] || o.price > bestML[o.name].price) bestML[o.name] = { price: o.price, book: bk.title };
+        if (isHR) hr.ml[o.name] = { price: o.price, book: 'Hard Rock Bet' };
       }
-      if (mkt.key === 'spreads') {
-        for (const o of mkt.outcomes) {
-          if (!bestRL[o.name] || o.price > bestRL[o.name].price) bestRL[o.name] = { price: o.price, point: o.point, book: bk.title };
-        }
+      if (mkt.key === 'spreads') for (const o of mkt.outcomes) {
+        if (!bestRL[o.name] || o.price > bestRL[o.name].price) bestRL[o.name] = { price: o.price, point: o.point, book: bk.title };
+        if (isHR) hr.rl[`${o.name}|${o.point}`] = { price: o.price, point: o.point, book: 'Hard Rock Bet' };
       }
-      if (mkt.key === 'totals') {
-        for (const o of mkt.outcomes) {
-          if (!bestTotal[o.name] || o.price > bestTotal[o.name].price) bestTotal[o.name] = { price: o.price, point: o.point, book: bk.title };
-        }
+      if (mkt.key === 'totals') for (const o of mkt.outcomes) {
+        if (!bestTotal[o.name] || o.price > bestTotal[o.name].price) bestTotal[o.name] = { price: o.price, point: o.point, book: bk.title };
+        if (isHR) hr.total[`${o.name}|${o.point}`] = { price: o.price, point: o.point, book: 'Hard Rock Bet' };
       }
-      // F5-specific markets: best available from ANY book
-      if (mkt.key === 'h2h_1st_5_innings') {
-        for (const o of mkt.outcomes) {
-          if (!f5ML[o.name] || o.price > f5ML[o.name].price) f5ML[o.name] = { price: o.price, book: bk.title };
-        }
+      if (mkt.key === 'h2h_1st_5_innings') for (const o of mkt.outcomes) {
+        if (!f5ML[o.name] || o.price > f5ML[o.name].price) f5ML[o.name] = { price: o.price, book: bk.title };
+        if (isHR) hr.f5ML[o.name] = { price: o.price, book: 'Hard Rock Bet' };
       }
-      if (mkt.key === 'spreads_1st_5_innings') {
-        for (const o of mkt.outcomes) {
-          if (!f5RL[o.name] || o.price > f5RL[o.name].price) f5RL[o.name] = { price: o.price, point: o.point, book: bk.title };
-        }
+      if (mkt.key === 'spreads_1st_5_innings') for (const o of mkt.outcomes) {
+        if (!f5RL[o.name] || o.price > f5RL[o.name].price) f5RL[o.name] = { price: o.price, point: o.point, book: bk.title };
+        if (isHR) hr.f5RL[`${o.name}|${o.point}`] = { price: o.price, point: o.point, book: 'Hard Rock Bet' };
       }
-      if (mkt.key === 'totals_1st_5_innings') {
-        for (const o of mkt.outcomes) {
-          if (!f5Total[o.name] || o.price > f5Total[o.name].price) f5Total[o.name] = { price: o.price, point: o.point, book: bk.title };
-        }
+      if (mkt.key === 'totals_1st_5_innings') for (const o of mkt.outcomes) {
+        if (!f5Total[o.name] || o.price > f5Total[o.name].price) f5Total[o.name] = { price: o.price, point: o.point, book: bk.title };
+        if (isHR) hr.f5Total[`${o.name}|${o.point}`] = { price: o.price, point: o.point, book: 'Hard Rock Bet' };
       }
     }
   }
-  return { ml: bestML, rl: bestRL, total: bestTotal, f5ML, f5RL, f5Total };
+  return { ml: bestML, rl: bestRL, total: bestTotal, f5ML, f5RL, f5Total, hr };
 }
 
 // ── Compute F5 edge for a game ──
@@ -723,13 +722,8 @@ function computeF5Edge(espnGame, teamStats, odds, f5Lines) {
     }
   }
 
-  // Fall back to Hard Rock Bet full-game ML if no F5 lines
-  if (f5MLEntries.length === 0) {
-    for (const [team, data] of Object.entries(ml)) {
-      const isHome = team.toLowerCase().includes(home.toLowerCase().split(' ').pop());
-      f5MLEntries.push({ team, odds: data.price, book: data.book + ' (FG proxy)', isHome });
-    }
-  }
+  // No FG-proxy (per Ben 2026-06-18): only recommend REAL F5 lines that actually exist at a
+  // top-10 US book. If no real F5 moneyline, we generate no F5 ML candidate for this game.
 
   for (const entry of f5MLEntries) {
     const rawMargin = entry.isHome ? projF5Margin : -projF5Margin;
@@ -770,15 +764,8 @@ function computeF5Edge(espnGame, teamStats, odds, f5Lines) {
       overBook = oddsF5Total.Over.book + ' (F5)';
       underBook = oddsF5Total.Under.book + ' (F5)';
       totalSource = 'Odds API F5';
-    } else if (total.Over && total.Under) {
-      // Derive from full-game total
-      line = Math.round(total.Over.point * 0.55 * 2) / 2;
-      overOdds = total.Over.price;
-      underOdds = total.Under.price;
-      overBook = total.Over.book;
-      underBook = total.Under.book;
-      totalSource = 'Derived (FG×0.55)';
     }
+    // No FG-proxy: if there's no REAL F5 total line at a top-10 US book, no F5 total pick.
 
     if (line != null) {
       const rawDiff = projF5Total - line;
@@ -833,8 +820,8 @@ function computeF5Edge(espnGame, teamStats, odds, f5Lines) {
 
   // F5 Run line edge — use real F5 run lines from Odds API when available, else derive ±0.5 from full-game
   const f5RLSource = Object.keys(oddsF5RL).length > 0 ? oddsF5RL : null;
-  const rlEntries = f5RLSource ? Object.entries(f5RLSource) : Object.entries(rl);
-  const rlSourceLabel = f5RLSource ? 'Odds API F5' : 'FG proxy (±0.5)';
+  const rlEntries = f5RLSource ? Object.entries(f5RLSource) : []; // no FG-proxy — real F5 run lines only
+  const rlSourceLabel = 'Odds API F5';
 
   for (const [team, data] of rlEntries) {
     const isHome = team.toLowerCase().includes(home.toLowerCase().split(' ').pop());
@@ -979,6 +966,9 @@ async function aggregateIntoMvp(f5Picks, dateISO) {
     const fg = mvp.picks
       .filter(p => p.sport !== 'PARLAY' && p.source !== 'F5')
       .map(p => ({ ...p, source: 'full-game', _ev: pev(p.ev) }));
+    const decFromAmerican = (o) => { const n = parseInt(String(o).replace('+', '')); return n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n); };
+    // F5 picks are now REAL top-10-US-book lines (offshore + FG-proxy removed upstream) — placeable in
+    // the US (Hard Rock or peers; line may move). Keep at the US-book price; discount the F5 EV for ranking.
     const f5 = (f5Picks || [])
       .map(p => ({ ...p, source: 'F5', _evRaw: pev(p.ev), _ev: (pev(p.ev) ?? 0) * F5_DISCOUNT }))
       .filter(p => p._evRaw != null && p._ev >= EV_FLOOR)
@@ -1009,9 +999,37 @@ async function aggregateIntoMvp(f5Picks, dateISO) {
     }
     if (!card.some(p => p.source === 'F5')) { console.log(`[mvp-merge] F5 didn't survive ranking — MVP unchanged`); return; }
 
+    // Rebuild the parlay from the (HR-placeable) expanded pool: highest-EV legs, 1 per game, de-correlated.
+    const cprob = (p) => { const v = p.coverProb != null ? p.coverProb : p.modelProb; const f = parseFloat(String(v)); return isNaN(f) ? 0.5 : (f > 1.5 ? f / 100 : f); };
+    const seenG = new Set(); const legPool = [];
+    for (const p of card) {
+      const g = String(p.matchup || '').toLowerCase().trim();
+      if (!g || seenG.has(g)) continue; // one leg per game (standard parlay rule)
+      if (legPool.filter(l => dirKey(l) === dirKey(p)).length >= 2) continue; // de-correlation
+      seenG.add(g); legPool.push(p);
+      if (legPool.length >= 3) break;
+    }
+    let parlayLegs = [];
+    if (legPool.length >= 3) { // a real parlay is 3 legs (optimized) or none — never a 2-leg fallback
+      const cd = legPool.reduce((s, l) => s * decFromAmerican(l.odds), 1);
+      const cp2 = legPool.reduce((s, l) => s * cprob(l), 1);
+      const amFromDec = (d) => d >= 2 ? `+${Math.round((d - 1) * 100)}` : `${Math.round(-100 / (d - 1))}`;
+      parlayLegs = [{
+        type: `${legPool.length}-leg-parlay`,
+        legs: legPool.map(l => ({ pick: l.pick, sport: l.sport, matchup: l.matchup, betType: l.betType, odds: String(l.odds), coverProb: `${Math.round(cprob(l) * 100)}%`, book: l.book || 'Hard Rock Bet', source: l.source })),
+        units: '0.5u',
+        combinedOdds: amFromDec(cd),
+        combinedDecimal: Math.round(cd * 100) / 100,
+        combinedProb: `${Math.round(cp2 * 100)}%`,
+        ev: `${Math.round((cp2 * cd - 1) * 100)}%`,
+        correlationNote: 'Rebuilt from expanded Hard-Rock-placeable pool (1 leg/game, de-correlated)',
+      }];
+    }
+
     const expanded = {
       ...mvp,
       picks: card,
+      parlayLegs,
       model: String(mvp.model || 'v11.1-mvp').replace('+F5', '') + '+F5',
       expandedAt: new Date().toISOString(),
       sources: {
@@ -1163,6 +1181,18 @@ exports.handler = async (event) => {
       const odds = extractBestOdds(oddsGame);
 
       const edgeResult = computeF5Edge(espn, teamStats, odds, null);
+
+      // Hard Rock placeability: flag whether HR offers each F5 candidate's EXACT bet (market+side+line),
+      // and capture HR's price. Annotate only (keeps /mlb behavior); the MVP aggregator requires hrPlaceable.
+      for (const c of (edgeResult.candidates || [])) {
+        let sub = null, key = null;
+        if (c.type === 'F5 Moneyline') { sub = 'f5ML'; key = c.pick.replace(/^F5 ML:\s*/, '').trim(); }
+        else if (c.type === 'F5 Total') { const m = c.pick.match(/F5 (Over|Under) ([\d.]+)/); if (m) { sub = 'f5Total'; key = `${m[1]}|${m[2]}`; } }
+        else if (c.type === 'F5 Run Line') { const m = c.pick.match(/F5 (.+?) ([+-][\d.]+)\s*$/); if (m) { sub = 'f5RL'; key = `${m[1].trim()}|${parseFloat(m[2])}`; } }
+        const hrEntry = (sub && key && odds.hr && odds.hr[sub]) ? odds.hr[sub][key] : null;
+        c.hrPlaceable = !!hrEntry;
+        if (hrEntry) { c.hrOdds = hrEntry.price; c.hrBook = 'Hard Rock Bet'; }
+      }
 
       const gameData = {
         espn,
@@ -1337,6 +1367,8 @@ exports.handler = async (event) => {
         kellyPct: c.kelly + '%',
         kellyCalcStr: kellyStr,
         modelProb: c.modelProb + '%',
+        hrPlaceable: c.hrPlaceable === true,
+        hrOdds: (typeof c.hrOdds === 'number' ? c.hrOdds : null),
         rawProb: (c.rawProb || c.modelProb) + '%',
         marketProb: c.marketProb + '%',
         coreReasoning: v?.coreReasoning || `WeBetAI projects a ${c.edge}% calibrated edge. ${kellyStr}.`,

@@ -287,7 +287,9 @@ async function autoFixPicks(picksData, pickReports) {
 // ── Write updated picks back to blob ──
 async function updatePicksBlob(dateKey, picksData) {
   picksData.verifiedAt = new Date().toISOString();
-  picksData.verified = true;
+  // verified is set by the caller (final pass) based on whether the FINAL card is genuinely clean.
+  // Do NOT force true here — a red-flagged pick that couldn't be resolved must not be stamped "verified".
+  if (typeof picksData.verified !== "boolean") picksData.verified = true;
 
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return false;
@@ -521,26 +523,37 @@ exports.handler = async (event) => {
           currentPickNames.add(replacement.pick);
           console.log(`[verify-sharp] REPLACED pick ${pickIdx + 1}: "${badPick.pick}" → "${replacement.pick}" (sharp red flag: ${flag.reason})`);
         } else {
+          // No replacement available — DROP the flagged pick. Elite practice: if a bet fails review,
+          // you don't bet it. Better to publish fewer clean picks than carry a red-flagged one.
+          // Mark here; physically removed after the loop to avoid index-shift mid-iteration.
           sharpReplacements.push({
             index: pickIdx,
             removed: badPick.pick,
             removedReason: `Sharp review RED FLAG: ${flag.reason}`,
             added: null,
           });
-          console.log(`[verify-sharp] FLAGGED pick ${pickIdx + 1}: "${badPick.pick}" — no replacement available`);
+          picksData.picks[pickIdx]._dropRedFlag = true;
+          console.log(`[verify-sharp] DROPPING pick ${pickIdx + 1}: "${badPick.pick}" — red flag, no replacement available`);
         }
       }
 
-      // If we made replacements, update the blob
-      if (sharpReplacements.filter(r => r.added).length > 0) {
-        // Recalculate summary
+      // Physically remove any red-flagged picks that had no replacement (filter avoids index-shift)
+      const droppedCount = picksData.picks.filter(p => p._dropRedFlag).length;
+      if (droppedCount > 0) {
+        picksData.picks = picksData.picks.filter(p => !p._dropRedFlag);
+        console.log(`[verify-sharp] Removed ${droppedCount} red-flagged pick(s) with no replacement; ${picksData.picks.length} remain`);
+      }
+
+      // If we made replacements OR drops, recalc summary + update the blob
+      if (sharpReplacements.filter(r => r.added).length > 0 || droppedCount > 0) {
         const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
         if (picksData.summary) {
           picksData.summary.totalPicks = picksData.picks.length;
+          picksData.summary.totalStraightBets = picksData.picks.length;
           picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
         }
         await updatePicksBlob(dateKey, picksData);
-        console.log(`[verify-sharp] Updated blob with ${sharpReplacements.filter(r => r.added).length} sharp-review replacements`);
+        console.log(`[verify-sharp] Updated blob: ${sharpReplacements.filter(r => r.added).length} replacement(s), ${droppedCount} drop(s)`);
       }
     }
 
@@ -704,7 +717,17 @@ Return ONLY valid JSON array:
         }];
         console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)}`);
         finalFixCount++;
+      } else {
+        // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
+        // never shows a parlay containing a removed leg.
+        if (picksData.parlayLegs && picksData.parlayLegs.length) {
+          picksData.parlayLegs = [];
+          console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
+        }
       }
+
+      // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
+      picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
 
       // Write the final clean card
       await updatePicksBlob(dateKey, picksData);
@@ -715,7 +738,7 @@ Return ONLY valid JSON array:
     const anyFixed = allReplacements.length > 0;
     const report = {
       date: dateKey,
-      verified: totalErrors === 0 && sharpReplacements.length === 0,
+      verified: picksData.verified === true,
       autoFixed: anyFixed,
       replacements: allReplacements,
       totalWarnings,

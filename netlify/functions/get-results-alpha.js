@@ -369,30 +369,31 @@ exports.handler = async (event) => {
     let straightWins = 0, straightLosses = 0, straightWagered = 0, straightProfit = 0;
     let parlayWins = 0, parlayLosses = 0, parlayWagered = 0, parlayProfit = 0;
 
-    for (const dateISO of fullDateRange) {
+    // PERF (2026-06-18): grade all dates in PARALLEL — was sequential await per date (~15s cold for
+    // ~19 days). ESPN score fetches now overlap; cumulative stats are accumulated AFTER, in date order
+    // (identical result). Cold load ~15s -> ~1-2s. Placeholder/no-play rows carry zero stats so they
+    // accumulate harmlessly.
+    const gradedByDate = await Promise.all(fullDateRange.map(async (dateISO) => {
       const entry = picksLookup.get(dateISO);
-
       if (!entry) {
-        // No picks this date — show placeholder row
-        days.push({ date: dateISO, dateFormatted: dateISO, source: 'no-picks', noPlays: true, picks: [], wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0', wagered: 0, profit: 0, roi: '--', parlayResult: 'skip', parlayProfit: 0 });
-        continue;
+        return { date: dateISO, dateFormatted: dateISO, source: 'no-picks', noPlays: true, picks: [], wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0', wagered: 0, profit: 0, roi: '--', parlayResult: 'skip', parlayProfit: 0 };
       }
-
       let picksData;
       try {
         const picksResp = await fetch(`${entry.url}/picks-${dateISO}`, { headers: authHeaders });
-        if (!picksResp.ok) continue;
+        if (!picksResp.ok) return null;
         picksData = await picksResp.json();
         picksData._source = entry.store;
-      } catch (e) { continue; }
-
+      } catch (e) { return null; }
       const day = await gradeDay(dateISO, picksData);
       if (!day) {
-        // Blob exists but has no qualifying picks — show 0-0 row
-        days.push({ date: dateISO, dateFormatted: picksData.dateFormatted || dateISO, source: entry.store, noPlays: true, picks: [], wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0', wagered: 0, profit: 0, roi: '--', parlayResult: 'skip', parlayProfit: 0 });
-        continue;
+        return { date: dateISO, dateFormatted: picksData.dateFormatted || dateISO, source: entry.store, noPlays: true, picks: [], wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0', wagered: 0, profit: 0, roi: '--', parlayResult: 'skip', parlayProfit: 0 };
       }
+      return day;
+    }));
 
+    for (const day of gradedByDate) {
+      if (!day) continue;
       cumWins += day.wins; cumLosses += day.losses; cumPushes += day.pushes; cumPending += day.pending;
       cumWagered += day.wagered; cumProfit += day.profit;
 

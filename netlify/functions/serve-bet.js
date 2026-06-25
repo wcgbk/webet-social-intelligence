@@ -49,30 +49,34 @@ exports.handler = async (event) => {
     };
   }
 
+  // 1) Load the bet page HTML (essential — the client reads the bet id from the
+  //    /bet/:id path and fetches /api/get-bet itself). readFileSync works only
+  //    when the file is bundled with the function; the CDN fallback must hit
+  //    "/bet" (the exact /bet rule serves /bet/index.html) and NEVER
+  //    "/bet/index.html", which matches the /bet/* rewrite and recurses back
+  //    into this function (server-side fetch loop → timeout → 502).
+  let html = '';
+  try { html = fs.readFileSync(path.join(__dirname, '..', '..', 'bet', 'index.html'), 'utf8'); } catch (_) {}
+  if (!html || !/<html/i.test(html)) {
+    try { html = await (await fetch(`${SITE_URL}/bet`)).text(); } catch (_) { html = ''; }
+  }
+  if (!html || !/<html/i.test(html)) {
+    // Couldn't get the page — bounce to the static /bet route (no blank 502).
+    return { statusCode: 302, headers: { Location: '/bet' }, body: '' };
+  }
+
+  // 2) Best-effort dynamic OG tags from the bet record. Never fatal — if blobs
+  //    are unavailable the static page (and its client-side fetch) still works.
   try {
-    // Read bet data
     const { getStore } = await import('@netlify/blobs');
     const siteID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
     const token = process.env.NETLIFY_AUTH_TOKEN || '';
     const store = getStore({ name: 'webet-bets', siteID, token });
-    const bet = await store.get(`bet-${betId}`, { type: 'json' });
-
-    // Read the static bet page HTML
-    let html;
-    try {
-      html = fs.readFileSync(path.join(__dirname, '..', '..', 'bet', 'index.html'), 'utf8');
-    } catch (e) {
-      // Fallback: try to fetch from CDN
-      const res = await fetch(`${SITE_URL}/bet/index.html`);
-      html = await res.text();
-    }
-
+    const bet = await store.get(`bet-${betId}`, { type: 'json' }).catch(() => null);
     if (bet) {
       const title = `WeBetAI — ${bet.title || 'Place Your Bet'}`;
       const desc = bet.betString || `$${bet.amount || 1} bet: ${bet.title || 'Pick a side'}`;
       const ogImage = `${SITE_URL}/api/bet-image?id=${betId}`;
-
-      // Replace static OG tags with dynamic ones
       html = html
         .replace(/<title>[^<]*<\/title>/, `<title>${escHtml(title)}</title>`)
         .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${escAttr(desc)}" />`)
@@ -84,24 +88,13 @@ exports.handler = async (event) => {
         .replace(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${escAttr(desc)}" />`)
         .replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${ogImage}" />`);
     }
+  } catch (_) { /* OG enhancement is optional — the static page already works */ }
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=60',
-      },
-      body: html,
-    };
-  } catch (err) {
-    console.error('[serve-bet] Error:', err.message);
-    // Fallback: redirect to static page
-    return {
-      statusCode: 302,
-      headers: { Location: `/bet/index.html#${betId}` },
-      body: '',
-    };
-  }
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
+    body: html,
+  };
 };
 
 function escHtml(s) { return (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }

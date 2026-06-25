@@ -1056,6 +1056,131 @@ async function aggregateIntoMvp(f5Picks, dateISO) {
   }
 }
 
+// ── Feed top F5 picks into the ALPHA card (production). Same discipline as the MVP merge:
+// F5 EV is UNVALIDATED (can't backtest) → DISCOUNT x0.5 + CAP 2 slots + CAP 1u sizing until CLV
+// proves it. F5 picks are NORMALIZED to the alpha pick shape (winProbability/coverProb from modelProb,
+// default whatLoses) so they survive the 10:30am verify-picks QA instead of NaN-ing its math check.
+// Robust: never throws into the F5 run; leaves the alpha card unchanged on any error or empty result.
+async function aggregateIntoAlpha(f5Picks, dateISO) {
+  try {
+    const token = process.env.NETLIFY_AUTH_TOKEN;
+    const siteId = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+    if (!token) return;
+    const alphaUrl = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha/picks-${dateISO}`;
+    const aResp = await fetch(alphaUrl, { headers: { "Authorization": `Bearer ${token}` } });
+    if (!aResp.ok) { console.log(`[alpha-merge] no alpha card for ${dateISO} — skip`); return; }
+    const alpha = await aResp.json();
+    if (!alpha || !Array.isArray(alpha.picks)) { console.log(`[alpha-merge] alpha card malformed — skip`); return; }
+
+    const pev = (v) => {
+      if (v == null) return null;
+      if (typeof v === 'number') return v;
+      const f = parseFloat(String(v).replace('%', '').replace('+', '').trim());
+      if (isNaN(f)) return null;
+      return Math.abs(f) > 1.5 ? f / 100 : f;
+    };
+    const F5_DISCOUNT = 0.5, F5_CAP = 2, F5_UNIT_CAP = 1.0, EV_FLOOR = 0.03, DAILY_CAP = 6;
+    const ratingFromUnits = (u) => u >= 2.5 ? 'A+' : u >= 1.5 ? 'A' : u >= 1.0 ? 'A-' : u >= 0.5 ? 'B+' : 'B';
+    // Idempotent: strip any prior-merged F5 so a re-run rebuilds cleanly
+    const fg = alpha.picks
+      .filter(p => p.sport !== 'PARLAY' && p.source !== 'F5')
+      .map(p => ({ ...p, source: p.source || 'full-game', _ev: pev(p.ev) }));
+    const decFromAmerican = (o) => { const n = parseInt(String(o).replace('+', '')); return n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n); };
+    const f5 = (f5Picks || [])
+      .map(p => ({ ...p, source: 'F5', _evRaw: pev(p.ev), _ev: (pev(p.ev) ?? 0) * F5_DISCOUNT }))
+      .filter(p => p._evRaw != null && p._ev >= EV_FLOOR)
+      .sort((a, b) => b._ev - a._ev)
+      .slice(0, F5_CAP);
+    if (f5.length === 0) { console.log(`[alpha-merge] no F5 cleared discount+floor — alpha unchanged`); return; }
+
+    const dirKey = (p) => {
+      const s = String(p.pick || p.side || '').toLowerCase();
+      const dir = s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'side';
+      return `${p.sport}|${dir}`;
+    };
+    const gameKey = (p) => String(p.matchup || '').toLowerCase().trim();
+    const merged = [...fg, ...f5]
+      .filter(p => (p._ev ?? 0) >= EV_FLOOR)
+      .sort((a, b) => (b._ev ?? 0) - (a._ev ?? 0));
+    const card = [];
+    for (const p of merged) {
+      const g = gameKey(p);
+      if (g && card.some(x => gameKey(x) === g)) continue;               // one pick per game (de-correlation)
+      if (card.filter(x => dirKey(x) === dirKey(p)).length >= 2) continue; // ≤2 same-direction same-sport
+      const { _ev, _evRaw, ...clean } = p;
+      if (clean.source === 'F5') {
+        // Honesty: display the DISCOUNTED F5 EV (what we trust); keep raw in evRaw.
+        if (_ev != null) { clean.evRaw = clean.ev; clean.ev = `+${Math.round(_ev * 100)}%`; }
+        // F5 is unvalidated — cap sizing at 1u so it can't be staked above a validated full-game play.
+        const u = Math.min(F5_UNIT_CAP, parseFloat(String(clean.units)) || 0.5);
+        clean.units = `${u}u`;
+        clean.rating = ratingFromUnits(u);
+        // Normalize to the alpha pick shape so verify-picks QA can math/narrative-check it cleanly.
+        const probStr = clean.winProbability || clean.coverProb || (clean.modelProb != null ? (String(clean.modelProb).includes('%') ? String(clean.modelProb) : `${clean.modelProb}%`) : '50%');
+        clean.winProbability = probStr;
+        clean.coverProb = clean.coverProb || probStr;
+        if (!clean.whatLoses || String(clean.whatLoses).trim().length < 10) {
+          clean.whatLoses = 'The first-five-innings result goes the other way, or the starter is pulled early and the bullpen swings it.';
+        }
+        clean.sport = clean.sport || 'MLB';
+      }
+      card.push(clean);
+      if (card.length >= DAILY_CAP) break;
+    }
+    if (!card.some(p => p.source === 'F5')) { console.log(`[alpha-merge] F5 didn't survive ranking — alpha unchanged`); return; }
+
+    // Rebuild parlay from the expanded pool: highest-EV legs, 1 per game, de-correlated, 3 legs or none.
+    const cprob = (p) => { const v = p.coverProb != null ? p.coverProb : p.modelProb; const f = parseFloat(String(v)); return isNaN(f) ? 0.5 : (f > 1.5 ? f / 100 : f); };
+    const seenG = new Set(); const legPool = [];
+    for (const p of card) {
+      const g = gameKey(p);
+      if (!g || seenG.has(g)) continue;
+      if (legPool.filter(l => dirKey(l) === dirKey(p)).length >= 2) continue;
+      seenG.add(g); legPool.push(p);
+      if (legPool.length >= 3) break;
+    }
+    let parlayLegs = [];
+    if (legPool.length >= 3) {
+      const cd = legPool.reduce((s, l) => s * decFromAmerican(l.odds), 1);
+      const cp2 = legPool.reduce((s, l) => s * cprob(l), 1);
+      const amFromDec = (d) => d >= 2 ? `+${Math.round((d - 1) * 100)}` : `${Math.round(-100 / (d - 1))}`;
+      parlayLegs = [{
+        type: `${legPool.length}-leg-parlay`,
+        legs: legPool.map(l => ({ pick: l.pick, sport: l.sport, matchup: l.matchup, betType: l.betType, odds: String(l.odds), coverProb: `${Math.round(cprob(l) * 100)}%`, book: l.book, source: l.source })),
+        units: '0.5u',
+        combinedOdds: amFromDec(cd),
+        combinedDecimal: Math.round(cd * 100) / 100,
+        combinedProb: `${Math.round(cp2 * 100)}%`,
+        ev: `${Math.round((cp2 * cd - 1) * 100)}%`,
+        correlationNote: 'Rebuilt from expanded F5+full-game pool (1 leg/game, de-correlated)',
+      }];
+    }
+
+    const expanded = {
+      ...alpha,
+      picks: card,
+      parlayLegs,
+      model: String(alpha.model || 'v10.3-alpha-sharp').replace('+F5', '') + '+F5',
+      expandedAt: new Date().toISOString(),
+      sources: { fullGame: card.filter(p => p.source !== 'F5').length, f5: card.filter(p => p.source === 'F5').length },
+    };
+    const bodyStr = JSON.stringify(expanded);
+    // Write BOTH SDK (what get-picks-alpha reads) + REST, like the MVP merge.
+    try {
+      const { getStore } = await import("@netlify/blobs");
+      await getStore("edge-picks-alpha").set(`picks-${dateISO}`, bodyStr);
+    } catch (e) { console.log(`[alpha-merge] SDK write failed: ${e.message}`); }
+    const put = await fetch(alphaUrl, {
+      method: "PUT",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: bodyStr,
+    });
+    console.log(`[alpha-merge] alpha expanded SDK+REST ${put.ok ? 'OK' : 'PUT-FAILED-' + put.status}: ${expanded.sources.fullGame} full-game + ${expanded.sources.f5} F5`);
+  } catch (e) {
+    console.error(`[alpha-merge] failed (alpha unchanged): ${e.message}`);
+  }
+}
+
 exports.handler = async (event) => {
   console.log("[mlb-f5] v2 — Pre-computed edge architecture started");
 
@@ -1470,8 +1595,9 @@ exports.handler = async (event) => {
     await storeBlob("latest-date", dateISO);
     await appendPicksDate(dateISO);
 
-    // A/B expanded menu: feed today's F5 options into the MVP card (treatment arm).
-    // Self-contained + never throws; leaves the MVP card unchanged on any error.
+    // Expanded menu: feed today's F5 options into the ALPHA card (production). Still feed MVP too
+    // (harmless — we no longer rely on it). Self-contained + never throws; card unchanged on any error.
+    await aggregateIntoAlpha(picks, dateISO);
     await aggregateIntoMvp(picks, dateISO);
 
     return { statusCode: 200, body: JSON.stringify({ success: true, picks: picks.length, rejections: rejections.length, date: dateISO }) };

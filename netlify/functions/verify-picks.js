@@ -26,7 +26,7 @@ function impliedProb(odds) { return odds < 0 ? Math.abs(odds) / (Math.abs(odds) 
 function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10); }
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
-function unitsToRating(u) { if (u >= 2.0) return "A+"; if (u >= 1.25) return "A"; if (u >= 0.75) return "A-"; if (u >= 0.5) return "B+"; return "B"; }
+function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
 
 // ── Math Checks ──
 function runMathChecks(pick) {
@@ -523,17 +523,24 @@ exports.handler = async (event) => {
           currentPickNames.add(replacement.pick);
           console.log(`[verify-sharp] REPLACED pick ${pickIdx + 1}: "${badPick.pick}" → "${replacement.pick}" (sharp red flag: ${flag.reason})`);
         } else {
-          // No replacement available — DROP the flagged pick. Elite practice: if a bet fails review,
-          // you don't bet it. Better to publish fewer clean picks than carry a red-flagged one.
-          // Mark here; physically removed after the loop to avoid index-shift mid-iteration.
+          // No CLEAN replacement. The sharp review is ADVISORY — a non-deterministic LLM that flags
+          // narrative/situational concerns, not math, and it has red-flagged genuine +EV plays (e.g.
+          // on "What Loses" phrasing). So we DOWNGRADE rather than delete: annotate the concern and
+          // trim 0.5u. Truly broken picks (negative/undefined EV, broken math) are removed upstream by
+          // the math-critical autoFix, not here. This guarantees the sharp review never shrinks the card.
+          const curU = parseUnits(badPick.units);
+          const newU = Math.max(0.5, (isNaN(curU) ? 1 : curU) - 0.5);
+          badPick.units = `${newU}u`;
+          badPick.rating = unitsToRating(newU);
+          badPick.sharpConcern = flag.reason;
           sharpReplacements.push({
             index: pickIdx,
-            removed: badPick.pick,
-            removedReason: `Sharp review RED FLAG: ${flag.reason}`,
+            downgraded: badPick.pick,
+            removed: null,
+            removedReason: `Sharp concern (downgraded ${(isNaN(curU) ? 1 : curU)}u→${newU}u, not removed): ${flag.reason}`,
             added: null,
           });
-          picksData.picks[pickIdx]._dropRedFlag = true;
-          console.log(`[verify-sharp] DROPPING pick ${pickIdx + 1}: "${badPick.pick}" — red flag, no replacement available`);
+          console.log(`[verify-sharp] DOWNGRADED pick ${pickIdx + 1}: "${badPick.pick}" → ${newU}u (advisory sharp concern)`);
         }
       }
 
@@ -559,8 +566,8 @@ exports.handler = async (event) => {
         console.log(`[verify-sharp] Removed ${droppedCount} red-flagged pick(s) with no replacement; ${picksData.picks.length} remain`);
       }
 
-      // If we made replacements OR drops, recalc summary + update the blob
-      if (sharpReplacements.filter(r => r.added).length > 0 || droppedCount > 0) {
+      // If we made any sharp action (replace / downgrade / drop), recalc summary + update the blob
+      if (sharpReplacements.length > 0 || droppedCount > 0) {
         const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
         if (picksData.summary) {
           picksData.summary.totalPicks = picksData.picks.length;

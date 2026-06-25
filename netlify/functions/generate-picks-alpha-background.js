@@ -421,11 +421,23 @@ const COVER_PROB_CAPS = {
 // destroyed grade/sizing differentiation. Caps are retained as an ultimate guard only.
 const SHRINK_K = { Total: 0.30, Spread: 0.35, "Puck Line": 0.35, "Run Line": 0.35, Moneyline: 0.50 };
 
-function getCalibratedCoverProb(rawProb, sport, market, odds, pmSignal) {
+// Two-sided no-vig from a pair of American odds (the correct market prior). null if unavailable.
+function noVigProb(myOdds, oppOdds) {
+  if (myOdds == null || oppOdds == null) return null;
+  const a = impliedProb(myOdds), b = impliedProb(oppOdds);
+  const s = a + b;
+  return s > 0 ? a / s : null;
+}
+
+function getCalibratedCoverProb(rawProb, sport, market, odds, pmSignal, noVigPrior) {
   const key = sport + "_" + market;
   const cap = COVER_PROB_CAPS[key] || 0.75;
-  // De-vig approximation: strip ~half of a typical 4.5% two-way overround from this side.
-  const mktProb = Math.min(0.95, Math.max(0.05, impliedProb(odds) * 0.9783));
+  // Market prior: prefer the TRUE two-sided no-vig price when supplied (correct for asymmetric markets
+  // like plus-money MLB dogs, where a flat haircut systematically overstates the favorite); else fall
+  // back to the flat one-sided overround approximation.
+  const mktProb = (typeof noVigPrior === "number" && noVigPrior > 0.01 && noVigPrior < 0.99)
+    ? noVigPrior
+    : Math.min(0.95, Math.max(0.05, impliedProb(odds) * 0.9783));
   const K = SHRINK_K[market] !== undefined ? SHRINK_K[market] : 0.35;
   let calibrated = mktProb + K * (rawProb - mktProb);
   calibrated = Math.min(calibrated, cap); // cap retained as guard rail
@@ -2584,7 +2596,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         if (odds == null) {
           console.log(`[v10-skip] No valid spread odds for ${game.away} @ ${game.home} — skipping spread candidate`);
         } else {
-        const coverProb = getCalibratedCoverProb(rawCoverProb, league.league, betType, odds);
+        const spreadNoVig = noVigProb(odds, isHomeCover ? gameData.awaySpreadOdds : gameData.homeSpreadOdds);
+        const coverProb = getCalibratedCoverProb(rawCoverProb, league.league, betType, odds, undefined, spreadNoVig);
 
         // Skip large NBA/NCAAB spreads — model accuracy degrades at extremes, sharp consensus is these are -EV
         const MAX_SPREAD = { NBA: 10, NCAAB: 14 };
@@ -2658,7 +2671,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           if (totalOdds == null) {
             console.log(`[v10-skip] No valid total odds for ${game.away} @ ${game.home} — skipping total candidate`);
           } else {
-          const totalCoverProb = getCalibratedCoverProb(rawTotalCoverProb, league.league, "Total", totalOdds);
+          const totalNoVig = noVigProb(isOver ? gameData.overOdds : gameData.underOdds, isOver ? gameData.underOdds : gameData.overOdds);
+          const totalCoverProb = getCalibratedCoverProb(rawTotalCoverProb, league.league, "Total", totalOdds, undefined, totalNoVig);
 
           if (totalOdds >= -250) {
             const kelly = computeKelly(totalCoverProb, totalOdds, drawdownActive);
@@ -2699,7 +2713,16 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       const homeML = (!SOCCER_LEAGUES.includes(league.league) && mlPlaceable) ? gameData.homeML : null;
       const awayML = !SOCCER_LEAGUES.includes(league.league) ? gameData.awayML : null;
       if (homeML && awayML) {
-        const homeWinProb = proj.homeWinProb;
+        let homeWinProb = proj.homeWinProb;
+        // MLB: blend Elo with a Pythagorean expectation from PROJECTED RUNS (which already fold in the
+        // regressed starter ERA + park factor) so ML win prob is pitcher-aware, not team-Elo-only —
+        // the single biggest gap in MLB ML pricing. Off-day starters move the line; team Elo doesn't.
+        if (league.league === "MLB" && proj.projHomeScore > 0 && proj.projAwayScore > 0) {
+          const EX = 1.83; // baseball Pythagorean exponent (empirical)
+          const ph = Math.pow(proj.projHomeScore, EX), pa = Math.pow(proj.projAwayScore, EX);
+          const pythagHome = ph / (ph + pa);
+          homeWinProb = 0.5 * proj.homeWinProb + 0.5 * pythagHome;
+        }
         const awayWinProb = 1 - homeWinProb;
 
         // Check both sides for ML value
@@ -2737,7 +2760,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           const implProb = implProb_;
 
           const rawCoverProb = winProb;
-          const coverProb = getCalibratedCoverProb(rawCoverProb, league.league, "Moneyline", ml);
+          const coverProb = getCalibratedCoverProb(rawCoverProb, league.league, "Moneyline", ml, undefined, implProbNoVig);
           const kelly = computeKelly(coverProb, ml, drawdownActive);
 
           if (kelly.ev > evFloor) {
@@ -4241,6 +4264,20 @@ exports.handler = async (event) => {
         }
       } catch (leanErr) {
         console.error(`[v10-lean-topup] Failed: ${leanErr.message}`);
+      }
+    }
+
+    // ── FINAL SAME-GAME DE-CORRELATION ──
+    // The lean top-up + thin-slate paths run AFTER the in-selection dedup, so they can reintroduce a
+    // second pick from a game already on the card (e.g. Team ML + that game's Over — positively
+    // correlated). Never publish two picks from the same matchup: keep the first (higher-conviction).
+    {
+      const seenM = new Set();
+      for (let i = 0; i < picks.length; i++) {
+        const m = (picks[i].matchup || '').toLowerCase().trim();
+        if (!m) continue;
+        if (seenM.has(m)) { console.log(`[v10-decorr] Dropping same-game pick "${picks[i].pick}" — ${m} already on card`); picks.splice(i, 1); i--; continue; }
+        seenM.add(m);
       }
     }
 

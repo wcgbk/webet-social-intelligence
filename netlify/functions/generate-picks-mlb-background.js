@@ -1637,9 +1637,12 @@ exports.handler = async (event) => {
     await storeBlob("latest-date", dateISO);
     await appendPicksDate(dateISO);
 
-    // Expanded menu: feed today's F5 options into the ALPHA card (production). Still feed MVP too
-    // (harmless — we no longer rely on it). Self-contained + never throws; card unchanged on any error.
-    await aggregateIntoAlpha(picks, dateISO);
+    // Stage 2 (2026-06-25): the ALPHA generator now produces F5 as a built-in market during its own
+    // 9am run, so this 10am standalone F5 cron must NOT overwrite the alpha card — doing so would
+    // clobber the disciplined in-generator F5 (correct sign, ×0.5 discount, 1u cap, unified de-corr)
+    // with this older engine's picks + re-introduce the cross-machine de-corr risk. So the alpha merge
+    // is DISABLED. This cron still serves /mlb and the deprecated MVP card.
+    // await aggregateIntoAlpha(picks, dateISO);  // DISABLED — alpha self-produces F5 inline now
     await aggregateIntoMvp(picks, dateISO);
 
     return { statusCode: 200, body: JSON.stringify({ success: true, picks: picks.length, rejections: rejections.length, date: dateISO }) };

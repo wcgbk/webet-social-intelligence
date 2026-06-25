@@ -1436,6 +1436,7 @@ exports.handler = async (event) => {
         console.log(`[mlb-f5] Sending ${topCandidates.length} candidates to Claude`);
         const resp = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
+          signal: AbortSignal.timeout(30000), // verify call is optional — a rate-limited hang here must not stall the F5 run (try/catch → continue without verifications, then store)
           headers: {
             "Content-Type": "application/json",
             "x-api-key": anthropicKey,

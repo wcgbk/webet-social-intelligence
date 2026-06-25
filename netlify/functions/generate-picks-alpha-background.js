@@ -4304,6 +4304,8 @@ exports.handler = async (event) => {
         ev: c.ev,
         kellyUnits: c.kellyUnits,
         matchup: c.matchup,
+        commenceTime: c.commenceTime,
+        zScore: c.zScore,
         selected: selectedRanks.has(c.rank),
       })),
     };

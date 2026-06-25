@@ -570,6 +570,67 @@ exports.handler = async (event) => {
       console.log(`[verify-final] Running final verification pass on ${picksData.picks.length} picks`);
       let finalFixCount = 0;
 
+      // ── Backfill: if drops/removals shrank the card below target, refill from the candidate
+      // pool with the next-best CLEAN candidates. A math-critical removal or sharp red-flag drop
+      // must NOT silently shrink the card to 2 when a clean alternative exists. We never force junk:
+      // only EV>3% candidates that Claude didn't actively reject, de-correlated, 1 per game.
+      // (If the pool is genuinely exhausted — a truly lean slate — we publish fewer, honestly.)
+      const TARGET_PICKS = 3;
+      if (picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
+        const onCard = new Set(picksData.picks.map(p => p.pick));
+        const rejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
+        const dirKey = (sport, side) => `${sport}|${/over/i.test(side) ? 'over' : /under/i.test(side) ? 'under' : 'side'}`;
+        const matchupsOnCard = new Set(picksData.picks.map(p => p.matchup));
+        const dirCount = {};
+        for (const p of picksData.picks) { const k = dirKey(p.sport, p.pick); dirCount[k] = (dirCount[k] || 0) + 1; }
+
+        const pool = picksData.candidateTable
+          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && c.ev > 0.03)
+          .sort((a, b) => b.ev - a.ev);
+
+        let backfilled = 0;
+        for (const c of pool) {
+          if (picksData.picks.length >= TARGET_PICKS) break;
+          if (matchupsOnCard.has(c.matchup)) continue;          // one pick per game
+          const k = dirKey(c.sport, c.side);
+          if ((dirCount[k] || 0) >= 2) continue;                // avoid 3 same-direction same-sport legs
+          const u = c.kellyUnits || 0.5;
+          picksData.picks.push({
+            sport: c.sport, matchup: c.matchup, pick: c.side, betType: c.market,
+            odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
+            rating: unitsToRating(u),
+            confidence: u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b",
+            units: `${u}u`,
+            ev: `${(c.ev * 100).toFixed(1)}%`, evRaw: c.ev,
+            edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
+            edgePoints: c.edge,
+            coverProb: `${(c.coverProb * 100).toFixed(0)}%`,
+            zScore: c.zScore,
+            kellyCalc: c.kellyCalcStr || "",
+            winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
+            coreReasoning: "",          // written by the narrative pass below
+            whatLoses: "",
+            modelEdge: `Edge: ${c.edge}`,
+            commenceTime: c.commenceTime || "",
+          });
+          onCard.add(c.side); matchupsOnCard.add(c.matchup); dirCount[k] = (dirCount[k] || 0) + 1;
+          backfilled++;
+          console.log(`[verify-backfill] Added ${c.side} (EV ${(c.ev * 100).toFixed(1)}%) to refill card toward ${TARGET_PICKS}`);
+        }
+        if (backfilled > 0) {
+          finalFixCount += backfilled;
+          if (picksData.summary) {
+            const tu = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
+            picksData.summary.totalPicks = picksData.picks.length;
+            picksData.summary.totalStraightBets = picksData.picks.length;
+            picksData.summary.totalUnits = `${tu.toFixed(1)}u`;
+          }
+          console.log(`[verify-backfill] Refilled card to ${picksData.picks.length} pick(s) from candidate pool`);
+        } else {
+          console.log(`[verify-backfill] No clean candidates available to refill — publishing ${picksData.picks.length} pick(s) honestly`);
+        }
+      }
+
       // Fix grades
       for (const p of picksData.picks) {
         const u = parseUnits(p.units);

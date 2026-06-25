@@ -1587,6 +1587,7 @@ async function fetchXIntelligence(candidates) {
   try {
     const resp = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
+      signal: AbortSignal.timeout(20000), // X-intel is an optional enhancement — never let a slow/hung/rate-limited Grok call stall the whole run before selection (Stage-1 robustness; the try/catch can't catch a hang without this)
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
       body: JSON.stringify({
         model: 'grok-3-mini',

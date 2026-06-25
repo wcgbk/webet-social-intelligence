@@ -21,8 +21,10 @@ const CORS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
 // Pack catalog mirrors /credits (founder-designed economy). Founder-editable.
 const PACKS = {
-  pro:   { credits: 15000, label: 'Pro',   price: '$97'  },
-  elite: { credits: 40000, label: 'Elite', price: '$197' },
+  contributor: { credits: 5000,  label: 'Contributor',      price: '$100' },
+  partner:     { credits: 10000, label: 'Liquidity Partner', price: '$200' },
+  pro:         { credits: 15000, label: 'Pro',               price: '$97'  },
+  elite:       { credits: 40000, label: 'Elite',             price: '$197' },
 };
 
 exports.handler = async (event) => {

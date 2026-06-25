@@ -89,8 +89,10 @@
 
   <script>
     var PACKS = {
-      pro:   { label: 'Pro',   credits: 15000, price: '$97'  },
-      elite: { label: 'Elite', credits: 40000, price: '$197' }
+      contributor: { label: 'Contributor',       credits: 5000,  price: '$100' },
+      partner:     { label: 'Liquidity Partner',  credits: 10000, price: '$200' },
+      pro:         { label: 'Pro',                credits: 15000, price: '$97'  },
+      elite:       { label: 'Elite',              credits: 40000, price: '$197' }
     };
     var params = new URLSearchParams(location.search);
     var packKey = params.get('pack');

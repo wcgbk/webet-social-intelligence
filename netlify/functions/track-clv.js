@@ -1,8 +1,33 @@
 // track-clv.js
 // API endpoint: GET/POST /.netlify/functions/track-clv
-// Captures closing lines for today's picks by re-fetching current odds from The Odds API,
-// compares them to the odds stored at pick time, and calculates CLV (Closing Line Value).
-// Positive CLV = we got better odds than closing (good model). Negative = line moved against us.
+//
+// Captures the TRUE closing line for each of today's picks and computes a real,
+// two-sided no-vig Closing Line Value (CLV) — the north-star KPI for a sharp model.
+//
+// What "true close" means here (upgraded 2026-06-25):
+//   1. SHARP ANCHOR, not soft-book median. We prefer Pinnacle, then a sharp-book
+//      consensus (Betfair Exchange / Matchbook / Circa), and only fall back to an
+//      all-book median when no sharp book is present. Regions us,us2,eu surface them.
+//   2. AS CLOSE TO FIRST PITCH AS POSSIBLE. For games that have already started
+//      (e.g. a past/graded date, or the morning settle pass) we pull the Odds API
+//      HISTORICAL snapshot at the game's commence_time — the actual close. For
+//      upcoming games we use the current line and let a later run (closer to first
+//      pitch, or the next-morning historical pass) overwrite it via captureScore.
+//   3. TWO-SIDED NO-VIG, not a flat haircut. CLV = noVig(closing) − noVig(bet),
+//      where the no-vig probability is the side's raw implied divided by the market
+//      overround (sum of both/all sides' raw implied) from the sharp anchor.
+//
+// Positive CLV = the fair (de-vigged) closing probability for our side is higher
+// than the fair probability we bet at → the line moved toward us → we beat the close.
+//
+// CONTRACT (do NOT break — consumed by other functions):
+//   • generate-picks-alpha-background.js fetchCLVFeedback() reads clv-{date}.bySport
+//     and .byMarket, each entry having { count, clvSum, beat }. We keep those exactly
+//     and only ADD fields (beatRate, bySource, byGameType, byCohort, ...).
+//   • get-analytics.js reads clvData.picks[i].clv positionally aligned to the picks
+//     blob. We keep clv numeric and the picks array in picks-blob order, 1:1.
+//   • Results grading (win/loss/push + profit, written back to the picks blob) is
+//     preserved unchanged.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +36,10 @@ const CORS = {
 };
 
 // ── Sport label → Odds API key mapping ──
+// (MLB was missing — the now-MLB-primary alpha pipeline produced zero CLV because
+//  fetch mapped 'MLB' → undefined and dropped it. Added baseball_mlb.)
 const ODDS_SPORTS_MAP = {
+  'MLB': 'baseball_mlb',
   'NBA': 'basketball_nba',
   'NHL': 'icehockey_nhl',
   'NCAAB': 'basketball_ncaab',
@@ -25,6 +53,20 @@ const ODDS_SPORTS_MAP = {
   'UEL': 'soccer_uefa_europa_league',
   'Europa': 'soccer_uefa_europa_league',
 };
+
+// ── Sharp-book anchor priority (the-odds-api book keys) ──
+// Pinnacle first (the reference sharp), then exchanges / sharp US books. Surfaced by
+// regions us,us2,eu. If none are present for a market we fall back to an all-book median.
+const SHARP_BOOKS = ['pinnacle', 'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook', 'circasports'];
+
+// Full-game vs first-five-innings (F5) market keys. F5 is ONLY served by the per-event
+// odds endpoint (the bulk /odds call rejects it), so F5 closes are fetched per game.
+const FULL_MARKETS = 'h2h,spreads,totals';
+const F5_MARKETS = 'h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings';
+const ODDS_REGIONS = 'us,us2,eu';
+
+// Treat a capture taken within this many minutes BEFORE first pitch as "at the close".
+const PRE_PITCH_BUFFER_MIN = 3;
 
 // ── Normalize team name for fuzzy matching ──
 function normalizeTeam(name) {
@@ -47,20 +89,16 @@ function teamsMatch(a, b) {
   if (!a || !b) return false;
   const na = normalizeTeam(a);
   const nb = normalizeTeam(b);
-  // Exact normalized match
   if (na === nb) return true;
-  // One contains the other
   if (na.includes(nb) || nb.includes(na)) return true;
-  // Last-word match (e.g. "Arizona Wildcats" vs "Arizona")
   if (lastWord(a) === lastWord(b)) return true;
-  // First word match for single-name teams (e.g. "Arsenal" vs "Arsenal FC")
   const fa = na.split(' ')[0];
   const fb = nb.split(' ')[0];
   if (fa.length > 3 && fa === fb) return true;
   return false;
 }
 
-// ── Convert American odds to implied probability ──
+// ── Convert American odds to implied probability (raw, with vig) ──
 function impliedProbability(americanOdds) {
   const odds = parseInt(americanOdds, 10);
   if (isNaN(odds)) return null;
@@ -71,149 +109,233 @@ function impliedProbability(americanOdds) {
   }
 }
 
-// ── Extract consensus odds from bookmaker data for a specific team/side ──
-function extractConsensusOdds(game, pickText, betType) {
-  if (!game || !game.bookmakers || game.bookmakers.length === 0) return null;
-
-  // Determine which team/side the pick is on
-  const pickLower = pickText.toLowerCase();
-  const homeTeam = game.home_team;
-  const awayTeam = game.away_team;
-
-  const isHome = teamsMatch(pickLower, homeTeam) || pickLower.includes(normalizeTeam(homeTeam));
-  const isAway = teamsMatch(pickLower, awayTeam) || pickLower.includes(normalizeTeam(awayTeam));
-
-  // Determine market key based on bet type
-  let marketKey = 'h2h'; // default to moneyline
-  const btLower = (betType || '').toLowerCase();
-  if (btLower === 'spread' || btLower === 'puck line') {
-    marketKey = 'spreads';
-  } else if (btLower === 'total') {
-    marketKey = 'totals';
-  } else if (btLower === 'ml' || btLower === 'moneyline' || btLower === 'draw') {
-    marketKey = 'h2h';
-  }
-
-  // Check for over/under in pick text
-  const isOver = pickLower.includes('over');
-  const isUnder = pickLower.includes('under');
-
-  // Collect odds across all bookmakers
-  const oddsValues = [];
-
-  for (const book of game.bookmakers) {
-    const market = book.markets.find(m => m.key === marketKey);
-    if (!market) continue;
-
-    for (const outcome of market.outcomes) {
-      const outcomeName = outcome.name.toLowerCase();
-
-      if (marketKey === 'totals') {
-        if ((isOver && outcomeName === 'over') || (isUnder && outcomeName === 'under')) {
-          oddsValues.push(outcome.price);
-        }
-      } else if (marketKey === 'h2h') {
-        if (btLower === 'draw' && outcomeName === 'draw') {
-          oddsValues.push(outcome.price);
-        } else if (isHome && teamsMatch(outcome.name, homeTeam)) {
-          oddsValues.push(outcome.price);
-        } else if (isAway && teamsMatch(outcome.name, awayTeam)) {
-          oddsValues.push(outcome.price);
-        }
-      } else {
-        // spreads
-        if (isHome && teamsMatch(outcome.name, homeTeam)) {
-          oddsValues.push(outcome.price);
-        } else if (isAway && teamsMatch(outcome.name, awayTeam)) {
-          oddsValues.push(outcome.price);
-        }
-      }
-    }
-  }
-
-  if (oddsValues.length === 0) return null;
-
-  // Return median odds as "consensus"
-  oddsValues.sort((a, b) => a - b);
-  const mid = Math.floor(oddsValues.length / 2);
-  const consensus = oddsValues.length % 2 === 0
-    ? Math.round((oddsValues[mid - 1] + oddsValues[mid]) / 2)
-    : oddsValues[mid];
-
-  return consensus;
+// ── Small numeric helpers ──
+function median(arr) {
+  const xs = (arr || []).filter(v => typeof v === 'number' && !isNaN(v)).sort((a, b) => a - b);
+  if (!xs.length) return null;
+  const mid = Math.floor(xs.length / 2);
+  return xs.length % 2 === 0 ? (xs[mid - 1] + xs[mid]) / 2 : xs[mid];
+}
+function medianOdds(arr) {
+  const m = median(arr);
+  return m === null ? null : Math.round(m);
 }
 
-// ── Find matching game in odds data for a pick ──
+// ET calendar date (America/New_York) for an ISO timestamp — the product runs on ET.
+function etDate(iso) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      .toISOString().split('T')[0];
+  } catch (e) { return null; }
+}
+
+// ── Describe which side/market a pick is on ──
+function pickSideInfo(pick) {
+  const pickLower = (pick.pick || '').toLowerCase();
+  const bt = (pick.betType || pick.market || '').toLowerCase();
+  const src = (pick.source || '').toLowerCase();
+  const isF5 = bt.startsWith('f5') || /\bf5\b/.test(pickLower) || src === 'f5';
+
+  let marketBase = 'h2h';
+  if (bt.includes('total')) marketBase = 'totals';
+  else if (bt.includes('spread') || bt.includes('puck') || bt.includes('run line')) marketBase = 'spreads';
+  else if (bt.includes('moneyline') || bt === 'ml' || bt.includes('draw')) marketBase = 'h2h';
+  // No explicit betType but pick text carries over/under → total
+  else if (/\b(over|under)\b/.test(pickLower)) marketBase = 'totals';
+  // A bare +/- number with no over/under → spread
+  else if (/[+-]\d+(\.\d+)?/.test(pickLower) && !/\b(over|under)\b/.test(pickLower)) marketBase = 'spreads';
+
+  const marketKey = isF5
+    ? (marketBase === 'h2h' ? 'h2h_1st_5_innings'
+      : marketBase === 'spreads' ? 'spreads_1st_5_innings'
+        : 'totals_1st_5_innings')
+    : marketBase;
+
+  return {
+    isF5,
+    marketBase,
+    marketKey,
+    isOver: pickLower.includes('over'),
+    isUnder: pickLower.includes('under'),
+    isDraw: /\bdraw\b/.test(pickLower) || bt.includes('draw'),
+  };
+}
+
+// Strip odds/line tokens from pick text to get the team-ish portion (ML/spread side)
+function stripLine(text) {
+  return (text || '')
+    .replace(/\bF5\b/gi, '')
+    .replace(/[+-]?\d+(\.\d+)?/g, '')
+    .replace(/\bML\b/gi, '')
+    .replace(/\b(over|under|moneyline|run line|puck line|spread|total|draw)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// The bet's own line (total number or spread number) parsed from the pick text
+function parseBetLine(pick, sideInfo) {
+  const t = pick.pick || '';
+  if (sideInfo.marketBase === 'totals') {
+    const m = t.match(/(over|under)\s*([\d.]+)/i);
+    return m ? parseFloat(m[2]) : null;
+  }
+  if (sideInfo.marketBase === 'spreads') {
+    const m = t.match(/([+-]\d+(\.\d+)?)/);
+    return m ? parseFloat(m[1]) : null;
+  }
+  return null;
+}
+
+// Full-game vs F5 segment, and a normalized "source" bucket for per-source beat-rate.
+function segmentOf(pick) {
+  const bt = (pick.betType || pick.market || '').toLowerCase();
+  const src = (pick.source || '').toLowerCase();
+  return (src === 'f5' || bt.startsWith('f5')) ? 'f5' : 'fullgame';
+}
+function sourceKey(pick) {
+  if (segmentOf(pick) === 'f5') return 'F5';
+  const s = (pick.source || '').trim().toLowerCase();
+  if (s === 'kalshi') return 'Kalshi';
+  if (s === 'polymarket') return 'Polymarket';
+  return 'full-game';
+}
+
+// ── Extract the sharp-anchor closing price + market overround for a pick's side ──
+// gameObj may be a full-game bulk game object OR a per-event (F5) object — both carry
+// { home_team, away_team, bookmakers:[{ key, title, markets:[{ key, outcomes:[{name, price, point}] }] }] }.
+// Returns { sideOdds, sideRaw, overround, closingLine, anchor, anchorBook } or null.
+function extractClose(gameObj, sideInfo, pick) {
+  if (!gameObj || !gameObj.bookmakers) return null;
+  const teamText = stripLine(pick.pick || '');
+  const isTeamMarket = sideInfo.marketBase !== 'totals' && !sideInfo.isDraw;
+  const pickedHome = isTeamMarket && teamsMatch(teamText, gameObj.home_team);
+  const pickedAway = isTeamMarket && teamsMatch(teamText, gameObj.away_team);
+
+  // Per-book view of the target market's outcomes
+  const perBook = [];
+  for (const b of gameObj.bookmakers) {
+    const mkt = (b.markets || []).find(m => m.key === sideInfo.marketKey);
+    if (!mkt || !mkt.outcomes || mkt.outcomes.length < 2) continue;
+    perBook.push({ key: (b.key || '').toLowerCase(), title: b.title || b.key, outcomes: mkt.outcomes });
+  }
+  if (!perBook.length) return null;
+
+  // From one book's outcomes: our side's price/line + the overround across all sides.
+  const selectFrom = (outcomes) => {
+    const allRaw = [];
+    for (const o of outcomes) {
+      const r = impliedProbability(o.price);
+      if (r != null) allRaw.push(r);
+    }
+    if (allRaw.length < 2) return null; // need both/all sides for a real overround
+    let sidePrice = null, line = null;
+    for (const o of outcomes) {
+      const n = (o.name || '').toLowerCase();
+      let hit = false;
+      if (sideInfo.marketBase === 'totals') hit = (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
+      else if (sideInfo.isDraw) hit = (n === 'draw');
+      else hit = (pickedHome && teamsMatch(o.name, gameObj.home_team)) || (pickedAway && teamsMatch(o.name, gameObj.away_team));
+      if (hit) { sidePrice = o.price; line = (o.point !== undefined ? o.point : null); break; }
+    }
+    if (sidePrice == null) return null;
+    const sideRaw = impliedProbability(sidePrice);
+    if (sideRaw == null) return null;
+    return { sidePrice, sideRaw, line, overround: allRaw.reduce((a, c) => a + c, 0) };
+  };
+
+  // 1) Single sharp book by priority (Pinnacle first)
+  for (const sb of SHARP_BOOKS) {
+    const b = perBook.find(x => x.key === sb);
+    if (!b) continue;
+    const s = selectFrom(b.outcomes);
+    if (s) return {
+      sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
+      anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
+    };
+  }
+
+  // 2) Sharp consensus (median across 2+ present sharp books)
+  const sharps = perBook.filter(x => SHARP_BOOKS.includes(x.key)).map(x => selectFrom(x.outcomes)).filter(Boolean);
+  if (sharps.length >= 2) {
+    return {
+      sideOdds: medianOdds(sharps.map(s => s.sidePrice)),
+      sideRaw: median(sharps.map(s => s.sideRaw)),
+      overround: median(sharps.map(s => s.overround)),
+      closingLine: median(sharps.map(s => s.line).filter(v => v != null)),
+      anchor: 'sharp-consensus', anchorBook: `${sharps.length} sharp books`,
+    };
+  }
+
+  // 3) All-book soft median (last resort — flagged so gating can discount it)
+  const all = perBook.map(x => selectFrom(x.outcomes)).filter(Boolean);
+  if (all.length) {
+    return {
+      sideOdds: medianOdds(all.map(s => s.sidePrice)),
+      sideRaw: median(all.map(s => s.sideRaw)),
+      overround: median(all.map(s => s.overround)),
+      closingLine: median(all.map(s => s.line).filter(v => v != null)),
+      anchor: 'soft-median', anchorBook: `${all.length}-book median`,
+    };
+  }
+  return null;
+}
+
+// ── Find matching game in an odds-feed array for a pick ──
 function findMatchingGame(pick, oddsData) {
   const matchup = (pick.matchup || '').toLowerCase();
   const pickText = (pick.pick || '').toLowerCase();
 
   for (const game of oddsData) {
-    const home = normalizeTeam(game.home_team);
-    const away = normalizeTeam(game.away_team);
-
-    // Check if both teams from the game appear in the matchup string
-    const homeInMatchup = teamsMatch(game.home_team, matchup) ||
-      matchup.includes(lastWord(game.home_team));
-    const awayInMatchup = teamsMatch(game.away_team, matchup) ||
-      matchup.includes(lastWord(game.away_team));
-
+    const homeInMatchup = teamsMatch(game.home_team, matchup) || matchup.includes(lastWord(game.home_team));
+    const awayInMatchup = teamsMatch(game.away_team, matchup) || matchup.includes(lastWord(game.away_team));
     if (homeInMatchup && awayInMatchup) return game;
 
-    // Also check if either team appears in the pick text itself
-    const homeInPick = teamsMatch(game.home_team, pickText) ||
-      pickText.includes(lastWord(game.home_team));
-    const awayInPick = teamsMatch(game.away_team, pickText) ||
-      pickText.includes(lastWord(game.away_team));
-
+    const homeInPick = teamsMatch(game.home_team, pickText) || pickText.includes(lastWord(game.home_team));
+    const awayInPick = teamsMatch(game.away_team, pickText) || pickText.includes(lastWord(game.away_team));
     if ((homeInMatchup || homeInPick) && (awayInMatchup || awayInPick)) return game;
   }
-
   return null;
 }
 
-// ── Fetch current odds from The Odds API ──
-async function fetchCurrentOdds(sports, dateISO) {
-  const apiKey = process.env.ODDS_API_KEY;
-  if (!apiKey) throw new Error('ODDS_API_KEY not configured');
-
-  const allOdds = {};
-
-  // Deduplicate sport keys
-  const sportKeys = [...new Set(sports.map(s => ODDS_SPORTS_MAP[s]).filter(Boolean))];
-
-  for (const sportKey of sportKeys) {
-    try {
-      const markets = sportKey.includes('icehockey')
-        ? 'h2h,spreads,totals'
-        : 'h2h,spreads,totals';
-
-      const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?regions=us&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
-      const resp = await fetch(url);
-
-      if (resp.ok) {
-        const data = await resp.json();
-        // Filter to today's games
-        const todayGames = data.filter(g => {
-          const gameDate = new Date(g.commence_time).toISOString().split('T')[0];
-          return gameDate === dateISO;
-        });
-        if (todayGames.length > 0) {
-          allOdds[sportKey] = todayGames;
-        }
-        console.log(`[track-clv] ${sportKey}: ${todayGames.length} games today (${data.length} total)`);
-      } else {
-        console.log(`[track-clv] ${sportKey}: API returned ${resp.status}`);
-      }
-    } catch (err) {
-      console.error(`[track-clv] Error fetching ${sportKey}:`, err.message);
-    }
-  }
-
-  return allOdds;
+// ── Odds API fetchers (live or historical-at-timestamp), with in-run caching ──
+function oddsBase(historical) {
+  return historical ? 'https://api.the-odds-api.com/v4/historical' : 'https://api.the-odds-api.com/v4';
 }
 
-// ── ESPN score fetching for settlement grading ──
+// Bulk full-game odds for a sport. atISO=null → current line; atISO set → historical snapshot.
+async function fetchBulk(sportKey, atISO) {
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey) { console.log('[track-clv] ODDS_API_KEY missing — skipping odds fetch'); return []; }
+  const dateParam = atISO ? `&date=${encodeURIComponent(atISO)}` : '';
+  const url = `${oddsBase(!!atISO)}/sports/${sportKey}/odds?regions=${ODDS_REGIONS}&markets=${FULL_MARKETS}&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) { console.log(`[track-clv] bulk ${sportKey} (${atISO || 'live'}): API ${resp.status}`); return []; }
+    const json = await resp.json();
+    return Array.isArray(json) ? json : (json.data || []); // historical wraps games in .data
+  } catch (e) {
+    console.log(`[track-clv] bulk ${sportKey} fetch failed: ${e.message}`);
+    return [];
+  }
+}
+
+// Per-event F5 odds for one MLB game. atISO=null → current; atISO set → historical at that time.
+async function fetchEventF5(sportKey, eventId, atISO) {
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey) return null;
+  const dateParam = atISO ? `&date=${encodeURIComponent(atISO)}` : '';
+  const url = `${oddsBase(!!atISO)}/sports/${sportKey}/events/${eventId}/odds?regions=${ODDS_REGIONS}&markets=${F5_MARKETS}&oddsFormat=american&apiKey=${apiKey}${dateParam}`;
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json && json.data ? json.data : json; // historical wraps event in .data; live is the event
+  } catch (e) { return null; }
+}
+
+// ── ESPN score fetching for settlement grading (unchanged) ──
 const ESPN_ENDPOINTS = {
   'NBA': 'basketball/nba', 'NHL': 'hockey/nhl', 'NCAAB': 'basketball/mens-college-basketball',
   'MLB': 'baseball/mlb', 'EPL': 'soccer/eng.1', 'La Liga': 'soccer/esp.1',
@@ -264,13 +386,13 @@ function findGameForGrading(pick, games) {
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   const pickStr = (pick.pick || '').trim();
-  const betType = (pick.betType || '').toLowerCase();
+  const betType = (pick.betType || pick.market || '').toLowerCase();
   const { awayScore, homeScore } = game;
-  const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
+  const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
 
-  if (betType === 'total' || /over|under/i.test(pickStr)) {
+  if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
     if (lineMatch) {
       const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]), total = awayScore + homeScore;
@@ -278,7 +400,7 @@ function gradePick(pick, game) {
       return (ou === 'over' && total > line) || (ou === 'under' && total < line) ? 'win' : 'loss';
     }
   }
-  if (betType === 'spread' || betType === 'puck line' || betType === 'run line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+  if (/spread|puck|run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
     const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
     if (spreadMatch && (pickedAway || pickedHome)) {
       const spread = parseFloat(spreadMatch[1]);
@@ -310,24 +432,40 @@ function calcProfit(result, units, oddsStr) {
   return Math.round(win);
 }
 
+// Aggregation bucket helper — keeps the {count, clvSum, beat} contract shape.
+function bump(map, key, clv, beat) {
+  if (!map[key]) map[key] = { count: 0, clvSum: 0, beat: 0 };
+  map[key].count++;
+  map[key].clvSum = +(map[key].clvSum + clv).toFixed(4);
+  if (beat) map[key].beat++;
+}
+function finalizeBuckets(map) {
+  for (const k of Object.keys(map)) {
+    const d = map[k];
+    d.beatRate = d.count ? +(d.beat / d.count).toFixed(4) : 0;
+    d.avgCLV = d.count ? +(d.clvSum / d.count).toFixed(4) : 0;
+  }
+  return map;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
   try {
-    // Determine date — default to today EST
+    // Determine date — default to today ET
     const params = event.queryStringParameters || {};
     const now = new Date();
     const estOffset = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const dateISO = params.date || estOffset.toISOString().split('T')[0];
+    const nowMs = Date.now();
 
     console.log(`[track-clv] Tracking CLV for date: ${dateISO}`);
 
     // Morning runs also settle YESTERDAY's picks — evening games finish after the last
-    // same-day run (7pm ET), so without this, night-game results never reach the blobs
-    // (blinding the drawdown detector and self-optimize). Fire-and-forget; the ?date=
-    // param on the child call prevents recursion.
+    // same-day run (7pm ET). This next-morning pass also captures yesterday's TRUE closes
+    // via the historical path (all of yesterday's games are now in the past).
     const etHour = estOffset.getHours();
     if (!params.date && etHour < 12) {
       const yest = new Date(estOffset); yest.setDate(yest.getDate() - 1);
@@ -351,9 +489,7 @@ exports.handler = async (event) => {
       if (token) {
         const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha/picks-${dateISO}`;
         const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (resp.ok) {
-          picksData = await resp.json();
-        }
+        if (resp.ok) picksData = await resp.json();
       }
     }
 
@@ -371,20 +507,8 @@ exports.handler = async (event) => {
 
     console.log(`[track-clv] Found ${picksData.picks.length} picks for ${dateISO}`);
 
-    // ── Step 2: Determine which sports to fetch ──
-    const sportsInPicks = [...new Set(picksData.picks.map(p => p.sport).filter(Boolean))];
-    console.log(`[track-clv] Sports in picks: ${sportsInPicks.join(', ')}`);
-
-    // ── Step 3: Fetch current odds ──
-    const currentOdds = await fetchCurrentOdds(sportsInPicks, dateISO);
-
-    // Flatten all games into one array for matching
-    const allGames = Object.values(currentOdds).flat();
-    console.log(`[track-clv] Total games with current odds: ${allGames.length}`);
-
-    // ── Step 3.5: Load existing CLV data (merge mode — don't overwrite already-tracked picks) ──
+    // ── Step 2: Load existing CLV data (merge mode — keep the capture closest to first pitch) ──
     let existingClv = null;
-    const existingTracked = new Set();
     try {
       const { getStore } = await import('@netlify/blobs');
       const store = getStore('edge-picks-alpha');
@@ -400,96 +524,150 @@ exports.handler = async (event) => {
         }
       } catch (e2) { /* ignore */ }
     }
-    if (existingClv && existingClv.picks) {
-      for (const p of existingClv.picks) {
-        if (p.clv !== null && p.clv !== undefined) existingTracked.add(p.pick);
-      }
-      console.log(`[track-clv] Existing CLV data found: ${existingTracked.size} already tracked`);
-    }
+    const findExisting = (pick) => (existingClv && Array.isArray(existingClv.picks))
+      ? existingClv.picks.find(p => p.pick === pick.pick && p.matchup === pick.matchup)
+      : null;
 
-    // ── Step 4: Calculate CLV for each pick ──
+    // ── Step 3: Per-pick close capture ──
+    // Caches keyed within this run so multiple picks on the same game/snapshot reuse one call.
+    const bulkCache = new Map();   // `${sportKey}|${atISO||'live'}` -> games[]
+    const eventCache = new Map();  // `${eventId}|${atISO||'live'}`  -> eventObj
+    const getBulk = async (sportKey, atISO) => {
+      const k = `${sportKey}|${atISO || 'live'}`;
+      if (!bulkCache.has(k)) bulkCache.set(k, await fetchBulk(sportKey, atISO));
+      return bulkCache.get(k);
+    };
+    const getEventF5 = async (sportKey, eventId, atISO) => {
+      const k = `${eventId}|${atISO || 'live'}`;
+      if (!eventCache.has(k)) eventCache.set(k, await fetchEventF5(sportKey, eventId, atISO));
+      return eventCache.get(k);
+    };
+
     const clvPicks = [];
 
     for (const pick of picksData.picks) {
-      // Skip picks already successfully tracked in a previous run
-      if (existingTracked.has(pick.pick)) {
-        const existing = existingClv.picks.find(p => p.pick === pick.pick);
-        if (existing) { clvPicks.push(existing); continue; }
-      }
+      const sideInfo = pickSideInfo(pick);
+      const sportKey = ODDS_SPORTS_MAP[pick.sport];
+      const prev = findExisting(pick);
 
-      const game = findMatchingGame(pick, allGames);
-
-      // Base record with sport/market fields for aggregation
       const baseRecord = {
         pick: pick.pick,
         matchup: pick.matchup,
         sport: pick.sport || null,
-        market: pick.betType || null,
+        betType: pick.betType || pick.market || null,
+        market: pick.betType || pick.market || null,
+        segment: segmentOf(pick),
+        source: sourceKey(pick),
         units: pick.units || null,
         pickTimeOdds: pick.odds || 'N/A',
+        betLine: parseBetLine(pick, sideInfo),
       };
 
-      if (!game) {
-        console.log(`[track-clv] No matching game found for: ${pick.matchup} — ${pick.pick}`);
-        clvPicks.push({
-          ...baseRecord,
-          closingOdds: null, pickTimeImplied: null, closingImplied: null,
-          clv: null, clvCents: null, beatClosing: null,
-          error: 'No matching game found in current odds data',
-        });
+      if (!sportKey) {
+        // Unmapped sport — carry forward any prior capture, else record untracked.
+        clvPicks.push(prev || { ...baseRecord, closingOdds: null, clv: null, clvCents: null, beatClosing: null, error: `Sport not mapped: ${pick.sport}` });
         continue;
       }
 
-      // Extract closing consensus odds for this pick's market
-      const closingOdds = extractConsensusOdds(game, pick.pick, pick.betType);
-      const pickTimeOddsStr = pick.odds || null;
+      // Resolve the game + decide live vs historical close.
+      let commenceISO = pick.commenceTime || null;
+      let commenceMs = commenceISO ? Date.parse(commenceISO) : NaN;
+      let gameObj = null;
+      let snapAt = null; // null → live current; ISO → historical snapshot
 
-      if (!closingOdds || !pickTimeOddsStr) {
-        console.log(`[track-clv] Missing odds data for: ${pick.pick} (closing: ${closingOdds}, pickTime: ${pickTimeOddsStr})`);
-        clvPicks.push({
-          ...baseRecord,
-          closingOdds: closingOdds ? String(closingOdds) : null,
-          pickTimeImplied: impliedProbability(pickTimeOddsStr),
-          closingImplied: closingOdds ? impliedProbability(String(closingOdds)) : null,
-          clv: null, clvCents: null, beatClosing: null,
-          error: closingOdds ? 'Missing pick-time odds' : 'Could not extract closing odds for this market',
-        });
-        continue;
+      // Upcoming (or commence unknown) → current line.
+      if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
+        const games = await getBulk(sportKey, null);
+        gameObj = findMatchingGame(pick, games);
+        if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
+      }
+      // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
+      if (!gameObj && Number.isFinite(commenceMs)) {
+        const games = await getBulk(sportKey, commenceISO);
+        gameObj = findMatchingGame(pick, games);
+        if (gameObj) snapAt = commenceISO;
       }
 
-      const pickTimeImpl = impliedProbability(pickTimeOddsStr);
-      const closingImpl = impliedProbability(String(closingOdds));
-
-      if (pickTimeImpl === null || closingImpl === null) {
-        clvPicks.push({
-          ...baseRecord,
-          closingOdds: String(closingOdds),
-          pickTimeImplied: pickTimeImpl, closingImplied: closingImpl,
-          clv: null, clvCents: null, beatClosing: null,
-          error: 'Could not parse odds to implied probability',
-        });
-        continue;
+      // F5 markets live only on the per-event endpoint.
+      let extractObj = gameObj;
+      if (gameObj && sideInfo.isF5 && gameObj.id) {
+        const ev = await getEventF5(sportKey, gameObj.id, snapAt);
+        if (ev) extractObj = ev;
       }
 
-      // CLV = closing implied prob - pick time implied prob
-      // Positive means closing line moved toward our side (we got better odds)
-      const clv = parseFloat((closingImpl - pickTimeImpl).toFixed(4));
-      const clvCents = parseFloat((clv * 100).toFixed(2));
-      const beatClosing = clv > 0;
+      const close = gameObj ? extractClose(extractObj, sideInfo, pick) : null;
 
-      clvPicks.push({
-        ...baseRecord,
-        closingOdds: String(closingOdds),
-        pickTimeImplied: parseFloat(pickTimeImpl.toFixed(4)),
-        closingImplied: parseFloat(closingImpl.toFixed(4)),
-        clv, clvCents, beatClosing,
-      });
+      // Capture provenance: how close to first pitch this snapshot was.
+      let captureMinsToCommence = null;
+      if (snapAt) captureMinsToCommence = 0; // historical snapshot is taken AT commence
+      else if (Number.isFinite(commenceMs)) captureMinsToCommence = Math.round((commenceMs - nowMs) / 60000);
+      // Lower captureScore = closer to (and ideally just before) first pitch.
+      const captureScore = captureMinsToCommence == null ? 5e5
+        : (captureMinsToCommence >= -PRE_PITCH_BUFFER_MIN ? Math.max(0, captureMinsToCommence) : 1e6 + Math.abs(captureMinsToCommence));
 
-      console.log(`[track-clv] ${pick.sport} ${pick.pick}: pickOdds=${pickTimeOddsStr} closingOdds=${closingOdds} CLV=${clvCents} cents`);
+      let rec;
+      if (!close || !close.overround) {
+        rec = {
+          ...baseRecord,
+          closingOdds: close ? String(close.sideOdds) : null,
+          closingLine: close ? (close.closingLine ?? null) : null,
+          anchor: close ? close.anchor : null,
+          anchorBook: close ? close.anchorBook : null,
+          pickTimeImplied: impliedProbability(pick.odds),
+          closingImplied: close && close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
+          pickTimeNoVig: null, closingNoVig: null, closingOverround: null, betDevigMethod: null,
+          clv: null, clvCents: null, clvRaw: null, beatClosing: null,
+          closeSnapshotAt: null, captureMinsToCommence, captureScore: 5e5,
+          error: gameObj ? 'Could not extract sharp closing price for this market' : 'No matching game found in odds feed',
+        };
+      } else {
+        const betRaw = impliedProbability(pick.odds);
+        const closingNoVig = +(close.sideRaw / close.overround).toFixed(4);
+        // De-vig the price we bet with the close market's two-sided overround as the
+        // entry-overround proxy (vig is ~stable intraday). This is a real two-sided
+        // de-vig, not a flat haircut — the haircut is the actual per-game/market overround.
+        const pickTimeNoVig = betRaw != null ? +(betRaw / close.overround).toFixed(4) : null;
+        const clv = (pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null;
+        const clvRaw = (betRaw != null && close.sideRaw != null) ? +(close.sideRaw - betRaw).toFixed(4) : null;
+
+        rec = {
+          ...baseRecord,
+          closingOdds: String(close.sideOdds),
+          closingLine: close.closingLine ?? null,
+          anchor: close.anchor,
+          anchorBook: close.anchorBook,
+          pickTimeImplied: betRaw != null ? +betRaw.toFixed(4) : null,
+          closingImplied: close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
+          pickTimeNoVig,
+          closingNoVig,
+          closingOverround: +close.overround.toFixed(4),
+          betDevigMethod: 'closing-overround',
+          // 'clv' is the TRUE two-sided no-vig CLV. Field name preserved for the generator's
+          // CLV-feedback loop and get-analytics, which both read pick.clv numerically.
+          clv,
+          clvCents: clv != null ? +(clv * 100).toFixed(2) : null,
+          clvRaw, // legacy raw-implied (closing − bet) difference, for transparency
+          beatClosing: clv != null ? clv > 0 : null,
+          closeSnapshotAt: snapAt || new Date().toISOString(),
+          captureMinsToCommence,
+          captureScore,
+        };
+        console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
+      }
+
+      // Merge: keep whichever capture is closer to first pitch (and ideally pre-pitch).
+      const prevScore = (prev && prev.clv != null && typeof prev.captureScore === 'number') ? prev.captureScore : Infinity;
+      if (rec.clv != null && rec.captureScore <= prevScore) {
+        clvPicks.push(rec);
+      } else if (prev && prev.clv != null) {
+        clvPicks.push({ ...prev, ...{ betType: rec.betType, market: rec.market, segment: rec.segment, source: rec.source } });
+      } else {
+        clvPicks.push(rec);
+      }
     }
 
-    // ── Step 4.5: Grade outcomes via ESPN final scores ──
-    // Fetch final scores for all sports in today's picks and determine win/loss/push.
+    // ── Step 4: Grade outcomes via ESPN final scores (unchanged contract) ──
+    const sportsInPicks = [...new Set(picksData.picks.map(p => p.sport).filter(Boolean))];
     const espnScoresBySport = {};
     await Promise.all(sportsInPicks.map(async sport => {
       espnScoresBySport[sport] = await fetchESPNScores(dateISO, sport);
@@ -510,23 +688,34 @@ exports.handler = async (event) => {
     }
     console.log(`[track-clv] Graded ${settledCount}/${clvPicks.length} picks via ESPN scores`);
 
-    // ── Step 5: Compute summary stats ──
-    const validClvPicks = clvPicks.filter(p => p.clv !== null);
+    // ── Step 5: Summary stats + beat-rate breakouts (per source / market / segment / cohort) ──
+    const validClvPicks = clvPicks.filter(p => p.clv !== null && p.clv !== undefined);
     const avgCLV = validClvPicks.length > 0
       ? parseFloat((validClvPicks.reduce((sum, p) => sum + p.clv, 0) / validClvPicks.length).toFixed(4))
       : 0;
     const picksBeatClosing = validClvPicks.filter(p => p.beatClosing).length;
 
-    // By sport/market aggregation
-    const bySport = {}, byMarket = {};
+    const bySport = {}, byMarket = {}, bySource = {}, byGameType = {}, byCohort = {};
+    const anchorBreakdown = {};
     for (const p of validClvPicks) {
       const s = p.sport || 'unknown';
       const m = p.market || 'unknown';
-      if (!bySport[s]) bySport[s] = { count: 0, clvSum: 0, beat: 0 };
-      bySport[s].count++; bySport[s].clvSum += p.clv; if (p.beatClosing) bySport[s].beat++;
-      if (!byMarket[m]) byMarket[m] = { count: 0, clvSum: 0, beat: 0 };
-      byMarket[m].count++; byMarket[m].clvSum += p.clv; if (p.beatClosing) byMarket[m].beat++;
+      const seg = p.segment || 'fullgame';
+      const src = p.source || 'full-game';
+      // Existing contract buckets ({count, clvSum, beat}) + added beatRate via finalizeBuckets.
+      bump(bySport, s, p.clv, p.beatClosing);
+      bump(byMarket, m, p.clv, p.beatClosing);
+      // New breakouts for later gating/weighting (additive; nothing reads these yet).
+      bump(bySource, src, p.clv, p.beatClosing);
+      bump(byGameType, seg, p.clv, p.beatClosing);
+      bump(byCohort, `${seg}|${s}|${m}`, p.clv, p.beatClosing);
+      const a = p.anchor || 'none';
+      anchorBreakdown[a] = (anchorBreakdown[a] || 0) + 1;
     }
+    finalizeBuckets(bySport); finalizeBuckets(byMarket); finalizeBuckets(bySource);
+    finalizeBuckets(byGameType); finalizeBuckets(byCohort);
+
+    const sharpAnchored = validClvPicks.filter(p => p.anchor && p.anchor !== 'soft-median' && p.anchor !== 'none').length;
 
     const settledResults = clvPicks.filter(p => p.result && p.result !== 'pending');
     const wins = settledResults.filter(p => p.result === 'win').length;
@@ -537,14 +726,19 @@ exports.handler = async (event) => {
     const clvData = {
       date: dateISO,
       capturedAt: new Date().toISOString(),
+      clvMethod: 'no-vig-sharp-anchor-v2',
       picks: clvPicks,
       avgCLV,
       avgCLVCents: parseFloat((avgCLV * 100).toFixed(2)),
       picksBeatClosing,
       totalTracked: validClvPicks.length,
       totalPicks: picksData.picks.length,
+      sharpAnchoredCount: sharpAnchored,
+      sharpAnchorPct: validClvPicks.length ? +((sharpAnchored / validClvPicks.length) * 100).toFixed(1) : 0,
+      anchorBreakdown,
       bySport, byMarket,
-      // Settlement results
+      bySource, byGameType, byCohort, // ADDED — full-game vs F5 + per-source/market/cohort beat-rate
+      // Settlement results (unchanged)
       wins, losses, pushes,
       totalProfit,
       settled: settledResults.length,
@@ -566,10 +760,7 @@ exports.handler = async (event) => {
           const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha/clv-${dateISO}`;
           await fetch(url, {
             method: 'PUT',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(clvData),
           });
           console.log('[track-clv] Stored CLV data via API fallback');
@@ -579,9 +770,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── Step 6.5: Write results back to picks blob (settlement) ──
-    // Update the stored pick objects with win/loss/push so the calibration system
-    // and CLV feedback loop can read settled results directly from the picks blob.
+    // ── Step 6.5: Write results back to picks blob (settlement) — unchanged ──
     const settledPicks = clvPicks.filter(p => p.result && p.result !== 'pending');
     if (settledPicks.length > 0) {
       try {
@@ -637,4 +826,12 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: true, message: `CLV tracking failed: ${err.message}` }),
     };
   }
+};
+
+// ── Test-only exports (offline validation; no effect on the deployed handler) ──
+// Mirrors the generator's `module.exports.extractF5FromEvent` pattern so the de-vig /
+// sharp-anchor / side-parsing logic can be unit-tested without network or blob writes.
+module.exports._test = {
+  impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
+  pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
 };

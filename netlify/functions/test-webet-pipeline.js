@@ -11,6 +11,23 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
+// De-dupe a deadline the model may already have baked into the claim
+// (claims often end "...by 7/31/26", so appending " By 7/31/26" doubled it).
+// Mirror of buildWebetString in generate-webet-content-background.js.
+function buildWebetString(claim, deadline) {
+  let c = (claim || '').trim();
+  const d = (deadline != null && String(deadline).trim()) || '?';
+  if (d !== '?') {
+    const esc = d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 1) drop a trailing "[by ]<deadline>" (also catches a bare trailing date)
+    c = c.replace(new RegExp(`[,\\s]+(?:by\\s+)?${esc}\\.?\\s*$`, 'i'), '');
+    // 2) drop any remaining explicit "by <deadline>" the model placed mid-claim
+    c = c.replace(new RegExp(`\\bby\\s+${esc}\\b[.,]?`, 'ig'), ' ');
+    c = c.replace(/\s{2,}/g, ' ').trim();
+  }
+  return `@AP WeBet $1 ${c} By ${d}`;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
@@ -140,7 +157,7 @@ Return ONLY a JSON array:
       push('Testing FULL pipeline: create bet + generate post + write blob...');
       const betId = crypto.randomBytes(3).toString('hex');
       const betUrl = `https://webetsocial.com/bet/${betId}`;
-      const webetString = `@AP WeBet $1 ${topics[0].claim} By ${topics[0].deadline || '?'}`;
+      const webetString = buildWebetString(topics[0].claim, topics[0].deadline);
 
       // Generate a simple truth social post via Grok
       let truthPost = `${topics[0].claim}\n\n@AP WeBet $1\n\n${betUrl}`;

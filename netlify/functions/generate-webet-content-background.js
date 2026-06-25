@@ -34,6 +34,25 @@ function stripGrokTags(str) {
     .replace(/\s{2,}/g, ' ').trim();
 }
 
+// ── Build the public WeBet string, de-duplicating a deadline the model may
+// already have baked into the claim. Grok is told to "frame a claim WITH a
+// deadline" (see discoverTopics), so claims often already end "...by 7/31/26";
+// blindly appending " By 7/31/26" rendered the date twice. Strip a trailing
+// "[by ]<deadline>" from the claim before appending the canonical " By <deadline>". ──
+function buildWebetString(claim, deadline) {
+  let c = (claim || '').trim();
+  const d = (deadline != null && String(deadline).trim()) || '?';
+  if (d !== '?') {
+    const esc = d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 1) drop a trailing "[by ]<deadline>" (also catches a bare trailing date)
+    c = c.replace(new RegExp(`[,\\s]+(?:by\\s+)?${esc}\\.?\\s*$`, 'i'), '');
+    // 2) drop any remaining explicit "by <deadline>" the model placed mid-claim
+    c = c.replace(new RegExp(`\\bby\\s+${esc}\\b[.,]?`, 'ig'), ' ');
+    c = c.replace(/\s{2,}/g, ' ').trim();
+  }
+  return `@AP WeBet $1 ${c} By ${d}`;
+}
+
 // ── Fetch with timeout ──
 async function fetchWithTimeout(url, opts, ms = 15000) {
   const controller = new AbortController();
@@ -342,7 +361,7 @@ CLAIM: ${topic.claim}
 SIDE A: ${topic.sideA}
 SIDE B: ${topic.sideB}
 ${marketContext ? `POLYMARKET: ${marketContext}` : ''}
-WEBET: @AP WeBet $1 ${topic.claim} By ${topic.deadline}
+WEBET: ${buildWebetString(topic.claim, topic.deadline)}
 
 The post will have these links appended automatically — do NOT include URLs in your text:
 - Blog article link
@@ -407,7 +426,7 @@ TOPIC: ${topic.topic}
 CLAIM: ${topic.claim}
 SIDES: ${topic.sideA} vs ${topic.sideB}
 ${marketContext ? `POLYMARKET: ${marketContext}` : ''}
-WEBET: @AP WeBet $1 ${topic.claim} By ${topic.deadline}
+WEBET: ${buildWebetString(topic.claim, topic.deadline)}
 BET: ${betUrl}
 ARTICLE: ${blogUrl}
 
@@ -523,7 +542,7 @@ exports.handler = async (event) => {
       // Create $1 bet
       const betId = generateBetId();
       const betUrl = `${SITE_URL}/bet/${betId}`;
-      const webetString = `@AP WeBet $1 ${topic.claim} By ${topic.deadline || '?'}`;
+      const webetString = buildWebetString(topic.claim, topic.deadline);
 
       // Stage 4: Multi-agent verification (parallel)
       const agents = await verifyWithAgents(topic, xaiKey, anthropicKey, openaiKey);

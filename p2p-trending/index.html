@@ -233,8 +233,8 @@ body.embed .side{display:none}
     <div class="ltabs" id="catTabs"></div>
     <div class="stabs">
       <div class="stab on">Active <span class="stab-cnt" id="activeCnt">0</span></div>
-      <div class="stab">Upcoming</div>
-      <div class="stab">Resolved</div>
+      <div class="stab" title="Coming soon" style="opacity:.4;cursor:not-allowed">Upcoming</div>
+      <div class="stab" title="Coming soon" style="opacity:.4;cursor:not-allowed">Resolved</div>
     </div>
     <div class="gg" id="grid">
       <div class="loading"><div class="spinner"></div><div class="ld-txt">Loading trending topics...</div></div>
@@ -259,7 +259,7 @@ body.embed .side{display:none}
 <script>
 if(window.self!==window.top)document.body.classList.add('embed');
 
-let posts=[],cat='all',balance=10000,selectedBet=null,modalStep='form';
+let posts=[],cat='all',balance=1000,selectedBet=null,modalStep='form';
 
 /* ── Static blog articles with generated bet data ── */
 const STATIC_ARTICLES=[
@@ -698,8 +698,8 @@ function renderBetForm(){
     </div>
     <div class="md-tabs">
       <button class="md-tab on">Market</button>
-      <button class="md-tab">Limit</button>
-      <button class="md-tab">Head2Head</button>
+      <button class="md-tab" disabled title="Coming soon" style="opacity:.4;cursor:not-allowed">Limit</button>
+      <button class="md-tab" disabled title="Coming soon" style="opacity:.4;cursor:not-allowed">Head2Head</button>
     </div>
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>

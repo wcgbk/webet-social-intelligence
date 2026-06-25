@@ -14,8 +14,17 @@ const path = require('path');
 const SITE_URL = 'https://webetsocial.com';
 
 exports.handler = async (event) => {
-  // Extract bet ID from path: /bet/XXXXX
-  const betId = (event.path || '').replace(/^\/bet\//, '').replace(/\/$/, '');
+  // Extract bet ID from the ORIGINAL request path: /bet/XXXXX
+  // netlify.toml rewrites /bet/* -> this function, so event.path is the function's
+  // own path (/.netlify/functions/serve-bet), NOT /bet/:id. event.rawUrl preserves
+  // the original URL; fall back to Netlify's original-path header, then event.path.
+  let reqPath = '';
+  try { if (event.rawUrl) reqPath = new URL(event.rawUrl).pathname; } catch (_) {}
+  if (!/^\/bet\//.test(reqPath)) {
+    const h = event.headers || {};
+    reqPath = String(h['x-nf-original-path'] || h['x-original-path'] || event.path || '').split('?')[0];
+  }
+  const betId = reqPath.replace(/^\/bet\//, '').replace(/\/$/, '');
 
   if (!betId || betId === 'index.html' || betId.includes('.')) {
     // Serve the static page as-is for /bet/ root

@@ -239,7 +239,7 @@ body.embed .side{display:none}
 <script>
 if(window.self!==window.top)document.body.classList.add('embed');
 
-let raw=null,league='all',status='upcoming',balance=10000,selectedBet=null,modalStep='form';
+let raw=null,league='all',status='upcoming',balance=1000,selectedBet=null,modalStep='form';
 
 /* ESPN team logos + primary colors */
 const TEAMS={
@@ -452,7 +452,12 @@ function renderSideLeagues(){
 }
 
 function setLg(l){league=l;renderLeagueTabs();renderSideLeagues();renderGames()}
-function setView(v){if(v==='live')setSt('live');else if(v==='home'){league='all';status='upcoming';renderLeagueTabs();renderSideLeagues();document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st==='upcoming'));renderGames()}}
+function setView(v){
+  document.querySelectorAll('#sidebar .side-item').forEach(i=>i.classList.toggle('on',(i.getAttribute('onclick')||'')==="setView('"+v+"')"));
+  if(v==='live')setSt('live');
+  else if(v==='favorites'){document.getElementById('gameGrid').innerHTML='<div class="empty">⭐ Favorites are coming soon — for now, every market lives on the Home board.</div>';}
+  else {league='all';status='upcoming';renderLeagueTabs();renderSideLeagues();document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st==='upcoming'));renderGames()}
+}
 function setSt(s){status=s;document.querySelectorAll('.stab').forEach(t=>t.classList.toggle('on',t.dataset.st===s));renderGames()}
 
 /* Render game grid — EVERY game on the slate, regardless of exchange liquidity */
@@ -460,7 +465,9 @@ function renderGames(){
   let games=allGames();
   if(league!=='all')games=games.filter(g=>g.league===league);
   const live=games.filter(g=>g.state==='in').length;
-  const upcoming=games.filter(g=>g.state==='pre').length;
+  // "Upcoming" tab shows every non-finished game (state!=='post'), so the badge must
+  // count the same set — otherwise an in-progress game leaks into the view but not the count.
+  const upcoming=games.filter(g=>g.state!=='post').length;
   document.getElementById('liveCnt').textContent=String(live);
   document.getElementById('upCnt').textContent=String(upcoming);
   if(status==='live')games=games.filter(g=>g.state==='in');
@@ -561,8 +568,8 @@ function renderBetForm(){
     </div>
     <div class="md-tabs">
       <button class="md-tab on">Market</button>
-      <button class="md-tab">Limit</button>
-      <button class="md-tab">Head2Head</button>
+      <button class="md-tab" disabled title="Coming soon" style="opacity:.4;cursor:not-allowed">Limit</button>
+      <button class="md-tab" disabled title="Coming soon" style="opacity:.4;cursor:not-allowed">Head2Head</button>
     </div>
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>

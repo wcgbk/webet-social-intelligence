@@ -465,9 +465,17 @@ exports.handler = async (event) => {
     const sharpResult = await sharpReview(picksData.picks, dateFormatted);
     console.log(`[verify] Sharp review: ${sharpResult.verdict} (${sharpResult.confidence || 0}% confidence)`);
 
-    // ── Step 3b: Act on sharp red flags — replace flagged picks ──
+    // ── Step 3b: Sharp handicapper review — INFORMATIONAL ONLY (2026-06-25) ──
+    // The sharp review is a non-deterministic LLM working from STALE training knowledge (no live data).
+    // It false-flagged a genuine +EV play (on narrative) AND a fine play (claimed "corrupted data" on a
+    // correct A's road game). So it must NOT modify, resize, or annotate the user-facing card. Its verdict
+    // is logged + posted to Discord for human monitoring only; real structural issues (same-game
+    // correlation) are handled deterministically upstream (canonical-key de-correlation in the merge).
     let sharpReplacements = [];
-    if (sharpResult.verdict === "red_flag" && sharpResult.pickFlags && sharpResult.pickFlags.length > 0) {
+    if (sharpResult.verdict === "red_flag") {
+      console.log(`[verify-sharp] (informational, no card change) red_flag: ${sharpResult.analysis || ""}`);
+    }
+    if (false && sharpResult.pickFlags && sharpResult.pickFlags.length > 0) { // DISABLED: advisory-only now
       const candidateTable = picksData.candidateTable || [];
       const currentPickNames = new Set(picksData.picks.map(p => p.pick));
       const sharpRejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
@@ -655,8 +663,9 @@ exports.handler = async (event) => {
         }
       }
 
-      // Fix grades
+      // Fix grades + strip any stale sharp-review annotations (sharp review is informational-only now)
       for (const p of picksData.picks) {
+        delete p.sharpConcern; delete p._dropRedFlag;
         const u = parseUnits(p.units);
         const correctGrade = unitsToRating(u);
         if (p.rating !== correctGrade) {
@@ -700,13 +709,12 @@ exports.handler = async (event) => {
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
               max_tokens: 1500,
-              system: [{ type: "text", text: `You write concise, confident sports betting pick narratives for WeBetAI. Each narrative should:
-- Be 3-4 sentences max
-- Start with a verified supporting fact (team form, matchup advantage, rest situation)
-- Argue IN FAVOR of the pick side — explain why it wins/covers
-- End with a value statement about why the odds offer edge
-- Never use technical jargon (no ORtg, DRtg, DVOA, ATS)
-- Never restate projections, lines, or numbers — the system displays those separately
+              system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+- Be 2-3 sentences max
+- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
+- Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
 - Always say "WeBetAI" not "the model"
 
 Also write a "whatLoses" field: one sentence describing the specific scenario that beats this pick.

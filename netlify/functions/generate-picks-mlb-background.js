@@ -684,10 +684,18 @@ function computeF5Edge(espnGame, teamStats, odds, f5Lines) {
   const homeSPEra = homeSP.blendedERA || homeSP.era || (awayStats.era || 4.0);
   const leagueAvgERA = 4.0;
 
-  // F5 projection: team's run rate * (league ERA / opposing SP ERA) * park factor * 0.55
+  // F5 projection: team run rate × opposing-SP run-suppression × park × 0.55.
+  // FIX 2026-06-25: the multiplier was INVERTED (leagueERA/oppERA) — facing an ACE (low ERA) *inflated*
+  // the opponent's projected runs (that's why F5 liked "Boston F5 vs Schlittler"). Correct direction is
+  // oppERA/leagueERA: a low-ERA starter suppresses the opposing offense (ratio <1). Regress the starter
+  // 50% to league + clamp; in F5 the starter throws the whole window, so allow a wider swing than full-game.
   const parkMult = parkData.pf / 100;
-  const awayF5Proj = awayRPG * (leagueAvgERA / Math.max(homeSPEra, 1.5)) * parkMult * 0.55;
-  const homeF5Proj = homeRPG * (leagueAvgERA / Math.max(awaySPEra, 1.5)) * parkMult * 0.55;
+  const LG = leagueAvgERA;
+  const regHomeSP = (Math.max(homeSPEra, 1.5) + LG) / 2; // away offense faces the HOME starter
+  const regAwaySP = (Math.max(awaySPEra, 1.5) + LG) / 2; // home offense faces the AWAY starter
+  const f5Clamp = (m) => Math.min(1.25, Math.max(0.75, m));
+  const awayF5Proj = awayRPG * f5Clamp(regHomeSP / LG) * parkMult * 0.55;
+  const homeF5Proj = homeRPG * f5Clamp(regAwaySP / LG) * parkMult * 0.55;
 
   // Temperature adjustment
   const temp = espnGame.temperature;
@@ -1056,6 +1064,25 @@ async function aggregateIntoMvp(f5Picks, dateISO) {
   }
 }
 
+// Canonical MLB game key — order- AND naming-format-independent (the F5 machine and the full-game
+// machine format team strings differently), so they de-correlate against each other reliably.
+const MLB_TEAM_IDS = [
+  ['diamondbacks','ARI'],['arizona','ARI'],['braves','ATL'],['atlanta','ATL'],['orioles','BAL'],['baltimore','BAL'],
+  ['red sox','BOS'],['cubs','CHC'],['white sox','CWS'],['reds','CIN'],['cincinnati','CIN'],['guardians','CLE'],['cleveland','CLE'],
+  ['rockies','COL'],['colorado','COL'],['tigers','DET'],['detroit','DET'],['astros','HOU'],['houston','HOU'],['royals','KC'],
+  ['angels','LAA'],['dodgers','LAD'],['marlins','MIA'],['miami','MIA'],['brewers','MIL'],['milwaukee','MIL'],['twins','MIN'],['minnesota','MIN'],
+  ['yankees','NYY'],['mets','NYM'],['athletics','OAK'],['oakland','OAK'],['phillies','PHI'],['philadelphia','PHI'],
+  ['pirates','PIT'],['pittsburgh','PIT'],['padres','SD'],['giants','SF'],['san francisco','SF'],['mariners','SEA'],['seattle','SEA'],
+  ['cardinals','STL'],['st. louis','STL'],['st louis','STL'],['rays','TB'],['tampa','TB'],['rangers','TEX'],
+  ['blue jays','TOR'],['toronto','TOR'],['nationals','WSH'],['washington','WSH'],
+];
+function mlbCanonGameKey(matchup) {
+  const s = String(matchup || '').toLowerCase();
+  const ids = new Set();
+  for (const [kw, id] of MLB_TEAM_IDS) if (s.includes(kw)) ids.add(id);
+  return ids.size >= 2 ? [...ids].sort().join('|') : s.trim(); // fall back to raw string if unresolved
+}
+
 // ── Feed top F5 picks into the ALPHA card (production). Same discipline as the MVP merge:
 // F5 EV is UNVALIDATED (can't backtest) → DISCOUNT x0.5 + CAP 2 slots + CAP 1u sizing until CLV
 // proves it. F5 picks are NORMALIZED to the alpha pick shape (winProbability/coverProb from modelProb,
@@ -1098,7 +1125,7 @@ async function aggregateIntoAlpha(f5Picks, dateISO) {
       const dir = s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'side';
       return `${p.sport}|${dir}`;
     };
-    const gameKey = (p) => String(p.matchup || '').toLowerCase().trim();
+    const gameKey = (p) => mlbCanonGameKey(p.matchup); // canonical — cross-machine (F5 vs full-game) safe
     const merged = [...fg, ...f5]
       .filter(p => (p._ev ?? 0) >= EV_FLOOR)
       .sort((a, b) => (b._ev ?? 0) - (a._ev ?? 0));

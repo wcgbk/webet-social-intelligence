@@ -50,6 +50,7 @@ NARRATIVE RULES (for coreReasoning field):
 - RECORDS & SPLITS: Cite team win-loss records and home/road records ONLY from the "Records (ESPN, authoritative)" line in the candidate table. Never state a record from web search or memory. If a record is not in the table, describe it qualitatively (e.g., "a strong home team") with no numbers.
 - NEVER lead with negative data about the team you're picking. Do NOT build a case for the opponent — build the case for the PICK SIDE covering.
 - NEVER use technical jargon like ORtg, DRtg, pace numbers, DVOA, ATS, or advanced stat abbreviations.
+- GROUNDING (critical): every specific you state — player names, injuries, venue, weather, records — must come from web search THIS run or the candidate-table data provided. If you cannot verify a specific, describe the edge generally (matchup/line value) instead. NEVER rely on prior-season memory (e.g. a team's former ballpark or last year's roster) — a wrong specific that contradicts the pick or slate breaks user trust.
 
 REJECTION RULES (for rejections array):
 - For each candidate NOT selected, provide a brief reason why.

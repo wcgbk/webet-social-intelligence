@@ -14,21 +14,39 @@ const path = require('path');
 const SITE_URL = 'https://webetsocial.com';
 
 exports.handler = async (event) => {
-  // Extract bet ID from the ORIGINAL request path: /bet/XXXXX
-  // netlify.toml rewrites /bet/* -> this function, so event.path is the function's
-  // own path (/.netlify/functions/serve-bet), NOT /bet/:id. event.rawUrl preserves
-  // the original URL; fall back to Netlify's original-path header, then event.path.
-  let reqPath = '';
-  try { if (event.rawUrl) reqPath = new URL(event.rawUrl).pathname; } catch (_) {}
-  if (!/^\/bet\//.test(reqPath)) {
-    const h = event.headers || {};
-    reqPath = String(h['x-nf-original-path'] || h['x-original-path'] || event.path || '').split('?')[0];
+  // Extract the bet ID from the ORIGINAL /bet/:id path. netlify.toml rewrites
+  // /bet/* -> this function, and depending on the Netlify runtime the original
+  // path can live in event.path, event.rawUrl, or a Netlify forwarding header —
+  // so scan every candidate for the /bet/<id> pattern rather than trusting one.
+  const h = event.headers || {};
+  const candidates = [
+    event.rawUrl,
+    event.path,
+    h['x-nf-original-path'], h['x-original-path'], h['x-forwarded-url'],
+    h['x-nf-request-url'], h['x-rewrite-url'], h['x-original-url'],
+  ];
+  let betId = '';
+  for (const c of candidates) {
+    if (!c) continue;
+    const m = String(c).match(/\/bet\/([a-zA-Z0-9]{3,})/);
+    if (m) { betId = m[1]; break; }
   }
-  const betId = reqPath.replace(/^\/bet\//, '').replace(/\/$/, '');
+  // Splat may also arrive as ?id= (if the redirect is ever changed to pass it).
+  if (!betId && event.queryStringParameters && event.queryStringParameters.id) {
+    betId = String(event.queryStringParameters.id).replace(/[^a-zA-Z0-9]/g, '');
+  }
 
   if (!betId || betId === 'index.html' || betId.includes('.')) {
-    // Serve the static page as-is for /bet/ root
-    return { statusCode: 404, body: 'Bet ID required' };
+    // Self-diagnostic: surface exactly what the runtime handed us so a missing
+    // bet ID is debuggable in one shot instead of a blank "Bet ID required".
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: 'bet_id_required',
+        _diag: { path: event.path || null, rawUrl: event.rawUrl || null, headerKeys: Object.keys(h) },
+      }),
+    };
   }
 
   try {

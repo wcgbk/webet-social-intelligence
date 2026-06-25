@@ -1106,7 +1106,8 @@ async function aggregateIntoAlpha(f5Picks, dateISO) {
     for (const p of merged) {
       const g = gameKey(p);
       if (g && card.some(x => gameKey(x) === g)) continue;               // one pick per game (de-correlation)
-      if (card.filter(x => dirKey(x) === dirKey(p)).length >= 2) continue; // ≤2 same-direction same-sport
+      const dk = dirKey(p);                                              // cap same-direction TOTALS (correlated run env);
+      if ((dk.endsWith('|over') || dk.endsWith('|under')) && card.filter(x => dirKey(x) === dk).length >= 2) continue; // sides/MLs are already 1-per-game, don't lump them
       const { _ev, _evRaw, ...clean } = p;
       if (clean.source === 'F5') {
         // Honesty: display the DISCOUNTED F5 EV (what we trust); keep raw in evRaw.
@@ -1135,7 +1136,8 @@ async function aggregateIntoAlpha(f5Picks, dateISO) {
     for (const p of card) {
       const g = gameKey(p);
       if (!g || seenG.has(g)) continue;
-      if (legPool.filter(l => dirKey(l) === dirKey(p)).length >= 2) continue;
+      const dkp = dirKey(p);
+      if ((dkp.endsWith('|over') || dkp.endsWith('|under')) && legPool.filter(l => dirKey(l) === dkp).length >= 2) continue;
       seenG.add(g); legPool.push(p);
       if (legPool.length >= 3) break;
     }

@@ -1601,24 +1601,36 @@ exports.handler = async (event) => {
 
     console.log(`[mlb-f5] Final: ${picks.length} picks, ${rejections.length} rejections`);
 
-    // Don't overwrite existing picks with empty results (e.g. if all games already started)
+    // Empty-result handling. Two very different reasons for 0 picks:
+    //   (a) every game already started — an empty re-run shouldn't wipe a card built earlier today;
+    //   (b) pre-game games existed but produced no F5 edge (now common + CORRECT after the sign fix,
+    //       e.g. an ace-heavy slate) — this is a LEGITIMATE no-play and MUST overwrite, otherwise the
+    //       /mlb store keeps showing STALE picks from an earlier run.
+    // Old behavior preserved existing picks in BOTH cases → stale F5 plays lingered on no-edge days.
+    // Fix: only preserve when ALL games have started; otherwise store the fresh no-plays state.
     if (picks.length === 0) {
-      try {
-        const token = process.env.NETLIFY_AUTH_TOKEN;
-        const siteId = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
-        if (token) {
-          const existingResp = await fetch(`https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-mlb/picks-${dateISO}`, {
-            headers: { "Authorization": `Bearer ${token}` },
-          });
-          if (existingResp.ok) {
-            const existing = await existingResp.json();
-            if (existing.picks && existing.picks.length > 0) {
-              console.log(`[mlb-f5] Existing ${existing.picks.length} picks found — skipping overwrite with empty result`);
-              return { statusCode: 200, body: JSON.stringify({ success: true, picks: 0, skipped: true, reason: 'Existing picks preserved', date: dateISO }) };
+      const anyPreGame = slateData.some(s => !s.started);
+      if (!anyPreGame) {
+        try {
+          const token = process.env.NETLIFY_AUTH_TOKEN;
+          const siteId = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+          if (token) {
+            const existingResp = await fetch(`https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-mlb/picks-${dateISO}`, {
+              headers: { "Authorization": `Bearer ${token}` },
+            });
+            if (existingResp.ok) {
+              const existing = await existingResp.json();
+              if (existing.picks && existing.picks.length > 0) {
+                console.log(`[mlb-f5] All games started + ${existing.picks.length} existing picks — preserving earlier card (not overwriting with empty)`);
+                return { statusCode: 200, body: JSON.stringify({ success: true, picks: 0, skipped: true, reason: 'All games started — earlier picks preserved', date: dateISO }) };
+              }
             }
           }
-        }
-      } catch (e) { /* proceed with save */ }
+        } catch (e) { /* proceed with save */ }
+      } else {
+        const pre = slateData.filter(s => !s.started).length;
+        console.log(`[mlb-f5] Legitimate no-play: ${pre} pre-game game(s) produced no qualifying F5 edge — storing no-plays state (clearing any stale picks)`);
+      }
     }
 
     await storeBlob(`picks-${dateISO}`, finalResult);

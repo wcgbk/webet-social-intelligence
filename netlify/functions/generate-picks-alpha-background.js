@@ -137,6 +137,28 @@ const MLB_PARK_FACTORS = {
   "PNC Park": 97, "Dodger Stadium": 97, "Citi Field": 96, "loanDepot park": 96, "Rogers Centre": 96,
   "T-Mobile Park": 95, "Tropicana Field": 95, "Oakland Coliseum": 95, "Oracle Park": 94, "Petco Park": 93,
 };
+
+// ── F5 (First-Five-Innings) market support — Stage 2 consolidation (2026-06-25) ──────────────
+// F5 used to be a SEPARATE function (generate-picks-mlb-background.js) bolted onto this card via a
+// post-run merge → timing chain, two-store drift, cross-machine de-corr bug. Now F5 is just-another
+// -market: fetched per-MLB-game in attachF5Odds() (F5 keys are ONLY on the per-event odds endpoint;
+// the bulk /odds call rejects them), hung on the consensus entry as gameData.f5, and emitted as
+// candidates in computeEdgeTable's MLB loop — same pool, same selection/sizing/de-corr/QA. Because
+// F5 now shares the full-game matchup format, same-game de-correlation is automatic (the old bug
+// was two machines formatting the matchup string differently). F5 is UNVALIDATED (forward-CLV only),
+// so it stays disciplined: ×0.5 EV discount (ranking + floor), max 2 slots, 1u sizing cap.
+const F5_ODDS_MARKETS = "h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings";
+const F5_EV_DISCOUNT = 0.5;  // halve the edge for ranking + the EV floor — unvalidated market
+const F5_MAX_SLOTS = 2;      // at most 2 F5 candidates may enter the pool per slate
+const F5_UNIT_CAP = 1.0;     // never stake an F5 leg above a validated full-game play
+// Calibration caps mirror the F5 function's COVER_PROB_CAPS — sharp models top out ~55-60% hit rate.
+const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Line": 0.57 };
+// US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
+const F5_US_BOOKS = new Set([
+  "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us", "espnbet", "betrivers", "fanatics",
+  "hardrockbet", "hardrockbet_oh", "ballybet", "fliff", "bet365", "pointsbetus", "wynnbet", "superbook",
+]);
+
 // Min edge thresholds: amount of point/goal/run disagreement before a candidate is evaluated.
 // MLB: 0.5 runs (matches beta — 0.2 was noise-level, below model resolution for run lines)
 // NHL: 0.4 goals (0.25 was too loose given puck line is fixed ±1.5)
@@ -453,6 +475,21 @@ function getCalibratedCoverProb(rawProb, sport, market, odds, pmSignal, noVigPri
   return calibrated;
 }
 
+// F5 probability calibration — port of the F5 function's getCalibratedProb. Distinct from the full-game
+// getCalibratedCoverProb above: F5 caps at ~0.60 (no full-game prior available) and blends HARDER toward
+// the market the more our model disagrees (larger gap = trust the line more). Unvalidated market discipline.
+function getF5CalibratedProb(rawProb, betType, odds) {
+  const cap = F5_COVER_PROB_CAPS[betType] || 0.60;
+  let capped = Math.min(rawProb, cap);
+  if (odds !== undefined && odds !== null) {
+    const marketImpl = impliedProb(odds);
+    const gap = Math.abs(capped - marketImpl);
+    const marketWeight = Math.min(0.35, 0.05 + gap * 2.0);
+    capped = capped * (1 - marketWeight) + marketImpl * marketWeight;
+  }
+  return capped;
+}
+
 function eloExpected(ratingA, ratingB) {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
@@ -643,6 +680,63 @@ async function fetchOdds(dateISO, snapshotTime = null) {
   }
   console.log(`[v10] Fetched odds for ${allOdds.length} sports`);
   return allOdds;
+}
+
+// ── Extract best F5 (first-five-innings) prices from a single per-event odds response ──
+// US-regulated books only (so every F5 line is placeable). Mirrors the F5 function's extractBestOdds
+// F5 branch. Returns null when the event carries no F5 markets at a US book.
+function extractF5FromEvent(ev) {
+  const f5ML = {}, f5RL = {}, f5Total = {};
+  const books = (ev?.bookmakers || []).filter(b => F5_US_BOOKS.has((b.key || "").toLowerCase()));
+  for (const bk of books) {
+    for (const mkt of (bk.markets || [])) {
+      if (mkt.key === "h2h_1st_5_innings") for (const o of (mkt.outcomes || [])) {
+        if (!f5ML[o.name] || o.price > f5ML[o.name].price) f5ML[o.name] = { price: o.price, book: bk.title };
+      }
+      if (mkt.key === "spreads_1st_5_innings") for (const o of (mkt.outcomes || [])) {
+        if (o.point === undefined) continue;
+        if (!f5RL[o.name] || o.price > f5RL[o.name].price) f5RL[o.name] = { price: o.price, point: o.point, book: bk.title };
+      }
+      if (mkt.key === "totals_1st_5_innings") for (const o of (mkt.outcomes || [])) {
+        if (o.point === undefined) continue;
+        if (!f5Total[o.name] || o.price > f5Total[o.name].price) f5Total[o.name] = { price: o.price, point: o.point, book: bk.title };
+      }
+    }
+  }
+  const has = Object.keys(f5ML).length || Object.keys(f5RL).length || Object.keys(f5Total).length;
+  return has ? { f5ML, f5RL, f5Total } : null;
+}
+
+// ── Fetch F5 lines per MLB game and hang them on the consensus entry as gameData.f5 ──
+// F5 markets are ONLY served by the Odds API PER-EVENT endpoint; the bulk /odds call (fetchOdds) rejects
+// them. We use the event ids from the bulk MLB response, fetch F5 per game, and attach to the SHARED
+// consensus entry object (same object the MLB loop reads via findConsensusLine) — zero key drift. In sim
+// mode (snapshotTime) we hit the historical per-event endpoint so F5 reflects the snapshot, not now.
+async function attachF5Odds(consensusLookup, oddsData, snapshotTime = null) {
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey || !oddsData || !consensusLookup) return 0;
+  const mlb = oddsData.find(s => s.sport === "baseball_mlb");
+  if (!mlb || !(mlb.games || []).length) return 0;
+  let attached = 0;
+  await Promise.all(mlb.games.map(async (game) => {
+    try {
+      if (!game.id) return;
+      const base = snapshotTime
+        ? `https://api.the-odds-api.com/v4/historical/sports/baseball_mlb/events/${game.id}/odds?regions=us,us2&markets=${F5_ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(snapshotTime)}`
+        : `https://api.the-odds-api.com/v4/sports/baseball_mlb/events/${game.id}/odds?regions=us,us2&markets=${F5_ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
+      const resp = await fetch(base, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) return;
+      const raw = await resp.json();
+      const ev = snapshotTime ? (raw.data || raw) : raw; // historical wraps the event in { data }
+      const f5 = extractF5FromEvent(ev);
+      if (!f5) return;
+      const entry = consensusLookup[(game.home_team || "").toLowerCase()]
+                 || consensusLookup[(game.away_team || "").toLowerCase()];
+      if (entry) { entry.f5 = f5; attached++; }
+    } catch (e) { /* per-game F5 is optional — a miss just means no F5 candidate for that game */ }
+  }));
+  console.log(`[v10-f5] Attached real F5 lines to ${attached}/${mlb.games.length} MLB game(s)`);
+  return attached;
 }
 
 // ── Fetch today's games + injuries from ESPN ──
@@ -2470,12 +2564,140 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   return { projHomeScore, projAwayScore, projSpread, projTotal, projMethod, homeWinProb, homeEloAdj, effectiveHomeAdv, poisoned };
 }
 
+// ── F5 (first-five-innings) candidates for one MLB game ──────────────────────────────────────
+// Port of the F5 function's computeF5Edge (mlb:669), reading from THIS generator's data sources and
+// emitting alpha-shape candidates (so they flow through the same selection/sizing/de-corr/QA). The
+// projection is sign-fixed: a low-ERA starter SUPPRESSES the opposing offense (oppERA/leagueERA, ratio
+// <1), regressed 50% to league + clamped — the inverted multiplier was why F5 used to love aces' opponents.
+// F5 is unvalidated → every emitted candidate carries the ×0.5 EV discount + 1u cap (finalizeF5).
+function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData, baseCandidate, drawdownActive, evFloor) {
+  const f5 = gameData.f5;
+  if (!f5) return [];
+  const home = game.home, away = game.away;
+  const homeStats = teamStats?.[home] || {};
+  const awayStats = teamStats?.[away] || {};
+
+  // Run rate (alpha stores baseball runs/game as pointsPerGame) + starter ERA (season, from scoreboard).
+  const awayRPG = (typeof awayStats.pointsPerGame === "number" ? awayStats.pointsPerGame : null) || 4.5;
+  const homeRPG = (typeof homeStats.pointsPerGame === "number" ? homeStats.pointsPerGame : null) || 4.5;
+  const awaySPEra = (pitcherData?.[away]?.era) || homeStats.era || 4.0; // away team's starter
+  const homeSPEra = (pitcherData?.[home]?.era) || awayStats.era || 4.0; // home team's starter
+  const LG = 4.0;
+  const parkMult = (MLB_PARK_FACTORS[game.venue] || 100) / 100;
+  const regHomeSP = (Math.max(homeSPEra, 1.5) + LG) / 2; // away offense faces the HOME starter
+  const regAwaySP = (Math.max(awaySPEra, 1.5) + LG) / 2; // home offense faces the AWAY starter
+  const f5Clamp = (m) => Math.min(1.25, Math.max(0.75, m));
+  let awayF5 = awayRPG * f5Clamp(regHomeSP / LG) * parkMult * 0.55;
+  let homeF5 = homeRPG * f5Clamp(regAwaySP / LG) * parkMult * 0.55;
+
+  // Temperature scales BOTH offenses (cancels in the margin → totals only).
+  const tempF = weatherData?.[`${away} @ ${home}`.toLowerCase()]?.tempF;
+  let tempMult = 1.0;
+  if (typeof tempF === "number") {
+    if (tempF < 50) tempMult = 0.92;
+    else if (tempF < 60) tempMult = 0.96;
+    else if (tempF > 90) tempMult = 1.08;
+    else if (tempF > 80) tempMult = 1.05;
+  }
+  awayF5 *= tempMult; homeF5 *= tempMult;
+  const projF5Total = awayF5 + homeF5;
+  const projF5Margin = homeF5 - awayF5; // positive = home favored
+  const MLB_STD = 2.5;
+
+  const out = [];
+  // Apply the F5 discipline (×0.5 EV discount for ranking/floor + 1u sizing cap) and emit alpha shape.
+  const finalizeF5 = (partial, coverProb, odds) => {
+    if (odds == null || odds < -250) return; // mirror full-game: never chase heavy juice
+    const kelly = computeKelly(coverProb, odds, drawdownActive);
+    const discEv = kelly.ev * F5_EV_DISCOUNT;
+    if (discEv <= evFloor) return; // discounted EV must clear the same floor as full-game
+    let units = Math.round(kelly.units * 2) / 2;
+    units = Math.max(0.5, Math.min(F5_UNIT_CAP, units));
+    out.push({
+      ...baseCandidate,
+      ...partial,
+      source: "F5",
+      odds,
+      coverProb: +coverProb.toFixed(4),
+      impliedProb: +impliedProb(odds).toFixed(4),
+      ev: +discEv.toFixed(4),
+      kellyFraction: +kelly.kellyFraction.toFixed(4),
+      kellyUnits: units,
+      decimalPayout: +kelly.decPayout.toFixed(3),
+      _rawKellyUnits: units,
+      kellyCalcStr: `[F5 ×${F5_EV_DISCOUNT} disc + ${F5_UNIT_CAP}u cap] coverProb=${coverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, rawEdge=${kelly.ev.toFixed(3)}, discEV=${discEv.toFixed(3)}, units=${units}u`,
+    });
+  };
+
+  // ── F5 Moneyline ── (real F5 ML lines only — no full-game proxy)
+  for (const [team, data] of Object.entries(f5.f5ML)) {
+    const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
+    const teamLabel = isHome ? home : away;
+    const rawMargin = isHome ? projF5Margin : -projF5Margin;
+    const discMargin = applyEdgeDiscount(Math.abs(rawMargin), MLB_STD) * Math.sign(rawMargin);
+    const rawProb = normalCDF(discMargin / MLB_STD);
+    const coverProb = getF5CalibratedProb(rawProb, "F5 Moneyline", data.price);
+    finalizeF5({
+      market: "F5 Moneyline",
+      side: `${teamLabel} F5 ML`,
+      modelProjection: +(rawProb * 100).toFixed(1),
+      consensusLine: +(impliedProb(data.price) * 100).toFixed(1),
+      edge: +((coverProb - impliedProb(data.price)) * 100).toFixed(1),
+      zScore: +(Math.abs(discMargin) / MLB_STD).toFixed(3),
+      book: data.book ? `${data.book} (F5)` : "F5",
+    }, coverProb, data.price);
+  }
+
+  // ── F5 Total ── (real F5 total line; emit whichever side clears the floor)
+  if (f5.f5Total.Over && f5.f5Total.Under) {
+    const line = f5.f5Total.Over.point;
+    const rawDiff = projF5Total - line;
+    const discDiff = applyEdgeDiscount(Math.abs(rawDiff), 2.0) * Math.sign(rawDiff);
+    const rawOver = normalCDF(discDiff / 2.0);
+    const z = +(Math.abs(discDiff) / 2.0).toFixed(3);
+    const edgeRuns = +Math.abs(projF5Total - line).toFixed(1);
+    finalizeF5({
+      market: "F5 Total", side: `F5 Over ${line}`,
+      modelProjection: +projF5Total.toFixed(1), consensusLine: line, edge: edgeRuns, zScore: z,
+      book: f5.f5Total.Over.book ? `${f5.f5Total.Over.book} (F5)` : "F5",
+    }, getF5CalibratedProb(rawOver, "F5 Total", f5.f5Total.Over.price), f5.f5Total.Over.price);
+    finalizeF5({
+      market: "F5 Total", side: `F5 Under ${line}`,
+      modelProjection: +projF5Total.toFixed(1), consensusLine: line, edge: edgeRuns, zScore: z,
+      book: f5.f5Total.Under.book ? `${f5.f5Total.Under.book} (F5)` : "F5",
+    }, getF5CalibratedProb(1 - rawOver, "F5 Total", f5.f5Total.Under.price), f5.f5Total.Under.price);
+  }
+
+  // ── F5 Run Line ── (rarely offered at US books; emit when present)
+  for (const [team, data] of Object.entries(f5.f5RL)) {
+    const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
+    const teamLabel = isHome ? home : away;
+    const spread = data.point;
+    const rawMargin = (isHome ? projF5Margin : -projF5Margin) + spread;
+    const discMargin = applyEdgeDiscount(Math.abs(rawMargin), MLB_STD) * Math.sign(rawMargin);
+    const rawProb = normalCDF(discMargin / MLB_STD);
+    const coverProb = getF5CalibratedProb(rawProb, "F5 Run Line", data.price);
+    finalizeF5({
+      market: "F5 Run Line",
+      side: `${teamLabel} ${spread > 0 ? "+" : ""}${spread} (F5)`,
+      modelProjection: +(isHome ? -projF5Margin : projF5Margin).toFixed(1),
+      consensusLine: spread,
+      edge: +Math.abs(rawMargin).toFixed(1),
+      zScore: +(Math.abs(discMargin) / MLB_STD).toFixed(3),
+      book: data.book ? `${data.book} (F5)` : "F5",
+    }, coverProb, data.price);
+  }
+
+  return out;
+}
+
 // evFloor: minimum Kelly EV a candidate must clear to be retained.
 // v10.3: default lowered 0.08 → 0.03. The old 8% bar was tuned to inflated probabilities;
 // with shrinkage calibration, +3% CALIBRATED EV is a genuinely sharp threshold (real edge after
 // vig, comparable to professional sides). The thin-slate fallback re-runs at 0.015 for Leans.
-function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.03) {
+function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.03, weatherData = null) {
   const candidates = [];
+  const f5Pool = []; // F5 candidates collected across MLB games; capped to F5_MAX_SLOTS before ranking
   if (!espnData) return candidates;
   // ratingsData can be null (stale/missing blob) — fall back to default Elo so ESPN stats still drive edges.
   // Root cause fix: previously bailing out here produced zero candidates, killing even the 3% lean tier.
@@ -2830,6 +3052,18 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           }
         }
       }
+
+      // ── F5 (first-five-innings) candidates ── MLB only; no-ops when gameData.f5 is absent.
+      // Collected into f5Pool, then capped to F5_MAX_SLOTS and merged just before the z-score ranking.
+      if (league.league === "MLB" && gameData && gameData.f5) {
+        try {
+          for (const fc of computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData, baseCandidate, drawdownActive, evFloor)) {
+            f5Pool.push(fc);
+          }
+        } catch (f5Err) {
+          console.error(`[v10-f5] F5 candidate generation failed for ${game.away} @ ${game.home}: ${f5Err.message}`);
+        }
+      }
     }
   }
 
@@ -3025,6 +3259,23 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
     }
   }
 
+  // ── FLUSH F5 POOL ── F5 candidates are already disciplined (×0.5 EV discount + 1u cap applied in
+  // computeF5Candidates) so they bypass the alt-line / situational / floor passes above and join the
+  // ranking directly. First collapse to the best F5 per game (a game often offers both an F5 ML and an
+  // F5 total — only one can survive same-game de-corr anyway), then keep the top F5_MAX_SLOTS by
+  // discounted EV across DIFFERENT games. Mirrors the old aggregateIntoAlpha cap+de-corr discipline.
+  if (f5Pool.length > 0) {
+    const bestPerGame = new Map();
+    for (const c of f5Pool) {
+      const k = (c.matchup || "").toLowerCase().trim();
+      const prev = bestPerGame.get(k);
+      if (!prev || (c.ev ?? 0) > (prev.ev ?? 0)) bestPerGame.set(k, c);
+    }
+    const f5Kept = [...bestPerGame.values()].sort((a, b) => (b.ev ?? 0) - (a.ev ?? 0)).slice(0, F5_MAX_SLOTS);
+    for (const c of f5Kept) candidates.push(c);
+    console.log(`[v10-f5] ${f5Pool.length} F5 candidate(s) over ${bestPerGame.size} game(s) cleared the discounted EV floor → kept top ${f5Kept.length} (cap ${F5_MAX_SLOTS}, 1/game): ${f5Kept.map(c => `${c.side} ${c.odds > 0 ? "+" : ""}${c.odds} (EV ${(c.ev * 100).toFixed(1)}%, ${c.kellyUnits}u)`).join(" | ")}`);
+  }
+
   // Sort by z-score descending (normalized edge across all sports)
   candidates.sort((a, b) => b.zScore - a.zScore);
 
@@ -3045,8 +3296,11 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
     prompt += `  ${c.matchup}\n`;
     prompt += `  PICK: ${c.side} | Odds: ${c.odds > 0 ? '+' : ''}${c.odds} | Edge: ${c.edge}${c.market === 'Total' ? (c.sport === 'NHL' ? ' goals' : c.sport === 'MLB' ? ' runs' : ' pts') : (c.sport === 'NHL' ? ' goals' : ' pts')}\n`;
+    if ((c.market || '').startsWith('F5')) {
+      prompt += `  ⚾ F5 = FIRST FIVE INNINGS — resolves on the score after 5 complete innings, decided by the STARTING PITCHERS (bullpens excluded). Ground the narrative in the starters, not the full game. Unvalidated market (capped 1u).\n`;
+    }
     // Explicit narrative direction so Claude knows which side to argue for
-    const isTotal = (c.market || '').toLowerCase() === 'total';
+    const isTotal = /total/.test((c.market || '').toLowerCase());
     if (isTotal) {
       const overUnder = (c.side || '').match(/(over|under)/i);
       prompt += `  👉 NARRATIVE DIRECTION: Write narrative supporting ${overUnder ? overUnder[1] : c.side} hitting\n`;
@@ -3187,8 +3441,9 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     const kellyRating = unitsToRating(finalUnits);
     const kellyConfidence = ratingToConfidence(kellyRating);
 
-    // Fix model edge display — use calibrated coverProb (not raw modelProjection)
-    const isML = c.market === "Moneyline";
+    // Fix model edge display — use calibrated coverProb (not raw modelProjection).
+    // F5 Moneyline displays like a moneyline (percent win prob), not a runs-based line.
+    const isML = c.market === "Moneyline" || c.market === "F5 Moneyline";
     const calibratedPct = (c.coverProb * 100).toFixed(1);
     const implPct = (impliedProb(c.odds) * 100).toFixed(1);
     const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
@@ -3219,8 +3474,9 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       clvExpectation: sel.clvExpectation || "",
       modelEdge: modelEdgeStr,
       commenceTime: c.commenceTime || "",
+      source: c.source || "full-game", // 'F5' flows from computeF5Candidates → distinguishes F5 legs on the card
     });
-    console.log(`[v10-beta] SELECTED rank ${c.rank}: ${c.side} (EV: ${(c.ev * 100).toFixed(1)}%, units: ${finalUnits}u, rating: ${kellyRating})`);
+    console.log(`[v10-beta] SELECTED rank ${c.rank}: ${c.side} (EV: ${(c.ev * 100).toFixed(1)}%, units: ${finalUnits}u, rating: ${kellyRating}${c.source === "F5" ? " [F5]" : ""})`);
   }
 
   // ── DAILY CAP: 4.0u maximum ──
@@ -3718,6 +3974,10 @@ exports.handler = async (event) => {
     fetchStartingPitchers(espnData),
   ]);
   const consensusLookup = buildConsensusLookup(oddsData);
+  // Fetch F5 (first-five-innings) lines per MLB game and hang them on the consensus entries so the MLB
+  // loop can emit F5 candidates into the same pool. Best-effort: a failure leaves the card F5-free, never
+  // blocks the run. (Sim mode passes snapshotTime → historical F5, matching the snapshot's lines.)
+  await attachF5Odds(consensusLookup, oddsData, snapshotTime);
 
   // Debug: log data availability
   console.log(`[v10] ESPN leagues: ${(espnData||[]).map(l => l.league + '(' + l.games.length + ')').join(', ')}`);
@@ -3729,7 +3989,7 @@ exports.handler = async (event) => {
   // ── PHASE 1B: COMPUTE ALL EDGES DETERMINISTICALLY ──
   let allCandidates;
   try {
-    allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData);
+    allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
     console.log(`[v10] Computed ${allCandidates.length} edge candidates across all sports`);
 
     // ── PHASE 1B2: CLV FEEDBACK ADJUSTMENT ──
@@ -4144,7 +4404,7 @@ exports.handler = async (event) => {
     // If nothing clears +3%, fall through to a true no-play — never force a -EV pick.
     let leanCandidates = [];
     try {
-      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015);
+      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
       leanCandidates.sort((a, b) => b.ev - a.ev);
       leanCandidates.forEach((c, i) => { c.rank = i + 1; });
     } catch (leanErr) {
@@ -4262,7 +4522,7 @@ exports.handler = async (event) => {
         }).filter(Boolean)
       );
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
@@ -4398,17 +4658,36 @@ exports.handler = async (event) => {
 // thinSlate:true so the results tracker scores them separately from the conviction
 // book. The parlay (if any) is also sized at the lean amount, per spec.
 const LEAN_UNITS = 0.25;
+// Keep at most one candidate per matchup (game): prefer a validated full-game pick over an F5 leg, then
+// higher EV. The deterministic fallback paths select top-N directly (no in-selection dedup), so without
+// this they could publish a full-game + F5 pick from the same game (positively correlated).
+function dedupeCandidatesByGame(cands) {
+  const byGame = new Map();
+  const score = (c) => (c.source === "F5" ? 0 : 1e6) + (typeof c.ev === "number" ? c.ev : 0);
+  for (const c of (cands || [])) {
+    const key = (c.matchup || "").toLowerCase().trim();
+    if (!key) continue;
+    const prev = byGame.get(key);
+    if (!prev || score(c) > score(prev)) byGame.set(key, c);
+  }
+  return [...byGame.values()].sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
+}
+
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = leanCandidates.slice(0, 3);
+  const top = dedupeCandidatesByGame(leanCandidates).slice(0, 3);
   const picks = top.map(c => {
+    const isF5 = (c.market || '').startsWith('F5');
+    const isF5Total = c.market === 'F5 Total';
     const isML = (c.market || '').toLowerCase() === 'moneyline';
     const isTotal = (c.market || '').toLowerCase() === 'total';
     const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
     const scoreUnit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
 
     let reasoning;
-    if (isML) {
+    if (isF5) {
+      reasoning = `Thin slate — no conviction edge today. WeBetAI's first-five-innings model finds a ${edgePctVal}% edge on ${c.side}, the starter-vs-starter window before the bullpens enter. Unvalidated market, so it's capped and sized down to a small Lean play.`;
+    } else if (isML) {
       reasoning = `Thin slate — no conviction edge today. WeBetAI's model gives ${c.side.replace(' ML', '')} a ${c.modelProjection}% win probability vs the market's implied ${c.consensusLine}% (a ${edgePctVal}% edge) — enough to clear the +3% lean threshold but below the conviction bar, so it's sized down to a small Lean play.`;
     } else if (isTotal) {
       reasoning = `Thin slate — no conviction edge today. WeBetAI projects ${c.modelProjection} total ${scoreUnit}s, ${c.edge} ${scoreUnit}s ${c.side.includes('Over') ? 'above' : 'below'} the line of ${c.consensusLine} (a ${edgePctVal}% edge). Clears the +3% lean threshold but below conviction — published as a small Lean play.`;
@@ -4416,7 +4695,9 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
       reasoning = `Thin slate — no conviction edge today. WeBetAI projects a ${Math.abs(c.modelProjection)}-${scoreUnit} margin vs the line of ${c.consensusLine} (a ${c.edge}-${scoreUnit}, ${edgePctVal}% edge). Clears the +3% lean threshold but below conviction — published as a small Lean play.`;
     }
 
-    const modelEdgeStr = isML
+    const modelEdgeStr = isF5
+      ? `F5 model edge: ${edgePctVal}% (first five innings, starter-driven)`
+      : isML
       ? `Model Win Prob: ${c.modelProjection}%, Implied: ${c.consensusLine}%, Edge: ${edgePctVal}%`
       : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${scoreUnit}s`;
 
@@ -4439,7 +4720,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
       kellyCalc: c.kellyCalcStr,
       winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
       coreReasoning: reasoning,
-      whatLoses: isML
+      whatLoses: isF5
+        ? (isF5Total
+            ? `The first five innings ${c.side.includes('Over') ? 'stay under' : 'go over'} the posted run total.`
+            : `${c.side.replace(/ F5 ML$/, '').replace(/ [+-][\d.]+ \(F5\)$/, '')} trails after five innings.`)
+        : isML
         ? `${c.side.replace(' ML', '')} loses the game outright.`
         : isTotal
         ? `The game ${c.side.includes('Over') ? 'stays under' : 'goes over'} the total.`
@@ -4448,6 +4733,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
       clvExpectation: "Lower-conviction edge; monitor for line movement.",
       modelEdge: modelEdgeStr,
       commenceTime: c.commenceTime || "",
+      source: c.source || "full-game",
     };
   });
 
@@ -4478,8 +4764,10 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now) {
   console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
-  const top3 = candidateTable.slice(0, 3);
+  const top3 = dedupeCandidatesByGame(candidateTable).slice(0, 3);
   const picks = top3.map(c => {
+    const isF5 = (c.market || '').startsWith('F5');
+    const isF5Total = c.market === 'F5 Total';
     const isML = (c.market || '').toLowerCase() === 'moneyline';
     const isTotal = (c.market || '').toLowerCase() === 'total';
     const zUnits = kellyToUnits(c.kellyUnits, false, c.coverProb);
@@ -4487,7 +4775,9 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
     // Build proper narrative based on bet type
     let reasoning;
-    if (isML) {
+    if (isF5) {
+      reasoning = `WeBetAI's first-five-innings model finds a ${edgePctVal}% edge on ${c.side} — the matchup decided over the first five innings by the starting pitchers, before either bullpen enters. Value at ${c.odds > 0 ? '+' : ''}${c.odds} on the starter-vs-starter spot; sized conservatively as an unvalidated market.`;
+    } else if (isML) {
       reasoning = `WeBetAI's model gives ${c.side.replace(' ML', '')} a ${c.modelProjection}% win probability vs the market's implied ${c.consensusLine}%, creating a ${edgePctVal}% edge. The ${c.homeTeam} and ${c.awayTeam} matchup presents value at ${c.odds > 0 ? '+' : ''}${c.odds} odds based on Elo ratings, recent form, and injury analysis.`;
     } else if (isTotal) {
       const unit = c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points';
@@ -4497,7 +4787,9 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
       reasoning = `WeBetAI projects a ${Math.abs(c.modelProjection)}-${unit} margin vs the line of ${c.consensusLine}, creating a ${c.edge}-${unit} edge. This ${edgePctVal}% edge reflects the gap between the model's power rating projection and the consensus sportsbook line.`;
     }
 
-    const modelEdgeStr = isML
+    const modelEdgeStr = isF5
+      ? `F5 model edge: ${edgePctVal}% (first five innings, starter-driven)`
+      : isML
       ? `Model Win Prob: ${c.modelProjection}%, Implied: ${c.consensusLine}%, Edge: ${edgePctVal}%`
       : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'pts'}`;
 
@@ -4519,7 +4811,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
       kellyCalc: c.kellyCalcStr,
       winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
       coreReasoning: reasoning,
-      whatLoses: isML
+      whatLoses: isF5
+        ? (isF5Total
+            ? `The first five innings ${c.side.includes('Over') ? 'stay under' : 'go over'} the posted run total.`
+            : `${c.side.replace(/ F5 ML$/, '').replace(/ [+-][\d.]+ \(F5\)$/, '')} trails after five innings.`)
+        : isML
         ? `${c.side.replace(' ML', '')} loses the game outright despite the model's edge.`
         : isTotal
         ? `The game ${c.side.includes('Over') ? 'stays under' : 'goes over'} the total due to unexpected pace or scoring changes.`
@@ -4528,6 +4824,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
       clvExpectation: "Line may move toward pick as sharp money arrives.",
       modelEdge: modelEdgeStr,
       commenceTime: c.commenceTime || "",
+      source: c.source || "full-game",
     };
   });
 
@@ -4628,3 +4925,10 @@ async function storePicks(dateISO, picksData) {
   //   console.error(`[v10-beta] Kalshi trigger failed: ${e.message}`);
   // }
 }
+
+// ── Testability hooks ── Netlify only invokes exports.handler at runtime; these extra exports let an
+// offline harness exercise the F5 candidate logic (projection math + discount/cap discipline) and the
+// per-event F5 odds extraction without any network. No effect on the deployed function's behavior.
+module.exports.computeF5Candidates = computeF5Candidates;
+module.exports.extractF5FromEvent = extractF5FromEvent;
+module.exports.getF5CalibratedProb = getF5CalibratedProb;

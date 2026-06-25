@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>WeBetAI - Social Intelligence | Bet</title>
+  <meta name="description" content="Pick a side. Send to a friend. The prediction market is the referee." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/bet" />
+  <meta property="og:title" content="WeBetAI — Place Your Bet" />
+  <meta property="og:description" content="Pick a side. Send to a friend. The prediction market is the referee." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Bet" />
+  <meta name="twitter:description" content="Pick a side. Send to a friend. The prediction market is the referee." />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+    :root {
+      --teal:         #006B6E;
+      --teal-hover:   #005558;
+      --teal-light:   #f0fafa;
+      --teal-lighter: #e4f4f4;
+      --teal-border:  #b8dede;
+      --olive:        #252B1A;
+      --white:        #ffffff;
+      --off-white:    #f8faf9;
+      --txt-h:        #252B1A;
+      --txt-b:        #4a4a4a;
+      --txt-m:        #787878;
+      --border:       #e8eae9;
+      --green:        #10b981;
+      --green-bg:     #ecfdf5;
+      --green-border: #a7f3d0;
+      --red:          #ef4444;
+      --red-bg:       #fef2f2;
+      --red-border:   #fecaca;
+      --amber:        #f59e0b;
+      --amber-bg:     #fffbeb;
+      --purple:       #6B21A8;
+      --purple-light: #f5f0ff;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--off-white); color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100dvh;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ─── Navbar ─── */
+    .navbar {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .navbar-inner {
+      max-width: 560px; margin: 0 auto; padding: 12px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+    .logo-text { font-size: 1.25rem; font-weight: 900; color: var(--olive); letter-spacing: -0.04em; }
+    .logo-tag {
+      font-size: 0.625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); padding: 2px 8px; border-radius: 9999px;
+      border: 1px solid var(--teal-border); text-transform: uppercase; letter-spacing: 0.05em;
+    }
+
+    /* ─── Loading State ─── */
+    .loading {
+      max-width: 560px; margin: 80px auto; text-align: center; padding: 0 20px;
+    }
+    .loading-spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--teal); border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { color: var(--txt-m); font-size: 0.875rem; }
+
+    /* ─── Error State ─── */
+    .error-state {
+      max-width: 560px; margin: 80px auto; text-align: center; padding: 0 20px;
+    }
+    .error-state h2 { font-size: 1.5rem; color: var(--txt-h); margin-bottom: 8px; }
+    .error-state p { color: var(--txt-m); margin-bottom: 24px; }
+    .error-state a {
+      display: inline-block; padding: 10px 24px; background: var(--teal);
+      color: white; border-radius: 10px; font-weight: 600; font-size: 0.875rem;
+    }
+
+    /* ─── Bet Card ─── */
+    .bet-container {
+      max-width: 560px; margin: 0 auto; padding: 24px 20px 40px;
+    }
+    .bet-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+    }
+
+    /* Category bar */
+    .category-bar {
+      padding: 10px 20px; font-size: 0.75rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--txt-m);
+    }
+    .category-emoji { font-size: 0.875rem; }
+    .status-badge {
+      margin-left: auto; padding: 2px 10px; border-radius: 9999px;
+      font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+    }
+    .status-open { background: var(--amber-bg); color: var(--amber); border: 1px solid #fde68a; }
+    .status-active { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .status-resolved { background: var(--purple-light); color: var(--purple); border: 1px solid #ddd0f5; }
+
+    /* Bet title */
+    .bet-title-section { padding: 24px 20px 16px; }
+    .bet-title {
+      font-size: 1.375rem; font-weight: 700; color: var(--txt-h);
+      line-height: 1.3; letter-spacing: -0.02em;
+    }
+    .bet-source {
+      margin-top: 8px; font-size: 0.8125rem; color: var(--txt-m);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .bet-source a { color: var(--teal); text-decoration: underline; }
+
+    /* Odds display */
+    .odds-bar { padding: 0 20px 20px; }
+    .odds-track {
+      height: 8px; border-radius: 4px; background: var(--red-bg);
+      overflow: hidden; display: flex;
+    }
+    .odds-yes {
+      height: 100%; background: var(--green); border-radius: 4px 0 0 4px;
+      transition: width 0.5s ease;
+    }
+    .odds-labels {
+      display: flex; justify-content: space-between; margin-top: 8px;
+      font-size: 0.8125rem; font-weight: 600;
+    }
+    .odds-yes-label { color: var(--green); }
+    .odds-no-label { color: var(--red); }
+
+    /* Side picker buttons */
+    .side-picker { padding: 0 20px 24px; display: flex; gap: 12px; }
+    .side-btn {
+      flex: 1; padding: 16px; border-radius: 12px; border: 2px solid var(--border);
+      background: var(--white); cursor: pointer; text-align: center;
+      transition: all 0.2s; position: relative;
+    }
+    .side-btn:hover { border-color: var(--teal-border); background: var(--teal-light); }
+    .side-btn:active { transform: scale(0.98); }
+    .side-btn.yes:hover { border-color: var(--green-border); background: var(--green-bg); }
+    .side-btn.no:hover { border-color: var(--red-border); background: var(--red-bg); }
+    .side-btn.selected.yes { border-color: var(--green); background: var(--green-bg); }
+    .side-btn.selected.no { border-color: var(--red); background: var(--red-bg); }
+    .side-label { font-size: 1.125rem; font-weight: 700; }
+    .side-btn.yes .side-label { color: var(--green); }
+    .side-btn.no .side-label { color: var(--red); }
+    .side-amount {
+      font-size: 0.8125rem; color: var(--txt-m); margin-top: 4px;
+    }
+    .side-count {
+      font-size: 0.6875rem; color: var(--txt-m); margin-top: 6px;
+    }
+
+    /* Handle input + confirm */
+    .accept-form {
+      padding: 0 20px 24px; display: none;
+    }
+    .accept-form.show { display: block; }
+    .form-row {
+      display: flex; gap: 8px; margin-bottom: 12px;
+    }
+    .form-input {
+      flex: 1; padding: 12px 14px; border: 1px solid var(--border);
+      border-radius: 10px; font-family: inherit; font-size: 0.875rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: var(--teal); }
+    .form-input::placeholder { color: #b0b0b0; }
+    .confirm-btn {
+      width: 100%; padding: 14px; border: none; border-radius: 12px;
+      background: var(--teal); color: white; font-family: inherit;
+      font-size: 0.9375rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .confirm-btn:hover { background: var(--teal-hover); }
+    .confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Bet string display */
+    .bet-string-section {
+      padding: 16px 20px; background: var(--off-white);
+      border-top: 1px solid var(--border);
+    }
+    .bet-string-label {
+      font-size: 0.6875rem; font-weight: 600; color: var(--txt-m);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .bet-string {
+      font-size: 0.9375rem; font-weight: 600; color: var(--txt-h);
+      line-height: 1.5; word-break: break-word;
+      padding: 12px 14px; background: var(--white); border: 1px solid var(--border);
+      border-radius: 10px; position: relative;
+    }
+
+    /* Pool & participants */
+    .bet-meta {
+      padding: 16px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 24px; font-size: 0.8125rem; color: var(--txt-m);
+    }
+    .bet-meta strong { color: var(--txt-h); }
+
+    /* Share actions */
+    .share-section {
+      padding: 16px 20px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .share-btn {
+      flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--white); cursor: pointer; text-align: center;
+      font-family: inherit; font-size: 0.8125rem; font-weight: 600;
+      color: var(--txt-b); transition: all 0.15s; display: flex;
+      align-items: center; justify-content: center; gap: 6px;
+    }
+    .share-btn:hover { background: var(--teal-light); border-color: var(--teal-border); color: var(--teal); }
+    .share-btn.primary {
+      background: var(--olive); color: white; border-color: var(--olive);
+    }
+    .share-btn.primary:hover { background: #1a1f12; }
+
+    /* Resolution banner */
+    .resolution-banner {
+      padding: 20px; text-align: center; display: none;
+    }
+    .resolution-banner.show { display: block; }
+    .resolution-banner.yes { background: var(--green-bg); border-bottom: 1px solid var(--green-border); }
+    .resolution-banner.no { background: var(--red-bg); border-bottom: 1px solid var(--red-border); }
+    .resolution-text { font-size: 1.125rem; font-weight: 700; }
+    .resolution-banner.yes .resolution-text { color: var(--green); }
+    .resolution-banner.no .resolution-text { color: var(--red); }
+    .resolution-source { font-size: 0.75rem; color: var(--txt-m); margin-top: 4px; }
+
+    /* Accepted confirmation */
+    .accepted-msg {
+      padding: 16px 20px; background: var(--green-bg); border-top: 1px solid var(--green-border);
+      text-align: center; font-size: 0.875rem; font-weight: 600; color: var(--green);
+      display: none;
+    }
+    .accepted-msg.show { display: block; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--olive); color: white; padding: 12px 24px;
+      border-radius: 12px; font-size: 0.875rem; font-weight: 600;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 480px) {
+      .bet-title { font-size: 1.125rem; }
+      .side-picker { gap: 8px; }
+      .share-section { flex-wrap: wrap; }
+      .share-btn { font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="logo">
+        <span class="logo-text">WeBetAI</span>
+        <span class="logo-tag">Bet</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <p>Loading bet...</p>
+  </div>
+
+  <!-- Error -->
+  <div class="error-state" id="error" style="display:none;">
+    <h2>Bet Not Found</h2>
+    <p>This bet may have expired or the link is incorrect.</p>
+    <a href="/feed/beta2">Browse Active Bets</a>
+  </div>
+
+  <!-- Bet Card -->
+  <div class="bet-container" id="betContainer" style="display:none;">
+    <div class="bet-card">
+
+      <!-- Resolution Banner (shown when resolved) -->
+      <div class="resolution-banner" id="resolutionBanner">
+        <div class="resolution-text" id="resolutionText"></div>
+        <div class="resolution-source" id="resolutionSource"></div>
+      </div>
+
+      <!-- Category Bar -->
+      <div class="category-bar">
+        <span class="category-emoji" id="catEmoji"></span>
+        <span id="catLabel"></span>
+        <span class="status-badge" id="statusBadge"></span>
+      </div>
+
+      <!-- Title -->
+      <div class="bet-title-section">
+        <h1 class="bet-title" id="betTitle"></h1>
+        <div class="bet-source" id="betSource"></div>
+      </div>
+
+      <!-- Odds Bar -->
+      <div class="odds-bar" id="oddsBar">
+        <div class="odds-track">
+          <div class="odds-yes" id="oddsYes" style="width:50%"></div>
+        </div>
+        <div class="odds-labels">
+          <span class="odds-yes-label" id="oddsYesLabel">YES 50%</span>
+          <span class="odds-no-label" id="oddsNoLabel">NO 50%</span>
+        </div>
+      </div>
+
+      <!-- Side Picker -->
+      <div class="side-picker" id="sidePicker">
+        <button class="side-btn yes" id="btnYes" onclick="pickSide('yes')">
+          <div class="side-label">YES</div>
+          <div class="side-amount" id="yesAmount"></div>
+          <div class="side-count" id="yesCount"></div>
+        </button>
+        <button class="side-btn no" id="btnNo" onclick="pickSide('no')">
+          <div class="side-label">NO</div>
+          <div class="side-amount" id="noAmount"></div>
+          <div class="side-count" id="noCount"></div>
+        </button>
+      </div>
+
+      <!-- Accept Form (appears after picking a side) -->
+      <div class="accept-form" id="acceptForm">
+        <div class="form-row">
+          <input class="form-input" id="handleInput" type="text" placeholder="Your @handle or name" />
+        </div>
+        <div class="form-row">
+          <input class="form-input" id="phoneInput" type="tel" placeholder="Phone for results (optional)" />
+        </div>
+        <button class="confirm-btn" id="confirmBtn" onclick="confirmBet()">
+          Lock In My Bet
+        </button>
+      </div>
+
+      <!-- Accepted Confirmation -->
+      <div class="accepted-msg" id="acceptedMsg">
+        You're in! We'll notify you when this bet resolves.
+      </div>
+
+      <!-- Bet String -->
+      <div class="bet-string-section">
+        <div class="bet-string-label">Bet String</div>
+        <div class="bet-string" id="betString" onclick="copyBetString()"></div>
+      </div>
+
+      <!-- Meta -->
+      <div class="bet-meta">
+        <div><strong id="poolAmount">$0</strong> in the pot</div>
+        <div><strong id="participantCount">0</strong> people betting</div>
+        <div>Started by <strong id="createdBy">@anonymous</strong></div>
+      </div>
+
+      <!-- Share Actions -->
+      <div class="share-section">
+        <button class="share-btn" onclick="copyBetString()">
+          <span>📋</span> Copy Bet String
+        </button>
+        <button class="share-btn" onclick="textFriend()">
+          <span>💬</span> Text a Friend
+        </button>
+        <button class="share-btn primary" onclick="copyLink()">
+          <span>🔗</span> Share Link
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API_BASE = '/api';
+    let currentBet = null;
+    let selectedSide = null;
+
+    // ── Extract bet ID from URL ──
+    function getBetId() {
+      const path = window.location.pathname;
+      const match = path.match(/\/bet\/([a-zA-Z0-9]+)/);
+      return match ? match[1] : null;
+    }
+
+    // ── Load bet data ──
+    async function loadBet() {
+      const betId = getBetId();
+      if (!betId) {
+        showError();
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/get-bet?id=${betId}`);
+        if (!res.ok) { showError(); return; }
+
+        const bet = await res.json();
+        if (bet.error) { showError(); return; }
+
+        currentBet = bet;
+        renderBet(bet);
+      } catch (err) {
+        console.error('Failed to load bet:', err);
+        showError();
+      }
+    }
+
+    // ── Render bet card ──
+    function renderBet(bet) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('betContainer').style.display = 'block';
+
+      // Category
+      const cat = bet.category || {};
+      document.getElementById('catEmoji').textContent = cat.emoji || '🎯';
+      document.getElementById('catLabel').textContent = cat.label || bet.category || 'Bet';
+
+      // Status badge
+      const badge = document.getElementById('statusBadge');
+      badge.textContent = bet.status.toUpperCase();
+      badge.className = 'status-badge status-' + bet.status;
+
+      // Title
+      document.getElementById('betTitle').textContent = bet.title;
+
+      // Source
+      const sourceEl = document.getElementById('betSource');
+      if (bet.platform && bet.marketUrl) {
+        sourceEl.innerHTML = `Source: <a href="${bet.marketUrl}" target="_blank">${bet.platform}</a> (live odds)`;
+      } else if (bet.platform) {
+        sourceEl.textContent = `Source: ${bet.platform}`;
+      } else {
+        sourceEl.textContent = 'Peer-to-peer bet';
+      }
+
+      // Odds
+      const yesOpt = (bet.options || []).find(o => o.name?.toLowerCase() === 'yes');
+      const noOpt = (bet.options || []).find(o => o.name?.toLowerCase() === 'no');
+      const yesProb = yesOpt?.probability || 50;
+      const noProb = noOpt?.probability || (100 - yesProb);
+
+      document.getElementById('oddsYes').style.width = yesProb + '%';
+      document.getElementById('oddsYesLabel').textContent = `YES ${yesProb}%`;
+      document.getElementById('oddsNoLabel').textContent = `NO ${noProb}%`;
+
+      if (!yesOpt && !noOpt) {
+        document.getElementById('oddsBar').style.display = 'none';
+      }
+
+      // Side buttons
+      const amount = bet.amount || 100;
+      document.getElementById('yesAmount').textContent = `$${amount}`;
+      document.getElementById('noAmount').textContent = `$${amount}`;
+      document.getElementById('yesCount').textContent =
+        bet.sides?.yes?.length ? `${bet.sides.yes.length} on this side` : '';
+      document.getElementById('noCount').textContent =
+        bet.sides?.no?.length ? `${bet.sides.no.length} on this side` : '';
+
+      // Bet string
+      document.getElementById('betString').textContent = bet.betString;
+
+      // Meta
+      document.getElementById('poolAmount').textContent = `$${bet.totalPool || 0}`;
+      document.getElementById('participantCount').textContent = bet.participantCount || 0;
+      document.getElementById('createdBy').textContent = bet.createdBy || '@anonymous';
+
+      // Resolution
+      if (bet.status === 'resolved' && bet.resolution) {
+        const banner = document.getElementById('resolutionBanner');
+        banner.classList.add('show', bet.resolution);
+        document.getElementById('resolutionText').textContent =
+          `Resolved: ${bet.resolution.toUpperCase()}`;
+        document.getElementById('resolutionSource').textContent =
+          bet.resolutionSource ? `via ${bet.resolutionSource}` : '';
+
+        // Hide side picker for resolved bets
+        document.getElementById('sidePicker').style.display = 'none';
+      }
+
+      // Update page title
+      document.title = `WeBetAI - Social Intelligence | ${bet.title}`;
+    }
+
+    // ── Pick a side ──
+    function pickSide(side) {
+      if (currentBet?.status === 'resolved') return;
+
+      selectedSide = side;
+
+      document.getElementById('btnYes').classList.toggle('selected', side === 'yes');
+      document.getElementById('btnNo').classList.toggle('selected', side === 'no');
+
+      const form = document.getElementById('acceptForm');
+      form.classList.add('show');
+
+      document.getElementById('confirmBtn').textContent =
+        `Lock In ${side.toUpperCase()} — $${currentBet?.amount || 100}`;
+
+      document.getElementById('handleInput').focus();
+    }
+
+    // ── Confirm bet ──
+    async function confirmBet() {
+      const handle = document.getElementById('handleInput').value.trim();
+      const phone = document.getElementById('phoneInput').value.trim();
+
+      if (!handle) {
+        document.getElementById('handleInput').style.borderColor = 'var(--red)';
+        return;
+      }
+
+      const btn = document.getElementById('confirmBtn');
+      btn.disabled = true;
+      btn.textContent = 'Locking in...';
+
+      try {
+        const res = await fetch(`${API_BASE}/accept-bet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            betId: currentBet.id,
+            side: selectedSide,
+            handle: handle.startsWith('@') ? handle : `@${handle}`,
+            phone: phone || null,
+            amount: currentBet.amount,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          // Show confirmation
+          document.getElementById('acceptForm').classList.remove('show');
+          document.getElementById('sidePicker').style.display = 'none';
+          document.getElementById('acceptedMsg').classList.add('show');
+
+          // Update counts
+          document.getElementById('poolAmount').textContent = `$${data.bet.totalPool}`;
+          document.getElementById('participantCount').textContent = data.bet.participantCount;
+
+          showToast(`You're in on ${selectedSide.toUpperCase()}!`);
+        } else {
+          showToast(data.error || 'Something went wrong');
+          btn.disabled = false;
+          btn.textContent = `Lock In ${selectedSide.toUpperCase()} — $${currentBet?.amount || 100}`;
+        }
+      } catch (err) {
+        showToast('Network error. Try again.');
+        btn.disabled = false;
+        btn.textContent = `Lock In ${selectedSide.toUpperCase()} — $${currentBet?.amount || 100}`;
+      }
+    }
+
+    // ── Share actions ──
+    function copyBetString() {
+      if (!currentBet) return;
+      const text = currentBet.betString + '\n' + window.location.href;
+      navigator.clipboard.writeText(text).then(() => showToast('Bet string copied!'));
+    }
+
+    function copyLink() {
+      navigator.clipboard.writeText(window.location.href).then(() => showToast('Link copied!'));
+    }
+
+    function textFriend() {
+      if (!currentBet) return;
+      const msg = encodeURIComponent(
+        `${currentBet.betString}\n\nYou in? Pick a side: ${window.location.href}`
+      );
+      window.open(`sms:?body=${msg}`, '_self');
+    }
+
+    // ── Utilities ──
+    function showError() {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    // ── Init ──
+    loadBet();
+  </script>
+</body>
+</html>

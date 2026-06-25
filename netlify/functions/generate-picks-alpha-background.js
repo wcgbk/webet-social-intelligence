@@ -402,6 +402,105 @@ function normalCDF(z) {
   return 0.5 * (1 + erf(z / Math.sqrt(2)));
 }
 
+// ── DISCRETE RUN-DISTRIBUTION for MLB (Stage-3) ──────────────────────────────────────────────
+// Replaces the symmetric normalCDF-on-a-point-estimate for MLB run lines, totals, and F5. Baseball
+// runs are discrete, right-skewed and OVERDISPERSED (var/mean ≈ 2.27 measured this season), so a
+// Normal mis-prices exactly the mass that decides RUN LINES (±1.5 — 26% of games are 1-run, the
+// single largest margin bucket) and the integer-push region of TOTALS (38% of total lines are
+// integer). We model each team's runs as an independent Negative Binomial (mean = projected runs,
+// variance = phi·mean) and read cover probs straight off the analytic convolution (total = sum) /
+// difference (margin). Deterministic, exact, ~30-term arrays (no Monte-Carlo: the two teams' runs
+// are empirically independent, corr ≈ −0.01). Validated hindsight-free
+// (~/webetai-backtest/mlb_distribution_validation.py): run-line ECE 0.100→0.059 vs normalCDF;
+// Poisson (phi=1) decisively rejected; phi=2.27 = the measured marginal overdispersion.
+const MLB_RUN_DISPERSION = 2.27; // var/mean for per-team MLB runs (season-measured)
+const MLB_RUN_KMAX = 28;         // run-distribution support 0..KMAX (P(team scores > 28) ≈ 0)
+
+// NegBinom PMF[0..K] with mean mu, variance phi·mu (phi>1). phi<=1 → Poisson limit.
+function nbRunPmf(mu, phi = MLB_RUN_DISPERSION, K = MLB_RUN_KMAX) {
+  mu = Math.max(0.4, mu);
+  const pmf = new Array(K + 1).fill(0);
+  if (phi <= 1.0001) {
+    pmf[0] = Math.exp(-mu);
+    for (let k = 1; k <= K; k++) pmf[k] = pmf[k - 1] * mu / k;
+    return pmf;
+  }
+  const r = mu / (phi - 1);   // size (need not be integer)
+  const p = r / (r + mu);     // mean = r(1-p)/p = mu
+  pmf[0] = Math.pow(p, r);
+  for (let k = 1; k <= K; k++) pmf[k] = pmf[k - 1] * (k - 1 + r) / k * (1 - p);
+  let s = 0; for (let k = 0; k <= K; k++) s += pmf[k];
+  for (let k = 0; k <= K; k++) pmf[k] /= s; // renormalize the truncated tail
+  return pmf;
+}
+
+// Build the margin/total tail helpers once per (lamHome, lamAway). All probs are exact.
+function mlbRunDist(lamHome, lamAway, phi = MLB_RUN_DISPERSION) {
+  const ph = nbRunPmf(lamHome, phi), pa = nbRunPmf(lamAway, phi);
+  const K = ph.length - 1;
+  const paSuf = new Array(K + 2).fill(0); // paSuf[j] = P(away >= j)
+  for (let j = K; j >= 0; j--) paSuf[j] = paSuf[j + 1] + pa[j];
+  const paPre = new Array(K + 1).fill(0); // paPre[j] = P(away <= j)
+  paPre[0] = pa[0];
+  for (let j = 1; j <= K; j++) paPre[j] = paPre[j - 1] + pa[j];
+  return {
+    marginGE(d) { // P(home - away >= d)
+      let acc = 0;
+      for (let i = 0; i <= K; i++) {
+        const amax = i - d; // away <= i - d
+        if (amax >= K) acc += ph[i];
+        else if (amax >= 0) acc += ph[i] * paPre[amax];
+      }
+      return acc;
+    },
+    totalGE(k) { // P(home + away >= k)
+      if (k <= 0) return 1;
+      let acc = 0;
+      for (let i = 0; i <= K; i++) {
+        const jmin = k - i;
+        if (jmin <= 0) acc += ph[i];
+        else if (jmin <= K) acc += ph[i] * paSuf[jmin];
+      }
+      return acc;
+    },
+    totalEQ(k) { // P(home + away == k)
+      let acc = 0;
+      const lo = Math.max(0, k - K), hi = Math.min(k, K);
+      for (let i = lo; i <= hi; i++) acc += ph[i] * pa[k - i];
+      return acc;
+    },
+    pTie() { let acc = 0; for (let i = 0; i <= K; i++) acc += ph[i] * pa[i]; return acc; }, // P(margin == 0)
+  };
+}
+
+// P(picked side covers run-line `spread`). Team covers iff teamMargin > -spread; spread is a
+// half-integer (±1.5/±2.5…) so the integer threshold is floor(-spread)+1. isHome selects the side.
+function runDistSpreadCover(dist, spread, isHome) {
+  return isHome ? dist.marginGE(Math.floor(-spread) + 1)
+                : 1 - dist.marginGE(Math.floor(spread) + 1);
+}
+
+// P(picked total side wins), push-adjusted: returns the win-given-decision prob so it slots into the
+// downstream coverProb (which treats 1-coverProb as loss). For X.5 lines there is no push and this
+// equals the raw Over/Under tail; for integer lines it nets out the push mass.
+function runDistTotalCover(dist, line, isOver) {
+  const pOver = dist.totalGE(Math.floor(line) + 1); // total >= floor(line)+1 ⇒ Over
+  const pPush = (Math.abs(line) % 1 === 0) ? dist.totalEQ(Math.round(line)) : 0;
+  const pUnder = Math.max(0, 1 - pOver - pPush);
+  const pWin = isOver ? pOver : pUnder;
+  const pLoss = isOver ? pUnder : pOver;
+  return pWin + pLoss > 0 ? pWin / (pWin + pLoss) : 0.5;
+}
+
+// P(team wins outright), ties (margin 0) excluded — for F5 moneyline where a tie pushes.
+function runDistWinProb(dist, isHome) {
+  const pHome = dist.marginGE(1);                 // home wins
+  const pAway = 1 - dist.marginGE(0);             // away wins (home-away <= -1)
+  const denom = pHome + pAway;
+  if (denom <= 0) return 0.5;
+  return isHome ? pHome / denom : pAway / denom;
+}
+
 // ── Sport-specific cover probability caps (research-calibrated) ──
 // Published research: elite ATS models sustain 55-57% over large samples.
 // Break-even at -110 is 52.4%. These caps enforce realistic model humility.
@@ -2602,7 +2701,11 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   awayF5 *= tempMult; homeF5 *= tempMult;
   const projF5Total = awayF5 + homeF5;
   const projF5Margin = homeF5 - awayF5; // positive = home favored
-  const MLB_STD = 2.5;
+  const MLB_STD = 2.5; // retained for the zScore display only — probabilities now come from the run-dist
+  // F5 prices off the SAME discrete run-distribution as the full game (most discrete/skewed market —
+  // first-5 run counts are low, so the symmetric normalCDF is worst here). Built from the per-team
+  // F5 run projections; F5 discipline (×0.5 EV + 1u cap in finalizeF5) is unchanged.
+  const f5dist = mlbRunDist(homeF5, awayF5);
 
   const out = [];
   // Apply the F5 discipline (×0.5 EV discount for ranking/floor + 1u sizing cap) and emit alpha shape.
@@ -2635,7 +2738,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
     const teamLabel = isHome ? home : away;
     const rawMargin = isHome ? projF5Margin : -projF5Margin;
     const discMargin = applyEdgeDiscount(Math.abs(rawMargin), MLB_STD) * Math.sign(rawMargin);
-    const rawProb = normalCDF(discMargin / MLB_STD);
+    const rawProb = runDistWinProb(f5dist, isHome); // P(team wins F5 | no tie) — F5 ML pushes on a tie
     const coverProb = getF5CalibratedProb(rawProb, "F5 Moneyline", data.price);
     finalizeF5({
       market: "F5 Moneyline",
@@ -2653,7 +2756,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
     const line = f5.f5Total.Over.point;
     const rawDiff = projF5Total - line;
     const discDiff = applyEdgeDiscount(Math.abs(rawDiff), 2.0) * Math.sign(rawDiff);
-    const rawOver = normalCDF(discDiff / 2.0);
+    const rawOver = runDistTotalCover(f5dist, line, true); // push-aware P(Over | decision); Under uses 1-rawOver
     const z = +(Math.abs(discDiff) / 2.0).toFixed(3);
     const edgeRuns = +Math.abs(projF5Total - line).toFixed(1);
     finalizeF5({
@@ -2675,7 +2778,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
     const spread = data.point;
     const rawMargin = (isHome ? projF5Margin : -projF5Margin) + spread;
     const discMargin = applyEdgeDiscount(Math.abs(rawMargin), MLB_STD) * Math.sign(rawMargin);
-    const rawProb = normalCDF(discMargin / MLB_STD);
+    const rawProb = runDistSpreadCover(f5dist, spread, isHome); // P(team covers F5 run line) from the run-dist
     const coverProb = getF5CalibratedProb(rawProb, "F5 Run Line", data.price);
     finalizeF5({
       market: "F5 Run Line",
@@ -2840,10 +2943,17 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         let betType = "Spread";
         if (league.league === "NHL") betType = "Puck Line";
         else if (league.league === "MLB") betType = "Run Line";
-        const rawCoverProb = normalCDF(spreadZ);
+        let rawCoverProb = normalCDF(spreadZ);
         // Determine pick side + odds first so we can pass odds to calibration
         const isHomeCover = proj.projSpread < actualSpread;
         const pickedSpread = isHomeCover ? actualSpread : gameData.awaySpread;
+        // MLB run line: price off the discrete run-distribution (overdispersed NegBinom) instead of the
+        // symmetric normalCDF — the ±1.5 mass (1-run games) is exactly what the Normal mis-prices. The
+        // result flows through the IDENTICAL getCalibratedCoverProb shrink → Kelly → caps below.
+        if (league.league === "MLB" && proj.projHomeScore > 0 && proj.projAwayScore > 0 && pickedSpread !== 0) {
+          const dist = mlbRunDist(proj.projHomeScore, proj.projAwayScore);
+          rawCoverProb = runDistSpreadCover(dist, pickedSpread, isHomeCover);
+        }
         // A 0-point spread has no push in playoff context — display as ML
         const sideLabel = pickedSpread === 0
           ? (isHomeCover ? `${game.home} ML` : `${game.away} ML`)
@@ -2920,8 +3030,14 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         const totalMinEdge = league.league === "NHL" ? 0.3 : league.league === "MLB" ? 0.4 : 2.5;
         if (totalEdge >= totalMinEdge && totalPlaceable) {
           const totalZ = totalEdge / totalStd;
-          const rawTotalCoverProb = normalCDF(totalZ);
+          let rawTotalCoverProb = normalCDF(totalZ);
           const isOver = proj.projTotal > actualTotal;
+          // MLB total: price off the discrete run-distribution (push-aware on integer lines, which the
+          // symmetric normalCDF ignores). Flows through the IDENTICAL calibration → Kelly → caps below.
+          if (league.league === "MLB" && proj.projHomeScore > 0 && proj.projAwayScore > 0) {
+            const dist = mlbRunDist(proj.projHomeScore, proj.projAwayScore);
+            rawTotalCoverProb = runDistTotalCover(dist, actualTotal, isOver);
+          }
           const totalSide = `${isOver ? "Over" : "Under"} ${actualTotal}`;
           // v10.3.1 line-shop: bet the best price for our side, but only if the integrity-checked
           // median is valid (null median = phantom/stale line → skip, never line-shop a bad number).
@@ -3117,7 +3233,11 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         const altSpreadEdge = Math.abs(c.modelProjection - alt.point);
         const discountedEdge = applyEdgeDiscount(altSpreadEdge, std);
         const altZ = discountedEdge / std;
-        const altRawProb = normalCDF(altZ);
+        let altRawProb = normalCDF(altZ);
+        // MLB alt run line: price off the run-dist so the alt-line optimizer is coherent with the main line.
+        if (c.sport === "MLB" && c.projHomeScore > 0 && c.projAwayScore > 0 && alt.point !== 0) {
+          altRawProb = runDistSpreadCover(mlbRunDist(c.projHomeScore, c.projAwayScore), alt.point, isHomeCover);
+        }
         const altCoverProb = getCalibratedCoverProb(altRawProb, c.sport, c.market, alt.odds);
         const altKelly = computeKelly(altCoverProb, alt.odds, drawdownActive);
 
@@ -3184,7 +3304,11 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         const altTotalStd = SPORT_TOTAL_STD_DEVS[c.sport] || std * 1.5; // v10.3: total σ for alt totals
         const discountedEdge = applyEdgeDiscount(altTotalEdge, altTotalStd);
         const altZ = discountedEdge / altTotalStd;
-        const altRawProb = normalCDF(altZ);
+        let altRawProb = normalCDF(altZ);
+        // MLB alt total: price off the run-dist (push-aware) to stay coherent with the main line.
+        if (c.sport === "MLB" && c.projHomeScore > 0 && c.projAwayScore > 0) {
+          altRawProb = runDistTotalCover(mlbRunDist(c.projHomeScore, c.projAwayScore), alt.point, isOver);
+        }
         const altCoverProb = getCalibratedCoverProb(altRawProb, c.sport, "Total", altOdds);
         const altKelly = computeKelly(altCoverProb, altOdds, drawdownActive);
 
@@ -4147,7 +4271,17 @@ exports.handler = async (event) => {
           // changed but coverProb/EV/units stayed stale, so weather had no effect on sizing.
           const wxTotalStd = SPORT_TOTAL_STD_DEVS[c.sport] || 18;
           const wxZ = newEdge / wxTotalStd;
-          const wxRaw = normalCDF(wxZ);
+          let wxRaw = normalCDF(wxZ);
+          // MLB: re-price the weather-shifted total off the run-dist (scale both team means to the new
+          // total) so weather stays coherent with the main run-dist pricing — otherwise this recompute
+          // would silently revert weather-affected MLB totals to normalCDF.
+          if (c.sport === "MLB" && c.projHomeScore > 0 && c.projAwayScore > 0) {
+            const base = c.projHomeScore + c.projAwayScore;
+            const scale = base > 0 ? c.modelProjection / base : 1;
+            const lamH = Math.max(0.4, c.projHomeScore * scale);
+            const lamA = Math.max(0.4, c.projAwayScore * scale);
+            wxRaw = runDistTotalCover(mlbRunDist(lamH, lamA), c.consensusLine, c.side.startsWith("Over"));
+          }
           const wxCal = getCalibratedCoverProb(wxRaw, c.sport, "Total", c.odds);
           const wxKelly = computeKelly(wxCal, c.odds, bankrollCtx.drawdownActive);
           c.zScore = +wxZ.toFixed(3);
@@ -4932,3 +5066,11 @@ async function storePicks(dateISO, picksData) {
 module.exports.computeF5Candidates = computeF5Candidates;
 module.exports.extractF5FromEvent = extractF5FromEvent;
 module.exports.getF5CalibratedProb = getF5CalibratedProb;
+// Stage-3 discrete run-distribution (NegBinom) hooks — let the offline harness exercise the new MLB
+// run-line/total/F5 pricing and the full computeEdgeTable wiring without any network.
+module.exports.computeEdgeTable = computeEdgeTable;
+module.exports.mlbRunDist = mlbRunDist;
+module.exports.nbRunPmf = nbRunPmf;
+module.exports.runDistSpreadCover = runDistSpreadCover;
+module.exports.runDistTotalCover = runDistTotalCover;
+module.exports.runDistWinProb = runDistWinProb;

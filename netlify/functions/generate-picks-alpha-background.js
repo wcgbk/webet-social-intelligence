@@ -457,6 +457,43 @@ function eloExpected(ratingA, ratingB) {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
+// ── Anthropic call with timeout + 429/5xx exponential backoff. Returns the Response, or null when
+// exhausted/timed-out. Callers MUST treat null as "LLM unavailable" and fall back to deterministic
+// output — a rate-limit or a hung request must NEVER block or kill a pick run. (Consolidation 2026-06-25.)
+async function anthropicFetch(body, { timeoutMs = 30000, retries = 3 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "prompt-caching-2024-07-31",
+        },
+        body: JSON.stringify(body),
+      });
+      clearTimeout(timer);
+      if ((resp.status === 429 || resp.status === 529 || resp.status >= 500) && attempt < retries) {
+        const waitMs = Math.min(8000, 800 * Math.pow(2, attempt));
+        console.log(`[llm] HTTP ${resp.status} — backoff ${waitMs}ms (attempt ${attempt + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      return resp;
+    } catch (e) {
+      clearTimeout(timer);
+      console.log(`[llm] fetch error/timeout (attempt ${attempt + 1}/${retries}): ${e.message}`);
+      if (attempt >= retries) return null;
+      await new Promise(r => setTimeout(r, Math.min(8000, 800 * Math.pow(2, attempt))));
+    }
+  }
+  return null;
+}
+
 function americanToDecimal(odds) {
   return odds > 0 ? 1 + (odds / 100) : 1 + (100 / Math.abs(odds));
 }
@@ -4142,31 +4179,20 @@ exports.handler = async (event) => {
   console.log(`[v10] Sending ${candidateTable.length} candidates to Claude (${userMessage.length} chars)`);
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        // Alpha improvement: prompt caching cuts Claude call cost ~80% and latency ~30%
-        "anthropic-beta": "prompt-caching-2024-07-31",
-      },
-      body: JSON.stringify({
-        // Alpha improvement: latest Sonnet (claude-sonnet-4-6 vs beta's claude-sonnet-4-20250514)
-        model: "claude-sonnet-4-6",
-        max_tokens: 8000,
-        temperature: 0.2,
-        // Alpha improvement: cache the large static system prompt (ephemeral, 5min TTL)
-        system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
-        messages: [{ role: "user", content: userMessage }],
-      }),
-    });
+    // Timeout+backoff wrapper: a rate-limited or hung Claude call returns null/!ok and routes to the
+    // deterministic fallback below instead of hanging the whole run. (web_search makes this slow → 90s.)
+    const response = await anthropicFetch({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8000,
+      temperature: 0.2,
+      system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
+      messages: [{ role: "user", content: userMessage }],
+    }, { timeoutMs: 90000, retries: 3 });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[v10] Claude API error ${response.status}: ${errText}`);
-      // Fallback: use top 3 candidates without narratives
+    if (!response || !response.ok) {
+      console.error(`[v10] Claude selection unavailable (${response ? 'HTTP ' + response.status : 'no response after retries'}) — deterministic top-candidates fallback`);
+      // Fallback: use top candidates without narratives — never block on the LLM
       return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now);
     }
 

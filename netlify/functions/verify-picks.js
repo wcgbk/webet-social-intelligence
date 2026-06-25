@@ -126,6 +126,7 @@ async function sharpReview(picks, dateFormatted) {
   try {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → skip
       headers: {
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
@@ -700,6 +701,7 @@ exports.handler = async (event) => {
         try {
           const resp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
+            signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → template
             headers: {
               "x-api-key": process.env.ANTHROPIC_API_KEY,
               "anthropic-version": "2023-06-01",

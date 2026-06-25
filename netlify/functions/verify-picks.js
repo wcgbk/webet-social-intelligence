@@ -537,6 +537,21 @@ exports.handler = async (event) => {
         }
       }
 
+      // Card floor: a red-flag drop must never publish an EMPTY card. If every surviving pick is
+      // flagged, retain the single highest-EV one (annotate the concern) rather than going dark.
+      // (Policy choice — flip to an honest "0-play day" if you'd rather show nothing than a flagged play.)
+      const evNum = (p) => { const r = (typeof p.evRaw === "number") ? p.evRaw : parseFloat(String(p.ev)) / 100; return isNaN(r) ? 0 : r; };
+      if (picksData.picks.filter(p => !p._dropRedFlag).length === 0) {
+        const flagged = picksData.picks.filter(p => p._dropRedFlag).sort((a, b) => evNum(b) - evNum(a));
+        if (flagged.length > 0) {
+          const keep = flagged[0];
+          delete keep._dropRedFlag;
+          keep.sharpConcern = "Retained as the card's only qualifying play; sharp review flagged a situational concern — size accordingly.";
+          sharpReplacements = sharpReplacements.filter(r => r.removed !== keep.pick); // it was NOT removed
+          console.log(`[verify-sharp] Card floor: retained "${keep.pick}" (highest EV) rather than publish an empty card`);
+        }
+      }
+
       // Physically remove any red-flagged picks that had no replacement (filter avoids index-shift)
       const droppedCount = picksData.picks.filter(p => p._dropRedFlag).length;
       if (droppedCount > 0) {
@@ -584,8 +599,10 @@ exports.handler = async (event) => {
         const dirCount = {};
         for (const p of picksData.picks) { const k = dirKey(p.sport, p.pick); dirCount[k] = (dirCount[k] || 0) + 1; }
 
+        // Exclude sides QA removed/flagged THIS run — never re-add a pick we just dropped.
+        const removedThisRun = new Set((allReplacements || []).map(r => r.removed));
         const pool = picksData.candidateTable
-          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && c.ev > 0.03)
+          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0.03)
           .sort((a, b) => b.ev - a.ev);
 
         let backfilled = 0;

@@ -1085,6 +1085,98 @@ async function fetchTeamStats(espnData) {
   return teamStats;
 }
 
+// ── Phase-4a sharp pitching λ: FIP from free MLB StatsAPI peripherals ──────────────
+// The run projection historically scaled the opposing offense by the starter's raw ERA, which is
+// noise-prone (defense/luck/sequencing). FIP = (13·HR + 3·(BB+HBP) − 2·K)/IP + cFIP isolates the
+// pitcher's own run-prevention skill. Hindsight-free backtest (2026-06-25,
+// ~/webetai-backtest/mlb_fip_validation.py) showed FIP is better-CALIBRATED than ERA on both run
+// lines and totals — but ONLY once the sample is stable (≥~30 IP); below that the FIP estimate is
+// itself noise and loses to ERA. So we gate on IP and fall back to ERA when thin. Downstream is
+// IDENTICAL (same regress→clamp[0.82,1.18] guardrail, same NegBinom run-distribution).
+const MLB_FIP_CONST  = 3.15; // cFIP — pins league FIP ≈ league ERA (~4.20); measured 3.16 in the 2026 backtest
+const MLB_FIP_MIN_IP = 30;   // require ≥30 season IP before trusting FIP over ERA (below it FIP is noise — backtest)
+const MLB_FIP_IP_REG = 50;   // IP-weighted regression strength toward league FIP
+const MLB_LG_RUN     = 4.20; // league run-environment anchor shared by the ERA and FIP regressions
+
+// StatsAPI reports innings as "6.1" = 6⅓ and "6.2" = 6⅔. Convert to a true float.
+function ipToFloat(s) {
+  if (s == null) return 0;
+  const v = parseFloat(String(s));
+  if (!isFinite(v)) return 0;
+  const whole = Math.trunc(v);
+  const frac = Math.round((v - whole) * 10);
+  return whole + (frac === 1 ? 1 / 3 : frac === 2 ? 2 / 3 : 0);
+}
+
+// Normalize MLB team names so StatsAPI `team.name` joins to ESPN displayName keys. 29/30 are identical
+// full names; "Athletics" (Oakland/Sacramento/Athletics) is the one franchise whose label drifts.
+function normTeamMLB(n) {
+  const s = String(n || '').toLowerCase().replace(/\./g, '').trim();
+  if (s.includes('athletics')) return 'athletics';
+  return s;
+}
+
+// Sharp run-suppression metric for a starting pitcher, expressed on the league run scale (~MLB_LG_RUN).
+// Prefers FIP (IP-weighted regression toward league FIP) once the sample is stable (≥MLB_FIP_MIN_IP IP);
+// otherwise the starter's ERA with the prior flat-50% shrink; otherwise the team ERA; otherwise null.
+// In the no-FIP case this is byte-identical to the prior v10.3.1 ERA path. Returns {metric, signal}|null.
+function mlbStarterRunMetric(pitcher, teamFallbackERA) {
+  if (pitcher && typeof pitcher.fip === 'number' && isFinite(pitcher.fip)
+      && typeof pitcher.fipIP === 'number' && pitcher.fipIP >= MLB_FIP_MIN_IP) {
+    const reg = (pitcher.fip * pitcher.fipIP + MLB_LG_RUN * MLB_FIP_IP_REG) / (pitcher.fipIP + MLB_FIP_IP_REG);
+    return { metric: reg, signal: 'FIP' };
+  }
+  const era = (pitcher && pitcher.era) || teamFallbackERA;
+  if (era) return { metric: (era + MLB_LG_RUN) / 2, signal: (pitcher && pitcher.era) ? 'ERA' : 'teamERA' };
+  return null;
+}
+
+// Fetch today's probable starters + their season peripherals → FIP, keyed by normalized team name.
+// EVERY fetch is wrapped in AbortSignal.timeout + try/catch so a slow/missing StatsAPI response can
+// NEVER hang or kill the run (Stage-1 lesson). Any failure simply omits that pitcher's FIP and the
+// projection transparently falls back to ERA. Returns { [normTeam]: { fip, ip, pitcher } }.
+async function fetchPitcherFIP(dateISO) {
+  const fipMap = {};
+  try {
+    const season = (dateISO && /^\d{4}/.test(dateISO)) ? dateISO.slice(0, 4) : String(new Date().getFullYear());
+    const schedURL = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateISO}&hydrate=probablePitcher`;
+    const sresp = await fetch(schedURL, { signal: AbortSignal.timeout(6000) });
+    if (!sresp.ok) { console.log(`[v10-fip] StatsAPI schedule HTTP ${sresp.status}`); return fipMap; }
+    const sdata = await sresp.json();
+    const games = (sdata && sdata.dates && sdata.dates[0] && sdata.dates[0].games) || [];
+    const probables = [];
+    for (const g of games) {
+      for (const side of ['home', 'away']) {
+        const t = g && g.teams && g.teams[side];
+        const pp = t && t.probablePitcher;
+        if (pp && pp.id && t.team && t.team.name) {
+          probables.push({ team: t.team.name, id: pp.id, name: pp.fullName || 'Unknown' });
+        }
+      }
+    }
+    await Promise.all(probables.map(async (p) => {
+      try {
+        const url = `https://statsapi.mlb.com/api/v1/people/${p.id}/stats?stats=season&group=pitching&season=${season}`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return;
+        const d = await r.json();
+        const st = d && d.stats && d.stats[0] && d.stats[0].splits && d.stats[0].splits[0] && d.stats[0].splits[0].stat;
+        if (!st) return;
+        const ip = ipToFloat(st.inningsPitched);
+        if (!ip || ip <= 0) return;
+        const hr = Number(st.homeRuns) || 0, bb = Number(st.baseOnBalls) || 0,
+              hbp = Number(st.hitByPitch) || 0, k = Number(st.strikeOuts) || 0;
+        const fip = (13 * hr + 3 * (bb + hbp) - 2 * k) / ip + MLB_FIP_CONST;
+        if (isFinite(fip)) fipMap[normTeamMLB(p.team)] = { fip, ip, pitcher: p.name };
+      } catch (e) { /* skip this pitcher; ERA fallback applies at projection time */ }
+    }));
+  } catch (e) {
+    console.log(`[v10-fip] StatsAPI FIP fetch failed: ${e.message}`);
+  }
+  console.log(`[v10-fip] Computed FIP for ${Object.keys(fipMap).length} probable starters`);
+  return fipMap;
+}
+
 // ── Fetch MLB starting pitchers from ESPN scoreboard ──
 async function fetchStartingPitchers(espnData) {
   const pitcherData = {};
@@ -2425,25 +2517,21 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   } else if (sportType === 'baseball' && homeStats?.sport === 'baseball' && awayStats?.sport === 'baseball'
              && homeStats.pointsPerGame && awayStats.pointsPerGame) {
     let effHome, effAway, method;
-    // Use starting pitcher ERA when available, fall back to team ERA
+    // Use starting pitcher signal when available (sharp FIP if the sample is stable, else ERA),
+    // falling back to team ERA, then to a runs-average. Phase-4a (2026-06-25): mlbStarterRunMetric
+    // prefers regressed FIP over raw ERA per the hindsight-free backtest; the no-FIP path is
+    // unchanged from v10.3.1 (regress 50% toward league, clamp the multiplier to ±18%).
     const homePitcher = pitcherData?.[game.home];
     const awayPitcher = pitcherData?.[game.away];
-    const homeERA = homePitcher?.era || homeStats.era;
-    const awayERA = awayPitcher?.era || awayStats.era;
-    if (homeERA && awayERA) {
-      // v10.3.1 (2026-06-17): regress starter ERA toward the league mean and clamp the
-      // run multiplier. The old `oppERA / 4.00` was unbounded and convex — a small-sample
-      // blow-up ERA (e.g. 10+) scaled the opposing offense ~2.5x, systematically inflating
-      // run totals and flooding the card with MLB Overs (the dominant losing-bet driver).
-      const LG_ERA = 4.20; // approx MLB run-scoring environment
-      const regAwayERA = (awayERA + LG_ERA) / 2; // 50% shrink toward league mean
-      const regHomeERA = (homeERA + LG_ERA) / 2;
+    const homeMetric = mlbStarterRunMetric(homePitcher, homeStats.era);
+    const awayMetric = mlbStarterRunMetric(awayPitcher, awayStats.era);
+    if (homeMetric && awayMetric) {
       const clampMult = (m) => Math.min(1.18, Math.max(0.82, m)); // one starter swings runs <=18%
-      effHome = homeStats.pointsPerGame * clampMult(regAwayERA / LG_ERA);
-      effAway = awayStats.pointsPerGame * clampMult(regHomeERA / LG_ERA);
-      method = homePitcher?.era || awayPitcher?.era
-        ? `mlb-starter-adjusted(${homePitcher?.pitcher || 'team'}/${awayPitcher?.pitcher || 'team'})`
-        : "mlb-pitching-adjusted";
+      // The home offense is suppressed by the AWAY starter (and vice-versa); both metrics are already
+      // regressed onto the league run scale, so divide by MLB_LG_RUN for the same multiplier as before.
+      effHome = homeStats.pointsPerGame * clampMult(awayMetric.metric / MLB_LG_RUN);
+      effAway = awayStats.pointsPerGame * clampMult(homeMetric.metric / MLB_LG_RUN);
+      method = `mlb-starter-adjusted(${homePitcher?.pitcher || 'team'}:${homeMetric.signal}/${awayPitcher?.pitcher || 'team'}:${awayMetric.signal})`;
     } else {
       effHome = (homeStats.pointsPerGame + (awayStats.pointsAllowed || homeStats.pointsPerGame)) / 2;
       effAway = (awayStats.pointsPerGame + (homeStats.pointsAllowed || awayStats.pointsPerGame)) / 2;
@@ -4092,11 +4180,23 @@ exports.handler = async (event) => {
     fetchSelfOptimizeParams(),
   ]);
 
-  const [teamStats, weatherData, pitcherData] = await Promise.all([
+  const [teamStats, weatherData, pitcherData, fipMap] = await Promise.all([
     fetchTeamStats(espnData),
     fetchWeatherForGames(espnData),
     fetchStartingPitchers(espnData),
+    fetchPitcherFIP(dateISO),
   ]);
+  // Phase-4a: merge sharp FIP onto the ESPN-keyed pitcherData (join via normalized team name).
+  // Best-effort — teams without a usable FIP keep ERA-only and project exactly as before. The ≥IP
+  // stability gate is applied later in mlbStarterRunMetric, so we attach whatever FIP we have here.
+  try {
+    let merged = 0;
+    for (const team of Object.keys(pitcherData)) {
+      const f = fipMap[normTeamMLB(team)];
+      if (f && typeof f.fip === 'number') { pitcherData[team].fip = f.fip; pitcherData[team].fipIP = f.ip; merged++; }
+    }
+    console.log(`[v10-fip] Merged FIP onto ${merged}/${Object.keys(pitcherData).length} pitcherData teams`);
+  } catch (e) { console.log(`[v10-fip] FIP merge skipped: ${e.message}`); }
   const consensusLookup = buildConsensusLookup(oddsData);
   // Fetch F5 (first-five-innings) lines per MLB game and hang them on the consensus entries so the MLB
   // loop can emit F5 candidates into the same pool. Best-effort: a failure leaves the card F5-free, never
@@ -5074,3 +5174,8 @@ module.exports.nbRunPmf = nbRunPmf;
 module.exports.runDistSpreadCover = runDistSpreadCover;
 module.exports.runDistTotalCover = runDistTotalCover;
 module.exports.runDistWinProb = runDistWinProb;
+// Phase-4a sharp pitching (FIP) hooks — offline-testable: the IP→float parser, the FIP/ERA run metric.
+module.exports.mlbStarterRunMetric = mlbStarterRunMetric;
+module.exports.ipToFloat = ipToFloat;
+module.exports.normTeamMLB = normTeamMLB;
+module.exports.fetchPitcherFIP = fetchPitcherFIP;

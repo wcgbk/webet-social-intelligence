@@ -6,10 +6,13 @@
 const { Resvg } = require("@resvg/resvg-js");
 const fs = require("fs");
 
+// Poppins — modern geometric sans, used across ALL sections for one cohesive look.
+// (DejaVu kept only as a last-resort fallback so text never renders as tofu.)
 const FONT_URLS = {
+  "Poppins-SemiBold.ttf": "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-SemiBold.ttf",
+  "Poppins-Bold.ttf": "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Bold.ttf",
+  "Poppins-Medium.ttf": "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Medium.ttf",
   "DejaVuSans.ttf": "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf",
-  "DejaVuSans-Bold.ttf": "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf",
-  "DejaVuSerif-Bold.ttf": "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSerif-Bold.ttf",
 };
 async function ensureFonts() {
   const out = [];
@@ -81,7 +84,7 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
   // Size headline to length — vertical card has room to go BIG.
   const len = String(headline).length;
   const fs2 = len <= 55 ? 80 : len <= 95 ? 68 : len <= 140 ? 58 : len <= 185 ? 50 : 43;
-  const cpl = len <= 55 ? 16 : len <= 95 ? 21 : len <= 140 ? 26 : len <= 185 ? 31 : 37;
+  const cpl = len <= 55 ? 14 : len <= 95 ? 18 : len <= 140 ? 23 : len <= 185 ? 28 : 33;
   const lines = wrapText(headline, cpl, 8);
   const lh = Math.round(fs2 * 1.3);
   const blockH = lines.length * lh;
@@ -89,7 +92,7 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
   const startY = Math.round(areaTop + ((areaBot - areaTop) - blockH) / 2) + Math.round(fs2 * 0.76);
 
   const headlineSvg = lines.map((ln, i) =>
-    `<text x="${PAD}" y="${startY + i * lh}" font-family="DejaVu Serif" font-size="${fs2}" font-weight="bold" fill="${TEAL_INK}">${esc(ln)}</text>`
+    `<text x="${PAD}" y="${startY + i * lh}" font-family="Poppins" font-size="${fs2}" font-weight="600" fill="${TEAL_INK}">${esc(ln)}</text>`
   ).join("");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -105,18 +108,18 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
 
   <!-- top teal band: wordmark + niche -->
   <rect x="0" y="0" width="${W}" height="${BAND}" fill="${TEAL}"/>
-  <text x="${PAD}" y="73" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${BANDTX}" letter-spacing="7">THE SIGNAL</text>
+  <text x="${PAD}" y="73" font-family="Poppins" font-size="25" font-weight="bold" fill="${BANDTX}" letter-spacing="7">THE SIGNAL</text>
   <circle cx="${W - PAD - (n.label.length * 14 + 22)}" cy="65" r="5" fill="${MINT}"/>
-  <text x="${W - PAD}" y="71" font-family="DejaVu Sans" font-size="17" font-weight="bold" fill="${MINT}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
+  <text x="${W - PAD}" y="71" font-family="Poppins" font-size="17" font-weight="bold" fill="${MINT}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
 
   ${headlineSvg}
 
-  ${(sub || "").trim() ? `<text x="${PAD}" y="${startY + lines.length * lh + 34}" font-family="DejaVu Sans" font-size="26" fill="${MUTE}">${esc((sub || "").trim().slice(0, 60))}</text>` : ""}
+  ${(sub || "").trim() ? `<text x="${PAD}" y="${startY + lines.length * lh + 34}" font-family="Poppins" font-size="26" fill="${MUTE}">${esc((sub || "").trim().slice(0, 60))}</text>` : ""}
 
   <!-- bottom teal band: centered footer -->
   <rect x="0" y="${H - BBAND}" width="${W}" height="${BBAND}" fill="${TEAL}"/>
-  <text x="${W / 2}" y="${H - BBAND / 2 - 6}" font-family="DejaVu Sans" font-size="23" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="1">Follow For Your Daily Dose Of Signal</text>
-  <text x="${W / 2}" y="${H - BBAND / 2 + 24}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="2">powered by Authentic Press</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 - 6}" font-family="Poppins" font-size="23" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="1">Follow For Your Daily Dose Of Signal</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 + 24}" font-family="Poppins" font-size="16" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="2">powered by Authentic Press</text>
 </svg>`;
 }
 
@@ -134,7 +137,7 @@ async function renderCard(opts) {
   const fontFiles = await ensureFonts();
   const svg = buildCardSVG({ ...opts });
   const resvg = new Resvg(svg, {
-    font: { loadSystemFonts: fontFiles.length === 0, fontFiles, defaultFontFamily: "DejaVu Sans" },
+    font: { loadSystemFonts: fontFiles.length === 0, fontFiles, defaultFontFamily: "Poppins" },
     fitTo: { mode: "width", value: 1200 },
   });
   return Buffer.from(resvg.render().asPng());

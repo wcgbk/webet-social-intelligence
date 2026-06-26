@@ -64,6 +64,11 @@ const SENSITIVE_RE = new RegExp(
     "ponzi", "scam", "fraudster", "pedo", "criminal",
   ].join("|"), "i"
 );
+// Put a blank line between each thought so the post breathes on X (skimmable whitespace).
+function spaceLines(s) {
+  return String(s || "").split(/\n+/).map((l) => l.trim()).filter(Boolean).join("\n\n");
+}
+
 function classifyRisk(parts, grokSensitivity) {
   const blob = parts.filter(Boolean).join(" \n ");
   if (String(grokSensitivity || "").toLowerCase().startsWith("sens")) return "sensitive";
@@ -208,6 +213,7 @@ async function runSlot(slotKey, opts = {}) {
 
   // 1) generate
   const gen = await slot.gen();
+  if (gen.text) gen.text = spaceLines(gen.text); // blank line between thoughts → X whitespace
   const risk = classifyRisk([gen.text, gen.topic, gen.card, ...(gen.tweets || [])], gen.sensitivity);
   const autopost = process.env.SIGNAL_AUTOPOST === "on" && slot.autopostEligible && risk === "low";
 

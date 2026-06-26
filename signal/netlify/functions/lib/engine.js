@@ -147,12 +147,12 @@ RULES:
 }
 
 // ── slot registry ────────────────────────────────────────────────────────────
-// image strategy (conversion best-practice): TEXT-FIRST posts reach further and feel native,
-// so takes/lessons/threads ship text-only with a strong hook. The QUOTE gets the branded card —
-// it's the one screenshot-worthy, shareable asset. Flip `image` to true to re-enable a card.
+// image strategy (research-backed): image posts get ~2.8x the engagement of text-only on X, so
+// single posts (take/lesson/quote) ship WITH the bright 4:5 card. Threads stay text-only — the
+// index tweet should pull people INTO the thread, not give them a card to screenshot and scroll past.
 const SLOTS = {
-  "morning-take": { gen: genMorningTake, autopostEligible: true, image: false },
-  "midday-lesson": { gen: genMiddayLesson, autopostEligible: true, image: false },
+  "morning-take": { gen: genMorningTake, autopostEligible: true, image: true },
+  "midday-lesson": { gen: genMiddayLesson, autopostEligible: true, image: true },
   "evening-quote": { gen: genEveningQuote, autopostEligible: true, image: true },
   "daily-thread": { gen: genDailyThread, autopostEligible: false, image: false }, // threads ALWAYS held
 };

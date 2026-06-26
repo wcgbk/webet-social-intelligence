@@ -6,47 +6,83 @@
 <meta name="robots" content="noindex,nofollow" />
 <title>The Signal — Review Queue</title>
 <style>
-  :root{ --bg:#0a1413; --card:#102826; --bd:rgba(191,154,69,.18); --tx:#eef1ea; --mut:#8fa39d; --gold:#bf9a45; --grn:#5fd08a; --red:#ef6a6a; --yel:#bf9a45; }
-  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  header{padding:22px 24px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  h1{font-size:18px;margin:0;letter-spacing:3px} .by{color:var(--mut);font-size:12px;letter-spacing:1px}
-  .rail{width:4px;height:26px;background:var(--gold);border-radius:2px}
-  main{max-width:860px;margin:0 auto;padding:24px}
-  .keybar{display:flex;gap:8px;margin-bottom:20px}
-  input,textarea{background:#11172a;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:9px 11px;font:inherit;width:100%}
-  textarea{min-height:84px;resize:vertical}
-  button{background:#1a2236;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
-  button:hover{border-color:var(--gold)}
-  .btn-go{background:var(--grn);color:#04140a;border:none} .btn-no{background:transparent;color:var(--red);border-color:rgba(239,106,106,.4)}
-  .btn-prev{background:var(--gold);color:#0a1413;border:none;white-space:nowrap} .btn-prev:hover{filter:brightness(1.08)}
-  .btn-go:hover{filter:brightness(1.08)}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:18px}
-  .meta{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .badge{font-size:11px;font-weight:700;letter-spacing:1.5px;padding:3px 9px;border-radius:20px;border:1px solid var(--bd)}
-  .slot{color:var(--gold);font-weight:700;text-transform:capitalize}
-  .risk-low{color:var(--grn);border-color:rgba(95,208,138,.4)} .risk-sensitive{color:var(--yel);border-color:rgba(233,185,73,.5)}
-  .tw{white-space:pre-wrap;background:#0a0f1c;border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin:8px 0}
-  .actions{display:flex;gap:8px;margin-top:12px}
-  img.preview{width:100%;border-radius:10px;border:1px solid var(--bd);margin:8px 0}
-  .muted{color:var(--mut)} .empty{color:var(--mut);text-align:center;padding:40px}
-  .sec{font-size:13px;letter-spacing:2px;color:var(--mut);margin:28px 0 10px;text-transform:uppercase}
-  .recent{opacity:.7;font-size:14px;padding:10px 14px;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center}
+  :root{
+    --teal:#15403d; --ink:#143b38; --bg:#f4f7f5; --paper:#ffffff; --line:rgba(21,64,61,.14);
+    --mut:#5f6f6a; --grn:#1f9d57; --red:#d9534f;
+    /* X light-mode tokens */
+    --x-text:#0f1419; --x-sub:#536471; --x-line:#cfd9de; --x-blue:#1d9bf0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:var(--teal);color:#f4f1e6;padding:18px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-bottom:4px solid #0f322f}
+  h1{font-size:18px;margin:0;letter-spacing:6px;font-weight:700}
+  .by{color:rgba(244,241,230,.7);font-size:12px;letter-spacing:2px}
+  main{max-width:1060px;margin:0 auto;padding:24px}
+  .keybar{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+  input{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 11px;font:inherit;min-width:200px}
+  button{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
+  button:hover{border-color:var(--teal)}
+  .btn-load{background:var(--teal);color:#f4f1e6;border:none}
+  .btn-prev{background:#fff;color:var(--teal);border:1px solid var(--teal);white-space:nowrap}
+  .btn-go{background:var(--grn);color:#fff;border:none} .btn-no{background:#fff;color:var(--red);border-color:rgba(217,83,79,.4)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-left:auto}
+  .seg button{border:none;border-radius:0;background:#fff;color:var(--mut);padding:8px 12px}
+  .seg button.on{background:var(--teal);color:#f4f1e6}
+  #pvstatus{font-size:13px;color:var(--mut);margin:0 0 18px;min-height:16px}
+  .draft{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:20px;box-shadow:0 8px 24px rgba(21,64,61,.05)}
+  .meta{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .badge{font-size:11px;font-weight:700;letter-spacing:1.2px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);text-transform:uppercase}
+  .slot{color:#fff;background:var(--teal);border-color:var(--teal)}
+  .risk-low{color:var(--grn);border-color:rgba(31,157,87,.4)} .risk-sensitive{color:#b9831f;border-color:rgba(185,131,31,.5)}
+  .actions{display:flex;gap:8px;margin-top:14px}
+  .empty{color:var(--mut);text-align:center;padding:40px}
+  .sec{font-size:13px;letter-spacing:2px;color:var(--mut);margin:30px 0 12px;text-transform:uppercase;font-weight:700}
+  .recent{font-size:14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center;background:#fff}
+
+  /* ── X tweet mock (light mode) ── */
+  .frames{display:flex;gap:22px;flex-wrap:wrap}
+  .frame{flex:0 0 auto}
+  .flabel{font-size:11px;letter-spacing:2px;color:var(--mut);font-weight:700;margin-bottom:8px}
+  .xwrap{background:#fff;border:1px solid var(--x-line);border-radius:16px;padding:12px 16px;color:var(--x-text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .xwrap.desk{width:598px;max-width:100%}
+  .xwrap.mob{width:380px;max-width:100%;border-radius:18px}
+  .tweet{display:flex;gap:12px}
+  .av{width:44px;height:44px;border-radius:50%;flex:0 0 44px;object-fit:cover;background:#e7ece8}
+  .body{flex:1;min-width:0}
+  .nameline{display:flex;align-items:center;gap:4px;flex-wrap:wrap;line-height:1.2}
+  .nm{font-weight:700;color:var(--x-text)} .hd{color:var(--x-sub)}
+  .vchk{flex:0 0 auto}
+  .text{color:var(--x-text);font-size:15px;line-height:1.35;white-space:pre-wrap;word-wrap:break-word;margin:2px 0 10px}
+  .xwrap.mob .text{font-size:15px}
+  .cardimg{width:100%;border-radius:16px;border:1px solid var(--x-line);display:block;margin-bottom:10px}
+  .acts{display:flex;justify-content:space-between;max-width:300px;color:var(--x-sub);margin-top:2px}
+  .aic{width:18px;height:18px;fill:var(--x-sub)}
+  /* thread connectors */
+  .trow{display:flex;gap:12px}
+  .avcol{position:relative;width:44px;flex:0 0 44px}
+  .trow.cont .avcol::after{content:"";position:absolute;left:21px;top:46px;bottom:-6px;width:2px;background:var(--x-line)}
+  .trow.cont{padding-bottom:6px}
 </style>
 </head>
 <body>
 <header>
-  <span class="rail"></span>
   <div><h1>THE SIGNAL</h1><div class="by">REVIEW QUEUE · @wcgbk</div></div>
   <div style="flex:1"></div>
-  <span id="who" class="muted" style="font-size:13px"></span>
+  <span id="who" class="by"></span>
 </header>
 <main>
   <div class="keybar">
     <input id="key" type="password" placeholder="REVIEW_KEY" />
-    <button onclick="saveKey()">Load</button>
+    <button class="btn-load" onclick="saveKey()">Load</button>
     <button class="btn-prev" onclick="previewAll()" title="Generate all 4 of today's posts (preview only — nothing is posted)">⟳ Preview today's 4 posts</button>
+    <span class="seg" id="seg">
+      <button data-m="both" class="on" onclick="setMode('both')">Both</button>
+      <button data-m="desk" onclick="setMode('desk')">🖥 Desktop</button>
+      <button data-m="mob" onclick="setMode('mob')">📱 Mobile</button>
+    </span>
   </div>
-  <div id="pvstatus" class="muted" style="font-size:13px;margin:-8px 0 18px"></div>
+  <div id="pvstatus"></div>
   <div class="sec">Pending approval</div>
   <div id="pending"><div class="empty">Enter your key and load.</div></div>
   <div class="sec">Recent</div>
@@ -55,10 +91,22 @@
 <script>
 const $ = (s)=>document.querySelector(s);
 let KEY = localStorage.getItem("signal_key") || "";
+let MODE = localStorage.getItem("signal_mode") || "both";
 if(KEY) $("#key").value = KEY;
+
+const AV = "https://pbs.twimg.com/profile_images/941755116540981248/tXl9Co5C_400x400.jpg";
+const VCHECK = `<svg class="vchk" viewBox="0 0 22 22" width="18" height="18"><path fill="#1d9bf0" d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44C11.866 1.62 11.234 1.418 10.59 1.4c-.646.017-1.273.213-1.813.568-.54.355-.969.854-1.24 1.44-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245C1.41 9.726 1.21 10.354 1.19 11c.02.646.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.689.878.633.132 1.292.082 1.901-.14.272.586.7 1.084 1.24 1.44.541.354 1.198.55 1.844.568.646-.018 1.273-.213 1.813-.567.54-.356.97-.853 1.244-1.44.608.223 1.264.27 1.897.14.634-.13 1.218-.434 1.688-.878.445-.47.749-1.054.879-1.688.13-.633.08-1.29-.144-1.896.586-.274 1.084-.705 1.44-1.245.354-.54.551-1.17.569-1.817zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></svg>`;
+const ACTS = `<div class="acts">
+  <svg class="aic" viewBox="0 0 24 24"><path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01z"/></svg>
+  <svg class="aic" viewBox="0 0 24 24"><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/></svg>
+  <svg class="aic" viewBox="0 0 24 24"><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.667-1.84-2.908-1.91z"/></svg>
+  <svg class="aic" viewBox="0 0 24 24"><path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z"/></svg>
+</div>`;
 
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function saveKey(){ KEY = $("#key").value.trim(); localStorage.setItem("signal_key", KEY); load(); }
+function setMode(m){ MODE=m; localStorage.setItem("signal_mode",m); document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.m===m)); applyMode(); }
+function applyMode(){ document.querySelectorAll('.frame.desk').forEach(e=>e.style.display=(MODE==='mob'?'none':'')); document.querySelectorAll('.frame.mob').forEach(e=>e.style.display=(MODE==='desk'?'none':'')); }
 
 // Fire all 4 slot generators in dryRun (preview only — never posts), then reload the queue.
 const PREVIEW_SLOTS = ["slot-morning-take-background","slot-daily-thread-background","slot-midday-lesson-background","slot-evening-quote-background"];
@@ -66,8 +114,9 @@ async function previewAll(){
   const s = $("#pvstatus");
   PREVIEW_SLOTS.forEach(fn => fetch("/.netlify/functions/"+fn+"?dryRun=1").catch(()=>{}));
   let n = 30;
-  s.textContent = "Generating all 4 previews… ~"+n+"s (nothing is posted)";
-  const t = setInterval(()=>{ n--; s.textContent = n>0 ? "Generating all 4 previews… ~"+n+"s (nothing is posted)" : ""; if(n<=0){ clearInterval(t); load(); } }, 1000);
+  const tick=()=>{ s.textContent = n>0 ? "Generating all 4 previews… ~"+n+"s (nothing is posted)" : ""; };
+  tick();
+  const t = setInterval(()=>{ n--; tick(); if(n<=0){ clearInterval(t); load(); } }, 1000);
 }
 
 async function api(method, body){
@@ -78,24 +127,47 @@ async function api(method, body){
   return r.json();
 }
 
-function tweetsHtml(d){
-  if(d.kind==="thread" && Array.isArray(d.tweets))
-    return d.tweets.map((t,i)=>`<div class="tw">${i===0?"<b>🧵 ":"<b>"+(i)+"/ </b>"}${esc(t)}${i===0?"</b>":""}</div>`).join("");
-  return `<div class="tw">${esc(d.text||"")}</div>`;
+// ── X tweet mock builders ──
+function singleMock(d){
+  const img = d.image ? `<img class="cardimg" src="data:image/png;base64,${d.image}"/>` : "";
+  return `<div class="tweet">
+    <img class="av" src="${AV}" onerror="this.style.visibility='hidden'"/>
+    <div class="body">
+      <div class="nameline"><span class="nm">Ben Klein</span>${VCHECK}<span class="hd">@wcgbk · now</span></div>
+      <div class="text">${esc(d.text||"")}</div>
+      ${img}
+      ${ACTS}
+    </div>
+  </div>`;
 }
+function threadMock(d){
+  const tws = d.tweets||[];
+  return `<div class="thread">` + tws.map((t,i)=>`
+    <div class="trow ${i<tws.length-1?'cont':''}">
+      <div class="avcol"><img class="av" src="${AV}" onerror="this.style.visibility='hidden'"/></div>
+      <div class="body">
+        <div class="nameline"><span class="nm">Ben Klein</span>${VCHECK}<span class="hd">@wcgbk${i===0?' · now':''}</span></div>
+        <div class="text">${esc(t)}</div>
+        ${i===tws.length-1?ACTS:''}
+      </div>
+    </div>`).join("") + `</div>`;
+}
+function mock(d){ return d.kind==="thread" ? threadMock(d) : singleMock(d); }
 
-function cardHtml(d){
+function draftHtml(d){
   const risk = d.risk==="sensitive"?"risk-sensitive":"risk-low";
-  const img = d.image ? `<img class="preview" src="data:image/png;base64,${d.image}" />` : "";
-  return `<div class="card" id="c_${esc(d.id)}">
+  const inner = mock(d);
+  return `<div class="draft" id="c_${esc(d.id)}">
     <div class="meta">
       <span class="badge slot">${esc(d.slot)}</span>
       <span class="badge">${esc((d.niche||"").toUpperCase())}</span>
       <span class="badge ${risk}">${esc((d.risk||"").toUpperCase())}</span>
-      <span class="muted" style="font-size:12px">${esc(d.date||"")}</span>
+      <span class="hd" style="font-size:12px;color:var(--mut)">${esc(d.date||"")}${d.kind==="thread"?" · thread":""}</span>
     </div>
-    ${tweetsHtml(d)}
-    ${img}
+    <div class="frames">
+      <div class="frame desk"><div class="flabel">🖥 DESKTOP</div><div class="xwrap desk">${inner}</div></div>
+      <div class="frame mob"><div class="flabel">📱 MOBILE</div><div class="xwrap mob">${inner}</div></div>
+    </div>
     <div class="actions">
       <button class="btn-go" onclick="act('${esc(d.id)}','approve',this)">✓ Approve &amp; post</button>
       <button class="btn-no" onclick="act('${esc(d.id)}','reject',this)">✕ Reject</button>
@@ -112,7 +184,7 @@ async function act(id, action, btn){
 }
 
 async function load(){
-  if(!KEY){ return; }
+  if(!KEY) return;
   $("#pending").innerHTML = '<div class="empty">Loading…</div>';
   try{
     const who = await api("GET","whoami=1");
@@ -121,14 +193,16 @@ async function load(){
   const data = await api("GET");
   if(data.error){ $("#pending").innerHTML = `<div class="empty">${esc(data.error)}</div>`; return; }
   $("#pending").innerHTML = (data.pending&&data.pending.length)
-    ? data.pending.map(cardHtml).join("")
+    ? data.pending.map(draftHtml).join("")
     : '<div class="empty">Nothing pending. 🎉</div>';
   $("#recent").innerHTML = (data.recent||[]).map(d=>`<div class="recent">
       <span class="badge slot">${esc(d.slot)}</span>
-      <span class="muted">${esc(d.status)}</span>
+      <span class="hd" style="color:var(--mut)">${esc(d.status)}</span>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((d.text||(d.tweets&&d.tweets[0])||"").slice(0,90))}</span>
     </div>`).join("");
+  applyMode();
 }
+setMode(MODE);
 load();
 </script>
 </body>

@@ -1210,7 +1210,9 @@ async function fetchStartingPitchers(espnData) {
             }
             if (teamName) {
               pitcherData[teamName] = {
-                pitcher: p.displayName || p.fullName || 'Unknown',
+                // ESPN now returns the generic "Probable Starting Pitcher" in displayName; the real
+                // name is nested under `athlete` (payload change ~2026-06). Prefer athlete.* fields.
+                pitcher: p.athlete?.displayName || p.athlete?.fullName || p.displayName || p.fullName || 'Unknown',
                 era: stats.era,
                 whip: stats.whip,
               };

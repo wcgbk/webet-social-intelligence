@@ -1,0 +1,44 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Master auto-post switch. "on" = low-risk slots post live; sensitive slots + the daily
+# thread are always held for approval (HYBRID). Set "off" to queue EVERYTHING for review.
+[build.environment]
+  SIGNAL_AUTOPOST = "on"
+
+[functions]
+  node_bundler = "esbuild"
+  # resvg ships a native binary — keep it external and include the Linux build.
+  external_node_modules = ["@resvg/resvg-js"]
+  included_files = ["node_modules/@resvg/**"]
+
+# ── Daily content slots (cron in UTC; comments show US Eastern during EDT) ──────────
+# Times shift +1h vs ET during EST (Nov–Mar); adjust if exact ET timing matters in winter.
+
+# Morning Take — single hot take on the day's biggest story. ~8:30a ET.
+[functions."slot-morning-take-background"]
+  schedule = "30 12 * * *"
+
+# Daily Thread — 4-6 tweet thread (ALWAYS held for approval). ~11:00a ET.
+[functions."slot-daily-thread-background"]
+  schedule = "0 15 * * *"
+
+# Midday Lesson — founder/operator lesson. ~1:00p ET.
+[functions."slot-midday-lesson-background"]
+  schedule = "0 17 * * *"
+
+# Evening Quote — original aphorism as a branded quote card. ~7:00p ET.
+[functions."slot-evening-quote-background"]
+  schedule = "0 23 * * *"
+
+# ── Routes ─────────────────────────────────────────────────────────────────────────
+[[redirects]]
+  from = "/api/review"
+  to = "/.netlify/functions/review-drafts"
+  status = 200
+
+[[redirects]]
+  from = "/review"
+  to = "/review/index.html"
+  status = 200

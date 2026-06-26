@@ -1,0 +1,10 @@
+{
+  "name": "the-signal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Signal — automated X content engine for @wcgbk (Ben Klein). Grok live-search → daily takes, lessons, threads & quote cards, hybrid auto-post/approval.",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

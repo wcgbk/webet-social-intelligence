@@ -1097,6 +1097,12 @@ const MLB_FIP_CONST  = 3.15; // cFIP — pins league FIP ≈ league ERA (~4.20);
 const MLB_FIP_MIN_IP = 30;   // require ≥30 season IP before trusting FIP over ERA (below it FIP is noise — backtest)
 const MLB_FIP_IP_REG = 50;   // IP-weighted regression strength toward league FIP
 const MLB_LG_RUN     = 4.20; // league run-environment anchor shared by the ERA and FIP regressions
+// Market-discipline (2026-06-26): the model regresses high-scoring matchups toward the mean, so on
+// high-total games it projects below the line and takes the Under — those Unders bled −11.5% ROI /
+// 33.9% beat-close (n=62, z=−2.54) vs the close. Skipping MLB Under bets when the line ≥ this value
+// improved realized ROI +2.6pp, stable out-of-sample in BOTH season halves (~/webetai-backtest/
+// mlb_hightotal_validation.py). A −EV-bleed filter, not a profit engine. Over bets here are untouched.
+const MLB_UNDER_SKIP_TOTAL = 9.5;
 
 // StatsAPI reports innings as "6.1" = 6⅓ and "6.2" = 6⅔. Convert to a true float.
 function ipToFloat(s) {
@@ -3122,6 +3128,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           const totalZ = totalEdge / totalStd;
           let rawTotalCoverProb = normalCDF(totalZ);
           const isOver = proj.projTotal > actualTotal;
+          // F3 market-discipline: skip MLB Under bets on high totals (line ≥ MLB_UNDER_SKIP_TOTAL) —
+          // a proven, out-of-sample-stable −EV bleed (the model under-projects high-scoring matchups).
+          const skipHighUnder = (league.league === "MLB" && !isOver && actualTotal >= MLB_UNDER_SKIP_TOTAL);
           // MLB total: price off the discrete run-distribution (push-aware on integer lines, which the
           // symmetric normalCDF ignores). Flows through the IDENTICAL calibration → Kelly → caps below.
           if (league.league === "MLB" && proj.projHomeScore > 0 && proj.projAwayScore > 0) {
@@ -3143,7 +3152,10 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 
           if (totalOdds >= -250) {
             const kelly = computeKelly(totalCoverProb, totalOdds, drawdownActive);
-            if (kelly.ev > evFloor) {
+            if (kelly.ev > evFloor && skipHighUnder) {
+              console.log(`[v10-disc] F3 suppressed MLB Under ${actualTotal} (${game.away} @ ${game.home}) — proven high-total under-bleed`);
+            }
+            if (kelly.ev > evFloor && !skipHighUnder) {
               const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
               let adjUnits = Math.round(kelly.units * sportMult * 2) / 2;
               adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));

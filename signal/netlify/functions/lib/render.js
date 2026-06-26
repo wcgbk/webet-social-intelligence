@@ -63,21 +63,20 @@ const NICHE = {
   "personal-development": { label: "MINDSET", c: "#6fc080" },
   quotes: { label: "SIGNAL", c: "#d8c9a0" },
 };
-// Brand palette — matched to the WeBetAI logo (deep teal) + WeBit coin (gold) on ivory.
-const TEAL = "#15403d";        // primary brand ink / header band
+// Brand palette — WeBetAI deep teal/green on white. No gold/yellow.
+const TEAL = "#15403d";        // brand bands / accents
 const TEAL_INK = "#143b38";    // headline text
-const GOLD = "#bf9a45";        // accent (coin / badge gold)
-const MUTE = "#5f6f6a";        // muted teal-gray
+const MUTE = "#5f6f6a";        // muted body text
+const BANDTX = "#f4f7f4";      // near-white text on teal bands
+const MINT = "#bcd9cd";        // soft mint accent on teal bands
 
-// kind: "quote" (large centered serif, quotation marks) | "take" (headline + kicker).
-// Bright IVORY card (pops on X's dark feed, stays defined on light), VERTICAL 4:5 (owns mobile
-// screen space), deep-teal header band + gold accents (on-brand), big high-contrast serif, and
-// the @handle emphasized (the follow driver).
+// kind: "quote" (centered serif) | "take" (headline + kicker). Clean WHITE card (pops on X's dark
+// feed, defined on light), VERTICAL 4:5 (owns mobile screen), deep-teal bands top AND bottom,
+// big high-contrast serif headline, @handle emphasized in the bottom band (the follow driver).
 function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "", avatarUri = null }) {
   const W = 1080, H = 1350;               // 4:5 vertical — maximum feed real estate on mobile
-  const PAD = 96, BAND = 116;             // header band height
+  const PAD = 96, BAND = 116, BBAND = 156; // top + bottom band heights
   const n = NICHE[niche] || NICHE.quotes;
-  const isQuote = kind === "quote";
 
   // Size headline to length — vertical card has room to go BIG.
   const len = String(headline).length;
@@ -86,63 +85,51 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
   const lines = wrapText(headline, cpl, 8);
   const lh = Math.round(fs2 * 1.3);
   const blockH = lines.length * lh;
-  const areaTop = 360, areaBot = H - 250;
+  const areaTop = BAND + 110, areaBot = H - BBAND - 40;
   const startY = Math.round(areaTop + ((areaBot - areaTop) - blockH) / 2) + Math.round(fs2 * 0.76);
 
   const headlineSvg = lines.map((ln, i) =>
     `<text x="${PAD}" y="${startY + i * lh}" font-family="DejaVu Serif" font-size="${fs2}" font-weight="bold" fill="${TEAL_INK}">${esc(ln)}</text>`
   ).join("");
 
-  // faint gold circuit motif (top-right) — a nod to the coin's engraving, deterministic + subtle.
-  let circuit = "";
-  for (const [x1, y1, x2, y2] of [
-    [760, 170, 760, 320], [760, 320, 900, 320], [900, 320, 900, 250],
-    [840, 200, 1000, 200], [1000, 200, 1000, 300], [820, 360, 980, 360], [980, 360, 980, 280],
-  ]) circuit += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${GOLD}" stroke-width="2" opacity="0.10"/>`;
-  for (const [cx2, cy2] of [[760, 170], [900, 250], [1000, 300], [980, 280]])
-    circuit += `<circle cx="${cx2}" cy="${cy2}" r="4" fill="${GOLD}" opacity="0.12"/>`;
-
-  const cy = H - 110;                      // byline anchor
+  const by = H - BBAND / 2;                // byline center inside the bottom band
   const avatar = avatarUri
-    ? `<circle cx="${PAD + 26}" cy="${cy}" r="28" fill="#fff" stroke="${GOLD}" stroke-width="2"/>
-       <image href="${avatarUri}" xlink:href="${avatarUri}" x="${PAD - 2}" y="${cy - 26}" width="56" height="56" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
-    : `<circle cx="${PAD + 26}" cy="${cy}" r="28" fill="#e7ece8" stroke="${GOLD}" stroke-width="2"/>
-       <text x="${PAD + 26}" y="${cy + 8}" font-family="DejaVu Serif" font-size="22" font-weight="bold" fill="${TEAL}" text-anchor="middle">BK</text>`;
+    ? `<circle cx="${PAD + 26}" cy="${by}" r="28" fill="#fff" stroke="${MINT}" stroke-width="2"/>
+       <image href="${avatarUri}" xlink:href="${avatarUri}" x="${PAD - 2}" y="${by - 26}" width="56" height="56" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
+    : `<circle cx="${PAD + 26}" cy="${by}" r="28" fill="#0f312e" stroke="${MINT}" stroke-width="2"/>
+       <text x="${PAD + 26}" y="${by + 8}" font-family="DejaVu Serif" font-size="22" font-weight="bold" fill="${MINT}" text-anchor="middle">BK</text>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0" stop-color="#f7f4ec"/><stop offset="100%" stop-color="#eef0ea"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="100%" stop-color="#f4f7f5"/>
     </linearGradient>
-    <clipPath id="av"><circle cx="${PAD + 26}" cy="${cy}" r="28"/></clipPath>
+    <clipPath id="av"><circle cx="${PAD + 26}" cy="${by}" r="28"/></clipPath>
   </defs>
 
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
-  ${circuit}
   <!-- subtle teal frame for edge definition on a light feed -->
   <rect x="8" y="8" width="${W - 16}" height="${H - 16}" fill="none" stroke="${TEAL}" stroke-opacity="0.12" stroke-width="2"/>
 
-  <!-- deep-teal header band (brand) + gold rule -->
+  <!-- top teal band: wordmark + niche -->
   <rect x="0" y="0" width="${W}" height="${BAND}" fill="${TEAL}"/>
-  <rect x="0" y="${BAND}" width="${W}" height="4" fill="${GOLD}"/>
-  <text x="${PAD}" y="73" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="#f4f1e6" letter-spacing="7">THE SIGNAL</text>
-  <circle cx="${W - PAD - (n.label.length * 14 + 22)}" cy="65" r="5" fill="${GOLD}"/>
-  <text x="${W - PAD}" y="71" font-family="DejaVu Sans" font-size="17" font-weight="bold" fill="${GOLD}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
+  <text x="${PAD}" y="73" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${BANDTX}" letter-spacing="7">THE SIGNAL</text>
+  <circle cx="${W - PAD - (n.label.length * 14 + 22)}" cy="65" r="5" fill="${MINT}"/>
+  <text x="${W - PAD}" y="71" font-family="DejaVu Sans" font-size="17" font-weight="bold" fill="${MINT}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
 
-  ${isQuote
-    ? `<text x="${PAD - 12}" y="${startY - 18}" font-family="DejaVu Serif" font-size="190" font-weight="bold" fill="${GOLD}" opacity="0.28">“</text>`
-    : `<rect x="${PAD}" y="${startY - fs2 - 30}" width="76" height="7" rx="3.5" fill="${GOLD}"/>`}
+  <!-- short teal kicker above the headline (no quote icon) -->
+  <rect x="${PAD}" y="${startY - fs2 - 34}" width="76" height="7" rx="3.5" fill="${TEAL}"/>
 
   ${headlineSvg}
 
   ${(sub || "").trim() ? `<text x="${PAD}" y="${startY + lines.length * lh + 34}" font-family="DejaVu Sans" font-size="26" fill="${MUTE}">${esc((sub || "").trim().slice(0, 60))}</text>` : ""}
 
-  <!-- byline: avatar + name + emphasized handle -->
-  <line x1="${PAD}" y1="${cy - 56}" x2="${W - PAD}" y2="${cy - 56}" stroke="${TEAL}" stroke-opacity="0.14" stroke-width="1.5"/>
+  <!-- bottom teal band: byline -->
+  <rect x="0" y="${H - BBAND}" width="${W}" height="${BBAND}" fill="${TEAL}"/>
   ${avatar}
-  <text x="${PAD + 72}" y="${cy - 5}" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${TEAL_INK}">Ben Klein</text>
-  <text x="${PAD + 72}" y="${cy + 26}" font-family="DejaVu Sans" font-size="20" font-weight="bold" fill="${GOLD}">@wcgbk</text>
-  <text x="${W - PAD}" y="${cy + 12}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${MUTE}" text-anchor="end" letter-spacing="2">FOLLOW FOR DAILY SIGNAL</text>
+  <text x="${PAD + 72}" y="${by - 5}" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${BANDTX}">Ben Klein</text>
+  <text x="${PAD + 72}" y="${by + 26}" font-family="DejaVu Sans" font-size="20" font-weight="bold" fill="${MINT}">@wcgbk</text>
+  <text x="${W - PAD}" y="${by + 8}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${MINT}" text-anchor="end" letter-spacing="2">FOLLOW FOR DAILY SIGNAL</text>
 </svg>`;
 }
 

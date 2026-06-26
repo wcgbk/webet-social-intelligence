@@ -75,7 +75,7 @@ const MINT = "#bcd9cd";        // soft mint accent on teal bands
 // big high-contrast serif headline, @handle emphasized in the bottom band (the follow driver).
 function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "", avatarUri = null }) {
   const W = 1080, H = 1350;               // 4:5 vertical — maximum feed real estate on mobile
-  const PAD = 96, BAND = 116, BBAND = 156; // top + bottom band heights
+  const PAD = 96, BAND = 116, BBAND = 116; // top + bottom band heights (equal)
   const n = NICHE[niche] || NICHE.quotes;
 
   // Size headline to length — vertical card has room to go BIG.
@@ -115,8 +115,8 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
 
   <!-- bottom teal band: centered footer -->
   <rect x="0" y="${H - BBAND}" width="${W}" height="${BBAND}" fill="${TEAL}"/>
-  <text x="${W / 2}" y="${H - BBAND / 2 - 4}" font-family="DejaVu Sans" font-size="23" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="1">Follow For Your Daily Dose Of Signal</text>
-  <text x="${W / 2}" y="${H - BBAND / 2 + 28}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="2">powered by Authentic Press</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 - 6}" font-family="DejaVu Sans" font-size="23" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="1">Follow For Your Daily Dose Of Signal</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 + 24}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="2">powered by Authentic Press</text>
 </svg>`;
 }
 

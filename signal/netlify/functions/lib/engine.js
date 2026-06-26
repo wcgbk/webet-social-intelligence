@@ -113,16 +113,22 @@ ${COMMON_RULES}`;
 
 async function genEveningQuote() {
   const want = pickNiche(QUOTE_NICHES, 0);
-  const prompt = `${VOICE}\n\nWrite ONE ORIGINAL aphorism (a Ben Klein original — NOT a quote from anyone else)
-in the "${want}" theme: building, betting on yourself, seeing through the noise, the AI era, discipline, growth.
-It must be tight, memorable, and screenshot-worthy. <= 140 characters. No author tag, no quotation marks in the text.
+  const prompt = `${VOICE}\n\nCreate a QUOTE POST in the "${want}" theme (building, betting on yourself,
+seeing through the noise, the AI era, discipline, growth). TWO parts:
+1) "quote": ONE original Ben Klein aphorism — tight, memorable, screenshot-worthy, <=130 chars,
+   no author tag, no quotation marks. (This goes on a branded image card.)
+2) "caption": the TWEET TEXT that sits ABOVE the image. It must EARN the quote — elaborate on WHY
+   it's true and what justifies it: the reasoning, the stakes, or a concrete example most people
+   miss. World-class, specific, a little contrarian. Do NOT repeat the quote verbatim.
+   2-4 short lines with line breaks, <=240 chars, no links, no hashtags, and END on a line that
+   invites replies (a pointed question or a "prove me wrong" claim).
 Return STRICT JSON:
-{ "niche": "personal-development|quotes|startups", "quote": "<=140 chars original line",
-  "sub": "<=70 char amplifier line (optional, can be empty)", "sensitivity": "low|sensitive" }
-Return STRICT JSON only, no prose.`;
+{ "niche": "personal-development|quotes|startups", "quote": "<=130 chars",
+  "caption": "<=240 chars", "sensitivity": "low|sensitive" }
+STRICT JSON only, no prose.`;
   const r = await callGrok(prompt, { liveSearch: false });
   const quote = r.quote || "";
-  return { kind: "single", niche: r.niche || want, topic: quote, text: quote, card: quote, sub: r.sub || "", isQuote: true, sensitivity: r.sensitivity };
+  return { kind: "single", niche: r.niche || want, topic: quote, text: (r.caption || quote), card: quote, sub: "", isQuote: true, sensitivity: r.sensitivity };
 }
 
 const THREAD_CTA = `If this resonated:\n\n• Follow @wcgbk — I post signal over noise, daily\n• Repost the first tweet to put it in front of a founder who needs it\n\nWhat would you add? 👇`;

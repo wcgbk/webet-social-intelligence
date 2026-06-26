@@ -63,84 +63,85 @@ const NICHE = {
   "personal-development": { label: "MINDSET", c: "#6fc080" },
   quotes: { label: "SIGNAL", c: "#d8c9a0" },
 };
-const GOLD = "#e9b949";
-// Saturated accents that POP on a light card against X's dark feed (warm hues catch the eye).
-const LIGHT_ACCENT = {
-  politics: "#b5471f", startups: "#0f8a78", vc: "#6a4fb0", economy: "#2f6fa0",
-  crypto: "#bf8418", "personal-development": "#2e8a4f", quotes: "#b07d2e",
-};
+// Brand palette — matched to the WeBetAI logo (deep teal) + WeBit coin (gold) on ivory.
+const TEAL = "#15403d";        // primary brand ink / header band
+const TEAL_INK = "#143b38";    // headline text
+const GOLD = "#bf9a45";        // accent (coin / badge gold)
+const MUTE = "#5f6f6a";        // muted teal-gray
 
 // kind: "quote" (large centered serif, quotation marks) | "take" (headline + kicker).
-// Research-tuned for X reach: BRIGHT warm-cream card (stands out vs X's black feed — dark cards
-// blend in), VERTICAL 4:5 (owns more mobile screen space), huge high-contrast type, bold warm
-// accent, and the @handle emphasized (the follow driver).
+// Bright IVORY card (pops on X's dark feed, stays defined on light), VERTICAL 4:5 (owns mobile
+// screen space), deep-teal header band + gold accents (on-brand), big high-contrast serif, and
+// the @handle emphasized (the follow driver).
 function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "", avatarUri = null }) {
   const W = 1080, H = 1350;               // 4:5 vertical — maximum feed real estate on mobile
-  const PAD = 96;
+  const PAD = 96, BAND = 116;             // header band height
   const n = NICHE[niche] || NICHE.quotes;
-  const accent = LIGHT_ACCENT[niche] || LIGHT_ACCENT.quotes;
-  const INK = "#17130c", MUTE = "#7a7060";
   const isQuote = kind === "quote";
 
   // Size headline to length — vertical card has room to go BIG.
   const len = String(headline).length;
   const fs2 = len <= 55 ? 80 : len <= 95 ? 68 : len <= 140 ? 58 : len <= 185 ? 50 : 43;
-  const cpl = len <= 55 ? 18 : len <= 95 ? 23 : len <= 140 ? 28 : len <= 185 ? 33 : 39;
+  const cpl = len <= 55 ? 16 : len <= 95 ? 21 : len <= 140 ? 26 : len <= 185 ? 31 : 37;
   const lines = wrapText(headline, cpl, 8);
   const lh = Math.round(fs2 * 1.3);
   const blockH = lines.length * lh;
-  const areaTop = 320, areaBot = H - 250;
+  const areaTop = 360, areaBot = H - 250;
   const startY = Math.round(areaTop + ((areaBot - areaTop) - blockH) / 2) + Math.round(fs2 * 0.76);
 
   const headlineSvg = lines.map((ln, i) =>
-    `<text x="${PAD}" y="${startY + i * lh}" font-family="DejaVu Serif" font-size="${fs2}" font-weight="bold" fill="${INK}">${esc(ln)}</text>`
+    `<text x="${PAD}" y="${startY + i * lh}" font-family="DejaVu Serif" font-size="${fs2}" font-weight="bold" fill="${TEAL_INK}">${esc(ln)}</text>`
   ).join("");
+
+  // faint gold circuit motif (top-right) — a nod to the coin's engraving, deterministic + subtle.
+  let circuit = "";
+  for (const [x1, y1, x2, y2] of [
+    [760, 170, 760, 320], [760, 320, 900, 320], [900, 320, 900, 250],
+    [840, 200, 1000, 200], [1000, 200, 1000, 300], [820, 360, 980, 360], [980, 360, 980, 280],
+  ]) circuit += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${GOLD}" stroke-width="2" opacity="0.10"/>`;
+  for (const [cx2, cy2] of [[760, 170], [900, 250], [1000, 300], [980, 280]])
+    circuit += `<circle cx="${cx2}" cy="${cy2}" r="4" fill="${GOLD}" opacity="0.12"/>`;
 
   const cy = H - 110;                      // byline anchor
   const avatar = avatarUri
-    ? `<circle cx="${PAD + 26}" cy="${cy}" r="28" fill="#fff" stroke="${accent}" stroke-width="2"/>
+    ? `<circle cx="${PAD + 26}" cy="${cy}" r="28" fill="#fff" stroke="${GOLD}" stroke-width="2"/>
        <image href="${avatarUri}" xlink:href="${avatarUri}" x="${PAD - 2}" y="${cy - 26}" width="56" height="56" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
-    : `<circle cx="${PAD + 26}" cy="${cy}" r="28" fill="#efe7d6" stroke="${accent}" stroke-width="2"/>
-       <text x="${PAD + 26}" y="${cy + 8}" font-family="DejaVu Serif" font-size="22" font-weight="bold" fill="${accent}" text-anchor="middle">BK</text>`;
+    : `<circle cx="${PAD + 26}" cy="${cy}" r="28" fill="#e7ece8" stroke="${GOLD}" stroke-width="2"/>
+       <text x="${PAD + 26}" y="${cy + 8}" font-family="DejaVu Serif" font-size="22" font-weight="bold" fill="${TEAL}" text-anchor="middle">BK</text>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#faf6ec"/><stop offset="100%" stop-color="#f1e8d6"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#f7f4ec"/><stop offset="100%" stop-color="#eef0ea"/>
     </linearGradient>
-    <radialGradient id="glow" cx="88%" cy="6%" r="55%">
-      <stop offset="0" stop-color="${accent}" stop-opacity="0.10"/><stop offset="100%" stop-color="transparent"/>
-    </radialGradient>
     <clipPath id="av"><circle cx="${PAD + 26}" cy="${cy}" r="28"/></clipPath>
   </defs>
 
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
-  <rect width="${W}" height="${H}" fill="url(#glow)"/>
+  ${circuit}
+  <!-- subtle teal frame for edge definition on a light feed -->
+  <rect x="8" y="8" width="${W - 16}" height="${H - 16}" fill="none" stroke="${TEAL}" stroke-opacity="0.12" stroke-width="2"/>
 
-  <!-- bold accent bar across the top -->
-  <rect x="0" y="0" width="${W}" height="12" fill="${accent}"/>
-  <!-- thin inner border for edge definition on a bright feed -->
-  <rect x="6" y="18" width="${W - 12}" height="${H - 24}" fill="none" stroke="#000000" stroke-opacity="0.06" stroke-width="2"/>
-
-  <!-- header: wordmark + niche label -->
-  <text x="${PAD}" y="118" font-family="DejaVu Sans" font-size="24" font-weight="bold" fill="${INK}" letter-spacing="7">THE SIGNAL</text>
-  <circle cx="${W - PAD - (n.label.length * 14 + 22)}" cy="110" r="5" fill="${accent}"/>
-  <text x="${W - PAD}" y="116" font-family="DejaVu Sans" font-size="17" font-weight="bold" fill="${accent}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
-  <line x1="${PAD}" y1="150" x2="${W - PAD}" y2="150" stroke="${INK}" stroke-opacity="0.12" stroke-width="1.5"/>
+  <!-- deep-teal header band (brand) + gold rule -->
+  <rect x="0" y="0" width="${W}" height="${BAND}" fill="${TEAL}"/>
+  <rect x="0" y="${BAND}" width="${W}" height="4" fill="${GOLD}"/>
+  <text x="${PAD}" y="73" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="#f4f1e6" letter-spacing="7">THE SIGNAL</text>
+  <circle cx="${W - PAD - (n.label.length * 14 + 22)}" cy="65" r="5" fill="${GOLD}"/>
+  <text x="${W - PAD}" y="71" font-family="DejaVu Sans" font-size="17" font-weight="bold" fill="${GOLD}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
 
   ${isQuote
-    ? `<text x="${PAD - 12}" y="${startY - 18}" font-family="DejaVu Serif" font-size="190" font-weight="bold" fill="${accent}" opacity="0.22">“</text>`
-    : `<rect x="${PAD}" y="${startY - fs2 - 30}" width="76" height="7" rx="3.5" fill="${accent}"/>`}
+    ? `<text x="${PAD - 12}" y="${startY - 18}" font-family="DejaVu Serif" font-size="190" font-weight="bold" fill="${GOLD}" opacity="0.28">“</text>`
+    : `<rect x="${PAD}" y="${startY - fs2 - 30}" width="76" height="7" rx="3.5" fill="${GOLD}"/>`}
 
   ${headlineSvg}
 
   ${(sub || "").trim() ? `<text x="${PAD}" y="${startY + lines.length * lh + 34}" font-family="DejaVu Sans" font-size="26" fill="${MUTE}">${esc((sub || "").trim().slice(0, 60))}</text>` : ""}
 
   <!-- byline: avatar + name + emphasized handle -->
-  <line x1="${PAD}" y1="${cy - 56}" x2="${W - PAD}" y2="${cy - 56}" stroke="${INK}" stroke-opacity="0.12" stroke-width="1.5"/>
+  <line x1="${PAD}" y1="${cy - 56}" x2="${W - PAD}" y2="${cy - 56}" stroke="${TEAL}" stroke-opacity="0.14" stroke-width="1.5"/>
   ${avatar}
-  <text x="${PAD + 72}" y="${cy - 5}" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${INK}">Ben Klein</text>
-  <text x="${PAD + 72}" y="${cy + 26}" font-family="DejaVu Sans" font-size="20" font-weight="bold" fill="${accent}">@wcgbk</text>
+  <text x="${PAD + 72}" y="${cy - 5}" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${TEAL_INK}">Ben Klein</text>
+  <text x="${PAD + 72}" y="${cy + 26}" font-family="DejaVu Sans" font-size="20" font-weight="bold" fill="${GOLD}">@wcgbk</text>
   <text x="${W - PAD}" y="${cy + 12}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${MUTE}" text-anchor="end" letter-spacing="2">FOLLOW FOR DAILY SIGNAL</text>
 </svg>`;
 }

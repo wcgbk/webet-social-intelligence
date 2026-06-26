@@ -401,7 +401,7 @@
   <main class="main">
 
     <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">v10.3-alpha-sharp</span></h1>
-    <p class="page-sub">Architecture and design assessment of the v10.3 alpha pipeline — the primary picks model. v10.3 ships shrinkage calibration fitted on 428 graded real picks, market-correct total deviations, and live-rescaled Kelly sizing. Ratings reflect system capabilities, not results.</p>
+    <p class="page-sub">Architecture and design assessment of the alpha pipeline — now the SOLE production picks model. June 2026 upgrades: a discrete negative-binomial run-distribution for MLB (replacing the normal approximation), First-Five-innings folded in as a built-in market, two-sided no-vig de-vig with pitcher-aware moneyline pricing, true closing-line CLV, and timeout/backoff hardening so a slow or rate-limited API can never stall a run. Ratings reflect system capabilities, not results.</p>
     <div style="text-align:center; margin-bottom:1.25rem;">
       <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary Reasoning</button>
     </div>
@@ -452,7 +452,7 @@
           <span class="metric-pct pct-elite">90th</span>
         </div>
         <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
-        <div class="metric-rationale">Cross-sport edge ranking via normalized z-scores. v10.3 gives totals their own standard deviations (NBA 18.5, NHL 2.3 goals, MLB 4.3 runs) instead of reusing margin deviations — total edges were previously overstated 40-50%. Edge discount curve compresses outlier edges (log compression above 1 std dev). Consensus-tightness and line-movement discounts shrink edges the market has already priced. The 3% calibrated EV floor filters noise that's indistinguishable from variance at -110.</div>
+        <div class="metric-rationale">Cross-sport edge ranking via normalized z-scores. MLB cover probabilities now come from a discrete negative-binomial run-distribution (analytic convolution of each team's projected run rate) rather than a normal CDF on a point estimate — baseball scoring is discrete and right-skewed, so this correctly prices the 1-run / half-run mass on run lines and the push region on totals. NBA and NHL still use sport-specific total standard deviations (NBA 18.5, NHL 2.3 goals) pending their own discrete models. Edge discount curve compresses outlier edges (log compression above 1 std dev). Consensus-tightness and line-movement discounts shrink edges the market has already priced. The 3% calibrated EV floor filters noise indistinguishable from variance at -110.</div>
       </div>
 
       <div class="metric">
@@ -470,7 +470,7 @@
           <span class="metric-pct pct-strong">88th</span>
         </div>
         <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
-        <div class="metric-rationale">Automated daily at 9am ET via Netlify scheduled function (a parallel MVP test pipeline runs at 8am ET for A/B comparison). 15-minute background worker. Early generation maximizes closing-line-value runway. Picks are final once generated — no mid-day overrides. No human in the loop for generation or delivery.</div>
+        <div class="metric-rationale">Automated daily at 9am ET via Netlify scheduled function; First-Five lines fold into the same card from a 10am ET pass. 15-minute background worker, now hardened with per-call timeouts + exponential backoff and a deterministic fallback so a slow or rate-limited API can never stall or block a run. Early generation maximizes closing-line-value runway. Picks are final once generated — no mid-day overrides. No human in the loop for generation or delivery.</div>
       </div>
 
       <div class="metric">
@@ -488,7 +488,7 @@
           <span class="metric-pct pct-strong">88th</span>
         </div>
         <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
-        <div class="metric-rationale">NBA, NHL, and MLB active. NCAAB disabled (sub-50% real accuracy) and v10.3 disables all 8 soccer leagues — their real daily-run record was 38.5% across every league, and the normal-distribution goal model is structurally wrong for draw-heavy soccer (a Poisson engine is being tested in the MVP pipeline before re-enable). Quality over quantity: the cross-sport mandate still evaluates every game with available lines and selects the highest calibrated EV regardless of sport.</div>
+        <div class="metric-rationale">NBA, NHL, and MLB active, plus MLB First-Five-innings (F5) folded in as a built-in market — the one genuinely soft corner, EV-discounted ×0.5 and slot/size-capped until closing-line value validates it. NCAAB disabled (sub-50% real accuracy) and all 8 soccer leagues disabled — 38.5% real daily-run record, and the normal goal model is structurally wrong for draw-heavy soccer (a discrete distribution is the prerequisite to re-enable). Quality over quantity: the cross-sport mandate evaluates every game with available lines and selects the highest calibrated EV regardless of sport.</div>
       </div>
 
       <div class="metric">

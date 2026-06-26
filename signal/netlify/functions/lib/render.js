@@ -92,19 +92,11 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
     `<text x="${PAD}" y="${startY + i * lh}" font-family="DejaVu Serif" font-size="${fs2}" font-weight="bold" fill="${TEAL_INK}">${esc(ln)}</text>`
   ).join("");
 
-  const by = H - BBAND / 2;                // byline center inside the bottom band
-  const avatar = avatarUri
-    ? `<circle cx="${PAD + 26}" cy="${by}" r="28" fill="#fff" stroke="${MINT}" stroke-width="2"/>
-       <image href="${avatarUri}" xlink:href="${avatarUri}" x="${PAD - 2}" y="${by - 26}" width="56" height="56" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
-    : `<circle cx="${PAD + 26}" cy="${by}" r="28" fill="#0f312e" stroke="${MINT}" stroke-width="2"/>
-       <text x="${PAD + 26}" y="${by + 8}" font-family="DejaVu Serif" font-size="22" font-weight="bold" fill="${MINT}" text-anchor="middle">BK</text>`;
-
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
       <stop offset="0" stop-color="#ffffff"/><stop offset="100%" stop-color="#f4f7f5"/>
     </linearGradient>
-    <clipPath id="av"><circle cx="${PAD + 26}" cy="${by}" r="28"/></clipPath>
   </defs>
 
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
@@ -117,19 +109,14 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
   <circle cx="${W - PAD - (n.label.length * 14 + 22)}" cy="65" r="5" fill="${MINT}"/>
   <text x="${W - PAD}" y="71" font-family="DejaVu Sans" font-size="17" font-weight="bold" fill="${MINT}" text-anchor="end" letter-spacing="3">${esc(n.label)}</text>
 
-  <!-- short teal kicker above the headline (no quote icon) -->
-  <rect x="${PAD}" y="${startY - fs2 - 34}" width="76" height="7" rx="3.5" fill="${TEAL}"/>
-
   ${headlineSvg}
 
   ${(sub || "").trim() ? `<text x="${PAD}" y="${startY + lines.length * lh + 34}" font-family="DejaVu Sans" font-size="26" fill="${MUTE}">${esc((sub || "").trim().slice(0, 60))}</text>` : ""}
 
-  <!-- bottom teal band: byline -->
+  <!-- bottom teal band: centered footer -->
   <rect x="0" y="${H - BBAND}" width="${W}" height="${BBAND}" fill="${TEAL}"/>
-  ${avatar}
-  <text x="${PAD + 72}" y="${by - 5}" font-family="DejaVu Sans" font-size="25" font-weight="bold" fill="${BANDTX}">Ben Klein</text>
-  <text x="${PAD + 72}" y="${by + 26}" font-family="DejaVu Sans" font-size="20" font-weight="bold" fill="${MINT}">@wcgbk</text>
-  <text x="${W - PAD}" y="${by + 8}" font-family="DejaVu Sans" font-size="16" font-weight="bold" fill="${MINT}" text-anchor="end" letter-spacing="2">FOLLOW FOR DAILY SIGNAL</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 - 4}" font-family="DejaVu Sans" font-size="23" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="1">Follow For Your Daily Dose Of Signal</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 + 28}" font-family="DejaVu Sans" font-size="16" fill="${MINT}" text-anchor="middle" letter-spacing="2">powered by Authentic Press</text>
 </svg>`;
 }
 
@@ -144,9 +131,8 @@ async function fetchAvatar() {
 }
 
 async function renderCard(opts) {
-  const avatarUri = await fetchAvatar();
   const fontFiles = await ensureFonts();
-  const svg = buildCardSVG({ ...opts, avatarUri });
+  const svg = buildCardSVG({ ...opts });
   const resvg = new Resvg(svg, {
     font: { loadSystemFonts: fontFiles.length === 0, fontFiles, defaultFontFamily: "DejaVu Sans" },
     fitTo: { mode: "width", value: 1200 },

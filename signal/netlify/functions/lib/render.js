@@ -66,50 +66,55 @@ const NICHE = {
 const GOLD = "#e9b949";
 
 // kind: "quote" (large centered serif, quotation marks) | "take" (headline + kicker).
-function buildCardSVG({ kind = "take", niche = "quotes", headline = "", sub = "", avatarUri = null }) {
+// Conversion-tuned: big readable type, generous whitespace, subtle branding, and the
+// @handle emphasized (handle drives profile-visits → follows; no website to leak attention).
+function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "", avatarUri = null }) {
   const W = 1200, H = 675;
+  const PAD = 92;                         // generous left/right margin
   const n = NICHE[niche] || NICHE.quotes;
   const isQuote = kind === "quote";
 
-  // Size the headline to its length so short lines read big, long ones still fit.
+  // Size the headline to its length so short lines read BIG (mobile-legible), long ones still fit.
   const len = String(headline).length;
-  const fs2 = len <= 70 ? 56 : len <= 120 ? 46 : len <= 180 ? 39 : 33;
-  const cpl = len <= 70 ? 24 : len <= 120 ? 30 : len <= 180 ? 36 : 42;
+  const fs2 = len <= 55 ? 60 : len <= 95 ? 52 : len <= 140 ? 45 : len <= 185 ? 39 : 34;
+  const cpl = len <= 55 ? 21 : len <= 95 ? 26 : len <= 140 ? 31 : len <= 185 ? 37 : 43;
   const lines = wrapText(headline, cpl, 7);
-  const lh = Math.round(fs2 * 1.22);
+  const lh = Math.round(fs2 * 1.28);
   const blockH = lines.length * lh;
-  const startY = Math.round((H - blockH) / 2) + fs2 - 6 + (isQuote ? 6 : 0);
-  const fontFam = isQuote ? "DejaVu Serif" : "DejaVu Serif";
+  // Vertically center the quote block between the header and the byline.
+  const areaTop = 168, areaBot = H - 132;
+  const startY = Math.round(areaTop + ((areaBot - areaTop) - blockH) / 2) + Math.round(fs2 * 0.78);
 
   const headlineSvg = lines.map((ln, i) =>
-    `<text x="84" y="${startY + i * lh}" font-family="${fontFam}" font-size="${fs2}" font-weight="bold" fill="#f4f1ea">${esc(ln)}</text>`
+    `<text x="${PAD}" y="${startY + i * lh}" font-family="DejaVu Serif" font-size="${fs2}" font-weight="bold" fill="#f6f3ec">${esc(ln)}</text>`
   ).join("");
 
-  // deterministic faint grid of dots for texture (no randomness — resume-safe)
+  // very faint deterministic dot texture (subtle — no randomness, resume-safe)
   let dots = "";
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 64; i++) {
     const x = (i * 211 + 30) % W;
     const y = (i * 97 + 40) % H;
-    const o = (0.03 + ((i * 17) % 40) / 1000).toFixed(3);
-    dots += `<circle cx="${x}" cy="${y}" r="1.1" fill="#ffffff" opacity="${o}"/>`;
+    const o = (0.02 + ((i * 17) % 30) / 1000).toFixed(3);
+    dots += `<circle cx="${x}" cy="${y}" r="1" fill="#ffffff" opacity="${o}"/>`;
   }
 
-  const sub2 = (sub || "").trim();
+  const cy = H - 60;                      // byline baseline anchor
   const avatar = avatarUri
-    ? `<circle cx="116" cy="${H - 58}" r="22" fill="#0b0f1c" stroke="${GOLD}" stroke-width="1.5"/>
-       <image href="${avatarUri}" xlink:href="${avatarUri}" x="94" y="${H - 80}" width="44" height="44" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
-    : `<circle cx="116" cy="${H - 58}" r="22" fill="#161b2e" stroke="${GOLD}" stroke-width="1.5"/>
-       <text x="116" y="${H - 51}" font-family="DejaVu Serif" font-size="18" font-weight="bold" fill="${GOLD}" text-anchor="middle">BK</text>`;
+    ? `<circle cx="${PAD + 22}" cy="${cy}" r="23" fill="#0b0f1c" stroke="${n.c}" stroke-width="1.5"/>
+       <image href="${avatarUri}" xlink:href="${avatarUri}" x="${PAD - 1}" y="${cy - 22}" width="46" height="46" clip-path="url(#av)" preserveAspectRatio="xMidYMid slice"/>`
+    : `<circle cx="${PAD + 22}" cy="${cy}" r="23" fill="#161b2e" stroke="${n.c}" stroke-width="1.5"/>
+       <text x="${PAD + 22}" y="${cy + 7}" font-family="DejaVu Serif" font-size="19" font-weight="bold" fill="${n.c}" text-anchor="middle">BK</text>`;
+  const badgeW = n.label.length * 11 + 36;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0c1120"/><stop offset="55%" stop-color="#080b16"/><stop offset="100%" stop-color="#04060d"/>
     </linearGradient>
-    <radialGradient id="glow" cx="14%" cy="12%" r="60%">
-      <stop offset="0" stop-color="${n.c}" stop-opacity="0.16"/><stop offset="100%" stop-color="transparent"/>
+    <radialGradient id="glow" cx="12%" cy="10%" r="62%">
+      <stop offset="0" stop-color="${n.c}" stop-opacity="0.18"/><stop offset="100%" stop-color="transparent"/>
     </radialGradient>
-    <clipPath id="av"><circle cx="116" cy="${H - 58}" r="22"/></clipPath>
+    <clipPath id="av"><circle cx="${PAD + 22}" cy="${cy}" r="23"/></clipPath>
   </defs>
 
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
@@ -120,22 +125,24 @@ function buildCardSVG({ kind = "take", niche = "quotes", headline = "", sub = ""
   <rect x="0" y="0" width="6" height="${H}" fill="${n.c}"/>
 
   <!-- header: wordmark + niche badge -->
-  <text x="84" y="78" font-family="DejaVu Sans" font-size="20" font-weight="bold" fill="#f4f1ea" letter-spacing="4">THE SIGNAL</text>
-  <text x="84" y="100" font-family="DejaVu Sans" font-size="12" fill="rgba(220,225,240,0.45)" letter-spacing="2">BY BEN KLEIN</text>
-  <rect x="${W - 84 - (n.label.length * 11 + 34)}" y="58" width="${n.label.length * 11 + 34}" height="30" rx="15" fill="none" stroke="${n.c}" stroke-width="1.4"/>
-  <circle cx="${W - 84 - (n.label.length * 11 + 34) + 18}" cy="73" r="4" fill="${n.c}"/>
-  <text x="${W - 84 - 16}" y="78" font-family="DejaVu Sans" font-size="13" font-weight="bold" fill="${n.c}" text-anchor="end" letter-spacing="2">${esc(n.label)}</text>
+  <text x="${PAD}" y="80" font-family="DejaVu Sans" font-size="19" font-weight="bold" fill="#f6f3ec" letter-spacing="6">THE SIGNAL</text>
+  <rect x="${W - PAD - badgeW}" y="62" width="${badgeW}" height="30" rx="15" fill="none" stroke="${n.c}" stroke-width="1.4"/>
+  <circle cx="${W - PAD - badgeW + 18}" cy="77" r="4" fill="${n.c}"/>
+  <text x="${W - PAD - 16}" y="82" font-family="DejaVu Sans" font-size="13" font-weight="bold" fill="${n.c}" text-anchor="end" letter-spacing="2">${esc(n.label)}</text>
+  <line x1="${PAD}" y1="104" x2="${W - PAD}" y2="104" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>
 
-  ${isQuote ? `<text x="70" y="${startY - lh}" font-family="DejaVu Serif" font-size="120" font-weight="bold" fill="${n.c}" opacity="0.22">“</text>` : `<rect x="84" y="${startY - fs2 - 24}" width="56" height="5" rx="2.5" fill="${n.c}"/>`}
+  ${isQuote ? `<text x="${PAD - 8}" y="${startY - 6}" font-family="DejaVu Serif" font-size="150" font-weight="bold" fill="${n.c}" opacity="0.18">“</text>` : `<rect x="${PAD}" y="${startY - fs2 - 22}" width="58" height="5" rx="2.5" fill="${n.c}"/>`}
 
   ${headlineSvg}
 
-  ${sub2 ? `<text x="84" y="${startY + lines.length * lh + 30}" font-family="DejaVu Sans" font-size="19" fill="rgba(220,225,240,0.62)">${esc(sub2.slice(0, 78))}</text>` : ""}
+  ${(sub || "").trim() ? `<text x="${PAD}" y="${startY + lines.length * lh + 26}" font-family="DejaVu Sans" font-size="19" fill="rgba(226,231,244,0.6)">${esc((sub || "").trim().slice(0, 80))}</text>` : ""}
 
-  <!-- byline -->
+  <!-- byline: avatar + name + emphasized handle (the follow driver) -->
+  <line x1="${PAD}" y1="${cy - 44}" x2="${W - PAD}" y2="${cy - 44}" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>
   ${avatar}
-  <text x="150" y="${H - 64}" font-family="DejaVu Sans" font-size="18" font-weight="bold" fill="#f4f1ea">Ben Klein</text>
-  <text x="150" y="${H - 44}" font-family="DejaVu Sans" font-size="14" fill="${GOLD}">@wcgbk · worldclassgrowth.com</text>
+  <text x="${PAD + 60}" y="${cy - 4}" font-family="DejaVu Sans" font-size="19" font-weight="bold" fill="#f6f3ec">Ben Klein</text>
+  <text x="${PAD + 60}" y="${cy + 19}" font-family="DejaVu Sans" font-size="15" font-weight="bold" fill="${GOLD}">@wcgbk</text>
+  <text x="${W - PAD}" y="${cy + 8}" font-family="DejaVu Sans" font-size="13" fill="rgba(226,231,244,0.4)" text-anchor="end" letter-spacing="2">FOLLOW FOR DAILY SIGNAL</text>
 </svg>`;
 }
 

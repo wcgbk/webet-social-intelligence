@@ -27,12 +27,16 @@ const VOICE = `VOICE — you are ghost-writing as Ben Klein (@wcgbk): president 
 an operator who helps founders win in the AI era and cuts through propaganda, spin, and hype.
 - Write like a sharp, contrarian human who lives on X. Confident, specific, a little provocative.
 - Earn the follow: every post must deliver a real insight, a useful frame, or a true contrarian take.
-- Open with a HOOK. Vary sentence length. Short punches. No throat-clearing, no "in an era of".
-- NO hashtags. NO emoji spam (one, at most, only if it earns its place). NO links in the body.
-- End on a line that invites a reply or a save (a question, a sharp claim, a reframe).
-- BANNED words/phrases: delve, tapestry, "let's unpack", "sparked a firestorm", "game-changer",
+FORMAT (X-native, tuned for reach + replies):
+- LINE 1 IS EVERYTHING. It must stop the scroll on its own (X truncates the rest). A bold claim,
+  a surprising number, or a sharp contrarian statement. No setup, no "I think", no throat-clearing.
+- Use SHORT lines and line breaks (\\n) for white space — make it skim in 2 seconds, not a paragraph block.
+- One idea per post. Concrete > abstract. Name names, use real numbers.
+- END on reply-bait: a pointed question, a "change my mind" claim, or a reframe that begs a response.
+- NO hashtags. NO links in the body. At most one emoji, only if it truly earns its place.
+- BANNED: delve, tapestry, "let's unpack", "sparked a firestorm", "game-changer", "in an era of",
   "in today's fast-paced", "the truth is", em-dash overload, generic motivational filler.
-- Sound like a person with skin in the game. Never sound like a brand or a press release.`;
+- Sound like a person with skin in the game. Never like a brand or a press release.`;
 
 const TODAY = () => `TODAY IS ${etLongDate()} (US Eastern). Use only what's genuinely current.`;
 
@@ -143,11 +147,14 @@ RULES:
 }
 
 // ── slot registry ────────────────────────────────────────────────────────────
+// image strategy (conversion best-practice): TEXT-FIRST posts reach further and feel native,
+// so takes/lessons/threads ship text-only with a strong hook. The QUOTE gets the branded card —
+// it's the one screenshot-worthy, shareable asset. Flip `image` to true to re-enable a card.
 const SLOTS = {
-  "morning-take": { gen: genMorningTake, autopostEligible: true, image: true },
-  "midday-lesson": { gen: genMiddayLesson, autopostEligible: true, image: true },
+  "morning-take": { gen: genMorningTake, autopostEligible: true, image: false },
+  "midday-lesson": { gen: genMiddayLesson, autopostEligible: true, image: false },
   "evening-quote": { gen: genEveningQuote, autopostEligible: true, image: true },
-  "daily-thread": { gen: genDailyThread, autopostEligible: false, image: true }, // threads ALWAYS held
+  "daily-thread": { gen: genDailyThread, autopostEligible: false, image: false }, // threads ALWAYS held
 };
 
 async function notifyOwner(text) {

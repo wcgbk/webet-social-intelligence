@@ -118,8 +118,8 @@ function buildCardSVG({ kind = "quote", niche = "quotes", headline = "", sub = "
 
   <!-- bottom teal band: centered footer -->
   <rect x="0" y="${H - BBAND}" width="${W}" height="${BBAND}" fill="${TEAL}"/>
-  <text x="${W / 2}" y="${H - BBAND / 2 - 6}" font-family="Poppins" font-size="23" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="1">Follow For Your Daily Dose Of Signal</text>
-  <text x="${W / 2}" y="${H - BBAND / 2 + 24}" font-family="Poppins" font-size="16" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="2">powered by Authentic Press</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 - 6}" font-family="Poppins" font-size="22" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="3">FOLLOW FOR YOUR DAILY DOSE OF SIGNAL</text>
+  <text x="${W / 2}" y="${H - BBAND / 2 + 24}" font-family="Poppins" font-size="15" font-weight="bold" fill="${BANDTX}" text-anchor="middle" letter-spacing="3">POWERED BY AUTHENTIC PRESS</text>
 </svg>`;
 }
 

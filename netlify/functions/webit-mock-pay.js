@@ -19,7 +19,7 @@ function parseCookies(str) {
 
 const CORS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
-// Pack catalog mirrors /credits (founder-designed economy). Founder-editable.
+// Pack catalog mirrors /webit (founder-designed economy). Founder-editable.
 const PACKS = {
   contributor: { credits: 5000,  label: 'Contributor',      price: '$100' },
   partner:     { credits: 10000, label: 'Liquidity Partner', price: '$200' },

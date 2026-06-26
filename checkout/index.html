@@ -57,7 +57,7 @@
 </head>
 <body>
   <div class="top">
-    <a href="/credits" class="logo">
+    <a href="/webit" class="logo">
       <svg viewBox="0 0 470 419" fill="none" style="width:26px;height:22px;" xmlns="http://www.w3.org/2000/svg"><path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/><path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/></svg>
       WeBetAI
     </a>
@@ -72,7 +72,7 @@
       <div class="row"><span class="k">WeBits</span><span class="v" id="r-credits">—</span></div>
       <div class="row total"><span class="k">Total</span><span class="v" id="r-price">—</span></div>
       <button class="btn" id="pay-btn" type="button">Complete purchase (test)</button>
-      <a class="cancel" href="/credits">Cancel and go back</a>
+      <a class="cancel" href="/webit">Cancel and go back</a>
       <div class="err" id="err"></div>
       <p class="note">Payments are in test mode while live processing is being connected — packs credit instantly to your account, no card required. Real checkout (Stripe) activates soon.</p>
     </div>
@@ -83,7 +83,7 @@
       <div class="bal" id="s-bal">—</div>
       <div class="bal-label">Your WeBit balance</div>
       <a class="btn" href="/dashboard" style="text-decoration:none;">Open your dashboard</a>
-      <a class="cancel" href="/credits">Back to credit packs</a>
+      <a class="cancel" href="/webit">Back to credit packs</a>
     </div>
   </div>
 
@@ -102,7 +102,7 @@
       document.getElementById('pack-title').textContent = 'Pick a pack first';
       document.querySelector('.sub').textContent = 'Choose a WeBit pack on the credits page to continue.';
       payBtn.textContent = 'View credit packs';
-      payBtn.addEventListener('click', function () { location.href = '/credits'; });
+      payBtn.addEventListener('click', function () { location.href = '/webit'; });
     } else {
       document.getElementById('pack-title').textContent = pack.label + ' Pack';
       document.getElementById('r-pack').textContent = pack.label;

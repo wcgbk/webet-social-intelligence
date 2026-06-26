@@ -2145,7 +2145,7 @@
         .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
         .then(function (res) {
           if (res.s === 401) { location.href = '/.netlify/functions/auth-x-init'; return; }
-          if (res.s === 402) { btn.disabled = false; btn.textContent = 'Need WeBits — get a pack'; btn.onclick = function () { location.href = '/credits'; }; return; }
+          if (res.s === 402) { btn.disabled = false; btn.textContent = 'Need WeBits — get a pack'; btn.onclick = function () { location.href = '/webit'; }; return; }
           if (!res.j || !res.j.ok) throw new Error('failed');
           depthData = res.j.depth || [];
           renderDepth();

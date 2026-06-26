@@ -1727,7 +1727,7 @@
                 if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: stakeSel });
                 if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
               } else if (j && j.error === 'insufficient_webits') {
-                status.textContent += ' · Not enough WeBits to stake — get a pack at webetsocial.com/credits';
+                status.textContent += ' · Not enough WeBits to stake — get a pack at webetsocial.com/webit';
               }
             }).catch(function () {});
         } else if (stakeSel > 0 && !window.wbaiUser) {
@@ -1891,7 +1891,7 @@
     if (matchStake > 0) {
       var bal = (window.wbaiUser && Number(window.wbaiUser.credit_balance)) || 0;
       if (bal < matchStake) {
-        status.innerHTML = 'You need ' + matchStake + ' WeBits to match this stake. <a href="/credits" style="color:#004C54;font-weight:700;">Get a pack →</a>';
+        status.innerHTML = 'You need ' + matchStake + ' WeBits to match this stake. <a href="/webit" style="color:#004C54;font-weight:700;">Get a pack →</a>';
         status.style.color = '#c0392b'; return;
       }
     }
@@ -2312,7 +2312,7 @@
         if (u && u.error) u = null;
         window.wbaiUser = u || null;
         if (u) {
-          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><a class="w" href="/webit" style="color:#fff;text-decoration:none;"><img src="/webet-coin.png" alt="WeBit" style="width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;"> ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</a><a href="/credits">get more</a>');
+          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><a class="w" href="/webit" style="color:#fff;text-decoration:none;"><img src="/webet-coin.png" alt="WeBit" style="width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;"> ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</a><a href="/webit">get more</a>');
           // Adopt the unified identity for EVERY signed-in user — phone when they have one
           // (SMS-first), otherwise their wbai account id (X users). The page's own phone
           // login is gone; /login is the only gate.

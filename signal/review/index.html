@@ -18,6 +18,7 @@
   button{background:#1a2236;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
   button:hover{border-color:var(--gold)}
   .btn-go{background:var(--grn);color:#04140a;border:none} .btn-no{background:transparent;color:var(--red);border-color:rgba(239,106,106,.4)}
+  .btn-prev{background:var(--gold);color:#0a1413;border:none;white-space:nowrap} .btn-prev:hover{filter:brightness(1.08)}
   .btn-go:hover{filter:brightness(1.08)}
   .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:18px}
   .meta{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
@@ -43,7 +44,9 @@
   <div class="keybar">
     <input id="key" type="password" placeholder="REVIEW_KEY" />
     <button onclick="saveKey()">Load</button>
+    <button class="btn-prev" onclick="previewAll()" title="Generate all 4 of today's posts (preview only — nothing is posted)">⟳ Preview today's 4 posts</button>
   </div>
+  <div id="pvstatus" class="muted" style="font-size:13px;margin:-8px 0 18px"></div>
   <div class="sec">Pending approval</div>
   <div id="pending"><div class="empty">Enter your key and load.</div></div>
   <div class="sec">Recent</div>
@@ -56,6 +59,16 @@ if(KEY) $("#key").value = KEY;
 
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function saveKey(){ KEY = $("#key").value.trim(); localStorage.setItem("signal_key", KEY); load(); }
+
+// Fire all 4 slot generators in dryRun (preview only — never posts), then reload the queue.
+const PREVIEW_SLOTS = ["slot-morning-take-background","slot-daily-thread-background","slot-midday-lesson-background","slot-evening-quote-background"];
+async function previewAll(){
+  const s = $("#pvstatus");
+  PREVIEW_SLOTS.forEach(fn => fetch("/.netlify/functions/"+fn+"?dryRun=1").catch(()=>{}));
+  let n = 30;
+  s.textContent = "Generating all 4 previews… ~"+n+"s (nothing is posted)";
+  const t = setInterval(()=>{ n--; s.textContent = n>0 ? "Generating all 4 previews… ~"+n+"s (nothing is posted)" : ""; if(n<=0){ clearInterval(t); load(); } }, 1000);
+}
 
 async function api(method, body){
   const url = "/api/review?key=" + encodeURIComponent(KEY) + (method==="GET"&&body?("&"+body):"");

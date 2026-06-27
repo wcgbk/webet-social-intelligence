@@ -1638,26 +1638,6 @@
         Trending Challenges
       </button>
 
-      <!-- Intelligence -->
-      <div class="nav-section-hd">Intelligence</div>
-      <button class="nav-item" data-panel="guardian" onclick="switchPanel('guardian')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-        Daily Digest
-      </button>
-      <button class="nav-item" data-panel="feed" onclick="switchPanel('feed')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
-        Authentic Press
-      </button>
-      <button class="nav-item" data-panel="builder" onclick="switchPanel('builder')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
-        WeBet Builder
-      </button>
-      <button class="nav-item coming-soon" data-panel="sniper">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg></span>
-        Comment Sniper
-        <span class="nav-soon-badge">Soon</span>
-      </button>
-
     </nav>
 
     <div class="sidebar-section-label" id="history-label" style="display:none">Recent Chats</div>
@@ -1733,10 +1713,6 @@
               <button class="suggestion-card" onclick="useSuggestion(this)">
                 <span class="suggestion-card-icon">🔍</span>
                 <span class="suggestion-card-text" id="verify-suggestion">Verify a pick</span>
-              </button>
-              <button class="suggestion-card" onclick="switchPanel('guardian')">
-                <span class="suggestion-card-icon">🔥</span>
-                <span class="suggestion-card-text">Today's trending digest</span>
               </button>
               <button class="suggestion-card" onclick="switchPanel('p2p')">
                 <span class="suggestion-card-icon">🏆</span>
@@ -1986,10 +1962,6 @@
 <!-- Mobile Bottom Tabs -->
 <div class="mobile-tabs" id="mobile-tabs">
   <div class="mobile-tabs-inner">
-    <button class="mobile-tab" data-panel="guardian" onclick="switchPanel('guardian')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-      <span class="mobile-tab-label">Trending</span>
-    </button>
     <button class="mobile-tab" data-panel="picks" onclick="switchPanel('picks')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
       <span class="mobile-tab-label">Picks</span>

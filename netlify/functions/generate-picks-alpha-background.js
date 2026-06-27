@@ -158,6 +158,18 @@ const F5_US_BOOKS = new Set([
   "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us", "espnbet", "betrivers", "fanatics",
   "hardrockbet", "hardrockbet_oh", "ballybet", "fliff", "bet365", "pointsbetus", "wynnbet", "superbook",
 ]);
+// Top major US books — the TIGHT set for F5 consensus + the bettability guard (Ben-confirmed 2026-06-27).
+// Excludes fringe/defunct books (bet365 intl-leaning, WynnBet, SuperBook, Barstool). Hard Rock included.
+const TOP_US_BOOKS = new Set([
+  "draftkings", "fanduel", "betmgm", "caesars", "espnbet",
+  "betrivers", "fanatics", "hardrockbet", "hardrockbet_oh",
+]);
+// Numeric median of American odds. Robust to a lone off-market outlier (e.g. a +155 when the field
+// is -120): the outlier sorts to the tail and never becomes the median.
+function medianAmerican(prices) {
+  const s = (prices || []).filter(p => Number.isFinite(p)).sort((a, b) => a - b);
+  return s.length ? s[Math.floor(s.length / 2)] : null;
+}
 
 // Min edge thresholds: amount of point/goal/run disagreement before a candidate is evaluated.
 // MLB: 0.5 runs (matches beta — 0.2 was noise-level, below model resolution for run lines)
@@ -781,26 +793,45 @@ async function fetchOdds(dateISO, snapshotTime = null) {
   return allOdds;
 }
 
-// ── Extract best F5 (first-five-innings) prices from a single per-event odds response ──
-// US-regulated books only (so every F5 line is placeable). Mirrors the F5 function's extractBestOdds
-// F5 branch. Returns null when the event carries no F5 markets at a US book.
+// ── Extract CONSENSUS F5 (first-five-innings) lines from a single per-event odds response ──
+// MEDIAN across TOP_US_BOOKS (the tight major set), NOT best-price. Best-price published off-market
+// outliers (a +155 F5 ML when the field is -120) that aren't bettable at your book; the median is
+// robust to a lone outlier. `n` = number of top US books offering the market (for the bettability guard).
+// Returns null when no top US book carries the event's F5 markets.
 function extractF5FromEvent(ev) {
   const f5ML = {}, f5RL = {}, f5Total = {};
-  const books = (ev?.bookmakers || []).filter(b => F5_US_BOOKS.has((b.key || "").toLowerCase()));
+  const books = (ev?.bookmakers || []).filter(b => TOP_US_BOOKS.has((b.key || "").toLowerCase()));
+  const mlP = {}, rlP = {}, totP = {};
   for (const bk of books) {
     for (const mkt of (bk.markets || [])) {
       if (mkt.key === "h2h_1st_5_innings") for (const o of (mkt.outcomes || [])) {
-        if (!f5ML[o.name] || o.price > f5ML[o.name].price) f5ML[o.name] = { price: o.price, book: bk.title };
+        (mlP[o.name] = mlP[o.name] || []).push(o.price);
       }
       if (mkt.key === "spreads_1st_5_innings") for (const o of (mkt.outcomes || [])) {
         if (o.point === undefined) continue;
-        if (!f5RL[o.name] || o.price > f5RL[o.name].price) f5RL[o.name] = { price: o.price, point: o.point, book: bk.title };
+        (rlP[o.name] = rlP[o.name] || []).push({ price: o.price, point: o.point });
       }
       if (mkt.key === "totals_1st_5_innings") for (const o of (mkt.outcomes || [])) {
         if (o.point === undefined) continue;
-        if (!f5Total[o.name] || o.price > f5Total[o.name].price) f5Total[o.name] = { price: o.price, point: o.point, book: bk.title };
+        (totP[o.name] = totP[o.name] || []).push({ price: o.price, point: o.point });
       }
     }
+  }
+  for (const name in mlP) {
+    f5ML[name] = { price: medianAmerican(mlP[name]), n: mlP[name].length, book: `${mlP[name].length}-book US consensus` };
+  }
+  // RL/Total: anchor on the median POINT, then median the prices offered AT that point.
+  for (const name in rlP) {
+    const pts = rlP[name].map(x => x.point).sort((a, b) => a - b);
+    const point = pts[Math.floor(pts.length / 2)];
+    const atPt = rlP[name].filter(x => x.point === point).map(x => x.price);
+    f5RL[name] = { price: medianAmerican(atPt), point, n: rlP[name].length, book: `${rlP[name].length}-book US consensus` };
+  }
+  for (const name in totP) {
+    const pts = totP[name].map(x => x.point).sort((a, b) => a - b);
+    const point = pts[Math.floor(pts.length / 2)];
+    const atPt = totP[name].filter(x => x.point === point).map(x => x.price);
+    f5Total[name] = { price: medianAmerican(atPt), point, n: totP[name].length, book: `${totP[name].length}-book US consensus` };
   }
   const has = Object.keys(f5ML).length || Object.keys(f5RL).length || Object.keys(f5Total).length;
   return has ? { f5ML, f5RL, f5Total } : null;
@@ -2834,6 +2865,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
 
   // ── F5 Moneyline ── (real F5 ML lines only — no full-game proxy)
   for (const [team, data] of Object.entries(f5.f5ML)) {
+    if ((data.n || 0) < 3) continue; // bettability guard: F5 ML must be offered by >=3 top US books
     const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
     const teamLabel = isHome ? home : away;
     const rawMargin = isHome ? projF5Margin : -projF5Margin;
@@ -2852,7 +2884,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   }
 
   // ── F5 Total ── (real F5 total line; emit whichever side clears the floor)
-  if (f5.f5Total.Over && f5.f5Total.Under) {
+  if (f5.f5Total.Over && f5.f5Total.Under && (f5.f5Total.Over.n || 0) >= 3) {  // bettability: F5 total offered by >=3 top US books
     const line = f5.f5Total.Over.point;
     const rawDiff = projF5Total - line;
     const discDiff = applyEdgeDiscount(Math.abs(rawDiff), 2.0) * Math.sign(rawDiff);
@@ -2873,6 +2905,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
 
   // ── F5 Run Line ── (rarely offered at US books; emit when present)
   for (const [team, data] of Object.entries(f5.f5RL)) {
+    if ((data.n || 0) < 3) continue; // bettability guard: F5 run line must be offered by >=3 top US books
     const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
     const teamLabel = isHome ? home : away;
     const spread = data.point;
@@ -3506,13 +3539,33 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
     console.log(`[v10-f5] ${f5Pool.length} F5 candidate(s) over ${bestPerGame.size} game(s) cleared the discounted EV floor → kept top ${f5Kept.length} (cap ${F5_MAX_SLOTS}, 1/game): ${f5Kept.map(c => `${c.side} ${c.odds > 0 ? "+" : ""}${c.odds} (EV ${(c.ev * 100).toFixed(1)}%, ${c.kellyUnits}u)`).join(" | ")}`);
   }
 
+  // ── Bettability guard (Ben-confirmed 2026-06-27) — never publish an off-market / unbettable price ──
+  // For moneylines (full-game + F5), the displayed odds may not be more than ODDS_RANGE_MAX_DEV implied
+  // (~20¢) more generous than the top-US CONSENSUS (consensusLine = median/no-vig implied % for an ML).
+  // Catches a best-price/stale outlier like +155 when the field is ~-120 (the exact case that shipped
+  // 6/27). Layered with: F5 thin-market availability (markets offered by <3 TOP_US_BOOKS are dropped at
+  // source in computeF5Candidates) and the F5 median-consensus fix (extractF5FromEvent). Full-game
+  // spreads/totals sit at the consensus line at standard juice, so they carry no off-market-odds risk.
+  const ODDS_RANGE_MAX_DEV = 0.07; // implied-prob (~20 cents)
+  const bettable = candidates.filter(c => {
+    if ((c.market || "").toLowerCase().includes("moneyline") && c.consensusLine != null && c.odds != null) {
+      const dev = (c.consensusLine / 100) - impliedProb(c.odds); // >0 ⇒ our price is more generous than consensus
+      if (dev > ODDS_RANGE_MAX_DEV) {
+        console.log(`[v10-bettability] DROP ${c.side} ${c.odds > 0 ? "+" : ""}${c.odds}: ${(impliedProb(c.odds) * 100).toFixed(1)}% implied vs ${c.consensusLine}% consensus = ${(dev * 100).toFixed(1)}% too generous (cap ${(ODDS_RANGE_MAX_DEV * 100).toFixed(0)}%) — not bettable at top US books`);
+        return false;
+      }
+    }
+    return true;
+  });
+  if (bettable.length < candidates.length) console.log(`[v10-bettability] dropped ${candidates.length - bettable.length} off-market candidate(s) of ${candidates.length}`);
+
   // Sort by z-score descending (normalized edge across all sports)
-  candidates.sort((a, b) => b.zScore - a.zScore);
+  bettable.sort((a, b) => b.zScore - a.zScore);
 
   // Assign ranks
-  candidates.forEach((c, i) => { c.rank = i + 1; });
+  bettable.forEach((c, i) => { c.rank = i + 1; });
 
-  return candidates;
+  return bettable;
 }
 
 // ── Format candidate table for Claude prompt ──
@@ -3601,13 +3654,13 @@ function fixNarrativeEdge(narrative, candidate) {
   const c = candidate;
   const edgeVal = Math.abs(c.edge);
   const unit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
-  const isTotal = (c.market || '').toLowerCase() === 'total';
+  const isTotal = (c.market || '').toLowerCase().includes('total');   // matches "Total" + "F5 Total"
 
   // Build the JS-computed opening sentence.
   // v10.3: the headline % must be the CALIBRATED edge (coverProb − implied) so the prose
   // matches the Edge badge. The raw model view stays as context — quoting the raw gap as
   // "the edge" overstated it ~3x vs what calibration credits.
-  const isML = (c.market || '').toLowerCase() === 'moneyline';
+  const isML = (c.market || '').toLowerCase().includes('moneyline');   // matches "moneyline" + "F5 Moneyline" → win-% sentence, not run-margin
   const truePct = (c.coverProb != null && c.odds != null)
     ? ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)
     : null;
@@ -4931,8 +4984,8 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
-    const isML = (c.market || '').toLowerCase() === 'moneyline';
-    const isTotal = (c.market || '').toLowerCase() === 'total';
+    const isML = (c.market || '').toLowerCase().includes('moneyline');   // matches "moneyline" + "F5 Moneyline" → win-% sentence, not run-margin
+    const isTotal = (c.market || '').toLowerCase().includes('total');   // matches "Total" + "F5 Total"
     const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
     const scoreUnit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
 
@@ -5020,8 +5073,8 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
-    const isML = (c.market || '').toLowerCase() === 'moneyline';
-    const isTotal = (c.market || '').toLowerCase() === 'total';
+    const isML = (c.market || '').toLowerCase().includes('moneyline');   // matches "moneyline" + "F5 Moneyline" → win-% sentence, not run-margin
+    const isTotal = (c.market || '').toLowerCase().includes('total');   // matches "Total" + "F5 Total"
     const zUnits = kellyToUnits(c.kellyUnits, false, c.coverProb);
     const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
 
@@ -5183,6 +5236,8 @@ async function storePicks(dateISO, picksData) {
 // per-event F5 odds extraction without any network. No effect on the deployed function's behavior.
 module.exports.computeF5Candidates = computeF5Candidates;
 module.exports.extractF5FromEvent = extractF5FromEvent;
+module.exports.medianAmerican = medianAmerican;
+module.exports.impliedProb = impliedProb;
 module.exports.getF5CalibratedProb = getF5CalibratedProb;
 // Stage-3 discrete run-distribution (NegBinom) hooks — let the offline harness exercise the new MLB
 // run-line/total/F5 pricing and the full computeEdgeTable wiring without any network.

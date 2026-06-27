@@ -2775,15 +2775,19 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   // Run rate (alpha stores baseball runs/game as pointsPerGame) + starter ERA (season, from scoreboard).
   const awayRPG = (typeof awayStats.pointsPerGame === "number" ? awayStats.pointsPerGame : null) || 4.5;
   const homeRPG = (typeof homeStats.pointsPerGame === "number" ? homeStats.pointsPerGame : null) || 4.5;
-  const awaySPEra = (pitcherData?.[away]?.era) || homeStats.era || 4.0; // away team's starter
-  const homeSPEra = (pitcherData?.[home]?.era) || awayStats.era || 4.0; // home team's starter
-  const LG = 4.0;
   const parkMult = (MLB_PARK_FACTORS[game.venue] || 100) / 100;
-  const regHomeSP = (Math.max(homeSPEra, 1.5) + LG) / 2; // away offense faces the HOME starter
-  const regAwaySP = (Math.max(awaySPEra, 1.5) + LG) / 2; // home offense faces the AWAY starter
   const f5Clamp = (m) => Math.min(1.25, Math.max(0.75, m));
-  let awayF5 = awayRPG * f5Clamp(regHomeSP / LG) * parkMult * 0.55;
-  let homeF5 = homeRPG * f5Clamp(regAwaySP / LG) * parkMult * 0.55;
+  // F5 pitching now uses the SAME sharp signal as the full game (Phase-4a): mlbStarterRunMetric prefers
+  // regressed FIP (≥30 IP) over raw ERA, then team ERA. It returns a metric on the MLB_LG_RUN (~4.20)
+  // scale, so divide by that to center a league-average starter at 1.0. F5's wider clamp [0.75,1.25] +
+  // the 0.55 half-game factor are unchanged. Applying our sharpest pitching signal to the softest MLB
+  // market (F5); forward-CLV only (F5 can't be backtested).
+  const homeMetric = mlbStarterRunMetric(pitcherData?.[home], homeStats.era); // home starter
+  const awayMetric = mlbStarterRunMetric(pitcherData?.[away], awayStats.era); // away starter
+  const homeSPMult = homeMetric ? f5Clamp(homeMetric.metric / MLB_LG_RUN) : 1.0;
+  const awaySPMult = awayMetric ? f5Clamp(awayMetric.metric / MLB_LG_RUN) : 1.0;
+  let awayF5 = awayRPG * homeSPMult * parkMult * 0.55; // away offense faces the HOME starter
+  let homeF5 = homeRPG * awaySPMult * parkMult * 0.55; // home offense faces the AWAY starter
 
   // Temperature scales BOTH offenses (cancels in the margin → totals only).
   const tempF = weatherData?.[`${away} @ ${home}`.toLowerCase()]?.tempF;

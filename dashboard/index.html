@@ -1710,10 +1710,6 @@
                 <span class="suggestion-card-icon">⚡</span>
                 <span class="suggestion-card-text">Show today's picks</span>
               </button>
-              <button class="suggestion-card" onclick="useSuggestion(this)">
-                <span class="suggestion-card-icon">🔍</span>
-                <span class="suggestion-card-text" id="verify-suggestion">Verify a pick</span>
-              </button>
               <button class="suggestion-card" onclick="switchPanel('p2p')">
                 <span class="suggestion-card-icon">🏆</span>
                 <span class="suggestion-card-text">Challenge someone Pick 3</span>
@@ -2970,10 +2966,7 @@
         <span class="picks-banner-count">${data.picks.length} picks</span>
         <span>${data.summary?.totalUnits || '0u'} total &middot; ${sports}</span>
       </div>`;
-      const verifySug = document.getElementById('verify-suggestion');
-      if (verifySug && data.picks[0]) {
-        verifySug.textContent = 'Verify: ' + (data.picks[0].matchup || '').split(' vs ')[0] || 'Verify a pick';
-      }
+      // (Verify suggestion card removed 2026-06-27 — user-facing verify feature retired)
     } else {
       subtitle.textContent = 'Your AI-powered betting assistant. Picks drop at 10am EST.';
     }

@@ -583,7 +583,7 @@
 
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
     <div class="date-header" id="date-header">Loading...</div>
-    <button class="verify-btn" id="verify-all-btn" onclick="verifyAllPicks()" style="display:none;">&#10003; Verify Picks</button>
+    <!-- Verify Picks button removed 2026-06-27 — user-facing verify feature retired per Ben -->
   </div>
 
   <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
@@ -1163,7 +1163,7 @@
 
     // Date
     document.getElementById('date-header').textContent = data.dateFormatted || data.date || 'Today';
-    if (picks.length > 0) document.getElementById('verify-all-btn').style.display = '';
+    // (verify-all-btn removed 2026-06-27 — no show-logic needed)
 
     // Daily Edge Summary
     const summaryEl = document.getElementById('daily-edge-summary');

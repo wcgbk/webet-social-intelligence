@@ -359,12 +359,26 @@ async function fetchESPNScores(dateISO, sport) {
       const home = comp.competitors?.find(c => c.homeAway === 'home');
       if (!away || !home) return null;
       const status = comp.status || ev.status || {};
+      // First-5-innings (F5) score from per-inning linescores (MLB only). An F5 bet settles on the
+      // score THROUGH 5 innings and is locked once the bottom of the 5th is complete (we've advanced
+      // past the 5th, or the game is final with >=5 innings on both sides).
+      const isMLB = sport === 'MLB';
+      const parseLS = (c) => Array.isArray(c?.linescores) ? c.linescores.map(l => Number(l.value ?? l.displayValue ?? 0) || 0) : [];
+      const awayLS = isMLB ? parseLS(away) : [];
+      const homeLS = isMLB ? parseLS(home) : [];
+      const sum5 = (a) => a.slice(0, 5).reduce((s, v) => s + v, 0);
+      const period = status.period || 0;
+      const st = status.type?.state || 'pre';
+      const f5Complete = isMLB && ((period > 5) || (st === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
       return {
         awayTeam: away.team?.displayName || '', awayAbbr: away.team?.abbreviation || '',
         awayScore: parseInt(away.score) || 0,
         homeTeam: home.team?.displayName || '', homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
-        state: status.type?.state || 'pre',
+        state: st,
+        awayScoreF5: isMLB ? sum5(awayLS) : null,
+        homeScoreF5: isMLB ? sum5(homeLS) : null,
+        f5Complete: !!f5Complete,
       };
     }).filter(Boolean);
   } catch (e) { return []; }
@@ -387,7 +401,13 @@ function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || pick.market || '').toLowerCase();
-  const { awayScore, homeScore } = game;
+  const src = (pick.source || '').toLowerCase();
+  const isF5 = src === 'f5' || betType.startsWith('f5') || /\bf5\b/.test(pickStr.toLowerCase());
+  // F5 bets settle on the score THROUGH 5 innings. If the game didn't complete 5 full innings the
+  // F5 bet is void (no action) — treat as a push so it neither wins nor loses.
+  if (isF5 && !game.f5Complete) return 'push';
+  const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
+  const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
@@ -834,4 +854,5 @@ exports.handler = async (event) => {
 module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
+  gradePick, calcProfit,
 };

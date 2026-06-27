@@ -772,6 +772,17 @@
             startTimeEST = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
           } catch(e) {}
         }
+        // First-5-innings (F5) score from per-inning linescores (MLB only). An F5 bet settles on the
+        // score THROUGH 5 innings and locks once the bottom of the 5th is complete (we've advanced
+        // past the 5th, or the game is final with >=5 innings on both sides).
+        const isMLB = sport === 'MLB';
+        const parseLS = (c) => Array.isArray(c?.linescores) ? c.linescores.map(l => Number(l.value ?? l.displayValue ?? 0) || 0) : [];
+        const awayLS = isMLB ? parseLS(away) : [];
+        const homeLS = isMLB ? parseLS(home) : [];
+        const sum5 = (a) => a.slice(0, 5).reduce((s, v) => s + v, 0);
+        const period = status.period || 0;
+        const state = status.type?.state || 'pre';
+        const f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
         return {
           awayTeam: away.team?.displayName || away.team?.shortDisplayName || '',
           awayAbbr: away.team?.abbreviation || '',
@@ -779,11 +790,16 @@
           homeTeam: home.team?.displayName || home.team?.shortDisplayName || '',
           homeAbbr: home.team?.abbreviation || '',
           homeScore: parseInt(home.score) || 0,
-          state: status.type?.state || 'pre',  // pre, in, post
+          state,  // pre, in, post
           detail: status.type?.shortDetail || status.type?.detail || '',
           clock: status.displayClock || '',
-          period: status.period || 0,
+          period,
           startTimeEST,
+          awayScoreF5: isMLB ? sum5(awayLS) : null,
+          homeScoreF5: isMLB ? sum5(homeLS) : null,
+          f5Complete: !!f5Complete,
+          awayLinescores: awayLS,
+          homeLinescores: homeLS,
         };
       }).filter(Boolean);
     } catch (e) {
@@ -871,21 +887,43 @@
     return null;
   }
 
-  /* ── Determine pick result ── */
+  /* ── Is this an F5 (first-five-innings) pick? ── */
+  function isF5Pick(pick) {
+    const bt = (pick.betType || '').toLowerCase();
+    const src = (pick.source || '').toLowerCase();
+    const pk = (pick.pick || '').toLowerCase();
+    return src === 'f5' || bt.startsWith('f5') || /\bf5\b/.test(pk);
+  }
+
+  /* ── Determine pick result ──
+     F5 bets settle on the score THROUGH 5 innings and finalize after the bottom of the 5th —
+     independently of the full game, which may still be in progress. Full-game bets use the full
+     score and finalize when the game is over. ── */
   function determineResult(pick, game) {
     if (!game) return { status: 'scheduled', label: 'Upcoming' };
     if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
-    if (game.state === 'in') {
+
+    const isF5 = isF5Pick(pick);
+    // Game called before 5 full innings → an F5 bet is void (no action).
+    if (isF5 && game.state === 'post' && !game.f5Complete) {
+      return { status: 'push', label: 'No F5 result' };
+    }
+    const awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
+    const isFinal = isF5 ? !!game.f5Complete : (game.state === 'post');
+
+    if (!isFinal) {
+      // In progress, not yet decided
       const livePickStr = (pick.pick || '').trim();
       const liveBetType = (pick.betType || '').toLowerCase();
-      const liveAwayScore = game.awayScore;
-      const liveHomeScore = game.homeScore;
-      const livePickTeam = livePickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+      const liveAwayScore = awayScore;
+      const liveHomeScore = homeScore;
+      const livePickTeam = livePickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
       const livePickedAway = teamsMatch(livePickTeam, game.awayTeam, game.awayAbbr);
       const livePickedHome = teamsMatch(livePickTeam, game.homeTeam, game.homeAbbr);
       let projected = 'live';
 
-      if (liveBetType === 'total' || /over|under/i.test(livePickStr)) {
+      if (liveBetType === 'total' || liveBetType === 'f5 total' || /over|under/i.test(livePickStr)) {
         const total = liveAwayScore + liveHomeScore;
         const lm = livePickStr.match(/(over|under)\s*([\d.]+)/i);
         if (lm) {
@@ -894,7 +932,7 @@
           const isOver = total > line;
           projected = (ou === 'over' && isOver) || (ou === 'under' && !isOver) ? 'win' : total === line ? 'live' : 'loss';
         }
-      } else if (liveBetType === 'spread' || liveBetType === 'puck line' || /[+-]\d+(\.\d+)?/.test(livePickStr)) {
+      } else if (liveBetType === 'spread' || liveBetType === 'puck line' || /run line/.test(liveBetType) || /[+-]\d+(\.\d+)?/.test(livePickStr)) {
         const sm = livePickStr.match(/([+-]\d+(\.\d+)?)/);
         if (sm && (livePickedAway || livePickedHome)) {
           const spread = parseFloat(sm[1]);
@@ -910,22 +948,20 @@
         projected = liveAwayScore === liveHomeScore ? 'win' : 'loss';
       }
 
-      return { status: projected, label: game.detail || 'Live', isLive: true };
+      return { status: projected, label: isF5 ? 'Live · 1st 5' : (game.detail || 'Live'), isLive: true };
     }
 
-    // Game is final (post)
+    // Decided — full game final, or F5 locked after the bottom of the 5th
     const pickStr = (pick.pick || '').trim();
     const betType = (pick.betType || '').toLowerCase();
-    const awayScore = game.awayScore;
-    const homeScore = game.homeScore;
 
     // Figure out which team was picked
-    const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
     const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
     const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
 
     // Total (Over/Under)
-    if (betType === 'total' || /over|under/i.test(pickStr)) {
+    if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
       const totalPoints = awayScore + homeScore;
       const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
       if (lineMatch) {
@@ -938,8 +974,8 @@
       }
     }
 
-    // Spread
-    if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+    // Spread / run line / puck line
+    if (betType === 'spread' || betType === 'puck line' || /run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
       const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
       if (spreadMatch && (pickedAway || pickedHome)) {
         const spread = parseFloat(spreadMatch[1]);
@@ -953,7 +989,7 @@
       }
     }
 
-    // Moneyline / default
+    // Moneyline / default (F5 ML pushes on a tie through 5)
     if (pickedAway || pickedHome) {
       const pickedScore = pickedAway ? awayScore : homeScore;
       const oppScore = pickedAway ? homeScore : awayScore;
@@ -970,7 +1006,7 @@
         : { status: 'loss', label: 'Loss' };
     }
 
-    return { status: 'scheduled', label: 'Final' };
+    return { status: 'scheduled', label: isF5 ? 'Final · 1st 5' : 'Final' };
   }
 
   /* ── Normal CDF approximation (Abramowitz & Stegun) ── */
@@ -983,8 +1019,16 @@
     return x > 0 ? 1 - p : p;
   }
 
-  /* ── Elapsed fraction of game from ESPN period + clock ── */
-  function gameElapsed(sport, period, clock) {
+  /* ── Elapsed fraction of game from ESPN period + clock ──
+     MLB has no game clock, so progress is measured by inning (9 innings, or 5 for an F5 bet); the
+     current inning is approximated as half-played. Other sports stay clock-based. ── */
+  function gameElapsed(sport, period, clock, isF5) {
+    if (sport === 'MLB') {
+      const totalInnings = isF5 ? 5 : 9;
+      const completed = Math.max(0, (period || 1) - 1);
+      const frac = (completed + 0.5) / totalInnings; // current inning ~half done
+      return Math.min(Math.max(frac, 0.01), 1);
+    }
     const parts = (clock || '').replace(/\s/g, '').split(':');
     const mins = parseFloat(parts[0]) || 0;
     const secs = parseFloat(parts[1]) || 0;
@@ -1003,26 +1047,29 @@
     return Math.min(Math.max(elapsed / totalMins, 0.01), 1);
   }
 
-  /* ── Live win probability for a bet ── */
+  /* ── Live win probability for a bet (F5-aware: uses the 1st-5 score + a 5-inning horizon) ── */
   function liveWinProb(pick, game) {
     if (!game || game.state !== 'in') return null;
+    const isF5 = isF5Pick(pick);
+    if (isF5 && game.f5Complete) return null; // F5 already decided — determineResult shows Win/Loss
     const sport = pick.sport || '';
     const pickStr = (pick.pick || '').trim();
     const betType = (pick.betType || '').toLowerCase();
-    const away = game.awayScore;
-    const home = game.homeScore;
-    const t = gameElapsed(sport, game.period, game.clock);
+    const away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
+    const t = gameElapsed(sport, game.period, game.clock, isF5);
     const sigmaPerMin = { 'NBA': 1.8, 'NCAAB': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
     const sigma = sigmaPerMin[sport] || 1.0;
+    const totalMinsMap = { 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
+    // F5 spans the first 5 of 9 innings → scale the MLB variance horizon to ~5 innings.
+    const gameMins = (sport === 'MLB' && isF5) ? 30 : (totalMinsMap[sport] || 48);
 
-    if (betType === 'total' || /over|under/i.test(pickStr)) {
+    if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
       const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
       if (!lineMatch) return null;
       const ou = lineMatch[1].toLowerCase();
       const line = parseFloat(lineMatch[2]);
       const currentTotal = away + home;
-      const totalMins = { 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
-      const gameMins = totalMins[sport] || 48;
       const remainMins = gameMins * (1 - t);
       // Bayesian projection: blend pace with market line as prior
       const paceProjection = t > 0.05 ? currentTotal / t : line;
@@ -1034,19 +1081,17 @@
       return ou === 'over' ? pOver : 1 - pOver;
     }
 
-    if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+    if (betType === 'spread' || betType === 'puck line' || /run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
       const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
       if (!spreadMatch) return null;
       const spread = parseFloat(spreadMatch[1]);
-      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').trim();
+      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
       const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
       const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
       const margin = pickedScore - oppScore;
-      const totalMins = { 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
-      const gameMins = totalMins[sport] || 48;
       const remainMins = gameMins * (1 - t);
       const w = t * t;
       const paceMargin = t > 0.05 ? margin / t : -spread;
@@ -1056,18 +1101,38 @@
       return normCDF(z);
     }
 
+    // Moneyline (full-game or F5) — live prob from the current score margin vs a pick'em prior.
+    if (betType === 'moneyline' || betType === 'f5 moneyline' || /\bml\b/i.test(pickStr)) {
+      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+      if (!pickedAway && !pickedHome) return null;
+      const pickedScore = pickedAway ? away : home;
+      const oppScore = pickedAway ? home : away;
+      const margin = pickedScore - oppScore;
+      const remainMins = gameMins * (1 - t);
+      const w = t * t;
+      const paceMargin = t > 0.05 ? margin / t : 0;
+      const projectedMargin = w * paceMargin; // ML prior = pick'em (margin 0)
+      const remainSD = sigma * Math.sqrt(remainMins) * (1 + 0.3 * (1 - t));
+      const z = (margin + (projectedMargin - margin) * (1 - t)) / Math.max(remainSD, 0.5);
+      return normCDF(z);
+    }
+
     return null;
   }
 
-  /* ── Compute live progress toward bet target ── */
+  /* ── Compute live progress toward bet target (F5-aware) ── */
   function progressDeltaHTML(pick, game, result) {
     if (!game || (game.state !== 'in' && game.state !== 'post')) return '';
+    const isF5 = isF5Pick(pick);
     const pickStr = (pick.pick || '').trim();
     const betType = (pick.betType || '').toLowerCase();
-    const away = game.awayScore;
-    const home = game.homeScore;
+    const away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
+    const decided = isF5 ? !!game.f5Complete : (game.state === 'post');
 
-    if (betType === 'total' || /over|under/i.test(pickStr)) {
+    if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
       const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
       if (!lineMatch) return '';
       const ou = lineMatch[1].toLowerCase();
@@ -1076,15 +1141,15 @@
       const raw = ou === 'over' ? currentTotal - line : line - currentTotal;
       const sign = raw > 0 ? '+' : raw < 0 ? '' : '';
       const cls = raw > 0 ? 'delta-positive' : raw < 0 ? 'delta-negative' : 'delta-even';
-      const suffix = game.state === 'post' ? '' : ' pts';
+      const suffix = decided ? '' : ' pts';
       return `<span class="progress-delta ${cls}">${sign}${raw % 1 === 0 ? raw : raw.toFixed(1)}${suffix}</span>`;
     }
 
-    if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+    if (betType === 'spread' || betType === 'puck line' || /run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
       const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
       if (!spreadMatch) return '';
       const spread = parseFloat(spreadMatch[1]);
-      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').trim();
+      const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
       const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
       const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
       if (!pickedAway && !pickedHome) return '';
@@ -1105,7 +1170,9 @@
       if (!pick.winProbability) return '';
       return `<span class="win-prob">${esc(pick.winProbability)}</span>`;
     }
-    if (game.state === 'post') {
+    const isF5 = isF5Pick(pick);
+    const decided = isF5 ? !!game.f5Complete : (game.state === 'post');
+    if (decided) {
       if (result.status === 'win') return '<span class="progress-delta delta-positive">WIN</span>';
       if (result.status === 'loss') return '<span class="progress-delta delta-negative">LOSS</span>';
       if (result.status === 'push') return '<span class="progress-delta delta-even">PUSH</span>';
@@ -1118,29 +1185,33 @@
     return `<span class="progress-delta ${cls}">${pct}%</span>`;
   }
 
-  /* ── Build score bar HTML ── */
+  /* ── Build score bar HTML (F5 shows the 1st-5-innings score) ── */
   function scoreBarHTML(pick, game, result) {
     if (!game) return '';
     // Hide score bar for pre-game — time is shown in the card header
     if (game.state === 'pre') return '';
+    const isF5 = isF5Pick(pick);
+    const aScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    const hScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
+    const decided = isF5 ? !!game.f5Complete : (game.state === 'post');
     const displayStatus = result.isLive ? 'live' : result.status;
     const barClass = `score-bar-${displayStatus}`;
     const statusClass = `status-${displayStatus}`;
+    // F5 bets show the score THROUGH 5 innings + an F5-specific detail (the full game may run on).
+    const detailText = isF5
+      ? (decided ? 'Final · 1st 5 innings' : `1st 5 innings · ${game.detail || 'Live'}`)
+      : (game.detail || '');
+    const statusLabel = result.isLive ? (isF5 ? 'Live · 1st 5' : 'Live') : esc(result.label);
 
-    let scoreContent = '';
-    if (false) {
-      // pre-game bar removed
-    } else {
-      scoreContent = `
+    const scoreContent = `
         <div class="score-teams">
-          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.awayTeam))}</span><span class="score-team-score">${game.awayScore}</span></div>
-          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.homeTeam))}</span><span class="score-team-score">${game.homeScore}</span></div>
+          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.awayTeam))}</span><span class="score-team-score">${aScore}</span></div>
+          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.homeTeam))}</span><span class="score-team-score">${hScore}</span></div>
         </div>
         <div class="score-meta">
-          <span class="score-status ${statusClass}">${result.isLive ? 'Live' : esc(result.label)}</span>
-          <span class="score-detail">${esc(game.detail)}</span>
+          <span class="score-status ${statusClass}">${statusLabel}</span>
+          <span class="score-detail">${esc(detailText)}</span>
         </div>`;
-    }
 
     return `<div class="pick-score-bar ${barClass}">${scoreContent}</div>`;
   }

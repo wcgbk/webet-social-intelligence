@@ -748,7 +748,6 @@
     .mc-time-chip { font-size:.625rem; font-weight:600; color:var(--txt-m); background:var(--white); border:1px solid var(--border-lt); border-radius:6px; padding:1px 7px; flex-shrink:0; }
     .mc-pick-line { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; margin-top:.4rem; }
     .mc-pick-side { font-size:.9375rem; font-weight:700; color:var(--olive); display:flex; align-items:center; gap:.4rem; min-width:0; }
-    .mc-odds { font-family:'Geist Sans',monospace; font-size:.875rem; font-weight:700; color:var(--olive); flex-shrink:0; }
     .mc-pick-foot { display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-top:.45rem; padding-top:.4rem; border-top:1px solid var(--border-lt); }
     .mc-foot-r { margin-left:auto; display:flex; align-items:center; gap:.4rem; }
     /* live score bar (mirrors /alpha) */
@@ -2404,7 +2403,6 @@
     var game = mcFindGame(p);
     var result = mcResult(p, game);
     var enr = mcLookup(p) || {};
-    var odds = mcFmtOdds(p.odds || enr.odds || '');
     var grade = p.grade || p.rating || enr.grade || '';
     var betType = p.betType || enr.betType || mcDeriveBetType(p);
     var startTime = p.startTime || p.commenceTime || enr.startTime || null;
@@ -2435,7 +2433,6 @@
     var line =
       '<div class="mc-pick-line">' +
         '<span class="mc-pick-side" style="' + (isMe ? '' : 'color:var(--txt-m);font-weight:600;') + '">' + esc(p.side || '—') + '</span>' +
-        (odds ? '<span class="mc-odds">' + esc(odds) + '</span>' : '') +
       '</div>';
 
     // Result pill (WON/LOST/PUSH) shown only once a leg is decided — no edge/EV on the card.

@@ -2407,8 +2407,8 @@
     return (n > 0 ? '+' : '') + n + '%';
   }
 
-  /* AlphaPix-style pick card — minimized: sport tag + grade, matchup + tip-off,
-     pick side + odds, live score, edge + result. Missing fields are enriched
+  /* AlphaPix-style pick card — minimized: sport tag + bet type + grade, matchup +
+     tip-off, pick side + odds, live score, decided result. Missing fields are enriched
      from the live alpha board (mcLookup) and otherwise simply omitted. */
   function mcPickRowHTML(p, isMe) {
     var game = mcFindGame(p);
@@ -2417,10 +2417,6 @@
     var odds = mcFmtOdds(p.odds || enr.odds || '');
     var grade = p.grade || p.rating || enr.grade || '';
     var betType = p.betType || enr.betType || mcDeriveBetType(p);
-    var edgeRaw = (p.ev != null && p.ev !== '') ? p.ev
-                : (p.edgePct != null && p.edgePct !== '') ? p.edgePct
-                : enr.edge;
-    var edgeStr = mcFmtPct(edgeRaw);
     var startTime = p.startTime || p.commenceTime || enr.startTime || null;
 
     var pill = '';
@@ -2452,9 +2448,8 @@
         (odds ? '<span class="mc-odds">' + esc(odds) + '</span>' : '') +
       '</div>';
 
-    var footParts = '';
-    if (edgeStr) footParts += '<span class="mc-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>Edge ' + esc(edgeStr) + '</span>';
-    var foot = (footParts || pill) ? '<div class="mc-pick-foot">' + footParts + '<span class="mc-foot-r">' + pill + '</span></div>' : '';
+    // Result pill (WON/LOST/PUSH) shown only once a leg is decided — no edge/EV on the card.
+    var foot = pill ? '<div class="mc-pick-foot"><span class="mc-foot-r">' + pill + '</span></div>' : '';
 
     return '<div class="mc-pick">' + head + mcScoreBar(p, game, result) + line + foot + '</div>';
   }

@@ -2205,7 +2205,7 @@
     bar.id = 'wb-unlock-bar';
     var signedIn = !!user;
     bar.innerHTML = '<span class="wb-unlock-txt">Sharp Depth: the full Kelly math, model z-scores, and failure scenarios behind today’s card.<small>' +
-      (signedIn ? '1 WeBit unlocks the whole day · your balance: ' + Number(user.credit_balance || 0).toLocaleString() : 'Sign in free — 1,000 WeBits included') + '</small></span>' +
+      (signedIn ? '1 WeBit unlocks the whole day · your balance: ' + Number(user.credit_balance || 0).toLocaleString() : 'Sign in free — 1,000 WeBit included') + '</small></span>' +
       '<button class="wb-unlock-btn" id="wb-unlock-btn" type="button">' + (signedIn ? '🔓 Unlock — 1 WeBit' : '𝕏 Sign in to unlock') + '</button>';
     firstCard.parentNode.insertBefore(bar, firstCard);
     document.getElementById('wb-unlock-btn').addEventListener('click', function () {
@@ -2216,7 +2216,7 @@
         .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
         .then(function (res) {
           if (res.s === 401) { location.href = '/.netlify/functions/auth-x-init'; return; }
-          if (res.s === 402) { btn.disabled = false; btn.textContent = 'Need WeBits — get a pack'; btn.onclick = function () { location.href = '/webit'; }; return; }
+          if (res.s === 402) { btn.disabled = false; btn.textContent = 'Need WeBit — get a pack'; btn.onclick = function () { location.href = '/webit'; }; return; }
           if (!res.j || !res.j.ok) throw new Error('failed');
           depthData = res.j.depth || [];
           renderDepth();

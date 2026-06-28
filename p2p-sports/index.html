@@ -337,7 +337,7 @@ async function refreshWebitAccount(){
       const firstResolve = !window.wbaiUser;
       window.wbaiUser = u;
       balance = Number(u.credit_balance)||0;
-      if(el) el.innerHTML = '<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBits</a>';
+      if(el) el.innerHTML = '<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBit</a>';
       if(firstResolve) settleMyBets();
     } else {
       window.wbaiUser = null;
@@ -656,7 +656,7 @@ function renderReview(){
       <div class="md-row"><span class="md-row-l">Outcome</span><span class="md-row-v">${b.pick}</span></div>
       <div class="md-row"><span class="md-row-l">Odds</span><span class="md-row-v">${fmtOdds(odds)} (${(price*100).toFixed(0)}%)</span></div>
       <div class="md-row"><span class="md-row-l">Quantity</span><span class="md-row-v">ⓦ${qty.toFixed(2)}</span></div>
-      <div class="md-row"><span class="md-row-l">Winner takes</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty*2).toFixed(0)} WeBits</span></div>
+      <div class="md-row"><span class="md-row-l">Winner takes</span><span class="md-row-v" style="color:var(--grn)">ⓦ${(qty*2).toFixed(0)} WeBit</span></div>
       <div class="md-row"><span class="md-row-l">Send via</span><span class="md-row-v">${deliverLabel}</span></div>
     </div>
     <div class="md-foot">
@@ -667,9 +667,9 @@ function renderReview(){
 
 async function submitBet(){
   const b=selectedBet;
-  // Must be signed in to wager WeBits
+  // Must be signed in to wager WeBit
   if(!window.wbaiUser){ window.location.href='/login'; return; }
-  if((b._qty||0) > balance){ alert('Not enough WeBits — get a pack at /webit'); return; }
+  if((b._qty||0) > balance){ alert('Not enough WeBit — get a pack at /webit'); return; }
 
   const deliver=b._deliver||'sms';
   if(deliver==='sms'){ const ph=(b._phone||'').replace(/[^\d+]/g,''); if(ph.replace(/\D/g,'').length<10){ alert('Enter your friend\'s phone, or switch to X DM.'); return; } }
@@ -696,13 +696,13 @@ async function submitBet(){
       // X DM mode: open the composer prefilled with the invite
       if(deliver==='dm'){
         const stakeN=Math.round(b._qty||0);
-        const msg='I bet you: '+b.pick+' ('+(b.matchup||b.event)+') for '+(stakeN>0?'ⓦ '+stakeN+' WeBits':'bragging rights')+'. Take the other side ('+data.oppositeSide+'): '+data.inviteUrl;
+        const msg='I bet you: '+b.pick+' ('+(b.matchup||b.event)+') for '+(stakeN>0?'ⓦ '+stakeN+' WeBit':'bragging rights')+'. Take the other side ('+data.oppositeSide+'): '+data.inviteUrl;
         window.open('https://x.com/messages/compose?text='+encodeURIComponent(msg),'_blank');
       }
       modalStep='success';renderModal();
     }else if(data.error==='insufficient_webits'){
       btn.disabled=false;btn.textContent='SUBMIT';
-      alert('Not enough WeBits to stake — get a pack at /webit');
+      alert('Not enough WeBit to stake — get a pack at /webit');
     }else{
       btn.disabled=false;btn.textContent='SUBMIT';
       alert('Error: '+(data.error||data.message||'failed'));
@@ -721,11 +721,11 @@ function renderSuccess(){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
       Bet Created &amp; Staked
     </div>
-    <div style="padding:.75rem 1.25rem;font-size:1.05rem;font-weight:700;color:var(--olive);text-align:center">${qty>0?'ⓦ '+qty+' WeBits staked':'Bet created'}</div>
+    <div style="padding:.75rem 1.25rem;font-size:1.05rem;font-weight:700;color:var(--olive);text-align:center">${qty>0?'ⓦ '+qty+' WeBit staked':'Bet created'}</div>
     <div class="md-body">
       <div class="md-row"><span class="md-row-l">Your side</span><span class="md-row-v">${b.pick}</span></div>
       <div class="md-row"><span class="md-row-l">They take</span><span class="md-row-v">${b._opp||'the other side'}</span></div>
-      <div class="md-row"><span class="md-row-l">Winner takes</span><span class="md-row-v" style="color:var(--grn)">ⓦ${qty*2} WeBits</span></div>
+      <div class="md-row"><span class="md-row-l">Winner takes</span><span class="md-row-v" style="color:var(--grn)">ⓦ${qty*2} WeBit</span></div>
     </div>
     <div style="padding:.5rem 1.25rem;font-size:.8125rem;color:var(--tm);text-align:center">${sent}</div>
     ${url?`<div class="share-area">
@@ -749,7 +749,7 @@ async function checkBetInvite(){
   const banner=document.createElement('div');
   banner.id='betInvite';
   banner.style.cssText='background:linear-gradient(135deg,#004C54,#1a2e1a);color:#fff;padding:1rem 1.25rem;text-align:center;';
-  const stakeLbl=bet.stake>0?('ⓦ '+bet.stake+' WeBits'):'bragging rights';
+  const stakeLbl=bet.stake>0?('ⓦ '+bet.stake+' WeBit'):'bragging rights';
   if(bet.status!=='open'){
     banner.innerHTML='<div style="font-weight:700;">'+(bet.challenger.name||'Someone')+'’s bet</div><div style="font-size:.85rem;opacity:.9;">'+esc2(bet.pick)+' · '+stakeLbl+' · '+(bet.status==='active'?'Already matched':bet.status)+'</div>';
   }else{
@@ -764,13 +764,13 @@ async function checkBetInvite(){
   if(tb)tb.addEventListener('click',function(){
     const msg=document.getElementById('takeBetMsg');
     if(!window.wbaiUser){ location.href='/login'; return; }
-    if(bet.stake>0 && balance<bet.stake){ msg.innerHTML='Need '+bet.stake+' WeBits. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>'; return; }
+    if(bet.stake>0 && balance<bet.stake){ msg.innerHTML='Need '+bet.stake+' WeBit. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>'; return; }
     tb.disabled=true;tb.textContent='Matching...';
     fetch('/api/market-bet',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'accept',betId:bet.id})})
       .then(r=>r.json()).then(function(j){
         if(j.success){ banner.style.background='linear-gradient(135deg,#2e7d32,#1a2e1a)'; banner.innerHTML='<div style="font-weight:700;">Bet matched — game on!</div><div style="font-size:.85rem;opacity:.9;">Winner takes ⓦ '+(bet.stake*2)+'. Settles after the final.</div>'; refreshWebitAccount(); }
         else if(j.error==='own_bet'){ msg.textContent="That's your own bet."; tb.disabled=false;tb.textContent='Take the other side'; }
-        else if(j.error==='insufficient_webits'){ msg.innerHTML='Not enough WeBits. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>'; tb.disabled=false;tb.textContent='Take the other side'; }
+        else if(j.error==='insufficient_webits'){ msg.innerHTML='Not enough WeBit. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>'; tb.disabled=false;tb.textContent='Take the other side'; }
         else { msg.textContent='Could not match ('+(j.error||'error')+').'; tb.disabled=false;tb.textContent='Take the other side'; }
       }).catch(function(){ msg.textContent='Network error.'; tb.disabled=false;tb.textContent='Take the other side'; });
   });

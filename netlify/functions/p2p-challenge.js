@@ -213,10 +213,10 @@ exports.handler = async (event) => {
       await blobPut('p2p-challenges', indexKey, existing);
     }
 
-    // Invite link lands on the unified same-domain experience (session + WeBits flow)
+    // Invite link lands on the unified same-domain experience (session + WeBit flow)
     const inviteUrl = `https://webetsocial.com/pick3p2p/?challenge=${challengeId}`;
     const picksText = picks.map((p, i) => `${i + 1}. ${p.sideName || p.side} (${p.sport})`).join('\n');
-    const stakeLabel = challenge.wager > 0 ? `${challenge.wager} WeBits` : 'bragging rights';
+    const stakeLabel = challenge.wager > 0 ? `${challenge.wager} WeBit` : 'bragging rights';
 
     if (deliver === 'sms') {
       const smsMessage = `${challengerName || 'Someone'} challenged you on Pick3P2P for ${stakeLabel}!\n\nTheir picks:\n${picksText}\n\nPick your 3 and lock them in:\n${inviteUrl}`;

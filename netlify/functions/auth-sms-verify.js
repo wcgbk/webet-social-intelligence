@@ -1,7 +1,7 @@
 // auth-sms-verify.js — SMS login step 2: verify code, mint session (loop-c5)
 // POST {phone, code}. Mirrors auth-x-callback's session pattern exactly:
 // user_{id} + session_{sessionId} in wbai-users, wbai_session cookie (30d).
-// SMS-first accounts get provider:'sms', 1,000 WeBits, phone-masked handle.
+// SMS-first accounts get provider:'sms', 1,000 WeBit, phone-masked handle.
 // (Linking an SMS account to an X account = canonical-identity backlog item.)
 
 const { createHmac, randomBytes } = require('crypto');

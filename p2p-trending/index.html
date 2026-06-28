@@ -375,7 +375,7 @@ window.wbaiUser=null;
 async function refreshWebitAccount(){
   const u=await fetch('/.netlify/functions/auth-me',{credentials:'include'}).then(r=>r.ok?r.json():null).catch(()=>null);
   const el=document.getElementById('balEl');
-  if(u&&!u.error){window.wbaiUser=u;balance=Number(u.credit_balance)||0;if(el)el.innerHTML='<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBits</a>';}
+  if(u&&!u.error){window.wbaiUser=u;balance=Number(u.credit_balance)||0;if(el)el.innerHTML='<a href="/webit" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;"><img src="/webet-coin.png" alt="" style="width:16px;height:16px;border-radius:50%;vertical-align:-3px;"> '+balance.toLocaleString()+' WeBit</a>';}
   else{window.wbaiUser=null;if(el)el.innerHTML='<a href="/login" style="color:inherit;text-decoration:none;font-weight:700;">Sign in →</a>';}
 }
 var mbDeliver='dm';
@@ -389,7 +389,7 @@ async function checkBetInvite(){
   if(!bet||!bet.id)return;
   const banner=document.createElement('div');
   banner.style.cssText='background:linear-gradient(135deg,#004C54,#1a2e1a);color:#fff;padding:1rem 1.25rem;text-align:center;';
-  const stakeLbl=bet.stake>0?('ⓦ '+bet.stake+' WeBits'):'bragging rights';
+  const stakeLbl=bet.stake>0?('ⓦ '+bet.stake+' WeBit'):'bragging rights';
   if(bet.status!=='open'){
     banner.innerHTML='<div style="font-weight:700;">'+(bet.challenger.name||'Someone')+'’s prediction</div><div style="font-size:.85rem;opacity:.9;">'+(bet.pick||'')+' · '+stakeLbl+' · '+(bet.status==='active'?'Matched':bet.status)+'</div>';
   }else{
@@ -402,13 +402,13 @@ async function checkBetInvite(){
   if(tb)tb.addEventListener('click',function(){
     const msg=document.getElementById('takeBetMsg');
     if(!window.wbaiUser){location.href='/login';return;}
-    if(bet.stake>0&&balance<bet.stake){msg.innerHTML='Need '+bet.stake+' WeBits. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>';return;}
+    if(bet.stake>0&&balance<bet.stake){msg.innerHTML='Need '+bet.stake+' WeBit. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>';return;}
     tb.disabled=true;tb.textContent='Matching...';
     fetch('/api/market-bet',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'accept',betId:bet.id})})
       .then(r=>r.json()).then(function(j){
         if(j.success){banner.style.background='linear-gradient(135deg,#2e7d32,#1a2e1a)';banner.innerHTML='<div style="font-weight:700;">Bet matched!</div><div style="font-size:.85rem;opacity:.9;">Winner takes ⓦ '+(bet.stake*2)+'. Resolves at the deadline.</div>';refreshWebitAccount();}
         else if(j.error==='own_bet'){msg.textContent="That's your own bet.";tb.disabled=false;tb.textContent='Take the other side';}
-        else if(j.error==='insufficient_webits'){msg.innerHTML='Not enough WeBits. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>';tb.disabled=false;tb.textContent='Take the other side';}
+        else if(j.error==='insufficient_webits'){msg.innerHTML='Not enough WeBit. <a href="/webit" style="color:#9be8ea;">Get a pack →</a>';tb.disabled=false;tb.textContent='Take the other side';}
         else{msg.textContent='Could not match.';tb.disabled=false;tb.textContent='Take the other side';}
       }).catch(function(){msg.textContent='Network error.';tb.disabled=false;tb.textContent='Take the other side';});
   });
@@ -778,7 +778,7 @@ function renderReview(){
 async function submitBet(){
   const b=selectedBet;
   if(!window.wbaiUser){window.location.href='/login';return;}
-  if((b._qty||0)>balance){alert('Not enough WeBits — get a pack at /webit');return;}
+  if((b._qty||0)>balance){alert('Not enough WeBit — get a pack at /webit');return;}
   const deliver=b._deliver||'dm';
   if(deliver==='sms'){const ph=(b._phone||'').replace(/\D/g,'');if(ph.length<10){alert('Enter your friend\'s phone, or switch to X DM.');return;}}
   // Yes/No side from the pick text ("Yes — ..." / "No — ...")
@@ -803,11 +803,11 @@ async function submitBet(){
       selectedBet._betId=data.betId;selectedBet._shareUrl=data.inviteUrl;selectedBet._opp=data.oppositeSide;
       if(deliver==='dm'){
         const stakeN=Math.round(b._qty||0);
-        const msg='I bet you: '+b.pick+' for '+(stakeN>0?'ⓦ '+stakeN+' WeBits':'bragging rights')+'. Take the other side ('+(data.oppositeSide||'')+'): '+data.inviteUrl;
+        const msg='I bet you: '+b.pick+' for '+(stakeN>0?'ⓦ '+stakeN+' WeBit':'bragging rights')+'. Take the other side ('+(data.oppositeSide||'')+'): '+data.inviteUrl;
         window.open('https://x.com/messages/compose?text='+encodeURIComponent(msg),'_blank');
       }
       modalStep='success';renderModal();
-    }else if(data.error==='insufficient_webits'){btn.disabled=false;btn.textContent='SUBMIT';alert('Not enough WeBits — get a pack at /webit');}
+    }else if(data.error==='insufficient_webits'){btn.disabled=false;btn.textContent='SUBMIT';alert('Not enough WeBit — get a pack at /webit');}
     else{btn.disabled=false;btn.textContent='SUBMIT';alert('Error: '+(data.error||data.message||'failed'))}
   }catch(e){btn.disabled=false;btn.textContent='SUBMIT';alert('Network error: '+e.message)}
 }

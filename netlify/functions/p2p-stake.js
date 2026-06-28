@@ -1,4 +1,4 @@
-// p2p-stake.js — escrow WeBits on a Pick3P2P challenge (loop-c6, Pick3P2P integration v1)
+// p2p-stake.js — escrow WeBit on a Pick3P2P challenge (loop-c6, Pick3P2P integration v1)
 // POST {challengeId, stake} with wbai_session cookie. Idempotent per user+challenge:
 // one ledger debit event evt_{userId}_p2pstake_{challengeId} in webit-ledger, balance
 // updated on the canonical wbai-users record. Payout/refund resolution reads these

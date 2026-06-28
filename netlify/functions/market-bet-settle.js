@@ -85,7 +85,7 @@ async function settleOne(stores, betId) {
 
   // Prediction-market bets (Yes/No on a trending topic) have no auto-grader.
   // They resolve manually/by oracle (v2). Safety net: refund both if unresolved
-  // long after creation so staked WeBits never get permanently stuck.
+  // long after creation so staked WeBit never get permanently stuck.
   if (bet.market === 'prediction') {
     if (ageDays > 21) { await refund(); bet.status = 'expired'; bet.settled = { outcome: 'unresolved_refund', at: new Date().toISOString() }; await stores.bets.setJSON(betId, bet); return { betId, result: 'settled', outcome: 'unresolved_refund' }; }
     return { betId, result: 'pending_resolution' };

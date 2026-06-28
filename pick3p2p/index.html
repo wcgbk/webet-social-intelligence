@@ -713,6 +713,52 @@
     }
     .btn-send-challenge:hover { background: #003a40; }
 
+    /* ─── My Challenges — accordion (inline drop-down, no modal) ─── */
+    .mc-card { border:1px solid var(--border-lt); border-radius:12px; margin-bottom:.625rem; background:var(--white); overflow:hidden; transition:border-color .15s, box-shadow .15s; }
+    .mc-card.open { border-color:var(--teal-border); box-shadow:0 4px 18px rgba(0,76,84,.08); }
+    .mc-summary { padding:.875rem 1rem; cursor:pointer; user-select:none; display:flex; flex-direction:column; gap:.4rem; }
+    .mc-summary:hover { background:var(--off-white); }
+    .mc-row1 { display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
+    .mc-vs { font-size:.9375rem; font-weight:700; color:var(--olive); display:flex; align-items:center; gap:.4rem; min-width:0; }
+    .mc-vs .mc-chev { color:var(--txt-l); font-size:.75rem; transition:transform .2s; flex-shrink:0; }
+    .mc-card.open .mc-vs .mc-chev { transform:rotate(90deg); color:var(--teal); }
+    .mc-badge { font-size:.6875rem; font-weight:700; padding:2px 9px; border-radius:9999px; flex-shrink:0; letter-spacing:.01em; }
+    .mc-row2 { display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-size:.75rem; color:var(--txt-m); }
+    .mc-stake { font-weight:600; color:var(--olive); }
+    .mc-tally { font-weight:700; font-size:.75rem; }
+    .mc-tally.lead { color:var(--green); } .mc-tally.trail { color:#c0392b; } .mc-tally.tied { color:var(--txt-m); }
+    .mc-result { font-size:.8125rem; font-weight:700; }
+    .mc-detail { display:none; padding:0 1rem 1rem; border-top:1px solid var(--border-lt); }
+    .mc-card.open .mc-detail { display:block; animation:mc-slide .22s ease; }
+    @keyframes mc-slide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+    .mc-side-label { font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin:.875rem 0 .5rem; }
+    .mc-side-label.you { color:var(--teal); } .mc-side-label.them { color:var(--txt-l); }
+    .mc-pick { padding:.625rem .75rem; border:1px solid var(--border-lt); border-radius:9px; margin-bottom:.5rem; background:var(--off-white); }
+    .mc-pick-head { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
+    .mc-pick-match { font-size:.6875rem; color:var(--txt-l); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .mc-pick-sport { font-size:.6875rem; color:var(--txt-l); flex-shrink:0; }
+    .mc-pick-side { font-size:.875rem; font-weight:700; color:var(--olive); margin-top:.1rem; display:flex; align-items:center; gap:.4rem; }
+    /* live score bar (mirrors /alpha) */
+    .mc-scorebar { display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin-top:.5rem; padding:.5rem .625rem; border-radius:7px; font-size:.75rem; }
+    .sb-live { background:#eef6ff; border:1px solid #b3d4fc; }
+    .sb-win { background:var(--green-light); border:1px solid var(--green-border); }
+    .sb-loss { background:#fce4e4; border:1px solid #f5b7b7; }
+    .sb-push { background:#fff8e1; border:1px solid #ffe082; }
+    .sb-scheduled { background:var(--off-white); border:1px solid var(--border-lt); }
+    .sb-teams { display:flex; flex-direction:column; gap:1px; color:var(--olive); }
+    .sb-team { display:flex; align-items:center; gap:.5rem; }
+    .sb-team-name { min-width:92px; font-weight:500; }
+    .sb-team-score { font-weight:700; font-family:'Geist Sans',monospace; min-width:22px; text-align:right; }
+    .sb-meta { display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right; }
+    .sb-status { font-size:.625rem; font-weight:700; padding:2px 7px; border-radius:5px; text-transform:uppercase; letter-spacing:.03em; }
+    .st-live { background:#2196f3; color:#fff; animation:sb-pulse 2s infinite; }
+    .st-win { background:var(--green); color:#fff; } .st-loss { background:#c0392b; color:#fff; }
+    .st-push { background:#f9a825; color:#fff; } .st-scheduled { background:var(--bg-light); color:var(--txt-m); }
+    .sb-detail { font-size:.625rem; color:var(--txt-m); }
+    .mc-result-pill { font-size:.6rem; font-weight:800; padding:1px 6px; border-radius:4px; }
+    .rp-win { background:var(--green-light); color:var(--green); } .rp-loss { background:#fce4e4; color:#c0392b; } .rp-push { background:#fff8e1; color:#b8860b; }
+    @keyframes sb-pulse { 0%,100% { opacity:1; } 50% { opacity:.65; } }
+
     /* ─── Fade-in ─── */
     .fi { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
     .fi.v { opacity: 1; transform: translateY(0); }
@@ -990,9 +1036,9 @@
         <label class="modal-label">WeBit Stake</label>
         <select class="modal-select" id="c-wager">
           <option value="0">No stake — bragging rights</option>
-          <option value="50" selected>ⓦ 50 WeBits — Casual</option>
-          <option value="100">ⓦ 100 WeBits — Competitive</option>
-          <option value="250">ⓦ 250 WeBits — Main Event</option>
+          <option value="50" selected>ⓦ 50 WeBit — Casual</option>
+          <option value="100">ⓦ 100 WeBit — Competitive</option>
+          <option value="250">ⓦ 250 WeBit — Main Event</option>
         </select>
       </div>
       <button class="btn-send-challenge" id="btn-send" onclick="sendChallenge()">Send Challenge via Text</button>
@@ -1707,7 +1753,7 @@
       btn.textContent = 'Challenge Sent!'; btn.style.background = '#2e7d32';
       if (deliverMode === 'dm') {
         var stakeNum = parseInt(wager, 10) || 0;
-        var dmMsg = 'I just locked 3 picks on Pick3P2P 🎯 Match me — winner takes ' + (stakeNum > 0 ? 'ⓦ ' + stakeNum + ' WeBits' : 'the bragging rights') + '. ' + (data.inviteUrl || 'https://webetsocial.com/pick3p2p/?challenge=' + data.challengeId);
+        var dmMsg = 'I just locked 3 picks on Pick3P2P 🎯 Match me — winner takes ' + (stakeNum > 0 ? 'ⓦ ' + stakeNum + ' WeBit' : 'the bragging rights') + '. ' + (data.inviteUrl || 'https://webetsocial.com/pick3p2p/?challenge=' + data.challengeId);
         window.open('https://x.com/messages/compose?text=' + encodeURIComponent(dmMsg), '_blank');
         status.textContent = 'Challenge created — X DM composer opened with your invite link. ID: ' + data.challengeId; status.style.color = '#2e7d32';
       } else {
@@ -1723,15 +1769,15 @@
             .then(function (r) { return r.json(); })
             .then(function (j) {
               if (j && j.ok) {
-                status.textContent += ' · 🪙 ' + stakeSel + ' WeBits escrowed (balance ' + Number(j.balance).toLocaleString() + ')';
+                status.textContent += ' · 🪙 ' + stakeSel + ' WeBit escrowed (balance ' + Number(j.balance).toLocaleString() + ')';
                 if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: stakeSel });
                 if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
               } else if (j && j.error === 'insufficient_webits') {
-                status.textContent += ' · Not enough WeBits to stake — get a pack at webetsocial.com/webit';
+                status.textContent += ' · Not enough WeBit to stake — get a pack at webetsocial.com/webit';
               }
             }).catch(function () {});
         } else if (stakeSel > 0 && !window.wbaiUser) {
-          status.textContent += ' · Sign in at webetsocial.com/login to stake WeBits on challenges.';
+          status.textContent += ' · Sign in at webetsocial.com/login to stake WeBit on challenges.';
         }
       } catch (e) {}
       setTimeout(function() {
@@ -1739,6 +1785,7 @@
         btn.textContent = 'Send Challenge via Text'; btn.style.background = ''; btn.disabled = false;
         status.textContent = 'Your friend will get a text with the challenge link.'; status.style.color = '';
         document.getElementById('c-name').value = ''; document.getElementById('c-friend').value = '';
+        if (typeof loadMyChallenges === 'function' && currentUser && currentUser.phone) loadMyChallenges();
       }, 3000);
     } catch (err) {
       btn.textContent = 'Send Challenge via Text'; btn.disabled = false;
@@ -1788,7 +1835,7 @@
       return '<div style="display:inline-block; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px; margin:3px; font-size:.8125rem;">' + (i+1) + '. ' + esc(p.side) + ' <span style="opacity:.7;">(' + esc(p.sport) + ')</span></div>';
     }).join('');
     banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700; margin-bottom:.375rem;">You\'ve Been Challenged!</div>' +
-      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">' + esc(challengerName) + ' challenged you for <strong>' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBits' : 'bragging rights') + '</strong></div>' +
+      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">' + esc(challengerName) + ' challenged you for <strong>' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBit' : 'bragging rights') + '</strong></div>' +
       '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.6; margin-bottom:.375rem;">Their picks</div>' +
       '<div style="margin-bottom:.75rem;">' + picksHtml + '</div>' +
       '<div style="font-size:.875rem; font-weight:600; background:rgba(255,255,255,0.15); display:inline-block; padding:6px 16px; border-radius:8px;">Select your 3 picks below, then lock them in</div>';
@@ -1807,7 +1854,7 @@
 
     var statusText = challenge.status === 'active' ? 'Challenge Active — Waiting for Games to Finish' : challenge.status === 'graded' ? 'Challenge Complete' : challenge.status;
     banner.innerHTML = '<div style="font-size:1rem; font-weight:700; margin-bottom:.25rem;">' + esc(statusText) + '</div>' +
-      '<div style="font-size:.8125rem; color:#5f6b7a;">' + esc(challenge.challenger.name || 'Challenger') + ' vs ' + esc(challenge.opponent.name || 'Opponent') + ' for ' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBits' : 'bragging rights') + '</div>' +
+      '<div style="font-size:.8125rem; color:#5f6b7a;">' + esc(challenge.challenger.name || 'Challenger') + ' vs ' + esc(challenge.opponent.name || 'Opponent') + ' for ' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBit' : 'bragging rights') + '</div>' +
       '<div style="margin-top:.5rem;"><a href="/?challenge=' + challenge.id + '" style="font-size:.8125rem; color:#004C54; font-weight:600;">View Details</a></div>';
   }
 
@@ -1891,7 +1938,7 @@
     if (matchStake > 0) {
       var bal = (window.wbaiUser && Number(window.wbaiUser.credit_balance)) || 0;
       if (bal < matchStake) {
-        status.innerHTML = 'You need ' + matchStake + ' WeBits to match this stake. <a href="/webit" style="color:#004C54;font-weight:700;">Get a pack →</a>';
+        status.innerHTML = 'You need ' + matchStake + ' WeBit to match this stake. <a href="/webit" style="color:#004C54;font-weight:700;">Get a pack →</a>';
         status.style.color = '#c0392b'; return;
       }
     }
@@ -1917,13 +1964,13 @@
       var data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to respond');
 
-      // Match the challenger's stake — both sides now have WeBits in the pot
+      // Match the challenger's stake — both sides now have WeBit in the pot
       var stakeNote = '';
       if (matchStake > 0 && window.wbaiUser) {
         try {
           var sres = await fetch('/.netlify/functions/p2p-stake', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: String(pendingChallengeId), stake: matchStake }) }).then(function (r) { return r.json(); });
           if (sres && sres.ok) {
-            stakeNote = ' · 🪙 ' + matchStake + ' WeBits staked (balance ' + Number(sres.balance).toLocaleString() + ')';
+            stakeNote = ' · 🪙 ' + matchStake + ' WeBit staked (balance ' + Number(sres.balance).toLocaleString() + ')';
             if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: matchStake });
             if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
           }
@@ -1937,7 +1984,7 @@
       var banner = document.getElementById('challenge-banner');
       if (banner) {
         banner.style.background = 'linear-gradient(135deg,#2e7d32,#1a2e1a)';
-        var potLine = matchStake > 0 ? 'Winner takes ⓦ ' + (matchStake * 2) + ' WeBits. ' : '';
+        var potLine = matchStake > 0 ? 'Winner takes ⓦ ' + (matchStake * 2) + ' WeBit. ' : '';
         banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700;">Challenge Accepted!</div><div style="font-size:.875rem; opacity:.9;">' + potLine + 'Results graded after all games finish.</div>';
       }
 
@@ -1955,6 +2002,7 @@
         document.getElementById('c-wager').parentElement.style.display = 'block';
         pendingChallengeId = null; pendingChallenge = null;
         document.getElementById('btn-challenge').removeAttribute('data-response-mode');
+        if (typeof loadMyChallenges === 'function' && currentUser && currentUser.phone) loadMyChallenges();
       }, 3000);
     } catch (err) {
       btn.textContent = 'Lock My Picks'; btn.disabled = false;
@@ -1963,15 +2011,187 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     MY CHALLENGES — Show active/completed challenges for logged-in user
+     MY CHALLENGES — inline accordion w/ live results (mirrors /alpha)
+     Both sides of a challenge watch the same ESPN-driven live scores.
   ═══════════════════════════════════════════════════════════════ */
   var myChallengesData = [];
+  var mcOpen = {};            // idx -> true when a card is expanded
+  var mcScores = {};          // sport -> [games]
+  var mcRefreshTimer = null;
+
+  /* ── ESPN live scores (ported from /alpha) ── */
+  var MC_ESPN = {
+    'NBA':'basketball/nba','WNBA':'basketball/wnba','NHL':'hockey/nhl',
+    'NCAAB':'basketball/mens-college-basketball','MLB':'baseball/mlb',
+    'EPL':'soccer/eng.1','La Liga':'soccer/esp.1','Serie A':'soccer/ita.1',
+    'Bundesliga':'soccer/ger.1','Ligue 1':'soccer/fra.1','MLS':'soccer/usa.1',
+    'UCL':'soccer/uefa.champions','UEL':'soccer/uefa.europa','Europa':'soccer/uefa.europa',
+  };
+  async function mcFetchSport(sport) {
+    var endpoint = MC_ESPN[sport]; if (!endpoint) return [];
+    try {
+      var resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/' + endpoint + '/scoreboard');
+      if (!resp.ok) return [];
+      var data = await resp.json();
+      return (data.events || []).map(function(ev) {
+        var comp = ev.competitions && ev.competitions[0]; if (!comp) return null;
+        var away = (comp.competitors || []).find(function(c){return c.homeAway==='away';});
+        var home = (comp.competitors || []).find(function(c){return c.homeAway==='home';});
+        if (!away || !home) return null;
+        var status = comp.status || ev.status || {};
+        var isMLB = sport === 'MLB';
+        var parseLS = function(c){ return Array.isArray(c && c.linescores) ? c.linescores.map(function(l){return Number(l.value != null ? l.value : (l.displayValue || 0)) || 0;}) : []; };
+        var awayLS = isMLB ? parseLS(away) : [], homeLS = isMLB ? parseLS(home) : [];
+        var sum5 = function(a){ return a.slice(0,5).reduce(function(s,v){return s+v;},0); };
+        var period = (status.period) || 0;
+        var state = (status.type && status.type.state) || 'pre';
+        var f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
+        var startTimeEST = '';
+        var rawDate = ev.date || comp.date || '';
+        if (rawDate) { try { startTimeEST = new Date(rawDate).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit',hour12:true}); } catch(e){} }
+        return {
+          awayTeam: (away.team && (away.team.displayName||away.team.shortDisplayName))||'',
+          awayAbbr: (away.team && away.team.abbreviation)||'', awayScore: parseInt(away.score)||0,
+          homeTeam: (home.team && (home.team.displayName||home.team.shortDisplayName))||'',
+          homeAbbr: (home.team && home.team.abbreviation)||'', homeScore: parseInt(home.score)||0,
+          state: state, detail: (status.type && (status.type.shortDetail||status.type.detail))||'',
+          period: period, startTimeEST: startTimeEST,
+          awayScoreF5: isMLB ? sum5(awayLS) : null, homeScoreF5: isMLB ? sum5(homeLS) : null, f5Complete: !!f5Complete,
+        };
+      }).filter(Boolean);
+    } catch(e) { return []; }
+  }
+  async function mcFetchScores(sports) {
+    var uniq = sports.filter(function(s,i){return s && sports.indexOf(s)===i;});
+    var pairs = await Promise.all(uniq.map(async function(s){ return [s, await mcFetchSport(s)]; }));
+    pairs.forEach(function(p){ mcScores[p[0]] = p[1]; });
+  }
+  function mcNorm(n){ return (n||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim(); }
+  function mcTeamsMatch(pickTeam, espnTeam, espnAbbr) {
+    var p = mcNorm(pickTeam), e = mcNorm(espnTeam);
+    if (!p || !e) return false;
+    if (p === e || p.indexOf(e) > -1 || e.indexOf(p) > -1) return true;
+    if (espnAbbr && espnAbbr.length >= 2 && p.split(' ').indexOf(espnAbbr.toLowerCase()) > -1) return true;
+    var pl = p.split(' ').pop(), el = e.split(' ').pop();
+    return pl.length > 2 && pl === el;
+  }
+  function mcFindGame(pick) {
+    var games = mcScores[pick.sport || ''] || [];
+    var matchup = (pick.matchup || '').toLowerCase();
+    var parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(function(s){return s.trim();}).filter(Boolean);
+    for (var i = 0; i < games.length; i++) {
+      var g = games[i];
+      var aLast = mcNorm(g.awayTeam).split(' ').pop(), hLast = mcNorm(g.homeTeam).split(' ').pop();
+      var aMatch = parts.some(function(pt){return mcTeamsMatch(pt, g.awayTeam, g.awayAbbr);}) || (aLast.length > 3 && matchup.indexOf(aLast) > -1);
+      var hMatch = parts.some(function(pt){return mcTeamsMatch(pt, g.homeTeam, g.homeAbbr);}) || (hLast.length > 3 && matchup.indexOf(hLast) > -1);
+      if (aMatch && hMatch) return g;
+    }
+    // fall back to the team we bet on
+    var side = (pick.side || '').replace(/[+-]\d.*$/,'').replace(/\bML\b/i,'').replace(/over|under/i,'').replace(/\(?\s*F5\s*\)?/ig,' ').trim();
+    if (side) {
+      for (var j = 0; j < games.length; j++) {
+        var g2 = games[j];
+        if (mcTeamsMatch(side, g2.awayTeam, g2.awayAbbr) || mcTeamsMatch(side, g2.homeTeam, g2.homeAbbr)) {
+          var otherLast = mcNorm(mcTeamsMatch(side, g2.awayTeam, g2.awayAbbr) ? g2.homeTeam : g2.awayTeam).split(' ').pop();
+          if (otherLast.length > 3 && matchup.indexOf(otherLast) > -1) return g2;
+        }
+      }
+    }
+    return null;
+  }
+  function mcIsF5(pick) {
+    var s = ((pick.side||'') + ' ' + (pick.type||'')).toLowerCase();
+    return /\bf5\b/.test(s) || s.indexOf('first 5') > -1 || s.indexOf('1st 5') > -1;
+  }
+  /* ── Compute a pick's result. Server-graded result wins; else live ESPN. ── */
+  function mcResult(pick, game) {
+    var graded = (pick.result || '').toLowerCase();
+    if (graded === 'win') return { status:'win', label:'Win' };
+    if (graded === 'loss') return { status:'loss', label:'Loss' };
+    if (graded === 'push') return { status:'push', label:'Push' };
+    if (!game) return { status:'scheduled', label:'Upcoming' };
+    if (game.state === 'pre') return { status:'scheduled', label: game.startTimeEST || game.detail || 'Upcoming' };
+
+    var isF5 = mcIsF5(pick);
+    if (isF5 && game.state === 'post' && !game.f5Complete) return { status:'push', label:'No F5 result' };
+    var aScore = isF5 ? (game.awayScoreF5||0) : game.awayScore;
+    var hScore = isF5 ? (game.homeScoreF5||0) : game.homeScore;
+    var isFinal = isF5 ? !!game.f5Complete : (game.state === 'post');
+    var side = (pick.side || '').trim();
+    var teamRaw = side.replace(/[+-]\d+(\.\d+)?/g,'').replace(/\bML\b/i,'').replace(/\(?\s*F5\s*\)?/ig,' ').replace(/over|under/i,'').trim();
+    var pickedAway = mcTeamsMatch(teamRaw, game.awayTeam, game.awayAbbr);
+    var pickedHome = mcTeamsMatch(teamRaw, game.homeTeam, game.homeAbbr);
+
+    function decideTotal() {
+      var total = aScore + hScore;
+      var m = side.match(/(over|under)\s*([\d.]+)/i); if (!m) return null;
+      var ou = m[1].toLowerCase(), line = parseFloat(m[2]);
+      if (isFinal && total === line) return { status:'push', label:'Push' };
+      var over = total > line, won = (ou==='over' && over) || (ou==='under' && !over);
+      if (!isFinal) return total === line ? 'live' : (won ? 'win' : 'loss');
+      return won ? { status:'win', label:'Win' } : { status:'loss', label:'Loss' };
+    }
+    function decideSpread() {
+      var m = side.match(/([+-]\d+(\.\d+)?)/); if (!m || !(pickedAway||pickedHome)) return null;
+      var spread = parseFloat(m[1]);
+      var ps = pickedAway ? aScore : hScore, os = pickedAway ? hScore : aScore;
+      var adj = ps + spread;
+      if (isFinal && adj === os) return { status:'push', label:'Push' };
+      if (!isFinal) return adj === os ? 'live' : (adj > os ? 'win' : 'loss');
+      return adj > os ? { status:'win', label:'Win' } : { status:'loss', label:'Loss' };
+    }
+    function decideML() {
+      if (!(pickedAway||pickedHome)) return null;
+      var ps = pickedAway ? aScore : hScore, os = pickedAway ? hScore : aScore;
+      if (isFinal && ps === os) return { status:'push', label:'Push' };
+      if (!isFinal) return ps === os ? 'live' : (ps > os ? 'win' : 'loss');
+      return ps > os ? { status:'win', label:'Win' } : { status:'loss', label:'Loss' };
+    }
+    var r = /over|under/i.test(side) ? decideTotal()
+          : /[+-]\d+(\.\d+)?/.test(side) ? decideSpread()
+          : decideML();
+    if (r == null) r = /draw/i.test(side) ? (isFinal ? (aScore===hScore ? {status:'win',label:'Win'} : {status:'loss',label:'Loss'}) : (aScore===hScore?'win':'loss')) : 'live';
+
+    if (!isFinal) {
+      var proj = (typeof r === 'string') ? r : 'live';
+      return { status: proj === 'live' ? 'live' : proj, label: isF5 ? 'Live · 1st 5' : (game.detail || 'Live'), isLive:true };
+    }
+    if (r && typeof r === 'object') return r;
+    return { status:'scheduled', label: isF5 ? 'Final · 1st 5' : 'Final' };
+  }
+  function mcTeamOnly(n){ var w = (n||'').trim().split(/\s+/); return w.length > 1 ? w[w.length-1] : (n||''); }
+  function mcScoreBar(pick, game, result) {
+    if (!game || game.state === 'pre') return '';
+    var isF5 = mcIsF5(pick);
+    var a = isF5 ? (game.awayScoreF5||0) : game.awayScore;
+    var h = isF5 ? (game.homeScoreF5||0) : game.homeScore;
+    var decided = isF5 ? !!game.f5Complete : (game.state === 'post');
+    var disp = result.isLive ? 'live' : result.status;
+    var detailText = isF5 ? (decided ? 'Final · 1st 5 innings' : '1st 5 innings · ' + (game.detail||'Live')) : (game.detail || '');
+    var statusLabel = result.isLive ? (isF5 ? 'Live · 1st 5' : 'Live') : esc(result.label);
+    return '<div class="mc-scorebar sb-' + disp + '">' +
+      '<div class="sb-teams">' +
+        '<div class="sb-team"><span class="sb-team-name">' + esc(mcTeamOnly(game.awayTeam)) + '</span><span class="sb-team-score">' + a + '</span></div>' +
+        '<div class="sb-team"><span class="sb-team-name">' + esc(mcTeamOnly(game.homeTeam)) + '</span><span class="sb-team-score">' + h + '</span></div>' +
+      '</div>' +
+      '<div class="sb-meta"><span class="sb-status st-' + disp + '">' + statusLabel + '</span>' +
+      (detailText ? '<span class="sb-detail">' + esc(detailText) + '</span>' : '') + '</div>' +
+    '</div>';
+  }
+  /* legs currently won/leading for a set of picks */
+  function mcLegsWon(picks) {
+    var n = 0;
+    (picks || []).forEach(function(p){
+      var r = mcResult(p, mcFindGame(p));
+      if (r.status === 'win') n++;
+    });
+    return n;
+  }
 
   async function loadMyChallenges() {
     if (!currentUser || !currentUser.phone) return;
     var container = document.getElementById('my-challenges');
     if (!container) return;
-
     try {
       var resp = await fetch(API_BASE + '/api/p2p-challenge?phone=' + encodeURIComponent(currentUser.phone));
       if (!resp.ok) throw new Error('Failed');
@@ -1979,114 +2199,166 @@
       myChallengesData = data.challenges || [];
       if (myChallengesData.length === 0) {
         container.innerHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">No challenges yet. Pick 3 and challenge a friend!</div>';
+        container.parentElement.style.display = 'block';
         return;
       }
-
-      var html = '';
-      for (var i = 0; i < myChallengesData.length; i++) {
-        var ch = myChallengesData[i];
-        var isChallenger = ch.challenger.phone === currentUser.phone;
-        var opponent = isChallenger ? ((ch.opponent && ch.opponent.phone) ? personName(ch.opponent) : 'Waiting…') : personName(ch.challenger, 'Challenger');
-        var statusBg = ch.status === 'pending' ? 'background:#fff3e0; color:#e65100;' : ch.status === 'active' ? 'background:var(--teal-light); color:var(--teal);' : 'background:var(--green-light); color:var(--green);';
-        var statusLabel = ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Graded';
-        var myPicks = isChallenger ? ch.challenger.picks : ch.opponent.picks;
-        var picksStr = myPicks.length > 0 ? myPicks.map(function(p) { return pickLabel(p); }).join('  •  ') : 'Awaiting picks';
-
-        // Settled outcome from the viewing user's perspective
-        var resultHtml = '';
-        if (ch.settled) {
-          var o = ch.settled.outcome || '';
-          var mySide = isChallenger ? 'challenger' : 'opponent';
-          if (o.indexOf('_wins') > -1) {
-            var iWon = (ch.winner === mySide);
-            resultHtml = iWon
-              ? '<div style="font-size:.8125rem; font-weight:700; color:#2e7d32; margin-top:.375rem;">🏆 You won' + (ch.settled.pot ? ' +' + ch.settled.pot + ' WeBits' : '') + '</div>'
-              : '<div style="font-size:.8125rem; font-weight:700; color:#c0392b; margin-top:.375rem;">Lost' + (ch.wager > 0 ? ' −' + ch.wager + ' WeBits' : '') + '</div>';
-          } else if (o.indexOf('refund') > -1) {
-            resultHtml = '<div style="font-size:.8125rem; font-weight:600; color:var(--txt-m); margin-top:.375rem;">' + (o.indexOf('tie') > -1 ? 'Tie' : 'Expired') + ' — stake refunded</div>';
-          }
-        }
-
-        html += '<div class="my-challenge-card" onclick="viewChallenge(' + i + ')" style="padding:.75rem; border:1px solid var(--border-lt); border-radius:10px; margin-bottom:.5rem; background:var(--white); cursor:pointer; transition:border-color .15s;"' +
-          ' onmouseover="this.style.borderColor=\'var(--teal-border)\'" onmouseout="this.style.borderColor=\'var(--border-lt)\'">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">' +
-            '<span style="font-size:.875rem; font-weight:600; color:var(--olive);">vs ' + esc(opponent) + '</span>' +
-            '<span style="font-size:.6875rem; font-weight:600; padding:2px 8px; border-radius:9999px; ' + statusBg + '">' + esc(statusLabel) + '</span>' +
-          '</div>' +
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<span style="font-size:.75rem; color:var(--txt-m);">' + (ch.wager > 0 ? 'ⓦ ' + ch.wager + ' WeBits' : 'bragging rights') + ' &middot; ' + esc(ch.date) + '</span>' +
-            '<span style="font-size:.6875rem; color:var(--teal); font-weight:500;">View &rarr;</span>' +
-          '</div>' +
-          '<div style="font-size:.75rem; color:var(--txt-l); margin-top:.375rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(picksStr) + '</div>' +
-          resultHtml +
-        '</div>';
-      }
-      container.innerHTML = html;
+      // Pre-load live scores for every sport referenced, so the summary tally + bars are populated.
+      var sports = [];
+      myChallengesData.forEach(function(ch){
+        (ch.challenger.picks||[]).concat(ch.opponent.picks||[]).forEach(function(p){ if (p.sport) sports.push(p.sport); });
+      });
+      await mcFetchScores(sports);
+      renderMyChallenges();
       container.parentElement.style.display = 'block';
+      mcEnsureRefresh();
     } catch(e) {
       container.innerHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Could not load challenges.</div>';
     }
   }
 
-  function viewChallenge(idx) {
-    var ch = myChallengesData[idx];
-    if (!ch) return;
-    var isChallenger = currentUser && ch.challenger.phone === currentUser.phone;
-    var me = isChallenger ? ch.challenger : ch.opponent;
-    var them = isChallenger ? ch.opponent : ch.challenger;
-
+  function renderMyChallenges() {
+    var container = document.getElementById('my-challenges');
+    if (!container) return;
     var html = '';
-    // Header
-    html += '<div style="background:var(--teal); color:#fff; padding:1.25rem; text-align:center;">';
-    html += '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.7; margin-bottom:.25rem;">' + esc(ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Active' : 'Complete') + '</div>';
-    html += '<div style="font-size:1.25rem; font-weight:700;">' + esc(personName(me, 'You')) + ' vs ' + esc(personName(them, 'Opponent')) + '</div>';
-    html += '<div style="font-size:.875rem; opacity:.8; margin-top:.25rem;">' + (ch.wager > 0 ? 'ⓦ ' + ch.wager + ' WeBits' : 'bragging rights') + ' &middot; ' + esc(ch.date) + '</div>';
-    html += '</div>';
+    for (var i = 0; i < myChallengesData.length; i++) html += mcCardHTML(i);
+    container.innerHTML = html;
+  }
 
-    // Your picks
-    html += '<div style="padding:1rem 1.25rem;">';
-    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); margin-bottom:.5rem;">Your Picks</div>';
-    if (me.picks && me.picks.length > 0) {
-      for (var i = 0; i < me.picks.length; i++) {
-        var p = me.picks[i];
-        var resultBadge = '';
-        if (p.result === 'win') resultBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">W</span>';
-        else if (p.result === 'loss') resultBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#fce4e4; color:#c0392b;">L</span>';
-        var pm = shortTeams(p.matchup);
-        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
-        html += '<span style="min-width:0; margin-right:.5rem;">' + (pm ? '<span style="font-size:.6875rem; color:var(--txt-l); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(pm) + '</span>' : '') + '<span style="font-weight:600; color:var(--olive);">' + esc(p.side) + ' ' + resultBadge + '</span></span>';
-        html += '<span style="font-size:.75rem; color:var(--txt-m); flex-shrink:0;">' + esc(p.sport) + '</span>';
-        html += '</div>';
+  function mcSides(ch) {
+    var isChallenger = currentUser && ch.challenger.phone === currentUser.phone;
+    return {
+      isChallenger: isChallenger,
+      me: isChallenger ? ch.challenger : ch.opponent,
+      them: isChallenger ? ch.opponent : ch.challenger,
+    };
+  }
+
+  function mcCardHTML(i) {
+    var ch = myChallengesData[i];
+    var s = mcSides(ch);
+    var hasOpp = !!(s.them && s.them.phone);
+    var oppName = hasOpp ? personName(s.them, s.isChallenger ? 'Opponent' : 'Challenger') : 'Waiting for opponent';
+    var statusBg = ch.status === 'pending' ? 'background:#fff3e0; color:#e65100;' : ch.status === 'active' ? 'background:var(--teal-light); color:var(--teal);' : 'background:var(--green-light); color:var(--green);';
+    var statusLabel = ch.status === 'pending' ? 'Pending' : ch.status === 'active' ? 'Live' : (ch.status === 'graded' ? 'Final' : 'Active');
+    var stake = ch.wager > 0 ? 'ⓦ ' + ch.wager + ' WeBit' : 'Bragging rights';
+    var open = mcOpen[i];
+
+    // Right-hand status indicator: settled result, live tally, or stake awaiting
+    var rightHtml = '';
+    if (ch.settled) {
+      var o = ch.settled.outcome || '';
+      var mySideKey = s.isChallenger ? 'challenger' : 'opponent';
+      if (o.indexOf('_wins') > -1) {
+        rightHtml = (ch.winner === mySideKey)
+          ? '<span class="mc-result" style="color:var(--green);">🏆 Won' + (ch.settled.pot ? ' +' + ch.settled.pot + ' WeBit' : '') + '</span>'
+          : '<span class="mc-result" style="color:#c0392b;">Lost' + (ch.wager > 0 ? ' −' + ch.wager + ' WeBit' : '') + '</span>';
+      } else if (o.indexOf('refund') > -1) {
+        rightHtml = '<span class="mc-result" style="color:var(--txt-m);">' + (o.indexOf('tie') > -1 ? 'Tie' : 'Expired') + ' — refunded</span>';
       }
-    } else {
-      html += '<div style="font-size:.8125rem; color:var(--txt-l); text-align:center; padding:.5rem 0;">No picks yet</div>';
+    } else if (ch.status === 'active' && hasOpp) {
+      var myLegs = mcLegsWon(s.me.picks), themLegs = mcLegsWon(s.them.picks);
+      var cls = myLegs > themLegs ? 'lead' : myLegs < themLegs ? 'trail' : 'tied';
+      var word = myLegs > themLegs ? 'You lead' : myLegs < themLegs ? 'Trailing' : 'Tied';
+      rightHtml = '<span class="mc-tally ' + cls + '">' + word + ' ' + myLegs + '–' + themLegs + '</span>';
+    } else if (ch.status === 'pending') {
+      rightHtml = '<span style="color:var(--txt-l); font-size:.75rem;">Awaiting response</span>';
     }
 
-    // Opponent picks
-    html += '<div style="height:.75rem;"></div>';
-    html += '<div style="font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--txt-l); margin-bottom:.5rem;">' + esc(personName(them, 'Opponent')) + '\'s Picks</div>';
-    if (them.picks && them.picks.length > 0) {
-      for (var j = 0; j < them.picks.length; j++) {
-        var tp = them.picks[j];
-        var rBadge = '';
-        if (tp.result === 'win') rBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#e8f5e9; color:#2e7d32;">W</span>';
-        else if (tp.result === 'loss') rBadge = '<span style="font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:4px; background:#fce4e4; color:#c0392b;">L</span>';
-        var tpm = shortTeams(tp.matchup);
-        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:.5rem 0; border-bottom:1px solid var(--border-lt); font-size:.8125rem;">';
-        html += '<span style="min-width:0; margin-right:.5rem;">' + (tpm ? '<span style="font-size:.6875rem; color:var(--txt-l); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(tpm) + '</span>' : '') + '<span style="font-weight:500; color:var(--txt-m);">' + esc(tp.side) + ' ' + rBadge + '</span></span>';
-        html += '<span style="font-size:.75rem; color:var(--txt-l); flex-shrink:0;">' + esc(tp.sport) + '</span>';
-        html += '</div>';
-      }
-    } else {
-      html += '<div style="font-size:.8125rem; color:var(--txt-l); text-align:center; padding:.5rem 0;">Waiting for response...</div>';
-    }
-    html += '</div>';
+    return '<div class="mc-card' + (open ? ' open' : '') + '" id="mc-card-' + i + '">' +
+      '<div class="mc-summary" onclick="toggleChallenge(' + i + ')" role="button" aria-expanded="' + (open ? 'true':'false') + '">' +
+        '<div class="mc-row1">' +
+          '<span class="mc-vs"><span class="mc-chev">▶</span>vs ' + esc(oppName) + '</span>' +
+          '<span class="mc-badge" style="' + statusBg + '">' + esc(statusLabel) + '</span>' +
+        '</div>' +
+        '<div class="mc-row2">' +
+          '<span class="mc-stake">' + stake + ' · ' + esc(ch.date) + '</span>' +
+          rightHtml +
+        '</div>' +
+      '</div>' +
+      '<div class="mc-detail" id="mc-detail-' + i + '">' + (open ? mcDetailHTML(i) : '') + '</div>' +
+    '</div>';
+  }
 
-    // Show in profile modal (reuse it)
-    var modal = document.getElementById('profile-modal');
-    var card = modal.querySelector('.profile-card');
-    card.innerHTML = '<button class="profile-close" onclick="document.getElementById(\'profile-modal\').classList.remove(\'open\')">&times;</button>' + html;
-    modal.classList.add('open');
+  function mcPickRowHTML(p, isMe) {
+    var game = mcFindGame(p);
+    var result = mcResult(p, game);
+    var pill = '';
+    if (result.status === 'win' && !result.isLive) pill = '<span class="mc-result-pill rp-win">WON</span>';
+    else if (result.status === 'loss' && !result.isLive) pill = '<span class="mc-result-pill rp-loss">LOST</span>';
+    else if (result.status === 'push' && !result.isLive) pill = '<span class="mc-result-pill rp-push">PUSH</span>';
+    var matchup = shortTeams(p.matchup);
+    return '<div class="mc-pick">' +
+      '<div class="mc-pick-head">' +
+        '<span class="mc-pick-match">' + esc(matchup || p.matchup || '') + '</span>' +
+        '<span class="mc-pick-sport">' + esc(p.sport || '') + '</span>' +
+      '</div>' +
+      '<div class="mc-pick-side" style="' + (isMe ? '' : 'color:var(--txt-m);font-weight:600;') + '">' + esc(p.side || '—') + pill + '</div>' +
+      mcScoreBar(p, game, result) +
+    '</div>';
+  }
+
+  function mcDetailHTML(i) {
+    var ch = myChallengesData[i];
+    var s = mcSides(ch);
+    var html = '';
+    // You
+    html += '<div class="mc-side-label you">Your picks</div>';
+    if (s.me && s.me.picks && s.me.picks.length) html += s.me.picks.map(function(p){ return mcPickRowHTML(p, true); }).join('');
+    else html += '<div style="font-size:.8125rem; color:var(--txt-l); padding:.25rem 0 .5rem;">No picks yet.</div>';
+    // Them
+    var themName = (s.them && s.them.phone) ? personName(s.them, s.isChallenger ? 'Opponent' : 'Challenger') : 'Opponent';
+    html += '<div class="mc-side-label them">' + esc(themName) + '’s picks</div>';
+    if (s.them && s.them.picks && s.them.picks.length) html += s.them.picks.map(function(p){ return mcPickRowHTML(p, false); }).join('');
+    else if (ch.status === 'pending') html += '<div style="font-size:.8125rem; color:var(--txt-l); padding:.25rem 0 .5rem;">Waiting for them to lock 3 picks.</div>';
+    else html += '<div style="font-size:.8125rem; color:var(--txt-l); padding:.25rem 0 .5rem;">No picks yet.</div>';
+    return html;
+  }
+
+  function toggleChallenge(i) {
+    var card = document.getElementById('mc-card-' + i);
+    var detail = document.getElementById('mc-detail-' + i);
+    if (!card || !detail) return;
+    mcOpen[i] = !mcOpen[i];
+    if (mcOpen[i]) {
+      detail.innerHTML = mcDetailHTML(i);
+      card.classList.add('open');
+      card.querySelector('.mc-summary').setAttribute('aria-expanded','true');
+    } else {
+      card.classList.remove('open');
+      card.querySelector('.mc-summary').setAttribute('aria-expanded','false');
+    }
+    mcEnsureRefresh();
+  }
+
+  /* Auto-refresh live scores while any active challenge with live games is shown. */
+  function mcAnyLive() {
+    return myChallengesData.some(function(ch){ return ch.status === 'active' && !ch.settled; });
+  }
+  function mcEnsureRefresh() {
+    if (mcAnyLive()) {
+      if (!mcRefreshTimer) mcRefreshTimer = setInterval(mcRefreshTick, 45000);
+    } else if (mcRefreshTimer) {
+      clearInterval(mcRefreshTimer); mcRefreshTimer = null;
+    }
+  }
+  async function mcRefreshTick() {
+    var sports = [];
+    myChallengesData.forEach(function(ch){
+      if (ch.status !== 'active') return;
+      (ch.challenger.picks||[]).concat(ch.opponent.picks||[]).forEach(function(p){ if (p.sport) sports.push(p.sport); });
+    });
+    if (!sports.length) return;
+    await mcFetchScores(sports);
+    // Refresh summary tallies + any open detail bodies in place (no scroll jump).
+    for (var i = 0; i < myChallengesData.length; i++) {
+      var card = document.getElementById('mc-card-' + i);
+      if (!card) continue;
+      var fresh = document.createElement('div'); fresh.innerHTML = mcCardHTML(i);
+      var newRow2 = fresh.querySelector('.mc-row2');
+      var oldRow2 = card.querySelector('.mc-row2');
+      if (newRow2 && oldRow2) oldRow2.innerHTML = newRow2.innerHTML;
+      if (mcOpen[i]) { var d = document.getElementById('mc-detail-' + i); if (d) d.innerHTML = mcDetailHTML(i); }
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -2283,7 +2555,7 @@
   document.head.appendChild(css);
 
   // The visible WeBetAI bar is removed (founder directive) — the dashboard top menu bar
-  // already shows login + WeBits. wbaiRefreshStrip still runs for its identity-adoption
+  // already shows login + WeBit. wbaiRefreshStrip still runs for its identity-adoption
   // side effects (window.wbaiUser / currentUser); the signed-out sign-in CTA lives in
   // renderLoginState's board prompt instead. strip() is now a no-op.
   function strip(html) { /* no visible bar */ }
@@ -2312,7 +2584,7 @@
         if (u && u.error) u = null;
         window.wbaiUser = u || null;
         if (u) {
-          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><a class="w" href="/webit" style="color:#fff;text-decoration:none;"><img src="/webet-coin.png" alt="WeBit" style="width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;"> ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBits</a><a href="/webit">get more</a>');
+          strip('<span>' + (u.handle ? '@' + String(u.handle).replace(/[<>&]/g, '') : 'Signed in') + '</span><a class="w" href="/webit" style="color:#fff;text-decoration:none;"><img src="/webet-coin.png" alt="WeBit" style="width:16px;height:16px;border-radius:50%;display:inline-block;vertical-align:-3px;"> ' + Number(u.credit_balance || 0).toLocaleString() + ' WeBit</a><a href="/webit">get more</a>');
           // Adopt the unified identity for EVERY signed-in user — phone when they have one
           // (SMS-first), otherwise their wbai account id (X users). The page's own phone
           // login is gone; /login is the only gate.

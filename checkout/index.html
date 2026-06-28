@@ -67,9 +67,9 @@
   <div class="wrap">
     <div class="card" id="pay-card">
       <h1 id="pack-title">Checkout</h1>
-      <p class="sub">You're one step from more WeBits — the credits that power Betty's pick analysis, premium depth, and Pick 3 challenges. Test mode: no real charge.</p>
+      <p class="sub">You're one step from more WeBit — the credits that power Betty's pick analysis, premium depth, and Pick 3 challenges. Test mode: no real charge.</p>
       <div class="row"><span class="k">Pack</span><span class="v" id="r-pack">—</span></div>
-      <div class="row"><span class="k">WeBits</span><span class="v" id="r-credits">—</span></div>
+      <div class="row"><span class="k">WeBit</span><span class="v" id="r-credits">—</span></div>
       <div class="row total"><span class="k">Total</span><span class="v" id="r-price">—</span></div>
       <button class="btn" id="pay-btn" type="button">Complete purchase (test)</button>
       <a class="cancel" href="/webit">Cancel and go back</a>
@@ -138,7 +138,7 @@
             var s = document.getElementById('success-card');
             s.style.display = 'block';
             document.getElementById('s-title').textContent = res.j.alreadyProcessed ? 'Already credited' : (pack.label + ' Pack credited!');
-            document.getElementById('s-bal').textContent = Number(res.j.newBalance).toLocaleString() + ' WeBits';
+            document.getElementById('s-bal').textContent = Number(res.j.newBalance).toLocaleString() + ' WeBit';
           })
           .catch(function (e) {
             payBtn.disabled = false;

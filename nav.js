@@ -1,7 +1,7 @@
 // WeBetAI unified auth chip + WeBit token icon — Product Loop (charter P0 item 1, rev 2 per founder feedback)
 // - Avatar = profile entry point (interim: /dashboard until /profile ships). No handle text in compact mode
 //   (founder avatar IS the brand logo — text next to wordmark read as a duplicate logo).
-// - WeBit token icon → /webit (the WeBits surface).
+// - WeBit token icon → /webit (the WeBit surface).
 // - Betty chat is the picks-delivery path on the homepage; nav adds NO picks links.
 (function () {
   var css = [

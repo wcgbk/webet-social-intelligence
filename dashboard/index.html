@@ -2090,10 +2090,10 @@
   function forceLoginGate(reason) {
     if (wbUser || gateForced || !window.WBLogin) return;
     gateForced = true;
-    WBLogin.open({ force: true, reason: reason || 'Sign in to keep going — your <b>1,000 free WeBits</b> are waiting.', onSuccess: onGateAuthed });
+    WBLogin.open({ force: true, reason: reason || 'Sign in to keep going — your <b>1,000 free WeBit</b> are waiting.', onSuccess: onGateAuthed });
   }
   // Time backstop — an engaged guest who lingers gets gated after 90s
-  setTimeout(function () { if (!wbUser && guestSends >= 1) forceLoginGate('You’re into it — sign in to keep chatting with Betty and lock your <b>1,000 free WeBits</b>. Five seconds, no password.'); }, 90000);
+  setTimeout(function () { if (!wbUser && guestSends >= 1) forceLoginGate('You’re into it — sign in to keep chatting with Betty and lock your <b>1,000 free WeBit</b>. Five seconds, no password.'); }, 90000);
 
   /* ─── State ─────────────────────────────────────────────────────── */
   let messages = [];
@@ -3048,7 +3048,7 @@
     // Guest conversion gate — 2 free Betty answers, then force the all-options sign-in pop-up
     if (!wbUser) {
       if (guestSends >= GUEST_FREE_SENDS) {
-        forceLoginGate('Loving Betty? Sign in to keep chatting and claim your <b>1,000 free WeBits</b> — free, five seconds, no password.');
+        forceLoginGate('Loving Betty? Sign in to keep chatting and claim your <b>1,000 free WeBit</b> — free, five seconds, no password.');
         return;
       }
       guestSends++;
@@ -3559,7 +3559,7 @@
 <script>
 /* ── Betty-led onboarding v1 (loop-c4) ─────────────────────────────────
    New guests get a short conversation: sports → today's matching edges →
-   save-via-X-signin → WeBits welcome. Scripted client-side (no LLM calls),
+   save-via-X-signin → WeBit welcome. Scripted client-side (no LLM calls),
    rides existing chat primitives (appendMsg/renderPickCard/loginWithX).
    Test hook: ?onboard=force re-runs the flow even when signed in. */
 (function () {
@@ -3625,7 +3625,7 @@
 
   function offerSave(sport) {
     setTimeout(function () {
-      betty('Want me to remember ' + (sport === 'All' ? 'your taste' : sport) + " and have your card ready every morning? Sign in with X — free, takes five seconds, and your 1,000 WeBits come with it.");
+      betty('Want me to remember ' + (sport === 'All' ? 'your taste' : sport) + " and have your card ready every morning? Sign in with X — free, takes five seconds, and your 1,000 WeBit come with it.");
       chipRow([
         { label: '𝕏 Sign in', primary: true, fn: function () { FE('onboard_signin_clicked'); localStorage.setItem('wb_onboarded', '1'); loginWithX(); } },
         { label: 'Maybe later', fn: function () { FE('onboard_skipped'); localStorage.setItem('wb_onboarded', '1'); betty("All good — I'm here when you need me. Ask me anything."); } }

@@ -58,7 +58,7 @@
         '<button class="wbl-x" type="button" aria-label="Close">&times;</button>' +
         '<div class="wbl-logo">' + LOGO + ' WeBetAI</div>' +
         '<h2 class="wbl-h">Sign in to continue</h2>' +
-        '<p class="wbl-sub" id="wbl-reason">Save your picks, chat with Betty, and activate your <b>1,000 free WeBits</b>. Five seconds, no password.</p>' +
+        '<p class="wbl-sub" id="wbl-reason">Save your picks, chat with Betty, and activate your <b>1,000 free WeBit</b>. Five seconds, no password.</p>' +
         '<a class="wbl-btn wbl-xbtn" id="wbl-x" href="/.netlify/functions/auth-x-init">𝕏 &nbsp;Continue with X</a>' +
         '<div class="wbl-div">or use your phone</div>' +
         '<div id="wbl-step-phone">' +
@@ -77,7 +77,7 @@
         '<div class="wbl-div">more ways</div>' +
         '<button class="wbl-btn wbl-soon" type="button" disabled>✉️ &nbsp;Email magic link<span class="wbl-soon-tag">SOON</span></button>' +
         '<button class="wbl-btn wbl-soon" type="button" disabled>🇬 &nbsp;Continue with Google<span class="wbl-soon-tag">SOON</span></button>' +
-        '<p class="wbl-perk">New accounts start with <b>1,000 WeBits</b> — they power Betty’s pick analysis, Sharp Depth, and Pick 3 challenges.</p>' +
+        '<p class="wbl-perk">New accounts start with <b>1,000 WeBit</b> — they power Betty’s pick analysis, Sharp Depth, and Pick 3 challenges.</p>' +
       '</div></div>');
     document.body.appendChild(overlay);
 

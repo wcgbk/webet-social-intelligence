@@ -1,5 +1,5 @@
 // market-bet.js — WeBit-escrowed head-to-head P2P market bets (BettorEdge methodology, free WeBit version)
-// One user takes a single market line (ML / spread / total) and stakes WeBits; a friend takes the
+// One user takes a single market line (ML / spread / total) and stakes WeBit; a friend takes the
 // OTHER side and matches the stake. Winner takes the pot, graded vs the final score (see
 // market-bet-settle.js). Delivery via X DM or text. Built to later swap to real-money BettorEdge.
 //
@@ -143,7 +143,7 @@ exports.handler = async (event) => {
 
     const invitePage = market === 'prediction' ? 'p2p-trending' : 'p2p-sports';
     const inviteUrl = `https://webetsocial.com/${invitePage}/?bet=${betId}`;
-    const stakeLbl = stake > 0 ? `${stake} WeBits` : 'bragging rights';
+    const stakeLbl = stake > 0 ? `${stake} WeBit` : 'bragging rights';
     if (deliver === 'sms' && friendPhone) {
       await sendSMS(friendPhone, `${myName} bet you on WeBetAI: ${pick} (${matchup}) for ${stakeLbl}. Take the other side: ${inviteUrl}`);
     }

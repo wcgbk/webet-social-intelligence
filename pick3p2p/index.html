@@ -734,10 +734,23 @@
     .mc-side-label { font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin:.875rem 0 .5rem; }
     .mc-side-label.you { color:var(--teal); } .mc-side-label.them { color:var(--txt-l); }
     .mc-pick { padding:.625rem .75rem; border:1px solid var(--border-lt); border-radius:9px; margin-bottom:.5rem; background:var(--off-white); }
+    /* AlphaPix-style header: sport tag + grade */
+    .mc-pick-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:.3rem; }
+    .mc-sport-tag { font-size:.625rem; font-weight:700; letter-spacing:.04em; color:var(--teal); background:var(--teal-light); border-radius:5px; padding:2px 7px; text-transform:uppercase; }
+    .mc-grade { font-size:.625rem; font-weight:800; letter-spacing:.02em; border-radius:5px; padding:2px 8px; }
+    .mc-g-a { background:var(--green-light); color:var(--green); }
+    .mc-g-b { background:var(--teal-light); color:var(--teal); }
+    .mc-g-c { background:var(--bg-light); color:var(--txt-m); }
     .mc-pick-head { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
-    .mc-pick-match { font-size:.6875rem; color:var(--txt-l); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .mc-pick-sport { font-size:.6875rem; color:var(--txt-l); flex-shrink:0; }
-    .mc-pick-side { font-size:.875rem; font-weight:700; color:var(--olive); margin-top:.1rem; display:flex; align-items:center; gap:.4rem; }
+    .mc-pick-match { font-size:.875rem; font-weight:700; color:var(--olive); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .mc-time-chip { font-size:.625rem; font-weight:600; color:var(--txt-m); background:var(--white); border:1px solid var(--border-lt); border-radius:6px; padding:1px 7px; flex-shrink:0; }
+    .mc-pick-line { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; margin-top:.4rem; }
+    .mc-pick-side { font-size:.9375rem; font-weight:700; color:var(--olive); display:flex; align-items:center; gap:.4rem; min-width:0; }
+    .mc-odds { font-family:'Geist Sans',monospace; font-size:.875rem; font-weight:700; color:var(--olive); flex-shrink:0; }
+    .mc-pick-foot { display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-top:.45rem; padding-top:.4rem; border-top:1px solid var(--border-lt); }
+    .mc-edge { display:inline-flex; align-items:center; gap:.25rem; font-size:.625rem; font-weight:700; color:var(--green); background:var(--green-light); border-radius:5px; padding:2px 7px; }
+    .mc-edge svg { width:11px; height:11px; }
+    .mc-foot-r { margin-left:auto; display:flex; align-items:center; gap:.4rem; }
     /* live score bar (mirrors /alpha) */
     .mc-scorebar { display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin-top:.5rem; padding:.5rem .625rem; border-radius:7px; font-size:.75rem; }
     .sb-live { background:#eef6ff; border:1px solid #b3d4fc; }
@@ -1338,6 +1351,9 @@
       sport: game.sport || '',
       rating: game.rating || null,
       odds: game.odds || null,
+      // AlphaPix bet detail captured from the board pick
+      startTime: game.startTime || (game.raw && game.raw.commenceTime) || null,
+      ev: (game.raw && (game.raw.ev || game.raw.edgePct || game.raw.edge)) || null,
     });
     updateBoardUI();
   }
@@ -1741,7 +1757,7 @@
           challengerHandle: (currentUser && currentUser.handle) || (window.wbaiUser && window.wbaiUser.handle) || null,
           challengerName: name,
           picks: userSelections.map(function(s) {
-            return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
+            return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type, odds: s.odds || null, grade: s.rating || null, ev: s.ev || null, startTime: s.startTime || null };
           }),
           friendPhone: friendPhone,
           wager: wager,
@@ -1957,7 +1973,7 @@
           responderHandle: (window.wbaiUser && window.wbaiUser.handle) || (currentUser && currentUser.handle) || null,
           responderName: bestMyName() || name || 'Opponent',
           picks: userSelections.map(function(s) {
-            return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type };
+            return { sport: s.sport, matchup: s.matchup, sideName: s.sideName, side: s.sideName, type: s.type, odds: s.odds || null, grade: s.rating || null, ev: s.ev || null, startTime: s.startTime || null };
           }),
         }),
       });
@@ -2207,7 +2223,7 @@
       myChallengesData.forEach(function(ch){
         (ch.challenger.picks||[]).concat(ch.opponent.picks||[]).forEach(function(p){ if (p.sport) sports.push(p.sport); });
       });
-      await mcFetchScores(sports);
+      await Promise.all([ mcFetchScores(sports), mcBuildEnrich() ]);
       renderMyChallenges();
       container.parentElement.style.display = 'block';
       mcEnsureRefresh();
@@ -2222,6 +2238,49 @@
     var html = '';
     for (var i = 0; i < myChallengesData.length; i++) html += mcCardHTML(i);
     container.innerHTML = html;
+  }
+
+  /* ── AlphaPix bet-detail enrichment ──
+     Older challenges only stored {sport,matchup,side}. We backfill odds / grade /
+     edge / tip-off from today's live alpha board so existing bets show full detail. */
+  var mcEnrich = {}; // normalized matchup -> [{ pickStr, odds, grade, ev, startTime }]
+  async function mcBuildEnrich() {
+    try {
+      var resp = await fetch(API_BASE + '/api/get-picks-alpha');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      mcEnrich = {};
+      var add = function(matchup, pickStr, odds, grade, ev, startTime) {
+        var k = mcNorm(matchup); if (!k) return;
+        (mcEnrich[k] = mcEnrich[k] || []).push({
+          pickStr: pickStr || '', odds: odds || null, grade: grade || null,
+          ev: (ev != null ? ev : null), startTime: startTime || null,
+        });
+      };
+      (data.picks || []).forEach(function(p){
+        add(p.matchup, p.pick, p.odds, p.confidence || p.rating, (p.ev != null ? p.ev : (p.edgePct != null ? p.edgePct : p.edge)), p.commenceTime || p.startTime);
+      });
+      (data.rejections || []).forEach(function(r){
+        add(r.matchup, r.side || r.pick, r.odds, null, null, r.commenceTime || r.startTime);
+      });
+    } catch(e) {}
+  }
+  function mcLookup(pick) {
+    var arr = mcEnrich[mcNorm(pick.matchup)];
+    if (!arr || !arr.length) return null;
+    var side = mcNorm(pick.side);
+    // Find the board entry whose pick text matches THIS side (direction-safe for totals).
+    var best = arr.find(function(e){
+      var ps = mcNorm(e.pickStr); if (!ps || !side) return false;
+      if (/\bover\b/.test(side) !== /\bover\b/.test(ps)) return false;
+      if (/\bunder\b/.test(side) !== /\bunder\b/.test(ps)) return false;
+      return ps.indexOf(side) > -1 || side.indexOf(ps) > -1 || side.split(' ').pop() === ps.split(' ').pop();
+    });
+    // Tip-off is game-level — safe to take from any entry on this matchup. Odds/grade/ev
+    // are side-specific, so only carry them on a confident match (never cross over↔under).
+    var startTime = (best && best.startTime) || arr[0].startTime || null;
+    if (best) return { odds: best.odds, grade: best.grade, ev: best.ev, startTime: startTime };
+    return { odds: null, grade: null, ev: null, startTime: startTime };
   }
 
   function mcSides(ch) {
@@ -2279,22 +2338,70 @@
     '</div>';
   }
 
+  /* Grade badge styling — A grades green, B grades teal, else neutral. */
+  function mcGradeClass(g) {
+    var u = String(g || '').toUpperCase();
+    if (u.charAt(0) === 'A') return 'mc-g-a';
+    if (u.charAt(0) === 'B') return 'mc-g-b';
+    return 'mc-g-c';
+  }
+  function mcFmtTime(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit', hour12:true }) + ' ET'; }
+    catch(e) { return ''; }
+  }
+  function mcFmtEv(ev) {
+    if (ev == null || ev === '') return '';
+    var s = String(ev).trim();
+    if (/%/.test(s)) return s;
+    var n = parseFloat(s);
+    if (isNaN(n)) return s;
+    return (n > 0 ? '+' : '') + n + '%';
+  }
+
+  /* AlphaPix-style pick card — minimized: sport tag + grade, matchup + tip-off,
+     pick side + odds, live score, edge + result. Missing fields are enriched
+     from the live alpha board (mcLookup) and otherwise simply omitted. */
   function mcPickRowHTML(p, isMe) {
     var game = mcFindGame(p);
     var result = mcResult(p, game);
+    var enr = mcLookup(p) || {};
+    var odds = p.odds || enr.odds || '';
+    var grade = p.grade || p.rating || enr.grade || '';
+    var ev = mcFmtEv(p.ev != null ? p.ev : enr.ev);
+    var startTime = p.startTime || p.commenceTime || enr.startTime || null;
+
     var pill = '';
     if (result.status === 'win' && !result.isLive) pill = '<span class="mc-result-pill rp-win">WON</span>';
     else if (result.status === 'loss' && !result.isLive) pill = '<span class="mc-result-pill rp-loss">LOST</span>';
     else if (result.status === 'push' && !result.isLive) pill = '<span class="mc-result-pill rp-push">PUSH</span>';
-    var matchup = shortTeams(p.matchup);
-    return '<div class="mc-pick">' +
-      '<div class="mc-pick-head">' +
-        '<span class="mc-pick-match">' + esc(matchup || p.matchup || '') + '</span>' +
-        '<span class="mc-pick-sport">' + esc(p.sport || '') + '</span>' +
+
+    var matchup = shortTeams(p.matchup) || p.matchup || '';
+    var isPre = !game || game.state === 'pre';
+    // tip-off chip: prefer ESPN start time, fall back to stored/enriched commence time
+    var timeStr = isPre ? ((game && game.startTimeEST ? game.startTimeEST + ' ET' : mcFmtTime(startTime))) : '';
+    var timeChip = (isPre && timeStr) ? '<span class="mc-time-chip">' + esc(timeStr) + '</span>' : '';
+
+    var head =
+      '<div class="mc-pick-top">' +
+        '<span class="mc-sport-tag">' + esc(p.sport || '') + '</span>' +
+        (grade ? '<span class="mc-grade ' + mcGradeClass(grade) + '">' + esc(String(grade).toUpperCase()) + '</span>' : '') +
       '</div>' +
-      '<div class="mc-pick-side" style="' + (isMe ? '' : 'color:var(--txt-m);font-weight:600;') + '">' + esc(p.side || '—') + pill + '</div>' +
-      mcScoreBar(p, game, result) +
-    '</div>';
+      '<div class="mc-pick-head">' +
+        '<span class="mc-pick-match">' + esc(matchup) + '</span>' + timeChip +
+      '</div>';
+
+    var line =
+      '<div class="mc-pick-line">' +
+        '<span class="mc-pick-side" style="' + (isMe ? '' : 'color:var(--txt-m);font-weight:600;') + '">' + esc(p.side || '—') + '</span>' +
+        (odds ? '<span class="mc-odds">' + esc(odds) + '</span>' : '') +
+      '</div>';
+
+    var footParts = '';
+    if (ev) footParts += '<span class="mc-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>Edge ' + esc(ev) + '</span>';
+    var foot = (footParts || pill) ? '<div class="mc-pick-foot">' + footParts + '<span class="mc-foot-r">' + pill + '</span></div>' : '';
+
+    return '<div class="mc-pick">' + head + mcScoreBar(p, game, result) + line + foot + '</div>';
   }
 
   function mcDetailHTML(i) {

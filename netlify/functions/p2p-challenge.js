@@ -182,6 +182,11 @@ exports.handler = async (event) => {
           matchup: p.matchup || '',
           side: p.sideName || p.side || '',
           type: p.type || 'avail',
+          // AlphaPix bet detail (carried from the pick board; null on older clients)
+          odds: p.odds || null,
+          grade: p.grade || p.rating || null,
+          ev: p.ev || p.edge || null,
+          startTime: p.startTime || p.commenceTime || null,
           result: null,
         })),
       },
@@ -263,6 +268,10 @@ exports.handler = async (event) => {
       matchup: p.matchup || '',
       side: p.sideName || p.side || '',
       type: p.type || 'avail',
+      odds: p.odds || null,
+      grade: p.grade || p.rating || null,
+      ev: p.ev || p.edge || null,
+      startTime: p.startTime || p.commenceTime || null,
       result: null,
     }));
     challenge.status = 'active';

@@ -735,8 +735,10 @@
     .mc-side-label.you { color:var(--teal); } .mc-side-label.them { color:var(--txt-l); }
     .mc-pick { padding:.625rem .75rem; border:1px solid var(--border-lt); border-radius:9px; margin-bottom:.5rem; background:var(--off-white); }
     /* AlphaPix-style header: sport tag + grade */
-    .mc-pick-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:.3rem; }
-    .mc-sport-tag { font-size:.625rem; font-weight:700; letter-spacing:.04em; color:var(--teal); background:var(--teal-light); border-radius:5px; padding:2px 7px; text-transform:uppercase; }
+    .mc-pick-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:.3rem; gap:.4rem; }
+    .mc-top-left { display:flex; align-items:center; gap:.35rem; min-width:0; }
+    .mc-sport-tag { font-size:.625rem; font-weight:700; letter-spacing:.04em; color:var(--teal); background:var(--teal-light); border-radius:5px; padding:2px 7px; text-transform:uppercase; flex-shrink:0; }
+    .mc-bet-type { font-size:.625rem; font-weight:600; color:var(--txt-m); background:var(--white); border:1px solid var(--border-lt); border-radius:5px; padding:2px 7px; white-space:nowrap; }
     .mc-grade { font-size:.625rem; font-weight:800; letter-spacing:.02em; border-radius:5px; padding:2px 8px; }
     .mc-g-a { background:var(--green-light); color:var(--green); }
     .mc-g-b { background:var(--teal-light); color:var(--teal); }
@@ -2241,27 +2243,52 @@
   }
 
   /* ── AlphaPix bet-detail enrichment ──
-     Older challenges only stored {sport,matchup,side}. We backfill odds / grade /
-     edge / tip-off from today's live alpha board so existing bets show full detail. */
-  var mcEnrich = {}; // normalized matchup -> [{ pickStr, odds, grade, ev, startTime }]
+     Older challenges only stored {sport,matchup,side}. We backfill odds / bet type /
+     edge / tip-off from today's live alpha board so existing bets show full detail.
+     candidateTable is the richest source — it carries odds + market + edge for EVERY
+     evaluated side (picks AND rejections), so it's our primary enrichment feed. */
+  var mcEnrich = {}; // normalized matchup -> [{ pickStr, odds, grade, ev, betType, edge, startTime }]
+  function mcFmtOdds(o) {
+    if (o == null || o === '') return '';
+    var s = String(o).trim();
+    if (/^[+-]/.test(s)) return s;          // already a signed string e.g. "-110"
+    var n = parseFloat(s); if (isNaN(n)) return s;
+    return n > 0 ? '+' + n : '' + n;        // numeric American odds → signed
+  }
+  function mcFmtPct(v) {
+    if (v == null || v === '') return '';
+    var s = String(v).trim();
+    if (/%$/.test(s)) return s;             // already "3.8%"
+    var n = parseFloat(s); if (isNaN(n)) return '';
+    if (Math.abs(n) > 0 && Math.abs(n) < 1) n = n * 100;  // fraction (0.117) → percent (11.7)
+    return (Math.round(n * 10) / 10) + '%';
+  }
   async function mcBuildEnrich() {
     try {
       var resp = await fetch(API_BASE + '/api/get-picks-alpha');
       if (!resp.ok) return;
       var data = await resp.json();
       mcEnrich = {};
-      var add = function(matchup, pickStr, odds, grade, ev, startTime) {
+      var add = function(matchup, pickStr, odds, grade, edge, betType, startTime) {
         var k = mcNorm(matchup); if (!k) return;
         (mcEnrich[k] = mcEnrich[k] || []).push({
           pickStr: pickStr || '', odds: odds || null, grade: grade || null,
-          ev: (ev != null ? ev : null), startTime: startTime || null,
+          edge: (edge != null && edge !== '') ? edge : null,
+          betType: betType || null, startTime: startTime || null,
         });
       };
-      (data.picks || []).forEach(function(p){
-        add(p.matchup, p.pick, p.odds, p.confidence || p.rating, (p.ev != null ? p.ev : (p.edgePct != null ? p.edgePct : p.edge)), p.commenceTime || p.startTime);
+      // Primary: candidateTable — odds + market + EV for all evaluated sides.
+      // Use EV (consistent across sources) for the edge badge, not the points "edge".
+      (data.candidateTable || []).forEach(function(c){
+        add(c.matchup, c.side, mcFmtOdds(c.odds), null, (c.ev != null ? c.ev : c.edge), c.market, c.commenceTime);
       });
+      // The 3 selected picks carry a letter grade (confidence) + clean betType
+      (data.picks || []).forEach(function(p){
+        add(p.matchup, p.pick, p.odds, p.confidence || p.rating, (p.edgePct != null ? p.edgePct : p.edge), p.betType, p.commenceTime || p.startTime);
+      });
+      // Rejections: matchup-level only (no odds), used as a tip-off fallback
       (data.rejections || []).forEach(function(r){
-        add(r.matchup, r.side || r.pick, r.odds, null, null, r.commenceTime || r.startTime);
+        add(r.matchup, r.side || r.pick, null, null, null, null, r.commenceTime || r.startTime);
       });
     } catch(e) {}
   }
@@ -2269,18 +2296,32 @@
     var arr = mcEnrich[mcNorm(pick.matchup)];
     if (!arr || !arr.length) return null;
     var side = mcNorm(pick.side);
-    // Find the board entry whose pick text matches THIS side (direction-safe for totals).
+    var sideF5 = mcIsF5(pick);
+    // Find the board entry whose pick text matches THIS side — direction-safe for
+    // totals (over↔under) AND segment-safe for F5 (don't map an F5 line onto a full game).
     var best = arr.find(function(e){
       var ps = mcNorm(e.pickStr); if (!ps || !side) return false;
       if (/\bover\b/.test(side) !== /\bover\b/.test(ps)) return false;
       if (/\bunder\b/.test(side) !== /\bunder\b/.test(ps)) return false;
-      return ps.indexOf(side) > -1 || side.indexOf(ps) > -1 || side.split(' ').pop() === ps.split(' ').pop();
+      if (sideF5 !== /\bf5\b/.test(ps)) return false;
+      // strip the trailing market tokens (ML / F5 ML) from the board side before comparing
+      var psTeam = ps.replace(/\bf5\b/g, '').replace(/\bml\b/g, '').replace(/\s+/g, ' ').trim();
+      return psTeam.indexOf(side) > -1 || side.indexOf(psTeam) > -1 || side.split(' ').pop() === psTeam.split(' ').pop();
     });
-    // Tip-off is game-level — safe to take from any entry on this matchup. Odds/grade/ev
-    // are side-specific, so only carry them on a confident match (never cross over↔under).
+    // Tip-off is game-level — safe from any entry. Odds/grade/edge/betType are
+    // side-specific, so only carry them on a confident match.
     var startTime = (best && best.startTime) || arr[0].startTime || null;
-    if (best) return { odds: best.odds, grade: best.grade, ev: best.ev, startTime: startTime };
-    return { odds: null, grade: null, ev: null, startTime: startTime };
+    if (best) return { odds: best.odds, grade: best.grade, edge: best.edge, betType: best.betType, startTime: startTime };
+    return { odds: null, grade: null, edge: null, betType: null, startTime: startTime };
+  }
+  /* Bet type derived from the side string — universal fallback when the board has no entry. */
+  function mcDeriveBetType(pick) {
+    var s = (pick.side || '').toLowerCase();
+    var sport = (pick.sport || '').toUpperCase();
+    var f5 = (/\bf5\b/.test(s) || /first 5|1st 5/.test(s)) ? 'F5 ' : '';
+    if (/\bover\b|\bunder\b/.test(s)) return f5 + 'Total';
+    if (/[+-]\d+(\.\d+)?/.test(s)) return f5 + (sport === 'MLB' ? 'Run Line' : sport === 'NHL' ? 'Puck Line' : 'Spread');
+    return f5 + 'Moneyline';
   }
 
   function mcSides(ch) {
@@ -2345,6 +2386,13 @@
     if (u.charAt(0) === 'B') return 'mc-g-b';
     return 'mc-g-c';
   }
+  /* Confidence token → letter label (e.g. "bplus" → "B+", "a" → "A"). */
+  function mcGradeLabel(g) {
+    var s = String(g || '').trim().toLowerCase();
+    if (!s) return '';
+    s = s.replace(/plus/g, '+').replace(/minus/g, '−');
+    return s.toUpperCase();
+  }
   function mcFmtTime(iso) {
     if (!iso) return '';
     try { return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit', hour12:true }) + ' ET'; }
@@ -2366,9 +2414,13 @@
     var game = mcFindGame(p);
     var result = mcResult(p, game);
     var enr = mcLookup(p) || {};
-    var odds = p.odds || enr.odds || '';
+    var odds = mcFmtOdds(p.odds || enr.odds || '');
     var grade = p.grade || p.rating || enr.grade || '';
-    var ev = mcFmtEv(p.ev != null ? p.ev : enr.ev);
+    var betType = p.betType || enr.betType || mcDeriveBetType(p);
+    var edgeRaw = (p.ev != null && p.ev !== '') ? p.ev
+                : (p.edgePct != null && p.edgePct !== '') ? p.edgePct
+                : enr.edge;
+    var edgeStr = mcFmtPct(edgeRaw);
     var startTime = p.startTime || p.commenceTime || enr.startTime || null;
 
     var pill = '';
@@ -2384,8 +2436,11 @@
 
     var head =
       '<div class="mc-pick-top">' +
-        '<span class="mc-sport-tag">' + esc(p.sport || '') + '</span>' +
-        (grade ? '<span class="mc-grade ' + mcGradeClass(grade) + '">' + esc(String(grade).toUpperCase()) + '</span>' : '') +
+        '<span class="mc-top-left">' +
+          '<span class="mc-sport-tag">' + esc(p.sport || '') + '</span>' +
+          (betType ? '<span class="mc-bet-type">' + esc(betType) + '</span>' : '') +
+        '</span>' +
+        (grade ? '<span class="mc-grade ' + mcGradeClass(grade) + '">' + esc(mcGradeLabel(grade)) + '</span>' : '') +
       '</div>' +
       '<div class="mc-pick-head">' +
         '<span class="mc-pick-match">' + esc(matchup) + '</span>' + timeChip +
@@ -2398,7 +2453,7 @@
       '</div>';
 
     var footParts = '';
-    if (ev) footParts += '<span class="mc-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>Edge ' + esc(ev) + '</span>';
+    if (edgeStr) footParts += '<span class="mc-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>Edge ' + esc(edgeStr) + '</span>';
     var foot = (footParts || pill) ? '<div class="mc-pick-foot">' + footParts + '<span class="mc-foot-r">' + pill + '</span></div>' : '';
 
     return '<div class="mc-pick">' + head + mcScoreBar(p, game, result) + line + foot + '</div>';

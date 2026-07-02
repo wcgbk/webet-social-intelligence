@@ -14,7 +14,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes — longer TTL so overlapping requests reuse results instead of each triggering a new Grok Live Search
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -25,9 +25,14 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { query, category } = JSON.parse(event.body || '{}');
-    const cat = (category || query || 'trending').trim();
-    const cacheKey = 'search-v2-' + cat.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
+    const { query, category, liveSearch, live } = JSON.parse(event.body || '{}');
+    // Grok Live Search (grok-4-fast + x_search) is billed per source — OFF by default.
+    // Callers that specifically need live X posts must opt in with liveSearch:true.
+    const useGrok = liveSearch === true || live === true;
+    // Resolve to a stable, known category so overlapping requests (and distinct
+    // per-market queries) share ONE cache entry instead of each spawning a Live Search.
+    const cat = resolveCategoryKey((category || query || 'trending').trim());
+    const cacheKey = 'search-v2-' + cat;
 
     // ── Check cache first ──
     let cachedPosts = null;
@@ -53,17 +58,22 @@ exports.handler = async (event) => {
     const xaiKey = process.env.XAI_API_KEY;
     let posts = null;
 
-    // Strategy 1: Grok trending-first (two-phase: get trends → get posts)
-    if (xaiKey) {
+    // Strategies 1 & 2 (Grok Live Search) only run when a caller explicitly opts in.
+    // This keeps the endpoint from silently burning xAI Live Search credits on
+    // high-traffic or unattended callers.
+    if (useGrok && xaiKey) {
+      // Strategy 1: Grok trending-first (two-phase: get trends → get posts)
       console.log('Attempting Grok trending-first for:', cat);
       posts = await searchTrendingWithGrok(cat, xaiKey);
       console.log('Grok trending result:', posts ? `${posts.length} posts` : 'null');
-    }
 
-    // Strategy 2: Grok keyword search fallback (old approach, single call)
-    if (!posts && xaiKey) {
-      console.log('Falling back to Grok keyword search');
-      posts = await searchKeywordWithGrok(cat, xaiKey);
+      // Strategy 2: Grok keyword search fallback (old approach, single call)
+      if (!posts) {
+        console.log('Falling back to Grok keyword search');
+        posts = await searchKeywordWithGrok(cat, xaiKey);
+      }
+    } else if (!useGrok) {
+      console.log('Grok Live Search skipped (liveSearch not requested) for:', cat);
     }
 
     // Strategy 3: Twitter v1.1 OAuth
@@ -140,6 +150,29 @@ const CATEGORY_CONTEXT = {
   markets: 'financial markets — stocks, Fed/interest rates, earnings, IPOs, economic data, Wall Street',
   culture: 'viral culture and debates — memes, social media drama, trending discourse, hot takes',
 };
+
+// ── Resolve any raw query/category string to a stable known-category key ─────
+// The trending search only distinguishes by CATEGORY_CONTEXT bucket (falling back
+// to 'trending'), so distinct free-text queries that map to the same bucket should
+// share a cache entry rather than each triggering a fresh Grok Live Search.
+function resolveCategoryKey(raw) {
+  const s = (raw || '').toLowerCase().trim();
+  if (CATEGORY_CONTEXT[s]) return s; // already a known category
+
+  const KEYWORDS = {
+    politics: ['politic', 'election', 'trump', 'biden', 'congress', 'senate', 'tariff', 'supreme court', 'policy', 'government'],
+    sports: ['sport', 'nba', 'nfl', 'mlb', 'nhl', 'ufc', 'mma', 'soccer', 'tennis', 'golf', 'playoff', 'game '],
+    crypto: ['crypto', 'bitcoin', 'btc', 'ethereum', 'eth', 'altcoin', 'defi', 'blockchain', 'etf'],
+    entertainment: ['movie', 'music', 'celebrity', 'tv show', 'streaming', 'awards', 'entertain', 'pop culture'],
+    tech: ['tech', 'startup', 'apple', 'google', 'microsoft', 'product launch', 'funding', 'ai '],
+    markets: ['stock', 's&p', 'fed', 'interest rate', 'earnings', 'ipo', 'wall street', 'market'],
+    culture: ['meme', 'viral', 'culture', 'debate', 'discourse'],
+  };
+  for (const [key, kws] of Object.entries(KEYWORDS)) {
+    if (kws.some(k => s.includes(k))) return key;
+  }
+  return 'trending';
+}
 
 // ── Grok Trending-First (the new approach) ──────────────────────────────────
 async function searchTrendingWithGrok(category, apiKey) {

@@ -772,7 +772,7 @@ async function loadFeed() {
     const res = await fetch('/api/search-x', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: catQueries[APP.feedCategory] || catQueries.trending }),
+      body: JSON.stringify({ query: catQueries[APP.feedCategory] || catQueries.trending, liveSearch: true }),
     });
     const data = await res.json();
     const posts = (data.posts || []).slice(0, 5);
@@ -1766,7 +1766,7 @@ async function loadBetBuilder() {
     const res = await fetch('/api/search-x', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: catQueries[APP.bbCategory] || catQueries.trending }),
+      body: JSON.stringify({ query: catQueries[APP.bbCategory] || catQueries.trending, liveSearch: true }),
     });
     const data = await res.json();
     const posts = (data.posts || []).slice(0, 5);

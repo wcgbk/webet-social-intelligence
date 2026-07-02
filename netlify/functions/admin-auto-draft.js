@@ -58,7 +58,7 @@ exports.handler = async (event) => {
       const searchRes = await fetch(`${siteURL}/.netlify/functions/search-x`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, liveSearch: true }),
       });
 
       if (!searchRes.ok) {

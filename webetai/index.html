@@ -1282,6 +1282,15 @@ function renderHome() {
   renderNewsletterCats();
 }
 
+// ─── xAI live features PAUSED on /webetai (cost control, 2026-07) ────────────
+// This page was auto-firing up to ~40 xAI API calls per load: one search-x
+// (grok-4-fast + x_search Live Search, billed per source) and one xai-analyze
+// (grok-3-mini) per market card. That drove repeated xAI prepaid-token refills.
+// Both are paused below. Static X fallback links still render and Betty insight
+// blocks are hidden, so the page stays presentable with zero xAI spend.
+// To re-enable the live features, set WEBETAI_LIVE_AI_PAUSED = false.
+const WEBETAI_LIVE_AI_PAUSED = true;
+
 // ─── X Embed Loading (via xAI search-x function) ─────────────────────────────
 
 async function loadXEmbeds(markets) {
@@ -1293,11 +1302,11 @@ async function loadXEmbeds(markets) {
     const m = markets[i];
     const searchUrl = m.xSearchUrl;
 
-    // Set initial fallback card
+    // Set initial fallback card (static X search link — no API call)
     container.innerHTML = renderXFallback(m.xSearchQuery, searchUrl);
 
     // Try to fetch real X posts via our search-x function
-    fetchRealXPost(container, m.xSearchQuery, searchUrl, i);
+    if (!WEBETAI_LIVE_AI_PAUSED) fetchRealXPost(container, m.xSearchQuery, searchUrl, i);
   }
 }
 
@@ -1385,6 +1394,14 @@ function formatEngagement(n) {
 // ─── Betty AI Insights (via xAI xai-analyze function) ─────────────────────────
 
 async function loadBettyInsights(markets) {
+  // PAUSED: hide the Betty insight blocks instead of firing xai-analyze (grok-3-mini) per card
+  if (WEBETAI_LIVE_AI_PAUSED) {
+    markets.forEach((m, i) => {
+      const c = document.getElementById('betty-insight-' + i);
+      if (c) c.style.display = 'none';
+    });
+    return;
+  }
   // Load insights in parallel, max 5 at a time
   const batch = markets.slice(0, 20);
   const promises = batch.map((m, i) => loadSingleInsight(m, i));

@@ -33,15 +33,20 @@
   # Background function — 15min timeout for MVP pick generation
 
 [functions."trigger-picks-mlb"]
-  schedule = "0 14 * * *"
-  # Re-enabled: KALSHI_PRIVATE_KEY moved to Netlify Blob (webet-config/kalshi-private-key)
-  # freeing ~1.8KB of the 4KB env var budget. MLB F5 pipeline — daily at 10am EDT.
+  # schedule = "0 14 * * *"
+  # PAUSED 2026-07-03 — F5 is folded into alpha (v10.3-alpha-sharp), the sole production
+  # pipeline. The standalone edge-picks-mlb store lacked alpha's guardrails (no de-vig, 2%
+  # edge floor, no high-total skip, half-Kelly) and bled -21% ROI / -20u on F5 ML underdogs
+  # (n=134). Do NOT re-enable without backporting alpha's guardrails or consolidating to alpha.
+  # MLB F5 pipeline — daily at 10am EDT.
 
 [functions."generate-picks-mlb-background"]
   # Background function — 15min timeout for MLB F5 pick generation
 
 [functions."confirm-starters-mlb"]
-  schedule = "30 17 * * *"
+  # schedule = "30 17 * * *"
+  # PAUSED 2026-07-03 — support cron for the now-paused trigger-picks-mlb pipeline; nothing
+  # to confirm once F5 generation is off. Re-enable together with trigger-picks-mlb.
   # 17:30 UTC = 1:30pm EDT. Re-checks ESPN starters 3.5h after picks generate.
   # Flags scratched starters with scratchWarning on the pick — no re-generation.
 
@@ -206,9 +211,11 @@
   status = 200
 
 [[redirects]]
+  # RETIRED 2026-07-03 — MLB K-props pipeline dormant; repointed to /alpha. 302 = reversible.
   from = "/mlb-props"
-  to = "/mlb-props/index.html"
-  status = 200
+  to = "/alpha"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/api/get-picks-mlb-props"
@@ -231,9 +238,12 @@
   status = 200
 
 [[redirects]]
+  # RETIRED 2026-07-03 — standalone edge-picks-mlb pipeline paused (F5-dog bleed); F5 is in alpha.
+  # Repointed to /alpha (the sole production card). 302 = reversible if the pipeline is rebuilt.
   from = "/mlb"
-  to = "/mlb/index.html"
-  status = 200
+  to = "/alpha"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/api/get-picks-mlb"
@@ -643,9 +653,11 @@
   status = 200
 
 [[redirects]]
+  # RETIRED 2026-07-03 — /summary summarized the paused MLB + MLB-props stores; repointed to /alpha. 302.
   from = "/summary"
-  to = "/summary/index.html"
-  status = 200
+  to = "/alpha"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/voicebet"

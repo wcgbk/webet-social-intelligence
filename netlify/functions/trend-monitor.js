@@ -109,13 +109,24 @@ exports.handler = async (event) => {
     roi: q.roi != null ? parseFloat(q.roi) : DEFAULTS.roi, watchN: DEFAULTS.watchN, watchRoi: DEFAULTS.watchRoi,
   };
   try {
-    const { getStore } = await import('@netlify/blobs');
-    // On-demand invocations don't always get auto-injected Blobs context — configure manually
-    // (siteID + token) when available, matching the fallback the other pick functions use.
-    const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+    // Blob access: on-demand invocations don't get auto-injected Blobs context, so prefer the
+    // REST Blobs API (api.netlify.com) with a Bearer token — the proven path get-picks-alpha
+    // falls back to. Only use the SDK auto-context when no token is configured.
+    const siteId = process.env.SITE_ID || process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
     const token = process.env.NETLIFY_AUTH_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
-    const store = token ? getStore({ name: 'edge-picks-alpha', siteID, token }) : getStore('edge-picks-alpha');
-    const latest = (await store.get('latest-date'))?.trim();
+    const baseUrl = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha`;
+    const auth = { Authorization: `Bearer ${token}` };
+    let sdkStore = null;
+    if (!token) { const { getStore } = await import('@netlify/blobs'); sdkStore = getStore('edge-picks-alpha'); }
+    const bGet = async (key, asJson) => {
+      if (token) { const r = await fetch(`${baseUrl}/${key}`, { headers: auth }); if (!r.ok) return null; return asJson ? r.json() : r.text(); }
+      return sdkStore.get(key, asJson ? { type: 'json' } : undefined);
+    };
+    const bPut = async (key, obj) => {
+      if (token) { await fetch(`${baseUrl}/${key}`, { method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify(obj) }); return; }
+      await sdkStore.setJSON(key, obj);
+    };
+    const latest = (await bGet('latest-date', false))?.trim();
     if (!latest) return { statusCode: 200, headers: CORS, body: JSON.stringify({ error: false, note: 'no picks yet', segments: [], alarms: [] }) };
 
     // 1) collect picks across the window
@@ -123,7 +134,7 @@ exports.handler = async (event) => {
     const picks = []; let datesSeen = 0;
     for (let i = 0; i < cfg.days; i++) {
       const dk = new Date(end.getTime() - i * 86400000).toISOString().slice(0, 10);
-      let data; try { data = await store.get(`picks-${dk}`, { type: 'json' }); } catch { data = null; }
+      let data; try { data = await bGet(`picks-${dk}`, true); } catch { data = null; }
       if (!data || !Array.isArray(data.picks) || !data.picks.length) continue;
       datesSeen++;
       for (const p of data.picks) picks.push({ ...p, _date: dk, _parsed: parse(p) });
@@ -174,7 +185,7 @@ exports.handler = async (event) => {
       tripwire: { minN: cfg.minN, roi: cfg.roi },
       alarmCount: alarms.length, watchCount: watch.length, alarms, watch, segments,
     };
-    try { await store.setJSON('trend-monitor-latest', payload); } catch (e) { console.error('[trend-monitor] snapshot write failed:', e.message); }
+    try { await bPut('trend-monitor-latest', payload); } catch (e) { console.error('[trend-monitor] snapshot write failed:', e.message); }
     if (alarms.length) console.warn(`[trend-monitor] ${alarms.length} ALARM(s):`, alarms.map((a) => `${a.key} ROI=${a.roiPct}% n=${a.decisive}`).join(' | '));
 
     return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=600' }, body: JSON.stringify(payload) };

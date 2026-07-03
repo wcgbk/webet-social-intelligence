@@ -104,6 +104,15 @@
   schedule = "0 9 * * 0"
   # 09:00 UTC = 5am EDT every Sunday. Weekly self-optimization cycle.
 
+[functions."trigger-trend-monitor"]
+  schedule = "0 1 * * *"
+  # 01:00 UTC = 9pm EDT, after the 23:00 track-clv settle. Fires the trend-monitor HTTP
+  # function (kept plain so /api/trend-monitor stays reliably on-demand). Negative-trend
+  # tracker: grades alpha picks vs ESPN (independent of the leaky settle write-back), computes
+  # realized ROI by segment (sport×market×segment×side), raises ALARM on bleeding segments
+  # (n>=40, ROI<=-10%, Wilson-low < breakeven). Detection only — writes trend-monitor-latest
+  # blob. Would've flagged F5-ML-dog at ~bet 40, not 134.
+
 # ── FOX: 3-AI Consensus Picks Pipeline (standalone) ──
 [functions."generate-fox-background"]
   # Background function — 15min timeout for FOX 3-AI consensus pipeline

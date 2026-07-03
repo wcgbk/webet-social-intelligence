@@ -110,7 +110,11 @@ exports.handler = async (event) => {
   };
   try {
     const { getStore } = await import('@netlify/blobs');
-    const store = getStore('edge-picks-alpha');
+    // On-demand invocations don't always get auto-injected Blobs context — configure manually
+    // (siteID + token) when available, matching the fallback the other pick functions use.
+    const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+    const token = process.env.NETLIFY_AUTH_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
+    const store = token ? getStore({ name: 'edge-picks-alpha', siteID, token }) : getStore('edge-picks-alpha');
     const latest = (await store.get('latest-date'))?.trim();
     if (!latest) return { statusCode: 200, headers: CORS, body: JSON.stringify({ error: false, note: 'no picks yet', segments: [], alarms: [] }) };
 

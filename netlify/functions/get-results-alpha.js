@@ -65,9 +65,11 @@ async function fetchESPNScores(dateISO, sport) {
         awayTeam: away.team?.displayName || '',
         awayAbbr: away.team?.abbreviation || '',
         awayScore: parseInt(away.score) || 0,
+        awayLine: (away.linescores || []).map(x => parseInt(x.value) || 0),
         homeTeam: home.team?.displayName || '',
         homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
+        homeLine: (home.linescores || []).map(x => parseInt(x.value) || 0),
         state: status.type?.state || 'pre',
       };
     }).filter(Boolean);
@@ -139,8 +141,16 @@ function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
-  const awayScore = game.awayScore;
-  const homeScore = game.homeScore;
+  // First-Five-Innings picks settle on the first-5 score, NOT the full game.
+  const isF5 = /\bf5\b|first 5|1st 5|first-5/i.test(pickStr) || betType.includes('f5') || /^f5\b/i.test(pickStr);
+  let awayScore = game.awayScore;
+  let homeScore = game.homeScore;
+  if (isF5) {
+    const aL = game.awayLine || [], hL = game.homeLine || [];
+    if (aL.length < 5 || hL.length < 5) return 'pending'; // not enough innings to settle F5
+    awayScore = aL.slice(0, 5).reduce((a, b) => a + b, 0);
+    homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
+  }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
@@ -265,8 +275,19 @@ async function gradeDay(dateISO, picksData) {
     else if (result === 'loss') { dayLosses++; profit = -risk; }
     else if (result === 'push') { dayPushes++; profit = 0; }
     else { dayPending++; }
-    if (result !== 'pending') { dayWagered += risk; dayProfit += profit; }
-    gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: game && game.state === 'post' ? `${game.awayScore}-${game.homeScore}` : null });
+    // Pushes return the stake (no action) — exclude from wagered so ROI isn't diluted.
+    // (profit is already 0 for push/pending, so dayProfit is unaffected either way.)
+    if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
+    const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
+    let scoreStr = null;
+    if (game && game.state === 'post') {
+      if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {
+        scoreStr = `${game.awayLine.slice(0, 5).reduce((a, b) => a + b, 0)}-${game.homeLine.slice(0, 5).reduce((a, b) => a + b, 0)} (F5)`;
+      } else {
+        scoreStr = `${game.awayScore}-${game.homeScore}`;
+      }
+    }
+    gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: scoreStr });
   }
 
   let parlayInput;
@@ -397,8 +418,8 @@ exports.handler = async (event) => {
       cumWins += day.wins; cumLosses += day.losses; cumPushes += day.pushes; cumPending += day.pending;
       cumWagered += day.wagered; cumProfit += day.profit;
 
-      // Straight pick KPIs (exclude parlay row)
-      for (const p of day.picks.filter(p => p.sport !== 'PARLAY' && p.result !== 'pending')) {
+      // Straight pick KPIs (exclude parlay row; exclude pushes — stake returned, no action)
+      for (const p of day.picks.filter(p => p.sport !== 'PARLAY' && p.result !== 'pending' && p.result !== 'push')) {
         const risk = (parseFloat(p.units) || 1) * 150;
         straightWagered += risk;
         straightProfit += p.profit;

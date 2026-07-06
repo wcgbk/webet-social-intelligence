@@ -4881,6 +4881,86 @@ exports.handler = async (event) => {
       }
     }
 
+    // ── FACT-GROUNDED LEAN NARRATION + FULL-CARD SUMMARIES ──
+    // Conviction picks are already narrated by the Phase-2 (web-searched) call. LEAN (thinSlate)
+    // picks were added after that and carry placeholder text. Narrate them here from the model's
+    // OWN already-fetched ESPN/StatsAPI facts (starters, ERA/FIP, records) — no web_search, so it's
+    // fast, free, and consistent with the numbers the pick was built on. Also (re)write the
+    // full-card edgeSummary + insights so both above-the-card sections cover every pick.
+    let insightsText = "";
+    try {
+      const leanCount = picks.filter(p => p.thinSlate).length;
+      if (leanCount > 0 && ANTHROPIC_API_KEY) {
+        const factSheet = picks.map((p, i) => {
+          const tag = p.thinSlate ? ' [LEAN — WRITE NARRATIVE]' : ' [conviction — already narrated]';
+          const head = `Pick ${i + 1}${tag}: ${p.pick} ${p.odds} | ${p.units} | ${p.sport} ${p.betType || ''} | ${p.matchup}`;
+          if (!p.thinSlate) {
+            return `${head}\n   Thesis: ${(p.coreReasoning || '').slice(0, 220)}`;
+          }
+          const away = p.awayTeam, home = p.homeTeam, facts = [];
+          if (p.sport === 'MLB') {
+            const ap = pitcherData[away], hp = pitcherData[home];
+            if (ap && ap.pitcher && ap.pitcher !== 'Unknown') facts.push(`${away} SP ${ap.pitcher} (${ap.era != null ? ap.era + ' ERA' : 'ERA n/a'}${ap.fip != null ? ', ' + ap.fip + ' FIP' : ''})`);
+            if (hp && hp.pitcher && hp.pitcher !== 'Unknown') facts.push(`${home} SP ${hp.pitcher} (${hp.era != null ? hp.era + ' ERA' : 'ERA n/a'}${hp.fip != null ? ', ' + hp.fip + ' FIP' : ''})`);
+          }
+          const as = teamStats[away], hs = teamStats[home];
+          const runLabel = p.sport === 'MLB' ? 'R/G' : 'PPG';
+          if (as) facts.push(`${away} ${as.recordTotal || ''}${as.pointsPerGame != null ? ', ' + as.pointsPerGame + ' ' + runLabel : ''}`.trim());
+          if (hs) facts.push(`${home} ${hs.recordTotal || ''}${hs.pointsPerGame != null ? ', ' + hs.pointsPerGame + ' ' + runLabel : ''}`.trim());
+          if (p.modelEdge) facts.push(p.modelEdge);
+          if (p.venue) facts.push(`venue ${p.venue}`);
+          return `${head}${facts.length ? '\n   Facts: ' + facts.join(' | ') : ''}`;
+        }).join('\n');
+
+        const narrSys = `You are WeBetAI's sharp sports-betting analyst. Use ONLY the verified facts provided below — do NOT invent player names, stats, injuries, records, or venues beyond what is given. For each pick marked [LEAN — WRITE NARRATIVE] return:
+- coreReasoning: 3-4 specific sentences citing the provided starters/records/edge, explaining WHY WeBetAI favors this exact side. Plain English, no stat abbreviations (ORtg/DVOA/ATS). Never restate the odds or EV numbers (shown separately). Say "WeBetAI", never "the model".
+- whatLoses: one sentence — the concrete scenario that beats this pick.
+- dataVerified: one sentence naming the specific facts used (starters, records).
+- clvExpectation: one sentence on expected line movement.
+Do NOT rewrite [conviction — already narrated] picks; only use their thesis for the summaries.
+ALSO return two card-level summaries covering ALL picks (NEVER say "lone edge" when there is more than one pick):
+- edgeSummary: 2-3 confident, specific sentences on the strongest theme tying the card together, referencing the actual games.
+- insights: 2-3 analytical sentences — why these markets/sides, how the slate shaped the card, and the sizing logic (full-unit conviction vs 0.25u leans).
+Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`;
+
+        const nr = await anthropicFetch({
+          model: "claude-sonnet-4-6",
+          max_tokens: 3000,
+          temperature: 0.3,
+          system: [{ type: "text", text: narrSys, cache_control: { type: "ephemeral" } }],
+          messages: [{ role: "user", content: `Today's final card (${dateFormatted}):\n${factSheet}\n\nReturn the JSON.` }],
+        }, { timeoutMs: 45000, retries: 2 });
+
+        if (nr && nr.ok) {
+          const nd = await nr.json();
+          let ntext = "";
+          for (const b of (nd.content || [])) { if (b.type === "text") ntext += b.text; }
+          const jm = ntext.match(/\{[\s\S]*\}/);
+          if (jm) {
+            let out;
+            try { out = JSON.parse(jm[0]); }
+            catch (e2) { out = JSON.parse(jm[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/[\x00-\x1F\x7F]/g, ' ')); }
+            for (const n of (out.narratives || [])) {
+              const idx = (n.pickIndex || 1) - 1;
+              if (idx >= 0 && idx < picks.length && picks[idx].thinSlate) {
+                if (n.coreReasoning && n.coreReasoning.length > 30) picks[idx].coreReasoning = n.coreReasoning;
+                if (n.whatLoses && n.whatLoses.length > 10) picks[idx].whatLoses = n.whatLoses;
+                if (n.dataVerified && n.dataVerified.length > 10) picks[idx].dataVerified = n.dataVerified;
+                if (n.clvExpectation && n.clvExpectation.length > 5) picks[idx].clvExpectation = n.clvExpectation;
+              }
+            }
+            if (out.edgeSummary && out.edgeSummary.length > 20) claudeOutput.edgeSummary = out.edgeSummary;
+            if (out.insights && out.insights.length > 20) insightsText = out.insights;
+            console.log(`[v10-lean-narr] Fact-grounded narratives for ${leanCount} lean(s) + full-card summaries`);
+          }
+        } else {
+          console.log('[v10-lean-narr] narration call failed — leans keep placeholder; validateAndEnhanceNarratives will backfill generic');
+        }
+      }
+    } catch (e) {
+      console.error(`[v10-lean-narr] non-fatal: ${e.message}`);
+    }
+
     // Build model projections snapshot
     const modelProjections = {};
     for (const c of allCandidates) {
@@ -4915,6 +4995,7 @@ exports.handler = async (event) => {
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
+      insights: insightsText || "",
       summary: {
         totalPicks: picks.length,
         totalStraightBets: picks.length,

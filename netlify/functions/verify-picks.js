@@ -690,18 +690,22 @@ exports.handler = async (event) => {
       }
       const uniqueNeeds = [...new Set(needsNarrative)];
 
-      // Call Claude to write proper narratives for picks that need them
-      if (uniqueNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
-        console.log(`[verify-final] Writing narratives for ${uniqueNeeds.length} pick(s) via Claude`);
-        const pickDescriptions = uniqueNeeds.map(i => {
-          const p = picksData.picks[i];
-          return `Pick ${i + 1}: ${p.pick} ${p.odds} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`;
-        }).join('\n');
-
+      // ── Rich narration + full-card summaries (LEAN parity + Daily Edge + Insights) ──
+      // Leans/backfills are added AFTER generation's web-searched narration, so without this they
+      // carry placeholder text and the edgeSummary predates them ("lone edge" on a 3-pick card).
+      // ONE web_search-enabled call over the FINAL card gives: (1) conviction-quality, fact-grounded
+      // narratives for picks that need them, (2) a full-card Daily Edge, (3) an Insights summary —
+      // so every pick and BOTH above-the-card sections match the depth of the conviction picks.
+      if (picksData.picks.length > 0 && process.env.ANTHROPIC_API_KEY) {
+        const needSet = new Set(uniqueNeeds.map(i => i + 1)); // 1-indexed picks needing a fresh narrative
+        const cardDesc = picksData.picks.map((p, i) =>
+          `Pick ${i + 1}${needSet.has(i + 1) ? ' [WRITE FULL NARRATIVE]' : ' [already narrated — summarize only]'}: ${p.pick} ${p.odds} | ${p.units} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`
+        ).join('\n');
+        console.log(`[verify-final] Rich narration + summaries via Claude (web_search): ${uniqueNeeds.length} narrative(s), ${picksData.picks.length}-pick card`);
         try {
           const resp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
-            signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → template
+            signal: AbortSignal.timeout(90000), // web_search is slow — template fallback on timeout so QA never hangs
             headers: {
               "x-api-key": process.env.ANTHROPIC_API_KEY,
               "anthropic-version": "2023-06-01",
@@ -710,50 +714,58 @@ exports.handler = async (event) => {
             },
             body: JSON.stringify({
               model: "claude-sonnet-4-6",
-              max_tokens: 1500,
-              system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
-- Be 2-3 sentences max
-- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
-- Frame the value as the model's projection diverging from this market price
-- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
-- Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
-- Always say "WeBetAI" not "the model"
+              max_tokens: 3500,
+              tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 10 }],
+              system: [{ type: "text", text: `You are WeBetAI's sharp sports-betting analyst. Use web_search to ground every pick marked [WRITE FULL NARRATIVE] in REAL, current facts (probable starters + their ERA/form, team form, injuries, venue/weather) — the SAME factual depth top conviction picks get. For picks marked [already narrated], do NOT rewrite them; only factor them into the two summaries.
 
-Also write a "whatLoses" field: one sentence describing the specific scenario that beats this pick.
+For each [WRITE FULL NARRATIVE] pick return:
+- coreReasoning: 3-5 sentences, specific and factual (real names/stats you verified via search), explaining WHY WeBetAI favors this exact side. Plain English, no stat abbreviations (ORtg/DVOA/ATS). Never restate the line/EV numbers (shown separately). Say "WeBetAI", never "the model".
+- whatLoses: one sentence — the concrete scenario that beats this pick.
+- dataVerified: one sentence — the specific facts you confirmed via search (starters, records, injuries). If search returned nothing usable, say "Model projection only — live data unavailable at verification."
+- clvExpectation: one sentence — expected line-movement direction and why.
 
-Return ONLY valid JSON array:
-[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
-              messages: [{ role: "user", content: `Write narratives for these picks:\n${pickDescriptions}` }],
+ALSO return two card-level summaries covering ALL picks (conviction + lean):
+- edgeSummary: the "Daily Edge" — 2-3 confident, specific sentences on the strongest theme tying today's card together. Reference the actual games. NEVER say "lone edge" when there is more than one pick.
+- insights: 2-3 analytical sentences of cross-card reasoning — why these markets/sides, how the slate shaped the card (e.g. thin summer MLB slate, lean tier used), and the sizing logic (full-unit conviction vs 0.25u leans). Analytical, not promotional.
+
+Invent NOTHING you did not verify via search. Return ONLY valid JSON:
+{ "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`, cache_control: { type: "ephemeral" } }],
+              messages: [{ role: "user", content: `Today's FINAL card (${picksData.dateFormatted || picksData.date}):\n${cardDesc}\n\nResearch each [WRITE FULL NARRATIVE] pick, then return the JSON (narratives + edgeSummary + insights).` }],
             }),
           });
 
-          if (resp.ok) {
-            const data = await resp.json();
-            const text = data.content?.[0]?.text || "";
-            const jsonMatch = text.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-              const narratives = JSON.parse(jsonMatch[0]);
-              for (const n of narratives) {
-                const idx = (n.pickIndex || 1) - 1;
-                if (idx >= 0 && idx < picksData.picks.length) {
-                  if (n.coreReasoning && n.coreReasoning.length > 30) {
-                    picksData.picks[idx].coreReasoning = n.coreReasoning;
-                    finalFixCount++;
-                    console.log(`[verify-final] Wrote narrative for pick ${idx + 1}: "${picksData.picks[idx].pick}"`);
-                  }
-                  if (n.whatLoses && n.whatLoses.length > 10) {
-                    picksData.picks[idx].whatLoses = n.whatLoses;
-                  }
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          let text = "";
+          for (const block of (data.content || [])) { if (block.type === "text") text += block.text; }
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            let out;
+            try { out = JSON.parse(jsonMatch[0]); }
+            catch (e2) { out = JSON.parse(jsonMatch[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/[\x00-\x1F\x7F]/g, ' ')); }
+            for (const n of (out.narratives || [])) {
+              const idx = (n.pickIndex || 1) - 1;
+              if (idx >= 0 && idx < picksData.picks.length && needSet.has(idx + 1)) {
+                if (n.coreReasoning && n.coreReasoning.length > 30) {
+                  picksData.picks[idx].coreReasoning = n.coreReasoning;
+                  finalFixCount++;
+                  console.log(`[verify-final] Rich narrative for pick ${idx + 1}: "${picksData.picks[idx].pick}"`);
                 }
+                if (n.whatLoses && n.whatLoses.length > 10) picksData.picks[idx].whatLoses = n.whatLoses;
+                if (n.dataVerified && n.dataVerified.length > 10) picksData.picks[idx].dataVerified = n.dataVerified;
+                if (n.clvExpectation && n.clvExpectation.length > 5) picksData.picks[idx].clvExpectation = n.clvExpectation;
               }
             }
+            if (out.edgeSummary && out.edgeSummary.length > 20) { picksData.edgeSummary = out.edgeSummary; console.log('[verify-final] Regenerated full-card Daily Edge summary'); }
+            if (out.insights && out.insights.length > 20) { picksData.insights = out.insights; console.log('[verify-final] Wrote Insights summary'); }
           }
         } catch (e) {
-          console.log(`[verify-final] Claude narrative write failed: ${e.message}`);
-          // Fallback: use template narratives
+          console.log(`[verify-final] Rich narration failed: ${e.message} — template fallback for leans (summaries keep generation values)`);
+          // Fallback: template narratives for the needy picks only. edgeSummary/insights keep their
+          // generation values (page falls back to its client-side insights template if none).
           for (const i of uniqueNeeds) {
             const p = picksData.picks[i];
-            if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces')) {
+            if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces') || p.coreReasoning.includes('conviction threshold')) {
               const isTotal = /over|under/i.test(p.pick);
               const isML = /\bML\b/i.test(p.pick);
               p.coreReasoning = isTotal

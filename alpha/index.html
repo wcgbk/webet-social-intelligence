@@ -1255,10 +1255,13 @@
       summaryEl.style.display = 'block';
     }
 
-    // Insights — cross-sport reasoning summary
+    // Insights — prefer the server-written LLM summary (verify-picks final pass); else template
     const insightsEl = document.getElementById('insights-section');
     const insightsText = document.getElementById('insights-text');
-    if (picks.length > 0) {
+    if (data.insights && data.insights.trim().length > 20) {
+      insightsText.textContent = data.insights.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Tt]he model/g, 'WeBetAI');
+      insightsEl.style.display = 'block';
+    } else if (picks.length > 0) {
       const sportSet = [...new Set(picks.map(p => p.sport))];
       const marketSet = [...new Set(picks.map(p => p.betType || p.market || ''))];
       const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);

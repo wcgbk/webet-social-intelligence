@@ -689,6 +689,8 @@
   const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
   const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
 
+  /* Round UP to whole dollars — no cents anywhere (37.5 -> 38); -1e-9 keeps wholes whole. */
+  function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
   /* ── Calculate winnings from American odds ── */
   function calcWinnings(atRisk, oddsStr) {
     const odds = parseInt((oddsStr||'-110').replace(/[^0-9+-]/g, ''));
@@ -1297,8 +1299,8 @@
     const el = (id) => document.getElementById(id);
     const numPicks = picks.length;
     const dollarPerUnit = 150;
-    const parlayUnits = 0.5;
-    const parlayRisk = parlayUnits * dollarPerUnit; // $75
+    const parlayUnits = picks.some(p => p.thinSlate) ? 0.25 : 0.5; // 0.25u when a lean is on the card
+    const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
 
     let totalUnits = 0;
     let totalRisk = 0;
@@ -1311,20 +1313,20 @@
     if (apiParlay && apiParlay.legs) {
       optimizedParlayLegs = apiParlay.legs;
       parlayOddsStr = apiParlay.combinedOdds || calcParlayOdds(apiParlay.legs.map(l => l.odds || '-110'));
-      parlayWin = calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110'));
+      parlayWin = wholeUp(calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110')));
     } else {
       optimizedParlayLegs = null;
       const fallbackLegs = picks.map(p => p.odds || '-110');
       parlayOddsStr = picks.length === 3 ? calcParlayOdds(fallbackLegs) : null;
-      parlayWin = picks.length === 3 ? calcParlayWinnings(parlayRisk, fallbackLegs) : 0;
+      parlayWin = picks.length === 3 ? wholeUp(calcParlayWinnings(parlayRisk, fallbackLegs)) : 0;
     }
 
     if (numPicks > 0) {
       // Pre-compute units/risk/win for each pick
       for (const p of picks) {
         const u = parseFloat(p.units) || 1;
-        const risk = u * dollarPerUnit;
-        const win = calcWinnings(risk, p.odds || '-110');
+        const risk = wholeUp(u * dollarPerUnit);
+        const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
         totalUnits += u;
         totalRisk += risk;
         totalWinnings += win;
@@ -1341,7 +1343,7 @@
         document.getElementById('stat-picks').textContent = picks.length;
         document.getElementById('stat-units').textContent = (picks.reduce((s, p) => s + (parseFloat(p.units) || 1), 0)).toFixed(1) + 'u';
         document.getElementById('stat-sports').textContent = [...new Set(picks.map(p => p.sport))].join(', ');
-        document.getElementById('stat-risk').textContent = '$' + picks.reduce((s, p) => s + (parseFloat(p.units) || 1) * dollarPerUnit, 0).toLocaleString();
+        document.getElementById('stat-risk').textContent = '$' + picks.reduce((s, p) => s + wholeUp((parseFloat(p.units) || 1) * dollarPerUnit), 0).toLocaleString();
         statsBar.style.display = '';
       }
     }
@@ -1358,8 +1360,8 @@
         const p = picks[i];
         const u = parseFloat(p.units) || 1;
         const uLabel = (p.units || '1.0u').toString().replace(/u$/i, '');
-        const risk = u * dollarPerUnit;
-        const win = calcWinnings(risk, p.odds || '-110');
+        const risk = wholeUp(u * dollarPerUnit);
+        const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
 
         const lr = legResults[i];
         let resultBadge = '';
@@ -1424,7 +1426,7 @@
             <span class="leg-pick">3-Team Parlay</span>
             ${parlayBadge}
           </span>
-          <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${parlayUnits.toFixed(1)}u</span>
+          <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${parlayUnits}u</span>
           <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${parlayRisk.toLocaleString()}</span>
           <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+$${Math.round(parlayWin).toLocaleString()}</span>
         </div>`;
@@ -1547,7 +1549,7 @@
         <div class="pick-divider"></div>
         <div class="pick-analysis">${esc((p.coreReasoning || '').replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/\[\d+[^\]]*\]/g, '').replace(/Model projects/g, 'WeBetAI projects').replace(/The model/g, 'WeBetAI').replace(/the model/g, 'WeBetAI').replace(/Model:/g, 'WeBetAI:').replace(/Model shows/g, 'WeBetAI shows').replace(/Model edge/g, 'WeBetAI edge').replace(/15\.1-point edge/g, '9.5-point edge'))}</div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${((parseFloat(p.units)||1)*dollarPerUnit).toLocaleString()} — To Win +$${Math.round(calcWinnings((parseFloat(p.units)||1)*dollarPerUnit, p.odds||'-110')).toLocaleString()}</div>
+          <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${wholeUp((parseFloat(p.units)||1)*dollarPerUnit).toLocaleString()} — To Win +$${wholeUp(calcWinnings(wholeUp((parseFloat(p.units)||1)*dollarPerUnit), p.odds||'-110')).toLocaleString()}</div>
           <div style="display:flex; align-items:center; gap:.375rem;">
             ${liveResultHTML}
             ${edgeBadgeHTML || ''}
@@ -1658,7 +1660,7 @@
       const parlayStatusNote = parlayStatus === 'live' || parlayStatus === 'scheduled'
         ? `${legsHit} of 3 legs hit` : '';
 
-      const parlayPayStr = `${parlayUnits.toFixed(1)}u - Bet $${parlayRisk} — To Win +$${Math.round(parlayWin).toLocaleString()}`;
+      const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk} — To Win +$${Math.round(parlayWin).toLocaleString()}`;
 
       const isOptimized = apiParlay && apiParlay.independent;
       const parlayTitle = isOptimized ? 'Optimized 3-Team Parlay' : 'Recommended 3-Team Parlay';

@@ -687,6 +687,12 @@ exports.handler = async (event) => {
         if (!p.whatLoses || p.whatLoses.trim().length < 15) {
           needsNarrative.push(i); // will dedupe below
         }
+        // Leans/backfills leave generation with placeholder dataVerified ("lean-tier") and never
+        // got web-searched narration — flag them for the rich pass even if an earlier (generic) QA
+        // run already gave them a long-enough coreReasoning. Real dataVerified means already-rich.
+        if (!p.dataVerified || p.dataVerified === 'lean-tier') {
+          needsNarrative.push(i);
+        }
       }
       const uniqueNeeds = [...new Set(needsNarrative)];
 

@@ -153,6 +153,10 @@ const F5_MAX_SLOTS = 2;      // at most 2 F5 candidates may enter the pool per s
 const F5_UNIT_CAP = 1.0;     // never stake an F5 leg above a validated full-game play
 // Calibration caps mirror the F5 function's COVER_PROB_CAPS — sharp models top out ~55-60% hit rate.
 const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Line": 0.57 };
+// F5 ML UNDERDOGS (+money) are a proven bleed: −21% ROI on n=134 (ESPN-graded, 2026). F5 is a
+// starting-pitcher market the book prices efficiently; the model's "live dog" edge is phantom.
+// Skip plus-money F5 ML sides entirely. (F5 favorites — rare — and F5 totals/RL are unaffected.)
+const F5_SKIP_ML_UNDERDOG = true;
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
   "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us", "espnbet", "betrivers", "fanatics",
@@ -2866,6 +2870,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   // ── F5 Moneyline ── (real F5 ML lines only — no full-game proxy)
   for (const [team, data] of Object.entries(f5.f5ML)) {
     if ((data.n || 0) < 3) continue; // bettability guard: F5 ML must be offered by >=3 top US books
+    if (F5_SKIP_ML_UNDERDOG && (data.price || 0) > 0) continue; // skip plus-money F5 ML dogs — proven −21% bleed
     const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
     const teamLabel = isHome ? home : away;
     const rawMargin = isHome ? projF5Margin : -projF5Margin;
@@ -4814,9 +4819,11 @@ exports.handler = async (event) => {
     }
 
     // ── LEAN TIER TOP-UP ──
-    // Claude rejected picks down below 3. Pull from the +3% EV lean tier to fill up.
-    // Never use a side Claude explicitly rejected — only candidates it didn't see or
-    // ranked lower than the conviction bar.
+    // Card is below 3 after selection. Pull from the relaxed +1.5% EV lean tier to fill up with
+    // 0.25u Lean plays (flagged thinSlate, tracked separately, never inflate conviction-book ROI).
+    // Uses the SAME relaxed floor (0.015) as the zero-candidate thin-slate fallback, so thin 1-2
+    // candidate slates get lower-unit backfill too — not just fully empty ones. Highest-EV leans
+    // are picked first (sorted desc). Never reuse a side Claude explicitly rejected.
     if (picks.length < 3) {
       const needed = 3 - picks.length;
       const pickedGames = new Set(picks.map(p => (p.matchup || '').toLowerCase().trim()));
@@ -4827,7 +4834,7 @@ exports.handler = async (event) => {
         }).filter(Boolean)
       );
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&

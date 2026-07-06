@@ -4910,7 +4910,7 @@ exports.handler = async (event) => {
     }
 
     // ── Narrative quality gate: ensure every pick has proper journalistic context ──
-    await validateAndEnhanceNarratives(picks, ANTHROPIC_API_KEY);
+    await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
 
     // Final sort by z-score descending (highest model confidence first)
     picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
@@ -5005,7 +5005,7 @@ function dedupeCandidatesByGame(cands) {
 async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll = false } = {}) {
   const out = { edgeSummary: "", insights: "" };
   try {
-    if (!Array.isArray(picks) || picks.length === 0 || !ANTHROPIC_API_KEY) return out;
+    if (!Array.isArray(picks) || picks.length === 0 || !process.env.ANTHROPIC_API_KEY) return out;
     pitcherData = pitcherData || {}; teamStats = teamStats || {};
     const shouldNarrate = (p) => narrateAll || p.thinSlate;
     const toNarrate = picks.filter(shouldNarrate).length;
@@ -5147,7 +5147,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
     };
   });
 
-  await validateAndEnhanceNarratives(picks, ANTHROPIC_API_KEY);
+  await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
   picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
 
   // Fact-grounded narratives + full-card summaries (all picks are leans here → narrateAll)
@@ -5243,7 +5243,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   });
 
   // Narrative quality gate on fallback picks too
-  await validateAndEnhanceNarratives(picks, ANTHROPIC_API_KEY);
+  await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
 
   // Sort fallback picks by z-score descending
   picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));

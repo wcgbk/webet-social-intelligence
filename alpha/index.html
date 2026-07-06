@@ -610,12 +610,6 @@
     </div>
   </div>
 
-  <div id="stats-bar-container" class="stats-bar" style="display:none;">
-    <div class="stat-box"><div class="stat-label">Picks</div><div class="stat-value" id="stat-picks">--</div></div>
-    <div class="stat-box"><div class="stat-label">Units</div><div class="stat-value" id="stat-units">--</div></div>
-    <div class="stat-box"><div class="stat-label">Sports</div><div class="stat-value" id="stat-sports">--</div></div>
-    <div class="stat-box"><div class="stat-label">Risk</div><div class="stat-value" id="stat-risk">--</div></div>
-  </div>
 
   <div id="picks-container">
     <div class="loading">
@@ -1337,15 +1331,6 @@
         totalWinnings += parlayWin;
       }
 
-      // Populate stats bar
-      const statsBar = document.getElementById('stats-bar-container');
-      if (statsBar) {
-        document.getElementById('stat-picks').textContent = picks.length;
-        document.getElementById('stat-units').textContent = (picks.reduce((s, p) => s + (parseFloat(p.units) || 1), 0)).toFixed(1) + 'u';
-        document.getElementById('stat-sports').textContent = [...new Set(picks.map(p => p.sport))].join(', ');
-        document.getElementById('stat-risk').textContent = '$' + picks.reduce((s, p) => s + wholeUp((parseFloat(p.units) || 1) * dollarPerUnit), 0).toLocaleString();
-        statsBar.style.display = '';
-      }
     }
 
     // Bet summary is built later after legResults are populated

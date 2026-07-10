@@ -18,12 +18,14 @@ export default async (req) => {
     body = {};
   }
 
-  const BETTY_CONTEXT_ID = '15b3c729-9a08-4b4e-ba4e-74391d6fa1f5';
-  const BETTY_LLM_CONFIG_ID = '88474133-a0a4-4461-9ac0-1fb5780c78c4'; // Grok-3 via xAI
+  const BETTY_CONTEXT_ID = process.env.BETTY_CONTEXT_ID || '15b3c729-9a08-4b4e-ba4e-74391d6fa1f5';
+  const BETTY_LLM_CONFIG_ID = process.env.BETTY_LLM_CONFIG_ID || '88474133-a0a4-4461-9ac0-1fb5780c78c4'; // Grok-3 via xAI
 
-  // Ann Therapist avatar — approachable female look (placeholder until custom Betty avatar is created)
-  const BETTY_AVATAR_ID = '513fd1b7-7ef9-466d-9af2-344e51eeb833';
-  const BETTY_VOICE_ID = 'de5574fc-009e-4a01-a881-9919ef8f5a0c'; // Ann - IA (female)
+  // Avatar/voice are env-driven so the real Betty avatar (created in the LiveAvatar
+  // dashboard) can go live by setting BETTY_AVATAR_ID in Netlify — no code redeploy.
+  // Falls back to the Ann Therapist stock avatar until BETTY_AVATAR_ID is set.
+  const BETTY_AVATAR_ID = process.env.BETTY_AVATAR_ID || '513fd1b7-7ef9-466d-9af2-344e51eeb833';
+  const BETTY_VOICE_ID = process.env.BETTY_VOICE_ID || 'de5574fc-009e-4a01-a881-9919ef8f5a0c'; // Ann - IA (female)
 
   const payload = {
     avatar_id: body.avatar_id || BETTY_AVATAR_ID,

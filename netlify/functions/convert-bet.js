@@ -17,9 +17,23 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
+// COST PAUSE 2026-07-10 — the /admin feed fans this out (one Grok call per post,
+// in parallel) and drained the prepaid xAI wallet, triggering repeated $25
+// auto-top-ups. Paused at the choke point so neither the dashboard feed nor the
+// admin-auto-draft cron spends on Grok. Flip to false to re-enable.
+const CONVERT_BET_PAUSED = true;
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
+  }
+
+  if (CONVERT_BET_PAUSED) {
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({ paused: true, markets: [], aiBet: null, cards: [] }),
+    };
   }
 
   try {
@@ -563,7 +577,7 @@ async function grokRelevancePass(tweetText, tweetHandle, topic, claim, sentiment
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'grok-3-fast',
+        model: 'grok-4.20-0309-non-reasoning',
         messages: [
           {
             role: 'user',

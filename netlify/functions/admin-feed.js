@@ -235,7 +235,7 @@ async function composeBettyPost(post, markets, apiKey) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'grok-3-mini-fast',
+        model: 'grok-4.20-0309-non-reasoning',
         messages: [
           { role: 'system', content: BETTY_SYSTEM_PROMPT },
           {
@@ -301,7 +301,7 @@ async function fetchTopCommenters(post, apiKey) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'grok-3-mini-fast',
+        model: 'grok-4.20-0309-non-reasoning',
         messages: [
           {
             role: 'system',

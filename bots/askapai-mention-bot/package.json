@@ -1,0 +1,25 @@
+{
+  "name": "askapai-mention-bot",
+  "version": "1.0.0",
+  "description": "Mention-reply bot for @AskApai — polls X mentions, scores authenticity + framing, replies with a private-analysis link + CTA. Pay-per-use, cost-tracked, TOS-compliant.",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/index.js",
+  "bin": {
+    "askapai-bot": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js loop",
+    "scan": "node src/index.js scan",
+    "charity": "node src/index.js charity",
+    "whoami": "node src/index.js whoami",
+    "usage": "node src/index.js usage"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5"
+  }
+}

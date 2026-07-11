@@ -1,9 +1,14 @@
 # @AskApai Mention-Reply Bot
 
-Production-ready X (Twitter) API v2 bot that watches for mentions of **@AskApai**,
-scores the referenced content for **authenticity (0–100)** and **framing
-(low/medium/high)**, and replies with a link to the full private analysis plus a
-follow CTA. Pay-per-use, cost-tracked, TOS-compliant.
+Production-ready X (Twitter) API v2 bot that watches for mentions of **@AskApai**
+and relays the referenced post to **Apai's existing chat brain** — the same one
+behind her daily dose + web chat — as if a user typed *"rate this post for
+authenticity and manipulation."* Her reply gets posted back in her own voice.
+Pay-per-use, cost-tracked, TOS-compliant.
+
+> **The bot does not score anything itself.** It's a thin bridge between an X
+> mention and Apai's chat endpoint. All authenticity + manipulation judgment
+> lives in Apai (one source of truth) — set `APAI_CHAT_URL` to point at it.
 
 > **Why a standalone worker (not a Netlify Function)?** A mention poller needs a
 > persistent `since_id` cursor and a long-running loop. Netlify Functions are
@@ -22,13 +27,11 @@ follow CTA. Pay-per-use, cost-tracked, TOS-compliant.
    - an **external URL** in the mention → `?url=`
    - else the **parent tweet** it replied to (a reply-summon) → `?tweet=<parentId>`
    - else the **mention's own text** as a claim → `?tweet=<mentionId>`
-3. Scores it (askapai.com backend if configured, else a local heuristic stub).
-4. Replies via `POST /2/tweets` with `reply.in_reply_to_tweet_id`:
-   ```
-   Authenticity: 72/100 · Framing: medium
-   Full private analysis: https://askapai.com/analyze?tweet=1234567890
-   Follow @AskApai for daily truth scores.
-   ```
+3. Sends it to **Apai's chat endpoint** (`APAI_CHAT_URL`) as the message
+   *"Rate this post for authenticity and manipulation: <post>"*.
+4. Posts **her reply** via `POST /2/tweets` with `reply.in_reply_to_tweet_id` —
+   in her voice, clamped to X's limit, with the follow CTA appended when it fits
+   (and the full-analysis link appended if her reply had to be truncated).
 5. Meters every read/write to `data/usage.json` and **hard-stops** at your daily
    reply/spend caps.
 6. (Optional) Posts a daily "tag @AskApai to score this claim → winner picks a
@@ -117,24 +120,26 @@ node src/index.js usage
 
 ---
 
-## Wiring the real scoring backend
+## Wiring Apai's chat (the real brain)
 
-The stub in `src/scoring.js` makes the bot runnable today. To use askapai.com's
-real authenticity + manipulation engine, set `ASKAPAI_BACKEND_URL` (and optional
-`ASKAPAI_BACKEND_KEY`). The bot POSTs:
+Set `APAI_CHAT_URL` to Apai's chat endpoint. The bot POSTs:
 
 ```json
-{ "url": "https://…", "text": "tweet text or null", "tweetId": "123…" }
+{ "message": "Rate this post for authenticity and manipulation.\n\nPost: https://…\nText: \"…\"",
+  "source": "x-mention", "url": "https://…", "tweetId": "123…" }
 ```
 
-and expects:
+- The message key is configurable via `APAI_REQUEST_FIELD` (default `message`).
+- Her reply is read from the first present of `APAI_REPLY_FIELDS`
+  (default `reply,message,text,response,answer`); it also understands
+  `{ data: { reply } }` and OpenAI-style `{ choices:[{message:{content}}] }`.
 
-```json
-{ "authenticity": 0-100, "framing": "low|medium|high", "note": "optional" }
-```
+If the chat endpoint errors or times out, the bot falls back to a short
+chat-style stub so an outage never wedges the reply loop.
 
-If the backend errors or times out, the bot falls back to the local stub so a
-scoring outage never wedges the reply loop.
+> **The one thing to confirm:** Apai's chat endpoint URL and its request/response
+> field names. Set `APAI_CHAT_URL` (+ `APAI_REQUEST_FIELD` / `APAI_REPLY_FIELDS`
+> if they differ from the defaults) and the bot posts her real judgment.
 
 ---
 
@@ -145,9 +150,9 @@ src/
   index.js    entry — CLI dispatch, polling loop, charity schedule, shutdown
   config.js   all env + tunables in one place
   xClient.js  OAuth 1.0a signing + X v2 calls (mentions, reply) + retry/backoff
-  scan.js     one scan cycle: poll → dedupe → target → score → reply
-  scoring.js  authenticity + framing (backend hook, else heuristic stub)
-  reply.js    reply text formatter (CTA in every reply, ≤280)
+  scan.js     one scan cycle: poll → dedupe → target → ask Apai → reply
+  apai.js     relays the post to Apai's chat brain (else a chat-style stub)
+  reply.js    fits Apai's reply to X (CTA/link appended when room, ≤280)
   charity.js  optional daily challenge poster
   state.js    since_id + processed-id dedupe ledger
   usage.js    cost/volume meter + daily budget guard

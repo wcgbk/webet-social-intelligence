@@ -16,8 +16,8 @@ const log = require('./logger');
 const xClient = require('./xClient');
 const state = require('./state');
 const usage = require('./usage');
-const scoring = require('./scoring');
-const { formatReply } = require('./reply');
+const apai = require('./apai');
+const { buildReply } = require('./reply');
 
 let RESOLVED_ID = config.account.userId;
 let RESOLVED_HANDLE = config.account.handle;
@@ -45,7 +45,7 @@ function mentionsUs(tweet) {
 //   2) else the parent tweet (a reply-summon) → ?tweet=<parentId>
 //   3) else the mention's own text (a claim) → ?tweet=<mentionId>
 function resolveTarget(tweet, includesById) {
-  const urls = scoring.extractUrls(tweet.text, tweet.entities);
+  const urls = apai.extractUrls(tweet.text, tweet.entities);
   if (urls.length) {
     return { kind: 'url', url: urls[0], text: tweet.text, tweetId: tweet.id };
   }
@@ -120,18 +120,20 @@ async function runCycle() {
       }
 
       const target = resolveTarget(tweet, includesById);
-      const score = await scoring.scoreContent({ url: target.url, text: target.text, tweetId: target.tweetId });
-      const analyzeUrl = scoring.buildAnalyzeUrl({ url: target.url, tweetId: target.tweetId });
-      const text = formatReply({ authenticity: score.authenticity, framing: score.framing, analyzeUrl });
+      // Ask Apai's chat exactly as a user would: "rate this post for
+      // authenticity and manipulation" — then post her reply in her voice.
+      const { reply: apaiReply, source } = await apai.askApai({ url: target.url, text: target.text, tweetId: target.tweetId });
+      const analyzeUrl = apai.buildAnalyzeUrl({ url: target.url, tweetId: target.tweetId });
+      const text = buildReply(apaiReply, analyzeUrl);
 
       if (config.dryRun) {
-        log.info('scan.dryRun.reply', { to: tweet.id, kind: target.kind, score: score.authenticity, framing: score.framing, text });
+        log.info('scan.dryRun.reply', { to: tweet.id, kind: target.kind, replySource: source, text });
       } else {
         const posted = await xClient.postTweet({ text, inReplyToTweetId: tweet.id });
         usage.recordReply('reply');
         log.info('scan.replied', {
           to: tweet.id, replyId: posted.id, author: tweet.author_id,
-          kind: target.kind, authenticity: score.authenticity, framing: score.framing, scoreSource: score.source,
+          kind: target.kind, replySource: source,
         });
         replied += 1;
       }

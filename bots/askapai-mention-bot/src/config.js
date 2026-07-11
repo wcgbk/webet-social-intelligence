@@ -41,13 +41,25 @@ module.exports = {
     handle: (process.env.ASKAPAI_HANDLE || 'AskApai').replace(/^@/, ''),
   },
 
-  // ── Scoring backend (optional) ──
-  // If set, POST {url,text,tweetId} here to get {authenticity,framing,note}.
-  // If unset, the local heuristic stub in scoring.js is used.
-  scoring: {
-    backendUrl: process.env.ASKAPAI_BACKEND_URL || null,
-    backendKey: process.env.ASKAPAI_BACKEND_KEY || null,
+  // ── Apai chat backend ──
+  // The bot does NOT compute its own score. It relays the post to Apai's
+  // EXISTING chat endpoint (the same brain behind the daily dose + web chat)
+  // as if a user typed "rate this post for authenticity and manipulation",
+  // and posts her reply verbatim. Set APAI_CHAT_URL to that endpoint.
+  // If unset, a chat-style local stub is used so the bot still runs offline.
+  apai: {
+    chatUrl: process.env.APAI_CHAT_URL || process.env.ASKAPAI_BACKEND_URL || null,
+    chatKey: process.env.APAI_CHAT_KEY || process.env.ASKAPAI_BACKEND_KEY || null,
+    // Field names vary by endpoint — configurable so we match Apai's contract
+    // without guessing. requestField = key we send the message under;
+    // replyFields = keys we look for her reply under (first match wins).
+    requestField: process.env.APAI_REQUEST_FIELD || 'message',
+    replyFields: (process.env.APAI_REPLY_FIELDS || 'reply,message,text,response,answer')
+      .split(',').map((s) => s.trim()).filter(Boolean),
+    timeoutMs: num(process.env.APAI_TIMEOUT_MS, 25_000),
     analyzeBase: process.env.ASKAPAI_ANALYZE_BASE || 'https://askapai.com/analyze',
+    // Append "Follow @AskApai …" CTA to her reply when there's room.
+    appendCta: bool(process.env.APAI_APPEND_CTA, true),
   },
 
   // ── Polling / pagination ──

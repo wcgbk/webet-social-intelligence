@@ -71,6 +71,8 @@ async function fetchESPNScores(dateISO, sport) {
         homeScore: parseInt(home.score) || 0,
         homeLine: (home.linescores || []).map(x => parseInt(x.value) || 0),
         state: status.type?.state || 'pre',
+        statusName: status.type?.name || '',
+        completed: !!status.type?.completed,
       };
     }).filter(Boolean);
   } catch (e) {
@@ -139,6 +141,11 @@ function findGame(pick, games) {
 
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
+  // Postponed / canceled games are voided by every major US book (no action) — the stake is
+  // returned, so we grade them as a push. A push leg is dropped from a parlay and the ticket
+  // reprices on the surviving legs (see gradeParlay). ESPN marks these state:'post' with
+  // completed:false, so they must be caught BEFORE any score-based grading (0-0 → false "under").
+  if (/POSTPONED|CANCELL?ED/i.test(game.statusName) || (game.state === 'post' && !game.completed)) return 'push';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
   // First-Five-Innings picks settle on the first-5 score, NOT the full game.
@@ -283,7 +290,9 @@ async function gradeDay(dateISO, picksData) {
     if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
     const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
     let scoreStr = null;
-    if (game && game.state === 'post') {
+    if (game && game.state === 'post' && result === 'push' && (/POSTPONED|CANCELL?ED/i.test(game.statusName) || !game.completed)) {
+      scoreStr = 'PPD';
+    } else if (game && game.state === 'post') {
       if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {
         scoreStr = `${game.awayLine.slice(0, 5).reduce((a, b) => a + b, 0)}-${game.homeLine.slice(0, 5).reduce((a, b) => a + b, 0)} (F5)`;
       } else {

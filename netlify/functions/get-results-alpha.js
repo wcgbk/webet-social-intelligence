@@ -73,6 +73,7 @@ async function fetchESPNScores(dateISO, sport) {
         state: status.type?.state || 'pre',
         statusName: status.type?.name || '',
         completed: !!status.type?.completed,
+        startISO: ev.date || comp.date || '',  // disambiguates doubleheaders vs pick.commenceTime
       };
     }).filter(Boolean);
   } catch (e) {
@@ -101,9 +102,27 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr) {
   return false;
 }
 
+// A team pair can appear TWICE on the same day (day-night doubleheader). Team-name matching alone
+// returns the first game, which would settle the nightcap against the opener's final. When >1 game
+// matches, pick the one whose start is nearest the pick's commenceTime.
+function disambiguateDoubleheader(matches, pick) {
+  if (matches.length <= 1) return matches[0] || null;
+  const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+  if (isNaN(ct)) return matches[0];
+  let best = matches[0], bestDiff = Infinity;
+  for (const g of matches) {
+    const gt = g.startISO ? Date.parse(g.startISO) : NaN;
+    if (isNaN(gt)) continue;
+    const diff = Math.abs(gt - ct);
+    if (diff < bestDiff) { bestDiff = diff; best = g; }
+  }
+  return best;
+}
+
 function findGame(pick, games) {
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  const primary = [];
   for (const g of games) {
     const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
     const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
@@ -111,30 +130,35 @@ function findGame(pick, games) {
                        (awayLast.length > 3 && matchup.includes(awayLast));
     const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
                        (homeLast.length > 3 && matchup.includes(homeLast));
-    if (awayMatch && homeMatch) return g;
+    if (awayMatch && homeMatch) primary.push(g);
   }
+  if (primary.length) return disambiguateDoubleheader(primary, pick);
   const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   if (pickTeam) {
+    const secondary = [];
     for (const g of games) {
       if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
         const otherLast = normalizeTeam(
           teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
         ).split(' ').pop();
-        if (otherLast.length > 3 && matchup.includes(otherLast)) return g;
+        if (otherLast.length > 3 && matchup.includes(otherLast)) secondary.push(g);
       }
     }
+    if (secondary.length) return disambiguateDoubleheader(secondary, pick);
   }
   if (matchupParts.length >= 2) {
+    const tertiary = [];
     for (const g of games) {
       const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
       const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
       const part0 = normalizeTeam(matchupParts[0]);
       const part1 = normalizeTeam(matchupParts[1]);
       if ((part0.includes(awayLast) || awayLast.includes(part0)) &&
-          (part1.includes(homeLast) || homeLast.includes(part1))) return g;
-      if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
-          (part1.includes(awayLast) || awayLast.includes(part1))) return g;
+          (part1.includes(homeLast) || homeLast.includes(part1))) tertiary.push(g);
+      else if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
+          (part1.includes(awayLast) || awayLast.includes(part1))) tertiary.push(g);
     }
+    if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
   }
   return null;
 }

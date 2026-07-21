@@ -1648,6 +1648,13 @@
         Trending Challenges
       </button>
 
+      <!-- Content -->
+      <div class="nav-section-hd">Content</div>
+      <button class="nav-item" data-panel="worldmonitor" onclick="switchPanel('worldmonitor')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+        World Monitor
+      </button>
+
     </nav>
 
     <div class="sidebar-section-label" id="history-label" style="display:none">Recent Chats</div>
@@ -1891,6 +1898,14 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <iframe id="iframe-builder" src="/admin?demo=1#feed" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- WORLD MONITOR PANEL -->
+      <div class="panel" id="panel-worldmonitor" style="overflow:hidden;position:relative;">
+        <button class="panel-refresh-btn" onclick="document.getElementById('iframe-worldmonitor').src = document.getElementById('iframe-worldmonitor').src" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <iframe id="iframe-worldmonitor" src="https://www.worldmonitor.app" style="width:100%;height:100%;border:none;" allow="fullscreen; geolocation" referrerpolicy="no-referrer" loading="lazy"></iframe>
       </div>
 
       <!-- COMET SNIPER PANEL -->
@@ -2140,6 +2155,7 @@
     guardian: 'Daily Digest',
     builder: 'WeBet Builder',
     sniper: 'Comment Sniper',
+    worldmonitor: 'World Monitor',
     digest: 'P2P Trending Topics',
     admin: 'Admin',
     settings: 'Settings',

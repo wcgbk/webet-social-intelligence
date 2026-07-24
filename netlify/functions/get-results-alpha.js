@@ -163,6 +163,19 @@ function findGame(pick, games) {
   return null;
 }
 
+// Parlay legs are stored WITHOUT commenceTime, so on a doubleheader date findGame falls back to the
+// opener and settles the leg against the wrong final — the straight bet (which HAS commenceTime)
+// grades correctly while the identical parlay leg does not. Inherit the start time from the straight
+// pick naming the same matchup + selection so both sides resolve to the same game.
+function withLegCommenceTime(leg, picks) {
+  if (leg.commenceTime) return leg;
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const sameMatchup = (p) => norm(p.matchup) === norm(leg.matchup);
+  const match = (picks || []).find(p => sameMatchup(p) && norm(p.pick) === norm(leg.pick)) ||
+                (picks || []).find(sameMatchup);
+  return (match && match.commenceTime) ? { ...leg, commenceTime: match.commenceTime } : leg;
+}
+
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   // Postponed / canceled games are voided by every major US book (no action) — the stake is
@@ -329,9 +342,10 @@ async function gradeDay(dateISO, picksData) {
   let parlayInput;
   if (optimizedLegs) {
     parlayInput = optimizedLegs.map(leg => {
-      const sportGames = scoresByGames.filter(g => g._sport === leg.sport);
-      const game = findGame(leg, sportGames);
-      return { result: gradePick(leg, game), odds: leg.odds || '-110' };
+      const eleg = withLegCommenceTime(leg, picks);
+      const sportGames = scoresByGames.filter(g => g._sport === eleg.sport);
+      const game = findGame(eleg, sportGames);
+      return { result: gradePick(eleg, game), odds: eleg.odds || '-110' };
     });
   } else {
     parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));

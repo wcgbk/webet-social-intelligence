@@ -917,6 +917,18 @@
     return null;
   }
 
+  /* ── Parlay legs are stored WITHOUT commenceTime, so on a doubleheader date findGame falls back to
+     the opener — the straight bet (which HAS commenceTime) resolves correctly while the identical
+     parlay leg does not. Inherit the start time from the straight pick naming the same matchup. ── */
+  function withLegCommenceTime(leg, picks) {
+    if (!leg || leg.commenceTime) return leg;
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const sameMatchup = (p) => norm(p.matchup) === norm(leg.matchup);
+    const match = (picks || []).find(p => sameMatchup(p) && norm(p.pick) === norm(leg.pick)) ||
+                  (picks || []).find(sameMatchup);
+    return (match && match.commenceTime) ? { ...leg, commenceTime: match.commenceTime } : leg;
+  }
+
   /* ── Is this an F5 (first-five-innings) pick? ── */
   function isF5Pick(pick) {
     const bt = (pick.betType || '').toLowerCase();
@@ -1581,7 +1593,7 @@
     // ── Parlay Bonus Card (PARLAY ONLY replacement leg) ──
     let parlayBonusResult = null;
     if (optimizedParlayLegs) {
-      const bonusLeg = optimizedParlayLegs.find(leg => !picks.some(p => p.pick === leg.pick));
+      const bonusLeg = withLegCommenceTime(optimizedParlayLegs.find(leg => !picks.some(p => p.pick === leg.pick)), picks);
       if (bonusLeg) {
         const bonusGame = findGame(bonusLeg);
         const bonusResult = determineResult(bonusLeg, bonusGame);
@@ -1738,7 +1750,8 @@
         }
       } else {
         // New: render from optimized parlay legs with live results
-        for (const leg of optimizedParlayLegs) {
+        for (const rawLeg of optimizedParlayLegs) {
+          const leg = withLegCommenceTime(rawLeg, picks);
           const isStraightPick = picks.some(p => p.pick === leg.pick);
           const independentBadge = !isStraightPick
             ? '<span style="background:var(--teal-light); color:var(--teal); font-size:.5625rem; font-weight:700; padding:1px 5px; border-radius:3px; margin-left:4px;">PARLAY ONLY</span>'

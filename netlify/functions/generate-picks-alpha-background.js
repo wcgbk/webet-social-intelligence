@@ -4129,6 +4129,9 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
     betType: c.market,
     odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
+    // Stamp the start time so grading can tell doubleheader games apart — without it a leg falls
+    // back to the day's FIRST matching game and can settle against the wrong final.
+    commenceTime: c.commenceTime || '',
     coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
     ev: `${(c.ev * 100).toFixed(1)}%`,
   }));
@@ -4172,6 +4175,8 @@ function buildFallbackParlay(picks) {
   const legs = picks.slice(0, 3).map(p => ({
     pick: p.pick, sport: p.sport, matchup: p.matchup,
     betType: p.betType, odds: p.odds, coverProb: p.coverProb,
+    // See note in buildCorrelatedParlay — legs need a start time to disambiguate doubleheaders.
+    commenceTime: p.commenceTime || '',
   }));
   let combinedDecimal = 1.0, combinedProb = 1.0;
   for (const leg of legs) {

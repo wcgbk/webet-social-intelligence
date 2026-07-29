@@ -4348,18 +4348,20 @@ exports.handler = async (event) => {
         blended = Math.min(blended, cap);
         if (Math.abs(blended - oldCoverProb) > 0.005) {
           c.coverProb = +blended.toFixed(4);
-          // Recompute Kelly with blended coverProb
+          // Recompute Kelly with blended coverProb. EV/kellyFraction always follow the
+          // blended probability — keeping the old EV when the blend turns it negative
+          // leaves a stale +EV on a candidate that no longer clears breakeven.
           const reKelly = computeKelly(c.coverProb, c.odds, bankrollCtx.drawdownActive);
+          c.ev = +reKelly.ev.toFixed(4);
+          c.kellyFraction = +reKelly.kellyFraction.toFixed(4);
           if (reKelly.ev > 0) {
-            c.ev = +reKelly.ev.toFixed(4);
-            c.kellyFraction = +reKelly.kellyFraction.toFixed(4);
             const sportMult = SPORT_KELLY_MULT[c.sport] || 1.0;
             let adjUnits = Math.round(reKelly.units * sportMult * 2) / 2;
             adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
             c.kellyUnits = adjUnits;
             c._rawKellyUnits = adjUnits;
           }
-          c.kellyCalcStr += ` [PM-BLEND: coverProb ${oldCoverProb.toFixed(3)}→${c.coverProb.toFixed(3)}]`;
+          c.kellyCalcStr += ` [PM-BLEND: coverProb ${oldCoverProb.toFixed(3)}→${c.coverProb.toFixed(3)}, EV ${(c.ev * 100).toFixed(1)}%]`;
           pmBlended++;
         }
       }
@@ -4404,7 +4406,21 @@ exports.handler = async (event) => {
           // This is informational — caps are already set in COVER_PROB_CAPS
           // The self-optimize engine suggests adjustments; we apply them as a secondary multiplier
           const probShift = 1.0 + capAdj;
+          const oldCp = c.coverProb;
           c.coverProb = +Math.min(0.70, c.coverProb * probShift).toFixed(4);
+          // Recompute the EV/Kelly chain — a shifted coverProb with stale EV lets a
+          // now-negative-edge candidate keep ranking (and shipping) on its old EV.
+          const soKelly = computeKelly(c.coverProb, c.odds, bankrollCtx.drawdownActive);
+          c.ev = +soKelly.ev.toFixed(4);
+          c.kellyFraction = +soKelly.kellyFraction.toFixed(4);
+          if (soKelly.ev > 0) {
+            const soMult = SPORT_KELLY_MULT[c.sport] || 1.0;
+            let soUnits = Math.round(soKelly.units * soMult * 2) / 2;
+            soUnits = Math.max(0.5, Math.min(3.0, soUnits));
+            c.kellyUnits = soUnits;
+            c._rawKellyUnits = soUnits;
+          }
+          c.kellyCalcStr += ` [SELF-OPT-CP ${capAdj > 0 ? '+' : ''}${capAdj}: coverProb ${oldCp.toFixed(3)}→${c.coverProb.toFixed(3)}, EV ${(c.ev * 100).toFixed(1)}%]`;
         }
       }
       console.log(`[v10-selfopt] Applied self-optimization to ${soAdj} candidates (sample: ${selfOptParams.sampleSize})`);
@@ -4842,6 +4858,7 @@ exports.handler = async (event) => {
         const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
+          hasPositiveEdge(c) &&
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
           !pickedGames.has((c.matchup || '').toLowerCase().trim()) &&
           !picks.find(p => p.pick === c.side)
@@ -4989,6 +5006,16 @@ const LEAN_UNITS = 0.25;
 // Keep at most one candidate per matchup (game): prefer a validated full-game pick over an F5 leg, then
 // higher EV. The deterministic fallback paths select top-N directly (no in-selection dedup), so without
 // this they could publish a full-game + F5 pick from the same game (positively correlated).
+// Publishable only if BOTH the EV and the calibrated edge (coverProb − implied) are positive.
+// The deterministic paths (fallback, thin-slate, lean top-up) skip buildFinalPicks' validation
+// layer, so without this pre-filter a post-adjustment negative-edge candidate can ship
+// (2026-07-29: Athletics +1.5 published at -0.0% edge with a stale +3.0% EV).
+function hasPositiveEdge(c) {
+  return typeof c.ev === "number" && c.ev > 0 &&
+    typeof c.coverProb === "number" && c.odds != null &&
+    (c.coverProb - impliedProb(c.odds)) > 0;
+}
+
 function dedupeCandidatesByGame(cands) {
   const byGame = new Map();
   const score = (c) => (c.source === "F5" ? 0 : 1e6) + (typeof c.ev === "number" ? c.ev : 0);
@@ -5090,7 +5117,7 @@ Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...
 
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = dedupeCandidatesByGame(leanCandidates).slice(0, 3);
+  const top = dedupeCandidatesByGame((leanCandidates || []).filter(hasPositiveEdge)).slice(0, 3);
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5183,7 +5210,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
   console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
-  const top3 = dedupeCandidatesByGame(candidateTable).slice(0, 3);
+  const top3 = dedupeCandidatesByGame(candidateTable.filter(hasPositiveEdge)).slice(0, 3);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';

@@ -24,7 +24,10 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-mvp"]
-  schedule = "0 12 * * *"
+  # schedule = "0 12 * * *"
+  # PAUSED 2026-08-02 — founder directive: alpha (v10.3-alpha-sharp → /alpha + /dashboard) is the
+  # SOLE live picks pipeline. The v11.1-mvp A/B challenger is paused; /mvp + /mvpalpha now go static.
+  # Re-enable only when resuming the champion-vs-challenger A/B test.
   # MVP pipeline — 8am EDT (12:00 UTC), 1hr before alpha for max CLV runway comparison
   # Writes to edge-picks-mvp blob store. Model: v11.0-mvp
   # v11.0 improvements: Poisson soccer, grade Kelly mult, adversarial A+ check, sport-diverse parlays

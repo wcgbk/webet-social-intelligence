@@ -3007,7 +3007,8 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
 // evFloor: minimum Kelly EV a candidate must clear to be retained.
 // v10.3: default lowered 0.08 → 0.03. The old 8% bar was tuned to inflated probabilities;
 // with shrinkage calibration, +3% CALIBRATED EV is a genuinely sharp threshold (real edge after
-// vig, comparable to professional sides). The thin-slate fallback re-runs at 0.03 for Leans (v10.4).
+// vig, comparable to professional sides). Conviction picks require this +3% default; the lean
+// backfill re-runs at the lower LEAN_EV_FLOOR (0.25u, separately tracked) to fill thin slates.
 function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.03, weatherData = null) {
   const candidates = [];
   const f5Pool = []; // F5 candidates collected across MLB games; capped to F5_MAX_SLOTS before ranking
@@ -4844,12 +4845,12 @@ exports.handler = async (event) => {
     // Re-run the edge table at a disciplined +3% EV floor; if anything qualifies,
     // publish the best 1-3 as low-stake "Lean" plays (0.25u) flagged thinSlate so
     // they're tracked separately and never inflate the conviction-book ROI.
-    // If nothing clears +3%, fall through to a true no-play — never force a -EV pick.
+    // If nothing clears the lean floor, fall through to a true no-play — never force a -EV pick.
     let leanCandidates = [];
     try {
-      // v10.4: floor restored to the advertised 3% — 1.5% calibrated EV on an MLB slate is
-      // inside model noise and was filling thin days with coin-flip picks.
-      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
+      // v10.4.1: whole-card lean fallback (0 conviction edges) uses the LEAN_EV_FLOOR tier so a
+      // thin slate still surfaces a card instead of going dark. These are 0.25u, separately tracked.
+      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
       leanCandidates.sort((a, b) => b.ev - a.ev);
       leanCandidates.forEach((c, i) => { c.rank = i + 1; });
     } catch (leanErr) {
@@ -4961,11 +4962,13 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP ──
-    // Card is below 3 after selection. Pull from the +3% EV lean tier to fill up with
-    // 0.25u Lean plays (flagged thinSlate, tracked separately, never inflate conviction-book ROI).
-    // v10.4: floor restored to 0.03 (the advertised 3%) — the 1.5% floor shipped Jul 6 filled
-    // cards with noise-level picks. Highest-EV leans first. Never reuse a rejected side.
+    // ── LEAN TIER TOP-UP (the "ensure ~3 picks + parlay" backfill) ──
+    // Card is below 3 after selection. Pull from the LEAN_EV_FLOOR tier to fill up with 0.25u Lean
+    // plays (flagged thinSlate, tracked separately, never inflate conviction-book ROI). v10.4.1:
+    // restored to the lower lean floor so thin slates fill toward 3 again. Highest-EV leans first.
+    // SAFETY (unchanged): never re-add a side the validator explicitly rejected, and never a second
+    // pick from a game already on the card — so on a slate whose only extra candidate was rejected on
+    // merit (e.g. a starter trending the wrong way), the card can still honestly come in under 3.
     if (picks.length < 3) {
       const needed = 3 - picks.length;
       const pickedGames = new Set(picks.map(p => (p.matchup || '').toLowerCase().trim()));
@@ -4976,7 +4979,7 @@ exports.handler = async (event) => {
         }).filter(Boolean)
       );
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
           hasPositiveEdge(c) &&
@@ -5128,6 +5131,13 @@ exports.handler = async (event) => {
 // thinSlate:true so the results tracker scores them separately from the conviction
 // book. The parlay (if any) is also sized at the lean amount, per spec.
 const LEAN_UNITS = 0.25;
+// Two-tier EV floor (v10.4.1): CONVICTION picks require +3% (real units, the main computeEdgeTable
+// call). The LEAN BACKFILL — the "ensure ~3 picks + a parlay" safety net — uses this lower floor and
+// publishes any extra qualifiers as 0.25u plays flagged thinSlate/rating:'Lean', which the results
+// tracker scores SEPARATELY so they never inflate the conviction-book ROI. Restored to the pre-v10.4
+// value so thin slates fill toward 3 again. Tunable: raise toward 0.02–0.025 for fewer marginal leans.
+// Note: leans still never override a validator rejection or stack a second pick on a picked game.
+const LEAN_EV_FLOOR = 0.015;
 // Keep at most one candidate per matchup (game): prefer a validated full-game pick over an F5 leg, then
 // higher EV. The deterministic fallback paths select top-N directly (no in-selection dedup), so without
 // this they could publish a full-game + F5 pick from the same game (positively correlated).

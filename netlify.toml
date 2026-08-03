@@ -125,9 +125,10 @@
   # PAUSED — 3-AI consensus pipeline failing (only ChatGPT responding). Re-enable when fixed.
   # 14:30 UTC = 10:30am EDT. Runs 30min after regular picks.
 
-[functions."calibrate-95"]
-  schedule = "0 8 * * *"
-  # 08:00 UTC = 4am EDT. Grade yesterday's picks and update calibration curves overnight.
+# REMOVED 2026-08-03: [functions."calibrate-95"] cron (0 8 * * *) pointed at a function file
+# that does not exist — it never ran, and its assumed overnight grading pass was silently
+# missing. Overnight settlement is now handled inside track-clv (awaited yesterday settle +
+# 7-day unsettled sweep on the 07:00 UTC run).
 
 [functions."admin-auto-draft"]
   # schedule = "0 12 * * *"

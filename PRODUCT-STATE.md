@@ -2,7 +2,9 @@
 
 > Any agent (cloud routine, fresh session, overnight run) starts HERE. Read this + the
 > Iteration Backlog in the charter, do the work, then UPDATE both. Never redo items
-> listed under DONE. Last updated: 2026-06-13 00:15 ET. X login fixed + founder-confirmed on real iPhone.
+> listed under DONE. Last updated: 2026-08-03 ET. v10.4-alpha-mlb shipped: settlement truth
+> (track-clv DH/PPD/F5 + overnight sweep), EV ranking, per-market caps, feedback loops demoted
+> to observer, parlay optimizer un-vetoed. See first DONE bullet.
 
 ## What this product is
 AI sports-picks platform. Betty (the LLM, /dashboard chat) is the primary interface —
@@ -15,6 +17,19 @@ picks card + live track record. WeBits = credit economy (1,000 granted at signup
 Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle.
 
 ## DONE — never rebuild (evidence in git log + charter)
+- **v10.4-alpha-mlb (2026-08-03, full optimization pass after post-ASB review):** settlement
+  writer fixed (track-clv: DH disambiguation by commenceTime, postponed→push, F5 linescore
+  guards, ESPN-grade-FIRST ordering, awaited overnight settle + 7-day unsettled sweep; dead
+  calibrate-95 cron removed from netlify.toml); generator ranks/selects on calibrated EV
+  (z-score demoted to diagnostic), DH source collisions fixed (consensus/pitcher/FIP/F5-odds
+  keyed per game), two-sided no-vig prior in alt-line + weather recalibrations, spread
+  stale/contrarian sign flipped, BettorEdge REMOVED from decision path, self-opt + CLV live
+  mutation channels REMOVED (self-optimize.js rebuilt as observer w/ real-ROI buckets +
+  grade-inversion alarm), per-market unit caps (ML 0.5u / F5 0.5u / Total 1.5u / RL 1.0u),
+  lean floor restored to 3%, storePicks overwrite guard (force:true to override, settled
+  results always carried), parlay optimizer un-vetoed (pseudo-rejections no longer poison
+  the pool) + 0.25u-lean-card rule enforced + verify-picks preserves the generator parlay
+  (rebuilds only on invalidated legs, keeps commenceTime). Baseline hashes regenerated.
 - Models v10.3-alpha-sharp + v11.1-mvp live; crons 12:00/13:00 UTC; shrinkage calibration
   (K: totals .30 / spreads .35 / ML .50 fitted on 428 real picks), Kelly ×50, 3% EV floor,
   per-market total σ, soccer off (alpha), +160 dog cap. MVP totalZ crash fixed.

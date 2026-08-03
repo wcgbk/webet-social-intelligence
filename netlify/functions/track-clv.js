@@ -376,8 +376,13 @@ async function fetchESPNScores(dateISO, sport) {
         homeTeam: home.team?.displayName || '', homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
         state: st,
+        statusName: status.type?.name || '',
+        completed: status.type?.completed === undefined ? null : !!status.type.completed,
+        startISO: ev.date || comp.date || null,
         awayScoreF5: isMLB ? sum5(awayLS) : null,
         homeScoreF5: isMLB ? sum5(homeLS) : null,
+        awayInnings: awayLS.length,
+        homeInnings: homeLS.length,
         f5Complete: !!f5Complete,
       };
     }).filter(Boolean);
@@ -387,25 +392,45 @@ async function fetchESPNScores(dateISO, sport) {
 function findGameForGrading(pick, games) {
   const matchup = (pick.matchup || '').toLowerCase();
   const parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  const matches = [];
   for (const g of games) {
     const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
     const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
     const awayMatch = parts.some(p => teamsMatch(p, g.awayTeam)) || (awayLast.length > 3 && matchup.includes(awayLast));
     const homeMatch = parts.some(p => teamsMatch(p, g.homeTeam)) || (homeLast.length > 3 && matchup.includes(homeLast));
-    if (awayMatch && homeMatch) return g;
+    if (awayMatch && homeMatch) matches.push(g);
   }
-  return null;
+  if (matches.length <= 1) return matches[0] || null;
+  // Day-night doubleheader: both games match by team name. Settle against the game whose
+  // start is nearest the pick's commenceTime (ported from get-results-alpha) — the first
+  // match is the opener, and grading the nightcap against it wrote false losses.
+  const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+  if (isNaN(ct)) return matches[0];
+  let best = matches[0], bestDiff = Infinity;
+  for (const g of matches) {
+    const gt = g.startISO ? Date.parse(g.startISO) : NaN;
+    if (isNaN(gt)) continue;
+    const diff = Math.abs(gt - ct);
+    if (diff < bestDiff) { bestDiff = diff; best = g; }
+  }
+  return best;
 }
 
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
+  // Postponed / canceled / suspended games are voided by every major US book (no action).
+  // ESPN marks them state:'post' with completed:false — catch BEFORE score-based grading,
+  // or a PPD game settles as a real 0-0 final (false Under win / RL loss / ML push).
+  if (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(game.statusName || '') ||
+      (game.state === 'post' && game.completed === false)) return 'push';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || pick.market || '').toLowerCase();
   const src = (pick.source || '').toLowerCase();
   const isF5 = src === 'f5' || betType.startsWith('f5') || /\bf5\b/.test(pickStr.toLowerCase());
-  // F5 bets settle on the score THROUGH 5 innings. If the game didn't complete 5 full innings the
-  // F5 bet is void (no action) — treat as a push so it neither wins nor loses.
-  if (isF5 && !game.f5Complete) return 'push';
+  // F5 bets settle on the score THROUGH 5 innings. Require >=5 recorded innings per side —
+  // a final game missing linescores must stay pending (retried next run), never settle as
+  // a phantom 0-0 F5 final or a false void.
+  if (isF5 && ((game.awayInnings || 0) < 5 || (game.homeInnings || 0) < 5)) return 'pending';
   const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
   const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
@@ -468,6 +493,78 @@ function finalizeBuckets(map) {
   return map;
 }
 
+// ── Picks blob I/O + ESPN-only settlement ──
+// Used by the early settle (Step 1.5) and the awaited morning sweep. Grading runs on cheap
+// ESPN scoreboard calls and writes results back IMMEDIATELY — it must never wait behind the
+// slow per-pick historical close capture (that ordering is how whole days stayed unsettled).
+async function loadPicksData(dateISO) {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore('edge-picks-alpha');
+    const data = await store.get(`picks-${dateISO}`, { type: 'json' });
+    if (data) return data;
+  } catch (e) { /* fall through to REST */ }
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+  if (!token) return null;
+  try {
+    const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha/picks-${dateISO}`;
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (resp.ok) return await resp.json();
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+async function writePicksData(dateISO, picksData) {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore('edge-picks-alpha');
+    await store.setJSON(`picks-${dateISO}`, picksData);
+    return true;
+  } catch (e) { /* fall through to REST */ }
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
+  if (!token) return false;
+  try {
+    const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha/picks-${dateISO}`;
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(picksData),
+    });
+    return resp.ok;
+  } catch (e) { return false; }
+}
+
+// Grade every unsettled pick for a date via ESPN finals and write results back to the picks
+// blob. Mutates picksData in place (so later steps in the same run see the results and the
+// Step 6.5 guard doesn't re-write). Returns the number of picks settled this call.
+async function settleResultsForDate(dateISO, picksData) {
+  const unsettled = (picksData.picks || []).filter(p => !p.result || p.result === 'pending');
+  if (!unsettled.length) return 0;
+  const sports = [...new Set(unsettled.map(p => p.sport).filter(Boolean))];
+  const scoresBySport = {};
+  await Promise.all(sports.map(async s => { scoresBySport[s] = await fetchESPNScores(dateISO, s); }));
+  let settledCount = 0;
+  for (const p of picksData.picks) {
+    if (p.result && p.result !== 'pending') continue;
+    const game = findGameForGrading(p, scoresBySport[p.sport] || []);
+    if (!game) continue;
+    const result = gradePick(p, game);
+    if (result === 'pending') continue;
+    p.result = result;
+    p.profit = calcProfit(result, p.units, p.odds || p.pickTimeOdds);
+    p.finalScore = `${game.awayScore}-${game.homeScore}`;
+    p.settledAt = new Date().toISOString();
+    settledCount++;
+  }
+  if (settledCount > 0) {
+    const ok = await writePicksData(dateISO, picksData);
+    if (!ok) console.log(`[track-clv] WARNING: settled ${settledCount} picks for ${dateISO} but blob write failed`);
+  }
+  return settledCount;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -488,30 +585,34 @@ exports.handler = async (event) => {
     // via the historical path (all of yesterday's games are now in the past).
     const etHour = estOffset.getHours();
     if (!params.date && etHour < 12) {
-      const yest = new Date(estOffset); yest.setDate(yest.getDate() - 1);
-      const yestISO = yest.toISOString().split('T')[0];
+      // Settle recent days INLINE and AWAITED. The old fire-and-forget self-POST usually died
+      // with the lambda before the request left the process — any date whose games all ended
+      // after the 7pm run stayed unsettled forever (55% of picks at one point). ESPN grading
+      // is cheap; sweep the last 7 days here. Dates with nothing unsettled cost one blob read.
+      const sweepDates = [];
+      for (let back = 1; back <= 7; back++) {
+        const d = new Date(estOffset); d.setDate(d.getDate() - back);
+        sweepDates.push(d.toISOString().split('T')[0]);
+      }
+      for (const swISO of sweepDates) {
+        try {
+          const swPicks = await loadPicksData(swISO);
+          if (!swPicks || !Array.isArray(swPicks.picks) || !swPicks.picks.length) continue;
+          const n = await settleResultsForDate(swISO, swPicks);
+          if (n > 0) console.log(`[track-clv] Sweep settled ${n} picks for ${swISO}`);
+        } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
+      }
+      // Yesterday's TRUE close capture (historical odds) still runs via self-POST — best
+      // effort only; settlement above no longer depends on it surviving.
+      const yestISO = sweepDates[0];
       const siteURL = process.env.URL || 'https://webetsocial.com';
       fetch(`${siteURL}/.netlify/functions/track-clv?date=${yestISO}`, { method: 'POST' })
-        .then(() => console.log(`[track-clv] Triggered overnight settle for ${yestISO}`))
-        .catch((e) => console.log(`[track-clv] Yesterday settle trigger failed: ${e.message}`));
+        .then(() => console.log(`[track-clv] Triggered overnight CLV capture for ${yestISO}`))
+        .catch((e) => console.log(`[track-clv] Yesterday CLV trigger failed: ${e.message}`));
     }
 
     // ── Step 1: Load today's picks from Blobs ──
-    let picksData;
-    try {
-      const { getStore } = await import('@netlify/blobs');
-      const store = getStore('edge-picks-alpha');
-      picksData = await store.get(`picks-${dateISO}`, { type: 'json' });
-    } catch (blobErr) {
-      console.log('[track-clv] Blobs SDK failed, trying API fallback:', blobErr.message);
-      const token = process.env.NETLIFY_AUTH_TOKEN;
-      const siteId = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
-      if (token) {
-        const url = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-alpha/picks-${dateISO}`;
-        const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (resp.ok) picksData = await resp.json();
-      }
-    }
+    const picksData = await loadPicksData(dateISO);
 
     if (!picksData || !picksData.picks || picksData.picks.length === 0) {
       return {
@@ -526,6 +627,13 @@ exports.handler = async (event) => {
     }
 
     console.log(`[track-clv] Found ${picksData.picks.length} picks for ${dateISO}`);
+
+    // ── Step 1.5: Settle results FIRST. The per-pick historical close capture below is the
+    // slow part of this sync function; if it times out, grading must already be on disk.
+    try {
+      const early = await settleResultsForDate(dateISO, picksData);
+      if (early > 0) console.log(`[track-clv] Early-settled ${early} picks for ${dateISO}`);
+    } catch (e) { console.log(`[track-clv] Early settle failed (non-fatal): ${e.message}`); }
 
     // ── Step 2: Load existing CLV data (merge mode — keep the capture closest to first pitch) ──
     let existingClv = null;
@@ -581,6 +689,9 @@ exports.handler = async (event) => {
         units: pick.units || null,
         pickTimeOdds: pick.odds || 'N/A',
         betLine: parseBetLine(pick, sideInfo),
+        // Carried so findGameForGrading can disambiguate doubleheaders in the CLV grading
+        // pass too (older clv records without it fall back to first-match).
+        commenceTime: pick.commenceTime || null,
       };
 
       if (!sportKey) {
@@ -854,5 +965,5 @@ exports.handler = async (event) => {
 module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
-  gradePick, calcProfit,
+  gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
 };

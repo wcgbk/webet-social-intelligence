@@ -779,9 +779,24 @@ Return ONLY valid JSON array:
         }
       }
 
-      // ── Rebuild parlay with the final card ──
-      // The parlay must reflect the actual picks on the page, not the pre-replacement picks
-      if (picksData.picks.length >= 3) {
+      // ── Parlay handling (v10.4): PRESERVE the generator's parlay unless it's now invalid ──
+      // The old unconditional daily rebuild (a) discarded the correlated-parlay optimizer's
+      // output (its legs may legitimately differ from the straight card), (b) re-hardcoded
+      // 0.5u over the 0.25u lean-card rule, and (c) dropped each leg's commenceTime —
+      // re-breaking doubleheader settlement every day at 10:30. Rebuild ONLY when the parlay
+      // is missing or a verification action invalidated one of its legs.
+      const removedPicks = new Set(allReplacements.map(r => r.removed).filter(Boolean));
+      const existingParlay = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
+      const parlayLegsArr = (existingParlay && Array.isArray(existingParlay.legs)) ? existingParlay.legs : [];
+      const cardPickSet = new Set(picksData.picks.map(p => p.pick));
+      const isCardMirror = !existingParlay || /fallback|verified/.test(existingParlay.type || "");
+      const parlayInvalid =
+        !existingParlay || !parlayLegsArr.length ||
+        parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
+        (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
+
+      if (picksData.picks.length >= 3 && parlayInvalid) {
+        const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
         const legs = picksData.picks.slice(0, 3).map(p => ({
           pick: p.pick,
           sport: p.sport,
@@ -789,6 +804,8 @@ Return ONLY valid JSON array:
           betType: p.betType,
           odds: p.odds,
           coverProb: p.winProbability || p.coverProb,
+          // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
+          commenceTime: p.commenceTime || '',
           ev: p.ev,
         }));
 
@@ -803,22 +820,24 @@ Return ONLY valid JSON array:
         picksData.parlayLegs = [{
           type: "3-leg-parlay-verified",
           legs,
-          units: "0.5u",
+          units: hasLean ? "0.25u" : "0.5u",
           combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
           combinedDecimal: +combinedDecimal.toFixed(2),
           combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
           ev: `${(parlayEV * 100).toFixed(1)}%`,
-          correlationNote: "Rebuilt after verification — reflects final verified card",
+          correlationNote: "Rebuilt after verification — a leg was invalidated by pick replacement",
         }];
-        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)}`);
+        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
         finalFixCount++;
-      } else {
+      } else if (picksData.picks.length < 3) {
         // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
         // never shows a parlay containing a removed leg.
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
         }
+      } else {
+        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
       }
 
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math

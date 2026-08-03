@@ -1,22 +1,20 @@
 // self-optimize.js
-// Self-optimization engine for WeBetAI v10.5
-// Runs weekly (Sunday night). Analyzes last 14-30 days of results data,
-// computes optimal parameter adjustments, and stores them in Netlify Blobs.
-// The picks pipeline reads these parameters at runtime, creating a closed-loop
-// feedback system that continuously improves without manual intervention.
+// Weekly performance OBSERVER for WeBetAI (v10.4 rebuild, 2026-08-03).
 //
-// Parameters tuned:
-// 1. Sport-specific Kelly multipliers (which sports are we sharpest at?)
-// 2. Market-specific accuracy (spreads vs totals vs ML — where do we hit?)
-// 3. Edge bucket calibration (what edge ranges actually win?)
-// 4. Cover probability cap adjustment (are we over/under-confident?)
-// 5. Home advantage drift (has home-court advantage changed this season?)
+// Runs Sunday. Analyzes the last 45 days of graded results and stores an
+// analytics + alarms report. As of v10.4 this is an OBSERVER, not a steerer:
+// the generator no longer applies these parameters to live picks. The old
+// closed loop inflated coverProb for whatever segment ran hot in the trailing
+// window (momentum-chasing — it manufactured phantom EV and stuffed regressing
+// segments into the top unit tier right as they mean-reverted), and its unit
+// multipliers mostly evaporated in 0.5u rounding anyway. Sizing policy now
+// lives in the generator's static per-market caps, changed deliberately.
 //
-// Philosophy: CONSERVATIVE adjustments. Each parameter moves at most 10% per cycle.
-// Catastrophic overfitting is prevented by:
-// - Minimum sample sizes (15+ picks per bucket)
-// - Mean-reversion bias (parameters drift back toward 1.0 over time)
-// - Max adjustment caps per cycle
+// What this computes weekly:
+// 1. Per-sport / per-market win rate AND ROI (real risked units, not count×1u)
+// 2. Grade-level accuracy + a GRADE-INVERSION ALARM (A-tier hitting below
+//    B-tier = the conviction ladder is anti-predictive — a bug signature)
+// 3. Confidence calibration when cover data is present in the cache
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 
@@ -48,7 +46,15 @@ exports.handler = async (event) => {
           if (p.sport === "PARLAY") continue;
           if (p.result !== "win" && p.result !== "loss") continue;
           const pickStr = p.pick || "";
-          const betType = /^(Over|Under)/.test(pickStr) ? "Total"
+          // v10.4: F5 detected FIRST — "Nationals F5 ML" used to pollute the Moneyline
+          // bucket and "F5 Over 4.5" was misfiled as Run Line, so market stats steered
+          // (and now report) the wrong segments.
+          const isF5 = /\bf5\b/i.test(pickStr);
+          const betType = isF5
+            ? (/over|under/i.test(pickStr) ? "F5 Total"
+              : / ML\b/i.test(pickStr) ? "F5 Moneyline"
+              : "F5 Run Line")
+            : /^(Over|Under)/.test(pickStr) ? "Total"
             : / ML$/.test(pickStr) ? "Moneyline"
             : p.sport === "NHL" ? "Puck Line"
             : p.sport === "MLB" ? "Run Line"
@@ -89,38 +95,48 @@ exports.handler = async (event) => {
     byGrade: {},       // { "A": { wins, losses, accuracy } }
   };
 
+  const DOLLARS_PER_UNIT = 150;
   for (const r of allResults) {
     const sport = r.sport || "Unknown";
     const market = r.betType || r.market || "Unknown";
     const grade = r.rating || r.grade || "B";
     const won = r.result === "win";
     const profit = r.profit || 0;
+    // v10.4: real dollars risked per pick (units × $150). The old count×$150 assumed every
+    // pick was 1u, which distorted every ROI this function reported.
+    const risked = (parseFloat(r.units) || 1) * DOLLARS_PER_UNIT;
     const edge = parseFloat(r.edgePoints || r.edge || 0);
 
     // By sport
-    if (!buckets.bySport[sport]) buckets.bySport[sport] = { wins: 0, losses: 0, profit: 0, count: 0 };
+    if (!buckets.bySport[sport]) buckets.bySport[sport] = { wins: 0, losses: 0, profit: 0, risked: 0, count: 0 };
     buckets.bySport[sport].count++;
     buckets.bySport[sport].profit += profit;
+    buckets.bySport[sport].risked += risked;
     if (won) buckets.bySport[sport].wins++; else buckets.bySport[sport].losses++;
 
     // By market
-    if (!buckets.byMarket[market]) buckets.byMarket[market] = { wins: 0, losses: 0, profit: 0, count: 0 };
+    if (!buckets.byMarket[market]) buckets.byMarket[market] = { wins: 0, losses: 0, profit: 0, risked: 0, count: 0 };
     buckets.byMarket[market].count++;
     buckets.byMarket[market].profit += profit;
+    buckets.byMarket[market].risked += risked;
     if (won) buckets.byMarket[market].wins++; else buckets.byMarket[market].losses++;
 
     // By sport+market
     const sm = `${sport}_${market}`;
-    if (!buckets.bySportMarket[sm]) buckets.bySportMarket[sm] = { wins: 0, losses: 0, profit: 0, count: 0 };
+    if (!buckets.bySportMarket[sm]) buckets.bySportMarket[sm] = { wins: 0, losses: 0, profit: 0, risked: 0, count: 0 };
     buckets.bySportMarket[sm].count++;
     buckets.bySportMarket[sm].profit += profit;
+    buckets.bySportMarket[sm].risked += risked;
     if (won) buckets.bySportMarket[sm].wins++; else buckets.bySportMarket[sm].losses++;
 
-    // By edge bucket
-    const edgeBucket = edge < 3 ? "0-3" : edge < 6 ? "3-6" : edge < 10 ? "6-10" : edge < 15 ? "10-15" : "15+";
-    if (!buckets.byEdgeBucket[edgeBucket]) buckets.byEdgeBucket[edgeBucket] = { wins: 0, losses: 0, count: 0 };
-    buckets.byEdgeBucket[edgeBucket].count++;
-    if (won) buckets.byEdgeBucket[edgeBucket].wins++; else buckets.byEdgeBucket[edgeBucket].losses++;
+    // By edge bucket — only when the cache row actually carries an edge value (the
+    // results cache historically didn't, which silently filed EVERY pick under "0-3").
+    if (edge > 0) {
+      const edgeBucket = edge < 3 ? "0-3" : edge < 6 ? "3-6" : edge < 10 ? "6-10" : edge < 15 ? "10-15" : "15+";
+      if (!buckets.byEdgeBucket[edgeBucket]) buckets.byEdgeBucket[edgeBucket] = { wins: 0, losses: 0, count: 0 };
+      buckets.byEdgeBucket[edgeBucket].count++;
+      if (won) buckets.byEdgeBucket[edgeBucket].wins++; else buckets.byEdgeBucket[edgeBucket].losses++;
+    }
 
     // By grade
     if (!buckets.byGrade[grade]) buckets.byGrade[grade] = { wins: 0, losses: 0, count: 0 };
@@ -128,13 +144,16 @@ exports.handler = async (event) => {
     if (won) buckets.byGrade[grade].wins++; else buckets.byGrade[grade].losses++;
   }
 
-  // ── Step 3: Compute optimal parameters ──
+  // ── Step 3: Compute the weekly report ──
+  // observationalOnly: the generator loads this blob for logging but applies NOTHING from it
+  // (v10.4). The multiplier fields remain as diagnostics of where the model has been sharp.
   const params = {
     generatedAt: new Date().toISOString(),
     sampleSize: allResults.length,
+    observationalOnly: true,
+    alerts: [],
     sportKellyMult: {},
     marketKellyMult: {},
-    coverProbAdjust: {},
     edgeBucketPerformance: {},
   };
 
@@ -167,20 +186,11 @@ exports.handler = async (event) => {
     console.log(`[self-optimize] ${market}: ${data.wins}W-${data.losses}L (${(marketWinRate*100).toFixed(0)}%), mult=${finalMult.toFixed(3)}`);
   }
 
-  // Cover probability cap adjustment
-  // If we're winning at rates above our predicted cover prob, caps are too low
-  // If we're losing despite high predicted cover prob, caps are too high
-  for (const [sm, data] of Object.entries(buckets.bySportMarket)) {
-    if (data.count < MIN_SAMPLE) continue;
-    const accuracy = data.wins / data.count;
-    // If accuracy > 55%, model is under-confident → raise cap slightly
-    // If accuracy < 48%, model is over-confident → lower cap slightly
-    if (accuracy > 0.55) {
-      params.coverProbAdjust[sm] = +Math.min(0.03, (accuracy - 0.55) * 0.5).toFixed(3);
-    } else if (accuracy < 0.48) {
-      params.coverProbAdjust[sm] = +Math.max(-0.03, (accuracy - 0.48) * 0.5).toFixed(3);
-    }
-  }
+  // v10.4: coverProbAdjust REMOVED. Shifting claimed probabilities toward whatever segment
+  // ran hot in the trailing window is momentum-chasing — it corrupted calibration and EV at
+  // the exact moment segments mean-reverted. Probability fixes belong in the pricing model's
+  // calibration constants, changed deliberately, never from a live feedback loop.
+  // Per-segment win rates remain visible in buckets.bySportMarket (stored with history).
 
   // Edge bucket performance — identifies which edge ranges are profitable
   // This tells us whether to tighten or loosen edge thresholds
@@ -191,29 +201,21 @@ exports.handler = async (event) => {
     };
   }
 
-  // ── Step 3b: ROI-weighted sport multipliers (profit-based, not just accuracy) ──
-  // Win rate can be misleading — a sport could win 55% but lose money on -110 juice.
-  // ROI captures the actual profitability.
+  // ── Step 3b: Real ROI per sport AND per market (v10.4: actual risked dollars) ──
+  // Win rate alone misleads — a market can win 55% and lose money at -110, while ML dogs can
+  // win 48% and profit. ROI on real stakes is the honest number; CLV (from the weekly clv-*
+  // blobs) is its market-validated companion in the review.
   params.sportROI = {};
   for (const [sport, data] of Object.entries(buckets.bySport)) {
     if (data.count < MIN_SAMPLE) continue;
-    const wagered = data.count * 150; // $150/unit approximate
-    const roi = wagered > 0 ? data.profit / wagered : 0;
-    params.sportROI[sport] = +roi.toFixed(4);
-
-    // If ROI is strongly positive, boost Kelly more aggressively (up to 1.20x)
-    if (roi > 0.05) {
-      const roiBoost = Math.min(1.20, 1.0 + roi * 2);
-      // Blend with accuracy-based multiplier (70% accuracy, 30% ROI)
-      const accuracyMult = params.sportKellyMult[sport] || 1.0;
-      params.sportKellyMult[sport] = +((accuracyMult * 0.7 + roiBoost * 0.3)).toFixed(3);
-      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, blended mult=${params.sportKellyMult[sport]}`);
-    } else if (roi < -0.05) {
-      const roiPenalty = Math.max(0.85, 1.0 + roi * 2);
-      const accuracyMult = params.sportKellyMult[sport] || 1.0;
-      params.sportKellyMult[sport] = +((accuracyMult * 0.7 + roiPenalty * 0.3)).toFixed(3);
-      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, blended mult=${params.sportKellyMult[sport]}`);
-    }
+    params.sportROI[sport] = data.risked > 0 ? +(data.profit / data.risked).toFixed(4) : 0;
+    console.log(`[self-optimize] ${sport} ROI=${(params.sportROI[sport]*100).toFixed(1)}% on $${data.risked} risked`);
+  }
+  params.marketROI = {};
+  for (const [market, data] of Object.entries(buckets.byMarket)) {
+    if (data.count < MIN_SAMPLE) continue;
+    params.marketROI[market] = data.risked > 0 ? +(data.profit / data.risked).toFixed(4) : 0;
+    console.log(`[self-optimize] ${market} ROI=${(params.marketROI[market]*100).toFixed(1)}% on $${data.risked} risked (${data.wins}W-${data.losses}L)`);
   }
 
   // ── Step 3c: Grade-level accuracy analysis ──
@@ -226,6 +228,28 @@ exports.handler = async (event) => {
       count: data.count,
     };
     console.log(`[self-optimize] Grade ${grade}: ${data.wins}W-${data.losses}L (${(data.wins/data.count*100).toFixed(0)}%)`);
+  }
+
+  // ── Step 3c2: GRADE-INVERSION ALARM (v10.4) ──
+  // If the A-tier (A+/A/A-) hits BELOW the B-tier on a real sample, the conviction ladder is
+  // anti-predictive — a ranking/sizing bug signature, not variance. This exact inversion
+  // preceded the post-All-Star-break slump and sat unread in gradeAccuracy every Sunday.
+  const tierAcc = (grades) => grades.reduce((acc, g) => {
+    const d = buckets.byGrade[g];
+    if (d) { acc.w += d.wins; acc.n += d.wins + d.losses; }
+    return acc;
+  }, { w: 0, n: 0 });
+  const aTier = tierAcc(["A+", "A", "A-"]);
+  const bTier = tierAcc(["B+", "B", "B-"]);
+  if (aTier.n >= 20 && bTier.n >= 20) {
+    const aAcc = aTier.w / aTier.n, bAcc = bTier.w / bTier.n;
+    if (aAcc < bAcc - 0.05) {
+      const msg = `GRADE INVERSION: A-tier ${(aAcc * 100).toFixed(1)}% (n=${aTier.n}) below B-tier ${(bAcc * 100).toFixed(1)}% (n=${bTier.n}) — the conviction ladder is anti-predictive; audit ranking + per-market caps before trusting unit sizes`;
+      params.alerts.push(msg);
+      console.error(`[self-optimize] ⚠️ ${msg}`);
+    } else {
+      console.log(`[self-optimize] Grade ladder healthy: A-tier ${(aAcc * 100).toFixed(1)}% (n=${aTier.n}) vs B-tier ${(bAcc * 100).toFixed(1)}% (n=${bTier.n})`);
+    }
   }
 
   // ── Step 3d: Optimal edge threshold recommendation ──
@@ -298,10 +322,12 @@ exports.handler = async (event) => {
   return {
     statusCode: 200,
     body: JSON.stringify({
+      observationalOnly: true,
       sampleSize: allResults.length,
-      sportMults: params.sportKellyMult,
-      marketMults: params.marketKellyMult,
-      coverProbAdj: params.coverProbAdjust,
+      sportROI: params.sportROI,
+      marketROI: params.marketROI,
+      gradeAccuracy: params.gradeAccuracy,
+      alerts: params.alerts,
     }),
   };
 };

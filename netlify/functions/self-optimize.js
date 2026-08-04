@@ -39,11 +39,19 @@ async function analyzeParlayLegCLV(token, days = 60) {
 
   const overall = { n: 0, clvSum: 0, beat: 0 };
   const byMarket = {};
+  const allByMarket = {}; // ALL straight-pick CLV by market — drives the ML-cap decision (not just parlay legs)
   let parlaysCovered = 0, legsTotal = 0, legsMatched = 0;
+  const bump = (map, m, c, beat) => { if (!map[m]) map[m] = { n: 0, clvSum: 0, beat: 0 }; map[m].n++; map[m].clvSum += c; if (beat) map[m].beat++; };
 
   const processDate = async (d) => {
     const [picks, clv] = await Promise.all([getJSON(`picks-${d}`), getJSON(`clv-${d}`)]);
-    if (!picks || !clv || !Array.isArray(clv.picks)) return;
+    if (!clv || !Array.isArray(clv.picks)) return;
+    // All-market CLV over every graded leg (drives the ML-cap proposal).
+    for (const p of clv.picks) {
+      if (typeof p.clvCents === 'number') bump(allByMarket, p.market || p.betType || 'Unknown', p.clvCents, p.beatClosing);
+    }
+    // Parlay-leg CLV (the subset that actually went into parlays).
+    if (!picks) return;
     const parlay = (picks.parlayLegs && picks.parlayLegs[0]) || null;
     const legs = (parlay && Array.isArray(parlay.legs)) ? parlay.legs : null;
     if (!legs || legs.length < 2) return;
@@ -55,9 +63,7 @@ async function analyzeParlayLegCLV(token, days = 60) {
       if (!rec || typeof rec.clvCents !== "number") continue;
       legsMatched++;
       overall.n++; overall.clvSum += rec.clvCents; if (rec.beatClosing) overall.beat++;
-      const m = rec.market || rec.betType || leg.betType || "Unknown";
-      if (!byMarket[m]) byMarket[m] = { n: 0, clvSum: 0, beat: 0 };
-      byMarket[m].n++; byMarket[m].clvSum += rec.clvCents; if (rec.beatClosing) byMarket[m].beat++;
+      bump(byMarket, rec.market || rec.betType || leg.betType || "Unknown", rec.clvCents, rec.beatClosing);
     }
   };
   // Batch to bound concurrency (2 blob fetches/date) so this stays well under the function
@@ -67,14 +73,17 @@ async function analyzeParlayLegCLV(token, days = 60) {
     await Promise.all(dates.slice(i, i + BATCH).map(processDate));
   }
 
-  if (overall.n === 0) return { window: `${days}d`, parlaysCovered, legsTotal, legsMatched: 0, note: "no parlay legs matched a CLV record yet" };
-
   const fin = (b) => ({ n: b.n, avgCLVCents: +(b.clvSum / b.n).toFixed(2), beatCloseRate: +(b.beat / b.n).toFixed(3) });
+  const allMarketCLV = Object.fromEntries(Object.entries(allByMarket).filter(([, v]) => v.n > 0).map(([k, v]) => [k, fin(v)]));
+
+  if (overall.n === 0) return { window: `${days}d`, parlaysCovered, legsTotal, legsMatched: 0, allMarketCLV, note: "no parlay legs matched a CLV record yet" };
+
   const out = {
     window: `${days}d`, parlaysCovered, legsTotal, legsMatched,
     coverage: +(legsMatched / legsTotal).toFixed(2),
     ...fin(overall),
     byMarket: Object.fromEntries(Object.entries(byMarket).map(([k, v]) => [k, fin(v)])),
+    allMarketCLV,
   };
   // Verdict: CLV is the only thing that separates a real parlay edge from variance.
   if (out.n >= 30 && out.beatCloseRate >= 0.53 && out.avgCLVCents > 0) {
@@ -115,7 +124,32 @@ function buildObserverDigest(params) {
   if (params.marketROI && Object.keys(params.marketROI).length) {
     L.push('', `**Market ROI (45d):** ` + Object.entries(params.marketROI).map(([m, r]) => `${m} ${r >= 0 ? '+' : ''}${(r * 100).toFixed(0)}%`).join(' · '));
   }
+  if (params.oddsUsage) L.push(params.oddsUsage);
+
+  // ── Approve-able proposals (reply-to-approve in the channel) ──
+  // Each maps to a bounded, reversible config change in edge-picks/alpha-config. The connector
+  // Claude applies ONLY these whitelisted actions, ONLY when Ben approves. See the runbook.
+  const props = [];
+  if (pl && pl.verdict === 'positive') props.push(['parlay-stake-up', 'raise parlay stake 0.5u → 0.75u — parlay-leg CLV is positive']);
+  const mlc = (params.marketCLV || {}).Moneyline;
+  if (mlc && mlc.n >= 30 && mlc.beatCloseRate >= 0.52 && mlc.avgCLVCents > 0) props.push(['ml-cap-up', `raise full-game ML cap 0.5u → 1.0u — ML CLV turned positive (${(mlc.beatCloseRate * 100).toFixed(0)}% beat close, n=${mlc.n})`]);
+  if (props.length) {
+    L.push('', '**📈 Proposals — reply in this channel to approve:**');
+    for (const [id, desc] of props) L.push(`• ${desc}\n   → reply \`approve ${id}\``);
+  }
   return L.join('\n').slice(0, 1900);
+}
+async function fetchOddsUsageLine() {
+  const key = process.env.ODDS_API_KEY;
+  if (!key) return null;
+  try {
+    const r = await fetch(`https://api.the-odds-api.com/v4/sports/?apiKey=${key}`);
+    const used = Number(r.headers.get('x-requests-used'));
+    const rem = Number(r.headers.get('x-requests-remaining'));
+    if (!Number.isFinite(used) || !Number.isFinite(rem)) return null;
+    const quota = used + rem, pct = quota ? (rem / quota * 100) : 0;
+    return { line: `**Odds API:** ${used.toLocaleString()} / ${quota.toLocaleString()} used · ${rem.toLocaleString()} left (${pct.toFixed(0)}%)${pct < 15 ? ' ⚠️ LOW — top up before it stalls settlement/CLV' : ''}`, low: pct < 15 };
+  } catch (e) { return null; }
 }
 async function postObserverDigest(token, params) {
   let webhook = process.env.DISCORD_OBSERVER_WEBHOOK || null;
@@ -417,6 +451,7 @@ exports.handler = async (event) => {
     const plCLV = await analyzeParlayLegCLV(token, 60);
     if (plCLV) {
       params.parlayLegCLV = plCLV;
+      params.marketCLV = plCLV.allMarketCLV || {}; // straight-pick CLV by market (ML-cap signal)
       const ranked = Object.entries(plCLV.byMarket || {})
         .filter(([, v]) => v.n >= 5)
         .sort((a, b) => b[1].avgCLVCents - a[1].avgCLVCents)
@@ -459,7 +494,11 @@ exports.handler = async (event) => {
     );
   } catch (e) { /* non-critical */ }
 
-  // ── Step 6: Push the digest to Discord so the operator actually sees it ──
+  // ── Step 6: Odds-API quota + push the digest to Discord ──
+  try {
+    const usage = await fetchOddsUsageLine();
+    if (usage) { params.oddsUsage = usage.line; if (usage.low) params.alerts.push('ODDS API quota LOW — top up to protect settlement + CLV capture'); }
+  } catch (e) { /* non-fatal */ }
   await postObserverDigest(token, params);
 
   return {

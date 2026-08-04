@@ -3805,9 +3805,33 @@ const MARKET_UNIT_CAPS = {
   "Moneyline": 0.5, "F5 Moneyline": 0.5, "F5 Total": 0.5, "F5 Run Line": 0.5,
   "Total": 1.5, "Spread": 1.0, "Run Line": 1.0, "Puck Line": 1.0,
 };
+
+// ── Operator-tunable config (v10.4.5) ──
+// These two levers are the ones the weekly Discord observer proposes changing (parlay stake,
+// full-game ML cap). They live in the edge-picks/alpha-config blob so an approved change is a
+// safe, reversible, no-deploy config write — never arbitrary code. loadAlphaConfig() overwrites
+// the defaults at runtime; if the blob is absent, the shipped defaults stand.
+let ALPHA_CONFIG = { parlayStakeUnits: 0.5, parlayStakeUnitsLean: 0.25, mlUnitCap: 0.5 };
+async function loadAlphaConfig() {
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (!token) return;
+  try {
+    const r = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks/alpha-config`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return;
+    const c = await r.json();
+    // Bounded sanitization — a config write can never push sizing outside sane rails.
+    if (typeof c.parlayStakeUnits === 'number' && c.parlayStakeUnits >= 0.25 && c.parlayStakeUnits <= 2) ALPHA_CONFIG.parlayStakeUnits = c.parlayStakeUnits;
+    if (typeof c.parlayStakeUnitsLean === 'number' && c.parlayStakeUnitsLean >= 0.25 && c.parlayStakeUnitsLean <= 1) ALPHA_CONFIG.parlayStakeUnitsLean = c.parlayStakeUnitsLean;
+    if (typeof c.mlUnitCap === 'number' && c.mlUnitCap >= 0.5 && c.mlUnitCap <= 2) ALPHA_CONFIG.mlUnitCap = c.mlUnitCap;
+    console.log(`[v10-config] alpha-config: parlay ${ALPHA_CONFIG.parlayStakeUnits}u (lean ${ALPHA_CONFIG.parlayStakeUnitsLean}u), ML cap ${ALPHA_CONFIG.mlUnitCap}u${c.updatedBy ? ` (last set by ${c.updatedBy})` : ''}`);
+  } catch (e) { console.log(`[v10-config] alpha-config load failed (using defaults): ${e.message}`); }
+}
+
 function applyMarketUnitCaps(picks) {
   for (const p of (picks || [])) {
-    const cap = MARKET_UNIT_CAPS[p.betType];
+    // Full-game ML cap is operator-tunable (the observer proposes raising it once ML CLV turns
+    // positive); everything else uses the static discipline caps.
+    const cap = /^Moneyline$/i.test(p.betType || '') ? ALPHA_CONFIG.mlUnitCap : MARKET_UNIT_CAPS[p.betType];
     if (!cap) continue;
     const u = parseFloat(p.units);
     if (isFinite(u) && u > cap) {
@@ -4158,7 +4182,8 @@ async function computeBankrollContext() {
 // override it (it used to hardcode 0.5u daily at 10:30).
 function parlayUnitsFor(picks) {
   const hasLean = (picks || []).some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
-  return hasLean ? "0.25u" : "0.5u";
+  // Stake is operator-tunable (the observer proposes raising it once parlay-leg CLV crosses +).
+  return hasLean ? `${ALPHA_CONFIG.parlayStakeUnitsLean}u` : `${ALPHA_CONFIG.parlayStakeUnits}u`;
 }
 
 // ── Parlay leg quality (v10.4.3) ──
@@ -4429,6 +4454,9 @@ exports.handler = async (event) => {
   console.log(`[v10] Ratings leagues: ${ratingsData ? Object.keys(ratingsData.leagues || {}).join(', ') : 'NONE'}`);
   console.log(`[v10] Team stats: ${Object.keys(teamStats).length} teams`);
   console.log(`[v10] Consensus lookup keys (sample): ${Object.keys(consensusLookup).slice(0, 8).join(', ')}`);
+
+  // Load operator-tunable sizing config (parlay stake, ML cap) before any sizing happens.
+  await loadAlphaConfig();
 
   // ── PHASE 1B: COMPUTE ALL EDGES DETERMINISTICALLY ──
   let allCandidates;

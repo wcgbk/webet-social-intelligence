@@ -137,7 +137,54 @@ function buildObserverDigest(params) {
     L.push('', '**📈 Proposals — reply in this channel to approve:**');
     for (const [id, desc] of props) L.push(`• ${desc}\n   → reply \`approve ${id}\``);
   }
-  return L.join('\n').slice(0, 1900);
+
+  // ── Governance dashboard: what's live, what changed, and did QA stay clean ──
+  const g = params.governance;
+  if (g) {
+    L.push('', '━━━ **Governance** ━━━');
+    L.push(`**Live config:** model \`${g.model}\` · parlay ${g.parlayStakeUnits}u · ML cap ${g.mlUnitCap}u`);
+    if (g.recentChanges && g.recentChanges.length) {
+      L.push(`**Config changes this week (${g.recentChanges.length}):** ` + g.recentChanges.map(c => `${c.action || c.note || 'change'} → ${c.to != null ? c.to : ''} (${c.date}${c.by ? ', ' + c.by : ''})`).join('; '));
+    } else {
+      L.push('**Config changes this week:** ✅ none — the model was not touched.');
+    }
+    if (g.qaDays === 0) L.push('**Daily QA (7d):** no audit records found');
+    else if (g.qaErrors === 0 && g.qaFixes === 0) L.push(`**Daily QA (7d):** ✅ ${g.qaPicks} picks audited over ${g.qaDays} days — 0 math errors, 0 auto-fixes${g.qaRedFlags ? `, ${g.qaRedFlags} sharp note(s)` : ''}`);
+    else L.push(`**Daily QA (7d):** ⚠️ ${g.qaErrors} error(s) / ${g.qaFixes} auto-fix(es) over ${g.qaDays} days — ${g.qaFlagged.join(' · ')}`);
+  }
+  return L.join('\n').slice(0, 1950);
+}
+// Governance snapshot: live config, the week's approved config changes, and the daily QA record.
+async function fetchGovernance(token) {
+  const base = `https://api.netlify.com/api/v1/blobs/${SITE_ID}`;
+  const H = { Authorization: `Bearer ${token}` };
+  const getJSON = async (store, key) => { try { const r = await fetch(`${base}/${store}/${key}`, { headers: H }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+  const getText = async (store, key) => { try { const r = await fetch(`${base}/${store}/${key}`, { headers: H }); return r.ok ? (await r.text()).trim() : null; } catch (e) { return null; } };
+  const cfg = (await getJSON('edge-picks', 'alpha-config')) || {};
+  let model = null;
+  const latest = await getText('edge-picks-alpha', 'latest-date');
+  if (latest) { const p = await getJSON('edge-picks-alpha', `picks-${latest}`); model = p && (p.model || (p.summary && p.summary.modelVersion)); }
+  const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+  const log = await getJSON('edge-picks', 'config-change-log');
+  const recentChanges = Array.isArray(log) ? log.filter(e => (e.date || '') >= cutoff) : [];
+  let qaDays = 0, qaPicks = 0, qaErrors = 0, qaFixes = 0, qaRedFlags = 0; const qaFlagged = [];
+  for (let back = 1; back <= 7; back++) {
+    const d = new Date(Date.now() - back * 86400000).toISOString().split('T')[0];
+    const v = await getJSON('edge-picks-alpha', `verification-${d}`);
+    if (!v) continue;
+    qaDays++;
+    qaPicks += (Array.isArray(v.picks) ? v.picks.length : 0);
+    qaErrors += v.totalErrors || 0;
+    if (v.autoFixed) qaFixes += (Array.isArray(v.replacements) ? v.replacements.length : 1);
+    qaRedFlags += v.sharpRedFlags || 0;
+    if ((v.totalErrors || 0) > 0 || v.autoFixed) qaFlagged.push(`${d}: ${v.totalErrors || 0} err${v.autoFixed ? ', auto-fixed' : ''}`);
+  }
+  return {
+    model: model || 'unknown',
+    parlayStakeUnits: cfg.parlayStakeUnits != null ? cfg.parlayStakeUnits : 0.5,
+    mlUnitCap: cfg.mlUnitCap != null ? cfg.mlUnitCap : 0.5,
+    recentChanges, qaDays, qaPicks, qaErrors, qaFixes, qaRedFlags, qaFlagged,
+  };
 }
 async function fetchOddsUsageLine() {
   const key = process.env.ODDS_API_KEY;
@@ -499,6 +546,7 @@ exports.handler = async (event) => {
     const usage = await fetchOddsUsageLine();
     if (usage) { params.oddsUsage = usage.line; if (usage.low) params.alerts.push('ODDS API quota LOW — top up to protect settlement + CLV capture'); }
   } catch (e) { /* non-fatal */ }
+  try { params.governance = await fetchGovernance(token); } catch (e) { console.log(`[self-optimize] governance fetch failed (non-fatal): ${e.message}`); }
   await postObserverDigest(token, params);
 
   return {

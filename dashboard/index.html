@@ -2427,6 +2427,30 @@
   }
 
   /* ─── Percentile Panel ──────────────────────────────────────────── */
+  // Full percentile scorecard + architecture — opens in an iframe overlay, staying in the dashboard.
+  function openArchModal() {
+    let m = document.getElementById('arch-modal');
+    if (!m) {
+      m = document.createElement('div');
+      m.id = 'arch-modal';
+      m.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;flex-direction:column;padding:14px;box-sizing:border-box';
+      m.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;max-width:1040px;width:100%;margin:0 auto 10px">'
+        + '<span style="color:#fff;font-weight:700;font-size:.95rem">Model Percentile Scorecard &amp; Architecture</span>'
+        + '<button onclick="closeArchModal()" style="display:inline-flex;align-items:center;gap:.35rem;background:#004c54;color:#fff;border:none;border-radius:9px;padding:.5rem .95rem;font-weight:700;font-size:.8125rem;cursor:pointer">Close &#10005;</button>'
+        + '</div>'
+        + '<iframe src="/percentile" title="Percentile scorecard" style="flex:1;width:100%;max-width:1040px;margin:0 auto;border:none;border-radius:12px;background:#fff"></iframe>';
+      m.addEventListener('click', function (e) { if (e.target === m) closeArchModal(); });
+      document.body.appendChild(m);
+    } else {
+      m.style.display = 'flex';
+    }
+  }
+  function closeArchModal() {
+    const m = document.getElementById('arch-modal');
+    if (m) m.style.display = 'none';
+  }
+
   async function loadPercentile() {
     const el = document.getElementById('percentile-content');
     try {
@@ -2502,6 +2526,9 @@
       ];
 
       let html = `
+        <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+          <button onclick="openArchModal()" style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8125rem;font-weight:700;color:#fff;background:#004c54;border:none;border-radius:10px;padding:.625rem 1.15rem;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15)" onmouseover="this.style.background='#003d44'" onmouseout="this.style.background='#004c54'">View Full Track Record and Architecture <span style="font-size:1.05em;line-height:1">&rarr;</span></button>
+        </div>
         <div class="stats-grid" style="grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px">
           <div class="stat-card">
             <div class="stat-label">ROI</div>
@@ -2542,9 +2569,7 @@
         </div>`;
       });
 
-      html += `<div style="text-align:center;margin-top:16px">
-        <a href="/percentile" style="font-size:0.8125rem;color:var(--primary);font-weight:600">View Full Track Record →</a>
-      </div>`;
+      // (Full track record + architecture now opens via the button above, in-dashboard.)
 
       el.innerHTML = html;
       return;

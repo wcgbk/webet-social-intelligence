@@ -5046,14 +5046,41 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── FACT-GROUNDED LEAN NARRATION + FULL-CARD SUMMARIES (shared helper) ──
-    // Conviction picks are already web-search-narrated; narrate only the leans here (narrateAll:false)
-    // from the model's own ESPN/StatsAPI facts. Overwrites the full-card edgeSummary + adds insights.
+    // ── NARRATIVE FACT-GATE (v10.4.6) ──
+    // The pick NUMBERS are unhallucinatable (all from the deterministic candidate). This closes the
+    // remaining gap: the conviction PROSE is Claude's live web-search text. Verify its checkable
+    // claims (starter ERAs) against the ESPN/StatsAPI values the pipeline already holds; a claim
+    // matching neither starter is flagged so its narrative is regenerated from the verified fact
+    // sheet (no web search). Deterministic detection against MEASURED data — never an LLM judging
+    // an LLM. A false flag is harmless (the pick just gets the fact-grounded narrative instead).
+    for (const p of picks) {
+      if (p.thinSlate) continue; // leans are already fact-grounded below
+      const chk = verifyNarrativeFacts(p, pitcherData, teamStats);
+      if (!chk.ok) {
+        p._factFlag = true;
+        console.log(`[v10-factgate] ${p.pick}: narrative fact mismatch (${chk.issues.join('; ')}) — regenerating from verified facts`);
+      }
+    }
+
+    // ── FACT-GROUNDED NARRATION + FULL-CARD SUMMARIES (shared helper) ──
+    // Leans AND any fact-flagged conviction picks are (re)narrated here from the model's own
+    // ESPN/StatsAPI facts (no web_search). Overwrites the full-card edgeSummary + adds insights.
     let insightsText = "";
     {
       const s = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: false });
       if (s.edgeSummary) claudeOutput.edgeSummary = s.edgeSummary;
       if (s.insights) insightsText = s.insights;
+    }
+
+    // Belt-and-suspenders: if regeneration didn't clear a flagged narrative (e.g. the narration
+    // call failed), never publish the unverified claim — replace it with an honest model-edge line.
+    for (const p of picks) {
+      if (!p._factFlag) continue;
+      if (!verifyNarrativeFacts(p, pitcherData, teamStats).ok) {
+        p.coreReasoning = `WeBetAI's model rates ${p.pick} at a ${p.edgePct} calibrated edge (${p.modelEdge}). Sized by expected value. A supporting detail could not be verified against the model's data feed and was withheld.`;
+        p.dataVerified = 'Model-computed edge; narrative auto-verified against ESPN/StatsAPI.';
+        console.log(`[v10-factgate] ${p.pick}: regen did not clear the mismatch — replaced with a verified model-edge narrative`);
+      }
     }
 
     // Build model projections snapshot
@@ -5185,12 +5212,44 @@ function dedupeCandidatesByGame(cands) {
 // narrateAll=false → only thinSlate leans (main path; conviction picks are already web-searched);
 // narrateAll=true → every pick (fallback + thin-slate paths, where nothing was web-searched).
 // Never mutates selection or sizing — only writes text fields. Returns {'',''} on any failure.
+// ── Narrative fact verification (v10.4.6) ──
+// Returns {ok, issues}. Deterministically checks the checkable claims in a conviction narrative
+// against the pipeline's authoritative data. Currently: MLB starter ERAs — an "X.XX ERA" figure
+// in the prose must be within tolerance of one of the two starters' real ERA or FIP; otherwise it
+// is a fabricated/mis-attributed stat. Extend with more checks over time; kept conservative so a
+// false positive only swaps in the (still-good) fact-grounded narrative.
+function verifyNarrativeFacts(pick, pitcherData, teamStats) {
+  if (!pick || pick.sport !== 'MLB') return { ok: true, issues: [] };
+  const issues = [];
+  const text = `${pick.coreReasoning || ''} ${pick.dataVerified || ''} ${pick.whatLoses || ''}`;
+  let away = pick.awayTeam, home = pick.homeTeam;
+  if (!away || !home) {
+    const parts = (pick.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(s => s.trim());
+    if (parts.length >= 2) { away = parts[0]; home = parts[1]; }
+  }
+  const authEras = [];
+  for (const t of [away, home]) {
+    if (!t || !pitcherData) continue;
+    const pd = pitcherData[t] || (typeof pitcherForGame === 'function' ? pitcherForGame(pitcherData, t, pick.commenceTime) : null);
+    if (pd) { if (typeof pd.era === 'number') authEras.push(pd.era); if (typeof pd.fip === 'number') authEras.push(pd.fip); }
+  }
+  if (authEras.length) {
+    for (const m of text.matchAll(/(\d\.\d{2})\s*ERA/gi)) {
+      const claimed = parseFloat(m[1]);
+      if (!authEras.some(a => Math.abs(a - claimed) <= 0.25)) {
+        issues.push(`ERA ${claimed} matches no starter (auth: ${authEras.map(a => a.toFixed(2)).join(', ')})`);
+      }
+    }
+  }
+  return { ok: issues.length === 0, issues };
+}
+
 async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll = false } = {}) {
   const out = { edgeSummary: "", insights: "" };
   try {
     if (!Array.isArray(picks) || picks.length === 0 || !process.env.ANTHROPIC_API_KEY) return out;
     pitcherData = pitcherData || {}; teamStats = teamStats || {};
-    const shouldNarrate = (p) => narrateAll || p.thinSlate;
+    const shouldNarrate = (p) => narrateAll || p.thinSlate || p._factFlag;
     const toNarrate = picks.filter(shouldNarrate).length;
     if (toNarrate === 0) return out;
     const teamsOf = (p) => {

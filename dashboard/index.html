@@ -2177,6 +2177,8 @@
   /* ─── Panel Switching ───────────────────────────────────────────── */
   function switchPanel(panel) {
     activePanel = panel;
+    // Remember the current page so a refresh/reload returns here instead of resetting to chat.
+    try { sessionStorage.setItem('wbaiActivePanel', panel); } catch (e) {}
 
     // Update panels
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -3701,6 +3703,19 @@
       }
     }).catch(function () {});
   }
+
+  // Restore the last-viewed panel across reloads: a refresh (browser, PWA, or pull-to-refresh)
+  // keeps you on whatever page you were on in the content area, instead of snapping back to chat.
+  // A #hash deep-link (e.g. /dashboard#picks) wins over the remembered panel.
+  (function restoreActivePanel() {
+    try {
+      var fromHash = (location.hash || '').replace(/^#/, '');
+      var saved = fromHash || sessionStorage.getItem('wbaiActivePanel');
+      if (saved && saved !== activePanel && document.getElementById('panel-' + saved)) {
+        switchPanel(saved);
+      }
+    } catch (e) {}
+  })();
 
   window.addEventListener('load', function () {
     var force = /[?&]onboard=force/.test(location.search);

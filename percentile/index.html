@@ -410,8 +410,8 @@
 
   <main class="main">
 
-    <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">v10.3-alpha-sharp</span></h1>
-    <p class="page-sub">Architecture and design assessment of the alpha pipeline — now the SOLE production picks model. June 2026 upgrades: a discrete negative-binomial run-distribution for MLB (replacing the normal approximation), First-Five-innings folded in as a built-in market, two-sided no-vig de-vig with pitcher-aware moneyline pricing, true closing-line CLV, and timeout/backoff hardening so a slow or rate-limited API can never stall a run. Ratings reflect system capabilities, not results.</p>
+    <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">v10.4-alpha-mlb</span></h1>
+    <p class="page-sub">Architecture and design assessment of the alpha pipeline — the SOLE production picks model. Foundation (June 2026): a discrete negative-binomial run-distribution for MLB, First-Five-innings folded in, two-sided no-vig de-vig with pitcher-aware moneyline pricing, and true closing-line CLV. August 2026 (v10.4) hardening: candidate ranking moved to calibrated expected value (z-score demoted to a display diagnostic); per-market unit discipline (moneylines and F5 capped, totals carry conviction) driven by measured closing-line value; doubleheader pricing and settlement fully disambiguated by start time; the self-optimization loop converted from a live parameter-mutator to a CLV observer whose changes are human-approved in Discord. Ratings reflect system capabilities, not results.</p>
     <div style="text-align:center; margin-bottom:1.25rem;">
       <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary Reasoning</button>
     </div>
@@ -453,7 +453,7 @@
           <span class="metric-pct pct-elite">92nd</span>
         </div>
         <div class="metric-bar"><div class="metric-fill fill-elite" style="width:92%"></div></div>
-        <div class="metric-rationale">4u daily exposure cap. 0.5u-3.0u range per pick. Drawdown detection triggers 25% Kelly reduction after 3+ consecutive losses. Parlay capped at 0.5u/day. Institutional bankroll management adapted for retail scale.</div>
+        <div class="metric-rationale">4u daily exposure cap. 0.5u-3.0u range per pick. Drawdown detection triggers 25% Kelly reduction after 3+ consecutive losses. v10.4 per-market caps enforce measured discipline: totals (the segment with positive closing-line value) carry conviction units; full-game moneylines and F5 are capped at 0.5u until they earn a positive-CLV track record. Parlay sized at 0.5u (0.25u when a lean is on the card). Institutional bankroll management adapted for retail scale.</div>
       </div>
 
       <div class="metric">
@@ -462,7 +462,7 @@
           <span class="metric-pct pct-elite">90th</span>
         </div>
         <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
-        <div class="metric-rationale">Cross-sport edge ranking via normalized z-scores. MLB cover probabilities now come from a discrete negative-binomial run-distribution (analytic convolution of each team's projected run rate) rather than a normal CDF on a point estimate — baseball scoring is discrete and right-skewed, so this correctly prices the 1-run / half-run mass on run lines and the push region on totals. NBA and NHL still use sport-specific total standard deviations (NBA 18.5, NHL 2.3 goals) pending their own discrete models. Edge discount curve compresses outlier edges (log compression above 1 std dev). Consensus-tightness and line-movement discounts shrink edges the market has already priced. The 3% calibrated EV floor filters noise indistinguishable from variance at -110.</div>
+        <div class="metric-rationale">Cross-sport edge ranking on calibrated expected value (v10.4 — z-scores were not comparable across markets, so they systematically floated moneylines and F5 above totals; z is now a display diagnostic only). MLB cover probabilities come from a discrete negative-binomial run-distribution (analytic convolution of each team's projected run rate) rather than a normal CDF on a point estimate — baseball scoring is discrete and right-skewed, so this correctly prices the 1-run / half-run mass on run lines and the push region on totals. NBA and NHL still use sport-specific total standard deviations (NBA 18.5, NHL 2.3 goals) pending their own discrete models. Edge discount curve compresses outlier edges (log compression above 1 std dev). Consensus-tightness and line-movement discounts shrink edges the market has already priced. The 3% calibrated EV floor filters noise indistinguishable from variance at -110.</div>
       </div>
 
       <div class="metric">
@@ -525,7 +525,7 @@
           <span class="metric-pct pct-elite">90th</span>
         </div>
         <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
-        <div class="metric-rationale">The feedback loop is closed as of v10.3. CLV tracked 3x daily (including a 3am ET overnight run that settles night games before the morning pipeline reads bankroll state), with 14-day CLV beat rates feeding Kelly multipliers per sport and market. Weekly self-optimization learns from the live alpha track record. Daily 10:30am QA pass audits every published pick's math and narrative. All calibration constants were re-fitted from real graded results — and stale parameters that real data contradicted (backtest-era sport multipliers) were removed rather than kept for tradition.</div>
+        <div class="metric-rationale">Closing-line value is tracked on every pick 3x daily — Pinnacle-anchored, two-sided no-vig — including a 3am ET overnight run that settles night games (doubleheaders, postponements, and F5 all disambiguated) before the morning pipeline reads bankroll state. v10.4 changed the correction philosophy: the old loop that let trailing performance mutate live probabilities and Kelly multipliers was removed — it chased variance and inflated whatever segment ran hot. Self-optimization is now an <em>observer</em>: each Sunday it aggregates 60 days of CLV by market and by parlay leg, computes real-dollar ROI, and checks the grade ladder, then posts the verdict to Discord. Sizing levers only move on deliberate, human-approved config changes gated by measured CLV — never on a hot streak. Daily 10:30am QA pass audits every published pick's math and narrative.</div>
       </div>
 
     </div>
@@ -647,10 +647,13 @@
         <span class="gap-label" style="color:var(--green);">Market-correct deviations: SHIPPED (v10.3)</span> Totals use full-game total standard deviations (NBA 18.5, NHL 2.3, MLB 4.3) instead of margin deviations, removing a 40-50% systematic overstatement of total edges.
       </div>
       <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">CLV feedback loop: SHIPPED</span> Closing line value tracked 3x daily (with overnight settlement); 14-day beat rates per sport and market feed Kelly multipliers automatically.
+        <span class="gap-label" style="color:var(--green);">Settlement truth: SHIPPED (v10.4)</span> The results grader that writes back to the store now disambiguates doubleheaders by start time, voids postponed/canceled games as pushes, and requires five recorded innings before settling an F5 bet — plus an awaited overnight sweep so night games never sit unsettled.
       </div>
       <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">Weekly self-optimization: SHIPPED</span> Sunday cycle learns from the live alpha track record: sport, market, and grade-level accuracy adjust parameters with conservative caps and mean reversion.
+        <span class="gap-label" style="color:var(--green);">EV-based ranking + per-market caps: SHIPPED (v10.4)</span> Candidates rank and size on calibrated expected value; totals carry conviction units while moneylines and F5 are capped until closing-line value earns them back.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">CLV observer + Discord approvals: SHIPPED (v10.4)</span> Closing-line value is tracked 3x daily (Pinnacle-anchored, overnight settlement) and aggregated weekly by market and by parlay leg. The observer proposes; a human approves bounded, reversible config changes in Discord. No live parameter mutation.
       </div>
       <div class="gap-item">
         <span class="gap-label" style="color:var(--green);">Real-data pruning: SHIPPED (v10.3)</span> Soccer disabled (38.5% real win rate across 6 leagues), moneyline dogs capped at +160 (6-14 real record beyond it), and backtest-era sport multipliers removed after real results contradicted them.
@@ -665,83 +668,39 @@
         <span class="gap-label">MLB projection engine upgrade:</span> Starter FIP instead of raw ERA, park factors, bullpen fatigue, and platoon splits — the highest-leverage summer improvement now that MLB carries the slate.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Poisson soccer engine:</span> Discrete goal distribution replaces the normal approximation. Live in the 8am MVP test pipeline; soccer returns to the alpha card only if it proves an edge there.
+        <span class="gap-label">Poisson soccer engine:</span> Discrete goal distribution to replace the normal approximation — a fall item. Soccer was pruned from the card after a 38.5% real win rate and returns only if a discrete model proves an edge in shadow-tracking first.
       </div>
     </div>
 
-    <!-- Operating Cost -->
-    <div class="scorecard">
-      <div class="scorecard-title">Daily Operating Cost</div>
-
-      <div class="cost-table">
-        <div class="cost-row">
-          <div class="cost-service">
-            <span class="cost-name">The Odds API</span>
-            <span class="cost-detail">~91 calls/day across 13 sports, 2x daily runs + CLV</span>
-          </div>
-          <div class="cost-amount">$3.30</div>
-        </div>
-        <div class="cost-row">
-          <div class="cost-service">
-            <span class="cost-name">Claude API (Sonnet)</span>
-            <span class="cost-detail">~137K output tokens + web search validation, 5 daily function calls</span>
-          </div>
-          <div class="cost-amount">$3.50</div>
-        </div>
-        <div class="cost-row">
-          <div class="cost-service">
-            <span class="cost-name">xAI / Grok-3-mini</span>
-            <span class="cost-detail">Breaking news alerts, narrative assist</span>
-          </div>
-          <div class="cost-amount">$0.15</div>
-        </div>
-        <div class="cost-row cost-free">
-          <div class="cost-service">
-            <span class="cost-name">ESPN API</span>
-            <span class="cost-detail">Team stats, injuries, schedules — public API</span>
-          </div>
-          <div class="cost-amount free">Free</div>
-        </div>
-        <div class="cost-row cost-free">
-          <div class="cost-service">
-            <span class="cost-name">Kalshi + Polymarket</span>
-            <span class="cost-detail">Prediction market data — public APIs</span>
-          </div>
-          <div class="cost-amount free">Free</div>
-        </div>
-        <div class="cost-row cost-free">
-          <div class="cost-service">
-            <span class="cost-name">Netlify (Hosting + Functions + Blobs)</span>
-            <span class="cost-detail">Scheduled functions, blob storage, CDN — free tier</span>
-          </div>
-          <div class="cost-amount free">Free</div>
-        </div>
-        <div class="cost-row cost-free">
-          <div class="cost-service">
-            <span class="cost-name">Twilio SMS</span>
-            <span class="cost-detail">On-demand only, not scheduled</span>
-          </div>
-          <div class="cost-amount free">~$0</div>
-        </div>
+    <!-- Weekly Optimization Loop -->
+    <div class="gap-card">
+      <div class="gap-title">Weekly Optimization Loop — Discord</div>
+      <div class="gap-item" style="border-bottom:none;">
+        The model audits itself every Sunday and reports to a private Discord channel. It is built so improvements are <em>earned, not guessed</em>: live sizing never changes on a hot streak — a lever only moves when the market's own closing line confirms the edge, and only after a human approves it. This is the feedback system that replaced the old loop of automatic parameter tweaks.
       </div>
-
-      <div class="cost-totals">
-        <div class="cost-total-row">
-          <span class="cost-total-label">Daily Total</span>
-          <span class="cost-total-value">~$6.95</span>
-        </div>
-        <div class="cost-total-row monthly">
-          <span class="cost-total-label">Monthly Total</span>
-          <span class="cost-total-value">~$208</span>
-        </div>
+      <div class="gap-item">
+        <span class="gap-label">1 · Measure</span> Every published pick's closing-line value is captured 3x daily — anchored to Pinnacle (the sharpest book in the world), two-sided no-vig. CLV, not a short-run win/loss record, is the truth signal for whether an edge is real.
       </div>
-
-      <div class="cost-note">5 independent data sources. Fully automated: 8am MVP test run, 9am alpha card, 3x daily CLV tracking, daily QA audit, weekly self-optimization. Full institutional-grade pipeline at retail cost.</div>
+      <div class="gap-item">
+        <span class="gap-label">2 · Observe (Sunday)</span> The self-optimizer aggregates ~60 days of CLV by market and by parlay leg, computes real-dollar ROI per segment, and checks the grade ladder — do higher-graded picks actually win more? It is observational only; it never mutates the live model.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">3 · Report</span> A model-health digest posts to Discord: the parlay-leg CLV verdict (🟢 real edge · 🟡 building · 🔴 variance), a grade-inversion alarm if conviction stops predicting, market ROI, and the Odds-API quota remaining.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">4 · Propose</span> When CLV crosses a threshold, the digest appends a concrete, bounded proposal — e.g. raise the parlay stake once parlay-leg CLV turns positive, or lift the moneyline cap once ML CLV beats the close over 30+ picks. Nothing is proposed the data hasn't earned.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label">5 · Approve</span> A one-word reply in the channel applies it. Approvals are restricted to the operator, write only a whitelisted, reversible config value — never code, never free-text instructions — and take effect on the next 9am card. Reverting is one reply away.
+      </div>
+      <div class="gap-item">
+        <span class="gap-label" style="color:var(--green);">The rule</span> A parlay of genuinely +CLV legs compounds edge; a parlay carrying a −CLV leg compounds a leak. So parlays are built totals-first (the segment that beats the close) and only scale when their legs are proven — discipline over adrenaline, enforced by process rather than willpower.
+      </div>
     </div>
 
     <div class="footer-note">
       Ratings reflect architecture design and system capabilities.<br />
-      Model version: v10.3-alpha-sharp Deterministic Edge Architecture<br />
+      Model version: v10.4-alpha-mlb Deterministic Edge Architecture<br />
       <a href="/alpha">Today's picks</a> &bull; <a href="/alpha">Live track record</a>
     </div>
 

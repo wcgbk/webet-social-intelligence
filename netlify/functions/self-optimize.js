@@ -41,7 +41,7 @@ async function analyzeParlayLegCLV(token, days = 60) {
   const byMarket = {};
   let parlaysCovered = 0, legsTotal = 0, legsMatched = 0;
 
-  await Promise.all(dates.map(async (d) => {
+  const processDate = async (d) => {
     const [picks, clv] = await Promise.all([getJSON(`picks-${d}`), getJSON(`clv-${d}`)]);
     if (!picks || !clv || !Array.isArray(clv.picks)) return;
     const parlay = (picks.parlayLegs && picks.parlayLegs[0]) || null;
@@ -59,7 +59,13 @@ async function analyzeParlayLegCLV(token, days = 60) {
       if (!byMarket[m]) byMarket[m] = { n: 0, clvSum: 0, beat: 0 };
       byMarket[m].n++; byMarket[m].clvSum += rec.clvCents; if (rec.beatClosing) byMarket[m].beat++;
     }
-  }));
+  };
+  // Batch to bound concurrency (2 blob fetches/date) so this stays well under the function
+  // timeout even across a 60-day window.
+  const BATCH = 12;
+  for (let i = 0; i < dates.length; i += BATCH) {
+    await Promise.all(dates.slice(i, i + BATCH).map(processDate));
+  }
 
   if (overall.n === 0) return { window: `${days}d`, parlaysCovered, legsTotal, legsMatched: 0, note: "no parlay legs matched a CLV record yet" };
 

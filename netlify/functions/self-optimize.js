@@ -90,6 +90,54 @@ async function analyzeParlayLegCLV(token, days = 60) {
   return out;
 }
 
+// ── Discord digest (v10.4.4) ──
+// The observer is only useful if someone reads it. Each Sunday run posts a short model-health
+// digest (parlay-CLV verdict, grade-inversion alarm, segment ROI) to a Discord webhook so it
+// reaches the operator instead of sitting in a blob. Webhook lives in a blob (not git — it's a
+// write-to-channel secret); env DISCORD_OBSERVER_WEBHOOK overrides.
+function buildObserverDigest(params) {
+  const d = (params.generatedAt || '').split('T')[0];
+  const L = [`📊 **WeBetAI Weekly Observer** — ${d}`, `_sample: ${params.sampleSize} graded picks (observational; no live steering)_`, ''];
+  const pl = params.parlayLegCLV;
+  if (pl && pl.verdict) {
+    const e = pl.verdict === 'positive' ? '🟢' : pl.verdict === 'negative' ? '🔴' : '🟡';
+    L.push(`${e} **Parlay-leg CLV: ${pl.verdict.toUpperCase()}** — ${(pl.beatCloseRate * 100).toFixed(0)}% beat close, ${pl.avgCLVCents >= 0 ? '+' : ''}${pl.avgCLVCents}¢ avg (n=${pl.n})`);
+    L.push(pl.recommendation);
+    const mk = Object.entries(pl.byMarket || {}).filter(([, v]) => v.n >= 5)
+      .sort((a, b) => b[1].avgCLVCents - a[1].avgCLVCents)
+      .map(([m, v]) => `${m} ${v.avgCLVCents >= 0 ? '+' : ''}${v.avgCLVCents}¢/${(v.beatCloseRate * 100).toFixed(0)}%`);
+    if (mk.length) L.push(`   legs by market (best→worst): ${mk.join(' · ')}`);
+    L.push('');
+  } else if (pl) {
+    L.push(`🟡 **Parlay-leg CLV:** ${pl.legsMatched || 0} legs matched — ${pl.note || 'building sample'}`, '');
+  }
+  for (const a of (params.alerts || [])) if (!a.startsWith('PARLAY CLV')) L.push(`⚠️ ${a}`);
+  if (params.marketROI && Object.keys(params.marketROI).length) {
+    L.push('', `**Market ROI (45d):** ` + Object.entries(params.marketROI).map(([m, r]) => `${m} ${r >= 0 ? '+' : ''}${(r * 100).toFixed(0)}%`).join(' · '));
+  }
+  return L.join('\n').slice(0, 1900);
+}
+async function postObserverDigest(token, params) {
+  let webhook = process.env.DISCORD_OBSERVER_WEBHOOK || null;
+  if (!webhook) {
+    try {
+      const r = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks/observer-webhook`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) webhook = (await r.text()).trim();
+    } catch (e) { /* ignore */ }
+  }
+  if (!webhook || !/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(webhook)) {
+    console.log('[self-optimize] No Discord observer webhook configured — skipping digest');
+    return;
+  }
+  try {
+    const resp = await fetch(webhook, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: buildObserverDigest(params), username: 'WeBetAI Observer' }),
+    });
+    console.log(`[self-optimize] Posted observer digest to Discord: HTTP ${resp.status}`);
+  } catch (e) { console.log(`[self-optimize] Discord digest post failed (non-fatal): ${e.message}`); }
+}
+
 exports.handler = async (event) => {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return { statusCode: 500, body: "Missing auth token" };
@@ -410,6 +458,9 @@ exports.handler = async (event) => {
       }
     );
   } catch (e) { /* non-critical */ }
+
+  // ── Step 6: Push the digest to Discord so the operator actually sees it ──
+  await postObserverDigest(token, params);
 
   return {
     statusCode: 200,

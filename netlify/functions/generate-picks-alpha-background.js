@@ -4161,170 +4161,157 @@ function parlayUnitsFor(picks) {
   return hasLean ? "0.25u" : "0.5u";
 }
 
-function buildCorrelatedParlay(picks, allCandidates, rejections) {
-  if (!allCandidates || allCandidates.length < 3) {
-    // Fallback: use straight picks if not enough candidates
-    return buildFallbackParlay(picks);
+// ── Parlay leg quality (v10.4.3) ──
+// Grounded in the self-optimize parlay-leg CLV finding (2026-08-04): Total legs beat the close
+// 54% (+0.51c) while full-game Moneyline legs manage only 33% (-0.42c) — the ML legs are what
+// turned the parlay's real edge into variance. So parlays are now built TOTALS-FIRST, drop the
+// -CLV full-game ML legs whenever >=2 non-ML legs are available (a clean 2-leg parlay beats a
+// 3-leg forced to carry an ML), exclude F5 entirely, and stay de-correlated (one leg per game,
+// at most two same-direction totals).
+function parlayMarketRank(market) {
+  const m = (market || '').toLowerCase();
+  if (m.includes('f5')) return -1;                                     // exclude F5 (unvalidated)
+  if (m.includes('total')) return 3;                                   // totals — proven +CLV
+  if (m.includes('run line') || m.includes('spread') || m.includes('puck')) return 2;
+  return 1;                                                            // full-game ML — the -CLV drag
+}
+function legDirection(side) {
+  const s = (side || '').toLowerCase();
+  return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
+}
+// Select 2-3 de-correlated, totals-first legs from a normalized candidate pool.
+// Each cand: { side, market, oddsNum, coverProbNum, evNum, matchup, commenceTime, sport }
+function selectParlayLegs(cands, maxLegs = 3) {
+  const pool = (cands || []).filter(c =>
+    parlayMarketRank(c.market) >= 0 &&                                 // no F5
+    Number.isFinite(c.oddsNum) && c.oddsNum >= -300 && c.oddsNum <= 300 &&
+    typeof c.coverProbNum === 'number' && c.coverProbNum >= 0.45);
+  // One leg per game — keep the highest market rank, then highest coverProb, per matchup.
+  const better = (a, b) => (parlayMarketRank(a.market) - parlayMarketRank(b.market)) || (a.coverProbNum - b.coverProbNum);
+  const byGame = new Map();
+  for (const c of pool) {
+    const g = (c.matchup || '').toLowerCase().trim();
+    if (!g) continue;
+    const prev = byGame.get(g);
+    if (!prev || better(c, prev) > 0) byGame.set(g, c);
   }
+  let ranked = [...byGame.values()].sort((a, b) => better(b, a));
+  // Drop the -CLV full-game ML legs when >=2 non-ML (totals/RL) legs exist.
+  const nonML = ranked.filter(c => parlayMarketRank(c.market) >= 2);
+  if (nonML.length >= 2) ranked = nonML;
+  // Build the list, capping same-direction totals at 2 (de-correlation).
+  const legs = []; let overs = 0, unders = 0;
+  for (const c of ranked) {
+    if (legs.length >= maxLegs) break;
+    const dir = legDirection(c.side);
+    if (dir === 'over' && overs >= 2) continue;
+    if (dir === 'under' && unders >= 2) continue;
+    legs.push(c);
+    if (dir === 'over') overs++; else if (dir === 'under') unders++;
+  }
+  // If de-correlation left us short of 2, relax it to reach a 2-leg ticket.
+  if (legs.length < 2) for (const c of ranked) { if (legs.length >= 2) break; if (!legs.includes(c)) legs.push(c); }
+  return legs;
+}
+function assembleParlay(cands, stakeUnits, isIndependent) {
+  const legs = cands.map(c => {
+    const leg = {
+      pick: c.side, sport: c.sport, matchup: c.matchup, betType: c.market,
+      odds: `${c.oddsNum > 0 ? '+' : ''}${c.oddsNum}`,
+      commenceTime: c.commenceTime || '',                              // DH-safe settlement
+      coverProb: `${(c.coverProbNum * 100).toFixed(0)}%`,
+    };
+    if (typeof c.evNum === 'number') leg.ev = `${(c.evNum * 100).toFixed(1)}%`;
+    return leg;
+  });
+  let combinedDecimal = 1.0, combinedProb = 1.0;
+  for (const c of cands) {
+    combinedDecimal *= c.oddsNum > 0 ? 1 + c.oddsNum / 100 : 1 + 100 / Math.abs(c.oddsNum);
+    combinedProb *= c.coverProbNum;
+  }
+  const parlayEV = combinedProb * combinedDecimal - 1;
+  const combinedOdds = combinedDecimal >= 2
+    ? `+${Math.round((combinedDecimal - 1) * 100)}`
+    : `${Math.round(-100 / (combinedDecimal - 1))}`;
+  const uniqueGames = new Set(cands.map(c => (c.matchup || '').toLowerCase().trim())).size;
+  const uniqueSports = new Set(cands.map(c => c.sport)).size;
+  return {
+    type: `${legs.length}-leg-parlay-${isIndependent ? 'optimized' : 'straight'}`,
+    legs, units: stakeUnits,
+    combinedOdds, combinedDecimal: +combinedDecimal.toFixed(2),
+    combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
+    ev: `${(parlayEV * 100).toFixed(1)}%`,
+    uniqueGames, uniqueSports,
+    independent: !!isIndependent,
+    legMarkets: cands.map(c => c.market),
+    correlationNote: `Totals-first, de-correlated — ${legs.length} legs across ${uniqueGames} game(s) (${cands.map(c => parlayMarketRank(c.market) === 3 ? 'T' : parlayMarketRank(c.market) === 2 ? 'RL' : 'ML').join('/')})`,
+    candidatesScanned: cands.length,
+    _parlayEV: parlayEV,
+  };
+}
 
-  // Build a set of rejected sides so the parlay never includes a pick Claude said no to.
-  // v10.4: only REAL rejections veto — the handler also files every non-selected top-15
-  // candidate as a bookkeeping "rejection" ("Not selected — lower edge priority"), which
-  // silently vetoed the entire pool and made this optimizer dead code (the parlay always
-  // fell back to the straight card).
+function buildCorrelatedParlay(picks, allCandidates, rejections) {
+  const stake = parlayUnitsFor(picks);
+  // Only REAL rejections veto the pool — the handler files every non-selected top-15 candidate
+  // as a bookkeeping "rejection", which must NOT veto. Genuine rejections (Claude's news-based
+  // disqualifiers) stay out of parlays too: they carry model-blind info (starter changes, IL
+  // returns, pitch-count caps) that makes those legs bad in any bet.
   const realRejections = (rejections || []).filter(r => {
     const reason = String(r.reason || '');
     return !reason.startsWith('Not selected') && !reason.startsWith('Lower edge priority') && !reason.startsWith('Below lean priority');
   });
   const rejectedSides = new Set(realRejections.map(r => (r.side || '').toLowerCase().trim()));
 
-  // Filter candidates for parlay eligibility
-  const eligible = allCandidates.filter(c => {
-    // Never use a candidate that was explicitly rejected during verification
+  const pool = (allCandidates || []).filter(c => {
     if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
-    // Must have >45% cover prob — low-probability legs kill parlays
-    if (cp < 0.45) return false;
-    // Must have positive EV individually
-    if (c.ev <= 0.03) return false;
-    // Must have valid odds
-    if (!c.odds || c.odds < -300 || c.odds > 300) return false;
+    const odds = typeof c.odds === 'number' ? c.odds : parseInt(c.odds);
+    if (cp < 0.45 || !(c.ev > 0.03) || !odds || odds < -300 || odds > 300) return false;
+    if ((cp - impliedProb(odds)) <= 0) return false;                   // require positive calibrated edge
     return true;
-  });
+  }).map(c => ({
+    side: c.side, market: c.market,
+    oddsNum: typeof c.odds === 'number' ? c.odds : parseInt(c.odds),
+    coverProbNum: typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb),
+    evNum: c.ev,
+    matchup: c.matchup || `${c.awayTeam} vs. ${c.homeTeam}`,
+    commenceTime: c.commenceTime || '', sport: c.sport,
+  }));
 
-  if (eligible.length < 3) return buildFallbackParlay(picks);
-
-  // Score every valid 3-leg combination
-  // For efficiency, limit to top 12 candidates (C(12,3) = 220 combos)
-  const pool = eligible.slice(0, 12);
-  let bestCombo = null;
-  let bestEV = -Infinity;
-
-  for (let i = 0; i < pool.length - 2; i++) {
-    for (let j = i + 1; j < pool.length - 1; j++) {
-      for (let k = j + 1; k < pool.length; k++) {
-        const trio = [pool[i], pool[j], pool[k]];
-
-        // Combined probability (product of cover probs)
-        let combinedProb = 1.0;
-        for (const leg of trio) {
-          const cp = typeof leg.coverProb === 'number' ? leg.coverProb : parseFloat(leg.coverProb) || 0.5;
-          combinedProb *= cp;
-        }
-
-        // Standard parlays require all legs from different games — skip same-game combos
-        const matchups = trio.map(t => (t.matchup || `${t.awayTeam} vs. ${t.homeTeam}`).toLowerCase().trim());
-        const uniqueMatchups = new Set(matchups).size;
-        if (uniqueMatchups < 3) continue;
-
-        // Combined decimal payout
-        let combinedDecimal = 1.0;
-        for (const leg of trio) {
-          const odds = typeof leg.odds === 'number' ? leg.odds : parseInt(leg.odds);
-          const dec = odds > 0 ? 1 + (odds / 100) : 1 + (100 / Math.abs(odds));
-          combinedDecimal *= dec;
-        }
-
-        // Parlay EV = (combinedProb × combinedPayout) - 1
-        const parlayEV = (combinedProb * combinedDecimal) - 1;
-
-        // Bonus: diversified sport coverage (+2% EV bonus per unique sport)
-        const uniqueSports = new Set(trio.map(t => t.sport)).size;
-        const diversityBonus = (uniqueSports - 1) * 0.02;
-        // v10.3.1 (2026-06-17): correlation penalty. Three same-direction totals (all Over /
-        // all Under) move together — one high- or low-scoring environment loses all three at
-        // once, and the product-of-probs overstates the true combo edge. Haircut these so the
-        // optimizer prefers a de-correlated trio whenever an alternative exists.
-        const legDirs = trio.map(t => {
-          const s = (t.side || '').toLowerCase();
-          return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
-        });
-        const allSameTotalsDir = legDirs.every(d => d === 'over') || legDirs.every(d => d === 'under');
-        const correlationPenalty = allSameTotalsDir ? 0.08 : 0;
-        const adjustedEV = parlayEV + diversityBonus - correlationPenalty;
-
-        if (adjustedEV > bestEV) {
-          bestEV = adjustedEV;
-          bestCombo = { trio, combinedProb, combinedDecimal, parlayEV, uniqueMatchups, uniqueSports };
-        }
-      }
+  const legs = selectParlayLegs(pool, 3);
+  if (legs.length >= 2 && new Set(legs.map(l => (l.matchup || '').toLowerCase().trim())).size >= 2) {
+    const straightSides = new Set((picks || []).map(p => p.pick));
+    const isIndependent = !legs.every(l => straightSides.has(l.side));
+    const p = assembleParlay(legs, stake, isIndependent);
+    if (p._parlayEV > 0) {
+      console.log(`[v10-parlay] ${p.type}: ${legs.map(l => l.side).join(' + ')} | EV ${p.ev} | ${p.correlationNote}`);
+      delete p._parlayEV;
+      return [p];
     }
   }
-
-  if (!bestCombo || bestCombo.parlayEV <= 0) return buildFallbackParlay(picks);
-
-  // Build the parlay output
-  const legs = bestCombo.trio.map(c => ({
-    pick: c.side,
-    sport: c.sport,
-    matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
-    betType: c.market,
-    odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-    // Stamp the start time so grading can tell doubleheader games apart — without it a leg falls
-    // back to the day's FIRST matching game and can settle against the wrong final.
-    commenceTime: c.commenceTime || '',
-    coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
-    ev: `${(c.ev * 100).toFixed(1)}%`,
-  }));
-
-  // Check if parlay uses different legs than the straight card
-  const straightPicks = new Set((picks || []).map(p => p.pick));
-  const parlayPicks = new Set(legs.map(l => l.pick));
-  const isIndependent = ![...parlayPicks].every(p => straightPicks.has(p));
-
-  const combinedOddsDisplay = bestCombo.combinedDecimal >= 2
-    ? `+${Math.round((bestCombo.combinedDecimal - 1) * 100)}`
-    : `${Math.round(-100 / (bestCombo.combinedDecimal - 1))}`;
-
-  console.log(`[v10-parlay] OPTIMIZED: ${legs.map(l => l.pick).join(' + ')} | EV: ${(bestCombo.parlayEV * 100).toFixed(1)}% | Prob: ${(bestCombo.combinedProb * 100).toFixed(1)}% | ${bestCombo.uniqueMatchups} games, ${bestCombo.uniqueSports} sports | Independent: ${isIndependent}`);
-
-  return [{
-    type: "3-leg-parlay-optimized",
-    legs,
-    units: parlayUnitsFor(picks),
-    combinedOdds: combinedOddsDisplay,
-    combinedDecimal: +bestCombo.combinedDecimal.toFixed(2),
-    combinedProb: `${(bestCombo.combinedProb * 100).toFixed(1)}%`,
-    ev: `${(bestCombo.parlayEV * 100).toFixed(1)}%`,
-    uniqueGames: bestCombo.uniqueMatchups,
-    uniqueSports: bestCombo.uniqueSports,
-    independent: isIndependent,
-    correlationNote: isIndependent
-      ? `Optimized independently from straight picks — ${bestCombo.uniqueMatchups} different games, ${bestCombo.uniqueSports} sports`
-      : `Uses straight pick legs — ${bestCombo.uniqueMatchups} games, ${bestCombo.uniqueSports} sports`,
-    candidatesScanned: pool.length,
-    combosEvaluated: pool.length * (pool.length - 1) * (pool.length - 2) / 6,
-  }];
+  return buildFallbackParlay(picks);
 }
 
-// Fallback: use straight picks as parlay legs (old behavior)
+// Fallback: build the parlay from the straight card, but still totals-first / no-F5 / drop-ML
+// (via selectParlayLegs). Used when the candidate pool can't produce a cleaner independent ticket.
 function buildFallbackParlay(picks) {
   if (!picks || picks.length < 2) return [];
-  // If all straight picks are from the same game, no valid standard parlay exists
-  const matchupSet = new Set((picks || []).slice(0, 3).map(p => (p.matchup || '').toLowerCase().trim()));
-  if (matchupSet.size < 2) return [];
-  const legs = picks.slice(0, 3).map(p => ({
-    pick: p.pick, sport: p.sport, matchup: p.matchup,
-    betType: p.betType, odds: p.odds, coverProb: p.coverProb,
-    // See note in buildCorrelatedParlay — legs need a start time to disambiguate doubleheaders.
-    commenceTime: p.commenceTime || '',
+  const stake = parlayUnitsFor(picks);
+  const cands = (picks || []).map(p => ({
+    side: p.pick, market: p.betType,
+    oddsNum: parseInt(p.odds),
+    coverProbNum: (typeof p.coverProb === 'string' ? parseFloat(p.coverProb) / 100
+      : typeof p.coverProb === 'number' ? p.coverProb
+      : parseFloat(p.winProbability) / 100) || 0.5,
+    evNum: (typeof p.evRaw === 'number') ? p.evRaw : (parseFloat(p.ev) / 100 || undefined),
+    matchup: p.matchup, commenceTime: p.commenceTime || '', sport: p.sport,
   }));
-  let combinedDecimal = 1.0, combinedProb = 1.0;
-  for (const leg of legs) {
-    const odds = parseInt(leg.odds);
-    combinedDecimal *= odds > 0 ? 1 + (odds / 100) : 1 + (100 / Math.abs(odds));
-    combinedProb *= parseFloat(leg.coverProb) / 100;
-  }
-  const parlayEV = (combinedProb * combinedDecimal) - 1;
-  return [{
-    type: "3-leg-parlay-fallback",
-    legs, units: parlayUnitsFor(picks),
-    combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
-    combinedDecimal: +combinedDecimal.toFixed(2),
-    combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
-    ev: `${(parlayEV * 100).toFixed(1)}%`,
-    correlationNote: "Fallback: uses straight pick legs",
-  }];
+  const legs = selectParlayLegs(cands, 3);
+  const games = new Set(legs.map(l => (l.matchup || '').toLowerCase().trim()));
+  if (legs.length < 2 || games.size < 2) return [];
+  const p = assembleParlay(legs, stake, false);
+  delete p._parlayEV;
+  return [p];
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -5571,4 +5558,4 @@ module.exports.ipToFloat = ipToFloat;
 module.exports.normTeamMLB = normTeamMLB;
 module.exports.fetchPitcherFIP = fetchPitcherFIP;
 // v10.4 test-only exports (offline validation; no effect on the deployed handler)
-module.exports._testV104 = { pitcherForGame, parlayUnitsFor, applyMarketUnitCaps, findConsensusLine, buildConsensusLookup, computeLineMovementSignal, getCalibratedCoverProb, noVigProb, buildCorrelatedParlay };
+module.exports._testV104 = { pitcherForGame, parlayUnitsFor, applyMarketUnitCaps, findConsensusLine, buildConsensusLookup, computeLineMovementSignal, getCalibratedCoverProb, noVigProb, buildCorrelatedParlay, buildFallbackParlay, selectParlayLegs, assembleParlay, parlayMarketRank };

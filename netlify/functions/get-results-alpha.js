@@ -253,7 +253,9 @@ function calcParlayWinnings(risk, legsOdds) {
 function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
 
 function gradeParlay(pickResults, parlayRisk) {
-  if (pickResults.length < 3) return { result: 'skip', profit: 0 };
+  // v10.4.3: parlays can now be 2-leg (totals-first construction drops -CLV ML legs), so grade
+  // any ticket with >=2 legs. Historical 3-leg tickets are unaffected.
+  if (pickResults.length < 2) return { result: 'skip', profit: 0 };
   const results = pickResults.map(p => p.result);
   const anyLoss = results.includes('loss');
   const anyPending = results.includes('pending');
@@ -361,7 +363,7 @@ async function gradeDay(dateISO, picksData) {
   }
   if (parlayResult.result !== 'skip') {
     const parlayLegsSource = optimizedLegs || picks;
-    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: optimizedLegs ? '3-Team Parlay (Optimized)' : '3-Team Parlay', odds: '', units: `${parlayUnits}u`, rating: 'P', result: parlayResult.result, profit: parlayResult.profit, score: null });
+    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: `${parlayInput.length}-Team Parlay${optimizedLegs ? ' (Optimized)' : ''}`, odds: '', units: `${parlayUnits}u`, rating: 'P', result: parlayResult.result, profit: parlayResult.profit, score: null });
   }
 
   const decided = dayWins + dayLosses;

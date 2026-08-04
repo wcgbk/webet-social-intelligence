@@ -27,6 +27,28 @@ function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10)
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
 function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
+function confFromUnits(u) { return u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b"; }
+
+// v10.4.7: QA replacements/backfills must obey the SAME sizing discipline as the generator's main
+// path — per-market caps (F5 0.5u, Moneyline = the config-tunable ML cap, Total 1.5u, RL/Spread/
+// Puck 1.0u) and the coverProb downsizing gates (sub-50% → 1.0u, sub-42% → 0.5u). Previously these
+// sized from the raw candidate Kelly (candidateTable.kellyUnits is pre-cap), so a replacement
+// moneyline could publish above its 0.5u cap. This mirrors applyMarketUnitCaps + the validation gate.
+let _mlUnitCap = 0.5; // overwritten from edge-picks/alpha-config at the top of the handler
+function cappedKellyUnits(c) {
+  let u = typeof c.kellyUnits === 'number' ? c.kellyUnits : (parseFloat(c.kellyUnits) || 0.5);
+  const mkt = (c.market || c.betType || '').toLowerCase();
+  let cap = null;
+  if (mkt.includes('f5')) cap = 0.5;
+  else if (mkt.includes('moneyline')) cap = _mlUnitCap;
+  else if (mkt.includes('total')) cap = 1.5;
+  else if (mkt.includes('run line') || mkt.includes('spread') || mkt.includes('puck')) cap = 1.0;
+  if (cap != null) u = Math.min(u, cap);
+  const cp = typeof c.coverProb === 'number' ? c.coverProb : (parseFloat(c.coverProb) || 0);
+  if (cp > 0 && cp < 0.50) u = Math.min(u, 1.0);
+  if (cp > 0 && cp < 0.42) u = Math.min(u, 0.5);
+  return Math.max(0.5, Math.round(u * 2) / 2);
+}
 
 // ── Math Checks ──
 function runMathChecks(pick) {
@@ -209,9 +231,9 @@ async function autoFixPicks(picksData, pickReports) {
         pick: c.side,
         betType: c.market,
         odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-        rating: unitsToRating(c.kellyUnits),
-        confidence: c.kellyUnits >= 2.0 ? "aplus" : c.kellyUnits >= 1.25 ? "a" : c.kellyUnits >= 0.75 ? "aminus" : c.kellyUnits >= 0.5 ? "bplus" : "b",
-        units: `${c.kellyUnits}u`,
+        rating: unitsToRating(cappedKellyUnits(c)),
+        confidence: confFromUnits(cappedKellyUnits(c)),
+        units: `${cappedKellyUnits(c)}u`,
         ev: `${(c.ev * 100).toFixed(1)}%`,
         evRaw: c.ev,
         edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
@@ -429,6 +451,15 @@ exports.handler = async (event) => {
 
     console.log(`[verify] Starting verification for ${dateKey}`);
 
+    // v10.4.7: load the tunable ML cap so QA replacements match the generator's live sizing.
+    try {
+      const t = process.env.NETLIFY_AUTH_TOKEN;
+      if (t) {
+        const cfgResp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks/alpha-config`, { headers: { Authorization: `Bearer ${t}` } });
+        if (cfgResp.ok) { const cfg = await cfgResp.json(); if (typeof cfg.mlUnitCap === 'number' && cfg.mlUnitCap >= 0.5 && cfg.mlUnitCap <= 2) { _mlUnitCap = cfg.mlUnitCap; console.log(`[verify] ML cap for QA sizing: ${_mlUnitCap}u`); } }
+      }
+    } catch (e) { /* keep default 0.5u */ }
+
     const result = await fetchBetaPicks(dateKey);
     if (!result || !result.data || !result.data.picks || result.data.picks.length === 0) {
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ date: dateKey, verified: false, summary: "No picks found" }) };
@@ -501,9 +532,9 @@ exports.handler = async (event) => {
             pick: c.side,
             betType: c.market,
             odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-            rating: unitsToRating(c.kellyUnits),
-            confidence: c.kellyUnits >= 2.0 ? "aplus" : c.kellyUnits >= 1.25 ? "a" : c.kellyUnits >= 0.75 ? "aminus" : c.kellyUnits >= 0.5 ? "bplus" : "b",
-            units: `${c.kellyUnits}u`,
+            rating: unitsToRating(cappedKellyUnits(c)),
+            confidence: confFromUnits(cappedKellyUnits(c)),
+            units: `${cappedKellyUnits(c)}u`,
             ev: `${(c.ev * 100).toFixed(1)}%`,
             evRaw: c.ev,
             edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
@@ -627,7 +658,7 @@ exports.handler = async (event) => {
           if (matchupsOnCard.has(c.matchup)) continue;          // one pick per game
           const k = dirKey(c.sport, c.side);
           if ((dirCount[k] || 0) >= 2) continue;                // avoid 3 same-direction same-sport legs
-          const u = c.kellyUnits || 0.5;
+          const u = cappedKellyUnits(c);
           picksData.picks.push({
             sport: c.sport, matchup: c.matchup, pick: c.side, betType: c.market,
             odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,

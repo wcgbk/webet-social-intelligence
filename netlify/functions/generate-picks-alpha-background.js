@@ -5056,9 +5056,11 @@ exports.handler = async (event) => {
     for (const p of picks) {
       if (p.thinSlate) continue; // leans are already fact-grounded below
       const chk = verifyNarrativeFacts(p, pitcherData, teamStats);
-      if (!chk.ok) {
+      const wrongDir = narrativeArguesAgainstPick(p);
+      if (!chk.ok || wrongDir) {
         p._factFlag = true;
-        console.log(`[v10-factgate] ${p.pick}: narrative fact mismatch (${chk.issues.join('; ')}) — regenerating from verified facts`);
+        const reason = [!chk.ok ? `fact mismatch (${chk.issues.join('; ')})` : '', wrongDir ? 'narrative argues against the pick' : ''].filter(Boolean).join(' + ');
+        console.log(`[v10-factgate] ${p.pick}: ${reason} — regenerating from verified facts`);
       }
     }
 
@@ -5242,6 +5244,28 @@ function verifyNarrativeFacts(pick, pitcherData, teamStats) {
     }
   }
   return { ok: issues.length === 0, issues };
+}
+
+// v10.4.7: does the conviction narrative argue for the OPPONENT's side? Same heuristic as
+// fixNarrativeEdge (opponent last-name mentioned meaningfully more than the picked team) but this
+// one ACTS: a true result flags the pick so its narrative is regenerated from the fact sheet.
+// Team-based picks only (ML / spread / run line / puck line); totals direction isn't mention-based.
+function narrativeArguesAgainstPick(pick) {
+  const side = pick.pick || '';
+  if (/(Over|Under)/i.test(side)) return false;
+  let away = pick.awayTeam, home = pick.homeTeam;
+  if (!away || !home) { const parts = (pick.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(s => s.trim()); if (parts.length >= 2) { away = parts[0]; home = parts[1]; } }
+  if (!away || !home) return false;
+  const homeLast = (home.split(' ').pop() || '').toLowerCase();
+  const awayLast = (away.split(' ').pop() || '').toLowerCase();
+  const sideLower = side.toLowerCase();
+  const picked = sideLower.includes(homeLast) ? home : sideLower.includes(awayLast) ? away : null;
+  if (!picked) return false;
+  const opponent = picked === home ? away : home;
+  const text = (pick.coreReasoning || '').toLowerCase();
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const cnt = (name) => { const last = (name.split(' ').pop() || '').toLowerCase(); return last ? (text.match(new RegExp('\\b' + esc(last) + '\\b', 'g')) || []).length : 0; };
+  return cnt(opponent) > cnt(picked) + 1;
 }
 
 async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll = false } = {}) {

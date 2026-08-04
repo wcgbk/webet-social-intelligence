@@ -18,6 +18,72 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 
+// ── Parlay-leg CLV (v10.4.2 observer add-on) ──
+// A variance-heavy parlay P/L can't tell you whether parlays are a real edge or luck. CLV can:
+// are the LEGS we parlay actually beating the closing line? If yes, the compounding parlay
+// profit is a real edge worth Kelly-scaling; if no, it's variance that will revert. Reads the
+// clv-{date} blobs (per-pick CLV from track-clv) + picks-{date} blobs (the actual parlay legs),
+// matches legs -> CLV records, aggregates overall + per leg-market. Observational only.
+async function analyzeParlayLegCLV(token, days = 60) {
+  const base = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-alpha`;
+  const H = { Authorization: `Bearer ${token}` };
+  const getJSON = async (key) => {
+    try { const r = await fetch(`${base}/${key}`, { headers: H }); return r.ok ? await r.json() : null; }
+    catch (e) { return null; }
+  };
+  const idx = await getJSON("picks-dates");
+  let dates = Array.isArray(idx) ? idx : [];
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().split("T")[0];
+  dates = dates.filter(d => d >= cutoff).sort();
+  if (!dates.length) return null;
+
+  const overall = { n: 0, clvSum: 0, beat: 0 };
+  const byMarket = {};
+  let parlaysCovered = 0, legsTotal = 0, legsMatched = 0;
+
+  await Promise.all(dates.map(async (d) => {
+    const [picks, clv] = await Promise.all([getJSON(`picks-${d}`), getJSON(`clv-${d}`)]);
+    if (!picks || !clv || !Array.isArray(clv.picks)) return;
+    const parlay = (picks.parlayLegs && picks.parlayLegs[0]) || null;
+    const legs = (parlay && Array.isArray(parlay.legs)) ? parlay.legs : null;
+    if (!legs || legs.length < 2) return;
+    parlaysCovered++;
+    const clvByKey = new Map(clv.picks.map(p => [`${p.pick}||${p.matchup}`, p]));
+    for (const leg of legs) {
+      legsTotal++;
+      const rec = clvByKey.get(`${leg.pick}||${leg.matchup}`);
+      if (!rec || typeof rec.clvCents !== "number") continue;
+      legsMatched++;
+      overall.n++; overall.clvSum += rec.clvCents; if (rec.beatClosing) overall.beat++;
+      const m = rec.market || rec.betType || leg.betType || "Unknown";
+      if (!byMarket[m]) byMarket[m] = { n: 0, clvSum: 0, beat: 0 };
+      byMarket[m].n++; byMarket[m].clvSum += rec.clvCents; if (rec.beatClosing) byMarket[m].beat++;
+    }
+  }));
+
+  if (overall.n === 0) return { window: `${days}d`, parlaysCovered, legsTotal, legsMatched: 0, note: "no parlay legs matched a CLV record yet" };
+
+  const fin = (b) => ({ n: b.n, avgCLVCents: +(b.clvSum / b.n).toFixed(2), beatCloseRate: +(b.beat / b.n).toFixed(3) });
+  const out = {
+    window: `${days}d`, parlaysCovered, legsTotal, legsMatched,
+    coverage: +(legsMatched / legsTotal).toFixed(2),
+    ...fin(overall),
+    byMarket: Object.fromEntries(Object.entries(byMarket).map(([k, v]) => [k, fin(v)])),
+  };
+  // Verdict: CLV is the only thing that separates a real parlay edge from variance.
+  if (out.n >= 30 && out.beatCloseRate >= 0.53 && out.avgCLVCents > 0) {
+    out.verdict = "positive";
+    out.recommendation = `Parlay legs beat the close ${(out.beatCloseRate*100).toFixed(0)}% (avg +${out.avgCLVCents}c) over ${out.n} legs — the parlay edge is REAL. A modest Kelly-based stake increase is justified; source legs from the highest-CLV markets.`;
+  } else if (out.n >= 30 && out.beatCloseRate < 0.48) {
+    out.verdict = "negative";
+    out.recommendation = `Parlay legs are NOT beating the close (${(out.beatCloseRate*100).toFixed(0)}%, avg ${out.avgCLVCents}c) over ${out.n} legs — the parlay profit is VARIANCE, not edge. Hold or cut the parlay stake; do not scale.`;
+  } else {
+    out.verdict = "inconclusive";
+    out.recommendation = `${out.n} legs tracked (need ~30+ with a clear signal). Beat-close ${(out.beatCloseRate*100).toFixed(0)}%, avg ${out.avgCLVCents}c — hold the stake steady and keep tracking.`;
+  }
+  return out;
+}
+
 exports.handler = async (event) => {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return { statusCode: 500, body: "Missing auth token" };
@@ -291,6 +357,26 @@ exports.handler = async (event) => {
     console.log(`[self-optimize] Calibration ${bucket}: predicted=${(avgPredicted*100).toFixed(0)}%, actual=${(actualRate*100).toFixed(0)}%, gap=${((actualRate-avgPredicted)*100).toFixed(0)}%`);
   }
 
+  // ── Step 3f: Parlay-leg CLV — is the parlay a real edge or variance? ──
+  // The signal that tells us whether to Kelly-scale the parlay stake or hold it steady.
+  try {
+    const plCLV = await analyzeParlayLegCLV(token, 60);
+    if (plCLV) {
+      params.parlayLegCLV = plCLV;
+      const ranked = Object.entries(plCLV.byMarket || {})
+        .filter(([, v]) => v.n >= 5)
+        .sort((a, b) => b[1].avgCLVCents - a[1].avgCLVCents)
+        .map(([m, v]) => `${m} ${v.avgCLVCents >= 0 ? '+' : ''}${v.avgCLVCents}c/${(v.beatCloseRate * 100).toFixed(0)}%`);
+      if (ranked.length) console.log(`[self-optimize] Parlay-leg CLV by market (best→worst): ${ranked.join(' | ')}`);
+      if (plCLV.recommendation) {
+        console.log(`[self-optimize] Parlay-leg CLV verdict: ${plCLV.verdict} — ${plCLV.recommendation}`);
+        params.alerts.push(`PARLAY CLV (${plCLV.verdict}): ${plCLV.recommendation}`);
+      }
+    }
+  } catch (e) {
+    console.log(`[self-optimize] Parlay-leg CLV analysis failed (non-fatal): ${e.message}`);
+  }
+
   // ── Step 4: Store optimized parameters ──
   try {
     await fetch(
@@ -327,6 +413,7 @@ exports.handler = async (event) => {
       sportROI: params.sportROI,
       marketROI: params.marketROI,
       gradeAccuracy: params.gradeAccuracy,
+      parlayLegCLV: params.parlayLegCLV,
       alerts: params.alerts,
     }),
   };

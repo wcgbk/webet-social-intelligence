@@ -806,6 +806,16 @@
     .feature-header {
       margin-bottom: 24px;
     }
+    /* Percentile header: title/subtitle on the left, button vertically centered on the right,
+       horizontally centered over the right (Record) column. Stacks below on mobile. */
+    .perc-feature-header { display: flex; align-items: center; gap: 16px; }
+    .perc-header-text { flex: 1 1 50%; min-width: 0; }
+    .perc-header-btn { flex: 1 1 50%; display: flex; justify-content: center; }
+    @media (max-width: 640px) {
+      .perc-feature-header { flex-direction: column; align-items: stretch; gap: 12px; }
+      .perc-header-btn { justify-content: stretch; }
+      .perc-header-btn button { width: 100%; justify-content: center; white-space: normal !important; }
+    }
     .feature-header h2 {
       font-size: 1.5rem;
       font-weight: 700;
@@ -1809,12 +1819,22 @@
       <!-- PERCENTILE PANEL -->
       <div class="panel" id="panel-percentile">
         <div class="feature-scroll">
-          <div class="feature-header">
-            <h2 id="percentile-heading">AI Percentile Rankings</h2>
-            <p>How WeBetAI stacks up against all elite betting models</p>
+          <div class="feature-header perc-feature-header">
+            <div class="perc-header-text">
+              <h2 id="percentile-heading">AI Percentile Rankings</h2>
+              <p>How WeBetAI stacks up against all elite betting models</p>
+            </div>
+            <div class="perc-header-btn">
+              <button onclick="switchPanel('arch')" style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8125rem;font-weight:700;color:#fff;background:#004c54;border:none;border-radius:10px;padding:.625rem 1.15rem;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15);white-space:nowrap" onmouseover="this.style.background='#003d44'" onmouseout="this.style.background='#004c54'">View Full Track Record &amp; Architecture <span style="font-size:1.05em;line-height:1">&rarr;</span></button>
+            </div>
           </div>
           <div id="percentile-content"><div class="feature-loading"><div class="spinner"></div> Loading percentile data...</div></div>
         </div>
+      </div>
+
+      <!-- FULL TRACK RECORD + ARCHITECTURE PANEL (opened from the percentile panel button) -->
+      <div class="panel" id="panel-arch" style="overflow:hidden;">
+        <iframe src="/percentile" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- P2P SPORTS EXCHANGE PANEL -->
@@ -2136,6 +2156,7 @@
     feed: 'Authentic Press',
     rankings: 'Pick3 Leaderboard',
     percentile: 'Percentile Rankings',
+    arch: 'Track Record & Architecture',
     p2p: 'Pick 3 PVP',
     guardian: 'Daily Digest',
     builder: 'WeBet Builder',
@@ -2427,30 +2448,6 @@
   }
 
   /* ─── Percentile Panel ──────────────────────────────────────────── */
-  // Full percentile scorecard + architecture — opens in an iframe overlay, staying in the dashboard.
-  function openArchModal() {
-    let m = document.getElementById('arch-modal');
-    if (!m) {
-      m = document.createElement('div');
-      m.id = 'arch-modal';
-      m.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;flex-direction:column;padding:14px;box-sizing:border-box';
-      m.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;max-width:1040px;width:100%;margin:0 auto 10px">'
-        + '<span style="color:#fff;font-weight:700;font-size:.95rem">Model Percentile Scorecard &amp; Architecture</span>'
-        + '<button onclick="closeArchModal()" style="display:inline-flex;align-items:center;gap:.35rem;background:#004c54;color:#fff;border:none;border-radius:9px;padding:.5rem .95rem;font-weight:700;font-size:.8125rem;cursor:pointer">Close &#10005;</button>'
-        + '</div>'
-        + '<iframe src="/percentile" title="Percentile scorecard" style="flex:1;width:100%;max-width:1040px;margin:0 auto;border:none;border-radius:12px;background:#fff"></iframe>';
-      m.addEventListener('click', function (e) { if (e.target === m) closeArchModal(); });
-      document.body.appendChild(m);
-    } else {
-      m.style.display = 'flex';
-    }
-  }
-  function closeArchModal() {
-    const m = document.getElementById('arch-modal');
-    if (m) m.style.display = 'none';
-  }
-
   async function loadPercentile() {
     const el = document.getElementById('percentile-content');
     try {
@@ -2526,9 +2523,6 @@
       ];
 
       let html = `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
-          <button onclick="openArchModal()" style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8125rem;font-weight:700;color:#fff;background:#004c54;border:none;border-radius:10px;padding:.625rem 1.15rem;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15)" onmouseover="this.style.background='#003d44'" onmouseout="this.style.background='#004c54'">View Full Track Record and Architecture <span style="font-size:1.05em;line-height:1">&rarr;</span></button>
-        </div>
         <div class="stats-grid" style="grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px">
           <div class="stat-card">
             <div class="stat-label">ROI</div>

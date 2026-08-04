@@ -583,7 +583,7 @@
         <div class="step-num">3</div>
         <div class="step-content">
           <div class="step-title">Edge Computation</div>
-          <div class="step-desc">Compare model projections to consensus lines. Calculate spread, total, puck line, and moneyline edges — totals against their own (wider) standard deviations. Normalize across sports via z-scores. Apply sport-specific minimum edge thresholds (NBA 2.0 pts, NHL 0.4 goals, MLB 0.5 runs). Filter to calibrated EV &gt; 3%. Consensus tightness, line movement, and market misalignment each discount edges the market has already captured.</div>
+          <div class="step-desc">Compare model projections to consensus lines. Calculate spread, total, puck line, and moneyline edges — totals against their own (wider) standard deviations. Rank across sports by calibrated expected value (v10.4 — z-scores were demoted to a display diagnostic, since they were not comparable across markets and floated moneylines above totals). Apply sport-specific minimum edge thresholds (NBA 2.0 pts, NHL 0.4 goals, MLB 0.5 runs). Filter to calibrated EV &gt; 3%. Consensus tightness, line movement, and market misalignment each discount edges the market has already captured.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -665,10 +665,7 @@
         <span class="gap-label" style="color:var(--green);">PM type-aligned cross-ref: SHIPPED</span> Prediction market signals parsed by bet type, multi-market aggregated, and proportionally weighted. Eliminates false flags from mismatched market comparisons.
       </div>
       <div class="gap-item">
-        <span class="gap-label">MLB projection engine upgrade:</span> Starter FIP instead of raw ERA, park factors, bullpen fatigue, and platoon splits — the highest-leverage summer improvement now that MLB carries the slate.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label">Poisson soccer engine:</span> Discrete goal distribution to replace the normal approximation — a fall item. Soccer was pruned from the card after a 38.5% real win rate and returns only if a discrete model proves an edge in shadow-tracking first.
+        <span class="gap-label" style="color:var(--green);">MLB projection engine: SHIPPED (v10.4)</span> Starter FIP replaces raw ERA (≥30 IP gate), a discrete negative-binomial run distribution prices the run-line and total push mass, and park factors are baked into each projection — the highest-leverage summer upgrade now that MLB carries the slate.
       </div>
     </div>
 
@@ -696,12 +693,6 @@
       <div class="gap-item">
         <span class="gap-label" style="color:var(--green);">The rule</span> A parlay of genuinely +CLV legs compounds edge; a parlay carrying a −CLV leg compounds a leak. So parlays are built totals-first (the segment that beats the close) and only scale when their legs are proven — discipline over adrenaline, enforced by process rather than willpower.
       </div>
-    </div>
-
-    <div class="footer-note">
-      Ratings reflect architecture design and system capabilities.<br />
-      Model version: v10.4-alpha-mlb Deterministic Edge Architecture<br />
-      <a href="/alpha">Today's picks</a> &bull; <a href="/alpha">Live track record</a>
     </div>
 
   </main>
@@ -768,8 +759,8 @@
           }).join('');
         }
 
-        const recentDays = days.slice(-PREVIEW);
-        const olderDays = days.slice(0, -PREVIEW);
+        const recentDays = days.slice(-PREVIEW).reverse();   // newest first (e.g. 8/4 on top), matching /alpha
+        const olderDays = days.slice(0, -PREVIEW).reverse();
 
         const totalProfit = cum.totalProfit || 0;
         const totalPl = totalProfit >= 0 ? `+$${totalProfit}` : `-$${Math.abs(totalProfit)}`;

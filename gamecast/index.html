@@ -1298,6 +1298,13 @@
       lastFingerprint = fp;
       G = parseSummary(data);
       computeChanges();
+      // Preload headshots outside the DOM — re-renders destroy <img> before slow
+      // espncdn first-loads finish; Image() warms the cache so renders are instant.
+      window.__pre = window.__pre || {};
+      for (const id of Object.keys(G.athletes)) {
+        const hs = G.athletes[id].headshot;
+        if (hs && !window.__pre[hs]) { window.__pre[hs] = 1; const im = new Image(); im.src = hs; }
+      }
       window.__abByBatter = {};
       // expose per-batter at-bats for box score renderer
       for (const p of plays) {

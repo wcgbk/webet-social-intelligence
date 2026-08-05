@@ -196,8 +196,99 @@
     }
     .leg-live { background: #eef6ff; color: #2196f3; }
 
-    /* ═══ GAMECAST ═══ */
-    .gc-wrap { margin-top: .75rem; border: 1px solid var(--border-lt); border-radius: .625rem; overflow: hidden; background: var(--white); }
+    /* ═══ GAMECAST — ESPN-matched palette + metrics ═══ */
+    :root {
+      --gc-ink: #2b2c2d;         /* ESPN primary text */
+      --gc-sub: #6c6d6f;         /* ESPN secondary text */
+      --gc-faint: #a5a6a7;       /* ESPN label gray */
+      --gc-line: #dcdddf;        /* ESPN hairline */
+      --gc-panel: #f7f7f8;
+      --gc-ball: #009944;        /* ESPN ball green (sampled live) */
+      --gc-strike: #dd0000;      /* ESPN strike/out red (sampled live) */
+      --gc-foul: #4a4c4f;        /* foul slate */
+      --gc-play: #0066cc;        /* in-play — ESPN link blue */
+      --gc-blue: #0066cc;        /* ESPN link/base blue */
+      --gc-base-off: #cbccce;    /* empty base border (sampled live) */
+      --gc-hot: rgba(224, 106, 89, 0.9);
+      --gc-cold: rgba(122, 165, 212, 0.9);
+    }
+
+    /* ─ Live-update animations (timings observed on ESPN Gamecast) ─ */
+    @keyframes gc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes gc-slide-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+    @keyframes gc-row-in { from { opacity: 0; transform: translateY(-9px); } to { opacity: 1; transform: none; } }
+    @keyframes gc-orb-pop { 0% { transform: scale(.35); opacity: .4; } 70% { transform: scale(1.3); } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes gc-flash { 0% { background: #fff3b8; } 100% { background: transparent; } }
+    .ip-new { animation: gc-fade-in .25s ease both; }              /* ESPN IncomingPitch: opacity .25s */
+    .gc-slide-in { animation: gc-slide-in .35s ease-out both; }    /* StatusBar TransitionPane swap */
+    .gc-row-in { animation: gc-row-in .3s ease-out both; }         /* PitchTracker slider push */
+    .gc-orb-new { animation: gc-orb-pop .25s ease-out both; }      /* count orb fill */
+    .gc-score-flash { animation: gc-flash 1.2s ease-out both; border-radius: 4px; }
+    .gc-wrap { margin-top: .75rem; border: 1px solid var(--gc-line); border-radius: .625rem; overflow: hidden; background: var(--white); }
+
+    /* ─ ESPN Gamestrip: [logo name/rec] score [inning+diamond] score [name/rec logo] ─ */
+    .gc-strip {
+      display: grid; grid-template-columns: 1fr auto auto auto 1fr;
+      gap: .5rem; align-items: center;
+      padding: .75rem .625rem .625rem; border-bottom: 1px solid var(--gc-line);
+    }
+    .gc-strip-team { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+    .gc-strip-team.home { flex-direction: row-reverse; text-align: right; }
+    .gc-strip-logo { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
+    .gc-strip-name { min-width: 0; }
+    .gc-strip-name .nm { font-size: .8125rem; font-weight: 700; color: var(--gc-ink); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gc-strip-name .rec { font-size: .625rem; color: var(--gc-sub); margin-top: 1px; white-space: nowrap; }
+    .gc-strip-score { font-size: 2rem; font-weight: 800; color: var(--gc-ink); font-variant-numeric: tabular-nums; line-height: 1; padding: 0 .25rem; }
+    .gc-strip-score.dim { color: var(--gc-faint); }
+    .gc-strip-mid { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 .375rem; }
+    .gc-strip-inning { font-size: .75rem; font-weight: 700; color: var(--gc-ink); white-space: nowrap; }
+    .gc-strip-inning .arrow-up { color: var(--gc-ink); }
+    .gc-strip-inning.final { color: var(--gc-sub); }
+    .gc-strip-mid .gc-live-tag {
+      font-size: .5625rem; font-weight: 700; letter-spacing: .04em; color: #fff;
+      background: #e33; border-radius: 3px; padding: 1px 5px;
+    }
+
+    /* ─ At-bat headline (ESPN: headshot left, 22px/700 title, 14px sub) ─ */
+    .gc-headline { display: flex; align-items: center; gap: .625rem; margin-bottom: .625rem; }
+    .gc-headshot {
+      width: 50px; height: 50px; border-radius: 50%; background: var(--gc-panel);
+      border: 1px solid var(--gc-line); object-fit: cover; object-position: top; flex-shrink: 0;
+    }
+    .gc-headline-txt { min-width: 0; }
+    .gc-headline-type { font-size: 1.375rem; font-weight: 700; color: var(--gc-ink); line-height: 1.15; }
+    .gc-headline-desc { font-size: .875rem; color: var(--gc-sub); line-height: 1.35; margin-top: 2px; }
+    .gc-inning-chip {
+      margin-left: auto; flex-shrink: 0; font-size: .625rem; font-weight: 700;
+      color: var(--gc-ink); background: var(--gc-panel); border: 1px solid var(--gc-line);
+      border-radius: 4px; padding: .125rem .45rem; text-transform: uppercase; white-space: nowrap;
+    }
+
+    /* ─ Count orbs (ESPN: 8px, white + #dcdddf border empty; fill + border-color on) ─ */
+    .gc-count { display: flex; align-items: center; gap: 1.25rem; padding: .5rem 0; margin-bottom: .5rem; flex-wrap: wrap; }
+    .gc-count-grp { display: flex; align-items: center; gap: .45rem; }
+    .gc-count-lbl { font-size: .6875rem; font-weight: 600; letter-spacing: .02em; color: var(--gc-ink); text-transform: uppercase; }
+    .gc-dots { display: flex; gap: 4px; }
+    .gc-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid var(--gc-line); transition: background-color .2s ease, border-color .2s ease; }
+    .gc-dot.on-ball { background: var(--gc-ball); border-color: var(--gc-ball); }
+    .gc-dot.on-strike { background: var(--gc-strike); border-color: var(--gc-strike); }
+    .gc-dot.on-out { background: var(--gc-strike); border-color: var(--gc-strike); }
+    .gc-bvp { font-size: .6875rem; color: var(--gc-faint); font-style: italic; margin: -.25rem 0 .625rem; line-height: 1.45; }
+
+    /* ─ Due-up module (ESPN BatterPitcher, between innings) ─ */
+    .gc-dueup { display: flex; align-items: stretch; gap: .5rem; margin-bottom: .625rem; }
+    .gc-dueup-side { flex: 1; display: flex; align-items: center; gap: .625rem; min-width: 0; }
+    .gc-dueup-side.batter { flex-direction: row-reverse; text-align: right; }
+    .gc-dueup-side .who { min-width: 0; }
+    .gc-dueup-title { font-size: .5625rem; font-weight: 700; letter-spacing: .06em; color: var(--gc-faint); text-transform: uppercase; }
+    .gc-dueup-name { font-size: .9375rem; font-weight: 700; color: var(--gc-ink); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gc-dueup-hand { font-size: .625rem; color: var(--gc-sub); }
+    .gc-dueup-line { font-size: .75rem; color: var(--gc-ink); margin-top: 2px; }
+    .gc-dueup-line b { font-weight: 700; }
+    .gc-dueup-line .u { color: var(--gc-sub); font-size: .625rem; }
+    .gc-vs { align-self: center; font-size: .6875rem; font-weight: 700; color: var(--gc-faint); text-transform: uppercase; padding: 0 .125rem; }
+    .gc-dueup-meta { font-size: .6875rem; color: var(--gc-sub); margin: -.25rem 0 .625rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+    .gc-dueup-meta b { color: var(--gc-ink); font-weight: 700; }
     .gc-toggle {
       width: 100%; display: flex; align-items: center; justify-content: space-between;
       background: var(--off-white); border: none; border-bottom: 1px solid var(--border-lt);
@@ -212,141 +303,127 @@
     .gc-toggle .chev { font-size: .6875rem; color: var(--txt-l); transition: transform .15s; }
     .gc-wrap.closed .gc-toggle { border-bottom: none; }
     .gc-wrap.closed .gc-body { display: none; }
+    .gc-wrap.closed .gc-strip { display: none; }
     .gc-wrap.closed .chev { transform: rotate(-90deg); }
     .gc-body { padding: .75rem; }
 
     .gc-section-title {
-      font-size: .625rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-      color: var(--txt-l); margin: .875rem 0 .5rem;
+      font-size: .6875rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+      color: var(--gc-ink); margin: .875rem 0 .5rem;
       display: flex; align-items: center; justify-content: space-between;
     }
     .gc-section-title:first-child { margin-top: 0; }
-
-    /* At-bat headline */
-    .gc-headline { display: flex; align-items: center; gap: .625rem; margin-bottom: .625rem; }
-    .gc-headshot {
-      width: 44px; height: 44px; border-radius: 50%; background: var(--off-white);
-      border: 1px solid var(--border-lt); object-fit: cover; object-position: top; flex-shrink: 0;
+    .gc-section-title .aux { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--gc-sub); }
+    .gc-h3 {
+      font-size: .9375rem; font-weight: 700; color: var(--gc-ink);
+      margin: 1.125rem 0 .375rem; display: flex; align-items: center; justify-content: space-between;
     }
-    .gc-headline-txt { min-width: 0; }
-    .gc-headline-type { font-size: 1rem; font-weight: 700; color: var(--olive); line-height: 1.2; }
-    .gc-headline-desc { font-size: .75rem; color: var(--txt-m); line-height: 1.4; margin-top: 1px; }
-    .gc-inning-chip {
-      margin-left: auto; flex-shrink: 0; font-size: .625rem; font-weight: 700;
-      color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 6px; padding: .125rem .45rem; text-transform: uppercase; white-space: nowrap;
-    }
-
-    /* Count dots */
-    .gc-count { display: flex; align-items: center; gap: 1.1rem; padding: .5rem .625rem; background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .5rem; margin-bottom: .625rem; flex-wrap: wrap; }
-    .gc-count-grp { display: flex; align-items: center; gap: .4rem; }
-    .gc-count-lbl { font-size: .625rem; font-weight: 700; letter-spacing: .05em; color: var(--txt-m); }
-    .gc-dots { display: flex; gap: 4px; }
-    .gc-dot { width: 11px; height: 11px; border-radius: 50%; background: #d6dae0; }
-    .gc-dot.on-ball { background: #2e9e36; }
-    .gc-dot.on-strike { background: #e03e2f; }
-    .gc-dot.on-out { background: #e03e2f; }
-    .gc-bvp { font-size: .6875rem; color: var(--txt-l); font-style: italic; margin: -.25rem 0 .625rem; line-height: 1.45; }
+    .gc-h3 .aux { font-size: .6875rem; font-weight: 500; color: var(--gc-sub); }
 
     /* Stage: plot + pitch sequence */
-    .gc-stage { display: grid; grid-template-columns: 1fr 200px; gap: .625rem; align-items: stretch; }
-    .gc-plot { background: #f4f5f7; border: 1px solid var(--border-lt); border-radius: .5rem; padding: .25rem; display: flex; align-items: center; justify-content: center; }
+    .gc-stage { display: grid; grid-template-columns: 1fr 210px; gap: .75rem; align-items: stretch; }
+    .gc-plot { background: #fff; border: 1px solid var(--gc-line); border-radius: .375rem; padding: .25rem; display: flex; align-items: center; justify-content: center; }
     .gc-plot svg { width: 100%; height: auto; max-height: 320px; display: block; aspect-ratio: 226 / 222; }
-    .gc-seq { display: flex; flex-direction: column; gap: .375rem; min-width: 0; }
+    .gc-seq { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--gc-line); border-radius: .375rem; overflow: hidden; align-self: start; }
     .gc-pitch {
-      display: flex; align-items: center; gap: .5rem;
-      border: 1px solid var(--border-lt); border-radius: .5rem;
-      padding: .375rem .5rem; background: var(--white);
+      display: flex; align-items: center; gap: .625rem;
+      border-bottom: 1px solid #ededee;
+      padding: .5rem .625rem; background: #fff;
     }
+    .gc-pitch:last-child { border-bottom: none; }
     .gc-pitch-num {
-      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
-      color: #fff; font-size: .6875rem; font-weight: 700;
+      color: #fff; font-size: .75rem; font-weight: 700;
     }
-    .gc-pitch-info { min-width: 0; line-height: 1.25; }
-    .gc-pitch-res { font-size: .6875rem; font-weight: 700; color: var(--txt-b); text-transform: uppercase; letter-spacing: .02em; }
-    .gc-pitch-sub { font-size: .625rem; color: var(--txt-m); }
-    .gc-pitch-velo { margin-left: auto; font-family: 'Geist Sans', monospace; font-size: .6875rem; font-weight: 700; color: var(--txt-m); white-space: nowrap; }
-    .gc-nopitch { font-size: .75rem; color: var(--txt-l); text-align: center; padding: 1rem .5rem; border: 1px dashed var(--border-lt); border-radius: .5rem; }
-    .pc-strike { background: #e03e2f; }
-    .pc-ball { background: #2e9e36; }
-    .pc-foul { background: #5b6b7a; }
-    .pc-play { background: #004C54; }
+    .gc-pitch-info { min-width: 0; line-height: 1.3; }
+    .gc-pitch-res { font-size: .75rem; font-weight: 700; color: var(--gc-ink); text-transform: uppercase; letter-spacing: .01em; }
+    .gc-pitch-sub { font-size: .6875rem; color: var(--gc-sub); }
+    .gc-pitch-velo { margin-left: auto; font-size: .75rem; font-weight: 600; color: var(--gc-sub); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .gc-nopitch { font-size: .8125rem; color: var(--gc-faint); text-align: center; padding: 1.25rem .5rem; }
+    .pc-strike { background: var(--gc-strike); }
+    .pc-ball { background: var(--gc-ball); }
+    .pc-foul { background: var(--gc-foul); }
+    .pc-play { background: var(--gc-play); }
 
     /* On-base strip */
     .gc-onbase {
-      display: flex; align-items: center; gap: .625rem;
-      background: var(--off-white); border: 1px solid var(--border-lt);
-      border-radius: .5rem; padding: .45rem .625rem; margin-top: .625rem;
-      font-size: .6875rem; color: var(--txt-m); flex-wrap: wrap;
+      display: flex; align-items: center; gap: .75rem;
+      border-top: 1px solid #ededee;
+      padding: .625rem 0 0; margin-top: .625rem;
+      font-size: .75rem; color: var(--gc-sub); flex-wrap: wrap;
     }
-    .gc-onbase b { color: var(--txt-b); font-weight: 600; }
-    .gc-onbase .lbl { font-weight: 700; letter-spacing: .04em; color: var(--txt-l); }
+    .gc-onbase b { color: var(--gc-ink); font-weight: 700; }
+    .gc-onbase .lbl { font-weight: 700; letter-spacing: .02em; color: var(--gc-ink); text-transform: uppercase; font-size: .6875rem; }
 
-    /* Linescore */
+    /* Linescore (ESPN: 10px gray uppercase headers, tabular numerals, bold R/H/E) */
     .gc-ls-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .gc-ls { width: 100%; border-collapse: collapse; font-family: 'Geist Sans', monospace; font-size: .6875rem; }
-    .gc-ls th, .gc-ls td { padding: .3rem .32rem; text-align: center; border-bottom: 1px solid var(--border-lt); white-space: nowrap; }
-    .gc-ls th { color: var(--txt-l); font-weight: 600; font-size: .625rem; }
-    .gc-ls .tm { text-align: left; font-family: 'Geist Sans', sans-serif; font-weight: 600; color: var(--olive); display: flex; align-items: center; gap: .35rem; }
-    .gc-ls .tm img { width: 16px; height: 16px; object-fit: contain; }
+    .gc-ls { width: 100%; border-collapse: collapse; font-size: .75rem; font-variant-numeric: tabular-nums; }
+    .gc-ls th, .gc-ls td { padding: .32rem .3rem; text-align: center; border-bottom: 1px solid #ededee; white-space: nowrap; color: var(--gc-ink); }
+    .gc-ls th { color: var(--gc-faint); font-weight: 600; font-size: .625rem; }
+    .gc-ls .tm { text-align: left; font-weight: 700; color: var(--gc-ink); display: flex; align-items: center; gap: .4rem; }
+    .gc-ls .tm img { width: 18px; height: 18px; object-fit: contain; }
     .gc-ls tr:last-child td { border-bottom: none; }
-    .gc-ls .rhe { font-weight: 700; color: var(--olive); }
-    .gc-ls .cur { background: var(--teal-light); border-radius: 4px; }
+    .gc-ls .rhe { font-weight: 700; }
+    .gc-ls .cur { background: #f1f2f3; border-radius: 3px; }
 
-    /* Scoring plays */
+    /* Scoring plays (ESPN: logo · inning · text · running score cols) */
     .gc-splays { margin-top: .375rem; }
     .gc-splay {
-      display: grid; grid-template-columns: 20px 2.4rem 1fr 1.5rem 1.5rem;
-      gap: .4rem; align-items: start; padding: .4rem .25rem;
-      border-bottom: 1px solid var(--border-lt); font-size: .6875rem;
+      display: grid; grid-template-columns: 22px 2.6rem 1fr 1.6rem 1.6rem;
+      gap: .5rem; align-items: start; padding: .5rem .125rem;
+      border-bottom: 1px solid #ededee; font-size: .75rem;
     }
     .gc-splay:last-child { border-bottom: none; }
-    .gc-splay img { width: 16px; height: 16px; object-fit: contain; margin-top: 1px; }
-    .gc-splay .inn { color: var(--txt-l); font-weight: 600; white-space: nowrap; }
-    .gc-splay .txt { color: var(--txt-m); line-height: 1.4; }
-    .gc-splay .sc { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--olive); text-align: right; }
-    .gc-splay .sc.scored { color: var(--teal); }
+    .gc-splay img { width: 18px; height: 18px; object-fit: contain; margin-top: 1px; }
+    .gc-splay .inn { color: var(--gc-sub); font-weight: 600; white-space: nowrap; font-size: .6875rem; padding-top: 1px; }
+    .gc-splay .txt { color: var(--gc-ink); line-height: 1.45; }
+    .gc-splay .sc { font-weight: 400; color: var(--gc-sub); text-align: right; font-variant-numeric: tabular-nums; }
+    .gc-splay .sc.scored { color: var(--gc-ink); font-weight: 700; }
 
-    /* Box score */
-    .gc-tabs { display: flex; border-bottom: 2px solid var(--border-lt); margin-bottom: .375rem; }
+    /* Box score (ESPN: tab underline, link-colored names, uppercase 10px headers) */
+    .gc-tabs { display: flex; border-bottom: 1px solid var(--gc-line); margin-bottom: .25rem; }
     .gc-tab {
       flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
       background: none; border: none; font-family: inherit; cursor: pointer;
-      font-size: .75rem; font-weight: 700; color: var(--txt-m);
-      padding: .45rem .25rem; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      font-size: .8125rem; font-weight: 600; color: var(--gc-sub);
+      padding: .5rem .25rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
     }
-    .gc-tab img { width: 18px; height: 18px; object-fit: contain; }
-    .gc-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+    .gc-tab img { width: 20px; height: 20px; object-fit: contain; }
+    .gc-tab.active { color: var(--gc-ink); font-weight: 700; border-bottom-color: var(--teal); }
     .gc-box-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .gc-box { width: 100%; border-collapse: collapse; font-size: .6875rem; }
-    .gc-box th, .gc-box td { padding: .32rem .3rem; border-bottom: 1px solid var(--border-lt); text-align: right; white-space: nowrap; }
-    .gc-box th { color: var(--txt-l); font-weight: 700; font-size: .5625rem; letter-spacing: .04em; }
+    .gc-box { width: 100%; border-collapse: collapse; font-size: .75rem; font-variant-numeric: tabular-nums; }
+    .gc-box th, .gc-box td { padding: .375rem .3rem; border-bottom: 1px solid #ededee; text-align: right; white-space: nowrap; }
+    .gc-box th { color: var(--gc-faint); font-weight: 600; font-size: .625rem; letter-spacing: .03em; }
     .gc-box th:first-child, .gc-box td:first-child { text-align: left; }
     .gc-box tr:last-child td { border-bottom: none; }
-    .gc-box .plr { color: var(--teal); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: .3rem; background: none; border: none; font-family: inherit; font-size: .6875rem; padding: 0; }
-    .gc-box .plr .pos { color: var(--txt-l); font-weight: 500; font-size: .5625rem; }
-    .gc-box .plr .chev { font-size: .5rem; color: var(--txt-l); }
-    .gc-box tr.now td { background: var(--teal-light); }
-    .gc-box .stat { font-family: 'Geist Sans', monospace; color: var(--txt-b); }
-    .gc-ab-detail td { background: var(--off-white); text-align: left; }
-    .gc-ab-detail .abt { font-size: .5625rem; font-weight: 700; letter-spacing: .05em; color: var(--txt-l); text-transform: uppercase; margin-bottom: .25rem; }
-    .gc-ab-detail div.ln { font-size: .6875rem; color: var(--txt-m); line-height: 1.5; white-space: normal; }
-    .gc-ab-detail div.ln b { color: var(--txt-b); font-weight: 600; }
+    .gc-box .plr { color: var(--gc-blue); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: .3rem; background: none; border: none; font-family: inherit; font-size: .75rem; padding: 0; }
+    .gc-box .plr .pos { color: var(--gc-faint); font-weight: 500; font-size: .625rem; }
+    .gc-box .plr .chev { font-size: .5rem; color: var(--gc-faint); }
+    .gc-box tr.now td { background: #f1f6fd; }
+    .gc-box .stat { color: var(--gc-ink); }
+    .gc-ab-detail td { background: var(--gc-panel); text-align: left; }
+    .gc-ab-detail .abt { font-size: .625rem; font-weight: 700; letter-spacing: .05em; color: var(--gc-ink); text-transform: uppercase; margin-bottom: .25rem; }
+    .gc-ab-detail div.ln { font-size: .75rem; color: var(--gc-sub); line-height: 1.55; white-space: normal; }
+    .gc-ab-detail div.ln b { color: var(--gc-ink); font-weight: 600; }
 
-    /* Team stats + win prob */
-    .gc-tstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .375rem; }
-    .gc-tstat { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .5rem; padding: .4rem .25rem; text-align: center; }
-    .gc-tstat .l { font-size: .5625rem; font-weight: 700; letter-spacing: .04em; color: var(--txt-l); text-transform: uppercase; }
-    .gc-tstat .v { font-size: .8125rem; font-weight: 700; color: var(--olive); font-family: 'Geist Sans', monospace; margin-top: 2px; }
-    .gc-wp { margin-top: .625rem; }
-    .gc-wp-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-lt); }
-    .gc-wp-away { background: var(--slate); }
-    .gc-wp-home { background: var(--teal); }
-    .gc-wp-lbl { display: flex; justify-content: space-between; font-size: .625rem; color: var(--txt-m); margin-top: 3px; }
-    .gc-wp-lbl b { color: var(--txt-b); }
+    /* Team stats + win prob (ESPN: label rows w/ two value columns) */
+    .gc-tstats { border: 1px solid var(--gc-line); border-radius: .375rem; overflow: hidden; }
+    .gc-tstat { display: grid; grid-template-columns: 1fr 3rem 3rem; padding: .45rem .625rem; border-bottom: 1px solid #ededee; font-size: .75rem; align-items: center; }
+    .gc-tstat:last-child { border-bottom: none; }
+    .gc-tstat .l { color: var(--gc-ink); font-weight: 500; }
+    .gc-tstat .v { text-align: right; font-weight: 700; color: var(--gc-ink); font-variant-numeric: tabular-nums; }
+    .gc-tstats-head { display: grid; grid-template-columns: 1fr 3rem 3rem; padding: .375rem .625rem; background: var(--gc-panel); border-bottom: 1px solid #ededee; }
+    .gc-tstats-head span { text-align: right; font-size: .625rem; font-weight: 700; color: var(--gc-sub); display: inline-flex; align-items: center; justify-content: flex-end; gap: .3rem; }
+    .gc-tstats-head img { width: 16px; height: 16px; object-fit: contain; }
+    .gc-wp { margin-top: .75rem; }
+    .gc-wp-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--gc-panel); }
+    .gc-wp-away { background: #7a8087; }
+    .gc-wp-home { background: var(--gc-ink); }
+    .gc-wp-lbl { display: flex; justify-content: space-between; font-size: .6875rem; color: var(--gc-sub); margin-top: 4px; }
+    .gc-wp-lbl b { color: var(--gc-ink); }
 
-    .gc-info { font-size: .6875rem; color: var(--txt-l); margin-top: .625rem; line-height: 1.5; }
+    .gc-info { font-size: .6875rem; color: var(--gc-faint); margin-top: .75rem; line-height: 1.5; }
 
     .gc-err { font-size: .75rem; color: var(--red); background: #fce4e4; border: 1px solid #f5b7b7; border-radius: .5rem; padding: .5rem .625rem; }
 
@@ -495,17 +572,21 @@
 
   function parseTeam(c) {
     const t = c.team || {};
+    const raw = (t.logos && t.logos[0] && t.logos[0].href) || ('https://a.espncdn.com/i/teamlogos/mlb/500/' + (t.abbreviation||'').toLowerCase() + '.png');
     return {
       id: String(t.id || ''),
       abbr: t.abbreviation || '',
       name: t.displayName || '',
       nick: t.name || (t.displayName || '').split(' ').pop(),
-      logo: (t.logos && t.logos[0] && t.logos[0].href) || ('https://a.espncdn.com/i/teamlogos/mlb/500/' + (t.abbreviation||'').toLowerCase() + '.png'),
+      logo: raw.replace('/mlb/500/', '/mlb/500/scoreboard/'), // ESPN Gamecast uses the scoreboard variant
+      logoFallback: raw,
       score: num(c.score),
       record: (c.record && c.record[0] && c.record[0].summary) || '',
+      homeRecord: (c.record && c.record.slice(1).map(r=>r.summary).filter(Boolean)[0]) || '',
       ls: Array.isArray(c.linescores) ? c.linescores.map(l => (l.displayValue ?? String(l.value ?? ''))) : [],
     };
   }
+  const logoImg = (t, cls) => '<img class="' + cls + '" src="' + esc(t.logo) + '" alt="' + esc(t.abbr) + '" loading="lazy" onerror="this.onerror=null;this.src=\'' + esc(t.logoFallback) + '\'"/>';
 
   function statVal(groups, groupName, names) {
     const g = (groups || []).find(x => (x.name || x.type) === groupName);
@@ -599,6 +680,10 @@
     const lastPitch = pitches[pitches.length - 1] || null;
     if (resultPlay) {
       headTitle = (lastPitch && !/^(ball|strike|foul)/i.test(lastPitch.type?.text || '')) ? (lastPitch.type?.text || 'In Play') : (lastPitch?.type?.text || 'At-Bat Over');
+      if (!lastPitch) {
+        const rt = resultPlay.text || '';
+        headTitle = /relieved/i.test(rt) ? 'Pitching Change' : /walked/i.test(rt) ? 'Walk' : /hit by pitch/i.test(rt) ? 'Hit By Pitch' : /stole/i.test(rt) ? 'Stolen Base' : /wild pitch/i.test(rt) ? 'Wild Pitch' : /passed ball/i.test(rt) ? 'Passed Ball' : /balk/i.test(rt) ? 'Balk' : 'At-Bat Over';
+      }
       headText = resultPlay.text || '';
     } else if (lastPitch) {
       headTitle = lastPitch.type?.text || 'Pitch';
@@ -746,13 +831,12 @@
   const ORD = (n) => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
 
   function diamondSVG(o1, o2, o3, size) {
+    // ESPN BaseballBases: occupied = filled link-blue #0066cc, empty = white w/ #cbccce border
     const s = size || 20;
-    const on = '#004C54', off = '#c8cdd4';
+    const base = (x, y, cx, cy, on) => '<rect x="' + x + '" y="' + y + '" width="8" height="8" rx="1.2" transform="rotate(45 ' + cx + ' ' + cy + ')" ' +
+      (on ? 'fill="#0066cc"' : 'fill="#ffffff" stroke="#cbccce" stroke-width="1.4"') + '/>';
     return '<svg width="' + s + '" height="' + (s * 0.72) + '" viewBox="0 0 34 25" aria-hidden="true">' +
-      '<rect x="13.5" y="1" width="8" height="8" rx="1.2" transform="rotate(45 17.5 5)" fill="' + (o2 ? on : off) + '"/>' +
-      '<rect x="24" y="11" width="8" height="8" rx="1.2" transform="rotate(45 28 15)" fill="' + (o1 ? on : off) + '"/>' +
-      '<rect x="3" y="11" width="8" height="8" rx="1.2" transform="rotate(45 7 15)" fill="' + (o3 ? on : off) + '"/>' +
-      '</svg>';
+      base(13.5, 1, 17.5, 5, o2) + base(24, 11, 28, 15, o1) + base(3, 11, 7, 15, o3) + '</svg>';
   }
 
   function dots(count, max, onClass) {
@@ -787,7 +871,7 @@
     return { x1: 77, x2: 158, y1: 131, y2: 203, cells: null };
   }
 
-  function pitchPlotSVG(pitches, hz, bats) {
+  function pitchPlotSVG(pitches, hz, bats, animateLast) {
     const z = zoneGeometry(hz);
     const VB = { x: 14, y: 72, w: 226, h: 222 }; // covers observed pitch scatter
     const clampX = (v) => Math.min(Math.max(v, VB.x + 10), VB.x + VB.w - 10);
@@ -828,21 +912,120 @@
     const pcx = (z.x1 + z.x2) / 2, py = VB.y + VB.h - 26;
     s += '<path d="M' + (pcx - 16) + ',' + py + ' L' + (pcx + 16) + ',' + py + ' L' + (pcx + 16) + ',' + (py + 7) + ' L' + pcx + ',' + (py + 15) + ' L' + (pcx - 16) + ',' + (py + 7) + ' Z" fill="#e8eaee" stroke="#c8cdd4" stroke-width="1"/>';
     // pitches
-    const colors = { 'pc-strike': '#e03e2f', 'pc-ball': '#2e9e36', 'pc-foul': '#5b6b7a', 'pc-play': '#004C54' };
+    const colors = { 'pc-strike': '#dd0000', 'pc-ball': '#009944', 'pc-foul': '#4a4c4f', 'pc-play': '#0066cc' };
     pitches.forEach((p, i) => {
       const cx = clampX(num(p.pitchCoordinate.x)), cy = clampY(num(p.pitchCoordinate.y));
       const col = colors[pitchClass(p.type?.text)];
       const isLast = i === pitches.length - 1;
-      if (isLast) s += '<circle cx="' + cx + '" cy="' + cy + '" r="12.5" fill="none" stroke="' + col + '" stroke-width="1.5" opacity="0.55"/>';
-      s += '<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" stroke="#ffffff" stroke-width="1.5"/>';
-      s += '<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff" font-family="Geist Sans, sans-serif">' + (p.atBatPitchNumber || i + 1) + '</text>';
+      const animCls = (isLast && animateLast) ? ' class="ip-new"' : '';
+      if (isLast) s += '<circle' + animCls + ' cx="' + cx + '" cy="' + cy + '" r="12.5" fill="none" stroke="' + col + '" stroke-width="1.5" opacity="0.55"/>';
+      s += '<g' + animCls + '><circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" stroke="#ffffff" stroke-width="1.5"/>';
+      s += '<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#ffffff" font-family="Geist Sans, sans-serif">' + (p.atBatPitchNumber || i + 1) + '</text></g>';
     });
     s += '</svg>';
     return s;
   }
 
+  /* ── Change tracker: which parts updated since last render (drives ESPN-style animations) ── */
+  let prevSnap = null;
+  let CHG = {};
+  function computeChanges() {
+    const ab = G.atBat;
+    const snap = {
+      pitchKey: ab.pitches.map(p => p.atBatPitchNumber + ':' + (p.type?.text || '')).join(','),
+      headline: ab.headTitle + '|' + ab.headText,
+      awayScore: G.away.score, homeScore: G.home.score,
+      balls: ab.balls, strikes: ab.strikes, outs: ab.outs,
+    };
+    CHG = prevSnap ? {
+      pitch: snap.pitchKey !== prevSnap.pitchKey && ab.pitches.length > 0,
+      headline: snap.headline !== prevSnap.headline,
+      away: snap.awayScore !== prevSnap.awayScore,
+      home: snap.homeScore !== prevSnap.homeScore,
+      balls: snap.balls > prevSnap.balls, strikes: snap.strikes > prevSnap.strikes, outs: snap.outs > prevSnap.outs,
+    } : {};
+    prevSnap = snap;
+  }
+
+  /* ── ESPN Gamestrip: [logo name/rec] score [inning + diamond] score [name/rec logo] ── */
+  function gameStripHTML() {
+    const ab = G.atBat;
+    let mid = '';
+    if (G.state === 'pre') {
+      mid = '<span class="gc-strip-inning">' + esc(G.shortDetail || G.detail) + '</span>';
+    } else if (G.state === 'post') {
+      mid = '<span class="gc-strip-inning final">Final</span>';
+    } else if (ab.inningOver || /^(mid|end)/i.test(G.periodPrefix || '')) {
+      mid = '<span class="gc-strip-inning">' + esc(G.shortDetail || G.detail) + '</span>' + diamondSVG(ab.occ1, ab.occ2, ab.occ3, 26) + '<span class="gc-live-tag">LIVE</span>';
+    } else {
+      const arrow = /top/i.test(G.periodPrefix) ? '&#9650;' : '&#9660;';
+      const outsTxt = ab.outs === 1 ? '1 out' : ab.outs + ' outs';
+      mid = '<span class="gc-strip-inning"><span class="arrow-up">' + arrow + '</span> ' + esc(ORD(G.period)) + ', ' + outsTxt + '</span>' + diamondSVG(ab.occ1, ab.occ2, ab.occ3, 26) + '<span class="gc-live-tag">LIVE</span>';
+    }
+    const dimAway = G.state === 'post' && G.away.score < G.home.score ? ' dim' : '';
+    const dimHome = G.state === 'post' && G.home.score < G.away.score ? ' dim' : '';
+    const team = (t, side) => '<div class="gc-strip-team ' + side + '">' + logoImg(t, 'gc-strip-logo') +
+      '<div class="gc-strip-name"><div class="nm">' + esc(t.name) + '</div><div class="rec">' + esc(t.record) + (side === 'away' ? ' Away' : ' Home') + '</div></div></div>';
+    return '<div class="gc-strip">' +
+      team(G.away, 'away') +
+      '<span class="gc-strip-score' + dimAway + (CHG.away ? ' gc-score-flash' : '') + '">' + G.away.score + '</span>' +
+      '<div class="gc-strip-mid">' + mid + '</div>' +
+      '<span class="gc-strip-score' + dimHome + (CHG.home ? ' gc-score-flash' : '') + '">' + G.home.score + '</span>' +
+      team(G.home, 'home') +
+      '</div>';
+  }
+
+  /* ── Between-innings due-up module (ESPN StatusBar__Module__BatterPitcher) ── */
+  function dueUpHTML() {
+    // Batting side for the upcoming half: Top/End → away bats (next top); Mid/Bottom → home bats
+    const pfx = (G.periodPrefix || G.detail || '');
+    const nextSide = /^(top|end)/i.test(pfx) ? 'away' : 'home';
+    const fieldSide = nextSide === 'home' ? 'away' : 'home';
+    const bb = G.box[nextSide], fb = G.box[fieldSide];
+    if (!bb || !fb) return '';
+    // pitcher: last listed pitcher for the fielding team
+    const pRow = fb.pitching[fb.pitching.length - 1];
+    const pitcher = pRow ? (G.athletes[pRow.id] || {}) : {};
+    const pl = fb.pitchingLabels;
+    const pv = (lbl) => { const i = pl.indexOf(lbl); return i >= 0 && pRow ? pRow.stats[i] : null; };
+    const pLine = pRow ? [['IP', pv('IP')], ['H', pv('H')], ['ER', pv('ER')], ['K', pv('K')], ['BB', pv('BB')]]
+      .filter(x => x[1] != null).map(x => '<b>' + esc(x[1]) + '</b><span class="u">' + x[0] + '</span>').join(' ') : '';
+    const pitchCount = pv('PC');
+    // due batter: last batter this team used → next in order (wraps)
+    let batter = {}, bRow = null, onDeck = null;
+    const order = bb.batting;
+    if (order.length) {
+      let lastIdx = -1;
+      for (let i = 0; i < order.length; i++) { if ((window.__abByBatter || {})[order[i].id]) lastIdx = i; }
+      bRow = order[(lastIdx + 1) % order.length];
+      onDeck = order[(lastIdx + 2) % order.length];
+      batter = G.athletes[bRow.id] || {};
+    }
+    const bl = bb.battingLabels;
+    const bv = (row, lbl) => { const i = bl.indexOf(lbl); return i >= 0 && row ? row.stats[i] : null; };
+    const bLine = bRow ? [bv(bRow, 'H-AB'), (num(bv(bRow, 'K')) > 0 ? num(bv(bRow, 'K')) + 'K' : null)].filter(Boolean).join(', ') : '';
+    const shot = (a) => a.headshot ? '<img class="gc-headshot" src="' + esc(a.headshot) + '" alt="' + esc(a.name || '') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'"/>' : '';
+
+    let h = '<div class="gc-section-title"><span>' + esc(G.shortDetail || 'Between Innings') + '</span><span class="aux">Due up: ' + esc((G.athletes[bRow ? bRow.id : ''] || {}).short || '') + '</span></div>';
+    h += '<div class="gc-dueup' + (CHG.headline ? ' gc-slide-in' : '') + '">' +
+      '<div class="gc-dueup-side">' + shot(pitcher) +
+        '<div class="who"><div class="gc-dueup-title">Pitcher</div><div class="gc-dueup-name">' + esc(pitcher.short || '—') + '</div>' +
+        '<div class="gc-dueup-line">' + pLine + '</div></div></div>' +
+      '<span class="gc-vs">vs</span>' +
+      '<div class="gc-dueup-side batter">' + shot(batter) +
+        '<div class="who"><div class="gc-dueup-title">Batter</div><div class="gc-dueup-name">' + esc(batter.short || '—') + '</div>' +
+        '<div class="gc-dueup-line">' + esc(bLine) + (batter.pos ? ' <span class="u">' + esc(batter.pos) + '</span>' : '') + '</div></div></div>' +
+      '</div>';
+    h += '<div class="gc-dueup-meta">' +
+      (pitchCount != null ? '<span>PITCH COUNT: <b>' + esc(pitchCount) + '</b></span>' : '') +
+      (onDeck ? '<span>ON DECK: <b>' + esc((G.athletes[onDeck.id] || {}).short || '') + '</b></span>' : '') +
+      '</div>';
+    return h;
+  }
+
   function atBatHTML(idx) {
     const ab = G.atBat;
+    if (G.state === 'in' && ab.inningOver) return dueUpHTML();
     const batter = G.athletes[ab.batterId] || {};
     const pitcher = G.athletes[ab.pitcherId] || {};
     const battingSide = G.periodPrefix && /bottom|end/i.test(G.periodPrefix) ? 'home' : 'away';
@@ -859,9 +1042,9 @@
     }
     const stateChip = G.state === 'post' ? 'FINAL' : (G.shortDetail || '').toUpperCase();
 
-    let h = '<div class="gc-section-title"><span>' + (ab.completed ? 'Last At-Bat' : 'Now At Bat') + (batter.short ? ' — ' + esc(batter.short) : '') + '</span><span style="font-weight:500; text-transform:none; letter-spacing:0;">' + (pitcher.short ? 'P: ' + esc(pitcher.short) : '') + '</span></div>';
+    let h = '<div class="gc-section-title"><span>' + (ab.completed ? 'Last At-Bat' : 'Now At Bat') + (batter.short ? ' — ' + esc(batter.short) : '') + '</span><span class="aux">' + (pitcher.short ? 'P: ' + esc(pitcher.short) : '') + '</span></div>';
 
-    h += '<div class="gc-headline">' +
+    h += '<div class="gc-headline' + (CHG.headline ? ' gc-slide-in' : '') + '">' +
       (batter.headshot ? '<img class="gc-headshot" src="' + esc(batter.headshot) + '" alt="' + esc(batter.name) + '" loading="lazy" onerror="this.style.visibility=\'hidden\'"/>' : '') +
       '<div class="gc-headline-txt"><div class="gc-headline-type">' + esc(ab.headTitle) + '</div>' +
       '<div class="gc-headline-desc">' + esc(ab.headText || (batLine ? esc(batLine) : '')) + '</div></div>' +
@@ -869,30 +1052,39 @@
 
     if (batLine && ab.headText) h += '<div class="gc-bvp" style="font-style:normal;">' + esc((batter.short || '') + (batter.pos ? ' (' + batter.pos + ')' : '') + ' — ' + batLine) + '</div>';
 
+    const dotsAnim = (count, max, cls, changed) => {
+      let out = '<span class="gc-dots">';
+      for (let i = 0; i < max; i++) {
+        const on = i < count;
+        const isNewest = changed && on && i === count - 1;
+        out += '<span class="gc-dot' + (on ? ' ' + cls : '') + (isNewest ? ' gc-orb-new' : '') + '"></span>';
+      }
+      return out + '</span>';
+    };
     h += '<div class="gc-count">' +
-      '<span class="gc-count-grp"><span class="gc-count-lbl">BALLS</span>' + dots(Math.min(ab.balls, 4), 4, 'on-ball') + '</span>' +
-      '<span class="gc-count-grp"><span class="gc-count-lbl">STRIKES</span>' + dots(Math.min(ab.strikes, 3), 3, 'on-strike') + '</span>' +
-      '<span class="gc-count-grp"><span class="gc-count-lbl">OUTS</span>' + dots(Math.min(ab.outs, 3), 3, 'on-out') + '</span>' +
-      '<span style="margin-left:auto;">' + diamondSVG(ab.occ1, ab.occ2, ab.occ3, 26) + '</span>' +
+      '<span class="gc-count-grp"><span class="gc-count-lbl">Balls</span>' + dotsAnim(Math.min(ab.balls, 4), 4, 'on-ball', CHG.balls) + '</span>' +
+      '<span class="gc-count-grp"><span class="gc-count-lbl">Strikes</span>' + dotsAnim(Math.min(ab.strikes, 3), 3, 'on-strike', CHG.strikes) + '</span>' +
+      '<span class="gc-count-grp"><span class="gc-count-lbl">Outs</span>' + dotsAnim(Math.min(ab.outs, 3), 3, 'on-out', CHG.outs) + '</span>' +
       '</div>';
 
     if (ab.bvp) h += '<div class="gc-bvp">' + esc(ab.bvp) + '</div>';
 
     // stage
     const batterHZ = (G.athletes[ab.batterId] || {}).hotZones;
-    h += '<div class="gc-stage"><div class="gc-plot">' + pitchPlotSVG(ab.pitches, batterHZ, ab.bats) + '</div>';
+    h += '<div class="gc-stage"><div class="gc-plot">' + pitchPlotSVG(ab.pitches, batterHZ, ab.bats, CHG.pitch) + '</div>';
     h += '<div class="gc-seq">';
     if (!ab.pitches.length) {
-      h += '<div class="gc-nopitch">No pitches yet this at-bat</div>';
+      h += '<div class="gc-nopitch">No pitches</div>';
     } else {
       const seq = ab.pitches.slice().reverse();
-      for (const p of seq) {
+      seq.forEach((p, i) => {
         const cls = pitchClass(p.type?.text);
-        h += '<div class="gc-pitch"><span class="gc-pitch-num ' + cls + '">' + (p.atBatPitchNumber || '') + '</span>' +
+        const anim = (i === 0 && CHG.pitch) ? ' gc-row-in' : '';
+        h += '<div class="gc-pitch' + anim + '"><span class="gc-pitch-num ' + cls + '">' + (p.atBatPitchNumber || '') + '</span>' +
           '<span class="gc-pitch-info"><span class="gc-pitch-res">' + esc(p.type?.text || '') + '</span><br/>' +
           '<span class="gc-pitch-sub">' + esc(p.pitchType?.text || '') + '</span></span>' +
           '<span class="gc-pitch-velo">' + (p.pitchVelocity ? esc(p.pitchVelocity + ' MPH') : '—') + '</span></div>';
-      }
+      });
     }
     h += '</div></div>';
 
@@ -916,13 +1108,13 @@
         const isCur = G.state === 'in' && i === curIdx;
         cells += '<td class="' + (isCur ? 'cur' : '') + '">' + esc(v) + '</td>';
       }
-      return '<tr><td class="tm"><img src="' + esc(t.logo) + '" alt="" loading="lazy"/>' + esc(t.abbr) + '</td>' + cells +
+      return '<tr><td class="tm">' + logoImg(t, '') + esc(t.abbr) + '</td>' + cells +
         '<td class="rhe">' + t.score + '</td><td class="rhe">' + esc(tot.hits ?? '-') + '</td><td class="rhe">' + esc(tot.errors ?? '-') + '</td></tr>';
     };
     let head = '<tr><th style="text-align:left;"></th>';
     for (let i = 1; i <= innings; i++) head += '<th>' + i + '</th>';
     head += '<th>R</th><th>H</th><th>E</th></tr>';
-    return '<div class="gc-section-title"><span>Scoring Summary</span></div>' +
+    return '<div class="gc-h3">Scoring Summary</div>' +
       '<div class="gc-ls-scroll"><table class="gc-ls">' + head + row(G.away, 'away') + row(G.home, 'home') + '</table></div>';
   }
 
@@ -932,7 +1124,7 @@
     for (const sp of G.scoringPlays) {
       const t = sp.teamId === G.away.id ? G.away : G.home;
       const scoredAway = sp.teamId === G.away.id;
-      h += '<div class="gc-splay"><img src="' + esc(t.logo) + '" alt="' + esc(t.abbr) + '" loading="lazy"/>' +
+      h += '<div class="gc-splay">' + logoImg(t, '') +
         '<span class="inn">' + esc((sp.half === 'Bottom' ? 'Bot' : 'Top') + ' ' + ORD(sp.inning)) + '</span>' +
         '<span class="txt">' + esc(sp.text) + '</span>' +
         '<span class="sc' + (scoredAway ? ' scored' : '') + '">' + sp.away + '</span>' +
@@ -947,10 +1139,10 @@
     const other = side === 'away' ? G.home : G.away;
     const b = G.box[side];
     if (!b) return '';
-    let h = '<div class="gc-section-title"><span>Box Score</span></div>';
+    let h = '<div class="gc-h3">Box Score</div>';
     h += '<div class="gc-tabs">' +
-      '<button class="gc-tab ' + (side === 'away' ? 'active' : '') + '" onclick="setTab(' + idx + ',\'away\')"><img src="' + esc(G.away.logo) + '" alt=""/>' + esc(G.away.abbr) + '</button>' +
-      '<button class="gc-tab ' + (side === 'home' ? 'active' : '') + '" onclick="setTab(' + idx + ',\'home\')"><img src="' + esc(G.home.logo) + '" alt=""/>' + esc(G.home.abbr) + '</button></div>';
+      '<button class="gc-tab ' + (side === 'away' ? 'active' : '') + '" onclick="setTab(' + idx + ',\'away\')">' + logoImg(G.away, '') + esc(G.away.abbr) + '</button>' +
+      '<button class="gc-tab ' + (side === 'home' ? 'active' : '') + '" onclick="setTab(' + idx + ',\'home\')">' + logoImg(G.home, '') + esc(G.home.abbr) + '</button></div>';
 
     const lbl = b.battingLabels;
     const cols = ['H-AB', 'R', 'HR', 'RBI', 'AVG'];
@@ -991,9 +1183,11 @@
 
   function teamStatsHTML() {
     const ta = G.totals.away || {}, th = G.totals.home || {};
-    const cell = (l, va, vh) => '<div class="gc-tstat"><div class="l">' + l + '</div><div class="v">' + esc(va ?? '-') + ' <span style="color:var(--txt-l); font-weight:500;">/</span> ' + esc(vh ?? '-') + '</div></div>';
-    let h = '<div class="gc-section-title"><span>Team Stats</span><span style="font-weight:500; text-transform:none; letter-spacing:0;">' + esc(G.away.abbr) + ' / ' + esc(G.home.abbr) + '</span></div>';
-    h += '<div class="gc-tstats">' + cell('Hits', ta.hits, th.hits) + cell('Home Runs', ta.hr, th.hr) + cell('Total Bases', ta.tb, th.tb) + cell('LOB', ta.lob, th.lob) + '</div>';
+    const row = (l, va, vh) => '<div class="gc-tstat"><span class="l">' + l + '</span><span class="v">' + esc(va ?? '-') + '</span><span class="v">' + esc(vh ?? '-') + '</span></div>';
+    let h = '<div class="gc-h3">Team Stats <span class="aux">According to ESPN data</span></div>';
+    h += '<div class="gc-tstats">' +
+      '<div class="gc-tstats-head"><span></span><span>' + logoImg(G.away, '') + esc(G.away.abbr) + '</span><span>' + logoImg(G.home, '') + esc(G.home.abbr) + '</span></div>' +
+      row('Hits', ta.hits, th.hits) + row('Home Runs', ta.hr, th.hr) + row('Total Bases', ta.tb, th.tb) + row('Runners LOB', ta.lob, th.lob) + '</div>';
     if (G.homeWP != null && G.state !== 'pre') {
       const hp = Math.round(G.homeWP * 1000) / 10;
       const ap = Math.round((100 - hp) * 10) / 10;
@@ -1011,6 +1205,7 @@
     const open = UI.open[idx];
     let h = '<div class="gc-wrap' + (open ? '' : ' closed') + '">';
     h += '<button class="gc-toggle" onclick="toggleGC(' + idx + ')"><span class="t">' + (G.state === 'in' ? '<span class="gc-live-dot"></span>' : '') + 'Live Gamecast — ' + esc(G.away.abbr) + ' @ ' + esc(G.home.abbr) + '</span><span class="chev">&#9660;</span></button>';
+    h += gameStripHTML();
     h += '<div class="gc-body">';
     h += atBatHTML(idx);
     h += linescoreHTML();
@@ -1099,6 +1294,7 @@
       if (fp === lastFingerprint && G) { lastFetchErr = false; schedule(); return; }
       lastFingerprint = fp;
       G = parseSummary(data);
+      computeChanges();
       window.__abByBatter = {};
       // expose per-batter at-bats for box score renderer
       for (const p of plays) {
@@ -1118,8 +1314,9 @@
   }
 
   function schedule() {
+    // ESPN's Fastcast pushes per-pitch (event-driven); 10s polling tracks within one pitch.
     if (refreshTimer) clearTimeout(refreshTimer);
-    const secs = (G && G.state === 'in') ? 20 : 90;
+    const secs = (G && G.state === 'in') ? 10 : 60;
     refreshTimer = setTimeout(load, secs * 1000);
   }
 

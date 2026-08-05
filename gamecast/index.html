@@ -620,7 +620,8 @@
           const id = String(ath.id || '');
           if (id && !athletes[id]) athletes[id] = {
             name: ath.displayName || '', short: ath.shortName || ath.displayName || '',
-            pos: ath.position?.abbreviation || '', headshot: ath.headshot?.href || '',
+            pos: ath.position?.abbreviation || '',
+            headshot: ath.headshot?.href || 'https://a.espncdn.com/i/headshots/mlb/players/full/' + id + '.png',
             hotZones: ath.hotZones || null,
           };
           if (grp.type === 'batting') entry.batting.push({ id, batOrder: a.batOrder ?? 99, sub: a.batOrder == null, stats: a.stats || [], active: !!a.active });
@@ -638,7 +639,9 @@
         const id = String(ath.id || '');
         if (id && !athletes[id]) athletes[id] = {
           name: ath.displayName || ath.fullName || '', short: ath.shortName || ath.displayName || '',
-          pos: ath.position?.abbreviation || '', headshot: ath.headshot?.href || '', hotZones: null,
+          pos: ath.position?.abbreviation || '',
+          headshot: ath.headshot?.href || 'https://a.espncdn.com/i/headshots/mlb/players/full/' + id + '.png',
+          hotZones: null,
         };
       }
     }

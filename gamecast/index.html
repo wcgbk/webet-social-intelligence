@@ -454,8 +454,8 @@
       .gc-splay { grid-template-columns: 18px 2.1rem 1fr 1.4rem 1.4rem; }
       .score-team-name { min-width: 76px; }
       /* vs-module: smaller faces + wrapping stat lines so the row fits 375px */
-      .gc-vshead { width: 40px; height: 40px; }
-      .gc-vsrow { gap: .4rem; }
+      .gc-vshead { width: 36px; height: 36px; }
+      .gc-vsrow { gap: .25rem; }
       .gc-vsname { font-size: .8125rem; }
       .gc-vsstat { white-space: normal; }
       .gc-strip-logo { width: 36px; height: 36px; }
@@ -1259,9 +1259,10 @@
       }
     }
     h += '</table>';
-    // pitchers
+    // pitchers (narrow screens drop PC-ST so the table fits and columns stay aligned, like ESPN mobile)
     const plbl = b.pitchingLabels;
-    const pcols = ['IP', 'H', 'ER', 'BB', 'K', 'PC-ST', 'ERA'];
+    const narrow = window.matchMedia && window.matchMedia('(max-width: 560px)').matches;
+    const pcols = narrow ? ['IP', 'H', 'ER', 'BB', 'K', 'ERA'] : ['IP', 'H', 'ER', 'BB', 'K', 'PC-ST', 'ERA'];
     const pIdx = pcols.map(c => plbl.indexOf(c));
     h += '<table class="gc-box" style="margin-top:.375rem;">';
     h += '<tr><th class="nm">PITCHERS</th>' + pcols.map(c => '<th class="st">' + c + '</th>').join('') + '</tr>';

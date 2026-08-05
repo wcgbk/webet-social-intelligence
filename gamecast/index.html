@@ -238,6 +238,7 @@
     .gc-strip-logo { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
     .gc-strip-name { min-width: 0; }
     .gc-strip-name .nm { font-size: .8125rem; font-weight: 700; color: var(--gc-ink); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gc-strip-name .nm-abbr { display: none; }
     .gc-strip-name .rec { font-size: .625rem; color: var(--gc-sub); margin-top: 1px; white-space: nowrap; }
     .gc-strip-score { font-size: 2rem; font-weight: 800; color: var(--gc-ink); font-variant-numeric: tabular-nums; line-height: 1; padding: 0 .25rem; }
     .gc-strip-score.dim { color: var(--gc-faint); }
@@ -465,37 +466,38 @@
       .gc-box { font-size: .6875rem; }
       .gc-box td.st, .gc-box th.st { width: 2.1rem; min-width: 1.9rem; }
       .gc-box th, .gc-box td { padding: .35rem .2rem; }
+
+      /* ── full mobile pass ── */
+      .main { padding: .875rem .625rem 2rem; }
+      .pick-card { padding: .875rem; }
+      .demo-bar { font-size: .6875rem; padding: .5rem .625rem; }
+      .date-header { font-size: .875rem; }
+      .gc-body { padding: .625rem; }
+      .gc-h3 { font-size: .875rem; margin: .875rem 0 .375rem; }
+      /* Gamestrip: ESPN mobile style — logos + abbr, tighter */
+      .gc-strip { gap: .375rem; padding: .625rem .5rem .5rem; }
+      .gc-strip-name .nm-full { display: none; }
+      .gc-strip-name .nm-abbr { display: inline; font-size: .9375rem; }
+      .gc-strip-name .rec { font-size: .5625rem; }
+      .gc-strip-team { gap: .375rem; }
+      .gc-strip-mid .gc-strip-inning { font-size: .6875rem; }
+      .gc-lastplay { font-size: .75rem; }
+      .gc-vsmeta { font-size: .75rem; gap: .5rem; }
+      .gc-vslabel { font-size: .6875rem; }
+      .gc-vslabel img { width: 15px; height: 15px; }
+      .gc-count-lbl { font-size: .625rem; }
+      .gc-pitch { padding: .45rem .5rem; }
+      .gc-onbase { font-size: .6875rem; gap: .5rem; }
+      .gc-splays .gc-splay { font-size: .6875rem; }
+      .gc-toggle { padding: .45rem .625rem; }
+      .footer-note { font-size: .625rem; }
+      .pick-analysis { font-size: .78125rem; }
     }
   </style>
 </head>
 <body>
 
   <div style="height:3px;background:linear-gradient(90deg,#004C54,#00b5b9,#004C54);position:fixed;top:0;left:0;right:0;z-index:200;"></div>
-  <header class="header">
-    <a href="/gamecast" class="logo">
-      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
-        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
-        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
-      </svg>
-      <span class="logo-text">WeBetAI</span>
-      <span class="header-badge" style="margin-left:2px;">Gamecast</span>
-    </a>
-    <nav class="header-nav">
-      <a href="/alpha" class="header-link">Alpha Picks</a>
-      <a href="/alpha/dashboard" class="header-link">Dashboard</a>
-      <a href="/percentile" class="header-link">Track Record</a>
-      <a href="/gamecast" class="header-link active">Gamecast</a>
-    </nav>
-    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <div class="mobile-dropdown" id="mobileDropdown">
-      <a href="/alpha">Alpha Picks</a>
-      <a href="/alpha/dashboard">Dashboard</a>
-      <a href="/percentile">Track Record</a>
-      <a href="/gamecast">Gamecast</a>
-    </div>
-  </header>
 
 <div class="main">
 
@@ -505,14 +507,6 @@
   </div>
 
   <div class="date-header" id="date-header">Loading…</div>
-
-  <div class="record-legend-bar">
-    <div id="record-bar-content" style="font-weight:600; color:var(--txt-b);">Rays @ Rockies — Live Gamecast Test</div>
-    <div class="rl-right">
-      <span><span class="legend-dot dot-aminus"></span>A- (1.0u)</span>
-      <span><span class="legend-dot dot-bplus"></span>B+ (0.5u)</span>
-    </div>
-  </div>
 
   <div id="picks-container">
     <div class="loading">
@@ -898,7 +892,7 @@
 
   function pitchPlotSVG(pitches, hz, bats, animateLast) {
     const z = zoneGeometry(hz);
-    const VB = { x: 24, y: 78, w: 206, h: 214 };
+    const VB = { x: 10, y: 78, w: 234, h: 214 }; // wide enough for the batter on either side
     const clampX = (v) => Math.min(Math.max(v, VB.x + 10), VB.x + VB.w - 10);
     const clampY = (v) => Math.min(Math.max(v, VB.y + 10), VB.y + VB.h - 12);
     const cw = (z.x2 - z.x1) / 3, ch = (z.y2 - z.y1) / 3;
@@ -907,6 +901,26 @@
     // faint basepath behind the zone (ESPN look)
     const pcx = (z.x1 + z.x2) / 2, py = VB.y + VB.h - 24;
     s += '<path d="M' + (pcx - 90) + ',' + (py - 44) + ' L' + pcx + ',' + (py + 4) + ' L' + (pcx + 90) + ',' + (py - 44) + '" fill="none" stroke="#e8eaee" stroke-width="2.5"/>';
+    // batter in the box (ESPN-style stance: helmet, crouch, bat up) — bats R stands plot-right like ESPN
+    const rSide = bats !== 'L';
+    const bx = rSide ? (z.x2 + 36) : (z.x1 - 36);
+    const flip = rSide ? 1 : -1;
+    s += '<g transform="translate(' + bx + ',' + ((z.y1 + z.y2) / 2 + 6) + ') scale(' + flip + ',1)" fill="#ccd1d8">' +
+      // bat (angled up behind the head)
+      '<path d="M6,-52 L24,-78 Q26.5,-81.5 29,-79.5 Q31.5,-77.5 29,-74.5 L12,-49 Z"/>' +
+      // helmet with brim + head
+      '<path d="M2,-62 Q2,-70 9,-70 Q16,-70 16,-62 L16,-59 L-1,-59 Q0,-61 2,-62 Z"/>' +
+      '<circle cx="9" cy="-56" r="6.5"/>' +
+      // torso leaning toward the plate
+      '<path d="M3,-49 Q13,-52 16,-42 Q19,-30 15,-16 L-2,-16 Q-4,-34 -1,-45 Q0,-48 3,-49 Z"/>' +
+      // arms up gripping the bat
+      '<path d="M4,-46 Q10,-56 15,-52 Q19,-49 14,-43 Q9,-39 4,-41 Z"/>' +
+      // front leg (stride toward zone) + back leg
+      '<path d="M-2,-17 Q-8,-2 -13,12 L-8,14 Q-2,2 3,-12 Z"/>' +
+      '<path d="M15,-17 Q17,-1 15,13 L10,13 Q10,-2 9,-15 Z"/>' +
+      // feet
+      '<path d="M-14,11 L-6,13 L-6,17 L-15,16 Z"/><path d="M9,12 L16,12 L17,17 L9,17 Z"/>' +
+      '</g>';
     // outer shadow ring (5x5): ESPN's cool chase-zone shading around the white-framed zone
     for (let r = -1; r <= 3; r++) for (let c = -1; c <= 3; c++) {
       if (r >= 0 && r <= 2 && c >= 0 && c <= 2) continue;
@@ -992,7 +1006,7 @@
     const dimAway = G.state === 'post' && G.away.score < G.home.score ? ' dim' : '';
     const dimHome = G.state === 'post' && G.home.score < G.away.score ? ' dim' : '';
     const team = (t, side) => '<div class="gc-strip-team ' + side + '">' + logoImg(t, 'gc-strip-logo') +
-      '<div class="gc-strip-name"><div class="nm">' + esc(t.name) + '</div><div class="rec">' + esc(t.record) + (side === 'away' ? ' Away' : ' Home') + '</div></div></div>';
+      '<div class="gc-strip-name"><div class="nm"><span class="nm-full">' + esc(t.name) + '</span><span class="nm-abbr">' + esc(t.abbr) + '</span></div><div class="rec">' + esc(t.record) + (side === 'away' ? ' Away' : ' Home') + '</div></div></div>';
     return '<div class="gc-strip">' +
       team(G.away, 'away') +
       '<span class="gc-strip-score' + dimAway + (CHG.away ? ' gc-score-flash' : '') + '">' + G.away.score + '</span>' +
@@ -1082,28 +1096,33 @@
     return h;
   }
 
-  /* ── Field view on a ball in play: grass, dirt, basepaths + hit location (ESPN swaps to this) ── */
-  function fieldSVG(hit, outcome) {
-    // ESPN hitCoordinate space ~250x250, plate near bottom-center (125, ~200)
-    const px = 125, pyy = 200;
-    const hx = Math.min(Math.max(num(hit.x, px), 8), 242);
-    const hy = Math.min(Math.max(num(hit.y, 120), 14), 208);
+  /* ── Field view on a ball in play — ESPN FieldView copy: monochrome grays
+       (#f1f2f3 / #c1c2c2 / #a8a9aa + white lines, wide 390x220 aspect), sampled live ── */
+  function fieldSVG(hit, outcome, occ) {
+    // ESPN hitCoordinate space ~250x250, plate bottom-center → map onto 390x220
+    const sx = (v) => 195 + (num(v, 125) - 125) * 1.44;
+    const sy = (v) => 12 + num(v, 110) * 0.9;
+    const px = 195, pyy = 198;
+    const hx = Math.min(Math.max(sx(hit.x), 12), 378);
+    const hy = Math.min(Math.max(sy(hit.y), 12), 205);
     const hr = /homer|home run/i.test(outcome || '') ? '#dd0000' : '#0066cc';
-    let s = '<svg viewBox="0 0 250 218" width="250" height="218" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hit location">';
-    // grass
-    s += '<path d="M' + px + ',' + pyy + ' L10,85 Q125,-28 240,85 Z" fill="#8bc34a"/>';
-    s += '<path d="M' + px + ',' + pyy + ' L38,113 Q125,28 212,113 Z" fill="#9ccc65"/>';
-    // infield dirt + inner grass diamond
-    s += '<path d="M' + px + ',' + (pyy + 4) + ' L182,147 Q125,90 68,147 Z" fill="#d7b98e"/>';
-    s += '<path d="M' + px + ',' + (pyy - 6) + ' L168,152 L125,109 L82,152 Z" fill="#9ccc65"/>';
+    let s = '<svg viewBox="0 0 390 220" width="390" height="220" style="aspect-ratio:390/220;" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hit location">';
+    // outfield
+    s += '<path d="M' + px + ',' + pyy + ' L28,58 Q195,-42 362,58 Z" fill="#f1f2f3"/>';
+    // infield dirt ring
+    s += '<path d="M' + px + ',' + (pyy + 4) + ' L272,133 Q195,58 118,133 Z" fill="#e2e3e5"/>';
+    // inner diamond
+    s += '<path d="M' + px + ',' + (pyy - 6) + ' L258,140 L195,84 L132,140 Z" fill="#f1f2f3" stroke="#c1c2c2" stroke-width="1.5"/>';
     // foul lines
-    s += '<path d="M' + px + ',' + pyy + ' L10,85 M' + px + ',' + pyy + ' L240,85" stroke="#ffffff" stroke-width="2" fill="none"/>';
-    // bases
-    const base = (bx, by) => '<rect x="' + (bx - 4) + '" y="' + (by - 4) + '" width="8" height="8" transform="rotate(45 ' + bx + ' ' + by + ')" fill="#ffffff" stroke="#c8cdd4" stroke-width="0.8"/>';
-    s += base(168, 152) + base(125, 109) + base(82, 152);
-    s += '<path d="M' + (px - 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy + 2) + ' L' + px + ',' + (pyy + 7) + ' L' + (px - 7) + ',' + (pyy + 2) + ' Z" fill="#ffffff" stroke="#c8cdd4" stroke-width="0.8"/>';
+    s += '<path d="M' + px + ',' + pyy + ' L28,58 M' + px + ',' + pyy + ' L362,58" stroke="#ffffff" stroke-width="2.5" fill="none"/>';
+    s += '<path d="M' + px + ',' + pyy + ' L28,58 M' + px + ',' + pyy + ' L362,58" stroke="#c1c2c2" stroke-width="1" fill="none"/>';
+    // bases — occupied fill ESPN blue, empty gray (FieldView_Base shades)
+    const base = (bx, by, on) => '<rect x="' + (bx - 5) + '" y="' + (by - 5) + '" width="10" height="10" transform="rotate(45 ' + bx + ' ' + by + ')" ' +
+      (on ? 'fill="#0066cc"' : 'fill="#c1c2c2"') + '/>';
+    s += base(258, 140, occ && occ[0]) + base(195, 84, occ && occ[1]) + base(132, 140, occ && occ[2]);
+    s += '<path d="M' + (px - 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy + 2) + ' L' + px + ',' + (pyy + 7) + ' L' + (px - 7) + ',' + (pyy + 2) + ' Z" fill="#a8a9aa"/>';
     // hit trajectory + marker
-    s += '<path class="ip-new" d="M' + px + ',' + (pyy - 4) + ' L' + hx + ',' + hy + '" stroke="#2b2c2d" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>';
+    s += '<path class="ip-new" d="M' + px + ',' + (pyy - 4) + ' L' + hx + ',' + hy + '" stroke="#a8a9aa" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>';
     s += '<g class="ip-new"><circle cx="' + hx + '" cy="' + hy + '" r="7.5" fill="' + hr + '" stroke="#ffffff" stroke-width="2"/></g>';
     s += '</svg>';
     return s;
@@ -1161,7 +1180,7 @@
     // Ball in play → swap the zone for the field view with the hit location (ESPN behavior)
     const lastP = ab.pitches[ab.pitches.length - 1];
     const showField = ab.completed && lastP && lastP.hitCoordinate && pitchClass(lastP.type?.text) === 'pc-play';
-    const plotSVG = showField ? fieldSVG(lastP.hitCoordinate, ab.headTitle) : pitchPlotSVG(ab.pitches, batterHZ, ab.bats, CHG.pitch);
+    const plotSVG = showField ? fieldSVG(lastP.hitCoordinate, ab.headTitle, [ab.occ1, ab.occ2, ab.occ3]) : pitchPlotSVG(ab.pitches, batterHZ, ab.bats, CHG.pitch);
     h += '<div class="gc-stage"><div class="gc-plot">' + plotSVG + '</div>';
     h += '<div class="gc-seq">';
     if (!ab.pitches.length) {
@@ -1277,12 +1296,7 @@
   }
 
   function teamStatsHTML() {
-    const ta = G.totals.away || {}, th = G.totals.home || {};
-    const row = (l, va, vh) => '<div class="gc-tstat"><span class="l">' + l + '</span><span class="v">' + esc(va ?? '-') + '</span><span class="v">' + esc(vh ?? '-') + '</span></div>';
-    let h = '<div class="gc-h3">Team Stats <span class="aux">According to ESPN data</span></div>';
-    h += '<div class="gc-tstats">' +
-      '<div class="gc-tstats-head"><span></span><span>' + logoImg(G.away, '') + esc(G.away.abbr) + '</span><span>' + logoImg(G.home, '') + esc(G.home.abbr) + '</span></div>' +
-      row('Hits', ta.hits, th.hits) + row('Home Runs', ta.hr, th.hr) + row('Total Bases', ta.tb, th.tb) + row('Runners LOB', ta.lob, th.lob) + '</div>';
+    let h = '';
     if (G.homeWP != null && G.state !== 'pre') {
       const hp = Math.round(G.homeWP * 1000) / 10;
       const ap = Math.round((100 - hp) * 10) / 10;
@@ -1324,7 +1338,6 @@
       '<div class="score-team"><img class="score-team-logo" src="' + esc(G.away.logo) + '" alt=""/><span class="score-team-name">' + esc(G.away.nick) + '</span><span class="score-team-score">' + G.away.score + '</span></div>' +
       '<div class="score-team"><img class="score-team-logo" src="' + esc(G.home.logo) + '" alt=""/><span class="score-team-name">' + esc(G.home.nick) + '</span><span class="score-team-score">' + G.home.score + '</span></div>' +
       '</div>' +
-      (G.state === 'in' ? '<span class="score-bases-big">' + diamondSVG(ab.occ1, ab.occ2, ab.occ3, 64) + '</span>' : '') +
       '<div class="score-meta">' +
       '<span class="score-status status-' + displayStatus + '">' + statusLabel + '</span>' +
       '<span class="score-detail">' + esc(G.detail + (outsTxt ? ' · ' + outsTxt : '')) + '</span>' +
@@ -1365,11 +1378,6 @@
     const today = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     dh.textContent = today + ' — Gamecast Preview';
 
-    const rb = document.getElementById('record-bar-content');
-    if (G) {
-      rb.innerHTML = 'Rays @ Rockies — ' + esc(G.state === 'in' ? G.detail : (G.state === 'post' ? 'Final' : 'Scheduled')) +
-        ' <span style="font-family:monospace; font-weight:700;">' + esc(G.away.abbr) + ' ' + G.away.score + ' · ' + esc(G.home.abbr) + ' ' + G.home.score + '</span>';
-    }
   }
 
   /* ═══════════════ UI STATE HANDLERS ═══════════════ */

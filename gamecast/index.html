@@ -179,6 +179,7 @@
     .score-team-name { min-width: 88px; }
     .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; }
     .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .score-bases-big { display: flex; align-items: center; margin-left: auto; margin-right: .75rem; }
     .score-status {
       font-size: .6875rem; font-weight: 700; text-transform: uppercase;
       padding: 2px 8px; border-radius: 4px; white-space: nowrap;
@@ -275,20 +276,27 @@
     .gc-dot.on-out { background: var(--gc-strike); border-color: var(--gc-strike); }
     .gc-bvp { font-size: .6875rem; color: var(--gc-faint); font-style: italic; margin: -.25rem 0 .625rem; line-height: 1.45; }
 
-    /* ─ Due-up module (ESPN BatterPitcher, between innings) ─ */
-    .gc-dueup { display: flex; align-items: stretch; gap: .5rem; margin-bottom: .625rem; }
-    .gc-dueup-side { flex: 1; display: flex; align-items: center; gap: .625rem; min-width: 0; }
-    .gc-dueup-side.batter { flex-direction: row-reverse; text-align: right; }
-    .gc-dueup-side .who { min-width: 0; }
-    .gc-dueup-title { font-size: .5625rem; font-weight: 700; letter-spacing: .06em; color: var(--gc-faint); text-transform: uppercase; }
-    .gc-dueup-name { font-size: .9375rem; font-weight: 700; color: var(--gc-ink); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .gc-dueup-hand { font-size: .625rem; color: var(--gc-sub); }
-    .gc-dueup-line { font-size: .75rem; color: var(--gc-ink); margin-top: 2px; }
-    .gc-dueup-line b { font-weight: 700; }
-    .gc-dueup-line .u { color: var(--gc-sub); font-size: .625rem; }
-    .gc-vs { align-self: center; font-size: .6875rem; font-weight: 700; color: var(--gc-faint); text-transform: uppercase; padding: 0 .125rem; }
-    .gc-dueup-meta { font-size: .6875rem; color: var(--gc-sub); margin: -.25rem 0 .625rem; display: flex; gap: 1rem; flex-wrap: wrap; }
-    .gc-dueup-meta b { color: var(--gc-ink); font-weight: 700; }
+    /* ─ PITCHER vs BATTER module (ESPN BatterPitcher — copied per computed styles) ─ */
+    .gc-vshdr { border-bottom: 1px solid #ededee; padding-bottom: .625rem; margin-bottom: .625rem; }
+    .gc-vsrow { display: grid; grid-template-columns: 1fr auto auto auto 1fr; gap: .625rem; align-items: center; }
+    .gc-vsside { min-width: 0; }
+    .gc-vsside.pitcher { text-align: right; justify-self: end; }
+    .gc-vsside.batter { text-align: left; justify-self: start; }
+    .gc-vslabel { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; font-weight: 700; color: #48494a; }
+    .gc-vslabel img { width: 18px; height: 18px; object-fit: contain; }
+    .gc-vsname { font-size: .875rem; color: var(--gc-blue); font-weight: 400; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gc-vsname .pos { color: var(--gc-sub); font-size: .75rem; margin-left: .25rem; }
+    .gc-vsstat { font-size: .5625rem; color: #151617; font-weight: 600; margin-top: 2px; white-space: nowrap; }
+    .gc-vsstat .u { color: var(--gc-sub); font-weight: 400; }
+    .gc-vsstat.big { font-size: .75rem; font-weight: 700; }
+    .gc-vshead { width: 50px; height: 50px; border-radius: 50%; background: var(--gc-panel); border: 1px solid var(--gc-line); object-fit: cover; object-position: top; flex-shrink: 0; }
+    .gc-vs { font-size: .75rem; color: var(--gc-faint); padding: 0 .125rem; }
+    .gc-vsmeta { display: flex; justify-content: center; gap: .75rem; align-items: center; margin-top: .5rem; font-size: .8125rem; color: var(--gc-ink); flex-wrap: wrap; }
+    .gc-vsmeta .sep { color: var(--gc-line); }
+    .gc-vsmeta b { font-weight: 700; }
+    .gc-vsmeta .lnk { color: var(--gc-blue); font-weight: 500; }
+    .gc-lastplay { font-size: .8125rem; color: var(--gc-sub); line-height: 1.45; margin-bottom: .625rem; }
+    .gc-lastplay b { color: var(--gc-ink); font-weight: 700; }
     .gc-toggle {
       width: 100%; display: flex; align-items: center; justify-content: space-between;
       background: var(--off-white); border: none; border-bottom: 1px solid var(--border-lt);
@@ -393,6 +401,8 @@
     .gc-tab.active { color: var(--gc-ink); font-weight: 700; border-bottom-color: var(--teal); }
     .gc-box-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .gc-box { width: 100%; border-collapse: collapse; font-size: .75rem; font-variant-numeric: tabular-nums; }
+    .gc-box td.nm, .gc-box th.nm { width: 100%; }              /* name col absorbs slack → stat cols right-align across hitter + pitcher tables */
+    .gc-box td.st, .gc-box th.st { width: 2.6rem; min-width: 2.4rem; }
     .gc-box th, .gc-box td { padding: .375rem .3rem; border-bottom: 1px solid #ededee; text-align: right; white-space: nowrap; }
     .gc-box th { color: var(--gc-faint); font-weight: 600; font-size: .625rem; letter-spacing: .03em; }
     .gc-box th:first-child, .gc-box td:first-child { text-align: left; }
@@ -876,44 +886,46 @@
 
   function pitchPlotSVG(pitches, hz, bats, animateLast) {
     const z = zoneGeometry(hz);
-    const VB = { x: 14, y: 72, w: 226, h: 222 }; // covers observed pitch scatter
+    const VB = { x: 24, y: 78, w: 206, h: 214 };
     const clampX = (v) => Math.min(Math.max(v, VB.x + 10), VB.x + VB.w - 10);
     const clampY = (v) => Math.min(Math.max(v, VB.y + 10), VB.y + VB.h - 12);
+    const cw = (z.x2 - z.x1) / 3, ch = (z.y2 - z.y1) / 3;
 
     let s = '<svg viewBox="' + VB.x + ' ' + VB.y + ' ' + VB.w + ' ' + VB.h + '" width="' + VB.w + '" height="' + VB.h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pitch location chart">';
-    // batter silhouette — right-handed stands plot-left facing zone; lefty mirrored
-    const lefty = bats === 'L';
-    const bx = lefty ? (z.x2 + 34) : (z.x1 - 34);
-    const flip = lefty ? -1 : 1;
-    s += '<g transform="translate(' + bx + ',' + ((z.y1 + z.y2) / 2 - 8) + ') scale(' + flip + ',1)" fill="#c9ced6">' +
-      '<circle cx="0" cy="-46" r="9"/>' +
-      '<path d="M-7,-36 C-10,-18 -9,6 -6,30 L-1,30 C-2,12 -2,-2 1,-14 C6,-4 7,12 6,30 L11,30 C13,4 12,-20 8,-35 C5,-38 -4,-38 -7,-36 Z"/>' +
-      '<path d="M4,-34 L26,-58 L28.5,-55.5 L8,-30 Z"/>' +
-      '</g>';
-    // 3x3 zone cells with hot-zone shading
+    // faint basepath behind the zone (ESPN look)
+    const pcx = (z.x1 + z.x2) / 2, py = VB.y + VB.h - 24;
+    s += '<path d="M' + (pcx - 90) + ',' + (py - 44) + ' L' + pcx + ',' + (py + 4) + ' L' + (pcx + 90) + ',' + (py - 44) + '" fill="none" stroke="#e8eaee" stroke-width="2.5"/>';
+    // outer shadow ring (5x5): ESPN's cool chase-zone shading around the white-framed zone
+    for (let r = -1; r <= 3; r++) for (let c = -1; c <= 3; c++) {
+      if (r >= 0 && r <= 2 && c >= 0 && c <= 2) continue;
+      const corner = (r === -1 || r === 3) && (c === -1 || c === 3);
+      s += '<rect x="' + (z.x1 + c * cw) + '" y="' + (z.y1 + r * ch) + '" width="' + cw + '" height="' + ch + '" fill="rgba(91,141,217,' + (corner ? '0.55' : '0.28') + ')" stroke="#ffffff" stroke-width="1"/>';
+    }
+    // inner 3x3 cells — batter hot zones, strong ESPN-style shading
+    const cellRect = (x, y, fill, avg) => {
+      let out = '<rect x="' + x + '" y="' + y + '" width="' + cw + '" height="' + ch + '" fill="' + fill + '" stroke="#ffffff" stroke-width="1"/>';
+      if (avg != null) out += '<text x="' + (x + cw / 2) + '" y="' + (y + ch / 2 + 2.5) + '" text-anchor="middle" font-size="7" fill="rgba(255,255,255,0.92)" font-weight="600" font-family="Geist Sans, sans-serif">' + avg + '</text>';
+      return out;
+    };
     if (z.cells) {
       for (const c of z.cells) {
-        const score = c.battingAvgScore;
-        let fill = '#ffffff';
-        if (typeof score === 'number' && c.atBats > 0) {
-          if (score >= 0.55) fill = 'rgba(224,62,47,' + Math.min(0.14 + (score - 0.55) * 0.9, 0.5).toFixed(2) + ')';
-          else if (score <= 0.45) fill = 'rgba(33,150,243,' + Math.min(0.14 + (0.45 - score) * 0.9, 0.5).toFixed(2) + ')';
+        const score = (typeof c.battingAvgScore === 'number' && c.atBats > 0) ? c.battingAvgScore : null;
+        let fill = 'rgba(224,106,89,0.18)';
+        if (score != null) {
+          fill = score >= 0.5
+            ? 'rgba(217,84,66,' + Math.min(0.25 + (score - 0.5) * 1.1, 0.8).toFixed(2) + ')'
+            : 'rgba(91,141,217,' + Math.min(0.25 + (0.5 - score) * 1.1, 0.8).toFixed(2) + ')';
         }
-        s += '<rect x="' + c.xMin + '" y="' + c.yMin + '" width="' + (c.xMax - c.xMin) + '" height="' + (c.yMax - c.yMin) + '" fill="' + fill + '" stroke="#d0d5db" stroke-width="0.8"/>';
-        if (typeof c.battingAvg === 'number' && c.atBats > 0) {
-          s += '<text x="' + ((c.xMin + c.xMax) / 2) + '" y="' + ((c.yMin + c.yMax) / 2 + 2.5) + '" text-anchor="middle" font-size="7" fill="#8b95a3" font-family="Geist Sans, sans-serif">' + ('.' + Math.round(c.battingAvg * 1000).toString().padStart(3, '0')) + '</text>';
-        }
+        const avg = (typeof c.battingAvg === 'number' && c.atBats > 0) ? ('.' + Math.round(c.battingAvg * 1000).toString().padStart(3, '0')) : null;
+        s += cellRect(c.xMin, c.yMin, fill, avg);
       }
     } else {
-      const cw = (z.x2 - z.x1) / 3, ch = (z.y2 - z.y1) / 3;
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-        s += '<rect x="' + (z.x1 + c * cw) + '" y="' + (z.y1 + r * ch) + '" width="' + cw + '" height="' + ch + '" fill="#ffffff" stroke="#d0d5db" stroke-width="0.8"/>';
-      }
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) s += cellRect(z.x1 + c * cw, z.y1 + r * ch, 'rgba(224,106,89,0.18)', null);
     }
-    s += '<rect x="' + z.x1 + '" y="' + z.y1 + '" width="' + (z.x2 - z.x1) + '" height="' + (z.y2 - z.y1) + '" fill="none" stroke="#5f6b7a" stroke-width="1.6" rx="1"/>';
+    // thick white zone frame (ESPN)
+    s += '<rect x="' + (z.x1 - 2) + '" y="' + (z.y1 - 2) + '" width="' + (z.x2 - z.x1 + 4) + '" height="' + (z.y2 - z.y1 + 4) + '" fill="none" stroke="#ffffff" stroke-width="4" rx="1"/>';
     // home plate
-    const pcx = (z.x1 + z.x2) / 2, py = VB.y + VB.h - 26;
-    s += '<path d="M' + (pcx - 16) + ',' + py + ' L' + (pcx + 16) + ',' + py + ' L' + (pcx + 16) + ',' + (py + 7) + ' L' + pcx + ',' + (py + 15) + ' L' + (pcx - 16) + ',' + (py + 7) + ' Z" fill="#e8eaee" stroke="#c8cdd4" stroke-width="1"/>';
+    s += '<path d="M' + (pcx - 14) + ',' + py + ' L' + (pcx + 14) + ',' + py + ' L' + (pcx + 14) + ',' + (py + 6) + ' L' + pcx + ',' + (py + 13) + ' L' + (pcx - 14) + ',' + (py + 6) + ' Z" fill="#eceef1" stroke="#d0d5db" stroke-width="1"/>';
     // pitches
     const colors = { 'pc-strike': '#dd0000', 'pc-ball': '#009944', 'pc-foul': '#4a4c4f', 'pc-play': '#0066cc' };
     pitches.forEach((p, i) => {
@@ -978,52 +990,111 @@
       '</div>';
   }
 
-  /* ── Between-innings due-up module (ESPN StatusBar__Module__BatterPitcher) ── */
+  /* ── Lineup helpers ── */
+  function nextBatterInfo(side, currentBatterId) {
+    const bb = G.box[side];
+    if (!bb || !bb.batting.length) return { batterRow: null, onDeckRow: null };
+    const order = bb.batting;
+    if (currentBatterId) {
+      const idx = order.findIndex(r => r.id === currentBatterId);
+      if (idx >= 0) return { batterRow: order[idx], onDeckRow: order[(idx + 1) % order.length] };
+    }
+    let lastIdx = -1;
+    for (let i = 0; i < order.length; i++) { if ((window.__abByBatter || {})[order[i].id]) lastIdx = i; }
+    return { batterRow: order[(lastIdx + 1) % order.length], onDeckRow: order[(lastIdx + 2) % order.length] };
+  }
+
+  /* ── PITCHER vs BATTER module (ESPN BatterPitcher — copied: 14px link-blue names,
+       12px/700 #48494a labels w/ team logos, 9px stat lines, 50px headshots, vs center,
+       PITCH COUNT | ON DECK meta row) ── */
+  function vsModuleHTML(pitcherId, batterId, battingSide, onDeckId, animate) {
+    const fieldSide = battingSide === 'home' ? 'away' : 'home';
+    const pTeam = fieldSide === 'away' ? G.away : G.home;
+    const bTeam = battingSide === 'away' ? G.away : G.home;
+    const pitcher = G.athletes[pitcherId] || {};
+    const batter = G.athletes[batterId] || {};
+    const fb = G.box[fieldSide], bb = G.box[battingSide];
+    let pLine = '', pitchCount = null;
+    if (fb && fb.pitching.length) {
+      const pRow = fb.pitching.find(r => r.id === pitcherId) || fb.pitching[fb.pitching.length - 1];
+      const pv = (l) => { const i = fb.pitchingLabels.indexOf(l); return i >= 0 && pRow ? pRow.stats[i] : null; };
+      pLine = ['IP', 'H', 'ER', 'K', 'BB'].map(l => { const v = pv(l); return v == null ? '' : '<b>' + esc(v) + '</b><span class="u">' + l + '</span>'; }).filter(Boolean).join(', ');
+      pitchCount = pv('PC');
+    }
+    let bLine = '';
+    if (bb) {
+      const bRow = bb.batting.find(r => r.id === batterId);
+      if (bRow) {
+        const bv = (l) => { const i = bb.battingLabels.indexOf(l); return i >= 0 ? bRow.stats[i] : null; };
+        const extras = ['R', 'RBI', 'HR', 'BB', 'K'].map(l => ({ l, v: num(bv(l)) })).filter(x => x.v > 0)
+          .map(x => '<b>' + x.v + '</b><span class="u">' + x.l + '</span>').join(', ');
+        bLine = '<span class="gc-vsstat big">' + esc(bv('H-AB') || '') + '</span>' + (extras ? ' <span class="gc-vsstat">' + extras + '</span>' : '');
+      }
+    }
+    const shot = (a) => a.headshot ? '<img class="gc-vshead" src="' + esc(a.headshot) + '" alt="' + esc(a.name || '') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'"/>' : '<span class="gc-vshead"></span>';
+    const onDeck = onDeckId ? (G.athletes[onDeckId] || {}) : null;
+    return '<div class="gc-vshdr' + (animate ? ' gc-slide-in' : '') + '">' +
+      '<div class="gc-vsrow">' +
+      '<div class="gc-vsside pitcher">' +
+        '<div class="gc-vslabel">' + logoImg(pTeam, '') + 'PITCHER</div>' +
+        '<div class="gc-vsname">' + esc(pitcher.short || '—') + '</div>' +
+        '<div class="gc-vsstat">' + pLine + '</div>' +
+      '</div>' +
+      shot(pitcher) + '<span class="gc-vs">vs</span>' + shot(batter) +
+      '<div class="gc-vsside batter">' +
+        '<div class="gc-vslabel">BATTER ' + logoImg(bTeam, '') + '</div>' +
+        '<div class="gc-vsname">' + esc(batter.short || '—') + (batter.pos ? '<span class="pos">' + esc(batter.pos) + '</span>' : '') + '</div>' +
+        '<div>' + bLine + '</div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="gc-vsmeta">' +
+        (pitchCount != null ? '<span>PITCH COUNT: <b>' + esc(pitchCount) + '</b></span>' : '') +
+        (pitchCount != null && onDeck ? '<span class="sep">|</span>' : '') +
+        (onDeck ? '<span>ON DECK: <span class="lnk">' + esc(onDeck.short || '') + '</span></span>' : '') +
+      '</div>' +
+      '</div>';
+  }
+
+  /* ── Between-innings due-up (same ESPN module, upcoming matchup) ── */
   function dueUpHTML() {
     // Batting side for the upcoming half: Top/End → away bats (next top); Mid/Bottom → home bats
     const pfx = (G.periodPrefix || G.detail || '');
     const nextSide = /^(top|end)/i.test(pfx) ? 'away' : 'home';
     const fieldSide = nextSide === 'home' ? 'away' : 'home';
-    const bb = G.box[nextSide], fb = G.box[fieldSide];
-    if (!bb || !fb) return '';
-    // pitcher: last listed pitcher for the fielding team
+    const fb = G.box[fieldSide];
+    if (!fb) return '';
     const pRow = fb.pitching[fb.pitching.length - 1];
-    const pitcher = pRow ? (G.athletes[pRow.id] || {}) : {};
-    const pl = fb.pitchingLabels;
-    const pv = (lbl) => { const i = pl.indexOf(lbl); return i >= 0 && pRow ? pRow.stats[i] : null; };
-    const pLine = pRow ? [['IP', pv('IP')], ['H', pv('H')], ['ER', pv('ER')], ['K', pv('K')], ['BB', pv('BB')]]
-      .filter(x => x[1] != null).map(x => '<b>' + esc(x[1]) + '</b><span class="u">' + x[0] + '</span>').join(' ') : '';
-    const pitchCount = pv('PC');
-    // due batter: last batter this team used → next in order (wraps)
-    let batter = {}, bRow = null, onDeck = null;
-    const order = bb.batting;
-    if (order.length) {
-      let lastIdx = -1;
-      for (let i = 0; i < order.length; i++) { if ((window.__abByBatter || {})[order[i].id]) lastIdx = i; }
-      bRow = order[(lastIdx + 1) % order.length];
-      onDeck = order[(lastIdx + 2) % order.length];
-      batter = G.athletes[bRow.id] || {};
-    }
-    const bl = bb.battingLabels;
-    const bv = (row, lbl) => { const i = bl.indexOf(lbl); return i >= 0 && row ? row.stats[i] : null; };
-    const bLine = bRow ? [bv(bRow, 'H-AB'), (num(bv(bRow, 'K')) > 0 ? num(bv(bRow, 'K')) + 'K' : null)].filter(Boolean).join(', ') : '';
-    const shot = (a) => a.headshot ? '<img class="gc-headshot" src="' + esc(a.headshot) + '" alt="' + esc(a.name || '') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'"/>' : '';
-
-    let h = '<div class="gc-section-title"><span>' + esc(G.shortDetail || 'Between Innings') + '</span><span class="aux">Due up: ' + esc((G.athletes[bRow ? bRow.id : ''] || {}).short || '') + '</span></div>';
-    h += '<div class="gc-dueup' + (CHG.headline ? ' gc-slide-in' : '') + '">' +
-      '<div class="gc-dueup-side">' + shot(pitcher) +
-        '<div class="who"><div class="gc-dueup-title">Pitcher</div><div class="gc-dueup-name">' + esc(pitcher.short || '—') + '</div>' +
-        '<div class="gc-dueup-line">' + pLine + '</div></div></div>' +
-      '<span class="gc-vs">vs</span>' +
-      '<div class="gc-dueup-side batter">' + shot(batter) +
-        '<div class="who"><div class="gc-dueup-title">Batter</div><div class="gc-dueup-name">' + esc(batter.short || '—') + '</div>' +
-        '<div class="gc-dueup-line">' + esc(bLine) + (batter.pos ? ' <span class="u">' + esc(batter.pos) + '</span>' : '') + '</div></div></div>' +
-      '</div>';
-    h += '<div class="gc-dueup-meta">' +
-      (pitchCount != null ? '<span>PITCH COUNT: <b>' + esc(pitchCount) + '</b></span>' : '') +
-      (onDeck ? '<span>ON DECK: <b>' + esc((G.athletes[onDeck.id] || {}).short || '') + '</b></span>' : '') +
-      '</div>';
+    const nb = nextBatterInfo(nextSide, null);
+    let h = '<div class="gc-section-title"><span>' + esc(G.shortDetail || 'Between Innings') + '</span><span class="aux">Due up</span></div>';
+    h += vsModuleHTML(pRow ? pRow.id : '', nb.batterRow ? nb.batterRow.id : '', nextSide, nb.onDeckRow ? nb.onDeckRow.id : '', CHG.headline);
     return h;
+  }
+
+  /* ── Field view on a ball in play: grass, dirt, basepaths + hit location (ESPN swaps to this) ── */
+  function fieldSVG(hit, outcome) {
+    // ESPN hitCoordinate space ~250x250, plate near bottom-center (125, ~200)
+    const px = 125, pyy = 200;
+    const hx = Math.min(Math.max(num(hit.x, px), 8), 242);
+    const hy = Math.min(Math.max(num(hit.y, 120), 14), 208);
+    const hr = /homer|home run/i.test(outcome || '') ? '#dd0000' : '#0066cc';
+    let s = '<svg viewBox="0 0 250 218" width="250" height="218" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hit location">';
+    // grass
+    s += '<path d="M' + px + ',' + pyy + ' L10,85 Q125,-28 240,85 Z" fill="#8bc34a"/>';
+    s += '<path d="M' + px + ',' + pyy + ' L38,113 Q125,28 212,113 Z" fill="#9ccc65"/>';
+    // infield dirt + inner grass diamond
+    s += '<path d="M' + px + ',' + (pyy + 4) + ' L182,147 Q125,90 68,147 Z" fill="#d7b98e"/>';
+    s += '<path d="M' + px + ',' + (pyy - 6) + ' L168,152 L125,109 L82,152 Z" fill="#9ccc65"/>';
+    // foul lines
+    s += '<path d="M' + px + ',' + pyy + ' L10,85 M' + px + ',' + pyy + ' L240,85" stroke="#ffffff" stroke-width="2" fill="none"/>';
+    // bases
+    const base = (bx, by) => '<rect x="' + (bx - 4) + '" y="' + (by - 4) + '" width="8" height="8" transform="rotate(45 ' + bx + ' ' + by + ')" fill="#ffffff" stroke="#c8cdd4" stroke-width="0.8"/>';
+    s += base(168, 152) + base(125, 109) + base(82, 152);
+    s += '<path d="M' + (px - 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy + 2) + ' L' + px + ',' + (pyy + 7) + ' L' + (px - 7) + ',' + (pyy + 2) + ' Z" fill="#ffffff" stroke="#c8cdd4" stroke-width="0.8"/>';
+    // hit trajectory + marker
+    s += '<path class="ip-new" d="M' + px + ',' + (pyy - 4) + ' L' + hx + ',' + hy + '" stroke="#2b2c2d" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>';
+    s += '<g class="ip-new"><circle cx="' + hx + '" cy="' + hy + '" r="7.5" fill="' + hr + '" stroke="#ffffff" stroke-width="2"/></g>';
+    s += '</svg>';
+    return s;
   }
 
   function atBatHTML(idx) {
@@ -1045,15 +1116,16 @@
     }
     const stateChip = G.state === 'post' ? 'FINAL' : (G.shortDetail || '').toUpperCase();
 
-    let h = '<div class="gc-section-title"><span>' + (ab.completed ? 'Last At-Bat' : 'Now At Bat') + (batter.short ? ' — ' + esc(batter.short) : '') + '</span><span class="aux">' + (pitcher.short ? 'P: ' + esc(pitcher.short) : '') + '</span></div>';
+    let h = '<div class="gc-section-title"><span>' + (ab.completed ? 'Last At-Bat' : 'Now At Bat') + (batter.short ? ' — ' + esc(batter.short) : '') + '</span><span class="aux">' + esc(stateChip) + '</span></div>';
 
-    h += '<div class="gc-headline' + (CHG.headline ? ' gc-slide-in' : '') + '">' +
-      (batter.headshot ? '<img class="gc-headshot" src="' + esc(batter.headshot) + '" alt="' + esc(batter.name) + '" loading="lazy" onerror="this.style.visibility=\'hidden\'"/>' : '') +
-      '<div class="gc-headline-txt"><div class="gc-headline-type">' + esc(ab.headTitle) + '</div>' +
-      '<div class="gc-headline-desc">' + esc(ab.headText || (batLine ? esc(batLine) : '')) + '</div></div>' +
-      '<span class="gc-inning-chip">' + esc(stateChip) + '</span></div>';
+    // ESPN BatterPitcher header — the current matchup, faces + logos + lines
+    const nb = nextBatterInfo(battingSide, ab.batterId);
+    h += vsModuleHTML(ab.pitcherId, ab.batterId, battingSide, nb.onDeckRow ? nb.onDeckRow.id : '', false);
 
-    if (batLine && ab.headText) h += '<div class="gc-bvp" style="font-style:normal;">' + esc((batter.short || '') + (batter.pos ? ' (' + batter.pos + ')' : '') + ' — ' + batLine) + '</div>';
+    // compact last-play line (ESPN rotates this in its StatusBar carousel)
+    if (ab.headTitle) {
+      h += '<div class="gc-lastplay' + (CHG.headline ? ' gc-slide-in' : '') + '"><b>' + esc(ab.headTitle) + '</b>' + (ab.headText ? ' — ' + esc(ab.headText) : '') + '</div>';
+    }
 
     const dotsAnim = (count, max, cls, changed) => {
       let out = '<span class="gc-dots">';
@@ -1074,7 +1146,11 @@
 
     // stage
     const batterHZ = (G.athletes[ab.batterId] || {}).hotZones;
-    h += '<div class="gc-stage"><div class="gc-plot">' + pitchPlotSVG(ab.pitches, batterHZ, ab.bats, CHG.pitch) + '</div>';
+    // Ball in play → swap the zone for the field view with the hit location (ESPN behavior)
+    const lastP = ab.pitches[ab.pitches.length - 1];
+    const showField = ab.completed && lastP && lastP.hitCoordinate && pitchClass(lastP.type?.text) === 'pc-play';
+    const plotSVG = showField ? fieldSVG(lastP.hitCoordinate, ab.headTitle) : pitchPlotSVG(ab.pitches, batterHZ, ab.bats, CHG.pitch);
+    h += '<div class="gc-stage"><div class="gc-plot">' + plotSVG + '</div>';
     h += '<div class="gc-seq">';
     if (!ab.pitches.length) {
       h += '<div class="gc-nopitch">No pitches</div>';
@@ -1150,8 +1226,9 @@
     const lbl = b.battingLabels;
     const cols = ['H-AB', 'R', 'HR', 'RBI', 'AVG'];
     const colIdx = cols.map(c => lbl.indexOf(c));
+    // separate hitters/pitchers tables: name col absorbs width → stat cols right-align across both
     h += '<div class="gc-box-scroll"><table class="gc-box">';
-    h += '<tr><th>HITTERS</th>' + cols.map(c => '<th>' + c + '</th>').join('') + '</tr>';
+    h += '<tr><th class="nm">HITTERS</th>' + cols.map(c => '<th class="st">' + c + '</th>').join('') + '</tr>';
     const nowBatterId = (G.state === 'in' && !G.atBat.completed) ? G.atBat.batterId : null;
     for (const r of b.batting) {
       const a = G.athletes[r.id] || {};
@@ -1159,26 +1236,28 @@
       const abList = (G.state !== 'pre' && (window.__abByBatter || {})[r.id]) || [];
       const isNow = r.id === nowBatterId;
       const open = UI.exp[key] || isNow;
-      h += '<tr class="' + (isNow ? 'now' : '') + '"><td>' +
+      h += '<tr class="' + (isNow ? 'now' : '') + '"><td class="nm">' +
         '<button class="plr" onclick="toggleAB(\'' + key + '\')">' +
         '<span class="chev">' + (abList.length ? (open ? '&#9650;' : '&#9660;') : '') + '</span>' +
         (r.sub ? '<span style="color:var(--txt-l);">&nbsp;&nbsp;</span>' : '') + esc(a.short || r.id) +
         ' <span class="pos">' + esc(a.pos || '') + '</span></button></td>' +
-        colIdx.map(ci => '<td class="stat">' + esc(ci >= 0 && r.stats[ci] != null ? r.stats[ci] : '-') + '</td>').join('') + '</tr>';
+        colIdx.map(ci => '<td class="st stat">' + esc(ci >= 0 && r.stats[ci] != null ? r.stats[ci] : '-') + '</td>').join('') + '</tr>';
       if (open && abList.length) {
         h += '<tr class="gc-ab-detail"><td colspan="' + (cols.length + 1) + '"><div class="abt">Today\'s At Bats</div>' +
           abList.map(x => '<div class="ln"><b>' + esc(ORD(x.inning)) + ':</b> ' + esc(x.text) + '</div>').join('') + '</td></tr>';
       }
     }
+    h += '</table>';
     // pitchers
     const plbl = b.pitchingLabels;
     const pcols = ['IP', 'H', 'ER', 'BB', 'K', 'PC-ST', 'ERA'];
     const pIdx = pcols.map(c => plbl.indexOf(c));
-    h += '<tr><th style="padding-top:.6rem;">PITCHERS</th>' + pcols.map(c => '<th style="padding-top:.6rem;">' + c + '</th>').join('') + '</tr>';
+    h += '<table class="gc-box" style="margin-top:.375rem;">';
+    h += '<tr><th class="nm">PITCHERS</th>' + pcols.map(c => '<th class="st">' + c + '</th>').join('') + '</tr>';
     for (const r of b.pitching) {
       const a = G.athletes[r.id] || {};
-      h += '<tr><td><span class="plr" style="cursor:default;">' + esc(a.short || r.id) + '</span></td>' +
-        pIdx.map(ci => '<td class="stat">' + esc(ci >= 0 && r.stats[ci] != null ? r.stats[ci] : '-') + '</td>').join('') + '</tr>';
+      h += '<tr><td class="nm"><span class="plr" style="cursor:default;">' + esc(a.short || r.id) + '</span></td>' +
+        pIdx.map(ci => '<td class="st stat">' + esc(ci >= 0 && r.stats[ci] != null ? r.stats[ci] : '-') + '</td>').join('') + '</tr>';
     }
     h += '</table></div>';
     return h;
@@ -1197,7 +1276,7 @@
       const leader = hp >= 50 ? G.home : G.away;
       const leadPct = hp >= 50 ? hp : ap;
       h += '<div class="gc-wp"><div class="gc-wp-bar"><span class="gc-wp-away" style="width:' + ap + '%"></span><span class="gc-wp-home" style="width:' + hp + '%"></span></div>' +
-        '<div class="gc-wp-lbl"><span>' + esc(G.away.abbr) + ' ' + ap + '%</span><b>Win Probability — ' + esc(leader.abbr) + ' ' + leadPct + '%</b><span>' + esc(G.home.abbr) + ' ' + hp + '%</span></div></div>';
+        '<div class="gc-wp-lbl"><span>' + esc(G.away.abbr) + ' ' + ap + '%</span><b>Game Win Probability — ' + esc(leader.abbr) + ' ' + leadPct + '%</b><span>' + esc(G.home.abbr) + ' ' + hp + '%</span></div></div>';
     }
     return h;
   }
@@ -1231,9 +1310,11 @@
       '<div class="score-teams">' +
       '<div class="score-team"><img class="score-team-logo" src="' + esc(G.away.logo) + '" alt=""/><span class="score-team-name">' + esc(G.away.nick) + '</span><span class="score-team-score">' + G.away.score + '</span></div>' +
       '<div class="score-team"><img class="score-team-logo" src="' + esc(G.home.logo) + '" alt=""/><span class="score-team-name">' + esc(G.home.nick) + '</span><span class="score-team-score">' + G.home.score + '</span></div>' +
-      '</div><div class="score-meta">' +
+      '</div>' +
+      (G.state === 'in' ? '<span class="score-bases-big">' + diamondSVG(ab.occ1, ab.occ2, ab.occ3, 64) + '</span>' : '') +
+      '<div class="score-meta">' +
       '<span class="score-status status-' + displayStatus + '">' + statusLabel + '</span>' +
-      '<span class="score-detail">' + (G.state === 'in' ? diamondSVG(ab.occ1, ab.occ2, ab.occ3, 18) : '') + esc(G.detail + (outsTxt ? ' · ' + outsTxt : '')) + '</span>' +
+      '<span class="score-detail">' + esc(G.detail + (outsTxt ? ' · ' + outsTxt : '')) + '</span>' +
       '</div></div>';
   }
 

@@ -453,6 +453,17 @@
       .pick-matchup { font-size: .9375rem; }
       .gc-splay { grid-template-columns: 18px 2.1rem 1fr 1.4rem 1.4rem; }
       .score-team-name { min-width: 76px; }
+      /* vs-module: smaller faces + wrapping stat lines so the row fits 375px */
+      .gc-vshead { width: 40px; height: 40px; }
+      .gc-vsrow { gap: .4rem; }
+      .gc-vsname { font-size: .8125rem; }
+      .gc-vsstat { white-space: normal; }
+      .gc-strip-logo { width: 36px; height: 36px; }
+      .gc-strip-score { font-size: 1.625rem; }
+      /* box score: compress stat cols so hitter + pitcher tables both fit → right edges align */
+      .gc-box { font-size: .6875rem; }
+      .gc-box td.st, .gc-box th.st { width: 2.1rem; min-width: 1.9rem; }
+      .gc-box th, .gc-box td { padding: .35rem .2rem; }
     }
   </style>
 </head>

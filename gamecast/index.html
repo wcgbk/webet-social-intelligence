@@ -491,6 +491,7 @@
   let G = null;          // parsed game state
   let refreshTimer = null;
   let lastFetchErr = false;
+  let lastFingerprint = null;  // skip re-render when nothing changed (no flicker)
 
   function parseTeam(c) {
     const t = c.team || {};
@@ -1090,10 +1091,16 @@
       const resp = await fetch(SUMMARY_URL);
       if (!resp.ok) throw new Error('ESPN ' + resp.status);
       const data = await resp.json();
+      const plays = data.plays || [];
+      const lastPlay = plays[plays.length - 1] || {};
+      const sit = data.situation || {};
+      const fp = [plays.length, lastPlay.id, sit.balls, sit.strikes, sit.outs,
+        data.header?.competitions?.[0]?.status?.type?.detail].join('|');
+      if (fp === lastFingerprint && G) { lastFetchErr = false; schedule(); return; }
+      lastFingerprint = fp;
       G = parseSummary(data);
       window.__abByBatter = {};
       // expose per-batter at-bats for box score renderer
-      const plays = data.plays || [];
       for (const p of plays) {
         if (p.type?.text !== 'Play Result' || !p.text) continue;
         const b = (p.participants || []).find(x => x.type === 'batter');

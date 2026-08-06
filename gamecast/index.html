@@ -12,16 +12,16 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WeBetAI - Social Intelligence | Gamecast Preview</title>
-  <meta name="description" content="Live in-card Gamecast preview — pitch-by-pitch strike zone, count, scoring summary, and box score powered by live ESPN data inside WeBetAI alpha pick cards." />
+  <title>WeBetAI - Social Intelligence | Picks Gamecast</title>
+  <meta name="description" content="Picks Gamecast — every game on today's WeBetAI alpha card with its own live ESPN Gamecast: pitch-by-pitch strike zone, count, scoring summary, and box score." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/gamecast" />
-  <meta property="og:title" content="WeBetAI - Social Intelligence | Gamecast Preview" />
-  <meta property="og:description" content="Live in-card Gamecast — pitch-by-pitch strike zone, count, scoring summary, and box score inside WeBetAI alpha pick cards." />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Picks Gamecast" />
+  <meta property="og:description" content="Every game on today's WeBetAI alpha card with its own live ESPN Gamecast — strike zone, count, scoring, box score." />
   <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Gamecast Preview" />
-  <meta name="twitter:description" content="Live in-card Gamecast — pitch-by-pitch strike zone, count, scoring summary, and box score inside WeBetAI alpha pick cards." />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Picks Gamecast" />
+  <meta name="twitter:description" content="Every game on today's WeBetAI alpha card with its own live ESPN Gamecast — strike zone, count, scoring, box score." />
   <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -60,64 +60,11 @@
       min-height: 100vh;
     }
 
-    /* ─── Header (alpha) ─── */
-    .header {
-      background: var(--white);
-      border-bottom: 1px solid var(--border-lt);
-      padding: .875rem 1.25rem;
-      display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 3px; z-index: 100;
-    }
-    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
-    .logo-text { font-size: 1rem; font-weight: 700; }
-    .header-badge {
-      font-size: .6875rem; font-weight: 600; color: var(--teal);
-      background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 9999px; padding: .2rem .6rem;
-    }
-    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
-    .header-link {
-      font-size: .625rem; font-weight: 600; color: var(--teal);
-      background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .header-link:hover { background: var(--teal-border); }
-    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
-    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
-    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
-    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
-    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
-    .mobile-dropdown a:hover { background: var(--teal-light); }
-    @media (max-width: 640px) {
-      .header-nav { display: none; }
-      .mobile-menu-btn { display: block; }
-    }
-
     /* ─── Main ─── */
     .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
     .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .75rem; }
 
-    .demo-bar {
-      display: flex; align-items: flex-start; gap: .5rem;
-      background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: .75rem; padding: .625rem .875rem; margin-bottom: 1rem;
-      font-size: .75rem; color: #0f3d42; line-height: 1.5;
-    }
-    .demo-bar strong { color: var(--teal); }
-
-    .record-legend-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: .75rem; padding: .625rem 1rem; margin-bottom: .75rem;
-      font-size: .8125rem; font-weight: 600;
-    }
-    .rl-right { display: flex; align-items: center; gap: .75rem; font-size: .75rem; color: var(--txt-m); font-weight: 500; }
-    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
-    .dot-aminus { background: #1abc9c; }
-    .dot-bplus { background: #f39c12; }
-
-    /* ─── Pick Card (alpha) ─── */
+    /* ─── Pick Card shell (alpha) ─── */
     .pick-card {
       background: var(--white); border: 1px solid var(--border-lt);
       border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
@@ -128,74 +75,22 @@
       background: var(--teal-light); border: 1px solid var(--teal-border);
       border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
     }
-    .rating-badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-width: 32px; height: 26px; border-radius: 6px;
-      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
-    }
-    .badge-aminus { background: #1abc9c; }
-    .badge-bplus { background: #f39c12; }
     .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
-    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
-    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
-    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
-    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
-    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
 
-    .edge-badge {
-      display: inline-flex; align-items: center; gap: .25rem;
-      font-size: .6875rem; font-weight: 700; font-family: 'Geist Sans', monospace;
-      color: #e8b931; background: rgba(232, 185, 49, 0.08);
-      border: 1px solid rgba(232, 185, 49, 0.2); border-radius: 6px;
-      padding: .125rem .5rem; white-space: nowrap;
+    /* ─── Pick chips (full analysis lives on /alpha — these stay minimal) ─── */
+    .gc-chips { display: flex; flex-wrap: wrap; gap: .375rem; margin: .375rem 0 .25rem; }
+    .gc-chip {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: 9999px; padding: .25rem .625rem;
+      font-size: .75rem; color: var(--txt-m); white-space: nowrap;
     }
-    .edge-badge svg { width: 12px; height: 12px; flex-shrink: 0; }
-
-    .progress-delta {
-      display: inline-flex; align-items: center; gap: .25rem;
-      font-size: .75rem; font-weight: 700; font-family: 'Geist Sans', monospace;
-      border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
-      white-space: nowrap;
-    }
-    .delta-positive { color: #16a34a; background: #dcfce7; border: 1px solid #86efac; }
-    .delta-negative { color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; }
-    .delta-even { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
-
-    /* ─── Live Score Bar (alpha) ─── */
-    .pick-score-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: .5rem .625rem; margin-bottom: .625rem;
-      border-radius: .5rem; font-size: .8125rem;
-    }
-    .score-bar-live { background: #eef6ff; border: 1px solid #b3d4fc; }
-    .score-bar-win { background: #e8f5e9; border: 1px solid #a5d6a7; }
-    .score-bar-loss { background: #fce4e4; border: 1px solid #f5b7b7; }
-    .score-bar-push { background: #fff8e1; border: 1px solid #ffe082; }
-    .score-bar-scheduled { background: var(--off-white); border: 1px solid var(--border-lt); }
-    .score-teams { display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: var(--olive); }
-    .score-team { display: flex; align-items: center; gap: .375rem; }
-    .score-team-logo { width: 18px; height: 18px; object-fit: contain; }
-    .score-team-name { min-width: 88px; }
-    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; }
-    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-    .score-bases-big { display: flex; align-items: center; margin-left: auto; margin-right: .75rem; }
-    .score-status {
-      font-size: .6875rem; font-weight: 700; text-transform: uppercase;
-      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
-    }
-    .status-live { background: #2196f3; color: #fff; animation: pulse-live 2s infinite; }
-    .status-win { background: #2e7d32; color: #fff; }
-    .status-loss { background: #c0392b; color: #fff; }
-    .status-push { background: #f9a825; color: #fff; }
-    .status-scheduled { background: var(--border-lt); color: var(--txt-m); }
-    .score-detail { font-size: .6875rem; color: var(--txt-m); display: flex; align-items: center; gap: .3rem; }
-    @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
-    .leg-result {
-      font-size: .75rem; font-weight: 700; padding: 1px 6px;
-      border-radius: 4px; white-space: nowrap;
-    }
-    .leg-live { background: #eef6ff; color: #2196f3; }
+    .gc-chip b { color: var(--olive); font-weight: 700; }
+    .gc-chip .odds { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--olive); }
+    .gc-chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .chip-aplus { background: #c0392b; } .chip-a { background: #004C54; }
+    .chip-aminus { background: #1abc9c; } .chip-bplus { background: #f39c12; }
+    .chip-b { background: #f9a825; } .chip-lean { background: #5b6b7a; }
 
     /* ═══ GAMECAST — ESPN-matched palette + metrics ═══ */
     :root {
@@ -210,8 +105,6 @@
       --gc-play: #0066cc;        /* in-play — ESPN link blue */
       --gc-blue: #0066cc;        /* ESPN link/base blue */
       --gc-base-off: #cbccce;    /* empty base border (sampled live) */
-      --gc-hot: rgba(224, 106, 89, 0.9);
-      --gc-cold: rgba(122, 165, 212, 0.9);
     }
 
     /* ─ Live-update animations (timings observed on ESPN Gamecast) ─ */
@@ -220,14 +113,15 @@
     @keyframes gc-row-in { from { opacity: 0; transform: translateY(-9px); } to { opacity: 1; transform: none; } }
     @keyframes gc-orb-pop { 0% { transform: scale(.35); opacity: .4; } 70% { transform: scale(1.3); } 100% { transform: scale(1); opacity: 1; } }
     @keyframes gc-flash { 0% { background: #fff3b8; } 100% { background: transparent; } }
-    .ip-new { animation: gc-fade-in .25s ease both; }              /* ESPN IncomingPitch: opacity .25s */
-    .gc-slide-in { animation: gc-slide-in .35s ease-out both; }    /* StatusBar TransitionPane swap */
-    .gc-row-in { animation: gc-row-in .3s ease-out both; }         /* PitchTracker slider push */
-    .gc-orb-new { animation: gc-orb-pop .25s ease-out both; }      /* count orb fill */
+    @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+    .ip-new { animation: gc-fade-in .25s ease both; }
+    .gc-slide-in { animation: gc-slide-in .35s ease-out both; }
+    .gc-row-in { animation: gc-row-in .3s ease-out both; }
+    .gc-orb-new { animation: gc-orb-pop .25s ease-out both; }
     .gc-score-flash { animation: gc-flash 1.2s ease-out both; border-radius: 4px; }
-    .gc-wrap { margin-top: .75rem; border: 1px solid var(--gc-line); border-radius: .625rem; overflow: hidden; background: var(--white); }
+    .gc-wrap { margin-top: .625rem; border: 1px solid var(--gc-line); border-radius: .625rem; overflow: hidden; background: var(--white); }
 
-    /* ─ ESPN Gamestrip: [logo name/rec] score [inning+diamond] score [name/rec logo] ─ */
+    /* ─ ESPN Gamestrip ─ */
     .gc-strip {
       display: grid; grid-template-columns: 1fr auto auto auto 1fr;
       gap: .5rem; align-items: center;
@@ -251,7 +145,7 @@
       background: #e33; border-radius: 3px; padding: 1px 5px;
     }
 
-    /* ─ At-bat headline (ESPN: headshot left, 22px/700 title, 14px sub) ─ */
+    /* ─ At-bat headline ─ */
     .gc-headline { display: flex; align-items: center; gap: .625rem; margin-bottom: .625rem; }
     .gc-headshot {
       width: 50px; height: 50px; border-radius: 50%; background: var(--gc-panel);
@@ -266,7 +160,7 @@
       border-radius: 4px; padding: .125rem .45rem; text-transform: uppercase; white-space: nowrap;
     }
 
-    /* ─ Count orbs (ESPN: 8px, white + #dcdddf border empty; fill + border-color on) ─ */
+    /* ─ Count orbs ─ */
     .gc-count { display: flex; align-items: center; gap: 1.25rem; padding: .5rem 0; margin-bottom: .5rem; flex-wrap: wrap; }
     .gc-count-grp { display: flex; align-items: center; gap: .45rem; }
     .gc-count-lbl { font-size: .6875rem; font-weight: 600; letter-spacing: .02em; color: var(--gc-ink); text-transform: uppercase; }
@@ -277,7 +171,7 @@
     .gc-dot.on-out { background: var(--gc-strike); border-color: var(--gc-strike); }
     .gc-bvp { font-size: .6875rem; color: var(--gc-faint); font-style: italic; margin: -.25rem 0 .625rem; line-height: 1.45; }
 
-    /* ─ PITCHER vs BATTER module (ESPN BatterPitcher — copied per computed styles) ─ */
+    /* ─ PITCHER vs BATTER module ─ */
     .gc-vshdr { border-bottom: 1px solid #ededee; padding-bottom: .625rem; margin-bottom: .625rem; }
     .gc-vsrow { display: grid; grid-template-columns: 1fr auto auto auto 1fr; gap: .625rem; align-items: center; }
     .gc-vsside { min-width: 0; }
@@ -329,10 +223,10 @@
     }
     .gc-h3 .aux { font-size: .6875rem; font-weight: 500; color: var(--gc-sub); }
 
-    /* Stage: plot + pitch sequence */
+    /* Stage: plot + pitch sequence. Plot is the ESPN zone module — kept compact. */
     .gc-stage { display: grid; grid-template-columns: 1fr 210px; gap: .75rem; align-items: stretch; }
     .gc-plot { background: #fff; border: 1px solid var(--gc-line); border-radius: .375rem; padding: .25rem; display: flex; align-items: center; justify-content: center; }
-    .gc-plot svg { width: 100%; height: auto; max-height: 320px; display: block; aspect-ratio: 226 / 222; }
+    .gc-plot svg { width: 100%; height: auto; max-height: 235px; display: block; aspect-ratio: 315 / 200; }
     .gc-seq { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--gc-line); border-radius: .375rem; overflow: hidden; align-self: start; }
     .gc-pitch {
       display: flex; align-items: center; gap: .625rem;
@@ -365,7 +259,7 @@
     .gc-onbase b { color: var(--gc-ink); font-weight: 700; }
     .gc-onbase .lbl { font-weight: 700; letter-spacing: .02em; color: var(--gc-ink); text-transform: uppercase; font-size: .6875rem; }
 
-    /* Linescore (ESPN: 10px gray uppercase headers, tabular numerals, bold R/H/E) */
+    /* Linescore */
     .gc-ls-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .gc-ls { width: 100%; border-collapse: collapse; font-size: .75rem; font-variant-numeric: tabular-nums; }
     .gc-ls th, .gc-ls td { padding: .32rem .3rem; text-align: center; border-bottom: 1px solid #ededee; white-space: nowrap; color: var(--gc-ink); }
@@ -376,7 +270,7 @@
     .gc-ls .rhe { font-weight: 700; }
     .gc-ls .cur { background: #f1f2f3; border-radius: 3px; }
 
-    /* Scoring plays (ESPN: logo · inning · text · running score cols) */
+    /* Scoring plays */
     .gc-splays { margin-top: .375rem; }
     .gc-splay {
       display: grid; grid-template-columns: 22px 2.6rem 1fr 1.6rem 1.6rem;
@@ -390,7 +284,7 @@
     .gc-splay .sc { font-weight: 400; color: var(--gc-sub); text-align: right; font-variant-numeric: tabular-nums; }
     .gc-splay .sc.scored { color: var(--gc-ink); font-weight: 700; }
 
-    /* Box score (ESPN: tab underline, link-colored names, uppercase 10px headers) */
+    /* Box score */
     .gc-tabs { display: flex; border-bottom: 1px solid var(--gc-line); margin-bottom: .25rem; }
     .gc-tab {
       flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
@@ -402,7 +296,7 @@
     .gc-tab.active { color: var(--gc-ink); font-weight: 700; border-bottom-color: var(--teal); }
     .gc-box-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .gc-box { width: 100%; border-collapse: collapse; font-size: .75rem; font-variant-numeric: tabular-nums; }
-    .gc-box td.nm, .gc-box th.nm { width: 100%; }              /* name col absorbs slack → stat cols right-align across hitter + pitcher tables */
+    .gc-box td.nm, .gc-box th.nm { width: 100%; }
     .gc-box td.st, .gc-box th.st { width: 2.6rem; min-width: 2.4rem; }
     .gc-box th, .gc-box td { padding: .375rem .3rem; border-bottom: 1px solid #ededee; text-align: right; white-space: nowrap; }
     .gc-box th { color: var(--gc-faint); font-weight: 600; font-size: .625rem; letter-spacing: .03em; }
@@ -418,15 +312,7 @@
     .gc-ab-detail div.ln { font-size: .75rem; color: var(--gc-sub); line-height: 1.55; white-space: normal; }
     .gc-ab-detail div.ln b { color: var(--gc-ink); font-weight: 600; }
 
-    /* Team stats + win prob (ESPN: label rows w/ two value columns) */
-    .gc-tstats { border: 1px solid var(--gc-line); border-radius: .375rem; overflow: hidden; }
-    .gc-tstat { display: grid; grid-template-columns: 1fr 3rem 3rem; padding: .45rem .625rem; border-bottom: 1px solid #ededee; font-size: .75rem; align-items: center; }
-    .gc-tstat:last-child { border-bottom: none; }
-    .gc-tstat .l { color: var(--gc-ink); font-weight: 500; }
-    .gc-tstat .v { text-align: right; font-weight: 700; color: var(--gc-ink); font-variant-numeric: tabular-nums; }
-    .gc-tstats-head { display: grid; grid-template-columns: 1fr 3rem 3rem; padding: .375rem .625rem; background: var(--gc-panel); border-bottom: 1px solid #ededee; }
-    .gc-tstats-head span { text-align: right; font-size: .625rem; font-weight: 700; color: var(--gc-sub); display: inline-flex; align-items: center; justify-content: flex-end; gap: .3rem; }
-    .gc-tstats-head img { width: 16px; height: 16px; object-fit: contain; }
+    /* Win prob */
     .gc-wp { margin-top: .75rem; }
     .gc-wp-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--gc-panel); }
     .gc-wp-away { background: #7a8087; }
@@ -449,11 +335,10 @@
     @media (max-width: 560px) {
       .gc-stage { grid-template-columns: 1fr; }
       .gc-seq { flex-direction: column; }
-      .gc-plot svg { max-height: 300px; }
+      .gc-plot svg { max-height: 220px; }
       .gc-count { gap: .75rem; }
       .pick-matchup { font-size: .9375rem; }
       .gc-splay { grid-template-columns: 18px 2.1rem 1fr 1.4rem 1.4rem; }
-      .score-team-name { min-width: 76px; }
       /* vs-module: smaller faces + wrapping stat lines so the row fits 375px */
       .gc-vshead { width: 36px; height: 36px; }
       .gc-vsrow { gap: .25rem; }
@@ -470,10 +355,11 @@
       /* ── full mobile pass ── */
       .main { padding: .875rem .625rem 2rem; }
       .pick-card { padding: .875rem; }
-      .demo-bar { font-size: .6875rem; padding: .5rem .625rem; }
       .date-header { font-size: .875rem; }
       .gc-body { padding: .625rem; }
       .gc-h3 { font-size: .875rem; margin: .875rem 0 .375rem; }
+      .gc-chips { gap: .25rem; }
+      .gc-chip { font-size: .6875rem; padding: .2rem .5rem; }
       /* Gamestrip: ESPN mobile style — logos + abbr, tighter */
       .gc-strip { gap: .375rem; padding: .625rem .5rem .5rem; }
       .gc-strip-name .nm-full { display: none; }
@@ -491,7 +377,6 @@
       .gc-splays .gc-splay { font-size: .6875rem; }
       .gc-toggle { padding: .45rem .625rem; }
       .footer-note { font-size: .625rem; }
-      .pick-analysis { font-size: .78125rem; }
     }
   </style>
 </head>
@@ -501,24 +386,19 @@
 
 <div class="main">
 
-  <div class="demo-bar">
-    <span style="flex-shrink:0;">&#9889;</span>
-    <span><strong>Gamecast Preview — test page.</strong> Three demo pick cards (ML, Run Line, Total) wired to the live Rays @ Rockies game, each with an embedded in-card Gamecast: pitch-by-pitch strike zone, count, scoring summary, and box score from live ESPN data. Not today's official alpha card.</span>
-  </div>
-
   <div class="date-header" id="date-header">Loading…</div>
 
   <div id="picks-container">
     <div class="loading">
       <div class="loading-icon">&#9203;</div>
-      Loading live Gamecast from ESPN…
+      Loading today's picks &amp; live Gamecasts…
     </div>
   </div>
 
   <p class="footer-note">
-    Demo pick cards for layout testing — not official WeBetAI picks and not tracked in results.<br>
-    Live game data: ESPN public Gamecast feed, refreshed every 20 seconds in your browser.<br>
-    Not financial advice.
+    Every game on today's WeBetAI alpha card, each with its live ESPN Gamecast.<br>
+    Full pick analysis, units, and track record live on the <a href="/alpha" style="color:var(--teal);font-weight:600;">Alpha Picks card</a>.<br>
+    Live game data: ESPN public Gamecast feed, refreshed every 10&ndash;60 seconds in your browser. Not financial advice.
   </p>
 </div>
 
@@ -526,66 +406,109 @@
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   const num = (v, f) => { const n = Number(v); return isNaN(n) ? (f ?? 0) : n; };
 
-  /* ═══════════════ DEMO PICKS (layout test — same fields as alpha) ═══════════════ */
-  const GAME_ID = '401816396';
-  const SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=' + GAME_ID;
-  const DOLLAR_PER_UNIT = 150;
+  /* ESPN's own Gamecast batter illustration (a.espncdn.com/redesign/assets/img/mlb/batter.svg),
+     inlined verbatim so the figure matches ESPN exactly. Native canvas 72x158. */
+  const ESPN_BATTER = '<g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"> <g> <g transform="translate(2.00, 1.00)"> <polygon fill="#DCDDDF" points="66.00 0.00 48.24 5.35 38.13 9.04 17.05 16.30 16.85 18.11 18.08 18.70 39.62 12.70 49.05 10.36 56.92 8.04 67.68 4.65 68.07 3.37 67.16 0.57"></polygon> <polygon fill="#DCDDDF" points="0.09 21.30 -0.00 21.88 0.09 22.70 0.76 24.58 1.97 25.63 2.50 25.52 2.64 25.19 1.23 21.30 0.67 20.98"></polygon> <polygon fill-opacity="0.44" fill="#A5A6A7" points="17.99 22.30 23.22 25.12 25.50 26.12 28.05 27.00 21.68 32.02 20.07 30.12 14.93 26.32"></polygon> <polygon fill="#E4E6EA" points="17.99 22.30 23.22 25.12 25.50 26.12 28.05 27.00 21.68 32.02 20.07 30.12 14.93 26.32"></polygon> <polygon fill="#E4E6EA" points="30.89 134.28 29.19 135.08 25.84 136.56 21.68 137.99 19.76 138.97 18.91 140.94 19.49 142.10 23.78 143.39 29.37 143.39 32.94 142.99 35.98 142.86 37.82 143.39 43.05 143.08 42.80 138.83 39.87 137.49"></polygon> <polygon fill="#E4E6EA" points="35.13 147.91 31.60 149.83 28.29 150.73 26.55 152.07 26.33 153.09 26.33 154.44 30.66 155.78 39.11 156.00 40.63 155.64 43.90 154.70 48.68 154.84 54.67 154.03 55.70 152.51 55.29 150.37 39.43 144.96"></polygon> <polygon fill="#DCDDDF" points="30.53 71.79 31.33 74.16 29.46 78.99 27.04 83.05 23.49 91.93 20.27 99.35 19.20 101.87 19.20 104.32 20.07 107.68 22.81 111.45 25.27 115.79 31.80 129.51 32.41 130.42 32.88 131.46 32.27 132.58 31.07 132.58 30.46 133.56 31.42 135.31 33.21 136.43 39.97 139.51 40.39 124.33 32.27 98.65 34.02 79.62 31.47 72.69"></polygon> <polygon fill="#E4E6EA" points="30.53 71.79 31.33 74.16 29.46 78.99 27.04 83.05 23.49 91.93 20.27 99.35 19.20 101.87 19.20 104.32 20.07 107.68 22.81 111.45 25.27 115.79 31.80 129.51 32.41 130.42 32.88 131.46 32.27 132.58 31.07 132.58 30.46 133.56 31.42 135.31 33.21 136.43 39.97 139.51 40.39 124.33 32.27 98.65 34.02 79.62 31.47 72.69"></polygon> <polygon fill="#DCDDDF" points="25.50 24.31 27.11 25.86 27.25 27.00 32.27 24.31 36.80 23.18 33.48 19.89 33.82 14.66 25.50 14.12"></polygon> <polygon fill="#DCDDDF" points="19.27 12.38 19.60 15.66 21.01 18.82 22.22 20.56 22.81 22.24 25.50 24.31 28.52 23.98 32.41 19.15 32.74 16.20 32.03 10.04 23.56 10.90"></polygon> <polygon fill="#EDEEF0" points="1.23 21.30 1.61 20.29 2.15 20.06 3.04 18.88 4.25 18.88 5.12 17.94 6.32 17.94 7.13 17.54 8.00 17.88 9.54 20.56 10.48 20.56 11.42 22.30 11.42 24.31 10.15 26.33 9.95 29.28 11.42 32.96 14.04 36.11 13.63 39.80 19.74 45.97 14.91 47.04 11.29 48.79 5.39 47.85 4.45 43.82 4.58 37.66 4.11 27.93 2.64 25.18"></polygon> <polygon fill="#EDEEF0" points="8.74 17.54 8.00 17.88 9.54 20.56 11.42 24.31 13.21 25.34 13.83 26.32 14.93 26.32 16.05 26.10 18.19 24.54 18.79 22.73 18.21 21.93 18.53 20.56 18.44 19.15 17.39 17.83 16.92 15.33 15.31 14.59 14.35 14.72 13.63 13.99 12.58 14.12 12.20 14.72 11.22 14.68 10.37 15.35 10.24 15.82 9.48 15.84 8.87 16.74"></polygon> <polygon fill="#DCDDDF" points="35.56 21.30 34.96 22.50 31.60 23.51 27.24 27.00 25.84 27.93 22.81 44.48 25.03 56.97 25.03 58.78 26.84 64.34 27.58 65.82 26.91 68.70 28.45 69.71 35.56 66.29 36.97 64.81 47.29 61.79 49.10 61.73 50.31 59.65 50.31 57.50 48.30 55.16 48.63 53.95 47.96 52.74 48.16 46.91 47.69 45.50 47.96 39.67 47.49 33.63 47.56 30.68 45.21 26.12 41.86 22.84 37.70 21.30"></polygon> <polygon fill="#DCDDDF" points="25.84 27.93 20.39 31.71 19.59 32.53 18.29 33.16 16.74 34.51 14.04 36.11 13.63 39.80 19.74 45.97 28.18 41.88 30.33 41.95 31.40 42.75 33.03 41.07 34.29 39.80 32.47 36.52 27.39 31.52"></polygon> <g transform="translate(13.32, 12.37)"> <polygon fill-opacity="0.24" fill="#EDEEF0" points="12.18 35.68 19.09 45.94 27.57 48.56 17.83 41.18"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="21.64 40.38 25.80 44.47 29.89 47.28 24.86 45.20"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="22.58 51.57 17.83 49.36 11.11 38.37 13.79 50.27 15.54 54.32 15.13 55.53 18.05 54.83"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="25.76 41.25 27.57 43.83 30.82 45.67 28.75 43.19"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="30.82 27.03 28.75 23.48 23.48 25.26 28.29 25.26"></polygon> <polygon fill="#E0E1E3" points="2.73 26.16 6.69 25.26 9.23 24.59 5.98 26.16"></polygon> <polygon fill="#E0E1E3" points="13.19 27.03 9.50 29.38 7.49 31.86 11.71 30.05"></polygon> <polygon fill="#D0D0D9" points="10.81 0.21 11.14 0.82 10.98 3.87 12.00 4.23 10.41 4.07"></polygon> <polygon fill="#D0D0D9" points="14.93 6.08 12.18 6.08 10.17 6.78 10.41 6.43 12.00 5.75"></polygon> <polygon fill="#EDEEF0" points="15.69 79.44 13.79 80.20 10.73 84.45 15.69 80.70"></polygon> <polygon fill="#EDEEF0" points="15.43 83.07 10.11 87.01 15.69 84.23"></polygon> <path d="M14.98,91.65 C14.84,91.69 12.52,92.14 12.52,92.14 L11.27,92.54 L15.20,92.54 L14.98,91.65 Z" fill="#EDEEF0"></path> <polygon fill="#EDEEF0" points="15.07 93.85 11.27 93.85 13.23 94.69 15.20 95.09"></polygon> <polygon fill="#EDEEF0" points="14.58 96.74 12.70 96.74 11.27 95.80 12.92 97.37 14.58 97.91"></polygon> <polygon fill="#EDEEF0" points="15.20 85.79 13.23 87.85 15.20 86.51"></polygon> <polygon fill="#EDEEF0" points="20.34 119.36 23.92 120.84 24.59 121.57"></polygon> <polygon fill="#DCDDDF" points="0.94 3.41 2.28 3.81 2.73 4.62 3.22 6.27 2.08 5.91 2.08 5.02"></polygon> </g> <polygon fill="#EDEEF0" points="49.10 61.73 51.18 64.07 51.18 64.81 52.66 66.22 54.47 69.71 55.34 74.06 54.94 78.22 53.73 81.71 49.77 86.60 46.76 90.16 45.01 93.24 43.87 97.26 42.93 104.24 41.79 111.34 45.21 117.04 47.36 121.74 48.57 127.57 51.65 137.16 55.34 144.67 56.01 150.37 50.31 150.37 43.14 148.02 38.64 145.00 41.12 142.93 42.33 140.51 40.12 138.70 37.24 130.32 35.36 125.69 30.60 117.98 27.85 113.42 27.11 109.94 27.71 106.85 28.72 90.83 31.74 77.15 31.40 74.06 31.47 72.66 30.53 71.78 29.73 69.71 29.68 69.09 35.56 66.29 36.97 64.81 47.29 61.79"></polygon> <polygon fill="#0066CC" points="48.63 62.63 50.31 65.01 43.44 67.19 42.06 64.71"></polygon> <polygon fill="#0066CC" points="35.42 67.19 36.56 69.71 33.41 71.32 32.27 68.97"></polygon> <polygon fill="#0066CC" points="31.03 69.71 32.27 71.92 31.65 72.22 30.46 70.18"></polygon> <g transform="translate(24.73, 15.22)"> <path d="M5.40,95.05 C5.40,95.05 7.33,96.65 10.49,95.52 C14.05,94.25 17.80,86.07 17.80,86.07 C17.80,86.07 13.66,91.12 12.17,92.57 C9.69,94.99 5.40,95.05 5.40,95.05" fill="#E4E6EA"></path> <polygon fill="#E4E6EA" points="22.63 72.90 11.60 82.13 9.69 85.40"></polygon> <polygon fill="#E4E6EA" points="18.81 78.62 13.84 85.40 11.60 89.69 14.65 85.40"></polygon> <path d="M22.02,57.97 C22.02,57.97 19.01,55.74 15.86,55.74 C12.70,55.74 9.28,58.38 9.28,58.38 C9.28,58.38 12.84,57.50 15.66,57.50 C18.47,57.50 22.02,57.97 22.02,57.97" fill="#DDE0E5"></path> <polygon fill="#E4E6EA" points="13.91 112.95 26.58 129.74 24.91 128.91"></polygon> <polygon fill="#E4E6EA" points="22.09 128.18 14.78 118.72 16.16 121.81"></polygon> <polygon fill="#E4E6EA" points="11.60 104.77 6.25 101.02 7.54 102.56"></polygon> <polygon fill="#E4E6EA" points="6.60 97.33 10.29 97.33 12.24 96.53 8.35 98.47"></polygon> <polygon fill="#DDE0E5" points="21.09 61.17 12.64 62.20 8.12 64.08"></polygon> <polygon fill="#DDE0E5" points="22.25 63.05 14.96 65.42 9.28 68.14 18.81 65.24"></polygon> <polygon fill="#DDE0E5" points="22.63 65.24 14.60 68.72 7.68 72.75 15.20 69.44"></polygon> <polygon fill="#E4E6EA" points="19.41 73.24 12.82 76.10 10.22 78.07 8.75 80.75"></polygon> <path d="M10.22,101.02 C10.94,101.22 13.00,101.51 13.00,101.51 L17.33,101.51 L12.24,102.98 L10.22,101.02 Z" fill="#E4E6EA"></path> <polygon fill="#D0D0D9" points="7.68 3.93 3.79 8.76 0.77 9.09 1.82 9.41 4.39 9.09 8.21 4.62 8.46 0.98 7.96 0.50"></polygon> </g> <polygon fill="#0066CC" points="17.05 13.45 19.74 12.22 23.56 10.90 26.98 10.55 32.09 10.55 32.04 13.35 32.69 15.72 33.65 17.18 35.22 17.18 35.96 15.26 35.96 11.44 34.69 9.70 33.95 6.21 32.84 4.26 31.15 2.79 27.78 1.52 23.96 1.52 20.81 2.72 18.66 4.67 17.59 7.15 17.86 11.57 16.85 12.91"></polygon> <polygon fill-opacity="0.24" fill="#4C4C4C" points="33.78 9.83 32.09 10.55 26.98 10.55 23.56 10.90 19.74 12.22 17.05 13.45 16.85 12.91 17.86 11.57 20.07 9.76 23.52 8.52 27.65 8.19 31.67 8.69 33.31 8.96"></polygon> </g> </g> </g>';
 
-  const PICKS = [
-    {
-      sport: 'MLB', matchup: 'Tampa Bay Rays vs. Colorado Rockies',
-      pick: 'Tampa Bay Rays ML', betType: 'Moneyline', odds: '-150',
-      rating: 'A-', confidence: 'aminus', units: '1.0u', ev: '8.4%', edgePct: '5.1%',
-      winProbability: '63%',
-      coreReasoning: "WeBetAI's model puts Tampa Bay at 68.1% to win vs the market's 60.0% implied — a 5.1% calibrated edge at the price. The Rays bring the AL's second-best record (66-46) into Coors Field against a Rockies team 23 games under .500, and the pitching gap is the story: Freddy Peralta's strikeout stuff travels better to altitude than Gabriel Hughes' fly-ball profile, which ranks bottom-five in home-run suppression. Colorado's bullpen has the worst ERA in baseball since the All-Star break, meaning even a close game through six favors Tampa Bay's late innings. WeBetAI sees the market shading too much weight onto the Coors home-field bump for a team that has lost seven of its last ten at home.",
-      whatLoses: 'Coors chaos — a crooked early inning off Peralta and the Rockies bullpen holding on in a slugfest.',
-      commenceTime: '2026-08-05T00:40:00Z', source: 'full-game',
-    },
-    {
-      sport: 'MLB', matchup: 'Tampa Bay Rays vs. Colorado Rockies',
-      pick: 'Over 11.5', betType: 'Total', odds: '-105',
-      rating: 'B+', confidence: 'bplus', units: '0.5u', ev: '6.2%', edgePct: '3.4%',
-      winProbability: '56%',
-      coreReasoning: "WeBetAI projects 12.8 combined runs vs the 11.5 line — a 1.3-run model edge at near even money. Coors Field remains the highest run environment in baseball, and tonight's matchup stacks two fly-ball-prone starters into thin air: Hughes allows the second-highest barrel rate among qualified NL starters, while Peralta's four-seam approach plays into elevation carry. Both offenses rank top-ten in runs per game over the last two weeks, and the forecast calls for warm, dry air with the wind out to right. The under has cashed just twice in Colorado's last eleven home games — WeBetAI sees the total priced for the pitching matchup on paper, not the park it's played in.",
-      whatLoses: 'Both starters settle in early and the thin-air carry never shows up — a 4-3 grinder through six.',
-      commenceTime: '2026-08-05T00:40:00Z', source: 'full-game',
-    },
-    {
-      sport: 'MLB', matchup: 'Tampa Bay Rays vs. Colorado Rockies',
-      pick: 'Tampa Bay Rays -1.5', betType: 'Run Line', odds: '+120',
-      rating: 'B+', confidence: 'bplus', units: '0.5u', ev: '5.8%', edgePct: '2.9%',
-      winProbability: '52%',
-      coreReasoning: "WeBetAI projects a 2.1-run margin vs the 1.5 line — a 2.9% calibrated edge at plus money. When Tampa Bay wins, it wins big: 62% of Rays victories this season have come by two or more runs, the third-highest cover-on-win rate in the majors. Colorado has been blown out at home more than any team in baseball — 21 home losses by 2+ runs — and the Rockies' minus-142 run differential at Coors shows the park inflates their opponents more than it protects them. With the Rays' contact-heavy lineup built to exploit Coors' huge outfield gaps, WeBetAI takes the extra 1.5 runs of risk for the +120 payout rather than laying the freight on the moneyline.",
-      whatLoses: 'A one-run Rays win — the bet loses the run-line margin while the moneyline ticket cashes.',
-      commenceTime: '2026-08-05T00:40:00Z', source: 'full-game',
-    },
-  ];
+  /* ═══════════════ TODAY'S ALPHA CARD → GAMES ═══════════════ */
+  let PICKSDATA = null;
+  let GAMES = [];        // [{sport, matchup, picks, commenceTime, espnId, G, chg, prevSnap, fingerprint, err, abByBatter}]
+  let G = null;          // current game state while rendering (module functions read this)
+  let CHG = {};
+  let refreshTimer = null;
 
-  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
-  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
+  const confClass = { aplus: 'chip-aplus', a: 'chip-a', aminus: 'chip-aminus', bplus: 'chip-bplus', b: 'chip-b', lean: 'chip-lean' };
 
-  function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
-  function calcWinnings(atRisk, oddsStr) {
-    const odds = parseInt((oddsStr||'-110').replace(/[^0-9+-]/g, ''));
-    if (isNaN(odds) || !atRisk) return 0;
-    if (odds > 0) return atRisk * (odds / 100);
-    return atRisk * (100 / Math.abs(odds));
+  function normTeam(s) { return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
+  function lastWord(s) { return normTeam(s).split(' ').pop(); }
+
+  // "Los Angeles Dodgers" → "Dodgers"; multi-word nicknames preserved
+  function teamOnly(name) {
+    if (!name) return '';
+    const multiWordNicks = ['Red Sox', 'White Sox', 'Blue Jays'];
+    const lower = name.toLowerCase().trim();
+    for (const nick of multiWordNicks) {
+      if (lower.endsWith(nick.toLowerCase())) return nick;
+    }
+    const parts = name.trim().split(/\s+/);
+    return parts[parts.length - 1];
   }
-  function normCDF(x) {
-    if (x > 6) return 1; if (x < -6) return 0;
-    const t = 1 / (1 + 0.2316419 * Math.abs(x));
-    const d = 0.3989422804014327;
-    const p = d * Math.exp(-x * x / 2) * t *
-      (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
-    return x > 0 ? 1 - p : p;
+  function shortMatchup(matchup) {
+    if (!matchup) return '';
+    const sep = matchup.match(/\s+(vs\.?|@|at|v)\s+/i);
+    if (!sep) return matchup;
+    const parts = matchup.split(sep[0]);
+    return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
+  }
+
+  async function init() {
+    let data = null;
+    try {
+      const resp = await fetch('/api/get-picks-alpha');
+      if (resp.ok) data = await resp.json();
+    } catch (e) { console.warn('picks fetch failed', e); }
+    PICKSDATA = data || {};
+
+    const dh = document.getElementById('date-header');
+    dh.textContent = (PICKSDATA.dateFormatted || new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })) + ' — Picks Gamecast';
+
+    const picks = (PICKSDATA.picks || []).slice(0, 3); // the card the alpha page shows
+    if (!picks.length) {
+      document.getElementById('picks-container').innerHTML =
+        '<div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">' +
+        '<div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">' + esc(PICKSDATA.noPlays || 'No alpha picks today.') + '</div>' +
+        '<div style="font-size:.8125rem; color:var(--txt-m);">Gamecast lights up when the next card drops.</div></div>';
+      return;
+    }
+
+    // One Gamecast per unique game — multiple picks on a game share the module
+    const groups = new Map();
+    for (const p of picks) {
+      const key = normTeam(p.matchup);
+      if (!groups.has(key)) groups.set(key, { sport: p.sport || 'MLB', matchup: p.matchup || '', picks: [], commenceTime: p.commenceTime || '' });
+      const grp = groups.get(key);
+      grp.picks.push(p);
+      if (!grp.commenceTime && p.commenceTime) grp.commenceTime = p.commenceTime;
+    }
+    GAMES = [...groups.values()].map(g => ({ ...g, espnId: null, G: null, chg: {}, prevSnap: null, fingerprint: null, err: false, abByBatter: {} }));
+
+    await resolveESPNIds();
+    renderAll();
+    load();
+  }
+
+  async function resolveESPNIds() {
+    if (!GAMES.some(g => g.sport === 'MLB')) return;
+    const dateParam = (PICKSDATA.date || '').replace(/-/g, '');
+    try {
+      const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard' + (dateParam ? '?dates=' + dateParam : ''));
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const evs = (data.events || []).map(ev => {
+        const comp = ev.competitions && ev.competitions[0];
+        if (!comp) return null;
+        const away = (comp.competitors || []).find(c => c.homeAway === 'away');
+        const home = (comp.competitors || []).find(c => c.homeAway === 'home');
+        return { id: ev.id, date: ev.date, away: (away && away.team && away.team.displayName) || '', home: (home && home.team && home.team.displayName) || '' };
+      }).filter(Boolean);
+      for (const g of GAMES) {
+        if (g.sport !== 'MLB') continue;
+        const parts = (g.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(normTeam).filter(Boolean);
+        const matches = evs.filter(ev => {
+          const teams = [normTeam(ev.away), normTeam(ev.home)];
+          return parts.length >= 2 && parts.every(p => teams.some(t => t.includes(lastWord(p)) || normTeam(p).includes(lastWord(t))));
+        });
+        let best = matches[0] || null;
+        if (matches.length > 1 && g.commenceTime) { // doubleheader — nearest start to the pick's commence time
+          const ct = Date.parse(g.commenceTime);
+          best = matches.reduce((a, b) => Math.abs(Date.parse(b.date) - ct) < Math.abs(Date.parse(a.date) - ct) ? b : a);
+        }
+        if (best) g.espnId = best.id;
+      }
+    } catch (e) { console.warn('scoreboard resolve failed', e); }
   }
 
   /* ═══════════════ PARSE ESPN SUMMARY ═══════════════ */
-  let G = null;          // parsed game state
-  let refreshTimer = null;
-  let lastFetchErr = false;
-  let lastFingerprint = null;  // skip re-render when nothing changed (no flicker)
-
   function parseTeam(c) {
     const t = c.team || {};
     const raw = (t.logos && t.logos[0] && t.logos[0].href) || ('https://a.espncdn.com/i/teamlogos/mlb/500/' + (t.abbreviation||'').toLowerCase() + '.png');
@@ -594,7 +517,7 @@
       abbr: t.abbreviation || '',
       name: t.displayName || '',
       nick: t.name || (t.displayName || '').split(' ').pop(),
-      logo: raw.replace('/mlb/500/', '/mlb/500/scoreboard/'), // ESPN Gamecast uses the scoreboard variant
+      logo: raw.replace('/mlb/500/', '/mlb/500/scoreboard/'),
       logoFallback: raw,
       score: num(c.score),
       record: (c.record && c.record[0] && c.record[0].summary) || '',
@@ -623,8 +546,7 @@
     const homeC = comp.competitors.find(c => c.homeAway === 'home');
     const away = parseTeam(awayC), home = parseTeam(homeC);
 
-    // Athlete map + per-team box score groups
-    const athletes = {};   // id -> {name, short, pos, headshot, hotZones}
+    const athletes = {};
     const box = { away: null, home: null };
     for (const tp of (d.boxscore?.players || [])) {
       const tid = String(tp.team?.id || '');
@@ -662,7 +584,6 @@
       }
     }
 
-    // Team totals (H/E + stat strip)
     const totals = { away: {}, home: {} };
     for (const tt of (d.boxscore?.teams || [])) {
       const side = tt.homeAway === 'away' ? 'away' : 'home';
@@ -676,7 +597,6 @@
       };
     }
 
-    // Plays / current at-bat
     const plays = d.plays || [];
     let lastABId = null;
     for (let i = plays.length - 1; i >= 0; i--) { if (plays[i].atBatId) { lastABId = plays[i].atBatId; break; } }
@@ -694,7 +614,6 @@
       if (p.bats?.abbreviation) bats = p.bats.abbreviation;
     }
 
-    // Headline
     let headTitle = '', headText = '';
     const lastPitch = pitches[pitches.length - 1] || null;
     if (resultPlay) {
@@ -715,7 +634,6 @@
       headText = status.type?.detail || '';
     }
 
-    // Situation
     const sit = d.situation || {};
     const balls = num(sit.balls, resultPlay ? 0 : num(lastPitch?.resultCount?.balls));
     const strikes = num(sit.strikes, resultPlay ? 0 : num(lastPitch?.resultCount?.strikes));
@@ -723,16 +641,6 @@
     if (outs == null) { const wp = abPlays.slice().reverse().find(p => p.outs != null); outs = wp ? wp.outs : 0; }
     const baseName = (o) => (o && o.playerId && athletes[String(o.playerId)]) ? athletes[String(o.playerId)].short : null;
     const bvp = (sit.situationNotes || []).map(n => n.text).filter(Boolean)[0] || '';
-
-    // Today's at-bats per batter
-    const abByBatter = {};
-    for (const p of plays) {
-      if (p.type?.text !== 'Play Result' || !p.text) continue;
-      const b = (p.participants || []).find(x => x.type === 'batter');
-      if (!b || !b.athlete) continue;
-      const id = String(b.athlete.id);
-      (abByBatter[id] = abByBatter[id] || []).push({ inning: num(p.period?.number), half: p.period?.type || '', text: p.text });
-    }
 
     const scoringPlays = plays.filter(p => p.scoringPlay && p.text).map(p => ({
       teamId: String(p.team?.id || ''), inning: num(p.period?.number),
@@ -761,107 +669,17 @@
     };
   }
 
-  /* ═══════════════ LIVE BET STATE (ported from /alpha) ═══════════════ */
-  function betState(pick) {
-    if (!G) return { result: { status: 'scheduled', label: 'Upcoming' }, delta: '', prob: '' };
-    const a = G.away.score, h = G.home.score;
-    const state = G.state;
-    const pickStr = pick.pick, bt = (pick.betType || '').toLowerCase();
-    const pickedAway = /rays|tampa/i.test(pickStr);
-    const pickedHome = /rockies|colorado/i.test(pickStr);
-    const t = Math.min(Math.max((Math.max(0, (G.period || 1) - 1) + 0.5) / 9, 0.01), 1);
-    const gameMins = 54, sigma = 0.35;
-    const remainSD = Math.max(sigma * Math.sqrt(gameMins * (1 - t)) * (1 + 0.3 * (1 - t)), 0.5);
-    const final = state === 'post';
-
-    let result = { status: 'scheduled', label: 'Upcoming' };
-    let delta = '', prob = '';
-
-    if (state === 'pre') {
-      if (pick.winProbability) prob = '<span class="win-prob progress-delta delta-even">' + esc(pick.winProbability) + '</span>';
-      return { result, delta, prob };
-    }
-
-    if (bt === 'total') {
-      const m = pickStr.match(/(over|under)\s*([\d.]+)/i);
-      if (m) {
-        const ou = m[1].toLowerCase(), line = parseFloat(m[2]);
-        const total = a + h;
-        const raw = ou === 'over' ? total - line : line - total;
-        const cls = raw > 0 ? 'delta-positive' : raw < 0 ? 'delta-negative' : 'delta-even';
-        delta = '<span class="progress-delta ' + cls + '">' + (raw > 0 ? '+' : '') + (raw % 1 === 0 ? raw : raw.toFixed(1)) + (final ? '' : ' pts') + '</span>';
-        if (final) {
-          result = total === line ? { status: 'push', label: 'Push' } : ((ou === 'over') === (total > line)) ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
-        } else {
-          result = { status: 'live', label: G.detail || 'Live', isLive: true };
-          const pace = t > 0.05 ? total / t : line;
-          const w = t * t;
-          const projected = w * pace + (1 - w) * line;
-          const z = (projected - line) / remainSD;
-          const p = ou === 'over' ? normCDF(z) : 1 - normCDF(z);
-          const pct = Math.round(p * 100);
-          const pcls = pct >= 55 ? 'delta-positive' : pct <= 40 ? 'delta-negative' : 'delta-even';
-          prob = '<span class="progress-delta ' + pcls + '">' + pct + '%</span>';
-        }
-      }
-    } else if (bt === 'run line' || /[+-]\d/.test(pickStr)) {
-      const m = pickStr.match(/([+-]\d+(\.\d+)?)/);
-      if (m && (pickedAway || pickedHome)) {
-        const spread = parseFloat(m[1]);
-        const ps = pickedAway ? a : h, os = pickedAway ? h : a;
-        const d2 = (ps + spread) - os;
-        const cls = d2 > 0 ? 'delta-positive' : d2 < 0 ? 'delta-negative' : 'delta-even';
-        delta = '<span class="progress-delta ' + cls + '">' + (d2 > 0 ? '+' : '') + (d2 % 1 === 0 ? d2 : d2.toFixed(1)) + '</span>';
-        if (final) {
-          result = d2 === 0 ? { status: 'push', label: 'Push' } : d2 > 0 ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
-        } else {
-          result = { status: 'live', label: G.detail || 'Live', isLive: true };
-          const margin = ps - os;
-          const w = t * t;
-          const paceMargin = t > 0.05 ? margin / t : -spread;
-          const projectedMargin = w * paceMargin + (1 - w) * (-spread);
-          const z = (margin + (projectedMargin - margin) * (1 - t) - (-spread)) / remainSD;
-          const pct = Math.round(normCDF(z) * 100);
-          const pcls = pct >= 55 ? 'delta-positive' : pct <= 40 ? 'delta-negative' : 'delta-even';
-          prob = '<span class="progress-delta ' + pcls + '">' + pct + '%</span>';
-        }
-      }
-    } else { // moneyline
-      const ps = pickedAway ? a : h, os = pickedAway ? h : a;
-      if (final) {
-        result = ps === os ? { status: 'push', label: 'Push' } : ps > os ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
-      } else {
-        result = { status: 'live', label: G.detail || 'Live', isLive: true };
-        const margin = ps - os;
-        const w = t * t;
-        const projectedMargin = w * (t > 0.05 ? margin / t : 0);
-        const z = (margin + (projectedMargin - margin) * (1 - t)) / remainSD;
-        const pct = Math.round(normCDF(z) * 100);
-        const pcls = pct >= 55 ? 'delta-positive' : pct <= 40 ? 'delta-negative' : 'delta-even';
-        prob = '<span class="progress-delta ' + pcls + '">' + pct + '%</span>';
-      }
-    }
-    return { result, delta, prob };
-  }
-
   /* ═══════════════ GAMECAST RENDERERS ═══════════════ */
-  const UI = { open: [true, true, true], tab: ['away', 'away', 'away'], exp: {} };
+  const UI = { open: {}, tab: {}, exp: {} };
 
   const ORD = (n) => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
 
   function diamondSVG(o1, o2, o3, size) {
-    // ESPN BaseballBases: occupied = filled link-blue #0066cc, empty = white w/ #cbccce border
     const s = size || 20;
     const base = (x, y, cx, cy, on) => '<rect x="' + x + '" y="' + y + '" width="8" height="8" rx="1.2" transform="rotate(45 ' + cx + ' ' + cy + ')" ' +
       (on ? 'fill="#0066cc"' : 'fill="#ffffff" stroke="#cbccce" stroke-width="1.4"') + '/>';
     return '<svg width="' + s + '" height="' + (s * 0.72) + '" viewBox="0 0 34 25" aria-hidden="true">' +
       base(13.5, 1, 17.5, 5, o2) + base(24, 11, 28, 15, o1) + base(3, 11, 7, 15, o3) + '</svg>';
-  }
-
-  function dots(count, max, onClass) {
-    let h = '<span class="gc-dots">';
-    for (let i = 0; i < max; i++) h += '<span class="gc-dot' + (i < count ? ' ' + onClass : '') + '"></span>';
-    return h + '</span>';
   }
 
   function pitchClass(typeText) {
@@ -873,7 +691,6 @@
   }
 
   function zoneGeometry(hz) {
-    // ESPN gamecast hot-zone config gives the true 3x3 zone rectangles
     let cells = null;
     if (hz) {
       const cfg = (hz || []).find(z => z.name === 'gamecast' || z.active) || hz[0];
@@ -890,68 +707,55 @@
     return { x1: 77, x2: 158, y1: 131, y2: 203, cells: null };
   }
 
+  /* ── ESPN pitch-zone module, matched to the live Gamecast look:
+       solid pastel hot/cold grid with white gutters, thick white rulebook frame inset
+       within the grid, faint full-width basepath + home plate, ESPN's own batter
+       illustration beside the zone (mirrored for lefties). ── */
   function pitchPlotSVG(pitches, hz, bats, animateLast) {
     const z = zoneGeometry(hz);
-    const VB = { x: 10, y: 78, w: 234, h: 214 }; // wide enough for the batter on either side
-    const clampX = (v) => Math.min(Math.max(v, VB.x + 10), VB.x + VB.w - 10);
-    const clampY = (v) => Math.min(Math.max(v, VB.y + 10), VB.y + VB.h - 12);
-    const cw = (z.x2 - z.x1) / 3, ch = (z.y2 - z.y1) / 3;
+    const zcx = (z.x1 + z.x2) / 2, zcy = (z.y1 + z.y2) / 2;
+    const VB = { x: -30, y: 55, w: 315, h: 200 };
+    const clampX = (v) => Math.min(Math.max(v, VB.x + 8), VB.x + VB.w - 8);
+    const clampY = (v) => Math.min(Math.max(v, VB.y + 8), VB.y + VB.h - 8);
+    const GRID = 1.4;                         // hot-zone grid drawn larger than the rulebook frame (ESPN)
+    const gsx = (v) => zcx + (v - zcx) * GRID;
+    const gsy = (v) => zcy + (v - zcy) * GRID;
 
-    let s = '<svg viewBox="' + VB.x + ' ' + VB.y + ' ' + VB.w + ' ' + VB.h + '" width="' + VB.w + '" height="' + VB.h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pitch location chart">';
-    // faint basepath behind the zone (ESPN look)
-    const pcx = (z.x1 + z.x2) / 2, py = VB.y + VB.h - 24;
-    s += '<path d="M' + (pcx - 90) + ',' + (py - 44) + ' L' + pcx + ',' + (py + 4) + ' L' + (pcx + 90) + ',' + (py - 44) + '" fill="none" stroke="#e8eaee" stroke-width="2.5"/>';
-    // batter in the box (ESPN-style stance: helmet, crouch, bat up) — bats R stands plot-right like ESPN
+    let s = '<svg viewBox="' + VB.x + ' ' + VB.y + ' ' + VB.w + ' ' + VB.h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pitch location chart">';
+
+    // faint basepath spanning the module + home plate at bottom center (ESPN)
+    const py = 236;
+    s += '<path d="M' + zcx + ',' + py + ' L-28,152 L-9,118" fill="none" stroke="#e3e5e9" stroke-width="2.5"/>';
+    s += '<path d="M' + zcx + ',' + py + ' L263,152 L244,118" fill="none" stroke="#e3e5e9" stroke-width="2.5"/>';
+    s += '<path d="M' + (zcx - 16) + ',' + py + ' L' + (zcx + 16) + ',' + py + ' L' + (zcx + 16) + ',' + (py + 5) + ' L' + zcx + ',' + (py + 12) + ' L' + (zcx - 16) + ',' + (py + 5) + ' Z" fill="#ffffff" stroke="#d9dcdf" stroke-width="2"/>';
+
+    // ESPN's batter beside the zone — righty stands plot-right facing the zone; lefty mirrors
     const rSide = bats !== 'L';
-    const bx = rSide ? (z.x2 + 36) : (z.x1 - 36);
-    const flip = rSide ? 1 : -1;
-    s += '<g transform="translate(' + bx + ',' + ((z.y1 + z.y2) / 2 + 6) + ') scale(' + flip + ',1)" fill="#ccd1d8">' +
-      // bat (angled up behind the head)
-      '<path d="M6,-52 L24,-78 Q26.5,-81.5 29,-79.5 Q31.5,-77.5 29,-74.5 L12,-49 Z"/>' +
-      // helmet with brim + head
-      '<path d="M2,-62 Q2,-70 9,-70 Q16,-70 16,-62 L16,-59 L-1,-59 Q0,-61 2,-62 Z"/>' +
-      '<circle cx="9" cy="-56" r="6.5"/>' +
-      // torso leaning toward the plate
-      '<path d="M3,-49 Q13,-52 16,-42 Q19,-30 15,-16 L-2,-16 Q-4,-34 -1,-45 Q0,-48 3,-49 Z"/>' +
-      // arms up gripping the bat
-      '<path d="M4,-46 Q10,-56 15,-52 Q19,-49 14,-43 Q9,-39 4,-41 Z"/>' +
-      // front leg (stride toward zone) + back leg
-      '<path d="M-2,-17 Q-8,-2 -13,12 L-8,14 Q-2,2 3,-12 Z"/>' +
-      '<path d="M15,-17 Q17,-1 15,13 L10,13 Q10,-2 9,-15 Z"/>' +
-      // feet
-      '<path d="M-14,11 L-6,13 L-6,17 L-15,16 Z"/><path d="M9,12 L16,12 L17,17 L9,17 Z"/>' +
-      '</g>';
-    // outer shadow ring (5x5): ESPN's cool chase-zone shading around the white-framed zone
-    for (let r = -1; r <= 3; r++) for (let c = -1; c <= 3; c++) {
-      if (r >= 0 && r <= 2 && c >= 0 && c <= 2) continue;
-      const corner = (r === -1 || r === 3) && (c === -1 || c === 3);
-      s += '<rect x="' + (z.x1 + c * cw) + '" y="' + (z.y1 + r * ch) + '" width="' + cw + '" height="' + ch + '" fill="rgba(91,141,217,' + (corner ? '0.55' : '0.28') + ')" stroke="#ffffff" stroke-width="1"/>';
-    }
-    // inner 3x3 cells — batter hot zones, strong ESPN-style shading
-    const cellRect = (x, y, fill, avg) => {
-      let out = '<rect x="' + x + '" y="' + y + '" width="' + cw + '" height="' + ch + '" fill="' + fill + '" stroke="#ffffff" stroke-width="1"/>';
-      if (avg != null) out += '<text x="' + (x + cw / 2) + '" y="' + (y + ch / 2 + 2.5) + '" text-anchor="middle" font-size="7" fill="rgba(255,255,255,0.92)" font-weight="600" font-family="Geist Sans, sans-serif">' + avg + '</text>';
-      return out;
-    };
+    const bt = rSide
+      ? 'translate(' + (gsx(z.x2) + 8) + ',75)'
+      : 'translate(' + (gsx(z.x1) - 8) + ',75) scale(-1,1)';
+    s += '<g transform="' + bt + '">' + ESPN_BATTER + '</g>';
+
+    // hot/cold grid — solid pastels with white gutters (batter's real zone data when available)
+    const GAP = 1.6;
+    const cellRect = (x1, y1, x2, y2, fill) =>
+      '<rect x="' + (x1 + GAP) + '" y="' + (y1 + GAP) + '" width="' + (x2 - x1 - 2 * GAP) + '" height="' + (y2 - y1 - 2 * GAP) + '" fill="' + fill + '"/>';
     if (z.cells) {
       for (const c of z.cells) {
         const score = (typeof c.battingAvgScore === 'number' && c.atBats > 0) ? c.battingAvgScore : null;
-        let fill = 'rgba(224,106,89,0.18)';
-        if (score != null) {
-          fill = score >= 0.5
-            ? 'rgba(217,84,66,' + Math.min(0.25 + (score - 0.5) * 1.1, 0.8).toFixed(2) + ')'
-            : 'rgba(91,141,217,' + Math.min(0.25 + (0.5 - score) * 1.1, 0.8).toFixed(2) + ')';
-        }
-        const avg = (typeof c.battingAvg === 'number' && c.atBats > 0) ? ('.' + Math.round(c.battingAvg * 1000).toString().padStart(3, '0')) : null;
-        s += cellRect(c.xMin, c.yMin, fill, avg);
+        let fill = '#c9dcf4';
+        if (score != null) fill = score >= 0.5 ? (score >= 0.75 ? '#e78a72' : '#f2b6a3') : (score <= 0.25 ? '#8db8ed' : '#b3d0f2');
+        s += cellRect(gsx(c.xMin), gsy(c.yMin), gsx(c.xMax), gsy(c.yMax), fill);
       }
     } else {
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) s += cellRect(z.x1 + c * cw, z.y1 + r * ch, 'rgba(224,106,89,0.18)', null);
+      const cw3 = (z.x2 - z.x1) / 3, ch3 = (z.y2 - z.y1) / 3;
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+        s += cellRect(gsx(z.x1 + c * cw3), gsy(z.y1 + r * ch3), gsx(z.x1 + (c + 1) * cw3), gsy(z.y1 + (r + 1) * ch3), '#c9dcf4');
     }
-    // thick white zone frame (ESPN)
-    s += '<rect x="' + (z.x1 - 2) + '" y="' + (z.y1 - 2) + '" width="' + (z.x2 - z.x1 + 4) + '" height="' + (z.y2 - z.y1 + 4) + '" fill="none" stroke="#ffffff" stroke-width="4" rx="1"/>';
-    // home plate
-    s += '<path d="M' + (pcx - 14) + ',' + py + ' L' + (pcx + 14) + ',' + py + ' L' + (pcx + 14) + ',' + (py + 6) + ' L' + pcx + ',' + (py + 13) + ' L' + (pcx - 14) + ',' + (py + 6) + ' Z" fill="#eceef1" stroke="#d0d5db" stroke-width="1"/>';
+
+    // rulebook strike zone — thick white rounded frame inset within the grid (ESPN)
+    s += '<rect x="' + z.x1 + '" y="' + z.y1 + '" width="' + (z.x2 - z.x1) + '" height="' + (z.y2 - z.y1) + '" fill="none" stroke="#ffffff" stroke-width="6" rx="2"/>';
+
     // pitches
     const colors = { 'pc-strike': '#dd0000', 'pc-ball': '#009944', 'pc-foul': '#4a4c4f', 'pc-play': '#0066cc' };
     pitches.forEach((p, i) => {
@@ -967,28 +771,27 @@
     return s;
   }
 
-  /* ── Change tracker: which parts updated since last render (drives ESPN-style animations) ── */
-  let prevSnap = null;
-  let CHG = {};
-  function computeChanges() {
-    const ab = G.atBat;
+  /* ── Change tracker (per game) — drives ESPN-style animations ── */
+  function computeChanges(g) {
+    const ab = g.G.atBat;
     const snap = {
       pitchKey: ab.pitches.map(p => p.atBatPitchNumber + ':' + (p.type?.text || '')).join(','),
       headline: ab.headTitle + '|' + ab.headText,
-      awayScore: G.away.score, homeScore: G.home.score,
+      awayScore: g.G.away.score, homeScore: g.G.home.score,
       balls: ab.balls, strikes: ab.strikes, outs: ab.outs,
     };
-    CHG = prevSnap ? {
-      pitch: snap.pitchKey !== prevSnap.pitchKey && ab.pitches.length > 0,
-      headline: snap.headline !== prevSnap.headline,
-      away: snap.awayScore !== prevSnap.awayScore,
-      home: snap.homeScore !== prevSnap.homeScore,
-      balls: snap.balls > prevSnap.balls, strikes: snap.strikes > prevSnap.strikes, outs: snap.outs > prevSnap.outs,
+    const chg = g.prevSnap ? {
+      pitch: snap.pitchKey !== g.prevSnap.pitchKey && ab.pitches.length > 0,
+      headline: snap.headline !== g.prevSnap.headline,
+      away: snap.awayScore !== g.prevSnap.awayScore,
+      home: snap.homeScore !== g.prevSnap.homeScore,
+      balls: snap.balls > g.prevSnap.balls, strikes: snap.strikes > g.prevSnap.strikes, outs: snap.outs > g.prevSnap.outs,
     } : {};
-    prevSnap = snap;
+    g.prevSnap = snap;
+    return chg;
   }
 
-  /* ── ESPN Gamestrip: [logo name/rec] score [inning + diamond] score [name/rec logo] ── */
+  /* ── ESPN Gamestrip ── */
   function gameStripHTML() {
     const ab = G.atBat;
     let mid = '';
@@ -1030,9 +833,7 @@
     return { batterRow: order[(lastIdx + 1) % order.length], onDeckRow: order[(lastIdx + 2) % order.length] };
   }
 
-  /* ── PITCHER vs BATTER module (ESPN BatterPitcher — copied: 14px link-blue names,
-       12px/700 #48494a labels w/ team logos, 9px stat lines, 50px headshots, vs center,
-       PITCH COUNT | ON DECK meta row) ── */
+  /* ── PITCHER vs BATTER module (ESPN BatterPitcher) ── */
   function vsModuleHTML(pitcherId, batterId, battingSide, onDeckId, animate) {
     const fieldSide = battingSide === 'home' ? 'away' : 'home';
     const pTeam = fieldSide === 'away' ? G.away : G.home;
@@ -1081,9 +882,8 @@
       '</div>';
   }
 
-  /* ── Between-innings due-up (same ESPN module, upcoming matchup) ── */
+  /* ── Between-innings due-up ── */
   function dueUpHTML() {
-    // Batting side for the upcoming half: Top/End → away bats (next top); Mid/Bottom → home bats
     const pfx = (G.periodPrefix || G.detail || '');
     const nextSide = /^(top|end)/i.test(pfx) ? 'away' : 'home';
     const fieldSide = nextSide === 'home' ? 'away' : 'home';
@@ -1096,10 +896,8 @@
     return h;
   }
 
-  /* ── Field view on a ball in play — ESPN FieldView copy: monochrome grays
-       (#f1f2f3 / #c1c2c2 / #a8a9aa + white lines, wide 390x220 aspect), sampled live ── */
+  /* ── Field view on a ball in play (ESPN FieldView monochrome copy) ── */
   function fieldSVG(hit, outcome, occ) {
-    // ESPN hitCoordinate space ~250x250, plate bottom-center → map onto 390x220
     const sx = (v) => 195 + (num(v, 125) - 125) * 1.44;
     const sy = (v) => 12 + num(v, 110) * 0.9;
     const px = 195, pyy = 198;
@@ -1107,21 +905,15 @@
     const hy = Math.min(Math.max(sy(hit.y), 12), 205);
     const hr = /homer|home run/i.test(outcome || '') ? '#dd0000' : '#0066cc';
     let s = '<svg viewBox="0 0 390 220" width="390" height="220" style="aspect-ratio:390/220;" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hit location">';
-    // outfield
     s += '<path d="M' + px + ',' + pyy + ' L28,58 Q195,-42 362,58 Z" fill="#f1f2f3"/>';
-    // infield dirt ring
     s += '<path d="M' + px + ',' + (pyy + 4) + ' L272,133 Q195,58 118,133 Z" fill="#e2e3e5"/>';
-    // inner diamond
     s += '<path d="M' + px + ',' + (pyy - 6) + ' L258,140 L195,84 L132,140 Z" fill="#f1f2f3" stroke="#c1c2c2" stroke-width="1.5"/>';
-    // foul lines
     s += '<path d="M' + px + ',' + pyy + ' L28,58 M' + px + ',' + pyy + ' L362,58" stroke="#ffffff" stroke-width="2.5" fill="none"/>';
     s += '<path d="M' + px + ',' + pyy + ' L28,58 M' + px + ',' + pyy + ' L362,58" stroke="#c1c2c2" stroke-width="1" fill="none"/>';
-    // bases — occupied fill ESPN blue, empty gray (FieldView_Base shades)
     const base = (bx, by, on) => '<rect x="' + (bx - 5) + '" y="' + (by - 5) + '" width="10" height="10" transform="rotate(45 ' + bx + ' ' + by + ')" ' +
       (on ? 'fill="#0066cc"' : 'fill="#c1c2c2"') + '/>';
     s += base(258, 140, occ && occ[0]) + base(195, 84, occ && occ[1]) + base(132, 140, occ && occ[2]);
     s += '<path d="M' + (px - 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy - 2) + ' L' + (px + 7) + ',' + (pyy + 2) + ' L' + px + ',' + (pyy + 7) + ' L' + (px - 7) + ',' + (pyy + 2) + ' Z" fill="#a8a9aa"/>';
-    // hit trajectory + marker
     s += '<path class="ip-new" d="M' + px + ',' + (pyy - 4) + ' L' + hx + ',' + hy + '" stroke="#a8a9aa" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>';
     s += '<g class="ip-new"><circle cx="' + hx + '" cy="' + hy + '" r="7.5" fill="' + hr + '" stroke="#ffffff" stroke-width="2"/></g>';
     s += '</svg>';
@@ -1132,9 +924,7 @@
     const ab = G.atBat;
     if (G.state === 'in' && ab.inningOver) return dueUpHTML();
     const batter = G.athletes[ab.batterId] || {};
-    const pitcher = G.athletes[ab.pitcherId] || {};
     const battingSide = G.periodPrefix && /bottom|end/i.test(G.periodPrefix) ? 'home' : 'away';
-    // batter today line from box
     let batLine = '';
     const bb = G.box[battingSide];
     if (bb) {
@@ -1149,11 +939,9 @@
 
     let h = '<div class="gc-section-title"><span>' + (ab.completed ? 'Last At-Bat' : 'Now At Bat') + (batter.short ? ' — ' + esc(batter.short) : '') + '</span><span class="aux">' + esc(stateChip) + '</span></div>';
 
-    // ESPN BatterPitcher header — the current matchup, faces + logos + lines
     const nb = nextBatterInfo(battingSide, ab.batterId);
     h += vsModuleHTML(ab.pitcherId, ab.batterId, battingSide, nb.onDeckRow ? nb.onDeckRow.id : '', false);
 
-    // compact last-play line (ESPN rotates this in its StatusBar carousel)
     if (ab.headTitle) {
       h += '<div class="gc-lastplay' + (CHG.headline ? ' gc-slide-in' : '') + '"><b>' + esc(ab.headTitle) + '</b>' + (ab.headText ? ' — ' + esc(ab.headText) : '') + '</div>';
     }
@@ -1175,9 +963,7 @@
 
     if (ab.bvp) h += '<div class="gc-bvp">' + esc(ab.bvp) + '</div>';
 
-    // stage
     const batterHZ = (G.athletes[ab.batterId] || {}).hotZones;
-    // Ball in play → swap the zone for the field view with the hit location (ESPN behavior)
     const lastP = ab.pitches[ab.pitches.length - 1];
     const showField = ab.completed && lastP && lastP.hitCoordinate && pitchClass(lastP.type?.text) === 'pc-play';
     const plotSVG = showField ? fieldSVG(lastP.hitCoordinate, ab.headTitle, [ab.occ1, ab.occ2, ab.occ3]) : pitchPlotSVG(ab.pitches, batterHZ, ab.bats, CHG.pitch);
@@ -1198,7 +984,6 @@
     }
     h += '</div></div>';
 
-    // on base
     h += '<div class="gc-onbase">' + diamondSVG(ab.occ1, ab.occ2, ab.occ3, 22) +
       '<span class="lbl">ON BASE:</span>' +
       '<span><b>1B:</b> ' + esc(ab.on1 || 'Empty') + '</span>' +
@@ -1244,9 +1029,7 @@
   }
 
   function boxScoreHTML(idx) {
-    const side = UI.tab[idx];
-    const t = side === 'away' ? G.away : G.home;
-    const other = side === 'away' ? G.home : G.away;
+    const side = UI.tab[idx] || 'away';
     const b = G.box[side];
     if (!b) return '';
     let h = '<div class="gc-h3">Box Score</div>';
@@ -1257,7 +1040,6 @@
     const lbl = b.battingLabels;
     const cols = ['H-AB', 'R', 'HR', 'RBI', 'AVG'];
     const colIdx = cols.map(c => lbl.indexOf(c));
-    // separate hitters/pitchers tables: name col absorbs width → stat cols right-align across both
     h += '<div class="gc-box-scroll"><table class="gc-box">';
     h += '<tr><th class="nm">HITTERS</th>' + cols.map(c => '<th class="st">' + c + '</th>').join('') + '</tr>';
     const nowBatterId = (G.state === 'in' && !G.atBat.completed) ? G.atBat.batterId : null;
@@ -1279,7 +1061,6 @@
       }
     }
     h += '</table>';
-    // pitchers (narrow screens drop PC-ST so the table fits and columns stay aligned, like ESPN mobile)
     const plbl = b.pitchingLabels;
     const narrow = window.matchMedia && window.matchMedia('(max-width: 560px)').matches;
     const pcols = narrow ? ['IP', 'H', 'ER', 'BB', 'K', 'ERA'] : ['IP', 'H', 'ER', 'BB', 'K', 'PC-ST', 'ERA'];
@@ -1309,9 +1090,7 @@
   }
 
   function gamecastHTML(idx) {
-    if (lastFetchErr && !G) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-err">Live Gamecast unavailable — ESPN feed did not respond. Retrying…</div></div></div>';
-    if (!G) return '';
-    const open = UI.open[idx];
+    const open = UI.open[idx] !== false;
     let h = '<div class="gc-wrap' + (open ? '' : ' closed') + '">';
     h += '<button class="gc-toggle" onclick="toggleGC(' + idx + ')"><span class="t">' + (G.state === 'in' ? '<span class="gc-live-dot"></span>' : '') + 'Live Gamecast — ' + esc(G.away.abbr) + ' @ ' + esc(G.home.abbr) + '</span><span class="chev">&#9660;</span></button>';
     h += gameStripHTML();
@@ -1326,113 +1105,107 @@
     return h;
   }
 
-  /* ═══════════════ CARD RENDER (alpha structure) ═══════════════ */
-  function scoreBarHTML(result) {
-    if (!G || G.state === 'pre') return '';
-    const displayStatus = result.isLive ? 'live' : result.status;
-    const statusLabel = result.isLive ? 'Live' : esc(result.label);
-    const ab = G.atBat;
-    const outsTxt = G.state === 'in' ? (ab.outs + (ab.outs === 1 ? ' Out' : ' Outs')) : '';
-    return '<div class="pick-score-bar score-bar-' + displayStatus + '">' +
-      '<div class="score-teams">' +
-      '<div class="score-team"><img class="score-team-logo" src="' + esc(G.away.logo) + '" alt=""/><span class="score-team-name">' + esc(G.away.nick) + '</span><span class="score-team-score">' + G.away.score + '</span></div>' +
-      '<div class="score-team"><img class="score-team-logo" src="' + esc(G.home.logo) + '" alt=""/><span class="score-team-name">' + esc(G.home.nick) + '</span><span class="score-team-score">' + G.home.score + '</span></div>' +
-      '</div>' +
-      '<div class="score-meta">' +
-      '<span class="score-status status-' + displayStatus + '">' + statusLabel + '</span>' +
-      '<span class="score-detail">' + esc(G.detail + (outsTxt ? ' · ' + outsTxt : '')) + '</span>' +
-      '</div></div>';
+  /* ═══════════════ RENDER — one section per game on today's card ═══════════════ */
+  function chipsHTML(picks) {
+    let h = '<div class="gc-chips">';
+    for (const p of picks) {
+      h += '<span class="gc-chip"><span class="gc-chip-dot ' + (confClass[p.confidence] || 'chip-b') + '"></span>' +
+        '<b>' + esc(p.pick) + '</b><span class="odds">' + esc(p.odds || '') + '</span>' +
+        (p.units ? '<span>·</span><span>' + esc(p.units) + '</span>' : '') +
+        (p.rating ? '<span>·</span><span>' + esc(p.rating) + '</span>' : '') + '</span>';
+    }
+    return h + '</div>';
+  }
+
+  function timeChipHTML(g) {
+    const pre = !g.G || g.G.state === 'pre';
+    if (!pre || !g.commenceTime) return '';
+    let t = '';
+    try { t = new Date(g.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET'; } catch (e) {}
+    return t ? '<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">' + esc(t) + '</span>' : '';
+  }
+
+  function gamecastSection(i, g) {
+    if (g.sport !== 'MLB') {
+      return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Live Gamecast is MLB-only for now — ' + esc(g.sport) + ' support coming soon.</div></div></div>';
+    }
+    if (!g.espnId) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Waiting for this game on the ESPN feed…</div></div></div>';
+    if (g.err && !g.G) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-err">Live Gamecast unavailable — ESPN feed did not respond. Retrying…</div></div></div>';
+    if (!g.G) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Loading live Gamecast…</div></div></div>';
+    return gamecastHTML(i);
   }
 
   function renderAll() {
     const container = document.getElementById('picks-container');
     let html = '';
-    for (let i = 0; i < PICKS.length; i++) {
-      const p = PICKS[i];
-      const bs = betState(p);
-      const badge = badgeClass[p.confidence] || 'badge-b';
-      const label = ratingLabel[p.confidence] || p.rating;
-      const u = parseFloat(p.units) || 1;
-      const risk = wholeUp(u * DOLLAR_PER_UNIT);
-      const win = wholeUp(calcWinnings(risk, p.odds));
-      const edgeBadgeHTML = p.edgePct ? '<span class="edge-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ' + esc(p.edgePct) + '</span>' : '';
-      let liveResultHTML = '';
-      if (bs.result.isLive) liveResultHTML = '<span class="leg-result leg-live">LIVE</span>';
-
-      html += '<div class="pick-card" data-wb-pick="' + esc(p.pick) + '">' +
-        '<div class="pick-header"><span class="sport-tag">' + esc(p.sport) + '</span><span class="rating-badge ' + badge + '">' + esc(label) + '</span></div>' +
-        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;"><div class="pick-matchup">Rays vs Rockies</div></div>' +
-        scoreBarHTML(bs.result) +
-        '<div class="pick-line"><span class="pick-name">' + esc(p.pick) + bs.delta + bs.prob + '</span><span class="pick-odds">' + esc(p.odds) + '</span></div>' +
-        '<div class="pick-divider"></div>' +
-        '<div class="pick-analysis">' + esc(p.coreReasoning) + '</div>' +
-        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-        '<div class="pick-units">' + esc(p.units) + ' - Bet $' + risk.toLocaleString() + ' — To Win +$' + win.toLocaleString() + '</div>' +
-        '<div style="display:flex; align-items:center; gap:.375rem;">' + liveResultHTML + edgeBadgeHTML + '</div></div>' +
-        gamecastHTML(i) +
+    for (let i = 0; i < GAMES.length; i++) {
+      const g = GAMES[i];
+      G = g.G; CHG = g.chg || {}; window.__abByBatter = g.abByBatter || {};
+      html += '<div class="pick-card">' +
+        '<div class="pick-header"><span class="sport-tag">' + esc(g.sport) + '</span>' + timeChipHTML(g) + '</div>' +
+        '<div class="pick-matchup" style="margin-bottom:.125rem;">' + esc(shortMatchup(g.matchup)) + '</div>' +
+        chipsHTML(g.picks) +
+        gamecastSection(i, g) +
         '</div>';
     }
     container.innerHTML = html;
-
-    const dh = document.getElementById('date-header');
-    const today = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    dh.textContent = today + ' — Gamecast Preview';
-
   }
 
   /* ═══════════════ UI STATE HANDLERS ═══════════════ */
-  function toggleGC(i) { UI.open[i] = !UI.open[i]; renderAll(); }
+  function toggleGC(i) { UI.open[i] = (UI.open[i] === false); renderAll(); }
   function setTab(i, side) { UI.tab[i] = side; renderAll(); }
   function toggleAB(key) { UI.exp[key] = !UI.exp[key]; renderAll(); }
 
-  /* ═══════════════ LOAD LOOP ═══════════════ */
+  /* ═══════════════ LIVE LOOP — all games in parallel ═══════════════ */
   async function load() {
-    try {
-      const resp = await fetch(SUMMARY_URL);
-      if (!resp.ok) throw new Error('ESPN ' + resp.status);
-      const data = await resp.json();
-      const plays = data.plays || [];
-      const lastPlay = plays[plays.length - 1] || {};
-      const sit = data.situation || {};
-      const fp = [plays.length, lastPlay.id, sit.balls, sit.strikes, sit.outs,
-        data.header?.competitions?.[0]?.status?.type?.detail].join('|');
-      if (fp === lastFingerprint && G) { lastFetchErr = false; schedule(); return; }
-      lastFingerprint = fp;
-      G = parseSummary(data);
-      computeChanges();
-      // Preload headshots outside the DOM — re-renders destroy <img> before slow
-      // espncdn first-loads finish; Image() warms the cache so renders are instant.
-      window.__pre = window.__pre || {};
-      for (const id of Object.keys(G.athletes)) {
-        const hs = G.athletes[id].headshot;
-        if (hs && !window.__pre[hs]) { window.__pre[hs] = 1; const im = new Image(); im.src = hs; }
+    await Promise.all(GAMES.map(async (g) => {
+      if (!g.espnId || g.sport !== 'MLB') return;
+      try {
+        const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=' + g.espnId);
+        if (!resp.ok) throw new Error('ESPN ' + resp.status);
+        const data = await resp.json();
+        const plays = data.plays || [];
+        const lastPlay = plays[plays.length - 1] || {};
+        const sit = data.situation || {};
+        const fp = [plays.length, lastPlay.id, sit.balls, sit.strikes, sit.outs,
+          data.header?.competitions?.[0]?.status?.type?.detail].join('|');
+        if (fp === g.fingerprint && g.G) { g.err = false; return; }
+        g.fingerprint = fp;
+        g.G = parseSummary(data);
+        g.chg = computeChanges(g);
+        // Preload headshots — re-renders destroy <img> before slow espncdn first-loads finish
+        window.__pre = window.__pre || {};
+        for (const id of Object.keys(g.G.athletes)) {
+          const hs = g.G.athletes[id].headshot;
+          if (hs && !window.__pre[hs]) { window.__pre[hs] = 1; const im = new Image(); im.src = hs; }
+        }
+        g.abByBatter = {};
+        for (const p of plays) {
+          if (p.type?.text !== 'Play Result' || !p.text) continue;
+          const b = (p.participants || []).find(x => x.type === 'batter');
+          if (!b || !b.athlete) continue;
+          const id = String(b.athlete.id);
+          (g.abByBatter[id] = g.abByBatter[id] || []).push({ inning: num(p.period?.number), text: p.text });
+        }
+        g.err = false;
+      } catch (e) {
+        console.warn('Gamecast fetch failed:', e);
+        g.err = true;
       }
-      window.__abByBatter = {};
-      // expose per-batter at-bats for box score renderer
-      for (const p of plays) {
-        if (p.type?.text !== 'Play Result' || !p.text) continue;
-        const b = (p.participants || []).find(x => x.type === 'batter');
-        if (!b || !b.athlete) continue;
-        const id = String(b.athlete.id);
-        (window.__abByBatter[id] = window.__abByBatter[id] || []).push({ inning: num(p.period?.number), text: p.text });
-      }
-      lastFetchErr = false;
-    } catch (e) {
-      console.warn('Gamecast fetch failed:', e);
-      lastFetchErr = true;
-    }
+    }));
     renderAll();
     schedule();
   }
 
   function schedule() {
-    // ESPN's Fastcast pushes per-pitch (event-driven); 10s polling tracks within one pitch.
     if (refreshTimer) clearTimeout(refreshTimer);
-    const secs = (G && G.state === 'in') ? 10 : 60;
+    const anyLive = GAMES.some(g => g.G && g.G.state === 'in');
+    const anyPre = GAMES.some(g => g.espnId && (!g.G || g.G.state === 'pre'));
+    const secs = anyLive ? 10 : (anyPre ? 30 : 60);
     refreshTimer = setTimeout(load, secs * 1000);
   }
 
-  load();
+  init();
 </script>
 
 </body>

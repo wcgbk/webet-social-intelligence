@@ -92,6 +92,24 @@
     .chip-aminus { background: #1abc9c; } .chip-bplus { background: #f39c12; }
     .chip-b { background: #f9a825; } .chip-lean { background: #5b6b7a; }
 
+    /* ─── Full bet details per pick (bigger than the old chip) ─── */
+    .gc-bd { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; padding: .75rem .875rem; margin: .5rem 0 .25rem; }
+    .gc-bd + .gc-bd { margin-top: .5rem; }
+    .gc-bd-top { display: flex; align-items: center; gap: .5rem; }
+    .gc-bd-pick { font-size: 1.0625rem; font-weight: 700; color: var(--olive); display: flex; align-items: center; gap: .45rem; min-width: 0; }
+    .gc-bd-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .gc-bd-odds { font-family: 'Geist Sans', monospace; font-size: 1.0625rem; font-weight: 700; color: var(--teal); margin-left: auto; white-space: nowrap; }
+    .gc-bd-rating { font-size: .75rem; font-weight: 700; color: #fff; border-radius: 6px; padding: .15rem .5rem; flex-shrink: 0; }
+    .rb-aplus { background: #c0392b; } .rb-a { background: #004C54; } .rb-aminus { background: #1abc9c; }
+    .rb-bplus { background: #f39c12; } .rb-b { background: #f9a825; } .rb-lean { background: #5b6b7a; }
+    .gc-bd-sub { font-size: .75rem; color: var(--txt-m); margin-top: .25rem; }
+    .gc-bd-stake { font-size: .9375rem; font-weight: 700; color: var(--teal); margin-top: .5rem; }
+    .gc-bd-metrics { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+    .gc-bd-metric { display: inline-flex; flex-direction: column; align-items: center; background: var(--off-white); border: 1px solid var(--border-lt); border-radius: 8px; padding: .3rem .625rem; min-width: 3.4rem; }
+    .gc-bd-metric .l { font-size: .5625rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--txt-l); }
+    .gc-bd-metric .v { font-size: .9375rem; font-weight: 700; color: var(--olive); margin-top: 1px; }
+    .gc-bd-model { font-size: .6875rem; color: var(--txt-m); margin-top: .5rem; padding-top: .45rem; border-top: 1px solid var(--border-lt); }
+
     /* ═══ GAMECAST — ESPN-matched palette + metrics ═══ */
     :root {
       --gc-ink: #2b2c2d;         /* ESPN primary text */
@@ -406,6 +424,15 @@
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   const num = (v, f) => { const n = Number(v); return isNaN(n) ? (f ?? 0) : n; };
 
+  // ── Bet-math (matches /alpha: $150 per unit, whole-dollar round-up) ──
+  const DOLLAR_PER_UNIT = 150;
+  function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
+  function calcWinnings(atRisk, oddsStr) {
+    const odds = parseInt((oddsStr || '-110').replace(/[^0-9+-]/g, ''));
+    if (isNaN(odds) || !atRisk) return 0;
+    return odds > 0 ? atRisk * (odds / 100) : atRisk * (100 / Math.abs(odds));
+  }
+
   /* ESPN's own Gamecast batter illustration (a.espncdn.com/redesign/assets/img/mlb/batter.svg),
      inlined verbatim so the figure matches ESPN exactly. Native canvas 72x158. */
   const ESPN_BATTER = '<g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"> <g> <g transform="translate(2.00, 1.00)"> <polygon fill="#DCDDDF" points="66.00 0.00 48.24 5.35 38.13 9.04 17.05 16.30 16.85 18.11 18.08 18.70 39.62 12.70 49.05 10.36 56.92 8.04 67.68 4.65 68.07 3.37 67.16 0.57"></polygon> <polygon fill="#DCDDDF" points="0.09 21.30 -0.00 21.88 0.09 22.70 0.76 24.58 1.97 25.63 2.50 25.52 2.64 25.19 1.23 21.30 0.67 20.98"></polygon> <polygon fill-opacity="0.44" fill="#A5A6A7" points="17.99 22.30 23.22 25.12 25.50 26.12 28.05 27.00 21.68 32.02 20.07 30.12 14.93 26.32"></polygon> <polygon fill="#E4E6EA" points="17.99 22.30 23.22 25.12 25.50 26.12 28.05 27.00 21.68 32.02 20.07 30.12 14.93 26.32"></polygon> <polygon fill="#E4E6EA" points="30.89 134.28 29.19 135.08 25.84 136.56 21.68 137.99 19.76 138.97 18.91 140.94 19.49 142.10 23.78 143.39 29.37 143.39 32.94 142.99 35.98 142.86 37.82 143.39 43.05 143.08 42.80 138.83 39.87 137.49"></polygon> <polygon fill="#E4E6EA" points="35.13 147.91 31.60 149.83 28.29 150.73 26.55 152.07 26.33 153.09 26.33 154.44 30.66 155.78 39.11 156.00 40.63 155.64 43.90 154.70 48.68 154.84 54.67 154.03 55.70 152.51 55.29 150.37 39.43 144.96"></polygon> <polygon fill="#DCDDDF" points="30.53 71.79 31.33 74.16 29.46 78.99 27.04 83.05 23.49 91.93 20.27 99.35 19.20 101.87 19.20 104.32 20.07 107.68 22.81 111.45 25.27 115.79 31.80 129.51 32.41 130.42 32.88 131.46 32.27 132.58 31.07 132.58 30.46 133.56 31.42 135.31 33.21 136.43 39.97 139.51 40.39 124.33 32.27 98.65 34.02 79.62 31.47 72.69"></polygon> <polygon fill="#E4E6EA" points="30.53 71.79 31.33 74.16 29.46 78.99 27.04 83.05 23.49 91.93 20.27 99.35 19.20 101.87 19.20 104.32 20.07 107.68 22.81 111.45 25.27 115.79 31.80 129.51 32.41 130.42 32.88 131.46 32.27 132.58 31.07 132.58 30.46 133.56 31.42 135.31 33.21 136.43 39.97 139.51 40.39 124.33 32.27 98.65 34.02 79.62 31.47 72.69"></polygon> <polygon fill="#DCDDDF" points="25.50 24.31 27.11 25.86 27.25 27.00 32.27 24.31 36.80 23.18 33.48 19.89 33.82 14.66 25.50 14.12"></polygon> <polygon fill="#DCDDDF" points="19.27 12.38 19.60 15.66 21.01 18.82 22.22 20.56 22.81 22.24 25.50 24.31 28.52 23.98 32.41 19.15 32.74 16.20 32.03 10.04 23.56 10.90"></polygon> <polygon fill="#EDEEF0" points="1.23 21.30 1.61 20.29 2.15 20.06 3.04 18.88 4.25 18.88 5.12 17.94 6.32 17.94 7.13 17.54 8.00 17.88 9.54 20.56 10.48 20.56 11.42 22.30 11.42 24.31 10.15 26.33 9.95 29.28 11.42 32.96 14.04 36.11 13.63 39.80 19.74 45.97 14.91 47.04 11.29 48.79 5.39 47.85 4.45 43.82 4.58 37.66 4.11 27.93 2.64 25.18"></polygon> <polygon fill="#EDEEF0" points="8.74 17.54 8.00 17.88 9.54 20.56 11.42 24.31 13.21 25.34 13.83 26.32 14.93 26.32 16.05 26.10 18.19 24.54 18.79 22.73 18.21 21.93 18.53 20.56 18.44 19.15 17.39 17.83 16.92 15.33 15.31 14.59 14.35 14.72 13.63 13.99 12.58 14.12 12.20 14.72 11.22 14.68 10.37 15.35 10.24 15.82 9.48 15.84 8.87 16.74"></polygon> <polygon fill="#DCDDDF" points="35.56 21.30 34.96 22.50 31.60 23.51 27.24 27.00 25.84 27.93 22.81 44.48 25.03 56.97 25.03 58.78 26.84 64.34 27.58 65.82 26.91 68.70 28.45 69.71 35.56 66.29 36.97 64.81 47.29 61.79 49.10 61.73 50.31 59.65 50.31 57.50 48.30 55.16 48.63 53.95 47.96 52.74 48.16 46.91 47.69 45.50 47.96 39.67 47.49 33.63 47.56 30.68 45.21 26.12 41.86 22.84 37.70 21.30"></polygon> <polygon fill="#DCDDDF" points="25.84 27.93 20.39 31.71 19.59 32.53 18.29 33.16 16.74 34.51 14.04 36.11 13.63 39.80 19.74 45.97 28.18 41.88 30.33 41.95 31.40 42.75 33.03 41.07 34.29 39.80 32.47 36.52 27.39 31.52"></polygon> <g transform="translate(13.32, 12.37)"> <polygon fill-opacity="0.24" fill="#EDEEF0" points="12.18 35.68 19.09 45.94 27.57 48.56 17.83 41.18"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="21.64 40.38 25.80 44.47 29.89 47.28 24.86 45.20"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="22.58 51.57 17.83 49.36 11.11 38.37 13.79 50.27 15.54 54.32 15.13 55.53 18.05 54.83"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="25.76 41.25 27.57 43.83 30.82 45.67 28.75 43.19"></polygon> <polygon fill-opacity="0.24" fill="#EDEEF0" points="30.82 27.03 28.75 23.48 23.48 25.26 28.29 25.26"></polygon> <polygon fill="#E0E1E3" points="2.73 26.16 6.69 25.26 9.23 24.59 5.98 26.16"></polygon> <polygon fill="#E0E1E3" points="13.19 27.03 9.50 29.38 7.49 31.86 11.71 30.05"></polygon> <polygon fill="#D0D0D9" points="10.81 0.21 11.14 0.82 10.98 3.87 12.00 4.23 10.41 4.07"></polygon> <polygon fill="#D0D0D9" points="14.93 6.08 12.18 6.08 10.17 6.78 10.41 6.43 12.00 5.75"></polygon> <polygon fill="#EDEEF0" points="15.69 79.44 13.79 80.20 10.73 84.45 15.69 80.70"></polygon> <polygon fill="#EDEEF0" points="15.43 83.07 10.11 87.01 15.69 84.23"></polygon> <path d="M14.98,91.65 C14.84,91.69 12.52,92.14 12.52,92.14 L11.27,92.54 L15.20,92.54 L14.98,91.65 Z" fill="#EDEEF0"></path> <polygon fill="#EDEEF0" points="15.07 93.85 11.27 93.85 13.23 94.69 15.20 95.09"></polygon> <polygon fill="#EDEEF0" points="14.58 96.74 12.70 96.74 11.27 95.80 12.92 97.37 14.58 97.91"></polygon> <polygon fill="#EDEEF0" points="15.20 85.79 13.23 87.85 15.20 86.51"></polygon> <polygon fill="#EDEEF0" points="20.34 119.36 23.92 120.84 24.59 121.57"></polygon> <polygon fill="#DCDDDF" points="0.94 3.41 2.28 3.81 2.73 4.62 3.22 6.27 2.08 5.91 2.08 5.02"></polygon> </g> <polygon fill="#EDEEF0" points="49.10 61.73 51.18 64.07 51.18 64.81 52.66 66.22 54.47 69.71 55.34 74.06 54.94 78.22 53.73 81.71 49.77 86.60 46.76 90.16 45.01 93.24 43.87 97.26 42.93 104.24 41.79 111.34 45.21 117.04 47.36 121.74 48.57 127.57 51.65 137.16 55.34 144.67 56.01 150.37 50.31 150.37 43.14 148.02 38.64 145.00 41.12 142.93 42.33 140.51 40.12 138.70 37.24 130.32 35.36 125.69 30.60 117.98 27.85 113.42 27.11 109.94 27.71 106.85 28.72 90.83 31.74 77.15 31.40 74.06 31.47 72.66 30.53 71.78 29.73 69.71 29.68 69.09 35.56 66.29 36.97 64.81 47.29 61.79"></polygon> <polygon fill="#0066CC" points="48.63 62.63 50.31 65.01 43.44 67.19 42.06 64.71"></polygon> <polygon fill="#0066CC" points="35.42 67.19 36.56 69.71 33.41 71.32 32.27 68.97"></polygon> <polygon fill="#0066CC" points="31.03 69.71 32.27 71.92 31.65 72.22 30.46 70.18"></polygon> <g transform="translate(24.73, 15.22)"> <path d="M5.40,95.05 C5.40,95.05 7.33,96.65 10.49,95.52 C14.05,94.25 17.80,86.07 17.80,86.07 C17.80,86.07 13.66,91.12 12.17,92.57 C9.69,94.99 5.40,95.05 5.40,95.05" fill="#E4E6EA"></path> <polygon fill="#E4E6EA" points="22.63 72.90 11.60 82.13 9.69 85.40"></polygon> <polygon fill="#E4E6EA" points="18.81 78.62 13.84 85.40 11.60 89.69 14.65 85.40"></polygon> <path d="M22.02,57.97 C22.02,57.97 19.01,55.74 15.86,55.74 C12.70,55.74 9.28,58.38 9.28,58.38 C9.28,58.38 12.84,57.50 15.66,57.50 C18.47,57.50 22.02,57.97 22.02,57.97" fill="#DDE0E5"></path> <polygon fill="#E4E6EA" points="13.91 112.95 26.58 129.74 24.91 128.91"></polygon> <polygon fill="#E4E6EA" points="22.09 128.18 14.78 118.72 16.16 121.81"></polygon> <polygon fill="#E4E6EA" points="11.60 104.77 6.25 101.02 7.54 102.56"></polygon> <polygon fill="#E4E6EA" points="6.60 97.33 10.29 97.33 12.24 96.53 8.35 98.47"></polygon> <polygon fill="#DDE0E5" points="21.09 61.17 12.64 62.20 8.12 64.08"></polygon> <polygon fill="#DDE0E5" points="22.25 63.05 14.96 65.42 9.28 68.14 18.81 65.24"></polygon> <polygon fill="#DDE0E5" points="22.63 65.24 14.60 68.72 7.68 72.75 15.20 69.44"></polygon> <polygon fill="#E4E6EA" points="19.41 73.24 12.82 76.10 10.22 78.07 8.75 80.75"></polygon> <path d="M10.22,101.02 C10.94,101.22 13.00,101.51 13.00,101.51 L17.33,101.51 L12.24,102.98 L10.22,101.02 Z" fill="#E4E6EA"></path> <polygon fill="#D0D0D9" points="7.68 3.93 3.79 8.76 0.77 9.09 1.82 9.41 4.39 9.09 8.21 4.62 8.46 0.98 7.96 0.50"></polygon> </g> <polygon fill="#0066CC" points="17.05 13.45 19.74 12.22 23.56 10.90 26.98 10.55 32.09 10.55 32.04 13.35 32.69 15.72 33.65 17.18 35.22 17.18 35.96 15.26 35.96 11.44 34.69 9.70 33.95 6.21 32.84 4.26 31.15 2.79 27.78 1.52 23.96 1.52 20.81 2.72 18.66 4.67 17.59 7.15 17.86 11.57 16.85 12.91"></polygon> <polygon fill-opacity="0.24" fill="#4C4C4C" points="33.78 9.83 32.09 10.55 26.98 10.55 23.56 10.90 19.74 12.22 17.05 13.45 16.85 12.91 17.86 11.57 20.07 9.76 23.52 8.52 27.65 8.19 31.67 8.69 33.31 8.96"></polygon> </g> </g> </g>';
@@ -546,6 +573,19 @@
     const homeC = comp.competitors.find(c => c.homeAway === 'home');
     const away = parseTeam(awayC), home = parseTeam(homeC);
 
+    // Probable starting pitchers (present pre-game; ESPN puts them on each competitor).
+    const probOf = (c) => {
+      const pr = (c && (c.probables || c.probable)) || [];
+      const ath = pr[0] && pr[0].athlete;
+      if (!ath || !ath.id) return null;
+      return {
+        id: String(ath.id), name: ath.displayName || '', short: ath.shortName || ath.displayName || '',
+        pos: (ath.position || {}).abbreviation || 'SP',
+        headshot: (ath.headshot && ath.headshot.href) || ('https://a.espncdn.com/i/headshots/mlb/players/full/' + ath.id + '.png'),
+      };
+    };
+    const probables = { away: probOf(awayC), home: probOf(homeC) };
+
     const athletes = {};
     const box = { away: null, home: null };
     for (const tp of (d.boxscore?.players || [])) {
@@ -658,7 +698,7 @@
     return {
       state, detail: status.type?.detail || '', shortDetail: status.type?.shortDetail || '',
       period: num(status.period), periodPrefix: status.periodPrefix || '',
-      away, home, box, totals, athletes,
+      away, home, box, totals, athletes, probables,
       atBat: {
         batterId, pitcherId, bats, pitches, completed: !!resultPlay, inningOver,
         headTitle, headText, balls, strikes, outs: num(outs),
@@ -723,11 +763,7 @@
 
     let s = '<svg viewBox="' + VB.x + ' ' + VB.y + ' ' + VB.w + ' ' + VB.h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pitch location chart">';
 
-    // faint basepath spanning the module + home plate at bottom center (ESPN)
-    const py = 236;
-    s += '<path d="M' + zcx + ',' + py + ' L-28,152 L-9,118" fill="none" stroke="#e3e5e9" stroke-width="2.5"/>';
-    s += '<path d="M' + zcx + ',' + py + ' L263,152 L244,118" fill="none" stroke="#e3e5e9" stroke-width="2.5"/>';
-    s += '<path d="M' + (zcx - 16) + ',' + py + ' L' + (zcx + 16) + ',' + py + ' L' + (zcx + 16) + ',' + (py + 5) + ' L' + zcx + ',' + (py + 12) + ' L' + (zcx - 16) + ',' + (py + 5) + ' Z" fill="#ffffff" stroke="#d9dcdf" stroke-width="2"/>';
+    // (basepath + home plate removed per request — zone + batter only)
 
     // ESPN's batter beside the zone — righty stands plot-right facing the zone; lefty mirrors
     const rSide = bats !== 'L';
@@ -921,9 +957,40 @@
     return s;
   }
 
+  /* ── Pre-game: the two probable starting pitchers (faces are otherwise empty before
+       first pitch). Same ESPN vs-module layout, batter/zone illustration kept below. ── */
+  function probableStartersHTML() {
+    const pr = G.probables || {};
+    const ap = pr.away, hp = pr.home;
+    const shot = (a) => (a && a.headshot)
+      ? '<img class="gc-vshead" src="' + esc(a.headshot) + '" alt="' + esc(a.name || '') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'"/>'
+      : '<span class="gc-vshead"></span>';
+    const side = (a, team, cls, teamFirst) => {
+      const logo = logoImg(team, '');
+      const label = teamFirst ? (logo + 'STARTER') : ('STARTER' + logo);
+      return '<div class="gc-vsside ' + cls + '">' +
+        '<div class="gc-vslabel">' + label + '</div>' +
+        '<div class="gc-vsname">' + esc(a ? (a.short || a.name) : 'TBD') + (a && a.pos ? '<span class="pos">' + esc(a.pos) + '</span>' : '') + '</div>' +
+        '<div class="gc-vsstat">Probable starter</div></div>';
+    };
+    return '<div class="gc-section-title"><span>Probable Starters</span><span class="aux">' + esc((G.shortDetail || 'Scheduled')) + '</span></div>' +
+      '<div class="gc-vshdr"><div class="gc-vsrow">' +
+        side(ap, G.away, 'pitcher', true) + shot(ap) + '<span class="gc-vs">vs</span>' + shot(hp) + side(hp, G.home, 'batter', false) +
+      '</div></div>';
+  }
+
   function atBatHTML(idx) {
     const ab = G.atBat;
     if (G.state === 'in' && ab.inningOver) return dueUpHTML();
+
+    // Pre-game: show the projected (probable) starters + the empty zone/batter illustration.
+    if (G.state === 'pre') {
+      let h = probableStartersHTML();
+      h += '<div class="gc-stage"><div class="gc-plot">' + pitchPlotSVG([], null, 'R', false) + '</div>' +
+        '<div class="gc-seq"><div class="gc-nopitch">First pitch not thrown yet</div></div></div>';
+      return h;
+    }
+
     const batter = G.athletes[ab.batterId] || {};
     const battingSide = G.periodPrefix && /bottom|end/i.test(G.periodPrefix) ? 'home' : 'away';
     let batLine = '';
@@ -1108,15 +1175,30 @@
   }
 
   /* ═══════════════ RENDER — one section per game on today's card ═══════════════ */
-  function chipsHTML(picks) {
-    let h = '<div class="gc-chips">';
+  function betDetailsHTML(picks) {
+    const metric = (label, val) => val ? '<span class="gc-bd-metric"><span class="l">' + label + '</span><span class="v">' + esc(val) + '</span></span>' : '';
+    let h = '';
     for (const p of picks) {
-      h += '<span class="gc-chip"><span class="gc-chip-dot ' + (confClass[p.confidence] || 'chip-b') + '"></span>' +
-        '<b>' + esc(p.pick) + '</b><span class="odds">' + esc(p.odds || '') + '</span>' +
-        (p.units ? '<span>·</span><span>' + esc(p.units) + '</span>' : '') +
-        (p.rating ? '<span>·</span><span>' + esc(p.rating) + '</span>' : '') + '</span>';
+      const conf = p.confidence || 'b';
+      const u = parseFloat(p.units) || 1;
+      const risk = wholeUp(u * DOLLAR_PER_UNIT);
+      const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
+      const uLabel = (p.units || (u + 'u')).toString();
+      h += '<div class="gc-bd">' +
+        '<div class="gc-bd-top">' +
+          '<span class="gc-bd-pick"><span class="gc-bd-dot ' + (confClass[conf] || 'chip-b') + '"></span>' + esc(p.pick) + '</span>' +
+          '<span class="gc-bd-odds">' + esc(p.odds || '') + '</span>' +
+          (p.rating ? '<span class="gc-bd-rating rb-' + conf + '">' + esc(p.rating) + '</span>' : '') +
+        '</div>' +
+        '<div class="gc-bd-sub">' + esc(p.betType || '') + (p.matchup ? ' · ' + esc(shortMatchup(p.matchup)) : '') + '</div>' +
+        '<div class="gc-bd-stake">' + esc(uLabel) + ' · Bet $' + risk.toLocaleString() + ' · To Win +$' + win.toLocaleString() + '</div>' +
+        '<div class="gc-bd-metrics">' +
+          metric('EV', p.ev) + metric('Edge', p.edgePct) + metric('Cover', p.coverProb) + metric('Win Prob', p.winProbability) +
+        '</div>' +
+        (p.modelEdge ? '<div class="gc-bd-model">' + esc(p.modelEdge) + '</div>' : '') +
+      '</div>';
     }
-    return h + '</div>';
+    return h;
   }
 
   function timeChipHTML(g) {
@@ -1146,7 +1228,7 @@
       html += '<div class="pick-card">' +
         '<div class="pick-header"><span class="sport-tag">' + esc(g.sport) + '</span>' + timeChipHTML(g) + '</div>' +
         '<div class="pick-matchup" style="margin-bottom:.125rem;">' + esc(shortMatchup(g.matchup)) + '</div>' +
-        chipsHTML(g.picks) +
+        betDetailsHTML(g.picks) +
         gamecastSection(i, g) +
         '</div>';
     }

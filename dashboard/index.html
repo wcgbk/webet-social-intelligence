@@ -1638,6 +1638,10 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
         Daily Edge Picks
       </button>
+      <button class="nav-item" data-panel="nfl" onclick="switchPanel('nfl')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M8.75 15.25l6.5-6.5M10 12.5l1.5 1.5M12.5 10l1.5 1.5"/></svg></span>
+        NFL Model
+      </button>
       <button class="nav-item" data-panel="gamecast" onclick="switchPanel('gamecast')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4.5c2.8 4.3 2.8 10.7 0 15M18 4.5c-2.8 4.3-2.8 10.7 0 15"/></svg></span>
         Gamecast
@@ -1790,6 +1794,11 @@
       <!-- DAILY EDGE PICKS PANEL -->
       <div class="panel" id="panel-picks" style="overflow:hidden;">
         <iframe id="picks-iframe" src="/alpha" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- NFL MODEL PANEL -->
+      <div class="panel" id="panel-nfl" style="overflow:hidden;">
+        <iframe id="nfl-iframe" src="/nfl" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- GAMECAST PANEL -->
@@ -2158,6 +2167,7 @@
   const panelTitles = {
     chat: 'Chat With Betty',
     picks: 'Daily Edge Picks',
+    nfl: 'NFL Model',
     gamecast: 'Gamecast',
     mlb: 'MLB First 5 Picks',
     webit: 'WeBit',

@@ -337,6 +337,7 @@
   query = {view = ":view"}
   to = "/.netlify/functions/serve-dashboard"
   status = 200
+  force = true  # override Netlify's static directory-index, which otherwise wins over non-forced rules
 
 [[redirects]]
   from = "/dashboard"

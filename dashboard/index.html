@@ -2050,7 +2050,7 @@
   (function initAuth() {
     const params = new URLSearchParams(window.location.search);
     const authStatus = params.get('auth');
-    if (authStatus) window.history.replaceState({}, '', '/dashboard');
+    if (authStatus) window.history.replaceState({}, '', '/dashboard' + (window.location.hash || ''));
     if (authStatus === 'success') {
       justSignedIn = true;
     } else if (authStatus === 'error') {
@@ -2187,6 +2187,27 @@
     profile: 'My Profile',
   };
 
+  // ── Deep-link slugs ──────────────────────────────────────────────
+  // Each content panel maps to a friendly, shareable URL fragment so the page
+  // you're on can be copied and sent — a returning visitor who opens the link
+  // lands on that exact panel. Chat is the home page (no fragment). Any raw
+  // panel key also resolves, so older /dashboard#panel links keep working.
+  const PANEL_SLUGS = {
+    picks: 'picks', nfl: 'nfl', gamecast: 'gamecast', percentile: 'track-record',
+    p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
+    webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
+  };
+  const SLUG_TO_PANEL = {};
+  Object.keys(PANEL_SLUGS).forEach(function (p) { SLUG_TO_PANEL[PANEL_SLUGS[p]] = p; });
+  function slugForPanel(panel) { return PANEL_SLUGS[panel] || panel; }
+  function panelForSlug(slug) {
+    if (!slug) return '';
+    const mapped = SLUG_TO_PANEL[slug];
+    if (mapped && document.getElementById('panel-' + mapped)) return mapped;
+    if (document.getElementById('panel-' + slug)) return slug; // raw panel-key fallback
+    return '';
+  }
+
   /* ─── Init ──────────────────────────────────────────────────────── */
   if (window.innerWidth <= 768) {
     document.getElementById('sidebar').classList.add('collapsed');
@@ -2204,6 +2225,18 @@
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     const target = document.getElementById('panel-' + panel);
     if (target) target.classList.add('active');
+
+    // Keep the URL in sync so the current page is shareable / deep-linkable.
+    // Chat is home (clean /dashboard); every other panel → /dashboard#<slug>.
+    // replaceState (not push) keeps history clean and does NOT fire hashchange,
+    // so this never loops with the hashchange router below.
+    try {
+      const slug = (panel === 'chat' || !target) ? '' : slugForPanel(panel);
+      const url = location.pathname + location.search + (slug ? '#' + slug : '');
+      if (location.pathname + location.search + location.hash !== url) {
+        history.replaceState(null, '', url);
+      }
+    } catch (e) {}
 
     // Update sidebar nav
     document.querySelectorAll('.nav-item[data-panel]').forEach(n => {
@@ -3729,13 +3762,23 @@
   // A #hash deep-link (e.g. /dashboard#picks) wins over the remembered panel.
   (function restoreActivePanel() {
     try {
-      var fromHash = (location.hash || '').replace(/^#/, '');
+      var fromHash = panelForSlug((location.hash || '').replace(/^#/, ''));
       var saved = fromHash || sessionStorage.getItem('wbaiActivePanel');
       if (saved && saved !== activePanel && document.getElementById('panel-' + saved)) {
         switchPanel(saved);
       }
     } catch (e) {}
   })();
+
+  // A shared link opened in an already-loaded tab (or browser back/forward, or a
+  // hand-edited fragment) changes only the hash — route it to that panel live.
+  // Empty hash → home (chat). switchPanel uses replaceState, so it won't re-fire this.
+  window.addEventListener('hashchange', function () {
+    try {
+      var p = panelForSlug((location.hash || '').replace(/^#/, '')) || 'chat';
+      if (p !== activePanel && document.getElementById('panel-' + p)) switchPanel(p);
+    } catch (e) {}
+  });
 
   window.addEventListener('load', function () {
     var force = /[?&]onboard=force/.test(location.search);

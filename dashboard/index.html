@@ -2050,7 +2050,11 @@
   (function initAuth() {
     const params = new URLSearchParams(window.location.search);
     const authStatus = params.get('auth');
-    if (authStatus) window.history.replaceState({}, '', '/dashboard' + (window.location.hash || ''));
+    if (authStatus) {
+      var _p = new URLSearchParams(window.location.search); _p.delete('auth');
+      var _qs = _p.toString(); // keep ?view (the shared panel) through the post-login cleanup
+      window.history.replaceState({}, '', '/dashboard' + (_qs ? '?' + _qs : '') + (window.location.hash || ''));
+    }
     if (authStatus === 'success') {
       justSignedIn = true;
     } else if (authStatus === 'error') {
@@ -2226,14 +2230,21 @@
     const target = document.getElementById('panel-' + panel);
     if (target) target.classList.add('active');
 
-    // Keep the URL in sync so the current page is shareable / deep-linkable.
-    // Chat is home (clean /dashboard); every other panel → /dashboard#<slug>.
-    // replaceState (not push) keeps history clean and does NOT fire hashchange,
-    // so this never loops with the hashchange router below.
+    // Keep the URL + browser-tab title in sync so the current page is shareable and
+    // both its tab title and its link-preview show the menu item's name. Chat is home
+    // (clean /dashboard); every other panel → /dashboard?view=<slug>. The query param
+    // (NOT #hash) is what lets a shared link unfurl with the panel name — crawlers
+    // never see a fragment and don't run JS; the server (serve-dashboard) renders the
+    // matching OG/title for ?view. replaceState keeps history clean.
     try {
+      document.title = 'WeBetAI - Social Intelligence | ' +
+        (panel === 'chat' ? 'Dashboard' : (panelTitles[panel] || 'Dashboard'));
+      const params = new URLSearchParams(location.search);
       const slug = (panel === 'chat' || !target) ? '' : slugForPanel(panel);
-      const url = location.pathname + location.search + (slug ? '#' + slug : '');
-      if (location.pathname + location.search + location.hash !== url) {
+      if (slug) params.set('view', slug); else params.delete('view');
+      const qs = params.toString();
+      const url = location.pathname + (qs ? '?' + qs : '');
+      if (location.pathname + location.search !== url) {
         history.replaceState(null, '', url);
       }
     } catch (e) {}
@@ -3762,8 +3773,10 @@
   // A #hash deep-link (e.g. /dashboard#picks) wins over the remembered panel.
   (function restoreActivePanel() {
     try {
-      var fromHash = panelForSlug((location.hash || '').replace(/^#/, ''));
-      var saved = fromHash || sessionStorage.getItem('wbaiActivePanel');
+      var view = new URLSearchParams(location.search).get('view') || '';
+      var fromQuery = panelForSlug(view);
+      var fromHash = panelForSlug((location.hash || '').replace(/^#/, '')); // legacy #panel links
+      var saved = fromQuery || fromHash || sessionStorage.getItem('wbaiActivePanel');
       if (saved && saved !== activePanel && document.getElementById('panel-' + saved)) {
         switchPanel(saved);
       }

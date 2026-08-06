@@ -20,6 +20,10 @@
   # Alpha pipeline — 9am EDT (13:00 UTC), 1hr earlier than beta for max CLV runway
   # Writes to edge-picks-alpha blob store. Model: v10.2-alpha-calibrated
 
+[functions."serve-dashboard"]
+  # Injects per-panel OG/title into the dashboard for shared /dashboard?view=<slug> links.
+  included_files = ["dashboard/index.html"]
+
 [functions."generate-picks-alpha-background"]
   # Background function — 15min timeout for Alpha pick generation
 
@@ -323,6 +327,15 @@
 [[redirects]]
   from = "/alpha"
   to = "/alpha/index.html"
+  status = 200
+
+# Deep-linked dashboard panels: /dashboard?view=<slug> is server-rendered with panel-specific
+# OG + <title> so a shared link unfurls with the menu item's name (crawlers never see #hash and
+# don't run JS). Plain /dashboard (no ?view) falls through to the static file below — unchanged.
+[[redirects]]
+  from = "/dashboard"
+  query = {view = ":view"}
+  to = "/.netlify/functions/serve-dashboard"
   status = 200
 
 [[redirects]]

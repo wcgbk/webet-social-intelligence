@@ -796,7 +796,8 @@
     const ab = G.atBat;
     let mid = '';
     if (G.state === 'pre') {
-      mid = '<span class="gc-strip-inning">' + esc(G.shortDetail || G.detail) + '</span>';
+      // Drop the leading "8/6 - " date so the mid column stays narrow enough for team abbrs on mobile
+      mid = '<span class="gc-strip-inning">' + esc((G.shortDetail || G.detail).replace(/^\d+\/\d+\s*-\s*/, '')) + '</span>';
     } else if (G.state === 'post') {
       mid = '<span class="gc-strip-inning final">Final</span>';
     } else if (ab.inningOver || /^(mid|end)/i.test(G.periodPrefix || '')) {
@@ -996,7 +997,8 @@
     const innings = Math.max(9, G.away.ls.length, G.home.ls.length, G.period);
     const curIdx = G.period - 1;
     const row = (t, side) => {
-      const tot = G.totals[side] || {};
+      // Pre-game the boxscore carries SEASON totals — show dashes until the game starts.
+      const tot = (G.state === 'pre' ? {} : G.totals[side]) || {};
       let cells = '';
       for (let i = 0; i < innings; i++) {
         const v = t.ls[i] != null && t.ls[i] !== '' ? t.ls[i] : '-';
@@ -1004,7 +1006,7 @@
         cells += '<td class="' + (isCur ? 'cur' : '') + '">' + esc(v) + '</td>';
       }
       return '<tr><td class="tm">' + logoImg(t, '') + esc(t.abbr) + '</td>' + cells +
-        '<td class="rhe">' + t.score + '</td><td class="rhe">' + esc(tot.hits ?? '-') + '</td><td class="rhe">' + esc(tot.errors ?? '-') + '</td></tr>';
+        '<td class="rhe">' + (G.state === 'pre' ? '-' : t.score) + '</td><td class="rhe">' + esc(tot.hits ?? '-') + '</td><td class="rhe">' + esc(tot.errors ?? '-') + '</td></tr>';
     };
     let head = '<tr><th style="text-align:left;"></th>';
     for (let i = 1; i <= innings; i++) head += '<th>' + i + '</th>';

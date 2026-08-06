@@ -17,6 +17,14 @@ picks card + live track record. WeBits = credit economy (1,000 granted at signup
 Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle.
 
 ## DONE — never rebuild (evidence in git log + charter)
+- **NFL pipeline LIVE (2026-08-06, founder-directed):** separate environment from alpha —
+  generate-picks-nfl-background (model v1.0-nfl-preseason: sharp-book consensus + two-sided
+  de-vig + market-anchored projection + line shopping, alpha shrinkage Ks ×0.6 preseason,
+  EV floor 3%, quarter-Kelly, preseason caps 1.0u/0.5u-ML, LEAN fallback so game nights
+  always card) → edge-picks-nfl store → /nfl page (alpha clone, clean NFL-only KPIs via
+  get-results-nfl lazy ESPN grading). Cron trigger-picks-nfl 15:00 UTC GATED on ESPN NFL
+  slate — runs only on NFL game days. netlify.toml + baseline hash regenerated for this.
+  Goal: fitted NFL Ks + live Elo before the 2026 regular-season opener.
 - **v10.4-alpha-mlb (2026-08-03, full optimization pass after post-ASB review):** settlement
   writer fixed (track-clv: DH disambiguation by commenceTime, postponed→push, F5 linescore
   guards, ESPN-grade-FIRST ordering, awaited overnight settle + 7-day unsettled sweep; dead

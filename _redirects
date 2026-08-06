@@ -2,3 +2,5 @@
 # Netlify processes these together with the netlify.toml [[redirects]]; first match wins, no conflicts.
 /mvpalpha     /mvpalpha/index.html     200
 /mvpalpha/    /mvpalpha/index.html     200
+/nfl          /nfl/index.html          200
+/nfl/         /nfl/index.html          200

@@ -23,6 +23,16 @@
 [functions."generate-picks-alpha-background"]
   # Background function — 15min timeout for Alpha pick generation
 
+[functions."trigger-picks-nfl"]
+  schedule = "0 15 * * *"
+  # NFL pipeline — 11am ET (15:00 UTC), added 2026-08-06. GATED: fires the generator only on
+  # days with NFL games (preseason or regular season, per ESPN scoreboard) — quiet no-op
+  # otherwise. Separate environment from alpha: writes to edge-picks-nfl blob store → /nfl page.
+  # Model: v1.0-nfl-preseason (market-anchored + line shopping, reduced preseason stakes).
+
+[functions."generate-picks-nfl-background"]
+  # Background function — 15min timeout for NFL pick generation
+
 [functions."trigger-picks-mvp"]
   # schedule = "0 12 * * *"
   # PAUSED 2026-08-02 — founder directive: alpha (v10.3-alpha-sharp → /alpha + /dashboard) is the

@@ -356,7 +356,7 @@
       .gc-plot svg { max-height: 220px; }
       .gc-count { gap: .75rem; }
       .pick-matchup { font-size: .9375rem; }
-      .gc-splay { grid-template-columns: 18px 2.1rem 1fr 1.4rem 1.4rem; }
+      .gc-splay { grid-template-columns: 18px 2.7rem 1fr 1.4rem 1.4rem; } /* wider inning col so "Top 2nd" clears the text */
       /* vs-module: smaller faces + wrapping stat lines so the row fits 375px */
       .gc-vshead { width: 36px; height: 36px; }
       .gc-vsrow { gap: .25rem; }
@@ -378,12 +378,16 @@
       .gc-h3 { font-size: .875rem; margin: .875rem 0 .375rem; }
       .gc-chips { gap: .25rem; }
       .gc-chip { font-size: .6875rem; padding: .2rem .5rem; }
-      /* Gamestrip: ESPN mobile style — logos + abbr, tighter */
-      .gc-strip { gap: .375rem; padding: .625rem .5rem .5rem; }
+      /* Gamestrip: ESPN mobile style — smaller logos + abbr, tighter, and the name column
+         clips so a long record can never bleed under the logo (Braves-logo overlap fix). */
+      .gc-strip { gap: .25rem; padding: .625rem .5rem .5rem; }
+      .gc-strip-logo { width: 28px; height: 28px; }
+      .gc-strip-name { overflow: hidden; }
       .gc-strip-name .nm-full { display: none; }
       .gc-strip-name .nm-abbr { display: inline; font-size: .9375rem; }
-      .gc-strip-name .rec { font-size: .5625rem; }
-      .gc-strip-team { gap: .375rem; }
+      .gc-strip-name .rec { font-size: .5625rem; overflow: hidden; text-overflow: ellipsis; }
+      .gc-strip-name .rec-loc { display: none; } /* "Away"/"Home" is implied by side — drop it on mobile */
+      .gc-strip-team { gap: .3rem; }
       .gc-strip-mid .gc-strip-inning { font-size: .6875rem; }
       .gc-lastplay { font-size: .75rem; }
       .gc-vsmeta { font-size: .75rem; gap: .5rem; }
@@ -846,7 +850,7 @@
     const dimAway = G.state === 'post' && G.away.score < G.home.score ? ' dim' : '';
     const dimHome = G.state === 'post' && G.home.score < G.away.score ? ' dim' : '';
     const team = (t, side) => '<div class="gc-strip-team ' + side + '">' + logoImg(t, 'gc-strip-logo') +
-      '<div class="gc-strip-name"><div class="nm"><span class="nm-full">' + esc(t.name) + '</span><span class="nm-abbr">' + esc(t.abbr) + '</span></div><div class="rec">' + esc(t.record) + (side === 'away' ? ' Away' : ' Home') + '</div></div></div>';
+      '<div class="gc-strip-name"><div class="nm"><span class="nm-full">' + esc(t.name) + '</span><span class="nm-abbr">' + esc(t.abbr) + '</span></div><div class="rec">' + esc(t.record) + '<span class="rec-loc">' + (side === 'away' ? ' Away' : ' Home') + '</span></div></div></div>';
     return '<div class="gc-strip">' +
       team(G.away, 'away') +
       '<span class="gc-strip-score' + dimAway + (CHG.away ? ' gc-score-flash' : '') + '">' + G.away.score + '</span>' +

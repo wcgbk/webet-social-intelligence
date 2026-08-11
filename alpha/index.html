@@ -945,6 +945,14 @@
     if (!game) return { status: 'scheduled', label: 'Upcoming' };
     if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
 
+    // Postponed / canceled / suspended games are voided (no action) by every major US book — the
+    // stake is returned, so grade them as a push, matching the settlement void set in track-clv +
+    // get-results-alpha. Catch BEFORE score-based grading or a 0-0/partial final settles as a false
+    // win/loss and the badge disagrees with the P/L KPI. ESPN surfaces the status in `detail`.
+    if (game.state === 'post' && /postponed|cancel|suspend|ppd/i.test(game.detail || '')) {
+      return { status: 'push', label: 'Void' };
+    }
+
     const isF5 = isF5Pick(pick);
     // Game called before 5 full innings → an F5 bet is void (no action).
     if (isF5 && game.state === 'post' && !game.f5Complete) {

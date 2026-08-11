@@ -51,6 +51,8 @@ async function fetchESPNScores(dateISO, sport) {
         homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
         state: status.type?.state || 'pre',
+        statusName: status.type?.name || '',
+        completed: !!status.type?.completed,
       };
     }).filter(Boolean);
   } catch (e) {
@@ -117,6 +119,10 @@ function findGame(pick, games) {
 
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
+  // Postponed / canceled / suspended games are voided (no action) — stake returned, grade as push.
+  // Matches the settlement void set in track-clv + get-results-alpha so analytics never counts a
+  // voided game as a phantom win/loss off its 0-0/partial final. Catch BEFORE score-based grading.
+  if (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(game.statusName || '') || (game.state === 'post' && !game.completed)) return 'push';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
   const awayScore = game.awayScore;

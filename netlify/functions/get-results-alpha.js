@@ -178,11 +178,14 @@ function withLegCommenceTime(leg, picks) {
 
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
-  // Postponed / canceled games are voided by every major US book (no action) — the stake is
-  // returned, so we grade them as a push. A push leg is dropped from a parlay and the ticket
-  // reprices on the surviving legs (see gradeParlay). ESPN marks these state:'post' with
-  // completed:false, so they must be caught BEFORE any score-based grading (0-0 → false "under").
-  if (/POSTPONED|CANCELL?ED/i.test(game.statusName) || (game.state === 'post' && !game.completed)) return 'push';
+  // Postponed / canceled / suspended games are voided by every major US book (no action) — the
+  // stake is returned, so we grade them as a push. A push leg is dropped from a parlay and the
+  // ticket reprices on the surviving legs (see gradeParlay). ESPN usually marks these state:'post'
+  // with completed:false, but a called/suspended game can come back state:'post' completed:true
+  // with a partial score — that would otherwise settle as a false win/loss off the partial score.
+  // Match track-clv's settlement void set exactly (adds SUSPENDED + guards a missing statusName)
+  // so the KPI/track-record reader never disagrees with the settled result written to the blob.
+  if (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(game.statusName || '') || (game.state === 'post' && !game.completed)) return 'push';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
   // First-Five-Innings picks settle on the first-5 score, NOT the full game.
@@ -329,7 +332,7 @@ async function gradeDay(dateISO, picksData) {
     if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
     const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
     let scoreStr = null;
-    if (game && game.state === 'post' && result === 'push' && (/POSTPONED|CANCELL?ED/i.test(game.statusName) || !game.completed)) {
+    if (game && game.state === 'post' && result === 'push' && (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(game.statusName || '') || !game.completed)) {
       scoreStr = 'PPD';
     } else if (game && game.state === 'post') {
       if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {

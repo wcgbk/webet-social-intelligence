@@ -416,6 +416,20 @@ function findGameForGrading(pick, games) {
   return best;
 }
 
+// F5-aware final-score string. F5 bets settle on the score THROUGH 5 innings, so stamp THAT
+// (tagged "(F5)") — NOT the full-game final. Otherwise an F5 push in a game that ran to extras
+// (e.g. 1-1 through 5, final 4-1) stores a loss-looking "4-1" next to a correctly-graded push.
+function settledScoreStr(pick, game) {
+  if (!game) return null;
+  const bt = (pick.betType || pick.market || '').toLowerCase();
+  const src = (pick.source || '').toLowerCase();
+  const isF5 = src === 'f5' || bt.startsWith('f5') || /\bf5\b/.test((pick.pick || '').toLowerCase());
+  if (isF5 && game.awayScoreF5 != null && game.homeScoreF5 != null) {
+    return `${game.awayScoreF5}-${game.homeScoreF5} (F5)`;
+  }
+  return `${game.awayScore}-${game.homeScore}`;
+}
+
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   // Postponed / canceled / suspended games are voided by every major US book (no action).
@@ -554,7 +568,7 @@ async function settleResultsForDate(dateISO, picksData) {
     if (result === 'pending') continue;
     p.result = result;
     p.profit = calcProfit(result, p.units, p.odds || p.pickTimeOdds);
-    p.finalScore = `${game.awayScore}-${game.homeScore}`;
+    p.finalScore = settledScoreStr(p, game);
     p.settledAt = new Date().toISOString();
     settledCount++;
   }
@@ -813,7 +827,7 @@ exports.handler = async (event) => {
       clvPick.result = result;
       clvPick.profit = profit;
       if (game && game.state === 'post') {
-        clvPick.finalScore = `${game.awayScore}-${game.homeScore}`;
+        clvPick.finalScore = settledScoreStr(clvPick, game);
         settledCount++;
       }
     }

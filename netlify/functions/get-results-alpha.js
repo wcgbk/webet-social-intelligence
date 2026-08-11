@@ -349,8 +349,15 @@ async function gradeDay(dateISO, picksData) {
       const game = findGame(eleg, sportGames);
       return { result: gradePick(eleg, game), odds: eleg.odds || '-110' };
     });
-  } else {
+  } else if (picks.length === 3) {
+    // Legacy/implicit parlay: ONLY a 3-straight-pick card ever formed a parlay from its
+    // straights — this matches the page, which gates its parlay display on picks.length === 3.
+    // A 2-pick card (e.g. an F5-only slate where the optimizer built nothing, since F5 is
+    // excluded from parlays) has NO parlay, so none is counted. Prevents a phantom 2-leg
+    // parlay from being graded into the KPIs when the generator produced no parlay at all.
     parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
+  } else {
+    parlayInput = [];
   }
   // Parlay stake drops to 0.25u whenever a lean pick is on the card, else 0.5u.
   const anyLean = picks.some(p => p.thinSlate);

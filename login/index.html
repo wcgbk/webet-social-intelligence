@@ -141,7 +141,12 @@
           if (res.j && res.j.ok) {
             okCode.textContent = '✓ Signed in — taking you to Betty…';
             okCode.style.display = 'block';
-            setTimeout(function () { location.href = '/dashboard?auth=success'; }, 600);
+            var next = '/dashboard?auth=success';
+            try {
+              var n = new URLSearchParams(location.search).get('next');
+              if (n && n.charAt(0) === '/') next = n;
+            } catch (e) {}
+            setTimeout(function () { location.href = next; }, 600);
           } else {
             verifyBtn.disabled = false; verifyBtn.textContent = 'Verify & sign in';
             errCode.textContent = ERRORS[(res.j || {}).error] || ERRORS.server_error;

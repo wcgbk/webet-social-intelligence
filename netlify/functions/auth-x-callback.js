@@ -130,7 +130,11 @@ exports.handler = async (event) => {
 
     // Preserve existing credit balance if user already exists
     const existingUser = await store.get(`user_${xUser.id}`, { type: 'json' }).catch(() => null);
-    const creditBalance = existingUser?.credit_balance ?? 1000;
+    const hadGrant = !!(existingUser && existingUser.welcome_grant);
+    const priorBal = existingUser?.credit_balance;
+    const creditBalance = hadGrant
+      ? (priorBal != null ? priorBal : 1000)
+      : Math.max(Number(priorBal) || 0, 1000);
     const createdAt = existingUser?.created_at ?? now;
 
     const userRecord = {
@@ -145,7 +149,9 @@ exports.handler = async (event) => {
       tweet_count: xUser.public_metrics?.tweet_count || 0,
       verified_type: xUser.verified_type || null,
       provider: 'x',
+      phone: existingUser?.phone || null,
       credit_balance: creditBalance,
+      welcome_grant: true,
       created_at: createdAt,
       last_seen: now,
       // Store tokens server-side only — never sent to client

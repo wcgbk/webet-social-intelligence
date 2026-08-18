@@ -67,6 +67,8 @@
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
+    body.in-iframe #main-event { display: none !important; }
+    body.in-iframe #challenge { padding-top: 1rem !important; }
 
     /* ─── Liquid Glass (hero only) ─── */
     .liquid-glass {
@@ -1057,8 +1059,8 @@
       <div class="modal-form-group">
         <label class="modal-label">WeBit Stake</label>
         <select class="modal-select" id="c-wager">
-          <option value="0">No stake — bragging rights</option>
-          <option value="50" selected>ⓦ 50 WeBit — Casual</option>
+          <option value="0" selected>No stake — bragging rights</option>
+          <option value="50">ⓦ 50 WeBit — Casual</option>
           <option value="100">ⓦ 100 WeBit — Competitive</option>
           <option value="250">ⓦ 250 WeBit — Main Event</option>
         </select>
@@ -1456,12 +1458,18 @@
 
   function inferSport(matchup) {
     if (!matchup) return '';
+    var scores = {};
     for (var sport in SPORT_TEAMS) {
+      scores[sport] = 0;
       for (var i = 0; i < SPORT_TEAMS[sport].length; i++) {
-        if (matchup.indexOf(SPORT_TEAMS[sport][i]) !== -1) return sport;
+        if (matchup.indexOf(SPORT_TEAMS[sport][i]) !== -1) scores[sport]++;
       }
     }
-    // Check for FC/SC/CF patterns for MLS/soccer
+    var best = '', bestN = 0;
+    for (var s in scores) {
+      if (scores[s] > bestN) { bestN = scores[s]; best = s; }
+    }
+    if (bestN >= 1) return best;
     if (/\b(FC|SC|CF|United|City|Dynamo|Galaxy|LAFC|Crew|Timbers|Sounders|Revolution|Rapids)\b/.test(matchup)) return 'MLS';
     return '';
   }
@@ -1646,7 +1654,24 @@
       if (heading) heading.textContent = 'Sign In to Make Your Pick 3';
       if (loginBar) {
         loginBar.style.display = 'flex';
-        loginBar.innerHTML = '<a href="/login" class="login-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">Sign in to WeBetAI →</a>';
+        loginBar.innerHTML = '<button type="button" class="login-btn" id="p3-signin-btn">Sign in to WeBetAI →</button>';
+        var sb = document.getElementById('p3-signin-btn');
+        if (sb) sb.addEventListener('click', function () {
+          var next = '/pick3p2p/' + location.search;
+          if (window.parent !== window && window.parent.WBLogin) {
+            window.parent.WBLogin.open({
+              reason: 'Sign in to pick your 3 and send a challenge. <b>1,000 free WeBit</b> on first login.',
+              onSuccess: function () { location.reload(); }
+            });
+          } else if (window.WBLogin) {
+            WBLogin.open({
+              reason: 'Sign in to pick your 3 and send a challenge. <b>1,000 free WeBit</b> on first login.',
+              onSuccess: function () { location.reload(); }
+            });
+          } else {
+            location.href = '/login?next=' + encodeURIComponent(next);
+          }
+        });
       }
       if (mcs) mcs.style.display = 'none';
     }
@@ -1750,9 +1775,11 @@
     if (userSelections.length !== 3) { status.textContent = 'Select 3 picks first.'; status.style.color = '#c0392b'; return; }
 
     // Challenger identity: verified phone, or the unified WeBetAI account (X users) in DM mode
-    var challengerPhone = currentUser ? currentUser.phone : null;
-    if (!challengerPhone && deliverMode === 'dm' && window.wbaiUser) challengerPhone = 'wbai:' + window.wbaiUser.id;
-    if (!challengerPhone) { status.textContent = deliverMode === 'dm' ? 'Sign in first (webetsocial.com/login).' : 'Log in with your phone number first.'; status.style.color = '#c0392b'; return; }
+    var challengerPhone = (currentUser && currentUser.phone) || null;
+    if (!challengerPhone && window.wbaiUser) {
+      challengerPhone = window.wbaiUser.phone || ('wbai:' + window.wbaiUser.id);
+    }
+    if (!challengerPhone) { status.textContent = 'Sign in first — then we can text your friend.'; status.style.color = '#c0392b'; return; }
 
     btn.disabled = true; btn.textContent = 'Sending...'; status.textContent = ''; status.style.color = '';
 
@@ -1852,9 +1879,12 @@
       banner.style.cssText = 'background:linear-gradient(135deg,#004C54,#1a2e1a); color:#fff; padding:1rem 1.25rem; text-align:center; position:relative; z-index:90;';
       // Insert after the sticky header
       var header = document.querySelector('.header');
-      if (header) header.insertAdjacentElement('afterend', banner);
+      var board = document.getElementById('challenge');
+      if (board) board.insertAdjacentElement('beforebegin', banner);
       else document.body.prepend(banner);
     }
+    var hero = document.getElementById('main-event');
+    if (hero) hero.style.display = 'none';
     var challengerName = challenge.challenger.name || 'Someone';
     var picksHtml = challenge.challenger.picks.map(function(p, i) {
       return '<div style="display:inline-block; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px; margin:3px; font-size:.8125rem;">' + (i+1) + '. ' + esc(p.side) + ' <span style="opacity:.7;">(' + esc(p.sport) + ')</span></div>';
@@ -1916,8 +1946,9 @@
     summary.innerHTML = html;
 
     // Must be logged in to respond
-    if (!currentUser || !currentUser.phone) {
-      alert('Log in with your phone number first, then lock your picks.');
+    if (!currentUser && !window.wbaiUser) {
+      if (window.WBLogin) WBLogin.open({ reason: 'Sign in to lock your picks.', onSuccess: function () { location.reload(); } });
+      else alert('Sign in first, then lock your picks.');
       return;
     }
 
@@ -1949,8 +1980,8 @@
 
     if (!name) { status.textContent = 'Enter your name.'; status.style.color = '#c0392b'; return; }
 
-    var responderPhone = currentUser ? currentUser.phone : null;
-    if (!responderPhone && window.wbaiUser) responderPhone = 'wbai:' + window.wbaiUser.id;
+    var responderPhone = (currentUser && currentUser.phone) || null;
+    if (!responderPhone && window.wbaiUser) responderPhone = window.wbaiUser.phone || ('wbai:' + window.wbaiUser.id);
     if (!responderPhone) { status.textContent = 'Sign in first (webetsocial.com/login).'; status.style.color = '#c0392b'; return; }
 
     // Can't accept your own challenge
@@ -2214,11 +2245,12 @@
   }
 
   async function loadMyChallenges() {
-    if (!currentUser || !currentUser.phone) return;
+    var ident = (currentUser && currentUser.phone) || (window.wbaiUser && (window.wbaiUser.phone || ('wbai:' + window.wbaiUser.id)));
+    if (!ident) return;
     var container = document.getElementById('my-challenges');
     if (!container) return;
     try {
-      var resp = await fetch(API_BASE + '/api/p2p-challenge?phone=' + encodeURIComponent(currentUser.phone));
+      var resp = await fetch(API_BASE + '/api/p2p-challenge?phone=' + encodeURIComponent(ident));
       if (!resp.ok) throw new Error('Failed');
       var data = await resp.json();
       myChallengesData = data.challenges || [];
@@ -2788,5 +2820,6 @@
     <div id="nm-status" class="nm-status"></div>
   </div>
 </div>
+<script src="/wbai-login.js" defer></script>
 </body>
 </html>

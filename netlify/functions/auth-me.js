@@ -53,6 +53,13 @@ exports.handler = async (event) => {
       return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'user_not_found' }) };
     }
 
+    if (!userRecord.welcome_grant) {
+      const bal = Number(userRecord.credit_balance);
+      userRecord.credit_balance = Number.isFinite(bal) ? Math.max(bal, 1000) : 1000;
+      userRecord.welcome_grant = true;
+      await store.setJSON(`user_${sessionData.user_id}`, userRecord);
+    }
+
     // Return public fields only — never send tokens to client
     return {
       statusCode: 200,
@@ -63,10 +70,12 @@ exports.handler = async (event) => {
         firstName: userRecord.firstName || null,
         lastName: userRecord.lastName || null,
         handle: userRecord.handle,
+        phone: userRecord.phone || null,
         avatar_url: userRecord.avatar_url,
         description: userRecord.description,
         followers: userRecord.followers,
-        credit_balance: userRecord.credit_balance || 1000,
+        credit_balance: userRecord.credit_balance != null ? userRecord.credit_balance : 1000,
+        welcome_grant: !!userRecord.welcome_grant,
         provider: userRecord.provider,
         created_at: userRecord.created_at,
       }),

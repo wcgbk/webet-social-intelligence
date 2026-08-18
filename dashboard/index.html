@@ -853,7 +853,7 @@
     }
     .sport-tag {
       font-size: .6875rem; font-weight: 600; color: var(--primary);
-      background: #e6f4f1; border: 1px solid #b8ddd6;
+      background: rgba(0,181,185,0.12); border: 1px solid rgba(0,181,185,0.28);
       border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
     }
     .rating-badge {
@@ -882,10 +882,18 @@
     }
     .win-prob {
       display: inline-block; font-size: .6875rem; font-weight: 600;
-      color: #2e7d32; background: #e8f5e9;
-      border: 1px solid #a5d6a7;
+      color: #7dffb3; background: rgba(125,255,179,0.1);
+      border: 1px solid rgba(125,255,179,0.28);
       border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
     }
+    .picks-stack { display: flex; flex-direction: column; gap: .65rem; width: 100%; }
+    .pick-card .pick-follow { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .65rem; }
+    .pick-follow button {
+      font-family: inherit; font-size: .75rem; font-weight: 650;
+      padding: .35rem .7rem; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border); background: transparent; color: var(--fg);
+    }
+    .pick-follow button.primary { background: #1ad4c4; color: #04110f; border-color: #1ad4c4; }
     .pick-divider { height: 1px; background: var(--border); margin-bottom: .625rem; }
     .pick-analysis {
       font-size: .8125rem; color: var(--fg-muted); line-height: 1.55;
@@ -1691,12 +1699,12 @@
       <!-- WeBit coin + balance (muted for guests, bright when logged in) -->
       <button class="topbar-webit" id="topbar-webit-btn" onclick="topbarCoinClick()" title="WeBit tokens">
         <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
-        <span class="topbar-webit-bal" id="topbar-webit-bal">1,000</span>
+        <span class="topbar-webit-bal" id="topbar-webit-bal">Sign in</span>
       </button>
 
       <!-- User state: Sign in button (guest) ↔ avatar (logged in) -->
       <div class="topbar-user-area" style="margin-left:6px;">
-        <button class="topbar-login-btn" id="topbar-login-btn" onclick="loginWithX()" title="Sign in with X">
+        <button class="topbar-login-btn" id="topbar-login-btn" onclick="openSignIn()" title="Sign in">
           <svg width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
           <span class="topbar-login-text">Sign in</span>
         </button>
@@ -1714,9 +1722,9 @@
           <div class="login-nudge-title">Lock in your 1,000 WeBit — it's yours free</div>
           <div class="login-nudge-sub">Save picks history &amp; challenges across devices</div>
         </div>
-        <button class="login-x-btn" onclick="loginWithX()">
+        <button class="login-x-btn" onclick="openSignIn()">
           <svg width="14" height="14" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
-          Continue with X
+          Sign in
         </button>
         <button class="login-nudge-dismiss" onclick="dismissLoginNudge()" title="Dismiss">✕</button>
       </div>
@@ -2130,6 +2138,20 @@
 
   function loginWithX() {
     window.location.href = '/.netlify/functions/auth-x-init';
+  }
+
+  function openSignIn(reason) {
+    if (window.WBLogin) {
+      WBLogin.open({
+        reason: reason || 'Save your chat and claim your <b>1,000 free WeBit</b>. Phone or X — five seconds.',
+        onSuccess: function () {
+          justSignedIn = true;
+          fetchCurrentUser();
+        }
+      });
+      return;
+    }
+    loginWithX();
   }
 
   /* ─── Conversion gate: value first, then a FORCED all-options sign-in pop-up ─────
@@ -3192,12 +3214,12 @@
       if (data.type === 'verification') {
         renderVerification(data);
         messages.push({ role: 'assistant', content: data.synthesis || 'Verification complete.' });
-      } else if (data.type === 'picks' && data.picks && data.picks.length > 0) {
-        data.picks.forEach(pick => renderPickCard(pick));
+      } else if (data.type === 'picks') {
         if (data.content) {
           messages.push({ role: 'assistant', content: data.content });
           appendMsg('ai', data.content);
         }
+        if (data.picks && data.picks.length) renderPicksStack(data.picks);
       } else if (data.content) {
         messages.push({ role: 'assistant', content: data.content });
         appendMsg('ai', data.content);
@@ -3225,26 +3247,15 @@
     return d.innerHTML;
   }
 
-  /* ─── Render pick card (chat) ───────────────────────────────────── */
-  function renderPickCard(pick) {
+  function pickCardHTML(pick, idx) {
     const badgeCls = pick.rating === 'A+' ? 'badge-aplus' : pick.rating === 'A' ? 'badge-a' : pick.rating === 'A-' ? 'badge-aminus' : pick.rating === 'B+' ? 'badge-bplus' : 'badge-b';
     const units = parseFloat(pick.units) || 1;
     const risk = units * DOLLAR_PER_UNIT;
     const win = Math.round(calcWinnings(risk, pick.odds || '-110'));
-    const prob = pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)} Win</span>` : '';
-
-    const group = document.createElement('div');
-    group.className = 'msg-group';
-
-    const avatar = document.createElement('div');
-    avatar.className = 'msg-avatar ai';
-    avatar.innerHTML = BETTY_AVATAR;
-
-    const contentWrap = document.createElement('div');
-    contentWrap.className = 'msg-content';
-    contentWrap.style.maxWidth = '100%';
-
-    contentWrap.innerHTML = `<div class="pick-card">
+    const edge = pick.edgePct || pick.ev || '';
+    const why = (pick.coreReasoning || '').slice(0, 280);
+    const q = encodeURIComponent('Tell me more about ' + (pick.pick || 'pick ' + (idx + 1)));
+    return `<div class="pick-card">
       <div class="pick-header">
         <span class="sport-tag">${esc(pick.sport || 'SPORT')}</span>
         <span class="rating-badge ${badgeCls}">${esc(pick.rating || 'A-')}</span>
@@ -3252,17 +3263,49 @@
       <div class="pick-matchup">${esc(pick.matchup || 'TBD')}</div>
       <div class="pick-line">
         <span class="pick-name">${esc(pick.pick || '')}</span>
-        <span class="pick-odds">${esc(pick.odds || '')}${prob}</span>
+        <span class="pick-odds">${esc(pick.odds || '')}${pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)} Win</span>` : ''}</span>
       </div>
       <div class="pick-divider"></div>
-      <div class="pick-analysis">${esc(pick.coreReasoning || '')}</div>
-      <div class="pick-units">${esc(pick.units || '1.0u')} - Bet $${risk.toLocaleString()} &mdash; To Win +$${win.toLocaleString()}</div>
+      <div class="pick-analysis">${esc(why)}</div>
+      <div class="pick-units">${esc(pick.units || '1.0u')} · Bet $${risk.toLocaleString()} to win +$${win.toLocaleString()}${edge ? ' · Edge ' + esc(String(edge)) : ''}</div>
+      <div class="pick-follow">
+        <button type="button" onclick="askBettyAbout(${idx})">Why this pick?</button>
+        <button type="button" class="primary" onclick="switchPanel('p2p')">Challenge a friend</button>
+      </div>
     </div>`;
+  }
 
+  function renderPicksStack(picks) {
+    window._bettyPicks = picks;
+    const group = document.createElement('div');
+    group.className = 'msg-group';
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar ai';
+    avatar.innerHTML = BETTY_AVATAR;
+    const contentWrap = document.createElement('div');
+    contentWrap.className = 'msg-content';
+    contentWrap.style.maxWidth = '100%';
+    contentWrap.innerHTML = `<div class="picks-stack">${picks.map((p, i) => pickCardHTML(p, i)).join('')}</div>`;
     group.appendChild(avatar);
     group.appendChild(contentWrap);
     messagesList.appendChild(group);
     scrollToBottom();
+  }
+
+  function askBettyAbout(idx) {
+    const picks = window._bettyPicks || [];
+    const p = picks[idx];
+    const text = p
+      ? `Why did ${p.pick} on ${p.matchup} make today's card? What loses?`
+      : 'Walk me through today\'s card.';
+    chatInput.value = text;
+    sendBtn.disabled = false;
+    sendMessage();
+  }
+
+  /* ─── Render pick card (chat) ───────────────────────────────────── */
+  function renderPickCard(pick) {
+    renderPicksStack([pick]);
   }
 
   /* ─── Render verification panel ─────────────────────────────────── */
@@ -3722,7 +3765,7 @@
     setTimeout(function () {
       betty('Want me to remember ' + (sport === 'All' ? 'your taste' : sport) + " and have your card ready every morning? Sign in with X — free, takes five seconds, and your 1,000 WeBit come with it.");
       chipRow([
-        { label: '𝕏 Sign in', primary: true, fn: function () { FE('onboard_signin_clicked'); localStorage.setItem('wb_onboarded', '1'); loginWithX(); } },
+        { label: 'Sign in', primary: true, fn: function () { FE('onboard_signin_clicked'); localStorage.setItem('wb_onboarded', '1'); openSignIn(); } },
         { label: 'Maybe later', fn: function () { FE('onboard_skipped'); localStorage.setItem('wb_onboarded', '1'); betty("All good — I'm here when you need me. Ask me anything."); } }
       ]);
     }, 450);
@@ -3773,7 +3816,9 @@
   // A #hash deep-link (e.g. /dashboard#picks) wins over the remembered panel.
   (function restoreActivePanel() {
     try {
-      var view = new URLSearchParams(location.search).get('view') || '';
+      var qs = new URLSearchParams(location.search);
+      if (qs.get('q')) { switchPanel('chat'); return; }
+      var view = qs.get('view') || '';
       var fromQuery = panelForSlug(view);
       var fromHash = panelForSlug((location.hash || '').replace(/^#/, '')); // legacy #panel links
       var saved = fromQuery || fromHash || sessionStorage.getItem('wbaiActivePanel');
@@ -3795,11 +3840,13 @@
 
   window.addEventListener('load', function () {
     var force = /[?&]onboard=force/.test(location.search);
+    var hasQ = !!new URLSearchParams(location.search).get('q');
     setTimeout(function () {
       authedUser().then(function (u) {
         if (u) mergePrefs();
         if (!force) {
-          if (u) return; // signed-in users are past onboarding
+          if (hasQ) return; // homepage sent them in with a prompt — don't hijack
+          if (u) return;
           try { if (localStorage.getItem('wb_onboarded')) return; } catch (e) {}
           try { if (typeof messages !== 'undefined' && messages.length) return; } catch (e) {}
         }

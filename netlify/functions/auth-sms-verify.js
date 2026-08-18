@@ -60,8 +60,14 @@ exports.handler = async (event) => {
       avatar_url: null,
       provider: 'sms',
       credit_balance: 1000,
+      welcome_grant: true,
       created_at: nowISO,
     };
+    if (!userRecord.welcome_grant) {
+      const bal = Number(userRecord.credit_balance);
+      userRecord.credit_balance = Number.isFinite(bal) ? Math.max(bal, 1000) : 1000;
+      userRecord.welcome_grant = true;
+    }
     userRecord.last_seen = nowISO;
     userRecord.phone = phone;
     await store.setJSON(`user_${userId}`, userRecord);

@@ -41,10 +41,10 @@ GENERAL KNOWLEDGE:
 
 RESPONSE RULES (CRITICAL):
 - NEVER direct people to URLs, pages, dashboards, or sections. Just give them the answer.
-- You have ALL the data. Use it. If someone asks about picks, give them the picks right there. If they ask about the guardian digest, summarize the key items. If they ask about the scorecard, give them the numbers.
+- You have ALL the data. Use it. If they ask about a specific pick, talk about THAT pick — matchup, number, why it made the card, what loses — like a sharp friend. Do not dump the whole card as a list (the chat already showed cards).
 - NEVER say "check the dashboard", "head to the edge picks", "hop on the site", or "go to [URL]". You ARE the interface. The conversation IS the product.
 - Only provide a URL if someone explicitly says "send me the link" or "what's the URL."
-- Your job is to keep the conversation going. Answer fully, then ask what else they want to know. Be the resource — don't hand them off.`;
+- Keep talking. After you answer, one short question to stay in the conversation.`;
 
 // ── Timed fetch helper (3s max per data source) ──
 const SITE = () => process.env.URL || 'https://webetsocial.com';
@@ -382,6 +382,35 @@ exports.handler = async (event) => {
     const fullSystemPrompt = BETTY_CORE + '\n\n--- LIVE DATA ---' + liveContext;
 
     const lastMsg = (messages[messages.length - 1]?.content || '').toLowerCase().trim();
+
+    // ── Picks card payload — homepage Try WeBet / chips / "today's picks" ──
+    const wantsPicks = action === 'picks'
+      || lastMsg.startsWith('/picks')
+      || lastMsg === 'picks'
+      || /show (me )?(today'?s |the )?(picks|card|plays|bets)/i.test(lastMsg)
+      || /today'?s (edge )?(picks|card|plays)/i.test(lastMsg)
+      || /best (sportsbook )?picks/i.test(lastMsg)
+      || /give me (today'?s |the )?(daily )?(picks|digest|card)/i.test(lastMsg)
+      || /what('?s| are) (today|the|tonight).*(pick|play|bet)/i.test(lastMsg)
+      || /sportsbook picks tonight/i.test(lastMsg)
+      || /edge picks/i.test(lastMsg);
+
+    if (wantsPicks) {
+      const picksData = await fetchEdgePicks();
+      const picks = picksData?.picks || [];
+      const dateLabel = picksData?.dateFormatted || picksData?.date || 'today';
+      let intro;
+      if (!picks.length) {
+        intro = "Today's card hasn't dropped yet — it lands around 9am ET. Ask me anything while we wait.";
+      } else {
+        const sports = [...new Set(picks.map(p => p.sport).filter(Boolean))].join(' / ');
+        intro = `Here's today's WeBetAI card (${dateLabel}${sports ? ', ' + sports : ''}). ${picks.length} play${picks.length === 1 ? '' : 's'}. Ask me about any of them — why it made the card, what loses, or send one to a friend.`;
+      }
+      return {
+        statusCode: 200, headers: CORS,
+        body: JSON.stringify({ type: 'picks', content: intro, picks, date: picksData?.date || null, dateFormatted: dateLabel }),
+      };
+    }
 
     // ── Verify action ──
     if (action === 'verify' || /verify|check with.*agents?|what do.*agents? think/i.test(lastMsg)) {

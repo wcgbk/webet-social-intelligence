@@ -11,7 +11,7 @@ const CORS = {
 };
 
 const BETTY_INTRO = `Hi! I'm Betty from WeBetAI — save me in your contacts!`;
-const BETTY_HEADSHOT_URL = "https://imagine-public.x.ai/imagine-public/share-images/79ef03da-8e8d-4fc2-8aa7-2d8d645b5b7f.jpg?cache=1";
+const BETTY_HEADSHOT_URL = "https://webetsocial.com/betty-sms.jpg?v=20260818";
 const BETTY_VCARD_URL = "https://webetsocial.com/betty.vcf";
 
 exports.handler = async (event) => {

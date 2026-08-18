@@ -512,6 +512,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      object-position: center 18%;
     }
     .msg-avatar.human {
       background: var(--primary);
@@ -1755,7 +1756,7 @@
       <div class="panel active" id="panel-chat">
         <div class="chat-area" id="chat-area">
           <div class="empty-state" id="empty-state">
-            <img src="/betty-sms.jpg" alt="Betty AI" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);box-shadow:0 4px 16px rgba(0,76,84,0.15);" />
+            <img src="/betty-sms.jpg?v=20260818" alt="Betty AI" style="width:80px;height:80px;border-radius:50%;object-fit:cover;object-position:center 18%;border:3px solid var(--primary);box-shadow:0 4px 16px rgba(0,76,84,0.15);" />
             <h1 class="empty-title">Hey, I'm Betty</h1>
             <p class="empty-subtitle" id="empty-subtitle">Loading today's edge picks...</p>
             <div id="picks-banner-area"></div>
@@ -2203,7 +2204,7 @@
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
 
-  const BETTY_AVATAR = '<img src="/betty-sms.jpg" alt="Betty" />';
+  const BETTY_AVATAR = '<img src="/betty-sms.jpg?v=20260818" alt="Betty" />';
 
   const API_URL = '/.netlify/functions/betty-chat-beta';
   const DOLLAR_PER_UNIT = 150;

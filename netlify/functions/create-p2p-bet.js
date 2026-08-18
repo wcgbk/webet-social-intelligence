@@ -189,7 +189,7 @@ async function sendSMS(to, message, mediaUrl) {
 
 // Send Betty intro as two messages: (1) square headshot + intro text, (2) vCard
 const BETTY_VCARD_URL = "https://webetsocial.com/betty.vcf";
-const BETTY_SMS_PHOTO = "https://webetsocial.com/betty-sms.jpg";
+const BETTY_SMS_PHOTO = "https://webetsocial.com/betty-sms.jpg?v=20260818";
 
 async function sendBettyVCard(to) {
   if (!TWILIO_SID || !TWILIO_TOKEN || !to) return false;

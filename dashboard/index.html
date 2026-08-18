@@ -3314,7 +3314,8 @@
     group.appendChild(avatar);
     group.appendChild(contentWrap);
     messagesList.appendChild(group);
-    scrollToBottom();
+    const intro = group.previousElementSibling;
+    (intro || group).scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   function togglePickWhy(idx) {

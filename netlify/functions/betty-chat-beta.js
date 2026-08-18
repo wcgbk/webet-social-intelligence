@@ -404,7 +404,7 @@ exports.handler = async (event) => {
         intro = "Today's card hasn't dropped yet — it lands around 9am ET. Ask me anything while we wait.";
       } else {
         const sports = [...new Set(picks.map(p => p.sport).filter(Boolean))].join(' / ');
-        intro = `Here's today's WeBetAI card (${dateLabel}${sports ? ', ' + sports : ''}). ${picks.length} play${picks.length === 1 ? '' : 's'}. Ask me about any of them — why it made the card, what loses, or send one to a friend.`;
+        intro = `Today's card — ${picks.length} play${picks.length === 1 ? '' : 's'}${sports ? ', ' + sports : ''}. Tap Why on any ticket, or Challenge a friend.`;
       }
       return {
         statusCode: 200, headers: CORS,

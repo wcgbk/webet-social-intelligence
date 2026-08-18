@@ -837,66 +837,83 @@
       gap: 10px;
     }
 
-    /* ─── Pick Cards (dark theme) ─────────────────────────────────────── */
+    /* ─── Pick tickets (match /alpha, built for chat) ─────────────────── */
+    .picks-stack { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .msg-group.picks-msg { width: 100%; }
+    .msg-group.picks-msg .msg-content { max-width: 100%; flex: 1; }
     .pick-card {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: .875rem;
-      padding: 1.125rem;
-      margin-bottom: .75rem;
-      transition: border-color 0.2s;
+      background: #fff;
+      border: 1px solid #e0e3e8;
+      border-left: 3px solid #004C54;
+      border-radius: 12px;
+      padding: 14px 14px 12px;
+      box-shadow: 0 1px 2px rgba(16,24,40,0.04);
     }
-    .pick-card:hover { border-color: var(--fg-dim); }
     .pick-header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: .625rem;
+      gap: 8px; margin-bottom: 8px;
     }
     .sport-tag {
-      font-size: .6875rem; font-weight: 600; color: var(--primary);
-      background: rgba(0,181,185,0.12); border: 1px solid rgba(0,181,185,0.28);
-      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+      font-size: 10px; font-weight: 700; color: #004C54;
+      background: #e6f4f1; border: 1px solid #b8ddd6;
+      border-radius: 5px; padding: 2px 7px; text-transform: uppercase;
+      letter-spacing: .04em;
     }
     .rating-badge {
       display: inline-flex; align-items: center; justify-content: center;
-      min-width: 32px; height: 26px; border-radius: 6px;
-      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+      min-width: 28px; height: 22px; border-radius: 5px;
+      color: #fff; font-size: 11px; font-weight: 700; padding: 0 6px;
     }
     .badge-aplus { background: #c0392b; }
-    .badge-a { background: #2980b9; }
-    .badge-aminus { background: #b8860b; }
-    .badge-bplus { background: #1abc9c; }
-    .badge-b { background: #e67e22; }
-    .pick-matchup {
-      font-size: 1.0625rem; font-weight: 700; color: var(--fg);
-      line-height: 1.25; margin-bottom: .375rem;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .pick-line {
+    .badge-a { background: #004C54; }
+    .badge-aminus { background: #1abc9c; }
+    .badge-bplus { background: #f39c12; }
+    .badge-b { background: #f9a825; }
+    .pick-bet {
       display: flex; align-items: baseline; justify-content: space-between;
-      margin-bottom: .625rem;
+      gap: 12px; margin-bottom: 2px;
     }
-    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--fg); }
-    .pick-odds {
-      font-family: 'Geist Sans', monospace; font-size: .9375rem;
-      font-weight: 700; color: var(--fg);
+    .pick-name { font-size: 1.25rem; font-weight: 700; color: #1a2e1a; letter-spacing: -0.03em; line-height: 1.2; }
+    .pick-odds { font-size: 1.125rem; font-weight: 700; color: #004C54; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .pick-matchup {
+      font-size: .8125rem; font-weight: 500; color: #5f6b7a;
+      line-height: 1.35; margin-bottom: 10px;
     }
-    .win-prob {
-      display: inline-block; font-size: .6875rem; font-weight: 600;
-      color: #7dffb3; background: rgba(125,255,179,0.1);
-      border: 1px solid rgba(125,255,179,0.28);
-      border-radius: 6px; padding: .125rem .5rem; margin-left: .5rem;
+    .pick-meta {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
     }
-    .picks-stack { display: flex; flex-direction: column; gap: .65rem; width: 100%; }
-    .pick-card .pick-follow { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .65rem; }
-    .pick-follow button {
-      font-family: inherit; font-size: .75rem; font-weight: 650;
-      padding: .35rem .7rem; border-radius: 999px; cursor: pointer;
-      border: 1px solid var(--border); background: transparent; color: var(--fg);
+    .pick-meta span {
+      font-size: 11px; font-weight: 650; color: #004C54;
+      background: #f2f3f5; border: 1px solid #e0e3e8;
+      border-radius: 999px; padding: 3px 8px;
     }
-    .pick-follow button.primary { background: #1ad4c4; color: #04110f; border-color: #1ad4c4; }
-    .pick-divider { height: 1px; background: var(--border); margin-bottom: .625rem; }
+    .win-prob { color: #2e7d32 !important; background: #e8f5e9 !important; border-color: #a5d6a7 !important; }
     .pick-analysis {
-      font-size: .8125rem; color: var(--fg-muted); line-height: 1.55;
+      font-size: .8125rem; color: #5f6b7a; line-height: 1.5;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; margin-bottom: 10px;
+    }
+    .pick-card.open .pick-analysis { -webkit-line-clamp: unset; display: block; }
+    .pick-follow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pick-follow button {
+      font-family: inherit; font-size: .8125rem; font-weight: 650;
+      padding: .55rem .7rem; border-radius: 10px; cursor: pointer;
+      border: 1px solid #e0e3e8; background: #fff; color: #1a2e1a;
+    }
+    .pick-follow button.primary { background: #004C54; color: #fff; border-color: #004C54; }
+    .pick-follow button:active { transform: scale(0.98); }
+    .pick-line { display: none; }
+    .pick-divider { display: none; }
+    .pick-units { display: none; }
+    .picks-claim {
+      margin-top: 4px; padding: 10px 12px;
+      background: #e6f4f1; border: 1px solid #b8ddd6; border-radius: 10px;
+      font-size: .8125rem; color: #004C54; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .picks-claim button {
+      font-family: inherit; font-size: .75rem; font-weight: 700;
+      padding: 6px 12px; border-radius: 999px; border: 0; background: #004C54; color: #fff; cursor: pointer; white-space: nowrap;
+    }
       margin-bottom: .625rem;
     }
     .pick-units { font-size: .875rem; font-weight: 700; color: var(--primary); }
@@ -1197,12 +1214,14 @@
       .topbar-sub { display: none; }
 
       .topbar { height: 48px; }
-      .pick-card { padding: 1rem; }
-      .pick-matchup { font-size: 1rem; }
-      .pick-name { font-size: 0.9375rem; }
-      .pick-odds { font-size: 0.9375rem; }
-      .pick-analysis { font-size: 0.8125rem; }
-      .pick-units { font-size: 0.875rem; }
+      .mobile-tabs { display: block; }
+      .input-area { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+      #panel-chat .messages-list { padding-bottom: 8px; }
+      .pick-card { padding: 12px; }
+      .pick-name { font-size: 1.125rem; }
+      .pick-odds { font-size: 1rem; }
+      .pick-matchup { font-size: .75rem; }
+      .msg-group.picks-msg .msg-avatar { display: none; }
       .bb-card { padding: 18px; }
       .bb-post-text { font-size: 0.875rem; }
       .feature-header h2 { font-size: 1.375rem; }
@@ -1472,10 +1491,10 @@
       .bb-odds-row { flex-direction: column; }
     }
 
-    /* ─── Login Nudge (slides DOWN from below topbar) ───────────────── */
+    /* ─── Login Nudge — light strip, never covers tickets ───────────── */
     .login-nudge {
-      background: #0d0d0d;
-      border-bottom: none;           /* no border when collapsed */
+      background: #e6f4f1;
+      border-bottom: none;
       max-height: 0;
       overflow: hidden;
       transition: max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1), padding 0.38s ease, border-color 0.38s ease;
@@ -1483,9 +1502,9 @@
       padding: 0 24px;
     }
     .login-nudge.show {
-      max-height: 72px;
-      padding: 10px 24px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+      max-height: 64px;
+      padding: 8px 24px;
+      border-bottom: 1px solid #b8ddd6;
     }
     .login-nudge-inner {
       display: flex;
@@ -1498,22 +1517,22 @@
     .login-nudge-title {
       font-size: 0.8125rem;
       font-weight: 600;
-      color: #ffffff;
+      color: #004C54;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .login-nudge-sub {
       font-size: 0.6875rem;
-      color: rgba(255,255,255,0.42);
+      color: #5f6b7a;
       white-space: nowrap;
     }
     .login-x-btn {
       display: flex;
       align-items: center;
       gap: 7px;
-      background: #ffffff;
-      color: #000000;
+      background: #004C54;
+      color: #ffffff;
       border: none;
       border-radius: 9999px;
       padding: 8px 16px;
@@ -1529,7 +1548,7 @@
     .login-nudge-dismiss {
       background: none;
       border: none;
-      color: rgba(255,255,255,0.28);
+      color: #8b95a3;
       cursor: pointer;
       padding: 4px 6px;
       font-size: 1rem;
@@ -1699,7 +1718,7 @@
       <!-- WeBit coin + balance (muted for guests, bright when logged in) -->
       <button class="topbar-webit" id="topbar-webit-btn" onclick="topbarCoinClick()" title="WeBit tokens">
         <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
-        <span class="topbar-webit-bal" id="topbar-webit-bal">Sign in</span>
+        <span class="topbar-webit-bal" id="topbar-webit-bal"></span>
       </button>
 
       <!-- User state: Sign in button (guest) ↔ avatar (logged in) -->
@@ -1717,10 +1736,9 @@
     <!-- Login Nudge — slides down from header after first Betty response -->
     <div class="login-nudge" id="login-nudge">
       <div class="login-nudge-inner">
-        <span style="font-size:1.1rem;flex-shrink:0">🪙</span>
         <div class="login-nudge-text">
-          <div class="login-nudge-title">Lock in your 1,000 WeBit — it's yours free</div>
-          <div class="login-nudge-sub">Save picks history &amp; challenges across devices</div>
+          <div class="login-nudge-title">Claim your 1,000 WeBit</div>
+          <div class="login-nudge-sub">Free on sign in · send a Pick 3 tonight</div>
         </div>
         <button class="login-x-btn" onclick="openSignIn()">
           <svg width="14" height="14" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
@@ -2093,7 +2111,7 @@
     // Coin: bright balance + authed class
     const webitBal = document.getElementById('topbar-webit-bal');
     const webitBtn = document.getElementById('topbar-webit-btn');
-    if (webitBal) webitBal.textContent = (wbUser.credit_balance || 1000).toLocaleString();
+    if (webitBal) webitBal.textContent = Number(wbUser.credit_balance != null ? wbUser.credit_balance : 1000).toLocaleString();
     if (webitBtn) webitBtn.classList.add('authed');
     // Swap login button → avatar
     const tbLoginBtn = document.getElementById('topbar-login-btn');
@@ -3226,7 +3244,7 @@
       } else {
         appendMsg('ai', 'No response from Betty.');
       }
-      showLoginNudge(); // prompt after first successful Betty response
+      if (!(data && data.type === 'picks')) showLoginNudge();
     } catch (err) {
       typingEl.remove();
       isLoading = false;
@@ -3253,24 +3271,28 @@
     const risk = units * DOLLAR_PER_UNIT;
     const win = Math.round(calcWinnings(risk, pick.odds || '-110'));
     const edge = pick.edgePct || pick.ev || '';
-    const why = (pick.coreReasoning || '').slice(0, 280);
-    const q = encodeURIComponent('Tell me more about ' + (pick.pick || 'pick ' + (idx + 1)));
-    return `<div class="pick-card">
+    const why = (pick.coreReasoning || '').trim();
+    const matchup = (pick.matchup || '').replace(/\s+vs\.?\s+/i, ' @ ');
+    return `<div class="pick-card" id="pc-${idx}">
       <div class="pick-header">
         <span class="sport-tag">${esc(pick.sport || 'SPORT')}</span>
-        <span class="rating-badge ${badgeCls}">${esc(pick.rating || 'A-')}</span>
+        <span class="rating-badge ${badgeCls}">${esc(pick.rating || 'B+')}</span>
       </div>
-      <div class="pick-matchup">${esc(pick.matchup || 'TBD')}</div>
-      <div class="pick-line">
+      <div class="pick-bet">
         <span class="pick-name">${esc(pick.pick || '')}</span>
-        <span class="pick-odds">${esc(pick.odds || '')}${pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)} Win</span>` : ''}</span>
+        <span class="pick-odds">${esc(pick.odds || '')}</span>
       </div>
-      <div class="pick-divider"></div>
-      <div class="pick-analysis">${esc(why)}</div>
-      <div class="pick-units">${esc(pick.units || '1.0u')} · Bet $${risk.toLocaleString()} to win +$${win.toLocaleString()}${edge ? ' · Edge ' + esc(String(edge)) : ''}</div>
+      <div class="pick-matchup">${esc(matchup)}</div>
+      <div class="pick-meta">
+        <span>${esc(pick.units || '1u')}</span>
+        <span>$${risk.toLocaleString()} to win $${win.toLocaleString()}</span>
+        ${edge ? `<span>Edge ${esc(String(edge))}</span>` : ''}
+        ${pick.winProbability ? `<span class="win-prob">${esc(pick.winProbability)}</span>` : ''}
+      </div>
+      ${why ? `<div class="pick-analysis">${esc(why)}</div>` : ''}
       <div class="pick-follow">
-        <button type="button" onclick="askBettyAbout(${idx})">Why this pick?</button>
-        <button type="button" class="primary" onclick="switchPanel('p2p')">Challenge a friend</button>
+        <button type="button" onclick="togglePickWhy(${idx})">Why</button>
+        <button type="button" class="primary" onclick="switchPanel('p2p')">Challenge</button>
       </div>
     </div>`;
   }
@@ -3278,18 +3300,32 @@
   function renderPicksStack(picks) {
     window._bettyPicks = picks;
     const group = document.createElement('div');
-    group.className = 'msg-group';
+    group.className = 'msg-group picks-msg';
     const avatar = document.createElement('div');
     avatar.className = 'msg-avatar ai';
     avatar.innerHTML = BETTY_AVATAR;
     const contentWrap = document.createElement('div');
     contentWrap.className = 'msg-content';
-    contentWrap.style.maxWidth = '100%';
-    contentWrap.innerHTML = `<div class="picks-stack">${picks.map((p, i) => pickCardHTML(p, i)).join('')}</div>`;
+    let extra = '';
+    if (!wbUser) {
+      extra = `<div class="picks-claim"><span>Sign in to lock these and send a Pick 3. 1,000 WeBit free.</span><button type="button" onclick="openSignIn()">Sign in</button></div>`;
+    }
+    contentWrap.innerHTML = `<div class="picks-stack">${picks.map((p, i) => pickCardHTML(p, i)).join('')}${extra}</div>`;
     group.appendChild(avatar);
     group.appendChild(contentWrap);
     messagesList.appendChild(group);
     scrollToBottom();
+  }
+
+  function togglePickWhy(idx) {
+    const card = document.getElementById('pc-' + idx);
+    if (!card) return;
+    const opening = !card.classList.contains('open');
+    card.classList.toggle('open', opening);
+    const btn = card.querySelector('.pick-follow button');
+    if (btn) btn.textContent = opening ? 'Ask Betty' : 'Why';
+    if (opening) return;
+    askBettyAbout(idx);
   }
 
   function askBettyAbout(idx) {

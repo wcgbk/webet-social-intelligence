@@ -1,37 +1,12 @@
 // trigger-picks-nfl.js
 // Scheduled function — daily at 15:00 UTC (11am ET), see netlify.toml.
-// GATED: fires generate-picks-nfl-background ONLY on days with NFL games (preseason or
-// regular season, per the ESPN scoreboard). Quiet no-op on off days — the NFL pipeline
-// runs only when there is NFL football.
-
-function getEasternDateToday() {
-  const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
-}
+// ALWAYS fires generate-picks-nfl-background. The generator writes a real card on
+// NFL game days and "No NFL Games Scheduled For Today" on off days so /nfl never
+// shows a stale last-game-day card.
 
 exports.handler = async () => {
-  const dateISO = getEasternDateToday();
-  console.log(`[trigger-picks-nfl] Scheduled check for ${dateISO}`);
-
-  // Game-day gate — ESPN NFL scoreboard for today (ET). Includes preseason (seasontype 1).
-  try {
-    const resp = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${dateISO.replace(/-/g, "")}`);
-    if (resp.ok) {
-      const data = await resp.json();
-      const count = (data.events || []).length;
-      if (count === 0) {
-        console.log("[trigger-picks-nfl] No NFL games today — skipping generation.");
-        return { statusCode: 200, body: "No NFL games today — skipped" };
-      }
-      console.log(`[trigger-picks-nfl] ${count} NFL game(s) today — firing generator.`);
-    } else {
-      console.log(`[trigger-picks-nfl] ESPN check HTTP ${resp.status} — firing generator anyway (it re-checks).`);
-    }
-  } catch (e) {
-    console.log(`[trigger-picks-nfl] ESPN check failed (${e.message}) — firing generator anyway (it re-checks).`);
-  }
-
   const siteURL = process.env.URL || "https://webetsocial.com";
+  console.log("[trigger-picks-nfl] Firing NFL generator (game-day vs no-games decided inside).");
   try {
     const response = await fetch(`${siteURL}/.netlify/functions/generate-picks-nfl-background`, {
       method: "POST",

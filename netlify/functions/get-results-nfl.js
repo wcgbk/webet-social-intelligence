@@ -236,20 +236,16 @@ async function gradeDay(dateISO, picksData) {
     gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: scoreStr });
   }
 
-  // Parlay (only exists on 3-game slates; gradeParlay skips <2 legs)
+  // Parlay: ONLY the generator's published parlayLegs. Never synthesize a 3-leg
+  // ticket from the straight card — that phantom was inflating NFL P/L.
   const apiParlay = (picksData.parlayLegs && picksData.parlayLegs.length > 0) ? picksData.parlayLegs[0] : null;
-  const optimizedLegs = (apiParlay && apiParlay.legs) ? apiParlay.legs : null;
-  let parlayInput;
-  if (optimizedLegs) {
-    parlayInput = optimizedLegs.map(leg => {
+  const optimizedLegs = (apiParlay && apiParlay.legs && apiParlay.legs.length >= 2) ? apiParlay.legs : null;
+  const parlayInput = optimizedLegs
+    ? optimizedLegs.map(leg => {
       const game = findGame(leg, games);
       return { result: gradePick(leg, game), odds: leg.odds || '-110' };
-    });
-  } else if (picks.length === 3) {
-    parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
-  } else {
-    parlayInput = [];
-  }
+    })
+    : [];
   const anyLean = picks.some(p => p.thinSlate);
   const parlayUnits = anyLean ? 0.25 : 0.5;
   const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
@@ -295,7 +291,7 @@ exports.handler = async (event) => {
 
     // 5-min cache
     try {
-      const cacheResp = await fetch(`${storeUrl}/results-nfl-cache-v1`, { headers: authHeaders });
+      const cacheResp = await fetch(`${storeUrl}/results-nfl-cache-v2`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
         if (Date.now() - (cached.cachedAt || 0) < 300000) {
@@ -321,6 +317,9 @@ exports.handler = async (event) => {
         if (!picksResp.ok) return null;
         picksData = await picksResp.json();
       } catch (e) { return null; }
+      if (picksData.noGames || /No NFL Games Scheduled/i.test(picksData.noPlays || '')) {
+        return null;
+      }
       const day = await gradeDay(dateISO, picksData);
       if (!day) {
         return { date: dateISO, dateFormatted: picksData.dateFormatted || dateISO, source: 'nfl', noPlays: true, picks: [], wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0', wagered: 0, profit: 0, roi: '--', parlayResult: 'skip', parlayProfit: 0 };
@@ -382,7 +381,7 @@ exports.handler = async (event) => {
     };
 
     try {
-      await fetch(`${storeUrl}/results-nfl-cache-v1`, {
+      await fetch(`${storeUrl}/results-nfl-cache-v2`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),

@@ -569,10 +569,10 @@
 
 <div class="main" id="dashboard">
 
-  <!-- NFL Preseason Lab banner -->
+  <!-- NFL model banner -->
   <div style="background: var(--teal-light); border: 1px solid var(--teal-border); border-left: 3px solid var(--teal); border-radius: .875rem; padding: .875rem 1.125rem; margin-bottom: 1rem;">
-    <div style="font-size: .6875rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem;">NFL Preseason Lab</div>
-    <div style="font-size: .8125rem; color: var(--txt-b); line-height: 1.55;">WeBetAI's dedicated NFL model is training through the 2026 preseason — reduced stakes, market-anchored projections, and a clean track record built from zero. Full calibration targets the regular-season opener. Cards generate only on NFL game days.</div>
+    <div style="font-size: .6875rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem;">NFL Model · Regular-Season Process</div>
+    <div style="font-size: .8125rem; color: var(--txt-b); line-height: 1.55;">Same process we will run in September: 3% EV floor, key-number spreads, independent totals, live ratings + QB-out, Pinnacle predCLV, Hard Rock preferred, 3 straights + 1 published-card parlay. Off days show No NFL Games Scheduled For Today — never yesterday's card.</div>
   </div>
 
   <!-- Results Tracker -->
@@ -638,8 +638,8 @@
 
   <p class="footer-note">
     All lines verified via The Odds API (25+ sportsbooks). Best available line selected per pick.<br>
-    Unit sizing: A+ = 2.5u+, A = 1.5-2.0u, A- = 1.0u, B+ = 0.5u, Lean = 0.25u. Kelly-sized; preseason stakes capped at 1.0u.<br>
-    Auto-generated at 11am ET on NFL game days. Not financial advice.
+    Unit sizing: A+ = 2.5u+, A = 1.5-2.0u, A- = 1.0u, B+ = 0.5u. Quarter-Kelly; ML capped at 0.5u. 3% EV floor, no forced leans.<br>
+    Auto-generated at 11am ET on NFL game days. Off days: No NFL Games Scheduled For Today. Not financial advice.
   </p>
 </div>
 
@@ -1363,9 +1363,8 @@
       parlayWin = wholeUp(calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110')));
     } else {
       optimizedParlayLegs = null;
-      const fallbackLegs = picks.map(p => p.odds || '-110');
-      parlayOddsStr = picks.length === 3 ? calcParlayOdds(fallbackLegs) : null;
-      parlayWin = picks.length === 3 ? wholeUp(calcParlayWinnings(parlayRisk, fallbackLegs)) : 0;
+      parlayOddsStr = null;
+      parlayWin = 0;
     }
 
     if (numPicks > 0) {
@@ -1378,7 +1377,7 @@
         totalRisk += risk;
         totalWinnings += win;
       }
-      if (picks.length === 3) {
+      if (optimizedParlayLegs && optimizedParlayLegs.length >= 2) {
         totalUnits += parlayUnits;
         totalRisk += parlayRisk;
         totalWinnings += parlayWin;
@@ -1439,8 +1438,8 @@
         </div>`;
       }
 
-      // Parlay row — use actual parlay legs (optimized or straight), only show final W/L
-      if (picks.length === 3) {
+      // Parlay row — only the generator's published parlayLegs (no phantom 3-pick ticket)
+      if (optimizedParlayLegs && optimizedParlayLegs.length >= 2) {
         let summaryParlayLegResults;
         if (optimizedParlayLegs) {
           summaryParlayLegResults = optimizedParlayLegs.map(leg => {
@@ -1498,9 +1497,9 @@
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
-            ${data.noPlays ? esc(data.noPlays) : 'No qualifying plays today.'}
+            ${data.noPlays ? esc(data.noPlays) : 'No NFL Games Scheduled For Today'}
           </div>
-          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. NFL cards generate at 11am ET on game days.</div>
+          <div style="font-size:.8125rem; color:var(--txt-m);">Cards generate at 11am ET only on days the NFL is playing.</div>
         </div>`;
       return;
     }
@@ -1662,8 +1661,8 @@
       }
     }
 
-    // ── 3-Team Parlay Card ──
-    if (picks.length === 3) {
+    // ── Published-card parlay (3+1) ──
+    if (optimizedParlayLegs && optimizedParlayLegs.length >= 2) {
       // Determine parlay status using actual parlay legs (optimized or straight)
       let parlayLegResults;
       if (optimizedParlayLegs) {

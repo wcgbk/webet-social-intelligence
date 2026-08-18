@@ -17,14 +17,16 @@ picks card + live track record. WeBits = credit economy (1,000 granted at signup
 Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle.
 
 ## DONE — never rebuild (evidence in git log + charter)
-- **NFL pipeline LIVE (2026-08-06, founder-directed):** separate environment from alpha —
-  generate-picks-nfl-background (model v1.0-nfl-preseason: sharp-book consensus + two-sided
-  de-vig + market-anchored projection + line shopping, alpha shrinkage Ks ×0.6 preseason,
-  EV floor 3%, quarter-Kelly, preseason caps 1.0u/0.5u-ML, LEAN fallback so game nights
-  always card) → edge-picks-nfl store → /nfl page (alpha clone, clean NFL-only KPIs via
-  get-results-nfl lazy ESPN grading). Cron trigger-picks-nfl 15:00 UTC GATED on ESPN NFL
-  slate — runs only on NFL game days. netlify.toml + baseline hash regenerated for this.
-  Goal: fitted NFL Ks + live Elo before the 2026 regular-season opener.
+- **NFL pipeline LIVE (2026-08-06, founder-directed; v1.1-nfl 2026-08-18):** separate
+  environment from alpha, shaped to merge later. generate-picks-nfl-background v1.1-nfl
+  runs the regular-season process even while ESPN still labels the slate preseason:
+  live standings overlay + QB-out, key-number cover (3/7), independent 50/50 totals,
+  Pinnacle predCLV floor −2¢, 2+ major US books with Hard Rock preferred, 3% EV floor,
+  NO forced leans, 3+1 of the published card, regular-season caps 2.5u / 0.5u ML.
+  Cron always fires; off days write "No NFL Games Scheduled For Today" (not indexed
+  on the track record). get-picks-nfl never serves a stale last-game-day card.
+  get-results-nfl grades only explicit parlayLegs (phantom 3-leg synthesis killed).
+  track-clv-nfl writes clv-{date} into edge-picks-nfl; trigger-clv fires it after alpha.
 - **v10.4-alpha-mlb (2026-08-03, full optimization pass after post-ASB review):** settlement
   writer fixed (track-clv: DH disambiguation by commenceTime, postponed→push, F5 linescore
   guards, ESPN-grade-FIRST ordering, awaited overnight settle + 7-day unsettled sweep; dead

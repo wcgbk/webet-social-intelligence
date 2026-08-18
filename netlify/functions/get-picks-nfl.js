@@ -1,7 +1,7 @@
 // get-picks-nfl.js
 // API endpoint: GET /api/get-picks-nfl
-// Returns the latest NFL picks JSON from Netlify Blobs (edge-picks-nfl store — the NFL
-// model's own environment, fully separate from alpha).
+// Returns today's NFL card from edge-picks-nfl. Off days (or a missing today blob)
+// return "No NFL Games Scheduled For Today" — never the last game day's card.
 // Optional: ?date=YYYY-MM-DD for historical picks.
 
 const CORS = {
@@ -10,8 +10,20 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-// Same server-side depth policy as alpha: these fields are never rendered on the free page.
 const PREMIUM_FIELDS = ['kellyCalc', 'kellyFraction', 'zScore'];
+const NO_GAMES_MSG = "No NFL Games Scheduled For Today";
+
+function getEasternDateToday() {
+  const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, "0")}-${String(et.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateLong(dateISO) {
+  return new Date(dateISO + "T12:00:00Z").toLocaleDateString("en-US", {
+    timeZone: "America/New_York", weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+}
+
 function stripPremium(picksData) {
   if (!picksData || !Array.isArray(picksData.picks)) return picksData;
   return { ...picksData, picks: picksData.picks.map(p => {
@@ -21,12 +33,25 @@ function stripPremium(picksData) {
   }) };
 }
 
-const EMPTY = {
-  error: false,
-  noPlays: "No NFL picks yet. Cards generate on NFL game days at 11am ET.",
-  date: null, picks: [], rejections: [],
-  summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
-};
+function emptyPayload(dateKey, msg) {
+  return {
+    error: false,
+    noPlays: msg || NO_GAMES_MSG,
+    noGames: /No NFL Games Scheduled/i.test(msg || NO_GAMES_MSG),
+    date: dateKey || getEasternDateToday(),
+    dateFormatted: formatDateLong(dateKey || getEasternDateToday()),
+    picks: [],
+    rejections: [],
+    parlayLegs: [],
+    summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
+  };
+}
+
+async function readBlobRest(baseUrl, authHeaders, key, asJson) {
+  const resp = await fetch(`${baseUrl}/${key}`, { headers: authHeaders });
+  if (!resp.ok) return null;
+  return asJson ? resp.json() : (await resp.text()).trim();
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -35,65 +60,45 @@ exports.handler = async (event) => {
 
   try {
     const params = event.queryStringParameters || {};
-    const requestedDate = params.date;
+    const requestedDate = (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) ? params.date : null;
+    const today = getEasternDateToday();
+    const dateKey = requestedDate || today;
+
+    const okHeaders = { ...CORS, 'Cache-Control': 'public, max-age=60, s-maxage=60' };
 
     try {
       const { getStore } = await import("@netlify/blobs");
       const store = getStore("edge-picks-nfl");
-
-      let dateKey;
-      if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
-        dateKey = requestedDate;
-      } else {
-        const latestDate = await store.get("latest-date");
-        if (!latestDate) {
-          return { statusCode: 200, headers: CORS, body: JSON.stringify(EMPTY) };
-        }
-        dateKey = latestDate.trim();
-      }
-
       const picksData = await store.get(`picks-${dateKey}`, { type: "json" });
-      if (!picksData) {
-        return {
-          statusCode: 200, headers: CORS,
-          body: JSON.stringify({ ...EMPTY, noPlays: `No NFL picks found for ${dateKey}.`, date: dateKey }),
-        };
+      if (picksData) {
+        const cache = (picksData.picks && picksData.picks.length) ? 'public, max-age=300, s-maxage=300' : 'public, max-age=60, s-maxage=60';
+        return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(picksData)) };
       }
-
-      return {
-        statusCode: 200,
-        headers: { ...CORS, 'Cache-Control': 'public, max-age=300, s-maxage=300' },
-        body: JSON.stringify(stripPremium(picksData)),
-      };
-
+      if (requestedDate) {
+        return { statusCode: 200, headers: okHeaders, body: JSON.stringify({ ...emptyPayload(dateKey, `No NFL picks found for ${dateKey}.`), noGames: false }) };
+      }
+      return { statusCode: 200, headers: okHeaders, body: JSON.stringify(emptyPayload(today, NO_GAMES_MSG)) };
     } catch (blobErr) {
       console.error("[get-picks-nfl] Blobs SDK error:", blobErr.message);
 
-      // REST fallback — SDK store reads can return null in the fn runtime (known alpha gotcha)
       const token = process.env.NETLIFY_AUTH_TOKEN;
       const siteId = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
       if (token) {
         const baseUrl = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-nfl`;
         const authHeaders = { "Authorization": `Bearer ${token}` };
-        let dateKey = requestedDate;
-        if (!dateKey) {
-          try {
-            const lr = await fetch(`${baseUrl}/latest-date`, { headers: authHeaders });
-            if (lr.ok) dateKey = (await lr.text()).trim();
-          } catch (e) {}
-        }
-        if (dateKey) {
-          try {
-            const pr = await fetch(`${baseUrl}/picks-${dateKey}`, { headers: authHeaders });
-            if (pr.ok) {
-              const data = await pr.json();
-              return { statusCode: 200, headers: CORS, body: JSON.stringify(stripPremium(data)) };
-            }
-          } catch (e) {}
-        }
+        try {
+          const data = await readBlobRest(baseUrl, authHeaders, `picks-${dateKey}`, true);
+          if (data) {
+            const cache = (data.picks && data.picks.length) ? 'public, max-age=300, s-maxage=300' : 'public, max-age=60, s-maxage=60';
+            return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(data)) };
+          }
+        } catch (e) {}
       }
 
-      return { statusCode: 200, headers: CORS, body: JSON.stringify(EMPTY) };
+      if (requestedDate) {
+        return { statusCode: 200, headers: okHeaders, body: JSON.stringify({ ...emptyPayload(dateKey, `No NFL picks found for ${dateKey}.`), noGames: false }) };
+      }
+      return { statusCode: 200, headers: okHeaders, body: JSON.stringify(emptyPayload(today, NO_GAMES_MSG)) };
     }
   } catch (err) {
     console.error("[get-picks-nfl] Error:", err.message);

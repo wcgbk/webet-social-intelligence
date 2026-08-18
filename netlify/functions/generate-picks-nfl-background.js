@@ -1,23 +1,12 @@
 // generate-picks-nfl-background.js
-// ── WeBetAI NFL Model v1.0-nfl-preseason ──
-// SEPARATE ENVIRONMENT from the alpha pipeline: own blob store (edge-picks-nfl), own page (/nfl),
-// own clean KPI history. Mirrors the v10 alpha architecture (sharp-book consensus → two-sided
-// de-vig → model projection → shrinkage calibration → EV floor → quarter-Kelly → letter grade)
-// but is NFL-only and preseason-aware.
+// ── WeBetAI NFL Model v1.1-nfl ──
+// SEPARATE ENVIRONMENT from alpha (edge-picks-nfl / /nfl) but shaped to merge later.
+// Regular-season process even while the calendar still says preseason — dress rehearsal:
+//   live ratings + QB out, key-number spreads, independent totals, Pinnacle predCLV,
+//   2+ major US books (Hard Rock preferred), 3% EV floor, NO forced leans, 3+1 of
+//   the published card. Off days write "No NFL Games Scheduled For Today".
 //
-// PRESEASON DISCIPLINE (why this model is deliberately humble until September):
-//   - Preseason outcomes are driven by coach playing-time plans, not team strength. Power
-//     ratings are dampened ×0.25 and the market is weighted 70% in the projection blend.
-//   - Shrinkage K values start from alpha's fitted constants but get an extra ×0.6 preseason
-//     multiplier — the model must EARN trust with graded results before it sizes up.
-//   - Stakes are capped at 1.0u per pick (0.5u for moneylines) during preseason.
-//   - If nothing clears the 3% EV floor, the single best candidate ships as a 0.25u LEAN so
-//     every NFL game night still produces a card and a graded data point for calibration.
-// GOAL: accumulate graded NFL picks + calibration data through the preseason so the model is
-// ready (with fitted Ks and live Elo ratings) for the 2026 regular season opener.
-//
-// Runs ONLY on days with NFL games (the trigger gates on the ESPN scoreboard; the generator
-// re-checks and exits quietly on empty slates).
+// Cron always fires. Off days write the no-games blob so /nfl never shows a stale card.
 //
 // POST body: { scheduled?: bool, force?: bool, dryRun?: bool, date?: "YYYY-MM-DD" }
 //   force  — override the existing-picks overwrite guard (scheduled cards are protected)
@@ -25,7 +14,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-nfl";
-const MODEL_VERSION = "v1.0-nfl-preseason";
+const MODEL_VERSION = "v1.1-nfl";
 
 // ── The Odds API sport keys — preseason + regular season are separate keys; query both so the
 // pipeline rolls into September without a code change.
@@ -34,22 +23,21 @@ const NFL_ODDS_SPORTS = ["americanfootball_nfl_preseason", "americanfootball_nfl
 // ── Season-phase constants ──
 // Preseason: margins are tighter (nobody game-plans, starters sit) and totals lower. Regular
 // season: NFL margin σ ≈ 13.2 (empirical, key-number lumpy), total σ ≈ 10.
+// Dress-rehearsal: BOTH phases use regular-season process (user: test as we would in-season).
+// Label on the card still reflects ESPN season type. Numbers do not get the old preseason
+// damp / extra shrink / forced-lean that would teach the wrong lessons before Week 1.
 const PHASE_CONFIG = {
   preseason: {
-    sigmaMargin: 12.0, sigmaTotal: 9.0, hfa: 1.0,
-    ratingDamp: 0.25,      // starters don't play — team strength barely matters
-    marketWeight: 0.70,    // projection blend: 70% market consensus, 30% rating model
-    shrinkMult: 0.6,       // extra shrinkage on top of alpha's fitted Ks
-    maxUnits: 1.0, mlMaxUnits: 0.5,
-    evFloor: 0.03, leanEvFloor: 0.01,
+    sigmaMargin: 13.2, sigmaTotal: 10.0, hfa: 2.0,
+    ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0,
+    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.03,
+    leagueTotal: 44.5,
   },
   regular: {
     sigmaMargin: 13.2, sigmaTotal: 10.0, hfa: 2.0,
-    ratingDamp: 1.0,
-    marketWeight: 0.50,
-    shrinkMult: 1.0,
-    maxUnits: 2.5, mlMaxUnits: 0.5,
-    evFloor: 0.03, leanEvFloor: 0.015,
+    ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0,
+    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.03,
+    leagueTotal: 44.5,
   },
 };
 
@@ -66,12 +54,25 @@ const BOOK_SHARPNESS = {
   betonlineag: 1.5, lowvig: 1.5, bookmaker: 1.5,
   draftkings: 1.2, fanduel: 1.2, betmgm: 1.2, caesars: 1.2, espnbet: 1.2,
 };
-// Best-line shopping is restricted to books a US bettor can actually get down at.
 const RETAIL_US_BOOKS = new Set([
   "draftkings", "fanduel", "betmgm", "caesars", "espnbet",
-  "hardrockbet", "betrivers", "fanatics", "ballybet", "betparx",
+  "hardrockbet", "hardrockbet_oh", "betrivers", "fanatics", "ballybet", "betparx",
 ]);
+const MAJOR_US_BOOKS = new Set([
+  "draftkings", "fanduel", "betmgm", "caesars", "espnbet",
+  "hardrockbet", "hardrockbet_oh", "betrivers", "fanatics",
+]);
+const HARD_ROCK = new Set(["hardrockbet", "hardrockbet_oh"]);
+const SHARP_BOOK_KEYS = ["pinnacle", "betfair_ex_eu", "betfair_ex_uk", "betfair", "matchbook", "circasports"];
 function bookWeight(key) { return BOOK_SHARPNESS[(key || "").toLowerCase()] || 1.0; }
+function isMajor(key) { return MAJOR_US_BOOKS.has((key || "").toLowerCase()); }
+function isHardRock(key) { return HARD_ROCK.has((key || "").toLowerCase()); }
+function sharpPri(key) {
+  const i = SHARP_BOOK_KEYS.indexOf((key || "").toLowerCase());
+  return i < 0 ? 99 : i;
+}
+
+const INDOOR_VENUES = /sofi|allegiant|at&t stadium|state farm|mercedes-benz|u\.?s\.? bank|ford field|lucas oil|caesars superdome|nrg stadium|roof|dome/i;
 
 // ── Static power-rating seed (net points vs league average, 2025 season baseline) ──
 // This is a SEED, not a live rating: preseason damping (×0.25) and the 70% market weight mean
@@ -126,6 +127,43 @@ function weightedMedian(pairs) { // pairs: [{v, w}]
 }
 function fmtOdds(o) { return `${o > 0 ? "+" : ""}${o}`; }
 function fmtSigned(n, dp = 1) { const v = Number(n).toFixed(dp); return n >= 0 ? `+${v}` : v; }
+
+// NFL key-number cover: extra mass at 3 and 7 (then 6/10/14). A 2.5 vs 3.5 is not 1σ of a normal.
+function nflSpreadCoverProb(modelMargin, pointsReceived, sigma) {
+  const need = -pointsReceived;
+  const integer = Math.abs(pointsReceived % 1) < 1e-9;
+  let pWin, pPush = 0;
+  if (integer) {
+    pPush = Math.max(0, normalCDF((need + 0.5 - modelMargin) / sigma) - normalCDF((need - 0.5 - modelMargin) / sigma));
+    pWin = 1 - normalCDF((need + 0.5 - modelMargin) / sigma);
+  } else {
+    pWin = 1 - normalCDF((need - modelMargin) / sigma);
+  }
+  const bump = (kn, w) => {
+    const L = Math.abs(pointsReceived);
+    if (pointsReceived > 0 && L >= kn - 0.5 && L < kn) pWin -= w;      // +2.5: don't get the 3
+    if (pointsReceived > 0 && L > kn && L <= kn + 0.5) pWin += w;      // +3.5: get the 3
+    if (pointsReceived < 0 && L >= kn - 0.5 && L < kn) pWin += w;      // -2.5: don't need the 3
+    if (pointsReceived < 0 && L > kn && L <= kn + 0.5) pWin -= w;      // -3.5: must clear 3
+  };
+  bump(3, 0.022); bump(7, 0.014); bump(6, 0.006); bump(10, 0.005); bump(14, 0.004);
+  pWin = Math.min(0.72, Math.max(0.28, pWin));
+  return pPush > 0.002 ? pWin / (1 - pPush) : pWin;
+}
+
+function nflTotalCoverProb(modelTotal, line, isOver, sigma) {
+  const integer = Math.abs(line % 1) < 1e-9;
+  let pOver, pPush = 0;
+  if (integer) {
+    pPush = Math.max(0, normalCDF((line + 0.5 - modelTotal) / sigma) - normalCDF((line - 0.5 - modelTotal) / sigma));
+    pOver = 1 - normalCDF((line + 0.5 - modelTotal) / sigma);
+  } else {
+    pOver = 1 - normalCDF((line - modelTotal) / sigma);
+  }
+  const pWin = isOver ? pOver : Math.max(0, 1 - pOver - pPush);
+  const denom = 1 - pPush;
+  return denom > 0 ? Math.min(0.70, Math.max(0.30, pWin / denom)) : 0.5;
+}
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
@@ -197,6 +235,8 @@ async function fetchESPNSlate(dateISO) {
         homeRecord: home.records?.[0]?.summary || "",
         awayRecord: away.records?.[0]?.summary || "",
         venue: comp.venue?.fullName || "",
+        indoor: !!(comp.venue?.indoor) || INDOOR_VENUES.test(comp.venue?.fullName || ""),
+        homeId: home.team?.id, awayId: away.team?.id,
         state: comp.status?.type?.state || "pre",
       };
     }).filter(Boolean);
@@ -206,6 +246,99 @@ async function fetchESPNSlate(dateISO) {
     console.log(`[nfl] ESPN slate fetch error: ${e.message}`);
     return { games: [], seasonPhase: "preseason" };
   }
+}
+
+// Live rating overlay: seed + point-diff from ESPN standings (regular or preseason).
+async function fetchLiveRatingOverlay() {
+  const out = {};
+  try {
+    const resp = await fetch("https://site.api.espn.com/apis/v2/sports/football/nfl/standings");
+    if (!resp.ok) return out;
+    const data = await resp.json();
+    const children = data.children || [data];
+    for (const conf of children) {
+      const entries = conf.standings?.entries || [];
+      for (const e of entries) {
+        const name = e.team?.displayName || "";
+        if (!name) continue;
+        const stats = {};
+        for (const s of (e.stats || [])) if (s.name) stats[s.name] = s.value;
+        const pd = Number(stats.pointDifferential ?? stats.differential ?? 0);
+        const gp = Number(stats.gamesPlayed || ((stats.wins || 0) + (stats.losses || 0)) || 1);
+        const perGame = gp > 0 ? pd / gp : 0;
+        out[name] = perGame; // blend in teamRatingLive
+      }
+    }
+    console.log(`[nfl] Live standings overlay for ${Object.keys(out).length} teams`);
+  } catch (e) {
+    console.log(`[nfl] standings overlay skipped: ${e.message}`);
+  }
+  return out;
+}
+
+function teamRatingLive(name, overlay) {
+  const seed = teamRating(name);
+  if (!overlay) return seed;
+  const last = (name || "").trim().split(/\s+/).pop().toLowerCase();
+  let live = overlay[name];
+  if (live == null) {
+    for (const [k, v] of Object.entries(overlay)) {
+      if (k.toLowerCase().endsWith(last)) { live = v; break; }
+    }
+  }
+  if (live == null || !Number.isFinite(live)) return seed;
+  return seed * 0.55 + live * 0.45;
+}
+
+// QB-out adjustment (points of margin). Out = full replacement, doubtful = partial.
+async function fetchQbAdjustments() {
+  const adj = {}; // team displayName → margin points (negative if THEIR qb is out)
+  try {
+    const resp = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries");
+    if (!resp.ok) return adj;
+    const data = await resp.json();
+    for (const team of (data.injuries || data.teams || [])) {
+      const teamName = team.displayName || team.team?.displayName || "";
+      const athletes = team.injuries || team.athletes || [];
+      for (const inj of athletes) {
+        const pos = (inj.athlete?.position?.abbreviation || inj.position || "").toUpperCase();
+        const status = (inj.status || inj.type || "").toLowerCase();
+        if (pos !== "QB") continue;
+        if (/out|injured reserve|ir|doubtful/.test(status)) {
+          const mag = /doubtful/.test(status) ? -2.0 : -3.5;
+          adj[teamName] = Math.min(adj[teamName] || 0, mag);
+        }
+      }
+    }
+    // ESPN injuries payload variants — also walk .items
+    if (!Object.keys(adj).length && Array.isArray(data.items)) {
+      for (const item of data.items) {
+        const teamName = item.team?.displayName || "";
+        const pos = (item.athlete?.position?.abbreviation || "").toUpperCase();
+        const status = (item.status || "").toLowerCase();
+        if (pos === "QB" && /out|ir|doubtful/.test(status)) {
+          adj[teamName] = /doubtful/.test(status) ? -2.0 : -3.5;
+        }
+      }
+    }
+    if (Object.keys(adj).length) console.log(`[nfl] QB adjustments: ${JSON.stringify(adj)}`);
+  } catch (e) {
+    console.log(`[nfl] QB injury fetch skipped: ${e.message}`);
+  }
+  return adj;
+}
+
+function qbMarginAdj(home, away, qbAdj) {
+  if (!qbAdj) return 0;
+  const find = (name) => {
+    if (qbAdj[name] != null) return qbAdj[name];
+    const last = (name || "").split(/\s+/).pop().toLowerCase();
+    for (const [k, v] of Object.entries(qbAdj)) {
+      if (k.toLowerCase().endsWith(last)) return v;
+    }
+    return 0;
+  };
+  return (find(home) || 0) - (find(away) || 0);
 }
 
 // ── The Odds API: today's NFL games (preseason + regular keys, ET-date filtered) ──
@@ -240,43 +373,55 @@ function buildGameConsensus(game) {
   const spreadPts = [], totalPts = [];
   const spreadNoVig = [], totalNoVig = [], mlNoVig = [];
   const offers = { spreadHome: [], spreadAway: [], over: [], under: [], mlHome: [], mlAway: [] };
+  let majorSpread = 0, majorTotal = 0, majorML = 0;
+  let sharp = { pri: 99, book: null, homeML: null, awayML: null, over: null, under: null, homeSpread: null, awaySpread: null };
 
   for (const bk of (game.bookmakers || [])) {
     const key = (bk.key || "").toLowerCase();
     const w = bookWeight(key);
     const retail = RETAIL_US_BOOKS.has(key);
+    const pri = sharpPri(key);
+    if (pri < sharp.pri) {
+      sharp = { pri, book: key, homeML: null, awayML: null, over: null, under: null, homeSpread: null, awaySpread: null };
+    }
     for (const mkt of (bk.markets || [])) {
       if (mkt.key === "spreads") {
         const h = mkt.outcomes?.find(o => o.name === home);
         const a = mkt.outcomes?.find(o => o.name === away);
         if (h?.point == null || a?.point == null) continue;
+        if (isMajor(key)) majorSpread++;
+        if (pri === sharp.pri) { sharp.homeSpread = h.price; sharp.awaySpread = a.price; }
         spreadPts.push({ v: h.point, w });
         const nv = noVigProb(h.price, a.price);
         if (nv != null) spreadNoVig.push({ point: h.point, prob: nv, w, key });
         if (retail) {
-          offers.spreadHome.push({ book: key, point: h.point, price: h.price });
-          offers.spreadAway.push({ book: key, point: a.point, price: a.price });
+          offers.spreadHome.push({ book: key, point: h.point, price: h.price, major: isMajor(key) });
+          offers.spreadAway.push({ book: key, point: a.point, price: a.price, major: isMajor(key) });
         }
       } else if (mkt.key === "totals") {
         const ov = mkt.outcomes?.find(o => o.name === "Over");
         const un = mkt.outcomes?.find(o => o.name === "Under");
         if (ov?.point == null || un?.point == null) continue;
+        if (isMajor(key)) majorTotal++;
+        if (pri === sharp.pri) { sharp.over = ov.price; sharp.under = un.price; }
         totalPts.push({ v: ov.point, w });
         const nv = noVigProb(ov.price, un.price);
         if (nv != null) totalNoVig.push({ point: ov.point, prob: nv, w, key });
         if (retail) {
-          offers.over.push({ book: key, point: ov.point, price: ov.price });
-          offers.under.push({ book: key, point: un.point, price: un.price });
+          offers.over.push({ book: key, point: ov.point, price: ov.price, major: isMajor(key) });
+          offers.under.push({ book: key, point: un.point, price: un.price, major: isMajor(key) });
         }
       } else if (mkt.key === "h2h") {
         const h = mkt.outcomes?.find(o => o.name === home);
         const a = mkt.outcomes?.find(o => o.name === away);
         if (!h || !a) continue;
+        if (isMajor(key)) majorML++;
+        if (pri === sharp.pri) { sharp.homeML = h.price; sharp.awayML = a.price; }
         const nv = noVigProb(h.price, a.price);
         if (nv != null) mlNoVig.push({ prob: nv, w, key });
         if (retail) {
-          offers.mlHome.push({ book: key, price: h.price });
-          offers.mlAway.push({ book: key, price: a.price });
+          offers.mlHome.push({ book: key, price: h.price, major: isMajor(key) });
+          offers.mlAway.push({ book: key, price: a.price, major: isMajor(key) });
         }
       }
     }
@@ -303,25 +448,35 @@ function buildGameConsensus(game) {
     consensusSpread, consensusTotal,
     spreadHomeNoVig, totalOverNoVig, mlHomeNoVig,
     offers, bookCount: (game.bookmakers || []).length,
+    majorSpread, majorTotal, majorML, sharp,
   };
 }
 
 // ── Candidate generation: for each game, evaluate every retail offer on every market and
 // keep the best-EV offer per side. Line shopping IS a real, honest edge — especially in
 // preseason where the model's own signal is deliberately tiny. ──
-function computeCandidates(consensus, espnGame, cfg) {
+function attachPredCLV(cand, sharpOurs, sharpOpp, betOpp) {
+  const sharpNV = noVigProb(sharpOurs, sharpOpp);
+  if (sharpNV == null || cand.odds == null) return;
+  const betNV = noVigProb(cand.odds, betOpp) ?? impliedProb(cand.odds);
+  cand.sharpNoVig = +sharpNV.toFixed(4);
+  cand.predCLV = +(sharpNV - betNV).toFixed(4);
+  cand.sharpBook = "pinnacle";
+}
+
+function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
   const c = consensus;
   if (c.consensusSpread == null && c.mlHomeNoVig == null) return [];
   const cands = [];
 
-  const rHome = teamRating(c.home), rAway = teamRating(c.away);
-  const ratingMargin = (rHome - rAway) * cfg.ratingDamp + cfg.hfa; // home margin per ratings
-  const marketMargin = c.consensusSpread != null ? -c.consensusSpread : ratingMargin; // home -3.5 → market says home by 3.5
-  // Projection blend — market-anchored; the rating model only nudges.
+  const rHome = teamRatingLive(c.home, ratingOverlay), rAway = teamRatingLive(c.away, ratingOverlay);
+  const qbAdjPts = qbMarginAdj(c.home, c.away, qbAdj);
+  const ratingMargin = (rHome - rAway) * cfg.ratingDamp + cfg.hfa + qbAdjPts;
+  const marketMargin = c.consensusSpread != null ? -c.consensusSpread : ratingMargin;
   const modelMargin = cfg.marketWeight * marketMargin + (1 - cfg.marketWeight) * ratingMargin;
-  // v1 has no offense/defense split, so the model total IS the consensus total; totals edge
-  // comes purely from off-consensus points/prices found by line shopping.
-  const modelTotal = c.consensusTotal;
+  const indoor = !!(espnGame && espnGame.indoor);
+  const ratingTotal = (cfg.leagueTotal || 44.5) + (rHome + rAway) * 0.45 + (indoor ? 0.8 : 0);
+  const modelTotal = c.consensusTotal != null ? 0.5 * ratingTotal + 0.5 * c.consensusTotal : ratingTotal;
 
   const shrink = (raw, market, prior) => {
     const cap = COVER_PROB_CAPS[`NFL_${market}`] || 0.60;
@@ -357,67 +512,100 @@ function computeCandidates(consensus, espnGame, cfg) {
   };
 
   const bestOffer = (list, probFn) => {
-    // Best EV across retail offers — point and price both matter, so evaluate each offer.
-    let best = null, bestEv = -Infinity;
-    for (const o of list) {
+    let best = null, bestEv = -Infinity, bestHr = null, bestHrEv = -Infinity;
+    const majors = (list || []).filter(o => o.major);
+    if (majors.length < 2 && (list || []).length) {
+      // Not 2+ major books on this side — still evaluate but mark unplaceable later via skip
+    }
+    const pool = majors.length >= 2 ? list.filter(o => o.major) : [];
+    if (!pool.length) return null;
+    for (const o of pool) {
       const p = probFn(o);
       if (p == null) continue;
       const ev = p.cover * americanToDecimal(o.price) - 1;
       if (ev > bestEv) { bestEv = ev; best = { offer: o, ...p }; }
+      if (isHardRock(o.book) && ev > bestHrEv) { bestHrEv = ev; bestHr = { offer: o, ...p }; }
     }
+    // Prefer Hard Rock when within 0.5pp EV of the shopped best (product is HR-betable).
+    if (bestHr && best && bestHrEv >= bestEv - 0.005) return bestHr;
     return best;
   };
 
-  // SPREADS — evaluate each retail offer at its own point.
-  if (c.consensusSpread != null && c.spreadHomeNoVig != null) {
+  // SPREADS — key-number cover at the SHOPPED point (the number we actually bet).
+  if (c.consensusSpread != null && c.spreadHomeNoVig != null && (c.majorSpread || 0) >= 2) {
     const homeBest = bestOffer(c.offers.spreadHome, (o) => {
-      const raw = normalCDF((modelMargin + o.point) / cfg.sigmaMargin);
-      // Prior holds at the consensus number; off-number offers shift it by ~2.4%/half-pt (NFL est.)
+      const raw = nflSpreadCoverProb(modelMargin, o.point, cfg.sigmaMargin);
       const prior = Math.min(0.95, Math.max(0.05, c.spreadHomeNoVig + (o.point - c.consensusSpread) * 0.048));
       return { raw, cover: shrink(raw, "Spread", prior), prior };
     });
-    if (homeBest) pushCand("Spread", `${c.home} ${fmtSigned(homeBest.offer.point)}`, homeBest.offer, homeBest.raw, homeBest.prior,
-      `${c.home} by ${fmtSigned(modelMargin)}`, `${c.home} ${fmtSigned(-marketMargin)}`, modelMargin - marketMargin);
+    if (homeBest) {
+      pushCand("Spread", `${c.home} ${fmtSigned(homeBest.offer.point)}`, homeBest.offer, homeBest.raw, homeBest.prior,
+        `${c.home} ${fmtSigned(-modelMargin)}`, `${c.home} ${fmtSigned(homeBest.offer.point)} @ ${fmtOdds(homeBest.offer.price)}`,
+        modelMargin - (-homeBest.offer.point));
+      const last = cands[cands.length - 1];
+      if (last) attachPredCLV(last, c.sharp?.homeSpread, c.sharp?.awaySpread, c.offers.spreadAway.find(x => x.book === homeBest.offer.book)?.price);
+    }
     const awayBest = bestOffer(c.offers.spreadAway, (o) => {
-      const raw = normalCDF((-modelMargin + o.point) / cfg.sigmaMargin);
+      const raw = nflSpreadCoverProb(-modelMargin, o.point, cfg.sigmaMargin);
       const prior = Math.min(0.95, Math.max(0.05, (1 - c.spreadHomeNoVig) + (o.point - (-c.consensusSpread)) * 0.048));
       return { raw, cover: shrink(raw, "Spread", prior), prior };
     });
-    if (awayBest) pushCand("Spread", `${c.away} ${fmtSigned(awayBest.offer.point)}`, awayBest.offer, awayBest.raw, awayBest.prior,
-      `${c.home} by ${fmtSigned(modelMargin)}`, `${c.away} ${fmtSigned(marketMargin)}`, -(modelMargin - marketMargin));
+    if (awayBest) {
+      pushCand("Spread", `${c.away} ${fmtSigned(awayBest.offer.point)}`, awayBest.offer, awayBest.raw, awayBest.prior,
+        `${c.away} ${fmtSigned(modelMargin)}`, `${c.away} ${fmtSigned(awayBest.offer.point)} @ ${fmtOdds(awayBest.offer.price)}`,
+        (-modelMargin) - (-awayBest.offer.point));
+      const last = cands[cands.length - 1];
+      if (last) attachPredCLV(last, c.sharp?.awaySpread, c.sharp?.homeSpread, c.offers.spreadHome.find(x => x.book === awayBest.offer.book)?.price);
+    }
   }
 
-  // TOTALS — model total = consensus, so edge is purely off-number/off-price shopping.
-  if (c.consensusTotal != null && c.totalOverNoVig != null && modelTotal != null) {
+  // TOTALS — independent rating total blended 50/50 with consensus, then shop the number.
+  if (c.consensusTotal != null && c.totalOverNoVig != null && modelTotal != null && (c.majorTotal || 0) >= 2) {
     const overBest = bestOffer(c.offers.over, (o) => {
-      const raw = normalCDF((modelTotal - o.point) / cfg.sigmaTotal);
+      const raw = nflTotalCoverProb(modelTotal, o.point, true, cfg.sigmaTotal);
       const prior = Math.min(0.95, Math.max(0.05, c.totalOverNoVig + (c.consensusTotal - o.point) * 0.045));
       return { raw, cover: shrink(raw, "Total", prior), prior };
     });
-    if (overBest) pushCand("Total", `Over ${overBest.offer.point}`, overBest.offer, overBest.raw, overBest.prior,
-      `${modelTotal.toFixed(1)} total`, `${c.consensusTotal}`, modelTotal - overBest.offer.point);
+    if (overBest) {
+      pushCand("Total", `Over ${overBest.offer.point}`, overBest.offer, overBest.raw, overBest.prior,
+        `${modelTotal.toFixed(1)} total`, `Over ${overBest.offer.point} @ ${fmtOdds(overBest.offer.price)}`, overBest.offer.point ? modelTotal - overBest.offer.point : 0);
+      const last = cands[cands.length - 1];
+      if (last) attachPredCLV(last, c.sharp?.over, c.sharp?.under, c.offers.under.find(x => x.book === overBest.offer.book)?.price);
+    }
     const underBest = bestOffer(c.offers.under, (o) => {
-      const raw = normalCDF((o.point - modelTotal) / cfg.sigmaTotal);
+      const raw = nflTotalCoverProb(modelTotal, o.point, false, cfg.sigmaTotal);
       const prior = Math.min(0.95, Math.max(0.05, (1 - c.totalOverNoVig) + (o.point - c.consensusTotal) * 0.045));
       return { raw, cover: shrink(raw, "Total", prior), prior };
     });
-    if (underBest) pushCand("Total", `Under ${underBest.offer.point}`, underBest.offer, underBest.raw, underBest.prior,
-      `${modelTotal.toFixed(1)} total`, `${c.consensusTotal}`, underBest.offer.point - modelTotal);
+    if (underBest) {
+      pushCand("Total", `Under ${underBest.offer.point}`, underBest.offer, underBest.raw, underBest.prior,
+        `${modelTotal.toFixed(1)} total`, `Under ${underBest.offer.point} @ ${fmtOdds(underBest.offer.price)}`, underBest.offer.point - modelTotal);
+      const last = cands[cands.length - 1];
+      if (last) attachPredCLV(last, c.sharp?.under, c.sharp?.over, c.offers.over.find(x => x.book === underBest.offer.book)?.price);
+    }
   }
 
   // MONEYLINES — win prob from model margin; heavy prior anchor.
-  if (c.mlHomeNoVig != null) {
+  if (c.mlHomeNoVig != null && (c.majorML || 0) >= 2) {
     const rawHomeWin = normalCDF(modelMargin / cfg.sigmaMargin);
     const homeBest = bestOffer(c.offers.mlHome, (o) => ({ raw: rawHomeWin, cover: shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig), prior: c.mlHomeNoVig }));
-    if (homeBest) pushCand("Moneyline", `${c.home} ML`, homeBest.offer, rawHomeWin, c.mlHomeNoVig,
-      `${(shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig) * 100).toFixed(1)}% win`, `${(c.mlHomeNoVig * 100).toFixed(1)}% implied`, null);
+    if (homeBest) {
+      pushCand("Moneyline", `${c.home} ML`, homeBest.offer, rawHomeWin, c.mlHomeNoVig,
+        `${(shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig) * 100).toFixed(1)}% win`, `${fmtOdds(homeBest.offer.price)}`, null);
+      const last = cands[cands.length - 1];
+      if (last) attachPredCLV(last, c.sharp?.homeML, c.sharp?.awayML, c.offers.mlAway.find(x => x.book === homeBest.offer.book)?.price);
+    }
     const rawAwayWin = 1 - rawHomeWin;
     const awayBest = bestOffer(c.offers.mlAway, (o) => ({ raw: rawAwayWin, cover: shrink(rawAwayWin, "Moneyline", 1 - c.mlHomeNoVig), prior: 1 - c.mlHomeNoVig }));
-    if (awayBest) pushCand("Moneyline", `${c.away} ML`, awayBest.offer, rawAwayWin, 1 - c.mlHomeNoVig,
-      `${(shrink(rawAwayWin, "Moneyline", 1 - c.mlHomeNoVig) * 100).toFixed(1)}% win`, `${((1 - c.mlHomeNoVig) * 100).toFixed(1)}% implied`, null);
+    if (awayBest) {
+      pushCand("Moneyline", `${c.away} ML`, awayBest.offer, rawAwayWin, 1 - c.mlHomeNoVig,
+        `${(shrink(rawAwayWin, "Moneyline", 1 - c.mlHomeNoVig) * 100).toFixed(1)}% win`, `${fmtOdds(awayBest.offer.price)}`, null);
+      const last = cands[cands.length - 1];
+      if (last) attachPredCLV(last, c.sharp?.awayML, c.sharp?.homeML, c.offers.mlHome.find(x => x.book === awayBest.offer.book)?.price);
+    }
   }
 
-  return cands;
+  return cands.filter(x => typeof x.predCLV !== "number" || x.predCLV >= -0.02);
 }
 
 // ── Match an odds-API game to the ESPN slate (records/venue context) ──
@@ -441,14 +629,7 @@ function selectPicks(allCands, cfg) {
   const perGame = [...byGame.values()].sort((a, b) => b.ev - a.ev);
 
   const qualified = perGame.filter(x => x.ev >= cfg.evFloor).slice(0, 3);
-  if (qualified.length) return { picks: qualified, lean: false };
-
-  const leans = perGame.filter(x => x.ev >= cfg.leanEvFloor).slice(0, 1);
-  if (leans.length) return { picks: leans, lean: true };
-
-  // Game-night guarantee: ship the single best candidate as a LEAN so the card is never
-  // empty on an NFL night — every graded result feeds the calibration fit.
-  return { picks: perGame.slice(0, 1), lean: true };
+  return { picks: qualified, lean: false };
 }
 
 function unitsToRating(u) {
@@ -469,7 +650,7 @@ function buildFinalPicks(selected, isLean, seasonPhase) {
     const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
     const modelEdgeStr = isML
       ? `Model Win Prob: ${(c.coverProb * 100).toFixed(1)}%, Implied: ${(impliedProb(c.odds) * 100).toFixed(1)}%, Edge: ${edgePctVal}%`
-      : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge != null ? c.edge : edgePctVal} ${c.market === "Total" ? "pts vs number" : "pts"}`;
+      : `Bet ${c.side} ${fmtOdds(c.odds)} @ ${c.book || "retail"}. ${c.modelProjection}. Calibrated edge ${edgePctVal}%.`;
     return {
       sport: "NFL",
       matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
@@ -493,6 +674,8 @@ function buildFinalPicks(selected, isLean, seasonPhase) {
       modelEdge: modelEdgeStr,
       commenceTime: c.commenceTime || "",
       bestBook: c.book || "",
+      predCLV: typeof c.predCLV === "number" ? c.predCLV : null,
+      sharpBook: c.sharpBook || null,
       seasonPhase,
       thinSlate: isLean,
       source: "nfl",
@@ -501,14 +684,72 @@ function buildFinalPicks(selected, isLean, seasonPhase) {
   });
 }
 
+function calcParlayAmerican(oddsArr) {
+  let dec = 1;
+  for (const o of oddsArr) {
+    const n = typeof o === "number" ? o : parseInt(String(o).replace(/[^0-9+-]/g, ""), 10);
+    if (!Number.isFinite(n)) { dec *= 1.909; continue; }
+    dec *= n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n);
+  }
+  const am = dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
+  return am > 0 ? `+${am}` : `${am}`;
+}
+
+// 3+1 of the published card — same product as alpha v10.5.2. No phantom synthesis later.
+function buildPublishedParlay(picks) {
+  if (!picks || picks.length < 2) return [];
+  const byGame = new Map();
+  for (const p of picks) {
+    const g = (p.matchup || "").toLowerCase().trim();
+    if (!g || byGame.has(g)) continue;
+    byGame.set(g, {
+      pick: p.pick,
+      matchup: p.matchup,
+      odds: p.odds,
+      betType: p.betType,
+      sport: "NFL",
+      commenceTime: p.commenceTime || "",
+      coverProb: p.coverProb,
+      ev: p.ev,
+    });
+  }
+  const legs = [...byGame.values()].slice(0, 3);
+  if (legs.length < 2) return [];
+  const stake = picks.some(p => p.thinSlate) ? 0.25 : 0.5;
+  return [{
+    type: `${legs.length}-leg-parlay`,
+    legs,
+    combinedOdds: calcParlayAmerican(legs.map(l => l.odds)),
+    units: `${stake}u`,
+    stake,
+    source: "published-card",
+  }];
+}
+
+function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays) {
+  return {
+    date: dateISO,
+    dateFormatted,
+    generatedAt: new Date().toISOString(),
+    model: MODEL_VERSION,
+    seasonPhase,
+    noPlays,
+    noGames: /No NFL Games Scheduled/i.test(noPlays || ""),
+    picks: [],
+    rejections: [],
+    parlayLegs: [],
+    summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
+  };
+}
+
 // ── Claude narration (narrator ONLY — the model already selected and sized; grounding is
 // strictly the provided table, no invented specifics) ──
 const NFL_NARRATOR_SYSTEM = `You are THE LOCK — WeBetAI's NFL analyst. The statistical model has ALREADY selected and sized these picks. Your only job is to write honest, compelling narratives.
 
 RULES:
 - Say "WeBetAI" — never "the model" or "our model".
-- ${"" /* preseason honesty is non-negotiable */}For PRESEASON picks: be honest that preseason is about line value and market positioning, not team strength — starters play a quarter at most. Never invent playing-time plans, injury news, or quotes.
-- Use ONLY facts provided in the data (teams, lines, prices, best-book, records, venue, edge math). NO outside specifics — no player names, no coach names, no news. If you don't have a fact, argue the line value generally.
+- Use the EXACT pick string, odds, and calibrated Edge % from the table. Never invent a different line.
+- Use ONLY facts in the data (teams, the number we are betting, prices, best-book, records, venue, edge math). No invented player/coach/news.
 - coreReasoning: 3-4 sentences arguing FOR the pick side. Start with a concrete supporting fact from the data. End with why the price offers value.
 - whatLoses: 1 sentence — the specific scenario that beats the pick.
 - clvExpectation: 1 short sentence on expected line movement.
@@ -524,13 +765,15 @@ async function narratePicks(picks, seasonPhase, dateFormatted) {
     for (const p of picks) {
       const phase = seasonPhase === "preseason" ? "preseason" : "regular-season";
       p.coreReasoning = p.coreReasoning ||
-        `WeBetAI scanned every spread, total, and moneyline across all sportsbooks for this ${phase} matchup and ${p.pick} at ${p.odds} graded out as the best value on the board${p.bestBook ? ` (best price at ${p.bestBook})` : ""}. The calibrated cover probability of ${p.coverProb} clears the market's implied break-even at this price, producing a ${p.ev} expected value. ${seasonPhase === "preseason" ? "Preseason stakes stay deliberately small while the NFL model builds its graded track record for the regular season." : "Stake is quarter-Kelly sized to the calibrated edge."}`;
-      p.whatLoses = p.whatLoses || "A game script that runs against the number — preseason rotations add variance any single result can't escape.";
-      p.clvExpectation = p.clvExpectation || "Line expected to stay near the consensus number into kickoff.";
+        `WeBetAI scanned every spread, total, and moneyline and ${p.pick} at ${p.odds}${p.bestBook ? ` (${p.bestBook})` : ""} is the best value on this game. Calibrated cover ${p.coverProb} vs break-even at this price, ${p.ev} expected value. Stake is quarter-Kelly sized to the calibrated edge.`;
+      p.whatLoses = p.whatLoses || "A game script that runs against the number — a late score or a stalled drive at a key number (3 or 7).";
+      p.clvExpectation = p.clvExpectation || (typeof p.predCLV === "number"
+        ? `Pick-time Pinnacle predCLV ${(p.predCLV * 100).toFixed(1)}¢ — hold if the close stays near this number.`
+        : "Line expected to stay near the consensus number into kickoff.");
     }
     return {
       edgeSummary: `WeBetAI's NFL model evaluated every market on today's slate and found its best value on ${picks.map(p => `${p.pick} (${p.odds})`).join(", ")}.`,
-      insights: `${picks.length} NFL pick${picks.length > 1 ? "s" : ""} today, ${picks.reduce((s, p) => s + parseFloat(p.units), 0)}u total exposure. ${seasonPhase === "preseason" ? "Preseason cards run reduced stakes by design — the model is accumulating graded results to calibrate for the 2026 regular season." : "Stakes are quarter-Kelly sized to calibrated edges."}`,
+      insights: `${picks.length} NFL pick${picks.length > 1 ? "s" : ""} today, ${picks.reduce((s, p) => s + parseFloat(p.units), 0)}u total exposure. Regular-season process: 3% EV floor, key-number cover, 2+ major books, Hard Rock preferred, quarter-Kelly.`,
     };
   };
   if (!apiKey || !picks.length) return fallback();
@@ -571,7 +814,7 @@ async function narratePicks(picks, seasonPhase, dateFormatted) {
 }
 
 // ── Storage (REST blob API, mirrors alpha incl. the v10.4 overwrite guard) ──
-async function storePicks(dateISO, picksData, force) {
+async function storePicks(dateISO, picksData, force, opts = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) { console.error("[nfl] NETLIFY_AUTH_TOKEN not set, cannot store picks"); return false; }
   const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${STORE_NAME}`;
@@ -620,7 +863,9 @@ async function storePicks(dateISO, picksData, force) {
       if (dResp.ok) dates = await dResp.json();
     } catch (e) {}
     if (!Array.isArray(dates)) dates = [];
-    if (!dates.includes(dateISO)) {
+    // Off-day "no games" blobs update latest-date (so /nfl is never stale) but stay off
+    // picks-dates so the track record is not padded with every Tuesday/Wednesday.
+    if (opts.indexDates !== false && !dates.includes(dateISO)) {
       dates.push(dateISO); dates.sort();
       await fetch(`${storeUrl}/picks-dates`, {
         method: "PUT", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify(dates),
@@ -645,19 +890,25 @@ exports.handler = async (event) => {
   const dateFormatted = formatDateLong(dateISO);
   console.log(`[nfl] ${MODEL_VERSION} run for ${dateISO} (scheduled:${!!body.scheduled} force:${force} dryRun:${dryRun})`);
 
-  // ── GAME-DAY GATE: NFL games only. No slate → no run, no writes. ──
+  // Regular-season process even if ESPN still labels the slate preseason.
+  const cfg = PHASE_CONFIG.regular;
   const { games: espnGames, seasonPhase } = await fetchESPNSlate(dateISO);
   if (!espnGames.length) {
-    console.log(`[nfl] No NFL games on ${dateISO} (ET) — exiting without generating.`);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no NFL games today" }) };
+    console.log(`[nfl] No NFL games on ${dateISO} (ET) — writing no-games card.`);
+    const noGames = emptyCard(dateISO, dateFormatted, seasonPhase, "No NFL Games Scheduled For Today");
+    if (!dryRun) await storePicks(dateISO, noGames, force, { indexDates: false });
+    return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no NFL games today", stored: !dryRun }) };
   }
-  console.log(`[nfl] ${espnGames.length} NFL game(s) today · phase=${seasonPhase}`);
-  const cfg = PHASE_CONFIG[seasonPhase] || PHASE_CONFIG.preseason;
+  console.log(`[nfl] ${espnGames.length} NFL game(s) today · phase=${seasonPhase} · process=regular`);
+
+  const [ratingOverlay, qbAdj] = await Promise.all([fetchLiveRatingOverlay(), fetchQbAdjustments()]);
 
   const oddsGames = await fetchNFLOdds(dateISO);
   if (!oddsGames.length) {
-    console.log(`[nfl] ESPN shows games but no odds available — exiting (no card without lines).`);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no NFL odds available" }) };
+    console.log(`[nfl] ESPN shows games but no odds available — writing no-plays card.`);
+    const noOdds = emptyCard(dateISO, dateFormatted, seasonPhase, "No qualifying NFL plays today — WeBetAI passed.");
+    if (!dryRun) await storePicks(dateISO, noOdds, force);
+    return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0, skipped: "no NFL odds available" }) };
   }
 
   // Consensus + candidates per game
@@ -666,7 +917,7 @@ exports.handler = async (event) => {
     const consensus = buildGameConsensus(g);
     if (consensus.bookCount < 3) { console.log(`[nfl] ${g.away_team} @ ${g.home_team}: only ${consensus.bookCount} books — skipping`); continue; }
     const espnGame = findESPNGame(espnGames, consensus.home, consensus.away);
-    const cands = computeCandidates(consensus, espnGame, cfg);
+    const cands = computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj);
     console.log(`[nfl] ${g.away_team} @ ${g.home_team}: consensus ${consensus.home} ${fmtSigned(consensus.consensusSpread ?? 0)} / total ${consensus.consensusTotal} · ${cands.length} candidate(s)`);
     for (const cand of cands) console.log(`[nfl]   ${cand.market}: ${cand.side} ${fmtOdds(cand.odds)} @ ${cand.book} — cover ${(cand.coverProb * 100).toFixed(1)}%, EV ${(cand.ev * 100).toFixed(1)}%`);
     allCands.push(...cands);
@@ -674,11 +925,7 @@ exports.handler = async (event) => {
 
   if (!allCands.length) {
     console.log("[nfl] No positive-EV candidates on the slate — writing no-plays card.");
-    const noPlaysData = {
-      date: dateISO, dateFormatted, generatedAt: new Date().toISOString(), model: MODEL_VERSION,
-      seasonPhase, noPlays: "No qualifying NFL plays today — WeBetAI passed.", picks: [], rejections: [],
-      parlayLegs: [], summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
-    };
+    const noPlaysData = emptyCard(dateISO, dateFormatted, seasonPhase, "No qualifying NFL plays today — WeBetAI passed.");
     if (!dryRun) await storePicks(dateISO, noPlaysData, force);
     return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0 }) };
   }
@@ -717,7 +964,7 @@ exports.handler = async (event) => {
     seasonPhase,
     picks,
     rejections,
-    parlayLegs: [], // parlays need a 3-game slate; preseason cards are usually 1-2 games
+    parlayLegs: buildPublishedParlay(picks),
     summary: {
       totalPicks: picks.length,
       totalUnits: `${parseFloat(totalUnits.toFixed(2))}u`,
@@ -745,6 +992,7 @@ module.exports.buildGameConsensus = buildGameConsensus;
 module.exports.computeCandidates = computeCandidates;
 module.exports.selectPicks = selectPicks;
 module.exports.buildFinalPicks = buildFinalPicks;
+module.exports.buildPublishedParlay = buildPublishedParlay;
 module.exports.noVigProb = noVigProb;
 module.exports.weightedMedian = weightedMedian;
 module.exports.PHASE_CONFIG = PHASE_CONFIG;

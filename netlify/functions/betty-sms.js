@@ -12,7 +12,7 @@ const CORS = {
 
 const BETTY_INTRO = `Hi! I'm Betty from WeBetAI — save me in your contacts!`;
 const BETTY_HEADSHOT_URL = "https://webetsocial.com/betty-sms.jpg?v=20260818";
-const BETTY_VCARD_URL = "https://webetsocial.com/betty.vcf";
+const BETTY_VCARD_URL = "https://webetsocial.com/betty.vcf?v=20260818";
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {

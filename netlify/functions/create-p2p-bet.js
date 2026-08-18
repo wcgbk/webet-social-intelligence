@@ -188,7 +188,7 @@ async function sendSMS(to, message, mediaUrl) {
 }
 
 // Send Betty intro as two messages: (1) square headshot + intro text, (2) vCard
-const BETTY_VCARD_URL = "https://webetsocial.com/betty.vcf";
+const BETTY_VCARD_URL = "https://webetsocial.com/betty.vcf?v=20260818";
 const BETTY_SMS_PHOTO = "https://webetsocial.com/betty-sms.jpg?v=20260818";
 
 async function sendBettyVCard(to) {
@@ -201,7 +201,7 @@ async function sendBettyVCard(to) {
     // Message 1: Square headshot + intro text
     var params1 = new URLSearchParams({
       To: to, From: TWILIO_FROM,
-      Body: "Hey! I'm Betty from WeBetAI. Today's Edge picks just dropped — check them out:\n\nwebetsocial.com/edge-beta\n\nAsk me anything as your AI companion for all things sports, news, politics, prediction markets, and entertainment.",
+      Body: "Hey! I'm Betty from WeBetAI. Save me in your contacts so you know it's me.\n\nwebetsocial.com/dashboard\n\nAsk me anything — sports, news, politics, prediction markets, and entertainment.",
     });
     params1.append("MediaUrl", BETTY_SMS_PHOTO);
     await fetch(apiUrl, { method: "POST", headers: headers, body: params1.toString() });

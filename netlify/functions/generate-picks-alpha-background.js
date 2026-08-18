@@ -1,10 +1,20 @@
 // generate-picks-alpha-background.js
-// v10.4-alpha-mlb — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// v10.5-alpha-truestats — Deterministic Edge Architecture (ALPHA, primary pipeline)
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
+// v10.5 truestats (2026-08-18) ROOT-CAUSE fix for the entire MLB side/ML bleed:
+//   1) MLB offense input was the PITCHING category's runs (= runs ALLOWED) via last-category
+//      overwrite in fetchTeamStats (since 0c225fd 2026-06-07) — now batting-scoped, with a
+//      cross-source tripwire against the record's avgPointsFor.
+//   2) METHOD-3 ppg-average guard missed the mlb-* method rename (ff1a534), so a ~zero-margin
+//      member always diluted MLB spreads at weight 1.2 — now skipped when mlb-* exists.
+//   Invalidates the "MLB markets efficient" conclusion — every validation Jun 7+ ran inverted.
+// v10.4.8 (2026-08-18) August discipline, measured on live alpha (post-ASB / Aug bleed):
+//   F5 off (5-8-3, −$435 post-ASB), plus-money ML off (16-25, −$822), no Coors/Rockies
+//   sides (0-4 August), no forced-3 lean fill (Claude was stuffing low-conviction dogs).
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
 //   per-market total σ (NBA 18.5 / NHL 2.3 / MLB 4.3), Kelly ×50 sizing (grades live again),
-//   EV floor 3% calibrated (lean 1.5%), soccer disabled (38.5% real-run), ML dogs capped +160,
+//   EV floor 3% calibrated (lean 1.5%), soccer disabled (38.5% real-run),
 //   stale sport multipliers removed, weather now recomputes EV/units, 2+ major books enforced.
 // Key changes from v10.0: Quarter-Kelly (was Half), 8% EV floor (was 3%), Claude SELECTOR (was VERIFIER).
 // Background function (15min timeout). Stores to "edge-picks-alpha" Netlify Blob store.
@@ -25,7 +35,7 @@ A ranked table of the top candidate picks with pre-computed edges, cover probabi
 
 YOUR JOB:
 1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), and recent form for the top 8 candidates.
-2. SELECT your top 3 picks from the candidate table (or fewer if web search reveals disqualifying info). If fewer than 3 genuine edges survive verification, output only what you have conviction on.
+2. SELECT only picks you have genuine conviction on (typically 1-2, never more than 3). A 0- or 1-pick card is the CORRECT outcome on a thin slate. Do NOT select a pick you just described as low-conviction in order to fill a 3-pick card.
 3. Write 3-5 sentence coreReasoning narrative for each selected pick.
 4. You MAY reject candidates if web search reveals material changes after the data cutoff:
    - Star player ruled out / downgraded after data cutoff
@@ -149,7 +159,7 @@ const MLB_PARK_FACTORS = {
 // so it stays disciplined: ×0.5 EV discount (ranking + floor), max 2 slots, 1u sizing cap.
 const F5_ODDS_MARKETS = "h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings";
 const F5_EV_DISCOUNT = 0.5;  // halve the edge for ranking + the EV floor — unvalidated market
-const F5_MAX_SLOTS = 2;      // at most 2 F5 candidates may enter the pool per slate
+const F5_MAX_SLOTS = 0;      // v10.4.8: F5 off the live card (post-ASB 5-8-3, −$435). Keep the engine; publish nothing.
 const F5_UNIT_CAP = 1.0;     // never stake an F5 leg above a validated full-game play
 // Calibration caps mirror the F5 function's COVER_PROB_CAPS — sharp models top out ~55-60% hit rate.
 const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Line": 0.57 };
@@ -979,12 +989,22 @@ async function fetchTeamStats(espnData) {
         ]);
 
         const stats = {};
+        // v10.5: category-scoped copy alongside the flat dict. ESPN repeats stat NAMES across
+        // categories (MLB batting.runs = scored, pitching.runs = ALLOWED; same for hits/HRs/BBs/Ks,
+        // NHL offensive/defensive goals) and the flat dict let the LAST category win — so every
+        // MLB team's "offense" was silently its runs allowed. Offense reads must go through
+        // statsByCategory, never bare stats.runs / stats.goals.
+        const statsByCategory = {};
         if (statsResp?.ok) {
           const data = await statsResp.json();
           const categories = data.results?.stats?.categories || data.splits?.categories || [];
           for (const cat of categories) {
+            const catName = (cat.name || '').toLowerCase();
+            if (catName && !statsByCategory[catName]) statsByCategory[catName] = {};
             for (const stat of (cat.stats || [])) {
-              if (stat.name) stats[stat.name] = stat.value;
+              if (!stat.name) continue;
+              stats[stat.name] = stat.value;
+              if (catName) statsByCategory[catName][stat.name] = stat.value;
             }
           }
           for (const stat of (data.statistics || [])) {
@@ -1062,7 +1082,10 @@ async function fetchTeamStats(espnData) {
             const slg = stats.slugAvg || null;
             const ops = (obp && slg) ? obp + slg : null;
             const gamesPlayed = stats.teamGamesPlayed || 1;
-            const runsTotal = stats.runs || null;
+            // v10.5 truestats: offense = BATTING runs only. Bare stats.runs was the pitching
+            // category's runs ALLOWED (last-category overwrite, since 0c225fd 2026-06-07), which
+            // inverted every MLB offense input — good teams deflated, bad teams inflated.
+            const runsTotal = statsByCategory.batting?.runs ?? null;
             let runsPerGame = runsTotal ? runsTotal / gamesPlayed : pointsPerGame;
             // Sanity guard: MLB runs/game must be 2.5–7.5. Anything outside this range
             // means ESPN returned bad data (season totals, basketball-scale avgPoints, etc.).
@@ -1070,6 +1093,13 @@ async function fetchTeamStats(espnData) {
             if (runsPerGame !== null && (runsPerGame < 2.5 || runsPerGame > 7.5)) {
               console.log(`[v10-guard] MLB runsPerGame=${runsPerGame?.toFixed(2)} for ${teamName} is outside [2.5, 7.5] — nulled (bad ESPN data)`);
               runsPerGame = null;
+            }
+            // v10.5 tripwire: batting runs/GP and the record's avgPointsFor are independent ESPN
+            // sources for the SAME quantity. Divergence >0.5 R/G means a parse broke again —
+            // log loudly and trust the record split (the source verified correct on 2026-08-18).
+            if (runsPerGame && ppgFor && Math.abs(runsPerGame - ppgFor) > 0.5) {
+              console.log(`[v10-guard] MLB OFFENSE MISMATCH ${teamName}: batting ${runsPerGame.toFixed(2)} R/G vs record avgPointsFor ${ppgFor.toFixed(2)} — using record value`);
+              runsPerGame = ppgFor;
             }
 
             teamStats[teamName] = {
@@ -2680,9 +2710,13 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   }
 
   // ── METHOD 3: PPG/PPG-allowed average (when available but efficiency isn't) ──
+  // v10.5: also skip when an mlb-* method exists. The MLB methods were renamed from
+  // 'pitching-*' to 'mlb-starter-adjusted'/'mlb-runs-average' in ff1a534 without updating
+  // this guard, so MLB always got a third ~zero-margin member at weight 1.2 dragging
+  // every MLB spread toward 0.
   if (homeStats?.pointsPerGame && homeStats?.pointsAllowed &&
       awayStats?.pointsPerGame && awayStats?.pointsAllowed &&
-      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace'))) {
+      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace') || p.method.startsWith('mlb-'))) {
     const ppgHome = (homeStats.pointsPerGame + awayStats.pointsAllowed) / 2;
     const ppgAway = (awayStats.pointsPerGame + homeStats.pointsAllowed) / 2;
     projections.push({ home: ppgHome, away: ppgAway, weight: 1.2, method: "ppg-average" });
@@ -3322,8 +3356,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // Check both sides for ML value
         // Sport-specific ML odds limits
         const ML_MAX_FAV = { NBA: -250, NHL: -300, NCAAB: -250, MLB: -200 };
-        // v10.3: dog cap tightened to +160 — real-run record on +161 or longer: 6-14 (30%, -3.6% ROI)
-        const ML_MAX_DOG = { NBA: 160, NHL: 160, NCAAB: 160, MLB: 160 };
+        // v10.4.8: MLB plus-money ML is a phantom-Elo leak (post-ASB 16-25, −$822).
+        // Even money (+100) is the longest dog we will still price. NBA/NHL unchanged (off-season).
+        const ML_MAX_DOG = { NBA: 160, NHL: 160, NCAAB: 160, MLB: 100 };
         const maxFav = ML_MAX_FAV[league.league] || -300;
         const maxDog = ML_MAX_DOG[league.league] || 200;
 
@@ -3641,6 +3676,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
   // spreads/totals sit at the consensus line at standard juice, so they carry no off-market-odds risk.
   const ODDS_RANGE_MAX_DEV = 0.07; // implied-prob (~20 cents)
   const bettable = candidates.filter(c => {
+    // v10.4.8 August discipline — drop leaks before Claude/fallback ever see them
+    if (!passesAugustDiscipline(c)) return false;
     if ((c.market || "").toLowerCase().includes("moneyline") && c.consensusLine != null && c.odds != null) {
       const dev = (c.consensusLine / 100) - impliedProb(c.odds); // >0 ⇒ our price is more generous than consensus
       if (dev > ODDS_RANGE_MAX_DEV) {
@@ -3667,7 +3704,7 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
   const top = candidates.slice(0, 15);
   let prompt = `TODAY: ${dateFormatted} (${dateISO})\n\n`;
   prompt += `${candidates.length} total edge candidates found across all sports. Here are the top ${top.length} ranked by normalized edge (z-score).\n`;
-  prompt += `Your job: web search to verify injuries/news for top candidates, then SELECT up to 3.\n\n`;
+  prompt += `Your job: web search to verify injuries/news for top candidates, then SELECT only genuine-conviction picks (1-2 typical; 0 is valid). Do not fill a card.\n\n`;
 
   for (const c of top) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
@@ -3851,6 +3888,10 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     const c = candidateTable.find(x => x.rank === sel.candidateRank);
     if (!c) {
       console.log(`[v10-beta] WARNING: Claude selected rank ${sel.candidateRank} which is not in candidate table — skipping`);
+      continue;
+    }
+    if (!passesAugustDiscipline(c)) {
+      console.log(`[v10.4.8] Claude selected rank ${sel.candidateRank} (${c.side}) — dropped by August discipline`);
       continue;
     }
 
@@ -4293,6 +4334,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     const odds = typeof c.odds === 'number' ? c.odds : parseInt(c.odds);
     if (cp < 0.45 || !(c.ev > 0.03) || !odds || odds < -300 || odds > 300) return false;
     if ((cp - impliedProb(odds)) <= 0) return false;                   // require positive calibrated edge
+    if (!passesAugustDiscipline(c)) return false;
     return true;
   }).map(c => ({
     side: c.side, market: c.market,
@@ -4880,12 +4922,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.4-alpha-mlb",
+      date: dateISO, dateFormatted, model: "v10.5-alpha-truestats",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.4-alpha-mlb" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.5-alpha-truestats" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4977,59 +5019,11 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP (the "ensure ~3 picks + parlay" backfill) ──
-    // Card is below 3 after selection. Pull from the LEAN_EV_FLOOR tier to fill up with 0.25u Lean
-    // plays (flagged thinSlate, tracked separately, never inflate conviction-book ROI). v10.4.1:
-    // restored to the lower lean floor so thin slates fill toward 3 again. Highest-EV leans first.
-    // SAFETY (unchanged): never re-add a side the validator explicitly rejected, and never a second
-    // pick from a game already on the card — so on a slate whose only extra candidate was rejected on
-    // merit (e.g. a starter trending the wrong way), the card can still honestly come in under 3.
+    // ── LEAN TIER TOP-UP — DISABLED (v10.4.8) ──
+    // Filling to 3 stuffed the card with low-conviction plus-money dogs (the August bleed).
+    // A 0- or 1-pick card is the correct published outcome when conviction edges are scarce.
     if (picks.length < 3) {
-      const needed = 3 - picks.length;
-      const pickedGames = new Set(picks.map(p => (p.matchup || '').toLowerCase().trim()));
-      const rejectedSides = new Set(
-        (claudeOutput.rejections || []).map(r => {
-          const c = candidateTable.find(x => x.rank === r.candidateRank);
-          return c ? (c.side || '').toLowerCase().trim() : '';
-        }).filter(Boolean)
-      );
-      try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
-        leanAll.sort((a, b) => b.ev - a.ev);
-        const topUps = leanAll.filter(c =>
-          hasPositiveEdge(c) &&
-          !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
-          !pickedGames.has((c.matchup || '').toLowerCase().trim()) &&
-          !picks.find(p => p.pick === c.side)
-        ).slice(0, needed);
-        if (topUps.length > 0) {
-          console.log(`[v10-lean-topup] Adding ${topUps.length} lean pick(s) — Claude left us with only ${picks.length}`);
-          for (const c of topUps) {
-            const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
-            const u = LEAN_UNITS;
-            picks.push({
-              pick: c.side, sport: c.sport, matchup: c.matchup,
-              betType: c.market, odds: oddsStr, units: `${u}u`,
-              rating: 'Lean', confidence: 'lean', thinSlate: true,
-              // v10.4: leans carry coverProb/evRaw like conviction picks — their absence made
-              // the fallback parlay compute NaN combined prob and broke dedup EV comparisons.
-              coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
-              evRaw: typeof c.ev === 'number' ? c.ev : null,
-              winProbability: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
-              edgePct: `${(c.ev * 100).toFixed(1)}%`,
-              modelEdge: `Model edge: ${c.edge.toFixed(1)} pts. EV: +${(c.ev * 100).toFixed(1)}%.`,
-              coreReasoning: 'Lean play — statistical edge below conviction threshold. Claude verified no disqualifying news.',
-              dataVerified: 'lean-tier',
-              clvExpectation: 'Minimal line movement expected.',
-              zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
-              commenceTime: c.commenceTime || '',
-            });
-            pickedGames.add((c.matchup || '').toLowerCase().trim());
-          }
-        }
-      } catch (leanErr) {
-        console.error(`[v10-lean-topup] Failed: ${leanErr.message}`);
-      }
+      console.log(`[v10-lean-topup] SKIPPED — card has ${picks.length} pick(s); v10.4.8 does not fill to 3`);
     }
 
     // ── FINAL SAME-GAME DE-CORRELATION ──
@@ -5115,7 +5109,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.4-alpha-mlb",
+      model: "v10.5-alpha-truestats",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -5126,7 +5120,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.4-alpha-mlb",
+        modelVersion: "v10.5-alpha-truestats",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5193,6 +5187,31 @@ function hasPositiveEdge(c) {
   return typeof c.ev === "number" && c.ev > 0 &&
     typeof c.coverProb === "number" && c.odds != null &&
     (c.coverProb - impliedProb(c.odds)) > 0;
+}
+
+// v10.4.8 — hard vetoes measured on the live August/post-ASB book. Totals pass through.
+function passesAugustDiscipline(c) {
+  if (!c) return false;
+  const market = (c.market || c.betType || "").toLowerCase();
+  const side = (c.side || c.pick || "").toLowerCase();
+  const venue = (c.venue || "").toLowerCase();
+  const src = (c.source || "").toLowerCase();
+  if (market.startsWith("f5") || src === "f5") {
+    console.log(`[v10.4.8] DROP ${c.side || c.pick}: F5 off the live card`);
+    return false;
+  }
+  const odds = typeof c.odds === "number" ? c.odds : parseInt(String(c.odds || "").replace("+", ""), 10);
+  if (market.includes("moneyline") && Number.isFinite(odds) && odds > 100) {
+    console.log(`[v10.4.8] DROP ${c.side || c.pick}: plus-money ML ${odds > 0 ? "+" : ""}${odds} (cap +100)`);
+    return false;
+  }
+  if (!market.includes("total")) {
+    if (venue.includes("coors") || side.includes("rockies")) {
+      console.log(`[v10.4.8] DROP ${c.side || c.pick}: Coors/Rockies side veto`);
+      return false;
+    }
+  }
+  return true;
 }
 
 function dedupeCandidatesByGame(cands) {
@@ -5351,7 +5370,7 @@ Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...
 
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = dedupeCandidatesByGame((leanCandidates || []).filter(hasPositiveEdge)).slice(0, 3);
+  const top = dedupeCandidatesByGame((leanCandidates || []).filter(c => hasPositiveEdge(c) && passesAugustDiscipline(c))).slice(0, 2);
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5427,12 +5446,12 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.4-alpha-mlb",
+    date: dateISO, dateFormatted, model: "v10.5-alpha-truestats",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.4-alpha-mlb" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5-alpha-truestats" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5444,7 +5463,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
   console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
-  const top3 = dedupeCandidatesByGame(candidateTable.filter(hasPositiveEdge)).slice(0, 3);
+  const top3 = dedupeCandidatesByGame(candidateTable.filter(c => hasPositiveEdge(c) && passesAugustDiscipline(c))).slice(0, 2);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5520,12 +5539,12 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.4-alpha-mlb",
+    date: dateISO, dateFormatted, model: "v10.5-alpha-truestats",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.4-alpha-mlb" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5-alpha-truestats" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };

@@ -183,8 +183,8 @@
       font-family: inherit;
     }
     .nav-item:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
-    .nav-item.active { background: rgba(0,76,84,0.25); color: #4dd8c0; }
-    .nav-item.active .nav-icon { color: #4dd8c0; }
+    .nav-item.active { background: rgba(0,76,84,0.25); color: #00b5b9; }
+    .nav-item.active .nav-icon { color: #00b5b9; }
     .nav-icon {
       width: 18px;
       height: 18px;
@@ -308,7 +308,7 @@
     }
     .topbar-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: #10b981;
+      background: #00b5b9;
       flex-shrink: 0;
     }
     .topbar-sub {
@@ -888,7 +888,7 @@
       background: #f2f3f5; border: 1px solid #e0e3e8;
       border-radius: 999px; padding: 3px 8px;
     }
-    .win-prob { color: #2e7d32 !important; background: #e8f5e9 !important; border-color: #a5d6a7 !important; }
+    .win-prob { color: #004C54 !important; background: #e6f4f1 !important; border-color: #b8ddd6 !important; }
     .pick-analysis {
       font-size: .8125rem; color: #5f6b7a; line-height: 1.5;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -997,7 +997,7 @@
       color: var(--fg-dim); margin-bottom: 4px;
     }
     .verify-agent-verdict { font-size: 0.75rem; font-weight: 600; margin-bottom: 2px; }
-    .verify-agent-verdict.agree { color: #2e7d32; }
+    .verify-agent-verdict.agree { color: #004C54; }
     .verify-agent-verdict.disagree { color: #c62828; }
     .verify-agent-verdict.caution { color: #e65100; }
     .verify-agent-conf { font-size: 0.625rem; color: var(--fg-dim); }
@@ -1087,7 +1087,7 @@
       font-family: inherit;
       transition: color 0.15s;
     }
-    .mobile-tab.active { color: #4dd8c0; }
+    .mobile-tab.active { color: #00b5b9; }
     .mobile-tab svg { width: 24px; height: 24px; }
     .mobile-tab-label {
       font-size: 0.6875rem;
@@ -1336,7 +1336,7 @@
       font-size: 0.75rem;
       font-weight: 700;
     }
-    .bb-odds-chip.yes { color: #2e7d32; border-color: #a5d6a7; }
+    .bb-odds-chip.yes { color: #004C54; border-color: #b8ddd6; }
     .bb-odds-chip.no { color: #c62828; border-color: #ef9a9a; }
     .bb-bet-string {
       font-family: 'Geist Sans', monospace;
@@ -1482,7 +1482,7 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
-    .status-badge.ready { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.ready { background: #e6f4f1; color: #004C54; }
     .status-badge.posted { background: #e3f2fd; color: #1565c0; }
     .status-badge.queued { background: #fff3e0; color: #e65100; }
     .status-badge.scheduled { background: #f3e5f5; color: #7b1fa2; }
@@ -2784,7 +2784,7 @@
         const source = story.source || story.sources || '';
         const betAngle = story.betAngle || story.bet_angle || story.micro_bet || '';
 
-        const scoreColor = score >= 80 ? '#2e7d32' : score >= 50 ? '#e65100' : score ? '#c62828' : 'var(--fg-dim)';
+        const scoreColor = score >= 80 ? '#004C54' : score >= 50 ? '#e65100' : score ? '#c62828' : 'var(--fg-dim)';
         const scoreLabel = score >= 80 ? 'Verified' : score >= 50 ? 'Mixed' : score ? 'Disputed' : 'Unscored';
 
         return `<div class="bb-card">
@@ -3895,6 +3895,6 @@
 })();
 </script>
 
-<script src="/wbai-login.js" defer></script>
+<script src="/wbai-login.js?v=20260818b" defer></script>
 </body>
 </html>

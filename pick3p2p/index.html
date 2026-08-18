@@ -34,10 +34,10 @@
     /* ─── CSS Variables ─── */
     :root {
       /* Hero (dark) */
-      --background:   hsl(260, 87%,  3%);
+      --background:   #000000;
       --foreground:   hsl(40,  6%,  95%);
-      --primary:      hsl(121, 95%, 76%);
-      --primary-fg:   hsl(0,   0%,   5%);
+      --primary:      #004C54;
+      --primary-fg:   #ffffff;
       --hero-heading: hsl(40,  10%, 96%);
       --hero-sub:     hsl(40,   6%, 82%);
       --border:       hsl(240,  4%, 20%);
@@ -49,9 +49,9 @@
       --teal: #004C54;
       --teal-light: #e6f4f1;
       --teal-border: #b8ddd6;
-      --green: #2e7d32;
-      --green-light: #e8f5e9;
-      --green-border: #a5d6a7;
+      --green: #004C54;
+      --green-light: #e6f4f1;
+      --green-border: #b8ddd6;
       --border-lt: #e0e3e8;
       --txt-b: #1a2e1a;
       --txt-m: #5f6b7a;
@@ -104,7 +104,7 @@
     }
     .hero-overlay {
       position: absolute; inset: 0;
-      background: linear-gradient(to bottom, rgba(5,2,14,0.55) 0%, rgba(5,2,14,0.30) 50%, rgba(5,2,14,0.70) 100%);
+      background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.30) 50%, rgba(0,0,0,0.70) 100%);
       z-index: 1;
     }
     .hero-content {
@@ -130,12 +130,12 @@
     }
     .nav-link:hover { opacity: 1; }
     .btn-nav {
-      background: var(--primary); color: var(--primary-fg); border: none;
+      background: #fff; color: #004C54; border: none;
       font-family: inherit; font-size: 0.875rem; font-weight: 500;
       padding: 7px 16px; border-radius: 12px; cursor: pointer; flex-shrink: 0;
       transition: background 0.15s ease; text-decoration: none;
     }
-    .btn-nav:hover { background: hsl(121,95%,68%); }
+    .btn-nav:hover { background: #e6f4f1; }
     .mobile-menu-btn { display: none; background: none; border: none; color: var(--foreground); cursor: pointer; padding: 4px; flex-shrink: 0; }
 
     /* ─── Hero Main ─── */
@@ -152,7 +152,7 @@
       display: inline-flex; align-items: center; gap: 3px;
       background: rgba(255,255,255,0.05); padding: 4px 10px 4px 12px;
       border-radius: 9999px; font-size: 0.8125rem; font-weight: 500;
-      color: var(--primary); text-decoration: none;
+      color: #00b5b9; text-decoration: none;
     }
     .hero-heading {
       font-size: clamp(2.25rem,5vw,3.75rem); font-weight: 600;
@@ -168,12 +168,12 @@
     }
     .hero-ctas { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
     .btn-hero {
-      background: var(--primary); color: var(--primary-fg); border: none;
+      background: #fff; color: #004C54; border: none;
       font-family: inherit; font-size: 1rem; font-weight: 500;
       padding: 12px 24px; border-radius: 9999px; cursor: pointer;
       transition: background 0.15s ease; white-space: nowrap; text-decoration: none;
     }
-    .btn-hero:hover { background: hsl(121,95%,68%); }
+    .btn-hero:hover { background: #e6f4f1; }
     .btn-hero-secondary {
       font-family: inherit; font-size: 1rem; font-weight: 400;
       padding: 12px 24px; border-radius: 9999px; border: none;
@@ -2816,6 +2816,6 @@
     <div id="nm-status" class="nm-status"></div>
   </div>
 </div>
-<script src="/wbai-login.js" defer></script>
+<script src="/wbai-login.js?v=20260818b" defer></script>
 </body>
 </html>

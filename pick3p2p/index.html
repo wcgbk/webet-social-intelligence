@@ -13,16 +13,16 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pick3P2P | Pick the Games the AI Passed On</title>
-  <meta name="description" content="Pick3P2P — pick 3 games the AI rejected. Challenge a friend P2P. Best record wins. Prove you see edges the algorithm missed." />
+  <title>Pick 3 | WeBetAI</title>
+  <meta name="description" content="Pick 3. Text a friend. Best record wins." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://pick3p2p.com" />
-  <meta property="og:title" content="Pick3P2P | Pick the Games the AI Passed On" />
-  <meta property="og:description" content="Pick 3 games the AI rejected. Challenge a friend P2P. Best record wins." />
+  <meta property="og:title" content="Pick 3 | WeBetAI" />
+  <meta property="og:description" content="Pick 3. Text a friend. Best record wins." />
   <meta property="og:image" content="https://webetsocial.com/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Pick3P2P | Pick the Games the AI Passed On" />
-  <meta name="twitter:description" content="Pick 3 games the AI rejected. Challenge a friend P2P. Best record wins." />
+  <meta name="twitter:title" content="Pick 3 | WeBetAI" />
+  <meta name="twitter:description" content="Pick 3. Text a friend. Best record wins." />
   <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -858,8 +858,8 @@
 <!-- THE MAIN EVENT — Explainer + VS -->
 <section class="sec fi" id="main-event" style="padding-bottom:0; padding-top:32px;">
   <div class="sec-inner" style="text-align:center;">
-    <div class="sec-label">The Daily Main Event</div>
-    <h2>Your Picks vs. Theirs</h2>
+    <div class="sec-label">Pick 3</div>
+    <h2>Your three vs theirs</h2>
 
     <!-- VS Cards -->
     <div class="vs-section">
@@ -880,18 +880,18 @@
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-num">STEP 1</div>
-        <div class="step-title">Pick Your 3</div>
-        <div class="step-desc">Choose only one of the AI's top selections. Then two from the remaining top 10 evaluated games.</div>
+        <div class="step-title">Pick your 3</div>
+        <div class="step-desc">Take one from Betty’s card. Add two more from the board.</div>
       </div>
       <div class="step-card">
         <div class="step-num">STEP 2</div>
-        <div class="step-title">Challenge a Friend</div>
-        <div class="step-desc">Lock your picks and send a text challenge. They'll get a link to come back and build their own 3.</div>
+        <div class="step-title">Text a friend</div>
+        <div class="step-desc">We send them a link. They pick their own 3.</div>
       </div>
       <div class="step-card">
         <div class="step-num">STEP 3</div>
-        <div class="step-title">Best Record Wins</div>
-        <div class="step-desc">Whoever has the best record wins. If it's a tie, it pushes to the next day.</div>
+        <div class="step-title">Best record wins</div>
+        <div class="step-desc">Most wins takes it. A tie pushes to tomorrow.</div>
       </div>
     </div>
   </div>
@@ -901,8 +901,8 @@
 <section class="sec fi" id="challenge" style="padding-top:2rem;">
   <div class="sec-inner">
     <div style="text-align:center;">
-      <div class="sec-label">Today's Board</div>
-      <h2 id="board-heading">Log In to Make Your Pick 3</h2>
+      <div class="sec-label">Tonight’s board</div>
+      <h2 id="board-heading">Sign in to pick your 3</h2>
     </div>
 
     <!-- Login Bar -->
@@ -926,23 +926,23 @@
     <!-- Pick Selection Board -->
     <div class="pick-board-wrap" id="pick-board">
       <div class="pick-board-header">
-        <span class="pick-board-title">Select Your 3 Picks</span>
-        <span class="pick-counter" id="pick-counter">0 / 3 Selected</span>
+        <span class="pick-board-title">Your 3</span>
+        <span class="pick-counter" id="pick-counter">0 / 3</span>
       </div>
 
       <!-- AI's Top 3 -->
       <div class="board-section" id="ai-section">
-        <div class="board-section-label">AI's Picks<span class="label-rule">— Select 1</span></div>
+        <div class="board-section-label">Betty’s card<span class="label-rule">— pick 1</span></div>
         <div id="ai-rows">
-          <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">Loading AI picks...</div>
+          <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">Loading today’s card…</div>
         </div>
       </div>
 
       <!-- Available Games -->
       <div class="board-section" id="avail-section">
-        <div class="board-section-label">Remaining Top 10<span class="label-rule">— Select 2</span></div>
+        <div class="board-section-label">The board<span class="label-rule">— pick 2</span></div>
         <div id="avail-rows">
-          <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">Loading today's games...</div>
+          <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">Loading the board…</div>
         </div>
       </div>
     </div>
@@ -957,9 +957,9 @@
     <div class="challenge-cta" style="text-align:center;">
       <button class="btn-challenge" id="btn-challenge" disabled onclick="openChallengeWithPicks()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        Select 3 Picks to Challenge
+        Pick 3 to send
       </button>
-      <p class="challenge-sub">Send a text challenge to a friend, and they'll come back and build their Pick 3.</p>
+      <p class="challenge-sub">We’ll text your friend. They pick their own 3.</p>
     </div>
 
   </div>
@@ -969,8 +969,8 @@
 <!-- MY CHALLENGES (visible when logged in) -->
 <section class="sec fi" id="my-challenges-section" style="display:none;">
   <div class="sec-inner">
-    <div class="sec-label">My Challenges</div>
-    <h2>Active & Past Challenges</h2>
+    <div class="sec-label">Yours</div>
+    <h2>Challenges</h2>
     <div id="playing-as" style="font-size:.8125rem; color:var(--txt-m); margin-top:.4rem;"></div>
     <div id="my-challenges" style="margin-top:1rem;">
       <div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-m);">Loading...</div>
@@ -981,8 +981,8 @@
 <!-- LEADERBOARD -->
 <section class="sec fi" id="leaderboard" style="padding-top:2rem;">
   <div class="sec-inner" style="text-align:center;">
-    <div class="sec-label">Capper Rankings</div>
-    <h2>Top Cappers This Season</h2>
+    <div class="sec-label">Season 1</div>
+    <h2>Leaderboard</h2>
   </div>
   <div class="sec-inner">
     <div class="arena-board">
@@ -992,7 +992,7 @@
       </div>
       <div class="board-row head">
         <span>#</span>
-        <span>Capper</span>
+        <span>Player</span>
         <span>Record</span>
         <span>Win %</span>
         <span>P/L</span>
@@ -1034,7 +1034,7 @@
 <div class="modal-overlay" id="challenge-modal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">Challenge a Friend</span>
+      <span class="modal-title">Text a friend</span>
       <button class="modal-close" onclick="document.getElementById('challenge-modal').classList.remove('open')">&times;</button>
     </div>
     <div class="modal-body">
@@ -1042,31 +1042,31 @@
       <div id="modal-picks-summary" style="margin-bottom:1rem;"></div>
       <div class="modal-divider"></div>
       <div class="modal-form-group">
-        <label class="modal-label">Your Name</label>
-        <input class="modal-input" type="text" placeholder="e.g. Brandon" id="c-name" />
+        <label class="modal-label">Your name</label>
+        <input class="modal-input" type="text" placeholder="Brandon" id="c-name" />
       </div>
       <div class="modal-form-group">
-        <label class="modal-label">Friend's Phone Number</label>
+        <label class="modal-label">Their number</label>
         <input class="modal-input" type="tel" placeholder="(555) 123-4567" id="c-friend" />
       </div>
       <div class="modal-form-group" id="deliver-group">
-        <label class="modal-label">Send the challenge via</label>
+        <label class="modal-label">Send how</label>
         <div style="display:flex;gap:8px;">
-          <button type="button" class="modal-select" id="dlv-sms" onclick="setDeliver('sms')" style="flex:1;cursor:pointer;font-weight:700;border-color:#004C54;background:#e6f4f1;">📱 Text — we send it</button>
-          <button type="button" class="modal-select" id="dlv-dm" onclick="setDeliver('dm')" style="flex:1;cursor:pointer;font-weight:700;opacity:.55;">𝕏 X DM — you send it</button>
+          <button type="button" class="modal-select" id="dlv-sms" onclick="setDeliver('sms')" style="flex:1;cursor:pointer;font-weight:700;border-color:#004C54;background:#e6f4f1;">Text</button>
+          <button type="button" class="modal-select" id="dlv-dm" onclick="setDeliver('dm')" style="flex:1;cursor:pointer;font-weight:700;opacity:.55;">Share on X</button>
         </div>
       </div>
       <div class="modal-form-group">
-        <label class="modal-label">WeBit Stake</label>
+        <label class="modal-label">Stake</label>
         <select class="modal-select" id="c-wager">
-          <option value="0" selected>No stake — bragging rights</option>
-          <option value="50">ⓦ 50 WeBit — Casual</option>
-          <option value="100">ⓦ 100 WeBit — Competitive</option>
-          <option value="250">ⓦ 250 WeBit — Main Event</option>
+          <option value="0" selected>Bragging rights</option>
+          <option value="50">50 WeBit</option>
+          <option value="100">100 WeBit</option>
+          <option value="250">250 WeBit</option>
         </select>
       </div>
-      <button class="btn-send-challenge" id="btn-send" onclick="sendChallenge()">Send Challenge via Text</button>
-      <p style="font-size:.6875rem; color:var(--txt-l); text-align:center; margin-top:.75rem; line-height:1.4;" id="modal-status">Your friend will get a text with the challenge link.</p>
+      <button class="btn-send-challenge" id="btn-send" onclick="sendChallenge()">Send text</button>
+      <p style="font-size:.6875rem; color:var(--txt-l); text-align:center; margin-top:.75rem; line-height:1.4;" id="modal-status">They get a text with your 3 and a link to pick theirs.</p>
     </div>
   </div>
 </div>
@@ -1273,7 +1273,7 @@
     var startInfo = gameStartInfo(game);
     var started = startInfo.started;
     var timeStr = startInfo.label;
-    if (!timeStr && type === 'avail' && game.detail) timeStr = 'AI passed';
+    if (!timeStr && type === 'avail' && game.detail) timeStr = 'Open';
     var ratingHTML = '';
     if (type === 'ai' && game.rating) {
       var bc = badgeClass[game.rating] || 'badge-b', rl = ratingLabel[game.rating] || 'B';
@@ -1296,7 +1296,7 @@
       sideAwayVal = 'away'; sideHomeVal = 'home';
     }
 
-    var timeHTML = timeStr ? '<div class="game-time">' + (started ? '🔒 Started' + (timeStr !== 'AI passed' ? ' · ' + esc(timeStr) : '') : esc(timeStr)) + '</div>' : '';
+    var timeHTML = timeStr ? '<div class="game-time">' + (started ? 'Started' + (timeStr !== 'Open' ? ' · ' + esc(timeStr) : '') : esc(timeStr)) + '</div>' : '';
     var sidesHTML = started
       ? '<div class="game-sides"><span style="font-size:.6875rem; font-weight:600; color:var(--txt-l); padding:.375rem .5rem;">Locked</span></div>'
       : '<div class="game-sides">' +
@@ -1406,7 +1406,7 @@
       var html = '';
       for (var i = 0; i < userSelections.length; i++) {
         var s = userSelections[i];
-        var tag = s.type === 'ai' ? '<span class="my-pick-tag">AI Pick</span>' : '';
+        var tag = s.type === 'ai' ? '<span class="my-pick-tag">Betty</span>' : '';
         html += '<div class="my-pick-row"><span class="my-pick-label">' + (i + 1) + '. ' + esc(s.sideName) + tag + '</span><span class="my-pick-detail">' + esc(s.sport) + ' — ' + esc(s.matchup) + '</span></div>';
       }
       listEl.innerHTML = html;
@@ -1418,10 +1418,11 @@
     var btn = document.getElementById('btn-challenge');
     if (total === 3) {
       btn.disabled = false;
-      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Challenge a Friend via Text';
+      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Text a friend';
     } else {
       btn.disabled = true;
-      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Select ' + (3 - total) + ' More Pick' + (3 - total > 1 ? 's' : '');
+      var left = 3 - total;
+      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Pick ' + left + ' more';
     }
   }
 
@@ -1526,7 +1527,7 @@
     // Render AI rows
     var aiHTML = '';
     if (aiPicks.length === 0) {
-      aiHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">No AI picks today — full board is open.</div>';
+      aiHTML = '<div style="padding:1rem; text-align:center; font-size:.8125rem; color:var(--txt-l);">No card today — pick any three from the board.</div>';
     } else {
       for (var i = 0; i < aiPicks.length; i++) aiHTML += gameRowHTML(aiPicks[i], i, 'ai');
     }
@@ -1623,7 +1624,7 @@
     var fn = (document.getElementById('nm-first').value || '').trim();
     var ln = (document.getElementById('nm-last').value || '').trim();
     var st = document.getElementById('nm-status');
-    if (!fn) { st.textContent = 'Please enter your first name.'; st.style.color = '#c0392b'; return; }
+    if (!fn) { st.textContent = 'First name, please.'; st.style.color = '#c0392b'; return; }
     var btn = document.getElementById('nm-save'); btn.disabled = true; btn.textContent = 'Saving…';
     try {
       var r = await fetch('/.netlify/functions/user-prefs', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ firstName: fn, lastName: ln }) });
@@ -1644,30 +1645,25 @@
     var heading = document.getElementById('board-heading');
     var mcs = document.getElementById('my-challenges-section');
     if (currentUser) {
-      if (heading) heading.textContent = 'Make Your Pick 3';
+      if (heading) heading.textContent = 'Pick your 3';
       if (mcs) { mcs.style.display = ''; mcs.classList.add('v'); }
       loadMyChallenges();
       if (typeof renderPlayingAs === 'function') renderPlayingAs();
     } else {
       // Logged-out (e.g. standalone /pick3p2p) — keep one sign-in CTA on the board,
       // since the top-bar/strip is gone. Inside the dashboard the user is already signed in.
-      if (heading) heading.textContent = 'Sign In to Make Your Pick 3';
+      if (heading) heading.textContent = 'Sign in to pick your 3';
       if (loginBar) {
         loginBar.style.display = 'flex';
-        loginBar.innerHTML = '<button type="button" class="login-btn" id="p3-signin-btn">Sign in to WeBetAI →</button>';
+        loginBar.innerHTML = '<button type="button" class="login-btn" id="p3-signin-btn">Sign in</button>';
         var sb = document.getElementById('p3-signin-btn');
         if (sb) sb.addEventListener('click', function () {
           var next = '/pick3p2p/' + location.search;
+          var reason = 'Sign in to pick your 3. <b>1,000 WeBit</b> on us.';
           if (window.parent !== window && window.parent.WBLogin) {
-            window.parent.WBLogin.open({
-              reason: 'Sign in to pick your 3 and send a challenge. <b>1,000 free WeBit</b> on first login.',
-              onSuccess: function () { location.reload(); }
-            });
+            window.parent.WBLogin.open({ reason: reason, onSuccess: function () { location.reload(); } });
           } else if (window.WBLogin) {
-            WBLogin.open({
-              reason: 'Sign in to pick your 3 and send a challenge. <b>1,000 free WeBit</b> on first login.',
-              onSuccess: function () { location.reload(); }
-            });
+            WBLogin.open({ reason: reason, onSuccess: function () { location.reload(); } });
           } else {
             location.href = '/login?next=' + encodeURIComponent(next);
           }
@@ -1757,7 +1753,7 @@
     });
     friendGroup.style.display = m === 'dm' ? 'none' : 'block';
     var btn = document.getElementById('btn-send');
-    if (btn && btn.textContent.indexOf('Lock') === -1) btn.textContent = m === 'dm' ? 'Create & open X DM' : 'Send Challenge via Text';
+    if (btn && btn.textContent.indexOf('Lock') === -1) btn.textContent = m === 'dm' ? 'Open X' : 'Send text';
   }
 
   async function sendChallenge() {
@@ -1766,22 +1762,22 @@
     var wager = document.getElementById('c-wager').value;
     var btn = document.getElementById('btn-send');
     var status = document.getElementById('modal-status');
-    if (!name) { status.textContent = 'Please enter your name.'; status.style.color = '#c0392b'; return; }
+    if (!name) { status.textContent = 'Add your name so they know who challenged them.'; status.style.color = '#c0392b'; return; }
     var friendPhone = null;
     if (deliverMode === 'sms') {
       friendPhone = formatPhone(friendRaw);
-      if (!friendPhone) { status.textContent = 'Enter a valid 10-digit US phone number.'; status.style.color = '#c0392b'; return; }
+      if (!friendPhone) { status.textContent = 'Need a 10-digit US number.'; status.style.color = '#c0392b'; return; }
     }
-    if (userSelections.length !== 3) { status.textContent = 'Select 3 picks first.'; status.style.color = '#c0392b'; return; }
+    if (userSelections.length !== 3) { status.textContent = 'Pick 3 first.'; status.style.color = '#c0392b'; return; }
 
     // Challenger identity: verified phone, or the unified WeBetAI account (X users) in DM mode
     var challengerPhone = (currentUser && currentUser.phone) || null;
     if (!challengerPhone && window.wbaiUser) {
       challengerPhone = window.wbaiUser.phone || ('wbai:' + window.wbaiUser.id);
     }
-    if (!challengerPhone) { status.textContent = 'Sign in first — then we can text your friend.'; status.style.color = '#c0392b'; return; }
+    if (!challengerPhone) { status.textContent = 'Sign in first, then we can text them.'; status.style.color = '#c0392b'; return; }
 
-    btn.disabled = true; btn.textContent = 'Sending...'; status.textContent = ''; status.style.color = '';
+    btn.disabled = true; btn.textContent = 'Sending…'; status.textContent = ''; status.style.color = '';
 
     try {
       var resp = await fetch(API_BASE + '/api/p2p-challenge', {
@@ -1802,14 +1798,14 @@
       var data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to send');
 
-      btn.textContent = 'Challenge Sent!'; btn.style.background = '#2e7d32';
+      btn.textContent = 'Sent'; btn.style.background = '#2e7d32';
       if (deliverMode === 'dm') {
         var stakeNum = parseInt(wager, 10) || 0;
-        var dmMsg = 'I just locked 3 picks on Pick3P2P 🎯 Match me — winner takes ' + (stakeNum > 0 ? 'ⓦ ' + stakeNum + ' WeBit' : 'the bragging rights') + '. ' + (data.inviteUrl || 'https://webetsocial.com/pick3p2p/?challenge=' + data.challengeId);
+        var dmMsg = 'I locked 3 on WeBetAI Pick 3. Match me — ' + (stakeNum > 0 ? stakeNum + ' WeBit' : 'bragging rights') + '. ' + (data.inviteUrl || 'https://webetsocial.com/pick3p2p/?challenge=' + data.challengeId);
         window.open('https://x.com/messages/compose?text=' + encodeURIComponent(dmMsg), '_blank');
-        status.textContent = 'Challenge created — X DM composer opened with your invite link. ID: ' + data.challengeId; status.style.color = '#2e7d32';
+        status.textContent = 'X is open with your invite.'; status.style.color = '#2e7d32';
       } else {
-        status.textContent = 'Text sent to ' + friendRaw + ' with your picks! Challenge ID: ' + data.challengeId; status.style.color = '#2e7d32';
+        status.textContent = 'Text sent. We’ll ping you when they lock in.'; status.style.color = '#2e7d32';
       }
 
       // WeBit stake escrow on the unified account (loop-c6) — requires wbai session
@@ -1821,27 +1817,27 @@
             .then(function (r) { return r.json(); })
             .then(function (j) {
               if (j && j.ok) {
-                status.textContent += ' · 🪙 ' + stakeSel + ' WeBit escrowed (balance ' + Number(j.balance).toLocaleString() + ')';
+                status.textContent += ' ' + stakeSel + ' WeBit staked.';
                 if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: stakeSel });
                 if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
               } else if (j && j.error === 'insufficient_webits') {
-                status.textContent += ' · Not enough WeBit to stake — get a pack at webetsocial.com/webit';
+                status.textContent += ' Not enough WeBit to stake.';
               }
             }).catch(function () {});
         } else if (stakeSel > 0 && !window.wbaiUser) {
-          status.textContent += ' · Sign in at webetsocial.com/login to stake WeBit on challenges.';
+          status.textContent += ' Sign in to stake WeBit.';
         }
       } catch (e) {}
       setTimeout(function() {
         document.getElementById('challenge-modal').classList.remove('open');
-        btn.textContent = 'Send Challenge via Text'; btn.style.background = ''; btn.disabled = false;
-        status.textContent = 'Your friend will get a text with the challenge link.'; status.style.color = '';
+        btn.textContent = 'Send text'; btn.style.background = ''; btn.disabled = false;
+        status.textContent = 'They get a text with your 3 and a link to pick theirs.'; status.style.color = '';
         document.getElementById('c-name').value = ''; document.getElementById('c-friend').value = '';
         if (typeof loadMyChallenges === 'function' && currentUser && currentUser.phone) loadMyChallenges();
       }, 3000);
     } catch (err) {
-      btn.textContent = 'Send Challenge via Text'; btn.disabled = false;
-      status.textContent = 'Failed to send: ' + err.message; status.style.color = '#c0392b';
+      btn.textContent = 'Send text'; btn.disabled = false;
+      status.textContent = err.message || 'Couldn’t send. Try again.'; status.style.color = '#c0392b';
     }
   }
 
@@ -1889,11 +1885,11 @@
     var picksHtml = challenge.challenger.picks.map(function(p, i) {
       return '<div style="display:inline-block; background:rgba(255,255,255,0.15); padding:4px 10px; border-radius:8px; margin:3px; font-size:.8125rem;">' + (i+1) + '. ' + esc(p.side) + ' <span style="opacity:.7;">(' + esc(p.sport) + ')</span></div>';
     }).join('');
-    banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700; margin-bottom:.375rem;">You\'ve Been Challenged!</div>' +
-      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">' + esc(challengerName) + ' challenged you for <strong>' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBit' : 'bragging rights') + '</strong></div>' +
-      '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.6; margin-bottom:.375rem;">Their picks</div>' +
+    banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700; margin-bottom:.375rem;">' + esc(challengerName) + ' challenged you</div>' +
+      '<div style="font-size:.875rem; opacity:.9; margin-bottom:.625rem;">For <strong>' + (challenge.wager > 0 ? challenge.wager + ' WeBit' : 'bragging rights') + '</strong></div>' +
+      '<div style="font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; opacity:.6; margin-bottom:.375rem;">Their 3</div>' +
       '<div style="margin-bottom:.75rem;">' + picksHtml + '</div>' +
-      '<div style="font-size:.875rem; font-weight:600; background:rgba(255,255,255,0.15); display:inline-block; padding:6px 16px; border-radius:8px;">Select your 3 picks below, then lock them in</div>';
+      '<div style="font-size:.875rem; font-weight:600; background:rgba(255,255,255,0.15); display:inline-block; padding:6px 16px; border-radius:8px;">Pick your 3 below, then lock</div>';
 
     // Change the challenge button to "Lock My Picks" mode
     var btn = document.getElementById('btn-challenge');
@@ -1907,10 +1903,10 @@
     if (header) header.insertAdjacentElement('afterend', banner);
     else document.body.prepend(banner);
 
-    var statusText = challenge.status === 'active' ? 'Challenge Active — Waiting for Games to Finish' : challenge.status === 'graded' ? 'Challenge Complete' : challenge.status;
+    var statusText = challenge.status === 'active' ? 'Locked — waiting on the games' : challenge.status === 'graded' ? 'Final' : challenge.status;
     banner.innerHTML = '<div style="font-size:1rem; font-weight:700; margin-bottom:.25rem;">' + esc(statusText) + '</div>' +
       '<div style="font-size:.8125rem; color:#5f6b7a;">' + esc(challenge.challenger.name || 'Challenger') + ' vs ' + esc(challenge.opponent.name || 'Opponent') + ' for ' + (challenge.wager > 0 ? 'ⓦ ' + challenge.wager + ' WeBit' : 'bragging rights') + '</div>' +
-      '<div style="margin-top:.5rem;"><a href="/?challenge=' + challenge.id + '" style="font-size:.8125rem; color:#004C54; font-weight:600;">View Details</a></div>';
+      '<div style="margin-top:.5rem;"><a href="/pick3p2p/?challenge=' + challenge.id + '" style="font-size:.8125rem; color:#004C54; font-weight:600;">View</a></div>';
   }
 
   // Override the challenge button behavior when in response mode
@@ -1961,7 +1957,7 @@
 
     var sendBtn = document.getElementById('btn-send');
     var respStake = (pendingChallenge && pendingChallenge.wager > 0) ? pendingChallenge.wager : 0;
-    sendBtn.textContent = respStake > 0 ? ('Lock Picks & Stake ' + respStake) : 'Lock Picks';
+    sendBtn.textContent = respStake > 0 ? ('Lock & stake ' + respStake) : 'Lock my 3';
     sendBtn.onclick = submitChallengeResponse;
 
     document.getElementById('c-name').value = '';
@@ -1969,7 +1965,7 @@
       document.getElementById('c-name').value = currentUser.displayName || currentUser.handle;
     }
 
-    document.getElementById('modal-status').textContent = pendingChallenge.wager > 0 ? 'Lock your picks to accept the ' + pendingChallenge.wager + '-WeBit challenge.' : 'Lock your picks to accept the challenge.';
+    document.getElementById('modal-status').textContent = pendingChallenge.wager > 0 ? 'Lock to match their ' + pendingChallenge.wager + ' WeBit.' : 'Lock your 3 to accept.';
     modal.classList.add('open');
   }
 
@@ -1982,7 +1978,7 @@
 
     var responderPhone = (currentUser && currentUser.phone) || null;
     if (!responderPhone && window.wbaiUser) responderPhone = window.wbaiUser.phone || ('wbai:' + window.wbaiUser.id);
-    if (!responderPhone) { status.textContent = 'Sign in first (webetsocial.com/login).'; status.style.color = '#c0392b'; return; }
+    if (!responderPhone) { status.textContent = 'Sign in first.'; status.style.color = '#c0392b'; return; }
 
     // Can't accept your own challenge
     if (pendingChallenge && pendingChallenge.challenger && pendingChallenge.challenger.phone === responderPhone) {
@@ -1994,7 +1990,7 @@
     if (matchStake > 0) {
       var bal = (window.wbaiUser && Number(window.wbaiUser.credit_balance)) || 0;
       if (bal < matchStake) {
-        status.innerHTML = 'You need ' + matchStake + ' WeBit to match this stake. <a href="/webit" style="color:#004C54;font-weight:700;">Get a pack →</a>';
+        status.innerHTML = 'You need ' + matchStake + ' WeBit to match. <a href="/webit" style="color:#004C54;font-weight:700;">Get more</a>';
         status.style.color = '#c0392b'; return;
       }
     }
@@ -2026,22 +2022,22 @@
         try {
           var sres = await fetch('/.netlify/functions/p2p-stake', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: String(pendingChallengeId), stake: matchStake }) }).then(function (r) { return r.json(); });
           if (sres && sres.ok) {
-            stakeNote = ' · 🪙 ' + matchStake + ' WeBit staked (balance ' + Number(sres.balance).toLocaleString() + ')';
+            stakeNote = ' ' + matchStake + ' WeBit staked.';
             if (typeof wbaiFE === 'function') wbaiFE('p2p_stake_escrowed', { stake: matchStake });
             if (typeof wbaiRefreshStrip === 'function') wbaiRefreshStrip();
           }
         } catch (e) {}
       }
 
-      btn.textContent = 'Picks Locked!'; btn.style.background = '#2e7d32';
-      status.textContent = 'You\'re in! Both players are staked. Game on!' + stakeNote; status.style.color = '#2e7d32';
+      btn.textContent = 'Locked'; btn.style.background = '#2e7d32';
+      status.textContent = (matchStake > 0 ? 'You’re in.' : 'You’re in. Bragging rights.') + stakeNote; status.style.color = '#2e7d32';
 
       // Update banner
       var banner = document.getElementById('challenge-banner');
       if (banner) {
         banner.style.background = 'linear-gradient(135deg,#2e7d32,#1a2e1a)';
-        var potLine = matchStake > 0 ? 'Winner takes ⓦ ' + (matchStake * 2) + ' WeBit. ' : '';
-        banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700;">Challenge Accepted!</div><div style="font-size:.875rem; opacity:.9;">' + potLine + 'Results graded after all games finish.</div>';
+        var potLine = matchStake > 0 ? 'Winner takes ' + (matchStake * 2) + ' WeBit. ' : '';
+        banner.innerHTML = '<div style="font-size:1.125rem; font-weight:700;">You’re in</div><div style="font-size:.875rem; opacity:.9;">' + potLine + 'Results after the last game.</div>';
       }
 
       // Remove ?challenge param from URL
@@ -2051,9 +2047,9 @@
 
       setTimeout(function() {
         document.getElementById('challenge-modal').classList.remove('open');
-        btn.textContent = 'Send Challenge via Text'; btn.style.background = ''; btn.disabled = false;
+        btn.textContent = 'Send text'; btn.style.background = ''; btn.disabled = false;
         btn.onclick = sendChallenge;
-        status.textContent = 'Your friend will get a text with the challenge link.'; status.style.color = '';
+        status.textContent = 'They get a text with your 3 and a link to pick theirs.'; status.style.color = '';
         document.getElementById('c-friend').parentElement.style.display = 'block';
         document.getElementById('c-wager').parentElement.style.display = 'block';
         pendingChallengeId = null; pendingChallenge = null;
@@ -2061,8 +2057,8 @@
         if (typeof loadMyChallenges === 'function' && currentUser && currentUser.phone) loadMyChallenges();
       }, 3000);
     } catch (err) {
-      btn.textContent = 'Lock My Picks'; btn.disabled = false;
-      status.textContent = 'Failed: ' + err.message; status.style.color = '#c0392b';
+      btn.textContent = 'Lock my 3'; btn.disabled = false;
+      status.textContent = err.message || 'Couldn’t lock. Try again.'; status.style.color = '#c0392b';
     }
   }
 
@@ -2810,8 +2806,8 @@
 <div id="name-modal" class="name-modal-overlay" role="dialog" aria-modal="true" aria-label="Add your name">
   <div class="name-modal-card" style="position:relative;">
     <button id="nm-close" onclick="closeNameModal()" aria-label="Close" style="display:none; position:absolute; top:.5rem; right:.7rem; background:none; border:none; font-size:1.5rem; line-height:1; color:var(--txt-l); cursor:pointer;">&times;</button>
-    <div class="name-modal-title">👋 What's your name?</div>
-    <div class="name-modal-sub">So friends see who they're betting against — not "WeBetAI Member."</div>
+    <div class="name-modal-title">What’s your name?</div>
+    <div class="name-modal-sub">So your friend sees you — not a blank profile.</div>
     <div class="nm-row">
       <input id="nm-first" class="nm-input" type="text" placeholder="First name" autocomplete="given-name" maxlength="40" />
       <input id="nm-last" class="nm-input" type="text" placeholder="Last name" autocomplete="family-name" maxlength="40" />

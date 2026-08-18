@@ -224,10 +224,9 @@ exports.handler = async (event) => {
     const stakeLabel = challenge.wager > 0 ? `${challenge.wager} WeBit` : 'bragging rights';
 
     if (deliver === 'sms') {
-      const smsMessage = `${challengerName || 'Someone'} challenged you on Pick3P2P for ${stakeLabel}!\n\nTheir picks:\n${picksText}\n\nPick your 3 and lock them in:\n${inviteUrl}`;
+      const smsMessage = `${challengerName || 'Someone'} challenged you on WeBetAI Pick 3 (${stakeLabel}).\n\nTheir 3:\n${picksText}\n\nPick yours:\n${inviteUrl}`;
       await sendSMS(normFriend, smsMessage);
-      // Confirm to challenger (only when they have a real phone)
-      if (!isWbaiId) await sendSMS(normChallenger, `Challenge sent for ${stakeLabel}! Your picks:\n${picksText}\n\nYou'll get a text when they respond.`);
+      if (!isWbaiId) await sendSMS(normChallenger, `Sent. We'll text you when they lock in.`);
     }
 
     return {
@@ -295,17 +294,15 @@ exports.handler = async (event) => {
     const opponentPicks = challenge.opponent.picks.map((p, i) => `${i + 1}. ${p.side} (${p.sport})`).join('\n');
     const challengerPicks = challenge.challenger.picks.map((p, i) => `${i + 1}. ${p.side} (${p.sport})`).join('\n');
 
-    const stakeLbl = challenge.wager > 0 ? `${challenge.wager}-WeBit` : 'bragging-rights';
+    const stakeLbl = challenge.wager > 0 ? `${challenge.wager} WeBit` : 'bragging rights';
     const gameUrl = `https://webetsocial.com/pick3p2p/?challenge=${challengeId}`;
 
-    // Notify challenger that opponent responded (only deliverable to real phones)
     if (!/^wbai:/.test(String(challenge.challenger.phone))) await sendSMS(challenge.challenger.phone,
-      `${responderName || 'Your opponent'} accepted your ${stakeLbl} Pick3P2P!\n\nTheir picks:\n${opponentPicks}\n\nYour picks:\n${challengerPicks}\n\nGame on! Results post after final scores.\n${gameUrl}`
+      `${responderName || 'Your friend'} locked in (${stakeLbl}).\n\nTheir 3:\n${opponentPicks}\n\nYours:\n${challengerPicks}\n\nResults after the last game.\n${gameUrl}`
     );
 
-    // Confirm to responder (only deliverable to real phones)
     if (!respIsWbai) await sendSMS(normResponder,
-      `Locked in! ${stakeLbl} Pick3P2P vs ${challenge.challenger.name || 'opponent'}.\n\nYour picks:\n${opponentPicks}\n\nTheir picks:\n${challengerPicks}\n\nResults post after final scores.\n${gameUrl}`
+      `Locked. ${stakeLbl} vs ${challenge.challenger.name || 'them'}.\n\nYour 3:\n${opponentPicks}\n\nTheirs:\n${challengerPicks}\n\nResults after the last game.\n${gameUrl}`
     );
 
     return {

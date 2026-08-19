@@ -57,13 +57,13 @@ YOUR JOB:
 7. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
 
 NARRATIVE RULES (for coreReasoning field):
-- Voice: world-class sports desk talking to a smart fan, not a quant memo. Conversational, short, still specific. Translate every number into what it means ("a 9 is a track-meet total; these two score 4.4 and 4.5 a night").
-- The system prepends the math (projection vs line as subtraction, then the yellow-badge %). Your job is commentary around it — why the number is interesting, in plain English.
-- Argue FOR the pick. Under = the posted total is asking too much. Over = the number is treating a good offense like a bad one.
-- 4-5 sentences after the opener. Named starters, season rates, the price. No "massive," "lock," or "highly probable" unless cover is 60%+.
-- Do NOT invent a run/point gap. 9.8 minus 7 is 2.8, never 2.6.
-- RECORDS: win-loss and home/road ONLY from the Records line. NEVER ORtg/DRtg/DVOA/ATS. NEVER lead with why the other side cashes.
-- GROUNDING: names, injuries, venue, weather, records from this run's table or web search only.
+- Voice: world-class ESPN columnist. Human grammar. No em dashes. Commas, periods, parentheses. Conversational but tight.
+- Only write about THIS pick's teams and number. Never name a team or game that is not this pick.
+- The system prepends the math. You add commentary: what the number means in English.
+- Argue FOR the pick. Under: the posted total asks too much. Over: the number treats a good offense like a weak one.
+- 4-5 sentences. Named starters, runs per game, the price. No "massive," "lock," or "highly probable" unless cover is 60%+.
+- Do NOT invent a run/point gap. 9.8 minus 7 is 2.8, never 2.6. Label any stat you cite (ERA, runs per game, calibrated edge).
+- RECORDS from the Records line only. Never ORtg/DRtg/DVOA/ATS. Never lead with why the other side cashes.
 
 DISQUALIFICATION RULES:
 - Only list a candidate in disqualifications when you have a specific news/data-integrity fact.
@@ -72,7 +72,7 @@ DISQUALIFICATION RULES:
 OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
 {
   "disqualifications": [
-    { "candidateRank": 4, "reason": "Starting pitcher scratched — X now starts (cite source)." }
+    { "candidateRank": 4, "reason": "Starting pitcher scratched. X now starts (cite source)." }
   ],
   "narratives": [
     {
@@ -80,12 +80,12 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
       "adjustedUnits": "1.0u",
       "unitAdjustmentReason": "",
       "coreReasoning": "Start with a supporting fact, not projections...",
-      "whatLoses": "One sentence — the specific scenario that beats this pick.",
+      "whatLoses": "One sentence. The specific scenario that beats this pick.",
       "dataVerified": "Brief note on what data you verified via web search.",
       "clvExpectation": "Your expectation for closing line movement."
     }
   ],
-  "edgeSummary": "3 conversational desk sentences a casual fan can follow. Mix of overs and unders must be said plainly. Numbers in English (what a 7 vs a 9 means). Yellow badge = calibrated %. WeBetAI, not 'the model'."
+  "edgeSummary": "Daily Edge is a preview of the published picks only, one beat of context each, not a KPI dump. Name every pick on the card. Never name a team that is not on the card. No em dashes. WeBetAI, not 'the model'."
 }`;
 
 // ── Sport keys for The Odds API ──
@@ -3839,7 +3839,7 @@ function fixNarrativeEdge(narrative, candidate) {
   const truePct = (c.coverProb != null && c.odds != null)
     ? ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)
     : null;
-  const calClause = truePct != null ? ` — a ${truePct}% calibrated edge at the price` : '';
+  const calClause = truePct != null ? `, a ${truePct}% calibrated edge at the price` : '';
   const unitPlural = c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points';
   let jsSentence;
   if (isTotal) {
@@ -3848,7 +3848,7 @@ function fixNarrativeEdge(narrative, candidate) {
       : null;
     const gapStr = (rawGap != null && Number.isFinite(rawGap)) ? rawGap.toFixed(1).replace(/\.0$/, '') : null;
     jsSentence = gapStr != null
-      ? `WeBetAI's number is ${c.modelProjection} ${unitPlural} at a ${c.consensusLine} total — ${gapStr} ${unitPlural} apart${calClause}.`
+      ? `WeBetAI's number is ${c.modelProjection} ${unitPlural} at a ${c.consensusLine} total, ${gapStr} ${unitPlural} apart${calClause}.`
       : `WeBetAI projects ${c.modelProjection} total ${unitPlural} vs the ${c.consensusLine} line${calClause}.`;
   } else if (isML) {
     // Headline MUST match the yellow Edge badge (calibrated cover − implied).
@@ -3857,7 +3857,7 @@ function fixNarrativeEdge(narrative, candidate) {
     const calWin = (c.coverProb != null) ? (c.coverProb * 100).toFixed(1) : null;
     const mktImp = (c.odds != null) ? (impliedProb(c.odds) * 100).toFixed(1) : null;
     jsSentence = (calWin != null && mktImp != null && truePct != null)
-      ? `WeBetAI prices this at ${calWin}% to win vs the market's ${mktImp}% implied — a ${truePct}% calibrated edge at the price.`
+      ? `WeBetAI prices this at ${calWin}% to win vs the market's ${mktImp}% implied, a ${truePct}% calibrated edge at the price.`
       : `WeBetAI's model puts this team at ${c.modelProjection}% to win vs the market's ${c.consensusLine}%.`;
   } else {
     const projMargin = Math.abs(c.modelProjection);
@@ -3866,7 +3866,7 @@ function fixNarrativeEdge(narrative, candidate) {
       : null;
     const gapStr = (rawGap != null && Number.isFinite(rawGap)) ? rawGap.toFixed(1).replace(/\.0$/, '') : null;
     jsSentence = gapStr != null
-      ? `WeBetAI's number is a ${Number(projMargin).toFixed(1).replace(/\.0$/, '')}-${unit} margin vs the ${c.consensusLine} line — ${gapStr} ${unit}s apart${calClause}.`
+      ? `WeBetAI's number is a ${Number(projMargin).toFixed(1).replace(/\.0$/, '')}-${unit} margin vs the ${c.consensusLine} line, ${gapStr} ${unit}s apart${calClause}.`
       : `WeBetAI projects a ${projMargin}-${unit} margin vs the ${c.consensusLine} line${calClause}.`;
   }
 
@@ -5445,21 +5445,21 @@ async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted,
       return `${head}${facts.length ? '\n   Facts: ' + facts.join(' | ') : ''}`;
     }).join('\n');
 
-    const narrSys = `You are a world-class sports writer for WeBetAI. Talk to a smart fan, not a spreadsheet. Use ONLY the verified facts below.
+    const narrSys = `You are a world-class ESPN columnist for WeBetAI. Human grammar. No em dashes. Talk to a smart fan. Use ONLY the verified facts on the published picks below. NEVER mention a team or game that is not on this card.
 
-VOICE: conversational, short, specific. Translate numbers into English ("a 9-run total is a track meet; these two score 4.4 and 4.5 a night"). Warm commentary around the facts. No "massive," "lock," or "highly probable" unless cover is 60%+. No ORtg/DVOA/ATS. Say "WeBetAI", never "the model".
+VOICE: conversational, short, specific. Translate numbers into English. Label every stat (runs per game, ERA, expected value, calibrated edge, units). No "massive," "lock," or "highly probable" unless cover is 60%+. No ORtg/DVOA/ATS. Say "WeBetAI", never "the model".
 
-MATH: projection minus the posted line is subtraction (9.8 vs 7 = 2.8 runs). The yellow badge is the calibrated % on the pick. If overs and unders are both on the card, say so — never one theme that only fits the overs.
+MATH: projection minus the posted line is subtraction (9.8 vs 7 = 2.8 runs). The yellow badge is calibrated edge. If overs and unders are both on the card, say so.
 
 For each pick marked [WRITE NARRATIVE] return:
-- coreReasoning: 4-5 sentences arguing FOR this side. Do not repeat the math opener (the system prepends it). Explain what the number means, then the starters/offenses, then the price.
-- whatLoses: one concrete, plain-English way this bet loses.
-- dataVerified: facts used (starters, records, R/G).
-- clvExpectation: one sentence a fan would understand about the line moving.
+- coreReasoning: 4-5 sentences FOR this side. Do not repeat the math opener. Explain what the number means, then the starters and scoring, then the price.
+- whatLoses: one plain-English way this bet loses.
+- dataVerified: facts used.
+- clvExpectation: one sentence on the line moving.
 Do NOT rewrite [already narrated] picks; only use their thesis for the summaries.
 ALSO:
-- edgeSummary: 3 conversational sentences on the whole card. Name over vs under correctly. Put the interesting number in English.
-- insights: 3 sentences on why these games, and the unit sizes as published (do not invent units).
+- edgeSummary (Daily Edge): a preview of EACH published pick with a little context. Not KPIs. One beat per pick. Only teams on the card.
+- insights: expand that same story with labeled KPIs on those picks only (expected value, units in dollars, calibrated edge, cover). Never name a team that is not on the card.
 Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`;
 
     const nr = await anthropicFetch({

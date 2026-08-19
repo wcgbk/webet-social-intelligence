@@ -826,43 +826,57 @@ Return ONLY valid JSON array:
         parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
         (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
 
-      if (picksData.picks.length >= 3 && parlayInvalid) {
+      if (picksData.picks.length >= 2 && parlayInvalid) {
         const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
-        const legs = picksData.picks.slice(0, 3).map(p => ({
-          pick: p.pick,
-          sport: p.sport,
-          matchup: p.matchup,
-          betType: p.betType,
-          odds: p.odds,
-          coverProb: p.winProbability || p.coverProb,
-          // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
-          commenceTime: p.commenceTime || '',
-          ev: p.ev,
-        }));
-
-        let combinedDecimal = 1.0, combinedProb = 1.0;
-        for (const leg of legs) {
-          const odds = parseOdds(leg.odds);
-          combinedDecimal *= americanToDecimal(odds);
-          combinedProb *= parseProbability(leg.coverProb);
+        const uniqueByGame = [];
+        const seenG = new Set();
+        for (const p of picksData.picks) {
+          const g = (p.matchup || '').toLowerCase().replace(/\s+vs\.?\s+/g, ' @ ').replace(/\s+/g, ' ').trim();
+          if (!g || seenG.has(g)) continue;
+          seenG.add(g);
+          uniqueByGame.push(p);
+          if (uniqueByGame.length >= 3) break;
         }
-        const parlayEV = (combinedProb * combinedDecimal) - 1;
+        if (uniqueByGame.length >= 2) {
+          const legs = uniqueByGame.map(p => ({
+            pick: p.pick,
+            sport: p.sport,
+            matchup: p.matchup,
+            betType: p.betType,
+            odds: p.odds,
+            coverProb: p.winProbability || p.coverProb,
+            // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
+            commenceTime: p.commenceTime || '',
+            ev: p.ev,
+          }));
 
-        picksData.parlayLegs = [{
-          type: "3-leg-parlay-verified",
-          legs,
-          units: hasLean ? "0.25u" : "0.5u",
-          combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
-          combinedDecimal: +combinedDecimal.toFixed(2),
-          combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
-          ev: `${(parlayEV * 100).toFixed(1)}%`,
-          correlationNote: "Rebuilt after verification — a leg was invalidated by pick replacement",
-        }];
-        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
-        finalFixCount++;
-      } else if (picksData.picks.length < 3) {
-        // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
-        // never shows a parlay containing a removed leg.
+          let combinedDecimal = 1.0, combinedProb = 1.0;
+          for (const leg of legs) {
+            const odds = parseOdds(leg.odds);
+            combinedDecimal *= americanToDecimal(odds);
+            combinedProb *= parseProbability(leg.coverProb);
+          }
+          const parlayEV = (combinedProb * combinedDecimal) - 1;
+
+          picksData.parlayLegs = [{
+            type: `${legs.length}-leg-parlay-verified`,
+            legs,
+            units: hasLean ? "0.25u" : "0.5u",
+            combinedOdds: combinedDecimal >= 2
+              ? `+${Math.round((combinedDecimal - 1) * 100)}`
+              : `${Math.round(-100 / (combinedDecimal - 1))}`,
+            combinedDecimal: +combinedDecimal.toFixed(2),
+            combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
+            ev: `${(parlayEV * 100).toFixed(1)}%`,
+            correlationNote: "Rebuilt after verification from the published card (2- or 3-leg)",
+          }];
+          console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} (${hasLean ? '0.25u lean card' : '0.5u'})`);
+          finalFixCount++;
+        } else if (picksData.parlayLegs && picksData.parlayLegs.length) {
+          picksData.parlayLegs = [];
+          console.log(`[verify-final] Cleared stale parlay — fewer than 2 unique games remain`);
+        }
+      } else if (picksData.picks.length < 2) {
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);

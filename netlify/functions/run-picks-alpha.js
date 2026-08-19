@@ -36,6 +36,7 @@ exports.handler = async (event) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           manual: true,
+          force: params.force === "1" || params.force === "true",
           timestamp: new Date().toISOString(),
           date: params.date || undefined,
           // snapshotTime: ISO-8601 — triggers historical odds mode (no hindsight bias)

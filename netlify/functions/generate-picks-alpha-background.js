@@ -1,6 +1,9 @@
 // generate-picks-alpha-background.js
-// v10.5.2-alpha-3plus1 — Deterministic Edge Architecture (ALPHA, primary pipeline)
-// JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
+// v10.5.3-alpha-ev — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// JS computes ALL projections, edges, and Kelly sizing. JS SELECTS. Claude only news-DQs + narrates.
+// v10.5.3 (2026-08-19): one publish gate = calibrated EV ≥ 3% + predCLV ≥ −2¢. Drop ML 8% raw
+//   bar and August market unit caps (Kelly sizes). Claude cannot pick or "low-conviction" veto.
+//   Fill-to-3 only from the 3% pool; short card / no-play if fewer survive. No 1.5% lean fake card.
 // v10.5.2 (2026-08-18): narrative opener = yellow Edge badge (calibrated); parlay = the
 //   3 published straights (no rejected Overs); DQ matchups vetoed from any fallback pool.
 // v10.5.1 (2026-08-18): restore 3 straights + 1 parlay on true-stats offense. v10.4.8
@@ -28,28 +31,30 @@
 //   4. Blob store: edge-picks-alpha (isolated from beta/production)
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+const MODEL_VERSION = "v10.5.3-alpha-ev";
 const { bettoredgeFetch } = require("./bettoredge-auth");
 
-// ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
-const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
+// ── Claude as NEWS VETO + NARRATOR. JS selects. ──
+const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this. You do NOT select the card. JS publishes the top 3 survivors by calibrated EV.
 
 YOUR INPUTS:
 A ranked table of the top candidate picks with pre-computed edges, cover probabilities, Kelly units, and supporting team context.
 
 YOUR JOB:
-1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), and recent form for the top 8 candidates.
-2. SELECT 3 picks from the candidate table. News may DISQUALIFY a candidate (wrong starter, IL return, weather, lineup change) — if you disqualify, cite the specific fact. Do NOT reject a cleared candidate for "low conviction" or "struggling team"; the math already passed the gates. If you disqualify one, JS fills the slot from the next-ranked survivor. A short card is allowed ONLY when fewer than 3 candidates survive news + CLV gates.
-3. Write 3-5 sentence coreReasoning narrative for each selected pick.
-4. You MAY reject candidates if web search reveals material changes after the data cutoff:
+1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), and weather for the top 8 candidates.
+2. DISQUALIFY a candidate ONLY for a specific material fact after the data cutoff:
    - Star player ruled out / downgraded after data cutoff
    - Goaltender change (NHL) not reflected in pre-computed data
    - Starting pitcher change (MLB)
    - Severe weather for outdoor sports
    - Material lineup or coaching change
-5. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
-6. You MUST NOT pick outside the provided candidate table.
-7. You MUST NOT override model direction, invent probabilities, or recompute edges.
-8. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
+   - Stale or incorrect market line vs current books
+   Do NOT disqualify for "low conviction", "struggling team", thin edge, recent form, or pitch-count speculation. The math already passed the 3% EV gate.
+3. Write 3-5 sentence coreReasoning for EVERY top-8 candidate that you did NOT disqualify (JS may publish any of them).
+4. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
+5. You MUST NOT pick outside the provided candidate table.
+6. You MUST NOT override model direction, invent probabilities, or recompute edges.
+7. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
 
 NARRATIVE RULES (for coreReasoning field):
 - DO NOT write a projection/line/edge sentence. The system will prepend the correct math automatically.
@@ -65,13 +70,16 @@ NARRATIVE RULES (for coreReasoning field):
 - NEVER use technical jargon like ORtg, DRtg, pace numbers, DVOA, ATS, or advanced stat abbreviations.
 - GROUNDING (critical): every specific you state — player names, injuries, venue, weather, records — must come from web search THIS run or the candidate-table data provided. If you cannot verify a specific, describe the edge generally (matchup/line value) instead. NEVER rely on prior-season memory (e.g. a team's former ballpark or last year's roster) — a wrong specific that contradicts the pick or slate breaks user trust.
 
-REJECTION RULES (for rejections array):
-- For each candidate NOT selected, provide a brief reason why.
-- If you skip a top-5 ranked candidate, the reason must cite specific web-search findings.
+DISQUALIFICATION RULES:
+- Only list a candidate in disqualifications when you have a specific news/data-integrity fact.
+- Soft opinions (form, conviction, "I don't like the number") are NOT disqualifications.
 
 OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
 {
-  "selections": [
+  "disqualifications": [
+    { "candidateRank": 4, "reason": "Starting pitcher scratched — X now starts (cite source)." }
+  ],
+  "narratives": [
     {
       "candidateRank": 1,
       "adjustedUnits": "1.0u",
@@ -81,9 +89,6 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
       "dataVerified": "Brief note on what data you verified via web search.",
       "clvExpectation": "Your expectation for closing line movement."
     }
-  ],
-  "rejections": [
-    { "candidateRank": 4, "reason": "Why no edge or why disqualified." }
   ],
   "edgeSummary": "1-2 sentence Daily Edge Summary. Use ONLY the exact projection, line, and calibrated-edge numbers from the candidate table (e.g. 7.2 vs 8.5, 1.2-run edge, 3.9% calibrated). Never round or invent a different number. Use 'WeBetAI' not 'the model'. No ORtg/DRtg/DVOA/ATS."
 }`;
@@ -3414,7 +3419,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           const implProbNoVig = side === 'home' ? homeRawProb / vigSum : awayRawProb / vigSum;
           const implProb_ = implProbNoVig;
           const mlEdge = winProb - implProb_;
-          if (mlEdge < 0.08) continue; // need at least 8% edge for ML — tighter than spreads/totals due to higher variance
+          if (mlEdge <= 0) continue; // no raw edge vs no-vig; calibrated EV floor is the quality gate
           // Hard cap on max credible ML edge: 15% for underdogs, 10% for favorites.
           // Larger gaps almost always indicate a model calibration issue, not a real edge.
           const maxCredibleEdge = implProb_ < 0.50 ? 0.15 : 0.10;
@@ -3745,8 +3750,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 function formatCandidateTable(candidates, dateISO, dateFormatted) {
   const top = candidates.slice(0, 15);
   let prompt = `TODAY: ${dateFormatted} (${dateISO})\n\n`;
-  prompt += `${candidates.length} total edge candidates found across all sports. Here are the top ${top.length} ranked by normalized edge (z-score).\n`;
-  prompt += `Your job: web search to verify injuries/news for top candidates, then SELECT 3. Disqualify only on specific news (wrong starter / IL / weather). JS fills any hole you leave.\n\n`;
+  prompt += `${candidates.length} total edge candidates found across all sports. Here are the top ${top.length} ranked by calibrated EV.\n`;
+  prompt += `Your job: web search to verify injuries/news for the top 8. DISQUALIFY only on specific news (wrong starter / IL / weather / stale line). Do NOT select the card — JS publishes the top 3 survivors. Write a narrative for every non-disqualified top-8 candidate.\n\n`;
 
   for (const c of top) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
@@ -3882,23 +3887,14 @@ function fixNarrativeEdge(narrative, candidate) {
   return jsSentence + ' ' + cleaned;
 }
 
-// ── v10.4 per-market unit caps (MLB six-week discipline, 2026-08-03) ──
-// Current-era measured results (Jun 26–Aug 2, independent ESPN grading): Totals +31.1% ROI
-// with POSITIVE CLV (+0.52c, beats close 55%); full-game ML +3.4% ROI with NEGATIVE CLV
-// (-0.42c, beats close 33%); F5 ML -6.6% ROI. Sizing follows the measured edge: totals may
-// carry conviction units; ML and F5 are capped at 0.5u until they show positive trailing
-// 30-day CLV in the weekly review. Raise caps deliberately — never from a live feedback loop.
+// F5 is off the published card; if a leak gets through, keep it tiny (illiquid / −CLV).
+// Full-game ML / total / spread size from quarter-Kelly (0.5–3.0u) + 4.0u daily cap.
 const MARKET_UNIT_CAPS = {
-  "Moneyline": 0.5, "F5 Moneyline": 0.5, "F5 Total": 0.5, "F5 Run Line": 0.5,
-  "Total": 1.5, "Spread": 1.0, "Run Line": 1.0, "Puck Line": 1.0,
+  "F5 Moneyline": 0.5, "F5 Total": 0.5, "F5 Run Line": 0.5,
 };
 
-// ── Operator-tunable config (v10.4.5) ──
-// These two levers are the ones the weekly Discord observer proposes changing (parlay stake,
-// full-game ML cap). They live in the edge-picks/alpha-config blob so an approved change is a
-// safe, reversible, no-deploy config write — never arbitrary code. loadAlphaConfig() overwrites
-// the defaults at runtime; if the blob is absent, the shipped defaults stand.
-let ALPHA_CONFIG = { parlayStakeUnits: 0.5, parlayStakeUnitsLean: 0.25, mlUnitCap: 0.5 };
+// Parlay stake is the remaining operator lever. ML cap is no longer applied — Kelly sizes.
+let ALPHA_CONFIG = { parlayStakeUnits: 0.5, parlayStakeUnitsLean: 0.25, mlUnitCap: 3.0 };
 async function loadAlphaConfig() {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return;
@@ -3906,23 +3902,19 @@ async function loadAlphaConfig() {
     const r = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks/alpha-config`, { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) return;
     const c = await r.json();
-    // Bounded sanitization — a config write can never push sizing outside sane rails.
     if (typeof c.parlayStakeUnits === 'number' && c.parlayStakeUnits >= 0.25 && c.parlayStakeUnits <= 2) ALPHA_CONFIG.parlayStakeUnits = c.parlayStakeUnits;
     if (typeof c.parlayStakeUnitsLean === 'number' && c.parlayStakeUnitsLean >= 0.25 && c.parlayStakeUnitsLean <= 1) ALPHA_CONFIG.parlayStakeUnitsLean = c.parlayStakeUnitsLean;
-    if (typeof c.mlUnitCap === 'number' && c.mlUnitCap >= 0.5 && c.mlUnitCap <= 2) ALPHA_CONFIG.mlUnitCap = c.mlUnitCap;
-    console.log(`[v10-config] alpha-config: parlay ${ALPHA_CONFIG.parlayStakeUnits}u (lean ${ALPHA_CONFIG.parlayStakeUnitsLean}u), ML cap ${ALPHA_CONFIG.mlUnitCap}u${c.updatedBy ? ` (last set by ${c.updatedBy})` : ''}`);
+    console.log(`[v10-config] alpha-config: parlay ${ALPHA_CONFIG.parlayStakeUnits}u (lean ${ALPHA_CONFIG.parlayStakeUnitsLean}u)${c.updatedBy ? ` (last set by ${c.updatedBy})` : ''}`);
   } catch (e) { console.log(`[v10-config] alpha-config load failed (using defaults): ${e.message}`); }
 }
 
 function applyMarketUnitCaps(picks) {
   for (const p of (picks || [])) {
-    // Full-game ML cap is operator-tunable (the observer proposes raising it once ML CLV turns
-    // positive); everything else uses the static discipline caps.
-    const cap = /^Moneyline$/i.test(p.betType || '') ? ALPHA_CONFIG.mlUnitCap : MARKET_UNIT_CAPS[p.betType];
+    const cap = MARKET_UNIT_CAPS[p.betType];
     if (!cap) continue;
     const u = parseFloat(p.units);
     if (isFinite(u) && u > cap) {
-      console.log(`[v10-caps] ${p.pick} (${p.betType}): ${u}u → ${cap}u (per-market cap)`);
+      console.log(`[v10-caps] ${p.pick} (${p.betType}): ${u}u → ${cap}u (F5 illiquid cap)`);
       p.units = `${cap}u`;
       p.rating = unitsToRating(cap);
       p.confidence = ratingToConfidence(p.rating);
@@ -4177,20 +4169,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       p.confidence = ratingToConfidence(p.rating);
     }
 
-    // 4. EV-to-unit proportionality: don't oversize low-EV picks.
-    //    v10.3 thresholds rescaled for calibrated EVs (typical range is now 3-15%):
-    //    under 5% calibrated EV → max 1.0u; under 8% → max 1.5u.
-    if (ev < 0.05 && parseFloat(p.units) > 1.0) {
-      console.log(`[v10-validate] DOWNSIZE ${p.pick}: → 1.0u (EV ${(ev*100).toFixed(1)}% < 5%)`);
-      p.units = "1.0u";
-      p.rating = unitsToRating(1.0);
-      p.confidence = ratingToConfidence(p.rating);
-    } else if (ev < 0.08 && parseFloat(p.units) > 1.5) {
-      console.log(`[v10-validate] DOWNSIZE ${p.pick}: → 1.5u (EV ${(ev*100).toFixed(1)}% < 8%)`);
-      p.units = "1.5u";
-      p.rating = unitsToRating(1.5);
-      p.confidence = ratingToConfidence(p.rating);
-    }
+    // Kelly already maps EV → units. Do not overlay extra 5%/8% downsizes.
 
     // 5. Edge-to-odds coherence: the displayed edge % must be positive
     const edgePct = parseFloat(p.edgePct);
@@ -4381,6 +4360,63 @@ function isBookkeepingRejection(reason) {
 // "Low conviction", thin edge, recent form, pitch limits are not DQs — the math already passed the 3% gate.
 function isHardRejection(reason) {
   return /disqualif|il return|lineup change|wrong starter|starter change|goaltender|weather|stale|incorrect line|data integrity|ruled out|phantom/i.test(String(reason || ''));
+}
+
+// JS publishes the top 3 calibrated-EV survivors. Claude may only hard-DQ on news.
+function jsSelectPicks(candidateTable, claudeOutput) {
+  const narr = new Map();
+  for (const s of (claudeOutput.selections || [])) if (s && s.candidateRank != null) narr.set(s.candidateRank, s);
+  for (const n of (claudeOutput.narratives || [])) if (n && n.candidateRank != null) narr.set(n.candidateRank, n);
+
+  const dqRanks = new Set();
+  const dqMatchups = new Set();
+  const dqReasons = [];
+  const items = [...(claudeOutput.disqualifications || []), ...(claudeOutput.rejections || [])];
+  for (const r of items) {
+    const reason = String(r.reason || r.fact || "");
+    if (!isHardRejection(reason)) {
+      console.log(`[v10.5.3] ignore soft DQ rank ${r.candidateRank}: ${reason.slice(0, 100)}`);
+      continue;
+    }
+    const c = (candidateTable || []).find(x => x.rank === r.candidateRank);
+    if (r.candidateRank != null) dqRanks.add(r.candidateRank);
+    const m = matchupKey(c ? c.matchup : r.matchup);
+    if (m) dqMatchups.add(m);
+    dqReasons.push({
+      matchup: c ? c.matchup : (r.matchup || `Candidate #${r.candidateRank}`),
+      side: c ? c.side : (r.side || "N/A"),
+      reason: reason || "News disqualification",
+    });
+  }
+
+  const survivors = [];
+  const seen = new Set();
+  for (const c of (candidateTable || [])) {
+    if (dqRanks.has(c.rank)) continue;
+    const g = matchupKey(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`);
+    if (g && dqMatchups.has(g)) continue;
+    if (!hasPositiveEdge(c) || !passesPublishGates(c)) continue;
+    if ((c.ev || 0) < 0.03) continue;
+    if (g && seen.has(g)) continue;
+    if (g) seen.add(g);
+    survivors.push(c);
+    if (survivors.length >= 3) break;
+  }
+
+  const selections = survivors.map(c => {
+    const n = narr.get(c.rank) || {};
+    return {
+      candidateRank: c.rank,
+      adjustedUnits: n.adjustedUnits || "",
+      unitAdjustmentReason: n.unitAdjustmentReason || "",
+      coreReasoning: n.coreReasoning || "",
+      whatLoses: n.whatLoses || "",
+      dataVerified: n.dataVerified || "",
+      clvExpectation: n.clvExpectation || "",
+    };
+  });
+  console.log(`[v10.5.3] JS select ${selections.length}/${(candidateTable || []).length} (hard DQ ${dqRanks.size}): ${survivors.map(c => c.side).join(" | ") || "(none)"}`);
+  return { selections, rejections: dqReasons };
 }
 
 function buildCorrelatedParlay(picks, allCandidates, rejections) {
@@ -4985,37 +5021,18 @@ exports.handler = async (event) => {
   }
 
   if (allCandidates.length === 0) {
-    // ── THIN-SLATE FALLBACK (Option B) ──
-    // No candidate cleared the +8% conviction bar (common on thin summer slates).
-    // Re-run the edge table at a disciplined +3% EV floor; if anything qualifies,
-    // publish the best 1-3 as low-stake "Lean" plays (0.25u) flagged thinSlate so
-    // they're tracked separately and never inflate the conviction-book ROI.
-    // If nothing clears the lean floor, fall through to a true no-play — never force a -EV pick.
-    let leanCandidates = [];
-    try {
-      // v10.4.1: whole-card lean fallback (0 conviction edges) uses the LEAN_EV_FLOOR tier so a
-      // thin slate still surfaces a card instead of going dark. These are 0.25u, separately tracked.
-      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
-      leanCandidates.sort((a, b) => b.ev - a.ev);
-      leanCandidates.forEach((c, i) => { c.rank = i + 1; });
-    } catch (leanErr) {
-      console.error(`[v10-lean] Thin-slate re-run failed: ${leanErr.message}`);
-      if (!allCandidates._pipelineError) allCandidates._pipelineError = leanErr.message;
-    }
-    if (leanCandidates.length > 0) {
-      console.log(`[v10-lean] Thin slate — ${leanCandidates.length} lean candidate(s) cleared +3% EV; publishing as Lean plays`);
-      return await buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats);
-    }
+    // Zero names cleared calibrated EV ≥ 3%. A pass is the correct bet — do not
+    // re-run at 1.5% and publish a fake lean card.
     const pipelineError = allCandidates._pipelineError || null;
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.5.2-alpha-3plus1",
+      date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.5.2-alpha-3plus1" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.5.3-alpha-ev" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -5029,7 +5046,7 @@ exports.handler = async (event) => {
   // days the table stayed z-ordered — and z-scores are NOT comparable across markets (ML z
   // ≈ 0.3–0.6 vs totals z ≈ 0.1–0.3), which floated ML/F5 into the top slots. Rank on EV
   // every run; z stays a display diagnostic.
-  allCandidates.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
+  allCandidates.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.predCLV ?? -1) - (a.predCLV ?? -1)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
   allCandidates.forEach((c, i) => { c.rank = i + 1; });
 
   // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──
@@ -5083,100 +5100,20 @@ exports.handler = async (event) => {
       return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
     }
 
-    // ── PHASE 3: MERGE JS NUMBERS + CLAUDE SELECTIONS ──
-    const selections = claudeOutput.selections || [];
+    // ── PHASE 3: JS SELECTS. Claude only news-DQs + narratives. ──
+    const jsPick = jsSelectPicks(candidateTable, claudeOutput);
+    const selections = jsPick.selections;
     const picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
-
-    // Build rejections from Claude + all non-selected candidates
     const selectedRanks = new Set(selections.map(s => s.candidateRank));
 
-    const rejections = [];
-    // Add Claude's explicit rejections
-    for (const r of (claudeOutput.rejections || [])) {
-      const c = candidateTable.find(x => x.rank === r.candidateRank);
-      rejections.push({
-        matchup: c ? c.matchup : `Candidate #${r.candidateRank}`,
-        side: c ? c.side : "N/A",
-        reason: r.reason || "No reason given",
-      });
-    }
-    // Add remaining non-selected candidates as rejections
+    const rejections = [...jsPick.rejections];
     for (const c of allCandidates.slice(0, 15)) {
       if (!selectedRanks.has(c.rank) && !rejections.find(r => r.side === c.side)) {
         rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." });
       }
     }
-
-    // ── LEAN TIER TOP-UP (v10.5.1 restore) ──
-    // Product is 3 straights + 1 parlay. Fill holes from the 3% pool first (same
-    // games / HARD-DQ sides excluded — low-conviction rejects stay eligible), then the 1.5% lean floor.
     if (picks.length < 3) {
-      const needed = 3 - picks.length;
-      const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
-      const rejectedSides = new Set();
-      const vetoedMatchups = new Set();
-      for (const r of (claudeOutput.rejections || [])) {
-        if (!isHardRejection(r.reason)) continue;
-        const c = candidateTable.find(x => x.rank === r.candidateRank);
-        const side = (c ? c.side : r.side || '').toLowerCase().trim();
-        if (side) rejectedSides.add(side);
-        const m = matchupKey(c ? c.matchup : r.matchup);
-        if (m) vetoedMatchups.add(m);
-      }
-      const take = (pool, n) => pool.filter(c =>
-        hasPositiveEdge(c) && passesPublishGates(c) &&
-        !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
-        !pickedGames.has(matchupKey(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) &&
-        !vetoedMatchups.has(matchupKey(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) &&
-        !picks.find(p => p.pick === c.side)
-      ).slice(0, n);
-      try {
-        let topUps = take(allCandidates, needed);
-        if (topUps.length < needed) {
-          const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
-          leanAll.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.predCLV ?? -1) - (a.predCLV ?? -1)));
-          topUps = topUps.concat(take(leanAll, needed - topUps.length));
-        }
-        if (topUps.length > 0) {
-          console.log(`[v10-lean-topup] Adding ${topUps.length} pick(s) — card had ${picks.length}`);
-          for (const c of topUps) {
-            const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
-            const fromLeanFloor = (c.ev || 0) <= 0.03;
-            const u = fromLeanFloor ? LEAN_UNITS : Math.max(0.5, Math.min(1, c.kellyUnits || 0.5));
-            const calEdge = (typeof c.coverProb === 'number' && c.odds != null)
-              ? (c.coverProb - impliedProb(c.odds)) * 100 : (c.ev || 0) * 100;
-            const displayMatchup = (c.awayTeam && c.homeTeam)
-              ? `${c.awayTeam} vs. ${c.homeTeam}`
-              : (c.matchup || '').replace(/\s+@\s+/g, ' vs. ');
-            picks.push({
-              pick: c.side, sport: c.sport, matchup: displayMatchup,
-              betType: c.market, odds: oddsStr, units: `${u}u`,
-              rating: fromLeanFloor ? 'Lean' : unitsToRating(u),
-              confidence: fromLeanFloor ? 'lean' : ratingToConfidence(unitsToRating(u)),
-              thinSlate: fromLeanFloor,
-              coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : 50).toFixed(0)}%`,
-              evRaw: typeof c.ev === 'number' ? c.ev : null,
-              ev: typeof c.ev === 'number' ? `${(c.ev * 100).toFixed(1)}%` : undefined,
-              winProbability: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : 50).toFixed(0)}%`,
-              edgePct: `${calEdge.toFixed(1)}%`,
-              edgePoints: c.edge,
-              modelEdge: `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'MLB' ? 'runs' : c.sport === 'NHL' ? 'goals' : 'pts'}`,
-              coreReasoning: fromLeanFloor
-                ? 'Lean play — statistical edge below conviction threshold. No disqualifying news.'
-                : `WeBetAI fills the 3-pick card with the next-ranked survivor (${(c.ev * 100).toFixed(1)}% EV).`,
-              dataVerified: fromLeanFloor ? 'lean-tier' : 'topup-3plus1',
-              clvExpectation: typeof c.predCLV === 'number' ? `predCLV ${(c.predCLV * 100).toFixed(1)}c vs ${c.sharpBook || 'sharp'}` : 'Monitor close.',
-              zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
-              commenceTime: c.commenceTime || '',
-              predCLV: typeof c.predCLV === 'number' ? c.predCLV : null,
-              sharpBook: c.sharpBook || null,
-            });
-            pickedGames.add(matchupKey(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`));
-          }
-        }
-      } catch (leanErr) {
-        console.error(`[v10-lean-topup] Failed: ${leanErr.message}`);
-      }
+      console.log(`[v10.5.3] short card ${picks.length}/3 — only this many cleared 3% EV + news + predCLV (no lean fill)`);
     }
 
     // ── FINAL SAME-GAME DE-CORRELATION ──
@@ -5262,7 +5199,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.5.2-alpha-3plus1",
+      model: "v10.5.3-alpha-ev",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -5273,7 +5210,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.5.2-alpha-3plus1",
+        modelVersion: "v10.5.3-alpha-ev",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5626,12 +5563,12 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.5.2-alpha-3plus1",
+    date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.2-alpha-3plus1" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.3-alpha-ev" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5719,12 +5656,12 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.5.2-alpha-3plus1",
+    date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.2-alpha-3plus1" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.3-alpha-ev" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };

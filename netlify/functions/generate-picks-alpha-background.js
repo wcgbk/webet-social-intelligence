@@ -57,18 +57,15 @@ YOUR JOB:
 7. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
 
 NARRATIVE RULES (for coreReasoning field):
-- DO NOT write a projection/line/edge sentence. The system will prepend the correct math automatically.
-- Your narrative must argue IN FAVOR of the pick side. If the pick is "Team X +17.5", explain why Team X covers that spread — NOT why the opponent wins. Frame the edge as the spread being too wide, the picked team being undervalued, or situational factors favoring a cover.
-- "The team you're picking" = the team or direction named in the PICK field. For spreads, that's the team getting or giving points. For totals, that's the Over or Under direction.
-- Start your coreReasoning with your first supporting fact — a verified insight from web search.
-- Support with 2-3 distinct verified facts (form, injuries, rest, matchup factor).
-- End with value statement explaining why the odds offer value.
-- Max 5 sentences. No padding. No duplicate stats. Every sentence must add new information.
-- DO NOT restate projections, lines, edges, cover probabilities, or any numbers from the candidate table.
-- RECORDS & SPLITS: Cite team win-loss records and home/road records ONLY from the "Records (ESPN, authoritative)" line in the candidate table. Never state a record from web search or memory. If a record is not in the table, describe it qualitatively (e.g., "a strong home team") with no numbers.
-- NEVER lead with negative data about the team you're picking. Do NOT build a case for the opponent — build the case for the PICK SIDE covering.
-- NEVER use technical jargon like ORtg, DRtg, pace numbers, DVOA, ATS, or advanced stat abbreviations.
-- GROUNDING (critical): every specific you state — player names, injuries, venue, weather, records — must come from web search THIS run or the candidate-table data provided. If you cannot verify a specific, describe the edge generally (matchup/line value) instead. NEVER rely on prior-season memory (e.g. a team's former ballpark or last year's roster) — a wrong specific that contradicts the pick or slate breaks user trust.
+- Write like a professional ESPN game preview, not a model dump. Short, specific sentences. Named players and verified facts. No "massive," "lock," or "highly probable" unless cover is 60%+.
+- DO NOT write a projection/line/edge sentence. The system will prepend the correct math (projection vs line as subtraction, then the yellow-badge calibrated %).
+- Argue IN FAVOR of the pick side. If the pick is Under, explain why the posted total is too high — not why the starters get hit. If it is Over, explain why the number is too low.
+- Start with a supporting fact (offense, park, rest, confirmed starter). 2-3 distinct facts. End on the price.
+- Max 5 sentences. No padding. Every sentence adds information.
+- Do NOT invent a run/point gap. Never write "9.8 vs 7, a 2.6-run edge" — 9.8 minus 7 is 2.8. The system opener handles math.
+- RECORDS: cite win-loss and home/road ONLY from the "Records (ESPN, authoritative)" line. If missing, describe qualitatively with no numbers.
+- NEVER lead with negative data about the pick side. NEVER use ORtg, DRtg, DVOA, ATS.
+- GROUNDING: player names, injuries, venue, weather, records must come from this run's table or web search. If you cannot verify a specific, speak to matchup/line value only.
 
 DISQUALIFICATION RULES:
 - Only list a candidate in disqualifications when you have a specific news/data-integrity fact.
@@ -90,7 +87,7 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
       "clvExpectation": "Your expectation for closing line movement."
     }
   ],
-  "edgeSummary": "1-2 sentence Daily Edge Summary. Use ONLY the exact projection, line, and calibrated-edge numbers from the candidate table (e.g. 7.2 vs 8.5, 1.2-run edge, 3.9% calibrated). Never round or invent a different number. Use 'WeBetAI' not 'the model'. No ORtg/DRtg/DVOA/ATS."
+  "edgeSummary": "2-3 sentences, ESPN desk. If the card mixes overs and unders, say so — never 'all lines too low' when an under is on the card. Projection minus line is subtraction (9.8 vs 7 = 2.8 runs). Calibrated % is the yellow badge. Use WeBetAI, not 'the model'."
 }`;
 
 // ── Sport keys for The Odds API ──
@@ -266,10 +263,10 @@ function needsNarrativeRegen(pick) {
 }
 
 async function generatePickNarrative(pick, apiKey) {
-  const prompt = `Write 2-3 sentences of sharp, journalistic betting analysis for this pick. Be specific — name the actual edge, the key matchup factor, and the primary risk. No markdown, no bullet points, plain text only. Under 75 words.
+  const prompt = `Write 3 sentences of ESPN-style betting preview for this pick. Argue FOR the pick side. Specific names and facts. No markdown. No "massive" or "lock". Under 80 words. Do not invent a run/point gap that is not in the facts.
 
 ${pick.sport} | ${pick.matchup}
-Pick: ${pick.pick} | Odds: ${pick.odds} | Win Prob: ${pick.winProbability} | Edge: ${pick.edgePct}
+Pick: ${pick.pick} | Odds: ${pick.odds} | Cover: ${pick.winProbability} | Calibrated edge (badge): ${pick.edgePct}
 ${pick.modelEdge || ''}
 Units: ${pick.units}`;
 
@@ -3845,9 +3842,16 @@ function fixNarrativeEdge(narrative, candidate) {
     ? ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)
     : null;
   const calClause = truePct != null ? ` — a ${truePct}% calibrated edge at the price` : '';
+  const unitPlural = c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points';
   let jsSentence;
   if (isTotal) {
-    jsSentence = `WeBetAI projects ${c.modelProjection} total ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points'} vs the ${c.consensusLine} line, a ${edgeVal}-${unit} model edge${calClause}.`;
+    const rawGap = (c.modelProjection != null && c.consensusLine != null)
+      ? Math.abs(Number(c.modelProjection) - Number(c.consensusLine))
+      : null;
+    const gapStr = (rawGap != null && Number.isFinite(rawGap)) ? rawGap.toFixed(1).replace(/\.0$/, '') : null;
+    jsSentence = gapStr != null
+      ? `WeBetAI's number is ${c.modelProjection} ${unitPlural} at a ${c.consensusLine} total — ${gapStr} ${unitPlural} apart${calClause}.`
+      : `WeBetAI projects ${c.modelProjection} total ${unitPlural} vs the ${c.consensusLine} line${calClause}.`;
   } else if (isML) {
     // Headline MUST match the yellow Edge badge (calibrated cover − implied).
     // Raw modelProjection (e.g. 49.2) vs no-vig market (38.5) is a 10pp gap that is
@@ -3858,14 +3862,20 @@ function fixNarrativeEdge(narrative, candidate) {
       ? `WeBetAI prices this at ${calWin}% to win vs the market's ${mktImp}% implied — a ${truePct}% calibrated edge at the price.`
       : `WeBetAI's model puts this team at ${c.modelProjection}% to win vs the market's ${c.consensusLine}%.`;
   } else {
-    // Spread: modelProjection is projected margin
     const projMargin = Math.abs(c.modelProjection);
-    jsSentence = `WeBetAI projects a ${projMargin}-${unit} margin vs the ${c.consensusLine} line, a ${edgeVal}-${unit} model edge${calClause}.`;
+    const rawGap = (c.modelProjection != null && c.consensusLine != null)
+      ? Math.abs(Number(c.modelProjection) - Number(c.consensusLine))
+      : null;
+    const gapStr = (rawGap != null && Number.isFinite(rawGap)) ? rawGap.toFixed(1).replace(/\.0$/, '') : null;
+    jsSentence = gapStr != null
+      ? `WeBetAI's number is a ${Number(projMargin).toFixed(1).replace(/\.0$/, '')}-${unit} margin vs the ${c.consensusLine} line — ${gapStr} ${unit}s apart${calClause}.`
+      : `WeBetAI projects a ${projMargin}-${unit} margin vs the ${c.consensusLine} line${calClause}.`;
   }
 
   // Strip any Claude sentence that restates projections/edges (starts with "WeBetAI projects" or mentions "[X]-point/goal edge")
   let cleaned = narrative
     .replace(/WeBetAI projects[^.]*\./i, '')
+    .replace(/WeBetAI's number is[^.]*\./i, '')
     .replace(/WeBetAI(?:'s model)? (?:puts this team|prices this) at[^.]*\./i, '')
     .replace(/[^.]*\d+\.?\d*-(point|goal|run) (?:model )?edge[^.]*\./gi, '')
     .replace(/[^.]*calibrated (?:to a |edge)[^.]*\./i, '')
@@ -5437,15 +5447,24 @@ async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted,
       return `${head}${facts.length ? '\n   Facts: ' + facts.join(' | ') : ''}`;
     }).join('\n');
 
-    const narrSys = `You are WeBetAI's sharp sports-betting analyst. Use ONLY the verified facts provided below — do NOT invent player names, stats, injuries, records, or venues beyond what is given. For each pick marked [WRITE NARRATIVE] return:
-- coreReasoning: 3-4 specific sentences citing the provided starters/records/edge, explaining WHY WeBetAI favors this exact side. Plain English, no stat abbreviations (ORtg/DVOA/ATS). Never restate the odds or EV numbers (shown separately). Say "WeBetAI", never "the model".
-- whatLoses: one sentence — the concrete scenario that beats this pick.
-- dataVerified: one sentence naming the specific facts used (starters, records).
+    const narrSys = `You are a professional ESPN-style betting writer for WeBetAI. Use ONLY the verified facts below — do not invent names, stats, injuries, records, or venues.
+
+VOICE: short sentences, specific, confident. Named starters and season rates. No "massive," "lock," or "highly probable" unless cover is 60%+. No ORtg/DVOA/ATS. Say "WeBetAI", never "the model".
+
+MATH (do not invent a different gap):
+- Totals: projection minus the posted line is subtraction (9.8 vs 7 = 2.8 runs). Do not call a discounted figure that gap.
+- The yellow Edge badge is the calibrated % already on the pick. Never put EV or the run gap in that slot.
+- If the card mixes overs and unders, the summary must say so. Never "all lines too low" when an under is on the card.
+
+For each pick marked [WRITE NARRATIVE] return:
+- coreReasoning: 3-5 ESPN-preview sentences arguing FOR this exact side. Start with a supporting fact (not the math opener — the system prepends that). For an Under, the posted total is too high. For an Over, the number is too low. Do not lead with why the other side cashes.
+- whatLoses: one concrete scenario that beats this pick.
+- dataVerified: the specific facts used (starters, records, R/G).
 - clvExpectation: one sentence on expected line movement.
 Do NOT rewrite [already narrated] picks; only use their thesis for the summaries.
-ALSO return two card-level summaries covering ALL picks (NEVER say "lone edge" when there is more than one pick):
-- edgeSummary: 2-3 sentences on the theme tying the card together. Use ONLY the exact projection/line/edge numbers already on each pick (never 1.3 if the pick says 1.2).
-- insights: 2-3 analytical sentences — why these markets/sides, how the slate shaped the card, and the sizing logic (full-unit conviction vs 0.25u leans).
+ALSO:
+- edgeSummary: 2-3 desk sentences on the whole card. Name each side (over vs under) correctly.
+- insights: 2-3 sentences on why these markets, and the unit sizes as published (do not invent units).
 Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`;
 
     const nr = await anthropicFetch({
@@ -5597,10 +5616,14 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
       reasoning = `WeBetAI's model gives ${c.side.replace(' ML', '')} a ${c.modelProjection}% win probability vs the market's implied ${c.consensusLine}%, creating a ${edgePctVal}% edge. The ${c.homeTeam} and ${c.awayTeam} matchup presents value at ${c.odds > 0 ? '+' : ''}${c.odds} odds based on Elo ratings, recent form, and injury analysis.`;
     } else if (isTotal) {
       const unit = c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'points';
-      reasoning = `WeBetAI projects ${c.modelProjection} total ${unit}, ${c.edge} ${unit} ${c.side.includes('Over') ? 'above' : 'below'} the line of ${c.consensusLine}. This ${edgePctVal}% edge is driven by the matchup's pace, recent scoring trends, and confirmed lineup data.`;
+      const rawGap = Math.abs(Number(c.modelProjection) - Number(c.consensusLine));
+      const gapStr = rawGap.toFixed(1).replace(/\.0$/, '');
+      const dir = (c.side || '').toLowerCase().includes('over') ? 'short of' : 'above';
+      reasoning = `The posted ${c.consensusLine} sits ${gapStr} ${unit} ${dir} WeBetAI's ${c.modelProjection} projection. Confirmed starters and season scoring rates support this side at ${c.odds > 0 ? '+' : ''}${c.odds}. Calibrated edge ${edgePctVal}% at the price.`;
     } else {
       const unit = c.sport === 'NHL' ? 'goal' : c.sport === 'MLB' ? 'run' : 'point';
-      reasoning = `WeBetAI projects a ${Math.abs(c.modelProjection)}-${unit} margin vs the line of ${c.consensusLine}, creating a ${c.edge}-${unit} edge. This ${edgePctVal}% edge reflects the gap between the model's power rating projection and the consensus sportsbook line.`;
+      const rawGap = Math.abs(Number(c.modelProjection) - Number(c.consensusLine));
+      reasoning = `WeBetAI's margin is ${Math.abs(c.modelProjection)} ${unit}s vs a ${c.consensusLine} line (${rawGap.toFixed(1)} ${unit}s apart). Calibrated edge ${edgePctVal}% at ${c.odds > 0 ? '+' : ''}${c.odds}.`;
     }
 
     const modelEdgeStr = isF5

@@ -5655,14 +5655,18 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   const summaries = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: true });
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
+  const rejections = (allCandidates || []).filter(c => !picks.find(p => p.pick === c.side)).slice(0, 8)
+    .map(c => ({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." }));
   const picksData = {
     date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
     picks,
-    rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
-    edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
+    rejections,
+    edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports ranked by calibrated EV.",
     insights: summaries.insights || "",
     summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.3-alpha-ev" },
-    generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
+    generatedAt: now.toISOString(),
+    parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
+    sgps: [],
     fallback: true,
   };
 

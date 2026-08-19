@@ -57,15 +57,13 @@ YOUR JOB:
 7. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
 
 NARRATIVE RULES (for coreReasoning field):
-- Write like a professional ESPN game preview, not a model dump. Short, specific sentences. Named players and verified facts. No "massive," "lock," or "highly probable" unless cover is 60%+.
-- DO NOT write a projection/line/edge sentence. The system will prepend the correct math (projection vs line as subtraction, then the yellow-badge calibrated %).
-- Argue IN FAVOR of the pick side. If the pick is Under, explain why the posted total is too high — not why the starters get hit. If it is Over, explain why the number is too low.
-- Start with a supporting fact (offense, park, rest, confirmed starter). 2-3 distinct facts. End on the price.
-- Max 5 sentences. No padding. Every sentence adds information.
-- Do NOT invent a run/point gap. Never write "9.8 vs 7, a 2.6-run edge" — 9.8 minus 7 is 2.8. The system opener handles math.
-- RECORDS: cite win-loss and home/road ONLY from the "Records (ESPN, authoritative)" line. If missing, describe qualitatively with no numbers.
-- NEVER lead with negative data about the pick side. NEVER use ORtg, DRtg, DVOA, ATS.
-- GROUNDING: player names, injuries, venue, weather, records must come from this run's table or web search. If you cannot verify a specific, speak to matchup/line value only.
+- Voice: world-class sports desk talking to a smart fan, not a quant memo. Conversational, short, still specific. Translate every number into what it means ("a 9 is a track-meet total; these two score 4.4 and 4.5 a night").
+- The system prepends the math (projection vs line as subtraction, then the yellow-badge %). Your job is commentary around it — why the number is interesting, in plain English.
+- Argue FOR the pick. Under = the posted total is asking too much. Over = the number is treating a good offense like a bad one.
+- 4-5 sentences after the opener. Named starters, season rates, the price. No "massive," "lock," or "highly probable" unless cover is 60%+.
+- Do NOT invent a run/point gap. 9.8 minus 7 is 2.8, never 2.6.
+- RECORDS: win-loss and home/road ONLY from the Records line. NEVER ORtg/DRtg/DVOA/ATS. NEVER lead with why the other side cashes.
+- GROUNDING: names, injuries, venue, weather, records from this run's table or web search only.
 
 DISQUALIFICATION RULES:
 - Only list a candidate in disqualifications when you have a specific news/data-integrity fact.
@@ -87,7 +85,7 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
       "clvExpectation": "Your expectation for closing line movement."
     }
   ],
-  "edgeSummary": "2-3 sentences, ESPN desk. If the card mixes overs and unders, say so — never 'all lines too low' when an under is on the card. Projection minus line is subtraction (9.8 vs 7 = 2.8 runs). Calibrated % is the yellow badge. Use WeBetAI, not 'the model'."
+  "edgeSummary": "3 conversational desk sentences a casual fan can follow. Mix of overs and unders must be said plainly. Numbers in English (what a 7 vs a 9 means). Yellow badge = calibrated %. WeBetAI, not 'the model'."
 }`;
 
 // ── Sport keys for The Odds API ──
@@ -5447,24 +5445,21 @@ async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted,
       return `${head}${facts.length ? '\n   Facts: ' + facts.join(' | ') : ''}`;
     }).join('\n');
 
-    const narrSys = `You are a professional ESPN-style betting writer for WeBetAI. Use ONLY the verified facts below — do not invent names, stats, injuries, records, or venues.
+    const narrSys = `You are a world-class sports writer for WeBetAI. Talk to a smart fan, not a spreadsheet. Use ONLY the verified facts below.
 
-VOICE: short sentences, specific, confident. Named starters and season rates. No "massive," "lock," or "highly probable" unless cover is 60%+. No ORtg/DVOA/ATS. Say "WeBetAI", never "the model".
+VOICE: conversational, short, specific. Translate numbers into English ("a 9-run total is a track meet; these two score 4.4 and 4.5 a night"). Warm commentary around the facts. No "massive," "lock," or "highly probable" unless cover is 60%+. No ORtg/DVOA/ATS. Say "WeBetAI", never "the model".
 
-MATH (do not invent a different gap):
-- Totals: projection minus the posted line is subtraction (9.8 vs 7 = 2.8 runs). Do not call a discounted figure that gap.
-- The yellow Edge badge is the calibrated % already on the pick. Never put EV or the run gap in that slot.
-- If the card mixes overs and unders, the summary must say so. Never "all lines too low" when an under is on the card.
+MATH: projection minus the posted line is subtraction (9.8 vs 7 = 2.8 runs). The yellow badge is the calibrated % on the pick. If overs and unders are both on the card, say so — never one theme that only fits the overs.
 
 For each pick marked [WRITE NARRATIVE] return:
-- coreReasoning: 3-5 ESPN-preview sentences arguing FOR this exact side. Start with a supporting fact (not the math opener — the system prepends that). For an Under, the posted total is too high. For an Over, the number is too low. Do not lead with why the other side cashes.
-- whatLoses: one concrete scenario that beats this pick.
-- dataVerified: the specific facts used (starters, records, R/G).
-- clvExpectation: one sentence on expected line movement.
+- coreReasoning: 4-5 sentences arguing FOR this side. Do not repeat the math opener (the system prepends it). Explain what the number means, then the starters/offenses, then the price.
+- whatLoses: one concrete, plain-English way this bet loses.
+- dataVerified: facts used (starters, records, R/G).
+- clvExpectation: one sentence a fan would understand about the line moving.
 Do NOT rewrite [already narrated] picks; only use their thesis for the summaries.
 ALSO:
-- edgeSummary: 2-3 desk sentences on the whole card. Name each side (over vs under) correctly.
-- insights: 2-3 sentences on why these markets, and the unit sizes as published (do not invent units).
+- edgeSummary: 3 conversational sentences on the whole card. Name over vs under correctly. Put the interesting number in English.
+- insights: 3 sentences on why these games, and the unit sizes as published (do not invent units).
 Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`;
 
     const nr = await anthropicFetch({

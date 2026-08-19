@@ -754,11 +754,12 @@
   let picksDataGlobal = null; // store sorted picks for verify access
   let refreshTimer = null;
 
-  async function fetchScoresForSport(sport) {
+  async function fetchScoresForSport(sport, dateISO) {
     const endpoint = ESPN_ENDPOINTS[sport];
     if (!endpoint) return [];
     try {
-      const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard`;
+      const dateParam = dateISO ? `?dates=${String(dateISO).replace(/-/g, '')}` : '';
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard${dateParam}`;
       const resp = await fetch(url);
       if (!resp.ok) return [];
       const data = await resp.json();
@@ -817,7 +818,8 @@
 
   async function fetchAllScores(sports) {
     const unique = [...new Set(sports)];
-    const results = await Promise.all(unique.map(async s => [s, await fetchScoresForSport(s)]));
+    const dateISO = (picksData && picksData.date) || null;
+    const results = await Promise.all(unique.map(async s => [s, await fetchScoresForSport(s, dateISO)]));
     for (const [sport, games] of results) {
       cachedScores[sport] = games;
     }
@@ -868,9 +870,17 @@
     return best;
   }
 
+  function gameMatchesPickWindow(game, pick) {
+    const gStart = game && game.startISO ? Date.parse(game.startISO) : NaN;
+    const pStart = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+    if (!isNaN(gStart) && !isNaN(pStart) && Math.abs(gStart - pStart) > 10 * 3600 * 1000) return false;
+    if (!isNaN(pStart) && pStart > Date.now() + 15 * 60 * 1000 && game && game.state === 'post') return false;
+    return true;
+  }
+
   function findGame(pick) {
     const sport = pick.sport || '';
-    const games = cachedScores[sport] || [];
+    const games = (cachedScores[sport] || []).filter(g => gameMatchesPickWindow(g, pick));
     const matchup = (pick.matchup || '').toLowerCase();
     const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
 
@@ -943,6 +953,10 @@
      score and finalize when the game is over. ── */
   function determineResult(pick, game) {
     if (!game) return { status: 'scheduled', label: 'Upcoming' };
+    const pStart = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+    if (!isNaN(pStart) && pStart > Date.now() + 15 * 60 * 1000) {
+      return { status: 'scheduled', label: game.detail || 'Upcoming' };
+    }
     if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
 
     const isF5 = isF5Pick(pick);
@@ -1849,7 +1863,7 @@
 
   async function loadPicks() {
     try {
-      const resp = await fetch('/api/get-picks-alpha');
+      const resp = await fetch('/api/get-picks-alpha', { cache: 'no-store' });
       if (!resp.ok) throw new Error('API returned ' + resp.status);
       const data = await resp.json();
       picksData = data;

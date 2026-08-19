@@ -1,8 +1,8 @@
 // generate-picks-alpha-background.js
 // v10.5.3-alpha-ev — Deterministic Edge Architecture (ALPHA, primary pipeline)
-// JS computes ALL projections, edges, and Kelly sizing. JS SELECTS. Claude only news-DQs + narrates.
+// JS computes ALL projections, edges, and Kelly sizing. JS SELECTS. Grok writes copy only.
 // v10.5.3 (2026-08-19): one publish gate = calibrated EV ≥ 3% + predCLV ≥ −2¢. Drop ML 8% raw
-//   bar and August market unit caps (Kelly sizes). Claude cannot pick or "low-conviction" veto.
+//   bar and August market unit caps (Kelly sizes). No LLM may pick or "low-conviction" veto.
 //   Fill-to-3 only from the 3% pool; short card / no-play if fewer survive. No 1.5% lean fake card.
 // v10.5.2 (2026-08-18): narrative opener = yellow Edge badge (calibrated); parlay = the
 //   3 published straights (no rejected Overs); DQ matchups vetoed from any fallback pool.
@@ -22,71 +22,17 @@
 //   per-market total σ (NBA 18.5 / NHL 2.3 / MLB 4.3), Kelly ×50 sizing (grades live again),
 //   EV floor 3% calibrated (lean 1.5%), soccer disabled (38.5% real-run),
 //   stale sport multipliers removed, weather now recomputes EV/units, 2+ major books enforced.
-// Key changes from v10.0: Quarter-Kelly (was Half), 8% EV floor (was 3%), Claude SELECTOR (was VERIFIER).
+// Key changes from v10.0: Quarter-Kelly (was Half), 8% EV floor (was 3%), JS SELECTOR (was LLM).
 // Background function (15min timeout). Stores to "edge-picks-alpha" Netlify Blob store.
-// Alpha improvements over beta:
-//   1. Model: claude-sonnet-4-6 (latest Sonnet)
-//   2. Prompt caching on system prompt (~80% cost/latency reduction on Claude call)
-//   3. Odds regions: us,us2,eu (broader line shopping, better consensus)
-//   4. Blob store: edge-picks-alpha (isolated from beta/production)
+// Alpha: JS prices and selects. Grok writes Daily Edge, Insights, and pick copy.
+// Odds regions: us,us2,eu. Blob store: edge-picks-alpha.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const MODEL_VERSION = "v10.5.3-alpha-ev";
+const GROK_WRITER = "grok-4-6";
 const { bettoredgeFetch } = require("./bettoredge-auth");
 
-// ── Claude as NEWS VETO + NARRATOR. JS selects. ──
-const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this. You do NOT select the card. JS publishes the top 3 survivors by calibrated EV.
-
-YOUR INPUTS:
-A ranked table of the top candidate picks with pre-computed edges, cover probabilities, Kelly units, and supporting team context.
-
-YOUR JOB:
-1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), and weather for the top 8 candidates.
-2. DISQUALIFY a candidate ONLY for a specific material fact after the data cutoff:
-   - Star player ruled out / downgraded after data cutoff
-   - Goaltender change (NHL) not reflected in pre-computed data
-   - Starting pitcher change (MLB)
-   - Severe weather for outdoor sports
-   - Material lineup or coaching change
-   - Stale or incorrect market line vs current books
-   Do NOT disqualify for "low conviction", "struggling team", thin edge, recent form, or pitch-count speculation. The math already passed the 3% EV gate.
-3. Write 3-5 sentence coreReasoning for EVERY top-8 candidate that you did NOT disqualify (JS may publish any of them).
-4. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
-5. You MUST NOT pick outside the provided candidate table.
-6. You MUST NOT override model direction, invent probabilities, or recompute edges.
-7. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
-
-NARRATIVE RULES (for coreReasoning field):
-- Voice: world-class ESPN columnist. Human grammar. No em dashes. Commas, periods, parentheses. Conversational but tight.
-- Only write about THIS pick's teams and number. Never name a team or game that is not this pick.
-- The system prepends the math. You add commentary: what the number means in English.
-- Argue FOR the pick. Under: the posted total asks too much. Over: the number treats a good offense like a weak one.
-- 4-5 sentences. Named starters, runs per game, the price. No "massive," "lock," or "highly probable" unless cover is 60%+.
-- Do NOT invent a run/point gap. 9.8 minus 7 is 2.8, never 2.6. Label any stat you cite (ERA, runs per game, calibrated edge).
-- RECORDS from the Records line only. Never ORtg/DRtg/DVOA/ATS. Never lead with why the other side cashes.
-
-DISQUALIFICATION RULES:
-- Only list a candidate in disqualifications when you have a specific news/data-integrity fact.
-- Soft opinions (form, conviction, "I don't like the number") are NOT disqualifications.
-
-OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
-{
-  "disqualifications": [
-    { "candidateRank": 4, "reason": "Starting pitcher scratched. X now starts (cite source)." }
-  ],
-  "narratives": [
-    {
-      "candidateRank": 1,
-      "adjustedUnits": "1.0u",
-      "unitAdjustmentReason": "",
-      "coreReasoning": "Start with a supporting fact, not projections...",
-      "whatLoses": "One sentence. The specific scenario that beats this pick.",
-      "dataVerified": "Brief note on what data you verified via web search.",
-      "clvExpectation": "Your expectation for closing line movement."
-    }
-  ],
-  "edgeSummary": "Daily Edge is a preview of the published picks only, one beat of context each, not a KPI dump. Name every pick on the card. Never name a team that is not on the card. No em dashes. WeBetAI, not 'the model'."
-}`;
+// Claude selector prompt removed 2026-08-19. JS selects; Grok narrates via narrateAndSummarize.
 
 // ── Sport keys for The Odds API ──
 const ODDS_SPORTS = [
@@ -244,7 +190,7 @@ function getSituationalFlag(recordStr, sport) {
 
 // ── Narrative quality check + regeneration ─────────────────────────────────
 // Detects picks with raw technical reasoning (auto-substituted, stats-dump, etc.)
-// and calls Claude Haiku to write proper journalistic context before storing.
+// and calls Grok to write proper journalistic context before storing.
 
 function needsNarrativeRegen(pick) {
   const r = (pick.coreReasoning || '').trim();
@@ -256,7 +202,8 @@ function needsNarrativeRegen(pick) {
     r.includes('auto-generated') ||
     r.includes('Auto-generated') ||
     r.includes('Thin-slate Lean') ||
-    r.includes('Claude narrative unavailable')
+    r.includes('Claude narrative unavailable') ||
+    r.includes('Grok narrative unavailable')
   );
 }
 
@@ -269,17 +216,10 @@ ${pick.modelEdge || ''}
 Units: ${pick.units}`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    return data.content?.[0]?.text?.trim() || null;
+    const r = await grokFetch({ system: "You write ESPN-style betting previews for WeBetAI. Plain text only.", user: prompt, max_tokens: 250, temperature: 0.3, timeoutMs: 15000, retries: 1, model: "grok-4-1-fast" });
+    return r && r.text ? r.text.trim() : null;
   } catch (e) {
-    console.error(`[v10-narrative] Haiku call failed: ${e.message}`);
+    console.error(`[v10-narrative] Grok stub write failed: ${e.message}`);
     return null;
   }
 }
@@ -622,36 +562,46 @@ function eloExpected(ratingA, ratingB) {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
-// ── Anthropic call with timeout + 429/5xx exponential backoff. Returns the Response, or null when
-// exhausted/timed-out. Callers MUST treat null as "LLM unavailable" and fall back to deterministic
-// output — a rate-limit or a hung request must NEVER block or kill a pick run. (Consolidation 2026-06-25.)
-async function anthropicFetch(body, { timeoutMs = 30000, retries = 3 } = {}) {
+// Grok chat-completions with timeout + backoff. Returns { ok, text } or null. Never throws.
+async function grokFetch({ system, user, max_tokens = 3000, temperature = 0.3, timeoutMs = 45000, retries = 2, model = GROK_WRITER } = {}) {
+  const key = process.env.XAI_API_KEY;
+  if (!key) return null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         signal: ctrl.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": process.env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "prompt-caching-2024-07-31",
-        },
-        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          max_tokens,
+          temperature,
+          messages: [
+            { role: "system", content: system || "" },
+            { role: "user", content: user || "" },
+          ],
+        }),
       });
       clearTimeout(timer);
-      if ((resp.status === 429 || resp.status === 529 || resp.status >= 500) && attempt < retries) {
+      if ((resp.status === 429 || resp.status >= 500) && attempt < retries) {
         const waitMs = Math.min(8000, 800 * Math.pow(2, attempt));
-        console.log(`[llm] HTTP ${resp.status} — backoff ${waitMs}ms (attempt ${attempt + 1}/${retries})`);
+        console.log(`[grok] HTTP ${resp.status} backoff ${waitMs}ms (attempt ${attempt + 1}/${retries})`);
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }
-      return resp;
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        console.log(`[grok] HTTP ${resp.status}: ${errBody.slice(0, 180)}`);
+        return null;
+      }
+      const data = await resp.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      return { ok: true, text };
     } catch (e) {
       clearTimeout(timer);
-      console.log(`[llm] fetch error/timeout (attempt ${attempt + 1}/${retries}): ${e.message}`);
+      console.log(`[grok] fetch error/timeout (attempt ${attempt + 1}/${retries}): ${e.message}`);
       if (attempt >= retries) return null;
       await new Promise(r => setTimeout(r, Math.min(8000, 800 * Math.pow(2, attempt))));
     }
@@ -4520,10 +4470,8 @@ function buildFallbackParlay(picks) {
 exports.handler = async (event) => {
   console.log("[v10] Background function started — Deterministic Edge Architecture");
 
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_API_KEY) {
-    console.error("[v10] ANTHROPIC_API_KEY not set");
-    return { statusCode: 500, body: "Missing API key" };
+  if (!process.env.XAI_API_KEY) {
+    console.log("[v10] XAI_API_KEY not set — JS card still publishes, Grok copy skipped");
   }
 
   const now = new Date();
@@ -5057,59 +5005,10 @@ exports.handler = async (event) => {
   allCandidates.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.predCLV ?? -1) - (a.predCLV ?? -1)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
   allCandidates.forEach((c, i) => { c.rank = i + 1; });
 
-  // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──
+  // ── PHASE 2: JS SELECTS. Grok writes copy. No Claude / no web-search selector. ──
   const candidateTable = allCandidates.slice(0, 15);
-  const userMessage = formatCandidateTable(candidateTable, dateISO, dateFormatted);
-
-  console.log(`[v10] Sending ${candidateTable.length} candidates to Claude (${userMessage.length} chars)`);
-
   try {
-    // Timeout+backoff wrapper: a rate-limited or hung Claude call returns null/!ok and routes to the
-    // deterministic fallback below instead of hanging the whole run. (web_search makes this slow → 90s.)
-    const response = await anthropicFetch({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8000,
-      temperature: 0.2,
-      system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
-      messages: [{ role: "user", content: userMessage }],
-    }, { timeoutMs: 90000, retries: 3 });
-
-    if (!response || !response.ok) {
-      console.error(`[v10] Claude selection unavailable (${response ? 'HTTP ' + response.status : 'no response after retries'}) — deterministic top-candidates fallback`);
-      // Fallback: use top candidates without narratives — never block on the LLM
-      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
-    }
-
-    const result = await response.json();
-    console.log("[v10] Claude API response received, stop_reason:", result.stop_reason);
-
-    let rawText = "";
-    for (const block of result.content) {
-      if (block.type === "text") rawText += block.text;
-    }
-
-    // Parse Claude's selection JSON
-    let claudeOutput;
-    try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-        try { claudeOutput = JSON.parse(jsonStr); }
-        catch (e) {
-          let fixed = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/[\x00-\x1F\x7F]/g, ' ');
-          claudeOutput = JSON.parse(fixed);
-        }
-      } else {
-        throw new Error("No JSON in Claude response");
-      }
-    } catch (parseErr) {
-      console.error(`[v10] JSON parse failed: ${parseErr.message}`);
-      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
-    }
-
-    // ── PHASE 3: JS SELECTS. Claude only news-DQs + narratives. ──
-    const jsPick = jsSelectPicks(candidateTable, claudeOutput);
+    const jsPick = jsSelectPicks(candidateTable, { disqualifications: [], rejections: [] });
     const selections = jsPick.selections;
     const picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
     const selectedRanks = new Set(selections.map(s => s.candidateRank));
@@ -5140,7 +5039,7 @@ exports.handler = async (event) => {
 
     // ── NARRATIVE FACT-GATE (v10.4.6) ──
     // The pick NUMBERS are unhallucinatable (all from the deterministic candidate). This closes the
-    // remaining gap: the conviction PROSE is Claude's live web-search text. Verify its checkable
+    // remaining gap: the conviction PROSE is Grok's fact-sheet text. Verify its checkable
     // claims (starter ERAs) against the ESPN/StatsAPI values the pipeline already holds; a claim
     // matching neither starter is flagged so its narrative is regenerated from the verified fact
     // sheet (no web search). Deterministic detection against MEASURED data — never an LLM judging
@@ -5160,10 +5059,15 @@ exports.handler = async (event) => {
     // Leans AND any fact-flagged conviction picks are (re)narrated here from the model's own
     // ESPN/StatsAPI facts (no web_search). Overwrites the full-card edgeSummary + adds insights.
     let insightsText = "";
+    let edgeSummaryText = "";
     {
-      const s = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: false });
-      if (s.edgeSummary) claudeOutput.edgeSummary = s.edgeSummary;
+      const s = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: true });
+      if (s.edgeSummary) edgeSummaryText = s.edgeSummary;
       if (s.insights) insightsText = s.insights;
+    }
+    for (const p of picks) {
+      const c = candidateTable.find(x => x.side === p.pick) || allCandidates.find(x => x.side === p.pick);
+      if (c && p.coreReasoning) p.coreReasoning = fixNarrativeEdge(p.coreReasoning, c);
     }
 
     // Belt-and-suspenders: if regeneration didn't clear a flagged narrative (e.g. the narration
@@ -5196,7 +5100,7 @@ exports.handler = async (event) => {
     }
 
     // ── Narrative quality gate: ensure every pick has proper journalistic context ──
-    await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
+    await validateAndEnhanceNarratives(picks);
 
     // Final card order: calibrated EV descending (v10.4 — z is not cross-market comparable)
     picks.sort((a, b) => ((b.evRaw ?? 0) - (a.evRaw ?? 0)) || ((b.zScore || 0) - (a.zScore || 0)));
@@ -5210,7 +5114,7 @@ exports.handler = async (event) => {
       model: "v10.5.3-alpha-ev",
       picks,
       rejections,
-      edgeSummary: claudeOutput.edgeSummary || "",
+      edgeSummary: edgeSummaryText || "",
       insights: insightsText || "",
       summary: {
         totalPicks: picks.length,
@@ -5246,12 +5150,6 @@ exports.handler = async (event) => {
       })),
     };
 
-    // Store thinking text if present
-    const jsonStart = rawText.indexOf('{');
-    if (jsonStart > 50) {
-      picksData.thinkingText = rawText.substring(0, jsonStart).trim();
-    }
-
     await storePicks(dateISO, picksData);
     console.log(`[v10] SUCCESS: ${picks.length} picks for ${dateISO}`);
     return { statusCode: 200, body: "OK" };
@@ -5262,7 +5160,7 @@ exports.handler = async (event) => {
   }
 };
 
-// ── Fallback: if Claude fails, use top 3 candidates with auto-generated narrative ──
+// ── Fallback: if Grok narration fails, use top 3 candidates with auto-generated narrative ──
 // ── THIN-SLATE LEAN PICKS (Option B) ──
 // Builds low-stake "Lean" plays from candidates that cleared the +3% EV floor but
 // not the +8% conviction bar. Lean picks publish at 0.25u, graded "Lean", flagged
@@ -5354,9 +5252,9 @@ function dedupeCandidatesByGame(cands) {
 
 // ── Shared: fact-grounded narration + full-card summaries (DISPLAY-ONLY) ──
 // Narrates picks from the model's OWN already-fetched ESPN/StatsAPI facts (starter ERA/FIP,
-// records) via a fast no-web_search Claude call, and returns a full-card {edgeSummary, insights}.
-// narrateAll=false → only thinSlate leans (main path; conviction picks are already web-searched);
-// narrateAll=true → every pick (fallback + thin-slate paths, where nothing was web-searched).
+// records) via Grok, and returns a full-card {edgeSummary, insights}.
+// narrateAll=false → only thinSlate leans / fact-flagged picks;
+// narrateAll=true → every pick (main path, fallback, and thin-slate).
 // Never mutates selection or sizing — only writes text fields. Returns {'',''} on any failure.
 // ── Narrative fact verification (v10.4.6) ──
 // Returns {ok, issues}. Deterministically checks the checkable claims in a conviction narrative
@@ -5415,7 +5313,7 @@ function narrativeArguesAgainstPick(pick) {
 async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll = false } = {}) {
   const out = { edgeSummary: "", insights: "" };
   try {
-    if (!Array.isArray(picks) || picks.length === 0 || !process.env.ANTHROPIC_API_KEY) return out;
+    if (!Array.isArray(picks) || picks.length === 0 || !process.env.XAI_API_KEY) return out;
     pitcherData = pitcherData || {}; teamStats = teamStats || {};
     const shouldNarrate = (p) => narrateAll || p.thinSlate || p._factFlag;
     const toNarrate = picks.filter(shouldNarrate).length;
@@ -5462,16 +5360,18 @@ ALSO:
 - insights: expand that same story with labeled KPIs on those picks only (expected value, units in dollars, calibrated edge, cover). Never name a team that is not on the card.
 Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`;
 
-    const nr = await anthropicFetch({
-      model: "claude-sonnet-4-6", max_tokens: 3000, temperature: 0.3,
-      system: [{ type: "text", text: narrSys, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: `Today's final card (${dateFormatted}):\n${factSheet}\n\nReturn the JSON.` }],
-    }, { timeoutMs: 45000, retries: 2 });
+    const nr = await grokFetch({
+      system: narrSys,
+      user: `Today's final card (${dateFormatted}):\n${factSheet}\n\nReturn the JSON.`,
+      max_tokens: 3000,
+      temperature: 0.3,
+      timeoutMs: 45000,
+      retries: 2,
+      model: GROK_WRITER,
+    });
 
-    if (nr && nr.ok) {
-      const nd = await nr.json();
-      let ntext = "";
-      for (const b of (nd.content || [])) { if (b.type === "text") ntext += b.text; }
+    if (nr && nr.ok && nr.text) {
+      const ntext = nr.text;
       const jm = ntext.match(/\{[\s\S]*\}/);
       if (jm) {
         let parsed;
@@ -5563,7 +5463,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
     };
   });
 
-  await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
+  await validateAndEnhanceNarratives(picks);
   picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
 
   // Fact-grounded narratives + full-card summaries (all picks are leans here → narrateAll)
@@ -5593,7 +5493,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 }
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
-  console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
+  console.log("[v10] Using fallback: top 3 candidates without Grok narratives");
   const top3 = dedupeCandidatesByGame(candidateTable.filter(c => hasPositiveEdge(c) && passesPublishGates(c))).slice(0, 3);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
@@ -5654,7 +5554,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
         : isTotal
         ? `The game ${c.side.includes('Over') ? 'stays under' : 'goes over'} the total due to unexpected pace or scoring changes.`
         : `The opponent covers the spread through late-game momentum or a blowout.`,
-      dataVerified: "Auto-generated from deterministic model — Claude narrative unavailable.",
+      dataVerified: "Auto-generated from deterministic model — Grok narrative unavailable.",
       clvExpectation: "Line may move toward pick as sharp money arrives.",
       modelEdge: modelEdgeStr,
       commenceTime: c.commenceTime || "",
@@ -5663,7 +5563,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   });
 
   // Narrative quality gate on fallback picks too
-  await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
+  await validateAndEnhanceNarratives(picks);
 
   // v10.4: per-market caps + EV ordering on the deterministic path too
   applyMarketUnitCaps(picks);

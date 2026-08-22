@@ -370,7 +370,7 @@ async function gradeDay(dateISO, picksData) {
   return {
     date: dateISO,
     dateFormatted: picksData.dateFormatted || dateISO,
-    source: picksData._source || 'alpha',
+    source: picksData._source || 'omega',
     noPlays: false,
     picks: gradedPicks,
     wins: dayWins, losses: dayLosses, pushes: dayPushes, pending: dayPending,
@@ -395,7 +395,6 @@ exports.handler = async (event) => {
 
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     const alphaStoreUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega`;
-    const betaStoreUrl  = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-beta`;
 
     // Check cache (5-min TTL, v2 key to bust stale cache)
     try {
@@ -408,26 +407,18 @@ exports.handler = async (event) => {
       }
     } catch (e) {}
 
-    // Get dates from both stores in parallel
-    const [alphaDates, betaDates] = await Promise.all([
-      getDatesFromStore(alphaStoreUrl, authHeaders),
-      getDatesFromStore(betaStoreUrl, authHeaders),
-    ]);
+    // OMEGA: KPIs start 2026-08-22 — its record is the omega store ONLY. The alpha version
+    // of this function stitched edge-picks-beta history in before the store's first date;
+    // omega carries no historical back-merge (Ben-directed 2026-08-22).
+    const alphaDates = await getDatesFromStore(alphaStoreUrl, authHeaders);
 
     const alphaDateSet = new Set(alphaDates);
-    const minAlphaDate = alphaDates.length > 0 ? [...alphaDates].sort()[0] : null;
-
-    // Beta dates strictly before earliest alpha date
-    const betaDatesToInclude = minAlphaDate
-      ? betaDates.filter(d => d < minAlphaDate)
-      : betaDates;
-    const betaDateSet = new Set(betaDatesToInclude);
+    const betaDateSet = new Set();
 
     // Build lookup: date → {store, url}
-    const picksLookup = new Map([
-      ...alphaDates.map(d => [d, { store: 'alpha', url: alphaStoreUrl }]),
-      ...betaDatesToInclude.map(d => [d, { store: 'beta', url: betaStoreUrl }]),
-    ]);
+    const picksLookup = new Map(
+      alphaDates.map(d => [d, { store: 'omega', url: alphaStoreUrl }])
+    );
 
     if (picksLookup.size === 0) {
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ days: [], cumulative: { wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0%', roi: '0%', totalWagered: 0, totalProfit: 0 }, straight: { wins: 0, losses: 0, accuracy: '0%' }, parlay: { wins: 0, losses: 0, accuracy: '0%' } }) };

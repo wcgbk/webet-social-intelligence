@@ -468,12 +468,7 @@
           '<div class="pick-analysis">' + esc(analysis) + '</div>' +
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
             '<div class="pick-units">' + esc(String(p.units).replace(/u$/i,'')) + 'u - Bet $' + risk.toLocaleString() + ' — To Win +$' + win.toLocaleString() + '</div>' +
-            '<div style="display:flex; align-items:center; gap:.375rem;">' +
-              (p.hardRock && p.hardRock.available && p.hardRock.odds
-                ? '<span class="sport-tag" title="Confirmed placeable at Hard Rock Bet">HR ' + esc(p.hardRock.odds) + '</span>'
-                : '') +
-              edgeBadgeHTML(p) +
-            '</div>' +
+            '<div style="display:flex; align-items:center; gap:.375rem;">' + edgeBadgeHTML(p) + '</div>' +
           '</div></div>';
       }
 

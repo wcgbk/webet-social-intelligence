@@ -168,6 +168,26 @@
     }
     .empty-card h3 { font-size: 1.0625rem; font-weight: 700; color: var(--olive); margin-bottom: .5rem; }
     .empty-card p { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; }
+    .parlay-section {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .parlay-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    .parlay-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+    .parlay-name { font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .parlay-odds { font-size: 1rem; font-weight: 700; color: var(--teal); }
+    .parlay-leg {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .375rem .5rem; background: var(--off-white);
+      border: 1px solid var(--border-lt); border-radius: .375rem;
+      margin-bottom: .25rem; font-size: .8125rem;
+    }
+    .leg-pick { font-weight: 500; color: var(--olive); }
+    .leg-matchup { color: var(--txt-l); font-weight: 400; margin-left: .25rem; }
+    .leg-odds { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--teal); white-space: nowrap; }
     @media (max-width: 640px) {
       .header-nav { display: none; }
       .mobile-menu-btn { display: block; }
@@ -249,11 +269,12 @@
     <div id="picks-container">
       <div class="loading">Loading today's Grok Beta card...</div>
     </div>
+    <div id="parlay-container"></div>
 
     <p class="footer-note">
       Not production Alpha. Separate model, separate record.<br>
-      Shin de-vig · sport-family scoring (runs / points / goals) · 4.8pt edge floor · 5.0u run cap.<br>
-      Daily job 08:30 ET. Lines via The Odds API. Not financial advice.
+      Sharp Shin (Pinnacle/Circa when present) vs best US retail · independent ESPN projection.<br>
+      3-straight card + optimized 3-leg parlay. 2.2% EV floor. Daily 08:30 ET. Not financial advice.
     </p>
   </div>
 
@@ -276,6 +297,8 @@
     function renderEmpty(msg, sub) {
       document.getElementById('picks-container').innerHTML =
         '<div class="empty-card"><h3>' + esc(msg) + '</h3><p>' + esc(sub || '') + '</p></div>';
+      const pc = document.getElementById('parlay-container');
+      if (pc) pc.innerHTML = '';
     }
 
     function renderPicks(data) {
@@ -301,7 +324,7 @@
           'Grok Beta has not priced this slate yet.',
           data.noPlays && data.noPlays !== 'Grok Beta has not priced this slate yet.'
             ? data.noPlays
-            : 'Zero published picks is a valid result when nothing clears the edge floor — or when every game has already started.'
+            : 'Nothing was +EV vs a devigged sharp book on this snapshot. Refresh after the 08:30 ET run.'
         );
         return;
       }
@@ -329,6 +352,24 @@
         '</div>';
       }
       document.getElementById('picks-container').innerHTML = html;
+
+      const parlays = data.parlayLegs || [];
+      const pc = document.getElementById('parlay-container');
+      if (!parlays.length) { pc.innerHTML = ''; return; }
+      const ticket = parlays[0];
+      const legs = ticket.legs || [];
+      let ph = '<div class="parlay-section"><div class="parlay-title">Optimized ' + legs.length + '-pick parlay</div>';
+      ph += '<div class="parlay-header"><span class="parlay-name">' + esc(ticket.name || 'Grok Beta parlay') + '</span>';
+      ph += '<span class="parlay-odds">' + esc(ticket.combinedOdds || '') + '</span></div>';
+      for (const leg of legs) {
+        ph += '<div class="parlay-leg"><span><span class="leg-pick">' + esc(leg.pick) + '</span>';
+        ph += '<span class="leg-matchup">' + esc(leg.matchup || '') + '</span></span>';
+        ph += '<span class="leg-odds">' + esc(leg.odds || '') + '</span></div>';
+      }
+      ph += '<div class="pick-units" style="margin-top:.75rem">' + esc(ticket.units) + 'u';
+      if (ticket.ev != null) ph += ' · EV ' + (ticket.ev * 100).toFixed(1) + '%';
+      ph += '</div></div>';
+      pc.innerHTML = ph;
     }
 
     async function load() {

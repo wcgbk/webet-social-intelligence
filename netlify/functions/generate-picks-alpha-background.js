@@ -38,7 +38,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const MODEL_VERSION = "v10.7-alpha-desk";
-const PUBLISH_EDGE_FLOOR = 0.015; // 1.5¢ of calibrated cover − implied. 3¢ was a product-killer.
+const PUBLISH_EDGE_FLOOR = 0.008; // 0.8¢. 3¢/1.5¢/1¢ all left a 15-game MLB board as a 1-pick card.
 const PLUS_ML_MAX = 140;          // VSIN-style underpriced dog, not a last-place longshot
 const GROK_WRITER = "grok-4-6";
 const { bettoredgeFetch } = require("./bettoredge-auth");
@@ -3903,6 +3903,9 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     if ((c.market || "").toLowerCase().includes("moneyline") && c.odds > 0) {
       finalUnits = Math.min(finalUnits, 0.5);
     }
+    if (calibratedEdge(c) < 0.015) {
+      finalUnits = Math.min(finalUnits, 0.5);
+    }
     if (sel.adjustedUnits) {
       const claudeUnits = parseFloat(String(sel.adjustedUnits).replace(/[^0-9.]/g, ''));
       if (!isNaN(claudeUnits) && claudeUnits < finalUnits) {
@@ -4355,6 +4358,7 @@ function jsSelectPicks(candidateTable, claudeOutput) {
 
   const survivors = [];
   const seen = new Set();
+  let overs = 0, unders = 0;
   const ranked = [...(candidateTable || [])].sort(byPublishRank);
   for (const c of ranked) {
     if (dqRanks.has(c.rank)) continue;
@@ -4364,7 +4368,13 @@ function jsSelectPicks(candidateTable, claudeOutput) {
     if (calibratedEdge(c) < PUBLISH_EDGE_FLOOR) continue;
     if ((c.ev || 0) <= 0) continue;
     if (g && seen.has(g)) continue;
+    const side = (c.side || "").toLowerCase();
+    const isTot = (c.market || "").toLowerCase().includes("total");
+    if (isTot && side.startsWith("over") && overs >= 2) continue;
+    if (isTot && side.startsWith("under") && unders >= 2) continue;
     if (g) seen.add(g);
+    if (isTot && side.startsWith("over")) overs++;
+    if (isTot && side.startsWith("under")) unders++;
     survivors.push(c);
     if (survivors.length >= 3) break;
   }

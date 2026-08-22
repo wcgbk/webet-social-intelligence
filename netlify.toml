@@ -27,6 +27,25 @@
 [functions."generate-picks-alpha-background"]
   # Background function — 15min timeout for Alpha pick generation
 
+[functions."trigger-picks-omega"]
+  schedule = "0 13 * * *"
+  # OMEGA split-test pipeline (Ben-directed 2026-08-22) — 9am ET, same time as alpha for a
+  # fair A/B. Full duplicate of the alpha daily process in an isolated environment: writes
+  # to edge-picks-omega blob store → /omega page. KPIs start fresh from 2026-08-22.
+  # NOTE: no track-clv-omega cron yet — omega KPIs grade from ESPN at read time
+  # (get-results-omega); CLV capture for omega waits for the Odds API quota renewal (~28th).
+
+[functions."generate-picks-omega-background"]
+  # Background function — 15min timeout for Omega pick generation
+
+[functions."verify-picks-omega"]
+  schedule = "30 14 * * *"
+  # Omega QA — 10:30am ET, mirrors verify-picks incl. the Hard Rock Bet placeability check.
+
+[functions."self-optimize-omega"]
+  schedule = "0 9 * * 0"
+  # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
+
 [functions."trigger-picks-nfl"]
   schedule = "0 15 * * *"
   # NFL pipeline — 11am ET (15:00 UTC), added 2026-08-06. GATED: fires the generator only on

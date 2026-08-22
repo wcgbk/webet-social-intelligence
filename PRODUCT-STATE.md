@@ -2,7 +2,13 @@
 
 > Any agent (cloud routine, fresh session, overnight run) starts HERE. Read this + the
 > Iteration Backlog in the charter, do the work, then UPDATE both. Never redo items
-> listed under DONE. Last updated: 2026-08-03 ET. v10.4-alpha-mlb shipped: settlement truth
+> listed under DONE. Last updated: 2026-08-22 ET. ⚠️ FOUNDER REVERT: alpha is the EXACT
+> 6/29 state again (v10.3, commit 133c57a — v10.4+ fixes deliberately NOT live on alpha;
+> do not re-apply without Ben). NEW: /omega split-test environment (full alpha duplicate,
+> edge-picks-omega store, own 9am/10:30/Sun crons, KPIs from 2026-08-22; CLV capture
+> deferred to Odds-API quota renewal ~28th). QA now includes the Hard Rock Bet
+> placeability check in verify-picks + verify-picks-omega.
+> Historical (superseded on alpha, still true as history): 2026-08-03 v10.4-alpha-mlb settlement truth
 > (track-clv DH/PPD/F5 + overnight sweep), EV ranking, per-market caps, feedback loops demoted
 > to observer, parlay optimizer un-vetoed. See first DONE bullet.
 

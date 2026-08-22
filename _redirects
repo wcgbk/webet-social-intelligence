@@ -9,3 +9,7 @@
 /api/grok-beta-picks  /.netlify/functions/grok-beta-get-picks  200
 /api/grok-beta-run    /.netlify/functions/grok-beta-run        200
 /api/grok-beta-status /.netlify/functions/grok-beta-status     200
+/omega        /omega/index.html        200
+/omega/       /omega/index.html        200
+/api/get-picks-omega   /.netlify/functions/get-picks-omega   200
+/api/get-results-omega /.netlify/functions/get-results-omega 200

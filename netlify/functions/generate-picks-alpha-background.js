@@ -1,10 +1,5 @@
 // generate-picks-alpha-background.js
 // v10.3-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
-// 2026-08-22 RESTORE (Ben-authorized): reverted to the Jun 29–Jul 11 production state
-// (commit d2d5b5f, Jul 10) with ONE carry-forward — the 2026-08-18 offense-inversion fix,
-// BOTH halves: (1) v10.5 truestats batting-scoped runs + mismatch tripwire (bare stats.runs
-// was the pitching category's runs ALLOWED, inverting every MLB offense input since
-// 2026-06-07), and (2) the METHOD-3 ppg-average guard for the mlb-* method rename.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
@@ -158,10 +153,6 @@ const F5_MAX_SLOTS = 2;      // at most 2 F5 candidates may enter the pool per s
 const F5_UNIT_CAP = 1.0;     // never stake an F5 leg above a validated full-game play
 // Calibration caps mirror the F5 function's COVER_PROB_CAPS — sharp models top out ~55-60% hit rate.
 const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Line": 0.57 };
-// F5 ML UNDERDOGS (+money) are a proven bleed: −21% ROI on n=134 (ESPN-graded, 2026). F5 is a
-// starting-pitcher market the book prices efficiently; the model's "live dog" edge is phantom.
-// Skip plus-money F5 ML sides entirely. (F5 favorites — rare — and F5 totals/RL are unaffected.)
-const F5_SKIP_ML_UNDERDOG = true;
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
   "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us", "espnbet", "betrivers", "fanatics",
@@ -972,22 +963,12 @@ async function fetchTeamStats(espnData) {
         ]);
 
         const stats = {};
-        // v10.5: category-scoped copy alongside the flat dict. ESPN repeats stat NAMES across
-        // categories (MLB batting.runs = scored, pitching.runs = ALLOWED; same for hits/HRs/BBs/Ks,
-        // NHL offensive/defensive goals) and the flat dict let the LAST category win — so every
-        // MLB team's "offense" was silently its runs allowed. Offense reads must go through
-        // statsByCategory, never bare stats.runs / stats.goals.
-        const statsByCategory = {};
         if (statsResp?.ok) {
           const data = await statsResp.json();
           const categories = data.results?.stats?.categories || data.splits?.categories || [];
           for (const cat of categories) {
-            const catName = (cat.name || '').toLowerCase();
-            if (catName && !statsByCategory[catName]) statsByCategory[catName] = {};
             for (const stat of (cat.stats || [])) {
-              if (!stat.name) continue;
-              stats[stat.name] = stat.value;
-              if (catName) statsByCategory[catName][stat.name] = stat.value;
+              if (stat.name) stats[stat.name] = stat.value;
             }
           }
           for (const stat of (data.statistics || [])) {
@@ -1065,10 +1046,7 @@ async function fetchTeamStats(espnData) {
             const slg = stats.slugAvg || null;
             const ops = (obp && slg) ? obp + slg : null;
             const gamesPlayed = stats.teamGamesPlayed || 1;
-            // v10.5 truestats: offense = BATTING runs only. Bare stats.runs was the pitching
-            // category's runs ALLOWED (last-category overwrite, since 0c225fd 2026-06-07), which
-            // inverted every MLB offense input — good teams deflated, bad teams inflated.
-            const runsTotal = statsByCategory.batting?.runs ?? null;
+            const runsTotal = stats.runs || null;
             let runsPerGame = runsTotal ? runsTotal / gamesPlayed : pointsPerGame;
             // Sanity guard: MLB runs/game must be 2.5–7.5. Anything outside this range
             // means ESPN returned bad data (season totals, basketball-scale avgPoints, etc.).
@@ -1076,13 +1054,6 @@ async function fetchTeamStats(espnData) {
             if (runsPerGame !== null && (runsPerGame < 2.5 || runsPerGame > 7.5)) {
               console.log(`[v10-guard] MLB runsPerGame=${runsPerGame?.toFixed(2)} for ${teamName} is outside [2.5, 7.5] — nulled (bad ESPN data)`);
               runsPerGame = null;
-            }
-            // v10.5 tripwire: batting runs/GP and the record's avgPointsFor are independent ESPN
-            // sources for the SAME quantity. Divergence >0.5 R/G means a parse broke again —
-            // log loudly and trust the record split (the source verified correct on 2026-08-18).
-            if (runsPerGame && ppgFor && Math.abs(runsPerGame - ppgFor) > 0.5) {
-              console.log(`[v10-guard] MLB OFFENSE MISMATCH ${teamName}: batting ${runsPerGame.toFixed(2)} R/G vs record avgPointsFor ${ppgFor.toFixed(2)} — using record value`);
-              runsPerGame = ppgFor;
             }
 
             teamStats[teamName] = {
@@ -2633,13 +2604,9 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   }
 
   // ── METHOD 3: PPG/PPG-allowed average (when available but efficiency isn't) ──
-  // MLB methods were renamed 'pitching-*' → 'mlb-starter-adjusted'/'mlb-runs-average' in
-  // ff1a534 without updating this guard, so a crude ppg-average member was ALWAYS added at
-  // ~32% effective weight alongside the sharp MLB projection (second half of the 2026-08-18
-  // offense-inversion diagnosis — the two fixes ship together).
   if (homeStats?.pointsPerGame && homeStats?.pointsAllowed &&
       awayStats?.pointsPerGame && awayStats?.pointsAllowed &&
-      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace') || p.method.startsWith('mlb-'))) {
+      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace'))) {
     const ppgHome = (homeStats.pointsPerGame + awayStats.pointsAllowed) / 2;
     const ppgAway = (awayStats.pointsPerGame + homeStats.pointsAllowed) / 2;
     projections.push({ home: ppgHome, away: ppgAway, weight: 1.2, method: "ppg-average" });
@@ -2899,7 +2866,6 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   // ── F5 Moneyline ── (real F5 ML lines only — no full-game proxy)
   for (const [team, data] of Object.entries(f5.f5ML)) {
     if ((data.n || 0) < 3) continue; // bettability guard: F5 ML must be offered by >=3 top US books
-    if (F5_SKIP_ML_UNDERDOG && (data.price || 0) > 0) continue; // skip plus-money F5 ML dogs — proven −21% bleed
     const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
     const teamLabel = isHome ? home : away;
     const rawMargin = isHome ? projF5Margin : -projF5Margin;
@@ -4752,7 +4718,7 @@ exports.handler = async (event) => {
     }
     if (leanCandidates.length > 0) {
       console.log(`[v10-lean] Thin slate — ${leanCandidates.length} lean candidate(s) cleared +3% EV; publishing as Lean plays`);
-      return await buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats);
+      return await buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now);
     }
     const pipelineError = allCandidates._pipelineError || null;
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
@@ -4793,7 +4759,7 @@ exports.handler = async (event) => {
     if (!response || !response.ok) {
       console.error(`[v10] Claude selection unavailable (${response ? 'HTTP ' + response.status : 'no response after retries'}) — deterministic top-candidates fallback`);
       // Fallback: use top candidates without narratives — never block on the LLM
-      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
+      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now);
     }
 
     const result = await response.json();
@@ -4820,7 +4786,7 @@ exports.handler = async (event) => {
       }
     } catch (parseErr) {
       console.error(`[v10] JSON parse failed: ${parseErr.message}`);
-      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
+      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now);
     }
 
     // ── PHASE 3: MERGE JS NUMBERS + CLAUDE SELECTIONS ──
@@ -4848,11 +4814,9 @@ exports.handler = async (event) => {
     }
 
     // ── LEAN TIER TOP-UP ──
-    // Card is below 3 after selection. Pull from the relaxed +1.5% EV lean tier to fill up with
-    // 0.25u Lean plays (flagged thinSlate, tracked separately, never inflate conviction-book ROI).
-    // Uses the SAME relaxed floor (0.015) as the zero-candidate thin-slate fallback, so thin 1-2
-    // candidate slates get lower-unit backfill too — not just fully empty ones. Highest-EV leans
-    // are picked first (sorted desc). Never reuse a side Claude explicitly rejected.
+    // Claude rejected picks down below 3. Pull from the +3% EV lean tier to fill up.
+    // Never use a side Claude explicitly rejected — only candidates it didn't see or
+    // ranked lower than the conviction bar.
     if (picks.length < 3) {
       const needed = 3 - picks.length;
       const pickedGames = new Set(picks.map(p => (p.matchup || '').toLowerCase().trim()));
@@ -4863,7 +4827,7 @@ exports.handler = async (event) => {
         }).filter(Boolean)
       );
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
@@ -4910,16 +4874,6 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── FACT-GROUNDED LEAN NARRATION + FULL-CARD SUMMARIES (shared helper) ──
-    // Conviction picks are already web-search-narrated; narrate only the leans here (narrateAll:false)
-    // from the model's own ESPN/StatsAPI facts. Overwrites the full-card edgeSummary + adds insights.
-    let insightsText = "";
-    {
-      const s = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: false });
-      if (s.edgeSummary) claudeOutput.edgeSummary = s.edgeSummary;
-      if (s.insights) insightsText = s.insights;
-    }
-
     // Build model projections snapshot
     const modelProjections = {};
     for (const c of allCandidates) {
@@ -4939,7 +4893,7 @@ exports.handler = async (event) => {
     }
 
     // ── Narrative quality gate: ensure every pick has proper journalistic context ──
-    await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
+    await validateAndEnhanceNarratives(picks, ANTHROPIC_API_KEY);
 
     // Final sort by z-score descending (highest model confidence first)
     picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
@@ -4954,7 +4908,6 @@ exports.handler = async (event) => {
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
-      insights: insightsText || "",
       summary: {
         totalPicks: picks.length,
         totalStraightBets: picks.length,
@@ -4999,7 +4952,7 @@ exports.handler = async (event) => {
 
   } catch (err) {
     console.error("[v10] Fatal error:", err.message);
-    return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
+    return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now);
   }
 };
 
@@ -5025,94 +4978,7 @@ function dedupeCandidatesByGame(cands) {
   return [...byGame.values()].sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
 }
 
-// ── Shared: fact-grounded narration + full-card summaries (DISPLAY-ONLY) ──
-// Narrates picks from the model's OWN already-fetched ESPN/StatsAPI facts (starter ERA/FIP,
-// records) via a fast no-web_search Claude call, and returns a full-card {edgeSummary, insights}.
-// narrateAll=false → only thinSlate leans (main path; conviction picks are already web-searched);
-// narrateAll=true → every pick (fallback + thin-slate paths, where nothing was web-searched).
-// Never mutates selection or sizing — only writes text fields. Returns {'',''} on any failure.
-async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll = false } = {}) {
-  const out = { edgeSummary: "", insights: "" };
-  try {
-    if (!Array.isArray(picks) || picks.length === 0 || !process.env.ANTHROPIC_API_KEY) return out;
-    pitcherData = pitcherData || {}; teamStats = teamStats || {};
-    const shouldNarrate = (p) => narrateAll || p.thinSlate;
-    const toNarrate = picks.filter(shouldNarrate).length;
-    if (toNarrate === 0) return out;
-    const teamsOf = (p) => {
-      if (p.awayTeam && p.homeTeam) return [p.awayTeam, p.homeTeam];
-      const parts = (p.matchup || '').split(/\s+(?:@|vs\.?)\s+/i).map(s => s.trim());
-      return parts.length >= 2 ? [parts[0], parts[1]] : [null, null];
-    };
-    const factSheet = picks.map((p, i) => {
-      const write = shouldNarrate(p);
-      const head = `Pick ${i + 1}${write ? ' [WRITE NARRATIVE]' : ' [already narrated — summarize only]'}: ${p.pick} ${p.odds} | ${p.units} | ${p.sport} ${p.betType || ''} | ${p.matchup}`;
-      if (!write) return `${head}\n   Thesis: ${(p.coreReasoning || '').slice(0, 220)}`;
-      const [away, home] = teamsOf(p);
-      const facts = [];
-      if (p.sport === 'MLB') {
-        const ap = pitcherData[away], hp = pitcherData[home];
-        if (ap && ap.pitcher && ap.pitcher !== 'Unknown') facts.push(`${away} SP ${ap.pitcher} (${ap.era != null ? ap.era + ' ERA' : 'ERA n/a'}${ap.fip != null ? ', ' + ap.fip + ' FIP' : ''})`);
-        if (hp && hp.pitcher && hp.pitcher !== 'Unknown') facts.push(`${home} SP ${hp.pitcher} (${hp.era != null ? hp.era + ' ERA' : 'ERA n/a'}${hp.fip != null ? ', ' + hp.fip + ' FIP' : ''})`);
-      }
-      const as = teamStats[away], hs = teamStats[home];
-      const runLabel = p.sport === 'MLB' ? 'R/G' : 'PPG';
-      if (as) facts.push(`${away} ${as.recordTotal || ''}${as.pointsPerGame != null ? ', ' + as.pointsPerGame + ' ' + runLabel : ''}`.trim());
-      if (hs) facts.push(`${home} ${hs.recordTotal || ''}${hs.pointsPerGame != null ? ', ' + hs.pointsPerGame + ' ' + runLabel : ''}`.trim());
-      if (p.modelEdge) facts.push(p.modelEdge);
-      if (p.venue) facts.push(`venue ${p.venue}`);
-      return `${head}${facts.length ? '\n   Facts: ' + facts.join(' | ') : ''}`;
-    }).join('\n');
-
-    const narrSys = `You are WeBetAI's sharp sports-betting analyst. Use ONLY the verified facts provided below — do NOT invent player names, stats, injuries, records, or venues beyond what is given. For each pick marked [WRITE NARRATIVE] return:
-- coreReasoning: 3-4 specific sentences citing the provided starters/records/edge, explaining WHY WeBetAI favors this exact side. Plain English, no stat abbreviations (ORtg/DVOA/ATS). Never restate the odds or EV numbers (shown separately). Say "WeBetAI", never "the model".
-- whatLoses: one sentence — the concrete scenario that beats this pick.
-- dataVerified: one sentence naming the specific facts used (starters, records).
-- clvExpectation: one sentence on expected line movement.
-Do NOT rewrite [already narrated] picks; only use their thesis for the summaries.
-ALSO return two card-level summaries covering ALL picks (NEVER say "lone edge" when there is more than one pick):
-- edgeSummary: 2-3 confident, specific sentences on the strongest theme tying the card together, referencing the actual games.
-- insights: 2-3 analytical sentences — why these markets/sides, how the slate shaped the card, and the sizing logic (full-unit conviction vs 0.25u leans).
-Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }], "edgeSummary": "...", "insights": "..." }`;
-
-    const nr = await anthropicFetch({
-      model: "claude-sonnet-4-6", max_tokens: 3000, temperature: 0.3,
-      system: [{ type: "text", text: narrSys, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: `Today's final card (${dateFormatted}):\n${factSheet}\n\nReturn the JSON.` }],
-    }, { timeoutMs: 45000, retries: 2 });
-
-    if (nr && nr.ok) {
-      const nd = await nr.json();
-      let ntext = "";
-      for (const b of (nd.content || [])) { if (b.type === "text") ntext += b.text; }
-      const jm = ntext.match(/\{[\s\S]*\}/);
-      if (jm) {
-        let parsed;
-        try { parsed = JSON.parse(jm[0]); }
-        catch (e2) { parsed = JSON.parse(jm[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/[\x00-\x1F\x7F]/g, ' ')); }
-        for (const n of (parsed.narratives || [])) {
-          const idx = (n.pickIndex || 1) - 1;
-          if (idx >= 0 && idx < picks.length && shouldNarrate(picks[idx])) {
-            if (n.coreReasoning && n.coreReasoning.length > 30) picks[idx].coreReasoning = n.coreReasoning;
-            if (n.whatLoses && n.whatLoses.length > 10) picks[idx].whatLoses = n.whatLoses;
-            if (n.dataVerified && n.dataVerified.length > 10) picks[idx].dataVerified = n.dataVerified;
-            if (n.clvExpectation && n.clvExpectation.length > 5) picks[idx].clvExpectation = n.clvExpectation;
-          }
-        }
-        if (parsed.edgeSummary && parsed.edgeSummary.length > 20) out.edgeSummary = parsed.edgeSummary;
-        if (parsed.insights && parsed.insights.length > 20) out.insights = parsed.insights;
-        console.log(`[v10-narr] Fact-grounded narratives for ${toNarrate} pick(s) + summaries (narrateAll=${narrateAll})`);
-      }
-    } else {
-      console.log('[v10-narr] narration call failed — keeping existing narratives/summary');
-    }
-  } catch (e) {
-    console.error(`[v10-narr] non-fatal: ${e.message}`);
-  }
-  return out;
-}
-
-async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats) {
+async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
   const top = dedupeCandidatesByGame(leanCandidates).slice(0, 3);
   const picks = top.map(c => {
@@ -5176,11 +5042,8 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
     };
   });
 
-  await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
+  await validateAndEnhanceNarratives(picks, ANTHROPIC_API_KEY);
   picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
-
-  // Fact-grounded narratives + full-card summaries (all picks are leans here → narrateAll)
-  const summaries = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: true });
 
   // Lean parlay — sized at the lean amount (0.25u) per spec
   let parlayLegs = [];
@@ -5193,8 +5056,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
     date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
-    edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    insights: summaries.insights || "",
+    edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
@@ -5205,7 +5067,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
   return { statusCode: 200, body: "Thin-slate Lean OK" };
 }
 
-async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
+async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now) {
   console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
   const top3 = dedupeCandidatesByGame(candidateTable).slice(0, 3);
   const picks = top3.map(c => {
@@ -5272,21 +5134,17 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   });
 
   // Narrative quality gate on fallback picks too
-  await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
+  await validateAndEnhanceNarratives(picks, ANTHROPIC_API_KEY);
 
   // Sort fallback picks by z-score descending
   picks.sort((a, b) => (b.zScore || 0) - (a.zScore || 0));
-
-  // Fact-grounded narratives + full-card summaries (no pick was web-searched → narrateAll)
-  const summaries = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: true });
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
     date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
-    edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    insights: summaries.insights || "",
+    edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
     summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,

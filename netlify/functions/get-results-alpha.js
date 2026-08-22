@@ -65,15 +65,10 @@ async function fetchESPNScores(dateISO, sport) {
         awayTeam: away.team?.displayName || '',
         awayAbbr: away.team?.abbreviation || '',
         awayScore: parseInt(away.score) || 0,
-        awayLine: (away.linescores || []).map(x => parseInt(x.value) || 0),
         homeTeam: home.team?.displayName || '',
         homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
-        homeLine: (home.linescores || []).map(x => parseInt(x.value) || 0),
         state: status.type?.state || 'pre',
-        statusName: status.type?.name || '',
-        completed: !!status.type?.completed,
-        startISO: ev.date || comp.date || '',  // disambiguates doubleheaders vs pick.commenceTime
       };
     }).filter(Boolean);
   } catch (e) {
@@ -102,27 +97,9 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr) {
   return false;
 }
 
-// A team pair can appear TWICE on the same day (day-night doubleheader). Team-name matching alone
-// returns the first game, which would settle the nightcap against the opener's final. When >1 game
-// matches, pick the one whose start is nearest the pick's commenceTime.
-function disambiguateDoubleheader(matches, pick) {
-  if (matches.length <= 1) return matches[0] || null;
-  const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
-  if (isNaN(ct)) return matches[0];
-  let best = matches[0], bestDiff = Infinity;
-  for (const g of matches) {
-    const gt = g.startISO ? Date.parse(g.startISO) : NaN;
-    if (isNaN(gt)) continue;
-    const diff = Math.abs(gt - ct);
-    if (diff < bestDiff) { bestDiff = diff; best = g; }
-  }
-  return best;
-}
-
 function findGame(pick, games) {
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-  const primary = [];
   for (const g of games) {
     const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
     const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
@@ -130,71 +107,40 @@ function findGame(pick, games) {
                        (awayLast.length > 3 && matchup.includes(awayLast));
     const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
                        (homeLast.length > 3 && matchup.includes(homeLast));
-    if (awayMatch && homeMatch) primary.push(g);
+    if (awayMatch && homeMatch) return g;
   }
-  if (primary.length) return disambiguateDoubleheader(primary, pick);
   const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   if (pickTeam) {
-    const secondary = [];
     for (const g of games) {
       if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
         const otherLast = normalizeTeam(
           teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
         ).split(' ').pop();
-        if (otherLast.length > 3 && matchup.includes(otherLast)) secondary.push(g);
+        if (otherLast.length > 3 && matchup.includes(otherLast)) return g;
       }
     }
-    if (secondary.length) return disambiguateDoubleheader(secondary, pick);
   }
   if (matchupParts.length >= 2) {
-    const tertiary = [];
     for (const g of games) {
       const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
       const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
       const part0 = normalizeTeam(matchupParts[0]);
       const part1 = normalizeTeam(matchupParts[1]);
       if ((part0.includes(awayLast) || awayLast.includes(part0)) &&
-          (part1.includes(homeLast) || homeLast.includes(part1))) tertiary.push(g);
-      else if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
-          (part1.includes(awayLast) || awayLast.includes(part1))) tertiary.push(g);
+          (part1.includes(homeLast) || homeLast.includes(part1))) return g;
+      if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
+          (part1.includes(awayLast) || awayLast.includes(part1))) return g;
     }
-    if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
   }
   return null;
 }
 
-// Parlay legs are stored WITHOUT commenceTime, so on a doubleheader date findGame falls back to the
-// opener and settles the leg against the wrong final — the straight bet (which HAS commenceTime)
-// grades correctly while the identical parlay leg does not. Inherit the start time from the straight
-// pick naming the same matchup + selection so both sides resolve to the same game.
-function withLegCommenceTime(leg, picks) {
-  if (leg.commenceTime) return leg;
-  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const sameMatchup = (p) => norm(p.matchup) === norm(leg.matchup);
-  const match = (picks || []).find(p => sameMatchup(p) && norm(p.pick) === norm(leg.pick)) ||
-                (picks || []).find(sameMatchup);
-  return (match && match.commenceTime) ? { ...leg, commenceTime: match.commenceTime } : leg;
-}
-
 function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
-  // Postponed / canceled games are voided by every major US book (no action) — the stake is
-  // returned, so we grade them as a push. A push leg is dropped from a parlay and the ticket
-  // reprices on the surviving legs (see gradeParlay). ESPN marks these state:'post' with
-  // completed:false, so they must be caught BEFORE any score-based grading (0-0 → false "under").
-  if (/POSTPONED|CANCELL?ED/i.test(game.statusName) || (game.state === 'post' && !game.completed)) return 'push';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
-  // First-Five-Innings picks settle on the first-5 score, NOT the full game.
-  const isF5 = /\bf5\b|first 5|1st 5|first-5/i.test(pickStr) || betType.includes('f5') || /^f5\b/i.test(pickStr);
-  let awayScore = game.awayScore;
-  let homeScore = game.homeScore;
-  if (isF5) {
-    const aL = game.awayLine || [], hL = game.homeLine || [];
-    if (aL.length < 5 || hL.length < 5) return 'pending'; // not enough innings to settle F5
-    awayScore = aL.slice(0, 5).reduce((a, b) => a + b, 0);
-    homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
-  }
+  const awayScore = game.awayScore;
+  const homeScore = game.homeScore;
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
@@ -248,25 +194,20 @@ function calcParlayWinnings(risk, legsOdds) {
   return risk * (decimalProduct - 1);
 }
 
-// Whole-dollar display: round UP to the next dollar so no cents show (37.5 -> 38). The -1e-9
-// keeps an already-whole amount whole (avoids 75 -> 76 on float dust).
-function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
-
-function gradeParlay(pickResults, parlayRisk) {
-  // v10.4.3: parlays can now be 2-leg (totals-first construction drops -CLV ML legs), so grade
-  // any ticket with >=2 legs. Historical 3-leg tickets are unaffected.
-  if (pickResults.length < 2) return { result: 'skip', profit: 0 };
+function gradeParlay(pickResults) {
+  if (pickResults.length < 3) return { result: 'skip', profit: 0 };
   const results = pickResults.map(p => p.result);
   const anyLoss = results.includes('loss');
   const anyPending = results.includes('pending');
   const allWin = results.every(r => r === 'win');
+  const parlayRisk = 75;
   if (anyLoss) return { result: 'loss', profit: -parlayRisk };
   if (anyPending) return { result: 'pending', profit: 0 };
-  if (allWin) return { result: 'win', profit: wholeUp(calcParlayWinnings(parlayRisk, pickResults.map(p => p.odds))) };
+  if (allWin) return { result: 'win', profit: calcParlayWinnings(parlayRisk, pickResults.map(p => p.odds)) };
   const nonPushLegs = pickResults.filter(p => p.result !== 'push');
   if (nonPushLegs.length === 0) return { result: 'push', profit: 0 };
   const allNonPushWin = nonPushLegs.every(p => p.result === 'win');
-  if (allNonPushWin) return { result: 'win', profit: wholeUp(calcParlayWinnings(parlayRisk, nonPushLegs.map(p => p.odds))) };
+  if (allNonPushWin) return { result: 'win', profit: calcParlayWinnings(parlayRisk, nonPushLegs.map(p => p.odds)) };
   return { result: 'pending', profit: 0 };
 }
 
@@ -317,60 +258,36 @@ async function gradeDay(dateISO, picksData) {
     const game = findGame(pick, sportGames);
     const result = gradePick(pick, game);
     const units = parseFloat(pick.units) || 1;
-    const risk = wholeUp(units * dollarPerUnit);
-    const winAmount = wholeUp(calcWinnings(risk, pick.odds || '-110'));
+    const risk = units * dollarPerUnit;
+    const winAmount = calcWinnings(risk, pick.odds || '-110');
     let profit = 0;
     if (result === 'win') { dayWins++; profit = winAmount; }
     else if (result === 'loss') { dayLosses++; profit = -risk; }
     else if (result === 'push') { dayPushes++; profit = 0; }
     else { dayPending++; }
-    // Pushes return the stake (no action) — exclude from wagered so ROI isn't diluted.
-    // (profit is already 0 for push/pending, so dayProfit is unaffected either way.)
-    if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
-    const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
-    let scoreStr = null;
-    if (game && game.state === 'post' && result === 'push' && (/POSTPONED|CANCELL?ED/i.test(game.statusName) || !game.completed)) {
-      scoreStr = 'PPD';
-    } else if (game && game.state === 'post') {
-      if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {
-        scoreStr = `${game.awayLine.slice(0, 5).reduce((a, b) => a + b, 0)}-${game.homeLine.slice(0, 5).reduce((a, b) => a + b, 0)} (F5)`;
-      } else {
-        scoreStr = `${game.awayScore}-${game.homeScore}`;
-      }
-    }
-    gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: scoreStr });
+    if (result !== 'pending') { dayWagered += risk; dayProfit += profit; }
+    gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: game && game.state === 'post' ? `${game.awayScore}-${game.homeScore}` : null });
   }
 
   let parlayInput;
   if (optimizedLegs) {
     parlayInput = optimizedLegs.map(leg => {
-      const eleg = withLegCommenceTime(leg, picks);
-      const sportGames = scoresByGames.filter(g => g._sport === eleg.sport);
-      const game = findGame(eleg, sportGames);
-      return { result: gradePick(eleg, game), odds: eleg.odds || '-110' };
+      const sportGames = scoresByGames.filter(g => g._sport === leg.sport);
+      const game = findGame(leg, sportGames);
+      return { result: gradePick(leg, game), odds: leg.odds || '-110' };
     });
-  } else if (picks.length === 3) {
-    // Legacy/implicit parlay: ONLY a 3-straight-pick card ever formed a parlay from its
-    // straights — this matches the page, which gates its parlay display on picks.length === 3.
-    // A 2-pick card (e.g. an F5-only slate where the optimizer built nothing, since F5 is
-    // excluded from parlays) has NO parlay, so none is counted. Prevents a phantom 2-leg
-    // parlay from being graded into the KPIs when the generator produced no parlay at all.
-    parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
   } else {
-    parlayInput = [];
+    parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
   }
-  // Parlay stake drops to 0.25u whenever a lean pick is on the card, else 0.5u.
-  const anyLean = picks.some(p => p.thinSlate);
-  const parlayUnits = anyLean ? 0.25 : 0.5;
-  const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
-  const parlayResult = gradeParlay(parlayInput, parlayRisk);
+  const parlayResult = gradeParlay(parlayInput);
+  const parlayRisk = 75;
   if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip') {
     dayWagered += parlayRisk;
     dayProfit += parlayResult.profit;
   }
   if (parlayResult.result !== 'skip') {
     const parlayLegsSource = optimizedLegs || picks;
-    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: `${parlayInput.length}-Team Parlay${optimizedLegs ? ' (Optimized)' : ''}`, odds: '', units: `${parlayUnits}u`, rating: 'P', result: parlayResult.result, profit: parlayResult.profit, score: null });
+    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: optimizedLegs ? '3-Team Parlay (Optimized)' : '3-Team Parlay', odds: '', units: '0.5u', rating: 'P', result: parlayResult.result, profit: Math.round(parlayResult.profit), score: null });
   }
 
   const decided = dayWins + dayLosses;
@@ -384,7 +301,7 @@ async function gradeDay(dateISO, picksData) {
     accuracy: decided > 0 ? ((dayWins / decided) * 100).toFixed(0) : '0',
     wagered: Math.round(dayWagered), profit: Math.round(dayProfit),
     roi: dayWagered > 0 ? ((dayProfit / dayWagered) * 100).toFixed(1) : '--',
-    parlayResult: parlayResult.result, parlayProfit: parlayResult.profit, parlayRisk,
+    parlayResult: parlayResult.result, parlayProfit: Math.round(parlayResult.profit),
   };
 }
 
@@ -480,9 +397,9 @@ exports.handler = async (event) => {
       cumWins += day.wins; cumLosses += day.losses; cumPushes += day.pushes; cumPending += day.pending;
       cumWagered += day.wagered; cumProfit += day.profit;
 
-      // Straight pick KPIs (exclude parlay row; exclude pushes — stake returned, no action)
-      for (const p of day.picks.filter(p => p.sport !== 'PARLAY' && p.result !== 'pending' && p.result !== 'push')) {
-        const risk = wholeUp((parseFloat(p.units) || 1) * 150);
+      // Straight pick KPIs (exclude parlay row)
+      for (const p of day.picks.filter(p => p.sport !== 'PARLAY' && p.result !== 'pending')) {
+        const risk = (parseFloat(p.units) || 1) * 150;
         straightWagered += risk;
         straightProfit += p.profit;
         if (p.result === 'win') straightWins++;
@@ -490,7 +407,7 @@ exports.handler = async (event) => {
       }
 
       if (day.parlayResult && day.parlayResult !== 'skip' && day.parlayResult !== 'pending') {
-        parlayWagered += (day.parlayRisk || 75); parlayProfit += day.parlayProfit;
+        parlayWagered += 75; parlayProfit += day.parlayProfit;
         if (day.parlayResult === 'win') parlayWins++;
         else if (day.parlayResult === 'loss') parlayLosses++;
       }

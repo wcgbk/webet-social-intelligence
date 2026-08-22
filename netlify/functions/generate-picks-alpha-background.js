@@ -1,9 +1,10 @@
 // generate-picks-alpha-background.js
 // v10.3-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
 // 2026-08-22 RESTORE (Ben-authorized): reverted to the Jun 29–Jul 11 production state
-// (commit d2d5b5f, Jul 10) with ONE carry-forward: the v10.5 truestats MLB offense fix
-// (statsByCategory batting-scoped runs + mismatch tripwire) — bare stats.runs was the
-// pitching category's runs ALLOWED, inverting every MLB offense input since 2026-06-07.
+// (commit d2d5b5f, Jul 10) with ONE carry-forward — the 2026-08-18 offense-inversion fix,
+// BOTH halves: (1) v10.5 truestats batting-scoped runs + mismatch tripwire (bare stats.runs
+// was the pitching category's runs ALLOWED, inverting every MLB offense input since
+// 2026-06-07), and (2) the METHOD-3 ppg-average guard for the mlb-* method rename.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
@@ -2632,9 +2633,13 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   }
 
   // ── METHOD 3: PPG/PPG-allowed average (when available but efficiency isn't) ──
+  // MLB methods were renamed 'pitching-*' → 'mlb-starter-adjusted'/'mlb-runs-average' in
+  // ff1a534 without updating this guard, so a crude ppg-average member was ALWAYS added at
+  // ~32% effective weight alongside the sharp MLB projection (second half of the 2026-08-18
+  // offense-inversion diagnosis — the two fixes ship together).
   if (homeStats?.pointsPerGame && homeStats?.pointsAllowed &&
       awayStats?.pointsPerGame && awayStats?.pointsAllowed &&
-      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace'))) {
+      !projections.find(p => p.method.includes('efficiency') || p.method.includes('pitching') || p.method.includes('pace') || p.method.startsWith('mlb-'))) {
     const ppgHome = (homeStats.pointsPerGame + awayStats.pointsAllowed) / 2;
     const ppgAway = (awayStats.pointsPerGame + homeStats.pointsAllowed) / 2;
     projections.push({ home: ppgHome, away: ppgAway, weight: 1.2, method: "ppg-average" });

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Grok Beta Model</title>
+  <meta name="description" content="Grok Beta Model — independent day-one all-sports engine. Separate book from Alpha. Not production Alpha." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/grok-beta" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Grok Beta Model" />
+  <meta property="og:description" content="Independent day-one all-sports engine. Separate book from Alpha. Not production Alpha." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Grok Beta Model" />
+  <meta name="twitter:description" content="Independent day-one all-sports engine. Separate book from Alpha." />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --teal-lighter: #d4ede8;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+    .header-nav { display: flex; gap: .75rem; align-items: center; }
+    .header-link { font-size: .8125rem; font-weight: 600; color: var(--txt-m); text-decoration: none; }
+    .header-link.active { color: var(--teal); }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .in-iframe .header { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: none !important; }
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .25rem; }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .dot-aplus { background: #c0392b; }
+    .dot-a { background: #004C54; }
+    .dot-aminus { background: #1abc9c; }
+    .dot-bplus { background: #1abc9c; }
+    .dot-b { background: #e67e22; }
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .rating-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 26px; border-radius: 6px;
+      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+    }
+    .badge-a { background: #004C54; }
+    .badge-aminus { background: #1abc9c; }
+    .badge-bplus { background: #f39c12; }
+    .badge-b { background: #f9a825; }
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
+    .win-prob {
+      display: inline-flex; align-items: center; font-size: .75rem; font-weight: 700;
+      font-family: 'Geist Sans', monospace;
+      color: var(--green); background: var(--green-light);
+      border: 1px solid var(--green-border); border-radius: 6px;
+      padding: .125rem .5rem; margin-left: .5rem; white-space: nowrap;
+    }
+    .edge-badge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .6875rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+      color: #e8b931; background: rgba(232, 185, 49, 0.08);
+      border: 1px solid rgba(232, 185, 49, 0.2); border-radius: 6px;
+      padding: .125rem .5rem; white-space: nowrap;
+    }
+    .results-section-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: .625rem;
+    }
+    .results-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; overflow: hidden; margin-bottom: 1rem;
+    }
+    .results-cumulative {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+    }
+    .cum-card {
+      padding: 1rem .5rem; text-align: center;
+      border-right: 1px solid var(--border-lt);
+    }
+    .cum-card:last-child { border-right: none; }
+    .cum-value { font-size: 1.5rem; font-weight: 700; color: var(--olive); }
+    .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+    .record-legend-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem 1rem; margin-bottom: .75rem;
+      font-size: .8125rem; font-weight: 600;
+    }
+    .rl-left { display: flex; align-items: center; gap: .25rem; }
+    .rl-right { display: flex; align-items: center; gap: .75rem; font-size: .75rem; color: var(--txt-m); font-weight: 500; }
+    .rejections {
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .875rem 1rem; margin-top: .5rem;
+    }
+    .rej-title { font-size: .6875rem; font-weight: 700; color: var(--txt-l); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem; }
+    .rej-item { font-size: .75rem; color: var(--txt-m); line-height: 1.5; margin-bottom: .125rem; }
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--txt-m); }
+    .empty-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 2rem 1.25rem; text-align: center;
+    }
+    .empty-card h3 { font-size: 1.0625rem; font-weight: 700; color: var(--olive); margin-bottom: .5rem; }
+    .empty-card p { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+    @media (max-width: 480px) {
+      .results-cumulative { grid-template-columns: repeat(2, 1fr); }
+      .cum-card { border-bottom: 1px solid var(--border-lt); }
+      .cum-card:nth-child(2) { border-right: none; }
+      .record-legend-bar { flex-wrap: wrap; gap: .5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div style="height:3px;background:linear-gradient(90deg,#004C54,#00b5b9,#004C54);position:fixed;top:0;left:0;right:0;z-index:200;"></div>
+  <header class="header" style="position:sticky;top:3px;">
+    <a href="/grok-beta" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+      <span class="header-badge" style="margin-left:2px;">BETA</span>
+    </a>
+    <a href="/dashboard" style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;border:1px solid #004C54;background:#e6f4f1;color:#004C54;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;margin-left:auto;margin-right:8px;">Dashboard</a>
+    <nav class="header-nav">
+      <a href="/grok-beta" class="header-link active">Grok Beta Model</a>
+      <a href="/alpha" class="header-link">Alpha Picks</a>
+      <a href="/dashboard" class="header-link">Dashboard</a>
+    </nav>
+    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/grok-beta">Grok Beta Model</a>
+      <a href="/alpha">Alpha Picks</a>
+      <a href="/dashboard">Dashboard</a>
+    </div>
+  </header>
+
+  <div class="main">
+    <div style="background: var(--teal-light); border: 1px solid var(--teal-border); border-left: 3px solid var(--teal); border-radius: .875rem; padding: .875rem 1.125rem; margin-bottom: 1rem;">
+      <div style="font-size: .6875rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem;">Grok Beta Model · BETA</div>
+      <div style="font-size: .9375rem; font-weight: 700; color: var(--olive); margin-bottom: .25rem;">Independent day-one all-sports engine. Separate book from Alpha.</div>
+      <div style="font-size: .8125rem; color: var(--txt-b); line-height: 1.55;">Not production Alpha. Separate model, separate record.</div>
+    </div>
+
+    <div class="results-section-title">Pick Results &amp; Track Record — Grok Beta</div>
+    <div class="results-card">
+      <div class="results-cumulative">
+        <div class="cum-card"><div class="cum-value" id="cum-roi">—</div><div class="cum-label">ROI</div></div>
+        <div class="cum-card"><div class="cum-value" id="cum-record">0-0-0</div><div class="cum-label">Record</div></div>
+        <div class="cum-card"><div class="cum-value" id="cum-units">0</div><div class="cum-label">Units</div></div>
+        <div class="cum-card"><div class="cum-value" id="cum-n">0</div><div class="cum-label">n</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+      <div class="date-header" id="date-header">Loading...</div>
+    </div>
+
+    <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
+      <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+        <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Daily Edge</span>
+      </div>
+      <p id="daily-edge-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+    </div>
+
+    <div id="record-legend-bar" class="record-legend-bar">
+      <div class="rl-left" id="record-bar-content">0-0-0 · n=0 · this engine has not graded itself yet</div>
+      <div class="rl-right">
+        <span><span class="legend-dot dot-a"></span>A (1.0u+)</span>
+        <span><span class="legend-dot dot-aminus"></span>A- (0.75u)</span>
+        <span><span class="legend-dot dot-bplus"></span>B+ (0.5u)</span>
+        <span><span class="legend-dot dot-b"></span>B (0.25u)</span>
+      </div>
+    </div>
+
+    <div id="picks-container">
+      <div class="loading">Loading today's Grok Beta card...</div>
+    </div>
+
+    <p class="footer-note">
+      Not production Alpha. Separate model, separate record.<br>
+      Shin de-vig · sport-family scoring (runs / points / goals) · 4.8pt edge floor · 5.0u run cap.<br>
+      Daily job 08:30 ET. Lines via The Odds API. Not financial advice.
+    </p>
+  </div>
+
+  <script src="/nav.js"></script>
+  <script>
+    if (window.self !== window.top) document.body.classList.add('in-iframe');
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function badgeClass(rating) {
+      const r = String(rating || '').toLowerCase().replace('+', 'plus').replace('-', 'minus');
+      if (r === 'a') return 'badge-a';
+      if (r === 'aminus') return 'badge-aminus';
+      if (r === 'bplus') return 'badge-bplus';
+      return 'badge-b';
+    }
+
+    function renderEmpty(msg, sub) {
+      document.getElementById('picks-container').innerHTML =
+        '<div class="empty-card"><h3>' + esc(msg) + '</h3><p>' + esc(sub || '') + '</p></div>';
+    }
+
+    function renderPicks(data) {
+      document.getElementById('date-header').textContent =
+        (data.dateFormatted || data.date || 'Today') +
+        (data.modelVersion ? ' · ' + data.modelVersion : '');
+
+      document.getElementById('cum-roi').textContent = '—';
+      document.getElementById('cum-record').textContent = '0-0-0';
+      document.getElementById('cum-units').textContent = '0';
+      document.getElementById('cum-n').textContent = '0';
+
+      const summaryEl = document.getElementById('daily-edge-summary');
+      const summaryText = document.getElementById('daily-edge-text');
+      if (data.edgeSummary) {
+        summaryText.textContent = data.edgeSummary;
+        summaryEl.style.display = 'block';
+      }
+
+      const picks = data.picks || [];
+      if (!picks.length) {
+        renderEmpty(
+          'Grok Beta has not priced this slate yet.',
+          data.noPlays && data.noPlays !== 'Grok Beta has not priced this slate yet.'
+            ? data.noPlays
+            : 'Zero published picks is a valid result when nothing clears the edge floor — or when every game has already started.'
+        );
+        return;
+      }
+
+      let html = '';
+      for (const p of picks) {
+        const edgePct = (p.edge != null) ? (p.edge * 100).toFixed(1) + 'pt' : (p.modelEdge || '');
+        const win = (p.pModel != null) ? (p.pModel * 100).toFixed(1) + '%' : '';
+        html += '<div class="pick-card">' +
+          '<div class="pick-header">' +
+            '<span class="sport-tag">' + esc(p.sport || '') + '</span>' +
+            '<span class="rating-badge ' + badgeClass(p.rating) + '">' + esc(p.rating || 'B') + '</span>' +
+          '</div>' +
+          '<div class="pick-matchup">' + esc(p.matchup) + '</div>' +
+          '<div class="pick-line">' +
+            '<span class="pick-name">' + esc(p.pick) + '</span>' +
+            '<span class="pick-odds">' + esc(p.odds) + (win ? '<span class="win-prob">' + esc(win) + '</span>' : '') + '</span>' +
+          '</div>' +
+          '<div class="pick-divider"></div>' +
+          '<div class="pick-analysis">' + esc(p.reasoning || '') + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span class="pick-units">' + esc(p.units) + 'u</span>' +
+            (edgePct ? '<span class="edge-badge">' + esc(edgePct) + '</span>' : '') +
+          '</div>' +
+        '</div>';
+      }
+      document.getElementById('picks-container').innerHTML = html;
+    }
+
+    async function load() {
+      try {
+        const resp = await fetch('/api/grok-beta-picks', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        renderPicks(data);
+      } catch (err) {
+        document.getElementById('date-header').textContent = 'Today';
+        renderEmpty('Grok Beta has not priced this slate yet.', 'Unable to reach the published card. Try refresh.');
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

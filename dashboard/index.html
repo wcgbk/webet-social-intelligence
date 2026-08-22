@@ -1670,6 +1670,10 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M8.75 15.25l6.5-6.5M10 12.5l1.5 1.5M12.5 10l1.5 1.5"/></svg></span>
         NFL Model
       </button>
+      <button class="nav-item" data-panel="grok-beta" onclick="switchPanel('grok-beta')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.8 5.7 20.8 8 13.6 2 9.2h7.6z"/></svg></span>
+        Grok Beta Model
+      </button>
       <button class="nav-item" data-panel="gamecast" onclick="switchPanel('gamecast')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4.5c2.8 4.3 2.8 10.7 0 15M18 4.5c-2.8 4.3-2.8 10.7 0 15"/></svg></span>
         Picks Gamecast
@@ -1828,6 +1832,11 @@
         <iframe id="nfl-iframe" src="/nfl" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
+      <!-- GROK BETA MODEL PANEL -->
+      <div class="panel" id="panel-grok-beta" style="overflow:hidden;">
+        <iframe id="grok-beta-iframe" src="/grok-beta" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
       <!-- GAMECAST PANEL -->
       <div class="panel" id="panel-gamecast" style="overflow:hidden;">
         <iframe id="gamecast-iframe" src="/gamecast" style="width:100%;height:100%;border:none;"></iframe>
@@ -1938,6 +1947,29 @@
                 <a href="/admin" class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--surface-3);font-size:0.75rem">Open</a>
               </div>
             </div>
+            <div class="settings-group">
+              <h3>Grok Beta</h3>
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-label">Status</div>
+                  <div class="stat-value" id="gb-status">—</div>
+                  <div class="stat-sub" id="gb-last-run">Last run: —</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label">Picks Today</div>
+                  <div class="stat-value" id="gb-picks-count">—</div>
+                  <div class="stat-sub" id="gb-version">version —</div>
+                </div>
+              </div>
+              <div class="settings-row">
+                <span class="settings-row-label">Run Grok Beta</span>
+                <button class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--primary-dim);color:var(--primary);font-size:0.75rem" onclick="triggerGrokBeta()">Run Grok Beta</button>
+              </div>
+              <div class="settings-row">
+                <span class="settings-row-label">Open /grok-beta</span>
+                <a href="/grok-beta" class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--surface-3);font-size:0.75rem">Open /grok-beta</a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2014,6 +2046,10 @@
             <div class="settings-row">
               <span class="settings-row-label">Edge Picks</span>
               <a href="/alpha" class="settings-row-value" style="color:var(--primary)">/alpha</a>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Grok Beta Model</span>
+              <a href="/grok-beta" class="settings-row-value" style="color:var(--primary)">/grok-beta</a>
             </div>
             <div class="settings-row">
               <span class="settings-row-label">Percentile</span>
@@ -2213,6 +2249,7 @@
     chat: 'Chat With Betty',
     picks: 'Daily Edge Picks',
     nfl: 'NFL Model',
+    'grok-beta': 'Grok Beta Model',
     gamecast: 'Picks Gamecast',
     mlb: 'MLB First 5 Picks',
     webit: 'WeBit',
@@ -2238,7 +2275,7 @@
   // lands on that exact panel. Chat is the home page (no fragment). Any raw
   // panel key also resolves, so older /dashboard#panel links keep working.
   const PANEL_SLUGS = {
-    picks: 'picks', nfl: 'nfl', gamecast: 'gamecast', percentile: 'track-record',
+    picks: 'picks', nfl: 'nfl', 'grok-beta': 'grok-beta', gamecast: 'gamecast', percentile: 'track-record',
     p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
     webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
   };
@@ -3553,6 +3590,32 @@
       await fetch('/.netlify/functions/run-picks', { method: 'POST' });
     } catch (_) {}
   }
+
+  async function triggerGrokBeta() {
+    const btn = event && event.target;
+    if (btn) { btn.textContent = 'Running…'; btn.disabled = true; }
+    try {
+      await fetch('/.netlify/functions/grok-beta-run?key=grok-beta-run', { method: 'POST' });
+      setTimeout(loadGrokBetaStatus, 2500);
+    } catch (_) {}
+    if (btn) { btn.textContent = 'Run Grok Beta'; btn.disabled = false; }
+  }
+
+  async function loadGrokBetaStatus() {
+    try {
+      const res = await fetch('/.netlify/functions/grok-beta-status', { cache: 'no-store' });
+      const data = await res.json();
+      const st = document.getElementById('gb-status');
+      const last = document.getElementById('gb-last-run');
+      const count = document.getElementById('gb-picks-count');
+      const ver = document.getElementById('gb-version');
+      if (st) st.textContent = data.status || 'idle';
+      if (last) last.textContent = data.lastRun ? ('Last run: ' + new Date(data.lastRun).toLocaleString('en-US', { timeZone: 'America/New_York' })) : 'Last run: —';
+      if (count) count.textContent = (data.picksToday != null) ? data.picksToday : '—';
+      if (ver) ver.textContent = data.version || 'version —';
+    } catch (_) {}
+  }
+  loadGrokBetaStatus();
 
   /* ─── Focus input on load (desktop) ─────────────────────────────── */
   if (window.innerWidth > 768) chatInput.focus();

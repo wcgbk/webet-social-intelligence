@@ -37,6 +37,22 @@
 [functions."generate-picks-nfl-background"]
   # Background function — 15min timeout for NFL pick generation
 
+[functions."grok-beta-daily"]
+  schedule = "30 12 * * *"
+  # Grok Beta daily — 08:30 America/New_York during EDT = 12:30 UTC.
+  # First automatic run: Sunday Aug 23, 2026 08:30 ET.
+  # Isolated from trigger-picks-alpha. Writes grok-beta blobs only.
+
+[functions."grok-beta-run-background"]
+  # Background function — 15min timeout for Grok Beta pick generation
+  included_files = ["lib/grok-beta/**"]
+
+[functions."grok-beta-get-picks"]
+  included_files = ["lib/grok-beta/**"]
+
+[functions."grok-beta-status"]
+  included_files = ["lib/grok-beta/**"]
+
 [functions."trigger-picks-mvp"]
   # schedule = "0 12 * * *"
   # PAUSED 2026-08-02 — founder directive: alpha (v10.3-alpha-sharp → /alpha + /dashboard) is the
@@ -709,6 +725,27 @@
 [[redirects]]
   from = "/x"
   to = "/x/index.html"
+  status = 200
+
+# ── Grok Beta (isolated day-one engine) ──
+[[redirects]]
+  from = "/grok-beta"
+  to = "/grok-beta/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/grok-beta-picks"
+  to = "/.netlify/functions/grok-beta-get-picks"
+  status = 200
+
+[[redirects]]
+  from = "/api/grok-beta-run"
+  to = "/.netlify/functions/grok-beta-run"
+  status = 200
+
+[[redirects]]
+  from = "/api/grok-beta-status"
+  to = "/.netlify/functions/grok-beta-status"
   status = 200
 
 # ── Auth: X OAuth (WeBetAI dashboard login) ──────────────────────────────────

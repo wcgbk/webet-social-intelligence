@@ -344,11 +344,12 @@
       return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
     }
     function badgeFor(p) {
-      const conf = String(p.confidence || '').toLowerCase();
-      if (badgeClass[conf]) return { cls: badgeClass[conf], label: ratingLabel[conf] };
-      const r = String(p.rating || 'B');
-      const key = r.toLowerCase().replace('+', 'plus').replace('-', 'minus');
-      return { cls: badgeClass[key] || 'badge-b', label: r };
+      // Units are source of truth (agents may cut stake without rewriting confidence).
+      const u = unitsNum(p);
+      if (u >= 1) return { cls: 'badge-a', label: 'A' };
+      if (u >= 0.75) return { cls: 'badge-aminus', label: 'A-' };
+      if (u >= 0.5) return { cls: 'badge-bplus', label: 'B+' };
+      return { cls: 'badge-b', label: 'B' };
     }
     function unitsNum(p) {
       return parseFloat(String(p.units || '1').toString().replace(/u$/i, '')) || 1;

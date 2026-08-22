@@ -1,15 +1,15 @@
 // verify-picks.js
-// v3: Post-pick verification + auto-fix + sharp handicapper review + Discord alerts
+// v2: Post-pick verification + auto-fix + sharp handicapper review + Discord alerts
 //
-// Runs at 10:30am ET daily. QA is a VERIFIER, not a second writer:
+// Runs at 10:30am ET daily. For each pick on today's beta card:
 // 1. MATH CHECKS: Recompute EV, Kelly, grade. Flag mismatches.
-// 2. NARRATIVE CHECKS: length / empty / whatLoses. Do not rewrite 9am Grok desk copy.
-// 3. SHARP REVIEW: Grok (informational, Discord only). Never mutates the card.
-// 4. AUTO-FIX: Negative EV / broken math only. Replace from the 3% EV pool. Write stub
-//    copy via Grok only for those replacements.
+// 2. NARRATIVE CHECKS: Verify reasoning mentions correct team, correct length, whatLoses present.
+// 3. SHARP REVIEW: Call Claude as an elite Vegas handicapper to review the full card.
+// 4. AUTO-FIX: If a pick fails critical checks (negative EV, math broken), replace it with the
+//    next best candidate from the candidate table. Rewrite the blob so the page updates.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
-// Aligned with v10.6-alpha-sharp: edge-rank, no plus-ML, no F5/soccer, short cards stay short.
+// The goal: the user ALWAYS sees 3 clean, verified picks with correct math and coherent narratives.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -27,50 +27,6 @@ function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10)
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
 function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
-function confFromUnits(u) { return u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b"; }
-
-// v10.5.3: QA replacements must size like the generator — F5 0.5u illiquid cap only,
-// coverProb downsizing gates (sub-50% → 1.0u, sub-42% → 0.5u), full-game Kelly otherwise.
-function cappedKellyUnits(c) {
-  let u = typeof c.kellyUnits === 'number' ? c.kellyUnits : (parseFloat(c.kellyUnits) || 0.5);
-  const mkt = (c.market || c.betType || '').toLowerCase();
-  if (mkt.includes('f5')) u = Math.min(u, 0.5);
-  const cp = typeof c.coverProb === 'number' ? c.coverProb : (parseFloat(c.coverProb) || 0);
-  if (cp > 0 && cp < 0.50) u = Math.min(u, 0.5);
-  if (cp > 0 && cp < 0.42) u = Math.min(u, 0.5);
-  return Math.max(0.5, Math.round(u * 2) / 2);
-}
-
-async function grokFetch({ system, user, max_tokens = 1500, temperature = 0.2, timeoutMs = 25000, model = "grok-4-1-fast" } = {}) {
-  const key = process.env.XAI_API_KEY;
-  if (!key) return null;
-  try {
-    const resp = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-      body: JSON.stringify({
-        model,
-        max_tokens,
-        temperature,
-        messages: [
-          { role: "system", content: system || "" },
-          { role: "user", content: user || "" },
-        ],
-      }),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.text().catch(() => "");
-      console.log(`[verify-grok] HTTP ${resp.status}: ${errBody.slice(0, 160)}`);
-      return null;
-    }
-    const data = await resp.json();
-    return data.choices?.[0]?.message?.content || "";
-  } catch (e) {
-    console.log(`[verify-grok] ${e.message}`);
-    return null;
-  }
-}
 
 // ── Math Checks ──
 function runMathChecks(pick) {
@@ -112,44 +68,6 @@ function runMathChecks(pick) {
 
   const hasCritical = errors.some(e => e.startsWith("CRITICAL"));
   return { checks, warnings, errors, severity: hasCritical ? "critical" : warnings.length > 0 ? "warning" : "clean" };
-}
-
-// v10.6 publish laws — fail the card, do not rewrite it.
-const SOCCER_SPORTS = new Set(["EPL", "La Liga", "Serie A", "Ligue 1", "MLS", "UCL", "Bundesliga", "Europa"]);
-function runPublishLawChecks(picks) {
-  const errors = [];
-  for (const p of picks || []) {
-    const odds = parseOdds(p.odds);
-    const cp = parseProbability(p.winProbability || p.coverProb);
-    const u = parseUnits(p.units);
-    const mkt = (p.betType || "").toLowerCase();
-    const pk = (p.pick || "").toLowerCase();
-    const src = (p.source || "").toLowerCase();
-    if (mkt.startsWith("f5") || src === "f5" || /\bf5\b/.test(pk)) {
-      errors.push(`CRITICAL: F5 on published card (${p.pick})`);
-    }
-    if (SOCCER_SPORTS.has(p.sport)) {
-      errors.push(`CRITICAL: soccer on published card (${p.sport} ${p.pick})`);
-    }
-    const isML = mkt.includes("moneyline") || /\bml\b/.test(pk);
-    if (isML && odds > 140) {
-      errors.push(`CRITICAL: plus-ML longer than +140 (${p.pick} ${p.odds})`);
-    }
-    if (isML && odds > 0 && u > 0.5) {
-      errors.push(`CRITICAL: plus-ML sized ${u}u > 0.5u (${p.pick})`);
-    }
-    if (!isNaN(cp) && cp < 0.50 && u > 0.5) {
-      errors.push(`CRITICAL: cover ${(cp * 100).toFixed(0)}% sized ${u}u > 0.5u (${p.pick})`);
-    }
-  }
-  if ((picks || []).length >= 2) {
-    const cp0 = parseProbability(picks[0].winProbability || picks[0].coverProb);
-    const alt = picks.find(p => parseProbability(p.winProbability || p.coverProb) >= 0.50);
-    if (cp0 < 0.50 && alt) {
-      errors.push(`CRITICAL: pick #1 cover < 50% while ${alt.pick} is >= 50%`);
-    }
-  }
-  return errors;
 }
 
 // ── Narrative Checks ──
@@ -196,18 +114,31 @@ function runNarrativeChecks(pick) {
   return { checks, warnings, errors, severity: hasCritical ? "critical" : warnings.length > 0 ? "warning" : "clean" };
 }
 
-// ── Sharp Handicapper Review (Grok, informational only) ──
+// ── Sharp Handicapper Review (Claude) ──
 async function sharpReview(picks, dateFormatted) {
-  if (!process.env.XAI_API_KEY) return { verdict: "skip", analysis: "No XAI_API_KEY for sharp review" };
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) return { verdict: "skip", analysis: "No API key for sharp review" };
 
   const cardSummary = picks.map((p, i) =>
     `${i + 1}. [${p.rating}] ${p.pick} ${p.odds} | ${p.units} | ${p.sport} | Cover: ${p.winProbability} | EV: ${p.ev}\n   Reasoning: ${(p.coreReasoning || '').slice(0, 200)}\n   What loses: ${p.whatLoses || 'N/A'}`
   ).join('\n\n');
 
-  const text = await grokFetch({
-    system: `You are an elite Las Vegas handicapper with 25 years of experience. You've worked for professional betting syndicates and have a lifetime ROI of +8% on over 50,000 bets. You review betting cards for red flags that pure math can't catch.
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → skip
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-beta": "prompt-caching-2024-07-31",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1500,
+        system: [{ type: "text", text: `You are an elite Las Vegas handicapper with 25 years of experience. You've worked for professional betting syndicates and have a lifetime ROI of +8% on over 50,000 bets. You review betting cards for red flags that pure math can't catch.
 
-Your job: Review today's card and flag anything that concerns you. Think about:
+Your job: Review today's 3-pick card and flag anything that concerns you. Think about:
 - Trap games (teams with nothing to play for, scheduling spots, look-ahead games)
 - Narrative coherence (does the reasoning actually support the pick direction?)
 - Line smell (does the line look right for this matchup, or is it a trap number?)
@@ -228,21 +159,19 @@ Return ONLY valid JSON:
 "concerns" = minor situational worries but still playable.
 "red_flag" = at least one pick has a significant problem that math wouldn't catch.
 
-Be honest and direct. Don't flag things just to flag them. Only raise genuine concerns. This review is advisory only and does not change the published card.`,
-    user: `Today's card (${dateFormatted}):\n\n${cardSummary}`,
-    max_tokens: 1500,
-    temperature: 0.2,
-    timeoutMs: 25000,
-    model: "grok-4-1-fast",
-  });
+Be honest and direct. Don't flag things just to flag them. Only raise genuine concerns.`, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: `Today's card (${dateFormatted}):\n\n${cardSummary}` }],
+      }),
+    });
 
-  if (text) {
-    try {
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || "";
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) return JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.log(`[verify-sharp] Grok JSON parse failed: ${e.message}`);
     }
+  } catch (e) {
+    console.log(`[verify-sharp] Claude review failed: ${e.message}`);
   }
   return { verdict: "skip", analysis: "Sharp review unavailable" };
 }
@@ -259,7 +188,7 @@ async function autoFixPicks(picksData, pickReports) {
   if (candidateTable.length === 0) return { fixed: false, replacements: [], reason: "No candidate table available" };
 
   const currentPicks = new Set(picksData.picks.map(p => p.pick));
-  const newsRejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
+  const claudeRejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
   const replacements = [];
 
   for (const idx of criticalIndices) {
@@ -270,10 +199,8 @@ async function autoFixPicks(picksData, pickReports) {
     for (const c of candidateTable) {
       if (currentPicks.has(c.side)) continue;
       if (c.ev <= 0.03) continue;
-      if ((c.market || '').toLowerCase().includes('moneyline') && c.odds > 140) continue;
-      if ((c.market || '').toLowerCase().startsWith('f5')) continue;
       if (c.verification === 'FAIL') continue;
-      if (newsRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — generator news/DQ rejected`); continue; }
+      if (claudeRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
       // Build a replacement pick object
       replacement = {
@@ -282,9 +209,9 @@ async function autoFixPicks(picksData, pickReports) {
         pick: c.side,
         betType: c.market,
         odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-        rating: unitsToRating(cappedKellyUnits(c)),
-        confidence: confFromUnits(cappedKellyUnits(c)),
-        units: `${cappedKellyUnits(c)}u`,
+        rating: unitsToRating(c.kellyUnits),
+        confidence: c.kellyUnits >= 2.0 ? "aplus" : c.kellyUnits >= 1.25 ? "a" : c.kellyUnits >= 0.75 ? "aminus" : c.kellyUnits >= 0.5 ? "bplus" : "b",
+        units: `${c.kellyUnits}u`,
         ev: `${(c.ev * 100).toFixed(1)}%`,
         evRaw: c.ev,
         edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
@@ -502,8 +429,6 @@ exports.handler = async (event) => {
 
     console.log(`[verify] Starting verification for ${dateKey}`);
 
-    // v10.5.3: full-game Kelly sizes; no ML unit cap to load.
-
     const result = await fetchBetaPicks(dateKey);
     if (!result || !result.data || !result.data.picks || result.data.picks.length === 0) {
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ date: dateKey, verified: false, summary: "No picks found" }) };
@@ -516,12 +441,6 @@ exports.handler = async (event) => {
     let totalWarnings = 0, totalErrors = 0;
     const pickReports = [];
 
-    const lawErrors = runPublishLawChecks(picksData.picks);
-    if (lawErrors.length) {
-      totalErrors += lawErrors.length;
-      console.log(`[verify] v10.6 publish-law failures: ${lawErrors.join(" | ")}`);
-    }
-
     for (const pick of picksData.picks) {
       const math = runMathChecks(pick);
       const narrative = runNarrativeChecks(pick);
@@ -531,9 +450,6 @@ exports.handler = async (event) => {
       totalWarnings += allWarnings.length;
       totalErrors += allErrors.length;
       pickReports.push({ pick: `${pick.pick} ${pick.odds}`, sport: pick.sport, severity, mathChecks: math.checks, narrativeChecks: narrative.checks, warnings: allWarnings, errors: allErrors });
-    }
-    if (lawErrors.length) {
-      pickReports.push({ pick: "CARD", sport: "", severity: "critical", mathChecks: {}, narrativeChecks: {}, warnings: [], errors: lawErrors });
     }
 
     console.log(`[verify] Math/narrative: ${totalErrors} errors, ${totalWarnings} warnings`);
@@ -577,7 +493,7 @@ exports.handler = async (event) => {
           if (currentPickNames.has(c.side)) continue;
           if (c.ev <= 0.03) continue;
           if (c.verification === 'FAIL') continue;
-          if (sharpRejectedSides.has(c.side)) { console.log(`[verify-sharp] Skipping "${c.side}" — generator news/DQ rejected`); continue; }
+          if (sharpRejectedSides.has(c.side)) { console.log(`[verify-sharp] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
           replacement = {
             sport: c.sport,
@@ -585,9 +501,9 @@ exports.handler = async (event) => {
             pick: c.side,
             betType: c.market,
             odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-            rating: unitsToRating(cappedKellyUnits(c)),
-            confidence: confFromUnits(cappedKellyUnits(c)),
-            units: `${cappedKellyUnits(c)}u`,
+            rating: unitsToRating(c.kellyUnits),
+            confidence: c.kellyUnits >= 2.0 ? "aplus" : c.kellyUnits >= 1.25 ? "a" : c.kellyUnits >= 0.75 ? "aminus" : c.kellyUnits >= 0.5 ? "bplus" : "b",
+            units: `${c.kellyUnits}u`,
             ev: `${(c.ev * 100).toFixed(1)}%`,
             evRaw: c.ev,
             edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
@@ -685,12 +601,13 @@ exports.handler = async (event) => {
       console.log(`[verify-final] Running final verification pass on ${picksData.picks.length} picks`);
       let finalFixCount = 0;
 
-      // ── Backfill ONLY if THIS QA run dropped a pick. v10.5.3 publishes a short card on
-      // purpose when fewer than 3 names clear 3% EV — do not pad that. If we removed a
-      // math-critical pick, refill from the 3% pool, 1 per game.
+      // ── Backfill: if drops/removals shrank the card below target, refill from the candidate
+      // pool with the next-best CLEAN candidates. A math-critical removal or sharp red-flag drop
+      // must NOT silently shrink the card to 2 when a clean alternative exists. We never force junk:
+      // only EV>3% candidates that Claude didn't actively reject, de-correlated, 1 per game.
+      // (If the pool is genuinely exhausted — a truly lean slate — we publish fewer, honestly.)
       const TARGET_PICKS = 3;
-      const qaDroppedAPick = (allReplacements || []).some(r => r.removed && !r.added);
-      if (qaDroppedAPick && picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
+      if (picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
         const onCard = new Set(picksData.picks.map(p => p.pick));
         const rejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
         const dirKey = (sport, side) => `${sport}|${/over/i.test(side) ? 'over' : /under/i.test(side) ? 'under' : 'side'}`;
@@ -701,7 +618,7 @@ exports.handler = async (event) => {
         // Exclude sides QA removed/flagged THIS run — never re-add a pick we just dropped.
         const removedThisRun = new Set((allReplacements || []).map(r => r.removed));
         const pool = picksData.candidateTable
-          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0 && !((c.market || '').toLowerCase().includes('moneyline') && c.odds > 140) && !(c.market || '').toLowerCase().startsWith('f5'))
+          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0.03)
           .sort((a, b) => b.ev - a.ev);
 
         let backfilled = 0;
@@ -710,7 +627,7 @@ exports.handler = async (event) => {
           if (matchupsOnCard.has(c.matchup)) continue;          // one pick per game
           const k = dirKey(c.sport, c.side);
           if ((dirCount[k] || 0) >= 2) continue;                // avoid 3 same-direction same-sport legs
-          const u = cappedKellyUnits(c);
+          const u = c.kellyUnits || 0.5;
           picksData.picks.push({
             sport: c.sport, matchup: c.matchup, pick: c.side, betType: c.market,
             odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
@@ -745,8 +662,6 @@ exports.handler = async (event) => {
         } else {
           console.log(`[verify-backfill] No clean candidates available to refill — publishing ${picksData.picks.length} pick(s) honestly`);
         }
-      } else if (picksData.picks.length < TARGET_PICKS) {
-        console.log(`[verify-backfill] Short card ${picksData.picks.length}/3 is generator intent — not padding`);
       }
 
       // Fix grades + strip any stale sharp-review annotations (sharp review is informational-only now)
@@ -761,51 +676,61 @@ exports.handler = async (event) => {
         }
       }
 
-      // Write copy ONLY for QA replacement stubs. Never rewrite 9am Grok desk copy
-      // just because a sentence is short.
+      // Identify picks needing real narratives (generic, too short, or contains "replaces")
       const needsNarrative = [];
       for (let i = 0; i < picksData.picks.length; i++) {
         const p = picksData.picks[i];
         const cr = p.coreReasoning || "";
-        const stub = cr.length < 40
-          || /replaces a|replacing a|statistical edge on this|Auto-generated|Claude narrative unavailable|Grok narrative unavailable/i.test(cr);
-        const missingLose = !p.whatLoses || p.whatLoses.trim().length < 15;
-        if (stub || missingLose) needsNarrative.push(i);
+        if (cr.length < 80 || cr.includes('replaces a') || cr.includes('replacing a') || cr.includes('statistical edge on this')) {
+          needsNarrative.push(i);
+        }
+        if (!p.whatLoses || p.whatLoses.trim().length < 15) {
+          needsNarrative.push(i); // will dedupe below
+        }
       }
       const uniqueNeeds = [...new Set(needsNarrative)];
 
-      if (uniqueNeeds.length > 0 && process.env.XAI_API_KEY) {
-        console.log(`[verify-final] Writing stub narratives for ${uniqueNeeds.length} pick(s) via Grok`);
+      // Call Claude to write proper narratives for picks that need them
+      if (uniqueNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
+        console.log(`[verify-final] Writing narratives for ${uniqueNeeds.length} pick(s) via Claude`);
         const pickDescriptions = uniqueNeeds.map(i => {
           const p = picksData.picks[i];
           return `Pick ${i + 1}: ${p.pick} ${p.odds} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`;
         }).join('\n');
 
-        const grokText = await grokFetch({
-          system: `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+        try {
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → template
+            headers: {
+              "x-api-key": process.env.ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+              "anthropic-beta": "prompt-caching-2024-07-31",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 1500,
+              system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
 - Be 2-3 sentences max
-- Explain in GENERAL terms why WeBetAI favors the side named in the pick
-- Frame the value as the projection diverging from this market price
-- State NO specific player names, records, scores, venues, or injuries you were not explicitly given
+- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
 - Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
 - Always say "WeBetAI" not "the model"
-- No em dashes
 
 Also write a "whatLoses" field: one sentence describing the specific scenario that beats this pick.
 
 Return ONLY valid JSON array:
-[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "..." }, ...]`,
-          user: `Write narratives for these picks:\n${pickDescriptions}`,
-          max_tokens: 1500,
-          temperature: 0.3,
-          timeoutMs: 25000,
-          model: "grok-4-1-fast",
-        });
+[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
+              messages: [{ role: "user", content: `Write narratives for these picks:\n${pickDescriptions}` }],
+            }),
+          });
 
-        let wrote = false;
-        if (grokText) {
-          try {
-            const jsonMatch = grokText.match(/\[[\s\S]*\]/);
+          if (resp.ok) {
+            const data = await resp.json();
+            const text = data.content?.[0]?.text || "";
+            const jsonMatch = text.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
               const narratives = JSON.parse(jsonMatch[0]);
               for (const n of narratives) {
@@ -814,7 +739,6 @@ Return ONLY valid JSON array:
                   if (n.coreReasoning && n.coreReasoning.length > 30) {
                     picksData.picks[idx].coreReasoning = n.coreReasoning;
                     finalFixCount++;
-                    wrote = true;
                     console.log(`[verify-final] Wrote narrative for pick ${idx + 1}: "${picksData.picks[idx].pick}"`);
                   }
                   if (n.whatLoses && n.whatLoses.length > 10) {
@@ -823,22 +747,20 @@ Return ONLY valid JSON array:
                 }
               }
             }
-          } catch (e) {
-            console.log(`[verify-final] Grok JSON parse failed: ${e.message}`);
           }
-        }
-        if (!wrote) {
-          console.log(`[verify-final] Grok narrative write failed — using templates`);
+        } catch (e) {
+          console.log(`[verify-final] Claude narrative write failed: ${e.message}`);
+          // Fallback: use template narratives
           for (const i of uniqueNeeds) {
             const p = picksData.picks[i];
-            if (!p.coreReasoning || p.coreReasoning.length < 40 || /replaces a|replacing a/i.test(p.coreReasoning)) {
+            if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces')) {
               const isTotal = /over|under/i.test(p.pick);
               const isML = /\bML\b/i.test(p.pick);
               p.coreReasoning = isTotal
-                ? `WeBetAI projects ${p.modelEdge || 'a statistical edge'} on this total. Scoring rates support this side at the posted number.`
+                ? `WeBetAI projects ${p.modelEdge || 'a statistical edge'} on this total. Recent scoring trends and pace data support this direction, with the projection diverging from the consensus line.`
                 : isML
-                ? `WeBetAI gives this team a win probability above the market's implied odds at ${p.odds}.`
-                : `WeBetAI projects ${p.modelEdge || 'a spread edge'} on this matchup. The projection diverges from the consensus line.`;
+                ? `WeBetAI gives this team a win probability above the market's implied odds at ${p.odds}. The Elo rating differential and recent form support value at these odds.`
+                : `WeBetAI projects ${p.modelEdge || 'a spread edge'} on this matchup. Efficiency metrics and recent form diverge from the consensus line, creating positive expected value.`;
               finalFixCount++;
             }
             if (!p.whatLoses || p.whatLoses.length < 15) {
@@ -857,91 +779,54 @@ Return ONLY valid JSON array:
         }
       }
 
-      // ── Parlay handling (v10.4): PRESERVE the generator's parlay unless it's now invalid ──
-      // The old unconditional daily rebuild (a) discarded the correlated-parlay optimizer's
-      // output (its legs may legitimately differ from the straight card), (b) re-hardcoded
-      // 0.5u over the 0.25u lean-card rule, and (c) dropped each leg's commenceTime —
-      // re-breaking doubleheader settlement every day at 10:30. Rebuild ONLY when the parlay
-      // is missing or a verification action invalidated one of its legs.
-      const removedPicks = new Set(allReplacements.map(r => r.removed).filter(Boolean));
-      const existingParlay = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
-      const parlayLegsArr = (existingParlay && Array.isArray(existingParlay.legs)) ? existingParlay.legs : [];
-      const cardPickSet = new Set(picksData.picks.map(p => p.pick));
-      const isCardMirror = !existingParlay || /fallback|verified/.test(existingParlay.type || "");
-      const parlayInvalid =
-        !existingParlay || !parlayLegsArr.length ||
-        parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
-        (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
+      // ── Rebuild parlay with the final card ──
+      // The parlay must reflect the actual picks on the page, not the pre-replacement picks
+      if (picksData.picks.length >= 3) {
+        const legs = picksData.picks.slice(0, 3).map(p => ({
+          pick: p.pick,
+          sport: p.sport,
+          matchup: p.matchup,
+          betType: p.betType,
+          odds: p.odds,
+          coverProb: p.winProbability || p.coverProb,
+          ev: p.ev,
+        }));
 
-      if (picksData.picks.length >= 2 && parlayInvalid) {
-        const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
-        const uniqueByGame = [];
-        const seenG = new Set();
-        for (const p of picksData.picks) {
-          const g = (p.matchup || '').toLowerCase().replace(/\s+vs\.?\s+/g, ' @ ').replace(/\s+/g, ' ').trim();
-          if (!g || seenG.has(g)) continue;
-          seenG.add(g);
-          uniqueByGame.push(p);
-          if (uniqueByGame.length >= 3) break;
+        let combinedDecimal = 1.0, combinedProb = 1.0;
+        for (const leg of legs) {
+          const odds = parseOdds(leg.odds);
+          combinedDecimal *= americanToDecimal(odds);
+          combinedProb *= parseProbability(leg.coverProb);
         }
-        if (uniqueByGame.length >= 2) {
-          const legs = uniqueByGame.map(p => ({
-            pick: p.pick,
-            sport: p.sport,
-            matchup: p.matchup,
-            betType: p.betType,
-            odds: p.odds,
-            coverProb: p.winProbability || p.coverProb,
-            // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
-            commenceTime: p.commenceTime || '',
-            ev: p.ev,
-          }));
+        const parlayEV = (combinedProb * combinedDecimal) - 1;
 
-          let combinedDecimal = 1.0, combinedProb = 1.0;
-          for (const leg of legs) {
-            const odds = parseOdds(leg.odds);
-            combinedDecimal *= americanToDecimal(odds);
-            combinedProb *= parseProbability(leg.coverProb);
-          }
-          const parlayEV = (combinedProb * combinedDecimal) - 1;
-
-          picksData.parlayLegs = [{
-            type: `${legs.length}-leg-parlay-verified`,
-            legs,
-            units: hasLean ? "0.25u" : "0.5u",
-            combinedOdds: combinedDecimal >= 2
-              ? `+${Math.round((combinedDecimal - 1) * 100)}`
-              : `${Math.round(-100 / (combinedDecimal - 1))}`,
-            combinedDecimal: +combinedDecimal.toFixed(2),
-            combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
-            ev: `${(parlayEV * 100).toFixed(1)}%`,
-            correlationNote: "Rebuilt after verification from the published card (2- or 3-leg)",
-          }];
-          console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} (${hasLean ? '0.25u lean card' : '0.5u'})`);
-          finalFixCount++;
-        } else if (picksData.parlayLegs && picksData.parlayLegs.length) {
-          picksData.parlayLegs = [];
-          console.log(`[verify-final] Cleared stale parlay — fewer than 2 unique games remain`);
-        }
-      } else if (picksData.picks.length < 2) {
+        picksData.parlayLegs = [{
+          type: "3-leg-parlay-verified",
+          legs,
+          units: "0.5u",
+          combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
+          combinedDecimal: +combinedDecimal.toFixed(2),
+          combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
+          ev: `${(parlayEV * 100).toFixed(1)}%`,
+          correlationNote: "Rebuilt after verification — reflects final verified card",
+        }];
+        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)}`);
+        finalFixCount++;
+      } else {
+        // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
+        // never shows a parlay containing a removed leg.
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
         }
-      } else {
-        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
       }
 
-      // verified ONLY if the final card is genuinely clean: at least 1 pick, no math flags, no v10.6 law breaks
-      picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag) && lawErrors.length === 0;
+      // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
+      picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
 
-      // Do not rewrite the 9am blob unless QA actually changed the card.
-      if (finalFixCount > 0) {
-        await updatePicksBlob(dateKey, picksData);
-        console.log(`[verify-final] Final pass complete: ${finalFixCount} fixes applied and saved`);
-      } else {
-        console.log(`[verify-final] No card mutations — 9am Grok copy left intact`);
-      }
+      // Write the final clean card
+      await updatePicksBlob(dateKey, picksData);
+      console.log(`[verify-final] Final pass complete: ${finalFixCount} fixes applied and saved`);
     }
 
     // ── Step 4: Build report ──

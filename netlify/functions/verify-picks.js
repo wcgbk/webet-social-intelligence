@@ -114,6 +114,190 @@ function runNarrativeChecks(pick) {
   return { checks, warnings, errors, severity: hasCritical ? "critical" : warnings.length > 0 ? "warning" : "clean" };
 }
 
+// ── Hard Rock Bet placeability check (Ben-directed, 2026-08-22) ──
+// QA must confirm every published bet — each straight pick AND each parlay leg — is a bet a
+// user can actually place at a major US sportsbook, using Hard Rock Bet as the confirmation
+// book, at a price/line in the ballpark of what the card expresses. Ballpark: the market
+// exists at Hard Rock for that game; totals/spreads point within 0.5 of the published line;
+// Hard Rock's price no more than ~3 implied-probability points worse than published
+// (≈20-25 American cents). Missing market/game → error; point drift ≤0.5 or worse-but-close
+// price → warning. ADVISORY: findings go to the QA report + Discord alert; this check never
+// modifies the published card (severity is never escalated to critical, so auto-fix ignores it).
+const HR_BOOK_KEYS = new Set(["hardrockbet", "hardrockbet_oh", "hardrock"]);
+const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl" };
+const HR_F5_MARKETS = { "F5 Moneyline": "h2h_1st_5_innings", "F5 Run Line": "spreads_1st_5_innings", "F5 Total": "totals_1st_5_innings" };
+const HR_ODDS_WORSE_PP = 3.0; // warning: Hard Rock implied prob >3pp worse than published
+const HR_ODDS_ERROR_PP = 6.0; // error: >6pp worse — materially off the expressed price
+
+function hrLastWord(name) { return String(name || "").trim().split(/\s+/).pop().toLowerCase(); }
+function hrImpliedPct(american) { return impliedProb(american) * 100; }
+function hrMatchGame(games, matchup) {
+  const m = String(matchup || "").toLowerCase();
+  return (games || []).find(g => m.includes(hrLastWord(g.home_team)) && m.includes(hrLastWord(g.away_team))) || null;
+}
+function hrBookFrom(game) {
+  return ((game && game.bookmakers) || []).find(b => HR_BOOK_KEYS.has((b.key || "").toLowerCase())) || null;
+}
+function hrMarketFrom(book, marketKey) {
+  return ((book && book.markets) || []).find(mk => mk.key === marketKey) || null;
+}
+
+// Compare one published pick against Hard Rock's current offering for that market.
+function hrEvaluate(pick, game) {
+  const out = { available: false, hrOdds: null, hrPoint: null, warnings: [], errors: [] };
+  const pubOdds = parseOdds(pick.odds);
+  const betType = pick.betType || "";
+  const isF5 = betType.startsWith("F5");
+  const marketKey = isF5 ? HR_F5_MARKETS[betType] : (betType === "Moneyline" ? "h2h" : betType === "Total" ? "totals" : "spreads");
+  if (!marketKey) { out.warnings.push(`HardRock: unsupported bet type "${betType}" — not checked`); return out; }
+
+  const book = hrBookFrom(game);
+  if (!book) {
+    out.errors.push(isF5
+      ? `HardRock: F5 markets not offered at Hard Rock Bet for this game — bet placeable only at other majors`
+      : `HardRock: Hard Rock Bet has no lines for this game — bet not confirmed placeable`);
+    return out;
+  }
+  const market = hrMarketFrom(book, marketKey);
+  if (!market) { out.errors.push(`HardRock: ${betType} market not offered at Hard Rock Bet for this game`); return out; }
+
+  let outcome = null;
+  let pubPoint = null;
+  if (marketKey === "h2h" || marketKey === "h2h_1st_5_innings") {
+    const team = String(pick.pick || "").replace(/\s*(F5\s*)?ML\s*$/i, "").trim();
+    outcome = (market.outcomes || []).find(o => hrLastWord(o.name) === hrLastWord(team) || String(o.name).toLowerCase().includes(hrLastWord(team)));
+  } else if (marketKey === "totals" || marketKey === "totals_1st_5_innings") {
+    const side = /under/i.test(pick.pick) ? "Under" : "Over";
+    pubPoint = parseFloat(String(pick.pick).replace(/[^0-9.]/g, ""));
+    outcome = (market.outcomes || []).find(o => o.name === side);
+  } else {
+    const team = String(pick.pick || "").replace(/[-+]?\d+(\.\d+)?\s*$/, "").trim();
+    const ptMatch = String(pick.pick || "").match(/([-+]?\d+(\.\d+)?)\s*$/);
+    pubPoint = ptMatch ? parseFloat(ptMatch[1]) : null;
+    outcome = (market.outcomes || []).find(o => hrLastWord(o.name) === hrLastWord(team) || String(o.name).toLowerCase().includes(hrLastWord(team)));
+  }
+  if (!outcome || !Number.isFinite(outcome.price)) {
+    out.errors.push(`HardRock: side "${pick.pick}" not found in Hard Rock's ${betType} market`);
+    return out;
+  }
+
+  out.available = true;
+  out.hrOdds = outcome.price > 0 ? `+${outcome.price}` : `${outcome.price}`;
+  if (outcome.point !== undefined) out.hrPoint = outcome.point;
+
+  // Point ballpark (totals/spreads): same bet within half a point, else it's a different bet.
+  if (pubPoint !== null && Number.isFinite(outcome.point)) {
+    const d = Math.abs(outcome.point - pubPoint);
+    if (d > 0.5) {
+      out.errors.push(`HardRock: line is ${outcome.point} vs published ${pubPoint} (Δ${d.toFixed(1)}) — materially different bet`);
+      return out;
+    }
+    if (d > 0) out.warnings.push(`HardRock: line is ${outcome.point} vs published ${pubPoint} — half-point off`);
+  }
+
+  // Price ballpark: how much worse is Hard Rock's implied probability than the published price?
+  if (Number.isFinite(pubOdds)) {
+    const worsePP = hrImpliedPct(outcome.price) - hrImpliedPct(pubOdds);
+    if (worsePP > HR_ODDS_ERROR_PP) {
+      out.errors.push(`HardRock: price ${out.hrOdds} vs published ${pick.odds} (+${worsePP.toFixed(1)}pp implied) — outside ballpark`);
+    } else if (worsePP > HR_ODDS_WORSE_PP) {
+      out.warnings.push(`HardRock: price ${out.hrOdds} vs published ${pick.odds} (+${worsePP.toFixed(1)}pp implied) — worse but in ballpark`);
+    }
+  }
+  return out;
+}
+
+async function runHardRockCheck(picksData) {
+  const summary = { book: "Hard Rock Bet", checked: 0, available: 0, warnings: 0, errors: 0, skipped: false };
+  const pickResults = [];
+  const parlayFindings = [];
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey) { summary.skipped = true; summary.reason = "No ODDS_API_KEY"; return { summary, pickResults, parlayFindings }; }
+
+  // One main-lines fetch per sport (bookmakers param scopes cost to Hard Rock only),
+  // plus one per-event fetch per F5 game.
+  const bySport = {};
+  for (const p of (picksData.picks || [])) (bySport[p.sport] = bySport[p.sport] || []).push(p);
+  const sportGames = {};
+  for (const sport of Object.keys(bySport)) {
+    const key = HR_SPORT_KEYS[sport];
+    if (!key) continue;
+    try {
+      const resp = await fetch(
+        `https://api.the-odds-api.com/v4/sports/${key}/odds?markets=h2h,spreads,totals&oddsFormat=american&bookmakers=hardrockbet,hardrockbet_oh&apiKey=${apiKey}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      sportGames[sport] = resp.ok ? await resp.json() : null;
+    } catch (e) { sportGames[sport] = null; }
+  }
+
+  const f5Cache = {};
+  async function gameForPick(pick) {
+    const games = sportGames[pick.sport];
+    if (!games) return { game: null, feedDown: true };
+    const game = hrMatchGame(games, pick.matchup);
+    if (!game) return { game: null, feedDown: false };
+    if ((pick.betType || "").startsWith("F5")) {
+      if (!(game.id in f5Cache)) {
+        try {
+          const resp = await fetch(
+            `https://api.the-odds-api.com/v4/sports/${HR_SPORT_KEYS[pick.sport]}/events/${game.id}/odds?markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&bookmakers=hardrockbet,hardrockbet_oh&apiKey=${apiKey}`,
+            { signal: AbortSignal.timeout(12000) }
+          );
+          f5Cache[game.id] = resp.ok ? await resp.json() : null;
+        } catch (e) { f5Cache[game.id] = null; }
+      }
+      return { game: f5Cache[game.id], feedDown: f5Cache[game.id] === null };
+    }
+    return { game, feedDown: false };
+  }
+
+  for (const pick of (picksData.picks || [])) {
+    summary.checked++;
+    const { game, feedDown } = await gameForPick(pick);
+    let r;
+    if (!game) {
+      r = { available: false, hrOdds: null, hrPoint: null, warnings: [], errors: [] };
+      // A game missing from the upcoming-odds feed usually means it already started —
+      // unknowable rather than unplaceable, so warn instead of error.
+      r.warnings.push(feedDown
+        ? `HardRock: odds feed unavailable — placeability not confirmed`
+        : `HardRock: game not in the current odds feed (already started?) — placeability not confirmed`);
+    } else {
+      r = hrEvaluate(pick, game);
+    }
+    if (r.available) summary.available++;
+    summary.warnings += r.warnings.length;
+    summary.errors += r.errors.length;
+    pickResults.push(r);
+  }
+
+  // Parlay legs: same per-leg confirmation + same-game structural check (a standard parlay
+  // with two legs from one game is typically not buildable — books require an SGP instead).
+  for (const pl of (picksData.parlayLegs || [])) {
+    const legGames = [];
+    for (const leg of (pl.legs || [])) {
+      const idx = (picksData.picks || []).findIndex(p => p.pick === leg.pick && p.matchup === leg.matchup);
+      if (idx >= 0 && pickResults[idx]) {
+        const r = pickResults[idx];
+        if (!r.available && r.errors.length) parlayFindings.push({ level: "error", note: `Parlay leg "${leg.pick}": ${r.errors[0]}` });
+      } else {
+        const { game } = await gameForPick(leg);
+        const r = game ? hrEvaluate(leg, game) : null;
+        if (!r || !r.available) parlayFindings.push({ level: "error", note: `Parlay leg "${leg.pick}" not confirmed at Hard Rock Bet` });
+      }
+      legGames.push(hrLastWord((leg.matchup || "").replace(/\s*(vs\.?|@|at)\s*/gi, " ")));
+    }
+    const dupes = legGames.filter((g, i) => legGames.indexOf(g) !== i);
+    if (dupes.length > 0) {
+      parlayFindings.push({ level: "warning", note: `Parlay has two legs from the same game — a standard parlay likely won't build at Hard Rock Bet (needs SGP)` });
+    }
+  }
+  summary.errors += parlayFindings.filter(f => f.level === "error").length;
+  summary.warnings += parlayFindings.filter(f => f.level === "warning").length;
+  return { summary, pickResults, parlayFindings };
+}
+
 // ── Sharp Handicapper Review (Claude) ──
 async function sharpReview(picks, dateFormatted) {
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -453,6 +637,30 @@ exports.handler = async (event) => {
     }
 
     console.log(`[verify] Math/narrative: ${totalErrors} errors, ${totalWarnings} warnings`);
+
+    // ── Step 1.5: Hard Rock Bet placeability check (advisory) ──
+    // Confirms each bet (straights + parlay legs) is actually placeable at Hard Rock Bet in
+    // the ballpark of the published odds/line. Findings flow into the report + Discord; the
+    // severity stays below "critical" so auto-fix never rewrites the card because of it.
+    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [] };
+    try {
+      hrCheck = await runHardRockCheck(picksData);
+      for (let i = 0; i < pickReports.length; i++) {
+        const r = hrCheck.pickResults[i];
+        if (!r) continue;
+        pickReports[i].hardRock = { available: r.available, hrOdds: r.hrOdds, hrPoint: r.hrPoint };
+        for (const w of r.warnings) { pickReports[i].warnings.push(w); totalWarnings++; }
+        for (const e of r.errors) { pickReports[i].errors.push(e); totalErrors++; }
+        if (pickReports[i].severity === "clean" && (r.warnings.length > 0 || r.errors.length > 0)) {
+          pickReports[i].severity = "warning";
+        }
+      }
+      totalErrors += hrCheck.parlayFindings.filter(f => f.level === "error").length;
+      totalWarnings += hrCheck.parlayFindings.filter(f => f.level === "warning").length;
+      console.log(`[verify-hardrock] ${hrCheck.summary.available}/${hrCheck.summary.checked} bets confirmed at Hard Rock Bet | ${hrCheck.summary.errors} error(s), ${hrCheck.summary.warnings} warning(s)`);
+    } catch (e) {
+      console.log(`[verify-hardrock] Check failed (non-fatal): ${e.message}`);
+    }
 
     // ── Step 2: Auto-fix critical issues ──
     const fixResult = await autoFixPicks(picksData, pickReports);
@@ -840,8 +1048,9 @@ Return ONLY valid JSON array:
       totalErrors,
       sharpRedFlags: sharpReplacements.length,
       picks: pickReports,
+      hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
       sharpReview: sharpResult,
-      summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
+      summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? 'skipped' : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
       verifiedAt: new Date().toISOString(),
     };
 

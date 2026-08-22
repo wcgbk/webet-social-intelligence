@@ -1,24 +1,223 @@
 // self-optimize.js
-// Self-optimization engine for WeBetAI v10.5
-// Runs weekly (Sunday night). Analyzes last 14-30 days of results data,
-// computes optimal parameter adjustments, and stores them in Netlify Blobs.
-// The picks pipeline reads these parameters at runtime, creating a closed-loop
-// feedback system that continuously improves without manual intervention.
+// Weekly performance OBSERVER for WeBetAI (v10.4 rebuild, 2026-08-03).
 //
-// Parameters tuned:
-// 1. Sport-specific Kelly multipliers (which sports are we sharpest at?)
-// 2. Market-specific accuracy (spreads vs totals vs ML — where do we hit?)
-// 3. Edge bucket calibration (what edge ranges actually win?)
-// 4. Cover probability cap adjustment (are we over/under-confident?)
-// 5. Home advantage drift (has home-court advantage changed this season?)
+// Runs Sunday. Analyzes the last 45 days of graded results and stores an
+// analytics + alarms report. As of v10.4 this is an OBSERVER, not a steerer:
+// the generator no longer applies these parameters to live picks. The old
+// closed loop inflated coverProb for whatever segment ran hot in the trailing
+// window (momentum-chasing — it manufactured phantom EV and stuffed regressing
+// segments into the top unit tier right as they mean-reverted), and its unit
+// multipliers mostly evaporated in 0.5u rounding anyway. Sizing policy now
+// lives in the generator's static per-market caps, changed deliberately.
 //
-// Philosophy: CONSERVATIVE adjustments. Each parameter moves at most 10% per cycle.
-// Catastrophic overfitting is prevented by:
-// - Minimum sample sizes (15+ picks per bucket)
-// - Mean-reversion bias (parameters drift back toward 1.0 over time)
-// - Max adjustment caps per cycle
+// What this computes weekly:
+// 1. Per-sport / per-market win rate AND ROI (real risked units, not count×1u)
+// 2. Grade-level accuracy + a GRADE-INVERSION ALARM (A-tier hitting below
+//    B-tier = the conviction ladder is anti-predictive — a bug signature)
+// 3. Confidence calibration when cover data is present in the cache
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+
+// ── Parlay-leg CLV (v10.4.2 observer add-on) ──
+// A variance-heavy parlay P/L can't tell you whether parlays are a real edge or luck. CLV can:
+// are the LEGS we parlay actually beating the closing line? If yes, the compounding parlay
+// profit is a real edge worth Kelly-scaling; if no, it's variance that will revert. Reads the
+// clv-{date} blobs (per-pick CLV from track-clv) + picks-{date} blobs (the actual parlay legs),
+// matches legs -> CLV records, aggregates overall + per leg-market. Observational only.
+async function analyzeParlayLegCLV(token, days = 60) {
+  const base = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega`;
+  const H = { Authorization: `Bearer ${token}` };
+  const getJSON = async (key) => {
+    try { const r = await fetch(`${base}/${key}`, { headers: H }); return r.ok ? await r.json() : null; }
+    catch (e) { return null; }
+  };
+  const idx = await getJSON("picks-dates");
+  let dates = Array.isArray(idx) ? idx : [];
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().split("T")[0];
+  dates = dates.filter(d => d >= cutoff).sort();
+  if (!dates.length) return null;
+
+  const overall = { n: 0, clvSum: 0, beat: 0 };
+  const byMarket = {};
+  const allByMarket = {}; // ALL straight-pick CLV by market — drives the ML-cap decision (not just parlay legs)
+  let parlaysCovered = 0, legsTotal = 0, legsMatched = 0;
+  const bump = (map, m, c, beat) => { if (!map[m]) map[m] = { n: 0, clvSum: 0, beat: 0 }; map[m].n++; map[m].clvSum += c; if (beat) map[m].beat++; };
+
+  const processDate = async (d) => {
+    const [picks, clv] = await Promise.all([getJSON(`picks-${d}`), getJSON(`clv-${d}`)]);
+    if (!clv || !Array.isArray(clv.picks)) return;
+    // All-market CLV over every graded leg (drives the ML-cap proposal).
+    for (const p of clv.picks) {
+      if (typeof p.clvCents === 'number') bump(allByMarket, p.market || p.betType || 'Unknown', p.clvCents, p.beatClosing);
+    }
+    // Parlay-leg CLV (the subset that actually went into parlays).
+    if (!picks) return;
+    const parlay = (picks.parlayLegs && picks.parlayLegs[0]) || null;
+    const legs = (parlay && Array.isArray(parlay.legs)) ? parlay.legs : null;
+    if (!legs || legs.length < 2) return;
+    parlaysCovered++;
+    const clvByKey = new Map(clv.picks.map(p => [`${p.pick}||${p.matchup}`, p]));
+    for (const leg of legs) {
+      legsTotal++;
+      const rec = clvByKey.get(`${leg.pick}||${leg.matchup}`);
+      if (!rec || typeof rec.clvCents !== "number") continue;
+      legsMatched++;
+      overall.n++; overall.clvSum += rec.clvCents; if (rec.beatClosing) overall.beat++;
+      bump(byMarket, rec.market || rec.betType || leg.betType || "Unknown", rec.clvCents, rec.beatClosing);
+    }
+  };
+  // Batch to bound concurrency (2 blob fetches/date) so this stays well under the function
+  // timeout even across a 60-day window.
+  const BATCH = 12;
+  for (let i = 0; i < dates.length; i += BATCH) {
+    await Promise.all(dates.slice(i, i + BATCH).map(processDate));
+  }
+
+  const fin = (b) => ({ n: b.n, avgCLVCents: +(b.clvSum / b.n).toFixed(2), beatCloseRate: +(b.beat / b.n).toFixed(3) });
+  const allMarketCLV = Object.fromEntries(Object.entries(allByMarket).filter(([, v]) => v.n > 0).map(([k, v]) => [k, fin(v)]));
+
+  if (overall.n === 0) return { window: `${days}d`, parlaysCovered, legsTotal, legsMatched: 0, allMarketCLV, note: "no parlay legs matched a CLV record yet" };
+
+  const out = {
+    window: `${days}d`, parlaysCovered, legsTotal, legsMatched,
+    coverage: +(legsMatched / legsTotal).toFixed(2),
+    ...fin(overall),
+    byMarket: Object.fromEntries(Object.entries(byMarket).map(([k, v]) => [k, fin(v)])),
+    allMarketCLV,
+  };
+  // Verdict: CLV is the only thing that separates a real parlay edge from variance.
+  if (out.n >= 30 && out.beatCloseRate >= 0.53 && out.avgCLVCents > 0) {
+    out.verdict = "positive";
+    out.recommendation = `Parlay legs beat the close ${(out.beatCloseRate*100).toFixed(0)}% (avg +${out.avgCLVCents}c) over ${out.n} legs — the parlay edge is REAL. A modest Kelly-based stake increase is justified; source legs from the highest-CLV markets.`;
+  } else if (out.n >= 30 && out.beatCloseRate < 0.48) {
+    out.verdict = "negative";
+    out.recommendation = `Parlay legs are NOT beating the close (${(out.beatCloseRate*100).toFixed(0)}%, avg ${out.avgCLVCents}c) over ${out.n} legs — the parlay profit is VARIANCE, not edge. Hold or cut the parlay stake; do not scale.`;
+  } else {
+    out.verdict = "inconclusive";
+    out.recommendation = `${out.n} legs tracked (need ~30+ with a clear signal). Beat-close ${(out.beatCloseRate*100).toFixed(0)}%, avg ${out.avgCLVCents}c — hold the stake steady and keep tracking.`;
+  }
+  return out;
+}
+
+// ── Discord digest (v10.4.4) ──
+// The observer is only useful if someone reads it. Each Sunday run posts a short model-health
+// digest (parlay-CLV verdict, grade-inversion alarm, segment ROI) to a Discord webhook so it
+// reaches the operator instead of sitting in a blob. Webhook lives in a blob (not git — it's a
+// write-to-channel secret); env DISCORD_OBSERVER_WEBHOOK overrides.
+function buildObserverDigest(params) {
+  const d = (params.generatedAt || '').split('T')[0];
+  const L = [`📊 **WeBetAI Weekly Observer** — ${d}`, `_sample: ${params.sampleSize} graded picks (observational; no live steering)_`, ''];
+  const pl = params.parlayLegCLV;
+  if (pl && pl.verdict) {
+    const e = pl.verdict === 'positive' ? '🟢' : pl.verdict === 'negative' ? '🔴' : '🟡';
+    L.push(`${e} **Parlay-leg CLV: ${pl.verdict.toUpperCase()}** — ${(pl.beatCloseRate * 100).toFixed(0)}% beat close, ${pl.avgCLVCents >= 0 ? '+' : ''}${pl.avgCLVCents}¢ avg (n=${pl.n})`);
+    L.push(pl.recommendation);
+    const mk = Object.entries(pl.byMarket || {}).filter(([, v]) => v.n >= 5)
+      .sort((a, b) => b[1].avgCLVCents - a[1].avgCLVCents)
+      .map(([m, v]) => `${m} ${v.avgCLVCents >= 0 ? '+' : ''}${v.avgCLVCents}¢/${(v.beatCloseRate * 100).toFixed(0)}%`);
+    if (mk.length) L.push(`   legs by market (best→worst): ${mk.join(' · ')}`);
+    L.push('');
+  } else if (pl) {
+    L.push(`🟡 **Parlay-leg CLV:** ${pl.legsMatched || 0} legs matched — ${pl.note || 'building sample'}`, '');
+  }
+  for (const a of (params.alerts || [])) if (!a.startsWith('PARLAY CLV')) L.push(`⚠️ ${a}`);
+  if (params.marketROI && Object.keys(params.marketROI).length) {
+    L.push('', `**Market ROI (45d):** ` + Object.entries(params.marketROI).map(([m, r]) => `${m} ${r >= 0 ? '+' : ''}${(r * 100).toFixed(0)}%`).join(' · '));
+  }
+  if (params.oddsUsage) L.push(params.oddsUsage);
+
+  // ── Approve-able proposals (reply-to-approve in the channel) ──
+  // Each maps to a bounded, reversible config change in edge-picks-omega/alpha-config. The connector
+  // Claude applies ONLY these whitelisted actions, ONLY when Ben approves. See the runbook.
+  const props = [];
+  if (pl && pl.verdict === 'positive') props.push(['parlay-stake-up', 'raise parlay stake 0.5u → 0.75u — parlay-leg CLV is positive']);
+  const mlc = (params.marketCLV || {}).Moneyline;
+  if (mlc && mlc.n >= 30 && mlc.beatCloseRate >= 0.52 && mlc.avgCLVCents > 0) props.push(['ml-cap-up', `raise full-game ML cap 0.5u → 1.0u — ML CLV turned positive (${(mlc.beatCloseRate * 100).toFixed(0)}% beat close, n=${mlc.n})`]);
+  if (props.length) {
+    L.push('', '**📈 Proposals — reply in this channel to approve:**');
+    for (const [id, desc] of props) L.push(`• ${desc}\n   → reply \`approve ${id}\``);
+  }
+
+  // ── Governance dashboard: what's live, what changed, and did QA stay clean ──
+  const g = params.governance;
+  if (g) {
+    L.push('', '━━━ **Governance** ━━━');
+    L.push(`**Live config:** model \`${g.model}\` · parlay ${g.parlayStakeUnits}u · ML cap ${g.mlUnitCap}u`);
+    if (g.recentChanges && g.recentChanges.length) {
+      L.push(`**Config changes this week (${g.recentChanges.length}):** ` + g.recentChanges.map(c => `${c.action || c.note || 'change'} → ${c.to != null ? c.to : ''} (${c.date}${c.by ? ', ' + c.by : ''})`).join('; '));
+    } else {
+      L.push('**Config changes this week:** ✅ none — the model was not touched.');
+    }
+    if (g.qaDays === 0) L.push('**Daily QA (7d):** no audit records found');
+    else if (g.qaErrors === 0 && g.qaFixes === 0) L.push(`**Daily QA (7d):** ✅ ${g.qaPicks} picks audited over ${g.qaDays} days — 0 math errors, 0 auto-fixes${g.qaRedFlags ? `, ${g.qaRedFlags} sharp note(s)` : ''}`);
+    else L.push(`**Daily QA (7d):** ⚠️ ${g.qaErrors} error(s) / ${g.qaFixes} auto-fix(es) over ${g.qaDays} days — ${g.qaFlagged.join(' · ')}`);
+  }
+  return L.join('\n').slice(0, 1950);
+}
+// Governance snapshot: live config, the week's approved config changes, and the daily QA record.
+async function fetchGovernance(token) {
+  const base = `https://api.netlify.com/api/v1/blobs/${SITE_ID}`;
+  const H = { Authorization: `Bearer ${token}` };
+  const getJSON = async (store, key) => { try { const r = await fetch(`${base}/${store}/${key}`, { headers: H }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+  const getText = async (store, key) => { try { const r = await fetch(`${base}/${store}/${key}`, { headers: H }); return r.ok ? (await r.text()).trim() : null; } catch (e) { return null; } };
+  const cfg = (await getJSON('edge-picks', 'alpha-config')) || {};
+  let model = null;
+  const latest = await getText('edge-picks-omega', 'latest-date');
+  if (latest) { const p = await getJSON('edge-picks-omega', `picks-${latest}`); model = p && (p.model || (p.summary && p.summary.modelVersion)); }
+  const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+  const log = await getJSON('edge-picks', 'config-change-log');
+  const recentChanges = Array.isArray(log) ? log.filter(e => (e.date || '') >= cutoff) : [];
+  let qaDays = 0, qaPicks = 0, qaErrors = 0, qaFixes = 0, qaRedFlags = 0; const qaFlagged = [];
+  for (let back = 1; back <= 7; back++) {
+    const d = new Date(Date.now() - back * 86400000).toISOString().split('T')[0];
+    const v = await getJSON('edge-picks-omega', `verification-${d}`);
+    if (!v) continue;
+    qaDays++;
+    qaPicks += (Array.isArray(v.picks) ? v.picks.length : 0);
+    qaErrors += v.totalErrors || 0;
+    if (v.autoFixed) qaFixes += (Array.isArray(v.replacements) ? v.replacements.length : 1);
+    qaRedFlags += v.sharpRedFlags || 0;
+    if ((v.totalErrors || 0) > 0 || v.autoFixed) qaFlagged.push(`${d}: ${v.totalErrors || 0} err${v.autoFixed ? ', auto-fixed' : ''}`);
+  }
+  return {
+    model: model || 'unknown',
+    parlayStakeUnits: cfg.parlayStakeUnits != null ? cfg.parlayStakeUnits : 0.5,
+    mlUnitCap: cfg.mlUnitCap != null ? cfg.mlUnitCap : 0.5,
+    recentChanges, qaDays, qaPicks, qaErrors, qaFixes, qaRedFlags, qaFlagged,
+  };
+}
+async function fetchOddsUsageLine() {
+  const key = process.env.ODDS_API_KEY;
+  if (!key) return null;
+  try {
+    const r = await fetch(`https://api.the-odds-api.com/v4/sports/?apiKey=${key}`);
+    const used = Number(r.headers.get('x-requests-used'));
+    const rem = Number(r.headers.get('x-requests-remaining'));
+    if (!Number.isFinite(used) || !Number.isFinite(rem)) return null;
+    const quota = used + rem, pct = quota ? (rem / quota * 100) : 0;
+    return { line: `**Odds API:** ${used.toLocaleString()} / ${quota.toLocaleString()} used · ${rem.toLocaleString()} left (${pct.toFixed(0)}%)${pct < 15 ? ' ⚠️ LOW — top up before it stalls settlement/CLV' : ''}`, low: pct < 15 };
+  } catch (e) { return null; }
+}
+async function postObserverDigest(token, params) {
+  let webhook = process.env.DISCORD_OBSERVER_WEBHOOK || null;
+  if (!webhook) {
+    try {
+      const r = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks/observer-webhook`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) webhook = (await r.text()).trim();
+    } catch (e) { /* ignore */ }
+  }
+  if (!webhook || !/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(webhook)) {
+    console.log('[self-optimize] No Discord observer webhook configured — skipping digest');
+    return;
+  }
+  try {
+    const resp = await fetch(webhook, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: buildObserverDigest(params), username: 'WeBetAI Observer' }),
+    });
+    console.log(`[self-optimize] Posted observer digest to Discord: HTTP ${resp.status}`);
+  } catch (e) { console.log(`[self-optimize] Discord digest post failed (non-fatal): ${e.message}`); }
+}
 
 exports.handler = async (event) => {
   const token = process.env.NETLIFY_AUTH_TOKEN;
@@ -48,7 +247,15 @@ exports.handler = async (event) => {
           if (p.sport === "PARLAY") continue;
           if (p.result !== "win" && p.result !== "loss") continue;
           const pickStr = p.pick || "";
-          const betType = /^(Over|Under)/.test(pickStr) ? "Total"
+          // v10.4: F5 detected FIRST — "Nationals F5 ML" used to pollute the Moneyline
+          // bucket and "F5 Over 4.5" was misfiled as Run Line, so market stats steered
+          // (and now report) the wrong segments.
+          const isF5 = /\bf5\b/i.test(pickStr);
+          const betType = isF5
+            ? (/over|under/i.test(pickStr) ? "F5 Total"
+              : / ML\b/i.test(pickStr) ? "F5 Moneyline"
+              : "F5 Run Line")
+            : /^(Over|Under)/.test(pickStr) ? "Total"
             : / ML$/.test(pickStr) ? "Moneyline"
             : p.sport === "NHL" ? "Puck Line"
             : p.sport === "MLB" ? "Run Line"
@@ -89,38 +296,48 @@ exports.handler = async (event) => {
     byGrade: {},       // { "A": { wins, losses, accuracy } }
   };
 
+  const DOLLARS_PER_UNIT = 150;
   for (const r of allResults) {
     const sport = r.sport || "Unknown";
     const market = r.betType || r.market || "Unknown";
     const grade = r.rating || r.grade || "B";
     const won = r.result === "win";
     const profit = r.profit || 0;
+    // v10.4: real dollars risked per pick (units × $150). The old count×$150 assumed every
+    // pick was 1u, which distorted every ROI this function reported.
+    const risked = (parseFloat(r.units) || 1) * DOLLARS_PER_UNIT;
     const edge = parseFloat(r.edgePoints || r.edge || 0);
 
     // By sport
-    if (!buckets.bySport[sport]) buckets.bySport[sport] = { wins: 0, losses: 0, profit: 0, count: 0 };
+    if (!buckets.bySport[sport]) buckets.bySport[sport] = { wins: 0, losses: 0, profit: 0, risked: 0, count: 0 };
     buckets.bySport[sport].count++;
     buckets.bySport[sport].profit += profit;
+    buckets.bySport[sport].risked += risked;
     if (won) buckets.bySport[sport].wins++; else buckets.bySport[sport].losses++;
 
     // By market
-    if (!buckets.byMarket[market]) buckets.byMarket[market] = { wins: 0, losses: 0, profit: 0, count: 0 };
+    if (!buckets.byMarket[market]) buckets.byMarket[market] = { wins: 0, losses: 0, profit: 0, risked: 0, count: 0 };
     buckets.byMarket[market].count++;
     buckets.byMarket[market].profit += profit;
+    buckets.byMarket[market].risked += risked;
     if (won) buckets.byMarket[market].wins++; else buckets.byMarket[market].losses++;
 
     // By sport+market
     const sm = `${sport}_${market}`;
-    if (!buckets.bySportMarket[sm]) buckets.bySportMarket[sm] = { wins: 0, losses: 0, profit: 0, count: 0 };
+    if (!buckets.bySportMarket[sm]) buckets.bySportMarket[sm] = { wins: 0, losses: 0, profit: 0, risked: 0, count: 0 };
     buckets.bySportMarket[sm].count++;
     buckets.bySportMarket[sm].profit += profit;
+    buckets.bySportMarket[sm].risked += risked;
     if (won) buckets.bySportMarket[sm].wins++; else buckets.bySportMarket[sm].losses++;
 
-    // By edge bucket
-    const edgeBucket = edge < 3 ? "0-3" : edge < 6 ? "3-6" : edge < 10 ? "6-10" : edge < 15 ? "10-15" : "15+";
-    if (!buckets.byEdgeBucket[edgeBucket]) buckets.byEdgeBucket[edgeBucket] = { wins: 0, losses: 0, count: 0 };
-    buckets.byEdgeBucket[edgeBucket].count++;
-    if (won) buckets.byEdgeBucket[edgeBucket].wins++; else buckets.byEdgeBucket[edgeBucket].losses++;
+    // By edge bucket — only when the cache row actually carries an edge value (the
+    // results cache historically didn't, which silently filed EVERY pick under "0-3").
+    if (edge > 0) {
+      const edgeBucket = edge < 3 ? "0-3" : edge < 6 ? "3-6" : edge < 10 ? "6-10" : edge < 15 ? "10-15" : "15+";
+      if (!buckets.byEdgeBucket[edgeBucket]) buckets.byEdgeBucket[edgeBucket] = { wins: 0, losses: 0, count: 0 };
+      buckets.byEdgeBucket[edgeBucket].count++;
+      if (won) buckets.byEdgeBucket[edgeBucket].wins++; else buckets.byEdgeBucket[edgeBucket].losses++;
+    }
 
     // By grade
     if (!buckets.byGrade[grade]) buckets.byGrade[grade] = { wins: 0, losses: 0, count: 0 };
@@ -128,13 +345,16 @@ exports.handler = async (event) => {
     if (won) buckets.byGrade[grade].wins++; else buckets.byGrade[grade].losses++;
   }
 
-  // ── Step 3: Compute optimal parameters ──
+  // ── Step 3: Compute the weekly report ──
+  // observationalOnly: the generator loads this blob for logging but applies NOTHING from it
+  // (v10.4). The multiplier fields remain as diagnostics of where the model has been sharp.
   const params = {
     generatedAt: new Date().toISOString(),
     sampleSize: allResults.length,
+    observationalOnly: true,
+    alerts: [],
     sportKellyMult: {},
     marketKellyMult: {},
-    coverProbAdjust: {},
     edgeBucketPerformance: {},
   };
 
@@ -167,20 +387,11 @@ exports.handler = async (event) => {
     console.log(`[self-optimize] ${market}: ${data.wins}W-${data.losses}L (${(marketWinRate*100).toFixed(0)}%), mult=${finalMult.toFixed(3)}`);
   }
 
-  // Cover probability cap adjustment
-  // If we're winning at rates above our predicted cover prob, caps are too low
-  // If we're losing despite high predicted cover prob, caps are too high
-  for (const [sm, data] of Object.entries(buckets.bySportMarket)) {
-    if (data.count < MIN_SAMPLE) continue;
-    const accuracy = data.wins / data.count;
-    // If accuracy > 55%, model is under-confident → raise cap slightly
-    // If accuracy < 48%, model is over-confident → lower cap slightly
-    if (accuracy > 0.55) {
-      params.coverProbAdjust[sm] = +Math.min(0.03, (accuracy - 0.55) * 0.5).toFixed(3);
-    } else if (accuracy < 0.48) {
-      params.coverProbAdjust[sm] = +Math.max(-0.03, (accuracy - 0.48) * 0.5).toFixed(3);
-    }
-  }
+  // v10.4: coverProbAdjust REMOVED. Shifting claimed probabilities toward whatever segment
+  // ran hot in the trailing window is momentum-chasing — it corrupted calibration and EV at
+  // the exact moment segments mean-reverted. Probability fixes belong in the pricing model's
+  // calibration constants, changed deliberately, never from a live feedback loop.
+  // Per-segment win rates remain visible in buckets.bySportMarket (stored with history).
 
   // Edge bucket performance — identifies which edge ranges are profitable
   // This tells us whether to tighten or loosen edge thresholds
@@ -191,29 +402,21 @@ exports.handler = async (event) => {
     };
   }
 
-  // ── Step 3b: ROI-weighted sport multipliers (profit-based, not just accuracy) ──
-  // Win rate can be misleading — a sport could win 55% but lose money on -110 juice.
-  // ROI captures the actual profitability.
+  // ── Step 3b: Real ROI per sport AND per market (v10.4: actual risked dollars) ──
+  // Win rate alone misleads — a market can win 55% and lose money at -110, while ML dogs can
+  // win 48% and profit. ROI on real stakes is the honest number; CLV (from the weekly clv-*
+  // blobs) is its market-validated companion in the review.
   params.sportROI = {};
   for (const [sport, data] of Object.entries(buckets.bySport)) {
     if (data.count < MIN_SAMPLE) continue;
-    const wagered = data.count * 150; // $150/unit approximate
-    const roi = wagered > 0 ? data.profit / wagered : 0;
-    params.sportROI[sport] = +roi.toFixed(4);
-
-    // If ROI is strongly positive, boost Kelly more aggressively (up to 1.20x)
-    if (roi > 0.05) {
-      const roiBoost = Math.min(1.20, 1.0 + roi * 2);
-      // Blend with accuracy-based multiplier (70% accuracy, 30% ROI)
-      const accuracyMult = params.sportKellyMult[sport] || 1.0;
-      params.sportKellyMult[sport] = +((accuracyMult * 0.7 + roiBoost * 0.3)).toFixed(3);
-      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, blended mult=${params.sportKellyMult[sport]}`);
-    } else if (roi < -0.05) {
-      const roiPenalty = Math.max(0.85, 1.0 + roi * 2);
-      const accuracyMult = params.sportKellyMult[sport] || 1.0;
-      params.sportKellyMult[sport] = +((accuracyMult * 0.7 + roiPenalty * 0.3)).toFixed(3);
-      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, blended mult=${params.sportKellyMult[sport]}`);
-    }
+    params.sportROI[sport] = data.risked > 0 ? +(data.profit / data.risked).toFixed(4) : 0;
+    console.log(`[self-optimize] ${sport} ROI=${(params.sportROI[sport]*100).toFixed(1)}% on $${data.risked} risked`);
+  }
+  params.marketROI = {};
+  for (const [market, data] of Object.entries(buckets.byMarket)) {
+    if (data.count < MIN_SAMPLE) continue;
+    params.marketROI[market] = data.risked > 0 ? +(data.profit / data.risked).toFixed(4) : 0;
+    console.log(`[self-optimize] ${market} ROI=${(params.marketROI[market]*100).toFixed(1)}% on $${data.risked} risked (${data.wins}W-${data.losses}L)`);
   }
 
   // ── Step 3c: Grade-level accuracy analysis ──
@@ -226,6 +429,28 @@ exports.handler = async (event) => {
       count: data.count,
     };
     console.log(`[self-optimize] Grade ${grade}: ${data.wins}W-${data.losses}L (${(data.wins/data.count*100).toFixed(0)}%)`);
+  }
+
+  // ── Step 3c2: GRADE-INVERSION ALARM (v10.4) ──
+  // If the A-tier (A+/A/A-) hits BELOW the B-tier on a real sample, the conviction ladder is
+  // anti-predictive — a ranking/sizing bug signature, not variance. This exact inversion
+  // preceded the post-All-Star-break slump and sat unread in gradeAccuracy every Sunday.
+  const tierAcc = (grades) => grades.reduce((acc, g) => {
+    const d = buckets.byGrade[g];
+    if (d) { acc.w += d.wins; acc.n += d.wins + d.losses; }
+    return acc;
+  }, { w: 0, n: 0 });
+  const aTier = tierAcc(["A+", "A", "A-"]);
+  const bTier = tierAcc(["B+", "B", "B-"]);
+  if (aTier.n >= 20 && bTier.n >= 20) {
+    const aAcc = aTier.w / aTier.n, bAcc = bTier.w / bTier.n;
+    if (aAcc < bAcc - 0.05) {
+      const msg = `GRADE INVERSION: A-tier ${(aAcc * 100).toFixed(1)}% (n=${aTier.n}) below B-tier ${(bAcc * 100).toFixed(1)}% (n=${bTier.n}) — the conviction ladder is anti-predictive; audit ranking + per-market caps before trusting unit sizes`;
+      params.alerts.push(msg);
+      console.error(`[self-optimize] ⚠️ ${msg}`);
+    } else {
+      console.log(`[self-optimize] Grade ladder healthy: A-tier ${(aAcc * 100).toFixed(1)}% (n=${aTier.n}) vs B-tier ${(bAcc * 100).toFixed(1)}% (n=${bTier.n})`);
+    }
   }
 
   // ── Step 3d: Optimal edge threshold recommendation ──
@@ -267,6 +492,27 @@ exports.handler = async (event) => {
     console.log(`[self-optimize] Calibration ${bucket}: predicted=${(avgPredicted*100).toFixed(0)}%, actual=${(actualRate*100).toFixed(0)}%, gap=${((actualRate-avgPredicted)*100).toFixed(0)}%`);
   }
 
+  // ── Step 3f: Parlay-leg CLV — is the parlay a real edge or variance? ──
+  // The signal that tells us whether to Kelly-scale the parlay stake or hold it steady.
+  try {
+    const plCLV = await analyzeParlayLegCLV(token, 60);
+    if (plCLV) {
+      params.parlayLegCLV = plCLV;
+      params.marketCLV = plCLV.allMarketCLV || {}; // straight-pick CLV by market (ML-cap signal)
+      const ranked = Object.entries(plCLV.byMarket || {})
+        .filter(([, v]) => v.n >= 5)
+        .sort((a, b) => b[1].avgCLVCents - a[1].avgCLVCents)
+        .map(([m, v]) => `${m} ${v.avgCLVCents >= 0 ? '+' : ''}${v.avgCLVCents}c/${(v.beatCloseRate * 100).toFixed(0)}%`);
+      if (ranked.length) console.log(`[self-optimize] Parlay-leg CLV by market (best→worst): ${ranked.join(' | ')}`);
+      if (plCLV.recommendation) {
+        console.log(`[self-optimize] Parlay-leg CLV verdict: ${plCLV.verdict} — ${plCLV.recommendation}`);
+        params.alerts.push(`PARLAY CLV (${plCLV.verdict}): ${plCLV.recommendation}`);
+      }
+    }
+  } catch (e) {
+    console.log(`[self-optimize] Parlay-leg CLV analysis failed (non-fatal): ${e.message}`);
+  }
+
   // ── Step 4: Store optimized parameters ──
   try {
     await fetch(
@@ -286,7 +532,7 @@ exports.handler = async (event) => {
   try {
     const historyKey = `self-optimize-history-${new Date().toISOString().split('T')[0]}`;
     await fetch(
-      `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/${historyKey}`,
+      `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks/${historyKey}`,
       {
         method: "PUT",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
@@ -295,13 +541,24 @@ exports.handler = async (event) => {
     );
   } catch (e) { /* non-critical */ }
 
+  // ── Step 6: Odds-API quota + push the digest to Discord ──
+  try {
+    const usage = await fetchOddsUsageLine();
+    if (usage) { params.oddsUsage = usage.line; if (usage.low) params.alerts.push('ODDS API quota LOW — top up to protect settlement + CLV capture'); }
+  } catch (e) { /* non-fatal */ }
+  try { params.governance = await fetchGovernance(token); } catch (e) { console.log(`[self-optimize] governance fetch failed (non-fatal): ${e.message}`); }
+  await postObserverDigest(token, params);
+
   return {
     statusCode: 200,
     body: JSON.stringify({
+      observationalOnly: true,
       sampleSize: allResults.length,
-      sportMults: params.sportKellyMult,
-      marketMults: params.marketKellyMult,
-      coverProbAdj: params.coverProbAdjust,
+      sportROI: params.sportROI,
+      marketROI: params.marketROI,
+      gradeAccuracy: params.gradeAccuracy,
+      parlayLegCLV: params.parlayLegCLV,
+      alerts: params.alerts,
     }),
   };
 };

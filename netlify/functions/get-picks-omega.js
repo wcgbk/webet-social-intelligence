@@ -1,7 +1,9 @@
 // get-picks-omega.js
 // API endpoint: GET /.netlify/functions/get-picks-omega
-// Returns the latest Omega picks JSON from Netlify Blobs (alpha store).
+// Returns TODAY's Omega picks (ET) from Netlify Blobs (alpha store).
 // Optional: ?date=YYYY-MM-DD for historical picks.
+// Default path never falls back to yesterday — that painted last-night W/L onto
+// the morning card while the 9am generator was still running.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +16,21 @@ const CORS = {
 // free page, so stripping them changes nothing visible — client-side hiding alone
 // is forbidden per the product charter.
 const PREMIUM_FIELDS = ['kellyCalc', 'kellyFraction', 'zScore'];
+function todayET() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+function liveCacheHeaders(isGenerating) {
+  const age = isGenerating ? 10 : 30;
+  return { ...CORS, 'Cache-Control': `public, max-age=${age}, s-maxage=${age}, must-revalidate` };
+}
+function generatingPayload(dateKey) {
+  return {
+    error: false,
+    noPlays: "Today's card is generating. Check back at 9am ET.",
+    date: dateKey, picks: [], rejections: [],
+    summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
+  };
+}
 function stripPremium(picksData) {
   if (!picksData || !Array.isArray(picksData.picks)) return picksData;
   const clone = { ...picksData, picks: picksData.picks.map(p => {
@@ -37,44 +54,29 @@ exports.handler = async (event) => {
       const { getStore } = await import("@netlify/blobs");
       const store = getStore("edge-picks-omega");
 
-      let dateKey;
-      if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
-        dateKey = requestedDate;
-      } else {
-        const latestDate = await store.get("latest-date");
-        if (!latestDate) {
-          return {
-            statusCode: 200,
-            headers: CORS,
-            body: JSON.stringify({
-              error: false,
-              noPlays: "No Omega picks generated yet. Check back at 9am ET.",
-              date: null, picks: [], rejections: [],
-              summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
-            }),
-          };
-        }
-        dateKey = latestDate.trim();
-      }
+      const historical = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate);
+      const dateKey = historical ? requestedDate : todayET();
 
       const picksData = await store.get(`picks-${dateKey}`, { type: "json" });
 
       if (!picksData) {
         return {
           statusCode: 200,
-          headers: CORS,
-          body: JSON.stringify({
-            error: false,
-            noPlays: `No Omega picks found for ${dateKey}.`,
-            date: dateKey, picks: [], rejections: [],
-            summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
-          }),
+          headers: liveCacheHeaders(!historical),
+          body: JSON.stringify(historical
+            ? {
+                error: false,
+                noPlays: `No Omega picks found for ${dateKey}.`,
+                date: dateKey, picks: [], rejections: [],
+                summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
+              }
+            : generatingPayload(dateKey)),
         };
       }
 
       return {
         statusCode: 200,
-        headers: { ...CORS, 'Cache-Control': 'public, max-age=300, s-maxage=300' },
+        headers: liveCacheHeaders(false),
         body: JSON.stringify(stripPremium(picksData)),
       };
 
@@ -88,34 +90,28 @@ exports.handler = async (event) => {
         const baseUrl = `https://api.netlify.com/api/v1/blobs/${siteId}/edge-picks-omega`;
         const authHeaders = { "Authorization": `Bearer ${token}` };
 
-        let dateKey = requestedDate;
-        if (!dateKey) {
-          try {
-            const lr = await fetch(`${baseUrl}/latest-date`, { headers: authHeaders });
-            if (lr.ok) dateKey = (await lr.text()).trim();
-          } catch(e) {}
-        }
-
-        if (dateKey) {
-          try {
-            const pr = await fetch(`${baseUrl}/picks-${dateKey}`, { headers: authHeaders });
-            if (pr.ok) {
-              const data = await pr.json();
-              return { statusCode: 200, headers: CORS, body: JSON.stringify(stripPremium(data)) };
-            }
-          } catch(e) {}
-        }
+        const historical = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate);
+        const dateKey = historical ? requestedDate : todayET();
+        try {
+          const pr = await fetch(`${baseUrl}/picks-${dateKey}`, { headers: authHeaders });
+          if (pr.ok) {
+            const data = await pr.json();
+            return { statusCode: 200, headers: liveCacheHeaders(false), body: JSON.stringify(stripPremium(data)) };
+          }
+        } catch(e) {}
+        return {
+          statusCode: 200,
+          headers: liveCacheHeaders(!historical),
+          body: JSON.stringify(historical
+            ? { error: false, noPlays: `No Omega picks found for ${dateKey}.`, date: dateKey, picks: [], rejections: [], summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] } }
+            : generatingPayload(dateKey)),
+        };
       }
 
       return {
         statusCode: 200,
-        headers: CORS,
-        body: JSON.stringify({
-          error: false,
-          noPlays: "No Omega picks available. Check back at 9am ET.",
-          date: null, picks: [], rejections: [],
-          summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
-        }),
+        headers: liveCacheHeaders(true),
+        body: JSON.stringify(generatingPayload(todayET())),
       };
     }
   } catch (err) {

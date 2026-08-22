@@ -21,6 +21,7 @@ const SITE_URL = 'https://webetsocial.com';
 const VIEW_TITLES = {
   picks: 'Daily Edge Picks',
   nfl: 'NFL Model',
+  omega: 'Omega Model',
   gamecast: 'Picks Gamecast',
   'track-record': 'Percentile Rankings', percentile: 'Percentile Rankings',
   pick3: 'Pick 3 PVP', p2p: 'Pick 3 PVP',

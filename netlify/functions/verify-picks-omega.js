@@ -27,6 +27,28 @@ function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10)
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
 function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
+function confFromUnits(u) { return u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b"; }
+
+// v10.4.7: QA replacements/backfills must obey the SAME sizing discipline as the generator's main
+// path — per-market caps (F5 0.5u, Moneyline = the config-tunable ML cap, Total 1.5u, RL/Spread/
+// Puck 1.0u) and the coverProb downsizing gates (sub-50% → 1.0u, sub-42% → 0.5u). Previously these
+// sized from the raw candidate Kelly (candidateTable.kellyUnits is pre-cap), so a replacement
+// moneyline could publish above its 0.5u cap. This mirrors applyMarketUnitCaps + the validation gate.
+let _mlUnitCap = 0.5; // overwritten from edge-picks-omega/alpha-config at the top of the handler
+function cappedKellyUnits(c) {
+  let u = typeof c.kellyUnits === 'number' ? c.kellyUnits : (parseFloat(c.kellyUnits) || 0.5);
+  const mkt = (c.market || c.betType || '').toLowerCase();
+  let cap = null;
+  if (mkt.includes('f5')) cap = 0.5;
+  else if (mkt.includes('moneyline')) cap = _mlUnitCap;
+  else if (mkt.includes('total')) cap = 1.5;
+  else if (mkt.includes('run line') || mkt.includes('spread') || mkt.includes('puck')) cap = 1.0;
+  if (cap != null) u = Math.min(u, cap);
+  const cp = typeof c.coverProb === 'number' ? c.coverProb : (parseFloat(c.coverProb) || 0);
+  if (cp > 0 && cp < 0.50) u = Math.min(u, 1.0);
+  if (cp > 0 && cp < 0.42) u = Math.min(u, 0.5);
+  return Math.max(0.5, Math.round(u * 2) / 2);
+}
 
 // ── Math Checks ──
 function runMathChecks(pick) {
@@ -448,9 +470,9 @@ async function autoFixPicks(picksData, pickReports) {
         pick: c.side,
         betType: c.market,
         odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-        rating: unitsToRating(c.kellyUnits),
-        confidence: c.kellyUnits >= 2.0 ? "aplus" : c.kellyUnits >= 1.25 ? "a" : c.kellyUnits >= 0.75 ? "aminus" : c.kellyUnits >= 0.5 ? "bplus" : "b",
-        units: `${c.kellyUnits}u`,
+        rating: unitsToRating(cappedKellyUnits(c)),
+        confidence: confFromUnits(cappedKellyUnits(c)),
+        units: `${cappedKellyUnits(c)}u`,
         ev: `${(c.ev * 100).toFixed(1)}%`,
         evRaw: c.ev,
         edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
@@ -668,6 +690,15 @@ exports.handler = async (event) => {
 
     console.log(`[verify] Starting verification for ${dateKey}`);
 
+    // v10.4.7: load the tunable ML cap so QA replacements match the generator's live sizing.
+    try {
+      const t = process.env.NETLIFY_AUTH_TOKEN;
+      if (t) {
+        const cfgResp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/alpha-config`, { headers: { Authorization: `Bearer ${t}` } });
+        if (cfgResp.ok) { const cfg = await cfgResp.json(); if (typeof cfg.mlUnitCap === 'number' && cfg.mlUnitCap >= 0.5 && cfg.mlUnitCap <= 2) { _mlUnitCap = cfg.mlUnitCap; console.log(`[verify] ML cap for QA sizing: ${_mlUnitCap}u`); } }
+      }
+    } catch (e) { /* keep default 0.5u */ }
+
     const result = await fetchBetaPicks(dateKey);
     if (!result || !result.data || !result.data.picks || result.data.picks.length === 0) {
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ date: dateKey, verified: false, summary: "No picks found" }) };
@@ -764,9 +795,9 @@ exports.handler = async (event) => {
             pick: c.side,
             betType: c.market,
             odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-            rating: unitsToRating(c.kellyUnits),
-            confidence: c.kellyUnits >= 2.0 ? "aplus" : c.kellyUnits >= 1.25 ? "a" : c.kellyUnits >= 0.75 ? "aminus" : c.kellyUnits >= 0.5 ? "bplus" : "b",
-            units: `${c.kellyUnits}u`,
+            rating: unitsToRating(cappedKellyUnits(c)),
+            confidence: confFromUnits(cappedKellyUnits(c)),
+            units: `${cappedKellyUnits(c)}u`,
             ev: `${(c.ev * 100).toFixed(1)}%`,
             evRaw: c.ev,
             edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
@@ -890,7 +921,7 @@ exports.handler = async (event) => {
           if (matchupsOnCard.has(c.matchup)) continue;          // one pick per game
           const k = dirKey(c.sport, c.side);
           if ((dirCount[k] || 0) >= 2) continue;                // avoid 3 same-direction same-sport legs
-          const u = c.kellyUnits || 0.5;
+          const u = cappedKellyUnits(c);
           picksData.picks.push({
             sport: c.sport, matchup: c.matchup, pick: c.side, betType: c.market,
             odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
@@ -1042,9 +1073,24 @@ Return ONLY valid JSON array:
         }
       }
 
-      // ── Rebuild parlay with the final card ──
-      // The parlay must reflect the actual picks on the page, not the pre-replacement picks
-      if (picksData.picks.length >= 3) {
+      // ── Parlay handling (v10.4): PRESERVE the generator's parlay unless it's now invalid ──
+      // The old unconditional daily rebuild (a) discarded the correlated-parlay optimizer's
+      // output (its legs may legitimately differ from the straight card), (b) re-hardcoded
+      // 0.5u over the 0.25u lean-card rule, and (c) dropped each leg's commenceTime —
+      // re-breaking doubleheader settlement every day at 10:30. Rebuild ONLY when the parlay
+      // is missing or a verification action invalidated one of its legs.
+      const removedPicks = new Set(allReplacements.map(r => r.removed).filter(Boolean));
+      const existingParlay = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
+      const parlayLegsArr = (existingParlay && Array.isArray(existingParlay.legs)) ? existingParlay.legs : [];
+      const cardPickSet = new Set(picksData.picks.map(p => p.pick));
+      const isCardMirror = !existingParlay || /fallback|verified/.test(existingParlay.type || "");
+      const parlayInvalid =
+        !existingParlay || !parlayLegsArr.length ||
+        parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
+        (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
+
+      if (picksData.picks.length >= 3 && parlayInvalid) {
+        const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
         const legs = picksData.picks.slice(0, 3).map(p => ({
           pick: p.pick,
           sport: p.sport,
@@ -1052,6 +1098,8 @@ Return ONLY valid JSON array:
           betType: p.betType,
           odds: p.odds,
           coverProb: p.winProbability || p.coverProb,
+          // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
+          commenceTime: p.commenceTime || '',
           ev: p.ev,
         }));
 
@@ -1066,22 +1114,24 @@ Return ONLY valid JSON array:
         picksData.parlayLegs = [{
           type: "3-leg-parlay-verified",
           legs,
-          units: "0.5u",
+          units: hasLean ? "0.25u" : "0.5u",
           combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
           combinedDecimal: +combinedDecimal.toFixed(2),
           combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
           ev: `${(parlayEV * 100).toFixed(1)}%`,
-          correlationNote: "Rebuilt after verification — reflects final verified card",
+          correlationNote: "Rebuilt after verification — a leg was invalidated by pick replacement",
         }];
-        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)}`);
+        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
         finalFixCount++;
-      } else {
+      } else if (picksData.picks.length < 3) {
         // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
         // never shows a parlay containing a removed leg.
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
         }
+      } else {
+        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
       }
 
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
@@ -1105,7 +1155,7 @@ Return ONLY valid JSON array:
       picks: pickReports,
       hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
       sharpReview: sharpResult,
-      summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? 'skipped' : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
+      summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? "skipped" : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
       verifiedAt: new Date().toISOString(),
     };
 

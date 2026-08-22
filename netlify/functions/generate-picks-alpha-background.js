@@ -1,13 +1,15 @@
 // generate-picks-alpha-background.js
-// v10.6-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
-// JS computes ALL projections, edges, and Kelly sizing. JS SELECTS. Grok writes copy only.
-// IMMUTABLE PUBLISH LAWS (do not delete because a projection bug was fixed):
-//   1. Select by calibrated EDGE (cover − implied), then predCLV — never by EV (payout inflates dogs).
-//   2. No plus-money ML on the published 3. Missing Pinnacle on an ML = drop (fail closed).
-//   3. Cover < 50% → max 0.5u and cannot be pick #1. Cover < 42% → no ML.
-//   4. No soccer. No F5. Short card / no-play if the pool is thin. No 1.5% lean fill.
-//   5. LLM never selects or resizes.
-// v10.6 (2026-08-22): publish formula above. True-stats pricer kept.
+// v10.7-alpha-desk — Daily handicapper card (VSIN / The Sharp Plays product standard)
+// JS prices and selects. Grok writes copy only.
+// DESK LAWS (TSP: over-filtering destroys the card. VSIN: own number vs the line, 2% is a play):
+//   1. Select by calibrated EDGE (cover − implied), then predCLV. Never by EV.
+//   2. Publish floor = 1.5¢ of edge AND EV > 0. 3¢ emptied a 15-game MLB slate to 1 pick.
+//   3. Plus-ML allowed only as a priced dog: odds ≤ +140, cover ≥ 45%, predCLV ≥ 0, 0.5u max.
+//      +150 and up (Athletics +155, Nats +153) stay off. Missing Pinnacle on any ML = drop.
+//   4. Cover < 50% cannot lead the card. No soccer. No F5. No 1.5% lean fake-fill.
+//   5. LLM never selects or resizes. Parlay = the published card (2+ games) or none.
+// v10.7 (2026-08-22): desk floor + priced-dog cap. True-stats pricer kept.
+// v10.6 (2026-08-22): 3¢ + no plus-ML — over-optimized the product to one total.
 // v10.5.3 (2026-08-19): one publish gate = calibrated EV ≥ 3% + predCLV ≥ −2¢. Drop ML 8% raw
 //   bar and August market unit caps (Kelly sizes). No LLM may pick or "low-conviction" veto.
 //   Fill-to-3 only from the 3% pool; short card / no-play if fewer survive. No 1.5% lean fake card.
@@ -35,7 +37,9 @@
 // Odds regions: us,us2,eu. Blob store: edge-picks-alpha.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
-const MODEL_VERSION = "v10.6-alpha-sharp";
+const MODEL_VERSION = "v10.7-alpha-desk";
+const PUBLISH_EDGE_FLOOR = 0.015; // 1.5¢ of calibrated cover − implied. 3¢ was a product-killer.
+const PLUS_ML_MAX = 140;          // VSIN-style underpriced dog, not a last-place longshot
 const GROK_WRITER = "grok-4-6";
 const { bettoredgeFetch } = require("./bettoredge-auth");
 
@@ -3896,6 +3900,9 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
 
     // Enforce: Claude can reduce units by up to 50% but never increase
     let finalUnits = kellyToUnits(c.kellyUnits, drawdownActive, c.coverProb);
+    if ((c.market || "").toLowerCase().includes("moneyline") && c.odds > 0) {
+      finalUnits = Math.min(finalUnits, 0.5);
+    }
     if (sel.adjustedUnits) {
       const claudeUnits = parseFloat(String(sel.adjustedUnits).replace(/[^0-9.]/g, ''));
       if (!isNaN(claudeUnits) && claudeUnits < finalUnits) {
@@ -4005,7 +4012,8 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
         const cMatchup = `${c.awayTeam} vs. ${c.homeTeam}`;
         if (usedMatchups.has(cMatchup)) return false;
         if (usedSides.has(c.side)) return false;
-        if ((c.ev || 0) <= 0.03) return false;
+        if ((c.ev || 0) <= 0) return false;
+        if (calibratedEdge(c) < PUBLISH_EDGE_FLOOR) return false;
         if ((c.coverProb || 0) < 0.45) return false;
         if (!c.odds || c.odds < -300 || c.odds > 300) return false;
         return true;
@@ -4353,8 +4361,8 @@ function jsSelectPicks(candidateTable, claudeOutput) {
     const g = matchupKey(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`);
     if (g && dqMatchups.has(g)) continue;
     if (!hasPositiveEdge(c) || !passesPublishGates(c)) continue;
-    if (calibratedEdge(c) < 0.03 && (c.ev || 0) < 0.03) continue;
-    if (calibratedEdge(c) < 0.03) continue;
+    if (calibratedEdge(c) < PUBLISH_EDGE_FLOOR) continue;
+    if ((c.ev || 0) <= 0) continue;
     if (g && seen.has(g)) continue;
     if (g) seen.add(g);
     survivors.push(c);
@@ -4598,7 +4606,7 @@ exports.handler = async (event) => {
   // ── PHASE 1B: COMPUTE ALL EDGES DETERMINISTICALLY ──
   let allCandidates;
   try {
-    allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
+    allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, PUBLISH_EDGE_FLOOR, weatherData);
     console.log(`[v10] Computed ${allCandidates.length} edge candidates across all sports`);
 
     // ── PHASE 1B2: CLV FEEDBACK ADJUSTMENT — REMOVED (v10.4) ──
@@ -4980,12 +4988,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.6-alpha-sharp",
+      date: dateISO, dateFormatted, model: "v10.7-alpha-desk",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.6-alpha-sharp" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.7-alpha-desk" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -5112,7 +5120,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.6-alpha-sharp",
+      model: "v10.7-alpha-desk",
       picks,
       rejections,
       edgeSummary: edgeSummaryText || "",
@@ -5123,7 +5131,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.6-alpha-sharp",
+        modelVersion: "v10.7-alpha-desk",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5233,15 +5241,25 @@ function passesPublishGates(c) {
   }
   const isML = market.includes("moneyline");
   if (isML && typeof c.odds === "number" && c.odds > 0) {
-    console.log(`[v10.6] DROP ${c.side || c.pick}: plus-money ML ${c.odds > 0 ? "+" : ""}${c.odds} off the published card`);
-    return false;
+    if (c.odds > PLUS_ML_MAX) {
+      console.log(`[v10.7] DROP ${c.side || c.pick}: plus-ML ${c.odds > 0 ? "+" : ""}${c.odds} > +${PLUS_ML_MAX}`);
+      return false;
+    }
+    if (typeof c.coverProb === "number" && c.coverProb < 0.45) {
+      console.log(`[v10.7] DROP ${c.side || c.pick}: plus-ML cover ${(c.coverProb * 100).toFixed(0)}% < 45%`);
+      return false;
+    }
+    if (typeof c.predCLV === "number" && c.predCLV < 0) {
+      console.log(`[v10.7] DROP ${c.side || c.pick}: plus-ML predCLV ${(c.predCLV * 100).toFixed(1)}c < 0`);
+      return false;
+    }
   }
   if (isML && typeof c.predCLV !== "number") {
-    console.log(`[v10.6] DROP ${c.side || c.pick}: ML missing Pinnacle predCLV (fail closed)`);
+    console.log(`[v10.7] DROP ${c.side || c.pick}: ML missing Pinnacle predCLV (fail closed)`);
     return false;
   }
   if (isML && typeof c.coverProb === "number" && c.coverProb < 0.42) {
-    console.log(`[v10.6] DROP ${c.side || c.pick}: ML cover ${(c.coverProb * 100).toFixed(0)}% < 42%`);
+    console.log(`[v10.7] DROP ${c.side || c.pick}: ML cover ${(c.coverProb * 100).toFixed(0)}% < 42%`);
     return false;
   }
   if (typeof c.predCLV === "number" && c.predCLV < -0.02) {
@@ -5494,12 +5512,12 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.6-alpha-sharp",
+    date: dateISO, dateFormatted, model: "v10.7-alpha-desk",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.6-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.7-alpha-desk" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5592,12 +5610,12 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   const rejections = (allCandidates || []).filter(c => !picks.find(p => p.pick === c.side)).slice(0, 8)
     .map(c => ({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." }));
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.6-alpha-sharp",
+    date: dateISO, dateFormatted, model: "v10.7-alpha-desk",
     picks,
     rejections,
     edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports ranked by calibrated EV.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.6-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.7-alpha-desk" },
     generatedAt: now.toISOString(),
     parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
     sgps: [],

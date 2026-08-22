@@ -132,8 +132,11 @@ function runPublishLawChecks(picks) {
       errors.push(`CRITICAL: soccer on published card (${p.sport} ${p.pick})`);
     }
     const isML = mkt.includes("moneyline") || /\bml\b/.test(pk);
-    if (isML && odds > 0) {
-      errors.push(`CRITICAL: plus-money ML on published card (${p.pick} ${p.odds})`);
+    if (isML && odds > 140) {
+      errors.push(`CRITICAL: plus-ML longer than +140 (${p.pick} ${p.odds})`);
+    }
+    if (isML && odds > 0 && u > 0.5) {
+      errors.push(`CRITICAL: plus-ML sized ${u}u > 0.5u (${p.pick})`);
     }
     if (!isNaN(cp) && cp < 0.50 && u > 0.5) {
       errors.push(`CRITICAL: cover ${(cp * 100).toFixed(0)}% sized ${u}u > 0.5u (${p.pick})`);
@@ -267,7 +270,7 @@ async function autoFixPicks(picksData, pickReports) {
     for (const c of candidateTable) {
       if (currentPicks.has(c.side)) continue;
       if (c.ev <= 0.03) continue;
-      if ((c.market || '').toLowerCase().includes('moneyline') && c.odds > 0) continue;
+      if ((c.market || '').toLowerCase().includes('moneyline') && c.odds > 140) continue;
       if ((c.market || '').toLowerCase().startsWith('f5')) continue;
       if (c.verification === 'FAIL') continue;
       if (newsRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — generator news/DQ rejected`); continue; }
@@ -698,7 +701,7 @@ exports.handler = async (event) => {
         // Exclude sides QA removed/flagged THIS run — never re-add a pick we just dropped.
         const removedThisRun = new Set((allReplacements || []).map(r => r.removed));
         const pool = picksData.candidateTable
-          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0.03 && !((c.market || '').toLowerCase().includes('moneyline') && c.odds > 0) && !(c.market || '').toLowerCase().startsWith('f5'))
+          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0 && !((c.market || '').toLowerCase().includes('moneyline') && c.odds > 140) && !(c.market || '').toLowerCase().startsWith('f5'))
           .sort((a, b) => b.ev - a.ev);
 
         let backfilled = 0;

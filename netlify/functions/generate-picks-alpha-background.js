@@ -4392,12 +4392,19 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
   // argued against (reasons starting "Not selected — same game…") — that contradiction
   // is the bug. Independent pool is only a fallback, and every Claude news/DQ
   // rejection + every other market on a DISQUALIFIED matchup is vetoed.
-  if ((picks || []).length >= 2) {
+  // v10.6: parlay IS the published card. Short card → no independent extra legs.
+  if ((picks || []).length < 2) {
+    console.log(`[v10-parlay] ${ (picks || []).length } published pick(s) — no parlay`);
+    return [];
+  }
+  {
     const fromCard = buildFallbackParlay(picks);
     if (fromCard.length) {
       console.log(`[v10-parlay] 3+1 card parlay: ${fromCard[0].legs.map(l => l.pick).join(' + ')}`);
       return fromCard;
     }
+    console.log(`[v10-parlay] published card could not form 2 unique-game legs — no parlay`);
+    return [];
   }
 
   const rejectedSides = new Set();

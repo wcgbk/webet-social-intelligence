@@ -77,7 +77,7 @@ These are published-sport residual scales, not fitted on WeBet Alpha history.
 
 Inputs (raw only): rest days, home/away, injury list, starter if present, book dispersion, optional Kalshi/Polymarket last price, and the **posted two-way lines themselves** (observables, not a fitted rating).
 
-Unknown rest defaults to **2 days** (no rest adjustment). Rest is measured as calendar days since the team's previous ESPN scoreboard appearance (yesterday's slate vs today). Capped at 7.
+Rest is binary from ESPN: **1** if the team appears on yesterday's scoreboard, else **2** (neutral, no adjustment). We do not invent 3–7 day rest without a dated last game — that would systematically juice overs on NFL/NBA off-nights.
 
 Day-one conservative prior: **anchor on the market total \(T\) and home spread \(S\)** (home handicap; \(S<0\) means home favored), then apply feature deltas only. Home field is already in \(S\); it is not added again.
 

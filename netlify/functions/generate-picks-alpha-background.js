@@ -1,6 +1,13 @@
 // generate-picks-alpha-background.js
-// v10.5.3-alpha-ev — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// v10.6-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
 // JS computes ALL projections, edges, and Kelly sizing. JS SELECTS. Grok writes copy only.
+// IMMUTABLE PUBLISH LAWS (do not delete because a projection bug was fixed):
+//   1. Select by calibrated EDGE (cover − implied), then predCLV — never by EV (payout inflates dogs).
+//   2. No plus-money ML on the published 3. Missing Pinnacle on an ML = drop (fail closed).
+//   3. Cover < 50% → max 0.5u and cannot be pick #1. Cover < 42% → no ML.
+//   4. No soccer. No F5. Short card / no-play if the pool is thin. No 1.5% lean fill.
+//   5. LLM never selects or resizes.
+// v10.6 (2026-08-22): publish formula above. True-stats pricer kept.
 // v10.5.3 (2026-08-19): one publish gate = calibrated EV ≥ 3% + predCLV ≥ −2¢. Drop ML 8% raw
 //   bar and August market unit caps (Kelly sizes). No LLM may pick or "low-conviction" veto.
 //   Fill-to-3 only from the 3% pool; short card / no-play if fewer survive. No 1.5% lean fake card.
@@ -28,7 +35,7 @@
 // Odds regions: us,us2,eu. Blob store: edge-picks-alpha.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
-const MODEL_VERSION = "v10.5.3-alpha-ev";
+const MODEL_VERSION = "v10.6-alpha-sharp";
 const GROK_WRITER = "grok-4-6";
 const { bettoredgeFetch } = require("./bettoredge-auth");
 
@@ -40,15 +47,7 @@ const ODDS_SPORTS = [
   "icehockey_nhl",
   // "basketball_ncaab", // v10.1: disabled — 48.7% accuracy, -7.0% ROI in backtest. Re-enable next season.
   "baseball_mlb",
-  "soccer_epl",
-  "soccer_spain_la_liga",
-  "soccer_italy_serie_a",
-  "soccer_germany_bundesliga",
-  "soccer_france_ligue_one",
-  "soccer_usa_mls",
-  "soccer_uefa_champs_league",
-  "soccer_uefa_europa_league",
-  "soccer_uefa_europa_conference_league",
+  // soccer disabled — 38.5% real-run / −17% on the 20 alpha tickets that leaked. Do not re-enable.
 ];
 
 // ── ESPN sport/league slugs ──
@@ -62,14 +61,6 @@ const ESPN_LEAGUES = [
   // MLB: kFactor=4 per FiveThirtyEight (highest luck component in major team sports).
   // homeAdv=24 ELO pts per FiveThirtyEight MLB calibration (~53.4% win prob for equal teams at home).
   { sport: "baseball", league: "mlb", label: "MLB", homeAdv: 24, kFactor: 4, baseElo: 1500 },
-  { sport: "soccer", league: "eng.1", label: "EPL", homeAdv: 80, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "esp.1", label: "La Liga", homeAdv: 80, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "ita.1", label: "Serie A", homeAdv: 80, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "ger.1", label: "Bundesliga", homeAdv: 80, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "fra.1", label: "Ligue 1", homeAdv: 80, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "usa.1", label: "MLS", homeAdv: 80, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "uefa.champions", label: "UCL", homeAdv: 60, kFactor: 24, baseElo: 1500 },
-  { sport: "soccer", league: "uefa.europa", label: "Europa", homeAdv: 60, kFactor: 24, baseElo: 1500 },
 ];
 
 // ── Sport-specific standard deviations for edge → probability conversion ──
@@ -617,6 +608,18 @@ function impliedProb(odds) {
   return odds < 0 ? Math.abs(odds) / (Math.abs(odds) + 100) : 100 / (odds + 100);
 }
 
+// Calibrated edge = cover − one-sided implied. Rank/select on THIS, never on EV
+// (cover × decimal − 1 inflates plus-money dogs into the top of a 3-pick card).
+function calibratedEdge(c) {
+  if (!c || typeof c.coverProb !== "number" || c.odds == null) return -1;
+  return c.coverProb - impliedProb(c.odds);
+}
+function byPublishRank(a, b) {
+  return (calibratedEdge(b) - calibratedEdge(a))
+    || ((b.predCLV ?? -1) - (a.predCLV ?? -1))
+    || ((b.ev ?? 0) - (a.ev ?? 0));
+}
+
 // ── Pure Kelly computation ──
 // EV is computed for display and candidate filtering (ev > 0.08 threshold).
 // Unit sizing is driven by Z-SCORE, not EV — z-score measures model confidence
@@ -655,14 +658,11 @@ function kellyToUnits(kellyUnits, drawdownActive, coverProb) {
   // Sub-50% cover prob = high variance → cap exposure
   // ML dogs: you lose more often than you win, size accordingly
   if (coverProb !== undefined && coverProb < 0.50) {
-    units = Math.min(units, 1.0);
+    units = Math.min(units, 0.5);
   }
-  // Heavy underdogs (cover < 42%) get additional cap at 0.5u
   if (coverProb !== undefined && coverProb < 0.42) {
     units = Math.min(units, 0.5);
   }
-
-  if (drawdownActive) units = Math.max(0.5, units - 0.5);
 
   // Floor at 0.5u — matches production minimum
   return Math.max(0.5, units);
@@ -3681,9 +3681,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
   });
   if (bettable.length < candidates.length) console.log(`[v10-bettability] dropped ${candidates.length - bettable.length} off-market candidate(s) of ${candidates.length}`);
 
-  // v10.4: rank by calibrated EV (z-score is not comparable across markets — ML z runs 2-5×
-  // totals z, which systematically floated ML/F5 to the top). z kept as tiebreak/diagnostic.
-  bettable.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.predCLV ?? -1) - (a.predCLV ?? -1)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
+  // v10.6: rank by calibrated EDGE (cover − implied), then predCLV. EV is sizing, not selection.
+  bettable.sort(byPublishRank);
 
   // Assign ranks
   bettable.forEach((c, i) => { c.rank = i + 1; });
@@ -4112,12 +4111,11 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       continue;
     }
 
-    // 3. Unit sizing must match cover prob reality
-    //    Sub-50% coverProb = max 1.0u, sub-42% = max 0.5u
-    if (cp < 0.50 && u > 1.0) {
-      console.log(`[v10-validate] DOWNSIZE ${p.pick}: ${u}u → 1.0u (coverProb ${(cp*100).toFixed(0)}% < 50%)`);
-      p.units = "1.0u";
-      p.rating = unitsToRating(1.0);
+    // 3. Unit sizing: cover < 50% → max 0.5u (v10.6). A 45% dog is not 1u A-.
+    if (cp < 0.50 && u > 0.5) {
+      console.log(`[v10-validate] DOWNSIZE ${p.pick}: ${u}u → 0.5u (coverProb ${(cp*100).toFixed(0)}% < 50%)`);
+      p.units = "0.5u";
+      p.rating = unitsToRating(0.5);
       p.confidence = ratingToConfidence(p.rating);
     }
     if (cp < 0.42 && parseFloat(p.units) > 0.5) {
@@ -4141,9 +4139,8 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     console.log(`[v10-validate] PASS ${p.pick}: ${p.units} @ ${p.odds}, coverProb=${(cp*100).toFixed(0)}%, EV=${(ev*100).toFixed(1)}%`);
   }
 
-  // v10.4 per-market unit caps, then sort by calibrated EV (was z-score — not cross-market comparable)
   applyMarketUnitCaps(validated);
-  validated.sort((a, b) => ((b.evRaw ?? 0) - (a.evRaw ?? 0)) || ((b.zScore || 0) - (a.zScore || 0)));
+  validated.sort((a, b) => (parseFloat(b.edgePct) - parseFloat(a.edgePct)) || ((b.evRaw ?? 0) - (a.evRaw ?? 0)));
 
   return validated;
 }
@@ -4188,10 +4185,11 @@ async function computeBankrollContext() {
     if (last5[i] === 'loss') consecutiveLosses++;
     else break;
   }
-  const drawdownActive = consecutiveLosses >= 3;
+  // v10.6: do not cut Kelly after 3 losses — that sizes down after variance.
+  const drawdownActive = false;
 
   const currentBankroll = startingBankroll + totalProfit;
-  console.log(`[v10] Bankroll: $${currentBankroll}, Drawdown: ${drawdownActive}, Losses: ${consecutiveLosses}`);
+  console.log(`[v10] Bankroll: $${currentBankroll}, Drawdown: off (v10.6), Losses: ${consecutiveLosses}`);
 
   return { drawdownActive, currentBankroll, totalProfit, consecutiveLosses };
 }
@@ -4349,16 +4347,26 @@ function jsSelectPicks(candidateTable, claudeOutput) {
 
   const survivors = [];
   const seen = new Set();
-  for (const c of (candidateTable || [])) {
+  const ranked = [...(candidateTable || [])].sort(byPublishRank);
+  for (const c of ranked) {
     if (dqRanks.has(c.rank)) continue;
     const g = matchupKey(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`);
     if (g && dqMatchups.has(g)) continue;
     if (!hasPositiveEdge(c) || !passesPublishGates(c)) continue;
-    if ((c.ev || 0) < 0.03) continue;
+    if (calibratedEdge(c) < 0.03 && (c.ev || 0) < 0.03) continue;
+    if (calibratedEdge(c) < 0.03) continue;
     if (g && seen.has(g)) continue;
     if (g) seen.add(g);
     survivors.push(c);
     if (survivors.length >= 3) break;
+  }
+  // Cover < 50% cannot lead the card if a >=50% name is on it.
+  if (survivors.length >= 2 && (survivors[0].coverProb || 0) < 0.50) {
+    const i = survivors.findIndex(c => (c.coverProb || 0) >= 0.50);
+    if (i > 0) {
+      const [lead] = survivors.splice(i, 1);
+      survivors.unshift(lead);
+    }
   }
 
   const selections = survivors.map(c => {
@@ -4641,8 +4649,7 @@ exports.handler = async (event) => {
       }
       if (pmBlended > 0) console.log(`[v10-pm] PM ensemble blend applied to ${pmBlended} candidates`);
 
-      // Re-sort after adjustments (units changed → re-rank by EV)
-      allCandidates.sort((a, b) => b.ev - a.ev);
+      allCandidates.sort(byPublishRank);
       allCandidates.forEach((c, i) => { c.rank = i + 1; });
       const pmSignals = allCandidates.filter(c => c.predictionMarket).length;
       console.log(`[v10] Prediction market: ${pmSignals} candidates matched, ${confirms} confirmed, ${cautions} cautioned (type-aligned)`);
@@ -4659,30 +4666,13 @@ exports.handler = async (event) => {
       console.log(`[v10-selfopt] Params loaded (sample: ${selfOptParams.sampleSize}) — observational only as of v10.4, no candidate mutation`);
     }
 
-    // ── PHASE 1D: OPENING LINE / STALE LINE DETECTION ──
-    // If the line has moved toward our model since opening, the edge is partially priced in.
-    // Stale edges get a 15% Kelly reduction. Contrarian edges (line moved away) get a 10% boost.
+    // ── PHASE 1D: OPENING LINE (display only) ──
+    // v10.6: do not haircut/boost Kelly from open-to-current move. EV is already at the current line.
     if (openingLines) {
-      let staleCount = 0, freshCount = 0, contrarianCount = 0;
       for (const c of allCandidates) {
         const signal = computeLineMovementSignal(c, openingLines);
-        if (!signal) continue;
-        c.lineMovement = signal;
-        if (signal.signal === "stale" && Math.abs(signal.movement) >= 1.0) {
-          const old = c.kellyUnits;
-          c.kellyUnits = Math.max(0.5, Math.round(c.kellyUnits * 0.85 * 2) / 2);
-          c.kellyCalcStr += ` [LINE-STALE: ${signal.desc}, ${old}u→${c.kellyUnits}u]`;
-          staleCount++;
-        } else if (signal.signal === "contrarian" && Math.abs(signal.movement) >= 1.0) {
-          const old = c.kellyUnits;
-          c.kellyUnits = Math.min(3.0, Math.round(c.kellyUnits * 1.10 * 2) / 2);
-          c.kellyCalcStr += ` [LINE-FRESH: ${signal.desc}, ${old}u→${c.kellyUnits}u]`;
-          contrarianCount++;
-        } else {
-          freshCount++;
-        }
+        if (signal) c.lineMovement = signal;
       }
-      console.log(`[v10-lines] Line movement: ${staleCount} stale, ${contrarianCount} contrarian, ${freshCount} fresh/neutral`);
     }
 
     // ── PHASE 1D2: WEATHER ADJUSTMENTS ──
@@ -4983,12 +4973,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
+      date: dateISO, dateFormatted, model: "v10.6-alpha-sharp",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.5.3-alpha-ev" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.6-alpha-sharp" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4997,12 +4987,8 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: pipelineError ? "PIPELINE ERROR (stored crash marker)" : "No edge candidates" };
   }
 
-  // ── CANONICAL RANKING (v10.4): calibrated EV, unconditionally ──
-  // Previously the EV re-sort only ran when PM/BettorEdge data happened to load, so on quiet
-  // days the table stayed z-ordered — and z-scores are NOT comparable across markets (ML z
-  // ≈ 0.3–0.6 vs totals z ≈ 0.1–0.3), which floated ML/F5 into the top slots. Rank on EV
-  // every run; z stays a display diagnostic.
-  allCandidates.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.predCLV ?? -1) - (a.predCLV ?? -1)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
+  // v10.6: rank by calibrated EDGE, then predCLV.
+  allCandidates.sort(byPublishRank);
   allCandidates.forEach((c, i) => { c.rank = i + 1; });
 
   // ── PHASE 2: JS SELECTS. Grok writes copy. No Claude / no web-search selector. ──
@@ -5020,7 +5006,7 @@ exports.handler = async (event) => {
       }
     }
     if (picks.length < 3) {
-      console.log(`[v10.5.3] short card ${picks.length}/3 — only this many cleared 3% EV + news + predCLV (no lean fill)`);
+      console.log(`[v10.6] short card ${picks.length}/3 — only this many cleared edge + minus-ML + predCLV (no lean fill)`);
     }
 
     // ── FINAL SAME-GAME DE-CORRELATION ──
@@ -5102,8 +5088,16 @@ exports.handler = async (event) => {
     // ── Narrative quality gate: ensure every pick has proper journalistic context ──
     await validateAndEnhanceNarratives(picks);
 
-    // Final card order: calibrated EV descending (v10.4 — z is not cross-market comparable)
-    picks.sort((a, b) => ((b.evRaw ?? 0) - (a.evRaw ?? 0)) || ((b.zScore || 0) - (a.zScore || 0)));
+    // Final card order: calibrated edge descending. Cover < 50% cannot lead if a >=50% name exists.
+    const cpOf = (p) => { const n = parseFloat(p.coverProb); return n > 1 ? n / 100 : n; };
+    picks.sort((a, b) => {
+      const ea = parseFloat(a.edgePct) || 0, eb = parseFloat(b.edgePct) || 0;
+      return (eb - ea) || ((b.evRaw ?? 0) - (a.evRaw ?? 0));
+    });
+    if (picks.length >= 2 && cpOf(picks[0]) < 0.50) {
+      const i = picks.findIndex(p => cpOf(p) >= 0.50);
+      if (i > 0) { const [lead] = picks.splice(i, 1); picks.unshift(lead); }
+    }
 
     const finalTotalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
     const sportsCovered = [...new Set(picks.map(p => p.sport))];
@@ -5111,7 +5105,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.5.3-alpha-ev",
+      model: "v10.6-alpha-sharp",
       picks,
       rejections,
       edgeSummary: edgeSummaryText || "",
@@ -5122,7 +5116,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.5.3-alpha-ev",
+        modelVersion: "v10.6-alpha-sharp",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5187,9 +5181,7 @@ function hasPositiveEdge(c) {
     (c.coverProb - impliedProb(c.odds)) > 0;
 }
 
-// v10.5.1 — publish gates. F5 stays off (illiquid / −CLV). Coors/+ML vetoes removed
-// (those were symptoms of inverted R/G). Predicted CLV vs Pinnacle: drop if we are
-// already 2pp worse than the sharp book (Buchdahl). Missing sharp quote fails OPEN.
+// v10.6 publish gates. F5 off. Plus-ML off. Missing sharp quote on an ML fails CLOSED.
 function attachPredCLV(c, gameData) {
   if (!c || !gameData) return;
   const market = (c.market || "").toLowerCase();
@@ -5223,12 +5215,30 @@ function passesPublishGates(c) {
   if (!c) return false;
   const market = (c.market || c.betType || "").toLowerCase();
   const src = (c.source || "").toLowerCase();
+  const sport = (c.sport || "").toLowerCase();
   if (market.startsWith("f5") || src === "f5") {
-    console.log(`[v10.5.1] DROP ${c.side || c.pick}: F5 off the published card`);
+    console.log(`[v10.6] DROP ${c.side || c.pick}: F5 off the published card`);
+    return false;
+  }
+  if (sport && !["mlb", "nhl", "nba", "ncaab", "nfl"].includes(sport)) {
+    console.log(`[v10.6] DROP ${c.side || c.pick}: ${c.sport} not on the live slate`);
+    return false;
+  }
+  const isML = market.includes("moneyline");
+  if (isML && typeof c.odds === "number" && c.odds > 0) {
+    console.log(`[v10.6] DROP ${c.side || c.pick}: plus-money ML ${c.odds > 0 ? "+" : ""}${c.odds} off the published card`);
+    return false;
+  }
+  if (isML && typeof c.predCLV !== "number") {
+    console.log(`[v10.6] DROP ${c.side || c.pick}: ML missing Pinnacle predCLV (fail closed)`);
+    return false;
+  }
+  if (isML && typeof c.coverProb === "number" && c.coverProb < 0.42) {
+    console.log(`[v10.6] DROP ${c.side || c.pick}: ML cover ${(c.coverProb * 100).toFixed(0)}% < 42%`);
     return false;
   }
   if (typeof c.predCLV === "number" && c.predCLV < -0.02) {
-    console.log(`[v10.5.1] DROP ${c.side || c.pick}: predCLV ${(c.predCLV * 100).toFixed(1)}c vs ${c.sharpBook || "sharp"} (floor -2.0c)`);
+    console.log(`[v10.6] DROP ${c.side || c.pick}: predCLV ${(c.predCLV * 100).toFixed(1)}c vs ${c.sharpBook || "sharp"} (floor -2.0c)`);
     return false;
   }
   return true;
@@ -5247,7 +5257,7 @@ function dedupeCandidatesByGame(cands) {
     if (!prev || score(c) > score(prev)) byGame.set(key, c);
   }
   // v10.4: deterministic selection ranks on calibrated EV (z is not cross-market comparable)
-  return [...byGame.values()].sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.predCLV ?? -1) - (a.predCLV ?? -1)) || ((b.zScore || 0) - (a.zScore || 0)));
+  return [...byGame.values()].sort(byPublishRank);
 }
 
 // ── Shared: fact-grounded narration + full-card summaries (DISPLAY-ONLY) ──
@@ -5477,12 +5487,12 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
+    date: dateISO, dateFormatted, model: "v10.6-alpha-sharp",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.3-alpha-ev" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.6-alpha-sharp" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5565,9 +5575,8 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   // Narrative quality gate on fallback picks too
   await validateAndEnhanceNarratives(picks);
 
-  // v10.4: per-market caps + EV ordering on the deterministic path too
   applyMarketUnitCaps(picks);
-  picks.sort((a, b) => ((b.evRaw ?? 0) - (a.evRaw ?? 0)) || ((b.zScore || 0) - (a.zScore || 0)));
+  picks.sort((a, b) => (parseFloat(b.edgePct) - parseFloat(a.edgePct)) || ((b.evRaw ?? 0) - (a.evRaw ?? 0)));
 
   // Fact-grounded narratives + full-card summaries (no pick was web-searched → narrateAll)
   const summaries = await narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted, { narrateAll: true });
@@ -5576,12 +5585,12 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   const rejections = (allCandidates || []).filter(c => !picks.find(p => p.pick === c.side)).slice(0, 8)
     .map(c => ({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." }));
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.5.3-alpha-ev",
+    date: dateISO, dateFormatted, model: "v10.6-alpha-sharp",
     picks,
     rejections,
     edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports ranked by calibrated EV.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.5.3-alpha-ev" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.6-alpha-sharp" },
     generatedAt: now.toISOString(),
     parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
     sgps: [],

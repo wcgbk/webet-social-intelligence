@@ -9,7 +9,7 @@
 //    copy via Grok only for those replacements.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
-// Aligned with v10.5.3: short cards stay short. No LLM selection. F5-only unit cap.
+// Aligned with v10.6-alpha-sharp: edge-rank, no plus-ML, no F5/soccer, short cards stay short.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -36,7 +36,7 @@ function cappedKellyUnits(c) {
   const mkt = (c.market || c.betType || '').toLowerCase();
   if (mkt.includes('f5')) u = Math.min(u, 0.5);
   const cp = typeof c.coverProb === 'number' ? c.coverProb : (parseFloat(c.coverProb) || 0);
-  if (cp > 0 && cp < 0.50) u = Math.min(u, 1.0);
+  if (cp > 0 && cp < 0.50) u = Math.min(u, 0.5);
   if (cp > 0 && cp < 0.42) u = Math.min(u, 0.5);
   return Math.max(0.5, Math.round(u * 2) / 2);
 }
@@ -112,6 +112,41 @@ function runMathChecks(pick) {
 
   const hasCritical = errors.some(e => e.startsWith("CRITICAL"));
   return { checks, warnings, errors, severity: hasCritical ? "critical" : warnings.length > 0 ? "warning" : "clean" };
+}
+
+// v10.6 publish laws — fail the card, do not rewrite it.
+const SOCCER_SPORTS = new Set(["EPL", "La Liga", "Serie A", "Ligue 1", "MLS", "UCL", "Bundesliga", "Europa"]);
+function runPublishLawChecks(picks) {
+  const errors = [];
+  for (const p of picks || []) {
+    const odds = parseOdds(p.odds);
+    const cp = parseProbability(p.winProbability || p.coverProb);
+    const u = parseUnits(p.units);
+    const mkt = (p.betType || "").toLowerCase();
+    const pk = (p.pick || "").toLowerCase();
+    const src = (p.source || "").toLowerCase();
+    if (mkt.startsWith("f5") || src === "f5" || /\bf5\b/.test(pk)) {
+      errors.push(`CRITICAL: F5 on published card (${p.pick})`);
+    }
+    if (SOCCER_SPORTS.has(p.sport)) {
+      errors.push(`CRITICAL: soccer on published card (${p.sport} ${p.pick})`);
+    }
+    const isML = mkt.includes("moneyline") || /\bml\b/.test(pk);
+    if (isML && odds > 0) {
+      errors.push(`CRITICAL: plus-money ML on published card (${p.pick} ${p.odds})`);
+    }
+    if (!isNaN(cp) && cp < 0.50 && u > 0.5) {
+      errors.push(`CRITICAL: cover ${(cp * 100).toFixed(0)}% sized ${u}u > 0.5u (${p.pick})`);
+    }
+  }
+  if ((picks || []).length >= 2) {
+    const cp0 = parseProbability(picks[0].winProbability || picks[0].coverProb);
+    const alt = picks.find(p => parseProbability(p.winProbability || p.coverProb) >= 0.50);
+    if (cp0 < 0.50 && alt) {
+      errors.push(`CRITICAL: pick #1 cover < 50% while ${alt.pick} is >= 50%`);
+    }
+  }
+  return errors;
 }
 
 // ── Narrative Checks ──
@@ -232,6 +267,8 @@ async function autoFixPicks(picksData, pickReports) {
     for (const c of candidateTable) {
       if (currentPicks.has(c.side)) continue;
       if (c.ev <= 0.03) continue;
+      if ((c.market || '').toLowerCase().includes('moneyline') && c.odds > 0) continue;
+      if ((c.market || '').toLowerCase().startsWith('f5')) continue;
       if (c.verification === 'FAIL') continue;
       if (newsRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — generator news/DQ rejected`); continue; }
 
@@ -476,6 +513,12 @@ exports.handler = async (event) => {
     let totalWarnings = 0, totalErrors = 0;
     const pickReports = [];
 
+    const lawErrors = runPublishLawChecks(picksData.picks);
+    if (lawErrors.length) {
+      totalErrors += lawErrors.length;
+      console.log(`[verify] v10.6 publish-law failures: ${lawErrors.join(" | ")}`);
+    }
+
     for (const pick of picksData.picks) {
       const math = runMathChecks(pick);
       const narrative = runNarrativeChecks(pick);
@@ -485,6 +528,9 @@ exports.handler = async (event) => {
       totalWarnings += allWarnings.length;
       totalErrors += allErrors.length;
       pickReports.push({ pick: `${pick.pick} ${pick.odds}`, sport: pick.sport, severity, mathChecks: math.checks, narrativeChecks: narrative.checks, warnings: allWarnings, errors: allErrors });
+    }
+    if (lawErrors.length) {
+      pickReports.push({ pick: "CARD", sport: "", severity: "critical", mathChecks: {}, narrativeChecks: {}, warnings: [], errors: lawErrors });
     }
 
     console.log(`[verify] Math/narrative: ${totalErrors} errors, ${totalWarnings} warnings`);
@@ -652,7 +698,7 @@ exports.handler = async (event) => {
         // Exclude sides QA removed/flagged THIS run — never re-add a pick we just dropped.
         const removedThisRun = new Set((allReplacements || []).map(r => r.removed));
         const pool = picksData.candidateTable
-          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0.03)
+          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0.03 && !((c.market || '').toLowerCase().includes('moneyline') && c.odds > 0) && !(c.market || '').toLowerCase().startsWith('f5'))
           .sort((a, b) => b.ev - a.ev);
 
         let backfilled = 0;
@@ -883,8 +929,8 @@ Return ONLY valid JSON array:
         console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
       }
 
-      // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
-      picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
+      // verified ONLY if the final card is genuinely clean: at least 1 pick, no math flags, no v10.6 law breaks
+      picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag) && lawErrors.length === 0;
 
       // Do not rewrite the 9am blob unless QA actually changed the card.
       if (finalFixCount > 0) {

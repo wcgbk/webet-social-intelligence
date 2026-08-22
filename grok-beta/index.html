@@ -293,7 +293,7 @@
 
   <p class="footer-note">
     Not production Alpha. Separate model, separate record.<br>
-    Sharp Shin (Pinnacle/Circa when present) vs best US retail · independent ESPN projection.<br>
+    Sharp Shin vs best US retail · independent ESPN projection · each bet confirmed at Hard Rock Bet.<br>
     3-straight card + optimized parlay. 1.8% EV floor, $150/u. Daily 08:30 ET. Not financial advice.
   </p>
 </div>
@@ -468,7 +468,12 @@
           '<div class="pick-analysis">' + esc(analysis) + '</div>' +
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
             '<div class="pick-units">' + esc(String(p.units).replace(/u$/i,'')) + 'u - Bet $' + risk.toLocaleString() + ' — To Win +$' + win.toLocaleString() + '</div>' +
-            '<div style="display:flex; align-items:center; gap:.375rem;">' + edgeBadgeHTML(p) + '</div>' +
+            '<div style="display:flex; align-items:center; gap:.375rem;">' +
+              (p.hardRock && p.hardRock.available && p.hardRock.odds
+                ? '<span class="sport-tag" title="Confirmed placeable at Hard Rock Bet">HR ' + esc(p.hardRock.odds) + '</span>'
+                : '') +
+              edgeBadgeHTML(p) +
+            '</div>' +
           '</div></div>';
       }
 

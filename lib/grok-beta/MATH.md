@@ -166,6 +166,7 @@ A side is a **candidate** iff all of:
 5. Retail American in \([-220,+260]\).
 6. \(\mathrm{EV}\ge 0.018\) (1.8%).
 7. \(\mathrm{EV}_{\text{hold}}\ge 0.006\) — **never fade a sharp no-vig price**. Projection may upgrade a retail lag; it may not bet the side Pinnacle already has as fair-worse. Agents may cut stake; they drop a pick only for a hard gate (scratch / postponed / started / no starter).
+8. **Hard Rock Bet placeability (same QA as Alpha `verify-picks`):** Hard Rock must offer that market and side, totals/spreads within 0.5 of the published line, and HR's implied probability no more than 6pp worse than the published price. Unplaceable sides never make the card or the parlay. Snapshot includes Odds API `us2` so Hard Rock is in the book list.
 
 Zero published remains valid if the slate is truly efficient. The v0.1 floor was the bug, not this clause.
 

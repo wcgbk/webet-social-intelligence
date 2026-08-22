@@ -392,7 +392,7 @@
         summaryText.textContent = edgeSummary;
         summaryEl.style.display = 'block';
       } else if (picks.length) {
-        summaryText.textContent = "Today's Grok Beta card: " + picks.map(p => p.pick + ' (' + p.odds + ')').join(', ') + '. Sharp Shin fair vs best US retail. Not Alpha.';
+        summaryText.textContent = "WeBetAI's Grok Beta card today: " + picks.map(p => p.pick + ' in ' + shortMatchup(p.matchup)).join(', ') + '. One pick per game after shopping the best US number against the sharp books.';
         summaryEl.style.display = 'block';
       } else {
         summaryEl.style.display = 'none';
@@ -401,16 +401,12 @@
       const insightsEl = document.getElementById('insights-section');
       const insightsText = document.getElementById('insights-text');
       if (data.insights && data.insights.trim().length > 20) {
-        insightsText.textContent = data.insights.replace(/[Tt]he model/g, 'WeBetAI');
+        insightsText.textContent = data.insights.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Tt]he model/g, 'WeBetAI');
         insightsEl.style.display = 'block';
       } else if (picks.length) {
         const sports = [...new Set(picks.map(p => p.sport))];
-        const tu = picks.reduce((s, p) => s + unitsNum(p), 0);
-        const holds = picks.filter(p => p.holdEv > 0).length;
-        insightsText.textContent = 'Mixed markets today across ' + sports.join(' and ') +
-          ' — each pick is the highest-EV number we can actually bet after Shin-devigging sharp books and shopping US retail. ' +
-          holds + ' of ' + picks.length + ' legs have positive hold vs the sharp no-vig. ' +
-          tu.toFixed(2) + 'u on the straights' + (parlayUnits ? ' plus a ' + parlayUnits + 'u parlay' : '') + '.';
+        insightsText.textContent = 'The slate shaped into ' + sports.join(' and ') +
+          ' with one pick per game, so the card is not doubling a single matchup. Sizing follows expected value — bigger edges get more of the unit budget, leans stay at a quarter-unit. WeBetAI passed on sides where the retail number was already worse than the sharp price.';
         insightsEl.style.display = 'block';
       } else {
         insightsEl.style.display = 'none';
@@ -445,9 +441,16 @@
           ? '<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">' + esc(t) + '</span>'
           : '';
         const prob = (p.pModel != null) ? '<span class="win-prob">' + (Number(p.pModel) * 100).toFixed(1) + '%</span>' : '';
-        const analysis = String(p.reasoning || p.coreReasoning || '')
+        const analysis = String(p.coreReasoning || p.reasoning || '')
           .replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '')
-          .replace(/[Tt]he model/g, 'WeBetAI');
+          .replace(/\[\d+[^\]]*\]/g, '')
+          .replace(/[Mm]odel projects/g, 'WeBetAI projects')
+          .replace(/[Tt]he model/g, 'WeBetAI')
+          .replace(/Grok Beta v0\.2[^.]*\./g, '')
+          .replace(/p_model[^.]*\./g, '')
+          .replace(/\(hold[^)]*\)/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
         html += '<div class="pick-card" data-wb-pick="' + esc(p.pick) + '">' +
           '<div class="pick-header" style="margin-bottom:.25rem;">' +
             '<span class="sport-tag">' + esc(p.sport || '') + '</span>' +

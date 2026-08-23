@@ -171,10 +171,38 @@
     .cum-card { padding: 1rem .5rem; text-align: center; border-right: 1px solid var(--border-lt); }
     .cum-card:last-child { border-right: none; }
     .cum-value { font-size: 1.5rem; font-weight: 700; color: var(--olive); }
+    .cum-value.positive { color: #2e7d32; }
+    .cum-value.negative { color: #c0392b; }
     .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
     .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
     .results-table td { padding: .5rem; border-bottom: 1px solid var(--border-lt); vertical-align: top; text-align: center; }
     .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: var(--off-white); }
+    .day-toggle {
+      background: none; border: none; padding: 0;
+      font-family: inherit; font-size: .8125rem; font-weight: 600;
+      color: var(--teal); cursor: pointer; text-align: left;
+    }
+    .day-detail { display: none; }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
+    .day-picks-list { list-style: none; padding: 0; margin: 0; }
+    .day-picks-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .25rem 0; border-bottom: 1px solid var(--border-lt);
+      font-size: .75rem;
+    }
+    .day-picks-list li:last-child { border-bottom: none; }
+    .result-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: .6875rem; font-weight: 600;
+    }
+    .result-win { background: #e8f5e9; color: #2e7d32; }
+    .result-loss { background: #fce4e4; color: #c0392b; }
+    .result-push { background: #fff8e1; color: #f9a825; }
+    .result-pending { background: #eef6ff; color: #2196f3; }
+    .profit-positive { color: #2e7d32; font-weight: 600; }
+    .profit-negative { color: #c0392b; font-weight: 600; }
     .show-more-bar { display: none; text-align: center; padding: .625rem; border-top: 1px solid var(--border-lt); }
     .record-legend-bar {
       display: flex; align-items: center; justify-content: space-between;
@@ -280,10 +308,10 @@
   </div>
   <div class="results-card">
     <div class="results-cumulative" id="results-cumulative">
-      <div class="cum-card"><div class="cum-value" id="cum-roi">—</div><div class="cum-label">ROI</div></div>
-      <div class="cum-card"><div class="cum-value" id="cum-record">0-0-0</div><div class="cum-label">Record</div></div>
-      <div class="cum-card"><div class="cum-value" id="cum-accuracy">—</div><div class="cum-label">Accuracy</div></div>
-      <div class="cum-card"><div class="cum-value" id="cum-profit">$0</div><div class="cum-label">P/L</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-roi">--</div><div class="cum-label">ROI</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-record">--</div><div class="cum-label">Record</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-accuracy">--</div><div class="cum-label">Accuracy</div></div>
+      <div class="cum-card"><div class="cum-value" id="cum-profit">--</div><div class="cum-label">P/L</div></div>
     </div>
     <table class="results-table" id="results-table">
       <tbody id="results-body">
@@ -904,6 +932,133 @@
       return '';
     }
 
+    function pickStake(p) {
+      return wholeUp(unitsNum(p) * DOLLAR_PER_UNIT);
+    }
+    function pickToWin(p) {
+      return wholeUp(calcWinnings(pickStake(p), p.odds || '-110'));
+    }
+    function decidedProfit(p, result) {
+      if (!result || result.isLive) return null;
+      if (result.status === 'win') return pickToWin(p);
+      if (result.status === 'loss') return -pickStake(p);
+      if (result.status === 'push') return 0;
+      return null;
+    }
+    function formatMoney(n) {
+      const v = Math.round(n || 0);
+      return (v >= 0 ? '+$' : '-$') + Math.abs(v).toLocaleString();
+    }
+    function setCum(id, text, n) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text;
+      if (n == null) { el.className = 'cum-value'; return; }
+      el.className = 'cum-value ' + (n >= 0 ? 'positive' : 'negative');
+    }
+
+    // Straight record/accuracy; P/L + ROI include a decided parlay. Same split as Alpha.
+    function updateLiveKpis(legResults, parlayInfo) {
+      let wins = 0, losses = 0, wagered = 0, profit = 0;
+      for (const lr of (legResults || [])) {
+        const pft = decidedProfit(lr.pick, lr.result);
+        if (pft == null) continue;
+        wagered += pickStake(lr.pick);
+        profit += pft;
+        if (lr.result.status === 'win') wins++;
+        else if (lr.result.status === 'loss') losses++;
+      }
+      if (parlayInfo && parlayInfo.decided) {
+        wagered += parlayInfo.risk;
+        profit += parlayInfo.profit;
+      }
+      const decided = wins + losses;
+      const acc = decided > 0 ? Math.round((wins / decided) * 100) + '%' : '0%';
+      const roi = wagered > 0 ? ((profit / wagered) * 100).toFixed(1) + '%' : '0%';
+      setCum('cum-record', wins + '-' + losses);
+      setCum('cum-accuracy', acc);
+      setCum('cum-roi', roi, wagered > 0 ? profit : 0);
+      setCum('cum-profit', formatMoney(profit), profit);
+    }
+
+    function updateTodayResultsRow(data, legResults, parlayInfo) {
+      const body = document.getElementById('results-body');
+      if (!body) return;
+      const wasOpen = !!document.getElementById('day-detail-today')?.classList.contains('open');
+      const picks = (legResults || []).map(lr => lr.pick);
+      if (!picks.length) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No graded Grok Beta days yet. Record starts at 0-0-0.</td></tr>';
+        return;
+      }
+
+      let tWins = 0, tLosses = 0, tPushes = 0, tProfit = 0;
+      const todayDetails = [];
+      for (const lr of legResults) {
+        const p = lr.pick, game = lr.game, result = lr.result;
+        const pft = decidedProfit(p, result);
+        if (result.isLive) { /* pending */ }
+        else if (result.status === 'win') { tWins++; if (pft != null) tProfit += pft; }
+        else if (result.status === 'loss') { tLosses++; if (pft != null) tProfit += pft; }
+        else if (result.status === 'push') { tPushes++; }
+
+        let rightSide = '';
+        const isPreGame = !game || game.state === 'pre';
+        if (isPreGame) {
+          let t = '';
+          if (game && game.startTimeEST) t = game.startTimeEST;
+          else if (p.commenceTime) {
+            try { t = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch (e) {}
+          }
+          if (t) {
+            const tz = /E[SD]T/.test(t) ? t : t + ' ET';
+            rightSide = '<span style="font-size:.65rem; color:var(--txt-l);">' + esc(tz) + '</span>';
+          }
+        } else if (result.isLive) {
+          const scoreStr = game ? '(' + game.awayScore + '-' + game.homeScore + ')' : '';
+          rightSide = '<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">' + scoreStr + '</span><span class="result-badge result-pending">LIVE</span>';
+        } else {
+          const rb = result.status === 'win' ? 'result-win' : result.status === 'loss' ? 'result-loss' : result.status === 'push' ? 'result-push' : 'result-pending';
+          const rl = result.status === 'win' ? 'W' : result.status === 'loss' ? 'L' : result.status === 'push' ? 'P' : '...';
+          const scoreStr = game ? '(' + game.awayScore + '-' + game.homeScore + ')' : '';
+          rightSide = '<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">' + scoreStr + '</span><span class="result-badge ' + rb + '">' + rl + '</span>';
+        }
+        todayDetails.push({ pick: p, rightSide });
+      }
+      if (parlayInfo && parlayInfo.decided) tProfit += parlayInfo.profit;
+
+      const todayRecord = tWins + 'W-' + tLosses + 'L' + (tPushes ? '-' + tPushes + 'P' : '');
+      const todayDecided = tWins + tLosses;
+      const todayAcc = todayDecided > 0 ? Math.round((tWins / todayDecided) * 100) : 0;
+      let todayDate = '';
+      try {
+        const iso = data.date || '';
+        todayDate = iso
+          ? new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
+      } catch (e) { todayDate = 'Today'; }
+      const profitClass = tProfit >= 0 ? 'profit-positive' : 'profit-negative';
+
+      let html = '<tr style="background:var(--teal-light);">' +
+        '<td><button class="day-toggle" onclick="toggleDay(\'today\')" style="font-weight:700;">' + esc(todayDate) + '</button></td>' +
+        '<td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">' + todayRecord + '</span></td>' +
+        '<td>' + todayAcc + '%</td>' +
+        '<td class="' + profitClass + '">' + formatMoney(tProfit) + '</td>' +
+      '</tr>';
+      html += '<tr class="day-detail' + (wasOpen ? ' open' : '') + '" id="day-detail-today"><td colspan="4">';
+      html += '<ul class="day-picks-list">';
+      for (const td of todayDetails) {
+        const p = td.pick;
+        html += '<li><span>' + esc(p.pick) + ' <span style="color:var(--txt-l);">' + esc(shortMatchup(p.matchup)) + '</span></span><span>' + td.rightSide + '</span></li>';
+      }
+      html += '</ul></td></tr>';
+      body.innerHTML = html;
+    }
+
+    function toggleDay(idx) {
+      const el = document.getElementById('day-detail-' + idx);
+      if (el) el.classList.toggle('open');
+    }
+
     function getAllSports(data) {
       const sports = new Set();
       for (const p of (data.picks || [])) { if (p.sport) sports.add(p.sport); }
@@ -925,10 +1080,6 @@
 
     function renderPicks(data) {
       document.getElementById('date-header').textContent = data.dateFormatted || data.date || 'Today';
-      document.getElementById('cum-roi').textContent = '—';
-      document.getElementById('cum-record').textContent = '0-0-0';
-      document.getElementById('cum-accuracy').textContent = '—';
-      document.getElementById('cum-profit').textContent = '$0';
 
       const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5 };
       const picks = (data.picks || []).slice(0, 3).sort((a, b) => {
@@ -980,6 +1131,8 @@
         summaryBox.innerHTML = '';
         document.getElementById('record-bar-content').textContent =
           '0-0-0 · 0 pending · this engine has not graded itself yet';
+        updateLiveKpis([], null);
+        updateTodayResultsRow(data, [], null);
         return;
       }
 
@@ -1048,11 +1201,11 @@
           '</div></div>';
       }
 
+      let parlayInfo = null;
       if (parlayLegs.length >= 2) {
         const pRisk = wholeUp(parlayUnits * DOLLAR_PER_UNIT);
         const pWin = wholeUp(calcParlayWinnings(pRisk, parlayLegs.map(l => l.odds || '-110')));
         const oddsStr = (apiParlay && apiParlay.combinedOdds) || '';
-        const evStr = (apiParlay && apiParlay.ev != null) ? ' · ' + (apiParlay.ev * 100).toFixed(1) + '% EV' : '';
 
         const parlayLegResults = parlayLegs.map(leg => {
           const withCt = withLegCommenceTime(leg, picks);
@@ -1085,7 +1238,7 @@
         html += '<div class="parlay-section">' +
           '<div class="parlay-title">Optimized ' + parlayLegs.length + '-Team Parlay</div>' +
           '<div class="parlay-header">' +
-            '<span class="parlay-name">Daily Lock Parlay' + esc(evStr) + '</span>' +
+            '<span class="parlay-name">Daily Lock Parlay</span>' +
             '<span class="parlay-odds">' + esc(oddsStr) + '</span>' +
           '</div>' +
           '<div class="parlay-payout">' + parlayUnits + 'u - Bet $' + pRisk.toLocaleString() + ' — To Win +$' + pWin.toLocaleString() + '</div>';
@@ -1126,16 +1279,21 @@
           '</div>';
         }
         html += '</div>';
+        if (parlayStatus === 'win' || parlayStatus === 'loss' || parlayStatus === 'push') {
+          parlayInfo = {
+            decided: true,
+            risk: pRisk,
+            profit: parlayStatus === 'win' ? pWin : parlayStatus === 'loss' ? -pRisk : 0,
+          };
+        }
       }
 
+      updateLiveKpis(legResults, parlayInfo);
+      updateTodayResultsRow(data, legResults, parlayInfo);
+
       const recordEl = document.getElementById('record-bar-content');
-      if (hasAnyLive || wins + losses + pushes > 0) {
-        recordEl.innerHTML = '<span style="font-weight:600; color:var(--txt-b);">Today\'s Record: ' +
-          wins + 'W-' + losses + 'L' + (pushes > 0 ? '-' + pushes + 'P' : '') +
-          (pending > 0 ? ' · ' + pending + ' live/pending' : '') + '</span>';
-      } else {
-        recordEl.textContent = '0-0-0 · ' + pending + ' pending · this engine has not graded itself yet';
-      }
+      recordEl.innerHTML = '<span style="font-weight:600; color:var(--txt-b);">Today\'s Record: ' +
+        wins + 'W-' + losses + 'L' + (pushes > 0 ? '-' + pushes + 'P' : '') + '</span>';
 
       if (hasAnyLive || pending > 0) scheduleRefresh(30);
       else scheduleRefresh(300);

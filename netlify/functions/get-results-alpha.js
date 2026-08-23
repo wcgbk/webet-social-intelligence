@@ -65,9 +65,11 @@ async function fetchESPNScores(dateISO, sport) {
         awayTeam: away.team?.displayName || '',
         awayAbbr: away.team?.abbreviation || '',
         awayScore: parseInt(away.score) || 0,
+        awayLine: (away.linescores || []).map(x => parseInt(x.value) || 0),
         homeTeam: home.team?.displayName || '',
         homeAbbr: home.team?.abbreviation || '',
         homeScore: parseInt(home.score) || 0,
+        homeLine: (home.linescores || []).map(x => parseInt(x.value) || 0),
         state: status.type?.state || 'pre',
       };
     }).filter(Boolean);
@@ -139,9 +141,23 @@ function gradePick(pick, game) {
   if (!game || game.state !== 'post') return 'pending';
   const pickStr = (pick.pick || '').trim();
   const betType = (pick.betType || '').toLowerCase();
-  const awayScore = game.awayScore;
-  const homeScore = game.homeScore;
-  const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
+
+  // F5 (first-5-innings) bets settle on the score THROUGH 5 innings, not the full game.
+  // The base 6/29 grader scored F5 on the full-game total (e.g. an F5 that ended 1-1 but
+  // the game finished 4-3 was mis-scored a win instead of a push). F5-only fix — non-F5
+  // grading below is unchanged. (Ben-directed 2026-08-22.)
+  const isF5 = betType.includes('f5') || /\bf5\b|first 5( innings)?/i.test(pickStr);
+  let awayScore = game.awayScore;
+  let homeScore = game.homeScore;
+  if (isF5) {
+    const al = game.awayLine || [], hl = game.homeLine || [];
+    // Require 5 recorded innings per side; otherwise the F5 result isn't settled yet.
+    if (al.length < 5 || hl.length < 5) return 'pending';
+    awayScore = al.slice(0, 5).reduce((s, v) => s + v, 0);
+    homeScore = hl.slice(0, 5).reduce((s, v) => s + v, 0);
+  }
+
+  const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/\bF5\b/gi, '').replace(/first 5( innings)?/gi, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
 

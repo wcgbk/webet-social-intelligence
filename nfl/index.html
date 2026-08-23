@@ -1839,6 +1839,11 @@
       const sports = getAllSports(picksData);
       await fetchAllScores(sports);
       renderPicks(picksData);
+      // Also refresh the KPI/track-record section so ROI, record, accuracy, P/L and the
+      // day rows update LIVE as games complete — not just the in-card live scores.
+      // get-results-nfl re-grades from ESPN at read time (≤5-min cache), so each tick
+      // reflects any game that has finished since the last refresh.
+      loadResults();
     }, seconds * 1000);
   }
 

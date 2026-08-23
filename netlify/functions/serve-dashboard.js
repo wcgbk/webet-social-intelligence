@@ -20,8 +20,9 @@ const SITE_URL = 'https://webetsocial.com';
 // Shareable slug (and raw panel key, for back-compat) → the menu item's display name.
 const VIEW_TITLES = {
   picks: 'Daily Edge Picks',
-  nfl: 'NFL Model',
-  omega: 'Omega Model',
+  nfl: 'NFL Only Picks',
+  'grok-beta': 'Live Edge Picks',
+  omega: 'Daily Omega Picks',
   gamecast: 'Picks Gamecast',
   'track-record': 'Percentile Rankings', percentile: 'Percentile Rankings',
   pick3: 'Pick 3 PVP', p2p: 'Pick 3 PVP',

@@ -746,11 +746,14 @@
   to = "/x/index.html"
   status = 200
 
-# ── Grok Beta (isolated day-one engine) ──
+# ── Live Edge (was /grok-beta; renamed 2026-08-22) ──
+# Page routing + old→new redirect live in _redirects (/live-edge serves the page;
+# /grok-beta 301s to /live-edge). This legacy entry now just backstops the old path.
 [[redirects]]
   from = "/grok-beta"
-  to = "/grok-beta/index.html"
-  status = 200
+  to = "/live-edge"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/api/grok-beta-picks"

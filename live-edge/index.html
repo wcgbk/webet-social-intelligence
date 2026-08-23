@@ -10,15 +10,15 @@
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WeBetAI - Social Intelligence | Grok Beta Model</title>
-  <meta name="description" content="Grok Beta Model — independent day-one all-sports engine. Separate book from Alpha. Not production Alpha." />
+  <title>WeBetAI - Social Intelligence | Live Edge Picks</title>
+  <meta name="description" content="Live Edge Picks — independent day-one all-sports engine. Separate book from Alpha. Not production Alpha." />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://webetsocial.com/grok-beta" />
-  <meta property="og:title" content="WeBetAI - Social Intelligence | Grok Beta Model" />
+  <meta property="og:url" content="https://webetsocial.com/live-edge" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Live Edge Picks" />
   <meta property="og:description" content="Independent day-one all-sports engine. Separate book from Alpha. Not production Alpha." />
   <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Grok Beta Model" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Live Edge Picks" />
   <meta name="twitter:description" content="Independent day-one all-sports engine. Separate book from Alpha." />
   <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
 
@@ -277,7 +277,7 @@
 <body>
   <div style="height:3px;background:linear-gradient(90deg,#004C54,#00b5b9,#004C54);position:fixed;top:0;left:0;right:0;z-index:200;"></div>
   <header class="header" style="position:sticky;top:3px;">
-    <a href="/grok-beta" class="logo">
+    <a href="/live-edge" class="logo">
       <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
         <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
         <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
@@ -287,7 +287,7 @@
     </a>
     <a href="/dashboard" style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;border:1px solid #004C54;background:#e6f4f1;color:#004C54;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;margin-left:auto;margin-right:8px;">Dashboard</a>
     <nav class="header-nav">
-      <a href="/grok-beta" class="header-link active">Grok Beta Model</a>
+      <a href="/live-edge" class="header-link active">Live Edge Picks</a>
       <a href="/alpha" class="header-link">Alpha Picks</a>
       <a href="/dashboard" class="header-link">Dashboard</a>
     </nav>
@@ -296,7 +296,7 @@
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="mobile-dropdown" id="mobileDropdown">
-      <a href="/grok-beta">Grok Beta Model</a>
+      <a href="/live-edge">Live Edge Picks</a>
       <a href="/alpha">Alpha Picks</a>
       <a href="/dashboard">Dashboard</a>
     </div>
@@ -305,7 +305,7 @@
 <div class="main" id="dashboard">
 
   <div class="results-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;">
-    <span>Pick Results &amp; Track Record — Grok Beta</span>
+    <span>Pick Results &amp; Track Record — Live Edge</span>
   </div>
   <div class="results-card">
     <div class="results-cumulative" id="results-cumulative">
@@ -316,7 +316,7 @@
     </div>
     <table class="results-table" id="results-table">
       <tbody id="results-body">
-        <tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No graded Grok Beta days yet. Record starts at 0-0-0.</td></tr>
+        <tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No graded Live Edge days yet. Record starts at 0-0-0.</td></tr>
       </tbody>
     </table>
     <div class="show-more-bar" id="showMoreBar"><span>Show all days &#9660;</span></div>
@@ -353,7 +353,7 @@
   <div id="picks-container">
     <div class="loading">
       <div class="loading-icon">&#9203;</div>
-      Loading today's Grok Beta picks...
+      Loading today's Live Edge picks...
     </div>
   </div>
 
@@ -988,7 +988,7 @@
       const wasOpen = !!document.getElementById('day-detail-today')?.classList.contains('open');
       const picks = (legResults || []).map(lr => lr.pick);
       if (!picks.length) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No graded Grok Beta days yet. Record starts at 0-0-0.</td></tr>';
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No graded Live Edge days yet. Record starts at 0-0-0.</td></tr>';
         return;
       }
 
@@ -1099,7 +1099,7 @@
         summaryText.textContent = edgeSummary;
         summaryEl.style.display = 'block';
       } else if (picks.length) {
-        summaryText.textContent = "WeBetAI's Grok Beta card today: " + picks.map(p => p.pick + ' in ' + shortMatchup(p.matchup)).join(', ') + '. One pick per game after shopping the best US number against the sharp books.';
+        summaryText.textContent = "WeBetAI's Live Edge card today: " + picks.map(p => p.pick + ' in ' + shortMatchup(p.matchup)).join(', ') + '. One pick per game after shopping the best US number against the sharp books.';
         summaryEl.style.display = 'block';
       } else {
         summaryEl.style.display = 'none';
@@ -1127,7 +1127,7 @@
           '<div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">' +
           '<div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>' +
           '<div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">' +
-          esc(data.noPlays || 'Grok Beta has not priced this slate yet.') + '</div>' +
+          esc(data.noPlays || 'Live Edge has not priced this slate yet.') + '</div>' +
           '<div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow at 8:30am ET.</div></div>';
         summaryBox.innerHTML = '';
         document.getElementById('record-bar-content').textContent =
@@ -1175,7 +1175,7 @@
           .replace(/\[\d+[^\]]*\]/g, '')
           .replace(/[Mm]odel projects/g, 'WeBetAI projects')
           .replace(/[Tt]he model/g, 'WeBetAI')
-          .replace(/Grok Beta v0\.2[^.]*\./g, '')
+          .replace(/(Live Edge|Grok Beta) v0\.2[^.]*\./g, '')
           .replace(/p_model[^.]*\./g, '')
           .replace(/\(hold[^)]*\)/g, '')
           .replace(/\s+/g, ' ')

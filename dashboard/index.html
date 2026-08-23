@@ -1666,17 +1666,17 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
         Daily Edge Picks
       </button>
-      <button class="nav-item" data-panel="nfl" onclick="switchPanel('nfl')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M8.75 15.25l6.5-6.5M10 12.5l1.5 1.5M12.5 10l1.5 1.5"/></svg></span>
-        NFL Model
+      <button class="nav-item" data-panel="omega" onclick="switchPanel('omega')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h5v-2.5C6.6 16.2 5 13.8 5 11a7 7 0 0 1 14 0c0 2.8-1.6 5.2-4 6.5V20h5"/></svg></span>
+        Daily Omega Picks
       </button>
       <button class="nav-item" data-panel="grok-beta" onclick="switchPanel('grok-beta')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.8 5.7 20.8 8 13.6 2 9.2h7.6z"/></svg></span>
-        Grok Beta Model
+        Live Edge Picks
       </button>
-      <button class="nav-item" data-panel="omega" onclick="switchPanel('omega')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h5v-2.5C6.6 16.2 5 13.8 5 11a7 7 0 0 1 14 0c0 2.8-1.6 5.2-4 6.5V20h5"/></svg></span>
-        Omega Model
+      <button class="nav-item" data-panel="nfl" onclick="switchPanel('nfl')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M8.75 15.25l6.5-6.5M10 12.5l1.5 1.5M12.5 10l1.5 1.5"/></svg></span>
+        NFL Only Picks
       </button>
       <button class="nav-item" data-panel="gamecast" onclick="switchPanel('gamecast')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4.5c2.8 4.3 2.8 10.7 0 15M18 4.5c-2.8 4.3-2.8 10.7 0 15"/></svg></span>
@@ -1838,12 +1838,12 @@
 
       <!-- GROK BETA MODEL PANEL -->
       <div class="panel" id="panel-grok-beta" style="overflow:hidden;">
-        <iframe id="grok-beta-iframe" src="/grok-beta" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="grok-beta-iframe" src="/live-edge" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- OMEGA MODEL PANEL -->
       <div class="panel" id="panel-omega" style="overflow:hidden;">
-        <iframe id="omega-iframe" src="/omega" style="width:100%;height:100%;border:none;"></iframe>
+        <iframe id="omega-iframe" src="/daily-omega" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- GAMECAST PANEL -->
@@ -1957,7 +1957,7 @@
               </div>
             </div>
             <div class="settings-group">
-              <h3>Grok Beta</h3>
+              <h3>Live Edge</h3>
               <div class="stats-grid">
                 <div class="stat-card">
                   <div class="stat-label">Status</div>
@@ -1971,12 +1971,12 @@
                 </div>
               </div>
               <div class="settings-row">
-                <span class="settings-row-label">Run Grok Beta</span>
-                <button class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--primary-dim);color:var(--primary);font-size:0.75rem" onclick="triggerGrokBeta()">Run Grok Beta</button>
+                <span class="settings-row-label">Run Live Edge</span>
+                <button class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--primary-dim);color:var(--primary);font-size:0.75rem" onclick="triggerGrokBeta()">Run Live Edge</button>
               </div>
               <div class="settings-row">
-                <span class="settings-row-label">Open /grok-beta</span>
-                <a href="/grok-beta" class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--surface-3);font-size:0.75rem">Open /grok-beta</a>
+                <span class="settings-row-label">Open /live-edge</span>
+                <a href="/live-edge" class="nav-item" style="width:auto;padding:6px 16px;border-radius:8px;background:var(--surface-3);font-size:0.75rem">Open /live-edge</a>
               </div>
             </div>
           </div>
@@ -2057,8 +2057,8 @@
               <a href="/alpha" class="settings-row-value" style="color:var(--primary)">/alpha</a>
             </div>
             <div class="settings-row">
-              <span class="settings-row-label">Grok Beta Model</span>
-              <a href="/grok-beta" class="settings-row-value" style="color:var(--primary)">/grok-beta</a>
+              <span class="settings-row-label">Live Edge Picks</span>
+              <a href="/live-edge" class="settings-row-value" style="color:var(--primary)">/live-edge</a>
             </div>
             <div class="settings-row">
               <span class="settings-row-label">Percentile</span>
@@ -2257,9 +2257,9 @@
   const panelTitles = {
     chat: 'Chat With Betty',
     picks: 'Daily Edge Picks',
-    nfl: 'NFL Model',
-    'grok-beta': 'Grok Beta Model',
-    omega: 'Omega Model',
+    nfl: 'NFL Only Picks',
+    'grok-beta': 'Live Edge Picks',
+    omega: 'Daily Omega Picks',
     gamecast: 'Picks Gamecast',
     mlb: 'MLB First 5 Picks',
     webit: 'WeBit',
@@ -3608,7 +3608,7 @@
       await fetch('/.netlify/functions/grok-beta-run?key=grok-beta-run', { method: 'POST' });
       setTimeout(loadGrokBetaStatus, 2500);
     } catch (_) {}
-    if (btn) { btn.textContent = 'Run Grok Beta'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Run Live Edge'; btn.disabled = false; }
   }
 
   async function loadGrokBetaStatus() {

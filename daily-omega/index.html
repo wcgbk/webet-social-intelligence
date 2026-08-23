@@ -1847,6 +1847,9 @@
       const sports = getAllSports(picksData);
       await fetchAllScores(sports);
       renderPicks(picksData);
+      // Also refresh the top KPI/track-record section (ROI, record, accuracy, P/L,
+      // day rows) so it updates live as games complete — no manual page refresh needed.
+      loadResults();
     }, seconds * 1000);
   }
 

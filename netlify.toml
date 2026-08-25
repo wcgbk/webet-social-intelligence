@@ -47,7 +47,10 @@
   # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
 
 [functions."fetch-tsp-live"]
-  schedule = "*/15 * * * *"
+  # schedule = "*/15 * * * *"
+  # PAUSED 2026-08-25 (Ben) — Live AI / TSP.Live feed ON HOLD pending permission from The
+  # Sharp Plays. Cron disabled AND a hard kill-switch in fetch-tsp-live.js ensures NO requests
+  # hit tsp.live from any path. Re-enable: uncomment the schedule + flip TSP_FETCH_ON_HOLD=false.
   # PRIVATE Live AI Picks feed (Ben-directed 2026-08-25) — pulls Ben's subscribed TSP.Live
   # Hermes A.I. page every 15 min using TSP_SESSION_COOKIE (Netlify env), parses the cards,
   # writes to the isolated "tsp-live" blob store → passcode-gated /live-ai page.

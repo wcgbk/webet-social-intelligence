@@ -57,9 +57,11 @@
   # Background function — 15min timeout for NFL pick generation
 
 [functions."grok-beta-daily"]
-  schedule = "30 12 * * *"
+  # schedule = "30 12 * * *"
+  # PAUSED 2026-08-25 (Ben) — Grok Build / Live Edge pipeline ON HOLD. Cron disabled so it
+  # stops auto-running and draining the Odds API (lib/grok-beta/adapters.js) + xAI / Anthropic
+  # / OpenAI (lib/grok-beta/validate.js, narrate.js). Re-enable by uncommenting the schedule.
   # Grok Beta daily — 08:30 America/New_York during EDT = 12:30 UTC.
-  # First automatic run: Sunday Aug 23, 2026 08:30 ET.
   # Isolated from trigger-picks-alpha. Writes grok-beta blobs only.
 
 [functions."grok-beta-run-background"]

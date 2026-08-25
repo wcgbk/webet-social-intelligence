@@ -39,39 +39,65 @@ function stripTags(s) {
   return (s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-// ── Parse the members page HTML into structured selections ──
-// Card shape (verified 2026-08-25):
-// <div class="selection-card medium" data-conf="MEDIUM" data-tsp-ai="11">
-//   <div class="selection-team">Hijkata +100</div>
-//   <div class="selection-meta">ATP Winston Salem · 8/25/2026 ·
-//        <span class="tsp-lt" title="3:30 PM ET · 8/25/2026">3:30 PM</span></div>
-//   <div class="confidence-badge MEDIUM">MEDIUM</div>
-//   <div class="score-chip-value open">31</div> ... <div class="score-chip-value tier-teal">31</div>
-//   <div class="score-delta flat">±0</div>
-function parseSelections(html) {
-  const selections = [];
-  const chunks = html.split('class="selection-card');
-  for (let i = 1; i < chunks.length; i++) {
-    // Bound each card at the next card (or a generous tail for the last one)
-    const raw = chunks[i].slice(0, 6000);
-    const sel = {};
-    sel.confidence = (raw.match(/data-conf="([A-Z]+)"/) || [])[1] || null;
-    const ai = (raw.match(/data-tsp-ai="([\d.]+)"/) || [])[1];
-    sel.aiScore = ai !== undefined ? Number(ai) : null;
-    sel.pick = stripTags((raw.match(/selection-team">([\s\S]*?)<\/div>/) || [])[1]);
-    const metaRaw = (raw.match(/selection-meta">([\s\S]*?)<\/div>/) || [])[1] || "";
-    sel.meta = stripTags(metaRaw);
-    sel.gameTimeET = (metaRaw.match(/class="tsp-lt"[^>]*title="([^"]+)"/) || [])[1] || null;
-    // Open/current chips: collect every score-chip-value; 'open' class marks the opener
-    const chips = [...raw.matchAll(/score-chip-value([^"]*)">([^<]+)</g)];
-    for (const c of chips) {
-      if (/\bopen\b/.test(c[1])) sel.open = c[2].trim();
-      else sel.current = c[2].trim();
+// ── Parse the members page into structured selections ──
+// The visible .selection-card DOM is rendered CLIENT-SIDE by JS, so the raw HTML has
+// only 1 card. The full slate is embedded as a json_encode'd JS array:
+//   var allSelections = [ { selection, confidence, openScore, currentScore, date,
+//       time, league, pros:[], cons:[], neutral:[], notes, tagColor, tagLabel,
+//       rotation, _ai }, ... ];
+// We extract that array (string-aware bracket matching) and JSON.parse it.
+function extractArrayLiteral(html, varName) {
+  const mi = html.indexOf("var " + varName);
+  if (mi === -1) return null;
+  const start = html.indexOf("[", mi);
+  if (start === -1) return null;
+  let depth = 0, inStr = false, quote = "", esc = false;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (esc) { esc = false; continue; }
+    if (inStr) {
+      if (c === "\\") esc = true;
+      else if (c === quote) inStr = false;
+      continue;
     }
-    sel.delta = stripTags((raw.match(/score-delta[^>]*>([^<]+)</) || [])[1]) || null;
-    if (sel.pick) selections.push(sel);
+    if (c === '"' || c === "'") { inStr = true; quote = c; }
+    else if (c === "[") depth++;
+    else if (c === "]") { depth--; if (depth === 0) return html.slice(start, i + 1); }
   }
-  return selections;
+  return null;
+}
+
+function parseSelections(html) {
+  const literal = extractArrayLiteral(html, "allSelections");
+  if (!literal) return [];
+  let arr;
+  try { arr = JSON.parse(literal); } catch (e) { return []; }
+  if (!Array.isArray(arr)) return [];
+  return arr.map((s) => {
+    const open = s.openScore, cur = s.currentScore;
+    let delta = null;
+    if (typeof open === "number" && typeof cur === "number") {
+      const d = cur - open;
+      delta = d === 0 ? "±0" : (d > 0 ? "+" + d : String(d));
+    }
+    return {
+      pick: (s.selection || "").trim(),
+      confidence: s.confidence || null,
+      aiScore: s._ai !== undefined && s._ai !== null ? s._ai : null,
+      open: open != null ? String(open) : null,
+      current: cur != null ? String(cur) : null,
+      delta,
+      league: s.league || null,
+      gameTimeET: [s.date, s.time].filter(Boolean).join(" · ") || null,
+      pros: Array.isArray(s.pros) ? s.pros : [],
+      cons: Array.isArray(s.cons) ? s.cons : [],
+      neutral: Array.isArray(s.neutral) ? s.neutral : [],
+      tagLabel: s.tagLabel || null,
+      notes: s.notes || null,
+      rotation: s.rotation || null,
+      meta: [s.league, s.date, s.time].filter(Boolean).join(" · "),
+    };
+  }).filter((s) => s.pick);
 }
 
 async function runFetch() {
@@ -103,7 +129,7 @@ async function runFetch() {
     return { ...base, status: "FETCH_ERROR", error: e.message, selections: [], count: 0 };
   }
 
-  const loggedIn = /MEMBERS/.test(html) || html.includes("selection-card");
+  const loggedIn = html.includes("allSelections") || /MEMBERS/.test(html) || html.includes("selection-card");
   if (!loggedIn) {
     return { ...base, status: "AUTH_EXPIRED", selections: [], count: 0 };
   }

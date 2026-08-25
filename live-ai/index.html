@@ -59,6 +59,12 @@
     .score .l { font-size: 0.62rem; letter-spacing: 0.08em; color: var(--txt-m); text-transform: uppercase; }
     .lines { display: flex; align-items: center; gap: 8px; color: var(--txt-m); font-size: 0.85rem; }
     .lines b { color: var(--txt); font-weight: 600; }
+    .lg { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; color: var(--txt-m); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .tag { font-size: 0.68rem; border-radius: 5px; padding: 2px 7px; border: 1px solid; }
+    .tag.pro { color: var(--primary); border-color: rgba(135,251,137,.3); background: rgba(135,251,137,.06); }
+    .tag.con { color: var(--red); border-color: rgba(251,146,135,.3); background: rgba(251,146,135,.06); }
+    .tag.neu { color: var(--txt-m); border-color: var(--border); }
     .empty { text-align: center; color: var(--txt-m); padding: 3rem 1rem; font-size: 0.9rem; }
     /* passcode gate */
     .gate { max-width: 360px; margin: 18vh auto 0; text-align: center; }
@@ -139,11 +145,18 @@
       grid.innerHTML = sels.map(function (s) {
         var lines = '';
         if (s.open != null || s.current != null) {
-          lines = '<div class="lines">Open <b>' + esc(s.open) + '</b> → Current <b>' + esc(s.current) + '</b>' + (s.delta ? ' <span>(' + esc(s.delta) + ')</span>' : '') + '</div>';
+          lines = '<div class="lines">Open <b>' + esc(s.open) + '</b> → <b>' + esc(s.current) + '</b>' + (s.delta ? ' <span>(' + esc(s.delta) + ')</span>' : '') + '</div>';
         }
+        var tags = '';
+        (s.pros || []).forEach(function (p) { tags += '<span class="tag pro">' + esc(p) + '</span>'; });
+        (s.neutral || []).forEach(function (n) { tags += '<span class="tag neu">' + esc(n) + '</span>'; });
+        (s.cons || []).forEach(function (c) { tags += '<span class="tag con">' + esc(c) + '</span>'; });
         return '<div class="sel">' +
-          '<div class="main"><div class="pick">' + esc(s.pick) + '</div>' +
-          '<div class="meta">' + esc(s.gameTimeET || s.meta) + '</div></div>' +
+          '<div class="main">' +
+            '<div class="pick">' + esc(s.pick) + (s.league ? '<span class="lg">' + esc(s.league) + '</span>' : '') + '</div>' +
+            '<div class="meta">' + esc(s.gameTimeET || s.meta) + '</div>' +
+            (tags ? '<div class="tags">' + tags + '</div>' : '') +
+          '</div>' +
           lines +
           (s.aiScore != null ? '<div class="score"><div class="n">' + esc(s.aiScore) + '</div><div class="l">Hermes</div></div>' : '') +
           (s.confidence ? '<div class="badge ' + esc(s.confidence) + '">' + esc(s.confidence) + '</div>' : '') +

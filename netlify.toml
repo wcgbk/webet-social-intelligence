@@ -46,6 +46,14 @@
   schedule = "0 9 * * 0"
   # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
 
+[functions."fetch-tsp-live"]
+  schedule = "*/15 * * * *"
+  # PRIVATE Live AI Picks feed (Ben-directed 2026-08-25) — pulls Ben's subscribed TSP.Live
+  # Hermes A.I. page every 15 min using TSP_SESSION_COOKIE (Netlify env), parses the cards,
+  # writes to the isolated "tsp-live" blob store → passcode-gated /live-ai page.
+  # PRIVATE-USE ONLY: never expose publicly (paid membership content). Needs env:
+  # TSP_SESSION_COOKIE (member cookie) + TSP_PAGE_KEY (page passcode). Zero external API cost.
+
 [functions."trigger-picks-nfl"]
   schedule = "0 15 * * *"
   # NFL pipeline — 11am ET (15:00 UTC), added 2026-08-06. GATED: fires the generator only on

@@ -1674,6 +1674,10 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M8.75 15.25l6.5-6.5M10 12.5l1.5 1.5M12.5 10l1.5 1.5"/></svg></span>
         NFL Only Picks
       </button>
+      <button class="nav-item" data-panel="live-ai" onclick="switchPanel('live-ai')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        Live AI Picks
+      </button>
       <button class="nav-item" data-panel="gamecast" onclick="switchPanel('gamecast')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4.5c2.8 4.3 2.8 10.7 0 15M18 4.5c-2.8 4.3-2.8 10.7 0 15"/></svg></span>
         Picks Gamecast
@@ -1840,6 +1844,11 @@
       <!-- OMEGA MODEL PANEL -->
       <div class="panel" id="panel-omega" style="overflow:hidden;">
         <iframe id="omega-iframe" src="/daily-omega" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- LIVE AI PICKS PANEL (private TSP.Live feed) -->
+      <div class="panel" id="panel-live-ai" style="overflow:hidden;">
+        <iframe id="live-ai-iframe" src="/live-ai" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- GAMECAST PANEL -->
@@ -2255,6 +2264,7 @@
     picks: 'Daily Edge Picks',
     nfl: 'NFL Only Picks',
     'grok-beta': 'Live Edge Picks',
+    'live-ai': 'Live AI Picks',
     omega: 'Daily Omega Picks',
     gamecast: 'Picks Gamecast',
     mlb: 'MLB First 5 Picks',
@@ -2281,7 +2291,7 @@
   // lands on that exact panel. Chat is the home page (no fragment). Any raw
   // panel key also resolves, so older /dashboard#panel links keep working.
   const PANEL_SLUGS = {
-    picks: 'picks', nfl: 'nfl', 'grok-beta': 'grok-beta', omega: 'omega', gamecast: 'gamecast', percentile: 'track-record',
+    picks: 'picks', nfl: 'nfl', 'grok-beta': 'grok-beta', 'live-ai': 'live-ai', omega: 'omega', gamecast: 'gamecast', percentile: 'track-record',
     p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
     webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
   };

@@ -26,7 +26,9 @@ exports.handler = async (event) => {
 
   try {
     const { getStore } = await import("@netlify/blobs");
-    const store = getStore("tsp-live");
+    const token = process.env.NETLIFY_AUTH_TOKEN;
+    const siteID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+    const store = token ? getStore({ name: "tsp-live", siteID, token }) : getStore("tsp-live");
     const key = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? `day-${params.date}` : "latest";
     const data = await store.get(key, { type: "json" });
     if (!data) {

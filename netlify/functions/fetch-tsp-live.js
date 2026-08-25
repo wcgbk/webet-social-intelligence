@@ -18,6 +18,15 @@
 
 const SOURCE_URL = "https://tsp.live/analytics-1/";
 
+// Scheduled functions don't receive the automatic Netlify Blobs context — pass it
+// explicitly (same reason the alpha/omega generators hit the Blobs REST API directly).
+const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+async function tspStore() {
+  const { getStore } = await import("@netlify/blobs");
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  return token ? getStore({ name: "tsp-live", siteID: SITE_ID, token }) : getStore("tsp-live");
+}
+
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
@@ -110,8 +119,7 @@ async function runFetch() {
 async function handler() {
   const payload = await runFetch();
   try {
-    const { getStore } = await import("@netlify/blobs");
-    const store = getStore("tsp-live");
+    const store = await tspStore();
     // Never clobber a good card with a transient failure — keep last-good visible,
     // but surface the failure alongside it so the page can show a warning banner.
     if (payload.status !== "ok") {

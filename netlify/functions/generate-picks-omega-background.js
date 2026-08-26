@@ -3924,6 +3924,21 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       continue;
     }
 
+    // ── EV INVARIANT (single serialization choke-point) ──
+    // EV is DEFINED as the Kelly edge of the CURRENT coverProb at the CURRENT price. Any upstream
+    // adjustment that mutates coverProb (PM-blend, weather; the old self-opt shrink, removed v10.4)
+    // must re-derive EV; if one ever forgets, the EV badge silently desyncs from the win-prob badge.
+    // Every pick passes through here, so re-deriving EV at this point makes that class of bug
+    // impossible to ship. EV is drawdown-independent, so pass false. F5 keeps its EV discount.
+    {
+      const evK = computeKelly(c.coverProb, c.odds, false);
+      const trueEV = c.source === "F5" ? evK.ev * F5_EV_DISCOUNT : evK.ev;
+      if (Math.abs(trueEV - c.ev) > 0.0005) {
+        console.log(`[v10-ev-invariant] rank ${c.rank} ${c.side}: EV ${(c.ev * 100).toFixed(1)}% → ${(trueEV * 100).toFixed(1)}% (coverProb ${(c.coverProb * 100).toFixed(1)}%)`);
+      }
+      c.ev = +trueEV.toFixed(4);
+    }
+
     // Enforce: Claude can reduce units by up to 50% but never increase
     let finalUnits = kellyToUnits(c.kellyUnits, drawdownActive, c.coverProb);
     if (sel.adjustedUnits) {

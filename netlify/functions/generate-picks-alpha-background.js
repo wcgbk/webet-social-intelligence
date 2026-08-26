@@ -3711,6 +3711,21 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       continue;
     }
 
+    // ── EV INVARIANT (single serialization choke-point) ──
+    // EV is DEFINED as the Kelly edge of the CURRENT coverProb at the CURRENT price. Any upstream
+    // adjustment that mutates coverProb (self-opt shrink, PM-blend, weather) must re-derive EV; if
+    // one ever forgets, the EV badge silently desyncs from the win-prob badge. Every pick passes
+    // through here, so re-deriving EV at this point makes that class of bug impossible to ship.
+    // EV is drawdown-independent, so pass false. F5 keeps its EV discount.
+    {
+      const evK = computeKelly(c.coverProb, c.odds, false);
+      const trueEV = c.source === "F5" ? evK.ev * F5_EV_DISCOUNT : evK.ev;
+      if (Math.abs(trueEV - c.ev) > 0.0005) {
+        console.log(`[v10-ev-invariant] rank ${c.rank} ${c.side}: EV ${(c.ev * 100).toFixed(1)}% → ${(trueEV * 100).toFixed(1)}% (coverProb ${(c.coverProb * 100).toFixed(1)}%)`);
+      }
+      c.ev = +trueEV.toFixed(4);
+    }
+
     // Enforce: Claude can reduce units by up to 50% but never increase
     let finalUnits = kellyToUnits(c.kellyUnits, drawdownActive, c.coverProb);
     if (sel.adjustedUnits) {
@@ -4395,6 +4410,12 @@ exports.handler = async (event) => {
           // The self-optimize engine suggests adjustments; we apply them as a secondary multiplier
           const probShift = 1.0 + capAdj;
           c.coverProb = +Math.min(0.70, c.coverProb * probShift).toFixed(4);
+          // Re-derive EV from the shrunk coverProb so the two can never desync. Every other
+          // coverProb mutation (alt-line, PM-blend, weather) already recomputes EV; this one
+          // silently did not, which inflated the displayed EV vs the win-prob badge
+          // (2026-08-26 MLB Moneyline bug). EV is drawdown-independent, so pass false.
+          const soKelly = computeKelly(c.coverProb, c.odds, false);
+          c.ev = +(c.source === "F5" ? soKelly.ev * F5_EV_DISCOUNT : soKelly.ev).toFixed(4);
         }
       }
       console.log(`[v10-selfopt] Applied self-optimization to ${soAdj} candidates (sample: ${selfOptParams.sampleSize})`);

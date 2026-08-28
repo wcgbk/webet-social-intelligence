@@ -4,6 +4,8 @@
 /mvpalpha/    /mvpalpha/index.html     200
 /nfl          /nfl/index.html          200
 /nfl/         /nfl/index.html          200
+/cfb          /cfb/index.html          200
+/cfb/         /cfb/index.html          200
 /live-edge    /live-edge/index.html    200
 /live-edge/   /live-edge/index.html    200
 /grok-beta    /live-edge               301

@@ -21,6 +21,7 @@ const SITE_URL = 'https://webetsocial.com';
 const VIEW_TITLES = {
   picks: 'Daily Edge Picks',
   nfl: 'NFL Only Picks',
+  cfb: 'College Football Picks',
   'grok-beta': 'Live Edge Picks',
   omega: 'Daily Omega Picks',
   gamecast: 'Picks Gamecast',
@@ -38,6 +39,7 @@ const VIEW_TITLES = {
 // Tailored preview blurbs; anything unlisted falls back to the base dashboard description.
 const VIEW_DESC = {
   'NFL Model': 'WeBetAI’s dedicated NFL model — calibrated edges on every NFL game day.',
+  'College Football Picks': 'WeBetAI’s dedicated college football model. Calibrated edges across the FBS slate on every game day.',
   'Picks Gamecast': 'Every game on today’s WeBetAI card with its own live ESPN Gamecast.',
   'Daily Edge Picks': 'Today’s WeBetAI edge picks across every league, ranked by expected value.',
   'Percentile Rankings': 'See how WeBetAI ranks against elite betting models.',

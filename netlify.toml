@@ -67,6 +67,18 @@
 [functions."generate-picks-nfl-background"]
   # Background function — 15min timeout for NFL pick generation
 
+[functions."trigger-picks-cfb"]
+  schedule = "5 15 * * *"
+  # College Football pipeline — 11:05am ET (15:05 UTC), added 2026-08-28. Clone of the NFL
+  # daily process (5 min later so the two Odds API pulls don't burst together). The generator
+  # decides game-day vs no-games inside: real card on CFB game days, "No College Football
+  # Games Scheduled For Today" otherwise. Separate environment from alpha/NFL: writes to the
+  # edge-picks-cfb blob store → /cfb page. Model: v1.0-cfb (market-anchored + line shopping,
+  # school-keyed team matching, drift clamps vs the consensus number).
+
+[functions."generate-picks-cfb-background"]
+  # Background function — 15min timeout for CFB pick generation
+
 [functions."grok-beta-daily"]
   # schedule = "30 12 * * *"
   # PAUSED 2026-08-25 (Ben) — Grok Build / Live Edge pipeline ON HOLD. Cron disabled so it

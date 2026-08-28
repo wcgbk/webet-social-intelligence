@@ -35,6 +35,18 @@ exports.handler = async (event) => {
       console.log(`[trigger-clv] NFL CLV skipped: ${nflErr.message}`);
     }
 
+    // CFB CLV is another sibling store (edge-picks-cfb). Same fire-and-forget contract.
+    try {
+      const cfb = await fetch(`${siteURL}/.netlify/functions/track-clv-cfb`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduled: true, window }),
+      });
+      console.log(`[trigger-clv] CFB CLV: HTTP ${cfb.status}`);
+    } catch (cfbErr) {
+      console.log(`[trigger-clv] CFB CLV skipped: ${cfbErr.message}`);
+    }
+
     return { statusCode: 200, body: `CLV ${window}: ${data.totalTracked}/${data.totalPicks} tracked` };
   } catch (err) {
     console.error(`[trigger-clv] Failed: ${err.message}`);

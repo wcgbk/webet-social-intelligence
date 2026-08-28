@@ -23,6 +23,17 @@ picks card + live track record. WeBits = credit economy (1,000 granted at signup
 Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle.
 
 ## DONE — never rebuild (evidence in git log + charter)
+- **CFB (College Football) pipeline LIVE (2026-08-28, founder-directed; commit cfabceb):**
+  full NFL-environment clone for the FBS slate, isolated in edge-picks-cfb → /cfb page +
+  dashboard "College Football Picks" menu item (panel-cfb iframe, ?view=cfb deep link).
+  generate-picks-cfb-background v1.0-cfb: market-anchored (no static seed for 130+ FBS
+  teams; ESPN standings overlay when games exist; hard drift clamps ±4 spread / ±5 total),
+  school-keyed team matching (nickname collisions: LSU Tigers ≠ Auburn Tigers), FBS
+  scoreboard needs groups=80&limit=300. Cron trigger-picks-cfb 15:05 UTC; off days write
+  "No College Football Games Scheduled For Today". get-results-cfb lazy ESPN grading,
+  KPIs from zero; track-clv-cfb fired by trigger-clv after alpha + NFL. Fixed the predCLV
+  mis-attachment inherited from the NFL generator (pushCand returns the pushed candidate)
+  — the SAME bug is still in generate-picks-nfl-background (flagged, not yet fixed there).
 - **NFL pipeline LIVE (2026-08-06, founder-directed; v1.1-nfl 2026-08-18):** separate
   environment from alpha, shaped to merge later. generate-picks-nfl-background v1.1-nfl
   runs the regular-season process even while ESPN still labels the slate preseason:

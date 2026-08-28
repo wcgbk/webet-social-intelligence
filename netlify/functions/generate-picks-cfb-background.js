@@ -28,12 +28,22 @@ const MODEL_VERSION = "v1.0-cfb";
 const CFB_ODDS_SPORTS = ["americanfootball_ncaaf"];
 
 // ── Season constants ──
-// CFB margins are wider than NFL: empirical margin σ ≈ 16.5, total σ ≈ 12.5. HFA ≈ 2.5.
-// League total ≈ 55.5. Market weight 0.70 (market-heavier than NFL's 0.50 because there is
-// no rating seed); drift clamps below are the real guardrail.
+// Margin σ 16.0: academic fit vs the closing line is ~14.1 (arXiv 2212.08116, long sample)
+// and practitioner consensus 15.5-16; spreads have been shrinking (2024 avg 10.44, lowest
+// in 40 yrs), and variance grows with spread size, so 16.0 is the conservative middle for
+// the near-market games this model actually bets. Total σ 12.5. HFA 2.5 (VSiN true-HFA
+// ≈ 2.6 over the last 3.5 seasons; books hang ~3.0). Market weight 0.70 (market-heavier
+// than NFL's 0.50 because there is no rating seed); drift clamps below are the real
+// guardrail.
+// sigmaML 14.0 is deliberately LOWER than sigmaMargin: the empirical CFB margin curve has a
+// fatter middle and the academic spread→win-probability fit is σ≈14.1 (arXiv 2212.08116).
+// Converting spreads to ML win probs with the wider ATS σ systematically overrates underdogs
+// (Φ(9/16)=71% for a −9 favorite vs ~74-76% empirical) and fills the card with +250 dog
+// MLs — the exact MLB-F5 bleed pattern. With σ 14 the only dog MLs that survive the 3% EV
+// floor are genuine price outliers the sharp predCLV anchor also likes.
 const PHASE_CONFIG = {
   regular: {
-    sigmaMargin: 16.5, sigmaTotal: 12.5, hfa: 2.5,
+    sigmaMargin: 16.0, sigmaML: 14.0, sigmaTotal: 12.5, hfa: 2.5,
     marketWeight: 0.70, shrinkMult: 1.0,
     maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.03,
     leagueTotal: 55.5,
@@ -120,8 +130,12 @@ function weightedMedian(pairs) { // pairs: [{v, w}]
 function fmtOdds(o) { return `${o > 0 ? "+" : ""}${o}`; }
 function fmtSigned(n, dp = 1) { const v = Number(n).toFixed(dp); return n >= 0 ? `+${v}` : v; }
 
-// CFB key-number cover: extra mass at 3 and 7 (then 6/10/14). Slightly smaller bumps than
-// the NFL — college margins are less key-number concentrated (more blowouts, 2-pt tries).
+// CFB key-number cover, weighted to the EMPIRICAL college margin distribution (23,768 FBS
+// games since 1980, boydsbets: 3=8.3%, 7=6.7%, 10=4.2%, 14=4.1%, 4=4.1%, 17=3.8%, 21=3.7%).
+// College is far less key-number concentrated than the NFL (3+7 decide 16% of CFB games vs
+// 24.3% of NFL games), so 3/7 get smaller bumps than the NFL model, 6 is NOT a college key
+// number (dropped), and the touchdown multiples 10/14/17/21 stay live because empirical
+// mass holds up there while the normal tail decays.
 function cfbSpreadCoverProb(modelMargin, pointsReceived, sigma) {
   const need = -pointsReceived;
   const integer = Math.abs(pointsReceived % 1) < 1e-9;
@@ -139,7 +153,7 @@ function cfbSpreadCoverProb(modelMargin, pointsReceived, sigma) {
     if (pointsReceived < 0 && L >= kn - 0.5 && L < kn) pWin += w;      // -2.5: don't need the 3
     if (pointsReceived < 0 && L > kn && L <= kn + 0.5) pWin -= w;      // -3.5: must clear 3
   };
-  bump(3, 0.016); bump(7, 0.011); bump(6, 0.005); bump(10, 0.005); bump(14, 0.004);
+  bump(3, 0.011); bump(7, 0.008); bump(10, 0.005); bump(14, 0.004); bump(4, 0.003); bump(17, 0.004); bump(21, 0.004);
   pWin = Math.min(0.72, Math.max(0.28, pWin));
   return pPush > 0.002 ? pWin / (1 - pPush) : pWin;
 }
@@ -258,8 +272,16 @@ async function fetchLiveRatingOverlay() {
         if (!name) continue;
         const stats = {};
         for (const s of (e.stats || [])) if (s.name) stats[s.name] = s.value;
+        // ESPN's CFB standings expose `wins` but NO `losses`/`gamesPlayed` stat — games
+        // played must come from the `overall` record string ("5-2"), else pd/gp would
+        // divide by wins alone and overstate every team.
+        const overall = (e.stats || []).find(s => s.name === "overall");
+        const recStr = (overall && (overall.displayValue || overall.summary)) || "";
+        const recM = recStr.match(/^(\d+)-(\d+)/);
         const wins = Number(stats.wins || 0), losses = Number(stats.losses || 0);
-        const gp = Number(stats.gamesPlayed || (wins + losses) || 0);
+        const gp = Number(stats.gamesPlayed || 0)
+          || (recM ? Number(recM[1]) + Number(recM[2]) : 0)
+          || (wins + losses);
         if (gp <= 0) continue; // no games yet → no signal, stay market-anchored
         const pd = Number(stats.pointDifferential ?? stats.differential ?? 0);
         const pf = Number(stats.pointsFor ?? NaN);
@@ -596,9 +618,10 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
     }
   }
 
-  // MONEYLINES — win prob from model margin; heavy prior anchor.
+  // MONEYLINES — win prob from model margin via the ML-fitted σ (see sigmaML note above);
+  // heavy prior anchor.
   if (c.mlHomeNoVig != null && (c.majorML || 0) >= 2) {
-    const rawHomeWin = normalCDF(modelMargin / cfg.sigmaMargin);
+    const rawHomeWin = normalCDF(modelMargin / (cfg.sigmaML || cfg.sigmaMargin));
     const homeBest = bestOffer(c.offers.mlHome, (o) => ({ raw: rawHomeWin, cover: shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig), prior: c.mlHomeNoVig }));
     if (homeBest) {
       const added = pushCand("Moneyline", `${c.home} ML`, homeBest.offer, rawHomeWin, c.mlHomeNoVig,

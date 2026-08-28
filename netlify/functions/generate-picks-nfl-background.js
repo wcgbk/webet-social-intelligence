@@ -487,17 +487,17 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
   };
 
   const pushCand = (market, side, offer, rawProb, prior, modelProjection, consensusLine, edgePts) => {
-    if (!offer || offer.price == null || offer.price < -300 || offer.price > 300) return;
+    if (!offer || offer.price == null || offer.price < -300 || offer.price > 300) return null;
     const coverProb = shrink(rawProb, market, prior);
     const dec = americanToDecimal(offer.price);
     const ev = coverProb * dec - 1;
-    if (ev <= 0) return;
+    if (ev <= 0) return null;
     let kellyUnits = ((ev / (dec - 1)) * 0.25) * 50; // quarter-Kelly ×50, alpha scale
     kellyUnits = Math.round(kellyUnits * 2) / 2;
     const capU = market === "Moneyline" ? cfg.mlMaxUnits : cfg.maxUnits;
     kellyUnits = Math.max(0.5, Math.min(capU, kellyUnits));
     const sigma = market === "Total" ? cfg.sigmaTotal : cfg.sigmaMargin;
-    cands.push({
+    const cand = {
       sport: "NFL", market, side,
       homeTeam: c.home, awayTeam: c.away, commenceTime: c.commenceTime,
       odds: offer.price, book: offer.book,
@@ -508,7 +508,9 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
       homeRecord: espnGame?.homeRecord || "", awayRecord: espnGame?.awayRecord || "",
       venue: espnGame?.venue || "",
       kellyCalcStr: `p=${coverProb.toFixed(3)}, dec=${dec.toFixed(2)}, EV=${(ev * 100).toFixed(1)}%, quarter-Kelly → ${kellyUnits}u (best line ${fmtOdds(offer.price)} @ ${offer.book})`,
-    });
+    };
+    cands.push(cand);
+    return cand;
   };
 
   const bestOffer = (list, probFn) => {
@@ -539,11 +541,10 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
       return { raw, cover: shrink(raw, "Spread", prior), prior };
     });
     if (homeBest) {
-      pushCand("Spread", `${c.home} ${fmtSigned(homeBest.offer.point)}`, homeBest.offer, homeBest.raw, homeBest.prior,
+      const added = pushCand("Spread", `${c.home} ${fmtSigned(homeBest.offer.point)}`, homeBest.offer, homeBest.raw, homeBest.prior,
         `${c.home} ${fmtSigned(-modelMargin)}`, `${c.home} ${fmtSigned(homeBest.offer.point)} @ ${fmtOdds(homeBest.offer.price)}`,
         modelMargin - (-homeBest.offer.point));
-      const last = cands[cands.length - 1];
-      if (last) attachPredCLV(last, c.sharp?.homeSpread, c.sharp?.awaySpread, c.offers.spreadAway.find(x => x.book === homeBest.offer.book)?.price);
+      if (added) attachPredCLV(added, c.sharp?.homeSpread, c.sharp?.awaySpread, c.offers.spreadAway.find(x => x.book === homeBest.offer.book)?.price);
     }
     const awayBest = bestOffer(c.offers.spreadAway, (o) => {
       const raw = nflSpreadCoverProb(-modelMargin, o.point, cfg.sigmaMargin);
@@ -551,11 +552,10 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
       return { raw, cover: shrink(raw, "Spread", prior), prior };
     });
     if (awayBest) {
-      pushCand("Spread", `${c.away} ${fmtSigned(awayBest.offer.point)}`, awayBest.offer, awayBest.raw, awayBest.prior,
+      const added = pushCand("Spread", `${c.away} ${fmtSigned(awayBest.offer.point)}`, awayBest.offer, awayBest.raw, awayBest.prior,
         `${c.away} ${fmtSigned(modelMargin)}`, `${c.away} ${fmtSigned(awayBest.offer.point)} @ ${fmtOdds(awayBest.offer.price)}`,
         (-modelMargin) - (-awayBest.offer.point));
-      const last = cands[cands.length - 1];
-      if (last) attachPredCLV(last, c.sharp?.awaySpread, c.sharp?.homeSpread, c.offers.spreadHome.find(x => x.book === awayBest.offer.book)?.price);
+      if (added) attachPredCLV(added, c.sharp?.awaySpread, c.sharp?.homeSpread, c.offers.spreadHome.find(x => x.book === awayBest.offer.book)?.price);
     }
   }
 
@@ -567,10 +567,9 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
       return { raw, cover: shrink(raw, "Total", prior), prior };
     });
     if (overBest) {
-      pushCand("Total", `Over ${overBest.offer.point}`, overBest.offer, overBest.raw, overBest.prior,
+      const added = pushCand("Total", `Over ${overBest.offer.point}`, overBest.offer, overBest.raw, overBest.prior,
         `${modelTotal.toFixed(1)} total`, `Over ${overBest.offer.point} @ ${fmtOdds(overBest.offer.price)}`, overBest.offer.point ? modelTotal - overBest.offer.point : 0);
-      const last = cands[cands.length - 1];
-      if (last) attachPredCLV(last, c.sharp?.over, c.sharp?.under, c.offers.under.find(x => x.book === overBest.offer.book)?.price);
+      if (added) attachPredCLV(added, c.sharp?.over, c.sharp?.under, c.offers.under.find(x => x.book === overBest.offer.book)?.price);
     }
     const underBest = bestOffer(c.offers.under, (o) => {
       const raw = nflTotalCoverProb(modelTotal, o.point, false, cfg.sigmaTotal);
@@ -578,10 +577,9 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
       return { raw, cover: shrink(raw, "Total", prior), prior };
     });
     if (underBest) {
-      pushCand("Total", `Under ${underBest.offer.point}`, underBest.offer, underBest.raw, underBest.prior,
+      const added = pushCand("Total", `Under ${underBest.offer.point}`, underBest.offer, underBest.raw, underBest.prior,
         `${modelTotal.toFixed(1)} total`, `Under ${underBest.offer.point} @ ${fmtOdds(underBest.offer.price)}`, underBest.offer.point - modelTotal);
-      const last = cands[cands.length - 1];
-      if (last) attachPredCLV(last, c.sharp?.under, c.sharp?.over, c.offers.over.find(x => x.book === underBest.offer.book)?.price);
+      if (added) attachPredCLV(added, c.sharp?.under, c.sharp?.over, c.offers.over.find(x => x.book === underBest.offer.book)?.price);
     }
   }
 
@@ -590,18 +588,16 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
     const rawHomeWin = normalCDF(modelMargin / cfg.sigmaMargin);
     const homeBest = bestOffer(c.offers.mlHome, (o) => ({ raw: rawHomeWin, cover: shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig), prior: c.mlHomeNoVig }));
     if (homeBest) {
-      pushCand("Moneyline", `${c.home} ML`, homeBest.offer, rawHomeWin, c.mlHomeNoVig,
+      const added = pushCand("Moneyline", `${c.home} ML`, homeBest.offer, rawHomeWin, c.mlHomeNoVig,
         `${(shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig) * 100).toFixed(1)}% win`, `${fmtOdds(homeBest.offer.price)}`, null);
-      const last = cands[cands.length - 1];
-      if (last) attachPredCLV(last, c.sharp?.homeML, c.sharp?.awayML, c.offers.mlAway.find(x => x.book === homeBest.offer.book)?.price);
+      if (added) attachPredCLV(added, c.sharp?.homeML, c.sharp?.awayML, c.offers.mlAway.find(x => x.book === homeBest.offer.book)?.price);
     }
     const rawAwayWin = 1 - rawHomeWin;
     const awayBest = bestOffer(c.offers.mlAway, (o) => ({ raw: rawAwayWin, cover: shrink(rawAwayWin, "Moneyline", 1 - c.mlHomeNoVig), prior: 1 - c.mlHomeNoVig }));
     if (awayBest) {
-      pushCand("Moneyline", `${c.away} ML`, awayBest.offer, rawAwayWin, 1 - c.mlHomeNoVig,
+      const added = pushCand("Moneyline", `${c.away} ML`, awayBest.offer, rawAwayWin, 1 - c.mlHomeNoVig,
         `${(shrink(rawAwayWin, "Moneyline", 1 - c.mlHomeNoVig) * 100).toFixed(1)}% win`, `${fmtOdds(awayBest.offer.price)}`, null);
-      const last = cands[cands.length - 1];
-      if (last) attachPredCLV(last, c.sharp?.awayML, c.sharp?.homeML, c.offers.mlHome.find(x => x.book === awayBest.offer.book)?.price);
+      if (added) attachPredCLV(added, c.sharp?.awayML, c.sharp?.homeML, c.offers.mlHome.find(x => x.book === awayBest.offer.book)?.price);
     }
   }
 

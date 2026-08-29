@@ -202,6 +202,8 @@
       font-family: inherit; font-size: .8125rem; font-weight: 600;
       color: var(--teal); cursor: pointer; text-align: left;
     }
+    /* Whole week row is the touch target (44px+ on mobile) */
+    .results-table tr.week-row { cursor: pointer; }
     .day-detail { display: none; }
     .day-detail.open { display: table-row; }
     .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
@@ -274,6 +276,10 @@
     }
     @media(max-width: 420px) {
       .pick-matchup { font-size: .9375rem; }
+    }
+    /* Very narrow phones: let the matchup wrap instead of ellipsis-clipping */
+    @media(max-width: 360px) {
+      .pick-matchup { white-space: normal; }
     }
     @media (max-width: 600px) {
       .record-legend-bar { flex-wrap: nowrap; gap: .25rem; padding: .5rem .75rem; }
@@ -612,8 +618,8 @@
       const wkPts = isPending ? '--' : ((wk.points || 0).toFixed(1) + ' pts');
       const wkRate = isPending ? '--' : (wk.rate || '--');
       const rowStyle = isPending ? ' style="background:var(--teal-light);"' : '';
-      tbl += `<tr${rowStyle}>
-        <td><button class="day-toggle" onclick="toggleWeek('${key}-${w}')" style="font-weight:700;">${esc(wk.label)}</button>
+      tbl += `<tr class="week-row" onclick="toggleWeek('${key}-${w}')"${rowStyle}>
+        <td><button class="day-toggle" type="button" style="font-weight:700;">${esc(wk.label)}</button>
           <span style="display:block; font-size:.625rem; color:var(--txt-l); font-weight:400;">${esc(wk.dates)}</span></td>
         <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${wkRecord}</span></td>
         <td>${wkRate}</td>

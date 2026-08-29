@@ -5,6 +5,12 @@
 // existing PICKS_SECRET_KEY so no new env var is required (fails closed if neither is set).
 // Payload: JSON, `pick` required; sport/matchup/betType/odds/book/units/analysis/postUrl/id optional.
 // Dedup: by caller-supplied id, else by sport+matchup+pick+odds within the same ET day.
+// Storage: Netlify Blobs REST API (the SDK is unavailable on git-based deploys of this site —
+// nft bundling with no root package.json — so all functions here use REST, same as the
+// alpha/omega generators).
+
+const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+const STORE_URL = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/grok-bot-picks`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -57,6 +63,11 @@ exports.handler = async (event) => {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: true, message: 'Unauthorized' }) };
   }
 
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (!token) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Storage not configured' }) };
+  }
+
   let body;
   try {
     body = JSON.parse(event.body || '{}');
@@ -71,13 +82,16 @@ exports.handler = async (event) => {
   entry.receivedAt = new Date().toISOString();
 
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore('grok-bot-picks');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
     const dateKey = getEasternDateToday();
-    const blobKey = `picks-${dateKey}`;
+    const blobUrl = `${STORE_URL}/picks-${dateKey}`;
 
-    const existing = (await store.get(blobKey, { type: 'json' })) || { date: dateKey, picks: [] };
-    if (!Array.isArray(existing.picks)) existing.picks = [];
+    let existing = { date: dateKey, picks: [] };
+    const readResp = await fetch(blobUrl, { headers: authHeaders });
+    if (readResp.ok) {
+      const data = await readResp.json().catch(() => null);
+      if (data && Array.isArray(data.picks)) existing = data;
+    }
 
     const newKey = dedupKey(entry);
     if (existing.picks.some(p => dedupKey(p) === newKey)) {
@@ -88,8 +102,22 @@ exports.handler = async (event) => {
     if (existing.picks.length > MAX_PICKS_PER_DAY) existing.picks.length = MAX_PICKS_PER_DAY;
     existing.updatedAt = entry.receivedAt;
 
-    await store.setJSON(blobKey, existing);
-    await store.set('latest-date', dateKey);
+    const putResp = await fetch(blobUrl, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(existing),
+    });
+    if (!putResp.ok) {
+      const errBody = await putResp.text();
+      console.error(`[grok-bot-webhook] Blob PUT failed ${putResp.status}: ${errBody.substring(0, 200)}`);
+      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to store pick' }) };
+    }
+
+    await fetch(`${STORE_URL}/latest-date`, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'text/plain' },
+      body: dateKey,
+    });
 
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, stored: true, countToday: existing.picks.length }) };
   } catch (err) {

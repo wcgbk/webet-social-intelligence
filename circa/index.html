@@ -400,10 +400,27 @@
     <div id="cfb-summary"></div>
   </div>
 
+  <!-- ═══════════════ CONTEST LOGIC BREAKDOWN ═══════════════ -->
+  <div class="contest-section" id="logic">
+    <div class="results-section-title">How WeBetAI Plays This Contest</div>
+    <div style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.25rem 1.125rem;">
+      <ol style="font-size: .8125rem; color: var(--txt-m); line-height: 1.7; padding-left: 1.25rem; margin: 0; display: flex; flex-direction: column; gap: .625rem;">
+        <li><strong style="color:var(--olive);">The objective is 1st place, not profit.</strong> Contest scoring has no juice, so breakeven is 50 percent, but winning the Circa Million has historically taken roughly 66 percent ATS across 90 picks. The model therefore optimizes probability of topping the leaderboard, which is a different math problem than maximizing dollar EV at a sportsbook.</li>
+        <li><strong style="color:var(--olive);">Scan the full board, rank by calibrated cover probability.</strong> Every game gets a projected margin from the same engine that powers the NFL and CFB pick environments. The gap between projection and spread converts to a cover probability through a sport-specific margin distribution, then gets shrunk toward the market: the contest rewards the 5 highest true probabilities, not the 5 biggest raw gaps.</li>
+        <li><strong style="color:var(--olive);">Key numbers are contest gold.</strong> Roughly 15 percent of NFL games land exactly on 3 or 7. A pick sitting on the right side of a key number converts a slice of losses into pushes, and each push banks a guaranteed 0.5 points. Getting +3 instead of +2.5 is worth far more in contest points than the half point suggests, so the model pays a premium for full key numbers (3, 7, 10, and 14 in college).</li>
+        <li><strong style="color:var(--olive);">Leverage beats consensus.</strong> Thousands of entries cluster on the same popular sides. Matching the field wins nothing: when the chalk covers, everyone scores together. A card that is right where the field is wrong gains full points of separation, so when public concentration is heavy on one side and the model is neutral or opposed, the card takes the contrarian number. Controlled variance raises the probability of finishing 1st even when it slightly lowers the expected point total.</li>
+        <li><strong style="color:var(--olive);">Use the whole clock.</strong> Lines post Thursday 10 AM PT and lock Saturday 4 PM PT. The model re-runs daily inside that window and submits near the deadline to price in injury news, weather, and line movement. Thursday games are avoided by default: rule 8 forces all 5 picks in before the earliest selected kickoff, and surrendering two days of information on four other picks is rarely worth one early edge.</li>
+        <li><strong style="color:var(--olive);">Manage the season like a tournament.</strong> KPIs above track points pace against the 66 percent winning benchmark. Behind pace, the card tilts toward higher-leverage contrarian picks to create catch-up variance. Ahead of pace, it tilts toward the highest-probability sides to defend position. The quarterly prize structure (awards every 4 to 5 weeks) gets the same treatment inside each quarter.</li>
+        <li><strong style="color:var(--olive);">College is the sharper edge, same math.</strong> Circa's open contests are NFL only, so the CFB card is WeBetAI's application of the identical format to the college board. College spreads are softer, variance is wider, and key numbers hit harder, which is exactly the environment where disciplined cover-probability ranking gains the most over a public field.</li>
+      </ol>
+    </div>
+  </div>
+
   <p class="footer-note">
     Contest format per the official Circa Million rules: 5 picks against the spread weekly for 18 weeks, 1 point per win, 0.5 per push. No juice applies to contest scoring.<br>
     Lines post Thursdays around 10 AM PT (Wednesday on Thanksgiving and Christmas weeks). Picks due Saturday 4 PM PT; early-game selections require the full 5-pick card before kickoff.<br>
-    Spreads shown are current market consensus. WeBetAI is not affiliated with Circa Sports. Auto-generated daily. Not financial advice.
+    Circa's open contests are NFL only; the college card applies the same format to the CFB board. Spreads shown are current market consensus.<br>
+    WeBetAI is not affiliated with Circa Sports. Auto-generated daily. Not financial advice.
   </p>
 </div>
 
@@ -503,7 +520,7 @@
       contest: 'Circa contest format',
       weekLabel: 'CFB Week 1: Sep 3 to Sep 5',
       dateFormatted: 'Week 1 Card: Saturday, September 5, 2026',
-      deadline: 'Contest-format card for the opening college weekend. Same submission rule applies: the full 5-pick card locks before the earliest selected kickoff, so Thursday and Friday selections close the card early.',
+      deadline: 'Note: Circa\'s open contests are NFL only. This card applies the Circa Million format to the college board (Circa\'s only college contest, the Friday Football Invitational, is free and invitation-only with a different 7-play format). Same submission logic applies here: the full 5-pick card locks before the earliest selected kickoff.',
       strategy: 'Same contest math applied to the college board: 5 spread picks, 1 point per cover, half point per push, no juice. College spreads are softer than NFL and key numbers 3, 7, and 10 hit even harder with wider scoring variance. This card takes four live underdogs on or near key numbers plus one big number fade, the profile that historically beats college contest fields built on ranked chalk.',
       picks: [
         {

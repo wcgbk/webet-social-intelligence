@@ -74,26 +74,7 @@
       background: var(--teal-light); border: 1px solid var(--teal-border);
       border-radius: 9999px; padding: .2rem .6rem;
     }
-    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
-    .header-link {
-      font-size: .625rem; font-weight: 600; color: var(--teal);
-      background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .header-link:hover { background: var(--teal-border); }
-    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
-    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
-    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
-    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
-    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
-    .mobile-dropdown a:hover { background: var(--teal-light); }
     .in-iframe .header { display: none !important; }
-    .in-iframe .mobile-menu-btn { display: none !important; }
-    @media (max-width: 640px) {
-      .header-nav { display: none; }
-      .mobile-menu-btn { display: block; }
-    }
 
     /* ─── Main Content ─── */
     .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
@@ -317,24 +298,6 @@
       <span class="logo-text">WeBetAI</span>
       <span class="header-badge" style="margin-left:2px;">Circa</span>
     </a>
-    <nav class="header-nav">
-      <a href="/circa" class="header-link active">Circa Contest</a>
-      <a href="/alpha" class="header-link">Alpha Picks</a>
-      <a href="/nfl" class="header-link">NFL</a>
-      <a href="/cfb" class="header-link">CFB</a>
-      <a href="/dashboard" class="header-link">Dashboard</a>
-    </nav>
-    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
-    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <div class="mobile-dropdown" id="mobileDropdown">
-      <a href="/circa">Circa Contest</a>
-      <a href="/alpha">Alpha Picks</a>
-      <a href="/nfl">NFL</a>
-      <a href="/cfb">CFB</a>
-      <a href="/dashboard">Dashboard</a>
-    </div>
   </header>
 
 <div class="main">
@@ -350,14 +313,17 @@
       <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Circa Million Contest</span>
     </div>
     <p style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;">
-      The <a href="https://www.circasports.com/circa-million" target="_blank" rel="noopener" style="color:var(--teal); font-weight:600;">Circa Million</a> is the biggest handicapping contest in sports: pick 5 NFL games against the spread every week, score 1 point per cover and half a point per push, and the highest season total wins from a $6,000,000 guaranteed prize pool. WeBetAI runs its daily model across the full board and surfaces the 5 NFL picks most likely to win the contest, plus a matching 5-pick college football card built on the exact same contest format. Contest scoring has no juice, so every pick below is chosen on pure cover probability, key number position, and leverage against the contest field.
+      The <a href="https://www.circasports.com/circa-million" target="_blank" rel="noopener" style="color:var(--teal); font-weight:600;">Circa Million</a> is the biggest handicapping contest in sports: pick 5 NFL games against the spread every week, score 1 point per cover and half a point per push, and the highest season total wins from a $6,000,000 guaranteed prize pool. The contest runs all 18 weeks of the NFL regular season, starting with Week 1 on September 10, 2026. Registration closes Saturday, September 12 at 2:00 PM PT. WeBetAI runs its daily model across the full board and surfaces the 5 NFL picks most likely to win the contest, plus a matching 5-pick college football card built on the exact same contest format. Contest scoring has no juice, so every pick below is chosen on pure cover probability, key number position, and leverage against the contest field.
     </p>
     <div class="rules-chips">
       <span class="rules-chip">5 picks per week, ATS</span>
       <span class="rules-chip">Win = 1 pt</span>
       <span class="rules-chip">Push = 0.5 pt</span>
+      <span class="rules-chip">18 weeks, starts Sep 10</span>
+      <span class="rules-chip">Register by Sat Sep 12, 2 PM PT</span>
       <span class="rules-chip">Lines post Thu 10 AM PT</span>
-      <span class="rules-chip">Picks lock Sat 4 PM PT</span>
+      <span class="rules-chip">Picks due Sat 4 PM PT</span>
+      <span class="rules-chip">Early games: all 5 in before kickoff</span>
       <span class="rules-chip">$6M guaranteed, $1M to 1st</span>
     </div>
   </div>
@@ -376,6 +342,7 @@
     </div>
 
     <div class="date-header" id="nfl-date-header"></div>
+    <div id="nfl-deadline" style="font-size:.75rem; color:var(--txt-m); font-weight:500; margin-bottom:.25rem;"></div>
 
     <div id="nfl-strategy" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin: .625rem 0 .75rem; border-left: 3px solid var(--green);">
       <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
@@ -411,6 +378,7 @@
     </div>
 
     <div class="date-header" id="cfb-date-header"></div>
+    <div id="cfb-deadline" style="font-size:.75rem; color:var(--txt-m); font-weight:500; margin-bottom:.25rem;"></div>
 
     <div id="cfb-strategy" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin: .625rem 0 .75rem; border-left: 3px solid var(--green);">
       <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
@@ -433,9 +401,9 @@
   </div>
 
   <p class="footer-note">
-    Contest format per circasports.com/circa-million: 5 picks against the spread, 1 point per win, 0.5 per push. No juice applies to contest scoring.<br>
-    Spreads shown are current market consensus; contest lines post Thursdays around 10 AM PT and picks lock Saturday 4 PM PT.<br>
-    WeBetAI is not affiliated with Circa Sports. Auto-generated daily. Not financial advice.
+    Contest format per the official Circa Million rules: 5 picks against the spread weekly for 18 weeks, 1 point per win, 0.5 per push. No juice applies to contest scoring.<br>
+    Lines post Thursdays around 10 AM PT (Wednesday on Thanksgiving and Christmas weeks). Picks due Saturday 4 PM PT; early-game selections require the full 5-pick card before kickoff.<br>
+    Spreads shown are current market consensus. WeBetAI is not affiliated with Circa Sports. Auto-generated daily. Not financial advice.
   </p>
 </div>
 
@@ -482,6 +450,7 @@
       contest: 'Circa Million',
       weekLabel: 'NFL Week 1: Sep 10 to Sep 14',
       dateFormatted: 'Week 1 Card: Sunday, September 13, 2026',
+      deadline: 'Week 1 lines post Thursday, Sep 10 at 10:00 AM PT. Picks due Saturday, Sep 12 at 4:00 PM PT. Selecting any game that kicks off before the deadline (Thursday Night Football) requires submitting all 5 picks before that kickoff. This card uses Sunday games only, keeping the full window open.',
       strategy: 'Contest scoring pays 1 point per cover with no juice, so this card maximizes raw cover probability and leaderboard leverage rather than dollar EV. Three of five picks sit on or across the key numbers 3 and 7, where roughly 15 percent of NFL games land. Two picks fade heavy public sides to gain ground on the contest field when chalk fails. Season target is 66 percent ATS, the pace that has cashed the top prize in prior Circa Million seasons.',
       picks: [
         {
@@ -534,6 +503,7 @@
       contest: 'Circa contest format',
       weekLabel: 'CFB Week 1: Sep 3 to Sep 5',
       dateFormatted: 'Week 1 Card: Saturday, September 5, 2026',
+      deadline: 'Contest-format card for the opening college weekend. Same submission rule applies: the full 5-pick card locks before the earliest selected kickoff, so Thursday and Friday selections close the card early.',
       strategy: 'Same contest math applied to the college board: 5 spread picks, 1 point per cover, half point per push, no juice. College spreads are softer than NFL and key numbers 3, 7, and 10 hit even harder with wider scoring variance. This card takes four live underdogs on or near key numbers plus one big number fade, the profile that historically beats college contest fields built on ranked chalk.',
       picks: [
         {
@@ -599,6 +569,7 @@
     // Header labels
     document.getElementById(key + '-week-label').textContent = sec.weekLabel;
     document.getElementById(key + '-date-header').textContent = sec.dateFormatted;
+    document.getElementById(key + '-deadline').textContent = sec.deadline || '';
     document.getElementById(key + '-strategy-text').textContent = sec.strategy;
 
     // ── KPI cumulative boxes ──
@@ -717,7 +688,6 @@
   renderSection('nfl');
   renderSection('cfb');
 </script>
-<script src="/nav.js" defer></script>
 
 </body>
 </html>

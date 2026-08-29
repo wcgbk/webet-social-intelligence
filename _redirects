@@ -19,3 +19,7 @@
 /omega/       /daily-omega             301
 /api/get-picks-omega   /.netlify/functions/get-picks-omega   200
 /api/get-results-omega /.netlify/functions/get-results-omega 200
+/grokbot      /grokbot/index.html      200
+/grokbot/     /grokbot/index.html      200
+/api/grok-bot-picks    /.netlify/functions/get-grok-bot-picks 200
+/api/grok-bot-webhook  /.netlify/functions/grok-bot-webhook   200

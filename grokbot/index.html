@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-848D47V084');
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Grok Bot Live Picks</title>
+  <meta name="description" content="Live feed of every sportsbook pick the WeBetAI Grok bot posts. Updates automatically within seconds of each new pick." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/grokbot" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Grok Bot Live Picks" />
+  <meta property="og:description" content="Live feed of every sportsbook pick the WeBetAI Grok bot posts. Updates automatically within seconds of each new pick." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Grok Bot Live Picks" />
+  <meta name="twitter:description" content="Live feed of every sportsbook pick the WeBetAI Grok bot posts. Updates automatically within seconds of each new pick." />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --live-red: #dc2626;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .625rem; }
+
+    .live-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem .875rem; margin-bottom: 1rem;
+      font-size: .8125rem;
+    }
+    .live-left { display: flex; align-items: center; gap: .5rem; font-weight: 600; color: var(--live-red); }
+    .live-dot {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--live-red);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220, 38, 38, .4); }
+      50% { opacity: .6; box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+    }
+    .live-right { color: var(--txt-m); font-size: .75rem; }
+
+    .stats-bar {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .stat-box {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem .375rem; text-align: center;
+    }
+    .stat-label { font-size: .5625rem; font-weight: 600; color: var(--txt-l); text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-top: .125rem; }
+
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .pick-card.new-pick { animation: flashIn 2.4s ease-out; }
+    @keyframes flashIn {
+      0% { background: var(--green-light); border-color: var(--green-border); }
+      100% { background: var(--white); border-color: var(--border-lt); }
+    }
+    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; gap: .5rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .pick-time { font-size: .6875rem; color: var(--txt-l); font-weight: 500; white-space: nowrap; }
+
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; gap: .5rem; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); white-space: nowrap; }
+    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-meta { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
+    .pick-book {
+      font-size: .6875rem; font-weight: 600; color: var(--txt-m);
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: 6px; padding: .175rem .5rem;
+    }
+    .pick-post-link {
+      font-size: .75rem; font-weight: 600; color: var(--teal); text-decoration: none;
+    }
+    .pick-post-link:hover { text-decoration: underline; }
+
+    .empty-state, .loading {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 2rem 1.25rem; text-align: center;
+      color: var(--txt-m); font-size: .875rem; line-height: 1.6;
+    }
+    .empty-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .375rem; }
+    .empty-sub a { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .empty-sub a:hover { text-decoration: underline; }
+
+    .error-state {
+      background: #fce4e4; border: 1px solid #f5b7b7; border-radius: .875rem;
+      padding: 1rem 1.25rem; text-align: center; color: #b03a3a; font-size: .8125rem;
+      margin-bottom: .75rem; display: none;
+    }
+
+    .footer-note {
+      font-size: .6875rem; color: var(--txt-l); line-height: 1.6;
+      text-align: center; margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <a class="logo" href="/">
+    <span class="logo-text">WeBetAI</span>
+  </a>
+  <span class="header-badge">Grok Bot Feed</span>
+</header>
+
+<div class="main">
+  <div class="date-header" id="date-header">Grok Bot Picks</div>
+
+  <div class="live-bar">
+    <div class="live-left"><span class="live-dot"></span><span>LIVE</span></div>
+    <div class="live-right" id="updated-ago">Connecting...</div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-box">
+      <div class="stat-label">Picks Today</div>
+      <div class="stat-value" id="stat-count">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Last Pick</div>
+      <div class="stat-value" id="stat-last">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Sports</div>
+      <div class="stat-value" id="stat-sports">-</div>
+    </div>
+  </div>
+
+  <div class="error-state" id="error-state">Feed temporarily unreachable. Retrying automatically.</div>
+
+  <div id="picks-container">
+    <div class="loading">Loading the live pick feed...</div>
+  </div>
+
+  <p class="footer-note">
+    Every pick on this page was posted automatically by the WeBetAI Grok bot and mirrored here within seconds.<br>
+    The page refreshes itself, no reload needed. Not financial advice.
+  </p>
+</div>
+
+<script>
+(function () {
+  var POLL_MS = 20000;
+  var API_URL = '/api/grok-bot-picks';
+  var DEMO = /[?&]demo=1/.test(window.location.search);
+
+  var lastFetchAt = null;
+  var seenKeys = {};
+  var firstRender = true;
+
+  var DEMO_PICKS = [
+    { sport: 'NFL', matchup: 'Chiefs @ Ravens', pick: 'Ravens -2.5', betType: 'Spread', odds: '-110', book: 'DraftKings', units: 1.5, analysis: 'Demo pick: home side with rest advantage and a healthy secondary.', postUrl: 'https://x.com', receivedAt: new Date(Date.now() - 4 * 60000).toISOString() },
+    { sport: 'MLB', matchup: 'Yankees @ Red Sox', pick: 'Over 9.5', betType: 'Total', odds: '-105', book: 'FanDuel', units: 1, analysis: 'Demo pick: two bullpen games with wind blowing out at Fenway.', receivedAt: new Date(Date.now() - 47 * 60000).toISOString() },
+    { sport: 'CFB', matchup: 'Georgia @ Clemson', pick: 'Georgia ML', betType: 'Moneyline', odds: '-160', book: 'BetMGM', units: 0.5, receivedAt: new Date(Date.now() - 128 * 60000).toISOString() }
+  ];
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function pickKey(p) {
+    if (p.id) return 'id:' + p.id;
+    return 'k:' + [p.sport, p.matchup, p.pick, p.odds].map(function (x) { return (x || '').toLowerCase(); }).join('|');
+  }
+
+  function etTime(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET';
+    } catch (e) { return ''; }
+  }
+
+  function renderCard(p, isNew) {
+    var html = '<div class="pick-card' + (isNew ? ' new-pick' : '') + '">';
+    html += '<div class="pick-header">';
+    html += '<span class="sport-tag">' + esc(p.sport || p.league || 'Pick') + (p.betType ? ' &middot; ' + esc(p.betType) : '') + '</span>';
+    html += '<span class="pick-time">' + esc(etTime(p.postedAt || p.receivedAt)) + '</span>';
+    html += '</div>';
+    if (p.matchup) html += '<div class="pick-matchup">' + esc(p.matchup) + '</div>';
+    html += '<div class="pick-line"><span class="pick-name">' + esc(p.pick) + '</span>';
+    if (p.odds) html += '<span class="pick-odds">' + esc(p.odds) + '</span>';
+    html += '</div>';
+    if (p.analysis) {
+      html += '<div class="pick-divider"></div>';
+      html += '<div class="pick-analysis">' + esc(p.analysis) + '</div>';
+    }
+    html += '<div class="pick-meta">';
+    var left = '';
+    if (p.units) left += '<span class="pick-units">' + esc(p.units) + 'u</span>';
+    if (p.book) left += '<span class="pick-book">' + esc(p.book) + '</span>';
+    html += '<span style="display:flex;align-items:center;gap:.5rem;">' + left + '</span>';
+    if (p.postUrl && /^https?:\/\//.test(p.postUrl)) {
+      html += '<a class="pick-post-link" href="' + esc(p.postUrl) + '" target="_blank" rel="noopener noreferrer">View post &#8599;</a>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderEmpty(latestDate) {
+    var html = '<div class="empty-state">';
+    html += '<div class="empty-title">No picks posted yet today</div>';
+    html += '<div class="empty-sub">The moment the Grok bot posts a sportsbook pick, it appears here automatically.';
+    if (latestDate) html += '<br>Last active day: <a href="?date=' + esc(latestDate) + '">' + esc(latestDate) + '</a>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function render(data) {
+    var container = document.getElementById('picks-container');
+    var picks = data.picks || [];
+
+    document.getElementById('date-header').textContent = 'Grok Bot Picks: ' + (data.dateFormatted || data.date || '');
+    document.getElementById('stat-count').textContent = picks.length;
+    document.getElementById('stat-last').textContent = picks.length ? etTime(picks[0].postedAt || picks[0].receivedAt).replace(' ET', '') : '-';
+    var sports = {};
+    picks.forEach(function (p) { if (p.sport || p.league) sports[(p.sport || p.league).toUpperCase()] = 1; });
+    var sportList = Object.keys(sports);
+    document.getElementById('stat-sports').textContent = sportList.length ? sportList.length : '-';
+    document.getElementById('stat-sports').title = sportList.join(', ');
+
+    if (!picks.length) {
+      container.innerHTML = renderEmpty(data.latestDate);
+      firstRender = false;
+      return;
+    }
+
+    var html = '';
+    picks.forEach(function (p) {
+      var key = pickKey(p);
+      var isNew = !firstRender && !seenKeys[key];
+      html += renderCard(p, isNew);
+    });
+    container.innerHTML = html;
+    picks.forEach(function (p) { seenKeys[pickKey(p)] = 1; });
+    firstRender = false;
+  }
+
+  function tickUpdatedAgo() {
+    var el = document.getElementById('updated-ago');
+    if (!lastFetchAt) return;
+    var s = Math.max(0, Math.round((Date.now() - lastFetchAt) / 1000));
+    el.textContent = s < 3 ? 'Updated just now' : 'Updated ' + s + 's ago';
+  }
+
+  async function refresh() {
+    if (DEMO) {
+      lastFetchAt = Date.now();
+      render({ date: new Date().toISOString().slice(0, 10), dateFormatted: 'Demo Mode', picks: DEMO_PICKS });
+      document.getElementById('error-state').style.display = 'none';
+      tickUpdatedAgo();
+      return;
+    }
+    try {
+      var qs = window.location.search.match(/[?&]date=(\d{4}-\d{2}-\d{2})/);
+      var url = qs ? API_URL + '?date=' + qs[1] : API_URL;
+      var resp = await fetch(url, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      if (data.error) throw new Error(data.message || 'API error');
+      lastFetchAt = Date.now();
+      document.getElementById('error-state').style.display = 'none';
+      render(data);
+    } catch (e) {
+      console.warn('Grok bot feed fetch failed:', e.message);
+      document.getElementById('error-state').style.display = 'block';
+      if (firstRender) {
+        document.getElementById('picks-container').innerHTML = renderEmpty(null);
+        firstRender = false;
+      }
+    }
+    tickUpdatedAgo();
+  }
+
+  refresh();
+  setInterval(refresh, POLL_MS);
+  setInterval(tickUpdatedAgo, 1000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refresh();
+  });
+})();
+</script>
+
+</body>
+</html>

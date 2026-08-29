@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-848D47V084');
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Circa Contest Picks</title>
+  <meta name="description" content="WeBetAI's top 5 NFL and top 5 college football picks against the spread each day, built to win the Circa Million contest format: 1 point per cover, half point per push." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/circa" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Circa Contest Picks" />
+  <meta property="og:description" content="Top 5 NFL and top 5 college football spread picks daily, optimized for the Circa Million contest format with full KPI tracking." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Circa Contest Picks" />
+  <meta name="twitter:description" content="Top 5 NFL and top 5 college football spread picks daily, optimized for the Circa Million contest format with full KPI tracking." />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --teal-lighter: #d4ede8;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─── */
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    .in-iframe .header { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: none !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+
+    /* ─── Main Content ─── */
+    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+    /* ─── Date + Legend ─── */
+    .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .25rem; }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .dot-aplus { background: #c0392b; }
+    .dot-a { background: #004C54; }
+    .dot-aminus { background: #1abc9c; }
+
+    /* ─── Pick Card ─── */
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+    }
+    .rating-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 26px; border-radius: 6px;
+      color: #fff; font-size: .75rem; font-weight: 700; padding: 0 .4rem;
+    }
+    .badge-aplus { background: #c0392b; }
+    .badge-a { background: #004C54; }
+    .badge-aminus { background: #1abc9c; }
+    .badge-bplus { background: #f39c12; }
+    .badge-b { background: #f9a825; }
+    .badge-lean { background: #5b6b7a; }
+
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
+
+    /* ─── Win Prob Badge ─── */
+    .win-prob {
+      display: inline-flex; align-items: center; font-size: .75rem; font-weight: 700;
+      font-family: 'Geist Sans', monospace;
+      color: var(--green); background: var(--green-light);
+      border: 1px solid var(--green-border); border-radius: 6px;
+      padding: .125rem .5rem; margin-left: .5rem; white-space: nowrap;
+    }
+
+    /* ─── Edge Badge (bottom-right of card) ─── */
+    .edge-badge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .6875rem; font-weight: 700; font-family: 'Geist Sans', monospace;
+      color: #e8b931; background: rgba(232, 185, 49, 0.08);
+      border: 1px solid rgba(232, 185, 49, 0.2); border-radius: 6px;
+      padding: .125rem .5rem; white-space: nowrap;
+    }
+    .edge-badge svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .edge-inline-mobile { display: none; }
+
+    /* ─── Card Summary (parlay-section style) ─── */
+    .parlay-section {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .parlay-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    .parlay-leg {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .375rem .5rem; background: var(--off-white);
+      border: 1px solid var(--border-lt); border-radius: .375rem;
+      margin-bottom: .25rem; font-size: .8125rem;
+    }
+    .leg-pick { font-weight: 500; color: var(--olive); }
+    .leg-odds { font-family: 'Geist Sans', monospace; font-weight: 700; color: var(--teal); white-space: nowrap; }
+
+    /* ─── Live Score / Result ─── */
+    .leg-result {
+      font-size: .6875rem; font-weight: 700; padding: 1px 6px;
+      border-radius: 4px; margin-left: .375rem; white-space: nowrap;
+    }
+    .leg-win { background: #e8f5e9; color: #2e7d32; }
+    .leg-loss { background: #fce4e4; color: #c0392b; }
+    .leg-push { background: #fff8e1; color: #f9a825; }
+    .leg-live { background: #eef6ff; color: #2196f3; }
+
+    /* ─── Results Tracker (card-style) ─── */
+    .results-section-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: .625rem;
+    }
+    .results-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; overflow: hidden; margin-bottom: 1rem;
+    }
+    .results-cumulative {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+      border-bottom: 1px solid var(--border-lt);
+    }
+    .cum-card {
+      padding: 1rem .5rem; text-align: center;
+      border-right: 1px solid var(--border-lt);
+    }
+    .cum-card:last-child { border-right: none; }
+    .cum-value { font-size: 1.5rem; font-weight: 700; color: var(--olive); }
+    .cum-value.positive { color: #2e7d32; }
+    .cum-value.negative { color: #c0392b; }
+    .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+
+    .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
+    .results-table td {
+      padding: .5rem; border-bottom: 1px solid var(--border-lt);
+      vertical-align: top; text-align: center;
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:hover td { background: var(--off-white); }
+
+    .day-toggle {
+      background: none; border: none; padding: 0;
+      font-family: inherit; font-size: .8125rem; font-weight: 600;
+      color: var(--teal); cursor: pointer; text-align: left;
+    }
+    .day-detail { display: none; }
+    .day-detail.open { display: table-row; }
+    .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
+    .day-picks-list { list-style: none; padding: 0; margin: 0; }
+    .day-picks-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .25rem 0; border-bottom: 1px solid var(--border-lt);
+      font-size: .75rem;
+    }
+    .day-picks-list li:last-child { border-bottom: none; }
+    .result-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: .6875rem; font-weight: 600;
+    }
+    .result-win { background: #e8f5e9; color: #2e7d32; }
+    .result-loss { background: #fce4e4; color: #c0392b; }
+    .result-push { background: #fff8e1; color: #f9a825; }
+    .result-pending { background: #eef6ff; color: #2196f3; }
+    .profit-positive { color: #2e7d32; font-weight: 600; }
+    .profit-negative { color: #c0392b; font-weight: 600; }
+
+    .record-legend-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .625rem 1rem; margin-bottom: .75rem;
+      font-size: .8125rem; font-weight: 600;
+    }
+    .rl-left { display: flex; align-items: center; gap: .25rem; }
+    .rl-right { display: flex; align-items: center; gap: .75rem; font-size: .75rem; color: var(--txt-m); font-weight: 500; }
+
+    /* ─── Contest rules chips ─── */
+    .rules-chips { display: flex; flex-wrap: wrap; gap: .375rem; margin-top: .625rem; }
+    .rules-chip {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .625rem; white-space: nowrap;
+    }
+
+    /* ─── Preview banner ─── */
+    .preview-banner {
+      background: #fff8e1; border: 1px solid #ffe082; border-radius: .75rem;
+      padding: .625rem .875rem; margin-bottom: 1rem;
+      font-size: .75rem; color: #7a5c00; line-height: 1.5; font-weight: 500;
+    }
+
+    /* ─── Section divider ─── */
+    .contest-section { margin-top: 2rem; }
+    .contest-section:first-of-type { margin-top: 0; }
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+      margin-bottom: .625rem; flex-wrap: wrap;
+    }
+    .section-head-title { font-size: 1.0625rem; font-weight: 700; color: var(--olive); }
+    .section-head-sub { font-size: .6875rem; font-weight: 600; color: var(--txt-m); }
+
+    /* ─── Footer ─── */
+    .footer-note {
+      margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l);
+      text-align: center; line-height: 1.5;
+    }
+
+    @media (max-width: 480px) {
+      .results-cumulative { grid-template-columns: repeat(2, 1fr); }
+      .cum-card { border-bottom: 1px solid var(--border-lt); }
+      .cum-card:nth-child(2) { border-right: none; }
+      .results-table { font-size: .75rem; }
+      .results-table td { padding: .375rem .25rem; }
+      .record-legend-bar { flex-wrap: wrap; gap: .5rem; }
+      .rl-right { font-size: .65rem; gap: .5rem; }
+    }
+    @media(max-width: 420px) {
+      .pick-matchup { font-size: .9375rem; }
+    }
+    @media (max-width: 600px) {
+      .record-legend-bar { flex-wrap: nowrap; gap: .25rem; padding: .5rem .75rem; }
+      .rl-left { font-size: .75rem; white-space: nowrap; flex-shrink: 0; }
+      .rl-right { font-size: .6rem; gap: .375rem; flex-shrink: 0; margin-left: auto; }
+      .edge-inline-mobile { display: none !important; }
+      .edge-badge { font-size: .6875rem; padding: .125rem .5rem; }
+      .edge-badge svg { width: 10px; height: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Thin teal accent line at very top -->
+  <div style="height:3px;background:linear-gradient(90deg,#004C54,#00b5b9,#004C54);position:fixed;top:0;left:0;right:0;z-index:200;"></div>
+  <header class="header" style="position:sticky;top:3px;">
+    <a href="/circa" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+      <span class="header-badge" style="margin-left:2px;">Circa</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/circa" class="header-link active">Circa Contest</a>
+      <a href="/alpha" class="header-link">Alpha Picks</a>
+      <a href="/nfl" class="header-link">NFL</a>
+      <a href="/cfb" class="header-link">CFB</a>
+      <a href="/dashboard" class="header-link">Dashboard</a>
+    </nav>
+    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
+    <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/circa">Circa Contest</a>
+      <a href="/alpha">Alpha Picks</a>
+      <a href="/nfl">NFL</a>
+      <a href="/cfb">CFB</a>
+      <a href="/dashboard">Dashboard</a>
+    </div>
+  </header>
+
+<div class="main">
+
+  <!-- Preview notice: dummy data until the live contest pipeline runs -->
+  <div class="preview-banner">
+    <strong>Preview mode:</strong> the cards below are sample layouts built from real upcoming schedules and current market lines. Live contest picks begin when the daily Circa pipeline runs. KPI totals start at zero until results are graded.
+  </div>
+
+  <!-- Contest explainer -->
+  <div style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: 1.25rem; border-left: 3px solid var(--teal);">
+    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+      <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Circa Million Contest</span>
+    </div>
+    <p style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;">
+      The <a href="https://www.circasports.com/circa-million" target="_blank" rel="noopener" style="color:var(--teal); font-weight:600;">Circa Million</a> is the biggest handicapping contest in sports: pick 5 NFL games against the spread every week, score 1 point per cover and half a point per push, and the highest season total wins from a $6,000,000 guaranteed prize pool. WeBetAI runs its daily model across the full board and surfaces the 5 NFL picks most likely to win the contest, plus a matching 5-pick college football card built on the exact same contest format. Contest scoring has no juice, so every pick below is chosen on pure cover probability, key number position, and leverage against the contest field.
+    </p>
+    <div class="rules-chips">
+      <span class="rules-chip">5 picks per week, ATS</span>
+      <span class="rules-chip">Win = 1 pt</span>
+      <span class="rules-chip">Push = 0.5 pt</span>
+      <span class="rules-chip">Lines post Thu 10 AM PT</span>
+      <span class="rules-chip">Picks lock Sat 4 PM PT</span>
+      <span class="rules-chip">$6M guaranteed, $1M to 1st</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════ NFL SECTION ═══════════════ -->
+  <div class="contest-section" id="nfl">
+    <div class="section-head">
+      <span class="section-head-title">NFL: Circa Million Card</span>
+      <span class="section-head-sub" id="nfl-week-label"></span>
+    </div>
+
+    <div class="results-section-title">Contest Results &amp; KPI Tracking: NFL</div>
+    <div class="results-card">
+      <div class="results-cumulative" id="nfl-cumulative"></div>
+      <table class="results-table"><tbody id="nfl-results-body"></tbody></table>
+    </div>
+
+    <div class="date-header" id="nfl-date-header"></div>
+
+    <div id="nfl-strategy" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin: .625rem 0 .75rem; border-left: 3px solid var(--green);">
+      <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+        <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Contest Edge</span>
+      </div>
+      <p id="nfl-strategy-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+    </div>
+
+    <div class="record-legend-bar">
+      <div id="nfl-record-bar" class="rl-left"></div>
+      <div class="rl-right">
+        <span><span class="legend-dot dot-aplus"></span>A+</span>
+        <span><span class="legend-dot dot-a"></span>A</span>
+        <span><span class="legend-dot dot-aminus"></span>A-</span>
+      </div>
+    </div>
+
+    <div id="nfl-picks"></div>
+    <div id="nfl-summary"></div>
+  </div>
+
+  <!-- ═══════════════ CFB SECTION ═══════════════ -->
+  <div class="contest-section" id="cfb">
+    <div class="section-head">
+      <span class="section-head-title">College Football: Contest Card</span>
+      <span class="section-head-sub" id="cfb-week-label"></span>
+    </div>
+
+    <div class="results-section-title">Contest Results &amp; KPI Tracking: CFB</div>
+    <div class="results-card">
+      <div class="results-cumulative" id="cfb-cumulative"></div>
+      <table class="results-table"><tbody id="cfb-results-body"></tbody></table>
+    </div>
+
+    <div class="date-header" id="cfb-date-header"></div>
+
+    <div id="cfb-strategy" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin: .625rem 0 .75rem; border-left: 3px solid var(--green);">
+      <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+        <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Contest Edge</span>
+      </div>
+      <p id="cfb-strategy-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+    </div>
+
+    <div class="record-legend-bar">
+      <div id="cfb-record-bar" class="rl-left"></div>
+      <div class="rl-right">
+        <span><span class="legend-dot dot-aplus"></span>A+</span>
+        <span><span class="legend-dot dot-a"></span>A</span>
+        <span><span class="legend-dot dot-aminus"></span>A-</span>
+      </div>
+    </div>
+
+    <div id="cfb-picks"></div>
+    <div id="cfb-summary"></div>
+  </div>
+
+  <p class="footer-note">
+    Contest format per circasports.com/circa-million: 5 picks against the spread, 1 point per win, 0.5 per push. No juice applies to contest scoring.<br>
+    Spreads shown are current market consensus; contest lines post Thursdays around 10 AM PT and picks lock Saturday 4 PM PT.<br>
+    WeBetAI is not affiliated with Circa Sports. Auto-generated daily. Not financial advice.
+  </p>
+</div>
+
+<script>
+  if (window.self !== window.top) document.body.classList.add('in-iframe');
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
+  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
+  const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5 };
+
+  // Strip city from NFL team names for the short matchup line
+  function teamOnly(name) {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    return parts[parts.length - 1];
+  }
+  function shortMatchup(matchup, sport) {
+    if (!matchup) return '';
+    const sep = matchup.match(/\s+(vs\.?|@|at)\s+/i);
+    if (!sep) return matchup;
+    const parts = matchup.split(sep[0]);
+    if (sport === 'CFB') return parts[0] + ' vs ' + parts[1]; // school names stay whole
+    return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
+  }
+  function gameTimeET(iso) {
+    try {
+      const d = new Date(iso);
+      const day = d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
+      const t = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+      return day + ' ' + t + ' ET';
+    } catch(e) { return ''; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     SAMPLE DATA (preview): real upcoming schedules + current market
+     spreads. Replaced by the daily Circa pipeline blob later
+     (same shape as the alpha picks blob, plus contest fields).
+     ═══════════════════════════════════════════════════════════════ */
+
+  const CIRCA_DATA = {
+    preview: true,
+    nfl: {
+      contest: 'Circa Million',
+      weekLabel: 'NFL Week 1: Sep 10 to Sep 14',
+      dateFormatted: 'Week 1 Card: Sunday, September 13, 2026',
+      strategy: 'Contest scoring pays 1 point per cover with no juice, so this card maximizes raw cover probability and leaderboard leverage rather than dollar EV. Three of five picks sit on or across the key numbers 3 and 7, where roughly 15 percent of NFL games land. Two picks fade heavy public sides to gain ground on the contest field when chalk fails. Season target is 66 percent ATS, the pace that has cashed the top prize in prior Circa Million seasons.',
+      picks: [
+        {
+          sport: 'NFL', betType: 'spread', confidence: 'aplus',
+          matchup: 'New York Jets @ Tennessee Titans',
+          pick: 'Jets +3', odds: '-105',
+          coverProb: '58.1%', edgePct: '+5.9%',
+          commenceTime: '2026-09-13T17:00:00Z',
+          coreReasoning: 'Full key number 3 with the road side. WeBetAI projects this game inside a field goal, and plus 3 flat converts every 1, 2, and 3 point loss into a cover or push. Titans opened minus 3.5 and sharp money moved it down, confirming the model lean. Highest contest EV on the Week 1 board.'
+        },
+        {
+          sport: 'NFL', betType: 'spread', confidence: 'a',
+          matchup: 'New Orleans Saints @ Detroit Lions',
+          pick: 'Saints +7', odds: '-110',
+          coverProb: '56.4%', edgePct: '+4.5%',
+          commenceTime: '2026-09-13T17:00:00Z',
+          coreReasoning: 'Key number 7 with a Week 1 underdog. WeBetAI projects Lions by 4.8, well inside the spread, and Week 1 favorites of 7 or more have covered under 46 percent over the last decade. The push protection at exactly 7 adds half a point of contest equity that a 6.5 or 7.5 line would not.'
+        },
+        {
+          sport: 'NFL', betType: 'spread', confidence: 'a',
+          matchup: 'Buffalo Bills @ Houston Texans',
+          pick: 'Bills -1.5', odds: '-110',
+          coverProb: '55.8%', edgePct: '+4.1%',
+          commenceTime: '2026-09-13T17:00:00Z',
+          coreReasoning: 'WeBetAI makes Buffalo minus 4 on neutral efficiency and special teams edges, so laying 1.5 keeps almost all of the win probability. Short road favorites off a full offseason with a top 5 quarterback have been the most reliable ATS profile in September. Low variance anchor pick for the card.'
+        },
+        {
+          sport: 'NFL', betType: 'spread', confidence: 'aminus',
+          matchup: 'Green Bay Packers @ Minnesota Vikings',
+          pick: 'Packers +1.5', odds: '-108',
+          coverProb: '54.6%', edgePct: '+3.2%',
+          commenceTime: '2026-09-13T20:25:00Z',
+          coreReasoning: 'Divisional coin flip where WeBetAI rates the rosters within a point and the market is charging a home premium the projection does not support. Taking the points in a game modeled as a pick means the number itself is the whole edge. Wins the pick outright in any Packers victory or 1 point loss.'
+        },
+        {
+          sport: 'NFL', betType: 'spread', confidence: 'bplus',
+          matchup: 'Washington Commanders @ Philadelphia Eagles',
+          pick: 'Commanders +4.5', odds: '-110',
+          coverProb: '53.5%', edgePct: '+2.4%',
+          commenceTime: '2026-09-13T20:25:00Z',
+          coreReasoning: 'Leverage play: early ticket counts show the contest field piling onto the defending champs at home. WeBetAI projects Eagles by 3, so the 4.5 holds model value on its own, and fading the most popular side of the week gains a full point on a large slice of the field when the cover misses.'
+        }
+      ],
+      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
+      weeks: [
+        { label: 'Week 1', dates: 'Sep 10 to 14', status: 'pending', points: null }
+      ]
+    },
+    cfb: {
+      contest: 'Circa contest format',
+      weekLabel: 'CFB Week 1: Sep 3 to Sep 5',
+      dateFormatted: 'Week 1 Card: Saturday, September 5, 2026',
+      strategy: 'Same contest math applied to the college board: 5 spread picks, 1 point per cover, half point per push, no juice. College spreads are softer than NFL and key numbers 3, 7, and 10 hit even harder with wider scoring variance. This card takes four live underdogs on or near key numbers plus one big number fade, the profile that historically beats college contest fields built on ranked chalk.',
+      picks: [
+        {
+          sport: 'CFB', betType: 'spread', confidence: 'aplus',
+          matchup: 'Baylor @ Auburn',
+          pick: 'Baylor +7', odds: '-110',
+          coverProb: '58.9%', edgePct: '+6.3%',
+          commenceTime: '2026-09-05T19:30:00Z',
+          coreReasoning: 'Full key number 7 with the better offense. WeBetAI projects Auburn by 3.1 on returning production and line play, less than half the spread. Baylor returns a top 15 passing attack against a rebuilt secondary, and the push protection at exactly 7 is worth half a point of contest equity on its own.'
+        },
+        {
+          sport: 'CFB', betType: 'spread', confidence: 'a',
+          matchup: 'Toledo @ Michigan State',
+          pick: 'Toledo +10', odds: '-105',
+          coverProb: '56.7%', edgePct: '+4.8%',
+          commenceTime: '2026-09-05T00:00:00Z',
+          coreReasoning: 'Classic MAC live dog spot on key number 10. Toledo has covered as a double digit underdog against the Big Ten in four of its last five tries, and WeBetAI rates this roster within a touchdown of Michigan State. Friday night spotlight game where the veteran group travels well.'
+        },
+        {
+          sport: 'CFB', betType: 'spread', confidence: 'a',
+          matchup: 'Colorado @ Georgia Tech',
+          pick: 'Colorado +6.5', odds: '-110',
+          coverProb: '56.1%', edgePct: '+4.3%',
+          commenceTime: '2026-09-04T00:00:00Z',
+          coreReasoning: 'WeBetAI projects Georgia Tech by 2.9, a 3.6 point gap to the spread. Colorado profiles as a pass first team that keeps games inside a touchdown, and Thursday openers have leaned to the underdog ATS for five straight seasons. Getting 6.5 in a projected one score game is pure contest value.'
+        },
+        {
+          sport: 'CFB', betType: 'spread', confidence: 'aminus',
+          matchup: 'Clemson @ LSU',
+          pick: 'Clemson +10.5', odds: '-110',
+          coverProb: '54.9%', edgePct: '+3.4%',
+          commenceTime: '2026-09-05T23:30:00Z',
+          coreReasoning: 'The market is pricing last season, not this roster. WeBetAI makes LSU by 6 in the marquee opener, and double digit spreads between top 25 caliber programs in Week 1 have gone under the number in 8 of the last 11 meetings. Night game in Death Valley is priced in, the extra 4.5 points are not.'
+        },
+        {
+          sport: 'CFB', betType: 'spread', confidence: 'bplus',
+          matchup: 'Boise State @ Oregon',
+          pick: 'Boise State +24.5', odds: '-115',
+          coverProb: '53.8%', edgePct: '+2.6%',
+          commenceTime: '2026-09-05T19:30:00Z',
+          coreReasoning: 'Big number fade: the contest field loads up on ranked home favorites in September, and Oregon backers need a 4 touchdown margin. WeBetAI projects a 17 point game, and a Boise program that never quits on backdoor covers has beaten numbers this size in 7 of its last 9 power conference road trips.'
+        }
+      ],
+      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 14 },
+      weeks: [
+        { label: 'Week 1', dates: 'Sep 3 to 5', status: 'pending', points: null }
+      ]
+    }
+  };
+
+  /* ═══════════════════════════════════════════════
+     RENDER: one section (nfl | cfb)
+     ═══════════════════════════════════════════════ */
+
+  function renderSection(key) {
+    const sec = CIRCA_DATA[key];
+    const picks = (sec.picks || []).slice(0, 5).sort((a, b) => {
+      const rA = ratingOrder[a.confidence] ?? 4;
+      const rB = ratingOrder[b.confidence] ?? 4;
+      return rA - rB; // A+ first
+    });
+
+    // Header labels
+    document.getElementById(key + '-week-label').textContent = sec.weekLabel;
+    document.getElementById(key + '-date-header').textContent = sec.dateFormatted;
+    document.getElementById(key + '-strategy-text').textContent = sec.strategy;
+
+    // ── KPI cumulative boxes ──
+    const k = sec.kpis || {};
+    const decided = (k.wins || 0) + (k.losses || 0);
+    const winRate = decided > 0 ? Math.round((k.wins / decided) * 100) + '%' : '--';
+    const record = `${k.wins || 0}-${k.losses || 0}${k.pushes ? '-' + k.pushes : ''}`;
+    const pts = (k.points || 0).toFixed(1);
+    const maxPts = (k.weeksPlayed || 0) * 5;
+    const pace = maxPts > 0 ? Math.round(((k.points || 0) / maxPts) * 100) + '%' : '--';
+    document.getElementById(key + '-cumulative').innerHTML = `
+      <div class="cum-card"><div class="cum-value ${ (k.points||0) > 0 ? 'positive' : ''}">${pts}</div><div class="cum-label">Contest Pts</div></div>
+      <div class="cum-card"><div class="cum-value">${record}</div><div class="cum-label">ATS Record</div></div>
+      <div class="cum-card"><div class="cum-value">${winRate}</div><div class="cum-label">Win Rate</div></div>
+      <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`;
+
+    // ── Weekly results table (current week highlighted + expandable picks) ──
+    let tbl = '';
+    for (let w = 0; w < (sec.weeks || []).length; w++) {
+      const wk = sec.weeks[w];
+      const isPending = wk.status === 'pending';
+      const wkRecord = isPending ? '0W-0L' : (wk.record || '');
+      const wkPts = isPending ? '--' : ((wk.points || 0).toFixed(1) + ' pts');
+      const wkRate = isPending ? '--' : (wk.rate || '--');
+      const rowStyle = isPending ? ' style="background:var(--teal-light);"' : '';
+      tbl += `<tr${rowStyle}>
+        <td><button class="day-toggle" onclick="toggleWeek('${key}-${w}')" style="font-weight:700;">${esc(wk.label)}</button>
+          <span style="display:block; font-size:.625rem; color:var(--txt-l); font-weight:400;">${esc(wk.dates)}</span></td>
+        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${wkRecord}</span></td>
+        <td>${wkRate}</td>
+        <td>${wkPts}</td>
+      </tr>`;
+      tbl += `<tr class="day-detail" id="week-detail-${key}-${w}"><td colspan="4"><ul class="day-picks-list">`;
+      for (const p of picks) {
+        tbl += `<li>
+          <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span></span>
+          <span><span style="font-size:.65rem; color:var(--txt-l); margin-right:.25rem;">${esc(gameTimeET(p.commenceTime))}</span><span class="result-badge result-pending">...</span></span>
+        </li>`;
+      }
+      tbl += '</ul></td></tr>';
+    }
+    if (!tbl) tbl = '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No contest weeks graded yet.</td></tr>';
+    document.getElementById(key + '-results-body').innerHTML = tbl;
+
+    // ── Record bar ──
+    document.getElementById(key + '-record-bar').innerHTML =
+      `<span style="font-weight:600; color:var(--txt-b);">This Week: 0W-0L, 0.0 of 5.0 pts</span>`;
+
+    // ── Pick cards (exact alpha card format) ──
+    let html = '';
+    for (let i = 0; i < picks.length; i++) {
+      const p = picks[i];
+      const conf = p.confidence || 'b';
+      const badge = badgeClass[conf] || 'badge-b';
+      const label = ratingLabel[conf] || 'B';
+      const timeStr = gameTimeET(p.commenceTime);
+      const timeChip = timeStr
+        ? `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(timeStr)}</span>`
+        : '';
+      const probChip = p.coverProb ? `<span class="win-prob">${esc(p.coverProb)}</span>` : '';
+      const edgeBadgeHTML = p.edgePct
+        ? `<span class="edge-badge" title="Calibrated cover probability minus the no-juice contest breakeven of 50 percent."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct)}</span>`
+        : '';
+
+      html += `<div class="pick-card" data-wb-pick="${esc(p.pick)}">
+        <div class="pick-header" style="margin-bottom:.25rem;">
+          <span class="sport-tag">${esc(p.sport)}</span>
+          <span class="rating-badge ${badge}">${esc(label)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
+          <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup, p.sport))}</div>
+          ${timeChip}
+        </div>
+        <div class="pick-line">
+          <span class="pick-name">${esc(p.pick)}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
+          <span class="pick-odds">${esc(p.odds)}</span>
+        </div>
+        <div class="pick-divider"></div>
+        <div class="pick-analysis">${esc(p.coreReasoning || '')}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="pick-units">Contest Pick ${i + 1} of 5: win 1.0 pt, push 0.5 pt</div>
+          <div style="display:flex; align-items:center; gap:.375rem;">
+            ${edgeBadgeHTML || ''}
+          </div>
+        </div>
+      </div>`;
+    }
+    document.getElementById(key + '-picks').innerHTML = html;
+
+    // ── Card summary (alpha bet-summary style) ──
+    let sum = `<div class="parlay-section">
+      <div class="parlay-title">${esc(sec.contest)}: This Week's 5-Pick Card</div>`;
+    for (const p of picks) {
+      sum += `<div class="parlay-leg" style="display:grid; grid-template-columns:1fr 4.5rem 3.5rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
+        <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
+          <span class="leg-pick">${esc(p.pick)}</span>
+          <span style="font-size:.6875rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span>
+          <span style="font-size:.625rem; color:var(--txt-l);">${esc(gameTimeET(p.commenceTime))}</span>
+        </span>
+        <span style="font-size:.75rem; color:var(--txt-m); text-align:right;">${esc(p.coverProb || '')}</span>
+        <span style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+1.0 pt</span>
+      </div>`;
+    }
+    sum += `<div style="display:grid; grid-template-columns:1fr 4.5rem 3.5rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
+      <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Max This Week</span>
+      <span></span>
+      <span style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">5.0 pts</span>
+    </div></div>`;
+    document.getElementById(key + '-summary').innerHTML = sum;
+  }
+
+  function toggleWeek(id) {
+    document.getElementById('week-detail-' + id).classList.toggle('open');
+  }
+
+  renderSection('nfl');
+  renderSection('cfb');
+</script>
+<script src="/nav.js" defer></script>
+
+</body>
+</html>

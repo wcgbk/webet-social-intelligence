@@ -1,13 +1,13 @@
-// get-tsp-live-picks.js
-// API for the PRIVATE /tsp-live page: GET /api/tsp-live-picks?key=<TSP_LIVE_KEY>[&date=YYYY-MM-DD]
-// Serves the TSP.Live Hermes card pushed by the Grok Bot into the `tsp-live-picks` store.
+// get-live-picks.js
+// API for the PRIVATE /live-picks page: GET /api/live-picks-data?key=<LIVE_PICKS_KEY>[&date=YYYY-MM-DD]
+// Serves the premium live sportsbook card pushed by the desktop agent into the `live-picks` store.
 //
-// HARD-GATED server-side: without the correct key the data never leaves the function (401).
-// There is NO public mode — TSP.Live is paid membership content, private to Ben's own use.
-// Storage: Netlify Blobs REST API (SDK unavailable on git deploys of this site — see tsp-ingest.js).
+// HARD-GATED server-side on LIVE_PICKS_KEY (falls back to PICKS_SECRET_KEY so the page always has
+// a working gate): without the correct key the data never leaves the function (401). No public mode.
+// Storage: Netlify Blobs REST API (SDK unavailable on git deploys of this site — see live-ingest.js).
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
-const STORE_URL = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/tsp-live-picks`;
+const STORE_URL = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/live-picks`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -31,9 +31,9 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
 
   const params = event.queryStringParameters || {};
-  const gate = process.env.TSP_LIVE_KEY || process.env.TSP_PAGE_KEY;
+  const gate = process.env.LIVE_PICKS_KEY || process.env.PICKS_SECRET_KEY;
   if (!gate) {
-    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NOT_CONFIGURED', message: 'TSP_LIVE_KEY env var is not set.' }) };
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NOT_CONFIGURED', message: 'LIVE_PICKS_KEY env var is not set.' }) };
   }
   if (params.key !== gate) {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: true, message: 'Unauthorized' }) };
@@ -58,7 +58,6 @@ exports.handler = async (event) => {
     let data = await readDay(dateKey);
     let latestDate = null;
 
-    // If today is empty, fall back to the most recent day the bot pushed.
     if (!data && !requested) {
       const lr = await fetch(`${STORE_URL}/latest-date`, { headers: authHeaders });
       if (lr.ok) {
@@ -75,7 +74,6 @@ exports.handler = async (event) => {
 
     const selections = (data && Array.isArray(data.selections)) ? data.selections : [];
 
-    // Graded record from finalWL (null = still open).
     let w = 0, l = 0, p = 0, units = 0;
     selections.forEach((s) => {
       const res = String(s.finalWL || s.result || '').toUpperCase();
@@ -90,7 +88,7 @@ exports.handler = async (event) => {
         error: false,
         date: dateKey,
         dateFormatted: formatDateLong(dateKey),
-        source: (data && data.source) || 'TSP.Live · Hermes A.I.',
+        source: (data && data.source) || 'Live Sportsbook Picks',
         fetchedAt: (data && (data.fetchedAt || data.receivedAt)) || null,
         unitSize: (data && data.unitSize) || null,
         selections,
@@ -100,7 +98,7 @@ exports.handler = async (event) => {
       }),
     };
   } catch (err) {
-    console.error('[get-tsp-live-picks] Error:', err.message);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to fetch TSP live card' }) };
+    console.error('[get-live-picks] Error:', err.message);
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to fetch live picks' }) };
   }
 };

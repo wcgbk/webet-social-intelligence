@@ -1,22 +1,21 @@
-// tsp-ingest.js
-// POST /.netlify/functions/tsp-ingest (alias /api/tsp-ingest)
-// Receives the FULL TSP.Live Hermes card from Ben's Grok Bot "TSP Live" agent every time it
-// drops or grades a pick, and stores it (day-keyed, ET) in the isolated `tsp-live-picks` store.
-// The bot POSTs the whole card each time (not a delta) — settlements arrive as `finalWL` on the
+// live-ingest.js
+// POST /.netlify/functions/live-ingest (alias /api/live-ingest)
+// Receives the FULL live sportsbook card from Ben's "Live Sportsbook Picks" desktop agent every
+// time it drops or grades a pick, and stores it (day-keyed, ET) in the isolated `live-picks` store.
+// The agent POSTs the whole card each time (not a delta) — settlements arrive as `finalWL` on the
 // same selections — so each POST REPLACES that day's card.
 //
-// Auth: `Authorization: Bearer <secret>` must match env TSP_INGEST_SECRET (falls back to the
+// Auth: `Authorization: Bearer <secret>` must match env LIVE_INGEST_SECRET (falls back to the
 // existing PICKS_SECRET_KEY so no new env var is strictly required; fails closed if neither set).
 // Payload: { source, dateET, fetchedAt, unitSize, selections:[ {sport,event,pick,odds,units,
 //            score,label,timeET,notes,finalWL} ] }.  Returns 200 { ok:true, count:N }.
 //
-// PRIVATE feed — TSP.Live is paid membership content. The reader (get-tsp-live-picks) is
-// key-gated server-side; this data must never be exposed publicly.
+// PRIVATE feed. The reader (get-live-picks) is key-gated server-side; never expose publicly.
 // Storage: Netlify Blobs REST API (the SDK is unavailable on git-based deploys of this site —
-// nft bundling with no root package.json — so all functions use REST, like alpha/omega/grok-bot).
+// nft bundling with no root package.json — so all functions use REST, like alpha/omega).
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
-const STORE_URL = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/tsp-live-picks`;
+const STORE_URL = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/live-picks`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -62,9 +61,9 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: true, message: 'POST only' }) };
   }
 
-  const secret = process.env.TSP_INGEST_SECRET || process.env.PICKS_SECRET_KEY;
+  const secret = process.env.LIVE_INGEST_SECRET || process.env.PICKS_SECRET_KEY;
   if (!secret) {
-    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, message: 'Ingest not configured (TSP_INGEST_SECRET unset)' }) };
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, message: 'Ingest not configured (LIVE_INGEST_SECRET unset)' }) };
   }
   if (parseBearer(event) !== secret) {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: true, message: 'Unauthorized' }) };
@@ -94,7 +93,7 @@ exports.handler = async (event) => {
   }
 
   const record = {
-    source: body.source ? String(body.source).slice(0, 60) : 'TSP Live',
+    source: body.source ? String(body.source).slice(0, 60) : 'Live Sportsbook Picks',
     dateET: dateKey,
     fetchedAt: body.fetchedAt || new Date().toISOString(),
     receivedAt: new Date().toISOString(),
@@ -112,7 +111,7 @@ exports.handler = async (event) => {
     });
     if (!putResp.ok) {
       const errBody = await putResp.text();
-      console.error(`[tsp-ingest] Blob PUT failed ${putResp.status}: ${errBody.substring(0, 200)}`);
+      console.error(`[live-ingest] Blob PUT failed ${putResp.status}: ${errBody.substring(0, 200)}`);
       return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to store card' }) };
     }
 
@@ -124,7 +123,7 @@ exports.handler = async (event) => {
 
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, count: selections.length, dateET: dateKey }) };
   } catch (err) {
-    console.error('[tsp-ingest] Error:', err.message);
+    console.error('[live-ingest] Error:', err.message);
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to store card' }) };
   }
 };

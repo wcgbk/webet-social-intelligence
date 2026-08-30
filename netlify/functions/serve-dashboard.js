@@ -24,6 +24,7 @@ const VIEW_TITLES = {
   cfb: 'College Football Picks',
   'grok-beta': 'Live Edge Picks',
   omega: 'Daily Omega Picks',
+  'live-picks': 'Premium Live Picks',
   gamecast: 'Picks Gamecast',
   'track-record': 'Percentile Rankings', percentile: 'Percentile Rankings',
   pick3: 'Pick 3 PVP', p2p: 'Pick 3 PVP',

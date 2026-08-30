@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- PRIVATE internal feed. Never index, never make public. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <title>WeBetAI - Social Intelligence | Premium Live Picks</title>
+  <meta name="description" content="Private premium live sportsbook picks feed — internal page." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/live-picks" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Premium Live Picks" />
+  <meta property="og:description" content="Private premium live sportsbook picks feed — internal page." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Premium Live Picks" />
+  <meta name="twitter:description" content="Private premium live sportsbook picks feed — internal page." />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --red: #c0392b;
+      --red-light: #fdecea;
+      --red-border: #f5b7b1;
+      --amber: #b9770a;
+      --amber-light: #fdf3e3;
+      --amber-border: #f0d9a8;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --sans: 'Geist Sans', 'Inter', system-ui, sans-serif;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--txt-b); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+    body.embed { background: transparent; }
+
+    .main { max-width: 720px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+    body.embed .main { padding: 1rem 1rem 2rem; }
+
+    /* header (standalone only) */
+    .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: .5rem; }
+    body.embed .page-head { display: none; }
+    .page-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; color: var(--olive); display: flex; align-items: center; gap: .5rem; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(46,125,50,.4); animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(46,125,50,.4); } 50% { box-shadow: 0 0 0 5px rgba(46,125,50,0); } }
+    .private-tag { font-size: .625rem; font-weight: 700; letter-spacing: .08em; color: var(--amber); background: var(--amber-light); border: 1px solid var(--amber-border); border-radius: 6px; padding: 2px 7px; }
+
+    /* meta + record */
+    .meta-line { color: var(--txt-m); font-size: .8125rem; margin: 0 0 .875rem; }
+    .record { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: 0 0 1rem; }
+    .rec-box { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; padding: .55rem .5rem; text-align: center; }
+    .rec-box .l { font-size: .5625rem; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); font-weight: 600; }
+    .rec-box .n { font-size: 1.15rem; font-weight: 700; color: var(--olive); margin-top: 1px; }
+    .rec-box .n.pos { color: var(--green); }
+    .rec-box .n.neg { color: var(--red); }
+
+    /* cards — slim + wide, alpha-consistent */
+    .grid { display: flex; flex-direction: column; gap: .5rem; }
+    .pick-card {
+      background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem;
+      padding: .75rem .875rem; display: flex; align-items: center; gap: .875rem;
+      transition: background .5s ease, border-color .5s ease;
+    }
+    .pick-card.new { animation: flashIn 2.4s ease-out; }
+    @keyframes flashIn { 0% { background: var(--green-light); border-color: var(--green-border); } 100% { background: var(--white); border-color: var(--border-lt); } }
+    .pc-main { flex: 1 1 auto; min-width: 0; }
+    .pc-top { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; flex-wrap: wrap; }
+    .sport-tag { font-size: .625rem; font-weight: 700; letter-spacing: .02em; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 5px; padding: .1rem .4rem; text-transform: uppercase; }
+    .conf { font-size: .5625rem; font-weight: 700; letter-spacing: .04em; border-radius: 5px; padding: .1rem .4rem; }
+    .conf.HIGH { color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); }
+    .conf.MEDIUM { color: var(--amber); background: var(--amber-light); border: 1px solid var(--amber-border); }
+    .conf.LOW { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
+    .pc-time { font-size: .625rem; color: var(--txt-l); font-weight: 500; margin-left: auto; }
+    .pc-pick { font-size: .9375rem; font-weight: 700; color: var(--olive); line-height: 1.25; }
+    .pc-event { font-size: .75rem; color: var(--txt-m); margin-top: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pc-nums { display: flex; align-items: center; gap: .4rem; margin-top: .3rem; }
+    .pc-odds { font-size: .8125rem; font-weight: 700; color: var(--olive); }
+    .pc-units { font-size: .75rem; font-weight: 700; color: var(--teal); background: var(--teal-light); border-radius: 5px; padding: .05rem .35rem; }
+    .pc-right { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; flex: 0 0 auto; }
+    .pc-score { text-align: center; }
+    .pc-score .n { font-size: 1.05rem; font-weight: 700; color: var(--teal); line-height: 1; }
+    .pc-score .l { font-size: .5rem; letter-spacing: .06em; color: var(--txt-l); text-transform: uppercase; font-weight: 600; }
+    .result { font-size: .625rem; font-weight: 700; letter-spacing: .03em; border-radius: 6px; padding: .2rem .5rem; white-space: nowrap; }
+    .result.win { color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); }
+    .result.loss { color: var(--red); background: var(--red-light); border: 1px solid var(--red-border); }
+    .result.push { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
+    .result.open { color: var(--amber); background: var(--amber-light); border: 1px solid var(--amber-border); }
+
+    .empty, .loading { background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 2.25rem 1.25rem; text-align: center; color: var(--txt-m); font-size: .875rem; line-height: 1.6; }
+    .empty-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .25rem; }
+
+    /* passcode gate */
+    .gate { max-width: 340px; margin: 12vh auto 0; text-align: center; background: var(--white); border: 1px solid var(--border-lt); border-radius: 1rem; padding: 1.75rem 1.5rem; }
+    body.embed .gate { margin-top: 6vh; }
+    .gate h2 { font-size: 1.05rem; font-weight: 700; color: var(--olive); margin-bottom: .35rem; }
+    .gate p { color: var(--txt-m); font-size: .8125rem; margin-bottom: 1rem; }
+    .gate input { width: 100%; background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .625rem; color: var(--txt-b); font-family: var(--sans); font-size: .95rem; padding: .75rem .875rem; outline: none; text-align: center; }
+    .gate input:focus { border-color: var(--teal); background: var(--white); }
+    .gate button { margin-top: .75rem; width: 100%; background: var(--teal); color: #fff; border: 0; border-radius: .625rem; font-family: var(--sans); font-weight: 700; font-size: .9rem; padding: .75rem; cursor: pointer; }
+    .gate .err-msg { color: var(--red); font-size: .78rem; margin-top: .625rem; min-height: 1em; }
+
+    footer { text-align: center; color: var(--txt-l); font-size: .6875rem; line-height: 1.6; margin-top: 2rem; }
+    body.embed footer { margin-top: 1.5rem; }
+
+    @media (max-width: 480px) {
+      .pick-card { gap: .625rem; padding: .7rem .75rem; }
+      .pc-score .n { font-size: .95rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="main">
+    <div id="gate" class="gate" style="display:none;">
+      <h2>Premium Live Picks</h2>
+      <p>Enter the access key to view the live feed.</p>
+      <input id="gate-key" type="password" placeholder="Access key" autocomplete="off" />
+      <button onclick="submitKey()">Unlock</button>
+      <div id="gate-err" class="err-msg"></div>
+    </div>
+
+    <div id="app" style="display:none;">
+      <div class="page-head">
+        <div class="page-title"><span class="live-dot"></span>Premium Live Picks <span class="private-tag">PRIVATE</span></div>
+      </div>
+      <div class="meta-line" id="meta-line">Loading…</div>
+      <div class="record" id="record" style="display:none;"></div>
+      <div class="grid" id="grid"></div>
+      <footer>Internal use only · not for redistribution<br>Live Sportsbook Picks feed · updates automatically as each pick drops.</footer>
+    </div>
+  </div>
+
+  <script>
+    var KEY_LS = 'live_picks_key';
+    var API_URL = '/api/live-picks-data';
+    var POLL_MS = 30000;
+    var EMBED = /[?&]embed=1/.test(window.location.search) || (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
+    if (EMBED) document.body.classList.add('embed');
+    var DEMO = /[?&]demo=1/.test(window.location.search);
+
+    var DEMO_DATA = {
+      error: false, date: '2026-08-30', dateFormatted: 'Saturday, August 30, 2026',
+      source: 'Live Sportsbook Picks', fetchedAt: new Date(Date.now() - 3 * 60000).toISOString(), unitSize: 150,
+      count: 4,
+      record: { w: 2, l: 0, p: 0, units: 2.75, graded: 2 },
+      selections: [
+        { sport: 'MLB', event: 'Boston Red Sox at New York Yankees', pick: 'NY Yankees ML', odds: '+111', units: 1.0, score: 41, label: 'HIGH', timeET: '1:35 PM ET', finalWL: 'W' },
+        { sport: 'MLB', event: 'Los Angeles Dodgers at Detroit Tigers', pick: 'LA Dodgers ML', odds: '-150', units: 1.5, score: 51, label: 'MEDIUM', timeET: '1:40 PM ET', finalWL: 'W' },
+        { sport: 'ATP', event: 'Munar vs Atmane', pick: 'Atmane -3.5 Games', odds: '-105', units: 1.25, score: 42, label: 'MEDIUM', timeET: '1:00 PM ET', finalWL: null },
+        { sport: 'MLB', event: 'Kansas City at Cleveland', pick: 'Cleveland -1.5', odds: '+112', units: 1.25, score: 28, label: 'LOW', timeET: '4:10 PM ET', finalWL: null }
+      ]
+    };
+
+    var seenKeys = {};
+    var firstRender = true;
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+    function selKey(s) { return [s.sport, s.event, s.pick, s.odds].map(function (x) { return (x || '').toString().toLowerCase(); }).join('|'); }
+
+    function showGate(msg) {
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('gate').style.display = 'block';
+      document.getElementById('gate-err').textContent = msg || '';
+    }
+    function submitKey() {
+      var v = document.getElementById('gate-key').value.trim();
+      if (!v) return;
+      try { localStorage.setItem(KEY_LS, v); } catch (e) {}
+      load(v);
+    }
+    document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && document.getElementById('gate').style.display !== 'none') submitKey(); });
+
+    function resultChip(s) {
+      var r = String(s.finalWL || s.result || '').toUpperCase();
+      if (r === 'W' || r === 'WIN') return '<span class="result win">WON' + (s.units ? ' +' + esc(s.units) + 'u' : '') + '</span>';
+      if (r === 'L' || r === 'LOSS' || r === 'LOSE') return '<span class="result loss">LOST' + (s.units ? ' -' + esc(s.units) + 'u' : '') + '</span>';
+      if (r === 'P' || r === 'PUSH') return '<span class="result push">PUSH</span>';
+      return '<span class="result open">OPEN</span>';
+    }
+
+    function render(data) {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+
+      var metaBits = [];
+      metaBits.push(esc(data.dateFormatted || data.date || ''));
+      if (data.count != null) metaBits.push(data.count + ' pick' + (data.count === 1 ? '' : 's'));
+      if (data.fetchedAt) {
+        var ageMin = Math.round((Date.now() - new Date(data.fetchedAt).getTime()) / 60000);
+        metaBits.push('updated ' + (ageMin <= 1 ? 'just now' : ageMin + ' min ago'));
+      }
+      document.getElementById('meta-line').textContent = metaBits.join('  ·  ');
+
+      var rec = data.record || null;
+      var recEl = document.getElementById('record');
+      if (rec && rec.graded > 0) {
+        var uCls = rec.units > 0 ? 'pos' : (rec.units < 0 ? 'neg' : '');
+        var uStr = (rec.units > 0 ? '+' : '') + rec.units + 'u';
+        recEl.innerHTML =
+          '<div class="rec-box"><div class="l">Graded</div><div class="n">' + rec.w + '-' + rec.l + (rec.p ? '-' + rec.p : '') + '</div></div>' +
+          '<div class="rec-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
+          '<div class="rec-box"><div class="l">Open</div><div class="n">' + Math.max(0, (data.count || 0) - rec.graded) + '</div></div>';
+        recEl.style.display = 'grid';
+      } else {
+        recEl.style.display = 'none';
+      }
+
+      var grid = document.getElementById('grid');
+      var sels = data.selections || [];
+      if (!sels.length) {
+        grid.innerHTML = '<div class="empty"><div class="empty-title">No picks posted yet today</div>The moment a live pick drops, it appears here automatically.' + (data.latestDate ? '<br>Last active day: ' + esc(data.latestDate) : '') + '</div>';
+        firstRender = false;
+        return;
+      }
+
+      grid.innerHTML = sels.map(function (s) {
+        var key = selKey(s);
+        var isNew = !firstRender && !seenKeys[key];
+        var league = s.sport || s.league || '';
+        var event = s.event || '';
+        var time = s.timeET || s.gameTimeET || '';
+        return '<div class="pick-card' + (isNew ? ' new' : '') + '">' +
+          '<div class="pc-main">' +
+            '<div class="pc-top">' +
+              (league ? '<span class="sport-tag">' + esc(league) + '</span>' : '') +
+              (s.label ? '<span class="conf ' + esc(String(s.label).toUpperCase()) + '">' + esc(s.label) + '</span>' : '') +
+              (time ? '<span class="pc-time">' + esc(time) + '</span>' : '') +
+            '</div>' +
+            '<div class="pc-pick">' + esc(s.pick) + '</div>' +
+            (event ? '<div class="pc-event">' + esc(event) + '</div>' : '') +
+            '<div class="pc-nums">' +
+              (s.odds ? '<span class="pc-odds">' + esc(s.odds) + '</span>' : '') +
+              (s.units ? '<span class="pc-units">' + esc(s.units) + 'u</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="pc-right">' +
+            resultChip(s) +
+            (s.score != null ? '<div class="pc-score"><div class="n">' + esc(s.score) + '</div><div class="l">AI</div></div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      sels.forEach(function (s) { seenKeys[selKey(s)] = 1; });
+      firstRender = false;
+    }
+
+    function load(key) {
+      fetch(API_URL + '?key=' + encodeURIComponent(key), { cache: 'no-store' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+        .then(function (res) {
+          if (res.status === 401) { try { localStorage.removeItem(KEY_LS); } catch (e) {} showGate('Wrong key.'); return; }
+          if (res.status === 503) { showGate('Feed not configured yet.'); return; }
+          render(res.j);
+        })
+        .catch(function () { showGate('Network error — try again.'); });
+    }
+
+    if (DEMO) { render(DEMO_DATA); }
+    else {
+    var saved = null;
+    try { saved = localStorage.getItem(KEY_LS); } catch (e) {}
+    if (saved) load(saved); else showGate();
+    setInterval(function () {
+      var k = null; try { k = localStorage.getItem(KEY_LS); } catch (e) {}
+      if (k && document.getElementById('app').style.display !== 'none') load(k);
+    }, POLL_MS);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) return;
+      var k = null; try { k = localStorage.getItem(KEY_LS); } catch (e) {}
+      if (k && document.getElementById('app').style.display !== 'none') load(k);
+    });
+    }
+  </script>
+</body>
+</html>

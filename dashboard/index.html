@@ -1666,6 +1666,10 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
         Daily Edge Picks
       </button>
+      <button class="nav-item" data-panel="live-picks" onclick="switchPanel('live-picks')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.6 6.8L22 9.3l-5.4 4.5L18.4 21 12 16.9 5.6 21l1.8-7.2L2 9.3l7.4-.5z"/></svg></span>
+        Premium Live Picks
+      </button>
       <button class="nav-item" data-panel="omega" onclick="switchPanel('omega')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h5v-2.5C6.6 16.2 5 13.8 5 11a7 7 0 0 1 14 0c0 2.8-1.6 5.2-4 6.5V20h5"/></svg></span>
         Daily Omega Picks
@@ -1851,9 +1855,9 @@
         <iframe id="omega-iframe" src="/daily-omega" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
-      <!-- LIVE AI PICKS PANEL (private TSP.Live feed) -->
-      <div class="panel" id="panel-live-ai" style="overflow:hidden;">
-        <iframe id="live-ai-iframe" src="/live-ai" style="width:100%;height:100%;border:none;"></iframe>
+      <!-- PREMIUM LIVE PICKS PANEL (private live sportsbook feed) -->
+      <div class="panel" id="panel-live-picks" style="overflow:hidden;">
+        <iframe id="live-picks-iframe" src="/live-picks?embed=1" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- GAMECAST PANEL -->
@@ -2270,7 +2274,7 @@
     nfl: 'NFL Only Picks',
     cfb: 'College Football Picks',
     'grok-beta': 'Live Edge Picks',
-    'live-ai': 'Live AI Picks',
+    'live-picks': 'Premium Live Picks',
     omega: 'Daily Omega Picks',
     gamecast: 'Picks Gamecast',
     mlb: 'MLB First 5 Picks',
@@ -2297,7 +2301,7 @@
   // lands on that exact panel. Chat is the home page (no fragment). Any raw
   // panel key also resolves, so older /dashboard#panel links keep working.
   const PANEL_SLUGS = {
-    picks: 'picks', nfl: 'nfl', cfb: 'cfb', 'grok-beta': 'grok-beta', 'live-ai': 'live-ai', omega: 'omega', gamecast: 'gamecast', percentile: 'track-record',
+    picks: 'picks', nfl: 'nfl', cfb: 'cfb', 'grok-beta': 'grok-beta', 'live-picks': 'live-picks', omega: 'omega', gamecast: 'gamecast', percentile: 'track-record',
     p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
     webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
   };

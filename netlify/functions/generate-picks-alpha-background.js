@@ -968,7 +968,16 @@ async function fetchTeamStats(espnData) {
           const categories = data.results?.stats?.categories || data.splits?.categories || [];
           for (const cat of categories) {
             for (const stat of (cat.stats || [])) {
-              if (stat.name) stats[stat.name] = stat.value;
+              if (stat.name) {
+                stats[stat.name] = stat.value;
+                // MLB offense-inversion fix (Ben-directed 2026-08-30): ESPN returns a 'runs' stat
+                // in BOTH the 'batting' category (runs SCORED = offense) and the 'pitching'
+                // category (runs ALLOWED = defense). This flat last-write-wins loop leaves
+                // stats.runs = pitching's value, so offense was read as runs allowed (the Rockies,
+                // MLB's worst run-prevention team, looked like the best offense). Keep the batting
+                // (runs-scored) value in a dedicated key for the offense signal below.
+                if (stat.name === 'runs' && cat.name === 'batting') stats.battingRuns = stat.value;
+              }
             }
           }
           for (const stat of (data.statistics || [])) {
@@ -1046,7 +1055,9 @@ async function fetchTeamStats(espnData) {
             const slg = stats.slugAvg || null;
             const ops = (obp && slg) ? obp + slg : null;
             const gamesPlayed = stats.teamGamesPlayed || 1;
-            const runsTotal = stats.runs || null;
+            // Use batting (runs-scored) for offense, not the flattened stats.runs which is
+            // overwritten by pitching (runs allowed). See offense-inversion fix note above.
+            const runsTotal = (stats.battingRuns ?? stats.runs) || null;
             let runsPerGame = runsTotal ? runsTotal / gamesPlayed : pointsPerGame;
             // Sanity guard: MLB runs/game must be 2.5–7.5. Anything outside this range
             // means ESPN returned bad data (season totals, basketball-scale avgPoints, etc.).

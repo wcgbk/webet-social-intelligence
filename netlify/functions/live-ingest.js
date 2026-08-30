@@ -55,6 +55,11 @@ function parseBearer(event) {
   return m ? m[1].trim() : '';
 }
 
+// Stable identity for a pick across the day's re-POSTs (odds may drift, so exclude them).
+function seqKey(s) {
+  return [s.sport, s.event, s.pick].map((x) => (x == null ? '' : String(x)).toLowerCase().trim()).join('|');
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
   if (event.httpMethod !== 'POST') {
@@ -92,17 +97,40 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: true, message: 'No selection had a "pick" field' }) };
   }
 
-  const record = {
-    source: body.source ? String(body.source).slice(0, 60) : 'Live Sportsbook Picks',
-    dateET: dateKey,
-    fetchedAt: body.fetchedAt || new Date().toISOString(),
-    receivedAt: new Date().toISOString(),
-    unitSize: (body.unitSize != null && isFinite(Number(body.unitSize))) ? Number(body.unitSize) : null,
-    selections,
-  };
-
   try {
     const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    // Merge a stable, monotonic firstSeq per pick so the page can show the most
+    // recently-added picks at the top. Full-card POSTs re-send every pick each time;
+    // a pick keeps the firstSeq it got when first seen, so new drops sort above older
+    // ones and graded picks stay in place.
+    let existingSeq = {}, maxSeq = 0;
+    try {
+      const readResp = await fetch(`${STORE_URL}/picks-${dateKey}`, { headers: authHeaders });
+      if (readResp.ok) {
+        const prev = await readResp.json().catch(() => null);
+        if (prev && Array.isArray(prev.selections)) {
+          prev.selections.forEach((p) => {
+            const n = Number(p.firstSeq);
+            if (isFinite(n)) { existingSeq[seqKey(p)] = n; if (n > maxSeq) maxSeq = n; }
+          });
+        }
+      }
+    } catch (e) { /* first write of the day / transient read failure → start fresh */ }
+
+    selections.forEach((s) => {
+      const k = seqKey(s);
+      s.firstSeq = (existingSeq[k] != null) ? existingSeq[k] : ++maxSeq;
+    });
+
+    const record = {
+      source: body.source ? String(body.source).slice(0, 60) : 'Live Sportsbook Picks',
+      dateET: dateKey,
+      fetchedAt: body.fetchedAt || new Date().toISOString(),
+      receivedAt: new Date().toISOString(),
+      unitSize: (body.unitSize != null && isFinite(Number(body.unitSize))) ? Number(body.unitSize) : null,
+      selections,
+    };
 
     const putResp = await fetch(`${STORE_URL}/picks-${dateKey}`, {
       method: 'PUT',

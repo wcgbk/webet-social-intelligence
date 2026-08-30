@@ -73,6 +73,8 @@ exports.handler = async (event) => {
     }
 
     const selections = (data && Array.isArray(data.selections)) ? data.selections : [];
+    // Most-recently-added picks first — new drops fill in at the top, older picks sink.
+    selections.sort((a, b) => (Number(b.firstSeq) || 0) - (Number(a.firstSeq) || 0));
 
     let w = 0, l = 0, p = 0, units = 0;
     selections.forEach((s) => {

@@ -23,3 +23,7 @@
 /grokbot/     /grokbot/index.html      200
 /api/grok-bot-picks    /.netlify/functions/get-grok-bot-picks 200
 /api/grok-bot-webhook  /.netlify/functions/grok-bot-webhook   200
+/tsp-live     /tsp-live/index.html     200
+/tsp-live/    /tsp-live/index.html     200
+/api/tsp-live-picks    /.netlify/functions/get-tsp-live-picks 200
+/api/tsp-ingest        /.netlify/functions/tsp-ingest         200

@@ -63,6 +63,13 @@ function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, '0')}-${String(et.getDate()).padStart(2, '0')}`;
 }
+// 'YYYY-MM-DD' → Kalshi ticker date code, e.g. '2026-08-31' → '26AUG31'.
+function kalshiCodeFromDate(dk) {
+  const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dk || '');
+  if (!m) return null;
+  return `${m[1].slice(-2)}${MON[parseInt(m[2], 10) - 1]}${m[3]}`;
+}
 function normalizeTeam(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -154,7 +161,10 @@ async function getBook(ticker) {
 
 // Best-effort match of a classified pick to a Kalshi market. Returns {ticker,title,side,line} or null.
 // Uses a per-run market cache keyed by series to avoid refetching.
-async function matchKalshi(cls, matchup, seriesCache) {
+// dateCode (e.g. "26AUG31") pins matches to the pick's actual game date — Kalshi encodes the game
+// date in the ticker (KXMLBGAME-26AUG31...), so without this the matcher would grab any open market
+// for that team, including a future series game against a different opponent.
+async function matchKalshi(cls, matchup, seriesCache, dateCode) {
   const series = SERIES_MAP[`${cls.sport}_${cls.betType}`];
   if (!series) return null;
 
@@ -162,8 +172,17 @@ async function matchKalshi(cls, matchup, seriesCache) {
     const data = await kpublic(`/markets?series_ticker=${series}&status=open&limit=500`);
     seriesCache[series] = (data && Array.isArray(data.markets)) ? data.markets : [];
   }
-  const markets = seriesCache[series];
+  let markets = seriesCache[series];
   if (!markets.length) return null;
+
+  // Pin to the pick's game date. If nothing matches today's code, fall back to book (return null)
+  // rather than betting the wrong day.
+  if (dateCode) {
+    const dc = dateCode.toUpperCase();
+    const sameDay = markets.filter((m) => `${m.ticker || ''} ${m.event_ticker || ''}`.toUpperCase().includes(dc));
+    if (!sameDay.length) return null;
+    markets = sameDay;
+  }
 
   const teams = extractTeams(matchup);
   const abbrevs = teams.map((t) => getCityAbbrev(t));
@@ -284,9 +303,11 @@ exports.handler = async (event) => {
       }
     }
     const selections = (card && Array.isArray(card.selections)) ? card.selections : [];
+    const dateCode = kalshiCodeFromDate(dateKey); // pins Kalshi matches to this card's game date
+    const fresh = params.reset === '1' || params.fresh === '1'; // re-match all picks, ignoring locked entries
 
     // 2. Load our prior demo log for this date so existing entries stay LOCKED (price/contracts frozen).
-    const prior = await blobGetJSON(`${DEMO_STORE_URL}/exec-${dateKey}`, token);
+    const prior = fresh ? null : await blobGetJSON(`${DEMO_STORE_URL}/exec-${dateKey}`, token);
     const priorByKey = {};
     if (prior && Array.isArray(prior.entries)) prior.entries.forEach((e) => { priorByKey[e.key] = e; });
 
@@ -322,7 +343,7 @@ exports.handler = async (event) => {
       if (SERIES_MAP[`${cls.sport}_${cls.betType}`] && newKalshiTries < MAX_NEW_KALSHI_TRIES && !matchDeadlineHit) {
         newKalshiTries++;
         try {
-          match = await matchKalshi(cls, sel.event, seriesCache);
+          match = await matchKalshi(cls, sel.event, seriesCache, dateCode);
         } catch (e) { match = null; }
       } else if (newKalshiTries >= MAX_NEW_KALSHI_TRIES) {
         matchDeadlineHit = true;

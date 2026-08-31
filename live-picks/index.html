@@ -113,6 +113,7 @@
     .track-chev { font-size: .6rem; color: var(--txt-l); transition: transform .2s; }
     .track.open .track-chev { transform: rotate(180deg); }
     .track-body { padding: 0 .875rem .625rem; }
+    .track-unit-note { text-align: center; color: var(--green); font-weight: 700; font-size: .8125rem; margin: .45rem 0 .1rem; }
     .track-cum { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .25rem 0 .5rem; }
     .cum-box { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .625rem; padding: .5rem; text-align: center; }
     .cum-box .l { font-size: .5625rem; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); font-weight: 600; }
@@ -344,7 +345,8 @@
       var profitStr = (profit >= 0 ? '+$' : '-$') + Math.abs(Math.round(profit)).toLocaleString();
       var profitCls = profit > 0 ? 'pos' : (profit < 0 ? 'neg' : '');
 
-      var html = '<div class="track-cum">' +
+      var html = '<div class="track-unit-note">1 unit = $' + DOLLAR_PER_UNIT + '</div>' +
+        '<div class="track-cum">' +
         '<div class="cum-box"><div class="l">Record</div><div class="n">' + cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '</div></div>' +
         '<div class="cum-box"><div class="l">Accuracy</div><div class="n">' + esc(acc) + '</div></div>' +
         '<div class="cum-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +

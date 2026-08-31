@@ -167,11 +167,24 @@ exports.handler = async (event) => {
     const balRaw = await kdemo('GET', '/portfolio/balance');
     if (params.mode === 'verify') {
       const bodySnippet = (() => { try { return JSON.stringify(balRaw.data).slice(0, 300); } catch (e) { return ''; } })();
+      // Report EXACTLY what Kalshi creds are stored (booleans + last4 only, never secret values).
+      let demoPrivBlob = false;
+      if (token) { try { const rr = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/webet-config/kalshi-demo-private-key`, { headers: { Authorization: `Bearer ${token}` } }); demoPrivBlob = rr.ok; } catch (e) {} }
+      const sources = {
+        KALSHI_DEMO_API_KEY_set: !!process.env.KALSHI_DEMO_API_KEY,
+        KALSHI_API_KEY_set: !!process.env.KALSHI_API_KEY,
+        keyUsedLast4: (DEMO_API_KEY || '').slice(-4),
+        KALSHI_DEMO_PRIVATE_KEY_env_set: !!process.env.KALSHI_DEMO_PRIVATE_KEY,
+        demo_private_key_in_blob: demoPrivBlob,
+        KALSHI_PRIVATE_KEY_env_set: !!process.env.KALSHI_PRIVATE_KEY,
+        KALSHI_ENABLED: process.env.KALSHI_ENABLED === 'true',
+        KALSHI_ENV: process.env.KALSHI_ENV || 'demo',
+      };
       return { statusCode: 200, headers: CORS, body: JSON.stringify({
         ok: balRaw.ok, env: 'demo', hardPinned: KALSHI_DEMO_BASE, kalshiStatus: balRaw.status,
         balance: balRaw.ok ? { balance: (balRaw.data.balance || 0) / 100, portfolioValue: (balRaw.data.portfolio_value || 0) / 100 } : null,
-        kalshiBody: bodySnippet,
-        note: balRaw.ok ? 'Demo credentials valid. No orders placed.' : 'Demo auth failed — see kalshiStatus/kalshiBody. Likely a production key (Kalshi demo needs its own key).',
+        kalshiBody: bodySnippet, sources,
+        note: balRaw.ok ? 'Demo credentials valid. No orders placed.' : 'Demo auth failed — see kalshiStatus/kalshiBody + sources. The stored key is not a valid demo key right now.',
       }) };
     }
     const balance = balRaw.ok ? { balance: (balRaw.data.balance || 0) / 100, portfolioValue: (balRaw.data.portfolio_value || 0) / 100 } : null;

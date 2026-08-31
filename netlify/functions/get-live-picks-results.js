@@ -15,15 +15,15 @@ const CORS = {
 };
 
 function summarize(selections) {
-  let w = 0, l = 0, p = 0, units = 0, graded = 0;
+  let w = 0, l = 0, p = 0, units = 0, graded = 0, staked = 0;
   (selections || []).forEach((s) => {
     const r = String(s.finalWL || s.result || '').toUpperCase();
     const u = Number(s.units) || 0;
-    if (r === 'W' || r === 'WIN') { w++; units += u; graded++; }
-    else if (r === 'L' || r === 'LOSS' || r === 'LOSE') { l++; units -= u; graded++; }
-    else if (r === 'P' || r === 'PUSH') { p++; graded++; }
+    if (r === 'W' || r === 'WIN') { w++; units += u; graded++; staked += u; }
+    else if (r === 'L' || r === 'LOSS' || r === 'LOSE') { l++; units -= u; graded++; staked += u; }
+    else if (r === 'P' || r === 'PUSH') { p++; graded++; staked += u; }
   });
-  return { w, l, p, units: Math.round(units * 100) / 100, graded, count: (selections || []).length };
+  return { w, l, p, units: Math.round(units * 100) / 100, staked: Math.round(staked * 100) / 100, graded, count: (selections || []).length };
 }
 
 function etToday() {
@@ -81,8 +81,9 @@ exports.handler = async (event) => {
     const cumulative = days.reduce((acc, d) => ({
       w: acc.w + d.w, l: acc.l + d.l, p: acc.p + d.p,
       units: Math.round((acc.units + d.units) * 100) / 100,
+      staked: Math.round((acc.staked + (d.staked || 0)) * 100) / 100,
       graded: acc.graded + d.graded, count: acc.count + d.count,
-    }), { w: 0, l: 0, p: 0, units: 0, graded: 0, count: 0 });
+    }), { w: 0, l: 0, p: 0, units: 0, staked: 0, graded: 0, count: 0 });
 
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ error: false, days, cumulative }) };
   } catch (err) {

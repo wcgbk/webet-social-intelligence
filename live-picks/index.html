@@ -189,6 +189,7 @@
     var RESULTS_URL = '/api/live-picks-results';
     var POLL_MS = 30000;
     var trackData = null, dayCache = {}, resultsLoaded = false;
+    var DOLLAR_PER_UNIT = 150;
     var EMBED = /[?&]embed=1/.test(window.location.search) || (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
     if (EMBED) document.body.classList.add('embed');
     var DEMO = /[?&]demo=1/.test(window.location.search);
@@ -207,10 +208,10 @@
     };
 
     var DEMO_RESULTS = {
-      cumulative: { w: 6, l: 2, p: 0, units: 4.0, graded: 8, count: 15 },
+      cumulative: { w: 6, l: 2, p: 0, units: 4.0, staked: 10, graded: 8, count: 15 },
       days: [
-        { date: '2026-08-31', w: 2, l: 0, p: 0, units: 2.75, graded: 2, count: 4 },
-        { date: '2026-08-30', w: 4, l: 2, p: 0, units: 1.25, graded: 6, count: 11 }
+        { date: '2026-08-31', w: 2, l: 0, p: 0, units: 2.75, staked: 2.5, graded: 2, count: 4 },
+        { date: '2026-08-30', w: 4, l: 2, p: 0, units: 1.25, staked: 7.5, graded: 6, count: 11 }
       ]
     };
     var DEMO_DAY_PICKS = {
@@ -334,9 +335,21 @@
       document.getElementById('track-sum').innerHTML =
         cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '  &middot;  <b class="' + uCls + '">' + esc(uStr) + '</b>';
 
+      var acc = (cum.w + cum.l) > 0 ? Math.round(cum.w / (cum.w + cum.l) * 100) + '%' : '—';
+      var stk = cum.staked || 0;
+      var roiNum = stk > 0 ? (cum.units / stk * 100) : 0;
+      var roiStr = stk > 0 ? (roiNum > 0 ? '+' : '') + roiNum.toFixed(1) + '%' : '—';
+      var roiCls = roiNum > 0 ? 'pos' : (roiNum < 0 ? 'neg' : '');
+      var profit = cum.units * DOLLAR_PER_UNIT;
+      var profitStr = (profit >= 0 ? '+$' : '-$') + Math.abs(Math.round(profit)).toLocaleString();
+      var profitCls = profit > 0 ? 'pos' : (profit < 0 ? 'neg' : '');
+
       var html = '<div class="track-cum">' +
         '<div class="cum-box"><div class="l">Record</div><div class="n">' + cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '</div></div>' +
+        '<div class="cum-box"><div class="l">Accuracy</div><div class="n">' + esc(acc) + '</div></div>' +
         '<div class="cum-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
+        '<div class="cum-box"><div class="l">Profit</div><div class="n ' + profitCls + '">' + esc(profitStr) + '</div></div>' +
+        '<div class="cum-box"><div class="l">ROI</div><div class="n ' + roiCls + '">' + esc(roiStr) + '</div></div>' +
         '<div class="cum-box"><div class="l">Days</div><div class="n">' + days.length + '</div></div>' +
         '</div>';
       days.forEach(function (d) {

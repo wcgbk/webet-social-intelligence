@@ -138,14 +138,21 @@ exports.handler = async (event) => {
       return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NO_PRIVATE_KEY', message: e.message }) };
     }
 
-    // Always confirm demo creds by reading balance first.
-    const balance = await getBalance();
-    if (balance === null) {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: true, status: 'AUTH_FAILED', env: 'demo', message: 'Kalshi DEMO auth/balance failed — the stored keys may be production keys, not demo keys, or unset.' }) };
-    }
-
+    // Confirm demo creds by reading balance. Surface the RAW Kalshi response so we can tell a
+    // wrong-env key (401/403) apart from other failures.
+    const balRaw = await kdemo('GET', '/portfolio/balance');
     if (params.mode === 'verify') {
-      return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, env: 'demo', hardPinned: KALSHI_DEMO_BASE, balance, note: 'Demo credentials valid. No orders placed.' }) };
+      const bodySnippet = (() => { try { return JSON.stringify(balRaw.data).slice(0, 300); } catch (e) { return ''; } })();
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({
+        ok: balRaw.ok, env: 'demo', hardPinned: KALSHI_DEMO_BASE, kalshiStatus: balRaw.status,
+        balance: balRaw.ok ? { balance: (balRaw.data.balance || 0) / 100, portfolioValue: (balRaw.data.portfolio_value || 0) / 100 } : null,
+        kalshiBody: bodySnippet,
+        note: balRaw.ok ? 'Demo credentials valid. No orders placed.' : 'Demo auth failed — see kalshiStatus/kalshiBody. Likely a production key (Kalshi demo needs its own key).',
+      }) };
+    }
+    const balance = balRaw.ok ? { balance: (balRaw.data.balance || 0) / 100, portfolioValue: (balRaw.data.portfolio_value || 0) / 100 } : null;
+    if (balance === null) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: true, status: 'AUTH_FAILED', env: 'demo', kalshiStatus: balRaw.status, message: 'Kalshi DEMO auth/balance failed — the stored keys may be production keys, not demo keys, or unset.' }) };
     }
 
     // ── RUN: pull matched picks from the paper sim, place demo orders for new OPEN Kalshi entries ──

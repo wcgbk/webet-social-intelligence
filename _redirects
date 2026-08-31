@@ -26,4 +26,5 @@
 /live-picks   /live-picks/index.html   200
 /live-picks/  /live-picks/index.html   200
 /api/live-picks-data   /.netlify/functions/get-live-picks 200
+/api/live-picks-results /.netlify/functions/get-live-picks-results 200
 /api/live-ingest       /.netlify/functions/live-ingest    200

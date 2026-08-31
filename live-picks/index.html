@@ -103,6 +103,38 @@
     .empty, .loading { background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 2.25rem 1.25rem; text-align: center; color: var(--txt-m); font-size: .875rem; line-height: 1.6; }
     .empty-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .25rem; }
 
+    /* track record (expandable daily KPIs) */
+    .track { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; margin: 0 0 1rem; overflow: hidden; }
+    .track-head { width: 100%; display: flex; align-items: center; gap: .5rem; background: none; border: 0; cursor: pointer; font-family: var(--sans); padding: .7rem .875rem; text-align: left; }
+    .track-title { font-size: .8125rem; font-weight: 700; color: var(--olive); }
+    .track-sum { font-size: .75rem; font-weight: 600; color: var(--txt-m); margin-left: auto; }
+    .track-sum b { font-weight: 700; }
+    .track-sum b.pos { color: var(--green); } .track-sum b.neg { color: var(--red); }
+    .track-chev { font-size: .6rem; color: var(--txt-l); transition: transform .2s; }
+    .track.open .track-chev { transform: rotate(180deg); }
+    .track-body { padding: 0 .875rem .625rem; }
+    .track-cum { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .25rem 0 .5rem; }
+    .cum-box { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .625rem; padding: .5rem; text-align: center; }
+    .cum-box .l { font-size: .5625rem; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); font-weight: 600; }
+    .cum-box .n { font-size: 1.05rem; font-weight: 700; color: var(--olive); margin-top: 1px; }
+    .cum-box .n.pos { color: var(--green); } .cum-box .n.neg { color: var(--red); }
+    .day-row { width: 100%; display: flex; align-items: center; gap: .5rem; background: none; border: 0; border-top: 1px solid var(--border-lt); cursor: pointer; font-family: var(--sans); padding: .55rem .125rem; text-align: left; }
+    .day-row .chev { font-size: .55rem; color: var(--txt-l); width: 12px; transition: transform .2s; }
+    .day-row.open .chev { transform: rotate(90deg); }
+    .day-row .d { font-size: .8125rem; font-weight: 600; color: var(--olive); }
+    .day-row .rec { font-size: .75rem; color: var(--txt-m); }
+    .day-row .u { font-size: .8125rem; font-weight: 700; margin-left: auto; color: var(--txt-m); }
+    .day-row .u.pos { color: var(--green); } .day-row .u.neg { color: var(--red); }
+    .day-picks { padding: 0 0 .5rem 1.125rem; display: flex; flex-direction: column; gap: .3rem; }
+    .day-pick { display: flex; align-items: center; gap: .5rem; font-size: .78rem; }
+    .day-pick .pk { color: var(--olive); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .day-pick .lg { font-size: .58rem; color: var(--txt-l); border: 1px solid var(--border-lt); border-radius: 4px; padding: 0 4px; }
+    .day-pick .r { margin-left: auto; font-weight: 700; font-size: .64rem; padding: .05rem .35rem; border-radius: 4px; white-space: nowrap; }
+    .day-pick .r.win { color: var(--green); background: var(--green-light); }
+    .day-pick .r.loss { color: var(--red); background: var(--red-light); }
+    .day-pick .r.push { color: var(--txt-m); background: var(--off-white); }
+    .day-pick .r.open { color: var(--amber); background: var(--amber-light); }
+
     /* passcode gate */
     .gate { max-width: 340px; margin: 12vh auto 0; text-align: center; background: var(--white); border: 1px solid var(--border-lt); border-radius: 1rem; padding: 1.75rem 1.5rem; }
     body.embed .gate { margin-top: 6vh; }
@@ -138,6 +170,14 @@
       </div>
       <div class="meta-line" id="meta-line">Loading…</div>
       <div class="record" id="record" style="display:none;"></div>
+      <div class="track" id="track" style="display:none;">
+        <button class="track-head" onclick="toggleTrack()" aria-expanded="false">
+          <span class="track-title">Track Record</span>
+          <span class="track-sum" id="track-sum"></span>
+          <span class="track-chev">&#9662;</span>
+        </button>
+        <div class="track-body" id="track-body" hidden></div>
+      </div>
       <div class="grid" id="grid"></div>
       <footer>Internal use only · not for redistribution<br>Live Sportsbook Picks feed · updates automatically as each pick drops.</footer>
     </div>
@@ -146,7 +186,9 @@
   <script>
     var KEY_LS = 'live_picks_key';
     var API_URL = '/api/live-picks-data';
+    var RESULTS_URL = '/api/live-picks-results';
     var POLL_MS = 30000;
+    var trackData = null, dayCache = {}, resultsLoaded = false;
     var EMBED = /[?&]embed=1/.test(window.location.search) || (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
     if (EMBED) document.body.classList.add('embed');
     var DEMO = /[?&]demo=1/.test(window.location.search);
@@ -161,6 +203,23 @@
         { sport: 'ATP', event: 'Munar vs Atmane', pick: 'Atmane -3.5 Games', odds: '-105', units: 1.25, score: 42, label: 'MEDIUM', timeET: '1:00 PM ET', finalWL: null },
         { sport: 'MLB', event: 'Los Angeles Dodgers at Detroit Tigers', pick: 'LA Dodgers ML', odds: '-150', units: 1.5, score: 51, label: 'MEDIUM', timeET: '1:40 PM ET', finalWL: 'W' },
         { sport: 'MLB', event: 'Boston Red Sox at New York Yankees', pick: 'NY Yankees ML', odds: '+111', units: 1.0, score: 41, label: 'HIGH', timeET: '1:35 PM ET', finalWL: 'W' }
+      ]
+    };
+
+    var DEMO_RESULTS = {
+      cumulative: { w: 6, l: 2, p: 0, units: 4.0, graded: 8, count: 15 },
+      days: [
+        { date: '2026-08-31', w: 2, l: 0, p: 0, units: 2.75, graded: 2, count: 4 },
+        { date: '2026-08-30', w: 4, l: 2, p: 0, units: 1.25, graded: 6, count: 11 }
+      ]
+    };
+    var DEMO_DAY_PICKS = {
+      '2026-08-30': [
+        { sport: 'MLB', pick: 'NY Yankees ML', finalWL: 'W' },
+        { sport: 'MLB', pick: 'LA Dodgers ML', finalWL: 'W' },
+        { sport: 'MLB', pick: 'Cleveland -1.5', finalWL: 'W' },
+        { sport: 'ATP', pick: 'Atmane -3.5 Games', finalWL: 'L' },
+        { sport: 'MLB', pick: 'Padres ML', finalWL: 'L' }
       ]
     };
 
@@ -204,19 +263,15 @@
       }
       document.getElementById('meta-line').textContent = metaBits.join('  ·  ');
 
-      var rec = data.record || null;
+      var rec = data.record || { w: 0, l: 0, p: 0, units: 0, graded: 0 };
       var recEl = document.getElementById('record');
-      if (rec && rec.graded > 0) {
-        var uCls = rec.units > 0 ? 'pos' : (rec.units < 0 ? 'neg' : '');
-        var uStr = (rec.units > 0 ? '+' : '') + rec.units + 'u';
-        recEl.innerHTML =
-          '<div class="rec-box"><div class="l">Graded</div><div class="n">' + rec.w + '-' + rec.l + (rec.p ? '-' + rec.p : '') + '</div></div>' +
-          '<div class="rec-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
-          '<div class="rec-box"><div class="l">Open</div><div class="n">' + Math.max(0, (data.count || 0) - rec.graded) + '</div></div>';
-        recEl.style.display = 'grid';
-      } else {
-        recEl.style.display = 'none';
-      }
+      var uCls = rec.units > 0 ? 'pos' : (rec.units < 0 ? 'neg' : '');
+      var uStr = (rec.units > 0 ? '+' : '') + rec.units + 'u';
+      recEl.innerHTML =
+        '<div class="rec-box"><div class="l">Graded</div><div class="n">' + rec.w + '-' + rec.l + (rec.p ? '-' + rec.p : '') + '</div></div>' +
+        '<div class="rec-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
+        '<div class="rec-box"><div class="l">Open</div><div class="n">' + Math.max(0, (data.count || 0) - rec.graded) + '</div></div>';
+      recEl.style.display = 'grid';
 
       var grid = document.getElementById('grid');
       var sels = data.selections || [];
@@ -257,6 +312,93 @@
       firstRender = false;
     }
 
+    function shortDate(iso) {
+      try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' }); }
+      catch (e) { return iso; }
+    }
+    function uSpan(u) {
+      var cls = u > 0 ? 'pos' : (u < 0 ? 'neg' : '');
+      return '<span class="u ' + cls + '">' + (u > 0 ? '+' : '') + u + 'u</span>';
+    }
+
+    function renderTrack(res) {
+      trackData = res;
+      var days = (res && res.days) || [];
+      var cum = (res && res.cumulative) || { w: 0, l: 0, p: 0, units: 0 };
+      var trackEl = document.getElementById('track');
+      if (!days.length) { trackEl.style.display = 'none'; return; }
+      trackEl.style.display = 'block';
+
+      var uCls = cum.units > 0 ? 'pos' : (cum.units < 0 ? 'neg' : '');
+      var uStr = (cum.units > 0 ? '+' : '') + cum.units + 'u';
+      document.getElementById('track-sum').innerHTML =
+        cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '  &middot;  <b class="' + uCls + '">' + esc(uStr) + '</b>';
+
+      var html = '<div class="track-cum">' +
+        '<div class="cum-box"><div class="l">Record</div><div class="n">' + cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '</div></div>' +
+        '<div class="cum-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
+        '<div class="cum-box"><div class="l">Days</div><div class="n">' + days.length + '</div></div>' +
+        '</div>';
+      days.forEach(function (d) {
+        html += '<button class="day-row" id="dayrow-' + esc(d.date) + '" onclick="toggleDay(\'' + esc(d.date) + '\')">' +
+          '<span class="chev">&#9656;</span>' +
+          '<span class="d">' + esc(shortDate(d.date)) + '</span>' +
+          '<span class="rec">' + d.w + '-' + d.l + (d.p ? '-' + d.p : '') + '</span>' +
+          uSpan(d.units) +
+        '</button>' +
+        '<div class="day-picks" id="daypicks-' + esc(d.date) + '" hidden></div>';
+      });
+      document.getElementById('track-body').innerHTML = html;
+    }
+
+    function toggleTrack() {
+      var track = document.getElementById('track');
+      var body = document.getElementById('track-body');
+      if (body.hasAttribute('hidden')) {
+        body.removeAttribute('hidden'); track.classList.add('open');
+        var k = null; try { k = localStorage.getItem(KEY_LS); } catch (e) {}
+        loadResults(k); // refresh the running total when opened
+      } else {
+        body.setAttribute('hidden', ''); track.classList.remove('open');
+      }
+    }
+
+    function toggleDay(date) {
+      var row = document.getElementById('dayrow-' + date);
+      var box = document.getElementById('daypicks-' + date);
+      if (!box || !row) return;
+      if (!box.hasAttribute('hidden')) { box.setAttribute('hidden', ''); row.classList.remove('open'); return; }
+      box.removeAttribute('hidden'); row.classList.add('open');
+      if (dayCache[date]) { box.innerHTML = dayCache[date]; return; }
+      box.innerHTML = '<div class="day-pick" style="color:var(--txt-l)">Loading…</div>';
+      var paint = function (sels) {
+        var out = (sels || []).map(function (s) {
+          var r = String(s.finalWL || s.result || '').toUpperCase();
+          var rc = (r === 'W' || r === 'WIN') ? '<span class="r win">W</span>'
+            : (r === 'L' || r === 'LOSS' || r === 'LOSE') ? '<span class="r loss">L</span>'
+            : (r === 'P' || r === 'PUSH') ? '<span class="r push">P</span>'
+            : '<span class="r open">OPEN</span>';
+          return '<div class="day-pick"><span class="pk">' + esc(s.pick) + '</span>' + (s.sport ? '<span class="lg">' + esc(s.sport) + '</span>' : '') + rc + '</div>';
+        }).join('') || '<div class="day-pick" style="color:var(--txt-l)">No picks.</div>';
+        dayCache[date] = out; box.innerHTML = out;
+      };
+      if (DEMO) { paint((DEMO_DAY_PICKS && DEMO_DAY_PICKS[date]) || []); return; }
+      var k = null; try { k = localStorage.getItem(KEY_LS); } catch (e) {}
+      fetch(API_URL + '?key=' + encodeURIComponent(k || '') + '&date=' + encodeURIComponent(date), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { paint(j && j.selections ? j.selections : []); })
+        .catch(function () { box.innerHTML = '<div class="day-pick" style="color:var(--red)">Failed to load.</div>'; });
+    }
+
+    function loadResults(key) {
+      if (DEMO) { renderTrack(DEMO_RESULTS); return; }
+      if (!key) return;
+      fetch(RESULTS_URL + '?key=' + encodeURIComponent(key), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (res) { if (res && !res.error) renderTrack(res); })
+        .catch(function () {});
+    }
+
     function load(key) {
       fetch(API_URL + '?key=' + encodeURIComponent(key), { cache: 'no-store' })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
@@ -264,11 +406,12 @@
           if (res.status === 401) { try { localStorage.removeItem(KEY_LS); } catch (e) {} showGate('Wrong key.'); return; }
           if (res.status === 503) { showGate('Feed not configured yet.'); return; }
           render(res.j);
+          if (!resultsLoaded) { resultsLoaded = true; loadResults(key); }
         })
         .catch(function () { showGate('Network error — try again.'); });
     }
 
-    if (DEMO) { render(DEMO_DATA); }
+    if (DEMO) { render(DEMO_DATA); loadResults(); }
     else {
     var saved = null;
     try { saved = localStorage.getItem(KEY_LS); } catch (e) {}

@@ -260,16 +260,19 @@
       var bits = [];
       bits.push(data.dateFormatted || data.date || '');
       if (data.count != null) bits.push(data.count + ' pick' + (data.count === 1 ? '' : 's'));
-      if (data.fetchedAt) {
-        var ageMin = Math.round((Date.now() - new Date(data.fetchedAt).getTime()) / 60000);
+      // "updated" reflects the last actual push to the site (receivedAt), not the
+      // bot's TSP fetch time — which can be stale when it re-posts a settlement.
+      var upd = data.receivedAt || data.fetchedAt;
+      if (upd) {
+        var ageMin = Math.round((Date.now() - new Date(upd).getTime()) / 60000);
         bits.push('updated ' + (ageMin <= 1 ? 'just now' : ageMin + ' min ago'));
       }
       document.getElementById('daily-sub').textContent = ' - ' + bits.join('  ·  ');
       document.getElementById('daily').style.display = 'block';
 
       // Refresh the overall + daily totals whenever the bot pushes a fresh card.
-      if (data.fetchedAt && data.fetchedAt !== lastFetchedAt) {
-        lastFetchedAt = data.fetchedAt;
+      if (upd && upd !== lastFetchedAt) {
+        lastFetchedAt = upd;
         var rk = null; try { rk = localStorage.getItem(KEY_LS); } catch (e) {}
         loadResults(rk);
       }

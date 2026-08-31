@@ -19,8 +19,9 @@
 //   * It contains NO order-placement code and never calls any authenticated Kalshi endpoint.
 //     Kalshi market data is read from the PUBLIC (unsigned) API; if that fails, it falls back to book.
 //
-// Auth: `?key=` must equal env KALSHI_DEMO_KEY (falls back to PICKS_SECRET_KEY so no new env var is
-// strictly required). The picks it surfaces are premium, so the endpoint fails closed if neither set.
+// Auth: `?key=` must equal env KALSHI_DEMO_KEY, else LIVE_PICKS_KEY (so the same key that unlocks
+// /live-picks also unlocks this demo — Ben's choice), else PICKS_SECRET_KEY. The picks it surfaces
+// are premium, so the endpoint fails closed if none of those is set.
 // Storage: Netlify Blobs REST API (the SDK is unavailable on git-based deploys of this site).
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
@@ -258,9 +259,9 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
 
   const params = event.queryStringParameters || {};
-  const gate = process.env.KALSHI_DEMO_KEY || process.env.PICKS_SECRET_KEY;
+  const gate = process.env.KALSHI_DEMO_KEY || process.env.LIVE_PICKS_KEY || process.env.PICKS_SECRET_KEY;
   if (!gate) {
-    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NOT_CONFIGURED', message: 'KALSHI_DEMO_KEY (or PICKS_SECRET_KEY) is not set.' }) };
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NOT_CONFIGURED', message: 'No gate key set (KALSHI_DEMO_KEY / LIVE_PICKS_KEY / PICKS_SECRET_KEY).' }) };
   }
   if (params.key !== gate) {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: true, message: 'Unauthorized' }) };

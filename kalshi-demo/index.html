@@ -143,7 +143,7 @@
   <div class="gate" id="gate" hidden>
     <div class="box">
       <h2>Internal access</h2>
-      <p>This is an internal betting-testing tool. Enter the demo key to continue.</p>
+      <p>This is an internal betting-testing tool. Enter your live-picks key to continue.</p>
       <div class="err" id="gateErr"></div>
       <input type="password" id="gateInput" placeholder="Demo key" autocomplete="off" />
       <button class="btn" id="gateBtn">Unlock</button>
@@ -282,7 +282,9 @@
     }
 
     // ── data ──
-    function getKey() { try { return localStorage.getItem(KEY_STORE) || ''; } catch (e) { return ''; } }
+    // Falls back to the live-picks key so this demo auto-unlocks with the same key (Ben's choice).
+    // Only ever WRITES kalshi_demo_key — never touches live_picks_key, so the live feed is unaffected.
+    function getKey() { try { return localStorage.getItem(KEY_STORE) || localStorage.getItem('live_picks_key') || ''; } catch (e) { return ''; } }
     function setKey(k) { try { localStorage.setItem(KEY_STORE, k); } catch (e) {} }
 
     async function load() {

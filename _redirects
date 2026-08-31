@@ -28,3 +28,7 @@
 /api/live-picks-data   /.netlify/functions/get-live-picks 200
 /api/live-picks-results /.netlify/functions/get-live-picks-results 200
 /api/live-ingest       /.netlify/functions/live-ingest    200
+
+# Internal Kalshi auto-bet DEMO (paper only, noindexed, key-gated). Isolated from the live feed.
+/kalshi-demo   /kalshi-demo/index.html  200
+/kalshi-demo/  /kalshi-demo/index.html  200

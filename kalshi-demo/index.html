@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- INTERNAL demo. Never index, never make public. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <title>WeBetAI - Social Intelligence | Kalshi Auto-Bet Demo (Internal)</title>
+  <meta name="description" content="Internal paper-trading demo: simulates a Kalshi auto-bet on live sportsbook picks. No real money." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/kalshi-demo" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Kalshi Auto-Bet Demo (Internal)" />
+  <meta property="og:description" content="Internal paper-trading demo: simulates a Kalshi auto-bet on live sportsbook picks. No real money." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Kalshi Auto-Bet Demo (Internal)" />
+  <meta name="twitter:description" content="Internal paper-trading demo: simulates a Kalshi auto-bet on live sportsbook picks. No real money." />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.1/600.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --red: #c0392b;
+      --red-light: #fdecea;
+      --red-border: #f5b7b1;
+      --amber: #b9770a;
+      --amber-light: #fdf3e3;
+      --amber-border: #f0d9a8;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --sans: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      --mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--txt-b); -webkit-font-smoothing: antialiased; min-height: 100vh; min-height: 100dvh; }
+
+    .main { max-width: 760px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+
+    /* DEMO banner */
+    .demo-banner {
+      display: flex; align-items: flex-start; gap: .55rem;
+      background: var(--amber-light); border: 1px solid var(--amber-border);
+      border-radius: .75rem; padding: .7rem .85rem; margin-bottom: .9rem;
+    }
+    .demo-banner .ic { color: var(--amber); font-size: 1rem; line-height: 1.35; flex: 0 0 auto; }
+    .demo-banner p { font-size: .78rem; color: #7a5406; line-height: 1.5; }
+    .demo-banner b { color: var(--amber); }
+
+    /* header */
+    .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: .35rem; }
+    .page-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; color: var(--olive); display: flex; align-items: center; gap: .5rem; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(46,125,50,.4); animation: pulse 1.6s ease-in-out infinite; flex: 0 0 auto; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(46,125,50,.4); } 50% { box-shadow: 0 0 0 5px rgba(46,125,50,0); } }
+    .private-tag { font-size: .625rem; font-weight: 700; letter-spacing: .08em; color: var(--amber); background: var(--amber-light); border: 1px solid var(--amber-border); border-radius: 6px; padding: 2px 7px; text-transform: uppercase; }
+    .head-actions { display: flex; align-items: center; gap: .5rem; }
+    .btn { font-family: var(--sans); font-size: .8125rem; font-weight: 600; cursor: pointer; background: var(--teal); color: #fff; border: none; border-radius: .55rem; padding: .5rem .85rem; transition: opacity .15s; }
+    .btn:hover { opacity: .9; }
+
+    .sub { color: var(--txt-m); font-size: .8125rem; line-height: 1.5; margin: 0 0 .5rem; }
+    .meta-line { color: var(--txt-l); font-size: .75rem; margin: 0 0 .9rem; display: flex; flex-wrap: wrap; gap: .15rem .75rem; }
+    .meta-line b { color: var(--txt-m); font-weight: 600; }
+
+    /* KPI row */
+    .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem; margin: 0 0 1rem; }
+    .kpi { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; padding: .55rem .5rem; text-align: center; }
+    .kpi .l { font-size: .5625rem; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); font-weight: 600; }
+    .kpi .n { font-size: 1.15rem; font-weight: 700; color: var(--olive); margin-top: 1px; }
+    .kpi .n.pos { color: var(--green); } .kpi .n.neg { color: var(--red); }
+    .kpi .s { font-size: .5625rem; color: var(--txt-l); margin-top: 1px; line-height: 1.3; }
+
+    .section-label { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-l); margin: 0 0 .5rem .1rem; }
+
+    /* cards — slim + wide, alpha-consistent */
+    .grid { display: flex; flex-direction: column; gap: .5rem; }
+    .pick-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; padding: .75rem .875rem; display: flex; align-items: center; gap: .875rem; }
+    .pc-main { flex: 1 1 auto; min-width: 0; }
+    .pc-top { display: flex; align-items: center; gap: .35rem; margin-bottom: .25rem; flex-wrap: wrap; }
+    .sport-tag { font-size: .625rem; font-weight: 700; letter-spacing: .02em; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 5px; padding: .1rem .4rem; text-transform: uppercase; }
+    .route { font-size: .5625rem; font-weight: 700; letter-spacing: .03em; border-radius: 5px; padding: .1rem .4rem; text-transform: uppercase; }
+    .route.kalshi { color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); }
+    .route.book { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
+    .result { font-size: .5625rem; font-weight: 700; letter-spacing: .03em; border-radius: 5px; padding: .1rem .4rem; text-transform: uppercase; white-space: nowrap; }
+    .result.win { color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); }
+    .result.loss { color: var(--red); background: var(--red-light); border: 1px solid var(--red-border); }
+    .result.push { color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt); }
+    .result.open { color: var(--amber); background: var(--amber-light); border: 1px solid var(--amber-border); }
+    .pc-pick { font-size: .9375rem; font-weight: 700; color: var(--olive); line-height: 1.25; }
+    .pc-pick .odds-in { font-size: .8125rem; font-weight: 600; color: var(--txt-m); margin-left: .3rem; }
+    .pc-event { font-size: .75rem; color: var(--txt-m); margin-top: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pc-route { font-family: var(--mono); font-size: .6875rem; color: var(--txt-m); margin-top: .4rem; line-height: 1.45; word-break: break-word; }
+    .pc-route .sub { color: var(--txt-l); }
+    .pc-right { display: flex; flex-direction: column; align-items: flex-end; gap: .15rem; flex: 0 0 auto; text-align: right; }
+    .pnl { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--txt-m); line-height: 1.1; }
+    .pnl.pos { color: var(--green); } .pnl.neg { color: var(--red); }
+    .pnl-sub { font-family: var(--mono); font-size: .625rem; color: var(--txt-l); }
+
+    .empty, .loading { background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 2.25rem 1.25rem; text-align: center; color: var(--txt-m); font-size: .875rem; line-height: 1.6; }
+    .empty-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .25rem; }
+
+    .foot { margin-top: 1.25rem; font-size: .6875rem; color: var(--txt-l); line-height: 1.6; border-top: 1px solid var(--border-lt); padding-top: .85rem; }
+
+    /* gate */
+    .gate { position: fixed; inset: 0; background: rgba(26,46,26,.55); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+    .gate .box { background: var(--white); border: 1px solid var(--border-lt); border-radius: 1rem; padding: 1.75rem 1.5rem; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(26,46,26,.18); }
+    .gate h2 { font-size: 1.125rem; margin-bottom: .4rem; color: var(--olive); }
+    .gate p { color: var(--txt-m); font-size: .8125rem; margin-bottom: 1rem; line-height: 1.5; }
+    .gate input { width: 100%; padding: .7rem .75rem; border-radius: .55rem; border: 1px solid var(--border-lt); background: var(--off-white); color: var(--txt-b); font-family: var(--mono); font-size: .875rem; margin-bottom: .75rem; }
+    .gate input:focus { outline: none; border-color: var(--teal); }
+    .gate .err { color: var(--red); font-size: .75rem; min-height: 15px; margin-bottom: .5rem; }
+    .gate .btn { width: 100%; padding: .7rem; }
+
+    @media (max-width: 560px) {
+      .kpis { grid-template-columns: repeat(3, 1fr); }
+      .kpi:nth-child(4), .kpi:nth-child(5) { grid-column: span 1; }
+    }
+    @media (max-width: 400px) {
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .pick-card { align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <!-- KEY GATE -->
+  <div class="gate" id="gate" hidden>
+    <div class="box">
+      <h2>Internal access</h2>
+      <p>This is an internal betting-testing tool. Enter the demo key to continue.</p>
+      <div class="err" id="gateErr"></div>
+      <input type="password" id="gateInput" placeholder="Demo key" autocomplete="off" />
+      <button class="btn" id="gateBtn">Unlock</button>
+    </div>
+  </div>
+
+  <div class="main" id="app" hidden>
+    <div class="demo-banner">
+      <span class="ic">&#9888;</span>
+      <p><b>INTERNAL DEMO &mdash; paper trading only.</b> No real money is used and <b>no live orders are ever placed</b>.
+      This tool reads the live picks feed and simulates what a Kalshi auto-bet would do. It never modifies the live
+      feed, the public site, the dashboard, or the bot's duties.</p>
+    </div>
+
+    <div class="page-head">
+      <div class="page-title"><span class="live-dot"></span> Kalshi Auto-Bet Demo <span class="private-tag">Paper</span></div>
+      <div class="head-actions"><button class="btn" id="runBtn">Run now</button></div>
+    </div>
+    <p class="sub">Fed read-only from the live sportsbook picks feed. Each pick is matched to a Kalshi market for a
+    dry-run entry; picks with no Kalshi market fall back to a book-odds paper bet. Paper P/L updates as picks settle.</p>
+    <div class="meta-line">
+      <span id="feedStatus">Loading&hellip;</span>
+      <span>Date: <b id="mDate">&mdash;</b></span>
+      <span>Feed received: <b id="mFeed">&mdash;</b></span>
+      <span>Last run: <b id="mRun">&mdash;</b></span>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="section-label">Simulated auto-bets</div>
+    <div class="grid" id="entries"></div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+
+  <script>
+    // ── config ──
+    var qs = new URLSearchParams(location.search);
+    var DEMO_MODE = qs.get('demo') === '1';               // client-only sample data, no backend
+    var RUN_URL = '/.netlify/functions/kalshi-demo-run';  // called directly (no redirect needed)
+    var POLL_MS = 30000;
+    var KEY_STORE = 'kalshi_demo_key';
+    var pollTimer = null;
+
+    // ── sample data for ?demo=1 (local UI preview, no backend) — defined before init uses it ──
+    var SAMPLE = {
+      mode: 'DEMO', source: 'Live Sportsbook Picks (Grok feed)', date: '2026-08-31',
+      feedReceivedAt: new Date(Date.now() - 3600000).toISOString(), ranAt: new Date().toISOString(),
+      dollarPerUnit: 150, matchDeadlineHit: false,
+      kpis: { total: 4, kalshiEntries: 2, bookEntries: 2, graded: 2, wins: 1, losses: 1, pushes: 0, open: 2, winRate: 50, staked: 452, paperPnl: 61.4, roi: 13.6, units: 0.4 },
+      entries: [
+        { sport: 'NBA', event: 'Celtics vs Knicks', pick: 'Celtics ML', odds: '-140', units: 1, stake: 150, result: null, pnl: null, entry: { mode: 'kalshi', ticker: 'KXNBAGAME-26AUG31BOSNYK-BOS', side: 'yes', entryPrice: 0.59, contracts: 254, cost: 149.86, kalshiLine: null } },
+        { sport: 'NHL', event: 'Bruins vs Rangers', pick: 'Over 6.5', odds: '+105', units: 1, stake: 150, result: 'W', pnl: 61.40, entry: { mode: 'kalshi', ticker: 'KXNHLTOTAL-26AUG31BOSNYR-6', side: 'yes', entryPrice: 0.48, contracts: 312, cost: 149.76, kalshiLine: 6.5 } },
+        { sport: 'MLB', event: 'Dodgers vs Padres', pick: 'Under 8', odds: '-115', units: 1, stake: 150, result: 'L', pnl: -150, entry: { mode: 'book', entryImplied: 53.5, bookProfit: 0.87, stake: 150, note: 'no Kalshi market (integer total) — book paper' } },
+        { sport: 'MLB', event: 'Yankees vs Astros', pick: 'Yankees -1.5', odds: '+120', units: 0.5, stake: 75, result: null, pnl: null, entry: { mode: 'book', entryImplied: 45.5, bookProfit: 1.2, stake: 75, note: 'no valid Kalshi price — book paper' } }
+      ]
+    };
+
+    // ── DOM helpers ──
+    function $(id) { return document.getElementById(id); }
+    function money(n) { if (n == null) return '—'; var s = n < 0 ? '-' : (n > 0 ? '+' : ''); return s + '$' + Math.abs(n).toFixed(2); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+    function timeShort(iso) { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET'; } catch (e) { return '—'; } }
+
+    // ── render ──
+    function render(log) {
+      if (!log || log.error) {
+        $('feedStatus').textContent = (log && log.message) ? log.message : 'No data';
+        $('kpis').innerHTML = '';
+        $('entries').innerHTML = '<div class="empty"><div class="empty-title">Waiting for picks</div>Once the bot drops today\'s card into the live feed, the demo auto-bet fires here.</div>';
+        $('foot').innerHTML = '';
+        return;
+      }
+      var k = log.kpis || {};
+      $('mDate').textContent = log.date || '—';
+      $('mFeed').textContent = timeShort(log.feedReceivedAt);
+      $('mRun').textContent = timeShort(log.ranAt);
+      $('feedStatus').textContent = (log.entries && log.entries.length) ? ('Simulating ' + log.entries.length + ' pick' + (log.entries.length === 1 ? '' : 's')) : 'No picks yet';
+
+      var pnlCls = (k.paperPnl > 0) ? 'pos' : (k.paperPnl < 0 ? 'neg' : '');
+      var roiCls = (k.roi > 0) ? 'pos' : (k.roi < 0 ? 'neg' : '');
+      var unitCls = (k.units > 0) ? 'pos' : (k.units < 0 ? 'neg' : '');
+      $('kpis').innerHTML = [
+        kpi('Paper P/L', money(k.paperPnl), pnlCls, '$' + (log.dollarPerUnit || 150) + '/unit'),
+        kpi('ROI', k.roi == null ? '—' : (k.roi + '%'), roiCls, 'on $' + (k.staked != null ? k.staked.toFixed(0) : '0')),
+        kpi('Record', (k.wins || 0) + '-' + (k.losses || 0) + (k.pushes ? '-' + k.pushes : ''), '', (k.winRate != null ? k.winRate + '% win' : 'ungraded')),
+        kpi('Units', (k.units > 0 ? '+' : '') + (k.units != null ? k.units.toFixed(2) : '0'), unitCls, (k.open || 0) + ' open'),
+        kpi('Routing', (k.kalshiEntries || 0) + '/' + (k.bookEntries || 0), '', 'Kalshi / book')
+      ].join('');
+
+      var entries = log.entries || [];
+      $('entries').innerHTML = entries.length ? entries.map(entryCard).join('')
+        : '<div class="empty"><div class="empty-title">Waiting for picks</div>Once the bot drops today\'s card into the live feed, the demo auto-bet fires here.</div>';
+
+      var notes = ['Source: ' + esc(log.source || 'live feed') + '.'];
+      if (log.matchDeadlineHit) notes.push('Some picks used book fallback due to the per-run Kalshi lookup cap.');
+      notes.push('Dry-run entries price at Kalshi\'s public ask; book entries price at the pick\'s stated odds. No orders are placed.');
+      $('foot').innerHTML = notes.join(' ');
+    }
+
+    function kpi(label, num, cls, note) {
+      return '<div class="kpi"><div class="l">' + esc(label) + '</div><div class="n ' + (cls || '') + '">' + esc(num) + '</div><div class="s">' + esc(note || '') + '</div></div>';
+    }
+
+    function entryCard(e) {
+      var en = e.entry || {};
+      var resultChip = e.result === 'W' ? '<span class="result win">Won</span>'
+        : e.result === 'L' ? '<span class="result loss">Lost</span>'
+        : e.result === 'P' ? '<span class="result push">Push</span>'
+        : '<span class="result open">Open</span>';
+      var routeChip = en.mode === 'kalshi' ? '<span class="route kalshi">Kalshi dry-run</span>' : '<span class="route book">Book paper</span>';
+
+      var route;
+      if (en.mode === 'kalshi') {
+        route = '<b>' + esc(en.ticker || '') + '</b> &middot; ' + esc((en.side || '').toUpperCase())
+          + ' @ ' + Math.round((en.entryPrice || 0) * 100) + '¢ &middot; ' + esc(en.contracts || 0) + ' contracts'
+          + (en.kalshiLine != null ? ' &middot; line ' + esc(en.kalshiLine) : '')
+          + '<br><span class="sub">would place order &middot; demo never executes</span>';
+      } else {
+        route = 'Book paper @ ' + esc(e.odds || '—') + ' &middot; implied ' + (en.entryImplied != null ? en.entryImplied + '%' : '—')
+          + '<br><span class="sub">' + esc(en.note || '') + '</span>';
+      }
+
+      var amt = e.pnl == null ? '—' : money(e.pnl);
+      var amtCls = e.pnl == null ? '' : (e.pnl > 0 ? 'pos' : (e.pnl < 0 ? 'neg' : ''));
+      var staked = en.mode === 'kalshi' ? ('cost $' + (en.cost != null ? en.cost.toFixed(0) : '0')) : ('risk $' + (e.stake != null ? e.stake.toFixed(0) : '0'));
+
+      return '<div class="pick-card"><div class="pc-main">'
+        + '<div class="pc-top"><span class="sport-tag">' + esc(e.sport || '—') + '</span>' + routeChip + resultChip + '</div>'
+        + '<div class="pc-pick">' + esc(e.pick || '') + '<span class="odds-in">' + esc(e.odds || '') + '</span></div>'
+        + '<div class="pc-event">' + esc(e.event || '') + '</div>'
+        + '<div class="pc-route">' + route + '</div>'
+        + '</div>'
+        + '<div class="pc-right"><div class="pnl ' + amtCls + '">' + amt + '</div><div class="pnl-sub">' + staked + '</div></div>'
+        + '</div>';
+    }
+
+    // ── data ──
+    function getKey() { try { return localStorage.getItem(KEY_STORE) || ''; } catch (e) { return ''; } }
+    function setKey(k) { try { localStorage.setItem(KEY_STORE, k); } catch (e) {} }
+
+    async function load() {
+      if (DEMO_MODE) { render(SAMPLE); return; }
+      var key = getKey();
+      if (!key) { showGate(); return; }
+      try {
+        var r = await fetch(RUN_URL + '?key=' + encodeURIComponent(key) + '&_=' + Date.now());
+        if (r.status === 401) { setKey(''); showGate('Wrong key — try again.'); return; }
+        var data = await r.json();
+        render(data);
+      } catch (e) {
+        $('feedStatus').textContent = 'Connection error — retrying…';
+      }
+    }
+
+    function startPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = setInterval(load, POLL_MS); }
+
+    function showGate(msg) {
+      $('app').hidden = true; $('gate').hidden = false;
+      if (msg) $('gateErr').textContent = msg;
+      $('gateInput').focus();
+    }
+    function unlock() {
+      var v = $('gateInput').value.trim();
+      if (!v) { $('gateErr').textContent = 'Enter a key.'; return; }
+      setKey(v); $('gate').hidden = true; $('app').hidden = false;
+      load(); startPolling();
+    }
+
+    // ── init ──
+    if (DEMO_MODE) {
+      $('app').hidden = false;
+      load();
+    } else if (getKey()) {
+      $('app').hidden = false;
+      load(); startPolling();
+    } else {
+      showGate();
+    }
+    $('gateBtn').addEventListener('click', unlock);
+    $('gateInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') unlock(); });
+    $('runBtn').addEventListener('click', function () { $('feedStatus').textContent = 'Running…'; load(); });
+  </script>
+</body>
+</html>

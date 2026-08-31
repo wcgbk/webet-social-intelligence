@@ -75,11 +75,11 @@ function sign(ts, method, path, pem) {
   }).toString('base64');
 }
 
-async function kdemo(method, path, body) {
+async function kdemo(method, path, body, keyIdOverride) {
   const pem = await privKey();
   const ts = Date.now().toString();
   const headers = {
-    'KALSHI-ACCESS-KEY': DEMO_API_KEY,
+    'KALSHI-ACCESS-KEY': keyIdOverride || DEMO_API_KEY,
     'KALSHI-ACCESS-TIMESTAMP': ts,
     'KALSHI-ACCESS-SIGNATURE': sign(ts, method, path, pem),
     'Content-Type': 'application/json',
@@ -164,7 +164,8 @@ exports.handler = async (event) => {
 
     // Confirm demo creds by reading balance. Surface the RAW Kalshi response so we can tell a
     // wrong-env key (401/403) apart from other failures.
-    const balRaw = await kdemo('GET', '/portfolio/balance');
+    // ?testKeyId=<id> lets us diagnose whether a specific key ID authenticates on demo (verify only).
+    const balRaw = await kdemo('GET', '/portfolio/balance', null, params.mode === 'verify' ? params.testKeyId : null);
     if (params.mode === 'verify') {
       const bodySnippet = (() => { try { return JSON.stringify(balRaw.data).slice(0, 300); } catch (e) { return ''; } })();
       // Report EXACTLY what Kalshi creds are stored (booleans + last4 only, never secret values).

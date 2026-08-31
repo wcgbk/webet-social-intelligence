@@ -103,18 +103,16 @@
     .empty, .loading { background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 2.25rem 1.25rem; text-align: center; color: var(--txt-m); font-size: .875rem; line-height: 1.6; }
     .empty-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .25rem; }
 
-    /* track record (expandable daily KPIs) */
-    .track { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; margin: 0 0 1rem; overflow: hidden; }
-    .track-head { width: 100%; display: flex; align-items: center; gap: .5rem; background: none; border: 0; cursor: pointer; font-family: var(--sans); padding: .7rem .875rem; text-align: left; }
-    .track-title { font-size: .8125rem; font-weight: 700; color: var(--olive); }
-    .track-sum { font-size: .75rem; font-weight: 600; color: var(--txt-m); margin-left: auto; }
-    .track-sum b { font-weight: 700; }
-    .track-sum b.pos { color: var(--green); } .track-sum b.neg { color: var(--red); }
-    .track-chev { font-size: .6rem; color: var(--txt-l); transition: transform .2s; }
-    .track.open .track-chev { transform: rotate(180deg); }
-    .track-body { padding: 0 .875rem .625rem; }
-    .track-unit-note { text-align: center; color: var(--green); font-weight: 700; font-size: .8125rem; margin: .45rem 0 .1rem; }
-    .track-cum { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .25rem 0 .5rem; }
+    /* overall track record (always visible) + daily (expandable per-day) */
+    .overall { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; margin: 0 0 .75rem; padding: .7rem .875rem .75rem; }
+    .overall-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+    .overall-title { font-size: .8125rem; font-weight: 700; color: var(--olive); }
+    .overall-unit { font-size: .8125rem; font-weight: 700; color: var(--green); white-space: nowrap; }
+    .daily { background: var(--white); border: 1px solid var(--border-lt); border-radius: .75rem; margin: 0 0 1rem; padding: .7rem .875rem .35rem; }
+    .daily-head { font-size: .8125rem; margin-bottom: .1rem; }
+    .daily-head .dh-label { font-weight: 700; color: var(--olive); }
+    .daily-head .dh-sub { font-weight: 500; color: var(--txt-m); }
+    .track-cum { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .5rem 0 0; }
     .cum-box { background: var(--off-white); border: 1px solid var(--border-lt); border-radius: .625rem; padding: .5rem; text-align: center; }
     .cum-box .l { font-size: .5625rem; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); font-weight: 600; }
     .cum-box .n { font-size: 1.05rem; font-weight: 700; color: var(--olive); margin-top: 1px; }
@@ -127,6 +125,7 @@
     .day-row .u { font-size: .8125rem; font-weight: 700; margin-left: auto; color: var(--txt-m); }
     .day-row .u.pos { color: var(--green); } .day-row .u.neg { color: var(--red); }
     .day-picks { padding: 0 0 .5rem 1.125rem; display: flex; flex-direction: column; gap: .3rem; }
+    .day-picks[hidden] { display: none; }
     .day-pick { display: flex; align-items: center; gap: .5rem; font-size: .78rem; }
     .day-pick .pk { color: var(--olive); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .day-pick .lg { font-size: .58rem; color: var(--txt-l); border: 1px solid var(--border-lt); border-radius: 4px; padding: 0 4px; }
@@ -169,15 +168,16 @@
       <div class="page-head">
         <div class="page-title"><span class="live-dot"></span>Premium Live Picks <span class="private-tag">PRIVATE</span></div>
       </div>
-      <div class="meta-line" id="meta-line">Loading…</div>
-      <div class="record" id="record" style="display:none;"></div>
-      <div class="track" id="track" style="display:none;">
-        <button class="track-head" onclick="toggleTrack()" aria-expanded="false">
-          <span class="track-title">Track Record</span>
-          <span class="track-sum" id="track-sum"></span>
-          <span class="track-chev">&#9662;</span>
-        </button>
-        <div class="track-body" id="track-body" hidden></div>
+      <div class="overall" id="overall" style="display:none;">
+        <div class="overall-head">
+          <span class="overall-title">Track Record</span>
+          <span class="overall-unit" id="overall-unit"></span>
+        </div>
+        <div class="track-cum" id="overall-cum"></div>
+      </div>
+      <div class="daily" id="daily" style="display:none;">
+        <div class="daily-head"><span class="dh-label">Daily Track Record</span><span class="dh-sub" id="daily-sub"></span></div>
+        <div class="daily-rows" id="daily-rows"></div>
       </div>
       <div class="grid" id="grid"></div>
       <footer>Internal use only · not for redistribution<br>Live Sportsbook Picks feed · updates automatically as each pick drops.</footer>
@@ -189,7 +189,7 @@
     var API_URL = '/api/live-picks-data';
     var RESULTS_URL = '/api/live-picks-results';
     var POLL_MS = 30000;
-    var trackData = null, dayCache = {}, resultsLoaded = false;
+    var trackData = null, dayCache = {}, lastFetchedAt = null;
     var DOLLAR_PER_UNIT = 150;
     var EMBED = /[?&]embed=1/.test(window.location.search) || (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
     if (EMBED) document.body.classList.add('embed');
@@ -256,24 +256,23 @@
       document.getElementById('gate').style.display = 'none';
       document.getElementById('app').style.display = 'block';
 
-      var metaBits = [];
-      metaBits.push(esc(data.dateFormatted || data.date || ''));
-      if (data.count != null) metaBits.push(data.count + ' pick' + (data.count === 1 ? '' : 's'));
+      // Daily Track Record header: — <date> · <n picks> · updated <ago>
+      var bits = [];
+      bits.push(data.dateFormatted || data.date || '');
+      if (data.count != null) bits.push(data.count + ' pick' + (data.count === 1 ? '' : 's'));
       if (data.fetchedAt) {
         var ageMin = Math.round((Date.now() - new Date(data.fetchedAt).getTime()) / 60000);
-        metaBits.push('updated ' + (ageMin <= 1 ? 'just now' : ageMin + ' min ago'));
+        bits.push('updated ' + (ageMin <= 1 ? 'just now' : ageMin + ' min ago'));
       }
-      document.getElementById('meta-line').textContent = metaBits.join('  ·  ');
+      document.getElementById('daily-sub').textContent = ' - ' + bits.join('  ·  ');
+      document.getElementById('daily').style.display = 'block';
 
-      var rec = data.record || { w: 0, l: 0, p: 0, units: 0, graded: 0 };
-      var recEl = document.getElementById('record');
-      var uCls = rec.units > 0 ? 'pos' : (rec.units < 0 ? 'neg' : '');
-      var uStr = (rec.units > 0 ? '+' : '') + rec.units + 'u';
-      recEl.innerHTML =
-        '<div class="rec-box"><div class="l">Graded</div><div class="n">' + rec.w + '-' + rec.l + (rec.p ? '-' + rec.p : '') + '</div></div>' +
-        '<div class="rec-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
-        '<div class="rec-box"><div class="l">Open</div><div class="n">' + Math.max(0, (data.count || 0) - rec.graded) + '</div></div>';
-      recEl.style.display = 'grid';
+      // Refresh the overall + daily totals whenever the bot pushes a fresh card.
+      if (data.fetchedAt && data.fetchedAt !== lastFetchedAt) {
+        lastFetchedAt = data.fetchedAt;
+        var rk = null; try { rk = localStorage.getItem(KEY_LS); } catch (e) {}
+        loadResults(rk);
+      }
 
       var grid = document.getElementById('grid');
       var sels = data.selections || [];
@@ -326,56 +325,54 @@
     function renderTrack(res) {
       trackData = res;
       var days = (res && res.days) || [];
-      var cum = (res && res.cumulative) || { w: 0, l: 0, p: 0, units: 0 };
-      var trackEl = document.getElementById('track');
-      if (!days.length) { trackEl.style.display = 'none'; return; }
-      trackEl.style.display = 'block';
+      var cum = (res && res.cumulative) || { w: 0, l: 0, p: 0, units: 0, staked: 0 };
+
+      // remember which day rows are open so we can restore them after rebuilding
+      var wasOpen = {};
+      document.querySelectorAll('.day-row.open').forEach(function (r) { wasOpen[r.id.replace('dayrow-', '')] = true; });
+
+      var overallEl = document.getElementById('overall');
+      if (!days.length) { overallEl.style.display = 'none'; document.getElementById('daily-rows').innerHTML = ''; return; }
+
+      document.getElementById('overall-unit').textContent = '1U = $' + DOLLAR_PER_UNIT;
 
       var uCls = cum.units > 0 ? 'pos' : (cum.units < 0 ? 'neg' : '');
       var uStr = (cum.units > 0 ? '+' : '') + cum.units + 'u';
-      document.getElementById('track-sum').innerHTML =
-        cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '  &middot;  <b class="' + uCls + '">' + esc(uStr) + '</b>';
-
-      var acc = (cum.w + cum.l) > 0 ? Math.round(cum.w / (cum.w + cum.l) * 100) + '%' : '—';
+      var acc = (cum.w + cum.l) > 0 ? Math.round(cum.w / (cum.w + cum.l) * 100) + '%' : '-';
       var stk = cum.staked || 0;
       var roiNum = stk > 0 ? (cum.units / stk * 100) : 0;
-      var roiStr = stk > 0 ? (roiNum > 0 ? '+' : '') + roiNum.toFixed(1) + '%' : '—';
+      var roiStr = stk > 0 ? (roiNum > 0 ? '+' : '') + roiNum.toFixed(1) + '%' : '-';
       var roiCls = roiNum > 0 ? 'pos' : (roiNum < 0 ? 'neg' : '');
       var profit = cum.units * DOLLAR_PER_UNIT;
       var profitStr = (profit >= 0 ? '+$' : '-$') + Math.abs(Math.round(profit)).toLocaleString();
       var profitCls = profit > 0 ? 'pos' : (profit < 0 ? 'neg' : '');
 
-      var html = '<div class="track-unit-note">1 unit = $' + DOLLAR_PER_UNIT + '</div>' +
-        '<div class="track-cum">' +
+      document.getElementById('overall-cum').innerHTML =
         '<div class="cum-box"><div class="l">Record</div><div class="n">' + cum.w + '-' + cum.l + (cum.p ? '-' + cum.p : '') + '</div></div>' +
         '<div class="cum-box"><div class="l">Accuracy</div><div class="n">' + esc(acc) + '</div></div>' +
         '<div class="cum-box"><div class="l">Units</div><div class="n ' + uCls + '">' + esc(uStr) + '</div></div>' +
         '<div class="cum-box"><div class="l">Profit</div><div class="n ' + profitCls + '">' + esc(profitStr) + '</div></div>' +
         '<div class="cum-box"><div class="l">ROI</div><div class="n ' + roiCls + '">' + esc(roiStr) + '</div></div>' +
-        '<div class="cum-box"><div class="l">Days</div><div class="n">' + days.length + '</div></div>' +
-        '</div>';
-      days.forEach(function (d) {
-        html += '<button class="day-row" id="dayrow-' + esc(d.date) + '" onclick="toggleDay(\'' + esc(d.date) + '\')">' +
+        '<div class="cum-box"><div class="l">Days</div><div class="n">' + days.length + '</div></div>';
+      overallEl.style.display = 'block';
+
+      document.getElementById('daily-rows').innerHTML = days.map(function (d) {
+        return '<button class="day-row" id="dayrow-' + esc(d.date) + '" onclick="toggleDay(\'' + esc(d.date) + '\')">' +
           '<span class="chev">&#9656;</span>' +
           '<span class="d">' + esc(shortDate(d.date)) + '</span>' +
           '<span class="rec">' + d.w + '-' + d.l + (d.p ? '-' + d.p : '') + '</span>' +
           uSpan(d.units) +
         '</button>' +
         '<div class="day-picks" id="daypicks-' + esc(d.date) + '" hidden></div>';
-      });
-      document.getElementById('track-body').innerHTML = html;
-    }
+      }).join('');
+      document.getElementById('daily').style.display = 'block';
 
-    function toggleTrack() {
-      var track = document.getElementById('track');
-      var body = document.getElementById('track-body');
-      if (body.hasAttribute('hidden')) {
-        body.removeAttribute('hidden'); track.classList.add('open');
-        var k = null; try { k = localStorage.getItem(KEY_LS); } catch (e) {}
-        loadResults(k); // refresh the running total when opened
-      } else {
-        body.setAttribute('hidden', ''); track.classList.remove('open');
-      }
+      // restore any day rows that were expanded before the rebuild
+      Object.keys(wasOpen).forEach(function (date) {
+        var row = document.getElementById('dayrow-' + date);
+        var box = document.getElementById('daypicks-' + date);
+        if (row && box && dayCache[date]) { box.innerHTML = dayCache[date]; box.removeAttribute('hidden'); row.classList.add('open'); }
+      });
     }
 
     function toggleDay(date) {
@@ -421,12 +418,11 @@
           if (res.status === 401) { try { localStorage.removeItem(KEY_LS); } catch (e) {} showGate('Wrong key.'); return; }
           if (res.status === 503) { showGate('Feed not configured yet.'); return; }
           render(res.j);
-          if (!resultsLoaded) { resultsLoaded = true; loadResults(key); }
         })
         .catch(function () { showGate('Network error — try again.'); });
     }
 
-    if (DEMO) { render(DEMO_DATA); loadResults(); }
+    if (DEMO) { render(DEMO_DATA); }
     else {
     var saved = null;
     try { saved = localStorage.getItem(KEY_LS); } catch (e) {}

@@ -6,9 +6,12 @@
 // env switch anywhere in this file, so it can never place a real-money order. Real money (Stage 3)
 // is a deliberate, separate build that Ben authorizes — not a flag on this function.
 //
-// Credentials are loaded at runtime (never handled in plaintext here): KALSHI_API_KEY (env) + the
-// RSA private key via ./kalshi-key (env KALSHI_PRIVATE_KEY or the webet-config Blob). These must be
-// DEMO keys — Kalshi's demo and production use SEPARATE API keys.
+// Credentials are loaded at runtime (never handled in plaintext here). Kalshi's demo and production
+// use SEPARATE keys, so this reads DEMO-specific creds and keeps them independent of the prod key:
+//   API key   : KALSHI_DEMO_API_KEY  (falls back to KALSHI_API_KEY)
+//   private key: Blob webet-config/kalshi-demo-private-key  →  env KALSHI_DEMO_PRIVATE_KEY  →  shared
+//                (shared = ./kalshi-key, i.e. the prod key — only as a last resort).
+// Set the demo private key via POST /api/bootstrap-kalshi-demo-key (moves env → Blob).
 //
 // GET /.netlify/functions/kalshi-demo-execute?key=<gate>
 //   &mode=verify        → just check demo creds + return balance (NO orders)
@@ -40,9 +43,30 @@ function getEasternDateToday() {
   return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, '0')}-${String(et.getDate()).padStart(2, '0')}`;
 }
 
+const DEMO_API_KEY = process.env.KALSHI_DEMO_API_KEY || process.env.KALSHI_API_KEY;
+
 // ── Kalshi DEMO signed client (RSA-PSS SHA256), pinned to KALSHI_DEMO_BASE ──
 let _privKey = null;
-async function privKey() { if (!_privKey) _privKey = await getKalshiPrivateKey(); return _privKey; }
+async function privKey() {
+  if (_privKey) return _privKey;
+  // 1) demo private key from Blob
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (token) {
+    try {
+      const r = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/webet-config/kalshi-demo-private-key`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) { const pem = await r.text(); if (pem && pem.includes('-----BEGIN')) { _privKey = pem; return _privKey; } }
+    } catch (e) { /* fall through */ }
+  }
+  // 2) demo private key from env
+  if (process.env.KALSHI_DEMO_PRIVATE_KEY) {
+    const pem = process.env.KALSHI_DEMO_PRIVATE_KEY;
+    _privKey = pem.indexOf('\\n') !== -1 ? pem.replace(/\\n/g, '\n') : pem;
+    return _privKey;
+  }
+  // 3) last resort: the shared (prod) key — will 401 on demo, but keeps a single failure path
+  _privKey = await getKalshiPrivateKey();
+  return _privKey;
+}
 
 function sign(ts, method, path, pem) {
   const msg = `${ts}${method}/trade-api/v2${path}`;
@@ -55,7 +79,7 @@ async function kdemo(method, path, body) {
   const pem = await privKey();
   const ts = Date.now().toString();
   const headers = {
-    'KALSHI-ACCESS-KEY': process.env.KALSHI_API_KEY,
+    'KALSHI-ACCESS-KEY': DEMO_API_KEY,
     'KALSHI-ACCESS-TIMESTAMP': ts,
     'KALSHI-ACCESS-SIGNATURE': sign(ts, method, path, pem),
     'Content-Type': 'application/json',
@@ -127,8 +151,8 @@ exports.handler = async (event) => {
   if (!gate) return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, message: 'No gate key set' }) };
   if (params.key !== gate) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: true, message: 'Unauthorized' }) };
 
-  if (!process.env.KALSHI_API_KEY) {
-    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NO_KALSHI_KEY', message: 'KALSHI_API_KEY not set — cannot reach Kalshi demo.' }) };
+  if (!DEMO_API_KEY) {
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: true, status: 'NO_KALSHI_KEY', message: 'No Kalshi demo API key — set KALSHI_DEMO_API_KEY.' }) };
   }
   const token = process.env.NETLIFY_AUTH_TOKEN;
 

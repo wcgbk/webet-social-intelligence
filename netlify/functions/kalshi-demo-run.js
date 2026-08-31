@@ -41,11 +41,31 @@ const CORS = {
 };
 
 // Kalshi game/total/spread series by "<SPORT>_<betType>".
+// Every sport Grok picks come in for tries to match a Kalshi series. Missing/absent markets
+// (e.g. tennis has no games-spread/total series, integer totals, offseason sports) → book fallback.
 const SERIES_MAP = {
   NBA_Moneyline: 'KXNBAGAME', NBA_Total: 'KXNBATOTAL', NBA_Spread: 'KXNBASPREAD',
   NHL_Moneyline: 'KXNHLGAME', NHL_Total: 'KXNHLTOTAL', NHL_Spread: 'KXNHLSPREAD',
   MLB_Moneyline: 'KXMLBGAME', MLB_Total: 'KXMLBTOTAL', MLB_Spread: 'KXMLBSPREAD',
+  NFL_Moneyline: 'KXNFLGAME', NFL_Total: 'KXNFLTOTAL', NFL_Spread: 'KXNFLSPREAD',
+  CFB_Moneyline: 'KXCFBGAME', CFB_Total: 'KXCFBTOTAL', CFB_Spread: 'KXCFBSPREAD',
+  ATP_Moneyline: 'KXATPMATCH', // tennis = match-winner only (no games spread/total on Kalshi)
+  WTA_Moneyline: 'KXWTAMATCH',
 };
+
+// Normalize the feed's sport label ("ATP US Open", "WTA US Open", "College Football", ...) to a
+// SERIES_MAP key.
+function sportKey(sport) {
+  const s = String(sport || '').toUpperCase();
+  if (s.includes('ATP')) return 'ATP';
+  if (s.includes('WTA')) return 'WTA';
+  if (s.includes('NBA')) return 'NBA';
+  if (s.includes('NHL')) return 'NHL';
+  if (s.includes('MLB')) return 'MLB';
+  if (s.includes('NFL')) return 'NFL';
+  if (s.includes('CFB') || s.includes('NCAAF') || s.includes('COLLEGE FOOTBALL')) return 'CFB';
+  return s.replace(/[^A-Z]/g, '');
+}
 
 const KALSHI_ABBREV_MAP = {
   'brooklyn': 'bkn', 'golden state': 'gs', 'oklahoma city': 'okc', 'new york': 'nyk',
@@ -111,7 +131,7 @@ function parseAmerican(odds) {
 // Classify the pick into a betType + direction + line + team from its text.
 function classify(sel) {
   const pickStr = String(sel.pick || '');
-  const sport = String(sel.sport || '').toUpperCase().trim();
+  const sport = sportKey(sel.sport);
   const lineNum = (sel.line != null && isFinite(Number(sel.line))) ? Number(sel.line) : null;
 
   const ou = pickStr.match(/(over|under|o|u)\s*([\d.]+)/i);
@@ -184,6 +204,24 @@ async function matchKalshi(cls, matchup, seriesCache, dateCode) {
     markets = sameDay;
   }
 
+  // Moneyline / match-winner: Kalshi lists one market per outcome ("Team wins" / "Player wins"),
+  // so match the market whose winning side names the pick's selection. Works for team games AND
+  // individual sports (tennis), where each market has only one competitor — the two-team filter
+  // below would wrongly reject those.
+  if (cls.direction === 'moneyline') {
+    const selWords = getTeamWords(cls.team);
+    const abbr = getCityAbbrev(cls.team);
+    const m = markets.find((mk) => {
+      const t = `${mk.title || ''} ${mk.yes_sub_title || ''}`.toLowerCase();
+      if (selWords.length && selWords.some((w) => wordInText(w, t))) return true;
+      const tk = (mk.ticker || '').toUpperCase();
+      return abbr && abbr.length >= 3 && tk.endsWith('-' + abbr.toUpperCase());
+    });
+    if (!m) return null;
+    return { ticker: m.ticker, title: m.title || m.yes_sub_title || m.ticker, side: 'yes', line: null };
+  }
+
+  // Totals & spreads: identify the game (both sides present), then pick the closest line.
   const teams = extractTeams(matchup);
   const abbrevs = teams.map((t) => getCityAbbrev(t));
   const candidates = markets.filter((m) => {
@@ -229,13 +267,7 @@ async function matchKalshi(cls, matchup, seriesCache, dateCode) {
     return { ticker: best.ticker, title: best.title || best.ticker, side: 'yes', line: bestLine };
   }
 
-  // Moneyline: pick the per-team "will X win" market whose text contains the pick team.
-  const teamWords = getTeamWords(cls.team);
-  let ml = candidates.find((m) => {
-    const t = `${m.title || ''} ${m.yes_sub_title || ''}`.toLowerCase();
-    return teamWords.some((w) => wordInText(w, t));
-  }) || candidates[0];
-  return { ticker: ml.ticker, title: ml.title || ml.yes_sub_title || ml.ticker, side: 'yes', line: null };
+  return null; // matched the game but couldn't resolve a total/spread line
 }
 
 // ── blob helpers (our store only for writes) ──

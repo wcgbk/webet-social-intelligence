@@ -83,6 +83,12 @@ exports.handler = async (event) => {
       .split('WeBetAI - Social Intelligence | Dashboard').join(escHtml(title))
       .split(`content="${BASE_DESC}"`).join(`content="${escAttr(desc)}"`)
       .split('content="https://webetsocial.com/dashboard"').join(`content="${escAttr(url)}"`);
+    // Picks share cards on X: native photo attachments are not clickable. Swap the
+    // Earth logo OG for the approved Betty daily-alpha card so the unfurled image
+    // is a summary_large_image that opens this URL.
+    if (rawView === 'picks') {
+      html = html.split('content="https://webetsocial.com/og-image.png"').join('content="https://webetsocial.com/daily-alpha-og-card.jpg"');
+    }
   }
 
   return {

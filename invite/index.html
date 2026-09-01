@@ -28,6 +28,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Paint the page ground on the root element so mobile browsers
+       (esp. Chrome on iOS) never expose the default white canvas in the
+       dynamic toolbar / overscroll region. */
+    html { background: #f2f3f5; min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+
     body { font-family: 'Geist Sans', system-ui, sans-serif; background: #f2f3f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
     .card { background: #fff; border: 1px solid #e0e3e8; border-radius: 1rem; padding: 2rem 1.5rem; width: 100%; max-width: 380px; }
     .logo { display: flex; align-items: center; gap: .5rem; margin-bottom: 1.5rem; }

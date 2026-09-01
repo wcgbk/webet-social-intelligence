@@ -13,6 +13,7 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f2f3f5" />
   <title>WeBetAI - Social Intelligence | Alpha Picks</title>
   <meta name="description" content="THE LOCK's disciplined 5-filter analysis engine surfaces daily edge picks across NBA, NHL, college hoops, soccer, and more." />
   <meta property="og:type" content="website" />
@@ -50,6 +51,17 @@
     }
 
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* Paint the page ground on the root element so mobile browsers (esp.
+       Chrome on iOS) never expose the WKWebView's default white canvas in the
+       dynamic toolbar / overscroll region. Body-only backgrounds rely on CSS
+       background propagation, which Chrome iOS does not extend into that gap,
+       producing a white bar at the bottom of the viewport. */
+    html {
+      background: var(--bg);
+      min-height: 100vh; min-height: 100dvh;
+      -webkit-text-size-adjust: 100%;
+    }
 
     body {
       font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;

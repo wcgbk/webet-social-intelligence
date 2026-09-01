@@ -43,6 +43,11 @@ tailwind.config = {
 </script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+/* Paint the page ground on the root element so mobile browsers
+   (esp. Chrome on iOS) never expose the default white canvas in the
+   dynamic toolbar / overscroll region. */
+html { background: #0a0a0a; min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+
 body { font-family: 'Geist Sans', system-ui, sans-serif; background: #0a0a0a; color: #1a1a1a; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

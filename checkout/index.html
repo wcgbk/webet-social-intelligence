@@ -38,6 +38,11 @@
       --green: #00b5b9;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Paint the page ground on the root element so mobile browsers
+       (esp. Chrome on iOS) never expose the default white canvas in the
+       dynamic toolbar / overscroll region. */
+    html { background: var(--background); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+
     body { background: var(--background); color: var(--txt); font-family: 'Geist Sans', -apple-system, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
     .top { width: 100%; max-width: 560px; display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; }
     .logo { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--txt); font-weight: 800; font-size: 18px; }

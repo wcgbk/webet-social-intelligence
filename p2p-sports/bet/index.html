@@ -33,6 +33,11 @@
   <style>
     :root{--white:#fff;--off-white:#f8f9fa;--bg:#f2f3f5;--teal:#004C54;--teal-light:#e6f4f1;--teal-border:#b8ddd6;--green:#2e7d32;--green-light:#e8f5e9;--green-border:#a5d6a7;--olive:#1a2e1a;--border:#e0e3e8;--txt:#1a2e1a;--txt-m:#5f6b7a;--txt-l:#8b95a3;--red:#c0392b;--amber:#f39c12}
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    /* Paint the page ground on the root element so mobile browsers
+       (esp. Chrome on iOS) never expose the default white canvas in the
+       dynamic toolbar / overscroll region. */
+    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+
     body{font-family:'Geist Sans','Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;min-height:100vh}
 
     .hdr{background:var(--white);border-bottom:1px solid var(--border);padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}

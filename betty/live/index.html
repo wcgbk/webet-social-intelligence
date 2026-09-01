@@ -49,6 +49,11 @@
 
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html { scroll-behavior: smooth; }
+    /* Paint the page ground on the root element so mobile browsers
+       (esp. Chrome on iOS) never expose the default white canvas in the
+       dynamic toolbar / overscroll region. */
+    html { background: var(--green); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+
     body {
       font-family: var(--sans);
       background: var(--green);

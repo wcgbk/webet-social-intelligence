@@ -85,6 +85,7 @@ exports.handler = async (event) => {
       .split('content="https://webetsocial.com/dashboard"').join(`content="${escAttr(url)}"`);
     // Plain /dashboard uses the Betty daily card (chat CTA). Panel shares (?view=)
     // keep the default Earth OG + panel title so picks/etc. show normal page metadata.
+    html = html.split('content="https://webetsocial.com/daily-betty-og-v13.jpg"').join('content="https://webetsocial.com/og-image.png"');
     html = html.split('content="https://webetsocial.com/daily-betty-og.jpg"').join('content="https://webetsocial.com/og-image.png"');
     html = html.split('content="https://webetsocial.com/daily-alpha-og-card.jpg"').join('content="https://webetsocial.com/og-image.png"');
     html = html.split('content="https://webetsocial.com/daily-alpha-og-card.jpg?v=20260902"').join('content="https://webetsocial.com/og-image.png"');

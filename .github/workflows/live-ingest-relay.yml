@@ -1,0 +1,58 @@
+name: live-ingest-relay
+
+# Relays Premium Live Picks POSTs to webetsocial.com when the shared Grok Bot
+# box cannot complete TLS to Netlify. Does not deploy or change site functions.
+
+on:
+  repository_dispatch:
+    types: [live-ingest]
+  workflow_dispatch:
+    inputs:
+      payload_json:
+        description: Full live-ingest JSON body (source, dateET, selections, ...)
+        required: true
+        type: string
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write payload.json
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          MANUAL_PAYLOAD: ${{ github.event.inputs.payload_json }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            printf '%s' "$MANUAL_PAYLOAD" > payload.json
+          else
+            printf '%s' "$DISPATCH_PAYLOAD" > payload.json
+          fi
+          python3 - <<'PY'
+          import json,sys
+          body=json.load(open('payload.json'))
+          if not isinstance(body, dict):
+            sys.exit('payload must be object')
+          sels=body.get('selections')
+          if not isinstance(sels, list) or not sels:
+            sys.exit('selections[] required')
+          print(f"ok dateET={body.get('dateET')} selections={len(sels)}")
+          PY
+
+      - name: POST webetsocial.com/api/live-ingest
+        env:
+          LIVE_INGEST_SECRET: ${{ secrets.LIVE_INGEST_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "${LIVE_INGEST_SECRET}"
+          code=$(curl -sS -o /tmp/ingest-out.json -w '%{http_code}' \
+            -X POST 'https://webetsocial.com/api/live-ingest' \
+            -H "Authorization: Bearer ${LIVE_INGEST_SECRET}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @payload.json)
+          echo "HTTP ${code}"
+          cat /tmp/ingest-out.json || true
+          echo
+          test "${code}" = "200"

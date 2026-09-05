@@ -2,6 +2,11 @@
 // (candidateTable, modelProjections, thinkingText, rejections, Kelly internals).
 // Those are unused on /omega /nfl /cfb cards and dominate TTFB + parse time.
 // Premium Sharp Depth still comes from get-picks-premium.
+//
+// CFB: pick/matchup stay full names (ESPN match keys). pickDisplay/matchupDisplay
+// are school-only for API consumers. Cards also format at render time.
+
+const { isCfbSport, formatCfbPickDisplay, formatCfbMatchupDisplay } = require('./cfb-school-name');
 
 const PICK_KEEP = [
   'pick', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
@@ -25,6 +30,10 @@ function pickPublic(p) {
   const out = {};
   for (const k of PICK_KEEP) {
     if (p[k] !== undefined) out[k] = p[k];
+  }
+  if (isCfbSport(out.sport)) {
+    if (out.pick) out.pickDisplay = formatCfbPickDisplay(out.pick);
+    if (out.matchup) out.matchupDisplay = formatCfbMatchupDisplay(out.matchup);
   }
   return out;
 }

@@ -79,4 +79,19 @@ Live Omega payload included `candidateTable`, `modelProjections`, `thinkingText`
 4. **Load** — Network: `get-picks-omega` JSON no longer includes `candidateTable`/`thinkingText`; first contentful card does not wait on ESPN.
 5. **Non-regression** — Omega model still `v11.2-omega-no-f5-claude-verify`; F5 stays off MAIN; Alpha generators untouched.
 
-`node test-omega-ux-live-kpi.js` covers endpoints, payload trim, cache TTL, and page wiring.
+`node test-omega-ux-live-kpi.js` covers endpoints, payload trim, cache TTL, page wiring, and CFB school-name display.
+
+## CFB display vs ESPN match keys
+
+Users see **school only** (no mascot) on Omega NCAAF legs and `/cfb` cards: matchup row, pick line, parlay legs, live scorebar, KPI history.
+
+| Stored / match key (unchanged) | Display |
+|---|---|
+| `UNLV Rebels` | `UNLV` |
+| `Hawai'i Rainbow Warriors` | `Hawai'i` |
+| `Western Kentucky Hilltoppers` | `Western Kentucky` |
+| `Mississippi Valley State Delta Devils` | `Mississippi Valley State` |
+
+- **Match keys stay full names.** Blob `pick` / `matchup` and ESPN `awayTeam` / `homeTeam` are not rewritten. `findGame` / `teamsMatch` / `schoolKey` still match on the full string (plus school-key fallback). `data-wb-pick` stays the stored pick so Sharp Depth still attaches.
+- **Display is a formatter, not a model change.** `netlify/functions/lib/cfb-school-name.js` (`formatCfbSchoolName`). Public `get-picks-*` adds `pickDisplay` / `matchupDisplay` for NCAAF only; originals remain. Client renders through the same rules so historical KPI rows and ESPN scoreboard names also shorten.
+- **NFL/MLB unchanged.** Nickname `teamOnly` (Chiefs, Dodgers) is still used when `sport !== NCAAF`.

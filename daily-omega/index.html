@@ -708,7 +708,65 @@
   if (window.self !== window.top) document.body.classList.add('in-iframe');
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+  // CFB display: school only, no mascot. Canonical: netlify/functions/lib/cfb-school-name.js
+  // findGame / teamsMatch still use full blob + ESPN names.
+  const CFB_MULTI_WORD_MASCOTS = [
+    'Rainbow Warriors','Thundering Herd','Fighting Irish','Fighting Illini','Fighting Hawks','Fighting Camels',
+    'Golden Hurricane','Golden Flashes','Golden Gophers','Golden Eagles','Golden Bears','Golden Lions','Golden Knights','Golden Panthers',
+    'Nittany Lions','Yellow Jackets','Demon Deacons','Scarlet Knights','Black Knights','Horned Frogs','Crimson Tide',
+    'Delta Devils','Blue Devils','Sun Devils','Blue Raiders','Red Raiders','Red Wolves','Red Storm','Red Flash','Red Hawks',
+    'Blue Hens','Blue Hose','Mean Green','Green Wave','Tar Heels','Wolf Pack','Black Bears','Big Green','Purple Aces',
+    "Ragin' Cajuns",'Ragin Cajuns',"Runnin' Rebels",'Running Rebels','Trail Blazers'
+  ];
+  function isCfbSport(sport) {
+    const s = String(sport || '').toUpperCase().trim();
+    return s === 'NCAAF' || s === 'CFB' || s === 'NCAAFB' || s === 'COLLEGE FOOTBALL';
+  }
+  function formatCfbSchoolName(fullName) {
+    if (!fullName || typeof fullName !== 'string') return '';
+    const name = fullName.trim().replace(/\s+/g, ' ');
+    if (!name) return '';
+    const folded = name.toLowerCase().replace(/[''`´]/g, '').replace(/\s+/g, ' ').trim();
+    const mascots = CFB_MULTI_WORD_MASCOTS
+      .map(m => { const fold = m.toLowerCase().replace(/[''`´]/g, '').replace(/\s+/g, ' ').trim(); return { fold, n: fold.split(' ').filter(Boolean).length }; })
+      .sort((a, b) => b.fold.length - a.fold.length);
+    for (const { fold, n } of mascots) {
+      if (!fold) continue;
+      if (folded === fold) return name;
+      if (folded.endsWith(' ' + fold)) {
+        const tokens = name.split(/\s+/);
+        if (tokens.length > n) return tokens.slice(0, tokens.length - n).join(' ');
+      }
+    }
+    const parts = name.split(/\s+/);
+    return parts.length === 1 ? name : parts.slice(0, -1).join(' ');
+  }
+  function formatCfbMatchupDisplay(matchup) {
+    if (!matchup) return '';
+    const sep = matchup.match(/\s+(vs\.?|@|at|v)\s+/i);
+    if (!sep) return matchup;
+    const parts = matchup.split(sep[0]);
+    return formatCfbSchoolName(parts[0]) + ' vs ' + formatCfbSchoolName(parts[1]);
+  }
+  function formatCfbPickDisplay(pick) {
+    if (!pick || typeof pick !== 'string') return pick || '';
+    const s = pick.trim();
+    if (/^(?:F5\s+)?(?:Over|Under)\b/i.test(s)) return s;
+    const m = s.match(/^(.*?)(\s+(?:F5\s+)?(?:[+-]\d+(?:\.\d+)?|ML)(?:\s*\([^)]*\))?)\s*$/i);
+    if (m && m[1].trim()) return (formatCfbSchoolName(m[1]) + m[2]).replace(/\s+/g, ' ').trim();
+    return formatCfbSchoolName(s);
+  }
+  function displayPick(pick, sport) {
+    if (!pick) return '';
+    if (String(sport || '').toUpperCase() === 'PARLAY') return pick;
+    return isCfbSport(sport) ? formatCfbPickDisplay(pick) : pick;
+  }
+  function displayTeam(name, sport) {
+    return isCfbSport(sport) ? formatCfbSchoolName(name) : teamOnly(name);
+  }
+
   // Strip city/state from team names — "Los Angeles Clippers" → "Clippers", "Boston Red Sox" → "Red Sox"
+  // NFL/MLB only. CFB uses formatCfbSchoolName (school, not mascot).
   function teamOnly(name) {
     if (!name) return '';
     // Multi-word nicknames that must not collapse to just the last word
@@ -726,9 +784,10 @@
     return parts[parts.length - 1];
   }
 
-  // Convert matchup to team-only format: "UConn Huskies vs. Duke Blue Devils" → "Huskies vs Blue Devils"
-  function shortMatchup(matchup) {
+  // Convert matchup to short display. CFB → school vs school; NFL/MLB → nicknames.
+  function shortMatchup(matchup, sport) {
     if (!matchup) return '';
+    if (isCfbSport(sport)) return formatCfbMatchupDisplay(matchup);
     const sep = matchup.match(/\s+(vs\.?|@|at|v)\s+/i);
     if (!sep) return matchup;
     const parts = matchup.split(sep[0]);
@@ -1380,8 +1439,8 @@
 
     const scoreContent = `
         <div class="score-teams">
-          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.awayTeam))}</span><span class="score-team-score">${aScore}</span></div>
-          <div class="score-team"><span class="score-team-name">${esc(teamOnly(game.homeTeam))}</span><span class="score-team-score">${hScore}</span></div>
+          <div class="score-team"><span class="score-team-name">${esc(displayTeam(game.awayTeam, pick.sport))}</span><span class="score-team-score">${aScore}</span></div>
+          <div class="score-team"><span class="score-team-name">${esc(displayTeam(game.homeTeam, pick.sport))}</span><span class="score-team-score">${hScore}</span></div>
         </div>
         <div class="score-meta">
           <span class="score-status ${statusClass}">${statusLabel}</span>
@@ -1536,7 +1595,7 @@
           else if (lr.result.status === 'push') resultBadge = '<span class="leg-result leg-push">— P</span>';
         }
 
-        const gameLabel = shortMatchup(p.matchup);
+        const gameLabel = shortMatchup(p.matchup, p.sport);
         const lrGame = lr ? lr.game : null;
         const lrIsPreGame = !lrGame || lrGame.state === 'pre';
         let summaryTime = '';
@@ -1555,7 +1614,7 @@
 
         html += `<div class="parlay-leg bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
           <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
-            <span class="leg-pick">${esc(p.pick)}</span>
+            <span class="leg-pick">${esc(displayPick(p.pick, p.sport))}</span>
             <span style="font-size:.6875rem; color:var(--txt-l);">${esc(gameLabel)}</span>
             ${timeLine}
           </span>
@@ -1702,12 +1761,12 @@
           <span class="rating-badge ${badge}">${esc(label)}</span>
         </div>
         <div class="pick-matchup-row">
-          <div class="pick-matchup">${esc(shortMatchup(p.matchup))}</div>
+          <div class="pick-matchup">${esc(shortMatchup(p.matchup, p.sport))}</div>
           ${timeChip}
         </div>
         ${scorebar}
         <div class="pick-line">
-          <span class="pick-name">${esc(p.pick)}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
+          <span class="pick-name">${esc(displayPick(p.pick, p.sport))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
           <span class="pick-odds">${esc(p.odds)}</span>
         </div>
         <div class="pick-divider"></div>
@@ -1767,12 +1826,12 @@
             <span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">OPTIMIZED PARLAY</span>
           </div>
           <div class="pick-matchup-row">
-            <div class="pick-matchup">${esc(shortMatchup(bonusLeg.matchup || ''))}</div>
+            <div class="pick-matchup">${esc(shortMatchup(bonusLeg.matchup || '', bonusLeg.sport))}</div>
             ${timeChip}
           </div>
           ${bonusScorebar}
           <div class="pick-line">
-            <span class="pick-name">${esc(bonusLeg.pick)}${bonusDeltaChip}${bonusProbChip}</span>
+            <span class="pick-name">${esc(displayPick(bonusLeg.pick, bonusLeg.sport))}${bonusDeltaChip}${bonusProbChip}</span>
             <span class="pick-odds">${esc(bonusLeg.odds)}</span>
           </div>
           <div class="pick-divider"></div>
@@ -1875,10 +1934,10 @@
 
           html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span class="leg-pick">${esc(p.pick)}</span>
+              <span class="leg-pick">${esc(displayPick(p.pick, p.sport))}</span>
               <span class="leg-odds">${esc(p.odds)}</span>
             </div>
-            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup))}${scoreStr}</div>
+            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}${scoreStr}</div>
             ${parlayTimeLine ? `<div>${parlayTimeLine}</div>` : ''}
           </div>`;
         }
@@ -1919,10 +1978,10 @@
 
           html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span class="leg-pick">${esc(leg.pick)}${independentBadge}${coverBadge}</span>
+              <span class="leg-pick">${esc(displayPick(leg.pick, leg.sport))}${independentBadge}${coverBadge}</span>
               <span class="leg-odds">${esc(leg.odds)}</span>
             </div>
-            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(leg.matchup || ''))} · ${esc(leg.sport || '')}/${esc(leg.betType || '')}${legScoreStr}</div>
+            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(leg.matchup || '', leg.sport))} · ${esc(leg.sport || '')}/${esc(leg.betType || '')}${legScoreStr}</div>
             ${legTimeLine ? `<div>${legTimeLine}</div>` : ''}
           </div>`;
         }
@@ -2134,7 +2193,7 @@
       for (const td of todayDetails) {
         const p = td.pick;
         html += `<li>
-          <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span></span>
+          <span>${esc(displayPick(p.pick, p.sport))} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span></span>
           <span>${td.rightSide}</span>
         </li>`;
       }
@@ -2174,7 +2233,7 @@
           const profitBadge = p.result === 'pending' ? '' :
             `<span class="${p.profit >= 0 ? 'profit-positive' : 'profit-negative'}" style="font-size:.65rem; margin-left:.25rem;">${p.profit >= 0 ? '+' : ''}$${Math.abs(p.profit)}</span>`;
           html += `<li>
-            <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span>${p.score ? ` <span style="color:var(--txt-m); font-weight:600;">(${p.score})</span>` : ''}</span>
+            <span>${esc(displayPick(p.pick, p.sport))} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span>${p.score ? ` <span style="color:var(--txt-m); font-weight:600;">(${p.score})</span>` : ''}</span>
             <span><span class="result-badge ${rb}">${rl}</span>${profitBadge}</span>
           </li>`;
         }
@@ -2281,7 +2340,7 @@
 
         html += '<div style="margin-bottom:.625rem; padding-bottom:.625rem;' + (p < picks.length - 1 ? ' border-bottom:1px solid var(--border-lt);' : '') + '">';
         html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem;">';
-        html += '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">' + esc(pick.pick) + ' ' + esc(pick.odds) + '</span>';
+        html += '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">' + esc(displayPick(pick.pick, pick.sport)) + ' ' + esc(pick.odds) + '</span>';
 
         if (agent) {
           var vClass = agent.verdict === 'agree' ? 'agree' : agent.verdict === 'disagree' ? 'disagree' : 'caution';
@@ -2291,7 +2350,7 @@
         }
 
         html += '</div>';
-        html += '<div style="font-size:.75rem; color:var(--txt-l); margin-bottom:.25rem;">' + esc(pick.sport) + ' | ' + esc(pick.units) + ' | ' + esc(pick.matchup || '') + '</div>';
+        html += '<div style="font-size:.75rem; color:var(--txt-l); margin-bottom:.25rem;">' + esc(pick.sport) + ' | ' + esc(pick.units) + ' | ' + esc(shortMatchup(pick.matchup || '', pick.sport)) + '</div>';
         if (agent && agent.analysis) {
           html += '<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.5;">' + esc(agent.analysis) + '</div>';
         }

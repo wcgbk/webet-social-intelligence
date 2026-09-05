@@ -7,6 +7,12 @@ const assert = require('assert');
 const { ESPN_ENDPOINTS, scoreboardUrls, scoreboardDates } = require('./netlify/functions/lib/espn-scoreboard');
 const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 const { cacheTtlMs, cacheControlFor, cacheIsFresh } = require('./netlify/functions/lib/kpi-cache');
+const {
+  formatCfbSchoolName,
+  formatCfbMatchupDisplay,
+  formatCfbPickDisplay,
+  isCfbSport,
+} = require('./netlify/functions/lib/cfb-school-name');
 
 let failed = 0;
 function check(name, fn) {
@@ -42,6 +48,42 @@ check('scoreboardDates spans D-1..D+1', () => {
   assert.deepStrictEqual(scoreboardDates('2026-09-05'), ['2026-09-04', '2026-09-05', '2026-09-06']);
 });
 
+console.log('cfb-school-name');
+check('strips mascot, keeps school (examples + brands + apostrophes)', () => {
+  const cases = [
+    ['UNLV Rebels', 'UNLV'],
+    ["Hawai'i Rainbow Warriors", "Hawai'i"],
+    ['Hawaii Rainbow Warriors', 'Hawaii'],
+    ['Western Kentucky Hilltoppers', 'Western Kentucky'],
+    ['Mississippi Valley State Delta Devils', 'Mississippi Valley State'],
+    ['LSU Tigers', 'LSU'],
+    ['USC Trojans', 'USC'],
+    ['UCF Knights', 'UCF'],
+    ['Notre Dame Fighting Irish', 'Notre Dame'],
+    ['Texas A&M Aggies', 'Texas A&M'],
+    ['Ole Miss Rebels', 'Ole Miss'],
+    ['Nevada Wolf Pack', 'Nevada'],
+    ["Louisiana Ragin' Cajuns", 'Louisiana'],
+    ['UNLV', 'UNLV'],
+  ];
+  for (const [full, school] of cases) {
+    assert.strictEqual(formatCfbSchoolName(full), school, full);
+  }
+});
+check('matchup + pick display keep Over/Under; NFL sport is not CFB', () => {
+  assert.strictEqual(
+    formatCfbMatchupDisplay("UNLV Rebels @ Hawai'i Rainbow Warriors"),
+    "UNLV vs Hawai'i"
+  );
+  assert.strictEqual(formatCfbPickDisplay('UNLV Rebels -3.5'), 'UNLV -3.5');
+  assert.strictEqual(formatCfbPickDisplay('Western Kentucky Hilltoppers +7'), 'Western Kentucky +7');
+  assert.strictEqual(formatCfbPickDisplay('Over 55.5'), 'Over 55.5');
+  assert.strictEqual(formatCfbPickDisplay('LSU Tigers ML'), 'LSU ML');
+  assert.strictEqual(isCfbSport('NCAAF'), true);
+  assert.strictEqual(isCfbSport('NFL'), false);
+  assert.strictEqual(isCfbSport('MLB'), false);
+});
+
 console.log('public-picks');
 check('strips candidateTable / thinkingText / rejections fat', () => {
   const fat = {
@@ -64,6 +106,37 @@ check('strips candidateTable / thinkingText / rejections fat', () => {
   assert.strictEqual(pub.parlayLegs[0].combinedOdds, '+600');
   assert.strictEqual(pub.parlayLegs[0].legs[0].pick, 'Under 55.5');
   assert.strictEqual(pub.parlayLegs[0].legs[0].kellyCalc, undefined);
+});
+check('NCAAF gets school-only display fields; pick/matchup stay full for ESPN match', () => {
+  const pub = publicPicksPayload({
+    picks: [{
+      pick: 'UNLV Rebels -3.5',
+      matchup: "UNLV Rebels @ Hawai'i Rainbow Warriors",
+      sport: 'NCAAF',
+      odds: '-110',
+    }],
+    parlayLegs: [{
+      type: '3-leg',
+      legs: [{ pick: 'Western Kentucky Hilltoppers +3.5', sport: 'NCAAF', matchup: 'Western Kentucky Hilltoppers vs. Nevada Wolf Pack' }],
+    }],
+  });
+  assert.strictEqual(pub.picks[0].pick, 'UNLV Rebels -3.5');
+  assert.strictEqual(pub.picks[0].matchup, "UNLV Rebels @ Hawai'i Rainbow Warriors");
+  assert.strictEqual(pub.picks[0].pickDisplay, 'UNLV -3.5');
+  assert.strictEqual(pub.picks[0].matchupDisplay, "UNLV vs Hawai'i");
+  assert.strictEqual(pub.parlayLegs[0].legs[0].pick, 'Western Kentucky Hilltoppers +3.5');
+  assert.strictEqual(pub.parlayLegs[0].legs[0].pickDisplay, 'Western Kentucky +3.5');
+  assert.strictEqual(pub.parlayLegs[0].legs[0].matchupDisplay, 'Western Kentucky vs Nevada');
+});
+check('NFL pick names are not rewritten', () => {
+  const pub = publicPicksPayload({
+    picks: [{ pick: 'Kansas City Chiefs -3.5', matchup: 'Kansas City Chiefs vs. Buffalo Bills', sport: 'NFL' }],
+    parlayLegs: [],
+  });
+  assert.strictEqual(pub.picks[0].pick, 'Kansas City Chiefs -3.5');
+  assert.strictEqual(pub.picks[0].matchup, 'Kansas City Chiefs vs. Buffalo Bills');
+  assert.strictEqual(pub.picks[0].pickDisplay, undefined);
+  assert.strictEqual(pub.picks[0].matchupDisplay, undefined);
 });
 
 console.log('kpi-cache');
@@ -114,6 +187,22 @@ for (const page of ['daily-omega/index.html', 'cfb/index.html']) {
     assert.ok(!html.includes('.header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }'));
   });
 }
+for (const page of ['daily-omega/index.html', 'cfb/index.html']) {
+  const html = fs.readFileSync(path.join(__dirname, page), 'utf8');
+  check(page + ' CFB school-only display, full names for match keys', () => {
+    assert.ok(html.includes('function formatCfbSchoolName'));
+    assert.ok(html.includes('function displayPick'));
+    assert.ok(html.includes("data-wb-pick=\"${esc(p.pick)}\""));
+    assert.ok(html.includes('function teamsMatch'));
+    assert.ok(html.includes('function findGame'));
+    assert.ok(html.includes('function schoolKey'));
+  });
+}
+check('nfl/index.html does not use CFB school-only formatter', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'nfl/index.html'), 'utf8');
+  assert.ok(!html.includes('function formatCfbSchoolName'));
+  assert.ok(!html.includes('function displayPick'));
+});
 check('nfl/index.html hamburger nav at phone widths (no header overflow)', () => {
   const html = fs.readFileSync(path.join(__dirname, 'nfl/index.html'), 'utf8');
   assert.ok(html.includes('@media (max-width: 640px)'));

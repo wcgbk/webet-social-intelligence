@@ -55,6 +55,7 @@ Live Omega payload included `candidateTable`, `modelProjections`, `thinkingText`
 
 - `.pick-matchup-row`, `.pick-footer`, wrapping chips, ellipsized score names.
 - `@media (max-width: 600px)` and `400px`: wrap matchup, shrink units, stack scorebar meta so live chrome does not overflow.
+- **Nav (Omega + CFB):** same hamburger/dropdown as NFL. Hamburger at `max-width: 900px` so tablet ~768px does not keep a nowrap pill row (CFB has four long labels). Duplicate Dashboard chip hides when the hamburger is on; Omega badge shortens to “Omega” under 480px. No `overflow-x: auto` on `.header-nav` (that was the inner nav scrollbar / clipped labels at ~390px).
 
 ### KPI settle (still real ESPN grades)
 
@@ -71,7 +72,7 @@ Live Omega payload included `candidateTable`, `modelProjections`, `thinkingText`
 
 ## Test plan (PR)
 
-1. **Mobile widths** — 375 / 390 / 430 / 768: pick cards, live scorebar, units row, parlay legs. No horizontal scroll, no clipped LIVE/Final chip.
+1. **Mobile widths** — 375 / 390 / 430 / 768: pick cards, live scorebar, units row, parlay legs. No horizontal scroll, no clipped LIVE/Final chip. Top nav: hamburger (not a scrolling/clipped pill row) on `/daily-omega` and `/cfb` at 390 and 768; labels fully visible; no page-level horizontal scrollbar.
 2. **Live → final** — `/omega` NCAAF (UNLV–Hawaii) and `/cfb` same game: scorebar appears at kick, updates in-game, shows Final. FCS CFB leg (MVSU/Sac State) also attaches.
 3. **KPI after final** — when the game goes `post`, day’s row + cumulative record/ROI update within ~30s (or immediately on the next score poll). Totals are ESPN-graded, not placeholders. KPI day = ET, start `2026-09-05`.
 4. **Load** — Network: `get-picks-omega` JSON no longer includes `candidateTable`/`thinkingText`; first contentful card does not wait on ESPN.

@@ -103,6 +103,17 @@ check('v11.2 F5 flag untouched', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-omega-background.js'), 'utf8');
   assert.ok(src.includes('const ALLOW_F5_ON_CARD = false'));
 });
+for (const page of ['daily-omega/index.html', 'cfb/index.html']) {
+  const html = fs.readFileSync(path.join(__dirname, page), 'utf8');
+  check(page + ' hamburger nav at phone + tablet', () => {
+    assert.ok(html.includes('@media (max-width: 900px)'));
+    assert.ok(html.includes('.header-dash { display: none; }'));
+    assert.ok(html.includes('class="header-dash"'));
+    assert.ok(html.includes('class="mobile-menu-btn"'));
+    assert.ok(html.includes('id="mobileDropdown"'));
+    assert.ok(!html.includes('.header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }'));
+  });
+}
 
 if (failed) {
   console.error('\n' + failed + ' check(s) failed');

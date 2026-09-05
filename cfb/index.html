@@ -79,7 +79,7 @@
     .header-badge {
       font-size: .6875rem; font-weight: 600; color: var(--teal);
       background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 9999px; padding: .2rem .6rem;
+      border-radius: 9999px; padding: .2rem .6rem; white-space: nowrap; flex-shrink: 0;
     }
 
     /* ─── Main Content ─── */
@@ -396,12 +396,14 @@
       background: var(--white);
       border-bottom: 1px solid var(--border-lt);
       padding: .875rem 1.25rem;
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center; justify-content: flex-start;
+      gap: .5rem;
       position: sticky; top: 0; z-index: 100;
+      width: 100%; min-width: 0;
     }
-    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
-    .logo-text { font-size: 1rem; font-weight: 700; }
-    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); min-width: 0; }
+    .logo-text { font-size: 1rem; font-weight: 700; white-space: nowrap; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; min-width: 0; }
     .header-link {
       font-size: .625rem; font-weight: 600; color: var(--teal);
       background: var(--teal-light); border: 1px solid var(--teal-border);
@@ -410,16 +412,33 @@
     }
     .header-link:hover { background: var(--teal-border); }
     .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
-    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .header-dash {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 14px; border-radius: 20px;
+      border: 1px solid #004C54; background: #e6f4f1; color: #004C54;
+      font-family: inherit; font-size: 11px; font-weight: 700;
+      text-decoration: none; margin-left: auto; margin-right: 8px;
+      flex-shrink: 0; white-space: nowrap;
+    }
+    .header-auth { margin-left: 10px; display: inline-flex; align-items: center; flex-shrink: 0; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; flex-shrink: 0; }
     .mobile-dropdown { display: none; position: absolute; top: 100%; right: 0; background: var(--white); border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 160px; }
     .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
     .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
     .mobile-dropdown a:hover { background: var(--teal-light); }
     .in-iframe .header { display: none !important; }
     .in-iframe .mobile-menu-btn { display: none !important; }
-    @media (max-width: 640px) {
+    /* Same hamburger pattern as NFL; 900px covers tablet 768 where CFB's extra pills overflow. */
+    @media (max-width: 900px) {
       .header-nav { display: none; }
+      .header-dash { display: none; }
       .mobile-menu-btn { display: block; }
+      .header-auth { margin-left: auto; }
+    }
+    @media (max-width: 480px) {
+      .header { padding: .75rem .75rem; gap: .375rem; }
+      .logo { gap: .375rem; }
+      .header-badge { font-size: .625rem; padding: .15rem .45rem; white-space: nowrap; }
     }
     @media(max-width: 420px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
@@ -580,14 +599,14 @@
       <span class="logo-text">WeBetAI</span>
       <span class="header-badge" style="margin-left:2px;">CFB</span>
     </a>
-    <a href="/alpha/dashboard" style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;border:1px solid #004C54;background:#e6f4f1;color:#004C54;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;transition:all 0.15s;margin-left:auto;margin-right:8px;">Dashboard</a>
+    <a href="/alpha/dashboard" class="header-dash">Dashboard</a>
     <nav class="header-nav">
       <a href="/cfb" class="header-link active">College Football Picks</a>
       <a href="/nfl" class="header-link">NFL Only Picks</a>
       <a href="/alpha" class="header-link">Alpha Picks</a>
       <a href="/alpha/dashboard" class="header-link">Dashboard</a>
     </nav>
-    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
+    <span id="wb-auth-slot" class="header-auth"></span>
     <button class="mobile-menu-btn" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>

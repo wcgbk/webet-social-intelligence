@@ -29,11 +29,9 @@
 
 [functions."trigger-picks-omega"]
   schedule = "0 13 * * *"
-  # OMEGA split-test pipeline (Ben-directed 2026-08-22) — 9am ET, same time as alpha for a
-  # fair A/B. Full duplicate of the alpha daily process in an isolated environment: writes
-  # to edge-picks-omega blob store → /omega page. KPIs start fresh from 2026-08-22.
-  # Omega CLV is invoked from trigger-clv (alongside NFL/CFB) — track-clv-omega maps MLB/NFL/NCAAF.
-  # KPIs still grade from ESPN at read time (get-results-omega).
+  # OMEGA MAIN multi-sport — 9:00am ET. NFL/CFB standalones follow at 9:05 / 9:10 (see their
+  # schedules) so the live daily process shares morning gen+QA timing without Odds API burst.
+  # Writes edge-picks-omega → /omega. CLV via trigger-clv (track-clv-omega). Verify at 10:30am ET.
 
 [functions."generate-picks-omega-background"]
   # Background function — 15min timeout for Omega pick generation
@@ -41,6 +39,9 @@
 [functions."verify-picks-omega"]
   schedule = "30 14 * * *"
   # Omega QA — 10:30am ET, mirrors verify-picks incl. the Hard Rock Bet placeability check.
+  # NOTE (2026-09-05): verify-picks-nfl.js / verify-picks-cfb.js do NOT exist — no twin verify
+  # crons added. NFL/CFB standalones rely on JS-select discipline + CLV (track-clv-nfl/cfb).
+  # Optional follow-up: thin verify wrappers cloning omega verify for their stores.
 
 [functions."self-optimize-omega"]
   schedule = "0 9 * * 0"
@@ -58,23 +59,21 @@
   # TSP_SESSION_COOKIE (member cookie) + TSP_PAGE_KEY (page passcode). Zero external API cost.
 
 [functions."trigger-picks-nfl"]
-  schedule = "0 15 * * *"
-  # NFL pipeline — 11am ET (15:00 UTC), added 2026-08-06. GATED: fires the generator only on
-  # days with NFL games (preseason or regular season, per ESPN scoreboard) — quiet no-op
-  # otherwise. Separate environment from alpha: writes to edge-picks-nfl blob store → /nfl page.
-  # Model: v1.0-nfl-preseason (market-anchored + line shopping, reduced preseason stakes).
+  schedule = "5 13 * * *"
+  # NFL pipeline — 9:05am ET (13:05 UTC). Aligned with Omega MAIN daily process (Omega 9:00,
+  # NFL 9:05, CFB 9:10) so gen+QA share the live morning window; +5min avoids Odds API burst
+  # with Omega. GATED: fires only on days with NFL games (ESPN scoreboard) — quiet no-op else.
+  # Separate env: edge-picks-nfl → /nfl. Was 11:00am ET; moved 2026-09-05 (omega-fix-f5-claude-sched).
 
 [functions."generate-picks-nfl-background"]
   # Background function — 15min timeout for NFL pick generation
 
 [functions."trigger-picks-cfb"]
-  schedule = "5 15 * * *"
-  # College Football pipeline — 11:05am ET (15:05 UTC), added 2026-08-28. Clone of the NFL
-  # daily process (5 min later so the two Odds API pulls don't burst together). The generator
-  # decides game-day vs no-games inside: real card on CFB game days, "No College Football
-  # Games Scheduled For Today" otherwise. Separate environment from alpha/NFL: writes to the
-  # edge-picks-cfb blob store → /cfb page. Model: v1.0-cfb (market-anchored + line shopping,
-  # school-keyed team matching, drift clamps vs the consensus number).
+  schedule = "10 13 * * *"
+  # College Football pipeline — 9:10am ET (13:10 UTC). Aligned with Omega/NFL morning window
+  # (Omega 9:00, NFL 9:05, CFB 9:10) to share gen timing for the live daily process; staggered
+  # to avoid Odds API burst. Generator no-ops on non-CFB days. Separate env: edge-picks-cfb → /cfb.
+  # Was 11:05am ET; moved 2026-09-05 (omega-fix-f5-claude-sched).
 
 [functions."generate-picks-cfb-background"]
   # Background function — 15min timeout for CFB pick generation

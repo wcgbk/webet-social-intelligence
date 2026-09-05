@@ -47,6 +47,18 @@ exports.handler = async (event) => {
       console.log(`[trigger-clv] CFB CLV skipped: ${cfbErr.message}`);
     }
 
+    // Omega MAIN CLV (edge-picks-omega) — MLB/NFL/CFB multi-sport card. Fire-and-forget.
+    try {
+      const omega = await fetch(`${siteURL}/.netlify/functions/track-clv-omega`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduled: true, window }),
+      });
+      console.log(`[trigger-clv] Omega CLV: HTTP ${omega.status}`);
+    } catch (omegaErr) {
+      console.log(`[trigger-clv] Omega CLV skipped: ${omegaErr.message}`);
+    }
+
     return { statusCode: 200, body: `CLV ${window}: ${data.totalTracked}/${data.totalPicks} tracked` };
   } catch (err) {
     console.error(`[trigger-clv] Failed: ${err.message}`);

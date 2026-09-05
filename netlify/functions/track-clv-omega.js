@@ -40,6 +40,9 @@ const CORS = {
 //  fetch mapped 'MLB' → undefined and dropped it. Added baseball_mlb.)
 const ODDS_SPORTS_MAP = {
   'MLB': 'baseball_mlb',
+  'NFL': 'americanfootball_nfl',
+  'NCAAF': 'americanfootball_ncaaf',
+  'CFB': 'americanfootball_ncaaf',
   'NBA': 'basketball_nba',
   'NHL': 'icehockey_nhl',
   'NCAAB': 'basketball_ncaab',

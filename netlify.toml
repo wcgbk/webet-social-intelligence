@@ -32,8 +32,8 @@
   # OMEGA split-test pipeline (Ben-directed 2026-08-22) — 9am ET, same time as alpha for a
   # fair A/B. Full duplicate of the alpha daily process in an isolated environment: writes
   # to edge-picks-omega blob store → /omega page. KPIs start fresh from 2026-08-22.
-  # NOTE: no track-clv-omega cron yet — omega KPIs grade from ESPN at read time
-  # (get-results-omega); CLV capture for omega waits for the Odds API quota renewal (~28th).
+  # Omega CLV is invoked from trigger-clv (alongside NFL/CFB) — track-clv-omega maps MLB/NFL/NCAAF.
+  # KPIs still grade from ESPN at read time (get-results-omega).
 
 [functions."generate-picks-omega-background"]
   # Background function — 15min timeout for Omega pick generation

@@ -6,11 +6,16 @@
 // Team matching is SCHOOL-keyed (never nickname alone) — CFB nicknames collide constantly
 // (Tigers, Bulldogs, Wildcats…), so "LSU Tigers" must never match "Auburn Tigers".
 
+const { fetchESPNScores } = require('./lib/espn-scoreboard');
+const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
+
+const RESULTS_CACHE_KEY = 'results-cfb-cache-v3';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -18,39 +23,6 @@ function getEasternDateToday() {
   const m = String(et.getMonth() + 1).padStart(2, '0');
   const d = String(et.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-async function fetchESPNScores(dateISO) {
-  try {
-    const dateParam = dateISO.replace(/-/g, '');
-    // groups=80 = FBS; without it ESPN returns only Top-25 games and most picks never grade.
-    const url = `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=${dateParam}&groups=80&limit=300`;
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.events || []).map(ev => {
-      const comp = ev.competitions?.[0];
-      if (!comp) return null;
-      const away = comp.competitors?.find(c => c.homeAway === 'away');
-      const home = comp.competitors?.find(c => c.homeAway === 'home');
-      if (!away || !home) return null;
-      const status = comp.status || ev.status || {};
-      return {
-        awayTeam: away.team?.displayName || '',
-        awayAbbr: away.team?.abbreviation || '',
-        awayScore: parseInt(away.score) || 0,
-        homeTeam: home.team?.displayName || '',
-        homeAbbr: home.team?.abbreviation || '',
-        homeScore: parseInt(home.score) || 0,
-        state: status.type?.state || 'pre',
-        statusName: status.type?.name || '',
-        completed: !!status.type?.completed,
-        startISO: ev.date || comp.date || '',
-      };
-    }).filter(Boolean);
-  } catch (e) {
-    return [];
-  }
 }
 
 function normalizeTeam(name) {
@@ -207,7 +179,7 @@ async function gradeDay(dateISO, picksData) {
   const picks = (picksData.picks || []).slice(0, 3);
   if (picks.length === 0) return null;
 
-  const games = await fetchESPNScores(dateISO);
+  const games = await fetchESPNScores(dateISO, 'NCAAF');
 
   const dollarPerUnit = 150;
   let dayWins = 0, dayLosses = 0, dayPushes = 0, dayPending = 0;
@@ -288,13 +260,13 @@ exports.handler = async (event) => {
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-cfb`;
 
-    // 5-min cache
+    // Adaptive cache: 30s while pending (settle promptly after final), 5 min when decided.
     try {
-      const cacheResp = await fetch(`${storeUrl}/results-cfb-cache-v2`, { headers: authHeaders });
+      const cacheResp = await fetch(`${storeUrl}/${RESULTS_CACHE_KEY}`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
-        if (Date.now() - (cached.cachedAt || 0) < 300000) {
-          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=300' }, body: JSON.stringify(cached) };
+        if (cacheIsFresh(cached, event)) {
+          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(cached) }, body: JSON.stringify(cached) };
         }
       }
     } catch (e) {}
@@ -383,14 +355,14 @@ exports.handler = async (event) => {
     };
 
     try {
-      await fetch(`${storeUrl}/results-cfb-cache-v2`, {
+      await fetch(`${storeUrl}/${RESULTS_CACHE_KEY}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),
       });
     } catch (e) {}
 
-    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=300' }, body: JSON.stringify(result) };
+    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(result) }, body: JSON.stringify(result) };
 
   } catch (err) {
     console.error('[get-results-cfb] Error:', err.message);

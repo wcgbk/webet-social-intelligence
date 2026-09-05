@@ -4,13 +4,13 @@
 // blob) return "No College Football Games Scheduled For Today" — never the last game day's
 // card. Optional: ?date=YYYY-MM-DD for historical picks.
 
+const { publicPicksPayload } = require('./lib/public-picks');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
-
-const PREMIUM_FIELDS = ['kellyCalc', 'kellyFraction', 'zScore'];
 const NO_GAMES_MSG = "No College Football Games Scheduled For Today";
 
 function getEasternDateToday() {
@@ -25,12 +25,7 @@ function formatDateLong(dateISO) {
 }
 
 function stripPremium(picksData) {
-  if (!picksData || !Array.isArray(picksData.picks)) return picksData;
-  return { ...picksData, picks: picksData.picks.map(p => {
-    const pub = { ...p };
-    PREMIUM_FIELDS.forEach(f => { delete pub[f]; });
-    return pub;
-  }) };
+  return publicPicksPayload(picksData);
 }
 
 function emptyPayload(dateKey, msg) {
@@ -71,7 +66,7 @@ exports.handler = async (event) => {
       const store = getStore("edge-picks-cfb");
       const picksData = await store.get(`picks-${dateKey}`, { type: "json" });
       if (picksData) {
-        const cache = (picksData.picks && picksData.picks.length) ? 'public, max-age=300, s-maxage=300' : 'public, max-age=60, s-maxage=60';
+        const cache = (picksData.picks && picksData.picks.length) ? 'public, max-age=120, s-maxage=120, stale-while-revalidate=600' : 'public, max-age=60, s-maxage=60';
         return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(picksData)) };
       }
       if (requestedDate) {
@@ -89,7 +84,7 @@ exports.handler = async (event) => {
         try {
           const data = await readBlobRest(baseUrl, authHeaders, `picks-${dateKey}`, true);
           if (data) {
-            const cache = (data.picks && data.picks.length) ? 'public, max-age=300, s-maxage=300' : 'public, max-age=60, s-maxage=60';
+            const cache = (data.picks && data.picks.length) ? 'public, max-age=120, s-maxage=120, stale-while-revalidate=600' : 'public, max-age=60, s-maxage=60';
             return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(data)) };
           }
         } catch (e) {}

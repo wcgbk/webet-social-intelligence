@@ -13,6 +13,8 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://site.api.espn.com" crossorigin />
   <title>WeBetAI - Social Intelligence | Daily Omega Picks</title>
   <meta name="description" content="Omega — WeBetAI's split-test picks lab running head-to-head against Alpha. Same daily process, separate environment, KPIs tracked from September 5, 2026." />
   <meta property="og:type" content="website" />
@@ -129,10 +131,14 @@
     .badge-b { background: #f9a825; }
     .badge-lean { background: #5b6b7a; }
 
-    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; }
-    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
-    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pick-matchup-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .375rem; min-width: 0; }
+    .pick-matchup-row .pick-matchup { margin-bottom: 0; flex: 1; min-width: 0; }
+    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; gap: .5rem; min-width: 0; }
+    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); min-width: 0; flex: 1; display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem .35rem; }
+    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); flex-shrink: 0; }
+    .pick-footer { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; min-width: 0; }
+    .pick-footer-right { display: flex; align-items: center; gap: .375rem; flex-shrink: 0; }
     .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
     .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
     .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
@@ -210,6 +216,7 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: .5rem .625rem; margin-bottom: .625rem;
       border-radius: .5rem; font-size: .8125rem;
+      gap: .5rem; min-width: 0;
     }
     .score-bar-live { background: #eef6ff; border: 1px solid #b3d4fc; }
     .score-bar-win { background: #e8f5e9; border: 1px solid #a5d6a7; }
@@ -218,11 +225,12 @@
     .score-bar-scheduled { background: var(--off-white); border: 1px solid var(--border-lt); }
     .score-teams {
       display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: var(--olive);
+      min-width: 0; flex: 1;
     }
-    .score-team { display: flex; align-items: center; gap: .375rem; }
-    .score-team-name { min-width: 100px; }
-    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; }
-    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .score-team { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+    .score-team-name { min-width: 0; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; flex-shrink: 0; }
+    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 0; max-width: 50%; }
     .score-status {
       font-size: .6875rem; font-weight: 700; text-transform: uppercase;
       padding: 2px 8px; border-radius: 4px; white-space: nowrap;
@@ -232,7 +240,8 @@
     .status-loss { background: #c0392b; color: #fff; }
     .status-push { background: #f9a825; color: #fff; }
     .status-scheduled { background: var(--border-lt); color: var(--txt-m); }
-    .score-detail { font-size: .6875rem; color: var(--txt-m); }
+    .score-detail { font-size: .6875rem; color: var(--txt-m); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+    .main, .pick-card, .parlay-section { overflow-x: hidden; }
     @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
 
     /* Parlay leg result indicators */
@@ -539,6 +548,22 @@
         font-size: .6875rem !important; padding: .125rem .5rem !important;
         height: auto; min-width: 0;
       }
+
+      .main { padding: 1rem .75rem 2.5rem; }
+      .pick-card, .parlay-section { padding: .875rem .75rem; }
+      .pick-matchup { white-space: normal; overflow: visible; text-overflow: unset; font-size: .9375rem; line-height: 1.3; }
+      .pick-score-bar { align-items: flex-start; padding: .5rem; }
+      .score-team-name { max-width: 8.5rem; }
+      .progress-delta, .win-prob { margin-left: 0; }
+      .pick-units { font-size: .75rem; line-height: 1.35; min-width: 0; flex: 1; }
+      .parlay-leg { align-items: flex-start; }
+      .leg-pick { min-width: 0; overflow-wrap: anywhere; }
+      .day-picks-list li { gap: .5rem; align-items: flex-start; }
+    }
+    @media (max-width: 400px) {
+      .pick-score-bar { flex-direction: column; align-items: stretch; }
+      .score-meta { max-width: 100%; flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+      .score-team-name { max-width: 14rem; }
     }
   </style>
 </head>
@@ -670,7 +695,8 @@
     const multiWordNicks = [
       'Red Sox', 'White Sox', 'Blue Jays',
       'Trail Blazers', 'Blue Jackets', 'Red Wings', 'Maple Leafs', 'Golden Knights',
-      'Blue Devils', 'Sun Devils', 'Mean Green', 'Tar Heels', 'Horned Frogs'
+      'Blue Devils', 'Sun Devils', 'Mean Green', 'Tar Heels', 'Horned Frogs',
+      'Rainbow Warriors', 'Wolf Pack', 'Delta Devils'
     ];
     const lower = name.toLowerCase().trim();
     for (const nick of multiWordNicks) {
@@ -739,6 +765,8 @@
      ═══════════════════════════════════════════════ */
 
   const ESPN_ENDPOINTS = {
+    'NFL': 'football/nfl',
+    'NCAAF': 'football/college-football',
     'NBA': 'basketball/nba',
     'NHL': 'hockey/nhl',
     'NCAAB': 'basketball/mens-college-basketball',
@@ -758,73 +786,124 @@
   let picksData = null;    // stored globally for re-render
   let picksDataGlobal = null; // store sorted picks for verify access
   let refreshTimer = null;
+  let kpiTimer = null;
 
-  async function fetchScoresForSport(sport, dateISO) {
+  function etDateFromISO(iso) {
+    if (!iso) return null;
+    try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); }
+    catch (e) { return null; }
+  }
+
+  function scoreboardDatesForPicks(data) {
+    const dates = new Set();
+    if (data && data.date) dates.add(data.date);
+    const addPick = (p) => { const et = etDateFromISO(p && p.commenceTime); if (et) dates.add(et); };
+    for (const p of (data && data.picks) || []) addPick(p);
+    const apiParlay = (data && data.parlayLegs && data.parlayLegs[0]) || null;
+    if (apiParlay && apiParlay.legs) for (const leg of apiParlay.legs) addPick(leg);
+    return [...dates];
+  }
+
+  function scoreboardUrls(sport, dates) {
     const endpoint = ESPN_ENDPOINTS[sport];
     if (!endpoint) return [];
-    try {
-      const dateParam = dateISO ? `?dates=${String(dateISO).replace(/-/g, '')}` : '';
-      const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard${dateParam}`;
-      const resp = await fetch(url);
-      if (!resp.ok) return [];
-      const data = await resp.json();
-      return (data.events || []).map(ev => {
-        const comp = ev.competitions?.[0];
-        if (!comp) return null;
-        const away = comp.competitors?.find(c => c.homeAway === 'away');
-        const home = comp.competitors?.find(c => c.homeAway === 'home');
-        if (!away || !home) return null;
-        const status = comp.status || ev.status || {};
-        // Extract start time and convert to EST display
-        const rawDate = ev.date || comp.date || '';
-        let startTimeEST = '';
-        if (rawDate) {
-          try {
-            const d = new Date(rawDate);
-            startTimeEST = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-          } catch(e) {}
-        }
-        // First-5-innings (F5) score from per-inning linescores (MLB only). An F5 bet settles on the
-        // score THROUGH 5 innings and locks once the bottom of the 5th is complete (we've advanced
-        // past the 5th, or the game is final with >=5 innings on both sides).
-        const isMLB = sport === 'MLB';
-        const parseLS = (c) => Array.isArray(c?.linescores) ? c.linescores.map(l => Number(l.value ?? l.displayValue ?? 0) || 0) : [];
-        const awayLS = isMLB ? parseLS(away) : [];
-        const homeLS = isMLB ? parseLS(home) : [];
-        const sum5 = (a) => a.slice(0, 5).reduce((s, v) => s + v, 0);
-        const period = status.period || 0;
-        const state = status.type?.state || 'pre';
-        const f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
-        return {
-          awayTeam: away.team?.displayName || away.team?.shortDisplayName || '',
-          awayAbbr: away.team?.abbreviation || '',
-          awayScore: parseInt(away.score) || 0,
-          homeTeam: home.team?.displayName || home.team?.shortDisplayName || '',
-          homeAbbr: home.team?.abbreviation || '',
-          homeScore: parseInt(home.score) || 0,
-          state,  // pre, in, post
-          detail: status.type?.shortDetail || status.type?.detail || '',
-          clock: status.displayClock || '',
-          period,
-          startTimeEST,
-          startISO: rawDate,  // raw ISO start — used to disambiguate doubleheaders vs pick.commenceTime
-          awayScoreF5: isMLB ? sum5(awayLS) : null,
-          homeScoreF5: isMLB ? sum5(homeLS) : null,
-          f5Complete: !!f5Complete,
-          awayLinescores: awayLS,
-          homeLinescores: homeLS,
-        };
-      }).filter(Boolean);
-    } catch (e) {
-      console.warn('Score fetch failed for', sport, e);
-      return [];
+    const isNcaaf = sport === 'NCAAF';
+    const urls = [];
+    const push = (dateISO, groups) => {
+      const q = [];
+      if (dateISO) q.push('dates=' + String(dateISO).replace(/-/g, ''));
+      if (groups) { q.push('groups=' + groups); q.push('limit=300'); }
+      urls.push('https://site.api.espn.com/apis/site/v2/sports/' + endpoint + '/scoreboard' + (q.length ? '?' + q.join('&') : ''));
+    };
+    const dateList = (dates && dates.length) ? dates : [null];
+    for (const d of dateList) {
+      if (isNcaaf) { push(d, '90'); push(d, '80'); }
+      else push(d, null);
     }
+    // Undated current/week board so live games aren't dropped on UTC date edges
+    if (isNcaaf) { push(null, '90'); push(null, '80'); }
+    else push(null, null);
+    return [...new Set(urls)];
+  }
+
+  function mapEspnEvent(ev, sport) {
+    const comp = ev.competitions && ev.competitions[0];
+    if (!comp) return null;
+    const away = (comp.competitors || []).find(c => c.homeAway === 'away');
+    const home = (comp.competitors || []).find(c => c.homeAway === 'home');
+    if (!away || !home) return null;
+    const status = comp.status || ev.status || {};
+    const rawDate = ev.date || comp.date || '';
+    let startTimeEST = '';
+    if (rawDate) {
+      try {
+        startTimeEST = new Date(rawDate).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+      } catch (e) {}
+    }
+    const isMLB = sport === 'MLB';
+    const parseLS = (c) => Array.isArray(c && c.linescores) ? c.linescores.map(l => Number(l.value ?? l.displayValue ?? 0) || 0) : [];
+    const awayLS = isMLB ? parseLS(away) : [];
+    const homeLS = isMLB ? parseLS(home) : [];
+    const sum5 = (a) => a.slice(0, 5).reduce((s, v) => s + v, 0);
+    const period = status.period || 0;
+    const state = (status.type && status.type.state) || 'pre';
+    const f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
+    return {
+      awayTeam: (away.team && (away.team.displayName || away.team.shortDisplayName)) || '',
+      awayAbbr: (away.team && away.team.abbreviation) || '',
+      awayScore: parseInt(away.score, 10) || 0,
+      homeTeam: (home.team && (home.team.displayName || home.team.shortDisplayName)) || '',
+      homeAbbr: (home.team && home.team.abbreviation) || '',
+      homeScore: parseInt(home.score, 10) || 0,
+      state,
+      detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
+      clock: status.displayClock || '',
+      period,
+      startTimeEST,
+      startISO: rawDate,
+      awayScoreF5: isMLB ? sum5(awayLS) : null,
+      homeScoreF5: isMLB ? sum5(homeLS) : null,
+      f5Complete: !!f5Complete,
+      awayLinescores: awayLS,
+      homeLinescores: homeLS,
+    };
+  }
+
+  function mergeEspnGames(lists) {
+    const map = new Map();
+    const key = (g) => ((g.awayAbbr || g.awayTeam || '') + '|' + (g.homeAbbr || g.homeTeam || '') + '|' + (g.startISO || '')).toLowerCase();
+    const rank = (g) => g.state === 'in' ? 3 : g.state === 'post' ? 2 : 1;
+    for (const list of lists) {
+      for (const g of list || []) {
+        const k = key(g);
+        const prev = map.get(k);
+        if (!prev || rank(g) > rank(prev)) map.set(k, g);
+      }
+    }
+    return [...map.values()];
+  }
+
+  async function fetchScoresForSport(sport, dates) {
+    const urls = scoreboardUrls(sport, dates);
+    if (!urls.length) return [];
+    const results = await Promise.all(urls.map(async url => {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.events || []).map(ev => mapEspnEvent(ev, sport)).filter(Boolean);
+      } catch (e) {
+        console.warn('Score fetch failed for', sport, e);
+        return [];
+      }
+    }));
+    return mergeEspnGames(results);
   }
 
   async function fetchAllScores(sports) {
     const unique = [...new Set(sports)];
-    const dateISO = (picksData && picksData.date) || null;
-    const results = await Promise.all(unique.map(async s => [s, await fetchScoresForSport(s, dateISO)]));
+    const dates = scoreboardDatesForPicks(picksData);
+    const results = await Promise.all(unique.map(async s => [s, await fetchScoresForSport(s, dates)]));
     for (const [sport, games] of results) {
       cachedScores[sport] = games;
     }
@@ -837,7 +916,12 @@
       .replace(/\s+/g, ' ').trim();
   }
 
-  function teamsMatch(pickTeam, espnTeam, espnAbbr) {
+  function schoolKey(name) {
+    const parts = normalizeTeam(name).split(' ');
+    return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
+  }
+
+  function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
     const p = normalizeTeam(pickTeam);
     const e = normalizeTeam(espnTeam);
     if (!p || !e) return false;
@@ -851,7 +935,12 @@
       const pWords = p.split(' ');
       if (pWords.includes(a)) return true;
     }
-    // Last word match (team nickname)
+    if (sport === 'NCAAF') {
+      const pS = schoolKey(pickTeam), eS = schoolKey(espnTeam);
+      if (pS.length > 2 && pS === eS) return true;
+      return false;
+    }
+    // Last word match (team nickname) — not for CFB (Tigers/Bulldogs collide)
     const pLast = p.split(' ').pop();
     const eLast = e.split(' ').pop();
     if (pLast.length > 2 && pLast === eLast) return true;
@@ -885,18 +974,19 @@
 
   function findGame(pick) {
     const sport = pick.sport || '';
+    const ncaaf = sport === 'NCAAF';
     const games = (cachedScores[sport] || []).filter(g => gameMatchesPickWindow(g, pick));
     const matchup = (pick.matchup || '').toLowerCase();
     const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
 
     const primary = [];
     for (const g of games) {
-      const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
-      const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
-      const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr)) ||
-                         (awayLast.length > 3 && matchup.includes(awayLast));
-      const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
-                         (homeLast.length > 3 && matchup.includes(homeLast));
+      const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
+      const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
+      const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport)) ||
+                         (awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
+      const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport)) ||
+                         (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
       if (awayMatch && homeMatch) primary.push(g);
     }
     if (primary.length) return disambiguateDoubleheader(primary, pick);
@@ -905,27 +995,29 @@
     if (pickTeam) {
       const secondary = [];
       for (const g of games) {
-        if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
-          const otherLast = normalizeTeam(
-            teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
-          ).split(' ').pop();
-          if (otherLast.length > 3 && matchup.includes(otherLast)) secondary.push(g);
+        const awayHit = teamsMatch(pickTeam, g.awayTeam, g.awayAbbr, sport);
+        const homeHit = teamsMatch(pickTeam, g.homeTeam, g.homeAbbr, sport);
+        if (awayHit || homeHit) {
+          const otherKey = ncaaf
+            ? schoolKey(awayHit ? g.homeTeam : g.awayTeam)
+            : normalizeTeam(awayHit ? g.homeTeam : g.awayTeam).split(' ').pop();
+          if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
         }
       }
       if (secondary.length) return disambiguateDoubleheader(secondary, pick);
     }
-    // Last resort: match on both team last-words from matchup parts
+    // Last resort: match on both team last-words / school keys from matchup parts
     if (matchupParts.length >= 2) {
       const tertiary = [];
       for (const g of games) {
-        const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
-        const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
-        const part0 = normalizeTeam(matchupParts[0]);
-        const part1 = normalizeTeam(matchupParts[1]);
-        if ((part0.includes(awayLast) || awayLast.includes(part0)) &&
-            (part1.includes(homeLast) || homeLast.includes(part1))) tertiary.push(g);
-        else if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
-            (part1.includes(awayLast) || awayLast.includes(part1))) tertiary.push(g);
+        const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
+        const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
+        const part0 = ncaaf ? schoolKey(matchupParts[0]) : normalizeTeam(matchupParts[0]);
+        const part1 = ncaaf ? schoolKey(matchupParts[1]) : normalizeTeam(matchupParts[1]);
+        if ((part0.includes(awayKey) || awayKey.includes(part0)) &&
+            (part1.includes(homeKey) || homeKey.includes(part1))) tertiary.push(g);
+        else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
+            (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
       }
       if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
     }
@@ -980,8 +1072,8 @@
       const liveAwayScore = awayScore;
       const liveHomeScore = homeScore;
       const livePickTeam = livePickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
-      const livePickedAway = teamsMatch(livePickTeam, game.awayTeam, game.awayAbbr);
-      const livePickedHome = teamsMatch(livePickTeam, game.homeTeam, game.homeAbbr);
+      const livePickedAway = teamsMatch(livePickTeam, game.awayTeam, game.awayAbbr, pick.sport);
+      const livePickedHome = teamsMatch(livePickTeam, game.homeTeam, game.homeAbbr, pick.sport);
       let projected = 'live';
 
       if (liveBetType === 'total' || liveBetType === 'f5 total' || /over|under/i.test(livePickStr)) {
@@ -1018,8 +1110,8 @@
 
     // Figure out which team was picked
     const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').replace(/Over|Under/i, '').trim();
-    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
-    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
 
     // Total (Over/Under)
     if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
@@ -1095,6 +1187,8 @@
     const secs = parseFloat(parts[1]) || 0;
     const remaining = mins + secs / 60;
     const configs = {
+      'NFL':   { periods: 4, periodMins: 15 },
+      'NCAAF': { periods: 4, periodMins: 15 },
       'NBA':   { periods: 4, periodMins: 12 },
       'NCAAB': { periods: 2, periodMins: 20 },
       'NHL':   { periods: 3, periodMins: 20 },
@@ -1119,9 +1213,9 @@
     const away = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
     const home = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
     const t = gameElapsed(sport, game.period, game.clock, isF5);
-    const sigmaPerMin = { 'NBA': 1.8, 'NCAAB': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
+    const sigmaPerMin = { 'NFL': 1.75, 'NCAAF': 2.1, 'NBA': 1.8, 'NCAAB': 1.5, 'NHL': 0.28, 'MLB': 0.35 };
     const sigma = sigmaPerMin[sport] || 1.0;
-    const totalMinsMap = { 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
+    const totalMinsMap = { 'NFL': 60, 'NCAAF': 60, 'NBA': 48, 'NCAAB': 40, 'NHL': 60, 'MLB': 54 };
     // F5 spans the first 5 of 9 innings → scale the MLB variance horizon to ~5 innings.
     const gameMins = (sport === 'MLB' && isF5) ? 30 : (totalMinsMap[sport] || 48);
 
@@ -1147,8 +1241,8 @@
       if (!spreadMatch) return null;
       const spread = parseFloat(spreadMatch[1]);
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
-      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1165,8 +1259,8 @@
     // Moneyline (full-game or F5) — live prob from the current score margin vs a pick'em prior.
     if (betType === 'moneyline' || betType === 'f5 moneyline' || /\bml\b/i.test(pickStr)) {
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
-      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return null;
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1211,8 +1305,8 @@
       if (!spreadMatch) return '';
       const spread = parseFloat(spreadMatch[1]);
       const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\(?\s*F5\s*\)?/ig, ' ').trim();
-      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
-      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+      const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+      const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
       if (!pickedAway && !pickedHome) return '';
       const pickedScore = pickedAway ? away : home;
       const oppScore = pickedAway ? home : away;
@@ -1587,8 +1681,8 @@
           <span class="sport-tag">${esc(p.sport)}</span>
           <span class="rating-badge ${badge}">${esc(label)}</span>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
-          <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup))}</div>
+        <div class="pick-matchup-row">
+          <div class="pick-matchup">${esc(shortMatchup(p.matchup))}</div>
           ${timeChip}
         </div>
         ${scorebar}
@@ -1598,9 +1692,9 @@
         </div>
         <div class="pick-divider"></div>
         <div class="pick-analysis">${esc((p.coreReasoning || '').replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/\[\d+[^\]]*\]/g, '').replace(/Model projects/g, 'WeBetAI projects').replace(/The model/g, 'WeBetAI').replace(/the model/g, 'WeBetAI').replace(/Model:/g, 'WeBetAI:').replace(/Model shows/g, 'WeBetAI shows').replace(/Model edge/g, 'WeBetAI edge').replace(/15\.1-point edge/g, '9.5-point edge'))}</div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="pick-footer">
           <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${wholeUp((parseFloat(p.units)||1)*dollarPerUnit).toLocaleString()} — To Win +$${wholeUp(calcWinnings(wholeUp((parseFloat(p.units)||1)*dollarPerUnit), p.odds||'-110')).toLocaleString()}</div>
-          <div style="display:flex; align-items:center; gap:.375rem;">
+          <div class="pick-footer-right">
             ${liveResultHTML}
             ${edgeBadgeHTML || ''}
           </div>
@@ -1652,8 +1746,8 @@
             <span class="sport-tag">${esc(bonusLeg.sport)}</span>
             <span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">OPTIMIZED PARLAY</span>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
-            <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(bonusLeg.matchup || ''))}</div>
+          <div class="pick-matchup-row">
+            <div class="pick-matchup">${esc(shortMatchup(bonusLeg.matchup || ''))}</div>
             ${timeChip}
           </div>
           ${bonusScorebar}
@@ -1663,9 +1757,9 @@
           </div>
           <div class="pick-divider"></div>
           <div class="pick-analysis">${esc(bonusLeg.sport)} ${esc(bonusLeg.betType || '')} play at ${esc(bonusLeg.odds)} with ${esc(bonusLeg.coverProb || '')} cover probability and ${esc(bonusLeg.ev || '')} expected value. Selected by WeBetAI's parlay optimizer after scanning all qualifying candidates across every league.</div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="pick-footer">
             <div class="pick-units" style="font-size:.75rem; color:var(--txt-l);">${esc(bonusLeg.coverProb || '')} cover · ${esc(bonusLeg.ev || '')} EV</div>
-            <div style="display:flex; align-items:center; gap:.375rem;">
+            <div class="pick-footer-right">
               ${liveResultHTML}
               ${edgeBadgeHTML}
             </div>
@@ -1845,17 +1939,28 @@
     }
   }
 
+  function resultSignature(data) {
+    return (data.picks || []).map(p => {
+      const g = findGame(p);
+      const r = determineResult(p, g);
+      return r.isLive ? 'L' : (r.status || 's');
+    }).join('|');
+  }
+
   function scheduleRefresh(seconds) {
     if (refreshTimer) clearInterval(refreshTimer);
+    if (kpiTimer) clearInterval(kpiTimer);
     refreshTimer = setInterval(async () => {
       if (!picksData) return;
-      const sports = getAllSports(picksData);
-      await fetchAllScores(sports);
+      const prev = resultSignature(picksData);
+      await fetchAllScores(getAllSports(picksData));
       renderPicks(picksData);
-      // Also refresh the top KPI/track-record section (ROI, record, accuracy, P/L,
-      // day rows) so it updates live as games complete — no manual page refresh needed.
-      loadResults();
+      const next = resultSignature(picksData);
+      if (next !== prev) loadResults({ bust: true });
     }, seconds * 1000);
+    // KPI poll is slower than live scores; bust immediately when a pick goes final.
+    const kpiSec = seconds <= 30 ? 45 : 300;
+    kpiTimer = setInterval(() => loadResults(), kpiSec * 1000);
   }
 
   function getAllSports(data) {
@@ -1871,16 +1976,17 @@
 
   async function loadPicks() {
     try {
-      const resp = await fetch('/api/get-picks-omega', { cache: 'no-store' });
+      const resp = await fetch('/api/get-picks-omega');
       if (!resp.ok) throw new Error('API returned ' + resp.status);
       const data = await resp.json();
       picksData = data;
-
-      // Fetch scores for all sports in the picks
-      const sports = getAllSports(data);
-      await fetchAllScores(sports);
-
       renderPicks(data);
+
+      const sports = getAllSports(data);
+      if (sports.length) {
+        await fetchAllScores(sports);
+        renderPicks(data);
+      }
     } catch (err) {
       console.error('Failed to load picks:', err);
       document.getElementById('picks-container').innerHTML = `
@@ -1901,9 +2007,10 @@
   // Load results automatically
   loadResults();
 
-  async function loadResults() {
+  async function loadResults(opts) {
     try {
-      const resp = await fetch('/api/get-results-omega');
+      const q = (opts && opts.bust) ? ('?refresh=1&t=' + Date.now()) : '';
+      const resp = await fetch('/api/get-results-omega' + q);
       if (!resp.ok) throw new Error('API ' + resp.status);
       const data = await resp.json();
       renderResults(data);

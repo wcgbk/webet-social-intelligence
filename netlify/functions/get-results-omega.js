@@ -4,27 +4,16 @@
 //   - Beta picks for dates before alpha started (pre-alpha history)
 //   - 0-0 placeholder rows for dates with no picks in either pipeline
 
+const { fetchESPNScores } = require('./lib/espn-scoreboard');
+const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
 
-const ESPN_ENDPOINTS = {
-  'NBA': 'basketball/nba',
-  'NHL': 'hockey/nhl',
-  'NCAAB': 'basketball/mens-college-basketball',
-  'MLB': 'baseball/mlb',
-  'EPL': 'soccer/eng.1',
-  'La Liga': 'soccer/esp.1',
-  'Serie A': 'soccer/ita.1',
-  'Bundesliga': 'soccer/ger.1',
-  'Ligue 1': 'soccer/fra.1',
-  'MLS': 'soccer/usa.1',
-  'UCL': 'soccer/uefa.champions',
-  'UEL': 'soccer/uefa.europa',
-  'Europa': 'soccer/uefa.europa',
-};
+const RESULTS_CACHE_KEY = 'results-omega-cache-v3';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -45,47 +34,16 @@ function getAllDatesInRange(startDate, endDate) {
   return dates;
 }
 
-async function fetchESPNScores(dateISO, sport) {
-  const endpoint = ESPN_ENDPOINTS[sport];
-  if (!endpoint) return [];
-  try {
-    const dateParam = dateISO.replace(/-/g, '');
-    const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard?dates=${dateParam}`;
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.events || []).map(ev => {
-      const comp = ev.competitions?.[0];
-      if (!comp) return null;
-      const away = comp.competitors?.find(c => c.homeAway === 'away');
-      const home = comp.competitors?.find(c => c.homeAway === 'home');
-      if (!away || !home) return null;
-      const status = comp.status || ev.status || {};
-      return {
-        awayTeam: away.team?.displayName || '',
-        awayAbbr: away.team?.abbreviation || '',
-        awayScore: parseInt(away.score) || 0,
-        awayLine: (away.linescores || []).map(x => parseInt(x.value) || 0),
-        homeTeam: home.team?.displayName || '',
-        homeAbbr: home.team?.abbreviation || '',
-        homeScore: parseInt(home.score) || 0,
-        homeLine: (home.linescores || []).map(x => parseInt(x.value) || 0),
-        state: status.type?.state || 'pre',
-        statusName: status.type?.name || '',
-        completed: !!status.type?.completed,
-        startISO: ev.date || comp.date || '',  // disambiguates doubleheaders vs pick.commenceTime
-      };
-    }).filter(Boolean);
-  } catch (e) {
-    return [];
-  }
-}
-
 function normalizeTeam(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function teamsMatch(pickTeam, espnTeam, espnAbbr) {
+function schoolKey(name) {
+  const parts = normalizeTeam(name).split(' ');
+  return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
+}
+
+function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
   if (!p || !e) return false;
@@ -95,6 +53,11 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr) {
     const a = espnAbbr.toLowerCase();
     const pWords = p.split(' ');
     if (pWords.includes(a)) return true;
+  }
+  if (sport === 'NCAAF') {
+    const pS = schoolKey(pickTeam), eS = schoolKey(espnTeam);
+    if (pS.length > 2 && pS === eS) return true;
+    return false;
   }
   const pLast = p.split(' ').pop();
   const eLast = e.split(' ').pop();
@@ -120,16 +83,18 @@ function disambiguateDoubleheader(matches, pick) {
 }
 
 function findGame(pick, games) {
+  const sport = pick.sport || '';
+  const ncaaf = sport === 'NCAAF';
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const primary = [];
   for (const g of games) {
-    const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
-    const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
-    const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr)) ||
-                       (awayLast.length > 3 && matchup.includes(awayLast));
-    const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
-                       (homeLast.length > 3 && matchup.includes(homeLast));
+    const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
+    const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
+    const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport)) ||
+                       (awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
+    const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport)) ||
+                       (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
     if (awayMatch && homeMatch) primary.push(g);
   }
   if (primary.length) return disambiguateDoubleheader(primary, pick);
@@ -137,11 +102,13 @@ function findGame(pick, games) {
   if (pickTeam) {
     const secondary = [];
     for (const g of games) {
-      if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
-        const otherLast = normalizeTeam(
-          teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
-        ).split(' ').pop();
-        if (otherLast.length > 3 && matchup.includes(otherLast)) secondary.push(g);
+      const awayHit = teamsMatch(pickTeam, g.awayTeam, g.awayAbbr, sport);
+      const homeHit = teamsMatch(pickTeam, g.homeTeam, g.homeAbbr, sport);
+      if (awayHit || homeHit) {
+        const otherKey = ncaaf
+          ? schoolKey(awayHit ? g.homeTeam : g.awayTeam)
+          : normalizeTeam(awayHit ? g.homeTeam : g.awayTeam).split(' ').pop();
+        if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
       }
     }
     if (secondary.length) return disambiguateDoubleheader(secondary, pick);
@@ -149,14 +116,14 @@ function findGame(pick, games) {
   if (matchupParts.length >= 2) {
     const tertiary = [];
     for (const g of games) {
-      const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
-      const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
-      const part0 = normalizeTeam(matchupParts[0]);
-      const part1 = normalizeTeam(matchupParts[1]);
-      if ((part0.includes(awayLast) || awayLast.includes(part0)) &&
-          (part1.includes(homeLast) || homeLast.includes(part1))) tertiary.push(g);
-      else if ((part0.includes(homeLast) || homeLast.includes(part0)) &&
-          (part1.includes(awayLast) || awayLast.includes(part1))) tertiary.push(g);
+      const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
+      const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
+      const part0 = ncaaf ? schoolKey(matchupParts[0]) : normalizeTeam(matchupParts[0]);
+      const part1 = ncaaf ? schoolKey(matchupParts[1]) : normalizeTeam(matchupParts[1]);
+      if ((part0.includes(awayKey) || awayKey.includes(part0)) &&
+          (part1.includes(homeKey) || homeKey.includes(part1))) tertiary.push(g);
+      else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
+          (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
     }
     if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
   }
@@ -196,8 +163,8 @@ function gradePick(pick, game) {
     homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
   }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
-  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
+  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
 
   if (betType === 'total' || /over|under/i.test(pickStr)) {
     const totalPoints = awayScore + homeScore;
@@ -396,13 +363,14 @@ exports.handler = async (event) => {
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     const alphaStoreUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega`;
 
-    // Check cache (5-min TTL, v2 key to bust stale cache)
+    // Adaptive cache: 30s while any pick is pending (settle promptly after final),
+    // 5 min once the ET day is fully decided. v3 busts the pre-NFL/NCAAF endpoint cache.
     try {
-      const cacheResp = await fetch(`${alphaStoreUrl}/results-omega-cache-v2`, { headers: authHeaders });
+      const cacheResp = await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
-        if (Date.now() - (cached.cachedAt || 0) < 300000) {
-          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=300' }, body: JSON.stringify(cached) };
+        if (cacheIsFresh(cached, event)) {
+          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(cached) }, body: JSON.stringify(cached) };
         }
       }
     } catch (e) {}
@@ -509,14 +477,14 @@ exports.handler = async (event) => {
     };
 
     try {
-      await fetch(`${alphaStoreUrl}/results-omega-cache-v2`, {
+      await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),
       });
     } catch (e) {}
 
-    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=300' }, body: JSON.stringify(result) };
+    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(result) }, body: JSON.stringify(result) };
 
   } catch (err) {
     console.error('[get-results-omega] Error:', err.message);

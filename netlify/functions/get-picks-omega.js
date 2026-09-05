@@ -5,6 +5,8 @@
 // Default path never falls back to yesterday — that painted last-night W/L onto
 // the morning card while the 9am generator was still running.
 
+const { publicPicksPayload } = require('./lib/public-picks');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -15,13 +17,12 @@ const CORS = {
 // get-picks-premium (session + balance validated). They were never rendered on the
 // free page, so stripping them changes nothing visible — client-side hiding alone
 // is forbidden per the product charter.
-const PREMIUM_FIELDS = ['kellyCalc', 'kellyFraction', 'zScore'];
 function todayET() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 function liveCacheHeaders(isGenerating) {
-  const age = isGenerating ? 10 : 30;
-  return { ...CORS, 'Cache-Control': `public, max-age=${age}, s-maxage=${age}, must-revalidate` };
+  const age = isGenerating ? 10 : 60;
+  return { ...CORS, 'Cache-Control': `public, max-age=${age}, s-maxage=${age}, stale-while-revalidate=300, must-revalidate` };
 }
 function generatingPayload(dateKey) {
   return {
@@ -32,13 +33,7 @@ function generatingPayload(dateKey) {
   };
 }
 function stripPremium(picksData) {
-  if (!picksData || !Array.isArray(picksData.picks)) return picksData;
-  const clone = { ...picksData, picks: picksData.picks.map(p => {
-    const pub = { ...p };
-    PREMIUM_FIELDS.forEach(f => { delete pub[f]; });
-    return pub;
-  }) };
-  return clone;
+  return publicPicksPayload(picksData);
 }
 
 exports.handler = async (event) => {

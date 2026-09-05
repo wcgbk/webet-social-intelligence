@@ -4,11 +4,16 @@
 // lazily against ESPN NFL finals on read — same architecture as get-results-alpha, with a
 // brand-new stat line starting from zero for the NFL model.
 
+const { fetchESPNScores } = require('./lib/espn-scoreboard');
+const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
+
+const RESULTS_CACHE_KEY = 'results-nfl-cache-v4';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -27,38 +32,6 @@ function getAllDatesInRange(startDate, endDate) {
     current.setUTCDate(current.getUTCDate() + 1);
   }
   return dates;
-}
-
-async function fetchESPNScores(dateISO) {
-  try {
-    const dateParam = dateISO.replace(/-/g, '');
-    const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${dateParam}`;
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.events || []).map(ev => {
-      const comp = ev.competitions?.[0];
-      if (!comp) return null;
-      const away = comp.competitors?.find(c => c.homeAway === 'away');
-      const home = comp.competitors?.find(c => c.homeAway === 'home');
-      if (!away || !home) return null;
-      const status = comp.status || ev.status || {};
-      return {
-        awayTeam: away.team?.displayName || '',
-        awayAbbr: away.team?.abbreviation || '',
-        awayScore: parseInt(away.score) || 0,
-        homeTeam: home.team?.displayName || '',
-        homeAbbr: home.team?.abbreviation || '',
-        homeScore: parseInt(home.score) || 0,
-        state: status.type?.state || 'pre',
-        statusName: status.type?.name || '',
-        completed: !!status.type?.completed,
-        startISO: ev.date || comp.date || '',
-      };
-    }).filter(Boolean);
-  } catch (e) {
-    return [];
-  }
 }
 
 function normalizeTeam(name) {
@@ -208,7 +181,7 @@ async function gradeDay(dateISO, picksData) {
   const picks = (picksData.picks || []).slice(0, 3);
   if (picks.length === 0) return null;
 
-  const games = await fetchESPNScores(dateISO);
+  const games = await fetchESPNScores(dateISO, 'NFL');
 
   const dollarPerUnit = 150;
   let dayWins = 0, dayLosses = 0, dayPushes = 0, dayPending = 0;
@@ -289,13 +262,13 @@ exports.handler = async (event) => {
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     const storeUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-nfl`;
 
-    // 5-min cache
+    // Adaptive cache: 30s while pending (settle promptly after final), 5 min when decided.
     try {
-      const cacheResp = await fetch(`${storeUrl}/results-nfl-cache-v3`, { headers: authHeaders });
+      const cacheResp = await fetch(`${storeUrl}/${RESULTS_CACHE_KEY}`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
-        if (Date.now() - (cached.cachedAt || 0) < 300000) {
-          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=300' }, body: JSON.stringify(cached) };
+        if (cacheIsFresh(cached, event)) {
+          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(cached) }, body: JSON.stringify(cached) };
         }
       }
     } catch (e) {}
@@ -384,14 +357,14 @@ exports.handler = async (event) => {
     };
 
     try {
-      await fetch(`${storeUrl}/results-nfl-cache-v3`, {
+      await fetch(`${storeUrl}/${RESULTS_CACHE_KEY}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),
       });
     } catch (e) {}
 
-    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=300' }, body: JSON.stringify(result) };
+    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(result) }, body: JSON.stringify(result) };
 
   } catch (err) {
     console.error('[get-results-nfl] Error:', err.message);

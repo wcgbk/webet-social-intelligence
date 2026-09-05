@@ -2,3 +2,11 @@
   Content-Type: text/vcard; charset=utf-8
   Content-Disposition: inline; filename="Betty.vcf"
   Cache-Control: public, max-age=0, must-revalidate
+
+# Pick pages fetch live scores client-side; HTML can cache briefly.
+/daily-omega/*
+  Cache-Control: public, max-age=120, must-revalidate
+/nfl/*
+  Cache-Control: public, max-age=120, must-revalidate
+/cfb/*
+  Cache-Control: public, max-age=120, must-revalidate

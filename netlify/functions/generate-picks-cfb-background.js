@@ -648,6 +648,12 @@ function findESPNGame(espnGames, home, away) {
 }
 
 // ── Selection: one pick per game (highest EV), top 3, floors ──
+// CFB blowout filter (parity with Omega MAIN): |spread|≥17.5 needs EV≥6%.
+function cfbSpreadAbsLine(cand) {
+  if (!cand || cand.market !== "Spread") return null;
+  const m = String(cand.side || "").match(/([+-]?\d+(?:\.\d+)?)\s*$/);
+  return m ? Math.abs(parseFloat(m[1])) : null;
+}
 function selectPicks(allCands, cfg) {
   const byGame = new Map();
   for (const cand of allCands) {
@@ -657,7 +663,15 @@ function selectPicks(allCands, cfg) {
   }
   const perGame = [...byGame.values()].sort((a, b) => b.ev - a.ev);
 
-  const qualified = perGame.filter(x => x.ev >= cfg.evFloor).slice(0, 3);
+  const qualified = perGame.filter(x => {
+    if (x.ev < cfg.evFloor) return false;
+    const abs = cfbSpreadAbsLine(x);
+    if (abs != null && abs >= 17.5 && x.ev < 0.06) {
+      console.log(`[cfb-blowout] Reject ${x.side} |line|=${abs} EV=${(x.ev * 100).toFixed(1)}% < 6%`);
+      return false;
+    }
+    return true;
+  }).slice(0, 3);
   return { picks: qualified, lean: false };
 }
 
@@ -981,7 +995,7 @@ exports.handler = async (event) => {
     });
   }
 
-  // Narration (Claude narrator; deterministic fallback)
+  // Narration (Claude narrator ONLY — JS already selected/sized; deterministic fallback)
   const { edgeSummary, insights } = await narratePicks(picks, seasonPhase, dateFormatted);
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);

@@ -1,11 +1,12 @@
 // generate-picks-omega-background.js
-// v11.0-omega-elite-multisport — fold NFL + CFB (NCAAF) into Omega's daily card
-// (up to 3 straights + 1 optimized parlay across MLB/NFL/CFB when a slate exists).
-// Baseline v10.9-omega-optimized (MLB-only, 3+parlay). Soccer stays disabled. Alpha
-// (get-picks-alpha* / generate-picks-alpha*) is untouched.
-// Football projections are sport-specific (Elo/EPA-style + rest + weather + QB) —
-// MLB FIP/starter/park logic is never applied to NFL/CFB. Store: edge-picks-omega.
-// JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
+// v11.1-omega-sharp-90 — hard diversification, Claude resilience, predCLV/CFB blowout
+// gates, normalized Away @ Home matchups, tightened lean fill. Multi-sport MAIN card
+// (MLB+NFL+CFB). Soccer stays disabled. Alpha (get-picks-alpha*) is untouched.
+// ROLE: JS computes ALL projections/EV/Kelly. Claude is SELECTOR+NARRATOR on the
+// candidate table (may reject / reduce units ≤50%, cannot invent edges). On Claude
+// abort → retry top-8 → JS fallback. NFL/CFB standalones: JS selects; Claude narrates.
+// Football projections are sport-specific — never apply MLB FIP/starter logic to NFL/CFB.
+// Store: edge-picks-omega.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
 //   per-market total σ (NBA 18.5 / NHL 2.3 / MLB 4.3), Kelly ×50 sizing (grades live again),
@@ -21,7 +22,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.0-omega-elite-multisport";
+const MODEL_VERSION = "v11.1-omega-sharp-90";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
@@ -669,6 +670,73 @@ function sportEvFloor(sport, defaultFloor) {
 function sportCoverFloor(sport) {
   if (sport === "NFL" || sport === "NCAAF") return 0.52;
   return 0;
+}
+
+// Canonical matchup string — candidates + published picks must share this format so
+// diversification / parlay uniqueness keys never diverge (vs. vs @ vs at).
+function formatMatchup(away, home) {
+  return `${away} @ ${home}`;
+}
+function matchupKey(matchupOrAway, home) {
+  if (home !== undefined) return formatMatchup(matchupOrAway, home).toLowerCase().trim();
+  return String(matchupOrAway || "")
+    .replace(/\s+(?:vs\.?|at)\s+/gi, " @ ")
+    .toLowerCase()
+    .trim();
+}
+
+// Parity with NFL/CFB standalones: when predCLV is present, require ≥ -0.02. Skip if missing.
+function passesPredClvGate(c) {
+  if (!c || !isFootballSport(c.sport)) return true;
+  if (typeof c.predCLV !== "number") return true;
+  return c.predCLV >= -0.02;
+}
+
+// Fade soft FCS hammer seats on MAIN: NCAAF spreads |line|≥17.5 need EV≥6%.
+function spreadAbsLine(c) {
+  if (!c) return null;
+  const mkt = String(c.market || "");
+  if (!/spread|run line|puck line/i.test(mkt)) return null;
+  const fromSide = String(c.side || "").match(/([+-]?\d+(?:\.\d+)?)\s*$/);
+  if (fromSide) return Math.abs(parseFloat(fromSide[1]));
+  if (typeof c.consensusLine === "number") return Math.abs(c.consensusLine);
+  return null;
+}
+function passesCfbBlowoutGate(c) {
+  if (!c || c.sport !== "NCAAF") return true;
+  const abs = spreadAbsLine(c);
+  if (abs == null || abs < 17.5) return true;
+  return typeof c.ev === "number" && c.ev >= 0.06;
+}
+
+function attachPredClvFromSharp(cand, sharp, isHomeSide, marketFamily) {
+  if (!cand || !sharp || sharp.pri >= 99) return;
+  let ours, opp;
+  if (marketFamily === "spread") {
+    ours = isHomeSide ? sharp.homeSpread : sharp.awaySpread;
+    opp = isHomeSide ? sharp.awaySpread : sharp.homeSpread;
+  } else if (marketFamily === "total") {
+    ours = isHomeSide ? sharp.over : sharp.under; // isHomeSide reused as isOver
+    opp = isHomeSide ? sharp.under : sharp.over;
+  } else if (marketFamily === "ml") {
+    ours = isHomeSide ? sharp.homeML : sharp.awayML;
+    opp = isHomeSide ? sharp.awayML : sharp.homeML;
+  }
+  const sharpNV = noVigProb(ours, opp);
+  if (sharpNV == null || cand.odds == null) return;
+  // Opp retail price unknown here — use one-sided implied as bet NV (standalone uses two-sided when available).
+  const betNV = impliedProb(cand.odds);
+  cand.sharpNoVig = +sharpNV.toFixed(4);
+  cand.predCLV = +(sharpNV - betNV).toFixed(4);
+  cand.sharpBook = sharp.book || "pinnacle";
+}
+
+function sharpBookPri(key) {
+  const k = (key || "").toLowerCase();
+  if (k === "pinnacle") return 0;
+  if (k === "betfair" || k === "betfair_ex_eu") return 1;
+  if (k === "matchbook") return 2;
+  return 99;
 }
 
 // ── NFL static power-rating seed (net points vs league average) — from generate-picks-nfl-background ──
@@ -2675,10 +2743,15 @@ function buildConsensusLookup(oddsData) {
       const allSpreads = [], allTotals = [], spreadOdds = {}, totalOdds = { Over: [], Under: [] }, allH2H = {};
       const weightedSpreads = [], weightedTotals = []; // for weighted median
       let majorSpreadBooks = 0, majorTotalBooks = 0, majorMLBooks = 0;
+      let sharp = { pri: 99, book: null, homeSpread: null, awaySpread: null, over: null, under: null, homeML: null, awayML: null };
 
       for (const book of (game.bookmakers || [])) {
         const w = getBookWeight(book.key);
         const isMajor = isMajorBook(book.key);
+        const pri = sharpBookPri(book.key);
+        if (pri < sharp.pri) {
+          sharp = { pri, book: (book.key || "").toLowerCase(), homeSpread: null, awaySpread: null, over: null, under: null, homeML: null, awayML: null };
+        }
         for (const mkt of (book.markets || [])) {
           if (mkt.key === 'spreads') {
             if (isMajor) majorSpreadBooks++;
@@ -2693,6 +2766,10 @@ function buildConsensusLookup(oddsData) {
                 const ptKey = String(o.point);
                 if (!spreadOdds[o.name][ptKey]) spreadOdds[o.name][ptKey] = [];
                 spreadOdds[o.name][ptKey].push(o.price);
+                if (pri === sharp.pri) {
+                  if (o.name === homeTeam) sharp.homeSpread = o.price;
+                  if (o.name === awayTeam) sharp.awaySpread = o.price;
+                }
               }
             }
           }
@@ -2707,11 +2784,13 @@ function buildConsensusLookup(oddsData) {
                   const ptk = String(o.point);
                   if (!totalOdds[ptk]) totalOdds[ptk] = { Over: [], Under: [] };
                   totalOdds[ptk].Over.push(o.price);
+                  if (pri === sharp.pri) sharp.over = o.price;
                 }
                 if (o.name === 'Under') {
                   const ptk = String(o.point);
                   if (!totalOdds[ptk]) totalOdds[ptk] = { Over: [], Under: [] };
                   totalOdds[ptk].Under.push(o.price);
+                  if (pri === sharp.pri) sharp.under = o.price;
                 }
               }
             }
@@ -2721,6 +2800,10 @@ function buildConsensusLookup(oddsData) {
             for (const o of mkt.outcomes) {
               if (!allH2H[o.name]) allH2H[o.name] = [];
               allH2H[o.name].push(o.price);
+              if (pri === sharp.pri) {
+                if (o.name === homeTeam) sharp.homeML = o.price;
+                if (o.name === awayTeam) sharp.awayML = o.price;
+              }
             }
           }
           // ── Alternate lines: store with major-book flag for placeability checks ──
@@ -2767,6 +2850,7 @@ function buildConsensusLookup(oddsData) {
       entry.majorSpreadBooks = majorSpreadBooks;
       entry.majorTotalBooks = majorTotalBooks;
       entry.majorMLBooks = majorMLBooks;
+      if (sharp.pri < 99) entry.sharp = sharp;
 
       // Weighted median home spread (sharp books count double)
       const homeSpreads = allSpreads.filter(s => s.team === homeTeam).map(s => s.spread);
@@ -3782,12 +3866,16 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           const kelly = computeKelly(coverProb, odds, drawdownActive);
           const floor = sportEvFloor(league.league, evFloor);
           const cpFloor = sportCoverFloor(league.league);
-          if (kelly.ev > floor && coverProb >= cpFloor) {
+          const absLine = Math.abs(isHomeCover ? actualSpread : gameData.awaySpread);
+          // CFB blowout filter: |spread|≥17.5 needs EV≥6% (fade soft FCS hammer seats on MAIN).
+          if (league.league === "NCAAF" && absLine >= 17.5 && kelly.ev < 0.06) {
+            console.log(`[v11-blowout] Reject NCAAF ${side} |line|=${absLine} EV=${(kelly.ev * 100).toFixed(1)}% < 6%`);
+          } else if (kelly.ev > floor && coverProb >= cpFloor) {
             // Apply sport-specific Kelly multiplier
             const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
             let adjUnits = Math.round(kelly.units * sportMult * 2) / 2; // round to 0.5u
             adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
-            candidates.push({
+            const spreadCand = {
               ...baseCandidate,
               market: betType,
               side,
@@ -3804,7 +3892,13 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
               decimalPayout: +kelly.decPayout.toFixed(3),
               _rawKellyUnits: adjUnits,
               kellyCalcStr: `coverProb=${coverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_half=${kelly.kellyFraction.toFixed(4)}, units=${adjUnits}u${sportMult !== 1.0 ? ` [${league.league} ${sportMult}x]` : ''}`,
-            });
+            };
+            if (isFootball) attachPredClvFromSharp(spreadCand, gameData.sharp, isHomeCover, "spread");
+            if (!passesPredClvGate(spreadCand)) {
+              console.log(`[v11-predCLV] Reject ${spreadCand.side} predCLV=${spreadCand.predCLV}`);
+            } else {
+              candidates.push(spreadCand);
+            }
           }
         }
         } // end: odds != null spread candidate block
@@ -3872,7 +3966,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
               const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
               let adjUnits = Math.round(kelly.units * sportMult * 2) / 2;
               adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
-              candidates.push({
+              const totCand = {
                 ...baseCandidate,
                 market: "Total",
                 side: totalSide,
@@ -3889,7 +3983,13 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
                 decimalPayout: +kelly.decPayout.toFixed(3),
                 _rawKellyUnits: adjUnits,
               kellyCalcStr: `coverProb=${totalCoverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_half=${kelly.kellyFraction.toFixed(4)}, units=${adjUnits}u${sportMult !== 1.0 ? ` [${league.league} ${sportMult}x]` : ''}`,
-              });
+              };
+              if (isFootball) attachPredClvFromSharp(totCand, gameData.sharp, isOver, "total");
+              if (!passesPredClvGate(totCand)) {
+                console.log(`[v11-predCLV] Reject ${totCand.side} predCLV=${totCand.predCLV}`);
+              } else {
+                candidates.push(totCand);
+              }
             }
           }
           } // end: totalOdds != null block
@@ -3964,7 +4064,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
             // z-score for ML: normalize to be comparable to spread/total z-scores
             // Use 0.25 denominator so a 5% ML edge ≈ 0.20 z-score (similar to 2.5pt NBA spread edge)
             const mlZ = mlEdge / 0.25;
-            candidates.push({
+            const mlCand = {
               ...baseCandidate,
               market: "Moneyline",
               side: `${teamName} ML`,
@@ -3981,7 +4081,13 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
               decimalPayout: +kelly.decPayout.toFixed(3),
               _rawKellyUnits: adjUnits,
               kellyCalcStr: `coverProb=${coverProb.toFixed(3)}, decPayout=${kelly.decPayout.toFixed(3)}, edge=${kelly.ev.toFixed(3)}, kelly_half=${kelly.kellyFraction.toFixed(4)}, units=${adjUnits}u${sportMult !== 1.0 ? ` [${league.league} ${sportMult}x]` : ''}`,
-            });
+            };
+            if (isFootball) attachPredClvFromSharp(mlCand, gameData.sharp, side === "home", "ml");
+            if (!passesPredClvGate(mlCand)) {
+              console.log(`[v11-predCLV] Reject ${mlCand.side} predCLV=${mlCand.predCLV}`);
+            } else {
+              candidates.push(mlCand);
+            }
           }
         }
       }
@@ -4509,7 +4615,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
 
     picks.push({
       sport: c.sport,
-      matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
+      matchup: formatMatchup(c.awayTeam, c.homeTeam),
       pick: c.side,
       betType: c.market,
       odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
@@ -4590,7 +4696,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
 
     const replacementCandidates = allCandidates
       .filter(c => {
-        const cMatchup = `${c.awayTeam} vs. ${c.homeTeam}`;
+        const cMatchup = formatMatchup(c.awayTeam, c.homeTeam);
         if (usedMatchups.has(cMatchup)) return false;
         if (usedSides.has(c.side)) return false;
         if ((c.ev || 0) <= 0.03) return false;
@@ -4611,7 +4717,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       const modelEdgeStr = isML
         ? `Model Win Prob: ${calibratedPct}%, Implied: ${implPct}%, Edge: ${edgePctVal}%`
         : `Model: ${c.modelProjection}, Line: ${c.consensusLine}, Edge: ${c.edge} ${c.sport === 'NHL' ? 'goals' : c.sport === 'MLB' ? 'runs' : 'pts'}`;
-      const cMatchup = `${c.awayTeam} vs. ${c.homeTeam}`;
+      const cMatchup = formatMatchup(c.awayTeam, c.homeTeam);
       console.log(`[v10-dedup] REPLACEMENT pick: ${c.side} (${cMatchup}) EV:${(c.ev*100).toFixed(1)}% units:${finalUnits}u`);
       picks.push({
         sport: c.sport,
@@ -4905,17 +5011,19 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
     if (c.ev < sportEvFloor(c.sport, defaultFloor)) return false;
     if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
     if (typeof c.coverProb === "number" && c.odds != null && (c.coverProb - impliedProb(c.odds)) <= 0) return false;
+    if (!passesPredClvGate(c)) return false;
+    if (!passesCfbBlowoutGate(c)) return false;
     return true;
   });
   const unique = dedupeCandidatesByGame(pool);
   const selected = [];
   const usedGames = new Set();
   const sportCount = {};
-  const remainingYes = (sport) => unique.some(c => c.sport === sport && !usedGames.has((c.matchup || "").toLowerCase().trim()));
+  const remainingYes = (sport) => unique.some(c => c.sport === sport && !usedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))));
 
   for (const c of unique) {
     if (selected.length >= maxPicks) break;
-    const g = (c.matchup || "").toLowerCase().trim();
+    const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
     if (!g || usedGames.has(g)) continue;
     const sc = sportCount[c.sport] || 0;
     if (sc >= 2) {
@@ -4933,7 +5041,7 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
       const weakest = selected[selected.length - 1];
       const mono = selected[0].sport;
       const alt = unique.find(c => c.sport !== mono
-        && !usedGames.has((c.matchup || "").toLowerCase().trim())
+        && !usedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)))
         && (weakest.ev - c.ev) <= 0.015);
       if (alt) {
         console.log(`[v11-div] Swapped ${weakest.side} for multi-sport ${alt.side} (EV ${(weakest.ev * 100).toFixed(1)}→${(alt.ev * 100).toFixed(1)})`);
@@ -4942,6 +5050,56 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
     }
   }
   return selected.slice(0, maxPicks);
+}
+
+// Binding card builder: diversified YES slots are authoritative; Claude narratives/unit cuts map onto them.
+function buildBindingDiversifiedPicks(allCandidates, claudeSelections, candidateTable, genuineRejectedSides, drawdownActive) {
+  const rejected = genuineRejectedSides || new Set();
+  const yesPool = (allCandidates || []).filter(c => {
+    if (rejected.has((c.side || "").toLowerCase().trim())) return false;
+    if (!hasPositiveEdge(c)) return false;
+    if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
+    if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
+    if (!passesPredClvGate(c)) return false;
+    if (!passesCfbBlowoutGate(c)) return false;
+    return true;
+  });
+  // Prefer Claude-selected sides when EV-competitive (stable sort: Claude flag then EV).
+  const claudeSides = new Set();
+  for (const sel of (claudeSelections || [])) {
+    const c = (candidateTable || []).find(x => x.rank === sel.candidateRank);
+    if (c && c.side) claudeSides.add(c.side);
+  }
+  const preferred = yesPool.slice().sort((a, b) => {
+    const aC = claudeSides.has(a.side) ? 1 : 0;
+    const bC = claudeSides.has(b.side) ? 1 : 0;
+    if (aC !== bC) return bC - aC;
+    return ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.zScore ?? 0) - (a.zScore ?? 0));
+  });
+  const diversified = selectDiversifiedStraights(preferred, 3, 0.03);
+  console.log(`[v11-div-bind] Binding card from ${diversified.length} diversified slot(s) (YES pool ${yesPool.length}, Claude sides ${claudeSides.size})`);
+
+  const bySide = new Map();
+  for (const sel of (claudeSelections || [])) {
+    const c = (candidateTable || []).find(x => x.rank === sel.candidateRank);
+    if (c) bySide.set(c.side, sel);
+  }
+  const mapped = diversified.map((c, i) => {
+    // Ensure findable by rank inside buildFinalPicks
+    if (c.rank == null) c.rank = 9000 + i;
+    const sel = bySide.get(c.side);
+    if (sel) return { ...sel, candidateRank: c.rank };
+    return {
+      candidateRank: c.rank,
+      adjustedUnits: null,
+      unitAdjustmentReason: "",
+      coreReasoning: "",
+      whatLoses: "",
+      dataVerified: "diversified-slot — Claude did not select; JS binding card",
+      clvExpectation: "",
+    };
+  });
+  return buildFinalPicks(diversified, mapped, allCandidates, drawdownActive);
 }
 
 function applyDiversificationToPicks(picks, allCandidates, drawdownActive) {
@@ -4965,7 +5123,7 @@ function applyDiversificationToPicks(picks, allCandidates, drawdownActive) {
     if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
     if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
     if (typeof c.ev !== "number" || c.ev <= 0) return false;
-    const g = (c.matchup || `${c.awayTeam} vs. ${c.homeTeam}`).toLowerCase().trim();
+    const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
     if (usedGames.has(g) || usedSides.has(c.side)) return false;
     return ((weakest.evRaw || 0) - c.ev) <= 0.015;
   });
@@ -5040,7 +5198,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     oddsNum: typeof c.odds === 'number' ? c.odds : parseInt(c.odds),
     coverProbNum: typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb),
     evNum: c.ev,
-    matchup: c.matchup || `${c.awayTeam} vs. ${c.homeTeam}`,
+    matchup: c.matchup || formatMatchup(c.awayTeam, c.homeTeam),
     commenceTime: c.commenceTime || '', sport: c.sport,
   }));
 
@@ -5657,15 +5815,14 @@ exports.handler = async (event) => {
   allCandidates.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
   allCandidates.forEach((c, i) => { c.rank = i + 1; });
 
-  // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──
-  const candidateTable = allCandidates.slice(0, 15);
-  const userMessage = formatCandidateTable(candidateTable, dateISO, dateFormatted);
+  // ── PHASE 2: CLAUDE AS SELECTOR + NARRATOR (with resilience) ──
+  // JS owns projections/EV/Kelly. Claude may reject or cut units ≤50%; cannot invent edges.
+  // On abort: retry once with top-8 table before tagging fallback:true.
+  let candidateTable = allCandidates.slice(0, 15);
 
-  console.log(`[v10] Sending ${candidateTable.length} candidates to Claude (${userMessage.length} chars)`);
-
-  try {
-    // Timeout+backoff wrapper: a rate-limited or hung Claude call returns null/!ok and routes to the
-    // deterministic fallback below instead of hanging the whole run. (web_search makes this slow → 90s.)
+  async function invokeClaudeSelector(table, { timeoutMs, retries, label }) {
+    const userMessage = formatCandidateTable(table, dateISO, dateFormatted);
+    console.log(`[v11-claude] ${label}: sending ${table.length} candidates (${userMessage.length} chars, timeout=${timeoutMs}ms, retries=${retries})`);
     const response = await anthropicFetch({
       model: "claude-sonnet-4-6",
       max_tokens: 8000,
@@ -5673,48 +5830,65 @@ exports.handler = async (event) => {
       system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
       messages: [{ role: "user", content: userMessage }],
-    }, { timeoutMs: 90000, retries: 3 });
-
+    }, { timeoutMs, retries });
     if (!response || !response.ok) {
-      console.error(`[v10] Claude selection unavailable (${response ? 'HTTP ' + response.status : 'no response after retries'}) — deterministic top-candidates fallback`);
-      // Fallback: use top candidates without narratives — never block on the LLM
-      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
+      console.error(`[v11-claude] ${label} unavailable (${response ? "HTTP " + response.status : "no response after retries"})`);
+      return { ok: false, reason: response ? `HTTP ${response.status}` : "timeout/abort" };
     }
-
     const result = await response.json();
-    console.log("[v10] Claude API response received, stop_reason:", result.stop_reason);
-
+    console.log(`[v11-claude] ${label} response received, stop_reason:`, result.stop_reason);
     let rawText = "";
     for (const block of result.content) {
       if (block.type === "text") rawText += block.text;
     }
-
-    // Parse Claude's selection JSON
-    let claudeOutput;
     try {
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-        try { claudeOutput = JSON.parse(jsonStr); }
-        catch (e) {
-          let fixed = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/[\x00-\x1F\x7F]/g, ' ');
-          claudeOutput = JSON.parse(fixed);
-        }
-      } else {
-        throw new Error("No JSON in Claude response");
+      if (!jsonMatch) throw new Error("No JSON in Claude response");
+      let claudeOutput;
+      try { claudeOutput = JSON.parse(jsonMatch[0]); }
+      catch (e) {
+        const fixed = jsonMatch[0].replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, " ");
+        claudeOutput = JSON.parse(fixed);
       }
+      return { ok: true, claudeOutput, rawText };
     } catch (parseErr) {
-      console.error(`[v10] JSON parse failed: ${parseErr.message}`);
-      return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
+      console.error(`[v11-claude] ${label} JSON parse failed: ${parseErr.message}`);
+      return { ok: false, reason: `parse: ${parseErr.message}`, rawText };
+    }
+  }
+
+  try {
+    let selector = await invokeClaudeSelector(candidateTable, { timeoutMs: 120000, retries: 4, label: "primary(top15)" });
+    if (!selector.ok) {
+      console.log(`[v11-claude] Primary selector failed (${selector.reason}) — retrying once with top-8 candidate table before JS fallback`);
+      candidateTable = allCandidates.slice(0, 8);
+      selector = await invokeClaudeSelector(candidateTable, { timeoutMs: 90000, retries: 2, label: "retry(top8)" });
+    }
+    if (!selector.ok) {
+      console.error(`[v11-claude] Selector aborted after primary+top8 retries (${selector.reason}) — deterministic JS fallback (fallback:true)`);
+      return await fallbackToTopCandidates(dateISO, dateFormatted, allCandidates.slice(0, 15), allCandidates, now, pitcherData, teamStats);
     }
 
-    // ── PHASE 3: MERGE JS NUMBERS + CLAUDE SELECTIONS ──
+    const claudeOutput = selector.claudeOutput;
+    const rawText = selector.rawText || "";
+
+    // ── PHASE 3: BINDING DIVERSIFIED CARD + CLAUDE NARRATIVE/UNIT MAP ──
+    // Diversification is hard (not soft post-hoc). Claude rejections remove sides from YES pool;
+    // Claude may narrate / cut units on the diversified slots only.
     const selections = claudeOutput.selections || [];
-    let picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
-    picks = applyDiversificationToPicks(picks, allCandidates, bankrollCtx.drawdownActive);
+    const genuineRejectedSides = new Set();
+    for (const r of (claudeOutput.rejections || [])) {
+      const reason = String(r.reason || "");
+      // Bookkeeping "not selected" lines are not genuine news rejects.
+      if (/^not selected|^lower edge|^below lean/i.test(reason)) continue;
+      const c = candidateTable.find(x => x.rank === r.candidateRank);
+      if (c && c.side) genuineRejectedSides.add((c.side || "").toLowerCase().trim());
+    }
+    let picks = buildBindingDiversifiedPicks(allCandidates, selections, candidateTable, genuineRejectedSides, bankrollCtx.drawdownActive);
 
     // Build rejections from Claude + all non-selected candidates
-    const selectedRanks = new Set(selections.map(s => s.candidateRank));
+    // Binding card sides are the published YES set (may differ from Claude's raw ranks).
+    const selectedSides = new Set(picks.map(p => p.pick));
 
     const rejections = [];
     // Add Claude's explicit rejections
@@ -5728,36 +5902,43 @@ exports.handler = async (event) => {
     }
     // Add remaining non-selected candidates as rejections
     for (const c of allCandidates.slice(0, 15)) {
-      if (!selectedRanks.has(c.rank) && !rejections.find(r => r.side === c.side)) {
+      if (!selectedSides.has(c.side) && !rejections.find(r => r.side === c.side)) {
         rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." });
       }
     }
 
-    // ── LEAN TIER TOP-UP (the "ensure ~3 picks + parlay" backfill) ──
-    // Card is below 3 after selection. Pull from the LEAN_EV_FLOOR tier to fill up with 0.25u Lean
-    // plays (flagged thinSlate, tracked separately, never inflate conviction-book ROI). v10.4.1:
-    // restored to the lower lean floor so thin slates fill toward 3 again. Highest-EV leans first.
-    // SAFETY (unchanged): never re-add a side the validator explicitly rejected, and never a second
-    // pick from a game already on the card — so on a slate whose only extra candidate was rejected on
-    // merit (e.g. a starter trending the wrong way), the card can still honestly come in under 3.
+    // ── LEAN TIER TOP-UP (tightened for sharp-90) ──
+    // Do NOT lean-fill football below sport EV floor. MLB leans require ≥2.0% EV (was 1.5%).
+    // Skip lean fill entirely when ≥1 football YES already sits on the card.
     if (picks.length < 3) {
       const needed = 3 - picks.length;
-      const pickedGames = new Set(picks.map(p => (p.matchup || '').toLowerCase().trim()));
+      const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
       const rejectedSides = new Set(
         (claudeOutput.rejections || []).map(r => {
           const c = candidateTable.find(x => x.rank === r.candidateRank);
           return c ? (c.side || '').toLowerCase().trim() : '';
         }).filter(Boolean)
       );
-      try {
+      for (const s of genuineRejectedSides) rejectedSides.add(s);
+      const hasFootballYes = picks.some(p => isFootballSport(p.sport));
+      if (hasFootballYes) {
+        console.log(`[v11-lean-topup] Skip lean fill — ≥1 football YES already on card (${picks.filter(p => isFootballSport(p.sport)).map(p => p.pick).join(', ')})`);
+      } else try {
         const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData, footballCtx);
         leanAll.sort((a, b) => b.ev - a.ev);
+        const leanFloorFor = (c) => {
+          if (isFootballSport(c.sport)) return sportEvFloor(c.sport, 0.03); // never below sport floor
+          if (c.sport === "MLB") return Math.max(LEAN_EV_FLOOR, MLB_LEAN_EV_FLOOR);
+          return LEAN_EV_FLOOR;
+        };
         const topUps = leanAll.filter(c =>
           hasPositiveEdge(c) &&
-          c.ev >= sportEvFloor(c.sport, isFootballSport(c.sport) ? 0.03 : LEAN_EV_FLOOR) &&
+          c.ev >= leanFloorFor(c) &&
           (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
+          passesPredClvGate(c) &&
+          passesCfbBlowoutGate(c) &&
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
-          !pickedGames.has((c.matchup || '').toLowerCase().trim()) &&
+          !pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))) &&
           !picks.find(p => p.pick === c.side)
         ).slice(0, needed);
         if (topUps.length > 0) {
@@ -5766,7 +5947,7 @@ exports.handler = async (event) => {
             const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
             const u = LEAN_UNITS;
             picks.push({
-              pick: c.side, sport: c.sport, matchup: c.matchup,
+              pick: c.side, sport: c.sport, matchup: c.matchup || formatMatchup(c.awayTeam, c.homeTeam),
               betType: c.market, odds: oddsStr, units: `${u}u`,
               rating: 'Lean', confidence: 'lean', thinSlate: true,
               // v10.4: leans carry coverProb/evRaw like conviction picks — their absence made
@@ -5782,7 +5963,7 @@ exports.handler = async (event) => {
               zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
               commenceTime: c.commenceTime || '',
             });
-            pickedGames.add((c.matchup || '').toLowerCase().trim());
+            pickedGames.add(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)));
           }
         }
       } catch (leanErr) {
@@ -5797,10 +5978,13 @@ exports.handler = async (event) => {
     {
       const seenM = new Set();
       for (let i = 0; i < picks.length; i++) {
-        const m = (picks[i].matchup || '').toLowerCase().trim();
+        const m = matchupKey(picks[i].matchup);
         if (!m) continue;
         if (seenM.has(m)) { console.log(`[v10-decorr] Dropping same-game pick "${picks[i].pick}" — ${m} already on card`); picks.splice(i, 1); i--; continue; }
         seenM.add(m);
+        // Canonicalize published matchup
+        if (picks[i].awayTeam && picks[i].homeTeam) picks[i].matchup = formatMatchup(picks[i].awayTeam, picks[i].homeTeam);
+        else if (picks[i].matchup) picks[i].matchup = picks[i].matchup.replace(/\s+(?:vs\.?|at)\s+/gi, " @ ");
       }
     }
 
@@ -5931,8 +6115,8 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: "OK" };
 
   } catch (err) {
-    console.error("[v10] Fatal error:", err.message);
-    return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats);
+    console.error(`[v11-claude] Fatal selector error after retries path: ${err.message}`);
+    return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable || allCandidates.slice(0, 15), allCandidates, now, pitcherData, teamStats);
   }
 };
 
@@ -5943,13 +6127,11 @@ exports.handler = async (event) => {
 // thinSlate:true so the results tracker scores them separately from the conviction
 // book. The parlay (if any) is also sized at the lean amount, per spec.
 const LEAN_UNITS = 0.25;
-// Two-tier EV floor (v10.4.1): CONVICTION picks require +3% (real units, the main computeEdgeTable
-// call). The LEAN BACKFILL — the "ensure ~3 picks + a parlay" safety net — uses this lower floor and
-// publishes any extra qualifiers as 0.25u plays flagged thinSlate/rating:'Lean', which the results
-// tracker scores SEPARATELY so they never inflate the conviction-book ROI. Restored to the pre-v10.4
-// value so thin slates fill toward 3 again. Tunable: raise toward 0.02–0.025 for fewer marginal leans.
-// Note: leans still never override a validator rejection or stack a second pick on a picked game.
+// Two-tier EV floor: conviction = sport floors via computeEdgeTable(0.03+). Lean backfill uses
+// LEAN_EV_FLOOR for non-MLB/non-football; MLB leans require MLB_LEAN_EV_FLOOR (2.0%); football
+// leans never go below sportEvFloor. Skip lean fill when a football YES is already on the card.
 const LEAN_EV_FLOOR = 0.015;
+const MLB_LEAN_EV_FLOOR = 0.02;
 // Keep at most one candidate per matchup (game): prefer a validated full-game pick over an F5 leg, then
 // higher EV. The deterministic fallback paths select top-N directly (no in-selection dedup), so without
 // this they could publish a full-game + F5 pick from the same game (positively correlated).
@@ -5967,8 +6149,10 @@ function dedupeCandidatesByGame(cands) {
   const byGame = new Map();
   const score = (c) => (c.source === "F5" ? 0 : 1e6) + (typeof c.ev === "number" ? c.ev : 0);
   for (const c of (cands || [])) {
-    const key = (c.matchup || "").toLowerCase().trim();
+    const key = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
     if (!key) continue;
+    // Keep canonical Away @ Home on the candidate for downstream uniqueness.
+    if (c.awayTeam && c.homeTeam) c.matchup = formatMatchup(c.awayTeam, c.homeTeam);
     const prev = byGame.get(key);
     if (!prev || score(c) > score(prev)) byGame.set(key, c);
   }
@@ -6129,7 +6313,12 @@ Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...
 
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = selectDiversifiedStraights((leanCandidates || []).filter(hasPositiveEdge), 3, LEAN_EV_FLOOR);
+  const top = selectDiversifiedStraights((leanCandidates || []).filter(c => {
+    if (!hasPositiveEdge(c)) return false;
+    if (c.sport === "MLB" && c.ev < MLB_LEAN_EV_FLOOR) return false;
+    if (isFootballSport(c.sport) && c.ev < sportEvFloor(c.sport, 0.03)) return false;
+    return true;
+  }), 3, LEAN_EV_FLOOR);
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -6157,7 +6346,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
     return {
       sport: c.sport,
-      matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
+      matchup: formatMatchup(c.awayTeam, c.homeTeam),
       pick: c.side,
       betType: c.market,
       odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
@@ -6221,7 +6410,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 }
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
-  console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
+  console.log("[v11-claude] JS fallback: diversified top candidates (fallback:true) — Claude selector unavailable after retries");
   const top3 = selectDiversifiedStraights(candidateTable.filter(hasPositiveEdge), 3, 0.03);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
@@ -6253,7 +6442,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
     return {
       sport: c.sport,
-      matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
+      matchup: formatMatchup(c.awayTeam, c.homeTeam),
       pick: c.side,
       betType: c.market,
       odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
@@ -6463,6 +6652,11 @@ module.exports.computeFootballProjection = computeFootballProjection;
 module.exports.sportEvFloor = sportEvFloor;
 module.exports.sportCoverFloor = sportCoverFloor;
 module.exports.selectDiversifiedStraights = selectDiversifiedStraights;
+module.exports.buildBindingDiversifiedPicks = buildBindingDiversifiedPicks;
+module.exports.formatMatchup = formatMatchup;
+module.exports.matchupKey = matchupKey;
+module.exports.passesPredClvGate = passesPredClvGate;
+module.exports.passesCfbBlowoutGate = passesCfbBlowoutGate;
 module.exports.preferMultiSportParlay = preferMultiSportParlay;
 module.exports.cfbTeamsMatch = cfbTeamsMatch;
 module.exports.isFootballSport = isFootballSport;

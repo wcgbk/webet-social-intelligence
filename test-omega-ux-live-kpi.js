@@ -114,6 +114,17 @@ for (const page of ['daily-omega/index.html', 'cfb/index.html']) {
     assert.ok(!html.includes('.header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }'));
   });
 }
+check('nfl/index.html hamburger nav at phone widths (no header overflow)', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'nfl/index.html'), 'utf8');
+  assert.ok(html.includes('@media (max-width: 640px)'));
+  assert.ok(html.includes('.header-dash { display: none; }'));
+  assert.ok(html.includes('class="header-dash"'));
+  assert.ok(html.includes('class="header-auth"'));
+  assert.ok(html.includes('class="mobile-menu-btn"'));
+  assert.ok(html.includes('id="mobileDropdown"'));
+  assert.ok(!html.includes('overflow-x: auto'));
+  assert.ok(!html.includes('margin-left:auto;margin-right:8px;">Dashboard</a>'));
+});
 
 if (failed) {
   console.error('\n' + failed + ' check(s) failed');

@@ -1,10 +1,12 @@
 // generate-picks-omega-background.js
-// v11.1-omega-sharp-90 — hard diversification, Claude resilience, predCLV/CFB blowout
-// gates, normalized Away @ Home matchups, tightened lean fill. Multi-sport MAIN card
+// v11.2-omega-no-f5-claude-verify — F5 off MAIN card, JS locks ≤3 then Claude verifies/
+// narrates only those (web_search max_uses 5, one ~180s attempt). Multi-sport MAIN
 // (MLB+NFL+CFB). Soccer stays disabled. Alpha (get-picks-alpha*) is untouched.
-// ROLE: JS computes ALL projections/EV/Kelly. Claude is SELECTOR+NARRATOR on the
-// candidate table (may reject / reduce units ≤50%, cannot invent edges). On Claude
-// abort → retry top-8 → JS fallback. NFL/CFB standalones: JS selects; Claude narrates.
+// ROLE: JS computes ALL projections/EV/Kelly AND locks diversified straights first.
+// Claude is VERIFIER+NARRATOR on the locked ≤3 only (may news-veto / cut units ≤50%;
+// cannot invent edges or rewrite the card). On Claude abort → keep JS picks + Haiku
+// narrate with claudeVerified:false (no side-rewriting fallback). F5 still computed
+// for analytics when cheap but ALLOW_F5_ON_CARD=false keeps it off published YES/parlay.
 // Football projections are sport-specific — never apply MLB FIP/starter logic to NFL/CFB.
 // Store: edge-picks-omega.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
@@ -22,49 +24,44 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.1-omega-sharp-90";
+const MODEL_VERSION = "v11.2-omega-no-f5-claude-verify";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
-const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
+const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
 
 YOUR INPUTS:
-A ranked table of the top candidate picks with pre-computed edges, cover probabilities, Kelly units, and supporting team context.
+A small table of ≤3 JS-locked picks (already diversified across games/sports) with pre-computed edges, cover probabilities, Kelly units, and supporting team context.
 
 YOUR JOB:
-1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), QB status (NFL/NCAAF), outdoor weather (NFL/NCAAF/MLB), and recent form for the top 8 candidates.
-2. SELECT your top 3 picks from the candidate table (or fewer if web search reveals disqualifying info). If fewer than 3 genuine edges survive verification, output only what you have conviction on — do NOT pad with weak legs.
-3. Write 3-5 sentence coreReasoning narrative for each selected pick.
-4. DIVERSIFICATION: unique games only. Prefer covering multiple sports (MLB / NFL / NCAAF) when a cross-sport candidate's EV is within 1.5% of a same-sport alternative. Cap 2 picks from one sport unless the other sports have no verified YES candidates.
-5. You MAY reject candidates if web search reveals material changes after the data cutoff:
-   - Star player ruled out / downgraded after data cutoff
-   - Goaltender change (NHL) not reflected in pre-computed data
-   - Starting pitcher change (MLB)
-   - QB ruled out / downgraded (NFL / NCAAF) when the projection depends on him
-   - Severe weather for outdoor sports (wind/cold/precip for football totals; MLB wind/temp)
-   - Material lineup or coaching change
-   - Do NOT apply baseball starter/FIP logic to football picks.
-5. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
-6. You MUST NOT pick outside the provided candidate table.
-7. You MUST NOT override model direction, invent probabilities, or recompute edges.
-8. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
+1. Use web search (sparingly — you have a tight search budget) to verify injury status, recent news, starting pitchers (MLB), QB status (NFL/NCAAF), outdoor weather, and recent form for EACH locked pick.
+2. ACCEPT or REJECT each locked pick. Default is ACCEPT. Reject ONLY when web search reveals material disqualifying news after the data cutoff (see rejection rules). You do NOT choose replacement picks — JS will fill the next diversified YES if you reject.
+3. Write 3-5 sentence coreReasoning narrative for each ACCEPTED pick.
+4. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
+5. You MUST NOT invent new picks, swap sides, or override model direction.
+6. You MUST NOT recompute edges or probabilities.
+7. Always say "WeBetAI" instead of "the model" or "our model" in narratives.
+8. Do NOT apply baseball starter/FIP logic to football picks.
+
+REJECTION RULES (rare — only with verified news):
+- Star player ruled out / downgraded after data cutoff
+- Starting pitcher change (MLB) not reflected in the table
+- QB ruled out / downgraded (NFL / NCAAF) when the projection depends on him
+- Severe weather for outdoor sports that materially changes the edge
+- Material lineup or coaching change
+- Put rejected locked picks in the rejections array with candidateRank + specific web-search reason. Do NOT invent bookkeeping "not selected" rows for accepted picks.
 
 NARRATIVE RULES (for coreReasoning field):
 - DO NOT write a projection/line/edge sentence. The system will prepend the correct math automatically.
-- Your narrative must argue IN FAVOR of the pick side. If the pick is "Team X +17.5", explain why Team X covers that spread — NOT why the opponent wins. Frame the edge as the spread being too wide, the picked team being undervalued, or situational factors favoring a cover.
-- "The team you're picking" = the team or direction named in the PICK field. For spreads, that's the team getting or giving points. For totals, that's the Over or Under direction.
+- Your narrative must argue IN FAVOR of the pick side. If the pick is "Team X +17.5", explain why Team X covers that spread — NOT why the opponent wins.
 - Start your coreReasoning with your first supporting fact — a verified insight from web search.
 - Support with 2-3 distinct verified facts (form, injuries, rest, matchup factor).
 - End with value statement explaining why the odds offer value.
-- Max 5 sentences. No padding. No duplicate stats. Every sentence must add new information.
+- Max 5 sentences. No padding. No duplicate stats.
 - DO NOT restate projections, lines, edges, cover probabilities, or any numbers from the candidate table.
-- RECORDS & SPLITS: Cite team win-loss records and home/road records ONLY from the "Records (ESPN, authoritative)" line in the candidate table. Never state a record from web search or memory. If a record is not in the table, describe it qualitatively (e.g., "a strong home team") with no numbers.
-- NEVER lead with negative data about the team you're picking. Do NOT build a case for the opponent — build the case for the PICK SIDE covering.
+- RECORDS & SPLITS: Cite team win-loss records and home/road records ONLY from the "Records (ESPN, authoritative)" line. Never state a record from web search or memory.
+- NEVER lead with negative data about the team you're picking.
 - NEVER use technical jargon like ORtg, DRtg, pace numbers, DVOA, ATS, or advanced stat abbreviations.
-- GROUNDING (critical): every specific you state — player names, injuries, venue, weather, records — must come from web search THIS run or the candidate-table data provided. If you cannot verify a specific, describe the edge generally (matchup/line value) instead. NEVER rely on prior-season memory (e.g. a team's former ballpark or last year's roster) — a wrong specific that contradicts the pick or slate breaks user trust.
-
-REJECTION RULES (for rejections array):
-- For each candidate NOT selected, provide a brief reason why.
-- If you skip a top-5 ranked candidate, the reason must cite specific web-search findings.
+- GROUNDING (critical): every specific you state must come from web search THIS run or the table. If you cannot verify a specific, describe the edge generally instead.
 
 OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
 {
@@ -80,9 +77,9 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
     }
   ],
   "rejections": [
-    { "candidateRank": 4, "reason": "Why no edge or why disqualified." }
+    { "candidateRank": 2, "reason": "Specific web-search disqualifier (only if rejecting a locked pick)." }
   ],
-  "edgeSummary": "1-2 sentence editorial-style Daily Edge Summary. Write it like a sharp sports analyst for a general audience — confident, specific, compelling. Reference actual matchups and WHY the edge exists. Use 'WeBetAI' not 'the model'. No advanced stat abbreviations (ORtg, DRtg, DVOA, ATS) — plain English only."
+  "edgeSummary": "1-2 sentence editorial-style Daily Edge Summary. Write it like a sharp sports analyst for a general audience — confident, specific, compelling. Reference actual matchups and WHY the edge exists. Use 'WeBetAI' not 'the model'. No advanced stat abbreviations — plain English only."
 }`;
 
 // ── Sport keys for The Odds API ──
@@ -192,6 +189,19 @@ const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Lin
 // starting-pitcher market the book prices efficiently; the model's "live dog" edge is phantom.
 // Skip plus-money F5 ML sides entirely. (F5 favorites — rare — and F5 totals/RL are unaffected.)
 const F5_SKIP_ML_UNDERDOG = true;
+// v11.2: F5 stays computed for analytics / CLV diagnostics when Odds API F5 lines are cheap
+// to attach, but MUST NOT enter the published Omega MAIN card (straights or parlays).
+// Rockies/Coors-style spots historically soft + unvalidated forward-CLV only.
+const ALLOW_F5_ON_CARD = false;
+function isF5Candidate(c) {
+  if (!c) return false;
+  if (c.source === "F5") return true;
+  const m = String(c.market || c.betType || "");
+  return /^F5\b/i.test(m) || /\bF5\b/i.test(String(c.side || c.pick || ""));
+}
+function allowOnOmegaCard(c) {
+  return ALLOW_F5_ON_CARD || !isF5Candidate(c);
+}
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
   "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us", "espnbet", "betrivers", "fanatics",
@@ -3507,7 +3517,10 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   // Run rate (alpha stores baseball runs/game as pointsPerGame) + starter ERA (season, from scoreboard).
   const awayRPG = (typeof awayStats.pointsPerGame === "number" ? awayStats.pointsPerGame : null) || 4.5;
   const homeRPG = (typeof homeStats.pointsPerGame === "number" ? homeStats.pointsPerGame : null) || 4.5;
-  const parkMult = (MLB_PARK_FACTORS[game.venue] || 100) / 100;
+  // Same dampened park factor as full-game (x0.5). Undampened Coors (114→1.14) was double-counting
+  // home-park offense already baked into R/G and systematically floated Rockies/Coors F5 spots.
+  const _pf = MLB_PARK_FACTORS[game.venue] || 100;
+  const parkMult = 1 + (_pf / 100 - 1) * 0.5;
   const f5Clamp = (m) => Math.min(1.25, Math.max(0.75, m));
   // F5 pitching now uses the SAME sharp signal as the full game (Phase-4a): mlbStarterRunMetric prefers
   // regressed FIP (≥30 IP) over raw ERA, then team ERA. It returns a metric on the MLB_LG_RUN (~4.20)
@@ -3564,15 +3577,28 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
     });
   };
 
-  // Sox-safe home detection: exact name first, then unambiguous last-word match — the old
-  // bare substring collided ("Boston Red Sox".includes("sox") matched a White Sox home game).
+  // Sox/Rockies-safe home detection: exact full name first, then exact last-token equality.
+  // Never use bare substring includes() — "sox" / shared city tokens caused home/away flips
+  // (Boston Red Sox vs Chicago White Sox; Colorado Rockies nickname collisions).
   // Ambiguous (Sox-vs-Sox, non-exact name) resolves to away — never guess home.
   const f5IsHomeTeam = (team) => {
-    const t = String(team).toLowerCase(), h = String(home).toLowerCase(), a = String(away).toLowerCase();
+    const t = String(team || "").toLowerCase().trim();
+    const h = String(home || "").toLowerCase().trim();
+    const a = String(away || "").toLowerCase().trim();
+    if (!t) return false;
     if (t === h) return true;
     if (t === a) return false;
-    const hitH = t.includes(h.split(" ").pop()), hitA = t.includes(a.split(" ").pop());
-    return hitH !== hitA ? hitH : false;
+    const tTok = t.split(/\s+/).pop();
+    const hTok = h.split(/\s+/).pop();
+    const aTok = a.split(/\s+/).pop();
+    if (tTok && tTok === hTok && tTok !== aTok) return true;
+    if (tTok && tTok === aTok && tTok !== hTok) return false;
+    // Unique containment of the FULL name only (not nickname fragments)
+    const inH = (h.includes(t) || t.includes(h)) && t.length >= 4;
+    const inA = (a.includes(t) || t.includes(a)) && t.length >= 4;
+    if (inH !== inA) return inH;
+    console.warn(`[v11.2-f5] Ambiguous F5 home/away for "${team}" in ${away} @ ${home} — treating as away (no home guess)`);
+    return false;
   };
 
   // ── F5 Moneyline ── (real F5 ML lines only — no full-game proxy)
@@ -4385,7 +4411,7 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
   let prompt = `TODAY: ${dateFormatted} (${dateISO})\n\n`;
   prompt += `${candidates.length} total edge candidates found across all sports. Here are the top ${top.length} ranked by calibrated EV.\n`;
   prompt += `Sports in the table: ${[...new Set(candidates.map(c => c.sport))].join(", ") || "none"}.\n`;
-  prompt += `Your job: web search to verify injuries/news/QB/weather for top candidates, then SELECT up to 3 (unique games; prefer multi-sport when EV is within 1.5%). Do not pad weak legs.\n\n`;
+  prompt += `Verify injuries/news/QB/weather via web search. If these are JS-locked picks, ACCEPT or REJECT only — do not invent replacements. If this is a full candidate table, prefer the locked-card instructions in the system prompt.\n\n`;
 
   for (const c of top) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
@@ -5007,6 +5033,7 @@ function preferMultiSportParlay(legs, pool) {
 
 function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
   const pool = (cands || []).filter(c => {
+    if (!allowOnOmegaCard(c)) return false; // v11.2: F5 off MAIN card unless ALLOW_F5_ON_CARD
     if (typeof c.ev !== "number" || c.ev <= 0) return false;
     if (c.ev < sportEvFloor(c.sport, defaultFloor)) return false;
     if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
@@ -5056,6 +5083,7 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
 function buildBindingDiversifiedPicks(allCandidates, claudeSelections, candidateTable, genuineRejectedSides, drawdownActive) {
   const rejected = genuineRejectedSides || new Set();
   const yesPool = (allCandidates || []).filter(c => {
+    if (!allowOnOmegaCard(c)) return false;
     if (rejected.has((c.side || "").toLowerCase().trim())) return false;
     if (!hasPositiveEdge(c)) return false;
     if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
@@ -5185,6 +5213,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
   const rejectedSides = new Set(realRejections.map(r => (r.side || '').toLowerCase().trim()));
 
   const pool = (allCandidates || []).filter(c => {
+    if (!allowOnOmegaCard(c)) return false; // v11.2: no F5 parlay legs on MAIN card
     if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
     const odds = typeof c.odds === 'number' ? c.odds : parseInt(c.odds);
@@ -5815,28 +5844,49 @@ exports.handler = async (event) => {
   allCandidates.sort((a, b) => ((b.ev ?? 0) - (a.ev ?? 0)) || ((b.zScore ?? 0) - (a.zScore ?? 0)));
   allCandidates.forEach((c, i) => { c.rank = i + 1; });
 
-  // ── PHASE 2: CLAUDE AS SELECTOR + NARRATOR (with resilience) ──
-  // JS owns projections/EV/Kelly. Claude may reject or cut units ≤50%; cannot invent edges.
-  // On abort: retry once with top-8 table before tagging fallback:true.
-  let candidateTable = allCandidates.slice(0, 15);
+  // ── PHASE 2: JS LOCKS ≤3, THEN CLAUDE VERIFIES + NARRATES (v11.2) ──
+  // Old path sent top-15 to Claude as primary selector (web_search max_uses 20, retry storms).
+  // New path: selectDiversifiedStraights / binding YES locks FIRST in JS; Claude only sees those
+  // ≤3 picks for news veto + narrative (max_uses 5, one ~180s attempt, retries 1).
+  // On Claude fail: KEEP the JS-locked sides + Haiku narrate; set claudeVerified:false.
+  // Do NOT call fallbackToTopCandidates (that rewrote sides).
+  const candidateTable = allCandidates.slice(0, 15); // analytics / stored table (may include F5)
+  const cardPool = allCandidates.filter(c => allowOnOmegaCard(c) && hasPositiveEdge(c));
+  let lockedCands = selectDiversifiedStraights(cardPool, 3, 0.03);
+  // Ensure locked picks have stable ranks for Claude mapping (prefer existing EV ranks)
+  lockedCands.forEach((c, i) => {
+    if (c.rank == null) c.rank = 9000 + i;
+  });
+  console.log(`[v11.2-js-lock] Locked ${lockedCands.length} diversified straight(s): ${lockedCands.map(c => `#${c.rank} ${c.side} (${c.sport}, EV ${((c.ev || 0) * 100).toFixed(1)}%)`).join(" | ") || "(none)"}`);
 
-  async function invokeClaudeSelector(table, { timeoutMs, retries, label }) {
-    const userMessage = formatCandidateTable(table, dateISO, dateFormatted);
-    console.log(`[v11-claude] ${label}: sending ${table.length} candidates (${userMessage.length} chars, timeout=${timeoutMs}ms, retries=${retries})`);
+  function formatLockedPicksForVerify(locked, dateISO, dateFormatted) {
+    let prompt = `TODAY: ${dateFormatted} (${dateISO})\n\n`;
+    prompt += `JS has ALREADY locked the straight card below (${locked.length} pick(s)). Your job is VERIFY + NARRATE only.\n`;
+    prompt += `Use web search sparingly to check injuries/news/starters/QB/weather. ACCEPT by default; REJECT only with material verified news.\n`;
+    prompt += `If you reject a pick, do NOT invent a replacement — JS will fill the next diversified YES.\n`;
+    prompt += `Return JSON with selections (accepted) and rejections (vetoed locked ranks only).\n\n`;
+    // Reuse the rich per-candidate formatting by temporarily ranking locked as the table.
+    prompt += formatCandidateTable(locked, dateISO, dateFormatted);
+    return prompt;
+  }
+
+  async function invokeClaudeVerifier(locked, { timeoutMs, retries, label }) {
+    const userMessage = formatLockedPicksForVerify(locked, dateISO, dateFormatted);
+    console.log(`[v11.2-claude] ${label}: verifying ${locked.length} locked pick(s) (${userMessage.length} chars, timeout=${timeoutMs}ms, retries=${retries}, max_uses=5)`);
     const response = await anthropicFetch({
       model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+      max_tokens: 6000,
       temperature: 0.2,
       system: [{ type: "text", text: THE_LOCK_V10_SYSTEM, cache_control: { type: "ephemeral" } }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
       messages: [{ role: "user", content: userMessage }],
     }, { timeoutMs, retries });
     if (!response || !response.ok) {
-      console.error(`[v11-claude] ${label} unavailable (${response ? "HTTP " + response.status : "no response after retries"})`);
+      console.error(`[v11.2-claude] ${label} unavailable (${response ? "HTTP " + response.status : "no response after retries"})`);
       return { ok: false, reason: response ? `HTTP ${response.status}` : "timeout/abort" };
     }
     const result = await response.json();
-    console.log(`[v11-claude] ${label} response received, stop_reason:`, result.stop_reason);
+    console.log(`[v11.2-claude] ${label} response received, stop_reason:`, result.stop_reason);
     let rawText = "";
     for (const block of result.content) {
       if (block.type === "text") rawText += block.text;
@@ -5852,58 +5902,114 @@ exports.handler = async (event) => {
       }
       return { ok: true, claudeOutput, rawText };
     } catch (parseErr) {
-      console.error(`[v11-claude] ${label} JSON parse failed: ${parseErr.message}`);
+      console.error(`[v11.2-claude] ${label} JSON parse failed: ${parseErr.message}`);
       return { ok: false, reason: `parse: ${parseErr.message}`, rawText };
     }
   }
 
+  function mapSelectionsOntoLocked(locked, claudeSelections) {
+    const byRank = new Map();
+    const bySide = new Map();
+    for (const sel of (claudeSelections || [])) {
+      if (sel && sel.candidateRank != null) byRank.set(sel.candidateRank, sel);
+    }
+    // Also index by side via locked ranks present in selections
+    for (const c of locked) {
+      const sel = byRank.get(c.rank);
+      if (sel) bySide.set(c.side, sel);
+    }
+    return locked.map((c, i) => {
+      const sel = byRank.get(c.rank) || bySide.get(c.side);
+      if (sel) return { ...sel, candidateRank: c.rank };
+      return {
+        candidateRank: c.rank,
+        adjustedUnits: null,
+        unitAdjustmentReason: "",
+        coreReasoning: "",
+        whatLoses: "",
+        dataVerified: "js-locked — Claude did not return a selection row; Haiku/fact narrate may fill",
+        clvExpectation: "",
+      };
+    });
+  }
+
+  let claudeVerified = false;
+  let claudeOutput = { selections: [], rejections: [], edgeSummary: "" };
+  let rawText = "";
+  const genuineRejectedSides = new Set();
+
   try {
-    let selector = await invokeClaudeSelector(candidateTable, { timeoutMs: 120000, retries: 4, label: "primary(top15)" });
-    if (!selector.ok) {
-      console.log(`[v11-claude] Primary selector failed (${selector.reason}) — retrying once with top-8 candidate table before JS fallback`);
-      candidateTable = allCandidates.slice(0, 8);
-      selector = await invokeClaudeSelector(candidateTable, { timeoutMs: 90000, retries: 2, label: "retry(top8)" });
-    }
-    if (!selector.ok) {
-      console.error(`[v11-claude] Selector aborted after primary+top8 retries (${selector.reason}) — deterministic JS fallback (fallback:true)`);
-      return await fallbackToTopCandidates(dateISO, dateFormatted, allCandidates.slice(0, 15), allCandidates, now, pitcherData, teamStats);
+    if (lockedCands.length === 0) {
+      console.log("[v11.2-js-lock] No card-eligible diversified YES after F5 gate / floors — continuing to lean/no-play paths via empty picks");
+    } else {
+      const verifier = await invokeClaudeVerifier(lockedCands, { timeoutMs: 180000, retries: 1, label: "verify(locked≤3)" });
+      if (verifier.ok) {
+        claudeVerified = true;
+        claudeOutput = verifier.claudeOutput || claudeOutput;
+        rawText = verifier.rawText || "";
+        for (const r of (claudeOutput.rejections || [])) {
+          const reason = String(r.reason || "");
+          if (/^not selected|^lower edge|^below lean/i.test(reason)) continue;
+          const c = lockedCands.find(x => x.rank === r.candidateRank)
+            || candidateTable.find(x => x.rank === r.candidateRank);
+          if (c && c.side) {
+            genuineRejectedSides.add((c.side || "").toLowerCase().trim());
+            console.log(`[v11.2-claude] News veto: ${c.side} — ${reason}`);
+          }
+        }
+        if (genuineRejectedSides.size > 0) {
+          const refillPool = cardPool.filter(c => !genuineRejectedSides.has((c.side || "").toLowerCase().trim()));
+          const refilled = selectDiversifiedStraights(refillPool, 3, 0.03);
+          refilled.forEach((c, i) => { if (c.rank == null) c.rank = 9100 + i; });
+          console.log(`[v11.2-js-lock] After ${genuineRejectedSides.size} veto(es), refilled to ${refilled.length}: ${refilled.map(c => c.side).join(" | ")}`);
+          lockedCands = refilled;
+        }
+      } else {
+        console.error(`[v11.2-claude] Verifier aborted (${verifier.reason}) — keeping JS-locked sides + Haiku narrate (claudeVerified:false)`);
+        rawText = verifier.rawText || "";
+      }
     }
 
-    const claudeOutput = selector.claudeOutput;
-    const rawText = selector.rawText || "";
+    // Build picks from JS-locked sides; map Claude narratives/unit cuts when verified.
+    const selections = mapSelectionsOntoLocked(lockedCands, claudeOutput.selections || []);
+    let picks = lockedCands.length
+      ? buildFinalPicks(lockedCands, selections, allCandidates, bankrollCtx.drawdownActive)
+      : [];
 
-    // ── PHASE 3: BINDING DIVERSIFIED CARD + CLAUDE NARRATIVE/UNIT MAP ──
-    // Diversification is hard (not soft post-hoc). Claude rejections remove sides from YES pool;
-    // Claude may narrate / cut units on the diversified slots only.
-    const selections = claudeOutput.selections || [];
-    const genuineRejectedSides = new Set();
-    for (const r of (claudeOutput.rejections || [])) {
-      const reason = String(r.reason || "");
-      // Bookkeeping "not selected" lines are not genuine news rejects.
-      if (/^not selected|^lower edge|^below lean/i.test(reason)) continue;
-      const c = candidateTable.find(x => x.rank === r.candidateRank);
-      if (c && c.side) genuineRejectedSides.add((c.side || "").toLowerCase().trim());
+    if (!claudeVerified && picks.length > 0) {
+      // Ensure Haiku path sees empty/placeholder narratives as needing regen
+      for (const p of picks) {
+        if (!p.coreReasoning) {
+          p.coreReasoning = "Auto-generated from deterministic model — Claude narrative unavailable.";
+          p.dataVerified = "js-locked; claudeVerified:false";
+        }
+      }
+      await validateAndEnhanceNarratives(picks, process.env.ANTHROPIC_API_KEY);
     }
-    let picks = buildBindingDiversifiedPicks(allCandidates, selections, candidateTable, genuineRejectedSides, bankrollCtx.drawdownActive);
 
-    // Build rejections from Claude + all non-selected candidates
-    // Binding card sides are the published YES set (may differ from Claude's raw ranks).
+    // Build rejections from Claude vetoes + non-selected analytics candidates
     const selectedSides = new Set(picks.map(p => p.pick));
+    const selectedRanks = new Set(lockedCands.map(c => c.rank));
 
     const rejections = [];
-    // Add Claude's explicit rejections
     for (const r of (claudeOutput.rejections || [])) {
-      const c = candidateTable.find(x => x.rank === r.candidateRank);
+      const c = lockedCands.find(x => x.rank === r.candidateRank)
+        || candidateTable.find(x => x.rank === r.candidateRank);
       rejections.push({
         matchup: c ? c.matchup : `Candidate #${r.candidateRank}`,
         side: c ? c.side : "N/A",
         reason: r.reason || "No reason given",
       });
     }
-    // Add remaining non-selected candidates as rejections
     for (const c of allCandidates.slice(0, 15)) {
+      if (!allowOnOmegaCard(c)) {
+        if (!rejections.find(r => r.side === c.side)) {
+          rejections.push({ matchup: c.matchup, side: c.side, reason: "F5 disabled on Omega MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only." });
+        }
+        continue;
+      }
       if (!selectedSides.has(c.side) && !rejections.find(r => r.side === c.side)) {
-        rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." });
+        rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority / diversification." });
       }
     }
 
@@ -5932,6 +6038,7 @@ exports.handler = async (event) => {
           return LEAN_EV_FLOOR;
         };
         const topUps = leanAll.filter(c =>
+          allowOnOmegaCard(c) &&
           hasPositiveEdge(c) &&
           c.ev >= leanFloorFor(c) &&
           (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
@@ -6083,6 +6190,8 @@ exports.handler = async (event) => {
       sgps: [],
       modelProjections,
       edgeCandidatesCount: allCandidates.length,
+      claudeVerified,
+      fallback: false,
       candidateTable: candidateTable.map(c => ({
         rank: c.rank,
         sport: c.sport,
@@ -6115,8 +6224,39 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: "OK" };
 
   } catch (err) {
-    console.error(`[v11-claude] Fatal selector error after retries path: ${err.message}`);
-    return await fallbackToTopCandidates(dateISO, dateFormatted, candidateTable || allCandidates.slice(0, 15), allCandidates, now, pitcherData, teamStats);
+    console.error(`[v11.2-claude] Fatal verifier error: ${err.message} — attempting to keep JS-locked card with claudeVerified:false`);
+    try {
+      const emergencyPool = (allCandidates || []).filter(c => allowOnOmegaCard(c) && hasPositiveEdge(c));
+      const emergencyLocked = selectDiversifiedStraights(emergencyPool, 3, 0.03);
+      emergencyLocked.forEach((c, i) => { if (c.rank == null) c.rank = 9200 + i; });
+      const emergencySels = emergencyLocked.map(c => ({
+        candidateRank: c.rank, coreReasoning: "Auto-generated from deterministic model — Claude narrative unavailable.",
+        whatLoses: "", dataVerified: "js-locked; claudeVerified:false (fatal verifier error)", clvExpectation: "",
+      }));
+      let emergencyPicks = emergencyLocked.length
+        ? buildFinalPicks(emergencyLocked, emergencySels, allCandidates, false)
+        : [];
+      if (emergencyPicks.length) await validateAndEnhanceNarratives(emergencyPicks, process.env.ANTHROPIC_API_KEY);
+      const summaries = await narrateAndSummarize(emergencyPicks, pitcherData, teamStats, dateFormatted, { narrateAll: true });
+      const totalUnits = emergencyPicks.reduce((s, p) => s + parseFloat(p.units), 0);
+      await storePicks(dateISO, {
+        date: dateISO, dateFormatted, model: MODEL_VERSION,
+        picks: emergencyPicks,
+        rejections: [{ matchup: "Claude", side: "verifier", reason: `Verifier fatal: ${err.message}` }],
+        edgeSummary: summaries.edgeSummary || "WeBetAI locked today's card from the statistical model; live news verification was unavailable.",
+        insights: summaries.insights || "",
+        summary: { totalPicks: emergencyPicks.length, totalStraightBets: emergencyPicks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(emergencyPicks.map(p => p.sport))], modelVersion: MODEL_VERSION },
+        generatedAt: now.toISOString(),
+        parlayLegs: buildCorrelatedParlay(emergencyPicks, allCandidates, []),
+        sgps: [],
+        claudeVerified: false,
+        fallback: false,
+      });
+      return { statusCode: 200, body: "JS-lock OK (claudeVerified:false)" };
+    } catch (e2) {
+      console.error(`[v11.2-claude] Emergency JS-lock store failed: ${e2.message}`);
+      return await fallbackToTopCandidates(dateISO, dateFormatted, (allCandidates || []).filter(allowOnOmegaCard).slice(0, 15), allCandidates, now, pitcherData, teamStats);
+    }
   }
 };
 
@@ -6411,7 +6551,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
   console.log("[v11-claude] JS fallback: diversified top candidates (fallback:true) — Claude selector unavailable after retries");
-  const top3 = selectDiversifiedStraights(candidateTable.filter(hasPositiveEdge), 3, 0.03);
+  const top3 = selectDiversifiedStraights(candidateTable.filter(c => allowOnOmegaCard(c) && hasPositiveEdge(c)), 3, 0.03);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -6495,6 +6635,7 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
     summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
     generatedAt: now.toISOString(), parlayLegs: buildCorrelatedParlay(picks, allCandidates, []), sgps: [],
     fallback: true,
+    claudeVerified: false,
   };
 
   await storePicks(dateISO, picksData);
@@ -6651,6 +6792,9 @@ module.exports.cfbTotalCoverProb = cfbTotalCoverProb;
 module.exports.computeFootballProjection = computeFootballProjection;
 module.exports.sportEvFloor = sportEvFloor;
 module.exports.sportCoverFloor = sportCoverFloor;
+module.exports.ALLOW_F5_ON_CARD = ALLOW_F5_ON_CARD;
+module.exports.isF5Candidate = isF5Candidate;
+module.exports.allowOnOmegaCard = allowOnOmegaCard;
 module.exports.selectDiversifiedStraights = selectDiversifiedStraights;
 module.exports.buildBindingDiversifiedPicks = buildBindingDiversifiedPicks;
 module.exports.formatMatchup = formatMatchup;

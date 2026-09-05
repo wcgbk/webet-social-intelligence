@@ -398,7 +398,7 @@ exports.handler = async (event) => {
 
     // Check cache (5-min TTL, v2 key to bust stale cache)
     try {
-      const cacheResp = await fetch(`${alphaStoreUrl}/results-omega-cache-v1`, { headers: authHeaders });
+      const cacheResp = await fetch(`${alphaStoreUrl}/results-omega-cache-v2`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
         if (Date.now() - (cached.cachedAt || 0) < 300000) {
@@ -407,10 +407,11 @@ exports.handler = async (event) => {
       }
     } catch (e) {}
 
-    // OMEGA: KPIs start 2026-08-22 — its record is the omega store ONLY. The alpha version
-    // of this function stitched edge-picks-beta history in before the store's first date;
-    // omega carries no historical back-merge (Ben-directed 2026-08-22).
-    const alphaDates = await getDatesFromStore(alphaStoreUrl, authHeaders);
+    // OMEGA: KPIs reset to start 2026-09-05 (Ben/Omega-directed). Omega store ONLY —
+    // no alpha/beta back-merge. Daily + cumulative ignore any pre-floor blob dates.
+    const KPI_START = "2026-09-05";
+    const alphaDatesRaw = await getDatesFromStore(alphaStoreUrl, authHeaders);
+    const alphaDates = alphaDatesRaw.filter(d => d >= KPI_START);
 
     const alphaDateSet = new Set(alphaDates);
     const betaDateSet = new Set();
@@ -508,7 +509,7 @@ exports.handler = async (event) => {
     };
 
     try {
-      await fetch(`${alphaStoreUrl}/results-omega-cache-v1`, {
+      await fetch(`${alphaStoreUrl}/results-omega-cache-v2`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),

@@ -1,11 +1,10 @@
 // generate-picks-omega-background.js
-// v10.9-omega-optimized — OMEGA split-test challenger (Ben-directed full-audit build,
-// 2026-08-22). Base = v10.4.7 alpha (465405d: EV ranking, per-market caps, totals-first
-// parlay, fact-gate, no-vig prior, observer config levers) + the truestats offense fix
-// (batting-scoped runs + tripwire + METHOD-3 guard) + audit backlog: ET pitcher date,
-// Sox-safe F5 home detection, 2025/26 park-rename aliases + Daikin/AmFam dome regex,
-// weather city geocoding, loud empty-injuries guard. Store: edge-picks-omega. Alpha
-// (6/29 pure control) is untouched.
+// v11.0-omega-elite-multisport — fold NFL + CFB (NCAAF) into Omega's daily card
+// (up to 3 straights + 1 optimized parlay across MLB/NFL/CFB when a slate exists).
+// Baseline v10.9-omega-optimized (MLB-only, 3+parlay). Soccer stays disabled. Alpha
+// (get-picks-alpha* / generate-picks-alpha*) is untouched.
+// Football projections are sport-specific (Elo/EPA-style + rest + weather + QB) —
+// MLB FIP/starter/park logic is never applied to NFL/CFB. Store: edge-picks-omega.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
@@ -22,6 +21,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
+const MODEL_VERSION = "v11.0-omega-elite-multisport";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
@@ -30,15 +30,18 @@ YOUR INPUTS:
 A ranked table of the top candidate picks with pre-computed edges, cover probabilities, Kelly units, and supporting team context.
 
 YOUR JOB:
-1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), and recent form for the top 8 candidates.
-2. SELECT your top 3 picks from the candidate table (or fewer if web search reveals disqualifying info). If fewer than 3 genuine edges survive verification, output only what you have conviction on.
+1. Use web search to verify injury status, recent news, goaltender confirmations (NHL), starting pitchers (MLB), QB status (NFL/NCAAF), outdoor weather (NFL/NCAAF/MLB), and recent form for the top 8 candidates.
+2. SELECT your top 3 picks from the candidate table (or fewer if web search reveals disqualifying info). If fewer than 3 genuine edges survive verification, output only what you have conviction on — do NOT pad with weak legs.
 3. Write 3-5 sentence coreReasoning narrative for each selected pick.
-4. You MAY reject candidates if web search reveals material changes after the data cutoff:
+4. DIVERSIFICATION: unique games only. Prefer covering multiple sports (MLB / NFL / NCAAF) when a cross-sport candidate's EV is within 1.5% of a same-sport alternative. Cap 2 picks from one sport unless the other sports have no verified YES candidates.
+5. You MAY reject candidates if web search reveals material changes after the data cutoff:
    - Star player ruled out / downgraded after data cutoff
    - Goaltender change (NHL) not reflected in pre-computed data
    - Starting pitcher change (MLB)
-   - Severe weather for outdoor sports
+   - QB ruled out / downgraded (NFL / NCAAF) when the projection depends on him
+   - Severe weather for outdoor sports (wind/cold/precip for football totals; MLB wind/temp)
    - Material lineup or coaching change
+   - Do NOT apply baseball starter/FIP logic to football picks.
 5. You MAY reduce pre-computed Kelly units by up to 50% with justification. You MUST NOT increase units.
 6. You MUST NOT pick outside the provided candidate table.
 7. You MUST NOT override model direction, invent probabilities, or recompute edges.
@@ -87,6 +90,8 @@ const ODDS_SPORTS = [
   "icehockey_nhl",
   // "basketball_ncaab", // v10.1: disabled — 48.7% accuracy, -7.0% ROI in backtest. Re-enable next season.
   "baseball_mlb",
+  "americanfootball_nfl",
+  "americanfootball_ncaaf",
   "soccer_epl",
   "soccer_spain_la_liga",
   "soccer_italy_serie_a",
@@ -109,6 +114,9 @@ const ESPN_LEAGUES = [
   // MLB: kFactor=4 per FiveThirtyEight (highest luck component in major team sports).
   // homeAdv=24 ELO pts per FiveThirtyEight MLB calibration (~53.4% win prob for equal teams at home).
   { sport: "baseball", league: "mlb", label: "MLB", homeAdv: 24, kFactor: 4, baseElo: 1500 },
+  // NFL HFA ~48–55 Elo pts (~2.5 pts ATS). CFB HFA larger (~55–70 Elo / ~3.0 pts).
+  { sport: "football", league: "nfl", label: "NFL", homeAdv: 50, kFactor: 20, baseElo: 1500 },
+  { sport: "football", league: "college-football", label: "NCAAF", homeAdv: 65, kFactor: 24, baseElo: 1500 },
   { sport: "soccer", league: "eng.1", label: "EPL", homeAdv: 80, kFactor: 24, baseElo: 1500 },
   { sport: "soccer", league: "esp.1", label: "La Liga", homeAdv: 80, kFactor: 24, baseElo: 1500 },
   { sport: "soccer", league: "ita.1", label: "Serie A", homeAdv: 80, kFactor: 24, baseElo: 1500 },
@@ -125,11 +133,11 @@ const ESPN_LEAGUES = [
 // NHL: ~1.6 goals (was 1.2 — too low, inflated z-scores by ~30%. Corrected to 1.6.)
 // MLB: ~2.8 runs (empirical SD from Baseball Reference; was 2.5 — slightly low)
 // Soccer: 1.5 goals (draw-compressed distribution; 1.0 was too tight)
-const SPORT_STD_DEVS = { NBA: 12, NCAAB: 11, NHL: 1.6, MLB: 2.8, EPL: 1.5, "La Liga": 1.5, "Serie A": 1.5, Bundesliga: 1.5, "Ligue 1": 1.5, MLS: 1.5, UCL: 1.5, Europa: 1.5 };
+const SPORT_STD_DEVS = { NBA: 12, NCAAB: 11, NHL: 1.6, MLB: 2.8, NFL: 13.2, NCAAF: 16.0, EPL: 1.5, "La Liga": 1.5, "Serie A": 1.5, Bundesliga: 1.5, "Ligue 1": 1.5, MLS: 1.5, UCL: 1.5, Europa: 1.5 };
 // v10.3: game-total distributions are wider than margin distributions — totals must use their own σ.
 // Empirical full-game total SDs: NBA ~18.5, NCAAB ~17, NHL ~2.3 goals, MLB ~4.3 runs.
 // Previously totals reused the margin σ, inflating total z-scores (and cover probs) by ~40-50%.
-const SPORT_TOTAL_STD_DEVS = { NBA: 18.5, NCAAB: 17, NHL: 2.3, MLB: 4.3, EPL: 1.9, "La Liga": 1.9, "Serie A": 1.9, Bundesliga: 1.9, "Ligue 1": 1.9, MLS: 1.9, UCL: 1.9, Europa: 1.9 };
+const SPORT_TOTAL_STD_DEVS = { NBA: 18.5, NCAAB: 17, NHL: 2.3, MLB: 4.3, NFL: 10.0, NCAAF: 12.5, EPL: 1.9, "La Liga": 1.9, "Serie A": 1.9, Bundesliga: 1.9, "Ligue 1": 1.9, MLS: 1.9, UCL: 1.9, Europa: 1.9 };
 
 // MLB park factors (2024-25 run environment; 100 = neutral, >100 hitter-friendly). Ported from the
 // F5 machine. Applied DAMPENED (x0.5) to the full-game total so we don't double-count the home park
@@ -205,7 +213,7 @@ function medianAmerican(prices) {
 // MLB: 0.5 runs (matches beta — 0.2 was noise-level, below model resolution for run lines)
 // NHL: 0.4 goals (0.25 was too loose given puck line is fixed ±1.5)
 // NBA: 2.0 pts (Finals-era tight lines; EV floor handles the rest)
-const SPORT_MIN_EDGE = { NBA: 2.0, NCAAB: 2.0, NHL: 0.4, MLB: 0.5, EPL: 0.25, "La Liga": 0.25, "Serie A": 0.25, Bundesliga: 0.25, "Ligue 1": 0.25, MLS: 0.25, UCL: 0.25, Europa: 0.25 };
+const SPORT_MIN_EDGE = { NBA: 2.0, NCAAB: 2.0, NHL: 0.4, MLB: 0.5, NFL: 2.0, NCAAF: 2.5, EPL: 0.25, "La Liga": 0.25, "Serie A": 0.25, Bundesliga: 0.25, "Ligue 1": 0.25, MLS: 0.25, UCL: 0.25, Europa: 0.25 };
 
 // v10.3: hardcoded sport Kelly multipliers REMOVED. They came from the backfilled backtest,
 // and the real daily-run record (Mar 19 – Jun 12, 428 graded straights) contradicts both:
@@ -320,7 +328,7 @@ async function validateAndEnhanceNarratives(picks, apiKey) {
 // Temporarily decay Elo to reflect current form, not full-season average.
 // Decay is symmetric: winning streaks get a boost.
 // Factor: 8 Elo points per game in streak beyond 3 games (NBA scale)
-const STREAK_ELO_DECAY = { NBA: 8, NHL: 5, NCAAB: 10, MLB: 4 };
+const STREAK_ELO_DECAY = { NBA: 8, NHL: 5, NCAAB: 10, MLB: 4, NFL: 6, NCAAF: 8 };
 
 function getStreakEloAdjustment(streak, sport) {
   const perGame = STREAK_ELO_DECAY[sport] || 5;
@@ -359,6 +367,8 @@ const REST_POINT_ADJUSTMENT = {
   NHL: { perDayDiff: 0.6, maxAdj: 2.0, b2bPenalty: 0.97 },
   NCAAB: { perDayDiff: 0.5, maxAdj: 2.0, b2bPenalty: 1.0 },
   MLB: { perDayDiff: 0.3, maxAdj: 1.0, b2bPenalty: 1.0 },
+  NFL: { perDayDiff: 0.8, maxAdj: 2.5, b2bPenalty: 0.97 },
+  NCAAF: { perDayDiff: 0.4, maxAdj: 1.5, b2bPenalty: 1.0 },
 };
 
 // Time zone map for NBA/NHL arenas (approximate — EST=0, CST=-1, MST=-2, PST=-3)
@@ -384,6 +394,15 @@ const TEAM_TIMEZONE = {
   "Winnipeg Jets": -1, "Anaheim Ducks": -3, "Calgary Flames": -2, "Edmonton Oilers": -2,
   "Los Angeles Kings": -3, "San Jose Sharks": -3, "Seattle Kraken": -3, "Vancouver Canucks": -3,
   "Vegas Golden Knights": -3,
+  // NFL
+  "Buffalo Bills": 0, "Miami Dolphins": 0, "New England Patriots": 0, "New York Jets": 0,
+  "Baltimore Ravens": 0, "Cincinnati Bengals": -1, "Cleveland Browns": 0, "Pittsburgh Steelers": 0,
+  "Houston Texans": -1, "Indianapolis Colts": -1, "Jacksonville Jaguars": 0, "Tennessee Titans": -1,
+  "Denver Broncos": -2, "Kansas City Chiefs": -1, "Las Vegas Raiders": -3, "Los Angeles Chargers": -3,
+  "Dallas Cowboys": -1, "New York Giants": 0, "Philadelphia Eagles": 0, "Washington Commanders": 0,
+  "Chicago Bears": -1, "Detroit Lions": 0, "Green Bay Packers": -1, "Minnesota Vikings": -1,
+  "Atlanta Falcons": 0, "Carolina Panthers": 0, "New Orleans Saints": -1, "Tampa Bay Buccaneers": 0,
+  "Arizona Cardinals": -2, "Los Angeles Rams": -3, "San Francisco 49ers": -3, "Seattle Seahawks": -3,
 };
 
 function computeRestAdjustment(homeRest, awayRest, homeTeam, awayTeam, sport) {
@@ -565,6 +584,12 @@ const COVER_PROB_CAPS = {
   "MLB_Run Line": 0.57,
   "MLB_Total": 0.60,
   "MLB_Moneyline": 0.70,
+  "NFL_Spread": 0.57,
+  "NFL_Total": 0.60,
+  "NFL_Moneyline": 0.72,
+  "NCAAF_Spread": 0.57,
+  "NCAAF_Total": 0.60,
+  "NCAAF_Moneyline": 0.72,
   // Soccer: draw possibility further compresses realistic win prob ceilings
   "EPL_Spread": 0.57, "La Liga_Spread": 0.57, "Serie A_Spread": 0.57,
   "Bundesliga_Spread": 0.57, "Ligue 1_Spread": 0.57, "MLS_Spread": 0.57,
@@ -633,6 +658,419 @@ function getF5CalibratedProb(rawProb, betType, odds) {
 
 function eloExpected(ratingA, ratingB) {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+function isFootballSport(sport) { return sport === "NFL" || sport === "NCAAF"; }
+function sportEvFloor(sport, defaultFloor) {
+  if (sport === "NFL") return Math.max(defaultFloor, 0.025);
+  if (sport === "NCAAF") return Math.max(defaultFloor, 0.030);
+  return defaultFloor;
+}
+function sportCoverFloor(sport) {
+  if (sport === "NFL" || sport === "NCAAF") return 0.52;
+  return 0;
+}
+
+// ── NFL static power-rating seed (net points vs league average) — from generate-picks-nfl-background ──
+const NFL_TEAM_RATINGS = {
+  "Arizona Cardinals": -0.5, "Atlanta Falcons": -0.5, "Baltimore Ravens": 5.5,
+  "Buffalo Bills": 6.0, "Carolina Panthers": -3.0, "Chicago Bears": -1.0,
+  "Cincinnati Bengals": 2.0, "Cleveland Browns": -5.5, "Dallas Cowboys": -1.0,
+  "Denver Broncos": 3.5, "Detroit Lions": 5.5, "Green Bay Packers": 3.5,
+  "Houston Texans": 1.5, "Indianapolis Colts": -1.0, "Jacksonville Jaguars": -3.0,
+  "Kansas City Chiefs": 4.0, "Las Vegas Raiders": -3.5, "Los Angeles Chargers": 2.5,
+  "Los Angeles Rams": 1.5, "Miami Dolphins": -0.5, "Minnesota Vikings": 3.0,
+  "New England Patriots": -3.0, "New Orleans Saints": -3.5, "New York Giants": -4.0,
+  "New York Jets": -2.5, "Philadelphia Eagles": 6.0, "Pittsburgh Steelers": 1.0,
+  "San Francisco 49ers": 1.5, "Seattle Seahawks": 1.0, "Tampa Bay Buccaneers": 2.0,
+  "Tennessee Titans": -5.0, "Washington Commanders": 3.0,
+};
+const FOOTBALL_INDOOR = /sofi|allegiant|at&t stadium|state farm|mercedes-benz|u\.?s\.? bank|ford field|lucas oil|caesars superdome|nrg stadium|alamodome|carrier dome|jma wireless|roof|dome/i;
+const NFL_HFA_PTS = 2.5;
+const CFB_HFA_PTS = 3.0;
+const NFL_LEAGUE_TOTAL = 44.5;
+const CFB_LEAGUE_TOTAL = 55.5;
+const NFL_SIGMA_ML = 13.2;
+
+function nflTeamRatingSeed(name) {
+  if (NFL_TEAM_RATINGS[name] !== undefined) return NFL_TEAM_RATINGS[name];
+  const last = (name || "").trim().split(/\s+/).pop().toLowerCase();
+  for (const [team, r] of Object.entries(NFL_TEAM_RATINGS)) {
+    if (team.toLowerCase().endsWith(last)) return r;
+  }
+  return 0;
+}
+function nflTeamRatingLive(name, overlay) {
+  const seed = nflTeamRatingSeed(name);
+  if (!overlay) return seed;
+  const last = (name || "").trim().split(/\s+/).pop().toLowerCase();
+  let live = overlay[name];
+  if (live == null) {
+    for (const [k, v] of Object.entries(overlay)) {
+      if (k.toLowerCase().endsWith(last)) { live = v; break; }
+    }
+  }
+  if (live == null || !Number.isFinite(live)) return seed;
+  return seed * 0.55 + live * 0.45;
+}
+
+function normFootballTeam(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+function cfbSchoolKey(name) {
+  const parts = normFootballTeam(name).split(" ");
+  return parts.length > 1 ? parts.slice(0, -1).join(" ") : (parts[0] || "");
+}
+function cfbTeamsMatch(a, b) {
+  const na = normFootballTeam(a), nb = normFootballTeam(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const sa = cfbSchoolKey(a), sb = cfbSchoolKey(b);
+  return sa.length > 2 && sa === sb;
+}
+function cfbOverlayFor(name, overlay) {
+  if (!overlay) return null;
+  if (overlay[name]) return overlay[name];
+  for (const [k, v] of Object.entries(overlay)) {
+    if (cfbTeamsMatch(k, name)) return v;
+  }
+  return null;
+}
+
+// NFL key-number cover (3/7 heavy). Port of generate-picks-nfl-background.
+function nflSpreadCoverProb(modelMargin, pointsReceived, sigma) {
+  const need = -pointsReceived;
+  const integer = Math.abs(pointsReceived % 1) < 1e-9;
+  let pWin, pPush = 0;
+  if (integer) {
+    pPush = Math.max(0, normalCDF((need + 0.5 - modelMargin) / sigma) - normalCDF((need - 0.5 - modelMargin) / sigma));
+    pWin = 1 - normalCDF((need + 0.5 - modelMargin) / sigma);
+  } else {
+    pWin = 1 - normalCDF((need - modelMargin) / sigma);
+  }
+  const bump = (kn, w) => {
+    const L = Math.abs(pointsReceived);
+    if (pointsReceived > 0 && L >= kn - 0.5 && L < kn) pWin -= w;
+    if (pointsReceived > 0 && L > kn && L <= kn + 0.5) pWin += w;
+    if (pointsReceived < 0 && L >= kn - 0.5 && L < kn) pWin += w;
+    if (pointsReceived < 0 && L > kn && L <= kn + 0.5) pWin -= w;
+  };
+  bump(3, 0.022); bump(7, 0.014); bump(6, 0.006); bump(10, 0.005); bump(14, 0.004);
+  pWin = Math.min(0.72, Math.max(0.28, pWin));
+  return pPush > 0.002 ? pWin / (1 - pPush) : pWin;
+}
+function nflTotalCoverProb(modelTotal, line, isOver, sigma) {
+  const integer = Math.abs(line % 1) < 1e-9;
+  let pOver, pPush = 0;
+  if (integer) {
+    pPush = Math.max(0, normalCDF((line + 0.5 - modelTotal) / sigma) - normalCDF((line - 0.5 - modelTotal) / sigma));
+    pOver = 1 - normalCDF((line + 0.5 - modelTotal) / sigma);
+  } else {
+    pOver = 1 - normalCDF((line - modelTotal) / sigma);
+  }
+  const pWin = isOver ? pOver : Math.max(0, 1 - pOver - pPush);
+  const denom = 1 - pPush;
+  return denom > 0 ? Math.min(0.70, Math.max(0.30, pWin / denom)) : 0.5;
+}
+// CFB key-number cover — empirical college curve (weaker 3/7 than NFL). Port of generate-picks-cfb-background.
+function cfbSpreadCoverProb(modelMargin, pointsReceived, sigma) {
+  const need = -pointsReceived;
+  const integer = Math.abs(pointsReceived % 1) < 1e-9;
+  let pWin, pPush = 0;
+  if (integer) {
+    pPush = Math.max(0, normalCDF((need + 0.5 - modelMargin) / sigma) - normalCDF((need - 0.5 - modelMargin) / sigma));
+    pWin = 1 - normalCDF((need + 0.5 - modelMargin) / sigma);
+  } else {
+    pWin = 1 - normalCDF((need - modelMargin) / sigma);
+  }
+  const bump = (kn, w) => {
+    const L = Math.abs(pointsReceived);
+    if (pointsReceived > 0 && L >= kn - 0.5 && L < kn) pWin -= w;
+    if (pointsReceived > 0 && L > kn && L <= kn + 0.5) pWin += w;
+    if (pointsReceived < 0 && L >= kn - 0.5 && L < kn) pWin += w;
+    if (pointsReceived < 0 && L > kn && L <= kn + 0.5) pWin -= w;
+  };
+  bump(3, 0.011); bump(7, 0.008); bump(10, 0.005); bump(14, 0.004); bump(4, 0.003); bump(17, 0.004); bump(21, 0.004);
+  pWin = Math.min(0.72, Math.max(0.28, pWin));
+  return pPush > 0.002 ? pWin / (1 - pPush) : pWin;
+}
+function cfbTotalCoverProb(modelTotal, line, isOver, sigma) {
+  const integer = Math.abs(line % 1) < 1e-9;
+  let pOver, pPush = 0;
+  if (integer) {
+    pPush = Math.max(0, normalCDF((line + 0.5 - modelTotal) / sigma) - normalCDF((line - 0.5 - modelTotal) / sigma));
+    pOver = 1 - normalCDF((line + 0.5 - modelTotal) / sigma);
+  } else {
+    pOver = 1 - normalCDF((line - modelTotal) / sigma);
+  }
+  const pWin = isOver ? pOver : Math.max(0, 1 - pOver - pPush);
+  const denom = 1 - pPush;
+  return denom > 0 ? Math.min(0.70, Math.max(0.30, pWin / denom)) : 0.5;
+}
+
+function qbMarginAdj(home, away, qbAdj, matcher) {
+  if (!qbAdj) return 0;
+  const find = (name) => {
+    if (qbAdj[name] != null) return qbAdj[name];
+    for (const [k, v] of Object.entries(qbAdj)) {
+      if (matcher ? matcher(k, name) : k.toLowerCase().endsWith((name || "").split(/\s+/).pop().toLowerCase())) return v;
+    }
+    return 0;
+  };
+  return (find(home) || 0) - (find(away) || 0);
+}
+
+function parseEspnQbInjuries(data, doubtfulPts, outPts) {
+  const adj = {};
+  const apply = (teamName, pos, status) => {
+    if ((pos || "").toUpperCase() !== "QB") return;
+    if (!/out|injured reserve|ir|doubtful/.test(status || "")) return;
+    const mag = /doubtful/.test(status) ? doubtfulPts : outPts;
+    adj[teamName] = Math.min(adj[teamName] || 0, mag);
+  };
+  for (const team of (data.injuries || data.teams || [])) {
+    const teamName = team.displayName || team.team?.displayName || "";
+    for (const inj of (team.injuries || team.athletes || [])) {
+      apply(teamName, inj.athlete?.position?.abbreviation || inj.position, inj.status || inj.type);
+    }
+  }
+  if (!Object.keys(adj).length && Array.isArray(data.items)) {
+    for (const item of data.items) {
+      apply(item.team?.displayName || "", item.athlete?.position?.abbreviation, item.status);
+    }
+  }
+  return adj;
+}
+
+async function fetchNflLiveOverlay() {
+  const out = {};
+  try {
+    const resp = await fetch("https://site.api.espn.com/apis/v2/sports/football/nfl/standings", { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) return out;
+    const data = await resp.json();
+    for (const conf of (data.children || [data])) {
+      for (const e of (conf.standings?.entries || [])) {
+        const name = e.team?.displayName || "";
+        if (!name) continue;
+        const stats = {};
+        for (const s of (e.stats || [])) if (s.name) stats[s.name] = s.value;
+        const pd = Number(stats.pointDifferential ?? stats.differential ?? 0);
+        const gp = Number(stats.gamesPlayed || ((stats.wins || 0) + (stats.losses || 0)) || 1);
+        out[name] = gp > 0 ? pd / gp : 0;
+      }
+    }
+    console.log(`[v11-nfl] Live standings overlay for ${Object.keys(out).length} teams`);
+  } catch (e) {
+    console.log(`[v11-nfl] standings overlay skipped: ${e.message}`);
+  }
+  return out;
+}
+
+async function fetchCfbLiveOverlay() {
+  const out = {};
+  try {
+    const resp = await fetch("https://site.api.espn.com/apis/v2/sports/football/college-football/standings", { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) return out;
+    const data = await resp.json();
+    const walk = (node) => {
+      if (!node) return;
+      for (const e of (node.standings?.entries || [])) {
+        const name = e.team?.displayName || "";
+        if (!name) continue;
+        const stats = {};
+        for (const s of (e.stats || [])) if (s.name) stats[s.name] = s.value;
+        const overall = (e.stats || []).find(s => s.name === "overall");
+        const recStr = (overall && (overall.displayValue || overall.summary)) || "";
+        const recM = recStr.match(/^(\d+)-(\d+)/);
+        const wins = Number(stats.wins || 0), losses = Number(stats.losses || 0);
+        const gp = Number(stats.gamesPlayed || 0) || (recM ? Number(recM[1]) + Number(recM[2]) : 0) || (wins + losses);
+        if (gp <= 0) continue;
+        const pd = Number(stats.pointDifferential ?? stats.differential ?? 0);
+        const pf = Number(stats.pointsFor ?? NaN);
+        const pa = Number(stats.pointsAgainst ?? NaN);
+        out[name] = {
+          margin: pd / gp,
+          totalRate: (Number.isFinite(pf) && Number.isFinite(pa)) ? (pf + pa) / gp : null,
+        };
+      }
+      for (const child of (node.children || [])) walk(child);
+    };
+    walk(data);
+    if (Array.isArray(data.children)) for (const c of data.children) walk(c);
+    console.log(`[v11-cfb] Live standings overlay for ${Object.keys(out).length} teams`);
+  } catch (e) {
+    console.log(`[v11-cfb] standings overlay skipped: ${e.message}`);
+  }
+  return out;
+}
+
+async function fetchFootballQbAdj(leagueSlug, doubtfulPts, outPts) {
+  try {
+    const resp = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/${leagueSlug}/injuries`, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) return {};
+    const data = await resp.json();
+    const adj = parseEspnQbInjuries(data, doubtfulPts, outPts);
+    if (Object.keys(adj).length) console.log(`[v11-qb] ${leagueSlug} QB adjustments: ${JSON.stringify(adj)}`);
+    return adj;
+  } catch (e) {
+    console.log(`[v11-qb] ${leagueSlug} injury fetch skipped: ${e.message}`);
+    return {};
+  }
+}
+
+async function fetchFootballContext(espnData) {
+  const hasNFL = (espnData || []).some(l => l.league === "NFL");
+  const hasCFB = (espnData || []).some(l => l.league === "NCAAF");
+  const ctx = { nflOverlay: {}, cfbOverlay: {}, nflQbAdj: {}, cfbQbAdj: {} };
+  const jobs = [];
+  if (hasNFL) {
+    jobs.push(fetchNflLiveOverlay().then(v => { ctx.nflOverlay = v; }));
+    jobs.push(fetchFootballQbAdj("nfl", -2.0, -3.5).then(v => { ctx.nflQbAdj = v; }));
+  }
+  if (hasCFB) {
+    jobs.push(fetchCfbLiveOverlay().then(v => { ctx.cfbOverlay = v; }));
+    jobs.push(fetchFootballQbAdj("college-football", -2.5, -4.0).then(v => { ctx.cfbQbAdj = v; }));
+  }
+  if (jobs.length) await Promise.all(jobs);
+  return ctx;
+}
+
+function footballCityFromTeam(name) {
+  const OVERRIDES = {
+    "New England Patriots": "Foxborough", "New York Giants": "East Rutherford",
+    "New York Jets": "East Rutherford", "Washington Commanders": "Landover",
+    "Las Vegas Raiders": "Las Vegas", "Green Bay Packers": "Green Bay",
+    "Tampa Bay Buccaneers": "Tampa", "Arizona Cardinals": "Glendale",
+    "Minnesota Vikings": "Minneapolis", "Tennessee Titans": "Nashville",
+  };
+  if (OVERRIDES[name]) return OVERRIDES[name];
+  return mlbCityFromTeam(name);
+}
+
+function findConsensusLineCfb(lookup, homeName, awayName, gameDateISO) {
+  if (!lookup) return null;
+  const seen = new Set();
+  const resolveTwin = (val) => {
+    if (!val || !val._twins || !val._twins.length || !gameDateISO) return val;
+    const gt = Date.parse(gameDateISO);
+    if (!Number.isFinite(gt)) return val;
+    let best = val, bestDiff = val.commenceTime ? Math.abs(Date.parse(val.commenceTime) - gt) : Infinity;
+    for (const tw of val._twins) {
+      const d = tw.commenceTime ? Math.abs(Date.parse(tw.commenceTime) - gt) : Infinity;
+      if (d < bestDiff) { bestDiff = d; best = tw; }
+    }
+    return best;
+  };
+  for (const val of Object.values(lookup)) {
+    if (!val || seen.has(val)) continue;
+    seen.add(val);
+    if (val.sport && val.sport !== "americanfootball_ncaaf") continue;
+    if (cfbTeamsMatch(val.homeTeam, homeName) && (!awayName || cfbTeamsMatch(val.awayTeam, awayName))) {
+      return resolveTwin(val);
+    }
+  }
+  return findConsensusLine(lookup, homeName, gameDateISO);
+}
+
+// Market-anchored football projection. NEVER uses MLB FIP/park/starter logic.
+function computeFootballProjection(game, leagueName, leagueConfig, homeRating, awayRating, teamStats, gameData, footballCtx) {
+  const isNFL = leagueName === "NFL";
+  const hfa = isNFL ? NFL_HFA_PTS : CFB_HFA_PTS;
+  const leagueTotal = isNFL ? NFL_LEAGUE_TOTAL : CFB_LEAGUE_TOTAL;
+  const sigmaMargin = isNFL ? (SPORT_STD_DEVS.NFL || 13.2) : (SPORT_STD_DEVS.NCAAF || 16.0);
+  const sigmaTotal = isNFL ? (SPORT_TOTAL_STD_DEVS.NFL || 10.0) : (SPORT_TOTAL_STD_DEVS.NCAAF || 12.5);
+  const sigmaML = isNFL ? NFL_SIGMA_ML : 14.0;
+  const marketWeight = isNFL ? 0.50 : 0.70;
+  const marginClamp = 4.0;
+  const totalClamp = isNFL ? 6.0 : 5.0;
+  const indoor = !!(game.indoor) || FOOTBALL_INDOOR.test(game.venue || "");
+
+  const marketMargin = gameData.homeSpread != null ? -gameData.homeSpread : 0;
+  let ratingMargin;
+  let qbAdjPts = 0;
+  let methodParts = [];
+
+  if (isNFL) {
+    const rHome = nflTeamRatingLive(game.home, footballCtx?.nflOverlay);
+    const rAway = nflTeamRatingLive(game.away, footballCtx?.nflOverlay);
+    qbAdjPts = qbMarginAdj(game.home, game.away, footballCtx?.nflQbAdj);
+    ratingMargin = (rHome - rAway) + hfa + qbAdjPts;
+    methodParts.push(`nfl-elo/epa-seed(h=${rHome.toFixed(1)},a=${rAway.toFixed(1)})`);
+  } else {
+    const ovHome = cfbOverlayFor(game.home, footballCtx?.cfbOverlay);
+    const ovAway = cfbOverlayFor(game.away, footballCtx?.cfbOverlay);
+    qbAdjPts = qbMarginAdj(game.home, game.away, footballCtx?.cfbQbAdj, cfbTeamsMatch);
+    const haveOverlay = !!(ovHome && ovAway);
+    ratingMargin = haveOverlay ? (ovHome.margin - ovAway.margin) + hfa : marketMargin;
+    methodParts.push(haveOverlay ? "cfb-standings-overlay" : "cfb-market-prior");
+  }
+
+  const restAdj = computeRestAdjustment(
+    homeRating?.daysSinceLastGame, awayRating?.daysSinceLastGame,
+    game.home, game.away, leagueName
+  );
+  // TNF/SNF/MNF rest: Thursday NFL is a known short-week spot (soft feature, never sole reason).
+  let tnfAdj = 0;
+  if (isNFL && (game.date || gameData.commenceTime)) {
+    const et = new Date(new Date(game.date || gameData.commenceTime).toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const dow = et.getDay();
+    const homeRest = homeRating?.daysSinceLastGame;
+    const awayRest = awayRating?.daysSinceLastGame;
+    if (dow === 4) { // Thursday
+      if (homeRest != null && homeRest <= 5) tnfAdj -= 0.4;
+      if (awayRest != null && awayRest <= 5) tnfAdj += 0.4;
+      methodParts.push("TNF-rest");
+    }
+  }
+
+  let modelMargin = marketWeight * marketMargin + (1 - marketWeight) * ratingMargin + (restAdj.spreadAdj || 0) + tnfAdj;
+  modelMargin = Math.max(marketMargin - marginClamp, Math.min(marketMargin + marginClamp, modelMargin));
+  if (qbAdjPts) methodParts.push(`qb ${qbAdjPts > 0 ? "+" : ""}${qbAdjPts.toFixed(1)}`);
+  if (restAdj.method) methodParts.push(restAdj.method.replace(/^\s*\[rest:\s*/, "").replace(/\]$/, ""));
+
+  let modelTotal = gameData.total;
+  if (gameData.total != null) {
+    if (isNFL) {
+      const rHome = nflTeamRatingLive(game.home, footballCtx?.nflOverlay);
+      const rAway = nflTeamRatingLive(game.away, footballCtx?.nflOverlay);
+      const ratingTotal = leagueTotal + (rHome + rAway) * 0.45 + (indoor ? 0.8 : 0);
+      modelTotal = 0.5 * ratingTotal + 0.5 * gameData.total;
+    } else {
+      const ovHome = cfbOverlayFor(game.home, footballCtx?.cfbOverlay);
+      const ovAway = cfbOverlayFor(game.away, footballCtx?.cfbOverlay);
+      if (ovHome && ovAway && ovHome.totalRate != null && ovAway.totalRate != null) {
+        const ratingTotal = (ovHome.totalRate + ovAway.totalRate) / 2 + (indoor ? 0.8 : 0);
+        modelTotal = 0.5 * ratingTotal + 0.5 * gameData.total;
+      } else {
+        modelTotal = gameData.total + (indoor ? 0.4 : 0);
+      }
+    }
+    modelTotal = Math.max(gameData.total - totalClamp, Math.min(gameData.total + totalClamp, modelTotal));
+    modelTotal *= restAdj.homeScoreMult * 0.5 + restAdj.awayScoreMult * 0.5;
+  } else {
+    modelTotal = leagueTotal;
+  }
+
+  const projHomeScore = (modelTotal + modelMargin) / 2;
+  const projAwayScore = (modelTotal - modelMargin) / 2;
+  const projSpread = -modelMargin;
+  const projTotal = projHomeScore + projAwayScore;
+  const homeWinProb = normalCDF(modelMargin / sigmaML);
+  const homeEloAdj = (leagueConfig?.homeAdv || hfa * 20);
+  const projMethod = `ensemble(${methodParts.join("+")}+market-anchor)`;
+
+  const totalCap = 100, spreadCap = isNFL ? 28 : 45;
+  const poisoned = projTotal > totalCap || Math.abs(projSpread) > spreadCap;
+  if (poisoned) {
+    console.log(`[v11-fb] POISONED ${leagueName} ${game.away} @ ${game.home}: total=${projTotal.toFixed(1)} spread=${projSpread.toFixed(1)}`);
+  }
+
+  return {
+    projHomeScore, projAwayScore, projSpread, projTotal, projMethod, homeWinProb, homeEloAdj,
+    effectiveHomeAdv: homeEloAdj, poisoned,
+    _fb: { modelMargin, modelTotal, sigmaMargin, sigmaTotal, sigmaML, indoor, qbAdjPts },
+  };
 }
 
 // ── Anthropic call with timeout + 429/5xx exponential backoff. Returns the Response, or null when
@@ -918,7 +1356,9 @@ async function fetchESPNData(dateISO) {
 
   for (const { sport, league, label } of ESPN_LEAGUES) {
     try {
-      const scoreUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/scoreboard?dates=${dateParam}`;
+      let scoreUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/scoreboard?dates=${dateParam}`;
+      // CFB: groups=80 = FBS; without it ESPN returns only Top-25 games and most of the slate is invisible.
+      if (league === "college-football") scoreUrl += "&groups=80&limit=300";
       const scoreResp = await fetch(scoreUrl);
       if (!scoreResp.ok) continue;
       const scoreData = await scoreResp.json();
@@ -943,6 +1383,7 @@ async function fetchESPNData(dateISO) {
           date: event.date,
           status: event.status?.type?.description || "Scheduled",
           venue: competition.venue?.fullName || "",
+          indoor: !!(competition.venue?.indoor) || FOOTBALL_INDOOR.test(competition.venue?.fullName || ""),
           home: home?.team?.displayName || "TBD",
           away: away?.team?.displayName || "TBD",
           homeRecord: home?.records?.[0]?.summary || "",
@@ -951,8 +1392,11 @@ async function fetchESPNData(dateISO) {
           awayId: away?.team?.id,
         };
 
+        // CFB Saturdays can be 50+ games; per-team injury fetches would blow the timeout.
+        // QB status comes from the league-wide injuries overlay in fetchFootballContext.
+        const skipPerTeamInj = league === "college-football";
         for (const [side, team] of [["home", home], ["away", away]]) {
-          if (team?.team?.id) {
+          if (!skipPerTeamInj && team?.team?.id) {
             try {
               const injUrl = `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/teams/${team.team.id}/injuries`;
               const injResp = await fetch(injUrl);
@@ -1131,6 +1575,15 @@ async function fetchTeamStats(espnData) {
               ops: ops ? Math.round(ops * 1000) / 1000 : null,
               pointsPerGame: runsPerGame ? Math.round(runsPerGame * 10) / 10 : null,
               pointsAllowed: pointsAllowed ? Math.round(pointsAllowed * 10) / 10 : null,
+              offensiveRating: null, defensiveRating: null, pace: null,
+            };
+          } else if (sportType === 'football') {
+            const gamesPlayed = stats.games || stats.teamGamesPlayed || null;
+            teamStats[teamName] = {
+              sport: 'football',
+              pointsPerGame: pointsPerGame ? Math.round(pointsPerGame * 10) / 10 : null,
+              pointsAllowed: pointsAllowed ? Math.round(pointsAllowed * 10) / 10 : null,
+              gamesPlayed,
               offensiveRating: null, defensiveRating: null, pace: null,
             };
           } else if (sportType === 'soccer') {
@@ -1669,24 +2122,27 @@ async function fetchWeatherForGames(espnData) {
   for (const league of (espnData || [])) {
     const isSoccer = ["EPL", "La Liga", "Serie A", "Bundesliga", "Ligue 1", "MLS", "UCL", "Europa"].includes(league.league);
     const isMLB = league.league === "MLB";
-    if (!isSoccer && !isMLB) continue;
+    const isFootball = league.league === "NFL" || league.league === "NCAAF";
+    if (!isSoccer && !isMLB && !isFootball) continue;
 
     for (const game of league.games) {
-      if (!game.venue) continue;
+      if (!game.venue && !isFootball) continue;
       // MLB dome detection (skip domes)
-      if (isMLB && /dome|roof|retractable|tropicana|minute maid|daikin|american family|rogers centre|loanDepot/i.test(game.venue)) continue;
-      outdoorGames.push({ venue: game.venue, home: game.home, away: game.away, league: league.league });
+      if (isMLB && /dome|roof|retractable|tropicana|minute maid|daikin|american family|rogers centre|loanDepot/i.test(game.venue || "")) continue;
+      if (isFootball && (game.indoor || FOOTBALL_INDOOR.test(game.venue || ""))) continue;
+      outdoorGames.push({ venue: game.venue || "", home: game.home, away: game.away, league: league.league });
     }
   }
 
-  // Batch weather lookups (limit to 5 to avoid rate limits)
-  for (const game of outdoorGames.slice(0, 5)) {
+  // Batch weather lookups (limit raised for football slates; wttr.in is free)
+  for (const game of outdoorGames.slice(0, 15)) {
     try {
       // Use venue city name for weather lookup. Fallback derives the CITY from the home
       // team's name — the old fallback used the NICKNAME (last word, e.g. "Cubs"), which
       // geocodes garbage (audit backlog, fixed for omega 2026-08-22).
-      const cityMatch = game.venue.match(/,\s*(\w+)/);
-      const city = cityMatch ? cityMatch[1] : mlbCityFromTeam(game.home);
+      const cityMatch = (game.venue || "").match(/,\s*([A-Za-z .]+)/);
+      const city = cityMatch ? cityMatch[1].trim()
+        : (game.league === "NFL" || game.league === "NCAAF") ? footballCityFromTeam(game.home) : mlbCityFromTeam(game.home);
       const resp = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, {
         headers: { "User-Agent": "WeBetAI/1.0" },
         signal: AbortSignal.timeout(3000),
@@ -1723,7 +2179,7 @@ function computeWeatherAdjustment(candidate, weatherData) {
   let totalAdj = 0;
   const parts = [];
   const isMLB = candidate.sport === "MLB";
-  const isSoccer = !isMLB; // if we got weather, it's MLB or soccer
+  const isFootball = candidate.sport === "NFL" || candidate.sport === "NCAAF";
 
   if (isMLB) {
     // Wind effect on totals — use direction when available
@@ -1751,6 +2207,13 @@ function computeWeatherAdjustment(candidate, weatherData) {
     else if (wx.tempF < 45) { totalAdj -= 0.3; parts.push(`cold ${wx.tempF}°F→-0.3`); }
     // Coors Field altitude (always adds runs)
     if (wx.venue && /coors/i.test(wx.venue)) { totalAdj += 0.8; parts.push(`altitude→+0.8`); }
+  } else if (isFootball) {
+    if (wx.windMph > 20) { totalAdj -= 3.0; parts.push(`wind ${wx.windMph}mph→-3.0`); }
+    else if (wx.windMph > 15) { totalAdj -= 1.5; parts.push(`wind ${wx.windMph}mph→-1.5`); }
+    if (wx.tempF < 20) { totalAdj -= 2.5; parts.push(`cold ${wx.tempF}°F→-2.5`); }
+    else if (wx.tempF < 32) { totalAdj -= 1.5; parts.push(`cold ${wx.tempF}°F→-1.5`); }
+    if (wx.precipMM > 2) { totalAdj -= 2.0; parts.push(`precip ${wx.precipMM}mm→-2.0`); }
+    else if (wx.precipMM > 0.5) { totalAdj -= 1.0; parts.push(`precip ${wx.precipMM}mm→-1.0`); }
   } else {
     // Soccer: rain/cold suppress scoring
     if (wx.precipMM > 1) { totalAdj -= 0.15; parts.push(`rain→-0.15`); }
@@ -2009,7 +2472,7 @@ async function fetchXIntelligence(candidates) {
           content: 'You are a sports intelligence analyst. Return ONLY valid JSON. No markdown, no explanation.'
         }, {
           role: 'user',
-          content: `Check X/Twitter for the latest breaking news on these games happening today. Focus ONLY on: injury updates, lineup changes, goaltender confirmations (NHL), starting pitcher changes (MLB), weather issues, or any material news that would shift the betting line.
+          content: `Check X/Twitter for the latest breaking news on these games happening today. Focus ONLY on: injury updates, lineup changes, goaltender confirmations (NHL), starting pitcher changes (MLB), QB status (NFL/NCAAF), weather issues, or any material news that would shift the betting line.
 
 Games to check:
 ${teamPairs.map((t, i) => `${i + 1}. ${t}`).join('\n')}
@@ -2478,8 +2941,15 @@ function buildConsensusLookup(oddsData) {
       putKey(awayTeam.toLowerCase(), entry);
       const homeLast = homeTeam.toLowerCase().split(/\s+/).pop();
       const awayLast = awayTeam.toLowerCase().split(/\s+/).pop();
-      if (homeLast.length > 3) putKey(homeLast, entry);
-      if (awayLast.length > 3) putKey(awayLast, entry);
+      // CFB nicknames collide (Tigers/Bulldogs) — key on school, never the nickname alone.
+      if (sportOdds.sport === "americanfootball_ncaaf") {
+        const hs = cfbSchoolKey(homeTeam), as = cfbSchoolKey(awayTeam);
+        if (hs.length > 2) putKey(hs, entry);
+        if (as.length > 2) putKey(as, entry);
+      } else {
+        if (homeLast.length > 3) putKey(homeLast, entry);
+        if (awayLast.length > 3) putKey(awayLast, entry);
+      }
     }
   }
   return lookup;
@@ -2603,6 +3073,7 @@ function computeDynamicInjuryImpact(injuries, teamStats, sport) {
     basketball: 1.5, // NBA/NCAAB: generic role player ~1.5 PPG impact
     hockey: 0.08,    // NHL: generic forward ~0.08 goals/game impact
     baseball: 0.3,   // MLB: generic lineup spot ~0.3 runs impact
+    football: 1.2,   // NFL/CFB: generic skill-player PPG impact (QB handled separately)
   };
 
   let totalImpact = 0;
@@ -2664,6 +3135,17 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
 
   // Collect all available projection methods
   const projections = []; // Array of { home, away, weight, method }
+
+  // Football uses computeFootballProjection (market-anchored Elo/EPA + QB/rest). Never apply
+  // default-100 basketball-scale Elo scores or MLB FIP/park/starter logic to NFL/CFB.
+  if (sportType === "football" || leagueName === "NFL" || leagueName === "NCAAF") {
+    return {
+      projHomeScore: 24, projAwayScore: 21, projSpread: -3, projTotal: 45,
+      projMethod: "football-placeholder-use-computeFootballProjection",
+      homeWinProb: 0.5, homeEloAdj: leagueConfig?.homeAdv || 50, effectiveHomeAdv: leagueConfig?.homeAdv || 50,
+      poisoned: true,
+    };
+  }
 
   // ── METHOD 1: Elo-based historical averages (always available) ──
   // Uses home/away splits from ratings blob
@@ -2826,7 +3308,7 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   }
 
   // ── REST DIFFERENTIAL SYSTEM: B2B penalties + rest advantage + time zone fatigue ──
-  const sportKey = sportType === 'hockey' ? 'NHL' : sportType === 'basketball' ? (leagueName === 'NCAAB' ? 'NCAAB' : 'NBA') : 'MLB';
+  const sportKey = sportType === 'hockey' ? 'NHL' : sportType === 'basketball' ? (leagueName === 'NCAAB' ? 'NCAAB' : 'NBA') : sportType === 'football' ? (leagueName === 'NCAAF' ? 'NCAAF' : 'NFL') : 'MLB';
   const restAdj = computeRestAdjustment(
     homeRating.daysSinceLastGame, awayRating.daysSinceLastGame,
     game.home, game.away, sportKey
@@ -2906,8 +3388,8 @@ function computeProjection(game, leagueName, leagueConfig, homeRating, awayRatin
   // Total sanity caps: anything above these values is a poisoned projection (bad input data).
   // Baseball max is 14 — real MLB games rarely exceed 20 runs total; 14 catches bad PPG data.
   // Historical record is 49 runs (1922), but betting context is current-era games (7.5-10.5 lines).
-  const TOTAL_CAPS = { soccer: 7, hockey: 12, basketball: 300, baseball: 14 };
-  const SPREAD_CAPS = { soccer: 4, hockey: 6, basketball: 40, baseball: 10 };
+  const TOTAL_CAPS = { soccer: 7, hockey: 12, basketball: 300, baseball: 14, football: 100 };
+  const SPREAD_CAPS = { soccer: 4, hockey: 6, basketball: 40, baseball: 10, football: 45 };
   const totalCap = TOTAL_CAPS[sportType] || 300;
   const spreadCap = SPREAD_CAPS[sportType] || 40;
   let projSpread = -(projHomeScore - projAwayScore) - (restAdj.spreadAdj || 0);
@@ -3079,7 +3561,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
 // with shrinkage calibration, +3% CALIBRATED EV is a genuinely sharp threshold (real edge after
 // vig, comparable to professional sides). Conviction picks require this +3% default; the lean
 // backfill re-runs at the lower LEAN_EV_FLOOR (0.25u, separately tracked) to fill thin slates.
-function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.03, weatherData = null) {
+function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, drawdownActive, calibrationData, pitcherData, evFloor = 0.03, weatherData = null, footballCtx = null) {
   const candidates = [];
   const f5Pool = []; // F5 candidates collected across MLB games; capped to F5_MAX_SLOTS before ranking
   if (!espnData) return candidates;
@@ -3110,9 +3592,22 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       const homeRating = (leagueRatings?.teams ? findTeam(leagueRatings.teams, game.home) : null) || DEFAULT_RATING;
       const awayRating = (leagueRatings?.teams ? findTeam(leagueRatings.teams, game.away) : null) || DEFAULT_RATING;
 
+      const isFootball = league.league === "NFL" || league.league === "NCAAF";
+      const gameData = isFootball && league.league === "NCAAF"
+        ? findConsensusLineCfb(consensusLookup, game.home, game.away, game.date)
+        : findConsensusLine(consensusLookup, game.home, game.date);
+      if (!gameData || gameData.homeSpread === undefined) {
+        console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — no consensus line found for "${game.home}"`);
+        continue;
+      }
+
       let proj;
       try {
-        proj = computeProjection(game, league.league, leagueConfig, homeRating, awayRating, teamStats, pitcherData);
+        if (isFootball) {
+          proj = computeFootballProjection(game, league.league, leagueConfig, homeRating, awayRating, teamStats, gameData, footballCtx);
+        } else {
+          proj = computeProjection(game, league.league, leagueConfig, homeRating, awayRating, teamStats, pitcherData);
+        }
       } catch (projErr) {
         console.error(`[v10-edge] PROJECTION ERROR for ${game.away} @ ${game.home} (${league.league}): ${projErr.message}`);
         console.error(projErr.stack?.split('\n').slice(0, 3).join('\n'));
@@ -3122,14 +3617,14 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       // A poisoned total (e.g. DEFAULT_RATING produces 200 runs for baseball) should
       // only block the total candidate — not the spread/ML candidates, which use
       // projSpread and homeWinProb that are still valid even with fallback ratings.
+      // Football placeholders from computeProjection are fully skipped (no market-anchor).
       const skipTotal = proj.poisoned;
       if (proj.poisoned) {
+        if (isFootball) {
+          console.log(`[v11-edge] POISON football ${league.league} (${game.away} @ ${game.home}) — skipping game`);
+          continue;
+        }
         console.log(`[v10-edge] POISON: projTotal=${proj.projTotal.toFixed(1)} for ${league.league} (${game.away} @ ${game.home}) — skipping total candidates only, spread/ML still evaluated`);
-      }
-      const gameData = findConsensusLine(consensusLookup, game.home, game.date);
-      if (!gameData || gameData.homeSpread === undefined) {
-        console.log(`[v10-edge] SKIP ${game.away} @ ${game.home} (${league.league}) — no consensus line found for "${game.home}"`);
-        continue;
       }
       const spreadEdgeDbg = Math.abs(proj.projSpread - gameData.homeSpread);
       const totalEdgeDbg = gameData.total ? Math.abs(proj.projTotal - gameData.total) : 0;
@@ -3145,6 +3640,23 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
       const awayFlag = getSituationalFlag(game.awayRecord, league.league);
       if (homeFlag !== "neutral" || awayFlag !== "neutral") {
         console.log(`[v10-sit] ${game.away} (${awayFlag}) @ ${game.home} (${homeFlag}) — ${game.homeRecord} vs ${game.awayRecord}`);
+      }
+
+      let qbNote = "";
+      if (isFootball) {
+        const adjMap = league.league === "NFL" ? footballCtx?.nflQbAdj : footballCtx?.cfbQbAdj;
+        if (adjMap && Object.keys(adjMap).length) {
+          const matcher = league.league === "NCAAF"
+            ? cfbTeamsMatch
+            : (a, b) => a === b || (a || "").toLowerCase().endsWith((b || "").split(/\s+/).pop().toLowerCase());
+          const bits = [];
+          for (const [team, mag] of Object.entries(adjMap)) {
+            if (matcher(team, game.home) || matcher(team, game.away)) {
+              bits.push(`${team} QB ${mag <= -3 ? "OUT" : "doubtful"} (${mag} pts margin)`);
+            }
+          }
+          qbNote = bits.join("; ");
+        }
       }
 
       const baseCandidate = {
@@ -3180,6 +3692,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         awayInjuries: game.awayInjuries || [],
         homeStats: homeStats || null,
         awayStats: awayStats || null,
+        qbNote,
       };
 
       // ── PLACEABILITY GATE ──
@@ -3228,6 +3741,13 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // Determine pick side + odds first so we can pass odds to calibration
         const isHomeCover = proj.projSpread < actualSpread;
         const pickedSpread = isHomeCover ? actualSpread : gameData.awaySpread;
+        // Football: key-number cover at the SHOPPED point (NFL 3/7 heavy; CFB weaker 3/7).
+        if (isFootball && proj._fb) {
+          const mm = isHomeCover ? proj._fb.modelMargin : -proj._fb.modelMargin;
+          rawCoverProb = league.league === "NFL"
+            ? nflSpreadCoverProb(mm, pickedSpread, proj._fb.sigmaMargin)
+            : cfbSpreadCoverProb(mm, pickedSpread, proj._fb.sigmaMargin);
+        }
         // MLB run line: price off the discrete run-distribution (overdispersed NegBinom) instead of the
         // symmetric normalCDF — the ±1.5 mass (1-run games) is exactly what the Normal mis-prices. The
         // result flows through the IDENTICAL getCalibratedCoverProb shrink → Kelly → caps below.
@@ -3252,7 +3772,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         const coverProb = getCalibratedCoverProb(rawCoverProb, league.league, betType, odds, undefined, spreadNoVig);
 
         // Skip large NBA/NCAAB spreads — model accuracy degrades at extremes, sharp consensus is these are -EV
-        const MAX_SPREAD = { NBA: 10, NCAAB: 14 };
+        const MAX_SPREAD = { NBA: 10, NCAAB: 14, NFL: 14, NCAAF: 21 };
         const spreadLimit = MAX_SPREAD[league.league];
         if (spreadLimit && Math.abs(isHomeCover ? actualSpread : gameData.awaySpread) > spreadLimit) {
           console.log(`[v10-beta] Skipping ${side} — spread ${Math.abs(isHomeCover ? actualSpread : gameData.awaySpread)} exceeds ${league.league} max ${spreadLimit}`);
@@ -3260,7 +3780,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // Skip if odds worse than -250
         else if (odds >= -250) {
           const kelly = computeKelly(coverProb, odds, drawdownActive);
-          if (kelly.ev > evFloor) {
+          const floor = sportEvFloor(league.league, evFloor);
+          const cpFloor = sportCoverFloor(league.league);
+          if (kelly.ev > floor && coverProb >= cpFloor) {
             // Apply sport-specific Kelly multiplier
             const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
             let adjUnits = Math.round(kelly.units * sportMult * 2) / 2; // round to 0.5u
@@ -3308,7 +3830,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           }
         }
         // v10.2: MLB total min edge 0.8→0.4, NHL 0.5→0.3. EV floor (3%/8%) is the real quality gate.
-        const totalMinEdge = league.league === "NHL" ? 0.3 : league.league === "MLB" ? 0.4 : 2.5;
+        const totalMinEdge = league.league === "NHL" ? 0.3 : league.league === "MLB" ? 0.4 : league.league === "NFL" ? 1.5 : league.league === "NCAAF" ? 2.0 : 2.5;
         if (totalEdge >= totalMinEdge && totalPlaceable) {
           const totalZ = totalEdge / totalStd;
           let rawTotalCoverProb = normalCDF(totalZ);
@@ -3321,6 +3843,10 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           if (league.league === "MLB" && proj.projHomeScore > 0 && proj.projAwayScore > 0) {
             const dist = mlbRunDist(proj.projHomeScore, proj.projAwayScore);
             rawTotalCoverProb = runDistTotalCover(dist, actualTotal, isOver);
+          } else if (isFootball && proj._fb) {
+            rawTotalCoverProb = league.league === "NFL"
+              ? nflTotalCoverProb(proj._fb.modelTotal, actualTotal, isOver, proj._fb.sigmaTotal)
+              : cfbTotalCoverProb(proj._fb.modelTotal, actualTotal, isOver, proj._fb.sigmaTotal);
           }
           const totalSide = `${isOver ? "Over" : "Under"} ${actualTotal}`;
           // v10.3.1 line-shop: bet the best price for our side, but only if the integrity-checked
@@ -3337,10 +3863,12 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 
           if (totalOdds >= -250) {
             const kelly = computeKelly(totalCoverProb, totalOdds, drawdownActive);
-            if (kelly.ev > evFloor && skipHighUnder) {
+            const totFloor = sportEvFloor(league.league, evFloor);
+            const totCpFloor = sportCoverFloor(league.league);
+            if (kelly.ev > totFloor && skipHighUnder) {
               console.log(`[v10-disc] F3 suppressed MLB Under ${actualTotal} (${game.away} @ ${game.home}) — proven high-total under-bleed`);
             }
-            if (kelly.ev > evFloor && !skipHighUnder) {
+            if (kelly.ev > totFloor && totalCoverProb >= totCpFloor && !skipHighUnder) {
               const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
               let adjUnits = Math.round(kelly.units * sportMult * 2) / 2;
               adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
@@ -3391,9 +3919,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 
         // Check both sides for ML value
         // Sport-specific ML odds limits
-        const ML_MAX_FAV = { NBA: -250, NHL: -300, NCAAB: -250, MLB: -200 };
+        const ML_MAX_FAV = { NBA: -250, NHL: -300, NCAAB: -250, MLB: -200, NFL: -250, NCAAF: -250 };
         // v10.3: dog cap tightened to +160 — real-run record on +161 or longer: 6-14 (30%, -3.6% ROI)
-        const ML_MAX_DOG = { NBA: 160, NHL: 160, NCAAB: 160, MLB: 160 };
+        const ML_MAX_DOG = { NBA: 160, NHL: 160, NCAAB: 160, MLB: 160, NFL: 160, NCAAF: 160 };
         const maxFav = ML_MAX_FAV[league.league] || -300;
         const maxDog = ML_MAX_DOG[league.league] || 200;
 
@@ -3411,7 +3939,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           const implProbNoVig = side === 'home' ? homeRawProb / vigSum : awayRawProb / vigSum;
           const implProb_ = implProbNoVig;
           const mlEdge = winProb - implProb_;
-          if (mlEdge < 0.08) continue; // need at least 8% edge for ML — tighter than spreads/totals due to higher variance
+          // Football: prefer ATS/totals; ML only when EV clears the sport floor (raw 4% vs 8% for other sports).
+          const minMlRaw = isFootball ? 0.04 : 0.08;
+          if (mlEdge < minMlRaw) continue; // need at least 8% edge for ML — tighter than spreads/totals due to higher variance
           // Hard cap on max credible ML edge: 15% for underdogs, 10% for favorites.
           // Larger gaps almost always indicate a model calibration issue, not a real edge.
           const maxCredibleEdge = implProb_ < 0.50 ? 0.15 : 0.10;
@@ -3427,7 +3957,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
           const coverProb = getCalibratedCoverProb(rawCoverProb, league.league, "Moneyline", ml, undefined, implProbNoVig);
           const kelly = computeKelly(coverProb, ml, drawdownActive);
 
-          if (kelly.ev > evFloor) {
+          if (kelly.ev > sportEvFloor(league.league, evFloor) && coverProb >= sportCoverFloor(league.league)) {
             const sportMult = SPORT_KELLY_MULT[league.league] || 1.0;
             let adjUnits = Math.round(kelly.units * sportMult * 2) / 2;
             adjUnits = Math.max(0.5, Math.min(3.0, adjUnits));
@@ -3530,6 +4060,12 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // MLB alt run line: price off the run-dist so the alt-line optimizer is coherent with the main line.
         if (c.sport === "MLB" && c.projHomeScore > 0 && c.projAwayScore > 0 && alt.point !== 0) {
           altRawProb = runDistSpreadCover(mlbRunDist(c.projHomeScore, c.projAwayScore), alt.point, isHomeCover);
+        } else if ((c.sport === "NFL" || c.sport === "NCAAF") && Number.isFinite(c.modelProjection)) {
+          const modelMargin = isHomeCover ? -c.modelProjection : c.modelProjection;
+          const sigma = SPORT_STD_DEVS[c.sport] || 13.2;
+          altRawProb = c.sport === "NFL"
+            ? nflSpreadCoverProb(modelMargin, alt.point, sigma)
+            : cfbSpreadCoverProb(modelMargin, alt.point, sigma);
         }
         // v10.4 prior fix: calibrate against the alt line's own two-sided no-vig price when the
         // opposite side is quoted — the flat-haircut fallback inflated alt EV ~+1.7pp and made
@@ -3606,6 +4142,11 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         // MLB alt total: price off the run-dist (push-aware) to stay coherent with the main line.
         if (c.sport === "MLB" && c.projHomeScore > 0 && c.projAwayScore > 0) {
           altRawProb = runDistTotalCover(mlbRunDist(c.projHomeScore, c.projAwayScore), alt.point, isOver);
+        } else if (c.sport === "NFL" || c.sport === "NCAAF") {
+          const sigmaT = SPORT_TOTAL_STD_DEVS[c.sport] || 10;
+          altRawProb = c.sport === "NFL"
+            ? nflTotalCoverProb(c.modelProjection, alt.point, isOver, sigmaT)
+            : cfbTotalCoverProb(c.modelProjection, alt.point, isOver, sigmaT);
         }
         // v10.4 prior fix: the alt total has BOTH sides quoted — use the true two-sided no-vig
         // prior instead of the flat haircut (which inflated alt-total EV ~+1.7pp).
@@ -3736,8 +4277,9 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
 function formatCandidateTable(candidates, dateISO, dateFormatted) {
   const top = candidates.slice(0, 15);
   let prompt = `TODAY: ${dateFormatted} (${dateISO})\n\n`;
-  prompt += `${candidates.length} total edge candidates found across all sports. Here are the top ${top.length} ranked by normalized edge (z-score).\n`;
-  prompt += `Your job: web search to verify injuries/news for top candidates, then SELECT up to 3.\n\n`;
+  prompt += `${candidates.length} total edge candidates found across all sports. Here are the top ${top.length} ranked by calibrated EV.\n`;
+  prompt += `Sports in the table: ${[...new Set(candidates.map(c => c.sport))].join(", ") || "none"}.\n`;
+  prompt += `Your job: web search to verify injuries/news/QB/weather for top candidates, then SELECT up to 3 (unique games; prefer multi-sport when EV is within 1.5%). Do not pad weak legs.\n\n`;
 
   for (const c of top) {
     prompt += `━━━ #${c.rank} | ${c.sport} ${c.market} | z=${c.zScore.toFixed(2)} ━━━\n`;
@@ -3792,6 +4334,9 @@ function formatCandidateTable(candidates, dateISO, dateFormatted) {
     } else if (c.homeStats?.sport === 'basketball') {
       if (c.homeStats.offensiveRating) prompt += `  ORtg: ${c.homeTeam} ${c.homeStats.offensiveRating} / ${c.awayTeam} ${c.awayStats?.offensiveRating || '?'} | DRtg: ${c.homeTeam} ${c.homeStats.defensiveRating} / ${c.awayTeam} ${c.awayStats?.defensiveRating || '?'}\n`;
       if (c.homeStats.pace) prompt += `  Pace: ${c.homeTeam} ${c.homeStats.pace} / ${c.awayTeam} ${c.awayStats?.pace || '?'}\n`;
+    } else if (c.homeStats?.sport === 'football' || c.sport === 'NFL' || c.sport === 'NCAAF') {
+      if (c.homeStats?.pointsPerGame != null) prompt += `  PPG: ${c.homeTeam} ${c.homeStats.pointsPerGame} (PA ${c.homeStats.pointsAllowed ?? '?'}) / ${c.awayTeam} ${c.awayStats?.pointsPerGame ?? '?'} (PA ${c.awayStats?.pointsAllowed ?? '?'})\n`;
+      if (c.qbNote) prompt += `  ⚠️ QB STATUS: ${c.qbNote}\n`;
     }
     // X/Grok intelligence alert
     if (c.xAlert) {
@@ -4323,6 +4868,115 @@ function selectParlayLegs(cands, maxLegs = 3) {
   if (legs.length < 2) for (const c of ranked) { if (legs.length >= 2) break; if (!legs.includes(c)) legs.push(c); }
   return legs;
 }
+// Prefer ≥1 non-MLB (NFL/CFB) parlay leg when football YES exists and EV loss ≤ 2%.
+function preferMultiSportParlay(legs, pool) {
+  if (!legs || legs.length < 2) return legs;
+  const sports = new Set(legs.map(l => l.sport));
+  const footballPool = (pool || []).filter(c => isFootballSport(c.sport)
+    && c.evNum > sportEvFloor(c.sport, 0.03)
+    && c.coverProbNum >= sportCoverFloor(c.sport));
+  if (sports.size >= 2 || footballPool.length === 0) return legs;
+  const usedGames = new Set(legs.map(l => (l.matchup || "").toLowerCase().trim()));
+  const baseline = assembleParlay(legs, "0.5u", true);
+  const baseEV = baseline._parlayEV || 0;
+  for (let i = legs.length - 1; i >= 0; i--) {
+    if (isFootballSport(legs[i].sport)) continue;
+    for (const alt of footballPool) {
+      const g = (alt.matchup || "").toLowerCase().trim();
+      if (!g || usedGames.has(g)) continue;
+      if (legs.some(l => l.side === alt.side)) continue;
+      const trial = legs.slice();
+      trial[i] = alt;
+      const trialGames = new Set(trial.map(l => (l.matchup || "").toLowerCase().trim()));
+      if (trialGames.size < trial.length) continue;
+      const ev = assembleParlay(trial, "0.5u", true)._parlayEV || 0;
+      if (ev > 0 && baseEV - ev <= 0.02) {
+        console.log(`[v11-parlay] Multi-sport swap: ${legs[i].side} → ${alt.side} (EV ${(baseEV * 100).toFixed(1)}→${(ev * 100).toFixed(1)})`);
+        return trial;
+      }
+    }
+  }
+  return legs;
+}
+
+function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
+  const pool = (cands || []).filter(c => {
+    if (typeof c.ev !== "number" || c.ev <= 0) return false;
+    if (c.ev < sportEvFloor(c.sport, defaultFloor)) return false;
+    if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
+    if (typeof c.coverProb === "number" && c.odds != null && (c.coverProb - impliedProb(c.odds)) <= 0) return false;
+    return true;
+  });
+  const unique = dedupeCandidatesByGame(pool);
+  const selected = [];
+  const usedGames = new Set();
+  const sportCount = {};
+  const remainingYes = (sport) => unique.some(c => c.sport === sport && !usedGames.has((c.matchup || "").toLowerCase().trim()));
+
+  for (const c of unique) {
+    if (selected.length >= maxPicks) break;
+    const g = (c.matchup || "").toLowerCase().trim();
+    if (!g || usedGames.has(g)) continue;
+    const sc = sportCount[c.sport] || 0;
+    if (sc >= 2) {
+      const otherHas = unique.some(x => x.sport !== c.sport && remainingYes(x.sport));
+      if (otherHas) continue;
+    }
+    selected.push(c);
+    usedGames.add(g);
+    sportCount[c.sport] = sc + 1;
+  }
+
+  if (selected.length >= 2) {
+    const sports = new Set(selected.map(c => c.sport));
+    if (sports.size === 1) {
+      const weakest = selected[selected.length - 1];
+      const mono = selected[0].sport;
+      const alt = unique.find(c => c.sport !== mono
+        && !usedGames.has((c.matchup || "").toLowerCase().trim())
+        && (weakest.ev - c.ev) <= 0.015);
+      if (alt) {
+        console.log(`[v11-div] Swapped ${weakest.side} for multi-sport ${alt.side} (EV ${(weakest.ev * 100).toFixed(1)}→${(alt.ev * 100).toFixed(1)})`);
+        selected[selected.length - 1] = alt;
+      }
+    }
+  }
+  return selected.slice(0, maxPicks);
+}
+
+function applyDiversificationToPicks(picks, allCandidates, drawdownActive) {
+  if (!picks || picks.length < 2 || !allCandidates) return picks;
+  const sportCount = {};
+  for (const p of picks) sportCount[p.sport] = (sportCount[p.sport] || 0) + 1;
+  const over = Object.entries(sportCount).find(([, n]) => n >= 3);
+  if (!over) {
+    // Still prefer multi-sport when all picks are one sport and a cross-sport YES is within 1.5%
+    const sports = new Set(picks.map(p => p.sport));
+    if (sports.size >= 2) return picks;
+  }
+  const usedGames = new Set(picks.map(p => (p.matchup || "").toLowerCase().trim()));
+  const usedSides = new Set(picks.map(p => p.pick));
+  const weakestIdx = picks.reduce((wi, p, i) => ((p.evRaw || 0) < (picks[wi].evRaw || 0) ? i : wi), 0);
+  const weakest = picks[weakestIdx];
+  const alt = allCandidates.find(c => {
+    if (c.sport === weakest.sport && !over) return false;
+    if (over && c.sport === over[0] && Object.keys(sportCount).length > 1) return false;
+    if (c.sport === weakest.sport && over && c.sport === over[0]) return false;
+    if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
+    if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
+    if (typeof c.ev !== "number" || c.ev <= 0) return false;
+    const g = (c.matchup || `${c.awayTeam} vs. ${c.homeTeam}`).toLowerCase().trim();
+    if (usedGames.has(g) || usedSides.has(c.side)) return false;
+    return ((weakest.evRaw || 0) - c.ev) <= 0.015;
+  });
+  if (!alt) return picks;
+  const built = buildFinalPicks([{ ...alt, rank: alt.rank || 99 }], [{ candidateRank: alt.rank || 99, coreReasoning: "", dataVerified: "diversification-swap", whatLoses: "" }], allCandidates, drawdownActive);
+  if (built[0]) {
+    console.log(`[v11-div] Replaced ${weakest.pick} (${weakest.sport}) with ${built[0].pick} (${alt.sport})`);
+    picks[weakestIdx] = built[0];
+  }
+  return picks;
+}
 function assembleParlay(cands, stakeUnits, isIndependent) {
   const legs = cands.map(c => {
     const leg = {
@@ -4376,7 +5030,9 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
     const odds = typeof c.odds === 'number' ? c.odds : parseInt(c.odds);
-    if (cp < 0.45 || !(c.ev > 0.03) || !odds || odds < -300 || odds > 300) return false;
+    const floor = sportEvFloor(c.sport, 0.03);
+    const cpFloor = Math.max(0.45, sportCoverFloor(c.sport));
+    if (cp < cpFloor || !(c.ev > floor) || !odds || odds < -300 || odds > 300) return false;
     if ((cp - impliedProb(odds)) <= 0) return false;                   // require positive calibrated edge
     return true;
   }).map(c => ({
@@ -4388,7 +5044,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     commenceTime: c.commenceTime || '', sport: c.sport,
   }));
 
-  const legs = selectParlayLegs(pool, 3);
+  const legs = preferMultiSportParlay(selectParlayLegs(pool, 3), pool);
   if (legs.length >= 2 && new Set(legs.map(l => (l.matchup || '').toLowerCase().trim())).size >= 2) {
     const straightSides = new Set((picks || []).map(p => p.pick));
     const isIndependent = !legs.every(l => straightSides.has(l.side));
@@ -4495,11 +5151,12 @@ exports.handler = async (event) => {
     fetchSelfOptimizeParams(),
   ]);
 
-  const [teamStats, weatherData, pitcherData, fipMap] = await Promise.all([
+  const [teamStats, weatherData, pitcherData, fipMap, footballCtx] = await Promise.all([
     fetchTeamStats(espnData),
     fetchWeatherForGames(espnData),
     fetchStartingPitchers(espnData),
     fetchPitcherFIP(dateISO),
+    fetchFootballContext(espnData),
   ]);
   // Phase-4a: merge sharp FIP onto the ESPN-keyed pitcherData (join via normalized team name).
   // Best-effort — teams without a usable FIP keep ERA-only and project exactly as before. The ≥IP
@@ -4546,7 +5203,7 @@ exports.handler = async (event) => {
   // ── PHASE 1B: COMPUTE ALL EDGES DETERMINISTICALLY ──
   let allCandidates;
   try {
-    allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
+    allCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData, footballCtx);
     console.log(`[v10] Computed ${allCandidates.length} edge candidates across all sports`);
 
     // ── PHASE 1B2: CLV FEEDBACK ADJUSTMENT — REMOVED (v10.4) ──
@@ -4674,6 +5331,10 @@ exports.handler = async (event) => {
             const lamH = Math.max(0.4, c.projHomeScore * scale);
             const lamA = Math.max(0.4, c.projAwayScore * scale);
             wxRaw = runDistTotalCover(mlbRunDist(lamH, lamA), c.consensusLine, c.side.startsWith("Over"));
+          } else if (c.sport === "NFL") {
+            wxRaw = nflTotalCoverProb(c.modelProjection, c.consensusLine, c.side.startsWith("Over"), SPORT_TOTAL_STD_DEVS.NFL || 10);
+          } else if (c.sport === "NCAAF") {
+            wxRaw = cfbTotalCoverProb(c.modelProjection, c.consensusLine, c.side.startsWith("Over"), SPORT_TOTAL_STD_DEVS.NCAAF || 12.5);
           }
           // v10.4 prior fix: pass the market's two-sided no-vig prior — the 4-arg call fell
           // back to a flat vig haircut, inflating every weather-touched summer total ~+1.7pp EV.
@@ -4699,6 +5360,15 @@ exports.handler = async (event) => {
         }
       }
       if (wxAdj > 0) console.log(`[v10-weather] Applied weather adjustments to ${wxAdj} total candidates`);
+      // Weather can erase a thin football edge — re-apply sport floors so we never ship a now-below-floor leg.
+      const before = allCandidates.length;
+      allCandidates = allCandidates.filter(c => {
+        if (!isFootballSport(c.sport)) return true;
+        if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
+        if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
+        return true;
+      });
+      if (allCandidates.length < before) console.log(`[v11-weather] Dropped ${before - allCandidates.length} football candidate(s) below sport floors after weather`);
     }
 
     // ── PHASE 1E: BETTOREDGE EXCHANGE INTEGRATION ──
@@ -4950,7 +5620,7 @@ exports.handler = async (event) => {
     try {
       // v10.4.1: whole-card lean fallback (0 conviction edges) uses the LEAN_EV_FLOOR tier so a
       // thin slate still surfaces a card instead of going dark. These are 0.25u, separately tracked.
-      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
+      leanCandidates = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData, footballCtx);
       leanCandidates.sort((a, b) => b.ev - a.ev);
       leanCandidates.forEach((c, i) => { c.rank = i + 1; });
     } catch (leanErr) {
@@ -4965,12 +5635,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.9-omega-optimized",
+      date: dateISO, dateFormatted, model: MODEL_VERSION,
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.9-omega-optimized" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: MODEL_VERSION },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -5040,7 +5710,8 @@ exports.handler = async (event) => {
 
     // ── PHASE 3: MERGE JS NUMBERS + CLAUDE SELECTIONS ──
     const selections = claudeOutput.selections || [];
-    const picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
+    let picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
+    picks = applyDiversificationToPicks(picks, allCandidates, bankrollCtx.drawdownActive);
 
     // Build rejections from Claude + all non-selected candidates
     const selectedRanks = new Set(selections.map(s => s.candidateRank));
@@ -5079,10 +5750,12 @@ exports.handler = async (event) => {
         }).filter(Boolean)
       );
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData, footballCtx);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
           hasPositiveEdge(c) &&
+          c.ev >= sportEvFloor(c.sport, isFootballSport(c.sport) ? 0.03 : LEAN_EV_FLOOR) &&
+          (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
           !pickedGames.has((c.matchup || '').toLowerCase().trim()) &&
           !picks.find(p => p.pick === c.side)
@@ -5129,6 +5802,14 @@ exports.handler = async (event) => {
         if (seenM.has(m)) { console.log(`[v10-decorr] Dropping same-game pick "${picks[i].pick}" — ${m} already on card`); picks.splice(i, 1); i--; continue; }
         seenM.add(m);
       }
+    }
+
+    if (picks.length < 3) {
+      rejections.push({
+        matchup: "Card fill",
+        side: "noFill",
+        reason: `Only ${picks.length} candidate(s) cleared sport EV/coverProb floors after verification — not padding weak legs.`,
+      });
     }
 
     // ── NARRATIVE FACT-GATE (v10.4.6) ──
@@ -5200,7 +5881,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.9-omega-optimized",
+      model: MODEL_VERSION,
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -5211,7 +5892,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.9-omega-optimized",
+        modelVersion: MODEL_VERSION,
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5233,6 +5914,8 @@ exports.handler = async (event) => {
         matchup: c.matchup,
         commenceTime: c.commenceTime,
         zScore: c.zScore,
+        qbNote: c.qbNote || "",
+        projMethod: c.projMethod || "",
         selected: selectedRanks.has(c.rank),
       })),
     };
@@ -5306,7 +5989,16 @@ function dedupeCandidatesByGame(cands) {
 // is a fabricated/mis-attributed stat. Extend with more checks over time; kept conservative so a
 // false positive only swaps in the (still-good) fact-grounded narrative.
 function verifyNarrativeFacts(pick, pitcherData, teamStats) {
-  if (!pick || pick.sport !== 'MLB') return { ok: true, issues: [] };
+  if (!pick) return { ok: true, issues: [] };
+  if (isFootballSport(pick.sport)) {
+    const text = `${pick.coreReasoning || ''} ${pick.dataVerified || ''} ${pick.whatLoses || ''}`;
+    const issues = [];
+    if (/\bFIP\b|\bERA\b|starting pitcher|run line/i.test(text)) {
+      issues.push("Football narrative used baseball starter/FIP language");
+    }
+    return { ok: issues.length === 0, issues };
+  }
+  if (pick.sport !== 'MLB') return { ok: true, issues: [] };
   const issues = [];
   const text = `${pick.coreReasoning || ''} ${pick.dataVerified || ''} ${pick.whatLoses || ''}`;
   let away = pick.awayTeam, home = pick.homeTeam;
@@ -5377,6 +6069,7 @@ async function narrateAndSummarize(picks, pitcherData, teamStats, dateFormatted,
         if (ap && ap.pitcher && ap.pitcher !== 'Unknown') facts.push(`${away} SP ${ap.pitcher} (${ap.era != null ? ap.era + ' ERA' : 'ERA n/a'}${ap.fip != null ? ', ' + ap.fip + ' FIP' : ''})`);
         if (hp && hp.pitcher && hp.pitcher !== 'Unknown') facts.push(`${home} SP ${hp.pitcher} (${hp.era != null ? hp.era + ' ERA' : 'ERA n/a'}${hp.fip != null ? ', ' + hp.fip + ' FIP' : ''})`);
       }
+      if (isFootballSport(p.sport) && p.qbNote) facts.push(`QB: ${p.qbNote}`);
       const as = teamStats[away], hs = teamStats[home];
       const runLabel = p.sport === 'MLB' ? 'R/G' : 'PPG';
       if (as) facts.push(`${away} ${as.recordTotal || ''}${as.pointsPerGame != null ? ', ' + as.pointsPerGame + ' ' + runLabel : ''}`.trim());
@@ -5436,7 +6129,7 @@ Return ONLY valid JSON: { "narratives": [{ "pickIndex": 1, "coreReasoning": "...
 
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, pitcherData, teamStats) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = dedupeCandidatesByGame((leanCandidates || []).filter(hasPositiveEdge)).slice(0, 3);
+  const top = selectDiversifiedStraights((leanCandidates || []).filter(hasPositiveEdge), 3, LEAN_EV_FLOOR);
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5512,12 +6205,12 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.9-omega-optimized",
+    date: dateISO, dateFormatted, model: MODEL_VERSION,
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.9-omega-optimized" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5529,7 +6222,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
   console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
-  const top3 = dedupeCandidatesByGame(candidateTable.filter(hasPositiveEdge)).slice(0, 3);
+  const top3 = selectDiversifiedStraights(candidateTable.filter(hasPositiveEdge), 3, 0.03);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5605,13 +6298,13 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.9-omega-optimized",
+    date: dateISO, dateFormatted, model: MODEL_VERSION,
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
-    edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
+    edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by calibrated EV.",
     insights: summaries.insights || "",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.9-omega-optimized" },
-    generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
+    generatedAt: now.toISOString(), parlayLegs: buildCorrelatedParlay(picks, allCandidates, []), sgps: [],
     fallback: true,
   };
 
@@ -5755,3 +6448,21 @@ module.exports.normTeamMLB = normTeamMLB;
 module.exports.fetchPitcherFIP = fetchPitcherFIP;
 // v10.4 test-only exports (offline validation; no effect on the deployed handler)
 module.exports._testV104 = { pitcherForGame, parlayUnitsFor, applyMarketUnitCaps, findConsensusLine, buildConsensusLookup, computeLineMovementSignal, getCalibratedCoverProb, noVigProb, buildCorrelatedParlay, buildFallbackParlay, selectParlayLegs, assembleParlay, parlayMarketRank };
+module.exports.MODEL_VERSION = MODEL_VERSION;
+module.exports.ODDS_SPORTS = ODDS_SPORTS;
+module.exports.ESPN_LEAGUES = ESPN_LEAGUES;
+module.exports.SPORT_STD_DEVS = SPORT_STD_DEVS;
+module.exports.SPORT_TOTAL_STD_DEVS = SPORT_TOTAL_STD_DEVS;
+module.exports.SPORT_MIN_EDGE = SPORT_MIN_EDGE;
+module.exports.COVER_PROB_CAPS = COVER_PROB_CAPS;
+module.exports.nflSpreadCoverProb = nflSpreadCoverProb;
+module.exports.nflTotalCoverProb = nflTotalCoverProb;
+module.exports.cfbSpreadCoverProb = cfbSpreadCoverProb;
+module.exports.cfbTotalCoverProb = cfbTotalCoverProb;
+module.exports.computeFootballProjection = computeFootballProjection;
+module.exports.sportEvFloor = sportEvFloor;
+module.exports.sportCoverFloor = sportCoverFloor;
+module.exports.selectDiversifiedStraights = selectDiversifiedStraights;
+module.exports.preferMultiSportParlay = preferMultiSportParlay;
+module.exports.cfbTeamsMatch = cfbTeamsMatch;
+module.exports.isFootballSport = isFootballSport;

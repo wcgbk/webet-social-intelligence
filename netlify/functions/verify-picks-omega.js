@@ -146,7 +146,22 @@ function runNarrativeChecks(pick) {
 // price → warning. ADVISORY: findings go to the QA report + Discord alert; this check never
 // modifies the published card (severity is never escalated to critical, so auto-fix ignores it).
 const HR_BOOK_KEYS = new Set(["hardrockbet", "hardrockbet_oh", "hardrock"]);
-const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl" };
+const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl", NCAAF: "americanfootball_ncaaf" };
+function sportEvFloor(sport, defaultFloor = 0.03) {
+  if (sport === "NFL") return Math.max(defaultFloor, 0.025);
+  if (sport === "NCAAF") return Math.max(defaultFloor, 0.030);
+  return defaultFloor;
+}
+function sportCoverFloor(sport) {
+  if (sport === "NFL" || sport === "NCAAF") return 0.52;
+  return 0;
+}
+function candidateClearsSportGates(c) {
+  if (!c || !(c.ev > sportEvFloor(c.sport, 0.03))) return false;
+  const cp = typeof c.coverProb === "number" ? c.coverProb : parseFloat(c.coverProb) || 0;
+  if (cp < sportCoverFloor(c.sport)) return false;
+  return true;
+}
 const HR_F5_MARKETS = { "F5 Moneyline": "h2h_1st_5_innings", "F5 Run Line": "spreads_1st_5_innings", "F5 Total": "totals_1st_5_innings" };
 const HR_ODDS_WORSE_PP = 3.0; // warning: Hard Rock implied prob >3pp worse than published
 const HR_ODDS_ERROR_PP = 6.0; // error: >6pp worse — materially off the expressed price
@@ -155,7 +170,15 @@ function hrLastWord(name) { return String(name || "").trim().split(/\s+/).pop().
 function hrImpliedPct(american) { return impliedProb(american) * 100; }
 function hrMatchGame(games, matchup) {
   const m = String(matchup || "").toLowerCase();
-  return (games || []).find(g => m.includes(hrLastWord(g.home_team)) && m.includes(hrLastWord(g.away_team))) || null;
+  return (games || []).find(g => {
+    const h = String(g.home_team || "").toLowerCase();
+    const a = String(g.away_team || "").toLowerCase();
+    if (m.includes(hrLastWord(g.home_team)) && m.includes(hrLastWord(g.away_team))) return true;
+    // CFB: nicknames collide (Tigers/Bulldogs) — also match on school/first tokens.
+    const hSchool = h.replace(/\s+\S+$/, "");
+    const aSchool = a.replace(/\s+\S+$/, "");
+    return hSchool.length > 3 && aSchool.length > 3 && m.includes(hSchool) && m.includes(aSchool);
+  }) || null;
 }
 function hrBookFrom(game) {
   return ((game && game.bookmakers) || []).find(b => HR_BOOK_KEYS.has((b.key || "").toLowerCase())) || null;
@@ -405,6 +428,7 @@ Your job: Review today's 3-pick card and flag anything that concerns you. Think 
 - Line smell (does the line look right for this matchup, or is it a trap number?)
 - Correlation risk (are multiple picks exposed to the same outcome?)
 - Situational factors (travel, rest, motivation, playoffs context)
+- NFL/NCAAF: QB status (out/doubtful), outdoor weather (wind/cold/precip vs indoor/dome), short-week rest (TNF). Never apply baseball starter/FIP logic to football.
 
 Return ONLY valid JSON:
 {
@@ -457,9 +481,11 @@ async function autoFixPicks(picksData, pickReports) {
 
     // Find next best candidate not already on the card
     let replacement = null;
+    const currentMatchups = new Set(picksData.picks.map(p => (p.matchup || "").toLowerCase().trim()));
     for (const c of candidateTable) {
       if (currentPicks.has(c.side)) continue;
-      if (c.ev <= 0.03) continue;
+      if (currentMatchups.has((c.matchup || "").toLowerCase().trim())) continue;
+      if (!candidateClearsSportGates(c)) continue;
       if (c.verification === 'FAIL') continue;
       if (claudeRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
@@ -785,7 +811,7 @@ exports.handler = async (event) => {
         let replacement = null;
         for (const c of candidateTable) {
           if (currentPickNames.has(c.side)) continue;
-          if (c.ev <= 0.03) continue;
+          if (!candidateClearsSportGates(c)) continue;
           if (c.verification === 'FAIL') continue;
           if (sharpRejectedSides.has(c.side)) { console.log(`[verify-sharp] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
@@ -912,7 +938,7 @@ exports.handler = async (event) => {
         // Exclude sides QA removed/flagged THIS run — never re-add a pick we just dropped.
         const removedThisRun = new Set((allReplacements || []).map(r => r.removed));
         const pool = picksData.candidateTable
-          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && c.ev > 0.03)
+          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && candidateClearsSportGates(c))
           .sort((a, b) => b.ev - a.ev);
 
         let backfilled = 0;
@@ -955,6 +981,16 @@ exports.handler = async (event) => {
           console.log(`[verify-backfill] Refilled card to ${picksData.picks.length} pick(s) from candidate pool`);
         } else {
           console.log(`[verify-backfill] No clean candidates available to refill — publishing ${picksData.picks.length} pick(s) honestly`);
+          if (picksData.picks.length < TARGET_PICKS) {
+            picksData.rejections = picksData.rejections || [];
+            if (!picksData.rejections.some(r => r.side === "noFill")) {
+              picksData.rejections.push({
+                matchup: "Card fill",
+                side: "noFill",
+                reason: `Only ${picksData.picks.length} candidate(s) cleared sport EV/coverProb floors — not padding weak legs.`,
+              });
+            }
+          }
         }
       }
 

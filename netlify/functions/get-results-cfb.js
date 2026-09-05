@@ -290,7 +290,7 @@ exports.handler = async (event) => {
 
     // 5-min cache
     try {
-      const cacheResp = await fetch(`${storeUrl}/results-cfb-cache-v1`, { headers: authHeaders });
+      const cacheResp = await fetch(`${storeUrl}/results-cfb-cache-v2`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
         if (Date.now() - (cached.cachedAt || 0) < 300000) {
@@ -299,9 +299,12 @@ exports.handler = async (event) => {
       }
     } catch (e) {}
 
-    const cfbDates = await getDatesFromStore(storeUrl, authHeaders);
+    // KPI reset: daily + cumulative from 2026-09-05 forward only (Ben/Omega-directed).
+    const KPI_START = "2026-09-05";
+    const cfbDatesRaw = await getDatesFromStore(storeUrl, authHeaders);
+    const cfbDates = cfbDatesRaw.filter(d => d >= KPI_START);
     if (cfbDates.length === 0) {
-      // Clean slate — the CFB model's KPIs start at zero, by design.
+      // Clean slate — CFB KPIs restart at KPI_START.
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ days: [], cumulative: { wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0%', roi: '0%', totalWagered: 0, totalProfit: 0 }, straight: { wins: 0, losses: 0, accuracy: '0%' }, parlay: { wins: 0, losses: 0, accuracy: '0%' } }) };
     }
 
@@ -380,7 +383,7 @@ exports.handler = async (event) => {
     };
 
     try {
-      await fetch(`${storeUrl}/results-cfb-cache-v1`, {
+      await fetch(`${storeUrl}/results-cfb-cache-v2`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),

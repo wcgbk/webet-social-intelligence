@@ -21,7 +21,7 @@ const SITE_URL = 'https://webetsocial.com';
 const VIEW_TITLES = {
   picks: 'Daily Edge Picks',
   nfl: 'NFL Only Picks',
-  cfb: 'College Football Picks',
+  cfb: 'Free College Football Picks',
   'grok-beta': 'Live Edge Picks',
   omega: 'Daily Omega Picks',
   'live-picks': 'Premium Live Picks',
@@ -40,7 +40,7 @@ const VIEW_TITLES = {
 // Tailored preview blurbs; anything unlisted falls back to the base dashboard description.
 const VIEW_DESC = {
   'NFL Model': 'WeBetAI’s dedicated NFL model — calibrated edges on every NFL game day.',
-  'College Football Picks': 'WeBetAI’s dedicated college football model. Calibrated edges across the FBS slate on every game day.',
+  'Free College Football Picks': 'WeBetAI’s dedicated college football model. Calibrated edges across the FBS slate on every game day.',
   'Picks Gamecast': 'Every game on today’s WeBetAI card with its own live ESPN Gamecast.',
   'Daily Edge Picks': 'Today’s WeBetAI edge picks across every league, ranked by expected value.',
   'Percentile Rankings': 'See how WeBetAI ranks against elite betting models.',
@@ -71,6 +71,23 @@ exports.handler = async (event) => {
     // Couldn't get the page — bounce to the static dashboard with the panel in the hash
     // so the client still opens the right panel (no blank error for the visitor).
     return { statusCode: 302, headers: { Location: '/dashboard' + (rawView ? '#' + rawView : '') }, body: '' };
+  }
+
+  // 2a) CFB Betty share card (?card=bettycfbv1) — Betty CFB OG for main X post.
+  //     Do NOT apply when ?view= is set (thread keeps Earth OG + panel title).
+  const rawCard = (q.card || '').toString().trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if (!menuName && (rawCard === 'bettycfbv1' || rawCard === 'betty-cfb-v1')) {
+    const og = `${SITE_URL}/daily-betty-cfb-og-v1.jpg`;
+    const title = 'WeBetAI - Free College Football Picks';
+    const desc = 'Free college football picks from WeBetAI. Chat with Betty for today’s card.';
+    const url = `${SITE_URL}/dashboard?card=bettycfbv1`;
+    html = html
+      .split('WeBetAI - Social Intelligence | Dashboard').join(escHtml(title))
+      .split(`content="${BASE_DESC}"`).join(`content="${escAttr(desc)}"`)
+      .split('content="https://webetsocial.com/dashboard"').join(`content="${escAttr(url)}"`)
+      .split('content="https://webetsocial.com/daily-betty-og-v13.jpg"').join(`content="${escAttr(og)}"`)
+      .split('content="https://webetsocial.com/daily-betty-og.jpg"').join(`content="${escAttr(og)}"`)
+      .split('content="https://webetsocial.com/daily-alpha-og-card.jpg"').join(`content="${escAttr(og)}"`);
   }
 
   // 2) If it's a known panel, swap in its title/description/url. Unknown view → serve the

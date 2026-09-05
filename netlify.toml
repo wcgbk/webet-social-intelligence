@@ -398,6 +398,16 @@
   status = 200
   force = true  # override Netlify's static directory-index, which otherwise wins over non-forced rules
 
+
+# Betty CFB OG share: /dashboard?card=bettycfbv1 serves CFB Betty art via serve-dashboard.
+# view= rules above still win when both are present (thread keeps Earth OG).
+[[redirects]]
+  from = "/dashboard"
+  query = {card = ":card"}
+  to = "/.netlify/functions/serve-dashboard"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/dashboard"
   to = "/dashboard/index.html"

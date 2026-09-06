@@ -15,6 +15,8 @@
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-nfl";
 const MODEL_VERSION = "v1.1-nfl";
+const NO_GAMES_MSG = "No NFL Games Scheduled For Today";
+const NO_EDGE_MSG = "No qualifying NFL plays today — WeBetAI passed.";
 
 // ── The Odds API sport keys — preseason + regular season are separate keys; query both so the
 // pipeline rolls into September without a code change.
@@ -722,20 +724,31 @@ function buildPublishedParlay(picks) {
   }];
 }
 
-function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays) {
-  return {
+function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays, extras = {}) {
+  const noGames = Object.prototype.hasOwnProperty.call(extras, "noGames")
+    ? !!extras.noGames
+    : /No NFL Games Scheduled/i.test(noPlays || "");
+  const card = {
     date: dateISO,
     dateFormatted,
     generatedAt: new Date().toISOString(),
     model: MODEL_VERSION,
     seasonPhase,
     noPlays,
-    noGames: /No NFL Games Scheduled/i.test(noPlays || ""),
+    noGames,
     picks: [],
-    rejections: [],
+    rejections: extras.rejections || [],
     parlayLegs: [],
-    summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
+    summary: {
+      totalPicks: 0,
+      totalUnits: "0u",
+      aplusLocks: 0,
+      sportsCovered: extras.sportsCovered || [],
+    },
   };
+  if (extras.insights) card.insights = extras.insights;
+  if (extras.edgeSummary) card.edgeSummary = extras.edgeSummary;
+  return card;
 }
 
 // ── Claude narration (narrator ONLY — the model already selected and sized; grounding is
@@ -891,7 +904,7 @@ exports.handler = async (event) => {
   const { games: espnGames, seasonPhase } = await fetchESPNSlate(dateISO);
   if (!espnGames.length) {
     console.log(`[nfl] No NFL games on ${dateISO} (ET) — writing no-games card.`);
-    const noGames = emptyCard(dateISO, dateFormatted, seasonPhase, "No NFL Games Scheduled For Today");
+    const noGames = emptyCard(dateISO, dateFormatted, seasonPhase, NO_GAMES_MSG);
     if (!dryRun) await storePicks(dateISO, noGames, force, { indexDates: false });
     return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no NFL games today", stored: !dryRun }) };
   }
@@ -902,7 +915,10 @@ exports.handler = async (event) => {
   const oddsGames = await fetchNFLOdds(dateISO);
   if (!oddsGames.length) {
     console.log(`[nfl] ESPN shows games but no odds available — writing no-plays card.`);
-    const noOdds = emptyCard(dateISO, dateFormatted, seasonPhase, "No qualifying NFL plays today — WeBetAI passed.");
+    const noOdds = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
+      noGames: false,
+      sportsCovered: ["NFL"],
+    });
     if (!dryRun) await storePicks(dateISO, noOdds, force);
     return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0, skipped: "no NFL odds available" }) };
   }
@@ -921,7 +937,10 @@ exports.handler = async (event) => {
 
   if (!allCands.length) {
     console.log("[nfl] No positive-EV candidates on the slate — writing no-plays card.");
-    const noPlaysData = emptyCard(dateISO, dateFormatted, seasonPhase, "No qualifying NFL plays today — WeBetAI passed.");
+    const noPlaysData = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
+      noGames: false,
+      sportsCovered: ["NFL"],
+    });
     if (!dryRun) await storePicks(dateISO, noPlaysData, force);
     return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0 }) };
   }
@@ -946,6 +965,26 @@ exports.handler = async (event) => {
         ? `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% — below the ${(cfg.evFloor * 100).toFixed(0)}% floor.`
         : `Edged out by higher-EV picks on today's card.`,
     });
+  }
+
+  // Same select-to-zero gap as CFB: candidates can exist and still fail the EV floor,
+  // which used to store a normal empty-picks card with no noPlays (UI then says no games).
+  if (!picks.length) {
+    console.log("[nfl] Candidates existed but none cleared selection floors — writing no-plays card.");
+    const noEdge = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
+      noGames: false,
+      sportsCovered: ["NFL"],
+      rejections,
+      insights: "WeBetAI scanned today's NFL slate. Games are scheduled, but none cleared the edge filters. Passed rather than force a lean.",
+      edgeSummary: NO_EDGE_MSG,
+    });
+    if (dryRun) {
+      console.log("[nfl] DRY RUN — nothing stored.");
+      return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, picks: 0, picksData: noEdge }) };
+    }
+    const stored = await storePicks(dateISO, noEdge, force);
+    console.log(`[nfl] Done in ${((Date.now() - started) / 1000).toFixed(1)}s (stored: ${stored}, no qualifying plays)`);
+    return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0, stored }) };
   }
 
   // Narration (Claude narrator; deterministic fallback)

@@ -684,7 +684,7 @@
   <p class="footer-note">
     All lines verified via The Odds API (25+ sportsbooks). Best available line selected per pick.<br>
     Unit sizing: A+ = 2.5u+, A = 1.5-2.0u, A- = 1.0u, B+ = 0.5u. Quarter-Kelly; ML capped at 0.5u. 3% EV floor, no forced leans.<br>
-    Auto-generated at 11:05am ET on college football game days. Off days: No College Football Games Scheduled For Today. Not financial advice.
+    Generated on college football game days. Off days: No College Football Games Scheduled For Today. Not financial advice.
   </p>
 </div>
 
@@ -1428,7 +1428,10 @@
     const summaryEl = document.getElementById('daily-edge-summary');
     const summaryText = document.getElementById('daily-edge-text');
     const edgeSummary = data.edgeSummary || '';
-    if (edgeSummary) {
+    // Empty card without noPlays is the pre-fix blob (narrator ran on 0 picks).
+    // Hide that broken copy until regen writes a real no-plays card.
+    const hideEmptyNarration = picks.length === 0 && !data.noPlays;
+    if (edgeSummary && !hideEmptyNarration) {
       summaryText.textContent = edgeSummary.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Mm]odel projects/g, 'WeBetAI projects').replace(/[Tt]he model/g, 'WeBetAI');
       summaryEl.style.display = 'block';
     } else if (picks.length > 0) {
@@ -1446,7 +1449,7 @@
     // Insights — prefer the server-written LLM summary (verify-picks final pass); else template
     const insightsEl = document.getElementById('insights-section');
     const insightsText = document.getElementById('insights-text');
-    if (data.insights && data.insights.trim().length > 20) {
+    if (data.insights && data.insights.trim().length > 20 && !hideEmptyNarration) {
       insightsText.textContent = data.insights.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Tt]he model/g, 'WeBetAI');
       insightsEl.style.display = 'block';
     } else if (picks.length > 0) {
@@ -1632,13 +1635,26 @@
     const container = document.getElementById('picks-container');
 
     if (picks.length === 0) {
+      const noPlaysMsg = data.noPlays || '';
+      const sportsCovered = (data.summary && data.summary.sportsCovered) || data.sportsCovered || [];
+      const coveredCfb = sportsCovered.some(s => String(s).toUpperCase() === 'NCAAF');
+      const isNoGames = data.noGames === true || /No College Football Games Scheduled/i.test(noPlaysMsg);
+      // Games on slate, model passed: explicit noPlays about qualifying/passed, OR the
+      // live empty-picks blob that set sportsCovered NCAAF without noPlays/noGames.
+      const isNoEdge = !isNoGames && (/qualifying|passed/i.test(noPlaysMsg) || coveredCfb);
+      const title = isNoEdge
+        ? (noPlaysMsg || 'No qualifying CFB plays today')
+        : (noPlaysMsg || 'No College Football Games Scheduled For Today');
+      const sub = isNoEdge
+        ? 'Games are scheduled today, but none cleared WeBetAI\'s edge filters.'
+        : 'Cards generate on college football game days.';
       container.innerHTML = `
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
-            ${data.noPlays ? esc(data.noPlays) : 'No College Football Games Scheduled For Today'}
+            ${esc(title)}
           </div>
-          <div style="font-size:.8125rem; color:var(--txt-m);">Cards generate at 11:05am ET only on days college football is playing.</div>
+          <div style="font-size:.8125rem; color:var(--txt-m);">${esc(sub)}</div>
         </div>`;
       return;
     }

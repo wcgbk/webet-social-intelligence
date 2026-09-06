@@ -399,11 +399,19 @@
   force = true  # override Netlify's static directory-index, which otherwise wins over non-forced rules
 
 
-# Betty CFB OG share: /dashboard?card=bettycfbv1 serves CFB Betty art via serve-dashboard.
-# view= rules above still win when both are present (thread keeps Earth OG).
+# Betty CFB OG share: ONLY exact CFB card values hit serve-dashboard.
+# Do NOT splat :card — Alpha bettyv13 must fall through to static /dashboard/index.html
+# so X unfurls daily-betty-og-v13.jpg. view= rules above still win when both present.
 [[redirects]]
   from = "/dashboard"
-  query = {card = ":card"}
+  query = {card = "bettycfbv1"}
+  to = "/.netlify/functions/serve-dashboard"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/dashboard"
+  query = {card = "betty-cfb-v1"}
   to = "/.netlify/functions/serve-dashboard"
   status = 200
   force = true

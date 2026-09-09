@@ -1,5 +1,6 @@
 // generate-picks-omega-background.js
-// v11.6-omega-3plus-parlay — restore fill-to-3 + optimized parlay; keep sharp-90 F5/UD/A's gates
+// v11.7-omega-parlay2v3 — fill-to-3 + 2-vs-3 parlay compare (best 3-leg, or 2-leg
+// when EV / combined hit-rate is better). Keep sharp-90 F5/UD/A's gates.
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
 // Fill-to-3 lean top-up restored. Football MAIN: predCLV ≥ 0 when present, max 1 slot.
 // JS locks ≤3 then Claude verifies/narrates only those (web_search max_uses 5, one ~180s
@@ -26,7 +27,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.6-omega-3plus-parlay";
+const MODEL_VERSION = "v11.7-omega-parlay2v3";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -5147,7 +5148,79 @@ function legDirection(side) {
   const s = (side || '').toLowerCase();
   return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
 }
+
+const PARLAY_EV_TIE_BAND = 0.02;     // 2pp adjusted-EV "close enough"
+const PARLAY_HIT_RATE_EDGE = 0.08;   // 8pp combined-prob "meaningfully higher"
+
+function parlayComboStats(cands) {
+  let combinedDecimal = 1.0, combinedProb = 1.0;
+  for (const c of cands || []) {
+    const odds = c.oddsNum;
+    if (!Number.isFinite(odds) || !Number.isFinite(c.coverProbNum)) continue;
+    combinedDecimal *= odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
+    combinedProb *= c.coverProbNum;
+  }
+  const ev = combinedProb * combinedDecimal - 1;
+  const uniqueSports = new Set((cands || []).map(c => c.sport).filter(Boolean)).size;
+  const dirs = (cands || []).map(c => legDirection(c.side));
+  const allSameTotalsDir = dirs.length >= 3 && (dirs.every(d => d === 'over') || dirs.every(d => d === 'under'));
+  const adjustedEV = ev + Math.max(0, uniqueSports - 1) * 0.02 - (allSameTotalsDir ? 0.08 : 0);
+  return { combinedDecimal, combinedProb, ev, adjustedEV };
+}
+
+function chooseParlay2or3(legs2, legs3) {
+  const two = (legs2 && legs2.length >= 2) ? legs2 : null;
+  const three = (legs3 && legs3.length >= 3) ? legs3 : null;
+  if (three && !two) return three;
+  if (two && !three) return two;
+  if (!two && !three) return [];
+  const s2 = parlayComboStats(two);
+  const s3 = parlayComboStats(three);
+  // Prefer 2-leg when its adjusted EV is strictly better.
+  if (s2.adjustedEV > s3.adjustedEV) return two;
+  // Prefer 2-leg when EV is close and combined hit-rate is meaningfully higher.
+  if ((s3.adjustedEV - s2.adjustedEV) <= PARLAY_EV_TIE_BAND
+      && s2.combinedProb >= s3.combinedProb + PARLAY_HIT_RATE_EDGE) {
+    return two;
+  }
+  return three;
+}
+
+function parlayCombinations(arr, k) {
+  const out = [];
+  const rec = (start, acc) => {
+    if (acc.length === k) { out.push(acc.slice()); return; }
+    for (let i = start; i <= arr.length - (k - acc.length); i++) {
+      acc.push(arr[i]);
+      rec(i + 1, acc);
+      acc.pop();
+    }
+  };
+  rec(0, []);
+  return out;
+}
+
+function bestParlayComboOfSize(pool, k) {
+  if (!pool || pool.length < k) return null;
+  let best = null;
+  let bestAdj = -Infinity;
+  for (const combo of parlayCombinations(pool, k)) {
+    const games = new Set(combo.map(c => (c.matchup || '').toLowerCase().trim()));
+    if (games.size < k) continue;
+    const overs = combo.filter(c => legDirection(c.side) === 'over').length;
+    const unders = combo.filter(c => legDirection(c.side) === 'under').length;
+    if (overs > 2 || unders > 2) continue;
+    const s = parlayComboStats(combo);
+    if (s.adjustedEV > bestAdj) {
+      bestAdj = s.adjustedEV;
+      best = combo;
+    }
+  }
+  return best;
+}
+
 // Select 2-3 de-correlated, totals-first legs from a normalized candidate pool.
+// v11.7: compare best-2 vs best-3 (adjusted EV, then hit-rate when EV is close).
 // Each cand: { side, market, oddsNum, coverProbNum, evNum, matchup, commenceTime, sport }
 function selectParlayLegs(cands, maxLegs = 3) {
   const pool = (cands || []).filter(c =>
@@ -5167,19 +5240,18 @@ function selectParlayLegs(cands, maxLegs = 3) {
   // Drop the -CLV full-game ML legs when >=2 non-ML (totals/RL) legs exist.
   const nonML = ranked.filter(c => parlayMarketRank(c.market) >= 2);
   if (nonML.length >= 2) ranked = nonML;
-  // Build the list, capping same-direction totals at 2 (de-correlation).
-  const legs = []; let overs = 0, unders = 0;
+  const scan = ranked.slice(0, 12);
+  const best2 = bestParlayComboOfSize(scan, 2);
+  const best3 = maxLegs >= 3 ? bestParlayComboOfSize(scan, 3) : null;
+  const chosen = chooseParlay2or3(best2, best3);
+  if (chosen && chosen.length >= 2) return chosen;
+  // Last resort: greedy prefix (relax same-dir) to still reach a 2-leg ticket.
+  const legs = [];
   for (const c of ranked) {
-    if (legs.length >= maxLegs) break;
-    const dir = legDirection(c.side);
-    if (dir === 'over' && overs >= 2) continue;
-    if (dir === 'under' && unders >= 2) continue;
-    legs.push(c);
-    if (dir === 'over') overs++; else if (dir === 'under') unders++;
+    if (legs.length >= Math.min(maxLegs, 3)) break;
+    if (!legs.includes(c)) legs.push(c);
   }
-  // If de-correlation left us short of 2, relax it to reach a 2-leg ticket.
-  if (legs.length < 2) for (const c of ranked) { if (legs.length >= 2) break; if (!legs.includes(c)) legs.push(c); }
-  return legs;
+  return legs.length >= 2 ? legs : [];
 }
 // Prefer ≥1 non-MLB (NFL/CFB) parlay leg when football YES exists and EV loss ≤ 2%.
 function preferMultiSportParlay(legs, pool) {
@@ -6967,7 +7039,7 @@ module.exports.ipToFloat = ipToFloat;
 module.exports.normTeamMLB = normTeamMLB;
 module.exports.fetchPitcherFIP = fetchPitcherFIP;
 // v10.4 test-only exports (offline validation; no effect on the deployed handler)
-module.exports._testV104 = { pitcherForGame, parlayUnitsFor, applyMarketUnitCaps, findConsensusLine, buildConsensusLookup, computeLineMovementSignal, getCalibratedCoverProb, noVigProb, buildCorrelatedParlay, buildFallbackParlay, selectParlayLegs, assembleParlay, parlayMarketRank };
+module.exports._testV104 = { pitcherForGame, parlayUnitsFor, applyMarketUnitCaps, findConsensusLine, buildConsensusLookup, computeLineMovementSignal, getCalibratedCoverProb, noVigProb, buildCorrelatedParlay, buildFallbackParlay, selectParlayLegs, assembleParlay, parlayMarketRank, chooseParlay2or3, parlayComboStats, bestParlayComboOfSize };
 module.exports.MODEL_VERSION = MODEL_VERSION;
 module.exports.ODDS_SPORTS = ODDS_SPORTS;
 module.exports.ESPN_LEAGUES = ESPN_LEAGUES;
@@ -7013,5 +7085,9 @@ module.exports.matchupKey = matchupKey;
 module.exports.passesPredClvGate = passesPredClvGate;
 module.exports.passesCfbBlowoutGate = passesCfbBlowoutGate;
 module.exports.preferMultiSportParlay = preferMultiSportParlay;
+module.exports.chooseParlay2or3 = chooseParlay2or3;
+module.exports.selectParlayLegs = selectParlayLegs;
+module.exports.PARLAY_EV_TIE_BAND = PARLAY_EV_TIE_BAND;
+module.exports.PARLAY_HIT_RATE_EDGE = PARLAY_HIT_RATE_EDGE;
 module.exports.cfbTeamsMatch = cfbTeamsMatch;
 module.exports.isFootballSport = isFootballSport;

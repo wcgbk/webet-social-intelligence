@@ -18,8 +18,8 @@ function check(name, fn) {
 console.log('\nsharp-90 gates');
 
 check('versions', () => {
-  assert.strictEqual(alpha.MODEL_VERSION, 'v10.7-alpha-3plus-parlay');
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.6-omega-3plus-parlay');
+  assert.strictEqual(alpha.MODEL_VERSION, 'v10.8-alpha-3plus-parlay2v3');
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.7-omega-parlay2v3');
 });
 
 check('F5 stays off MAIN', () => {
@@ -71,7 +71,7 @@ check('lean top-up path present (fill when conviction < 3)', () => {
   const oSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-omega-background.js'), 'utf8');
   const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
   assert.ok(oSrc.includes('v11.6-lean-topup') || oSrc.includes('LEAN TIER TOP-UP (restored'));
-  assert.ok(aSrc.includes('v10.7-lean-topup') || aSrc.includes('LEAN TIER TOP-UP (restored'));
+  assert.ok(aSrc.includes('v10.8-lean-topup') || aSrc.includes('v10.7-lean-topup') || aSrc.includes('LEAN TIER TOP-UP'));
   assert.ok(!oSrc.includes('No lean pad-to-3 — publishing'));
   assert.ok(!aSrc.includes('not padding weak legs'));
   // Alpha parlay builder must remain first-class

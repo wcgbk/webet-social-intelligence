@@ -19,7 +19,7 @@ Process percentiles are reasoned bands vs a ~90th-percentile sharp desk (CLV-fir
 
 **P0**
 1. Alpha CLV + self-opt **observer only** (no `coverProb` / `kellyUnits` mutation). Still fetched for Discord/logs.
-2. ~~Omega no lean pad-to-3~~ **REVERTED (v11.6 / v10.7)**: fill-to-3 lean top-up restored for 3 straights + 1 optimized parlay. F5/UD/A's gates stay.
+2. ~~Omega no lean pad-to-3~~ **REVERTED (v11.6 / v10.7)** then **tightened (v10.8 / v11.7)**: fill-to-3 lean top-up; Alpha lean floor EV>0; both books compare best-2 vs best-3 parlays. F5/UD/A's gates stay.
 
 **P1**
 3. Alpha `MARKET_UNIT_CAPS` (ML 0.5 / Total 1.5 / RL 1.0 / F5 0.5) + `applyMarketUnitCaps` after Kelly.
@@ -70,4 +70,5 @@ Process percentiles are reasoned bands vs a ~90th-percentile sharp desk (CLV-fir
 ```
 node test-mlb-fade-f5-dogs.js
 node test-sharp-90-gates.js
+node test-fill3-parlay-2or3.js
 ```

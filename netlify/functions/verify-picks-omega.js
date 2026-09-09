@@ -1119,15 +1119,18 @@ Return ONLY valid JSON array:
       const existingParlay = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
       const parlayLegsArr = (existingParlay && Array.isArray(existingParlay.legs)) ? existingParlay.legs : [];
       const cardPickSet = new Set(picksData.picks.map(p => p.pick));
-      const isCardMirror = !existingParlay || /fallback|verified/.test(existingParlay.type || "");
+      const isCardMirror = !existingParlay || /fallback|verified|straight/.test(existingParlay.type || "");
       const parlayInvalid =
-        !existingParlay || !parlayLegsArr.length ||
+        !existingParlay || parlayLegsArr.length < 2 ||
         parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
         (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
 
-      if (picksData.picks.length >= 3 && parlayInvalid) {
+      if (!parlayInvalid) {
+        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
+      } else if (picksData.picks.length >= 2) {
         const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
-        const legs = picksData.picks.slice(0, 3).map(p => ({
+        const n = Math.min(3, picksData.picks.length);
+        const legs = picksData.picks.slice(0, n).map(p => ({
           pick: p.pick,
           sport: p.sport,
           matchup: p.matchup,
@@ -1148,7 +1151,7 @@ Return ONLY valid JSON array:
         const parlayEV = (combinedProb * combinedDecimal) - 1;
 
         picksData.parlayLegs = [{
-          type: "3-leg-parlay-verified",
+          type: `${legs.length}-leg-parlay-verified`,
           legs,
           units: hasLean ? "0.25u" : "0.5u",
           combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
@@ -1159,15 +1162,11 @@ Return ONLY valid JSON array:
         }];
         console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
         finalFixCount++;
-      } else if (picksData.picks.length < 3) {
-        // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
-        // never shows a parlay containing a removed leg.
+      } else {
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
         }
-      } else {
-        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
       }
 
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math

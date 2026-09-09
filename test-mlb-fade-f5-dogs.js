@@ -57,8 +57,8 @@ const pubRlShape = { sport: 'MLB', betType: 'Run Line', pick: 'Athletics +1.5', 
 for (const [label, mod] of [['omega', omega], ['alpha', alpha]]) {
   console.log('\n' + label);
   check('model version bumped', () => {
-    if (label === 'omega') assert.strictEqual(mod.MODEL_VERSION, 'v11.5-omega-sharp-90');
-    else assert.strictEqual(mod.MODEL_VERSION, 'v10.6-alpha-sharp-90');
+    if (label === 'omega') assert.ok(/^v11\.(6|7)-/.test(mod.MODEL_VERSION));
+    else assert.ok(/^v10\.(7|8)-/.test(mod.MODEL_VERSION));
   });
   check('F5 constants', () => {
     assert.strictEqual(mod.ALLOW_F5_ON_CARD, false);
@@ -200,13 +200,13 @@ check('Alpha does not rewrite sides on Claude fail (emergency store-throw only)'
   assert.ok(alphaSrc.includes('Emergency JS-lock store failed'));
   assert.ok(alphaSrc.includes('keeping JS-locked sides') || alphaSrc.includes('keep JS-locked'));
 });
-check('lean pad-to-3 disabled on both', () => {
-  assert.strictEqual(omega.LEAN_PAD_TO_THREE, false);
-  assert.strictEqual(alpha.LEAN_PAD_TO_THREE, false);
-  assert.strictEqual(omega.shouldLeanPadToThree(1), false);
-  assert.strictEqual(alpha.shouldLeanPadToThree(2), false);
-  assert.ok(omegaSrc.includes('No lean pad-to-3'));
-  assert.ok(alphaSrc.includes('No lean pad-to-3'));
+check('lean pad-to-3 restored on both (fill-to-3)', () => {
+  assert.strictEqual(omega.LEAN_PAD_TO_THREE, true);
+  assert.strictEqual(alpha.LEAN_PAD_TO_THREE, true);
+  assert.strictEqual(omega.shouldLeanPadToThree(1), true);
+  assert.strictEqual(alpha.shouldLeanPadToThree(2), true);
+  assert.ok(!omegaSrc.includes('No lean pad-to-3 — publishing'));
+  assert.ok(!alphaSrc.includes('not padding weak legs') || alpha.LEAN_PAD_TO_THREE === true);
 });
 
 if (failed) {

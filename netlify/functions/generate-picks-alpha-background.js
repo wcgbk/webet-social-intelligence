@@ -1,5 +1,6 @@
 // generate-picks-alpha-background.js
-// v10.7-alpha-3plus-parlay — restore fill-to-3 + best optimized parlay; keep sharp-90 gates
+// v10.8-alpha-3plus-parlay2v3 — fill-to-3 at EV>0; Omega-style 2-or-3 parlay optimizer
+// (best 3-leg, or 2-leg when EV / hit-rate is better). Keep sharp-90 gates.
 // F5 off MAIN card (ALLOW_F5_ON_CARD=false) + plus-money F5 ML skip + full-game MLB
 // underdog ML/RL coverProb ≥ 0.50 (RL fail-closed if winProb missing) + bottom-club
 // plus-money ML/RL ban (Athletics/Rockies). F5 still computed for analytics.
@@ -20,7 +21,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v10.7-alpha-3plus-parlay";
+const MODEL_VERSION = "v10.8-alpha-3plus-parlay2v3";
 
 // ── Claude as VERIFIER + NARRATOR (JS already locked ≤3). Matches Omega v11.2 role. ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -212,6 +213,9 @@ const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
 // stay off this list until Elo/standings quartile is wired (hard list is OK per sharp-90).
 const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
 const LEAN_PAD_TO_THREE = true;
+// v10.8: fill remaining YES slots from any positive-EV card-eligible unique game.
+// Product priority: always 3 when ≥3 gated-eligible games exist. Was 1.5% (v10.7).
+const LEAN_FILL_EV_FLOOR = 0;
 function candidateAmericanOdds(c) {
   if (!c) return null;
   if (typeof c.odds === "number" && Number.isFinite(c.odds)) return c.odds;
@@ -4028,6 +4032,50 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
   return selected.slice(0, maxPicks);
 }
 
+// Lean fill ranking: totals/RL over ML (F5/banned UD already fail allowOnPublishedCard).
+function leanFillMarketRank(c) {
+  const m = String(c.market || c.betType || "").toLowerCase();
+  if (/\bf5\b/.test(m) || String(c.source || "") === "F5") return -1;
+  if (m.includes("total")) return 3;
+  if (m.includes("run line") || m.includes("spread") || m.includes("puck")) return 2;
+  return 1;
+}
+
+// Next-best card-eligible unique-game fillers when conviction YES < 3.
+// Floor is LEAN_FILL_EV_FLOOR (0 = any positive EV). Never invents sides; never bypasses gates.
+function selectLeanTopUps(picks, candidates, needed, rejectedSides) {
+  const n = Math.max(0, needed | 0);
+  if (n <= 0) return [];
+  const usedGames = new Set((picks || []).map(p => matchupKey(p.matchup)));
+  const usedSides = new Set((picks || []).map(p => p.pick));
+  const rejected = rejectedSides instanceof Set ? rejectedSides : new Set(rejectedSides || []);
+  const pool = (candidates || []).filter(c => {
+    if (!allowOnPublishedCard(c)) return false;
+    if (typeof c.ev !== "number" || c.ev <= LEAN_FILL_EV_FLOOR) return false;
+    if (typeof c.coverProb === "number" && c.odds != null && (c.coverProb - impliedProb(c.odds)) <= 0) return false;
+    if (rejected.has((c.side || "").toLowerCase().trim())) return false;
+    if (usedSides.has(c.side)) return false;
+    const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
+    if (!g || usedGames.has(g)) return false;
+    return true;
+  }).slice();
+  pool.sort((a, b) => {
+    const r = leanFillMarketRank(b) - leanFillMarketRank(a);
+    if (r) return r;
+    return ((b.ev || 0) - (a.ev || 0)) || ((b.coverProb || 0) - (a.coverProb || 0));
+  });
+  const out = [];
+  for (const c of pool) {
+    if (out.length >= n) break;
+    const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
+    if (!g || usedGames.has(g)) continue;
+    out.push(c);
+    usedGames.add(g);
+    usedSides.add(c.side);
+  }
+  return out;
+}
+
 // ── Build final picks from Claude's SELECTIONS (matches production pattern) ──
 function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdownActive) {
   const picks = [];
@@ -4385,169 +4433,226 @@ async function computeBankrollContext() {
   return { drawdownActive, currentBankroll, totalProfit, consecutiveLosses };
 }
 
-// ── INDEPENDENT PARLAY OPTIMIZER ──
-// Scans ALL qualifying candidates (not just the 3 straight picks) to find the
-// 3-leg combination with the highest parlay EV. Optimizes for:
-// 1. Combined probability × combined payout (true parlay EV)
-// 2. Game diversification (penalizes same-game legs for correlation)
-// 3. Minimum individual cover probability per leg (no sub-45% legs)
-//
-// The parlay can include legs that AREN'T on the straight card — a candidate
-// ranked #5 with 60% cover at -130 might be a better parlay leg than the #1
-// straight pick with 55% cover at +190 (higher hit rate = better combo prob).
+// ── INDEPENDENT PARLAY OPTIMIZER (v10.8 — Omega-style 2-or-3) ──
+// Scans ALL qualifying candidates (not just the straight card). Totals-first,
+// de-correlated, one leg per game. Compares best 2-leg vs best 3-leg:
+//   - Prefer 3-leg when adjusted parlay EV is best
+//   - Choose 2-leg when it has higher EV, or EV is within 2pp and combined
+//     hit probability is meaningfully higher (≥8pp)
+// Honest labels: 2-leg-parlay-optimized / 3-leg-parlay-optimized.
+// Stake stays ALPHA_CONFIG.parlayStakeUnits (0.5u) even on a lean-filled card.
 
-function buildCorrelatedParlay(picks, allCandidates, rejections) {
-  if (!allCandidates || allCandidates.length < 3) {
-    // Fallback: use straight picks if not enough candidates
-    return buildFallbackParlay(picks);
-  }
-
-  // Build a set of rejected sides so the parlay never includes a pick Claude said no to
-  const rejectedSides = new Set((rejections || []).map(r => (r.side || '').toLowerCase().trim()));
-
-  // Filter candidates for parlay eligibility
-  const eligible = allCandidates.filter(c => {
-    if (!allowOnPublishedCard(c)) return false;
-    // Never use a candidate that was explicitly rejected during verification
-    if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
-    const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
-    // Must have >45% cover prob — low-probability legs kill parlays
-    if (cp < 0.45) return false;
-    // Must have positive EV individually
-    if (c.ev <= 0.03) return false;
-    // Must have valid odds
-    if (!c.odds || c.odds < -300 || c.odds > 300) return false;
-    return true;
-  });
-
-  if (eligible.length < 3) return buildFallbackParlay(picks);
-
-  // Score every valid 3-leg combination
-  // For efficiency, limit to top 12 candidates (C(12,3) = 220 combos)
-  const pool = eligible.slice(0, 12);
-  let bestCombo = null;
-  let bestEV = -Infinity;
-
-  for (let i = 0; i < pool.length - 2; i++) {
-    for (let j = i + 1; j < pool.length - 1; j++) {
-      for (let k = j + 1; k < pool.length; k++) {
-        const trio = [pool[i], pool[j], pool[k]];
-
-        // Combined probability (product of cover probs)
-        let combinedProb = 1.0;
-        for (const leg of trio) {
-          const cp = typeof leg.coverProb === 'number' ? leg.coverProb : parseFloat(leg.coverProb) || 0.5;
-          combinedProb *= cp;
-        }
-
-        // Standard parlays require all legs from different games — skip same-game combos
-        const matchups = trio.map(t => (t.matchup || `${t.awayTeam} vs. ${t.homeTeam}`).toLowerCase().trim());
-        const uniqueMatchups = new Set(matchups).size;
-        if (uniqueMatchups < 3) continue;
-
-        // Combined decimal payout
-        let combinedDecimal = 1.0;
-        for (const leg of trio) {
-          const odds = typeof leg.odds === 'number' ? leg.odds : parseInt(leg.odds);
-          const dec = odds > 0 ? 1 + (odds / 100) : 1 + (100 / Math.abs(odds));
-          combinedDecimal *= dec;
-        }
-
-        // Parlay EV = (combinedProb × combinedPayout) - 1
-        const parlayEV = (combinedProb * combinedDecimal) - 1;
-
-        // Bonus: diversified sport coverage (+2% EV bonus per unique sport)
-        const uniqueSports = new Set(trio.map(t => t.sport)).size;
-        const diversityBonus = (uniqueSports - 1) * 0.02;
-        // v10.3.1 (2026-06-17): correlation penalty. Three same-direction totals (all Over /
-        // all Under) move together — one high- or low-scoring environment loses all three at
-        // once, and the product-of-probs overstates the true combo edge. Haircut these so the
-        // optimizer prefers a de-correlated trio whenever an alternative exists.
-        const legDirs = trio.map(t => {
-          const s = (t.side || '').toLowerCase();
-          return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
-        });
-        const allSameTotalsDir = legDirs.every(d => d === 'over') || legDirs.every(d => d === 'under');
-        const correlationPenalty = allSameTotalsDir ? 0.08 : 0;
-        const adjustedEV = parlayEV + diversityBonus - correlationPenalty;
-
-        if (adjustedEV > bestEV) {
-          bestEV = adjustedEV;
-          bestCombo = { trio, combinedProb, combinedDecimal, parlayEV, uniqueMatchups, uniqueSports };
-        }
-      }
-    }
-  }
-
-  if (!bestCombo || bestCombo.parlayEV <= 0) return buildFallbackParlay(picks);
-
-  // Build the parlay output
-  const legs = bestCombo.trio.map(c => ({
-    pick: c.side,
-    sport: c.sport,
-    matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
-    betType: c.market,
-    odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-    coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
-    ev: `${(c.ev * 100).toFixed(1)}%`,
-  }));
-
-  // Check if parlay uses different legs than the straight card
-  const straightPicks = new Set((picks || []).map(p => p.pick));
-  const parlayPicks = new Set(legs.map(l => l.pick));
-  const isIndependent = ![...parlayPicks].every(p => straightPicks.has(p));
-
-  const combinedOddsDisplay = bestCombo.combinedDecimal >= 2
-    ? `+${Math.round((bestCombo.combinedDecimal - 1) * 100)}`
-    : `${Math.round(-100 / (bestCombo.combinedDecimal - 1))}`;
-
-  console.log(`[v10-parlay] OPTIMIZED: ${legs.map(l => l.pick).join(' + ')} | EV: ${(bestCombo.parlayEV * 100).toFixed(1)}% | Prob: ${(bestCombo.combinedProb * 100).toFixed(1)}% | ${bestCombo.uniqueMatchups} games, ${bestCombo.uniqueSports} sports | Independent: ${isIndependent}`);
-
-  return [{
-    type: "3-leg-parlay-optimized",
-    legs,
-    units: "0.5u",
-    combinedOdds: combinedOddsDisplay,
-    combinedDecimal: +bestCombo.combinedDecimal.toFixed(2),
-    combinedProb: `${(bestCombo.combinedProb * 100).toFixed(1)}%`,
-    ev: `${(bestCombo.parlayEV * 100).toFixed(1)}%`,
-    uniqueGames: bestCombo.uniqueMatchups,
-    uniqueSports: bestCombo.uniqueSports,
-    independent: isIndependent,
-    correlationNote: isIndependent
-      ? `Optimized independently from straight picks — ${bestCombo.uniqueMatchups} different games, ${bestCombo.uniqueSports} sports`
-      : `Uses straight pick legs — ${bestCombo.uniqueMatchups} games, ${bestCombo.uniqueSports} sports`,
-    candidatesScanned: pool.length,
-    combosEvaluated: pool.length * (pool.length - 1) * (pool.length - 2) / 6,
-  }];
+function parlayUnitsFor(picks) {
+  // Alpha parlay is the ROI product — lean fill-to-3 must not silently cut stake.
+  void picks;
+  return `${ALPHA_CONFIG.parlayStakeUnits}u`;
 }
 
-// Fallback: use straight picks as parlay legs (old behavior)
-function buildFallbackParlay(picks) {
-  if (!picks || picks.length < 2) return [];
-  // If all straight picks are from the same game, no valid standard parlay exists
-  const matchupSet = new Set((picks || []).slice(0, 3).map(p => (p.matchup || '').toLowerCase().trim()));
-  if (matchupSet.size < 2) return [];
-  const legs = picks.slice(0, 3).map(p => ({
-    pick: p.pick, sport: p.sport, matchup: p.matchup,
-    betType: p.betType, odds: p.odds, coverProb: p.coverProb,
-  }));
+function parlayMarketRank(market) {
+  const m = (market || '').toLowerCase();
+  if (m.includes('f5')) return -1;
+  if (m.includes('total')) return 3;
+  if (m.includes('run line') || m.includes('spread') || m.includes('puck')) return 2;
+  return 1;
+}
+function legDirection(side) {
+  const s = (side || '').toLowerCase();
+  return s.includes('over') ? 'over' : s.includes('under') ? 'under' : 'other';
+}
+
+const PARLAY_EV_TIE_BAND = 0.02;     // 2pp adjusted-EV "close enough"
+const PARLAY_HIT_RATE_EDGE = 0.08;   // 8pp combined-prob "meaningfully higher"
+
+function parlayComboStats(cands) {
   let combinedDecimal = 1.0, combinedProb = 1.0;
-  for (const leg of legs) {
-    const odds = parseInt(leg.odds);
-    combinedDecimal *= odds > 0 ? 1 + (odds / 100) : 1 + (100 / Math.abs(odds));
-    combinedProb *= parseFloat(leg.coverProb) / 100;
+  for (const c of cands || []) {
+    const odds = c.oddsNum;
+    if (!Number.isFinite(odds) || !Number.isFinite(c.coverProbNum)) continue;
+    combinedDecimal *= odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
+    combinedProb *= c.coverProbNum;
   }
-  const parlayEV = (combinedProb * combinedDecimal) - 1;
-  return [{
-    type: "3-leg-parlay-fallback",
-    legs, units: "0.5u",
-    combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
-    combinedDecimal: +combinedDecimal.toFixed(2),
+  const ev = combinedProb * combinedDecimal - 1;
+  const uniqueSports = new Set((cands || []).map(c => c.sport).filter(Boolean)).size;
+  const dirs = (cands || []).map(c => legDirection(c.side));
+  const allSameTotalsDir = dirs.length >= 3 && (dirs.every(d => d === 'over') || dirs.every(d => d === 'under'));
+  const adjustedEV = ev + Math.max(0, uniqueSports - 1) * 0.02 - (allSameTotalsDir ? 0.08 : 0);
+  return { combinedDecimal, combinedProb, ev, adjustedEV };
+}
+
+function chooseParlay2or3(legs2, legs3) {
+  const two = (legs2 && legs2.length >= 2) ? legs2 : null;
+  const three = (legs3 && legs3.length >= 3) ? legs3 : null;
+  if (three && !two) return three;
+  if (two && !three) return two;
+  if (!two && !three) return [];
+  const s2 = parlayComboStats(two);
+  const s3 = parlayComboStats(three);
+  if (s2.adjustedEV > s3.adjustedEV) return two;
+  if ((s3.adjustedEV - s2.adjustedEV) <= PARLAY_EV_TIE_BAND
+      && s2.combinedProb >= s3.combinedProb + PARLAY_HIT_RATE_EDGE) {
+    return two;
+  }
+  return three;
+}
+
+function parlayCombinations(arr, k) {
+  const out = [];
+  const rec = (start, acc) => {
+    if (acc.length === k) { out.push(acc.slice()); return; }
+    for (let i = start; i <= arr.length - (k - acc.length); i++) {
+      acc.push(arr[i]);
+      rec(i + 1, acc);
+      acc.pop();
+    }
+  };
+  rec(0, []);
+  return out;
+}
+
+function bestParlayComboOfSize(pool, k) {
+  if (!pool || pool.length < k) return null;
+  let best = null;
+  let bestAdj = -Infinity;
+  for (const combo of parlayCombinations(pool, k)) {
+    const games = new Set(combo.map(c => (c.matchup || '').toLowerCase().trim()));
+    if (games.size < k) continue;
+    const overs = combo.filter(c => legDirection(c.side) === 'over').length;
+    const unders = combo.filter(c => legDirection(c.side) === 'under').length;
+    if (overs > 2 || unders > 2) continue;
+    const s = parlayComboStats(combo);
+    if (s.adjustedEV > bestAdj) {
+      bestAdj = s.adjustedEV;
+      best = combo;
+    }
+  }
+  return best;
+}
+
+// Select 2-3 de-correlated, totals-first legs. Compares best-2 vs best-3.
+// Each cand: { side, market, oddsNum, coverProbNum, evNum, matchup, commenceTime, sport }
+function selectParlayLegs(cands, maxLegs = 3) {
+  const pool = (cands || []).filter(c =>
+    parlayMarketRank(c.market) >= 0 &&
+    Number.isFinite(c.oddsNum) && c.oddsNum >= -300 && c.oddsNum <= 300 &&
+    typeof c.coverProbNum === 'number' && c.coverProbNum >= 0.45);
+  const better = (a, b) => (parlayMarketRank(a.market) - parlayMarketRank(b.market)) || (a.coverProbNum - b.coverProbNum);
+  const byGame = new Map();
+  for (const c of pool) {
+    const g = (c.matchup || '').toLowerCase().trim();
+    if (!g) continue;
+    const prev = byGame.get(g);
+    if (!prev || better(c, prev) > 0) byGame.set(g, c);
+  }
+  let ranked = [...byGame.values()].sort((a, b) => better(b, a));
+  const nonML = ranked.filter(c => parlayMarketRank(c.market) >= 2);
+  if (nonML.length >= 2) ranked = nonML;
+  const scan = ranked.slice(0, 12);
+  const best2 = bestParlayComboOfSize(scan, 2);
+  const best3 = maxLegs >= 3 ? bestParlayComboOfSize(scan, 3) : null;
+  const chosen = chooseParlay2or3(best2, best3);
+  if (chosen && chosen.length >= 2) return chosen;
+  const legs = [];
+  for (const c of ranked) {
+    if (legs.length >= Math.min(maxLegs, 3)) break;
+    legs.push(c);
+  }
+  return legs.length >= 2 ? legs : [];
+}
+
+function assembleParlay(cands, stakeUnits, isIndependent) {
+  const legs = cands.map(c => {
+    const leg = {
+      pick: c.side, sport: c.sport, matchup: c.matchup, betType: c.market,
+      odds: `${c.oddsNum > 0 ? '+' : ''}${c.oddsNum}`,
+      commenceTime: c.commenceTime || '',
+      coverProb: `${(c.coverProbNum * 100).toFixed(0)}%`,
+    };
+    if (typeof c.evNum === 'number') leg.ev = `${(c.evNum * 100).toFixed(1)}%`;
+    return leg;
+  });
+  let combinedDecimal = 1.0, combinedProb = 1.0;
+  for (const c of cands) {
+    combinedDecimal *= c.oddsNum > 0 ? 1 + c.oddsNum / 100 : 1 + 100 / Math.abs(c.oddsNum);
+    combinedProb *= c.coverProbNum;
+  }
+  const parlayEV = combinedProb * combinedDecimal - 1;
+  const combinedOdds = combinedDecimal >= 2
+    ? `+${Math.round((combinedDecimal - 1) * 100)}`
+    : `${Math.round(-100 / (combinedDecimal - 1))}`;
+  const uniqueGames = new Set(cands.map(c => (c.matchup || '').toLowerCase().trim())).size;
+  const uniqueSports = new Set(cands.map(c => c.sport)).size;
+  return {
+    type: `${legs.length}-leg-parlay-${isIndependent ? 'optimized' : 'straight'}`,
+    legs, units: stakeUnits,
+    combinedOdds, combinedDecimal: +combinedDecimal.toFixed(2),
     combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
     ev: `${(parlayEV * 100).toFixed(1)}%`,
-    correlationNote: "Fallback: uses straight pick legs",
-  }];
+    uniqueGames, uniqueSports,
+    independent: !!isIndependent,
+    legMarkets: cands.map(c => c.market),
+    correlationNote: `Totals-first, de-correlated — ${legs.length} legs across ${uniqueGames} game(s) (${cands.map(c => parlayMarketRank(c.market) === 3 ? 'T' : parlayMarketRank(c.market) === 2 ? 'RL' : 'ML').join('/')})`,
+    candidatesScanned: cands.length,
+    _parlayEV: parlayEV,
+  };
+}
+
+function buildCorrelatedParlay(picks, allCandidates, rejections) {
+  const stake = parlayUnitsFor(picks);
+  const realRejections = (rejections || []).filter(r => {
+    const reason = String(r.reason || '');
+    return !reason.startsWith('Not selected') && !reason.startsWith('Lower edge priority') && !reason.startsWith('Below lean priority');
+  });
+  const rejectedSides = new Set(realRejections.map(r => (r.side || '').toLowerCase().trim()));
+
+  const pool = (allCandidates || []).filter(c => {
+    if (!allowOnPublishedCard(c)) return false;
+    if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
+    const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
+    const odds = typeof c.odds === 'number' ? c.odds : parseInt(c.odds);
+    if (cp < 0.45 || !(c.ev > 0.03) || !odds || odds < -300 || odds > 300) return false;
+    if ((cp - impliedProb(odds)) <= 0) return false;
+    return true;
+  }).map(c => ({
+    side: c.side, market: c.market,
+    oddsNum: typeof c.odds === 'number' ? c.odds : parseInt(c.odds),
+    coverProbNum: typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb),
+    evNum: c.ev,
+    matchup: c.matchup || formatMatchup(c.awayTeam, c.homeTeam),
+    commenceTime: c.commenceTime || '', sport: c.sport,
+  }));
+
+  const legs = selectParlayLegs(pool, 3);
+  if (legs.length >= 2 && new Set(legs.map(l => (l.matchup || '').toLowerCase().trim())).size >= 2) {
+    const straightSides = new Set((picks || []).map(p => p.pick));
+    const isIndependent = !legs.every(l => straightSides.has(l.side));
+    const p = assembleParlay(legs, stake, isIndependent);
+    if (p._parlayEV > 0) {
+      console.log(`[v10-parlay] ${p.type}: ${legs.map(l => l.side).join(' + ')} | EV ${p.ev} | ${p.correlationNote}`);
+      delete p._parlayEV;
+      return [p];
+    }
+  }
+  return buildFallbackParlay(picks);
+}
+
+function buildFallbackParlay(picks) {
+  if (!picks || picks.length < 2) return [];
+  const stake = parlayUnitsFor(picks);
+  const cands = (picks || []).map(p => ({
+    side: p.pick, market: p.betType,
+    oddsNum: parseInt(p.odds),
+    coverProbNum: (typeof p.coverProb === 'string' ? parseFloat(p.coverProb) / 100
+      : typeof p.coverProb === 'number' ? p.coverProb
+      : parseFloat(p.winProbability) / 100) || 0.5,
+    evNum: (typeof p.evRaw === 'number') ? p.evRaw : (parseFloat(p.ev) / 100 || undefined),
+    matchup: p.matchup, commenceTime: p.commenceTime || '', sport: p.sport,
+  }));
+  const legs = selectParlayLegs(cands, 3);
+  const games = new Set(legs.map(l => (l.matchup || '').toLowerCase().trim()));
+  if (legs.length < 2 || games.size < 2) return [];
+  const p = assembleParlay(legs, stake, false);
+  delete p._parlayEV;
+  return [p];
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -5234,12 +5339,13 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP (restored v10.7 — product: 3 straights + 1 optimized parlay) ──
-    // If conviction YES < 3, fill from lean EV tier. Do NOT weaken buildCorrelatedParlay —
-    // parlay is built AFTER this fill from the fuller card (Alpha parlay ROI is first-class).
+    // ── LEAN TIER TOP-UP (v10.8 — fill-to-3 at EV>0 from card-eligible unique games) ──
+    // If conviction YES < 3, fill remaining slots from next-best gated candidates
+    // (unique games, allowOnPublishedCard, not Claude-rejected). Prefer totals/RL.
+    // Still never publish F5 / Athletics-Rockies plus-money / sub-50% UD ML-RL.
+    // If truly <3 card-eligible after gates, publish what we have — don't invent sides.
     if (shouldLeanPadToThree(picks.length)) {
       const needed = 3 - picks.length;
-      const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
       const rejectedSides = new Set(
         (claudeOutput.rejections || []).map(r => {
           const c = candidateTable.find(x => x.rank === r.candidateRank);
@@ -5248,17 +5354,10 @@ exports.handler = async (event) => {
       );
       for (const s of genuineRejectedSides) rejectedSides.add(s);
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
-        leanAll.sort((a, b) => b.ev - a.ev);
-        const topUps = leanAll.filter(c =>
-          allowOnPublishedCard(c) &&
-          (c.ev || 0) >= 0.015 &&
-          !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
-          !pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))) &&
-          !picks.find(p => p.pick === c.side)
-        ).slice(0, needed);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_FILL_EV_FLOOR, weatherData);
+        const topUps = selectLeanTopUps(picks, [...(allCandidates || []), ...leanAll], needed, rejectedSides);
         if (topUps.length > 0) {
-          console.log(`[v10.7-lean-topup] Adding ${topUps.length} lean pick(s) — card had only ${picks.length} conviction YES`);
+          console.log(`[v10.8-lean-topup] Adding ${topUps.length} lean pick(s) — card had only ${picks.length} conviction YES (fill floor EV>${LEAN_FILL_EV_FLOOR})`);
           for (const c of topUps) {
             const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
             const u = LEAN_UNITS;
@@ -5279,18 +5378,17 @@ exports.handler = async (event) => {
               zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
               commenceTime: c.commenceTime || '',
             });
-            pickedGames.add(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)));
           }
         } else {
-          console.log(`[v10.7-lean-topup] No lean candidates available to fill ${needed} slot(s)`);
+          console.log(`[v10.8-lean-topup] No card-eligible lean candidates to fill ${needed} slot(s) — publishing ${picks.length}`);
           rejections.push({
             matchup: "Card fill",
             side: "noFill",
-            reason: `Only ${picks.length} candidate(s) cleared conviction floors after verification — lean tier also empty.`,
+            reason: `Only ${picks.length} candidate(s) cleared gates after verification — fewer than 3 card-eligible unique games.`,
           });
         }
       } catch (leanErr) {
-        console.error(`[v10.7-lean-topup] Failed: ${leanErr.message}`);
+        console.error(`[v10.8-lean-topup] Failed: ${leanErr.message}`);
       }
     }
 
@@ -5742,7 +5840,16 @@ module.exports.MLB_BOTTOM_CLUB_REJECT_REASON = MLB_BOTTOM_CLUB_REJECT_REASON;
 module.exports.passesBottomClubBan = passesBottomClubBan;
 module.exports.isMlbBottomClubName = isMlbBottomClubName;
 module.exports.LEAN_PAD_TO_THREE = LEAN_PAD_TO_THREE;
+module.exports.LEAN_FILL_EV_FLOOR = LEAN_FILL_EV_FLOOR;
 module.exports.shouldLeanPadToThree = shouldLeanPadToThree;
+module.exports.selectLeanTopUps = selectLeanTopUps;
+module.exports.leanFillMarketRank = leanFillMarketRank;
+module.exports._testV104 = { parlayUnitsFor, applyMarketUnitCaps, buildCorrelatedParlay, buildFallbackParlay, selectParlayLegs, assembleParlay, parlayMarketRank, chooseParlay2or3, parlayComboStats, bestParlayComboOfSize };
+module.exports.chooseParlay2or3 = chooseParlay2or3;
+module.exports.selectParlayLegs = selectParlayLegs;
+module.exports.buildCorrelatedParlay = buildCorrelatedParlay;
+module.exports.PARLAY_EV_TIE_BAND = PARLAY_EV_TIE_BAND;
+module.exports.PARLAY_HIT_RATE_EDGE = PARLAY_HIT_RATE_EDGE;
 module.exports.applyObservationalClvSelfOpt = applyObservationalClvSelfOpt;
 module.exports.MARKET_UNIT_CAPS = MARKET_UNIT_CAPS;
 module.exports.applyMarketUnitCaps = applyMarketUnitCaps;

@@ -1042,16 +1042,31 @@ Return ONLY valid JSON array:
         }
       }
 
-      // ── Rebuild parlay with the final card ──
-      // The parlay must reflect the actual picks on the page, not the pre-replacement picks
-      if (picksData.picks.length >= 3) {
-        const legs = picksData.picks.slice(0, 3).map(p => ({
+      // ── Parlay handling: PRESERVE the generator's 2-or-3 optimizer unless invalid ──
+      // Independent parlays may legitimately differ from the straight card. Rebuild
+      // ONLY when missing or a verification action invalidated a leg. Honest n-leg labels.
+      const removedPicks = new Set(allReplacements.map(r => r.removed).filter(Boolean));
+      const existingParlay = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
+      const parlayLegsArr = (existingParlay && Array.isArray(existingParlay.legs)) ? existingParlay.legs : [];
+      const cardPickSet = new Set(picksData.picks.map(p => p.pick));
+      const isCardMirror = !existingParlay || /fallback|verified|straight/.test(existingParlay.type || "");
+      const parlayInvalid =
+        !existingParlay || parlayLegsArr.length < 2 ||
+        parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
+        (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
+
+      if (!parlayInvalid) {
+        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
+      } else if (picksData.picks.length >= 2) {
+        const n = Math.min(3, picksData.picks.length);
+        const legs = picksData.picks.slice(0, n).map(p => ({
           pick: p.pick,
           sport: p.sport,
           matchup: p.matchup,
           betType: p.betType,
           odds: p.odds,
           coverProb: p.winProbability || p.coverProb,
+          commenceTime: p.commenceTime || '',
           ev: p.ev,
         }));
 
@@ -1064,20 +1079,18 @@ Return ONLY valid JSON array:
         const parlayEV = (combinedProb * combinedDecimal) - 1;
 
         picksData.parlayLegs = [{
-          type: "3-leg-parlay-verified",
+          type: `${legs.length}-leg-parlay-verified`,
           legs,
           units: "0.5u",
           combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
           combinedDecimal: +combinedDecimal.toFixed(2),
           combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
           ev: `${(parlayEV * 100).toFixed(1)}%`,
-          correlationNote: "Rebuilt after verification — reflects final verified card",
+          correlationNote: "Rebuilt after verification — a leg was invalidated by pick replacement",
         }];
         console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)}`);
         finalFixCount++;
       } else {
-        // Fewer than 3 picks (e.g. after a red-flag drop) — clear any stale parlay so the page
-        // never shows a parlay containing a removed leg.
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);

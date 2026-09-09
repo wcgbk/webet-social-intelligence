@@ -1,7 +1,7 @@
 // generate-picks-omega-background.js
-// v11.2-omega-no-f5-claude-verify — F5 off MAIN card, JS locks ≤3 then Claude verifies/
-// narrates only those (web_search max_uses 5, one ~180s attempt). Multi-sport MAIN
-// (MLB+NFL+CFB). Soccer stays disabled. Alpha (get-picks-alpha*) is untouched.
+// v11.3-omega-fade-ud-ml — F5 off MAIN card + full-game MLB underdog ML coverProb ≥ 0.50.
+// JS locks ≤3 then Claude verifies/narrates only those (web_search max_uses 5, one ~180s
+// attempt). Multi-sport MAIN (MLB+NFL+CFB). Soccer stays disabled.
 // ROLE: JS computes ALL projections/EV/Kelly AND locks diversified straights first.
 // Claude is VERIFIER+NARRATOR on the locked ≤3 only (may news-veto / cut units ≤50%;
 // cannot invent edges or rewrite the card). On Claude abort → keep JS picks + Haiku
@@ -24,7 +24,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.2-omega-no-f5-claude-verify";
+const MODEL_VERSION = "v11.3-omega-fade-ud-ml";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -201,6 +201,57 @@ function isF5Candidate(c) {
 }
 function allowOnOmegaCard(c) {
   return ALLOW_F5_ON_CARD || !isF5Candidate(c);
+}
+// Full-game MLB moneyline underdogs with calibrated coverProb < 0.50 (Athletics/Rockies-style
+// longshots that rank high on EV at ~40–42% cover). Favorites, run lines, and totals are
+// unaffected. F5 is gated separately via ALLOW_F5_ON_CARD / F5_SKIP_ML_UNDERDOG.
+const UNDERDOG_ML_MIN_COVER_PROB = 0.50;
+const UNDERDOG_ML_COVER_REJECT_REASON = "underdog ML coverProb < 0.50";
+function candidateAmericanOdds(c) {
+  if (!c) return null;
+  if (typeof c.odds === "number" && Number.isFinite(c.odds)) return c.odds;
+  if (typeof c.odds === "string") {
+    const n = parseInt(c.odds, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+function numericCoverProb(c) {
+  if (!c) return 0;
+  const v = c.coverProb;
+  if (typeof v === "number" && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  if (typeof v === "string") {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return 0;
+    return n > 1 ? n / 100 : n;
+  }
+  return 0;
+}
+function isFullGameUnderdogML(c) {
+  if (!c) return false;
+  if (isF5Candidate(c)) return false;
+  if (String(c.sport || "") !== "MLB") return false;
+  const market = String(c.market || c.betType || "");
+  if (!/moneyline/i.test(market)) return false;
+  const odds = candidateAmericanOdds(c);
+  return odds != null && odds > 0;
+}
+function passesUnderdogMlCoverGate(c) {
+  if (!isFullGameUnderdogML(c)) return true;
+  const cp = numericCoverProb(c);
+  // Must be ≥ 0.50. Treat ≤0.499 the same as <0.50 (rounding-safe).
+  if (cp <= 0.499) return false;
+  return cp >= UNDERDOG_ML_MIN_COVER_PROB;
+}
+function publishedCardRejectionReason(c) {
+  if (!allowOnOmegaCard(c)) {
+    return "F5 disabled on Omega MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only.";
+  }
+  if (!passesUnderdogMlCoverGate(c)) return UNDERDOG_ML_COVER_REJECT_REASON;
+  return null;
+}
+function allowOnPublishedCard(c) {
+  return allowOnOmegaCard(c) && passesUnderdogMlCoverGate(c);
 }
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
@@ -4600,6 +4651,10 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       console.log(`[v10-beta] WARNING: Claude selected rank ${sel.candidateRank} which is not in candidate table — skipping`);
       continue;
     }
+    if (!allowOnPublishedCard(c)) {
+      console.log(`[v11.3] SKIP rank ${c.rank} ${c.side}: ${publishedCardRejectionReason(c)}`);
+      continue;
+    }
 
     // ── EV INVARIANT (single serialization choke-point) ──
     // EV is DEFINED as the Kelly edge of the CURRENT coverProb at the CURRENT price. Any upstream
@@ -4831,6 +4886,18 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       continue;
     }
 
+    // 2b. Full-game MLB underdog ML (and F5-off-card) published-card gates
+    {
+      const gateReason = publishedCardRejectionReason({
+        sport: p.sport, market: p.betType, betType: p.betType, odds: p.odds,
+        coverProb: p.coverProb, side: p.pick, pick: p.pick, source: p.source,
+      });
+      if (gateReason) {
+        console.log(`[v10-validate] REJECT ${p.pick}: ${gateReason}`);
+        continue;
+      }
+    }
+
     // 3. Unit sizing must match cover prob reality
     //    Sub-50% coverProb = max 1.0u, sub-42% = max 0.5u
     if (cp < 0.50 && u > 1.0) {
@@ -5033,7 +5100,7 @@ function preferMultiSportParlay(legs, pool) {
 
 function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
   const pool = (cands || []).filter(c => {
-    if (!allowOnOmegaCard(c)) return false; // v11.2: F5 off MAIN card unless ALLOW_F5_ON_CARD
+    if (!allowOnPublishedCard(c)) return false; // v11.3: F5 off MAIN + underdog ML coverProb ≥ 0.50
     if (typeof c.ev !== "number" || c.ev <= 0) return false;
     if (c.ev < sportEvFloor(c.sport, defaultFloor)) return false;
     if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
@@ -5083,7 +5150,7 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
 function buildBindingDiversifiedPicks(allCandidates, claudeSelections, candidateTable, genuineRejectedSides, drawdownActive) {
   const rejected = genuineRejectedSides || new Set();
   const yesPool = (allCandidates || []).filter(c => {
-    if (!allowOnOmegaCard(c)) return false;
+    if (!allowOnPublishedCard(c)) return false;
     if (rejected.has((c.side || "").toLowerCase().trim())) return false;
     if (!hasPositiveEdge(c)) return false;
     if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
@@ -5151,6 +5218,7 @@ function applyDiversificationToPicks(picks, allCandidates, drawdownActive) {
     if (c.ev < sportEvFloor(c.sport, 0.03)) return false;
     if ((c.coverProb || 0) < sportCoverFloor(c.sport)) return false;
     if (typeof c.ev !== "number" || c.ev <= 0) return false;
+    if (!allowOnPublishedCard(c)) return false;
     const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
     if (usedGames.has(g) || usedSides.has(c.side)) return false;
     return ((weakest.evRaw || 0) - c.ev) <= 0.015;
@@ -5213,7 +5281,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
   const rejectedSides = new Set(realRejections.map(r => (r.side || '').toLowerCase().trim()));
 
   const pool = (allCandidates || []).filter(c => {
-    if (!allowOnOmegaCard(c)) return false; // v11.2: no F5 parlay legs on MAIN card
+    if (!allowOnPublishedCard(c)) return false; // v11.3: no F5 / sub-50% MLB underdog ML parlay legs
     if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
     const odds = typeof c.odds === 'number' ? c.odds : parseInt(c.odds);
@@ -5851,7 +5919,7 @@ exports.handler = async (event) => {
   // On Claude fail: KEEP the JS-locked sides + Haiku narrate; set claudeVerified:false.
   // Do NOT call fallbackToTopCandidates (that rewrote sides).
   const candidateTable = allCandidates.slice(0, 15); // analytics / stored table (may include F5)
-  const cardPool = allCandidates.filter(c => allowOnOmegaCard(c) && hasPositiveEdge(c));
+  const cardPool = allCandidates.filter(c => allowOnPublishedCard(c) && hasPositiveEdge(c));
   let lockedCands = selectDiversifiedStraights(cardPool, 3, 0.03);
   // Ensure locked picks have stable ranks for Claude mapping (prefer existing EV ranks)
   lockedCands.forEach((c, i) => {
@@ -6002,9 +6070,10 @@ exports.handler = async (event) => {
       });
     }
     for (const c of allCandidates.slice(0, 15)) {
-      if (!allowOnOmegaCard(c)) {
+      const gateReason = publishedCardRejectionReason(c);
+      if (gateReason) {
         if (!rejections.find(r => r.side === c.side)) {
-          rejections.push({ matchup: c.matchup, side: c.side, reason: "F5 disabled on Omega MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only." });
+          rejections.push({ matchup: c.matchup, side: c.side, reason: gateReason });
         }
         continue;
       }
@@ -6038,7 +6107,7 @@ exports.handler = async (event) => {
           return LEAN_EV_FLOOR;
         };
         const topUps = leanAll.filter(c =>
-          allowOnOmegaCard(c) &&
+          allowOnPublishedCard(c) &&
           hasPositiveEdge(c) &&
           c.ev >= leanFloorFor(c) &&
           (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
@@ -6226,7 +6295,7 @@ exports.handler = async (event) => {
   } catch (err) {
     console.error(`[v11.2-claude] Fatal verifier error: ${err.message} — attempting to keep JS-locked card with claudeVerified:false`);
     try {
-      const emergencyPool = (allCandidates || []).filter(c => allowOnOmegaCard(c) && hasPositiveEdge(c));
+      const emergencyPool = (allCandidates || []).filter(c => allowOnPublishedCard(c) && hasPositiveEdge(c));
       const emergencyLocked = selectDiversifiedStraights(emergencyPool, 3, 0.03);
       emergencyLocked.forEach((c, i) => { if (c.rank == null) c.rank = 9200 + i; });
       const emergencySels = emergencyLocked.map(c => ({
@@ -6255,7 +6324,7 @@ exports.handler = async (event) => {
       return { statusCode: 200, body: "JS-lock OK (claudeVerified:false)" };
     } catch (e2) {
       console.error(`[v11.2-claude] Emergency JS-lock store failed: ${e2.message}`);
-      return await fallbackToTopCandidates(dateISO, dateFormatted, (allCandidates || []).filter(allowOnOmegaCard).slice(0, 15), allCandidates, now, pitcherData, teamStats);
+      return await fallbackToTopCandidates(dateISO, dateFormatted, (allCandidates || []).filter(allowOnPublishedCard).slice(0, 15), allCandidates, now, pitcherData, teamStats);
     }
   }
 };
@@ -6536,7 +6605,10 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
   const picksData = {
     date: dateISO, dateFormatted, model: MODEL_VERSION,
     picks,
-    rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
+    rejections: [
+      ...leanCandidates.filter(c => publishedCardRejectionReason(c)).slice(0, 8).map(c => ({ matchup: c.matchup, side: c.side, reason: publishedCardRejectionReason(c) })),
+      ...leanCandidates.filter(allowOnPublishedCard).slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
+    ],
     edgeSummary: summaries.edgeSummary || "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
     insights: summaries.insights || "",
     summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
@@ -6551,7 +6623,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now, 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now, pitcherData, teamStats) {
   console.log("[v11-claude] JS fallback: diversified top candidates (fallback:true) — Claude selector unavailable after retries");
-  const top3 = selectDiversifiedStraights(candidateTable.filter(c => allowOnOmegaCard(c) && hasPositiveEdge(c)), 3, 0.03);
+  const top3 = selectDiversifiedStraights(candidateTable.filter(c => allowOnPublishedCard(c) && hasPositiveEdge(c)), 3, 0.03);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -6629,7 +6701,10 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
   const picksData = {
     date: dateISO, dateFormatted, model: MODEL_VERSION,
     picks,
-    rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
+    rejections: [
+      ...allCandidates.slice(0, 15).filter(c => publishedCardRejectionReason(c)).map(c => ({ matchup: c.matchup, side: c.side, reason: publishedCardRejectionReason(c) })),
+      ...allCandidates.filter(allowOnPublishedCard).slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
+    ],
     edgeSummary: summaries.edgeSummary || "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by calibrated EV.",
     insights: summaries.insights || "",
     summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
@@ -6793,8 +6868,15 @@ module.exports.computeFootballProjection = computeFootballProjection;
 module.exports.sportEvFloor = sportEvFloor;
 module.exports.sportCoverFloor = sportCoverFloor;
 module.exports.ALLOW_F5_ON_CARD = ALLOW_F5_ON_CARD;
+module.exports.F5_SKIP_ML_UNDERDOG = F5_SKIP_ML_UNDERDOG;
 module.exports.isF5Candidate = isF5Candidate;
 module.exports.allowOnOmegaCard = allowOnOmegaCard;
+module.exports.UNDERDOG_ML_MIN_COVER_PROB = UNDERDOG_ML_MIN_COVER_PROB;
+module.exports.UNDERDOG_ML_COVER_REJECT_REASON = UNDERDOG_ML_COVER_REJECT_REASON;
+module.exports.isFullGameUnderdogML = isFullGameUnderdogML;
+module.exports.passesUnderdogMlCoverGate = passesUnderdogMlCoverGate;
+module.exports.publishedCardRejectionReason = publishedCardRejectionReason;
+module.exports.allowOnPublishedCard = allowOnPublishedCard;
 module.exports.selectDiversifiedStraights = selectDiversifiedStraights;
 module.exports.buildBindingDiversifiedPicks = buildBindingDiversifiedPicks;
 module.exports.formatMatchup = formatMatchup;

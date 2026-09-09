@@ -1,5 +1,7 @@
 // generate-picks-alpha-background.js
-// v10.3-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// v10.4-alpha-fade-f5-ud — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// F5 off MAIN card (ALLOW_F5_ON_CARD=false) + plus-money F5 ML skip + full-game MLB
+// underdog ML coverProb ≥ 0.50. F5 still computed for analytics.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
@@ -16,6 +18,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
+const MODEL_VERSION = "v10.4-alpha-fade-f5-ud";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
@@ -153,6 +156,74 @@ const F5_MAX_SLOTS = 2;      // at most 2 F5 candidates may enter the pool per s
 const F5_UNIT_CAP = 1.0;     // never stake an F5 leg above a validated full-game play
 // Calibration caps mirror the F5 function's COVER_PROB_CAPS — sharp models top out ~55-60% hit rate.
 const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Line": 0.57 };
+// F5 ML UNDERDOGS (+money) are a proven bleed: −21% ROI on n=134 (ESPN-graded, 2026). F5 is a
+// starting-pitcher market the book prices efficiently; the model's "live dog" edge is phantom.
+// Skip plus-money F5 ML sides entirely. (F5 favorites — rare — and F5 totals/RL are unaffected.)
+const F5_SKIP_ML_UNDERDOG = true;
+// F5 stays computed for analytics / CLV diagnostics when Odds API F5 lines are cheap
+// to attach, but MUST NOT enter the published Alpha MAIN card (straights or parlays).
+// Graded Alpha Athletics F5 ~1-4 / Rockies F5 ~0-2 plus the −21% F5-dog ROI.
+const ALLOW_F5_ON_CARD = false;
+function isF5Candidate(c) {
+  if (!c) return false;
+  if (c.source === "F5") return true;
+  const m = String(c.market || c.betType || "");
+  return /^F5\b/i.test(m) || /\bF5\b/i.test(String(c.side || c.pick || ""));
+}
+function allowOnAlphaCard(c) {
+  return ALLOW_F5_ON_CARD || !isF5Candidate(c);
+}
+// Full-game MLB moneyline underdogs with calibrated coverProb < 0.50 (Athletics/Rockies-style
+// longshots that rank high on EV at ~40–42% cover). Favorites, run lines, and totals are
+// unaffected. F5 is gated separately via ALLOW_F5_ON_CARD / F5_SKIP_ML_UNDERDOG.
+const UNDERDOG_ML_MIN_COVER_PROB = 0.50;
+const UNDERDOG_ML_COVER_REJECT_REASON = "underdog ML coverProb < 0.50";
+function candidateAmericanOdds(c) {
+  if (!c) return null;
+  if (typeof c.odds === "number" && Number.isFinite(c.odds)) return c.odds;
+  if (typeof c.odds === "string") {
+    const n = parseInt(c.odds, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+function numericCoverProb(c) {
+  if (!c) return 0;
+  const v = c.coverProb;
+  if (typeof v === "number" && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  if (typeof v === "string") {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return 0;
+    return n > 1 ? n / 100 : n;
+  }
+  return 0;
+}
+function isFullGameUnderdogML(c) {
+  if (!c) return false;
+  if (isF5Candidate(c)) return false;
+  if (String(c.sport || "") !== "MLB") return false;
+  const market = String(c.market || c.betType || "");
+  if (!/moneyline/i.test(market)) return false;
+  const odds = candidateAmericanOdds(c);
+  return odds != null && odds > 0;
+}
+function passesUnderdogMlCoverGate(c) {
+  if (!isFullGameUnderdogML(c)) return true;
+  const cp = numericCoverProb(c);
+  // Must be ≥ 0.50. Treat ≤0.499 the same as <0.50 (rounding-safe).
+  if (cp <= 0.499) return false;
+  return cp >= UNDERDOG_ML_MIN_COVER_PROB;
+}
+function publishedCardRejectionReason(c) {
+  if (!allowOnAlphaCard(c)) {
+    return "F5 disabled on Alpha MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only.";
+  }
+  if (!passesUnderdogMlCoverGate(c)) return UNDERDOG_ML_COVER_REJECT_REASON;
+  return null;
+}
+function allowOnPublishedCard(c) {
+  return allowOnAlphaCard(c) && passesUnderdogMlCoverGate(c);
+}
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
   "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us", "espnbet", "betrivers", "fanatics",
@@ -2877,6 +2948,7 @@ function computeF5Candidates(game, gameData, teamStats, pitcherData, weatherData
   // ── F5 Moneyline ── (real F5 ML lines only — no full-game proxy)
   for (const [team, data] of Object.entries(f5.f5ML)) {
     if ((data.n || 0) < 3) continue; // bettability guard: F5 ML must be offered by >=3 top US books
+    if (F5_SKIP_ML_UNDERDOG && (data.price || 0) > 0) continue; // skip plus-money F5 ML dogs — proven −21% bleed
     const isHome = team.toLowerCase().includes(home.toLowerCase().split(" ").pop());
     const teamLabel = isHome ? home : away;
     const rawMargin = isHome ? projF5Margin : -projF5Margin;
@@ -3721,6 +3793,10 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       console.log(`[v10-beta] WARNING: Claude selected rank ${sel.candidateRank} which is not in candidate table — skipping`);
       continue;
     }
+    if (!allowOnPublishedCard(c)) {
+      console.log(`[v10-beta] SKIP rank ${c.rank} ${c.side}: ${publishedCardRejectionReason(c)}`);
+      continue;
+    }
 
     // ── EV INVARIANT (single serialization choke-point) ──
     // EV is DEFINED as the Kelly edge of the CURRENT coverProb at the CURRENT price. Any upstream
@@ -3843,6 +3919,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
 
     const replacementCandidates = allCandidates
       .filter(c => {
+        if (!allowOnPublishedCard(c)) return false;
         const cMatchup = `${c.awayTeam} vs. ${c.homeTeam}`;
         if (usedMatchups.has(cMatchup)) return false;
         if (usedSides.has(c.side)) return false;
@@ -3950,6 +4027,18 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       warnings.push(`REJECTED: coverProb ${(cp*100).toFixed(1)}% <= breakeven ${(breakeven*100).toFixed(1)}%`);
       console.log(`[v10-validate] REJECT ${p.pick}: ${warnings[0]}`);
       continue;
+    }
+
+    // 2b. Full-game MLB underdog ML (and F5-off-card) published-card gates
+    {
+      const gateReason = publishedCardRejectionReason({
+        sport: p.sport, market: p.betType, betType: p.betType, odds: p.odds,
+        coverProb: p.coverProb, side: p.pick, pick: p.pick, source: p.source,
+      });
+      if (gateReason) {
+        console.log(`[v10-validate] REJECT ${p.pick}: ${gateReason}`);
+        continue;
+      }
     }
 
     // 3. Unit sizing must match cover prob reality
@@ -4070,6 +4159,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
 
   // Filter candidates for parlay eligibility
   const eligible = allCandidates.filter(c => {
+    if (!allowOnPublishedCard(c)) return false;
     // Never use a candidate that was explicitly rejected during verification
     if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
@@ -4756,12 +4846,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+      date: dateISO, dateFormatted, model: MODEL_VERSION,
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3-alpha-sharp" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: MODEL_VERSION },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4771,7 +4861,10 @@ exports.handler = async (event) => {
   }
 
   // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──
-  const candidateTable = allCandidates.slice(0, 15);
+  // Analytics table may include F5 / sub-50% MLB underdog ML (computed for CLV).
+  // Claude only sees published-card-eligible candidates so it cannot select gated sides.
+  const analyticsTable = allCandidates.slice(0, 15);
+  const candidateTable = allCandidates.filter(allowOnPublishedCard).slice(0, 15);
   const userMessage = formatCandidateTable(candidateTable, dateISO, dateFormatted);
 
   console.log(`[v10] Sending ${candidateTable.length} candidates to Claude (${userMessage.length} chars)`);
@@ -4838,8 +4931,15 @@ exports.handler = async (event) => {
         reason: r.reason || "No reason given",
       });
     }
-    // Add remaining non-selected candidates as rejections
-    for (const c of allCandidates.slice(0, 15)) {
+    // Add remaining non-selected candidates as rejections (gate F5 / underdog ML first)
+    for (const c of analyticsTable) {
+      const gateReason = publishedCardRejectionReason(c);
+      if (gateReason) {
+        if (!rejections.find(r => r.side === c.side)) {
+          rejections.push({ matchup: c.matchup, side: c.side, reason: gateReason });
+        }
+        continue;
+      }
       if (!selectedRanks.has(c.rank) && !rejections.find(r => r.side === c.side)) {
         rejections.push({ matchup: c.matchup, side: c.side, reason: "Not selected — lower edge priority." });
       }
@@ -4862,6 +4962,7 @@ exports.handler = async (event) => {
         const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
+          allowOnPublishedCard(c) &&
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
           !pickedGames.has((c.matchup || '').toLowerCase().trim()) &&
           !picks.find(p => p.pick === c.side)
@@ -4936,7 +5037,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3-alpha-sharp",
+      model: MODEL_VERSION,
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4946,14 +5047,14 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3-alpha-sharp",
+        modelVersion: MODEL_VERSION,
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
       sgps: [],
       modelProjections,
       edgeCandidatesCount: allCandidates.length,
-      candidateTable: candidateTable.map(c => ({
+      candidateTable: analyticsTable.map(c => ({
         rank: c.rank,
         sport: c.sport,
         side: c.side,
@@ -5012,7 +5113,7 @@ function dedupeCandidatesByGame(cands) {
 
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = dedupeCandidatesByGame(leanCandidates).slice(0, 3);
+  const top = dedupeCandidatesByGame((leanCandidates || []).filter(allowOnPublishedCard)).slice(0, 3);
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5085,11 +5186,14 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+    date: dateISO, dateFormatted, model: MODEL_VERSION,
     picks,
-    rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
+    rejections: [
+      ...(leanCandidates || []).filter(c => publishedCardRejectionReason(c)).slice(0, 8).map(c => ({ matchup: c.matchup, side: c.side, reason: publishedCardRejectionReason(c) })),
+      ...(leanCandidates || []).filter(allowOnPublishedCard).slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
+    ],
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5101,7 +5205,7 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
 async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, allCandidates, now) {
   console.log("[v10] Using fallback: top 3 candidates without Claude narratives");
-  const top3 = dedupeCandidatesByGame(candidateTable).slice(0, 3);
+  const top3 = dedupeCandidatesByGame((candidateTable || []).filter(allowOnPublishedCard)).slice(0, 3);
   const picks = top3.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5173,11 +5277,14 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+    date: dateISO, dateFormatted, model: MODEL_VERSION,
     picks,
-    rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
+    rejections: [
+      ...(allCandidates || []).slice(0, 15).filter(c => publishedCardRejectionReason(c)).map(c => ({ matchup: c.matchup, side: c.side, reason: publishedCardRejectionReason(c) })),
+      ...(allCandidates || []).filter(allowOnPublishedCard).slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
+    ],
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: MODEL_VERSION },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };
@@ -5284,3 +5391,14 @@ module.exports.mlbStarterRunMetric = mlbStarterRunMetric;
 module.exports.ipToFloat = ipToFloat;
 module.exports.normTeamMLB = normTeamMLB;
 module.exports.fetchPitcherFIP = fetchPitcherFIP;
+module.exports.MODEL_VERSION = MODEL_VERSION;
+module.exports.ALLOW_F5_ON_CARD = ALLOW_F5_ON_CARD;
+module.exports.F5_SKIP_ML_UNDERDOG = F5_SKIP_ML_UNDERDOG;
+module.exports.isF5Candidate = isF5Candidate;
+module.exports.allowOnAlphaCard = allowOnAlphaCard;
+module.exports.UNDERDOG_ML_MIN_COVER_PROB = UNDERDOG_ML_MIN_COVER_PROB;
+module.exports.UNDERDOG_ML_COVER_REJECT_REASON = UNDERDOG_ML_COVER_REJECT_REASON;
+module.exports.isFullGameUnderdogML = isFullGameUnderdogML;
+module.exports.passesUnderdogMlCoverGate = passesUnderdogMlCoverGate;
+module.exports.publishedCardRejectionReason = publishedCardRejectionReason;
+module.exports.allowOnPublishedCard = allowOnPublishedCard;

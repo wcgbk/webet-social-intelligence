@@ -42,11 +42,12 @@ This is not optional. A feature is not done until it is tested and confirmed wor
 
 ## Daily Picks Pipeline (alpha is PRIMARY as of 2026-06)
 - `trigger-picks-alpha.js` — cron `0 13 * * *` (9am ET) → `generate-picks-alpha-background.js`
-  (model v10.6-alpha-sharp-90) → `edge-picks-alpha` blobs → `/api/get-picks-alpha` → /alpha + /dashboard
+  (model v10.8-alpha-3plus-parlay2v3) → `edge-picks-alpha` blobs → `/api/get-picks-alpha` → /alpha + /dashboard
   JS-lock ≤3, Claude verify/narrate only. No NFL/CFB on Alpha (MLB control). F5 off MAIN.
+  Fill-to-3 at EV>0; parlay is best 3-leg or 2-leg when EV/hit-rate is better.
 - `trigger-picks-omega.js` — cron `0 13 * * *` (9am ET) → `generate-picks-omega-background.js`
-  (model v11.5-omega-sharp-90) → `edge-picks-omega` → `/omega`. Multi-sport MAIN; no lean pad-to-3;
-  football MAIN max 1 slot and predCLV ≥ 0 when present.
+  (model v11.7-omega-parlay2v3) → `edge-picks-omega` → `/omega`. Multi-sport MAIN; fill-to-3;
+  football MAIN max 1 slot and predCLV ≥ 0 when present. Parlay compares best-2 vs best-3.
 - `trigger-picks-mvp.js` — cron `0 12 * * *` (8am ET) — A/B test pipeline (v11.1-mvp) → `edge-picks-mvp`
 - PAUSED: `trigger-picks` (old prod /edge) and `trigger-picks-beta` — /edge + /edge/beta pages are
   frozen at Jun 5; do not revive or "fix" them without Ben asking

@@ -1,3 +1,10 @@
+## 2026-09-09 — alpha-fill3-parlay-2or3 (v10.8-alpha / v11.7-omega)
+- Alpha lean fill-to-3: remaining YES slots from next-best **card-eligible** unique games (`allowOnPublishedCard`, not Claude-rejected). Lean EV floor lowered **1.5% → 0** (any positive EV). Prefer totals/RL. Still never publish F5 / Athletics-Rockies plus-money / sub-50% UD ML-RL. If <3 eligible after gates, publish what we have.
+- Alpha parlay ported to Omega-style totals-first / de-correlated optimizer that compares **best 2-leg vs best 3-leg**. Honest labels `2-leg-parlay-optimized` / `3-leg-parlay-optimized`. Independent pool scan (bookkeeping "Not selected" no longer vetoes). Stake stays 0.5u even on lean-filled cards.
+- Omega `selectParlayLegs` tightened: no longer always takes 3 when available; picks 2 when adjusted EV is higher or EV is within 2pp and combined hit-rate is ≥8pp higher.
+- verify-picks (Alpha+Omega) preserve generator 2-or-3 parlays; rebuild uses honest n-leg type; no longer clears a valid 2-leg just because the card has <3 straights.
+- Tests: `test-fill3-parlay-2or3.js`. F5/UD/A's/JS-lock unchanged.
+
 ## 2026-09-09 — restore-3-pick-parlay (v10.7-alpha / v11.6-omega)
 - Restored lean-fill / fill-to-3 on Omega MAIN + Alpha (LEAN_PAD_TO_THREE=true + lean tier top-up).
 - Kept Alpha `buildCorrelatedParlay` aggressive/first-class (3 straights + optimized parlay).

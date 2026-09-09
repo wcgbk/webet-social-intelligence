@@ -42,12 +42,17 @@ This is not optional. A feature is not done until it is tested and confirmed wor
 
 ## Daily Picks Pipeline (alpha is PRIMARY as of 2026-06)
 - `trigger-picks-alpha.js` — cron `0 13 * * *` (9am ET) → `generate-picks-alpha-background.js`
-  (model v10.5-alpha-fade-ud-rl) → `edge-picks-alpha` blobs → `/api/get-picks-alpha` → /alpha + /dashboard
+  (model v10.6-alpha-sharp-90) → `edge-picks-alpha` blobs → `/api/get-picks-alpha` → /alpha + /dashboard
+  JS-lock ≤3, Claude verify/narrate only. No NFL/CFB on Alpha (MLB control). F5 off MAIN.
+- `trigger-picks-omega.js` — cron `0 13 * * *` (9am ET) → `generate-picks-omega-background.js`
+  (model v11.5-omega-sharp-90) → `edge-picks-omega` → `/omega`. Multi-sport MAIN; no lean pad-to-3;
+  football MAIN max 1 slot and predCLV ≥ 0 when present.
 - `trigger-picks-mvp.js` — cron `0 12 * * *` (8am ET) — A/B test pipeline (v11.1-mvp) → `edge-picks-mvp`
 - PAUSED: `trigger-picks` (old prod /edge) and `trigger-picks-beta` — /edge + /edge/beta pages are
   frozen at Jun 5; do not revive or "fix" them without Ben asking
 - Support crons: capture-opening-lines 6am ET · verify-picks QA 10:30am ET (audits the ALPHA store)
   · track-clv 3am/1pm/7pm ET (CLV capture + settles results into picks blobs) · self-optimize Sun
+  · confirm-starters-mlb 1:30pm ET (re-checks ESPN SPs on Alpha+Omega; kills SP-dependent picks on scratch)
 - Manual runs must NOT overwrite the 9am scheduled alpha picks once generated for the day.
   Sim mode (`snapshotTime` in the POST body) writes isolated `picks-sim-*` keys and is always safe.
 - `netlify.toml` is cron ground truth and is hash-protected by the product loop

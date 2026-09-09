@@ -1,6 +1,7 @@
 // generate-picks-omega-background.js
-// v11.4-omega-fade-ud-rl — F5 off MAIN + full-game MLB underdog ML and underdog
-// run-line coverProb ≥ 0.50 (RL also requires model winProb ≥ 0.50 when present).
+// v11.5-omega-sharp-90 — F5 off MAIN + full-game MLB underdog ML/RL coverProb ≥ 0.50
+// (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
+// No lean pad-to-3. Football MAIN: predCLV ≥ 0 when present, max 1 slot.
 // JS locks ≤3 then Claude verifies/narrates only those (web_search max_uses 5, one ~180s
 // attempt). Multi-sport MAIN (MLB+NFL+CFB). Soccer stays disabled.
 // ROLE: JS computes ALL projections/EV/Kelly AND locks diversified straights first.
@@ -25,7 +26,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.4-omega-fade-ud-rl";
+const MODEL_VERSION = "v11.5-omega-sharp-90";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -216,6 +217,11 @@ const UNDERDOG_RL_MIN_COVER_PROB = 0.50;
 const UNDERDOG_RL_COVER_REJECT_REASON = "underdog RL coverProb < 0.50";
 const UNDERDOG_RL_MIN_WIN_PROB = 0.50;
 const UNDERDOG_RL_WIN_REJECT_REASON = "underdog RL winProb < 0.50";
+const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
+// Bottom-quartile MLB clubs: never emit plus-money ML or underdog RL, even if EV is juicy.
+const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
+const LEAN_PAD_TO_THREE = false;
+const FOOTBALL_MAIN_MAX_SLOTS = 1;
 function candidateAmericanOdds(c) {
   if (!c) return null;
   if (typeof c.odds === "number" && Number.isFinite(c.odds)) return c.odds;
@@ -307,9 +313,33 @@ function passesUnderdogRlCoverGate(c) {
 function passesUnderdogRlWinGate(c) {
   if (!isFullGameUnderdogRL(c)) return true;
   const wp = pickedTeamWinProb(c);
-  if (wp == null) return true;
+  if (wp == null) return false; // fail closed — missing winProb is a reject
   if (wp <= 0.499) return false;
   return wp >= UNDERDOG_RL_MIN_WIN_PROB;
+}
+function isMlbBottomClubName(name) {
+  const s = String(name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return false;
+  return /\bathletics\b/.test(s) || /\brockies\b/.test(s);
+}
+function pickedTeamNameFromSide(c) {
+  return String(c.side || c.pick || "")
+    .replace(/\s+F5\s+ML\s*$/i, "")
+    .replace(/\s+ML\s*$/i, "")
+    .replace(/\s+[+-]\d+(?:\.\d+)?\s*$/i, "")
+    .trim();
+}
+function passesBottomClubBan(c) {
+  if (!c) return true;
+  if (String(c.sport || "") !== "MLB") return true;
+  if (isF5Candidate(c)) return true; // F5 already off MAIN
+  if (!isFullGameUnderdogML(c) && !isFullGameUnderdogRL(c)) return true;
+  const sideTeam = pickedTeamNameFromSide(c);
+  if (isMlbBottomClubName(sideTeam)) return false;
+  const isHome = pickedTeamIsHome(c);
+  if (isHome === true && isMlbBottomClubName(c.homeTeam)) return false;
+  if (isHome === false && isMlbBottomClubName(c.awayTeam)) return false;
+  return true;
 }
 function publishedCardRejectionReason(c) {
   if (!allowOnOmegaCard(c)) {
@@ -317,11 +347,17 @@ function publishedCardRejectionReason(c) {
   }
   if (!passesUnderdogMlCoverGate(c)) return UNDERDOG_ML_COVER_REJECT_REASON;
   if (!passesUnderdogRlCoverGate(c)) return UNDERDOG_RL_COVER_REJECT_REASON;
-  if (!passesUnderdogRlWinGate(c)) return UNDERDOG_RL_WIN_REJECT_REASON;
+  if (!passesUnderdogRlWinGate(c)) {
+    return pickedTeamWinProb(c) == null ? UNDERDOG_RL_WIN_MISSING_REASON : UNDERDOG_RL_WIN_REJECT_REASON;
+  }
+  if (!passesBottomClubBan(c)) return MLB_BOTTOM_CLUB_REJECT_REASON;
   return null;
 }
 function allowOnPublishedCard(c) {
-  return allowOnOmegaCard(c) && passesUnderdogMlCoverGate(c) && passesUnderdogRlCoverGate(c) && passesUnderdogRlWinGate(c);
+  return allowOnOmegaCard(c) && passesUnderdogMlCoverGate(c) && passesUnderdogRlCoverGate(c) && passesUnderdogRlWinGate(c) && passesBottomClubBan(c);
+}
+function shouldLeanPadToThree(currentCount) {
+  return LEAN_PAD_TO_THREE && (currentCount || 0) < 3;
 }
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
@@ -816,11 +852,11 @@ function matchupKey(matchupOrAway, home) {
     .trim();
 }
 
-// Parity with NFL/CFB standalones: when predCLV is present, require ≥ -0.02. Skip if missing.
+// Football MAIN: when predCLV is present, require ≥ 0 (tightened from −0.02 in sharp-90). Skip if missing.
 function passesPredClvGate(c) {
   if (!c || !isFootballSport(c.sport)) return true;
   if (typeof c.predCLV !== "number") return true;
-  return c.predCLV >= -0.02;
+  return c.predCLV >= 0;
 }
 
 // Fade soft FCS hammer seats on MAIN: NCAAF spreads |line|≥17.5 need EV≥6%.
@@ -3890,11 +3926,15 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
         }
       }
 
+      const mlbHomeSP = league.league === "MLB" ? (pitcherForGame(pitcherData, game.home, game.date)?.pitcher || "") : "";
+      const mlbAwaySP = league.league === "MLB" ? (pitcherForGame(pitcherData, game.away, game.date)?.pitcher || "") : "";
       const baseCandidate = {
         matchup: `${game.away} @ ${game.home}`,
         sport: league.league,
         homeTeam: game.home,
         awayTeam: game.away,
+        homeSP: mlbHomeSP,
+        awaySP: mlbAwaySP,
         venue: game.venue || "",
         commenceTime: gameData.commenceTime || "",
         homeFlag,
@@ -4787,6 +4827,10 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       clvExpectation: sel.clvExpectation || "",
       modelEdge: modelEdgeStr,
       commenceTime: c.commenceTime || "",
+      homeSP: c.homeSP || "",
+      awaySP: c.awaySP || "",
+      homeTeam: c.homeTeam,
+      awayTeam: c.awayTeam,
       source: c.source || "full-game", // 'F5' flows from computeF5Candidates → distinguishes F5 legs on the card
     });
     console.log(`[v10-beta] SELECTED rank ${c.rank}: ${c.side} (EV: ${(c.ev * 100).toFixed(1)}%, units: ${finalUnits}u, rating: ${kellyRating}${c.source === "F5" ? " [F5]" : ""})`);
@@ -5190,6 +5234,7 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
     const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
     if (!g || usedGames.has(g)) continue;
     const sc = sportCount[c.sport] || 0;
+    if (isFootballSport(c.sport) && ((sportCount.NFL || 0) + (sportCount.NCAAF || 0)) >= FOOTBALL_MAIN_MAX_SLOTS) continue;
     if (sc >= 2) {
       const otherHas = unique.some(x => x.sport !== c.sport && remainingYes(x.sport));
       if (otherHas) continue;
@@ -5206,6 +5251,7 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
       const mono = selected[0].sport;
       const alt = unique.find(c => c.sport !== mono
         && !usedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)))
+        && !(isFootballSport(c.sport) && ((sportCount.NFL || 0) + (sportCount.NCAAF || 0)) >= FOOTBALL_MAIN_MAX_SLOTS && !isFootballSport(weakest.sport))
         && (weakest.ev - c.ev) <= 0.015);
       if (alt) {
         console.log(`[v11-div] Swapped ${weakest.side} for multi-sport ${alt.side} (EV ${(weakest.ev * 100).toFixed(1)}→${(alt.ev * 100).toFixed(1)})`);
@@ -6152,69 +6198,10 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP (tightened for sharp-90) ──
-    // Do NOT lean-fill football below sport EV floor. MLB leans require ≥2.0% EV (was 1.5%).
-    // Skip lean fill entirely when ≥1 football YES already sits on the card.
+    // ── LEAN TIER TOP-UP — DISABLED (sharp-90) ──
+    // If conviction YES < 3, publish that many (pass). Do NOT pad to 3 with below-floor leans.
     if (picks.length < 3) {
-      const needed = 3 - picks.length;
-      const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
-      const rejectedSides = new Set(
-        (claudeOutput.rejections || []).map(r => {
-          const c = candidateTable.find(x => x.rank === r.candidateRank);
-          return c ? (c.side || '').toLowerCase().trim() : '';
-        }).filter(Boolean)
-      );
-      for (const s of genuineRejectedSides) rejectedSides.add(s);
-      const hasFootballYes = picks.some(p => isFootballSport(p.sport));
-      if (hasFootballYes) {
-        console.log(`[v11-lean-topup] Skip lean fill — ≥1 football YES already on card (${picks.filter(p => isFootballSport(p.sport)).map(p => p.pick).join(', ')})`);
-      } else try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData, footballCtx);
-        leanAll.sort((a, b) => b.ev - a.ev);
-        const leanFloorFor = (c) => {
-          if (isFootballSport(c.sport)) return sportEvFloor(c.sport, 0.03); // never below sport floor
-          if (c.sport === "MLB") return Math.max(LEAN_EV_FLOOR, MLB_LEAN_EV_FLOOR);
-          return LEAN_EV_FLOOR;
-        };
-        const topUps = leanAll.filter(c =>
-          allowOnPublishedCard(c) &&
-          hasPositiveEdge(c) &&
-          c.ev >= leanFloorFor(c) &&
-          (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
-          passesPredClvGate(c) &&
-          passesCfbBlowoutGate(c) &&
-          !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
-          !pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))) &&
-          !picks.find(p => p.pick === c.side)
-        ).slice(0, needed);
-        if (topUps.length > 0) {
-          console.log(`[v10-lean-topup] Adding ${topUps.length} lean pick(s) — Claude left us with only ${picks.length}`);
-          for (const c of topUps) {
-            const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
-            const u = LEAN_UNITS;
-            picks.push({
-              pick: c.side, sport: c.sport, matchup: c.matchup || formatMatchup(c.awayTeam, c.homeTeam),
-              betType: c.market, odds: oddsStr, units: `${u}u`,
-              rating: 'Lean', confidence: 'lean', thinSlate: true,
-              // v10.4: leans carry coverProb/evRaw like conviction picks — their absence made
-              // the fallback parlay compute NaN combined prob and broke dedup EV comparisons.
-              coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
-              evRaw: typeof c.ev === 'number' ? c.ev : null,
-              winProbability: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
-              edgePct: `${(c.ev * 100).toFixed(1)}%`,
-              modelEdge: `Model edge: ${c.edge.toFixed(1)} pts. EV: +${(c.ev * 100).toFixed(1)}%.`,
-              coreReasoning: 'Lean play — statistical edge below conviction threshold. Claude verified no disqualifying news.',
-              dataVerified: 'lean-tier',
-              clvExpectation: 'Minimal line movement expected.',
-              zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
-              commenceTime: c.commenceTime || '',
-            });
-            pickedGames.add(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)));
-          }
-        }
-      } catch (leanErr) {
-        console.error(`[v10-lean-topup] Failed: ${leanErr.message}`);
-      }
+      console.log(`[sharp-90] No lean pad-to-3 — publishing ${picks.length} conviction pick(s)`);
     }
 
     // ── FINAL SAME-GAME DE-CORRELATION ──
@@ -6954,6 +6941,13 @@ module.exports.passesUnderdogRlCoverGate = passesUnderdogRlCoverGate;
 module.exports.passesUnderdogRlWinGate = passesUnderdogRlWinGate;
 module.exports.publishedCardRejectionReason = publishedCardRejectionReason;
 module.exports.allowOnPublishedCard = allowOnPublishedCard;
+module.exports.UNDERDOG_RL_WIN_MISSING_REASON = UNDERDOG_RL_WIN_MISSING_REASON;
+module.exports.MLB_BOTTOM_CLUB_REJECT_REASON = MLB_BOTTOM_CLUB_REJECT_REASON;
+module.exports.passesBottomClubBan = passesBottomClubBan;
+module.exports.isMlbBottomClubName = isMlbBottomClubName;
+module.exports.LEAN_PAD_TO_THREE = LEAN_PAD_TO_THREE;
+module.exports.shouldLeanPadToThree = shouldLeanPadToThree;
+module.exports.FOOTBALL_MAIN_MAX_SLOTS = FOOTBALL_MAIN_MAX_SLOTS;
 module.exports.selectDiversifiedStraights = selectDiversifiedStraights;
 module.exports.buildBindingDiversifiedPicks = buildBindingDiversifiedPicks;
 module.exports.formatMatchup = formatMatchup;

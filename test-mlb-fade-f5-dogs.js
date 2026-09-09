@@ -20,10 +20,22 @@ const athleticsDog = {
 const athleticsDog499 = { ...athleticsDog, coverProb: 0.499 };
 const athleticsFlip = { ...athleticsDog, coverProb: 0.50 };
 const favoriteMl = { ...athleticsDog, odds: -130, coverProb: 0.58 };
+const royalsDog = {
+  sport: 'MLB', market: 'Moneyline', side: 'Royals ML',
+  odds: 145, coverProb: 0.50, ev: 0.08, source: 'full-game',
+  homeTeam: 'Royals', awayTeam: 'Yankees',
+};
 const runLineLow = { sport: 'MLB', market: 'Spread', side: 'Athletics +1.5', odds: -110, coverProb: 0.48 };
 const runLineNamed = { sport: 'MLB', market: 'Run Line', side: 'Athletics +1.5', odds: -105, coverProb: 0.48 };
 const runLine499 = { ...runLineNamed, coverProb: 0.499 };
 const runLineFlip = { ...runLineNamed, coverProb: 0.50 };
+const royalsRlFlip = {
+  sport: 'MLB', market: 'Run Line', side: 'Royals +1.5', odds: -105, coverProb: 0.50,
+  homeTeam: 'Royals', awayTeam: 'Yankees',
+};
+const royalsRlWithWin = {
+  ...royalsRlFlip, homeWinProb: 52,
+};
 const runLineToday = {
   sport: 'MLB', market: 'Run Line', side: 'Athletics +1.5', odds: -105,
   coverProb: 0.5415, ev: 0.0572, source: 'full-game',
@@ -45,8 +57,8 @@ const pubRlShape = { sport: 'MLB', betType: 'Run Line', pick: 'Athletics +1.5', 
 for (const [label, mod] of [['omega', omega], ['alpha', alpha]]) {
   console.log('\n' + label);
   check('model version bumped', () => {
-    if (label === 'omega') assert.strictEqual(mod.MODEL_VERSION, 'v11.4-omega-fade-ud-rl');
-    else assert.strictEqual(mod.MODEL_VERSION, 'v10.5-alpha-fade-ud-rl');
+    if (label === 'omega') assert.strictEqual(mod.MODEL_VERSION, 'v11.5-omega-sharp-90');
+    else assert.strictEqual(mod.MODEL_VERSION, 'v10.6-alpha-sharp-90');
   });
   check('F5 constants', () => {
     assert.strictEqual(mod.ALLOW_F5_ON_CARD, false);
@@ -68,10 +80,16 @@ for (const [label, mod] of [['omega', omega], ['alpha', alpha]]) {
   check('coverProb 0.499 treated as < 0.50', () => {
     assert.strictEqual(mod.passesUnderdogMlCoverGate(athleticsDog499), false);
   });
-  check('coverProb 0.50 underdog ML allowed', () => {
+  check('coverProb 0.50 underdog ML allowed when not a bottom club', () => {
+    assert.strictEqual(mod.passesUnderdogMlCoverGate(royalsDog), true);
+    assert.strictEqual(mod.allowOnPublishedCard(royalsDog), true);
+    assert.strictEqual(mod.publishedCardRejectionReason(royalsDog), null);
+  });
+  check('Athletics plus-money ML banned even at 0.50 cover (bottom club)', () => {
     assert.strictEqual(mod.passesUnderdogMlCoverGate(athleticsFlip), true);
-    assert.strictEqual(mod.allowOnPublishedCard(athleticsFlip), true);
-    assert.strictEqual(mod.publishedCardRejectionReason(athleticsFlip), null);
+    assert.strictEqual(mod.passesBottomClubBan(athleticsFlip), false);
+    assert.strictEqual(mod.allowOnPublishedCard(athleticsFlip), false);
+    assert.strictEqual(mod.publishedCardRejectionReason(athleticsFlip), 'bottom-quartile MLB club plus-money ML/RL banned');
   });
   check('underdog RL coverProb < 0.50 rejected (Spread + Run Line labels)', () => {
     assert.strictEqual(mod.isFullGameUnderdogRL(runLineLow), true);
@@ -84,11 +102,11 @@ for (const [label, mod] of [['omega', omega], ['alpha', alpha]]) {
   check('underdog RL coverProb 0.499 treated as < 0.50', () => {
     assert.strictEqual(mod.passesUnderdogRlCoverGate(runLine499), false);
   });
-  check('underdog RL coverProb 0.50 allowed when winProb absent', () => {
-    assert.strictEqual(mod.passesUnderdogRlCoverGate(runLineFlip), true);
-    assert.strictEqual(mod.passesUnderdogRlWinGate(runLineFlip), true);
-    assert.strictEqual(mod.allowOnPublishedCard(runLineFlip), true);
-    assert.strictEqual(mod.publishedCardRejectionReason(runLineFlip), null);
+  check('underdog RL coverProb 0.50 fail-closed when winProb absent', () => {
+    assert.strictEqual(mod.passesUnderdogRlCoverGate(royalsRlFlip), true);
+    assert.strictEqual(mod.passesUnderdogRlWinGate(royalsRlFlip), false);
+    assert.strictEqual(mod.allowOnPublishedCard(royalsRlFlip), false);
+    assert.strictEqual(mod.publishedCardRejectionReason(royalsRlFlip), 'underdog RL winProb missing');
   });
   check('today Athletics +1.5 (54% cover, 46% winProb) rejected', () => {
     assert.strictEqual(mod.isFullGameUnderdogRL(runLineToday), true);
@@ -97,10 +115,16 @@ for (const [label, mod] of [['omega', omega], ['alpha', alpha]]) {
     assert.strictEqual(mod.allowOnPublishedCard(runLineToday), false);
     assert.strictEqual(mod.publishedCardRejectionReason(runLineToday), 'underdog RL winProb < 0.50');
   });
-  check('underdog RL with model winProb >= 0.50 allowed', () => {
+  check('underdog RL with model winProb >= 0.50 allowed when not a bottom club', () => {
+    assert.strictEqual(mod.passesUnderdogRlWinGate(royalsRlWithWin), true);
+    assert.strictEqual(mod.allowOnPublishedCard(royalsRlWithWin), true);
+    assert.strictEqual(mod.publishedCardRejectionReason(royalsRlWithWin), null);
+  });
+  check('Athletics +1.5 banned as bottom-club UD RL even with winProb >= 0.50', () => {
     assert.strictEqual(mod.passesUnderdogRlWinGate(runLineMarketFav), true);
-    assert.strictEqual(mod.allowOnPublishedCard(runLineMarketFav), true);
-    assert.strictEqual(mod.publishedCardRejectionReason(runLineMarketFav), null);
+    assert.strictEqual(mod.passesBottomClubBan(runLineMarketFav), false);
+    assert.strictEqual(mod.allowOnPublishedCard(runLineMarketFav), false);
+    assert.strictEqual(mod.publishedCardRejectionReason(runLineMarketFav), 'bottom-quartile MLB club plus-money ML/RL banned');
   });
   check('favorites / totals / non-MLB not gated', () => {
     assert.strictEqual(mod.isFullGameUnderdogML(favoriteMl), false);
@@ -164,10 +188,25 @@ check('both files share RL rejection reason string', () => {
   assert.ok(omegaSrc.includes('underdog RL winProb < 0.50'));
   assert.ok(alphaSrc.includes('underdog RL winProb < 0.50'));
 });
-check('Claude verify-only path still present on Omega', () => {
-  assert.ok(omegaSrc.includes('JS-locked'));
-  assert.ok(omegaSrc.includes('max_uses: 5') || omegaSrc.includes('max_uses 5'));
-  assert.ok(omegaSrc.includes('claudeVerified'));
+check('Claude verify-only path on Omega and Alpha', () => {
+  for (const src of [omegaSrc, alphaSrc]) {
+    assert.ok(src.includes('JS-locked') || src.includes('js-lock'));
+    assert.ok(src.includes('max_uses: 5') || src.includes('max_uses 5'));
+    assert.ok(src.includes('claudeVerified'));
+    assert.ok(!src.includes('max_uses: 20'));
+  }
+});
+check('Alpha does not rewrite sides on Claude fail (emergency store-throw only)', () => {
+  assert.ok(alphaSrc.includes('Emergency JS-lock store failed'));
+  assert.ok(alphaSrc.includes('keeping JS-locked sides') || alphaSrc.includes('keep JS-locked'));
+});
+check('lean pad-to-3 disabled on both', () => {
+  assert.strictEqual(omega.LEAN_PAD_TO_THREE, false);
+  assert.strictEqual(alpha.LEAN_PAD_TO_THREE, false);
+  assert.strictEqual(omega.shouldLeanPadToThree(1), false);
+  assert.strictEqual(alpha.shouldLeanPadToThree(2), false);
+  assert.ok(omegaSrc.includes('No lean pad-to-3'));
+  assert.ok(alphaSrc.includes('No lean pad-to-3'));
 });
 
 if (failed) {

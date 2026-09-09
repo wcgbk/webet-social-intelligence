@@ -13,7 +13,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v3';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v4';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -475,6 +475,17 @@ exports.handler = async (event) => {
       },
       cachedAt: Date.now(),
     };
+
+    try {
+      const { summarizeClvFromStore } = require('./lib/clv-summary');
+      result.clv = await summarizeClvFromStore({
+        storeUrl: alphaStoreUrl,
+        authHeaders,
+        dates: alphaDates,
+      });
+    } catch (e) {
+      result.clv = { available: false, n: 0, meanCents: null, beatClosePct: null, byFamily: {}, note: 'clv summary unavailable' };
+    }
 
     try {
       await fetch(`${alphaStoreUrl}/${RESULTS_CACHE_KEY}`, {

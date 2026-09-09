@@ -2,12 +2,13 @@
 
 > Any agent (cloud routine, fresh session, overnight run) starts HERE. Read this + the
 > Iteration Backlog in the charter, do the work, then UPDATE both. Never redo items
-> listed under DONE. Last updated: 2026-08-22 ET. ⚠️ FOUNDER REVERT: alpha is the EXACT
-> 6/29 state again (v10.3, commit 133c57a — v10.4+ fixes deliberately NOT live on alpha;
-> do not re-apply without Ben). NEW: /omega split-test environment (full alpha duplicate,
-> edge-picks-omega store, own 9am/10:30/Sun crons, KPIs from 2026-08-22; CLV capture
-> deferred to Odds-API quota renewal ~28th). QA now includes the Hard Rock Bet
-> placeability check in verify-picks + verify-picks-omega.
+> listed under DONE. Last updated: 2026-09-09 ET.
+>
+> **Live models (sharp-90 P0/P1):** Alpha `v10.6-alpha-sharp-90` (MLB control, no NFL/CFB,
+> JS-lock Claude, CLV/self-opt observer-only, MARKET_UNIT_CAPS, todayET + KPI_START).
+> Omega `v11.5-omega-sharp-90` (no lean pad-to-3, football MAIN 1 slot + predCLV ≥ 0,
+> same UD RL fail-closed + Athletics/Rockies plus-money ban). F5 stays **off** MAIN
+> (`ALLOW_F5_ON_CARD=false`). Do not revive `/edge`. See `SHARP-90-REMAINING.md`.
 > Historical (superseded on alpha, still true as history): 2026-08-03 v10.4-alpha-mlb settlement truth
 > (track-clv DH/PPD/F5 + overnight sweep), EV ranking, per-market caps, feedback loops demoted
 > to observer, parlay optimizer un-vetoed. See first DONE bullet.

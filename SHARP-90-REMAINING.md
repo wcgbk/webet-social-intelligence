@@ -19,12 +19,12 @@ Process percentiles are reasoned bands vs a ~90th-percentile sharp desk (CLV-fir
 
 **P0**
 1. Alpha CLV + self-opt **observer only** (no `coverProb` / `kellyUnits` mutation). Still fetched for Discord/logs.
-2. Omega **no lean pad-to-3**. If conviction YES < 3, publish that many (pass). Alpha JS-lock path matches.
+2. ~~Omega no lean pad-to-3~~ **REVERTED (v11.6 / v10.7)**: fill-to-3 lean top-up restored for 3 straights + 1 optimized parlay. F5/UD/A's gates stay.
 
 **P1**
 3. Alpha `MARKET_UNIT_CAPS` (ML 0.5 / Total 1.5 / RL 1.0 / F5 0.5) + `applyMarketUnitCaps` after Kelly.
 4. Alpha `get-picks-alpha` serves **today ET**, not stale `latest-date`.
-5. Alpha `get-results-alpha`: `KPI_START=2026-09-05` (override `?from=`), grade published 2- or 3-leg parlays, published units, honest `{n}-leg parlay` labels.
+5. Alpha `get-results-alpha`: **default FULL lifetime history** again (architecture dashboard); optional `?from=` for sharp A/B. Omega MAIN keeps intentional 2026-09-05 KPI floor. Honest `{n}-leg parlay` labels.
 6. Alpha Claude is **verify/narrate only** (JS `selectDiversifiedStraights` locks ≤3). Claude fail keeps JS sides; `fallbackToTopCandidates` only if the emergency JS-lock store throws.
 7. Fail-closed MLB UD RL if `winProb` missing. Bottom-club plus-money ML/RL ban: **Athletics, Rockies** (hard list).
 8. Alpha park rename aliases (Daikin / Rate Field / Oriole Park at Camden Yards / Steinbrenner) + `MLB_CITY_OVERRIDES` Athletics→Sacramento + DH FIP `Team\|eventISO` merge + `pitcherForGame`.

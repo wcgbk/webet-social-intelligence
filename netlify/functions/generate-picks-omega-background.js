@@ -1,7 +1,7 @@
 // generate-picks-omega-background.js
-// v11.5-omega-sharp-90 — F5 off MAIN + full-game MLB underdog ML/RL coverProb ≥ 0.50
+// v11.6-omega-3plus-parlay — restore fill-to-3 + optimized parlay; keep sharp-90 F5/UD/A's gates
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
-// No lean pad-to-3. Football MAIN: predCLV ≥ 0 when present, max 1 slot.
+// Fill-to-3 lean top-up restored. Football MAIN: predCLV ≥ 0 when present, max 1 slot.
 // JS locks ≤3 then Claude verifies/narrates only those (web_search max_uses 5, one ~180s
 // attempt). Multi-sport MAIN (MLB+NFL+CFB). Soccer stays disabled.
 // ROLE: JS computes ALL projections/EV/Kelly AND locks diversified straights first.
@@ -26,7 +26,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.5-omega-sharp-90";
+const MODEL_VERSION = "v11.6-omega-3plus-parlay";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -220,7 +220,7 @@ const UNDERDOG_RL_WIN_REJECT_REASON = "underdog RL winProb < 0.50";
 const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
 // Bottom-quartile MLB clubs: never emit plus-money ML or underdog RL, even if EV is juicy.
 const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
-const LEAN_PAD_TO_THREE = false;
+const LEAN_PAD_TO_THREE = true;
 const FOOTBALL_MAIN_MAX_SLOTS = 1;
 function candidateAmericanOdds(c) {
   if (!c) return null;
@@ -6198,10 +6198,68 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP — DISABLED (sharp-90) ──
-    // If conviction YES < 3, publish that many (pass). Do NOT pad to 3 with below-floor leans.
-    if (picks.length < 3) {
-      console.log(`[sharp-90] No lean pad-to-3 — publishing ${picks.length} conviction pick(s)`);
+    // ── LEAN TIER TOP-UP (restored v11.6 — product: 3 straights + 1 parlay) ──
+    // Fill remaining slots from lean-tier diversified candidates when conviction YES < 3.
+    // Do NOT lean-fill football below sport EV floor. Prefer MLB lean fill to reach 3 even if
+    // a football YES is already on the card (FOOTBALL_MAIN_MAX_SLOTS=1 still applies upstream).
+    if (shouldLeanPadToThree(picks.length)) {
+      const needed = 3 - picks.length;
+      const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
+      const rejectedSides = new Set(
+        (claudeOutput.rejections || []).map(r => {
+          const c = candidateTable.find(x => x.rank === r.candidateRank);
+          return c ? (c.side || '').toLowerCase().trim() : '';
+        }).filter(Boolean)
+      );
+      for (const s of genuineRejectedSides) rejectedSides.add(s);
+      try {
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, LEAN_EV_FLOOR, weatherData, footballCtx);
+        leanAll.sort((a, b) => b.ev - a.ev);
+        const leanFloorFor = (c) => {
+          if (isFootballSport(c.sport)) return sportEvFloor(c.sport, 0.03); // never below sport floor
+          if (c.sport === "MLB") return Math.max(LEAN_EV_FLOOR, MLB_LEAN_EV_FLOOR);
+          return LEAN_EV_FLOOR;
+        };
+        const topUps = leanAll.filter(c =>
+          allowOnPublishedCard(c) &&
+          hasPositiveEdge(c) &&
+          !isFootballSport(c.sport) && // never lean-pad football; MLB/other fill to 3
+          c.ev >= leanFloorFor(c) &&
+          (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
+          passesPredClvGate(c) &&
+          passesCfbBlowoutGate(c) &&
+          !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
+          !pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))) &&
+          !picks.find(p => p.pick === c.side)
+        ).slice(0, needed);
+        if (topUps.length > 0) {
+          console.log(`[v11.6-lean-topup] Adding ${topUps.length} lean pick(s) — card had only ${picks.length} conviction YES`);
+          for (const c of topUps) {
+            const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
+            const u = LEAN_UNITS;
+            picks.push({
+              pick: c.side, sport: c.sport, matchup: c.matchup || formatMatchup(c.awayTeam, c.homeTeam),
+              betType: c.market, odds: oddsStr, units: `${u}u`,
+              rating: 'Lean', confidence: 'lean', thinSlate: true,
+              coverProb: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
+              evRaw: typeof c.ev === 'number' ? c.ev : null,
+              winProbability: `${(typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50).toFixed(0)}%`,
+              edgePct: `${(c.ev * 100).toFixed(1)}%`,
+              modelEdge: `Model edge: ${c.edge.toFixed(1)} pts. EV: +${(c.ev * 100).toFixed(1)}%.`,
+              coreReasoning: 'Lean play — statistical edge below conviction threshold. Claude verified no disqualifying news.',
+              dataVerified: 'lean-tier',
+              clvExpectation: 'Minimal line movement expected.',
+              zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
+              commenceTime: c.commenceTime || '',
+            });
+            pickedGames.add(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)));
+          }
+        } else {
+          console.log(`[v11.6-lean-topup] No lean candidates available to fill ${needed} slot(s)`);
+        }
+      } catch (leanErr) {
+        console.error(`[v11.6-lean-topup] Failed: ${leanErr.message}`);
+      }
     }
 
     // ── FINAL SAME-GAME DE-CORRELATION ──

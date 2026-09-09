@@ -4,9 +4,9 @@
 > Iteration Backlog in the charter, do the work, then UPDATE both. Never redo items
 > listed under DONE. Last updated: 2026-09-09 ET.
 >
-> **Live models (sharp-90 P0/P1):** Alpha `v10.6-alpha-sharp-90` (MLB control, no NFL/CFB,
-> JS-lock Claude, CLV/self-opt observer-only, MARKET_UNIT_CAPS, todayET + KPI_START).
-> Omega `v11.5-omega-sharp-90` (no lean pad-to-3, football MAIN 1 slot + predCLV ≥ 0,
+> **Live models (sharp-90 P0/P1):** Alpha `v10.7-alpha-3plus-parlay` (MLB control, no NFL/CFB,
+> JS-lock Claude, CLV/self-opt observer-only, MARKET_UNIT_CAPS, todayET; Alpha results default FULL history, optional ?from=).
+> Omega `v11.6-omega-3plus-parlay` (fill-to-3 + optimized parlay restored, football MAIN 1 slot + predCLV ≥ 0,
 > same UD RL fail-closed + Athletics/Rockies plus-money ban). F5 stays **off** MAIN
 > (`ALLOW_F5_ON_CARD=false`). Do not revive `/edge`. See `SHARP-90-REMAINING.md`.
 > Historical (superseded on alpha, still true as history): 2026-08-03 v10.4-alpha-mlb settlement truth

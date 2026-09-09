@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sharp-90 P0/P1 gates: no-mutation, no lean-pad, fail-closed UD RL,
+// Sharp-90 P0/P1 gates: no-mutation, fill-to-3 lean pad restored, fail-closed UD RL,
 // bottom-club ban, MARKET_UNIT_CAPS on Alpha, predCLV ≥ 0 football.
 const assert = require('assert');
 const path = require('path');
@@ -18,8 +18,8 @@ function check(name, fn) {
 console.log('\nsharp-90 gates');
 
 check('versions', () => {
-  assert.strictEqual(alpha.MODEL_VERSION, 'v10.6-alpha-sharp-90');
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.5-omega-sharp-90');
+  assert.strictEqual(alpha.MODEL_VERSION, 'v10.7-alpha-3plus-parlay');
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.6-omega-3plus-parlay');
 });
 
 check('F5 stays off MAIN', () => {
@@ -55,12 +55,27 @@ check('Alpha generator source no longer writes coverProb from selfOpt', () => {
   assert.ok(src.includes('REMOVED (v10.6'));
 });
 
-check('no lean pad-to-3', () => {
-  assert.strictEqual(omega.shouldLeanPadToThree(0), false);
-  assert.strictEqual(omega.shouldLeanPadToThree(1), false);
-  assert.strictEqual(omega.shouldLeanPadToThree(2), false);
-  assert.strictEqual(alpha.shouldLeanPadToThree(2), false);
-  assert.strictEqual(omega.LEAN_PAD_TO_THREE, false);
+check('fill-to-3 lean pad restored', () => {
+  assert.strictEqual(omega.LEAN_PAD_TO_THREE, true);
+  assert.strictEqual(alpha.LEAN_PAD_TO_THREE, true);
+  assert.strictEqual(omega.shouldLeanPadToThree(0), true);
+  assert.strictEqual(omega.shouldLeanPadToThree(1), true);
+  assert.strictEqual(omega.shouldLeanPadToThree(2), true);
+  assert.strictEqual(omega.shouldLeanPadToThree(3), false);
+  assert.strictEqual(alpha.shouldLeanPadToThree(0), true);
+  assert.strictEqual(alpha.shouldLeanPadToThree(2), true);
+  assert.strictEqual(alpha.shouldLeanPadToThree(3), false);
+});
+
+check('lean top-up path present (fill when conviction < 3)', () => {
+  const oSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-omega-background.js'), 'utf8');
+  const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
+  assert.ok(oSrc.includes('v11.6-lean-topup') || oSrc.includes('LEAN TIER TOP-UP (restored'));
+  assert.ok(aSrc.includes('v10.7-lean-topup') || aSrc.includes('LEAN TIER TOP-UP (restored'));
+  assert.ok(!oSrc.includes('No lean pad-to-3 — publishing'));
+  assert.ok(!aSrc.includes('not padding weak legs'));
+  // Alpha parlay builder must remain first-class
+  assert.ok(aSrc.includes('buildCorrelatedParlay(picks, allCandidates, rejections)'));
 });
 
 check('fail-closed UD RL missing winProb', () => {
@@ -190,9 +205,15 @@ check('Alpha get-picks uses todayET not latest-date as today', () => {
   assert.ok(!/store\.get\("latest-date"\)/.test(src));
 });
 
-check('Alpha results KPI_START + honest 2-leg parlays', () => {
+check('Alpha results full-history default + optional ?from= + honest parlays', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/get-results-alpha.js'), 'utf8');
-  assert.ok(src.includes("KPI_START_DEFAULT = '2026-09-05'"));
+  // Default must be FULL history (architecture dashboard); only filter when ?from= set.
+  assert.ok(!src.includes("KPI_START_DEFAULT = '2026-09-05'"));
+  assert.ok(src.includes('results-alpha-cache-v7-full'));
+  assert.ok(src.includes('results-alpha-cache-v7-from-'));
+  assert.ok(src.includes('params.from'));
+  assert.ok(src.includes('KPI_START ? alphaDatesRaw.filter'));
+  assert.ok(src.includes(': null;'));
   assert.ok(src.includes('pickResults.length < 2'));
   assert.ok(src.includes('publishedParlayUnits'));
   assert.ok(src.includes('-leg parlay'));

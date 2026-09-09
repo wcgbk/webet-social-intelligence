@@ -1,7 +1,8 @@
 // generate-picks-alpha-background.js
-// v10.4-alpha-fade-f5-ud — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// v10.5-alpha-fade-ud-rl — Deterministic Edge Architecture (ALPHA, primary pipeline)
 // F5 off MAIN card (ALLOW_F5_ON_CARD=false) + plus-money F5 ML skip + full-game MLB
-// underdog ML coverProb ≥ 0.50. F5 still computed for analytics.
+// underdog ML and underdog run-line coverProb ≥ 0.50 (RL also requires model
+// winProb ≥ 0.50 when present). F5 still computed for analytics.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
@@ -18,7 +19,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v10.4-alpha-fade-f5-ud";
+const MODEL_VERSION = "v10.5-alpha-fade-ud-rl";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
@@ -174,10 +175,18 @@ function allowOnAlphaCard(c) {
   return ALLOW_F5_ON_CARD || !isF5Candidate(c);
 }
 // Full-game MLB moneyline underdogs with calibrated coverProb < 0.50 (Athletics/Rockies-style
-// longshots that rank high on EV at ~40–42% cover). Favorites, run lines, and totals are
-// unaffected. F5 is gated separately via ALLOW_F5_ON_CARD / F5_SKIP_ML_UNDERDOG.
+// longshots that rank high on EV at ~40–42% cover). Totals and favorite ML/RL are unaffected.
+// F5 is gated separately via ALLOW_F5_ON_CARD / F5_SKIP_ML_UNDERDOG.
 const UNDERDOG_ML_MIN_COVER_PROB = 0.50;
 const UNDERDOG_ML_COVER_REJECT_REASON = "underdog ML coverProb < 0.50";
+// Full-game MLB underdog run lines (picked side receiving +runs, typically +1.5).
+// Killing UD ML hops to the same dog's +1.5, which routinely calibrates ~54% cover even
+// when the model has them losing (2026-09-09 Athletics +1.5: RL cover 54–55% after ML 41%
+// was gated). Same 0.50 / ≤0.499 floors: RL coverProb, and model winProb when present.
+const UNDERDOG_RL_MIN_COVER_PROB = 0.50;
+const UNDERDOG_RL_COVER_REJECT_REASON = "underdog RL coverProb < 0.50";
+const UNDERDOG_RL_MIN_WIN_PROB = 0.50;
+const UNDERDOG_RL_WIN_REJECT_REASON = "underdog RL winProb < 0.50";
 function candidateAmericanOdds(c) {
   if (!c) return null;
   if (typeof c.odds === "number" && Number.isFinite(c.odds)) return c.odds;
@@ -214,15 +223,76 @@ function passesUnderdogMlCoverGate(c) {
   if (cp <= 0.499) return false;
   return cp >= UNDERDOG_ML_MIN_COVER_PROB;
 }
+function pickedSpreadNumber(c) {
+  if (!c) return null;
+  const text = String(c.side || c.pick || "");
+  const m = text.match(/([+-]\d+(?:\.\d+)?)\s*$/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+function isMlbRunLineMarket(c) {
+  const market = String(c.market || c.betType || "");
+  return /run\s*line/i.test(market) || /^spread$/i.test(market);
+}
+function isFullGameUnderdogRL(c) {
+  if (!c) return false;
+  if (isF5Candidate(c)) return false;
+  if (String(c.sport || "") !== "MLB") return false;
+  if (!isMlbRunLineMarket(c)) return false;
+  const line = pickedSpreadNumber(c);
+  return line != null && line > 0;
+}
+function numericWinProb(v) {
+  if (v == null) return null;
+  if (typeof v === "number" && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  if (typeof v === "string") {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) return null;
+    return n > 1 ? n / 100 : n;
+  }
+  return null;
+}
+function pickedTeamIsHome(c) {
+  const text = String(c.side || c.pick || "").toLowerCase().trim();
+  const home = String(c.homeTeam || "").toLowerCase().trim();
+  const away = String(c.awayTeam || "").toLowerCase().trim();
+  if (home && text.startsWith(home)) return true;
+  if (away && text.startsWith(away)) return false;
+  return null;
+}
+function pickedTeamWinProb(c) {
+  if (!c) return null;
+  const hw = numericWinProb(c.homeWinProb);
+  if (hw == null) return null;
+  const isHome = pickedTeamIsHome(c);
+  if (isHome == null) return null;
+  return isHome ? hw : (1 - hw);
+}
+function passesUnderdogRlCoverGate(c) {
+  if (!isFullGameUnderdogRL(c)) return true;
+  const cp = numericCoverProb(c);
+  if (cp <= 0.499) return false;
+  return cp >= UNDERDOG_RL_MIN_COVER_PROB;
+}
+function passesUnderdogRlWinGate(c) {
+  if (!isFullGameUnderdogRL(c)) return true;
+  const wp = pickedTeamWinProb(c);
+  if (wp == null) return true;
+  if (wp <= 0.499) return false;
+  return wp >= UNDERDOG_RL_MIN_WIN_PROB;
+}
 function publishedCardRejectionReason(c) {
   if (!allowOnAlphaCard(c)) {
     return "F5 disabled on Alpha MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only.";
   }
   if (!passesUnderdogMlCoverGate(c)) return UNDERDOG_ML_COVER_REJECT_REASON;
+  if (!passesUnderdogRlCoverGate(c)) return UNDERDOG_RL_COVER_REJECT_REASON;
+  if (!passesUnderdogRlWinGate(c)) return UNDERDOG_RL_WIN_REJECT_REASON;
   return null;
 }
 function allowOnPublishedCard(c) {
-  return allowOnAlphaCard(c) && passesUnderdogMlCoverGate(c);
+  return allowOnAlphaCard(c) && passesUnderdogMlCoverGate(c) && passesUnderdogRlCoverGate(c) && passesUnderdogRlWinGate(c);
 }
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
@@ -4029,7 +4099,7 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       continue;
     }
 
-    // 2b. Full-game MLB underdog ML (and F5-off-card) published-card gates
+    // 2b. Full-game MLB underdog ML/RL (and F5-off-card) published-card gates
     {
       const gateReason = publishedCardRejectionReason({
         sport: p.sport, market: p.betType, betType: p.betType, odds: p.odds,
@@ -4861,7 +4931,7 @@ exports.handler = async (event) => {
   }
 
   // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──
-  // Analytics table may include F5 / sub-50% MLB underdog ML (computed for CLV).
+  // Analytics table may include F5 / sub-50% MLB underdog ML or RL (computed for CLV).
   // Claude only sees published-card-eligible candidates so it cannot select gated sides.
   const analyticsTable = allCandidates.slice(0, 15);
   const candidateTable = allCandidates.filter(allowOnPublishedCard).slice(0, 15);
@@ -4931,7 +5001,7 @@ exports.handler = async (event) => {
         reason: r.reason || "No reason given",
       });
     }
-    // Add remaining non-selected candidates as rejections (gate F5 / underdog ML first)
+    // Add remaining non-selected candidates as rejections (gate F5 / underdog ML/RL first)
     for (const c of analyticsTable) {
       const gateReason = publishedCardRejectionReason(c);
       if (gateReason) {
@@ -5400,5 +5470,12 @@ module.exports.UNDERDOG_ML_MIN_COVER_PROB = UNDERDOG_ML_MIN_COVER_PROB;
 module.exports.UNDERDOG_ML_COVER_REJECT_REASON = UNDERDOG_ML_COVER_REJECT_REASON;
 module.exports.isFullGameUnderdogML = isFullGameUnderdogML;
 module.exports.passesUnderdogMlCoverGate = passesUnderdogMlCoverGate;
+module.exports.UNDERDOG_RL_MIN_COVER_PROB = UNDERDOG_RL_MIN_COVER_PROB;
+module.exports.UNDERDOG_RL_COVER_REJECT_REASON = UNDERDOG_RL_COVER_REJECT_REASON;
+module.exports.UNDERDOG_RL_MIN_WIN_PROB = UNDERDOG_RL_MIN_WIN_PROB;
+module.exports.UNDERDOG_RL_WIN_REJECT_REASON = UNDERDOG_RL_WIN_REJECT_REASON;
+module.exports.isFullGameUnderdogRL = isFullGameUnderdogRL;
+module.exports.passesUnderdogRlCoverGate = passesUnderdogRlCoverGate;
+module.exports.passesUnderdogRlWinGate = passesUnderdogRlWinGate;
 module.exports.publishedCardRejectionReason = publishedCardRejectionReason;
 module.exports.allowOnPublishedCard = allowOnPublishedCard;

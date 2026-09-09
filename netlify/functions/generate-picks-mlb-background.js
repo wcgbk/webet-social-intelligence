@@ -1189,7 +1189,7 @@ async function aggregateIntoAlpha(f5Picks, dateISO) {
       ...alpha,
       picks: card,
       parlayLegs,
-      model: String(alpha.model || 'v10.4-alpha-fade-f5-ud').replace('+F5', '') + '+F5',
+      model: String(alpha.model || 'v10.5-alpha-fade-ud-rl').replace('+F5', '') + '+F5',
       expandedAt: new Date().toISOString(),
       sources: { fullGame: card.filter(p => p.source !== 'F5').length, f5: card.filter(p => p.source === 'F5').length },
     };

@@ -42,7 +42,7 @@ This is not optional. A feature is not done until it is tested and confirmed wor
 
 ## Daily Picks Pipeline (alpha is PRIMARY as of 2026-06)
 - `trigger-picks-alpha.js` — cron `0 13 * * *` (9am ET) → `generate-picks-alpha-background.js`
-  (model v10.3-alpha-sharp) → `edge-picks-alpha` blobs → `/api/get-picks-alpha` → /alpha + /dashboard
+  (model v10.4-alpha-fade-f5-ud) → `edge-picks-alpha` blobs → `/api/get-picks-alpha` → /alpha + /dashboard
 - `trigger-picks-mvp.js` — cron `0 12 * * *` (8am ET) — A/B test pipeline (v11.1-mvp) → `edge-picks-mvp`
 - PAUSED: `trigger-picks` (old prod /edge) and `trigger-picks-beta` — /edge + /edge/beta pages are
   frozen at Jun 5; do not revive or "fix" them without Ben asking

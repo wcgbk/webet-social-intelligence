@@ -210,13 +210,23 @@ function calcParlayWinnings(risk, legsOdds) {
   return risk * (decimalProduct - 1);
 }
 
-function gradeParlay(pickResults) {
-  if (pickResults.length < 3) return { result: 'skip', profit: 0 };
+function publishedParlayUnits(picksData, picks) {
+  const apiParlay = (picksData && picksData.parlayLegs && picksData.parlayLegs[0]) || null;
+  if (apiParlay && apiParlay.units) {
+    const u = parseFloat(apiParlay.units);
+    if (isFinite(u) && u > 0) return u;
+  }
+  if ((picks || []).some(p => p.thinSlate)) return 0.25;
+  return 0.5;
+}
+
+function gradeParlay(pickResults, parlayRisk) {
+  // Grade published 2-leg or 3-leg tickets. Historical 3-leg tickets are unaffected.
+  if (pickResults.length < 2) return { result: 'skip', profit: 0 };
   const results = pickResults.map(p => p.result);
   const anyLoss = results.includes('loss');
   const anyPending = results.includes('pending');
   const allWin = results.every(r => r === 'win');
-  const parlayRisk = 75;
   if (anyLoss) return { result: 'loss', profit: -parlayRisk };
   if (anyPending) return { result: 'pending', profit: 0 };
   if (allWin) return { result: 'win', profit: calcParlayWinnings(parlayRisk, pickResults.map(p => p.odds)) };
@@ -295,15 +305,27 @@ async function gradeDay(dateISO, picksData) {
   } else {
     parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
   }
-  const parlayResult = gradeParlay(parlayInput);
-  const parlayRisk = 75;
+  const parlayUnits = publishedParlayUnits(picksData, picks);
+  const parlayRisk = parlayUnits * dollarPerUnit;
+  const parlayResult = gradeParlay(parlayInput, parlayRisk);
   if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip') {
     dayWagered += parlayRisk;
     dayProfit += parlayResult.profit;
   }
   if (parlayResult.result !== 'skip') {
     const parlayLegsSource = optimizedLegs || picks;
-    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: optimizedLegs ? '3-Team Parlay (Optimized)' : '3-Team Parlay', odds: '', units: '0.5u', rating: 'P', result: parlayResult.result, profit: Math.round(parlayResult.profit), score: null });
+    const nLegs = parlayInput.length;
+    gradedPicks.push({
+      sport: 'PARLAY',
+      matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '),
+      pick: `${nLegs}-leg parlay${optimizedLegs ? ' (optimized)' : ''}`,
+      odds: '',
+      units: `${parlayUnits}u`,
+      rating: 'P',
+      result: parlayResult.result,
+      profit: Math.round(parlayResult.profit),
+      score: null,
+    });
   }
 
   const decided = dayWins + dayLosses;
@@ -337,9 +359,14 @@ exports.handler = async (event) => {
     const alphaStoreUrl = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-alpha`;
     const betaStoreUrl  = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-beta`;
 
-    // Check cache (5-min TTL, v2 key to bust stale cache)
+    const params = event.queryStringParameters || {};
+    const KPI_START_DEFAULT = '2026-09-05';
+    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) ? params.from : KPI_START_DEFAULT;
+    const cacheKey = `results-alpha-cache-v6-${KPI_START}`;
+
+    // Check cache (5-min TTL). Skip shared cache when ?from= is an explicit slice.
     try {
-      const cacheResp = await fetch(`${alphaStoreUrl}/results-alpha-cache-v5`, { headers: authHeaders });
+      const cacheResp = await fetch(`${alphaStoreUrl}/${cacheKey}`, { headers: authHeaders });
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
         if (Date.now() - (cached.cachedAt || 0) < 300000) {
@@ -349,18 +376,20 @@ exports.handler = async (event) => {
     } catch (e) {}
 
     // Get dates from both stores in parallel
-    const [alphaDates, betaDates] = await Promise.all([
+    const [alphaDatesRaw, betaDates] = await Promise.all([
       getDatesFromStore(alphaStoreUrl, authHeaders),
       getDatesFromStore(betaStoreUrl, authHeaders),
     ]);
+    const alphaDates = alphaDatesRaw.filter(d => d >= KPI_START);
 
     const alphaDateSet = new Set(alphaDates);
     const minAlphaDate = alphaDates.length > 0 ? [...alphaDates].sort()[0] : null;
 
     // Beta dates strictly before earliest alpha date
-    const betaDatesToInclude = minAlphaDate
+    const betaDatesToInclude = (minAlphaDate
       ? betaDates.filter(d => d < minAlphaDate)
-      : betaDates;
+      : betaDates
+    ).filter(d => d >= KPI_START);
     const betaDateSet = new Set(betaDatesToInclude);
 
     // Build lookup: date → {store, url}
@@ -423,7 +452,9 @@ exports.handler = async (event) => {
       }
 
       if (day.parlayResult && day.parlayResult !== 'skip' && day.parlayResult !== 'pending') {
-        parlayWagered += 75; parlayProfit += day.parlayProfit;
+        const parlayRow = (day.picks || []).find(p => p.sport === 'PARLAY');
+        const parlayRisk = parlayRow ? (parseFloat(parlayRow.units) || 0.5) * 150 : 75;
+        parlayWagered += parlayRisk; parlayProfit += day.parlayProfit;
         if (day.parlayResult === 'win') parlayWins++;
         else if (day.parlayResult === 'loss') parlayLosses++;
       }
@@ -454,10 +485,22 @@ exports.handler = async (event) => {
         totalWagered: Math.round(parlayWagered), totalProfit: Math.round(parlayProfit),
       },
       cachedAt: Date.now(),
+      kpiStart: KPI_START,
     };
 
     try {
-      await fetch(`${alphaStoreUrl}/results-alpha-cache-v5`, {
+      const { summarizeClvFromStore } = require('./lib/clv-summary');
+      result.clv = await summarizeClvFromStore({
+        storeUrl: alphaStoreUrl,
+        authHeaders,
+        dates: alphaDates,
+      });
+    } catch (e) {
+      result.clv = { available: false, n: 0, meanCents: null, beatClosePct: null, byFamily: {}, note: 'clv summary unavailable' };
+    }
+
+    try {
+      await fetch(`${alphaStoreUrl}/${cacheKey}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(result),

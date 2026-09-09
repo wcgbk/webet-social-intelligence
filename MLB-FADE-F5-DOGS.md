@@ -1,13 +1,13 @@
 # MLB fade: F5 dogs + underdog ML/RL coverProb gate
 
-Ship on `mlb-fade-underdog-runline` (follows `mlb-fade-f5-dogs-underdog-ml-gate` / PR #19). Stops F5, sub-50% underdog ML, **and** underdog run-line hops from the published MAIN card without changing Claude verify-only (Omega), CFB/NFL standalones, school-name display, or KPI/live score UX.
+Ship on `mlb-fade-underdog-runline` (follows `mlb-fade-f5-dogs-underdog-ml-gate` / PR #19). Stops F5, sub-50% underdog ML, **and** underdog run-line hops from the published MAIN card. Sharp-90 (`v10.6-alpha-sharp-90` / `v11.5-omega-sharp-90`) adds fail-closed missing winProb + Athletics/Rockies plus-money ML/RL ban. F5 stays off MAIN. See `SHARP-90-REMAINING.md`.
 
 ## Versions
 
 | Pipeline | Previous | This ship |
 |----------|----------|-----------|
-| Omega MAIN | `v11.3-omega-fade-ud-ml` | `v11.4-omega-fade-ud-rl` |
-| Alpha MAIN | `v10.4-alpha-fade-f5-ud` | `v10.5-alpha-fade-ud-rl` |
+| Omega MAIN | `v11.4-omega-fade-ud-rl` | `v11.5-omega-sharp-90` |
+| Alpha MAIN | `v10.5-alpha-fade-ud-rl` | `v10.6-alpha-sharp-90` |
 
 ## Constants
 
@@ -19,7 +19,8 @@ Both generators (`generate-picks-omega-background.js`, `generate-picks-alpha-bac
 | `ALLOW_F5_ON_CARD` | `false` | All F5 markets stay off the published MAIN card (straights, leans, parlays). F5 is still computed/attached for analytics when Odds API F5 lines are cheap. |
 | `UNDERDOG_ML_MIN_COVER_PROB` | `0.50` | Full-game **MLB moneyline underdogs** (American price `> 0`) need calibrated `coverProb ≥ 0.50`. `≤ 0.499` is treated the same as `< 0.50`. |
 | `UNDERDOG_RL_MIN_COVER_PROB` | `0.50` | Full-game **MLB underdog run lines** (picked side receiving +runs, typically `+1.5`; market `Run Line` or `Spread`) need calibrated `coverProb ≥ 0.50`. Same `≤ 0.499` rounding. |
-| `UNDERDOG_RL_MIN_WIN_PROB` | `0.50` | When candidate `homeWinProb` is present, the picked side's model win probability must also be `≥ 0.50`. Skipped when the field is missing (coverProb gate still applies). |
+| `UNDERDOG_RL_MIN_WIN_PROB` | `0.50` | Picked side's model win probability must be `≥ 0.50`. **Fail closed** if `homeWinProb` is missing (`underdog RL winProb missing`). |
+| Bottom-club ban | Athletics, Rockies | Plus-money ML **and** underdog RL (`+runs`) on these clubs never publish, even if cover/EV clear. |
 
 ## Helpers
 
@@ -29,13 +30,16 @@ Both generators (`generate-picks-omega-background.js`, `generate-picks-alpha-bac
 - `passesUnderdogMlCoverGate(c)` — true unless it is a full-game MLB underdog ML with `coverProb < 0.50` (incl. `≤ 0.499`).
 - `isFullGameUnderdogRL(c)` — MLB, full-game Run Line/Spread (not F5), picked side has a **positive** run line (`Athletics +1.5`).
 - `passesUnderdogRlCoverGate(c)` — true unless UD RL with `coverProb < 0.50`.
-- `passesUnderdogRlWinGate(c)` — true unless UD RL with model `winProb < 0.50` (Elo-derived `homeWinProb` on the candidate). Passes when winProb is absent.
-- `allowOnPublishedCard(c)` — F5-off-card **and** underdog-ML cover gate **and** underdog-RL cover/win gates.
+- `passesUnderdogRlWinGate(c)` — true unless UD RL with model `winProb < 0.50` **or winProb missing** (fail closed).
+- `passesBottomClubBan(c)` — false for Athletics/Rockies plus-money ML or underdog RL.
+- `allowOnPublishedCard(c)` — F5-off-card **and** underdog-ML cover **and** underdog-RL cover/win **and** bottom-club ban.
 - `publishedCardRejectionReason(c)` — writes the candidate into `rejections` with:
   - F5: `F5 disabled on {Omega\|Alpha} MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only.`
   - UD ML: `underdog ML coverProb < 0.50`
   - UD RL cover: `underdog RL coverProb < 0.50`
   - UD RL win: `underdog RL winProb < 0.50`
+  - UD RL missing: `underdog RL winProb missing`
+  - Bottom club: `bottom-quartile MLB club plus-money ML/RL banned`
 
 ## What is not gated
 

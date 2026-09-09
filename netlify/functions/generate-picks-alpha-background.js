@@ -1,5 +1,5 @@
 // generate-picks-alpha-background.js
-// v10.6-alpha-sharp-90 — Deterministic Edge Architecture (ALPHA, MLB control)
+// v10.7-alpha-3plus-parlay — restore fill-to-3 + best optimized parlay; keep sharp-90 gates
 // F5 off MAIN card (ALLOW_F5_ON_CARD=false) + plus-money F5 ML skip + full-game MLB
 // underdog ML/RL coverProb ≥ 0.50 (RL fail-closed if winProb missing) + bottom-club
 // plus-money ML/RL ban (Athletics/Rockies). F5 still computed for analytics.
@@ -20,7 +20,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v10.6-alpha-sharp-90";
+const MODEL_VERSION = "v10.7-alpha-3plus-parlay";
 
 // ── Claude as VERIFIER + NARRATOR (JS already locked ≤3). Matches Omega v11.2 role. ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -211,7 +211,7 @@ const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
 // Hard list is the hop-stop (F5 → ML → +1.5). Athletics/Rockies printed the bleed; White Sox
 // stay off this list until Elo/standings quartile is wired (hard list is OK per sharp-90).
 const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
-const LEAN_PAD_TO_THREE = false;
+const LEAN_PAD_TO_THREE = true;
 function candidateAmericanOdds(c) {
   if (!c) return null;
   if (typeof c.odds === "number" && Number.isFinite(c.odds)) return c.odds;
@@ -5234,15 +5234,64 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP — DISABLED (sharp-90) ──
-    // If conviction YES < 3, publish that many (pass). Do NOT pad to 3.
-    if (picks.length < 3) {
-      console.log(`[sharp-90] No lean pad-to-3 — publishing ${picks.length} conviction pick(s)`);
-      rejections.push({
-        matchup: "Card fill",
-        side: "noFill",
-        reason: `Only ${picks.length} candidate(s) cleared conviction floors after verification — not padding weak legs.`,
-      });
+    // ── LEAN TIER TOP-UP (restored v10.7 — product: 3 straights + 1 optimized parlay) ──
+    // If conviction YES < 3, fill from lean EV tier. Do NOT weaken buildCorrelatedParlay —
+    // parlay is built AFTER this fill from the fuller card (Alpha parlay ROI is first-class).
+    if (shouldLeanPadToThree(picks.length)) {
+      const needed = 3 - picks.length;
+      const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
+      const rejectedSides = new Set(
+        (claudeOutput.rejections || []).map(r => {
+          const c = candidateTable.find(x => x.rank === r.candidateRank);
+          return c ? (c.side || '').toLowerCase().trim() : '';
+        }).filter(Boolean)
+      );
+      for (const s of genuineRejectedSides) rejectedSides.add(s);
+      try {
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
+        leanAll.sort((a, b) => b.ev - a.ev);
+        const topUps = leanAll.filter(c =>
+          allowOnPublishedCard(c) &&
+          (c.ev || 0) >= 0.015 &&
+          !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
+          !pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))) &&
+          !picks.find(p => p.pick === c.side)
+        ).slice(0, needed);
+        if (topUps.length > 0) {
+          console.log(`[v10.7-lean-topup] Adding ${topUps.length} lean pick(s) — card had only ${picks.length} conviction YES`);
+          for (const c of topUps) {
+            const oddsStr = c.odds > 0 ? `+${c.odds}` : `${c.odds}`;
+            const u = LEAN_UNITS;
+            const cpPct = (typeof c.coverProb === 'number' ? c.coverProb * 100 : parseFloat(c.coverProb) * 100 || 50);
+            picks.push({
+              pick: c.side, sport: c.sport, matchup: c.matchup || formatMatchup(c.awayTeam, c.homeTeam),
+              betType: c.market, odds: oddsStr, units: `${u}u`,
+              rating: 'Lean', confidence: 'lean', thinSlate: true,
+              // coverProb/evRaw required so buildCorrelatedParlay stays honest/aggressive
+              coverProb: `${cpPct.toFixed(0)}%`,
+              evRaw: typeof c.ev === 'number' ? c.ev : null,
+              winProbability: `${cpPct.toFixed(0)}%`,
+              edgePct: `${(c.ev * 100).toFixed(1)}%`,
+              modelEdge: `Model edge: ${c.edge.toFixed(1)} pts. EV: +${(c.ev * 100).toFixed(1)}%.`,
+              coreReasoning: 'Lean play — statistical edge below conviction threshold. Claude verified no disqualifying news.',
+              dataVerified: 'lean-tier',
+              clvExpectation: 'Minimal line movement expected.',
+              zScore: c.zScore || 0, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
+              commenceTime: c.commenceTime || '',
+            });
+            pickedGames.add(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)));
+          }
+        } else {
+          console.log(`[v10.7-lean-topup] No lean candidates available to fill ${needed} slot(s)`);
+          rejections.push({
+            matchup: "Card fill",
+            side: "noFill",
+            reason: `Only ${picks.length} candidate(s) cleared conviction floors after verification — lean tier also empty.`,
+          });
+        }
+      } catch (leanErr) {
+        console.error(`[v10.7-lean-topup] Failed: ${leanErr.message}`);
+      }
     }
 
     // ── FINAL SAME-GAME DE-CORRELATION ──

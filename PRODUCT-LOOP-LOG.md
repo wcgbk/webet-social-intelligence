@@ -1,3 +1,9 @@
+## 2026-09-09 — restore-3-pick-parlay (v10.7-alpha / v11.6-omega)
+- Restored lean-fill / fill-to-3 on Omega MAIN + Alpha (LEAN_PAD_TO_THREE=true + lean tier top-up).
+- Kept Alpha `buildCorrelatedParlay` aggressive/first-class (3 straights + optimized parlay).
+- Reverted Alpha get-results default to FULL history (cache v7); optional `?from=` only. Omega KPI_START 2026-09-05 left intentional.
+- Kept PR #21 F5-off, UD ML/RL gates, Athletics/Rockies ban, Alpha observer-only CLV/self-opt, JS-lock Claude.
+
 # WeBetAI Product Loop — Progress Log
 Charter: ~/.gstack/projects/wcgbk-webet-social-intelligence/bk-main-design-20260612-180500.md (APPROVED 2026-06-12)
 [sharp-90 2026-09-09] P0/P1 stack on `sharp-90-p0-p1-stack` (not merged): Alpha v10.6-alpha-sharp-90 (CLV/self-opt observer-only, JS-lock Claude, MARKET_UNIT_CAPS, todayET, KPI_START, honest 2-leg parlays, park aliases/DH FIP) + Omega v11.5-omega-sharp-90 (no lean pad-to-3, football MAIN 1 slot + predCLV≥0). Shared fail-closed UD RL + Athletics/Rockies plus-money ban. confirm-starters-mlb unpaused for Alpha+Omega. get-clv-summary + results.clv. Tests: test-mlb-fade-f5-dogs.js + test-sharp-90-gates.js. Remaining: SHARP-90-REMAINING.md (~75–82 process, not 90th). F5 off MAIN. /edge untouched.

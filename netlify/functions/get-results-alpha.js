@@ -360,9 +360,12 @@ exports.handler = async (event) => {
     const betaStoreUrl  = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-beta`;
 
     const params = event.queryStringParameters || {};
-    const KPI_START_DEFAULT = '2026-09-05';
-    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) ? params.from : KPI_START_DEFAULT;
-    const cacheKey = `results-alpha-cache-v6-${KPI_START}`;
+    // Default = FULL lifetime history (architecture dashboard + Alpha parlay ROI track).
+    // Optional ?from=YYYY-MM-DD slices for sharp A/B; bare /get-results-alpha must not truncate.
+    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) ? params.from : null;
+    const cacheKey = KPI_START
+      ? `results-alpha-cache-v7-from-${KPI_START}`
+      : `results-alpha-cache-v7-full`;
 
     // Check cache (5-min TTL). Skip shared cache when ?from= is an explicit slice.
     try {
@@ -380,7 +383,7 @@ exports.handler = async (event) => {
       getDatesFromStore(alphaStoreUrl, authHeaders),
       getDatesFromStore(betaStoreUrl, authHeaders),
     ]);
-    const alphaDates = alphaDatesRaw.filter(d => d >= KPI_START);
+    const alphaDates = KPI_START ? alphaDatesRaw.filter(d => d >= KPI_START) : alphaDatesRaw.slice();
 
     const alphaDateSet = new Set(alphaDates);
     const minAlphaDate = alphaDates.length > 0 ? [...alphaDates].sort()[0] : null;
@@ -389,7 +392,7 @@ exports.handler = async (event) => {
     const betaDatesToInclude = (minAlphaDate
       ? betaDates.filter(d => d < minAlphaDate)
       : betaDates
-    ).filter(d => d >= KPI_START);
+    ).filter(d => !KPI_START || d >= KPI_START);
     const betaDateSet = new Set(betaDatesToInclude);
 
     // Build lookup: date → {store, url}

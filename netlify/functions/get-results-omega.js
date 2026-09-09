@@ -377,7 +377,11 @@ exports.handler = async (event) => {
 
     // OMEGA: KPIs reset to start 2026-09-05 (Ben/Omega-directed). Omega store ONLY —
     // no alpha/beta back-merge. Daily + cumulative ignore any pre-floor blob dates.
-    const KPI_START = "2026-09-05";
+    // Optional ?from=YYYY-MM-DD can raise the floor further; default stays 2026-09-05 (intentional MAIN reset).
+    const params = event.queryStringParameters || {};
+    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) && params.from > "2026-09-05")
+      ? params.from
+      : "2026-09-05";
     const alphaDatesRaw = await getDatesFromStore(alphaStoreUrl, authHeaders);
     const alphaDates = alphaDatesRaw.filter(d => d >= KPI_START);
 

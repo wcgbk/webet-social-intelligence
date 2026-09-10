@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Registered users — WeBet Social Admin</title>
+  <script>
+    if (document.cookie.split(';').some(function(c){ return c.trim().indexOf('ga_exclude=') === 0; })) {
+      window['ga-disable-G-848D47V084'] = true;
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #0b0f14; color: #e8eef6; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    .sub { color: #9fb0c3; margin: 0 0 20px; }
+    .card { background: #121821; border: 1px solid #243041; border-radius: 16px; padding: 20px; }
+    label { display:block; font-size: .8rem; color: #9fb0c3; margin: 0 0 6px; }
+    input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2c3b50; background: #0b0f14; color: #e8eef6; margin-bottom: 12px; }
+    button { border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #fff; }
+    button.secondary { background: #243041; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+    .stat { background: #0b0f14; border: 1px solid #243041; border-radius: 12px; padding: 12px 14px; min-width: 120px; }
+    .stat b { display:block; font-size: 1.3rem; }
+    .stat span { color: #9fb0c3; font-size: .8rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #243041; vertical-align: top; }
+    th { color: #9fb0c3; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #243041; font-size: .75rem; }
+    .err { color: #f87171; }
+    .ok { color: #34d399; }
+    a { color: #93c5fd; }
+    #login { max-width: 420px; margin: 10vh auto; }
+    #app { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="login" class="card">
+      <h1>Registered users</h1>
+      <p class="sub">Admin sign-in required. Same credentials as <a href="/admin">/admin</a>.</p>
+      <label for="email">Email</label>
+      <input id="email" type="email" value="ben@worldclassgrowth.com" autocomplete="username" />
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <button type="button" id="loginBtn">Sign in</button>
+      <p class="err" id="loginErr"></p>
+    </div>
+
+    <div id="app">
+      <h1>Registered users</h1>
+      <p class="sub">Source: <code>wbai-users</code> blob store · <a href="/admin">Admin</a></p>
+      <div class="row" id="stats"></div>
+      <div class="row">
+        <input id="q" type="search" placeholder="Filter name, handle, id, provider…" style="flex:1;margin:0" />
+        <button type="button" class="secondary" id="refresh">Refresh</button>
+        <button type="button" class="secondary" id="logout">Log out</button>
+      </div>
+      <div class="card" style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Created</th>
+              <th>Name</th>
+              <th>Handle</th>
+              <th>Provider</th>
+              <th>Phone</th>
+              <th>Opt-in</th>
+              <th>Credits</th>
+              <th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <p id="empty" class="sub" style="display:none;margin-top:12px">No users found.</p>
+      </div>
+    </div>
+  </div>
+  <script>
+    var APP = { token: localStorage.getItem('admin_token') || '' };
+    var ALL = [];
+
+    function showApp(on) {
+      document.getElementById('login').style.display = on ? 'none' : 'block';
+      document.getElementById('app').style.display = on ? 'block' : 'none';
+    }
+
+    async function api(path, opts) {
+      opts = opts || {};
+      var headers = Object.assign({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + APP.token }, opts.headers || {});
+      var res = await fetch(path, Object.assign({}, opts, { headers: headers }));
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      return data;
+    }
+
+    async function doLogin() {
+      document.getElementById('loginErr').textContent = '';
+      try {
+        var data = await fetch('/api/admin-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+        if (!data.ok || !data.j.token) throw new Error((data.j && data.j.error) || 'login_failed');
+        APP.token = data.j.token;
+        localStorage.setItem('admin_token', APP.token);
+        showApp(true);
+        await loadUsers();
+      } catch (e) {
+        document.getElementById('loginErr').textContent = e.message || 'Login failed';
+      }
+    }
+
+    function fmt(d) {
+      if (!d) return '—';
+      try { return new Date(d).toLocaleString(); } catch (e) { return d; }
+    }
+
+    function render() {
+      var q = (document.getElementById('q').value || '').toLowerCase().trim();
+      var rows = ALL.filter(function (u) {
+        if (!q) return true;
+        return [u.name, u.handle, u.id, u.provider, u.phone, u.email].join(' ').toLowerCase().indexOf(q) !== -1;
+      });
+      var tb = document.getElementById('tbody');
+      tb.innerHTML = rows.map(function (u) {
+        return '<tr>' +
+          '<td>' + fmt(u.created_at) + '</td>' +
+          '<td>' + esc(u.name || '—') + '</td>' +
+          '<td>' + esc(u.handle || '—') + '</td>' +
+          '<td><span class="tag">' + esc(u.provider || '?') + '</span></td>' +
+          '<td>' + esc(u.phone || '—') + '</td>' +
+          '<td>' + (u.opted_in ? '<span class="ok">yes</span>' : '—') + '</td>' +
+          '<td>' + (u.credit_balance != null ? u.credit_balance : '—') + '</td>' +
+          '<td>' + fmt(u.last_seen) + '</td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('empty').style.display = rows.length ? 'none' : 'block';
+      var x = ALL.filter(function (u) { return u.provider === 'x'; }).length;
+      var sms = ALL.filter(function (u) { return u.provider === 'sms'; }).length;
+      var opt = ALL.filter(function (u) { return u.opted_in; }).length;
+      document.getElementById('stats').innerHTML =
+        '<div class="stat"><b>' + ALL.length + '</b><span>Total registered</span></div>' +
+        '<div class="stat"><b>' + x + '</b><span>X</span></div>' +
+        '<div class="stat"><b>' + sms + '</b><span>SMS</span></div>' +
+        '<div class="stat"><b>' + opt + '</b><span>Opted in</span></div>';
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+      });
+    }
+
+    async function loadUsers() {
+      var data = await api('/api/admin-list-users');
+      ALL = data.users || [];
+      render();
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', doLogin);
+    document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+    document.getElementById('q').addEventListener('input', render);
+    document.getElementById('refresh').addEventListener('click', function () { loadUsers().catch(function (e) { alert(e.message); }); });
+    document.getElementById('logout').addEventListener('click', function () {
+      localStorage.removeItem('admin_token'); APP.token = ''; showApp(false);
+    });
+
+    if (APP.token) {
+      showApp(true);
+      loadUsers().catch(function () { showApp(false); });
+    }
+  </script>
+  <script src="/js/site-share.js" defer></script>
+</body>
+</html>

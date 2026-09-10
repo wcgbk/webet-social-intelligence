@@ -120,6 +120,7 @@ exports.handler = async (event) => {
   const now = new Date().toISOString();
   const sessionId = randomBytes(32).toString('hex');
 
+  let isNewUser = false;
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore({
@@ -130,6 +131,7 @@ exports.handler = async (event) => {
 
     // Preserve existing credit balance if user already exists
     const existingUser = await store.get(`user_${xUser.id}`, { type: 'json' }).catch(() => null);
+    isNewUser = !existingUser;
     const hadGrant = !!(existingUser && existingUser.welcome_grant);
     const priorBal = existingUser?.credit_balance;
     const creditBalance = hadGrant
@@ -176,7 +178,7 @@ exports.handler = async (event) => {
   return {
     statusCode: 302,
     multiValueHeaders: {
-      'Location': ['/dashboard?auth=success'],
+      'Location': [`/dashboard?auth=success&new=${isNewUser ? '1' : '0'}`],
       'Set-Cookie': [sessionCookie, clearPkce],
       'Cache-Control': ['no-store'],
     },

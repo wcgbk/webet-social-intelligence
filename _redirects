@@ -39,3 +39,8 @@
 # UTM short links — /go/{source}/{campaign}/{content}[/path]
 /go/*  /.netlify/functions/go-redirect  200
 /go     /.netlify/functions/go-redirect  200
+
+# Registered users admin + API
+/users    /users/index.html    200
+/users/   /users/index.html    200
+/api/admin-list-users  /.netlify/functions/admin-list-users  200

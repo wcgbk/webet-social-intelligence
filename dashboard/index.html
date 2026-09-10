@@ -3937,7 +3937,7 @@
     }).then(function (r) {
       if (r.ok) {
         try { localStorage.setItem('wb_prefs_saved', '1'); } catch (e) {}
-        FE('onboard_prefs_saved');
+        FE('onboard_prefs_saved'); try { if (window.wbGa) wbGa.optIn('onboard_prefs'); } catch (e) {}
         if (typeof showToast === 'function') showToast('✓ Sports preference saved to your account', 'success');
       }
     }).catch(function () {});
@@ -3990,6 +3990,24 @@
 </script>
 
 <script src="/wbai-login.js?v=20260818b" defer></script>
+  <script src="/js/ga-conversions.js" defer></script>
   <script src="/js/site-share.js" defer></script>
+
+<script>
+(function(){
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get('auth') === 'success' && window.wbGa) {
+      if (q.get('new') === '1') wbGa.signUp('x'); else wbGa.login('x');
+      if (window.history && history.replaceState) {
+        q.delete('auth'); q.delete('new');
+        var next = location.pathname + (q.toString() ? '?' + q.toString() : '') + location.hash;
+        history.replaceState({}, '', next);
+      }
+    }
+  } catch (e) {}
+})();
+</script>
+
 </body>
 </html>

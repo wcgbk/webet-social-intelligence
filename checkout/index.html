@@ -170,5 +170,26 @@
     }
   </script>
   <script src="/js/site-share.js" defer></script>
+  <script src="/js/ga-conversions.js" defer></script>
+  <script>
+    (function () {
+      var _fetch = window.fetch;
+      if (!_fetch) return;
+      window.fetch = function () {
+        var args = arguments;
+        return _fetch.apply(this, args).then(function (res) {
+          try {
+            var u = String((args[0] && args[0].url) || args[0] || '');
+            if (u.indexOf('webit-mock-pay') !== -1 && res.ok && window.wbGa) {
+              res.clone().json().then(function (j) {
+                if (j && j.ok) wbGa.purchase({ pack: j.pack || 'webit', value: Number(j.amount || j.value || 0), transaction_id: j.id || j.transaction_id });
+              }).catch(function(){});
+            }
+          } catch (e) {}
+          return res;
+        });
+      };
+    })();
+  </script>
 </body>
 </html>

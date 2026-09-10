@@ -151,6 +151,12 @@
         .then(function (res) {
           if (res.j && res.j.ok) {
             okCode.textContent = '✓ Signed in — taking you to Betty…';
+            try {
+              if (window.wbGa) {
+                if (j.newUser) wbGa.signUp('sms');
+                else wbGa.login('sms');
+              }
+            } catch (e) {}
             okCode.style.display = 'block';
             var next = '/dashboard?auth=success';
             try {
@@ -174,6 +180,7 @@
     codeEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') verifyBtn.click(); });
     phoneEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') sendBtn.click(); });
   </script>
+  <script src="/js/ga-conversions.js" defer></script>
   <script src="/js/site-share.js" defer></script>
 </body>
 </html>

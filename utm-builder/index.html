@@ -35,18 +35,19 @@
     .primary { background: #3b82f6; color: #fff; flex: 1; }
     .secondary { background: #243041; color: #e8eef6; }
     .out {
-      margin-top: 16px; padding: 14px; border-radius: 12px; background: #0b0f14;
+      margin-top: 12px; padding: 14px; border-radius: 12px; background: #0b0f14;
       border: 1px solid #2c3b50; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.9rem; min-height: 3.2em;
+      font-size: 0.9rem; min-height: 2.8em;
     }
+    .labelish { font-size: 0.8rem; color: #9fb0c3; margin-top: 14px; }
     .hint { margin-top: 10px; font-size: 0.85rem; color: #8fa0b3; line-height: 1.4; }
     .ok { color: #34d399; font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>UTM link builder</h1>
-    <p class="sub">Tag every X / LinkedIn / etc. link so GA can show which post drove traffic. Convention: <code>source</code> + <code>social</code> + campaign + content (post id).</p>
+    <h1>UTM + short link builder</h1>
+    <p class="sub">Prefer the short <code>/go/…</code> link in posts — it redirects with UTMs stamped automatically. No registry to maintain.</p>
     <div class="card">
       <label for="base">Destination URL</label>
       <input id="base" type="url" placeholder="https://webetsocial.com/" value="https://webetsocial.com/" />
@@ -65,24 +66,27 @@
           <input id="sourceOther" type="text" placeholder="custom source" style="display:none;margin-top:8px;" />
         </div>
         <div>
-          <label for="medium">utm_medium</label>
+          <label for="medium">utm_medium (auto for /go)</label>
           <input id="medium" type="text" value="social" />
         </div>
       </div>
 
       <label for="campaign">utm_campaign (theme / week)</label>
-      <input id="campaign" type="text" placeholder="e.g. betty_sep10 or cfb_week1" />
+      <input id="campaign" type="text" placeholder="e.g. betty_sep10" />
 
       <label for="content">utm_content (which post)</label>
       <input id="content" type="text" placeholder="e.g. post_20260910_a" />
 
       <div class="actions">
-        <button class="primary" type="button" id="build">Build link</button>
-        <button class="secondary" type="button" id="copy">Copy</button>
+        <button class="primary" type="button" id="build">Build</button>
+        <button class="secondary" type="button" id="copyShort">Copy short</button>
+        <button class="secondary" type="button" id="copyFull">Copy full</button>
       </div>
-      <div class="out" id="out">Tagged link will show here</div>
+      <div class="labelish">Short link (use this in X posts)</div>
+      <div class="out" id="outShort">…</div>
+      <div class="labelish">Full tagged URL (redirect target)</div>
+      <div class="out" id="outFull">…</div>
       <p class="hint" id="status"></p>
-      <p class="hint">Paste this full URL into the X post. GA will report it under First user / Session campaign &amp; content.</p>
     </div>
   </div>
   <script>
@@ -93,15 +97,13 @@
       var medium = document.getElementById('medium');
       var campaign = document.getElementById('campaign');
       var content = document.getElementById('content');
-      var out = document.getElementById('out');
+      var outShort = document.getElementById('outShort');
+      var outFull = document.getElementById('outFull');
       var status = document.getElementById('status');
 
       function todaySlug() {
         var d = new Date();
-        var y = d.getFullYear();
-        var m = String(d.getMonth() + 1).padStart(2, '0');
-        var day = String(d.getDate()).padStart(2, '0');
-        return 'post_' + y + m + day + '_a';
+        return 'post_' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '_a';
       }
       if (!content.value) content.value = todaySlug();
       if (!campaign.value) {
@@ -119,10 +121,15 @@
         return source.value === 'other' ? (sourceOther.value || 'other').trim() : source.value;
       }
 
+      function slugOk(s) { return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(s); }
+
       function build() {
         status.textContent = '';
         try {
           var url = new URL((base.value || '').trim());
+          if (url.origin !== 'https://webetsocial.com' && url.origin !== 'http://webetsocial.com') {
+            status.textContent = 'Destination must be on webetsocial.com for /go/ short links.';
+          }
           var s = srcVal();
           var med = (medium.value || 'social').trim();
           var camp = (campaign.value || '').trim();
@@ -131,32 +138,44 @@
             status.textContent = 'Fill source, medium, campaign, and content.';
             return null;
           }
+          if (![s, camp, cont].every(slugOk)) {
+            status.textContent = 'source/campaign/content: use letters, numbers, _ or - only.';
+            return null;
+          }
           url.searchParams.set('utm_source', s);
           url.searchParams.set('utm_medium', med);
           url.searchParams.set('utm_campaign', camp);
           url.searchParams.set('utm_content', cont);
-          var built = url.toString();
-          out.textContent = built;
-          return built;
+          var full = url.toString();
+          var pathPart = url.pathname.replace(/\/$/, '') || '';
+          var shortPath = 'https://webetsocial.com/go/' + encodeURIComponent(s) + '/' + encodeURIComponent(camp) + '/' + encodeURIComponent(cont);
+          if (pathPart && pathPart !== '') {
+            shortPath += pathPart; // e.g. /omega
+          }
+          outFull.textContent = full;
+          outShort.textContent = shortPath;
+          return { full: full, short: shortPath };
         } catch (e) {
           status.textContent = 'Invalid destination URL.';
           return null;
         }
       }
 
-      document.getElementById('build').addEventListener('click', build);
-      document.getElementById('copy').addEventListener('click', function () {
-        var built = build();
-        if (!built) return;
+      function copyText(t, label) {
+        if (!t) return;
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(built).then(function () {
-            status.innerHTML = '<span class="ok">Copied.</span>';
-          }).catch(function () {
-            status.textContent = 'Copy failed — select the link and copy manually.';
-          });
-        } else {
-          status.textContent = 'Select the link and copy manually.';
-        }
+          navigator.clipboard.writeText(t).then(function () {
+            status.innerHTML = '<span class="ok">Copied ' + label + '.</span>';
+          }).catch(function () { status.textContent = 'Copy failed — select manually.'; });
+        } else status.textContent = 'Select and copy manually.';
+      }
+
+      document.getElementById('build').addEventListener('click', build);
+      document.getElementById('copyShort').addEventListener('click', function () {
+        var r = build(); if (r) copyText(r.short, 'short link');
+      });
+      document.getElementById('copyFull').addEventListener('click', function () {
+        var r = build(); if (r) copyText(r.full, 'full URL');
       });
       build();
     })();

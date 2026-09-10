@@ -35,3 +35,7 @@
 # Internal Kalshi auto-bet DEMO (paper only, noindexed, key-gated). Isolated from the live feed.
 /kalshi-demo   /kalshi-demo/index.html  200
 /kalshi-demo/  /kalshi-demo/index.html  200
+
+# UTM short links — /go/{source}/{campaign}/{content}[/path]
+/go/*  /.netlify/functions/go-redirect  200
+/go     /.netlify/functions/go-redirect  200

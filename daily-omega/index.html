@@ -1563,7 +1563,7 @@
         totalRisk += risk;
         totalWinnings += win;
       }
-      if (picks.length === 3) {
+      if ((apiParlay && apiParlay.legs && apiParlay.legs.length) || (optimizedParlayLegs && optimizedParlayLegs.length) || picks.length === 3) {
         totalUnits += parlayUnits;
         totalRisk += parlayRisk;
         totalWinnings += parlayWin;
@@ -1625,7 +1625,7 @@
       }
 
       // Parlay row — use actual parlay legs (optimized or straight), only show final W/L
-      if (picks.length === 3) {
+      if ((apiParlay && apiParlay.legs && apiParlay.legs.length) || (optimizedParlayLegs && optimizedParlayLegs.length) || picks.length === 3) {
         let summaryParlayLegResults;
         if (optimizedParlayLegs) {
           summaryParlayLegResults = optimizedParlayLegs.map(leg => {
@@ -1847,8 +1847,8 @@
       }
     }
 
-    // ── 3-Team Parlay Card ──
-    if (picks.length === 3) {
+    // ── Parlay Card (2 or 3 legs from API) ──
+    if ((apiParlay && apiParlay.legs && apiParlay.legs.length) || (optimizedParlayLegs && optimizedParlayLegs.length) || picks.length === 3) {
       // Determine parlay status using actual parlay legs (optimized or straight)
       let parlayLegResults;
       if (optimizedParlayLegs) {

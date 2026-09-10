@@ -1,10 +1,11 @@
 // generate-picks-nfl-background.js
-// ── WeBetAI NFL Model v1.1-nfl ──
+// ── WeBetAI NFL Model v1.1.1-nfl ──
 // SEPARATE ENVIRONMENT from alpha (edge-picks-nfl / /nfl) but shaped to merge later.
 // Regular-season process even while the calendar still says preseason — dress rehearsal:
 //   live ratings + QB out, key-number spreads, independent totals, Pinnacle predCLV,
 //   2+ major US books (Hard Rock preferred), 3% EV floor, NO forced leans, 3+1 of
 //   the published card. Off days write "No NFL Games Scheduled For Today".
+// v1.1.1: Away @ Home matchup + grounded narrator venue (homeTeam/awayTeam/venue on card).
 //
 // Cron always fires. Off days write the no-games blob so /nfl never shows a stale card.
 //
@@ -14,7 +15,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-nfl";
-const MODEL_VERSION = "v1.1-nfl";
+const MODEL_VERSION = "v1.1.1-nfl";
 const NO_GAMES_MSG = "No NFL Games Scheduled For Today";
 const NO_EDGE_MSG = "No qualifying NFL plays today — WeBetAI passed.";
 
@@ -651,7 +652,10 @@ function buildFinalPicks(selected, isLean, seasonPhase) {
       : `Bet ${c.side} ${fmtOdds(c.odds)} @ ${c.book || "retail"}. ${c.modelProjection}. Calibrated edge ${edgePctVal}%.`;
     return {
       sport: "NFL",
-      matchup: `${c.awayTeam} vs. ${c.homeTeam}`,
+      matchup: `${c.awayTeam} @ ${c.homeTeam}`,
+      homeTeam: c.homeTeam,
+      awayTeam: c.awayTeam,
+      venue: c.venue || "",
       pick: c.side,
       betType: c.market,
       odds: fmtOdds(c.odds),
@@ -758,6 +762,8 @@ const NFL_NARRATOR_SYSTEM = `You are THE LOCK — WeBetAI's NFL analyst. The sta
 RULES:
 - Say "WeBetAI" — never "the model" or "our model".
 - Use the EXACT pick string, odds, and calibrated Edge % from the table. Never invent a different line.
+- matchup is Away @ Home format. Use homeTeam / awayTeam / venue from the table for any location or home-field claim.
+- NEVER invent or invert venue/home-field. If the pick is the away team, do NOT claim home-field advantage.
 - Use ONLY facts in the data (teams, the number we are betting, prices, best-book, records, venue, edge math). No invented player/coach/news.
 - coreReasoning: 3-4 sentences arguing FOR the pick side. Start with a concrete supporting fact from the data. End with why the price offers value.
 - whatLoses: 1 sentence — the specific scenario that beats the pick.
@@ -789,7 +795,8 @@ async function narratePicks(picks, seasonPhase, dateFormatted) {
 
   try {
     const table = picks.map(p => ({
-      pick: p.pick, matchup: p.matchup, market: p.betType, odds: p.odds, bestBook: p.bestBook,
+      pick: p.pick, matchup: p.matchup, homeTeam: p.homeTeam, awayTeam: p.awayTeam, venue: p.venue,
+      market: p.betType, odds: p.odds, bestBook: p.bestBook,
       units: p.units, rating: p.rating, coverProb: p.coverProb, ev: p.ev, modelEdge: p.modelEdge,
       seasonPhase: p.seasonPhase,
     }));
@@ -954,7 +961,7 @@ exports.handler = async (event) => {
   const rejections = [];
   const byGameBest = new Map();
   for (const cand of allCands) {
-    const key = `${cand.awayTeam} vs. ${cand.homeTeam}`;
+    const key = `${cand.awayTeam} @ ${cand.homeTeam}`;
     if (!byGameBest.has(key) || cand.ev > byGameBest.get(key).ev) byGameBest.set(key, cand);
   }
   for (const [matchup, cand] of byGameBest) {

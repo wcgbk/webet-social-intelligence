@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Exclude me from Google Analytics — WeBet Social</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #0b0f14; color: #e8eef6; padding: 24px;
+    }
+    .card {
+      max-width: 420px; width: 100%; background: #121821; border: 1px solid #243041;
+      border-radius: 16px; padding: 28px 24px; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 8px; }
+    p { margin: 0 0 16px; line-height: 1.45; color: #b7c3d3; }
+    button {
+      width: 100%; border: 0; border-radius: 12px; padding: 14px 16px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      background: #3b82f6; color: white;
+    }
+    button:active { transform: scale(0.99); }
+    .ok { color: #34d399; font-weight: 600; }
+    .err { color: #f87171; font-weight: 600; }
+    code { font-size: 0.9em; color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Exclude this browser from GA</h1>
+    <p>For you and your business partner. Sets a 2-year cookie on <code>.webetsocial.com</code> so this browser stops sending Google Analytics hits.</p>
+    <button id="btn" type="button">Exclude me on this browser</button>
+    <p id="status" style="margin-top:16px;margin-bottom:0;"></p>
+  </div>
+  <script>
+    (function () {
+      var status = document.getElementById('status');
+      var btn = document.getElementById('btn');
+      function hasCookie() {
+        return document.cookie.split(';').some(function (c) {
+          return c.trim().indexOf('ga_exclude=') === 0;
+        });
+      }
+      function setCookie() {
+        document.cookie = 'ga_exclude=1;path=/;max-age=63072000;domain=.webetsocial.com;SameSite=Lax';
+      }
+      function refresh() {
+        if (hasCookie()) {
+          status.innerHTML = '<span class="ok">Done.</span> This browser is excluded. You can close this tab.';
+          btn.textContent = 'Already excluded';
+        }
+      }
+      btn.addEventListener('click', function () {
+        try {
+          setCookie();
+          if (hasCookie()) {
+            status.innerHTML = '<span class="ok">Done.</span> This browser is excluded from GA.';
+            alert('Excluded from GA on this browser');
+          } else {
+            status.innerHTML = '<span class="err">Cookie did not stick.</span> Try again, or check browser cookie settings.';
+          }
+          refresh();
+        } catch (e) {
+          status.innerHTML = '<span class="err">Failed:</span> ' + (e && e.message ? e.message : 'unknown error');
+        }
+      });
+      refresh();
+    })();
+  </script>
+</body>
+</html>

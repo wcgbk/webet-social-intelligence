@@ -13,16 +13,16 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WeBetAI - Social Intelligence | Circa Million Contest</title>
-  <meta name="description" content="WeBetAI's top 5 NFL and top 5 college football picks against the spread each day, built to win the Circa Million contest format: 1 point per cover, half point per push." />
+  <title>WeBetAI - Social Intelligence | Circa Million VIII</title>
+  <meta name="description" content="WeBetAI's 5 NFL against-the-spread picks for Circa Million VIII: 1 point per cover, half point per push, no juice. Weekly card after Thursday 10 AM PT lines, in before Saturday 4 PM PT." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/circa" />
-  <meta property="og:title" content="WeBetAI - Social Intelligence | Circa Million Contest" />
-  <meta property="og:description" content="Top 5 NFL and top 5 college football spread picks daily, optimized for the Circa Million contest format with full KPI tracking." />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Circa Million VIII" />
+  <meta property="og:description" content="NFL-only Circa Million VIII card: 5 spread picks per week, ranked by calibrated cover probability. $6M guaranteed, quarters every 4–5 weeks." />
   <meta property="og:image" content="https://webetsocial.com/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Circa Million Contest" />
-  <meta name="twitter:description" content="Top 5 NFL and top 5 college football spread picks daily, optimized for the Circa Million contest format with full KPI tracking." />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Circa Million VIII" />
+  <meta name="twitter:description" content="NFL-only Circa Million VIII card: 5 spread picks per week, ranked by calibrated cover probability. $6M guaranteed, quarters every 4–5 weeks." />
   <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -254,6 +254,18 @@
       font-size: .75rem; color: #7a5c00; line-height: 1.5; font-weight: 500;
     }
 
+    .pending-card {
+      background: var(--white); border: 1px dashed var(--teal-border);
+      border-radius: .875rem; padding: 1.5rem 1.125rem; text-align: center;
+      margin-bottom: .75rem;
+    }
+    .pending-card h2 {
+      font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .375rem;
+    }
+    .pending-card p {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.55;
+    }
+
     /* ─── Section divider ─── */
     .contest-section { margin-top: 2rem; }
     .contest-section:first-of-type { margin-top: 0; }
@@ -313,36 +325,39 @@
 
 <div class="main">
 
-  <!-- Preview notice: dummy data until the live contest pipeline runs -->
-  <div class="preview-banner">
-    <strong>Preview mode:</strong> the cards below are sample layouts built from real upcoming schedules and current market lines. Live contest picks begin when the daily Circa pipeline runs. KPI totals start at zero until results are graded.
+  <div class="preview-banner" id="preview-banner" hidden>
+    <strong>Preview:</strong> sample layout only. Live Circa Million VIII picks publish when the weekly pipeline writes the contest blob.
   </div>
 
   <!-- Contest explainer -->
   <div style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: 1.25rem; border-left: 3px solid var(--teal);">
     <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
-      <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Circa Million Contest</span>
+      <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Circa Million VIII</span>
     </div>
     <p style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;">
-      The <a href="https://www.circasports.com/circa-million" target="_blank" rel="noopener" style="color:var(--teal); font-weight:600;">Circa Million</a> is the biggest handicapping contest in sports: pick 5 NFL games against the spread every week, score 1 point per cover and half a point per push, and the highest season total wins from a $6,000,000 guaranteed prize pool. The contest runs all 18 weeks of the NFL regular season, starting with Week 1 on September 10, 2026. Registration closes Saturday, September 12 at 2:00 PM PT. WeBetAI runs its daily model across the full board and surfaces the 5 NFL picks most likely to win the contest, plus a matching 5-pick college football card built on the exact same contest format. Contest scoring has no juice, so every pick below is chosen on pure cover probability, key number position, and leverage against the contest field.
+      <a href="https://www.circasports.com/circa-million" target="_blank" rel="noopener" style="color:var(--teal); font-weight:600;">Circa Million VIII</a> is NFL only: pick 5 games against the spread every week, score 1 point per cover and half a point per push, and the highest season total wins from a $6,000,000 guaranteed prize pool (quarters every 4–5 weeks). The contest runs all 18 weeks of the NFL regular season, starting with Week 1 on September 10, 2026. Registration closes Saturday, September 12 at 2:00 PM PT. Lines post Thursday around 10:00 AM PT (Wednesday, November 25 and Wednesday, December 23 on Thanksgiving and Christmas weeks). Picks are due Saturday at 4:00 PM PT, or before the earliest selected kickoff. Contest scoring has no juice, so WeBetAI ranks the board on calibrated cover probability, key-number position, and leverage against the field — then publishes exactly five unique NFL spreads.
     </p>
     <div class="rules-chips">
+      <span class="rules-chip">NFL only</span>
       <span class="rules-chip">5 picks per week, ATS</span>
       <span class="rules-chip">Win = 1 pt</span>
       <span class="rules-chip">Push = 0.5 pt</span>
+      <span class="rules-chip">No juice</span>
       <span class="rules-chip">18 weeks, starts Sep 10</span>
       <span class="rules-chip">Register by Sat Sep 12, 2 PM PT</span>
       <span class="rules-chip">Lines post Thu 10 AM PT</span>
+      <span class="rules-chip">Thanksgiving: Wed Nov 25</span>
+      <span class="rules-chip">Christmas: Wed Dec 23</span>
       <span class="rules-chip">Picks due Sat 4 PM PT</span>
       <span class="rules-chip">Early games: all 5 in before kickoff</span>
-      <span class="rules-chip">$6M guaranteed, $1M to 1st</span>
+      <span class="rules-chip">$6M guaranteed, quarters every 4–5 weeks</span>
     </div>
   </div>
 
   <!-- ═══════════════ NFL SECTION ═══════════════ -->
   <div class="contest-section" id="nfl">
     <div class="section-head">
-      <span class="section-head-title">NFL: Circa Million Card</span>
+      <span class="section-head-title">NFL: Circa Million VIII Card</span>
       <span class="section-head-sub" id="nfl-week-label"></span>
     </div>
 
@@ -375,63 +390,26 @@
     <div id="nfl-summary"></div>
   </div>
 
-  <!-- ═══════════════ CFB SECTION ═══════════════ -->
-  <div class="contest-section" id="cfb">
-    <div class="section-head">
-      <span class="section-head-title">College Football: Contest Card</span>
-      <span class="section-head-sub" id="cfb-week-label"></span>
-    </div>
-
-    <div class="results-section-title">Contest Results &amp; KPI Tracking: CFB</div>
-    <div class="results-card">
-      <div class="results-cumulative" id="cfb-cumulative"></div>
-      <table class="results-table"><tbody id="cfb-results-body"></tbody></table>
-    </div>
-
-    <div class="date-header" id="cfb-date-header"></div>
-    <div id="cfb-deadline" style="font-size:.75rem; color:var(--txt-m); font-weight:500; margin-bottom:.25rem;"></div>
-
-    <div id="cfb-strategy" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin: .625rem 0 .75rem; border-left: 3px solid var(--green);">
-      <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
-        <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Contest Edge</span>
-      </div>
-      <p id="cfb-strategy-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
-    </div>
-
-    <div class="record-legend-bar">
-      <div id="cfb-record-bar" class="rl-left"></div>
-      <div class="rl-right">
-        <span><span class="legend-dot dot-aplus"></span>A+</span>
-        <span><span class="legend-dot dot-a"></span>A</span>
-        <span><span class="legend-dot dot-aminus"></span>A-</span>
-      </div>
-    </div>
-
-    <div id="cfb-picks"></div>
-    <div id="cfb-summary"></div>
-  </div>
-
   <!-- ═══════════════ CONTEST LOGIC BREAKDOWN ═══════════════ -->
   <div class="contest-section" id="logic">
     <div class="results-section-title">How WeBetAI Plays This Contest</div>
     <div style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.25rem 1.125rem;">
       <ol style="font-size: .8125rem; color: var(--txt-m); line-height: 1.7; padding-left: 1.25rem; margin: 0; display: flex; flex-direction: column; gap: .625rem;">
         <li><strong style="color:var(--olive);">The objective is 1st place, not profit.</strong> Contest scoring has no juice, so breakeven is 50 percent, but winning the Circa Million has historically taken roughly 66 percent ATS across 90 picks. The model therefore optimizes probability of topping the leaderboard, which is a different math problem than maximizing dollar EV at a sportsbook.</li>
-        <li><strong style="color:var(--olive);">Scan the full board, rank by calibrated cover probability.</strong> Every game gets a projected margin from the same engine that powers the NFL and CFB pick environments. The gap between projection and spread converts to a cover probability through a sport-specific margin distribution, then gets shrunk toward the market: the contest rewards the 5 highest true probabilities, not the 5 biggest raw gaps.</li>
-        <li><strong style="color:var(--olive);">Key numbers are contest gold.</strong> Roughly 15 percent of NFL games land exactly on 3 or 7. A pick sitting on the right side of a key number converts a slice of losses into pushes, and each push banks a guaranteed 0.5 points. Getting +3 instead of +2.5 is worth far more in contest points than the half point suggests, so the model pays a premium for full key numbers (3, 7, 10, and 14 in college).</li>
+        <li><strong style="color:var(--olive);">Scan the full NFL board, rank by calibrated cover probability.</strong> Every game gets a projected margin from the same engine that powers the NFL pick environment. The gap between projection and spread converts to a cover probability through an NFL margin distribution (extra mass at 3 and 7), then gets shrunk toward the market: the contest rewards the 5 highest true probabilities, not the 5 biggest raw gaps.</li>
+        <li><strong style="color:var(--olive);">Key numbers are contest gold.</strong> Roughly 15 percent of NFL games land exactly on 3 or 7. A pick sitting on the right side of a key number converts a slice of losses into pushes, and each push banks a guaranteed 0.5 points. Getting +3 instead of +2.5 is worth far more in contest points than the half point suggests, so the model pays a premium for full key numbers (3, 7, 10, and 14).</li>
         <li><strong style="color:var(--olive);">Leverage beats consensus.</strong> Thousands of entries cluster on the same popular sides. Matching the field wins nothing: when the chalk covers, everyone scores together. A card that is right where the field is wrong gains full points of separation, so when public concentration is heavy on one side and the model is neutral or opposed, the card takes the contrarian number. Controlled variance raises the probability of finishing 1st even when it slightly lowers the expected point total.</li>
-        <li><strong style="color:var(--olive);">Use the whole clock.</strong> Lines post Thursday 10 AM PT and lock Saturday 4 PM PT. The model re-runs daily inside that window and submits near the deadline to price in injury news, weather, and line movement. Thursday games are avoided by default: rule 8 forces all 5 picks in before the earliest selected kickoff, and surrendering two days of information on four other picks is rarely worth one early edge.</li>
+        <li><strong style="color:var(--olive);">Use the whole clock.</strong> Lines post Thursday 10 AM PT and lock Saturday 4 PM PT. The model writes a first card after lines post (~10:15 AM PT Thursday), refreshes Friday morning, and locks a final card Saturday 1:00 PM PT — well before the deadline — to price in injury news, weather, and line movement. Thursday games are avoided by default: an early kickoff forces all 5 picks in before that game, and surrendering two days of information on four other picks is rarely worth one early edge unless the cover-probability gap is large.</li>
         <li><strong style="color:var(--olive);">Manage the season like a tournament.</strong> KPIs above track points pace against the 66 percent winning benchmark. Behind pace, the card tilts toward higher-leverage contrarian picks to create catch-up variance. Ahead of pace, it tilts toward the highest-probability sides to defend position. The quarterly prize structure (awards every 4 to 5 weeks) gets the same treatment inside each quarter.</li>
-        <li><strong style="color:var(--olive);">College is the sharper edge, same math.</strong> Circa's open contests are NFL only, so the CFB card is WeBetAI's application of the identical format to the college board. College spreads are softer, variance is wider, and key numbers hit harder, which is exactly the environment where disciplined cover-probability ranking gains the most over a public field.</li>
+        <li><strong style="color:var(--olive);">Prefer the Circa posted number.</strong> The contest grades against Circa Sports' static weekly spreads, not a shopped retail number. When the Odds API carries <em>circasports</em>, that is the card number. When it does not, the card uses Pinnacle or consensus and says so — confirm the official Circa board before submitting.</li>
       </ol>
     </div>
   </div>
 
   <p class="footer-note">
-    Contest format per the official Circa Million rules: 5 picks against the spread weekly for 18 weeks, 1 point per win, 0.5 per push. No juice applies to contest scoring.<br>
-    Lines post Thursdays around 10 AM PT (Wednesday on Thanksgiving and Christmas weeks). Picks due Saturday 4 PM PT; early-game selections require the full 5-pick card before kickoff.<br>
-    Circa's open contests are NFL only; the college card applies the same format to the CFB board. Spreads shown are current market consensus.<br>
-    WeBetAI is not affiliated with Circa Sports. Auto-generated daily. Not financial advice.
+    Contest format per the official Circa Million VIII rules: NFL only, 5 picks against the spread weekly for 18 weeks, 1 point per win, 0.5 per push. No juice applies to contest scoring.<br>
+    Lines post Thursdays around 10 AM PT (Wednesday, November 25 and Wednesday, December 23 on Thanksgiving and Christmas weeks). Picks due Saturday 4 PM PT; early-game selections require the full 5-pick card before kickoff.<br>
+    Spreads prefer Circa Sports' posted number when available. WeBetAI is not affiliated with Circa Sports. Auto-generated weekly. Not financial advice.
   </p>
 </div>
 
@@ -449,12 +427,11 @@
     const parts = name.trim().split(/\s+/);
     return parts[parts.length - 1];
   }
-  function shortMatchup(matchup, sport) {
+  function shortMatchup(matchup) {
     if (!matchup) return '';
     const sep = matchup.match(/\s+(vs\.?|@|at)\s+/i);
     if (!sep) return matchup;
     const parts = matchup.split(sep[0]);
-    if (sport === 'CFB') return parts[0] + ' vs ' + parts[1]; // school names stay whole
     return teamOnly(parts[0]) + ' vs ' + teamOnly(parts[1]);
   }
   function gameTimeET(iso) {
@@ -466,141 +443,14 @@
     } catch(e) { return ''; }
   }
 
-  /* ═══════════════════════════════════════════════════════════════
-     SAMPLE DATA (preview): real upcoming schedules + current market
-     spreads. Replaced by the daily Circa pipeline blob later
-     (same shape as the alpha picks blob, plus contest fields).
-     ═══════════════════════════════════════════════════════════════ */
+  function pendingCopy(sec) {
+    if (sec.pendingMessage) return sec.pendingMessage;
+    const n = sec.weekNum || ((sec.week || '').match(/W0?(\d+)/i) || [])[1] || '';
+    const weekBit = n ? ('Week ' + n) : 'Week';
+    return weekBit + ' card pending — lines post Thu 10am PT; final card before Sat 4pm PT';
+  }
 
-  const CIRCA_DATA = {
-    preview: true,
-    nfl: {
-      contest: 'Circa Million',
-      weekLabel: 'NFL Week 1: Sep 10 to Sep 14',
-      dateFormatted: 'Week 1 Card: Sunday, September 13, 2026',
-      deadline: 'Week 1 lines post Thursday, Sep 10 at 10:00 AM PT. Picks due Saturday, Sep 12 at 4:00 PM PT. Selecting any game that kicks off before the deadline (Thursday Night Football) requires submitting all 5 picks before that kickoff. This card uses Sunday games only, keeping the full window open.',
-      strategy: 'Contest scoring pays 1 point per cover with no juice, so this card maximizes raw cover probability and leaderboard leverage rather than dollar EV. Three of five picks sit on or across the key numbers 3 and 7, where roughly 15 percent of NFL games land. Two picks fade heavy public sides to gain ground on the contest field when chalk fails. Season target is 66 percent ATS, the pace that has cashed the top prize in prior Circa Million seasons.',
-      picks: [
-        {
-          sport: 'NFL', betType: 'spread', confidence: 'aplus',
-          matchup: 'New York Jets @ Tennessee Titans',
-          pick: 'Jets +3', odds: '-105',
-          coverProb: '58.1%', edgePct: '+5.9%',
-          commenceTime: '2026-09-13T17:00:00Z',
-          coreReasoning: 'Full key number 3 with the road side. WeBetAI projects this game inside a field goal, and plus 3 flat converts every 1, 2, and 3 point loss into a cover or push. Titans opened minus 3.5 and sharp money moved it down, confirming the model lean. Highest cover probability on the Week 1 board.'
-        },
-        {
-          sport: 'NFL', betType: 'spread', confidence: 'a',
-          matchup: 'New Orleans Saints @ Detroit Lions',
-          pick: 'Saints +7', odds: '-110',
-          coverProb: '56.4%', edgePct: '+4.5%',
-          commenceTime: '2026-09-13T17:00:00Z',
-          coreReasoning: 'Key number 7 with a Week 1 underdog. WeBetAI projects Lions by 4.8, well inside the spread, and Week 1 favorites of 7 or more have covered under 46 percent over the last decade. The push protection at exactly 7 adds half a point of contest equity that a 6.5 or 7.5 line would not.'
-        },
-        {
-          sport: 'NFL', betType: 'spread', confidence: 'a',
-          matchup: 'Buffalo Bills @ Houston Texans',
-          pick: 'Bills -1.5', odds: '-110',
-          coverProb: '55.8%', edgePct: '+4.1%',
-          commenceTime: '2026-09-13T17:00:00Z',
-          coreReasoning: 'WeBetAI makes Buffalo minus 4 on neutral efficiency and special teams edges, so laying 1.5 keeps almost all of the win probability. Short road favorites off a full offseason with a top 5 quarterback have been the most reliable ATS profile in September. Low variance anchor pick for the card.'
-        },
-        {
-          sport: 'NFL', betType: 'spread', confidence: 'aminus',
-          matchup: 'Green Bay Packers @ Minnesota Vikings',
-          pick: 'Packers +1.5', odds: '-108',
-          coverProb: '54.6%', edgePct: '+3.2%',
-          commenceTime: '2026-09-13T20:25:00Z',
-          coreReasoning: 'Divisional coin flip where WeBetAI rates the rosters within a point and the market is charging a home premium the projection does not support. Taking the points in a game modeled as a pick means the number itself is the whole edge. Wins the pick outright in any Packers victory or 1 point loss.'
-        },
-        {
-          sport: 'NFL', betType: 'spread', confidence: 'bplus',
-          matchup: 'Washington Commanders @ Philadelphia Eagles',
-          pick: 'Commanders +4.5', odds: '-110',
-          coverProb: '53.5%', edgePct: '+2.4%',
-          commenceTime: '2026-09-13T20:25:00Z',
-          coreReasoning: 'Leverage play: early ticket counts show the contest field piling onto the defending champs at home. WeBetAI projects Eagles by 3, so the 4.5 holds model value on its own, and fading the most popular side of the week gains a full point on a large slice of the field when the cover misses.'
-        }
-      ],
-      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
-      weeks: [
-        { label: 'Week 1', dates: 'Sep 10 to 14', status: 'pending', points: null }
-      ]
-    },
-    cfb: {
-      contest: 'Circa contest format',
-      weekLabel: 'CFB Week 1: Sep 3 to Sep 5',
-      dateFormatted: 'Week 1 Card: Saturday, September 5, 2026',
-      deadline: 'Note: Circa\'s open contests are NFL only. This card applies the Circa Million format to the college board (Circa\'s only college contest, the Friday Football Invitational, is free and invitation-only with a different 7-play format). Same submission logic applies here: the full 5-pick card locks before the earliest selected kickoff.',
-      strategy: 'Same contest math applied to the college board: 5 spread picks, 1 point per cover, half point per push, no juice. College spreads are softer than NFL and key numbers 3, 7, and 10 hit even harder with wider scoring variance. This card takes four live underdogs on or near key numbers plus one big number fade, the profile that historically beats college contest fields built on ranked chalk.',
-      picks: [
-        {
-          sport: 'CFB', betType: 'spread', confidence: 'aplus',
-          matchup: 'Baylor @ Auburn',
-          pick: 'Baylor +7', odds: '-110',
-          coverProb: '58.9%', edgePct: '+6.3%',
-          commenceTime: '2026-09-05T19:30:00Z',
-          coreReasoning: 'Full key number 7 with the better offense. WeBetAI projects Auburn by 3.1 on returning production and line play, less than half the spread. Baylor returns a top 15 passing attack against a rebuilt secondary, and the push protection at exactly 7 is worth half a point of contest equity on its own.'
-        },
-        {
-          sport: 'CFB', betType: 'spread', confidence: 'a',
-          matchup: 'Toledo @ Michigan State',
-          pick: 'Toledo +10', odds: '-105',
-          coverProb: '56.7%', edgePct: '+4.8%',
-          commenceTime: '2026-09-05T00:00:00Z',
-          coreReasoning: 'Classic MAC live dog spot on key number 10. Toledo has covered as a double digit underdog against the Big Ten in four of its last five tries, and WeBetAI rates this roster within a touchdown of Michigan State. Friday night spotlight game where the veteran group travels well.'
-        },
-        {
-          sport: 'CFB', betType: 'spread', confidence: 'a',
-          matchup: 'Colorado @ Georgia Tech',
-          pick: 'Colorado +6.5', odds: '-110',
-          coverProb: '56.1%', edgePct: '+4.3%',
-          commenceTime: '2026-09-04T00:00:00Z',
-          coreReasoning: 'WeBetAI projects Georgia Tech by 2.9, a 3.6 point gap to the spread. Colorado profiles as a pass first team that keeps games inside a touchdown, and Thursday openers have leaned to the underdog ATS for five straight seasons. Getting 6.5 in a projected one score game is pure contest value.'
-        },
-        {
-          sport: 'CFB', betType: 'spread', confidence: 'aminus',
-          matchup: 'Clemson @ LSU',
-          pick: 'Clemson +10.5', odds: '-110',
-          coverProb: '54.9%', edgePct: '+3.4%',
-          commenceTime: '2026-09-05T23:30:00Z',
-          coreReasoning: 'The market is pricing last season, not this roster. WeBetAI makes LSU by 6 in the marquee opener, and double digit spreads between top 25 caliber programs in Week 1 have gone under the number in 8 of the last 11 meetings. Night game in Death Valley is priced in, the extra 4.5 points are not.'
-        },
-        {
-          sport: 'CFB', betType: 'spread', confidence: 'bplus',
-          matchup: 'Boise State @ Oregon',
-          pick: 'Boise State +24.5', odds: '-115',
-          coverProb: '53.8%', edgePct: '+2.6%',
-          commenceTime: '2026-09-05T19:30:00Z',
-          coreReasoning: 'Big number fade: the contest field loads up on ranked home favorites in September, and Oregon backers need a 4 touchdown margin. WeBetAI projects a 17 point game, and a Boise program that never quits on backdoor covers has beaten numbers this size in 7 of its last 9 power conference road trips.'
-        }
-      ],
-      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 14 },
-      weeks: [
-        { label: 'Week 1', dates: 'Sep 3 to 5', status: 'pending', points: null }
-      ]
-    }
-  };
-
-  /* ═══════════════════════════════════════════════
-     RENDER: one section (nfl | cfb)
-     ═══════════════════════════════════════════════ */
-
-  function renderSection(key) {
-    const sec = CIRCA_DATA[key];
-    const picks = (sec.picks || []).slice(0, 5).sort((a, b) => {
-      const rA = ratingOrder[a.confidence] ?? 4;
-      const rB = ratingOrder[b.confidence] ?? 4;
-      return rA - rB; // A+ first
-    });
-
-    // Header labels
-    document.getElementById(key + '-week-label').textContent = sec.weekLabel;
-    document.getElementById(key + '-date-header').textContent = sec.dateFormatted;
-    document.getElementById(key + '-deadline').textContent = sec.deadline || '';
-    document.getElementById(key + '-strategy-text').textContent = sec.strategy;
-
-    // ── KPI cumulative boxes ──
+  function renderKpis(sec) {
     const k = sec.kpis || {};
     const decided = (k.wins || 0) + (k.losses || 0);
     const winRate = decided > 0 ? Math.round((k.wins / decided) * 100) + '%' : '--';
@@ -608,45 +458,91 @@
     const pts = (k.points || 0).toFixed(1);
     const maxPts = (k.weeksPlayed || 0) * 5;
     const pace = maxPts > 0 ? Math.round(((k.points || 0) / maxPts) * 100) + '%' : '--';
-    document.getElementById(key + '-cumulative').innerHTML = `
+    document.getElementById('nfl-cumulative').innerHTML = `
       <div class="cum-card"><div class="cum-value ${ (k.points||0) > 0 ? 'positive' : ''}">${pts}</div><div class="cum-label">Contest Pts</div></div>
       <div class="cum-card"><div class="cum-value">${record}</div><div class="cum-label">ATS Record</div></div>
       <div class="cum-card"><div class="cum-value">${winRate}</div><div class="cum-label">Win Rate</div></div>
       <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`;
+  }
 
-    // ── Weekly results table (current week highlighted + expandable picks) ──
+  function renderWeeksTable(sec, picks) {
     let tbl = '';
-    for (let w = 0; w < (sec.weeks || []).length; w++) {
-      const wk = sec.weeks[w];
-      const isPending = wk.status === 'pending';
-      const wkRecord = isPending ? '0W-0L' : (wk.record || '');
-      const wkPts = isPending ? '--' : ((wk.points || 0).toFixed(1) + ' pts');
-      const wkRate = isPending ? '--' : (wk.rate || '--');
-      const rowStyle = isPending ? ' style="background:var(--teal-light);"' : '';
-      tbl += `<tr class="week-row" onclick="toggleWeek('${key}-${w}')"${rowStyle}>
+    const weeks = sec.weeks || [];
+    for (let w = 0; w < weeks.length; w++) {
+      const wk = weeks[w];
+      const highlight = wk.current ? ' style="background:var(--teal-light);"' : '';
+      const unplayed = wk.status === 'pending' || wk.status === 'upcoming' || wk.points == null;
+      const wkRecord = unplayed ? (wk.record || '0W-0L') : (wk.record || '');
+      const wkPts = unplayed ? '--' : ((wk.points || 0).toFixed(1) + ' pts');
+      const wkRate = unplayed ? '--' : (wk.rate || '--');
+      tbl += `<tr class="week-row" onclick="toggleWeek('nfl-${w}')"${highlight}>
         <td><button class="day-toggle" type="button" style="font-weight:700;">${esc(wk.label)}</button>
           <span style="display:block; font-size:.625rem; color:var(--txt-l); font-weight:400;">${esc(wk.dates)}</span></td>
-        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${wkRecord}</span></td>
-        <td>${wkRate}</td>
-        <td>${wkPts}</td>
+        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${esc(wkRecord)}</span></td>
+        <td>${esc(wkRate)}</td>
+        <td>${esc(wkPts)}</td>
       </tr>`;
-      tbl += `<tr class="day-detail" id="week-detail-${key}-${w}"><td colspan="4"><ul class="day-picks-list">`;
-      for (const p of picks) {
-        tbl += `<li>
-          <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span></span>
-          <span><span style="font-size:.65rem; color:var(--txt-l); margin-right:.25rem;">${esc(gameTimeET(p.commenceTime))}</span><span class="result-badge result-pending">...</span></span>
-        </li>`;
+      tbl += `<tr class="day-detail" id="week-detail-nfl-${w}"><td colspan="4"><ul class="day-picks-list">`;
+      if (wk.current && picks.length) {
+        for (const p of picks) {
+          tbl += `<li>
+            <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span></span>
+            <span><span style="font-size:.65rem; color:var(--txt-l); margin-right:.25rem;">${esc(gameTimeET(p.commenceTime))}</span><span class="result-badge result-pending">...</span></span>
+          </li>`;
+        }
+      } else {
+        tbl += `<li><span style="color:var(--txt-l);">${wk.current ? 'Card pending' : (wk.status === 'upcoming' ? 'Not yet played' : 'Not graded yet')}</span></li>`;
       }
       tbl += '</ul></td></tr>';
     }
     if (!tbl) tbl = '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">No contest weeks graded yet.</td></tr>';
-    document.getElementById(key + '-results-body').innerHTML = tbl;
+    document.getElementById('nfl-results-body').innerHTML = tbl;
+  }
 
-    // ── Record bar ──
-    document.getElementById(key + '-record-bar').innerHTML =
+  function renderPending(sec) {
+    const msg = pendingCopy(sec);
+    document.getElementById('nfl-week-label').textContent = sec.weekLabel || '';
+    document.getElementById('nfl-date-header').textContent = sec.dateFormatted || '';
+    document.getElementById('nfl-deadline').textContent = sec.deadline || '';
+    document.getElementById('nfl-strategy-text').textContent = sec.strategy || '';
+    renderKpis(sec);
+    renderWeeksTable(sec, []);
+    document.getElementById('nfl-record-bar').innerHTML =
+      `<span style="font-weight:600; color:var(--txt-b);">This Week: card pending</span>`;
+    document.getElementById('nfl-picks').innerHTML = `
+      <div class="pending-card" id="circa-pending">
+        <h2>${esc(msg)}</h2>
+        <p>Circa Million VIII is NFL only — five against-the-spread picks. The weekly pipeline writes this card after lines post and refreshes through Saturday 1:00 PM PT.</p>
+      </div>`;
+    document.getElementById('nfl-summary').innerHTML = '';
+  }
+
+  function renderSection(sec) {
+    const picks = (sec.picks || []).filter(p => (p.sport || 'NFL').toUpperCase() === 'NFL' && (p.betType || 'spread').toLowerCase() !== 'total' && (p.betType || 'spread').toLowerCase() !== 'moneyline').slice(0, 5).sort((a, b) => {
+      const rA = ratingOrder[a.confidence] ?? 4;
+      const rB = ratingOrder[b.confidence] ?? 4;
+      return rA - rB;
+    });
+
+    const banner = document.getElementById('preview-banner');
+    if (sec.preview && picks.length) banner.removeAttribute('hidden');
+    else banner.setAttribute('hidden', '');
+
+    if (!picks.length || sec.pending) {
+      renderPending(sec);
+      return;
+    }
+
+    document.getElementById('nfl-week-label').textContent = sec.weekLabel || '';
+    document.getElementById('nfl-date-header').textContent = sec.dateFormatted || '';
+    document.getElementById('nfl-deadline').textContent = sec.deadline || '';
+    document.getElementById('nfl-strategy-text').textContent = sec.strategy || '';
+    renderKpis(sec);
+    renderWeeksTable(sec, picks);
+
+    document.getElementById('nfl-record-bar').innerHTML =
       `<span style="font-weight:600; color:var(--txt-b);">This Week: 0W-0L, 0.0 of 5.0 pts</span>`;
 
-    // ── Pick cards (exact alpha card format) ──
     let html = '';
     for (let i = 0; i < picks.length; i++) {
       const p = picks[i];
@@ -661,14 +557,17 @@
       const edgeBadgeHTML = p.edgePct
         ? `<span class="edge-badge" title="Calibrated cover probability minus the no-juice contest breakeven of 50 percent."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct)}</span>`
         : '';
+      const lineNote = p.lineNote
+        ? `<div style="font-size:.6875rem; color:var(--txt-m); margin-bottom:.5rem;">${esc(p.lineNote)}</div>`
+        : '';
 
       html += `<div class="pick-card" data-wb-pick="${esc(p.pick)}">
         <div class="pick-header" style="margin-bottom:.25rem;">
-          <span class="sport-tag">${esc(p.sport)}</span>
+          <span class="sport-tag">${esc(p.sport || 'NFL')}</span>
           <span class="rating-badge ${badge}">${esc(label)}</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.375rem;">
-          <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup, p.sport))}</div>
+          <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup))}</div>
           ${timeChip}
         </div>
         <div class="pick-line">
@@ -676,6 +575,7 @@
           <span class="pick-odds">${esc(p.odds)}</span>
         </div>
         <div class="pick-divider"></div>
+        ${lineNote}
         <div class="pick-analysis">${esc(p.coreReasoning || '')}</div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div class="pick-units">Contest Pick ${i + 1} of 5</div>
@@ -685,16 +585,15 @@
         </div>
       </div>`;
     }
-    document.getElementById(key + '-picks').innerHTML = html;
+    document.getElementById('nfl-picks').innerHTML = html;
 
-    // ── Card summary (alpha bet-summary style) ──
     let sum = `<div class="parlay-section">
-      <div class="parlay-title">${esc(sec.contest)}: This Week's 5-Pick Card</div>`;
+      <div class="parlay-title">${esc(sec.contest || 'Circa Million VIII')}: This Week's 5-Pick Card</div>`;
     for (const p of picks) {
       sum += `<div class="parlay-leg" style="display:grid; grid-template-columns:1fr 4.5rem 3.5rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
         <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
           <span class="leg-pick">${esc(p.pick)}</span>
-          <span style="font-size:.6875rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span>
+          <span style="font-size:.6875rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span>
           <span style="font-size:.625rem; color:var(--txt-l);">${esc(gameTimeET(p.commenceTime))}</span>
         </span>
         <span style="font-size:.75rem; color:var(--txt-m); text-align:right;">${esc(p.coverProb || '')}</span>
@@ -706,15 +605,39 @@
       <span></span>
       <span style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">5.0 pts</span>
     </div></div>`;
-    document.getElementById(key + '-summary').innerHTML = sum;
+    document.getElementById('nfl-summary').innerHTML = sum;
   }
 
   function toggleWeek(id) {
-    document.getElementById('week-detail-' + id).classList.toggle('open');
+    const el = document.getElementById('week-detail-' + id);
+    if (el) el.classList.toggle('open');
   }
 
-  renderSection('nfl');
-  renderSection('cfb');
+  async function loadCirca() {
+    try {
+      const params = new URLSearchParams(location.search);
+      const week = params.get('week');
+      const url = '/.netlify/functions/get-picks-circa' + (week ? ('?week=' + encodeURIComponent(week)) : '');
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('API ' + resp.status);
+      const data = await resp.json();
+      const sec = (data && data.nfl && Array.isArray(data.nfl.picks)) ? data.nfl : data;
+      renderSection(sec || {});
+    } catch (err) {
+      console.error('Failed to load Circa card:', err);
+      renderPending({
+        weekLabel: '',
+        dateFormatted: '',
+        deadline: '',
+        strategy: '',
+        pendingMessage: 'Week card pending — lines post Thu 10am PT; final card before Sat 4pm PT',
+        kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
+        weeks: []
+      });
+    }
+  }
+
+  loadCirca();
 </script>
 
 </body>

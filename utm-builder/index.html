@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>UTM builder — WeBet Social</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #0b0f14; color: #e8eef6; padding: 24px;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 1.35rem; margin: 0 0 6px; }
+    .sub { color: #b7c3d3; margin: 0 0 22px; line-height: 1.45; }
+    .card {
+      background: #121821; border: 1px solid #243041; border-radius: 16px;
+      padding: 22px; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    }
+    label { display: block; font-size: 0.85rem; color: #9fb0c3; margin: 14px 0 6px; }
+    label:first-of-type { margin-top: 0; }
+    input, select {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2c3b50;
+      background: #0b0f14; color: #e8eef6; font-size: 1rem;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+    .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+    button {
+      border: 0; border-radius: 12px; padding: 12px 16px; font-size: 0.95rem;
+      font-weight: 600; cursor: pointer;
+    }
+    .primary { background: #3b82f6; color: #fff; flex: 1; }
+    .secondary { background: #243041; color: #e8eef6; }
+    .out {
+      margin-top: 16px; padding: 14px; border-radius: 12px; background: #0b0f14;
+      border: 1px solid #2c3b50; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.9rem; min-height: 3.2em;
+    }
+    .hint { margin-top: 10px; font-size: 0.85rem; color: #8fa0b3; line-height: 1.4; }
+    .ok { color: #34d399; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>UTM link builder</h1>
+    <p class="sub">Tag every X / LinkedIn / etc. link so GA can show which post drove traffic. Convention: <code>source</code> + <code>social</code> + campaign + content (post id).</p>
+    <div class="card">
+      <label for="base">Destination URL</label>
+      <input id="base" type="url" placeholder="https://webetsocial.com/" value="https://webetsocial.com/" />
+
+      <div class="row">
+        <div>
+          <label for="source">utm_source</label>
+          <select id="source">
+            <option value="x" selected>x</option>
+            <option value="linkedin">linkedin</option>
+            <option value="sms">sms</option>
+            <option value="email">email</option>
+            <option value="wefunder">wefunder</option>
+            <option value="other">other…</option>
+          </select>
+          <input id="sourceOther" type="text" placeholder="custom source" style="display:none;margin-top:8px;" />
+        </div>
+        <div>
+          <label for="medium">utm_medium</label>
+          <input id="medium" type="text" value="social" />
+        </div>
+      </div>
+
+      <label for="campaign">utm_campaign (theme / week)</label>
+      <input id="campaign" type="text" placeholder="e.g. betty_sep10 or cfb_week1" />
+
+      <label for="content">utm_content (which post)</label>
+      <input id="content" type="text" placeholder="e.g. post_20260910_a" />
+
+      <div class="actions">
+        <button class="primary" type="button" id="build">Build link</button>
+        <button class="secondary" type="button" id="copy">Copy</button>
+      </div>
+      <div class="out" id="out">Tagged link will show here</div>
+      <p class="hint" id="status"></p>
+      <p class="hint">Paste this full URL into the X post. GA will report it under First user / Session campaign &amp; content.</p>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var base = document.getElementById('base');
+      var source = document.getElementById('source');
+      var sourceOther = document.getElementById('sourceOther');
+      var medium = document.getElementById('medium');
+      var campaign = document.getElementById('campaign');
+      var content = document.getElementById('content');
+      var out = document.getElementById('out');
+      var status = document.getElementById('status');
+
+      function todaySlug() {
+        var d = new Date();
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return 'post_' + y + m + day + '_a';
+      }
+      if (!content.value) content.value = todaySlug();
+      if (!campaign.value) {
+        var d = new Date();
+        var months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        campaign.value = 'webet_' + months[d.getMonth()] + d.getDate();
+      }
+
+      source.addEventListener('change', function () {
+        sourceOther.style.display = source.value === 'other' ? 'block' : 'none';
+        medium.value = (source.value === 'email' || source.value === 'sms') ? source.value : 'social';
+      });
+
+      function srcVal() {
+        return source.value === 'other' ? (sourceOther.value || 'other').trim() : source.value;
+      }
+
+      function build() {
+        status.textContent = '';
+        try {
+          var url = new URL((base.value || '').trim());
+          var s = srcVal();
+          var med = (medium.value || 'social').trim();
+          var camp = (campaign.value || '').trim();
+          var cont = (content.value || '').trim();
+          if (!s || !med || !camp || !cont) {
+            status.textContent = 'Fill source, medium, campaign, and content.';
+            return null;
+          }
+          url.searchParams.set('utm_source', s);
+          url.searchParams.set('utm_medium', med);
+          url.searchParams.set('utm_campaign', camp);
+          url.searchParams.set('utm_content', cont);
+          var built = url.toString();
+          out.textContent = built;
+          return built;
+        } catch (e) {
+          status.textContent = 'Invalid destination URL.';
+          return null;
+        }
+      }
+
+      document.getElementById('build').addEventListener('click', build);
+      document.getElementById('copy').addEventListener('click', function () {
+        var built = build();
+        if (!built) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(built).then(function () {
+            status.innerHTML = '<span class="ok">Copied.</span>';
+          }).catch(function () {
+            status.textContent = 'Copy failed — select the link and copy manually.';
+          });
+        } else {
+          status.textContent = 'Select the link and copy manually.';
+        }
+      });
+      build();
+    })();
+  </script>
+</body>
+</html>

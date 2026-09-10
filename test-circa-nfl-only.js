@@ -21,6 +21,7 @@ const {
   coverToRating,
   RATING_TO_CONFIDENCE,
 } = require("./netlify/functions/lib/circa-contest");
+const lines = require("./netlify/functions/lib/circa-contest-lines");
 const getPicks = require("./netlify/functions/get-picks-circa");
 const gen = require("./netlify/functions/generate-picks-circa-background");
 const trigger = require("./netlify/functions/trigger-picks-circa");
@@ -71,12 +72,28 @@ check("preview banner is hidden until API says preview", () => {
   assert.ok(/id="preview-banner"/.test(html));
   assert.ok(/preview-banner"[^>]*hidden/.test(html) || html.includes('id="preview-banner" hidden'));
 });
+check("page shows Circa vs market (contest PDF language)", () => {
+  assert.ok(/market-chip/.test(html) || /marketMove/.test(html));
+  assert.ok(/vs Circa/.test(html));
+  assert.ok(/contest PDF|contest point spreads/i.test(html));
+  assert.ok(/frozen/i.test(html));
+  assert.ok(/W1-4/.test(html) && /W5-9/.test(html) && /W10-13/.test(html) && /W14-18/.test(html));
+  assert.ok(/rule 8/i.test(html));
+  assert.ok(!/When the Odds API carries/.test(html));
+  assert.ok(html.includes("CircaMillionVIIIContest.2026.pdf"));
+});
+check("page empty state mentions contest PDF missing / no Pinnacle fallback", () => {
+  assert.ok(/will not publish a card on Pinnacle/i.test(html) || /contest-pdf-unavailable/.test(html));
+});
 
 console.log("lib/circa-contest");
 check("contest metadata", () => {
   assert.strictEqual(CONTEST.name, "Circa Million VIII");
   assert.strictEqual(CONTEST.totalWeeks, 18);
   assert.strictEqual(CONTEST.storeName, "edge-picks-circa");
+  assert.ok(/contest-pdf/.test(CONTEST.modelVersion));
+  assert.strictEqual(CONTEST.modelVersion, "v1.2-circa-contest-pdf");
+  assert.ok(CONTEST.rulesUrl && /CircaMillionVIIIContest/.test(CONTEST.rulesUrl));
 });
 check("week keys", () => {
   assert.strictEqual(weekKey(1), "2026-W01");
@@ -194,12 +211,76 @@ check("exports handler + payload helpers", () => {
   assert.strictEqual(getPicks.hasLivePicks({ preview: true, picks: [{ pick: "Jets +3" }] }), false);
 });
 
+console.log("lib/circa-contest-lines");
+check("Week 1 fixture matches official sheet (Browns +8.5 / Jaguars -8.5)", () => {
+  const fx = lines.getWeekFixture(1);
+  assert.ok(fx);
+  assert.strictEqual(fx.weekNum, 1);
+  assert.strictEqual(fx.lineSource, "circa-contest-pdf");
+  assert.strictEqual(fx.games.length, 16);
+  const jax = fx.games.find(g => /Jaguars/.test(g.home) && /Browns/.test(g.away));
+  assert.ok(jax, "Browns @ Jaguars missing");
+  assert.strictEqual(jax.away, "Cleveland Browns");
+  assert.strictEqual(jax.home, "Jacksonville Jaguars");
+  assert.strictEqual(jax.awaySpread, 8.5);
+  assert.strictEqual(jax.homeSpread, -8.5);
+  const bills = fx.games.find(g => /Bills/.test(g.away));
+  assert.strictEqual(bills.awaySpread, -0.5);
+  assert.strictEqual(bills.homeSpread, 0.5);
+  const rams = fx.games.find(g => /Rams/.test(g.home));
+  assert.strictEqual(rams.awaySpread, 4);
+  assert.strictEqual(rams.homeSpread, -4);
+  const pats = fx.games.find(g => /Patriots/.test(g.away));
+  assert.strictEqual(pats.homeSpread, -3);
+  assert.strictEqual(pats.awaySpread, 3);
+});
+check("½ parses to .5", () => {
+  assert.strictEqual(lines.parseSpreadToken("+8½"), 8.5);
+  assert.strictEqual(lines.parseSpreadToken("-3½"), -3.5);
+  assert.strictEqual(lines.parseSpreadToken("-½"), -0.5);
+  assert.strictEqual(lines.parseSpreadToken("+3"), 3);
+});
+check("parseContestText maps ALL CAPS sheet tokens including ½", () => {
+  const text = "BROWNS +8½\nJAGUARS -8½\nBUCS +3½\nBENGALS -3½";
+  const parsed = lines.parseContestText(text, 1);
+  assert.ok(parsed.games.length >= 2, JSON.stringify(parsed.games));
+  const jax = parsed.games.find(g => /Jaguars/.test(g.home) && /Browns/.test(g.away));
+  assert.ok(jax, JSON.stringify(parsed.games));
+  assert.strictEqual(jax.away, "Cleveland Browns");
+  assert.strictEqual(jax.home, "Jacksonville Jaguars");
+  assert.strictEqual(jax.awaySpread, 8.5);
+  assert.strictEqual(jax.homeSpread, -8.5);
+});
+check("candidate URLs include Week-1 2026/09 path", () => {
+  const urls = lines.candidateSpreadUrls(1);
+  assert.ok(urls.some(u => /Week-1\.pdf/.test(u)));
+  assert.ok(urls.some(u => /2026\/09/.test(u)));
+});
+check("no pinnacle-as-contest in lines module", () => {
+  const src = fs.readFileSync(path.join(root, "netlify/functions/lib/circa-contest-lines.js"), "utf8");
+  assert.ok(!/lineSource\s*=\s*["']pinnacle["']/.test(src));
+  assert.ok(src.includes("circa-contest-pdf"));
+  assert.ok(/never/i.test(src) && /Pinnacle/i.test(src));
+});
+
 console.log("generate-picks-circa-background");
-check("exports handler and spread helpers", () => {
+check("exports handler and contest/market helpers", () => {
   assert.strictEqual(typeof gen.handler, "function");
-  assert.strictEqual(typeof gen.buildPostedSpread, "function");
+  assert.strictEqual(typeof gen.extractMarketSpread, "function");
+  assert.strictEqual(typeof gen.mergeContestAndMarket, "function");
   assert.strictEqual(typeof gen.buildFinalPicks, "function");
-  assert.strictEqual(gen.MODEL_VERSION, "v1.0-circa-million-viii");
+  assert.strictEqual(typeof gen.formatMarketMove, "function");
+  assert.ok(/contest-pdf/.test(gen.MODEL_VERSION));
+  assert.strictEqual(gen.MODEL_VERSION, "v1.2-circa-contest-pdf");
+  assert.strictEqual(typeof gen.buildPostedSpread, "undefined");
+});
+check("generator source never treats pinnacle as contest lineSource", () => {
+  const src = fs.readFileSync(path.join(root, "netlify/functions/generate-picks-circa-background.js"), "utf8");
+  assert.ok(!/lineSource\s*=\s*["']pinnacle["']/.test(src));
+  assert.ok(!/using Pinnacle/.test(src));
+  assert.ok(src.includes("circa-contest-pdf") || src.includes("CONTEST_LINE_SOURCE"));
+  assert.ok(src.includes("loadContestLines"));
+  assert.ok(!/Posted number: Circa Sports \(`circasports`\) when Odds API has it/.test(src));
 });
 check("integer contest numbers format without trailing .0", () => {
   const sides = gen.computeSpreadSides({
@@ -208,81 +289,114 @@ check("integer contest numbers format without trailing .0", () => {
     commenceTime: "2026-09-13T17:00:00Z",
     consensusSpread: -3,
     spreadHomeNoVig: 0.48,
-    postedHomePoint: -3,
-    postedAwayPoint: 3,
-    postedHomePrice: -105,
-    postedAwayPrice: -115,
-    lineSource: "circasports",
+    contestHomePoint: -3,
+    contestAwayPoint: 3,
+    lineSource: "circa-contest-pdf",
     lineNote: null,
     bookCount: 2,
   }, { venue: "Nissan Stadium" }, {}, {});
   assert.ok(sides.some(s => s.pick === "Jets +3"), JSON.stringify(sides.map(s => s.pick)));
   assert.ok(sides.some(s => s.pick === "Titans -3"), JSON.stringify(sides.map(s => s.pick)));
+  assert.ok(sides.every(s => s.lineSource === "circa-contest-pdf"));
 });
-check("prefers circasports posted number", () => {
-  const posted = gen.buildPostedSpread({
-    home_team: "Tennessee Titans",
-    away_team: "New York Jets",
+check("Pinnacle is market-only, never the contest number", () => {
+  const market = gen.extractMarketSpread({
+    home_team: "Jacksonville Jaguars",
+    away_team: "Cleveland Browns",
     commence_time: "2026-09-13T17:00:00Z",
     bookmakers: [
       {
         key: "pinnacle",
         markets: [{ key: "spreads", outcomes: [
-          { name: "Tennessee Titans", point: -3.5, price: -110 },
-          { name: "New York Jets", point: 3.5, price: -110 },
-        ] }],
-      },
-      {
-        key: "circasports",
-        markets: [{ key: "spreads", outcomes: [
-          { name: "Tennessee Titans", point: -3, price: -105 },
-          { name: "New York Jets", point: 3, price: -115 },
+          { name: "Jacksonville Jaguars", point: -9.5, price: -110 },
+          { name: "Cleveland Browns", point: 9.5, price: -110 },
         ] }],
       },
     ],
   });
-  assert.strictEqual(posted.lineSource, "circasports");
-  assert.strictEqual(posted.postedHomePoint, -3);
-  assert.strictEqual(posted.postedAwayPoint, 3);
-});
-check("falls back to pinnacle with a note when Circa is missing", () => {
-  const posted = gen.buildPostedSpread({
-    home_team: "Detroit Lions",
-    away_team: "New Orleans Saints",
+  assert.ok(market);
+  assert.notStrictEqual(market.lineSource, "pinnacle");
+  assert.strictEqual(market.homePoint, -9.5);
+  const merged = gen.mergeContestAndMarket({
+    home: "Jacksonville Jaguars",
+    away: "Cleveland Browns",
+    homeSpread: -8.5,
+    awaySpread: 8.5,
+    commenceTime: "2026-09-13T17:00:00Z",
+  }, {
+    home_team: "Jacksonville Jaguars",
+    away_team: "Cleveland Browns",
     commence_time: "2026-09-13T17:00:00Z",
     bookmakers: [
       {
         key: "pinnacle",
         markets: [{ key: "spreads", outcomes: [
-          { name: "Detroit Lions", point: -7, price: -110 },
-          { name: "New Orleans Saints", point: 7, price: -110 },
+          { name: "Jacksonville Jaguars", point: -9.5, price: -110 },
+          { name: "Cleveland Browns", point: 9.5, price: -110 },
         ] }],
       },
     ],
-  });
-  assert.strictEqual(posted.lineSource, "pinnacle");
-  assert.ok(/Circa number not posted/.test(posted.lineNote));
+  }, { sourceUrl: lines.WEEK1_SOURCE_URL });
+  assert.strictEqual(merged.lineSource, "circa-contest-pdf");
+  assert.strictEqual(merged.contestHomePoint, -8.5);
+  assert.strictEqual(merged.contestAwayPoint, 8.5);
+  assert.strictEqual(merged.marketAwayPoint, 9.5);
+});
+check("marketMove fields on contest sides (Browns +8.5 vs market +9.5)", () => {
+  const sides = gen.computeSpreadSides({
+    home: "Jacksonville Jaguars",
+    away: "Cleveland Browns",
+    commenceTime: "2026-09-13T17:00:00Z",
+    contestHomePoint: -8.5,
+    contestAwayPoint: 8.5,
+    marketHomePoint: -9.5,
+    marketAwayPoint: 9.5,
+    marketHomePrice: -110,
+    marketAwayPrice: -110,
+    consensusSpread: -9.5,
+    lineSource: "circa-contest-pdf",
+    sourceUrl: lines.WEEK1_SOURCE_URL,
+  }, { venue: "EverBank Stadium" }, {}, {});
+  const browns = sides.find(s => /Browns/.test(s.pick));
+  assert.ok(browns, JSON.stringify(sides.map(s => s.pick)));
+  assert.strictEqual(browns.pick, "Browns +8.5");
+  assert.strictEqual(browns.lineSource, "circa-contest-pdf");
+  assert.strictEqual(browns.circaSpread, "+8.5");
+  assert.ok(/Market now Browns \+9\.5 \(\+1\.0 vs Circa\)/.test(browns.marketMove), browns.marketMove);
+  const final = gen.buildFinalPicks([browns], 1)[0];
+  assert.strictEqual(final.lineSource, "circa-contest-pdf");
+  assert.ok(final.marketMove);
+  assert.ok(final.circaSpread);
+  assert.ok(final.contestLine);
+  assert.ok(final.marketSpread);
 });
 check("final pick fields match the page", () => {
   const picks = gen.buildFinalPicks([{
-    pick: "Jets +3",
-    odds: -105,
+    pick: "Jets +1.5",
+    odds: null,
     coverProb: 0.581,
     homeTeam: "Tennessee Titans",
     awayTeam: "New York Jets",
     commenceTime: "2026-09-13T17:00:00Z",
-    lineSource: "circasports",
+    lineSource: "circa-contest-pdf",
+    circaSpread: "+1.5",
+    contestLine: "Jets +1.5",
+    marketSpread: "+2",
+    marketMove: "Market now Jets +2 (+0.5 vs Circa)",
+    postedPoint: 1.5,
     venue: "Nissan Stadium",
   }], 1);
   const p = picks[0];
-  for (const k of ["matchup", "pick", "odds", "coverProb", "edgePct", "commenceTime", "coreReasoning", "confidence", "sport", "betType"]) {
+  for (const k of ["matchup", "pick", "odds", "coverProb", "edgePct", "commenceTime", "coreReasoning", "confidence", "sport", "betType", "circaSpread", "contestLine", "marketMove", "lineSource"]) {
     assert.ok(p[k] != null && p[k] !== "", "missing " + k);
   }
   assert.strictEqual(p.sport, "NFL");
   assert.strictEqual(p.betType, "spread");
   assert.strictEqual(p.matchup, "New York Jets @ Tennessee Titans");
+  assert.strictEqual(p.lineSource, "circa-contest-pdf");
   assert.ok(String(p.coverProb).includes("%"));
   assert.ok(String(p.edgePct).includes("%"));
+  assert.ok(/vs Circa/.test(p.marketMove));
 });
 check("live card payload is flat (not nested under .nfl)", () => {
   const card = gen.liveCardPayload({
@@ -314,12 +428,43 @@ check("pipeline files exist", () => {
     "netlify/functions/trigger-picks-circa.js",
     "netlify/functions/get-picks-circa.js",
     "netlify/functions/lib/circa-contest.js",
+    "netlify/functions/lib/circa-contest-lines.js",
   ]) {
     assert.ok(fs.existsSync(path.join(root, f)), f);
   }
 });
 
 async function runAsync() {
+  console.log("lib/circa-contest-lines async");
+  try {
+    const board = await lines.loadContestLines(1, { skipFetch: true });
+    assert.strictEqual(board.weekNum, 1);
+    assert.strictEqual(board.lineSource, "circa-contest-pdf");
+    assert.ok(board.games.length >= 16);
+    const jax = board.games.find(g => /Jaguars/.test(g.home));
+    assert.strictEqual(jax.awaySpread, 8.5);
+    assert.strictEqual(jax.homeSpread, -8.5);
+    const chiefs = board.games.find(g => /Chiefs/.test(g.home));
+    assert.strictEqual(chiefs.awaySpread, 3);
+    assert.strictEqual(chiefs.homeSpread, -3);
+    console.log("  ok  loadContestLines week 1 fixture");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL loadContestLines week 1 fixture: " + e.message);
+  }
+  try {
+    let threw = false;
+    try { await lines.loadContestLines(2, { skipFetch: true }); }
+    catch (e) {
+      threw = e instanceof lines.ContestLinesError || /not available/.test(e.message);
+    }
+    assert.ok(threw, "week 2 without PDF/fixture must refuse (no Pinnacle fallback)");
+    console.log("  ok  week 2 without sheet throws");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL week 2 without sheet throws: " + e.message);
+  }
+
   console.log("get-picks-circa handler (no blob → pending JSON)");
   try {
     const res = await getPicks.handler({ httpMethod: "GET", queryStringParameters: { week: "1" } });
@@ -332,6 +477,7 @@ async function runAsync() {
     assert.strictEqual(body.preview, false);
     assert.ok(body.pendingMessage);
     assert.strictEqual(body.week, "2026-W01");
+    assert.ok(body.rulesUrl);
     console.log("  ok  pending JSON shape");
   } catch (e) {
     failed++;

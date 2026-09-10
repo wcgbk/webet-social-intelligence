@@ -1,20 +1,28 @@
 // Circa Million VIII — NFL-only contest calendar, card selection, pending payload.
 // Official: https://www.circasports.com/circa-million
-// 5 NFL ATS picks/week, 1 pt cover / 0.5 push, no juice. Lines Thu ~10:00 AM PT
-// (Thanksgiving week Wed Nov 25 10am PT; Christmas week Wed Dec 23 10am PT).
-// Picks due Sat 4:00 PM PT, or before the earliest selected kickoff.
+// 5 NFL ATS picks/week vs a STATIC contest PDF spread, 1 pt cover / 0.5 push, no juice.
+// Spreads Thu ~10:00 AM PT (Thanksgiving week Wed Nov 25 10am PT; Christmas week
+// Wed Dec 23 10am PT). Picks due Sat 4:00 PM PT, or before the earliest selected
+// kickoff (rule 8). Pick numbers come from circa-contest-lines.js, never Pinnacle.
 
 const CONTEST = {
   name: "Circa Million VIII",
   seasonYear: 2026,
   totalWeeks: 18,
-  modelVersion: "v1.0-circa-million-viii",
+  modelVersion: "v1.2-circa-contest-pdf",
   officialUrl: "https://www.circasports.com/circa-million",
+  rulesUrl: "https://www.circasports.com/wp-content/uploads/2026/05/CircaMillionVIIIContest.2026.pdf",
   week1Thursday: "2026-09-10",
   week1Open: "2026-09-09",
   registrationDeadline: "Saturday, September 12, 2026 at 2:00 PM PT",
   earlyCoverGap: 0.04,
   storeName: "edge-picks-circa",
+  quarters: [
+    { id: 1, label: "1st Quarter", weeks: "1-4" },
+    { id: 2, label: "2nd Quarter", weeks: "5-9" },
+    { id: 3, label: "3rd Quarter", weeks: "10-13" },
+    { id: 4, label: "4th Quarter", weeks: "14-18" },
+  ],
 };
 
 // PT calendar dates when Circa posts lines on Wednesday instead of Thursday.
@@ -24,7 +32,7 @@ const HOLIDAY_LINES_POST = {
 };
 
 const DEFAULT_STRATEGY =
-  "Contest scoring pays 1 point per cover and 0.5 per push with no juice, so this card ranks NFL spreads by calibrated cover probability rather than dollar EV. Circa Sports' posted number is used when the Odds API carries it; otherwise the card notes a Pinnacle/consensus substitute. Thursday Night and other kickoffs before Saturday 4:00 PM PT are avoided unless the cover-probability gap versus the next-best Sunday/late pick is at least 4 percentage points — an early game locks the entire 5-card before that kickoff and surrenders two days of information. Key numbers 3 and 7 are treated as contest gold. Season target is roughly 66 percent ATS, the pace that has cashed the top prize in prior Circa Million seasons.";
+  "Contest scoring pays 1 point per cover and 0.5 per push with no juice (Circa Million VIII rules 6–8), so this card ranks NFL spreads by calibrated cover probability rather than dollar EV. The pick number is always the frozen weekly Contest Point Spreads PDF — never Pinnacle, DraftKings, or any live Odds API quote. WeBetAI still watches consensus/Pinnacle Thursday through Saturday to measure market move versus that freeze (classic contest CLV) and may change sides as the market moves relative to the static Circa number. Autopilot refreshes after the Thursday ~10:00 AM PT post, Friday morning, and Saturday ~1:00 PM PT against the same sheet. Thursday Night and other kickoffs before Saturday 4:00 PM PT are avoided unless the cover-probability gap versus the next-best Sunday/late pick is at least 4 percentage points — official rule 8: selecting any early game requires submitting all five picks before that kickoff. Key numbers 3, 7, 10, and 14 are treated as contest gold. Quarters: Weeks 1–4, 5–9, 10–13, 14–18. Season target is roughly 66 percent ATS.";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -272,6 +280,11 @@ function pendingPayload(weekInfo, extras = {}) {
     generatedAt: null,
     pendingMessage: pendingMessage(weekNum),
     noPlays: pendingMessage(weekNum),
+    rulesUrl: CONTEST.rulesUrl,
+    sourceUrl: extras.sourceUrl || null,
+    error: !!extras.error,
+    errorCode: extras.errorCode || null,
+    errorMessage: extras.errorMessage || null,
   };
 }
 
@@ -294,6 +307,10 @@ function selectCircaCard(cands, opts = {}) {
   const gap = opts.earlyGap != null ? opts.earlyGap : CONTEST.earlyCoverGap;
   const maxPicks = opts.maxPicks || 5;
 
+  const scoreOf = (c) => {
+    const s = c.rankScore != null ? Number(c.rankScore) : Number(c.coverProb);
+    return Number.isFinite(s) ? s : 0;
+  };
   const byGame = new Map();
   for (const c of cands || []) {
     if (!c) continue;
@@ -301,7 +318,7 @@ function selectCircaCard(cands, opts = {}) {
     const key = gameKeyOf(c);
     if (!key) continue;
     const cur = byGame.get(key);
-    if (!cur || Number(c.coverProb) > Number(cur.coverProb)) byGame.set(key, { ...c, gameKey: key });
+    if (!cur || scoreOf(c) > scoreOf(cur)) byGame.set(key, { ...c, gameKey: key });
   }
 
   const early = [];
@@ -311,7 +328,7 @@ function selectCircaCard(cands, opts = {}) {
     if (deadline && kick < deadline) early.push(c);
     else late.push(c);
   }
-  const byCover = (a, b) => Number(b.coverProb) - Number(a.coverProb) || String(a.pick || "").localeCompare(String(b.pick || ""));
+  const byCover = (a, b) => scoreOf(b) - scoreOf(a) || String(a.pick || "").localeCompare(String(b.pick || ""));
   late.sort(byCover);
   early.sort(byCover);
 
@@ -330,7 +347,7 @@ function selectCircaCard(cands, opts = {}) {
     for (const c of early) {
       picked.sort(byCover);
       const weakest = picked[picked.length - 1];
-      if (Number(c.coverProb) < Number(weakest.coverProb) + gap) break;
+      if (scoreOf(c) < scoreOf(weakest) + gap) break;
       const k = gameKeyOf(c);
       if (used.has(k)) continue;
       used.delete(gameKeyOf(weakest));
@@ -363,19 +380,23 @@ function nick(name) {
 
 function strategyForCard(picks, weekNum, lineNotes) {
   const early = (picks || []).filter((p) => p.earlyKickoff || isEarlyKickoff(p.commenceTime, weekNum));
-  const circaN = (picks || []).filter((p) => p.lineSource === "circasports").length;
+  const pdfN = (picks || []).filter((p) => p.lineSource === "circa-contest-pdf").length;
   const parts = [DEFAULT_STRATEGY];
   if (early.length) {
-    parts.push(`Early-window exception: ${early.map((p) => p.pick).join(", ")} cleared the ${Math.round(CONTEST.earlyCoverGap * 100)}-point cover-probability gap versus the next-best Saturday/Sunday side, so the full card must be in before that kickoff.`);
+    parts.push(`Early-window exception (rule 8): ${early.map((p) => p.pick).join(", ")} cleared the ${Math.round(CONTEST.earlyCoverGap * 100)}-point cover-probability gap versus the next-best Saturday/Sunday side, so the full card must be submitted before that kickoff.`);
   } else {
     parts.push("No Thursday Night / early kickoffs on this card — the Saturday 4:00 PM PT window stays open.");
   }
-  if (circaN === (picks || []).length && picks.length) {
-    parts.push("All five numbers are Circa Sports posted spreads.");
-  } else if (circaN) {
-    parts.push(`${circaN} of ${picks.length} numbers are Circa Sports posted; the rest use sharp/consensus because Circa was not on the Odds API for those games.`);
-  } else if (picks && picks.length) {
-    parts.push("Circa Sports was not on the Odds API for this slate — numbers are Pinnacle/consensus with a note on each card. Official contest lines should be confirmed at Circa before submitting.");
+  if (picks && picks.length) {
+    if (pdfN === picks.length) {
+      parts.push("All five numbers are official Circa Million VIII contest point spreads from this week's frozen PDF — not Pinnacle, DraftKings, or any live sportsbook.");
+    } else {
+      parts.push("This card only publishes Circa contest PDF numbers. Any side missing a contest sheet number was dropped rather than filled from Pinnacle or consensus.");
+    }
+    const moves = picks.filter((p) => p.marketMove);
+    if (moves.length) {
+      parts.push(`Live market vs freeze: ${moves.map((p) => p.marketMove).join("; ")}.`);
+    }
   }
   if (lineNotes) parts.push(lineNotes);
   return parts.join(" ");

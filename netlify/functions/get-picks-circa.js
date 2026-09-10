@@ -53,6 +53,12 @@ function normalizePayload(data, weekInfo) {
     generatedAt: data.generatedAt || null,
     pendingMessage: data.pendingMessage || pendingPayload(weekInfo).pendingMessage,
     lineSourceNote: data.lineSourceNote || null,
+    lineSource: data.lineSource || null,
+    sourceUrl: data.sourceUrl || null,
+    rulesUrl: data.rulesUrl || CONTEST.rulesUrl,
+    error: !!data.error,
+    errorCode: data.errorCode || null,
+    errorMessage: data.errorMessage || null,
   };
 }
 

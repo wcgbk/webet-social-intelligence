@@ -236,6 +236,7 @@ function defaultKpis() {
 }
 
 function defaultWeeks(currentWeekNum) {
+  // Full 18-week calendar for KPI merge. Filter with visibleWeeks for display/API.
   const out = [];
   for (let n = 1; n <= CONTEST.totalWeeks; n++) {
     const thu = weekThursdayYmd(n);
@@ -259,6 +260,80 @@ function defaultWeeks(currentWeekNum) {
   return out;
 }
 
+// Filter KPI weeks: history + current/live card. Never dump far-future upcoming rows.
+// Keep this function body identical in netlify/functions/lib/circa-contest.js and circa/index.html.
+function visibleWeeks(weeks, picks) {
+  const list = Array.isArray(weeks) ? weeks : [];
+  const pickList = Array.isArray(picks) ? picks : [];
+
+  function weekNum(wk) {
+    if (!wk) return null;
+    if (wk.weekNum != null && Number.isFinite(Number(wk.weekNum))) return Number(wk.weekNum);
+    const m = String(wk.label || "").match(/week\s*(\d+)/i);
+    return m ? Number(m[1]) : null;
+  }
+
+  function placeholderRecord(record) {
+    if (record == null || String(record).trim() === "") return true;
+    const s = String(record).replace(/\s+/g, "").toUpperCase();
+    return s === "0W-0L" || s === "0-0" || s === "0W-0L-0P" || s === "0-0-0";
+  }
+
+  function picksOf(wk) {
+    if (Array.isArray(wk && wk.picks) && wk.picks.length) return wk.picks;
+    if (wk && wk.current) return pickList;
+    return [];
+  }
+
+  function hasGradedPicks(wk) {
+    return picksOf(wk).some(function (p) {
+      const r = String((p && p.result) || "").trim().toLowerCase();
+      return r !== "" && r !== "pending" && r !== "live" && r !== "...";
+    });
+  }
+
+  function hasHistory(wk) {
+    if (!wk) return false;
+    const st = String(wk.status || "").toLowerCase();
+    if (st === "completed" || st === "graded" || st === "final") return true;
+    if (wk.points != null) return true;
+    if (wk.record && !placeholderRecord(wk.record)) return true;
+    if (hasGradedPicks(wk)) return true;
+    return false;
+  }
+
+  function isCurrentLive(wk) {
+    if (!wk) return false;
+    if (wk.current === true) return true;
+    const st = String(wk.status || "").toLowerCase();
+    if ((st === "live" || st === "pending") && picksOf(wk).length > 0) return true;
+    return false;
+  }
+
+  function isComplete(wk) {
+    if (!wk) return false;
+    const st = String(wk.status || "").toLowerCase();
+    return st === "completed" || st === "graded" || st === "final";
+  }
+
+  const byNum = {};
+  for (let i = 0; i < list.length; i++) {
+    const n = weekNum(list[i]);
+    if (n != null) byNum[n] = list[i];
+  }
+
+  return list.filter(function (wk) {
+    if (hasHistory(wk)) return true;
+    if (isCurrentLive(wk)) return true;
+    const n = weekNum(wk);
+    if (n == null) return false;
+    const prev = byNum[n - 1];
+    if (!isComplete(prev)) return false;
+    // Next upcoming only if prior is complete AND this week has picks / is current-live.
+    return picksOf(wk).length > 0;
+  });
+}
+
 function pendingPayload(weekInfo, extras = {}) {
   const info = weekInfo && weekInfo.weekNum ? weekInfo : resolveContestWeek();
   const weekNum = info.weekNum;
@@ -275,7 +350,7 @@ function pendingPayload(weekInfo, extras = {}) {
     weekNum,
     picks: [],
     kpis: extras.kpis || defaultKpis(),
-    weeks: extras.weeks || defaultWeeks(weekNum),
+    weeks: visibleWeeks(extras.weeks || defaultWeeks(weekNum), extras.picks || []),
     modelVersion: CONTEST.modelVersion,
     generatedAt: null,
     pendingMessage: pendingMessage(weekNum),
@@ -450,6 +525,7 @@ module.exports = {
   pendingMessage,
   defaultKpis,
   defaultWeeks,
+  visibleWeeks,
   pendingPayload,
   selectCircaCard,
   coverToRating,

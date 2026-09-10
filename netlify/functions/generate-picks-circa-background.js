@@ -598,7 +598,7 @@ function buildFinalPicks(selected, weekNum) {
       awayTeam: c.awayTeam,
       venue: c.venue || "",
       pick: c.pick,
-      odds: "EVEN",
+      odds: null,
       coverProb: coverPct,
       coverProbRaw: cover,
       edgePct,
@@ -909,7 +909,7 @@ exports.handler = async (event) => {
     rulesUrl: board.rulesUrl || CONTEST.rulesUrl,
   });
 
-  console.log(`[circa] Card: ${picks.map(p => `${p.pick} ${p.odds} (${p.coverProb})`).join(" | ")}`);
+  console.log(`[circa] Card: ${picks.map(p => `${p.pick} (${p.coverProb})`).join(" | ")}`);
   if (dryRun) {
     console.log("[circa] DRY RUN — nothing stored.");
     return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, picksData }) };

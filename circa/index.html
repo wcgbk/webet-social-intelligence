@@ -498,9 +498,83 @@
       <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`;
   }
 
+  // Filter KPI weeks: history + current/live card. Never dump far-future upcoming rows.
+  // Keep this function body identical in netlify/functions/lib/circa-contest.js and circa/index.html.
+  function visibleWeeks(weeks, picks) {
+    const list = Array.isArray(weeks) ? weeks : [];
+    const pickList = Array.isArray(picks) ? picks : [];
+
+    function weekNum(wk) {
+      if (!wk) return null;
+      if (wk.weekNum != null && Number.isFinite(Number(wk.weekNum))) return Number(wk.weekNum);
+      const m = String(wk.label || "").match(/week\s*(\d+)/i);
+      return m ? Number(m[1]) : null;
+    }
+
+    function placeholderRecord(record) {
+      if (record == null || String(record).trim() === "") return true;
+      const s = String(record).replace(/\s+/g, "").toUpperCase();
+      return s === "0W-0L" || s === "0-0" || s === "0W-0L-0P" || s === "0-0-0";
+    }
+
+    function picksOf(wk) {
+      if (Array.isArray(wk && wk.picks) && wk.picks.length) return wk.picks;
+      if (wk && wk.current) return pickList;
+      return [];
+    }
+
+    function hasGradedPicks(wk) {
+      return picksOf(wk).some(function (p) {
+        const r = String((p && p.result) || "").trim().toLowerCase();
+        return r !== "" && r !== "pending" && r !== "live" && r !== "...";
+      });
+    }
+
+    function hasHistory(wk) {
+      if (!wk) return false;
+      const st = String(wk.status || "").toLowerCase();
+      if (st === "completed" || st === "graded" || st === "final") return true;
+      if (wk.points != null) return true;
+      if (wk.record && !placeholderRecord(wk.record)) return true;
+      if (hasGradedPicks(wk)) return true;
+      return false;
+    }
+
+    function isCurrentLive(wk) {
+      if (!wk) return false;
+      if (wk.current === true) return true;
+      const st = String(wk.status || "").toLowerCase();
+      if ((st === "live" || st === "pending") && picksOf(wk).length > 0) return true;
+      return false;
+    }
+
+    function isComplete(wk) {
+      if (!wk) return false;
+      const st = String(wk.status || "").toLowerCase();
+      return st === "completed" || st === "graded" || st === "final";
+    }
+
+    const byNum = {};
+    for (let i = 0; i < list.length; i++) {
+      const n = weekNum(list[i]);
+      if (n != null) byNum[n] = list[i];
+    }
+
+    return list.filter(function (wk) {
+      if (hasHistory(wk)) return true;
+      if (isCurrentLive(wk)) return true;
+      const n = weekNum(wk);
+      if (n == null) return false;
+      const prev = byNum[n - 1];
+      if (!isComplete(prev)) return false;
+      // Next upcoming only if prior is complete AND this week has picks / is current-live.
+      return picksOf(wk).length > 0;
+    });
+  }
+
   function renderWeeksTable(sec, picks) {
     let tbl = '';
-    const weeks = sec.weeks || [];
+    const weeks = visibleWeeks(sec.weeks || [], picks || []);
     for (let w = 0; w < weeks.length; w++) {
       const wk = weeks[w];
       const highlight = wk.current ? ' style="background:var(--teal-light);"' : '';
@@ -613,9 +687,9 @@
         : '';
       const marketMove = p.marketMove || (p.marketSpread ? ('Market ' + p.marketSpread + ' vs Circa') : '');
       const marketChip = marketMove
-        ? `<span class="market-chip" title="Live consensus/Pinnacle versus the frozen Circa contest PDF number">${esc(marketMove)}${p.marketOdds ? ' · ' + esc(p.marketOdds) : ''}</span>`
+        ? `<span class="market-chip" title="Live consensus/Pinnacle versus the frozen Circa contest PDF number">${esc(marketMove)}</span>`
         : '';
-      const circaChip = `<span class="circa-chip" title="Frozen Circa Million VIII contest number">Circa ${esc(p.circaSpread || p.contestLine || p.pick)}</span>`;
+      const circaChip = `<span class="circa-chip" title="Frozen Circa Million VIII contest number — no juice, contest ATS">Circa ${esc(p.circaSpread || p.contestLine || p.pick)}</span>`;
       const earlyWarn = p.earlyKickoff
         ? `<div class="early-warn">Early kickoff (rule 8): all five picks must be submitted before this game starts.</div>`
         : '';
@@ -631,9 +705,9 @@
         </div>
         <div class="pick-line">
           <span class="pick-name">${esc(p.pick)}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
-          <span class="pick-odds">${esc(p.odds || 'EVEN')}</span>
+          ${circaChip}
         </div>
-        <div class="market-row">${circaChip}${marketChip}</div>
+        ${marketChip ? `<div class="market-row">${marketChip}</div>` : ''}
         <div class="pick-divider"></div>
         ${earlyWarn}
         ${lineNote}

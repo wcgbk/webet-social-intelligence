@@ -68,6 +68,22 @@
 [functions."generate-picks-nfl-background"]
   # Background function — 15min timeout for NFL pick generation
 
+[functions."trigger-picks-circa"]
+  # Circa Million VIII — NFL-only weekly ATS card (edge-picks-circa → /circa).
+  # Sep = PDT = UTC-7. Netlify allows one cron per function; this union fires
+  # candidate slots and trigger-picks-circa.js no-ops outside the intended windows:
+  #   Thu 17:15 UTC = 10:15 AM PT — first card after Circa lines post ~10:00 AM PT
+  #   Fri 17:00 UTC = 10:00 AM PT — refresh
+  #   Sat 20:00 UTC = 1:00 PM PT  — final, well before Sat 4:00 PM PT deadline
+  #   Wed 17:15 UTC — holiday first card only (2026-11-25 Thanksgiving, 2026-12-23 Christmas)
+  # After DST (Nov) 17:15 UTC is 9:15 AM PST; Circa still posts ~10:00 AM PT — TODO
+  # if a PST-shifted 18:15 UTC first-card cron is needed.
+  schedule = "0,15 17,20 * * 3,4,5,6"
+
+[functions."generate-picks-circa-background"]
+  # Background function — 15min timeout for Circa Million VIII weekly ATS card
+  # Spreads only, 5 unique NFL games, rank by calibrated cover probability.
+
 [functions."trigger-picks-cfb"]
   schedule = "10 13 * * *"
   # College Football pipeline — 9:10am ET (13:10 UTC). Aligned with Omega/NFL morning window

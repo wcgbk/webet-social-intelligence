@@ -4,13 +4,15 @@
 //
 // Official contest (https://www.circasports.com/circa-million):
 //   NFL only · 5 spreads/week · 1 pt cover / 0.5 push · no juice
-//   Lines Thu ~10:00 AM PT (Thanksgiving week Wed Nov 25 10am PT;
-//   Christmas week Wed Dec 23 10am PT)
-//   Picks due Sat 4:00 PM PT, or before the earliest selected kickoff
+//   Static Contest Point Spreads PDF ~10:00 AM Thu PT (Thanksgiving week
+//   Wed Nov 25 10am PT; Christmas week Wed Dec 23 10am PT)
+//   Picks due Sat 4:00 PM PT, or before the earliest selected kickoff (rule 8)
 //
-// Selection: calibrated cover probability (not dollar EV). One pick per game.
-// Posted number: Circa Sports (`circasports`) when Odds API has it, else
-// Pinnacle then consensus — noted on the card.
+// Selection: calibrated cover probability at the FROZEN Circa PDF number
+// (not dollar EV, not live Pinnacle/DK). lineSource is always
+// "circa-contest-pdf" — never pinnacle, draftkings, or circasports-from-Odds-API.
+// Odds API is used only to measure market move vs that freeze (classic contest
+// CLV). Refuse to publish a live card if the contest PDF/fixture cannot be loaded.
 // Default-avoid kickoffs before Sat 4pm PT unless coverProb gap ≥ 4pp.
 // Never include a game that already started. Skip/no-op outside NFL season.
 //
@@ -45,6 +47,14 @@ const {
   gameAlreadyStarted,
   isEarlyKickoff,
 } = require("./lib/circa-contest");
+
+const {
+  LINE_SOURCE: CONTEST_LINE_SOURCE,
+  RULES_PDF_URL,
+  ContestLinesError,
+  loadContestLines,
+  nickOf: contestNick,
+} = require("./lib/circa-contest-lines");
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = CONTEST.storeName;
@@ -350,29 +360,43 @@ async function fetchNFLSpreadOdds() {
   }
 }
 
-function findESPNGame(espnGames, home, away) {
+function teamsMatch(a, b) {
   const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
   const last = (s) => norm(s).split(" ").pop();
-  return espnGames.find(g =>
-    (norm(g.homeTeam) === norm(home) || last(g.homeTeam) === last(home)) &&
-    (norm(g.awayTeam) === norm(away) || last(g.awayTeam) === last(away))
+  return norm(a) === norm(b) || last(a) === last(b);
+}
+
+function findESPNGame(espnGames, home, away) {
+  return (espnGames || []).find(g =>
+    teamsMatch(g.homeTeam, home) && teamsMatch(g.awayTeam, away)
+  ) || null;
+}
+
+function findOddsGame(oddsGames, home, away) {
+  return (oddsGames || []).find(g =>
+    teamsMatch(g.home_team || g.homeTeam, home) && teamsMatch(g.away_team || g.awayTeam, away)
   ) || null;
 }
 
 function spreadOutcomes(mkt, home, away) {
-  const h = mkt.outcomes?.find(o => o.name === home);
-  const a = mkt.outcomes?.find(o => o.name === away);
+  const h = mkt.outcomes?.find(o => teamsMatch(o.name, home));
+  const a = mkt.outcomes?.find(o => teamsMatch(o.name, away));
   if (h?.point == null || a?.point == null) return null;
   return { home: h, away: a };
 }
 
-function buildPostedSpread(game) {
-  const home = game.home_team, away = game.away_team;
+/**
+ * Live sportsbook snapshot for CLV vs the frozen Circa PDF.
+ * Never used as the contest pick number / lineSource.
+ */
+function extractMarketSpread(game, home, away) {
+  home = home || game.home_team || game.homeTeam;
+  away = away || game.away_team || game.awayTeam;
   const spreadPts = [];
   const spreadNoVig = [];
-  let circa = null;
   let pinnacle = null;
   let sharp = { pri: 99, book: null, home: null, away: null };
+  let retail = null;
 
   for (const bk of (game.bookmakers || [])) {
     const key = (bk.key || "").toLowerCase();
@@ -385,13 +409,15 @@ function buildPostedSpread(game) {
       spreadPts.push({ v: sides.home.point, w });
       const nv = noVigProb(sides.home.price, sides.away.price);
       if (nv != null) spreadNoVig.push({ point: sides.home.point, prob: nv, w, key });
-      if (key === "circasports") circa = { book: key, home: sides.home, away: sides.away };
       if (key === "pinnacle") pinnacle = { book: key, home: sides.home, away: sides.away };
       if (pri < sharp.pri) sharp = { pri, book: key, home: sides.home, away: sides.away };
+      if (!retail && /draftkings|fanduel|betmgm|caesars|espnbet/.test(key)) {
+        retail = { book: key, home: sides.home, away: sides.away };
+      }
     }
   }
 
-  const consensusSpread = weightedMedian(spreadPts);
+  const consensusHome = weightedMedian(spreadPts);
   const wavg = (arr, sel) => {
     const tw = arr.reduce((s, x) => s + x.w, 0);
     return tw > 0 ? arr.reduce((s, x) => s + sel(x) * x.w, 0) / tw : null;
@@ -401,58 +427,106 @@ function buildPostedSpread(game) {
     const exact = arr.filter(x => Math.abs(x.point - num) < 0.01);
     return exact.length ? exact : arr;
   };
-  const spreadHomeNoVig = spreadNoVig.length ? wavg(atNum(spreadNoVig, consensusSpread), x => x.prob) : null;
+  const homeNoVig = spreadNoVig.length ? wavg(atNum(spreadNoVig, consensusHome), x => x.prob) : null;
 
-  let posted, lineSource, lineNote;
-  if (circa) {
-    posted = circa;
-    lineSource = "circasports";
-    lineNote = null;
-  } else if (pinnacle) {
-    posted = pinnacle;
-    lineSource = "pinnacle";
-    lineNote = "Circa number not posted on the Odds API — using Pinnacle.";
-  } else if (consensusSpread != null && sharp.home) {
-    posted = { book: sharp.book || "consensus", home: sharp.home, away: sharp.away };
-    lineSource = sharp.book || "consensus";
-    lineNote = "Circa number not posted on the Odds API — using sharp/consensus. Confirm the official Circa contest number before submitting.";
-  } else {
-    return null;
-  }
+  const quote = pinnacle || (sharp.home ? sharp : null) || retail;
+  if (consensusHome == null && !quote) return null;
 
+  const homePoint = quote ? quote.home.point : consensusHome;
+  const awayPoint = quote ? quote.away.point : (consensusHome != null ? -consensusHome : null);
   return {
-    home, away, commenceTime: game.commence_time,
-    consensusSpread,
-    spreadHomeNoVig,
-    postedHomePoint: posted.home.point,
-    postedAwayPoint: posted.away.point,
-    postedHomePrice: posted.home.price,
-    postedAwayPrice: posted.away.price,
-    lineSource,
-    lineNote,
+    book: quote ? quote.book : "consensus",
+    homePoint,
+    awayPoint,
+    homePrice: quote ? quote.home.price : null,
+    awayPrice: quote ? quote.away.price : null,
+    consensusHomePoint: consensusHome,
+    homeNoVig,
     bookCount: (game.bookmakers || []).length,
+  };
+}
+
+function fmtMoveDelta(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "+0.0";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(1)}`;
+}
+
+function formatMarketMove(teamName, marketPoint, contestPoint) {
+  if (marketPoint == null || contestPoint == null) return null;
+  const delta = Number(marketPoint) - Number(contestPoint);
+  const label = contestNick(teamName) || nick(teamName);
+  return `Market now ${label} ${fmtSigned(marketPoint)} (${fmtMoveDelta(delta)} vs Circa)`;
+}
+
+function keyNumberBoost(point) {
+  const a = Math.abs(Number(point));
+  if (a === 3 || a === 7) return 0.006;
+  if (a === 10 || a === 14) return 0.003;
+  return 0;
+}
+
+function clvBoost(contestPoint, marketPoint) {
+  if (contestPoint == null || marketPoint == null) return 0;
+  // Circa is the better number when it gives more points than the live market.
+  return 0.008 * Math.max(0, Number(contestPoint) - Number(marketPoint));
+}
+
+function mergeContestAndMarket(contestGame, oddsGame, board) {
+  const home = contestGame.home;
+  const away = contestGame.away;
+  const market = oddsGame ? extractMarketSpread(oddsGame, home, away) : null;
+  const sourceUrl = (board && board.sourceUrl) || contestGame.sourceUrl || null;
+  const lineNote = sourceUrl
+    ? `Official Circa Million VIII contest number from this week's frozen Contest Point Spreads PDF. Live market is shown only as movement versus that freeze.`
+    : `Official Circa Million VIII contest number from the verified weekly sheet. Live market is shown only as movement versus that freeze.`;
+  return {
+    home,
+    away,
+    commenceTime: contestGame.commenceTime || (oddsGame && oddsGame.commence_time) || null,
+    commenceHint: contestGame.commenceHint || null,
+    contestHomePoint: contestGame.homeSpread,
+    contestAwayPoint: contestGame.awaySpread,
+    postedHomePoint: contestGame.homeSpread,
+    postedAwayPoint: contestGame.awaySpread,
+    consensusSpread: market ? market.consensusHomePoint : null,
+    spreadHomeNoVig: market ? market.homeNoVig : null,
+    marketHomePoint: market ? market.homePoint : null,
+    marketAwayPoint: market ? market.awayPoint : null,
+    marketHomePrice: market ? market.homePrice : null,
+    marketAwayPrice: market ? market.awayPrice : null,
+    marketBook: market ? market.book : null,
+    lineSource: CONTEST_LINE_SOURCE,
+    lineNote,
+    sourceUrl,
+    contestIds: contestGame.contestIds || null,
+    venueHint: contestGame.venueHint || null,
+    bookCount: market ? market.bookCount : 0,
   };
 }
 
 function computeSpreadSides(posted, espnGame, ratingOverlay, qbAdj) {
   const cfg = PHASE_CONFIG;
   const c = posted;
-  if (c.postedHomePoint == null) return [];
+  const contestHome = c.contestHomePoint != null ? c.contestHomePoint : c.postedHomePoint;
+  const contestAway = c.contestAwayPoint != null ? c.contestAwayPoint : c.postedAwayPoint;
+  if (contestHome == null || contestAway == null) return [];
 
   const rHome = teamRatingLive(c.home, ratingOverlay);
   const rAway = teamRatingLive(c.away, ratingOverlay);
   const qbAdjPts = qbMarginAdj(c.home, c.away, qbAdj);
   const ratingMargin = (rHome - rAway) * cfg.ratingDamp + cfg.hfa + qbAdjPts;
-  const marketMargin = c.consensusSpread != null ? -c.consensusSpread : -c.postedHomePoint;
+  const marketMargin = c.consensusSpread != null ? -c.consensusSpread : -contestHome;
   const modelMargin = cfg.marketWeight * marketMargin + (1 - cfg.marketWeight) * ratingMargin;
 
   const homePrior = c.spreadHomeNoVig != null
-    ? Math.min(0.95, Math.max(0.05, c.spreadHomeNoVig + (c.postedHomePoint - (c.consensusSpread ?? c.postedHomePoint)) * 0.048))
+    ? Math.min(0.95, Math.max(0.05, c.spreadHomeNoVig + (contestHome - (c.consensusSpread ?? contestHome)) * 0.048))
     : null;
   const awayPrior = homePrior != null ? Math.min(0.95, Math.max(0.05, 1 - homePrior)) : null;
 
-  const homeRaw = nflSpreadCoverProb(modelMargin, c.postedHomePoint, cfg.sigmaMargin);
-  const awayRaw = nflSpreadCoverProb(-modelMargin, c.postedAwayPoint, cfg.sigmaMargin);
+  const homeRaw = nflSpreadCoverProb(modelMargin, contestHome, cfg.sigmaMargin);
+  const awayRaw = nflSpreadCoverProb(-modelMargin, contestAway, cfg.sigmaMargin);
   const homeCover = shrinkCover(homeRaw, homePrior);
   const awayCover = shrinkCover(awayRaw, awayPrior);
 
@@ -462,9 +536,10 @@ function computeSpreadSides(posted, espnGame, ratingOverlay, qbAdj) {
     homeTeam: c.home,
     awayTeam: c.away,
     commenceTime: c.commenceTime,
-    lineSource: c.lineSource,
+    lineSource: CONTEST_LINE_SOURCE,
     lineNote: c.lineNote,
-    venue: espnGame?.venue || "",
+    sourceUrl: c.sourceUrl || null,
+    venue: espnGame?.venue || c.venueHint || "",
     homeRecord: espnGame?.homeRecord || "",
     awayRecord: espnGame?.awayRecord || "",
     modelMargin,
@@ -472,40 +547,47 @@ function computeSpreadSides(posted, espnGame, ratingOverlay, qbAdj) {
     gameKey: `${c.away}@${c.home}`,
   };
 
+  function sideRow(side, team, contestPoint, cover, raw, marketPoint, marketPrice, contestId) {
+    const pick = `${nick(team)} ${fmtSigned(contestPoint)}`;
+    return {
+      ...base,
+      side,
+      pickTeam: team,
+      pick,
+      odds: null,
+      coverProb: cover,
+      rawProb: raw,
+      postedPoint: contestPoint,
+      circaSpread: fmtSigned(contestPoint),
+      contestLine: pick,
+      contestId: contestId != null ? contestId : null,
+      marketSpread: marketPoint != null ? fmtSigned(marketPoint) : null,
+      marketSpreadRaw: marketPoint != null ? Number(marketPoint) : null,
+      marketOdds: marketPrice != null ? marketPrice : null,
+      marketMove: formatMarketMove(team, marketPoint, contestPoint),
+      rankScore: cover + clvBoost(contestPoint, marketPoint) + keyNumberBoost(contestPoint),
+    };
+  }
+
+  const ids = c.contestIds || {};
   return [
-    {
-      ...base,
-      side: "home",
-      pickTeam: c.home,
-      pick: `${nick(c.home)} ${fmtSigned(c.postedHomePoint)}`,
-      odds: c.postedHomePrice,
-      coverProb: homeCover,
-      rawProb: homeRaw,
-      postedPoint: c.postedHomePoint,
-    },
-    {
-      ...base,
-      side: "away",
-      pickTeam: c.away,
-      pick: `${nick(c.away)} ${fmtSigned(c.postedAwayPoint)}`,
-      odds: c.postedAwayPrice,
-      coverProb: awayCover,
-      rawProb: awayRaw,
-      postedPoint: c.postedAwayPoint,
-    },
+    sideRow("home", c.home, contestHome, homeCover, homeRaw, c.marketHomePoint, c.marketHomePrice, ids.home),
+    sideRow("away", c.away, contestAway, awayCover, awayRaw, c.marketAwayPoint, c.marketAwayPrice, ids.away),
   ];
 }
 
 function buildFinalPicks(selected, weekNum) {
-  return selected.map((c, i) => {
+  return selected.map((c) => {
     const cover = Number(c.coverProb);
     const rating = coverToRating(cover);
     const edge = cover - 0.50;
     const edgePct = `${edge >= 0 ? "+" : ""}${(edge * 100).toFixed(1)}%`;
     const coverPct = `${(cover * 100).toFixed(1)}%`;
-    const fallback = c.lineNote
-      ? `${c.lineNote} WeBetAI projects this spread at calibrated cover ${coverPct} (contest breakeven is 50 percent with no juice).`
-      : `WeBetAI ranks this side by calibrated cover probability ${coverPct} at the ${c.lineSource === "circasports" ? "Circa Sports posted" : "market"} number ${c.pick}. Contest scoring has no juice — edge vs 50 percent is ${edgePct}.`;
+    const moveBit = c.marketMove ? ` ${c.marketMove}.` : "";
+    const fallback =
+      `WeBetAI ranks ${c.pick} at the frozen Circa contest PDF number (cover ${coverPct}, edge vs 50 percent ${edgePct}).` +
+      moveBit +
+      ` Contest scoring has no juice — this is a cover-probability pick, not a sportsbook EV bet.`;
     return {
       sport: "NFL",
       betType: "spread",
@@ -516,14 +598,21 @@ function buildFinalPicks(selected, weekNum) {
       awayTeam: c.awayTeam,
       venue: c.venue || "",
       pick: c.pick,
-      odds: fmtOdds(c.odds),
+      odds: "EVEN",
       coverProb: coverPct,
       coverProbRaw: cover,
       edgePct,
       commenceTime: c.commenceTime || "",
       coreReasoning: c.coreReasoning || fallback,
-      lineSource: c.lineSource,
+      lineSource: CONTEST_LINE_SOURCE,
       lineNote: c.lineNote || null,
+      sourceUrl: c.sourceUrl || null,
+      circaSpread: c.circaSpread || fmtSigned(c.postedPoint),
+      contestLine: c.contestLine || c.pick,
+      contestId: c.contestId != null ? c.contestId : null,
+      marketSpread: c.marketSpread || null,
+      marketOdds: c.marketOdds != null ? fmtOdds(c.marketOdds) : null,
+      marketMove: c.marketMove || null,
       earlyKickoff: !!(c.earlyKickoff || isEarlyKickoff(c.commenceTime, weekNum)),
       source: "circa",
       result: "pending",
@@ -531,15 +620,15 @@ function buildFinalPicks(selected, weekNum) {
   });
 }
 
-const CIRCA_NARRATOR_SYSTEM = `You are THE LOCK — WeBetAI's NFL contest analyst for Circa Million VIII. The statistical model has ALREADY selected these 5 against-the-spread picks by calibrated cover probability (the contest has no juice). Your only job is to write honest, compelling narratives.
+const CIRCA_NARRATOR_SYSTEM = `You are THE LOCK — WeBetAI's NFL contest analyst for Circa Million VIII. The statistical model has ALREADY selected these 5 against-the-spread picks by calibrated cover probability at the frozen Circa contest PDF number (the contest has no juice). Your only job is to write honest, compelling narratives.
 
 RULES:
 - Say "WeBetAI" — never "the model" or "our model".
-- Use the EXACT pick string, odds, coverProb, and edgePct from the table. Never invent a different line.
+- Use the EXACT pick string, Circa contest number, coverProb, and edgePct from the table. Never invent a different line and never substitute a Pinnacle/DraftKings number for the contest number.
 - matchup is Away @ Home format. Use homeTeam / awayTeam / venue from the table for any location or home-field claim.
 - NEVER invent or invert venue/home-field. If the pick is the away team, do NOT claim home-field advantage.
-- Use ONLY facts in the data (teams, the contest number, Circa vs consensus note, records, venue, cover math). No invented player/coach/news.
-- coreReasoning: 3-4 sentences arguing FOR the pick side. Start with a concrete supporting fact from the data. Mention key numbers 3/7 when the number sits on one. End with why this side ranks on a no-juice contest card.
+- Use ONLY facts in the data (teams, the frozen Circa PDF number, marketMove vs that freeze, records, venue, cover math). No invented player/coach/news.
+- coreReasoning: 3-4 sentences arguing FOR the pick side. Start with a concrete supporting fact from the data. Mention the Circa number and any market move vs Circa. Mention key numbers 3/7 when the number sits on one. End with why this side ranks on a no-juice contest card.
 - Do not discuss units, Kelly, or sportsbook EV.
 
 Return ONLY valid JSON:
@@ -551,7 +640,7 @@ async function narratePicks(picks, weekLabelStr) {
     for (const p of picks) {
       if (p.coreReasoning) continue;
       p.coreReasoning =
-        `WeBetAI scanned the NFL spread board for ${weekLabelStr} and ranks ${p.pick} at ${p.odds}${p.lineSource === "circasports" ? " (Circa posted number)" : p.lineNote ? " (" + p.lineNote + ")" : ""} by calibrated cover ${p.coverProb}. Contest scoring has no juice, so this is a cover-probability pick, not a dollar-EV bet.`;
+        `WeBetAI scanned the frozen Circa contest PDF for ${weekLabelStr} and ranks ${p.pick} (Circa number${p.marketMove ? "; " + p.marketMove : ""}) by calibrated cover ${p.coverProb}. Contest scoring has no juice, so this is a cover-probability pick, not a dollar-EV bet.`;
     }
     return picks;
   };
@@ -562,6 +651,7 @@ async function narratePicks(picks, weekLabelStr) {
       pick: p.pick, matchup: p.matchup, homeTeam: p.homeTeam, awayTeam: p.awayTeam, venue: p.venue,
       odds: p.odds, coverProb: p.coverProb, edgePct: p.edgePct,
       lineSource: p.lineSource, lineNote: p.lineNote, earlyKickoff: p.earlyKickoff,
+      circaSpread: p.circaSpread, marketMove: p.marketMove, marketSpread: p.marketSpread,
     }));
     const resp = await anthropicFetch({
       model: "claude-sonnet-4-6",
@@ -695,7 +785,7 @@ async function storeCard(weekStr, picksData, force, scheduled, now) {
   return true;
 }
 
-function liveCardPayload({ weekNum, week, picks, strategy }) {
+function liveCardPayload({ weekNum, week, picks, strategy, sourceUrl, rulesUrl }) {
   return {
     preview: false,
     pending: false,
@@ -712,7 +802,24 @@ function liveCardPayload({ weekNum, week, picks, strategy }) {
     modelVersion: MODEL_VERSION,
     model: MODEL_VERSION,
     generatedAt: new Date().toISOString(),
+    lineSource: CONTEST_LINE_SOURCE,
+    sourceUrl: sourceUrl || null,
+    rulesUrl: rulesUrl || CONTEST.rulesUrl || RULES_PDF_URL,
   };
+}
+
+function contestPdfUnavailablePayload(weekInfo, err) {
+  const pending = pendingPayload(weekInfo, {
+    error: true,
+    errorCode: "contest-pdf-unavailable",
+    errorMessage: err && err.message ? err.message : null,
+  });
+  pending.pendingMessage =
+    `Week ${weekInfo.weekNum} card pending — official Circa contest point spreads PDF is not available. WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line.`;
+  pending.noPlays = pending.pendingMessage;
+  pending.error = true;
+  pending.errorCode = "contest-pdf-unavailable";
+  return pending;
 }
 
 exports.handler = async (event) => {
@@ -735,15 +842,20 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "outside NFL season", week }) };
   }
 
-  const { games: espnGames, seasonType } = await fetchESPNWeekSlate(weekNum, CONTEST.seasonYear);
-  if (seasonType && seasonType !== 2 && !espnGames.length) {
-    console.log(`[circa] ESPN seasonType=${seasonType} and no regular-season games — no-op.`);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no NFL regular-season games", week }) };
+  let board;
+  try {
+    board = await loadContestLines(weekNum, { now, slate: null });
+  } catch (e) {
+    const msg = e instanceof ContestLinesError ? e.message : `Contest lines unavailable: ${e.message}`;
+    console.error(`[circa] ${msg}`);
+    const pending = contestPdfUnavailablePayload({ weekNum, week }, e);
+    if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, error: true, picksData: pending }) };
+    const stored = await storeCard(week, pending, force, scheduled, now);
+    return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, error: true, stored, reason: "contest-pdf-unavailable" }) };
   }
-  if (!espnGames.length) {
-    console.log(`[circa] No ESPN NFL games for ${week} — no-op.`);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no NFL games this week", week }) };
-  }
+  console.log(`[circa] Contest board week ${weekNum}: ${board.games.length} game(s) via ${board.fromFixture ? "verified fixture" : "PDF parse"} (${board.sourceUrl || "no url"})`);
+
+  const { games: espnGames } = await fetchESPNWeekSlate(weekNum, CONTEST.seasonYear);
   console.log(`[circa] ${espnGames.length} ESPN game(s) for ${week}`);
 
   const [ratingOverlay, qbAdj, oddsGames] = await Promise.all([
@@ -751,42 +863,38 @@ exports.handler = async (event) => {
     fetchQbAdjustments(),
     fetchNFLSpreadOdds(),
   ]);
-
   if (!oddsGames.length) {
-    console.log("[circa] No odds available — writing pending card.");
-    const pending = pendingPayload({ weekNum, week });
-    if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, picksData: pending }) };
-    const stored = await storeCard(week, pending, force, scheduled, now);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, stored }) };
+    console.log("[circa] No Odds API market — covering Circa PDF numbers from ratings only.");
   }
 
   const allSides = [];
-  for (const g of oddsGames) {
-    const espnGame = findESPNGame(espnGames, g.home_team, g.away_team);
-    if (!espnGame) continue;
-    if (espnGame.state && espnGame.state !== "pre") {
-      console.log(`[circa] skip started/final ${g.away_team} @ ${g.home_team} (${espnGame.state})`);
+  for (const cg of board.games) {
+    const espnGame = findESPNGame(espnGames, cg.home, cg.away);
+    const oddsGame = findOddsGame(oddsGames, cg.home, cg.away);
+    const commence = (espnGame && espnGame.date) || (oddsGame && oddsGame.commence_time) || cg.commenceTime;
+    if (espnGame && espnGame.state && espnGame.state !== "pre") {
+      console.log(`[circa] skip started/final ${cg.away} @ ${cg.home} (${espnGame.state})`);
       continue;
     }
-    if (gameAlreadyStarted(g.commence_time, now)) continue;
-    const posted = buildPostedSpread(g);
-    if (!posted) {
-      console.log(`[circa] ${g.away_team} @ ${g.home_team}: no usable spread`);
+    if (gameAlreadyStarted(commence, now)) {
+      console.log(`[circa] skip already started ${cg.away} @ ${cg.home}`);
       continue;
     }
-    const sides = computeSpreadSides(posted, espnGame, ratingOverlay, qbAdj);
+    const row = mergeContestAndMarket({ ...cg, commenceTime: commence }, oddsGame, board);
+    const sides = computeSpreadSides(row, espnGame, ratingOverlay, qbAdj);
     for (const s of sides) {
-      console.log(`[circa]   ${s.pick} @ ${fmtOdds(s.odds)} (${s.lineSource}) cover ${(s.coverProb * 100).toFixed(1)}%`);
+      console.log(`[circa]   ${s.pick} (${s.lineSource}) cover ${(s.coverProb * 100).toFixed(1)}% ${s.marketMove || ""}`);
     }
     allSides.push(...sides);
   }
 
   const selected = selectCircaCard(allSides, { now, weekNum });
   if (!selected.length) {
-    console.log("[circa] No remaining unplayed spreads — writing pending card.");
-    const pending = pendingPayload({ weekNum, week });
-    pending.pendingMessage = `Week ${weekNum} card pending — no unplayed NFL spreads available yet.`;
+    console.log("[circa] No remaining unplayed contest spreads — writing pending card.");
+    const pending = pendingPayload({ weekNum, week }, { sourceUrl: board.sourceUrl });
+    pending.pendingMessage = `Week ${weekNum} card pending — no unplayed NFL contest spreads available yet.`;
     pending.noPlays = pending.pendingMessage;
+    pending.sourceUrl = board.sourceUrl;
     if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, picksData: pending }) };
     const stored = await storeCard(week, pending, force, scheduled, now);
     return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, stored, picks: 0 }) };
@@ -795,7 +903,11 @@ exports.handler = async (event) => {
   const picks = buildFinalPicks(selected, weekNum);
   await narratePicks(picks, weekLabel(weekNum));
   const strategy = strategyForCard(picks, weekNum);
-  const picksData = liveCardPayload({ weekNum, week, picks, strategy });
+  const picksData = liveCardPayload({
+    weekNum, week, picks, strategy,
+    sourceUrl: board.sourceUrl,
+    rulesUrl: board.rulesUrl || CONTEST.rulesUrl,
+  });
 
   console.log(`[circa] Card: ${picks.map(p => `${p.pick} ${p.odds} (${p.coverProb})`).join(" | ")}`);
   if (dryRun) {
@@ -808,10 +920,14 @@ exports.handler = async (event) => {
   return { statusCode: 200, body: JSON.stringify({ ok: true, picks: picks.length, stored, week }) };
 };
 
-module.exports.buildPostedSpread = buildPostedSpread;
+module.exports.extractMarketSpread = extractMarketSpread;
+module.exports.mergeContestAndMarket = mergeContestAndMarket;
+module.exports.formatMarketMove = formatMarketMove;
 module.exports.computeSpreadSides = computeSpreadSides;
 module.exports.buildFinalPicks = buildFinalPicks;
 module.exports.nflSpreadCoverProb = nflSpreadCoverProb;
 module.exports.shrinkCover = shrinkCover;
 module.exports.liveCardPayload = liveCardPayload;
+module.exports.contestPdfUnavailablePayload = contestPdfUnavailablePayload;
 module.exports.MODEL_VERSION = MODEL_VERSION;
+module.exports.CONTEST_LINE_SOURCE = CONTEST_LINE_SOURCE;

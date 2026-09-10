@@ -18,6 +18,7 @@ const {
   saturdayDeadline,
   holidayForWeek,
   defaultWeeks,
+  visibleWeeks,
   coverToRating,
   RATING_TO_CONFIDENCE,
 } = require("./netlify/functions/lib/circa-contest");
@@ -85,6 +86,17 @@ check("page shows Circa vs market (contest PDF language)", () => {
 check("page empty state mentions contest PDF missing / no Pinnacle fallback", () => {
   assert.ok(/will not publish a card on Pinnacle/i.test(html) || /contest-pdf-unavailable/.test(html));
 });
+check("results table filters through visibleWeeks", () => {
+  assert.ok(/function visibleWeeks\(weeks, picks\)/.test(html));
+  assert.ok(/visibleWeeks\(sec\.weeks/.test(html));
+});
+check("pick cards omit EVEN / sportsbook juice", () => {
+  assert.ok(!/p\.odds\s*\|\|\s*['"]EVEN['"]/.test(html));
+  assert.ok(!/\$\{esc\(p\.odds/.test(html));
+  assert.ok(!/>EVEN</.test(html));
+  assert.ok(/circa-chip/.test(html));
+  assert.ok(/market-chip/.test(html));
+});
 
 console.log("lib/circa-contest");
 check("contest metadata", () => {
@@ -124,7 +136,9 @@ check("pending payload shape", () => {
   assert.strictEqual(p.contest, "Circa Million VIII");
   assert.ok(Array.isArray(p.picks) && p.picks.length === 0);
   assert.ok(p.kpis && p.kpis.totalWeeks === 18);
-  assert.ok(Array.isArray(p.weeks) && p.weeks.length === 18);
+  assert.ok(Array.isArray(p.weeks) && p.weeks.length === 1, "pending API should not dump 18 upcoming weeks");
+  assert.ok(/Week 1/.test(p.weeks[0].label));
+  assert.ok(!p.weeks.some(w => /Week 18/.test(w.label)));
   assert.ok(/Week 1 card pending/.test(p.pendingMessage));
   assert.ok(/Thu 10am PT/.test(p.pendingMessage));
   assert.ok(/Sat 4pm PT/.test(p.pendingMessage));
@@ -134,8 +148,86 @@ check("pending payload shape", () => {
 });
 check("default weeks highlight current", () => {
   const weeks = defaultWeeks(1);
+  assert.strictEqual(weeks.length, 18);
   assert.strictEqual(weeks[0].current, true);
   assert.strictEqual(weeks[1].current, false);
+});
+check("visibleWeeks: only current week when no history (Week 1 live)", () => {
+  const weeks = defaultWeeks(1);
+  const vis = visibleWeeks(weeks, [{ pick: "Jets +3", result: "pending" }]);
+  assert.strictEqual(vis.length, 1);
+  assert.ok(/Week 1/.test(vis[0].label));
+  assert.ok(!vis.some(w => /Week 2/.test(w.label)));
+  assert.ok(!vis.some(w => /Week 18/.test(w.label)));
+});
+check("visibleWeeks: history + current when prior weeks are complete/graded", () => {
+  const weeks = defaultWeeks(2);
+  weeks[0].status = "graded";
+  weeks[0].points = 3.5;
+  weeks[0].record = "3W-2L";
+  weeks[0].current = false;
+  weeks[1].status = "live";
+  weeks[1].current = true;
+  const vis = visibleWeeks(weeks, [{ pick: "Bills -3" }]);
+  assert.strictEqual(vis.length, 2);
+  assert.ok(vis.some(w => /Week 1/.test(w.label)));
+  assert.ok(vis.some(w => /Week 2/.test(w.label)));
+  assert.ok(!vis.some(w => /Week 18/.test(w.label)));
+  assert.ok(!vis.some(w => /Week 3/.test(w.label)));
+});
+check("visibleWeeks: no Week 18 spam while early season", () => {
+  const weeks = defaultWeeks(1);
+  const vis = visibleWeeks(weeks, []);
+  assert.strictEqual(vis.length, 1);
+  assert.ok(/Week 1/.test(vis[0].label));
+  assert.ok(!vis.some(w => /Week 18/.test(w.label)));
+  const mid = visibleWeeks(defaultWeeks(5), [{ pick: "A +3" }]);
+  assert.strictEqual(mid.length, 1);
+  assert.ok(/Week 5/.test(mid[0].label));
+  assert.ok(!mid.some(w => /Week 18/.test(w.label)));
+});
+check("visibleWeeks: next week hidden until prior complete AND next live", () => {
+  const weeks = defaultWeeks(1);
+  weeks[0].status = "graded";
+  weeks[0].points = 4;
+  weeks[0].current = false;
+  let vis = visibleWeeks(weeks, []);
+  assert.ok(vis.some(w => /Week 1/.test(w.label)));
+  assert.ok(!vis.some(w => /Week 2/.test(w.label)));
+  weeks[1].status = "live";
+  weeks[1].current = true;
+  vis = visibleWeeks(weeks, [{ pick: "X +3" }]);
+  assert.strictEqual(vis.length, 2);
+  assert.ok(vis.some(w => /Week 2/.test(w.label)));
+});
+check("visibleWeeks: placeholder 0W-0L is not history", () => {
+  const weeks = defaultWeeks(2);
+  weeks[0].current = false;
+  weeks[0].status = "upcoming";
+  weeks[0].record = "0W-0L";
+  weeks[1].current = true;
+  const vis = visibleWeeks(weeks, []);
+  assert.strictEqual(vis.length, 1);
+  assert.ok(/Week 2/.test(vis[0].label));
+});
+check("page visibleWeeks mirrors lib", () => {
+  function extractFn(src) {
+    const startToken = "function visibleWeeks(weeks, picks)";
+    const start = src.indexOf(startToken);
+    assert.ok(start >= 0, "visibleWeeks missing");
+    let i = src.indexOf("{", start);
+    let depth = 0;
+    for (; i < src.length; i++) {
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}") {
+        depth--;
+        if (depth === 0) return src.slice(start, i + 1).replace(/\s+/g, " ").trim();
+      }
+    }
+    throw new Error("unterminated visibleWeeks");
+  }
+  const libSrc = fs.readFileSync(path.join(root, "netlify/functions/lib/circa-contest.js"), "utf8");
+  assert.strictEqual(extractFn(html), extractFn(libSrc));
 });
 check("TNF / early kickoff vs Sat 4pm PT", () => {
   assert.strictEqual(isEarlyKickoff("2026-09-11T00:20:00Z", 1), true);
@@ -387,9 +479,11 @@ check("final pick fields match the page", () => {
     venue: "Nissan Stadium",
   }], 1);
   const p = picks[0];
-  for (const k of ["matchup", "pick", "odds", "coverProb", "edgePct", "commenceTime", "coreReasoning", "confidence", "sport", "betType", "circaSpread", "contestLine", "marketMove", "lineSource"]) {
+  for (const k of ["matchup", "pick", "coverProb", "edgePct", "commenceTime", "coreReasoning", "confidence", "sport", "betType", "circaSpread", "contestLine", "marketMove", "lineSource"]) {
     assert.ok(p[k] != null && p[k] !== "", "missing " + k);
   }
+  assert.ok(p.odds == null || p.odds === "" || /contest ats/i.test(String(p.odds)), "odds must not be a sportsbook price");
+  assert.ok(!/^even$/i.test(String(p.odds || "")));
   assert.strictEqual(p.sport, "NFL");
   assert.strictEqual(p.betType, "spread");
   assert.strictEqual(p.matchup, "New York Jets @ Tennessee Titans");
@@ -478,6 +572,10 @@ async function runAsync() {
     assert.ok(body.pendingMessage);
     assert.strictEqual(body.week, "2026-W01");
     assert.ok(body.rulesUrl);
+    assert.ok(Array.isArray(body.weeks));
+    assert.strictEqual(body.weeks.length, 1);
+    assert.ok(/Week 1/.test(body.weeks[0].label));
+    assert.ok(!body.weeks.some(w => /Week 18/.test(w.label)));
     console.log("  ok  pending JSON shape");
   } catch (e) {
     failed++;

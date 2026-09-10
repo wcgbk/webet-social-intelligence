@@ -11,6 +11,7 @@ const {
   weekBlobKey,
   defaultKpis,
   defaultWeeks,
+  visibleWeeks,
 } = require("./lib/circa-contest");
 
 const CORS = {
@@ -48,7 +49,10 @@ function normalizePayload(data, weekInfo) {
     weekNum,
     picks: Array.isArray(data.picks) ? data.picks : [],
     kpis: data.kpis || defaultKpis(),
-    weeks: Array.isArray(data.weeks) && data.weeks.length ? data.weeks : defaultWeeks(weekNum),
+    weeks: visibleWeeks(
+      Array.isArray(data.weeks) && data.weeks.length ? data.weeks : defaultWeeks(weekNum),
+      Array.isArray(data.picks) ? data.picks : []
+    ),
     modelVersion: data.modelVersion || data.model || CONTEST.modelVersion,
     generatedAt: data.generatedAt || null,
     pendingMessage: data.pendingMessage || pendingPayload(weekInfo).pendingMessage,
@@ -118,6 +122,7 @@ exports.handler = async (event) => {
     const pending = pendingPayload(weekInfo, {
       kpis: (data && data.kpis) || defaultKpis(),
       weeks: (data && data.weeks) || defaultWeeks(weekInfo.weekNum),
+      picks: (data && data.picks) || [],
     });
     return ok(pending);
   } catch (err) {

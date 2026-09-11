@@ -72,6 +72,8 @@
 
   function shouldSkip() {
     var p = (location.pathname || '').replace(/\/+$/, '') || '/';
+    // Homepage only — keep Share on dashboard and other pages
+    if (p === '/' || p === '') return true;
     return p === '/admin' || p.indexOf('/admin/') === 0 ||
       p === '/users' || p.indexOf('/users/') === 0 ||
       p === '/exclude-ga' || p.indexOf('/exclude-ga/') === 0;

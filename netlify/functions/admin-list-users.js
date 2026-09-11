@@ -52,7 +52,7 @@ function publicUser(u, key) {
 }
 
 async function listUsers() {
-  const { getStore } = await import('@netlify/blobs');
+  const { getStore } = require('@netlify/blobs');
   // IMPORTANT: ambient store (no siteID/token) — same context auth writes use in production.
   // Passing a PAT + siteID can resolve an empty/wrong store.
   const store = getStore('wbai-users');

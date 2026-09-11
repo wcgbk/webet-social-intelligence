@@ -335,12 +335,13 @@
     }
     .topbar-action:hover { color: #ffffff; }
 
-    /* ─── Topbar WeBit + user area ───────────────────────────────── */
-    .coin-img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    /* ─── Topbar WeBit + user area (aligned 36px controls) ───────── */
+    .coin-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: block; }
     .topbar-webit {
-      display: flex; align-items: center; gap: 7px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      height: 36px; box-sizing: border-box;
       background: none; border: none;
-      border-radius: 9999px; padding: 4px 8px 4px 4px;
+      border-radius: 9999px; padding: 2px 8px 2px 2px;
       cursor: pointer; flex-shrink: 0;
       transition: background 0.15s;
     }
@@ -353,21 +354,25 @@
     .topbar-webit.authed .topbar-webit-bal {
       color: #ffffff;                 /* bright when logged in */
     }
-    .topbar-user-area { display: flex; align-items: center; }
+    .topbar-user-area { display: inline-flex; align-items: center; height: 36px; }
     .topbar-login-btn {
-      display: flex; align-items: center; gap: 6px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      height: 36px; min-height: 36px; box-sizing: border-box;
       background: #ffffff;
       border: none;
       color: #000000; border-radius: 9999px;
-      padding: 7px 15px 7px 11px;
+      padding: 0 14px 0 12px;
       font-family: inherit; font-size: 0.75rem; font-weight: 700;
       cursor: pointer; white-space: nowrap;
       transition: opacity 0.15s;
     }
+    .topbar-login-btn svg { width: 14px; height: 14px; flex-shrink: 0; display: block; }
     .topbar-login-btn:hover { opacity: 0.88; }
     .topbar-avatar-btn {
       background: none; border: none; cursor: pointer;
-      padding: 2px; border-radius: 50%; flex-shrink: 0;
+      width: 36px; height: 36px; padding: 0;
+      border-radius: 50%; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
       transition: transform 0.15s, opacity 0.15s;
     }
     .topbar-avatar-btn:hover { transform: scale(1.06); opacity: 0.88; }
@@ -377,15 +382,38 @@
       font-size: 0.75rem; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
       overflow: hidden; border: 2px solid rgba(255,255,255,0.18);
+      box-sizing: border-box;
     }
     .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* Share injected by site-share.js — match topbar control height */
+    .topbar .wb-site-share-btn,
+    .topbar #wb-site-share {
+      height: 36px !important;
+      min-height: 36px !important;
+      padding: 0 14px !important;
+      font-size: 12px !important;
+      line-height: 1 !important;
+      box-sizing: border-box !important;
+    }
     @media (max-width: 600px) {
       .topbar-login-text { display: none; }
-      .topbar-login-btn { padding: 10px 12px; gap: 0; min-height: 40px; min-width: 40px; justify-content: center; }
+      .coin-img { width: 36px; height: 36px; }
+      .topbar-webit {
+        width: 36px; height: 36px; padding: 0; gap: 0;
+      }
+      .topbar-login-btn {
+        width: 36px; height: 36px; min-width: 36px; min-height: 36px;
+        padding: 0; gap: 0; border-radius: 50%;
+      }
       .topbar-login-btn svg { width: 16px; height: 16px; }
       .topbar-webit-bal { display: none !important; }
-      .topbar-avatar-btn { padding: 4px; }
       .topbar-avatar { width: 36px; height: 36px; }
+      .topbar .wb-site-share-btn,
+      .topbar #wb-site-share {
+        height: 36px !important;
+        padding: 0 12px !important;
+        font-size: 11px !important;
+      }
     }
 
     /* ─── Panel Container ─────────────────────────────────────────────── */

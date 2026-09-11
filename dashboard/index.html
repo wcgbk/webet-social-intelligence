@@ -355,11 +355,17 @@
     .topbar-webit.authed .topbar-webit-bal {
       color: #ffffff;                 /* bright when logged in */
     }
-    .topbar-user-area { display: inline-flex; align-items: center; height: 34px; align-self: center; }
+    .topbar-user-area {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 42px; align-self: center; margin-top: 0; margin-bottom: 0;
+    }
     .topbar-login-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       height: 34px; min-height: 34px; width: 34px; min-width: 34px;
       box-sizing: border-box;
+      align-self: center;
+      margin: 0;
+      line-height: 0;
       background: #ffffff;
       border: none;
       color: #000000; border-radius: 50%;
@@ -376,6 +382,7 @@
       width: 34px; height: 34px; padding: 0;
       border-radius: 50%; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
+      align-self: center; margin: 0; line-height: 0;
       transition: transform 0.15s, opacity 0.15s;
     }
     .topbar-avatar-btn:hover { transform: scale(1.06); opacity: 0.88; }
@@ -401,6 +408,13 @@
       .topbar-login-btn svg { width: 14px; height: 14px; }
       .topbar-webit-bal { display: none !important; }
       .topbar-avatar { width: 34px; height: 34px; }
+    }
+
+    .topbar .wb-site-share-btn,
+    .topbar #wb-site-share {
+      align-self: center !important;
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
     }
 
     /* ─── Panel Container ─────────────────────────────────────────────── */

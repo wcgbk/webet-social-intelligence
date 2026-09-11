@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex,nofollow" />
   <title>Registered users — WeBet Social Admin</title>
   <script>
@@ -20,28 +20,63 @@
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #0b0f14; color: #e8eef6; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    h1 { font-size: 1.4rem; margin: 0 0 4px; }
-    .sub { color: #9fb0c3; margin: 0 0 20px; }
-    .card { background: #121821; border: 1px solid #243041; border-radius: 16px; padding: 20px; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #0b0f14; color: #e8eef6;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+    @media (min-width: 720px) { .wrap { padding: 24px; } }
+    h1 { font-size: 1.25rem; margin: 0 0 4px; }
+    .sub { color: #9fb0c3; margin: 0 0 16px; font-size: .9rem; line-height: 1.4; }
+    .card {
+      background: #121821; border: 1px solid #243041; border-radius: 14px; padding: 16px;
+    }
     label { display:block; font-size: .8rem; color: #9fb0c3; margin: 0 0 6px; }
-    input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2c3b50; background: #0b0f14; color: #e8eef6; margin-bottom: 12px; }
-    button { border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 600; cursor: pointer; background: #3b82f6; color: #fff; }
+    input, button { font: inherit; }
+    input[type="email"], input[type="password"], input[type="search"] {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2c3b50;
+      background: #0b0f14; color: #e8eef6; margin-bottom: 12px;
+    }
+    button {
+      border: 0; border-radius: 12px; padding: 12px 14px; font-weight: 600; cursor: pointer;
+      background: #3b82f6; color: #fff; width: 100%;
+    }
     button.secondary { background: #243041; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
-    .stat { background: #0b0f14; border: 1px solid #243041; border-radius: 12px; padding: 12px 14px; min-width: 120px; }
-    .stat b { display:block; font-size: 1.3rem; }
-    .stat span { color: #9fb0c3; font-size: .8rem; }
-    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #243041; vertical-align: top; }
-    th { color: #9fb0c3; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
-    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #243041; font-size: .75rem; }
-    .err { color: #f87171; }
+    .toolbar { display: grid; gap: 8px; margin-bottom: 14px; }
+    @media (min-width: 640px) {
+      .toolbar { grid-template-columns: 1fr auto auto; align-items: center; }
+      .toolbar button { width: auto; min-width: 96px; }
+      .toolbar input { margin: 0; }
+    }
+    .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+    @media (min-width: 640px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+    .stat { background: #0b0f14; border: 1px solid #243041; border-radius: 12px; padding: 12px; }
+    .stat b { display:block; font-size: 1.25rem; }
+    .stat span { color: #9fb0c3; font-size: .75rem; }
+    .list { display: grid; gap: 10px; }
+    .user {
+      background: #121821; border: 1px solid #243041; border-radius: 14px; padding: 14px;
+    }
+    .user-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .user-name { font-weight: 700; font-size: 1rem; }
+    .user-handle { color: #9fb0c3; font-size: .85rem; margin-top: 2px; }
+    .tag { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #243041; font-size: .72rem; white-space: nowrap; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 12px; font-size: .82rem; }
+    .meta div span { display:block; color: #9fb0c3; font-size: .7rem; margin-bottom: 2px; }
+    .err { color: #f87171; font-size: .9rem; }
     .ok { color: #34d399; }
     a { color: #93c5fd; }
-    #login { max-width: 420px; margin: 10vh auto; }
+    #login { max-width: 420px; margin: 8vh auto; }
     #app { display: none; }
+    .desk-table { display: none; overflow: auto; }
+    @media (min-width: 900px) {
+      .list { display: none; }
+      .desk-table { display: block; }
+      table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+      th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #243041; }
+      th { color: #9fb0c3; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+    }
   </style>
 </head>
 <body>
@@ -59,31 +94,27 @@
 
     <div id="app">
       <h1>Registered users</h1>
-      <p class="sub">Source: <code>wbai-users</code> blob store · <a href="/admin">Admin</a></p>
-      <div class="row" id="stats"></div>
-      <div class="row">
-        <input id="q" type="search" placeholder="Filter name, handle, id, provider…" style="flex:1;margin:0" />
+      <p class="sub">Source: <code>wbai-users</code> · <a href="/admin">Admin</a></p>
+      <div class="stats" id="stats"></div>
+      <div class="toolbar">
+        <input id="q" type="search" placeholder="Filter name, handle, id…" enterkeyhint="search" />
         <button type="button" class="secondary" id="refresh">Refresh</button>
         <button type="button" class="secondary" id="logout">Log out</button>
       </div>
-      <div class="card" style="overflow:auto">
+      <p class="err" id="loadErr"></p>
+      <div class="list" id="cards"></div>
+      <div class="card desk-table">
         <table>
           <thead>
             <tr>
-              <th>Created</th>
-              <th>Name</th>
-              <th>Handle</th>
-              <th>Provider</th>
-              <th>Phone</th>
-              <th>Opt-in</th>
-              <th>Credits</th>
-              <th>Last seen</th>
+              <th>Created</th><th>Name</th><th>Handle</th><th>Provider</th>
+              <th>Phone</th><th>Opt-in</th><th>Credits</th><th>Last seen</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
-        <p id="empty" class="sub" style="display:none;margin-top:12px">No users found.</p>
       </div>
+      <p id="empty" class="sub" style="display:none">No users found.</p>
     </div>
   </div>
   <script>
@@ -94,29 +125,43 @@
       document.getElementById('login').style.display = on ? 'none' : 'block';
       document.getElementById('app').style.display = on ? 'block' : 'none';
     }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+      });
+    }
+    function fmt(d) {
+      if (!d) return '—';
+      try {
+        var dt = new Date(d);
+        return dt.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) +
+          ' · ' + dt.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+      } catch (e) { return d; }
+    }
 
     async function api(path, opts) {
       opts = opts || {};
       var headers = Object.assign({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + APP.token }, opts.headers || {});
       var res = await fetch(path, Object.assign({}, opts, { headers: headers }));
       var data = await res.json().catch(function () { return {}; });
-      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      if (!res.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
       return data;
     }
 
     async function doLogin() {
       document.getElementById('loginErr').textContent = '';
       try {
-        var data = await fetch('/api/admin-auth', {
+        var res = await fetch('/api/admin-auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: document.getElementById('email').value,
             password: document.getElementById('password').value,
           }),
-        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
-        if (!data.ok || !data.j.token) throw new Error((data.j && data.j.error) || 'login_failed');
-        APP.token = data.j.token;
+        });
+        var data = await res.json();
+        if (!res.ok || !data.token) throw new Error(data.error || 'login_failed');
+        APP.token = data.token;
         localStorage.setItem('admin_token', APP.token);
         showApp(true);
         await loadUsers();
@@ -125,30 +170,40 @@
       }
     }
 
-    function fmt(d) {
-      if (!d) return '—';
-      try { return new Date(d).toLocaleString(); } catch (e) { return d; }
-    }
-
     function render() {
       var q = (document.getElementById('q').value || '').toLowerCase().trim();
       var rows = ALL.filter(function (u) {
         if (!q) return true;
         return [u.name, u.handle, u.id, u.provider, u.phone, u.email].join(' ').toLowerCase().indexOf(q) !== -1;
       });
-      var tb = document.getElementById('tbody');
-      tb.innerHTML = rows.map(function (u) {
+
+      document.getElementById('cards').innerHTML = rows.map(function (u) {
+        return '<article class="user">' +
+          '<div class="user-top"><div><div class="user-name">' + esc(u.name || 'Member') + '</div>' +
+          '<div class="user-handle">' + esc(u.handle || u.id || '') + '</div></div>' +
+          '<span class="tag">' + esc(u.provider || '?') + '</span></div>' +
+          '<div class="meta">' +
+            '<div><span>Created</span>' + esc(fmt(u.created_at)) + '</div>' +
+            '<div><span>Last seen</span>' + esc(fmt(u.last_seen)) + '</div>' +
+            '<div><span>Phone</span>' + esc(u.phone || '—') + '</div>' +
+            '<div><span>Credits</span>' + esc(u.credit_balance != null ? u.credit_balance : '—') + '</div>' +
+            '<div><span>Opt-in</span>' + (u.opted_in ? '<span class="ok">yes</span>' : '—') + '</div>' +
+            '<div><span>ID</span>' + esc(u.id || '—') + '</div>' +
+          '</div></article>';
+      }).join('');
+
+      document.getElementById('tbody').innerHTML = rows.map(function (u) {
         return '<tr>' +
-          '<td>' + fmt(u.created_at) + '</td>' +
+          '<td>' + esc(fmt(u.created_at)) + '</td>' +
           '<td>' + esc(u.name || '—') + '</td>' +
           '<td>' + esc(u.handle || '—') + '</td>' +
           '<td><span class="tag">' + esc(u.provider || '?') + '</span></td>' +
           '<td>' + esc(u.phone || '—') + '</td>' +
           '<td>' + (u.opted_in ? '<span class="ok">yes</span>' : '—') + '</td>' +
-          '<td>' + (u.credit_balance != null ? u.credit_balance : '—') + '</td>' +
-          '<td>' + fmt(u.last_seen) + '</td>' +
-        '</tr>';
+          '<td>' + esc(u.credit_balance != null ? u.credit_balance : '—') + '</td>' +
+          '<td>' + esc(fmt(u.last_seen)) + '</td></tr>';
       }).join('');
+
       document.getElementById('empty').style.display = rows.length ? 'none' : 'block';
       var x = ALL.filter(function (u) { return u.provider === 'x'; }).length;
       var sms = ALL.filter(function (u) { return u.provider === 'sms'; }).length;
@@ -160,31 +215,35 @@
         '<div class="stat"><b>' + opt + '</b><span>Opted in</span></div>';
     }
 
-    function esc(s) {
-      return String(s).replace(/[&<>"']/g, function (c) {
-        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-      });
-    }
-
     async function loadUsers() {
-      var data = await api('/api/admin-list-users');
-      ALL = data.users || [];
-      render();
+      document.getElementById('loadErr').textContent = '';
+      try {
+        var data = await api('/api/admin-list-users');
+        ALL = data.users || [];
+        if (!ALL.length && data.errors && data.errors.length) {
+          document.getElementById('loadErr').textContent = 'List empty. Debug: ' + data.errors.join('; ');
+        }
+        render();
+      } catch (e) {
+        document.getElementById('loadErr').textContent = e.message || 'Failed to load users';
+        throw e;
+      }
     }
 
     document.getElementById('loginBtn').addEventListener('click', doLogin);
     document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
     document.getElementById('q').addEventListener('input', render);
-    document.getElementById('refresh').addEventListener('click', function () { loadUsers().catch(function (e) { alert(e.message); }); });
+    document.getElementById('refresh').addEventListener('click', function () {
+      loadUsers().catch(function () {});
+    });
     document.getElementById('logout').addEventListener('click', function () {
       localStorage.removeItem('admin_token'); APP.token = ''; showApp(false);
     });
 
     if (APP.token) {
       showApp(true);
-      loadUsers().catch(function () { showApp(false); });
+      loadUsers().catch(function () { /* keep app visible with error */ });
     }
   </script>
-  <script src="/js/site-share.js" defer></script>
 </body>
 </html>

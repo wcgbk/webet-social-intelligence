@@ -1,4 +1,4 @@
-// admin-list-users.js — GET/POST list wbai-users registrations (admin auth)
+// admin-list-users.js — list wbai-users registrations (admin auth)
 const crypto = require('crypto');
 
 const CORS = {
@@ -27,10 +27,12 @@ function verifyToken(token) {
   }
 }
 
-function publicUser(u) {
+function publicUser(u, key) {
   if (!u || typeof u !== 'object') return null;
+  const id = u.id || (key ? String(key).replace(/^user_/, '') : null);
+  if (!id && !u.handle && !u.phone) return null;
   return {
-    id: u.id || null,
+    id,
     name: u.name || null,
     handle: u.handle || null,
     provider: u.provider || null,
@@ -45,8 +47,48 @@ function publicUser(u) {
     firstName: u.firstName || null,
     lastName: u.lastName || null,
     email: u.email || null,
-    opted_in: u.opted_in === true || u.marketing_opt_in === true || !!u.prefs?.marketing_opt_in,
+    opted_in: u.opted_in === true || u.marketing_opt_in === true || !!(u.prefs && u.prefs.marketing_opt_in),
   };
+}
+
+async function listUsers() {
+  const { getStore } = await import('@netlify/blobs');
+  // IMPORTANT: ambient store (no siteID/token) — same context auth writes use in production.
+  // Passing a PAT + siteID can resolve an empty/wrong store.
+  const store = getStore('wbai-users');
+
+  const keys = [];
+  let cursor;
+  for (;;) {
+    const page = cursor
+      ? await store.list({ prefix: 'user_', cursor })
+      : await store.list({ prefix: 'user_' });
+    for (const blob of page.blobs || []) {
+      if (blob && blob.key) keys.push(blob.key);
+    }
+    if (!page.cursor) break;
+    cursor = page.cursor;
+  }
+
+  if (!keys.length) {
+    let c2;
+    for (;;) {
+      const page = c2 ? await store.list({ cursor: c2 }) : await store.list();
+      for (const blob of page.blobs || []) {
+        if (blob && blob.key && String(blob.key).startsWith('user_')) keys.push(blob.key);
+      }
+      if (!page.cursor) break;
+      c2 = page.cursor;
+    }
+  }
+
+  const users = [];
+  for (const key of keys) {
+    const raw = await store.get(key, { type: 'json' }).catch(() => null);
+    const row = publicUser(raw, key);
+    if (row) users.push(row);
+  }
+  return { users, keyCount: keys.length };
 }
 
 exports.handler = async (event) => {
@@ -63,36 +105,20 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const siteID = process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
-    const blobToken = process.env.NETLIFY_TOKEN;
-    const store = getStore({ name: 'wbai-users', siteID, token: blobToken });
-
-    const users = [];
-    let cursor;
-    do {
-      const page = await store.list({ prefix: 'user_', cursor });
-      for (const blob of page.blobs || []) {
-        const raw = await store.get(blob.key, { type: 'json' }).catch(() => null);
-        const row = publicUser(raw);
-        if (row && row.id) users.push(row);
-      }
-      cursor = page.cursor;
-    } while (cursor);
-
+    const result = await listUsers();
+    const users = result.users || [];
     users.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
-
     return {
       statusCode: 200,
       headers: CORS,
-      body: JSON.stringify({
-        ok: true,
-        total: users.length,
-        users,
-      }),
+      body: JSON.stringify({ ok: true, total: users.length, keyCount: result.keyCount, users }),
     };
   } catch (err) {
     console.error('[admin-list-users]', err.message);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'server_error', message: err.message }) };
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: 'server_error', message: err.message }),
+    };
   }
 };

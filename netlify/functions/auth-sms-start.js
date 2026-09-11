@@ -64,7 +64,13 @@ exports.handler = async (event) => {
     });
     if (!resp.ok) {
       const t = await resp.text();
-      console.error('[auth-sms-start] Twilio error:', resp.status, t.slice(0, 200));
+      console.error('[auth-sms-start] Twilio error:', resp.status, t.slice(0, 300));
+      let twilioCode = null;
+      try { twilioCode = (JSON.parse(t).code); } catch (_) {}
+      // 21211/21614 = invalid/unverifiable To number; 21606 = From invalid
+      if (twilioCode === 21211 || twilioCode === 21614) {
+        return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'invalid_phone' }) };
+      }
       return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'sms_send_failed' }) };
     }
     console.log(`[auth-sms-start] code sent to ${phone.slice(0, 5)}•••`);

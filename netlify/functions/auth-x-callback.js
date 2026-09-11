@@ -122,12 +122,8 @@ exports.handler = async (event) => {
 
   let isNewUser = false;
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore({
-      name: 'wbai-users',
-      siteID: process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606',
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const { getWbaiUsersStore } = require('./_lib/wbai-users-store');
+    const store = await getWbaiUsersStore();
 
     // Preserve existing credit balance if user already exists
     const existingUser = await store.get(`user_${xUser.id}`, { type: 'json' }).catch(() => null);
@@ -168,7 +164,8 @@ exports.handler = async (event) => {
     await store.set(`session_${sessionId}`, JSON.stringify({ user_id: xUser.id, expires: sessionExpiry }));
   } catch (e) {
     console.error('[auth-x-callback] Blob store error:', e.message);
-    // Don't fail the login — session just won't persist server-side
+    // Without a persisted session, /auth/me cannot restore the user — fail closed.
+    return { statusCode: 302, headers: { Location: '/dashboard?auth=error' }, body: '' };
   }
 
   // Set session cookie (30 days) + clear PKCE cookie

@@ -24,12 +24,8 @@ exports.handler = async (event) => {
   // Optionally delete the session from Blob store
   if (sessionId) {
     try {
-      const { getStore } = await import('@netlify/blobs');
-      const store = getStore({
-        name: 'wbai-users',
-        siteID: process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606',
-        token: process.env.NETLIFY_TOKEN,
-      });
+      const { getWbaiUsersStore } = require('./_lib/wbai-users-store');
+      const store = await getWbaiUsersStore();
       await store.delete(`session_${sessionId}`).catch(() => {});
     } catch (_) {}
   }

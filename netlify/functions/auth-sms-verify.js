@@ -29,8 +29,8 @@ exports.handler = async (event) => {
   if (!phone || code.length !== 6) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'invalid_input' }) };
 
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore({ name: 'wbai-users', siteID: process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606', token: process.env.NETLIFY_TOKEN });
+    const { getWbaiUsersStore } = require('./_lib/wbai-users-store');
+    const store = await getWbaiUsersStore();
     const otpKey = `sms_otp_${phone}`;
     const otp = await store.get(otpKey, { type: 'json' }).catch(() => null);
     const now = Date.now();

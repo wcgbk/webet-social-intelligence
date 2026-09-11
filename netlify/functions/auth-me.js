@@ -29,12 +29,8 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore({
-      name: 'wbai-users',
-      siteID: process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606',
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const { getWbaiUsersStore } = require('./_lib/wbai-users-store');
+    const store = await getWbaiUsersStore();
 
     // Look up session
     const sessionData = await store.get(`session_${sessionId}`, { type: 'json' }).catch(() => null);

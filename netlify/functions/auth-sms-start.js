@@ -19,7 +19,8 @@ function normPhone(raw) {
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'method_not_allowed' }) };
-  const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN, from = process.env.TWILIO_FROM || process.env.TWILIO_PHONE_NUMBER;
+  const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN;
+  const from = (process.env.TWILIO_FROM || process.env.TWILIO_PHONE_NUMBER || '').trim();
   if (!sid || !tok || !from) return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'sms_not_configured' }) };
 
   let body = {};
@@ -29,8 +30,8 @@ exports.handler = async (event) => {
   const ip = (event.headers['x-nf-client-connection-ip'] || event.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
 
   try {
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore({ name: 'wbai-users', siteID: process.env.NETLIFY_SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606', token: process.env.NETLIFY_TOKEN });
+    const { getWbaiUsersStore } = require('./_lib/wbai-users-store');
+    const store = await getWbaiUsersStore();
     const now = Date.now();
 
     // Rate limit: per IP

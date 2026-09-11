@@ -3,18 +3,22 @@
  *
  *   /go/{source}/{campaign}/{content}
  *   /go/{source}/{campaign}/{content}/{path...}
- *   /go/{source}/{campaign}/{content}?to=/omega
+ *   /go/{source}/{campaign}/{content}/{path...}?card=bettyv13&view=picks
+ *   /go/{source}/{campaign}/{content}?to=/dashboard?card=bettyv13
  *
  * Examples:
  *   /go/x/betty_sep10/post_a
  *     → https://webetsocial.com/?utm_source=x&utm_medium=social&utm_campaign=betty_sep10&utm_content=post_a
  *   /go/x/cfb_week1/post_b/omega
  *     → https://webetsocial.com/omega?utm_source=x&utm_medium=social&utm_campaign=cfb_week1&utm_content=post_b
+ *   /go/x/betty_sep11/alpha_main/dashboard?card=bettyv13
+ *     → https://webetsocial.com/dashboard?card=bettyv13&utm_source=x&utm_medium=social&utm_campaign=betty_sep11&utm_content=alpha_main
  *
  * Medium defaults: email|sms → themselves; else social.
  * Only same-site relative destinations allowed (no open redirects).
+ * Non-reserved query params on the /go/ URL are forwarded to the destination
+ * (so ?card= / ?view= deep links survive).
  */
-
 const SITE = 'https://webetsocial.com';
 const SEG = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 
@@ -24,7 +28,6 @@ function mediumFor(source) {
 }
 
 function parseGoPath(pathname) {
-  // pathname like /go/x/camp/content or /go/x/camp/content/omega/foo
   const parts = pathname.split('/').filter(Boolean);
   if (parts[0] !== 'go' || parts.length < 4) return null;
   const source = parts[1];
@@ -36,19 +39,44 @@ function parseGoPath(pathname) {
   return { source, campaign, content, extraPath };
 }
 
-function safeToPath(raw, extraPath) {
+function safeDestination(raw, extraPath) {
+  let pathname = '/';
+  const searchParams = new URLSearchParams();
+
   if (raw && typeof raw === 'string') {
     let p = raw.trim();
     if (!p.startsWith('/')) p = '/' + p;
-    if (p.startsWith('//') || p.includes('://') || p.includes('\\')) return '/';
-    // block protocol-relative / weirdness
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(p)) return '/';
-    return p.split('?')[0].split('#')[0] || '/';
+    if (p.startsWith('//') || p.includes('://') || p.includes('\\')) {
+      return { pathname: '/', searchParams };
+    }
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(p)) {
+      return { pathname: '/', searchParams };
+    }
+    const qIdx = p.indexOf('?');
+    const hIdx = p.indexOf('#');
+    let pathOnly = p;
+    let search = '';
+    if (qIdx >= 0) {
+      pathOnly = p.slice(0, qIdx);
+      search = p.slice(qIdx + 1);
+      const hashInSearch = search.indexOf('#');
+      if (hashInSearch >= 0) search = search.slice(0, hashInSearch);
+    } else if (hIdx >= 0) {
+      pathOnly = p.slice(0, hIdx);
+    }
+    pathname = pathOnly || '/';
+    if (search) {
+      new URLSearchParams(search).forEach((v, k) => {
+        if (k) searchParams.set(k, v);
+      });
+    }
+    return { pathname, searchParams };
   }
+
   if (extraPath && extraPath.length) {
-    return '/' + extraPath.join('/');
+    return { pathname: '/' + extraPath.join('/'), searchParams };
   }
-  return '/';
+  return { pathname: '/', searchParams };
 }
 
 exports.handler = async (event) => {
@@ -63,8 +91,22 @@ exports.handler = async (event) => {
   }
 
   const qs = event.queryStringParameters || {};
-  const destPath = safeToPath(qs.to, parsed.extraPath);
-  const url = new URL(destPath, SITE);
+  const dest = safeDestination(qs.to, parsed.extraPath);
+  const url = new URL(dest.pathname, SITE);
+
+  dest.searchParams.forEach((v, k) => {
+    url.searchParams.set(k, v);
+  });
+
+  // Forward leftover query params from the /go/ URL (except reserved `to`)
+  for (const [k, raw] of Object.entries(qs)) {
+    if (k === 'to' || raw == null) continue;
+    const val = Array.isArray(raw) ? raw[0] : raw;
+    if (val === '') continue;
+    url.searchParams.set(k, val);
+  }
+
+  // UTMs last so they always win
   url.searchParams.set('utm_source', parsed.source);
   url.searchParams.set('utm_medium', mediumFor(parsed.source));
   url.searchParams.set('utm_campaign', parsed.campaign);

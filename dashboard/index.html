@@ -388,13 +388,18 @@
     .topbar-avatar-btn:hover { transform: scale(1.06); opacity: 0.88; }
     .topbar-avatar {
       width: 34px; height: 34px; border-radius: 50%;
-      background: var(--primary); color: var(--primary-fg);
+      background: #1a2e1a; color: #fff;
       font-size: 0.8125rem; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
       overflow: hidden; border: 2px solid rgba(255,255,255,0.18);
-      box-sizing: border-box;
+      box-sizing: border-box; flex-shrink: 0;
     }
     .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .topbar-avatar .wb-avatar-ph {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: #243041; color: rgba(255,255,255,0.85);
+    }
+    .topbar-avatar .wb-avatar-ph svg { width: 18px; height: 18px; display: block; }
     @media (max-width: 600px) {
       .topbar-login-text { display: none; }
       .coin-img { width: 42px; height: 42px; }
@@ -2183,9 +2188,48 @@
     fetchCurrentUser(); // always check for an active session cookie
   })();
 
+  function wbAvatarPlaceholderHTML() {
+    return '<span class="wb-avatar-ph" title="Add a profile photo later" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg></span>';
+  }
+
+  function wbResolveAvatarUrl(user) {
+    if (!user) return null;
+    var u = user.avatar_url || user.profile_image_url || user.avatar || null;
+    if (!u || typeof u !== 'string') return null;
+    u = u.trim();
+    if (!u) return null;
+    // Prefer larger X CDN variants when still on _normal
+    return u.replace('_normal.', '_400x400.');
+  }
+
+  function wbRenderTopbarAvatar(el, user) {
+    if (!el) return;
+    var url = wbResolveAvatarUrl(user);
+    var label = (user && (user.name || user.handle)) ? String(user.name || user.handle) : 'Profile';
+    if (url) {
+      el.style.background = 'transparent';
+      el.innerHTML = '';
+      var img = document.createElement('img');
+      img.src = url;
+      img.alt = label;
+      img.referrerPolicy = 'no-referrer';
+      img.decoding = 'async';
+      img.addEventListener('error', function () {
+        el.style.background = '';
+        el.innerHTML = wbAvatarPlaceholderHTML();
+      });
+      el.appendChild(img);
+    } else {
+      el.style.background = '';
+      el.innerHTML = wbAvatarPlaceholderHTML();
+    }
+  }
+
   async function fetchCurrentUser() {
     try {
-      const res = await fetch('/auth/me');
+      const res = await fetch('/auth/me', { credentials: 'include', cache: 'no-store' });
       if (res.ok) {
         const user = await res.json();
         if (user && user.id) { wbUser = user; updateAuthUI(); }
@@ -2207,20 +2251,16 @@
     const webitBtn = document.getElementById('topbar-webit-btn');
     if (webitBal) webitBal.textContent = Number(wbUser.credit_balance != null ? wbUser.credit_balance : 1000).toLocaleString();
     if (webitBtn) webitBtn.classList.add('authed');
-    // Swap login button → avatar
+    // Swap login button → avatar (X photo or placeholder, same 34px size)
     const tbLoginBtn = document.getElementById('topbar-login-btn');
     const tbAvatarBtn = document.getElementById('topbar-avatar-btn');
     const tbAvatar = document.getElementById('topbar-avatar');
     if (tbLoginBtn) tbLoginBtn.style.display = 'none';
-    if (tbAvatar) {
-      if (wbUser.avatar_url) {
-        tbAvatar.style.background = 'transparent';
-        tbAvatar.innerHTML = `<img src="${wbUser.avatar_url}" alt="${wbUser.handle || 'U'}" />`;
-      } else {
-        tbAvatar.textContent = (wbUser.name || wbUser.handle || 'U')[0].toUpperCase();
-      }
+    wbRenderTopbarAvatar(tbAvatar, wbUser);
+    if (tbAvatarBtn) {
+      tbAvatarBtn.style.display = '';
+      tbAvatarBtn.title = wbResolveAvatarUrl(wbUser) ? 'Your profile' : 'Your profile — add a photo later';
     }
-    if (tbAvatarBtn) tbAvatarBtn.style.display = '';
 
 
     // Welcome toast — only fires once after X OAuth redirect
@@ -3746,9 +3786,10 @@
     const memberSince = wbUser.created_at
       ? new Date(wbUser.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
       : 'Today';
-    const avatarHTML = wbUser.avatar_url
-      ? `<img src="${wbUser.avatar_url}" alt="${wbUser.handle}" />`
-      : `<span>${(wbUser.name || wbUser.handle || 'U')[0].toUpperCase()}</span>`;
+    const _avUrl = wbResolveAvatarUrl(wbUser);
+    const avatarHTML = _avUrl
+      ? `<img src="${_avUrl}" alt="${wbUser.handle || 'You'}" referrerpolicy="no-referrer" />`
+      : wbAvatarPlaceholderHTML();
 
     el.innerHTML = `
       <div class="profile-hero">

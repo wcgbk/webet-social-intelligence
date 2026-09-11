@@ -310,6 +310,15 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex: 1 1 auto;
+      min-width: 0;              /* allow shrink so actions stay put */
+      overflow: hidden;
+    }
+    .topbar-title > span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
     .topbar-dot {
       width: 8px; height: 8px; border-radius: 50%;
@@ -321,7 +330,17 @@
       font-weight: 400;
       color: rgba(255,255,255,0.4);
     }
-    .topbar-spacer { flex: 1; }
+    .topbar-spacer { display: none; } /* spacer retired — title flexes instead */
+    .topbar-actions {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex: 0 0 auto;
+      margin-left: auto;
+      align-self: center;
+    }
+    .topbar-actions .topbar-user-area { margin-left: 0 !important; }
     .topbar-action {
       background: none;
       border: none;
@@ -415,11 +434,13 @@
       .topbar-avatar { width: 34px; height: 34px; }
     }
 
+    .topbar-actions .wb-site-share-btn,
+    .topbar-actions #wb-site-share,
     .topbar .wb-site-share-btn,
     .topbar #wb-site-share {
       align-self: center !important;
-      margin-top: 0 !important;
-      margin-bottom: 0 !important;
+      margin: 0 !important;
+      flex-shrink: 0 !important;
     }
 
     /* ─── Panel Container ─────────────────────────────────────────────── */
@@ -1193,7 +1214,10 @@
         height: 52px;
         padding: 0 12px;
         gap: 8px;
+        flex-wrap: nowrap;
       }
+      .topbar-actions { gap: 8px; }
+      .topbar-title { font-size: 0.8125rem; }
 
       .empty-state {
         padding: 16px 20px;
@@ -1765,23 +1789,22 @@
         <span class="topbar-dot"></span>
         <span>Chat With Betty</span>
       </div>
-      <div class="topbar-spacer"></div>
 
-      <!-- WeBit coin + balance (muted for guests, bright when logged in) -->
-      <button class="topbar-webit" id="topbar-webit-btn" onclick="topbarCoinClick()" title="WeBit tokens">
-        <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
-        <span class="topbar-webit-bal" id="topbar-webit-bal"></span>
-      </button>
-
-      <!-- User state: Sign in button (guest) ↔ avatar (logged in) -->
-      <div class="topbar-user-area" style="margin-left:6px;">
-        <button class="topbar-login-btn" id="topbar-login-btn" onclick="openSignIn()" title="Sign in">
-          <svg width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
-          <span class="topbar-login-text">Sign in</span>
+      <!-- Stable right cluster: Share (injected) · WeBit · X/avatar — never shifts with title length -->
+      <div class="topbar-actions" id="topbar-actions">
+        <button class="topbar-webit" id="topbar-webit-btn" onclick="topbarCoinClick()" title="WeBit tokens">
+          <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
+          <span class="topbar-webit-bal" id="topbar-webit-bal"></span>
         </button>
-        <button class="topbar-avatar-btn" id="topbar-avatar-btn" onclick="openProfilePanel()" title="Your profile" style="display:none;">
-          <div class="topbar-avatar" id="topbar-avatar">G</div>
-        </button>
+        <div class="topbar-user-area">
+          <button class="topbar-login-btn" id="topbar-login-btn" onclick="openSignIn()" title="Sign in">
+            <svg width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
+            <span class="topbar-login-text">Sign in</span>
+          </button>
+          <button class="topbar-avatar-btn" id="topbar-avatar-btn" onclick="openProfilePanel()" title="Your profile" style="display:none;">
+            <div class="topbar-avatar" id="topbar-avatar">G</div>
+          </button>
+        </div>
       </div>
     </div>
 

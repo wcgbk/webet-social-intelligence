@@ -110,26 +110,18 @@
     return b;
   }
 
-  function ensureSpacer(el) {
-    if (el && el.classList && el.classList.contains('topbar-spacer')) return el;
-    var s = document.createElement('div');
-    s.className = 'topbar-spacer';
-    return s;
-  }
-
   function mountInTopbar(topbar) {
+    var actions = topbar.querySelector('#topbar-actions, .topbar-actions');
     var webit = topbar.querySelector('#topbar-webit-btn, .topbar-webit');
-    if (!webit) return false;
     var btn = makeShareButton();
-    var prev = webit.previousElementSibling;
-    // Layout: title … spacer | Share | spacer | WeBit …
-    if (!prev || !prev.classList || !prev.classList.contains('topbar-spacer')) {
-      var left = ensureSpacer(null);
-      topbar.insertBefore(left, webit);
+    // Pin Share into the fixed right cluster so title length never shifts it
+    if (actions) {
+      if (webit && webit.parentNode === actions) actions.insertBefore(btn, webit);
+      else actions.insertBefore(btn, actions.firstChild);
+      return true;
     }
-    topbar.insertBefore(btn, webit);
-    var right = ensureSpacer(null);
-    topbar.insertBefore(right, webit);
+    if (!webit) return false;
+    webit.parentNode.insertBefore(btn, webit);
     return true;
   }
 

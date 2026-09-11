@@ -1,4 +1,4 @@
-/*! WeBet Social — stamp UTMs when visitors share/copy the page link */
+/*! WeBet Social — stamp UTMs when visitors share the page link */
 (function () {
   if (window.__wbSiteShare) return;
   window.__wbSiteShare = true;
@@ -10,7 +10,6 @@
 
   function taggedUrl() {
     var url = new URL(location.href);
-    // Drop prior UTMs so the share is attributed to this handoff
     ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id'].forEach(function (k) {
       url.searchParams.delete(k);
     });
@@ -27,7 +26,7 @@
     t.textContent = msg;
     t.setAttribute('role', 'status');
     Object.assign(t.style, {
-      position: 'fixed', left: '50%', bottom: '88px', transform: 'translateX(-50%)',
+      position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)',
       background: 'rgba(18,24,33,.96)', color: '#e8eef6', padding: '10px 14px',
       borderRadius: '10px', font: '600 13px/1.3 system-ui,-apple-system,sans-serif',
       zIndex: '2147483000', border: '1px solid #243041', boxShadow: '0 8px 30px rgba(0,0,0,.35)',
@@ -71,38 +70,106 @@
     await copyTagged();
   }
 
+  function shouldSkip() {
+    var p = (location.pathname || '').replace(/\/+$/, '') || '/';
+    return p === '/admin' || p.indexOf('/admin/') === 0 ||
+      p === '/users' || p.indexOf('/users/') === 0 ||
+      p === '/exclude-ga' || p.indexOf('/exclude-ga/') === 0;
+  }
+
+  function makeShareButton() {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'wb-site-share';
+    b.className = 'wb-site-share-btn';
+    b.textContent = 'Share';
+    b.setAttribute('aria-label', 'Share this page');
+    Object.assign(b.style, {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '6px',
+      border: '1px solid #004C54',
+      borderRadius: '20px',
+      padding: '6px 14px',
+      cursor: 'pointer',
+      font: '700 12px/1 system-ui,-apple-system,sans-serif',
+      background: '#004C54',
+      color: '#fff',
+      whiteSpace: 'nowrap',
+      flexShrink: '0',
+      textDecoration: 'none',
+      transition: 'opacity .15s'
+    });
+    b.addEventListener('mouseenter', function () { b.style.opacity = '0.85'; });
+    b.addEventListener('mouseleave', function () { b.style.opacity = '1'; });
+    b.addEventListener('click', function (e) {
+      e.preventDefault();
+      shareTagged();
+    });
+    return b;
+  }
+
+  function ensureSpacer(el) {
+    if (el && el.classList && el.classList.contains('topbar-spacer')) return el;
+    var s = document.createElement('div');
+    s.className = 'topbar-spacer';
+    return s;
+  }
+
+  function mountInTopbar(topbar) {
+    var webit = topbar.querySelector('#topbar-webit-btn, .topbar-webit');
+    if (!webit) return false;
+    var btn = makeShareButton();
+    var prev = webit.previousElementSibling;
+    // Layout: title … spacer | Share | spacer | WeBit …
+    if (!prev || !prev.classList || !prev.classList.contains('topbar-spacer')) {
+      var left = ensureSpacer(null);
+      topbar.insertBefore(left, webit);
+    }
+    topbar.insertBefore(btn, webit);
+    var right = ensureSpacer(null);
+    topbar.insertBefore(right, webit);
+    return true;
+  }
+
+  function mountBeforeAuthSlot() {
+    var slot = document.getElementById('wb-auth-slot') || document.querySelector('[data-wb-auth]');
+    if (!slot || !slot.parentNode) return false;
+    var btn = makeShareButton();
+    btn.style.marginRight = '8px';
+    slot.parentNode.insertBefore(btn, slot);
+    return true;
+  }
+
+  function mountInHeader() {
+    var header = document.querySelector('header.header');
+    if (header) {
+      var slot = header.querySelector('#wb-auth-slot, .header-auth, .mobile-menu-btn');
+      var btn = makeShareButton();
+      btn.style.marginLeft = 'auto';
+      if (slot) header.insertBefore(btn, slot);
+      else header.appendChild(btn);
+      return true;
+    }
+    var nav = document.querySelector('nav.nav');
+    if (nav) {
+      var cta = nav.querySelector('.nav-cta, .nav-right, a:last-of-type');
+      var btn2 = makeShareButton();
+      if (cta && cta.parentNode === nav) nav.insertBefore(btn2, cta);
+      else nav.appendChild(btn2);
+      return true;
+    }
+    return false;
+  }
+
   function mount() {
     if (document.getElementById('wb-site-share')) return;
-    var wrap = document.createElement('div');
-    wrap.id = 'wb-site-share';
-    Object.assign(wrap.style, {
-      position: 'fixed', right: '16px', bottom: '16px', zIndex: '2147482999',
-      display: 'flex', gap: '8px', alignItems: 'center'
-    });
-
-    function btn(label, primary) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = label;
-      Object.assign(b.style, {
-        border: '0', borderRadius: '999px', padding: '10px 14px', cursor: 'pointer',
-        font: '600 13px/1 system-ui,-apple-system,sans-serif',
-        background: primary ? '#3b82f6' : '#121821',
-        color: '#fff',
-        border: '1px solid ' + (primary ? '#3b82f6' : '#243041'),
-        boxShadow: '0 8px 24px rgba(0,0,0,.35)'
-      });
-      return b;
-    }
-
-    var shareBtn = btn('Share', true);
-    var copyBtn = btn('Copy link', false);
-    shareBtn.addEventListener('click', function (e) { e.preventDefault(); shareTagged(); });
-    copyBtn.addEventListener('click', function (e) { e.preventDefault(); copyTagged(); });
-
-    wrap.appendChild(shareBtn);
-    wrap.appendChild(copyBtn);
-    document.body.appendChild(wrap);
+    if (shouldSkip()) return;
+    var topbar = document.querySelector('.topbar');
+    if (topbar && mountInTopbar(topbar)) return;
+    if (mountBeforeAuthSlot()) return;
+    mountInHeader();
   }
 
   if (document.readyState === 'loading') {

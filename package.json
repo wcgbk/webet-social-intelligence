@@ -1,7 +1,0 @@
-{
-  "name": "webet-social-intelligence",
-  "private": true,
-  "dependencies": {
-    "@netlify/blobs": "^9.1.2"
-  }
-}

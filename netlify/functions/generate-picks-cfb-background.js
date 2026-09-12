@@ -1,6 +1,7 @@
 // generate-picks-cfb-background.js
-// ── WeBetAI College Football Model v1.1.1-cfb-prob-edge ──
+// ── WeBetAI College Football Model v1.1.2-cfb-prob-edge ──
 // v1.1.1: skip already-started games (Odds commence_time + ESPN state!==pre).
+// v1.1.2: REQUIRE ESPN pre match (Odds commence can lag delayed games); harden team matching.
 // SEPARATE ENVIRONMENT from alpha and NFL (edge-picks-cfb / /cfb), cloned from the NFL
 // pipeline (generate-picks-nfl-background v1.1-nfl) and adapted for the FBS slate:
 //   sharp-book consensus + two-sided de-vig, key-number cover (3/7), Pinnacle predCLV
@@ -38,7 +39,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-cfb";
-const MODEL_VERSION = "v1.1.1-cfb-prob-edge";
+const MODEL_VERSION = "v1.1.2-cfb-prob-edge";
 const NO_GAMES_MSG = "No College Football Games Scheduled For Today";
 const NO_EDGE_MSG = "No qualifying college football plays today — WeBetAI passed.";
 
@@ -119,21 +120,89 @@ function sharpPri(key) {
 const INDOOR_VENUES = /alamodome|carrier dome|jma wireless|ford field|lucas oil|mercedes-benz|caesars superdome|nrg stadium|state farm stadium|allegiant|at&t stadium|u\.?s\.? bank|roof|dome/i;
 
 // ── Team matching helpers ──
-// CFB nicknames collide constantly (Tigers, Bulldogs, Wildcats…), so fuzzy matching keys on
-// the SCHOOL (name minus the nickname word), never the nickname alone — "LSU Tigers" and
-// "Auburn Tigers" must never match each other.
+// CFB nicknames collide (Tigers/Bulldogs/…). Key on SCHOOL, never nickname alone.
+// NEVER use naive substring includes — "Georgia" must not match "Georgia Tech",
+// "Oregon" must not match "Oregon State", "Oklahoma" must not match "Oklahoma State".
+// Compound school tokens (State/Tech/A&M/…) are part of the school, not a mascot.
 function normTeam(s) { return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim(); }
+const CFB_COMPOUND_SCHOOL = new Set([
+  "state", "tech", "am", "a&m", "st", "international", "atlantic", "southern",
+  "northern", "eastern", "western", "central", "college", "university",
+  "oh", "ohio", // Miami OH / Miami (OH) — OH is school, not mascot
+]);
+const CFB_TEAM_ALIASES = {
+  "ucf": "central florida",
+  "central florida": "central florida",
+  "pitt": "pittsburgh",
+  "pittsburgh": "pittsburgh",
+  "ole miss": "ole miss",
+  "mississippi": "ole miss", // Odds/ESPN sometimes shorten Ole Miss this way; Mississippi State stays "mississippi state"
+  "miami oh": "miami ohio",
+  "miami ohio": "miami ohio",
+  "miami oh redhawks": "miami ohio",
+  "miami florida": "miami",
+  "miami hurricanes": "miami",
+  "lsu": "louisiana state",
+  "louisiana state": "louisiana state",
+  "ul monroe": "louisiana monroe",
+  "louisiana monroe": "louisiana monroe",
+  "ull": "louisiana",
+  "louisiana ragin cajuns": "louisiana",
+  "usc": "southern california",
+  "southern california": "southern california",
+  "southern cal": "southern california",
+  "nc state": "north carolina state",
+  "north carolina state": "north carolina state",
+  "boston college": "boston college",
+  "utsa": "texas san antonio",
+  "utep": "texas el paso",
+  "fiu": "florida international",
+  "fau": "florida atlantic",
+  "app state": "appalachian state",
+  "appalachian state": "appalachian state",
+  "jmu": "james madison",
+  "james madison": "james madison",
+  "unlv": "unlv",
+  "nevada las vegas": "unlv",
+};
 function schoolKey(name) {
-  const parts = normTeam(name).split(" ");
-  return parts.length > 1 ? parts.slice(0, -1).join(" ") : (parts[0] || "");
+  const parts = normTeam(name).split(" ").filter(Boolean);
+  if (!parts.length) return "";
+  // If last token is a compound school word, keep it (State/Tech/…).
+  // Only strip a trailing nickname when the token before it completes a school.
+  if (parts.length === 1) return parts[0];
+  const last = parts[parts.length - 1];
+  const prev = parts[parts.length - 2];
+  // Keep full string when last is compound OR prev is compound (e.g. "florida atlantic owls")
+  if (CFB_COMPOUND_SCHOOL.has(last) || CFB_COMPOUND_SCHOOL.has(prev)) {
+    // still drop a pure mascot after a completed compound school: "florida state seminoles"
+    if (!CFB_COMPOUND_SCHOOL.has(last) && CFB_COMPOUND_SCHOOL.has(prev)) {
+      return parts.slice(0, -1).join(" ");
+    }
+    return parts.join(" ");
+  }
+  // Default: drop trailing nickname word ("oregon ducks" → "oregon")
+  return parts.slice(0, -1).join(" ");
+}
+function aliasSchool(name) {
+  const n = normTeam(name);
+  if (!n) return "";
+  if (CFB_TEAM_ALIASES[n]) return CFB_TEAM_ALIASES[n];
+  const sk = schoolKey(name);
+  if (CFB_TEAM_ALIASES[sk]) return CFB_TEAM_ALIASES[sk];
+  // Special: bare "mississippi" → ole miss, but "mississippi state" stays
+  if (sk === "mississippi" || n === "mississippi") return "ole miss";
+  return sk;
 }
 function cfbTeamsMatch(a, b) {
   const na = normTeam(a), nb = normTeam(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  if (na.includes(nb) || nb.includes(na)) return true;
-  const sa = schoolKey(a), sb = schoolKey(b);
-  return sa.length > 2 && sa === sb;
+  const sa = aliasSchool(a), sb = aliasSchool(b);
+  if (sa && sb && sa === sb) return true;
+  // Exact schoolKey equality without aliases (full mascot names)
+  const ka = schoolKey(a), kb = schoolKey(b);
+  return ka.length > 2 && ka === kb;
 }
 
 // ── Math helpers (identical formulas to alpha/NFL) ──
@@ -293,11 +362,13 @@ async function fetchESPNSlate(dateISO) {
         indoor: !!(comp.venue?.indoor) || INDOOR_VENUES.test(comp.venue?.fullName || ""),
         homeId: home.team?.id, awayId: away.team?.id,
         state: comp.status?.type?.state || "pre",
+        statusName: comp.status?.type?.name || "",
+        statusDetail: comp.status?.type?.detail || comp.status?.type?.description || "",
+        espnCommence: ev.date || "",
       };
-    }).filter(Boolean)
-      // Only pre-game — in-progress / final games must not enter the card (parity with Omega)
-      .filter(g => g.state === "pre");
-    console.log(`[cfb] ESPN pre-game slate: ${games.length} (started/final excluded)`);
+    }).filter(Boolean);
+    const preCount = games.filter(g => g.state === "pre").length;
+    console.log(`[cfb] ESPN slate: ${games.length} games (${preCount} pre; delayed/in/post kept for hard skip)`);
     return { games, seasonPhase: "regular" };
   } catch (e) {
     console.log(`[cfb] ESPN slate fetch error: ${e.message}`);
@@ -1329,13 +1400,14 @@ exports.handler = async (event) => {
 
   const cfg = PHASE_CONFIG.regular;
   const { games: espnGames, seasonPhase } = await fetchESPNSlate(dateISO);
-  if (!espnGames.length) {
-    console.log(`[cfb] No CFB games on ${dateISO} (ET) — writing no-games card.`);
+  const espnPreGames = espnGames.filter(g => g.state === "pre");
+  if (!espnPreGames.length) {
+    console.log(`[cfb] No CFB pre-game slate on ${dateISO} (ET) — writing no-games card.`);
     const noGames = emptyCard(dateISO, dateFormatted, seasonPhase, NO_GAMES_MSG);
     if (!dryRun) await storePicks(dateISO, noGames, force, { indexDates: false });
     return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "no CFB games today", stored: !dryRun }) };
   }
-  console.log(`[cfb] ${espnGames.length} CFB game(s) today · phase=${seasonPhase}`);
+  console.log(`[cfb] ${espnPreGames.length} CFB pre-game(s) today (${espnGames.length} ESPN total) · phase=${seasonPhase}`);
 
   const [ratingOverlay, qbAdj] = await Promise.all([fetchLiveRatingOverlay(), fetchQbAdjustments()]);
 
@@ -1354,14 +1426,29 @@ exports.handler = async (event) => {
   const allCands = [];
   const nowMs = Date.now();
   for (const g of oddsGames) {
-    const kick = Date.parse(g.commence_time);
-    if (Number.isFinite(kick) && kick <= nowMs) {
-      console.log(`[cfb] Candidate skip already started: ${g.away_team} @ ${g.home_team} (${g.commence_time})`);
-      continue;
-    }
     const consensus = buildGameConsensus(g);
     if (consensus.bookCount < 3) { console.log(`[cfb] ${g.away_team} @ ${g.home_team}: only ${consensus.bookCount} books — skipping`); continue; }
+    // Match against FULL ESPN slate (incl. delayed/in/post) so we can hard-skip non-pre.
     const espnGame = findESPNGame(espnGames, consensus.home, consensus.away);
+    if (!espnGame) {
+      console.log(`[cfb] Skip (no ESPN match): ${g.away_team} @ ${g.home_team}`);
+      continue;
+    }
+    const statusName = String(espnGame.statusName || "");
+    const delayed = /DELAYED/i.test(statusName) || /delayed/i.test(String(espnGame.statusDetail || ""));
+    if (espnGame.state !== "pre" || delayed) {
+      console.log(`[cfb] Skip (ESPN ${espnGame.state}${delayed ? "/delayed" : ""}): ${g.away_team} @ ${g.home_team} — Odds commence ${g.commence_time}, ESPN ${espnGame.espnCommence || espnGame.date}`);
+      continue;
+    }
+    // Prefer earlier of Odds commence vs ESPN date — Odds often lags delayed kickoffs.
+    const oddsKick = Date.parse(g.commence_time);
+    const espnKick = Date.parse(espnGame.espnCommence || espnGame.date || "");
+    const kick = [oddsKick, espnKick].filter(Number.isFinite);
+    const earliest = kick.length ? Math.min(...kick) : NaN;
+    if (Number.isFinite(earliest) && earliest <= nowMs) {
+      console.log(`[cfb] Candidate skip already started: ${g.away_team} @ ${g.home_team} (earliest kick ${new Date(earliest).toISOString()})`);
+      continue;
+    }
     const cands = computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj);
     if (cands.length) {
       console.log(`[cfb] ${g.away_team} @ ${g.home_team}: consensus ${consensus.home} ${fmtSigned(consensus.consensusSpread ?? 0)} / total ${consensus.consensusTotal} · ${cands.length} candidate(s)`);

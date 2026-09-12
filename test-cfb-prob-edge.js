@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CFB v1.1-cfb-prob-edge: dog-ML gate, dual floor, probEdge ranking, lean fill, 2-vs-3 parlay.
+// CFB v1.1.2-cfb-prob-edge: dog-ML gate, dual floor, probEdge ranking, lean fill, 2-vs-3 parlay.
 const assert = require('assert');
 const cfb = require('./netlify/functions/generate-picks-cfb-background');
 
@@ -79,10 +79,10 @@ const gameB = { home: 'Ohio State Buckeyes', away: 'Penn State Nittany Lions' };
 const gameC = { home: 'Oregon Ducks', away: 'Washington Huskies' };
 const gameD = { home: 'Michigan Wolverines', away: 'Michigan State Spartans' };
 
-console.log('\nCFB v1.1-cfb-prob-edge');
+console.log('\nCFB v1.1.2-cfb-prob-edge');
 
-check('MODEL_VERSION is v1.1-cfb-prob-edge', () => {
-  assert.strictEqual(cfb.MODEL_VERSION, 'v1.1-cfb-prob-edge');
+check('MODEL_VERSION is v1.1.2-cfb-prob-edge', () => {
+  assert.strictEqual(cfb.MODEL_VERSION, 'v1.1.2-cfb-prob-edge');
 });
 
 check('conviction dual floor constants', () => {
@@ -395,3 +395,18 @@ if (failed) {
   process.exit(1);
 }
 console.log('\nall passed');
+
+// ── v1.1.2 team match + delayed-game gate notes ──
+const { cfbTeamsMatch: _cfm } = require("./netlify/functions/generate-picks-cfb-background.js");
+function assertMatch(a,b,yes) {
+  const m = _cfm(a,b) || _cfm(b,a);
+  if (!!m !== !!yes) throw new Error(`cfbTeamsMatch(${a},${b}) expected ${yes} got ${m}`);
+}
+assertMatch("Georgia", "Georgia Tech", false);
+assertMatch("Oregon", "Oregon State", false);
+assertMatch("Oklahoma", "Oklahoma State", false);
+assertMatch("Miami", "Miami OH", false);
+assertMatch("UCF Knights", "Central Florida Knights", true);
+assertMatch("Pittsburgh Panthers", "Pitt", true);
+console.log("cfbTeamsMatch false positives / aliases: PASS");
+

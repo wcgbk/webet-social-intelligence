@@ -1,5 +1,6 @@
 // generate-picks-cfb-background.js
-// ── WeBetAI College Football Model v1.1-cfb-prob-edge ──
+// ── WeBetAI College Football Model v1.1.1-cfb-prob-edge ──
+// v1.1.1: skip already-started games (Odds commence_time + ESPN state!==pre).
 // SEPARATE ENVIRONMENT from alpha and NFL (edge-picks-cfb / /cfb), cloned from the NFL
 // pipeline (generate-picks-nfl-background v1.1-nfl) and adapted for the FBS slate:
 //   sharp-book consensus + two-sided de-vig, key-number cover (3/7), Pinnacle predCLV
@@ -37,7 +38,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-cfb";
-const MODEL_VERSION = "v1.1-cfb-prob-edge";
+const MODEL_VERSION = "v1.1.1-cfb-prob-edge";
 const NO_GAMES_MSG = "No College Football Games Scheduled For Today";
 const NO_EDGE_MSG = "No qualifying college football plays today — WeBetAI passed.";
 
@@ -293,7 +294,10 @@ async function fetchESPNSlate(dateISO) {
         homeId: home.team?.id, awayId: away.team?.id,
         state: comp.status?.type?.state || "pre",
       };
-    }).filter(Boolean);
+    }).filter(Boolean)
+      // Only pre-game — in-progress / final games must not enter the card (parity with Omega)
+      .filter(g => g.state === "pre");
+    console.log(`[cfb] ESPN pre-game slate: ${games.length} (started/final excluded)`);
     return { games, seasonPhase: "regular" };
   } catch (e) {
     console.log(`[cfb] ESPN slate fetch error: ${e.message}`);
@@ -419,9 +423,16 @@ async function fetchCFBOdds(dateISO) {
       const resp = await fetch(url);
       if (!resp.ok) { console.log(`[cfb] Odds fetch ${sport}: HTTP ${resp.status}`); continue; }
       const data = await resp.json();
+      const nowMs = Date.now();
       for (const g of data) {
         if (seen.has(g.id)) continue;
         if (easternDateOf(g.commence_time) !== dateISO) continue;
+        const kick = Date.parse(g.commence_time);
+        // Skip games that have already kicked off (or are kicking off now)
+        if (Number.isFinite(kick) && kick <= nowMs) {
+          console.log(`[cfb] Odds skip already started: ${g.away_team} @ ${g.home_team} (${g.commence_time})`);
+          continue;
+        }
         seen.add(g.id);
         games.push(g);
       }
@@ -1341,7 +1352,13 @@ exports.handler = async (event) => {
 
   // Consensus + candidates per game
   const allCands = [];
+  const nowMs = Date.now();
   for (const g of oddsGames) {
+    const kick = Date.parse(g.commence_time);
+    if (Number.isFinite(kick) && kick <= nowMs) {
+      console.log(`[cfb] Candidate skip already started: ${g.away_team} @ ${g.home_team} (${g.commence_time})`);
+      continue;
+    }
     const consensus = buildGameConsensus(g);
     if (consensus.bookCount < 3) { console.log(`[cfb] ${g.away_team} @ ${g.home_team}: only ${consensus.bookCount} books — skipping`); continue; }
     const espnGame = findESPNGame(espnGames, consensus.home, consensus.away);

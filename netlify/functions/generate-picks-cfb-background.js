@@ -1,10 +1,23 @@
 // generate-picks-cfb-background.js
-// ── WeBetAI College Football Model v1.0-cfb ──
+// ── WeBetAI College Football Model v1.1-cfb-prob-edge ──
 // SEPARATE ENVIRONMENT from alpha and NFL (edge-picks-cfb / /cfb), cloned from the NFL
 // pipeline (generate-picks-nfl-background v1.1-nfl) and adapted for the FBS slate:
 //   sharp-book consensus + two-sided de-vig, key-number cover (3/7), Pinnacle predCLV
-//   floor -2c, 2+ major US books (Hard Rock preferred), 3% EV floor, NO forced leans,
-//   3+1 of the published card, quarter-Kelly, caps 2.5u / 0.5u ML.
+//   floor -2c, 2+ major US books (Hard Rock preferred), quarter-Kelly, caps 2.5u / 0.5u ML.
+// v1.1 ranking/selection (approved CFB-only strategic fix):
+//   Rank by probability edge probEdge = coverProb − impliedProb (no-vig prior when available),
+//   NOT raw EV%. Conviction YES dual floor: EV >= 3% AND probEdge >= 4pp.
+//   Dog-ML gate (underdog Moneyline only if ALL of): consensus |spread| <= 10 (unknown → skip),
+//   coverProb >= 0.35, American price <= +200; hard NEVER |spread| >= 14 OR price > +425;
+//   soft-penalize home dog ML ~0.8pp in ranking; ML unit cap 0.5u; predCLV >= -0.02.
+//   Max 1 Moneyline on the published 3-pick straight card; prefer Spread/Total over ML same game.
+//   Lean fill-to-3 (Omega-style): if <3 YES, fill with leans (EV ~1.5%, probEdge >= ~2pp,
+//   0.25u, rating Lean, thinSlate true). Do not force failing dog MLs as leans. Empty card
+//   if nothing qualifies.
+//   Parlay: Omega v11.7-style 2-vs-3 optimizer (true parlay EV, one leg per game). CFB
+//   constraints: no leg odds >= +200; no leg coverProb < 40%; max 1 dog ML leg; stake 0.5u
+//   (0.25u if any lean on the card).
+// Claude is narrator-only — JS already selected and sized.
 // CFB-specific discipline: there is NO static power-rating seed for 130+ FBS teams, so
 // the projection is market-anchored by design — live ESPN standings (point diff + scoring
 // rate) overlay when available, otherwise the market number IS the prior and the honest
@@ -24,7 +37,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-cfb";
-const MODEL_VERSION = "v1.0-cfb";
+const MODEL_VERSION = "v1.1-cfb-prob-edge";
 const NO_GAMES_MSG = "No College Football Games Scheduled For Today";
 const NO_EDGE_MSG = "No qualifying college football plays today — WeBetAI passed.";
 
@@ -49,7 +62,8 @@ const PHASE_CONFIG = {
   regular: {
     sigmaMargin: 16.0, sigmaML: 14.0, sigmaTotal: 12.5, hfa: 2.5,
     marketWeight: 0.70, shrinkMult: 1.0,
-    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.03,
+    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.015,
+    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02,
     leagueTotal: 55.5,
     marginClamp: 4.0,   // |modelMargin − marketMargin| ≤ 4 pts
     totalClamp: 5.0,    // |modelTotal − consensusTotal| ≤ 5 pts
@@ -62,6 +76,20 @@ const PHASE_CONFIG = {
 const SHRINK_K = { Spread: 0.35, Total: 0.30, Moneyline: 0.50 };
 const COVER_PROB_CAPS = { CFB_Spread: 0.57, CFB_Total: 0.60, CFB_Moneyline: 0.72 };
 const LEAN_UNITS = 0.25;
+const CONV_PROB_EDGE_FLOOR = 0.04;       // 4pp dual floor with EV >= 3%
+const LEAN_PROB_EDGE_FLOOR = 0.02;       // ~2pp lean fill
+const LEAN_EV_FLOOR = 0.015;             // ~1.5% lean EV
+const HOME_DOG_ML_RANK_PENALTY = 0.008;  // 0.8pp soft penalty on home dog ML rank score
+const MAX_ML_ON_CARD = 1;
+const DOG_ML_MAX_SPREAD = 10;            // consensus |spread| must be <= 10
+const DOG_ML_MIN_COVER = 0.35;
+const DOG_ML_MAX_PRICE = 200;            // American price <= +200
+const DOG_ML_HARD_SPREAD = 14;           // hard never |spread| >= 14
+const DOG_ML_HARD_PRICE = 425;           // hard never price > +425
+const PARLAY_MIN_COVER = 0.40;           // no parlay leg coverProb < 40%
+const PARLAY_MAX_PLUS_ODDS = 200;        // no parlay leg odds >= +200
+const PARLAY_EV_TIE_BAND = 0.02;
+const PARLAY_HIT_RATE_EDGE = 0.08;
 
 // ── Book weighting (sharpness) + bettable retail set — identical to NFL ──
 const BOOK_SHARPNESS = {
@@ -117,6 +145,20 @@ function erf(x) {
 function normalCDF(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
 function americanToDecimal(odds) { return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds); }
 function impliedProb(odds) { return odds < 0 ? Math.abs(odds) / (Math.abs(odds) + 100) : 100 / (odds + 100); }
+function parseAmericanOdds(odds) {
+  if (typeof odds === "number" && Number.isFinite(odds)) return odds;
+  const n = parseInt(String(odds || "").replace(/[^0-9+-]/g, ""), 10);
+  return Number.isFinite(n) ? n : NaN;
+}
+function parseCoverProb(cp) {
+  if (typeof cp === "number" && Number.isFinite(cp)) return cp > 1 ? cp / 100 : cp;
+  if (typeof cp === "string") {
+    const n = parseFloat(cp);
+    if (!Number.isFinite(n)) return NaN;
+    return /%/.test(cp) || n > 1 ? n / 100 : n;
+  }
+  return NaN;
+}
 function noVigProb(myOdds, oppOdds) {
   if (myOdds == null || oppOdds == null) return null;
   const a = impliedProb(myOdds), b = impliedProb(oppOdds);
@@ -539,17 +581,21 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
     const capU = market === "Moneyline" ? cfg.mlMaxUnits : cfg.maxUnits;
     kellyUnits = Math.max(0.5, Math.min(capU, kellyUnits));
     const sigma = market === "Total" ? cfg.sigmaTotal : cfg.sigmaMargin;
+    const mktProb = (typeof prior === "number" && prior > 0.01 && prior < 0.99) ? prior : impliedProb(offer.price);
+    const probEdge = coverProb - mktProb;
     const cand = {
       sport: "NCAAF", market, side,
       homeTeam: c.home, awayTeam: c.away, commenceTime: c.commenceTime,
       odds: offer.price, book: offer.book,
-      rawProb, coverProb, ev, kellyUnits,
+      rawProb, coverProb, ev, kellyUnits, probEdge,
       zScore: edgePts != null ? +(edgePts / sigma).toFixed(2) : null,
       modelProjection, consensusLine, edge: edgePts != null ? +edgePts.toFixed(1) : null,
       noVigPrior: prior,
+      consensusSpread: c.consensusSpread,
+      consensusSpreadAbs: c.consensusSpread != null ? Math.abs(c.consensusSpread) : null,
       homeRecord: espnGame?.homeRecord || "", awayRecord: espnGame?.awayRecord || "",
       venue: espnGame?.venue || "",
-      kellyCalcStr: `p=${coverProb.toFixed(3)}, dec=${dec.toFixed(2)}, EV=${(ev * 100).toFixed(1)}%, quarter-Kelly → ${kellyUnits}u (best line ${fmtOdds(offer.price)} @ ${offer.book})`,
+      kellyCalcStr: `p=${coverProb.toFixed(3)}, dec=${dec.toFixed(2)}, EV=${(ev * 100).toFixed(1)}%, probEdge=${(probEdge * 100).toFixed(1)}pp, quarter-Kelly → ${kellyUnits}u (best line ${fmtOdds(offer.price)} @ ${offer.book})`,
     };
     cands.push(cand);
     return cand;
@@ -651,32 +697,181 @@ function findESPNGame(espnGames, home, away) {
   ) || null;
 }
 
-// ── Selection: one pick per game (highest EV), top 3, floors ──
+// ── Selection: rank by probEdge (not raw EV%), dual floor, dog-ML gate, max 1 ML ──
 // CFB blowout filter (parity with Omega MAIN): |spread|≥17.5 needs EV≥6%.
 function cfbSpreadAbsLine(cand) {
   if (!cand || cand.market !== "Spread") return null;
   const m = String(cand.side || "").match(/([+-]?\d+(?:\.\d+)?)\s*$/);
   return m ? Math.abs(parseFloat(m[1])) : null;
 }
-function selectPicks(allCands, cfg) {
-  const byGame = new Map();
-  for (const cand of allCands) {
-    const key = `${cand.awayTeam}@${cand.homeTeam}`;
-    const cur = byGame.get(key);
-    if (!cur || cand.ev > cur.ev) byGame.set(key, cand);
+function gameKey(c) {
+  if (!c) return "";
+  if (c.awayTeam && c.homeTeam) return `${c.awayTeam}@${c.homeTeam}`;
+  return String(c.matchup || "").toLowerCase().trim();
+}
+function isMoneyline(c) {
+  return (c.market || c.betType) === "Moneyline";
+}
+function marketImpliedProb(c) {
+  if (typeof c.noVigPrior === "number" && c.noVigPrior > 0.01 && c.noVigPrior < 0.99) return c.noVigPrior;
+  const odds = parseAmericanOdds(c.odds);
+  return Number.isFinite(odds) ? impliedProb(odds) : NaN;
+}
+function candProbEdge(c) {
+  if (!c) return NaN;
+  if (typeof c.probEdge === "number" && Number.isFinite(c.probEdge)) return c.probEdge;
+  const cp = typeof c.coverProb === "number" ? c.coverProb : parseCoverProb(c.coverProb);
+  const mkt = marketImpliedProb(c);
+  if (!Number.isFinite(cp) || !Number.isFinite(mkt)) return NaN;
+  return cp - mkt;
+}
+function consensusSpreadAbs(c) {
+  if (typeof c.consensusSpreadAbs === "number" && Number.isFinite(c.consensusSpreadAbs)) return c.consensusSpreadAbs;
+  if (typeof c.consensusSpread === "number" && Number.isFinite(c.consensusSpread)) return Math.abs(c.consensusSpread);
+  return null;
+}
+function isUnderdogML(c) {
+  if (!isMoneyline(c)) return false;
+  const odds = parseAmericanOdds(c.odds);
+  return Number.isFinite(odds) && odds > 0;
+}
+function isHomeDogML(c) {
+  if (!isUnderdogML(c)) return false;
+  const home = String(c.homeTeam || "").toLowerCase().trim();
+  if (!home) return false;
+  return String(c.side || c.pick || "").toLowerCase().startsWith(home);
+}
+function dogMlRejectReason(c) {
+  if (!isUnderdogML(c)) return null;
+  const odds = parseAmericanOdds(c.odds);
+  const abs = consensusSpreadAbs(c);
+  const cp = typeof c.coverProb === "number" ? c.coverProb : parseCoverProb(c.coverProb);
+  if (Number.isFinite(odds) && odds > DOG_ML_HARD_PRICE) {
+    return `dog ML hard-never: price ${fmtOdds(odds)} > +${DOG_ML_HARD_PRICE}`;
   }
-  const perGame = [...byGame.values()].sort((a, b) => b.ev - a.ev);
+  if (abs != null && abs >= DOG_ML_HARD_SPREAD) {
+    return `dog ML hard-never: |spread| ${abs} >= ${DOG_ML_HARD_SPREAD}`;
+  }
+  if (abs == null) {
+    return "dog ML skipped: consensus |spread| unknown";
+  }
+  if (abs > DOG_ML_MAX_SPREAD) {
+    return `dog ML: consensus |spread| ${abs} > ${DOG_ML_MAX_SPREAD}`;
+  }
+  if (!(cp >= DOG_ML_MIN_COVER)) {
+    return `dog ML: coverProb ${Number.isFinite(cp) ? (cp * 100).toFixed(1) : "?"}% < ${DOG_ML_MIN_COVER * 100}%`;
+  }
+  if (Number.isFinite(odds) && odds > DOG_ML_MAX_PRICE) {
+    return `dog ML: price ${fmtOdds(odds)} > +${DOG_ML_MAX_PRICE}`;
+  }
+  return null;
+}
+function passesCfbBlowout(c) {
+  const abs = cfbSpreadAbsLine(c);
+  if (abs != null && abs >= 17.5 && !(c.ev >= 0.06)) return false;
+  return true;
+}
+function rankScore(c) {
+  let s = candProbEdge(c);
+  if (!Number.isFinite(s)) s = -Infinity;
+  if (isHomeDogML(c)) s -= HOME_DOG_ML_RANK_PENALTY;
+  return s;
+}
+function marketPrefNonML(c) {
+  const m = String(c.market || c.betType || "").toLowerCase();
+  if (m === "spread" || m === "total") return 2;
+  if (m === "moneyline") return 0;
+  return 1;
+}
+function betterSameGame(a, b) {
+  const pref = marketPrefNonML(a) - marketPrefNonML(b);
+  if (pref) return pref;
+  return rankScore(a) - rankScore(b);
+}
+function pickBestPerGame(pool) {
+  const byGame = new Map();
+  for (const cand of pool || []) {
+    const key = gameKey(cand);
+    if (!key) continue;
+    const cur = byGame.get(key);
+    if (!cur || betterSameGame(cand, cur) > 0) byGame.set(key, cand);
+  }
+  return [...byGame.values()].sort((a, b) => rankScore(b) - rankScore(a));
+}
+function takeUniqueGamesMaxOneML(pool, maxTake, mlAlready = 0) {
+  const ranked = pickBestPerGame(pool);
+  const out = [];
+  let mlCount = mlAlready;
+  const used = new Set();
+  for (const c of ranked) {
+    if (out.length >= maxTake) break;
+    const g = gameKey(c);
+    if (!g || used.has(g)) continue;
+    if (isMoneyline(c) && mlCount >= MAX_ML_ON_CARD) continue;
+    if (isMoneyline(c)) mlCount++;
+    out.push(c);
+    used.add(g);
+  }
+  return out;
+}
+function rejectionReason(cand, cfg) {
+  const dog = dogMlRejectReason(cand);
+  if (dog) return dog;
+  if (!passesCfbBlowout(cand)) {
+    const abs = cfbSpreadAbsLine(cand);
+    return `Blowout spread |line|=${abs} needs EV>=6% (EV ${(cand.ev * 100).toFixed(1)}%).`;
+  }
+  const pe = candProbEdge(cand);
+  const evFloor = cfg.evFloor;
+  const peFloor = cfg.probEdgeFloor ?? CONV_PROB_EDGE_FLOOR;
+  if (!(cand.ev >= evFloor) || !(pe >= peFloor)) {
+    return `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% / probEdge ${(pe * 100).toFixed(1)}pp — below conviction floor (EV>=${(evFloor * 100).toFixed(0)}% AND probEdge>=${(peFloor * 100).toFixed(0)}pp).`;
+  }
+  if (isMoneyline(cand)) {
+    return "Moneyline held off the card (max 1 ML; Spread/Total preferred).";
+  }
+  return "Edged out by higher-probEdge picks on today's card.";
+}
+function selectPicks(allCands, cfg) {
+  const evFloor = cfg.evFloor;
+  const peFloor = cfg.probEdgeFloor ?? CONV_PROB_EDGE_FLOOR;
+  const leanEv = cfg.leanEvFloor ?? LEAN_EV_FLOOR;
+  const leanPe = cfg.leanProbEdgeFloor ?? LEAN_PROB_EDGE_FLOOR;
 
-  const qualified = perGame.filter(x => {
-    if (x.ev < cfg.evFloor) return false;
-    const abs = cfbSpreadAbsLine(x);
-    if (abs != null && abs >= 17.5 && x.ev < 0.06) {
-      console.log(`[cfb-blowout] Reject ${x.side} |line|=${abs} EV=${(x.ev * 100).toFixed(1)}% < 6%`);
-      return false;
+  const eligible = [];
+  for (const c of allCands || []) {
+    if (!c || typeof c.ev !== "number") continue;
+    if (!passesCfbBlowout(c)) {
+      const abs = cfbSpreadAbsLine(c);
+      console.log(`[cfb-blowout] Reject ${c.side} |line|=${abs} EV=${(c.ev * 100).toFixed(1)}% < 6%`);
+      continue;
     }
-    return true;
-  }).slice(0, 3);
-  return { picks: qualified, lean: false };
+    const dog = dogMlRejectReason(c);
+    if (dog) {
+      console.log(`[cfb-dog-ml] Reject ${c.side} ${fmtOdds(c.odds)} — ${dog}`);
+      continue;
+    }
+    eligible.push(c);
+  }
+
+  const conviction = eligible.filter(c => c.ev >= evFloor && candProbEdge(c) >= peFloor);
+  const yes = takeUniqueGamesMaxOneML(conviction, 3);
+  const selected = yes.map(c => ({ ...c, isLean: false }));
+
+  if (selected.length < 3) {
+    const used = new Set(selected.map(gameKey));
+    const leanPool = eligible.filter(c => {
+      if (used.has(gameKey(c))) return false;
+      return c.ev >= leanEv && candProbEdge(c) >= leanPe;
+    });
+    const fills = takeUniqueGamesMaxOneML(leanPool, 3 - selected.length, selected.filter(isMoneyline).length);
+    for (const c of fills) selected.push({ ...c, isLean: true });
+    if (fills.length) {
+      console.log(`[cfb-lean-topup] Adding ${fills.length} lean pick(s) — card had ${yes.length} conviction YES`);
+    }
+  }
+
+  return { picks: selected, lean: selected.length > 0 && selected.every(c => c.isLean) };
 }
 
 function unitsToRating(u) {
@@ -691,12 +886,16 @@ const RATING_TO_CONFIDENCE = { "A+": "aplus", "A": "a", "A-": "aminus", "B+": "b
 // ── Assemble final pick objects (exact alpha card shape — the /cfb page is an alpha clone) ──
 function buildFinalPicks(selected, isLean, seasonPhase) {
   return selected.map(c => {
-    const units = isLean ? LEAN_UNITS : c.kellyUnits;
-    const rating = isLean ? "Lean" : unitsToRating(units);
+    const leanPick = !!c.isLean || !!isLean;
+    const units = leanPick ? LEAN_UNITS : c.kellyUnits;
+    const rating = leanPick ? "Lean" : unitsToRating(units);
     const isML = c.market === "Moneyline";
-    const edgePctVal = ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
+    const pe = candProbEdge(c);
+    const mkt = marketImpliedProb(c);
+    const edgePctVal = Number.isFinite(pe) ? (pe * 100).toFixed(1) : ((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1);
+    const implPct = Number.isFinite(mkt) ? (mkt * 100).toFixed(1) : (impliedProb(c.odds) * 100).toFixed(1);
     const modelEdgeStr = isML
-      ? `Model Win Prob: ${(c.coverProb * 100).toFixed(1)}%, Implied: ${(impliedProb(c.odds) * 100).toFixed(1)}%, Edge: ${edgePctVal}%`
+      ? `Model Win Prob: ${(c.coverProb * 100).toFixed(1)}%, Implied: ${implPct}%, Edge: ${edgePctVal}%`
       : `Bet ${c.side} ${fmtOdds(c.odds)} @ ${c.book || "retail"}. ${c.modelProjection}. Calibrated edge ${edgePctVal}%.`;
     return {
       sport: "NCAAF",
@@ -723,8 +922,13 @@ function buildFinalPicks(selected, isLean, seasonPhase) {
       bestBook: c.book || "",
       predCLV: typeof c.predCLV === "number" ? c.predCLV : null,
       sharpBook: c.sharpBook || null,
+      homeTeam: c.homeTeam,
+      awayTeam: c.awayTeam,
+      consensusSpread: c.consensusSpread,
+      consensusSpreadAbs: c.consensusSpreadAbs,
+      noVigPrior: c.noVigPrior,
       seasonPhase,
-      thinSlate: isLean,
+      thinSlate: leanPick,
       source: "cfb",
       result: "pending",
     };
@@ -742,35 +946,200 @@ function calcParlayAmerican(oddsArr) {
   return am > 0 ? `+${am}` : `${am}`;
 }
 
-// 3+1 of the published card — same product as alpha v10.5.2 / NFL. No phantom synthesis later.
-function buildPublishedParlay(picks) {
-  if (!picks || picks.length < 2) return [];
-  const byGame = new Map();
-  for (const p of picks) {
-    const g = (p.matchup || "").toLowerCase().trim();
-    if (!g || byGame.has(g)) continue;
-    byGame.set(g, {
-      pick: p.pick,
-      matchup: p.matchup,
-      odds: p.odds,
-      betType: p.betType,
-      sport: "NCAAF",
-      commenceTime: p.commenceTime || "",
-      coverProb: p.coverProb,
-      ev: p.ev,
-    });
+function parlayUnitsFor(picks) {
+  const hasLean = (picks || []).some(p => p.thinSlate || p.isLean || (p.rating || "").toLowerCase() === "lean");
+  return hasLean ? 0.25 : 0.5;
+}
+function legDirection(side) {
+  const s = (side || "").toLowerCase();
+  return s.includes("over") ? "over" : s.includes("under") ? "under" : "other";
+}
+function parlayComboStats(cands) {
+  let combinedDecimal = 1.0, combinedProb = 1.0;
+  for (const c of cands || []) {
+    const odds = c.oddsNum;
+    if (!Number.isFinite(odds) || !Number.isFinite(c.coverProbNum)) continue;
+    combinedDecimal *= odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds);
+    combinedProb *= c.coverProbNum;
   }
-  const legs = [...byGame.values()].slice(0, 3);
-  if (legs.length < 2) return [];
-  const stake = picks.some(p => p.thinSlate) ? 0.25 : 0.5;
-  return [{
-    type: `${legs.length}-leg-parlay`,
+  const ev = combinedProb * combinedDecimal - 1;
+  const uniqueSports = new Set((cands || []).map(c => c.sport).filter(Boolean)).size;
+  const dirs = (cands || []).map(c => legDirection(c.side));
+  const allSameTotalsDir = dirs.length >= 3 && (dirs.every(d => d === "over") || dirs.every(d => d === "under"));
+  const adjustedEV = ev + Math.max(0, uniqueSports - 1) * 0.02 - (allSameTotalsDir ? 0.08 : 0);
+  return { combinedDecimal, combinedProb, ev, adjustedEV };
+}
+function chooseParlay2or3(legs2, legs3) {
+  const two = (legs2 && legs2.length >= 2) ? legs2 : null;
+  const three = (legs3 && legs3.length >= 3) ? legs3 : null;
+  if (three && !two) return three;
+  if (two && !three) return two;
+  if (!two && !three) return [];
+  const s2 = parlayComboStats(two);
+  const s3 = parlayComboStats(three);
+  if (s2.ev > s3.ev) return two;
+  if ((s3.ev - s2.ev) <= PARLAY_EV_TIE_BAND && s2.combinedProb >= s3.combinedProb + PARLAY_HIT_RATE_EDGE) {
+    return two;
+  }
+  return three;
+}
+function parlayCombinations(arr, k) {
+  const out = [];
+  const rec = (start, acc) => {
+    if (acc.length === k) { out.push(acc.slice()); return; }
+    for (let i = start; i <= arr.length - (k - acc.length); i++) {
+      acc.push(arr[i]);
+      rec(i + 1, acc);
+      acc.pop();
+    }
+  };
+  rec(0, []);
+  return out;
+}
+function isParlayDogML(c) {
+  const m = String(c.market || c.betType || "").toLowerCase();
+  if (m !== "moneyline") return false;
+  return Number.isFinite(c.oddsNum) && c.oddsNum > 0;
+}
+function comboDogMlCount(combo) {
+  return (combo || []).filter(isParlayDogML).length;
+}
+function bestParlayComboOfSize(pool, k) {
+  if (!pool || pool.length < k) return null;
+  let best = null;
+  let bestEv = -Infinity;
+  for (const combo of parlayCombinations(pool, k)) {
+    const games = new Set(combo.map(c => (c.matchup || "").toLowerCase().trim()));
+    if (games.size < k) continue;
+    if (comboDogMlCount(combo) > 1) continue;
+    const s = parlayComboStats(combo);
+    if (s.ev > bestEv) {
+      bestEv = s.ev;
+      best = combo;
+    }
+  }
+  return best;
+}
+function toParlayCand(c) {
+  if (!c) return null;
+  const oddsNum = parseAmericanOdds(c.oddsNum != null ? c.oddsNum : c.odds);
+  const coverProbNum = Number.isFinite(c.coverProbNum)
+    ? c.coverProbNum
+    : (typeof c.coverProb === "number" ? c.coverProb : parseCoverProb(c.coverProb));
+  const evNum = typeof c.evNum === "number" ? c.evNum
+    : typeof c.ev === "number" ? c.ev
+    : (typeof c.evRaw === "number" ? c.evRaw : parseFloat(c.ev) / 100);
+  const side = c.side || c.pick;
+  const market = c.market || c.betType;
+  const matchup = c.matchup || (c.awayTeam && c.homeTeam ? `${c.awayTeam} vs. ${c.homeTeam}` : "");
+  return {
+    side, market, oddsNum, coverProbNum, evNum, matchup,
+    commenceTime: c.commenceTime || "",
+    sport: c.sport || "NCAAF",
+    homeTeam: c.homeTeam, awayTeam: c.awayTeam,
+    consensusSpread: c.consensusSpread, consensusSpreadAbs: c.consensusSpreadAbs,
+    noVigPrior: c.noVigPrior, odds: oddsNum, coverProb: coverProbNum, pick: side, betType: market,
+  };
+}
+function passesParlayLeg(c) {
+  if (!c || !Number.isFinite(c.oddsNum) || !Number.isFinite(c.coverProbNum)) return false;
+  if (c.oddsNum >= PARLAY_MAX_PLUS_ODDS) return false;
+  if (c.oddsNum < -300) return false;
+  if (c.coverProbNum < PARLAY_MIN_COVER) return false;
+  if (dogMlRejectReason(c)) return false;
+  return true;
+}
+function parlayMarketPref(c) {
+  const m = String(c.market || "").toLowerCase();
+  if (m === "total") return 3;
+  if (m === "spread") return 2;
+  return 1;
+}
+function assembleCfbParlay(cands, stake, isIndependent) {
+  const legs = cands.map(c => ({
+    pick: c.side,
+    matchup: c.matchup,
+    odds: fmtOdds(c.oddsNum),
+    betType: c.market,
+    sport: "NCAAF",
+    commenceTime: c.commenceTime || "",
+    coverProb: `${(c.coverProbNum * 100).toFixed(0)}%`,
+    ev: typeof c.evNum === "number" && Number.isFinite(c.evNum) ? `${(c.evNum * 100).toFixed(1)}%` : undefined,
+  }));
+  const s = parlayComboStats(cands);
+  const combinedOdds = s.combinedDecimal >= 2
+    ? `+${Math.round((s.combinedDecimal - 1) * 100)}`
+    : `${Math.round(-100 / (s.combinedDecimal - 1))}`;
+  return {
+    type: `${legs.length}-leg-parlay-optimized`,
     legs,
-    combinedOdds: calcParlayAmerican(legs.map(l => l.odds)),
+    combinedOdds,
+    combinedDecimal: +s.combinedDecimal.toFixed(2),
+    combinedProb: `${(s.combinedProb * 100).toFixed(1)}%`,
+    ev: `${(s.ev * 100).toFixed(1)}%`,
     units: `${stake}u`,
     stake,
-    source: "published-card",
-  }];
+    source: isIndependent ? "independent-2v3" : "published-card",
+    independent: !!isIndependent,
+    uniqueGames: new Set(cands.map(c => (c.matchup || "").toLowerCase().trim())).size,
+    _parlayEV: s.ev,
+  };
+}
+
+// Omega v11.7-style 2-vs-3 optimizer: compare best 2-leg vs best 3-leg by true parlay EV.
+// One leg per game. CFB constraints: no +200 legs, coverProb >= 40%, max 1 dog ML.
+function buildPublishedParlay(picks, allCands) {
+  const stake = parlayUnitsFor(picks);
+  const fromCands = (allCands || []).map(toParlayCand).filter(c => c && passesParlayLeg(c));
+  const fromPicks = (picks || []).map(toParlayCand).filter(c => c && passesParlayLeg(c));
+  const poolSrc = fromCands.length >= 2 ? fromCands : fromPicks;
+  const byGame = new Map();
+  for (const c of poolSrc) {
+    const g = (c.matchup || "").toLowerCase().trim();
+    if (!g) continue;
+    const prev = byGame.get(g);
+    if (!prev) { byGame.set(g, c); continue; }
+    const pref = parlayMarketPref(c) - parlayMarketPref(prev);
+    const cover = c.coverProbNum - (prev.coverProbNum || 0);
+    if (pref > 0 || (pref === 0 && cover > 0)) byGame.set(g, c);
+  }
+  const scan = [...byGame.values()].sort((a, b) =>
+    (parlayMarketPref(b) - parlayMarketPref(a)) || (b.coverProbNum - a.coverProbNum)
+  ).slice(0, 12);
+  const best2 = bestParlayComboOfSize(scan, 2);
+  const best3 = bestParlayComboOfSize(scan, 3);
+  const chosen = chooseParlay2or3(best2, best3);
+  if (chosen && chosen.length >= 2) {
+    const straightSides = new Set((picks || []).map(p => p.pick));
+    const isIndependent = !chosen.every(l => straightSides.has(l.side));
+    const p = assembleCfbParlay(chosen, stake, isIndependent);
+    if (p._parlayEV > 0) {
+      console.log(`[cfb-parlay] ${p.type}: ${chosen.map(l => l.side).join(" + ")} | EV ${p.ev}`);
+      delete p._parlayEV;
+      return [p];
+    }
+  }
+  if (fromPicks.length >= 2) {
+    const fallbackScan = [];
+    const seen = new Set();
+    for (const c of fromPicks) {
+      const g = (c.matchup || "").toLowerCase().trim();
+      if (!g || seen.has(g)) continue;
+      seen.add(g);
+      fallbackScan.push(c);
+    }
+    const fb2 = bestParlayComboOfSize(fallbackScan, 2);
+    const fb3 = bestParlayComboOfSize(fallbackScan, 3);
+    const fb = chooseParlay2or3(fb2, fb3);
+    if (fb && fb.length >= 2) {
+      const p = assembleCfbParlay(fb, stake, false);
+      if (p._parlayEV > 0) {
+        delete p._parlayEV;
+        return [p];
+      }
+    }
+  }
+  return [];
 }
 
 function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays, extras = {}) {
@@ -830,7 +1199,7 @@ async function narratePicks(picks, seasonPhase, dateFormatted) {
     }
     return {
       edgeSummary: `WeBetAI's college football model evaluated every market on today's slate and found its best value on ${picks.map(p => `${p.pick} (${p.odds})`).join(", ")}.`,
-      insights: `${picks.length} college football pick${picks.length > 1 ? "s" : ""} today, ${picks.reduce((s, p) => s + parseFloat(p.units), 0)}u total exposure. Discipline: 3% EV floor, key-number cover, 2+ major books, Hard Rock preferred, quarter-Kelly, market-anchored projections.`,
+      insights: `${picks.length} college football pick${picks.length > 1 ? "s" : ""} today, ${picks.reduce((s, p) => s + parseFloat(p.units), 0)}u total exposure. Discipline: dual floor EV>=3% AND probEdge>=4pp, dog-ML gate, max 1 ML, key-number cover, 2+ major books, Hard Rock preferred, quarter-Kelly, market-anchored projections.`,
     };
   };
   if (!apiKey || !picks.length) return fallback();
@@ -979,7 +1348,7 @@ exports.handler = async (event) => {
     const cands = computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj);
     if (cands.length) {
       console.log(`[cfb] ${g.away_team} @ ${g.home_team}: consensus ${consensus.home} ${fmtSigned(consensus.consensusSpread ?? 0)} / total ${consensus.consensusTotal} · ${cands.length} candidate(s)`);
-      for (const cand of cands) console.log(`[cfb]   ${cand.market}: ${cand.side} ${fmtOdds(cand.odds)} @ ${cand.book} — cover ${(cand.coverProb * 100).toFixed(1)}%, EV ${(cand.ev * 100).toFixed(1)}%`);
+      for (const cand of cands) console.log(`[cfb]   ${cand.market}: ${cand.side} ${fmtOdds(cand.odds)} @ ${cand.book} — cover ${(cand.coverProb * 100).toFixed(1)}%, EV ${(cand.ev * 100).toFixed(1)}%, probEdge ${(candProbEdge(cand) * 100).toFixed(1)}pp`);
     }
     allCands.push(...cands);
   }
@@ -1010,9 +1379,8 @@ exports.handler = async (event) => {
     if (pickSides.has(cand.side)) continue;
     rejections.push({
       matchup,
-      reason: cand.ev < cfg.evFloor
-        ? `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% — below the ${(cfg.evFloor * 100).toFixed(0)}% floor.`
-        : `Edged out by higher-EV picks on today's card.`,
+      side: cand.side,
+      reason: rejectionReason(cand, cfg),
     });
   }
 
@@ -1049,7 +1417,7 @@ exports.handler = async (event) => {
     seasonPhase,
     picks,
     rejections: rejections.slice(0, 12),
-    parlayLegs: buildPublishedParlay(picks),
+    parlayLegs: buildPublishedParlay(picks, allCands),
     summary: {
       totalPicks: picks.length,
       totalUnits: `${parseFloat(totalUnits.toFixed(2))}u`,
@@ -1073,6 +1441,7 @@ exports.handler = async (event) => {
 
 // ── Offline-test hooks (Netlify only invokes exports.handler; these let a local harness
 // exercise the math with no network) ──
+module.exports.MODEL_VERSION = MODEL_VERSION;
 module.exports.buildGameConsensus = buildGameConsensus;
 module.exports.computeCandidates = computeCandidates;
 module.exports.selectPicks = selectPicks;
@@ -1086,3 +1455,13 @@ module.exports.weightedMedian = weightedMedian;
 module.exports.cfbTeamsMatch = cfbTeamsMatch;
 module.exports.schoolKey = schoolKey;
 module.exports.PHASE_CONFIG = PHASE_CONFIG;
+module.exports.impliedProb = impliedProb;
+module.exports.dogMlRejectReason = dogMlRejectReason;
+module.exports.candProbEdge = candProbEdge;
+module.exports.rankScore = rankScore;
+module.exports.chooseParlay2or3 = chooseParlay2or3;
+module.exports.parlayComboStats = parlayComboStats;
+module.exports.HOME_DOG_ML_RANK_PENALTY = HOME_DOG_ML_RANK_PENALTY;
+module.exports.CONV_PROB_EDGE_FLOOR = CONV_PROB_EDGE_FLOOR;
+module.exports.LEAN_PROB_EDGE_FLOOR = LEAN_PROB_EDGE_FLOOR;
+module.exports.LEAN_UNITS = LEAN_UNITS;

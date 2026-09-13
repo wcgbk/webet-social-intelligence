@@ -325,13 +325,16 @@ function nflGameCandidates(game, gameData, footballCtx, leagueConfig) {
     const raw = OMEGA.nflTotalCoverProb(proj._fb.modelTotal, gameData.total, isOver, proj._fb.sigmaTotal);
     push("Total", `${isOver ? "Over" : "Under"} ${gameData.total}`, odds, raw, oppOdds, `model total ${proj.projTotal.toFixed(1)} vs ${gameData.total}`, proj.projTotal - gameData.total);
   }
-  // MONEYLINE — the side with the bigger no-vig cover edge, dog capped at +160 (no payout-inflated traps).
+  // MONEYLINE — FAVORITES ONLY (odds < 0) with a clear edge and >=55% model win prob. Never a
+  // plus-money dog: elite practice takes the POINTS (the spread) on a dog, not the outright ML. This
+  // is what keeps the card off the dog-ML traps Ben flagged.
   if (gameData.homeML != null && gameData.awayML != null) {
     const opts = [["home", proj.homeWinProb, gameData.homeML, gameData.awayML, game.home],
                   ["away", 1 - proj.homeWinProb, gameData.awayML, gameData.homeML, game.away]];
     let best = null;
     for (const [, wp, ml, opp, team] of opts) {
-      if (ml == null || ml > 160 || ml < -350) continue;
+      if (ml == null || ml >= 0 || ml < -350) continue; // favorites only
+      if (wp < 0.55) continue;                            // must be a clear favorite
       const noVig = OMEGA._testV104.noVigProb(ml, opp) ?? impliedProb(ml);
       const edge = wp - noVig;
       if (!best || edge > best.edge) best = { wp, ml, opp, team, edge };

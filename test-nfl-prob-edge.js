@@ -64,6 +64,13 @@ function espn(home, away, state = 'pre') {
     assert.strictEqual(games.size, 3, 'one pick per game');
   });
 
+  await check('never a plus-money dog ML on the card (dogs take the spread, not the ML)', async () => {
+    // A near-pickem game with a plus-money home dog — the pick must be a spread/total, never the dog ML.
+    const r = await nfl.runOmegaNfl([espn('Carolina Panthers', 'Chicago Bears')], [game('d', 'Carolina Panthers', 'Chicago Bears', 44)], {}, {}, true);
+    const picks = nfl.buildFinalPicks(r.selected, false, 'regular');
+    assert.ok(picks.every(p => !(p.betType === 'Moneyline' && String(p.odds).startsWith('+'))), 'no plus-money dog ML: ' + picks.map(p=>p.pick+' '+p.odds).join(', '));
+  });
+
   await check('no picks when there are no pre-game games', async () => {
     const none = await nfl.runOmegaNfl([espn('A', 'B', 'in')], [], {}, {}, false);
     assert.strictEqual(none.selected.length, 0);

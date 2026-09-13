@@ -15,7 +15,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-nfl";
-const MODEL_VERSION = "v1.1.1-nfl";
+const MODEL_VERSION = "v1.2-nfl-prob-edge";
 const NO_GAMES_MSG = "No NFL Games Scheduled For Today";
 const NO_EDGE_MSG = "No qualifying NFL plays today — WeBetAI passed.";
 
@@ -29,17 +29,24 @@ const NFL_ODDS_SPORTS = ["americanfootball_nfl_preseason", "americanfootball_nfl
 // Dress-rehearsal: BOTH phases use regular-season process (user: test as we would in-season).
 // Label on the card still reflects ESPN season type. Numbers do not get the old preseason
 // damp / extra shrink / forced-lean that would teach the wrong lessons before Week 1.
+// sigmaML is the spread->moneyline win-prob σ, kept SEPARATE from the ATS σ (same design as the
+// CFB pipeline). NFL's ATS σ (13.2) already sits at the empirical spread->win-prob fit (~13-14),
+// so sigmaML == sigmaMargin here and adds no distortion — but the constant is wired so a future
+// refit can tune ML independently of ATS. The dog-ML overpicking is NOT gated by σ on NFL; it is
+// gated by the probEdge dual floor + dog-ML rules below (see selectPicks).
 const PHASE_CONFIG = {
   preseason: {
-    sigmaMargin: 13.2, sigmaTotal: 10.0, hfa: 2.0,
+    sigmaMargin: 13.2, sigmaML: 13.2, sigmaTotal: 10.0, hfa: 2.0,
     ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0,
-    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.03,
+    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.015,
+    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02,
     leagueTotal: 44.5,
   },
   regular: {
-    sigmaMargin: 13.2, sigmaTotal: 10.0, hfa: 2.0,
+    sigmaMargin: 13.2, sigmaML: 13.2, sigmaTotal: 10.0, hfa: 2.0,
     ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0,
-    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.03,
+    maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.015,
+    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02,
     leagueTotal: 44.5,
   },
 };
@@ -50,6 +57,24 @@ const PHASE_CONFIG = {
 const SHRINK_K = { Spread: 0.35, Total: 0.30, Moneyline: 0.50 };
 const COVER_PROB_CAPS = { NFL_Spread: 0.57, NFL_Total: 0.60, NFL_Moneyline: 0.72 };
 const LEAN_UNITS = 0.25;
+
+// ── Dog-ML / probability-edge gate (parity with CFB v1.1.2-prob-edge + Omega ML guardrails) ──
+// The old NFL card gated moneylines on raw EV% only. A dog's EV = winProb × (big decimal) − 1, so a
+// microscopic 1-3pp win-prob edge on a +200/+275 dog balloons past the 3% EV floor while the same
+// edge on a favorite stays flat or negative — the card fills with plus-money dogs. Sharp models
+// gate on the PROBABILITY EDGE (coverProb − no-vig implied), not the payout-inflated EV, and hard-
+// cap the longshots the model cannot reliably price. NFL values are a touch tighter than CFB's
+// because NFL is lower-variance (σ 13.2 vs 16): dogs win outright less often at the same spread.
+const CONV_PROB_EDGE_FLOOR = 0.04;       // conviction: probEdge >= 4pp AND EV >= 3%
+const LEAN_PROB_EDGE_FLOOR = 0.02;       // lean fill: probEdge >= ~2pp
+const LEAN_EV_FLOOR = 0.015;             // lean fill: EV >= ~1.5%
+const HOME_DOG_ML_RANK_PENALTY = 0.008;  // soft 0.8pp rank penalty on home-dog ML (books sharp here)
+const MAX_ML_ON_CARD = 1;                // at most one moneyline on the published card
+const DOG_ML_MAX_SPREAD = 9.5;           // dog ML only when consensus |spread| <= 9.5 (outright is live)
+const DOG_ML_MIN_COVER = 0.38;           // dog ML only when model win prob >= 38%
+const DOG_ML_MAX_PRICE = 175;            // dog ML only when price <= +175 (longer dogs bleed)
+const DOG_ML_HARD_SPREAD = 13;           // hard never: consensus |spread| >= 13
+const DOG_ML_HARD_PRICE = 300;           // hard never: price > +300
 
 // ── Book weighting (sharpness) + bettable retail set ──
 const BOOK_SHARPNESS = {
@@ -500,17 +525,21 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
     const capU = market === "Moneyline" ? cfg.mlMaxUnits : cfg.maxUnits;
     kellyUnits = Math.max(0.5, Math.min(capU, kellyUnits));
     const sigma = market === "Total" ? cfg.sigmaTotal : cfg.sigmaMargin;
+    const mktProb = (typeof prior === "number" && prior > 0.01 && prior < 0.99) ? prior : impliedProb(offer.price);
+    const probEdge = coverProb - mktProb; // probability edge — the sharp selection metric, not payout-inflated EV
     const cand = {
       sport: "NFL", market, side,
       homeTeam: c.home, awayTeam: c.away, commenceTime: c.commenceTime,
       odds: offer.price, book: offer.book,
-      rawProb, coverProb, ev, kellyUnits,
+      rawProb, coverProb, ev, kellyUnits, probEdge,
       zScore: edgePts != null ? +(edgePts / sigma).toFixed(2) : null,
       modelProjection, consensusLine, edge: edgePts != null ? +edgePts.toFixed(1) : null,
       noVigPrior: prior,
+      consensusSpread: c.consensusSpread,
+      consensusSpreadAbs: c.consensusSpread != null ? Math.abs(c.consensusSpread) : null,
       homeRecord: espnGame?.homeRecord || "", awayRecord: espnGame?.awayRecord || "",
       venue: espnGame?.venue || "",
-      kellyCalcStr: `p=${coverProb.toFixed(3)}, dec=${dec.toFixed(2)}, EV=${(ev * 100).toFixed(1)}%, quarter-Kelly → ${kellyUnits}u (best line ${fmtOdds(offer.price)} @ ${offer.book})`,
+      kellyCalcStr: `p=${coverProb.toFixed(3)}, dec=${dec.toFixed(2)}, EV=${(ev * 100).toFixed(1)}%, probEdge=${(probEdge * 100).toFixed(1)}pp, quarter-Kelly → ${kellyUnits}u (best line ${fmtOdds(offer.price)} @ ${offer.book})`,
     };
     cands.push(cand);
     return cand;
@@ -586,9 +615,9 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
     }
   }
 
-  // MONEYLINES — win prob from model margin; heavy prior anchor.
+  // MONEYLINES — win prob from model margin via the ML-fitted σ; heavy prior anchor.
   if (c.mlHomeNoVig != null && (c.majorML || 0) >= 2) {
-    const rawHomeWin = normalCDF(modelMargin / cfg.sigmaMargin);
+    const rawHomeWin = normalCDF(modelMargin / (cfg.sigmaML || cfg.sigmaMargin));
     const homeBest = bestOffer(c.offers.mlHome, (o) => ({ raw: rawHomeWin, cover: shrink(rawHomeWin, "Moneyline", c.mlHomeNoVig), prior: c.mlHomeNoVig }));
     if (homeBest) {
       const added = pushCand("Moneyline", `${c.home} ML`, homeBest.offer, rawHomeWin, c.mlHomeNoVig,
@@ -617,18 +646,157 @@ function findESPNGame(espnGames, home, away) {
   ) || null;
 }
 
-// ── Selection: one pick per game (highest EV), top 3, floors, LEAN fallback ──
-function selectPicks(allCands, cfg) {
+// ── Selection: rank by probEdge (not raw EV%), dual floor, dog-ML gate, max 1 ML, lean fill-to-3 ──
+// Ranking on the probability edge — not payout-inflated EV — is what stops the card filling with
+// plus-money dogs. Spreads/totals are preferred over moneylines on the same game, at most one ML
+// ships, and dog MLs must clear the DOG_ML_* gate (price/spread/cover). Conviction picks need the
+// dual floor (EV>=3% AND probEdge>=4pp); if fewer than 3 qualify, lean fills top the card to 3.
+function gameKey(c) {
+  if (!c) return "";
+  if (c.awayTeam && c.homeTeam) return `${c.awayTeam}@${c.homeTeam}`;
+  return String(c.matchup || "").toLowerCase().trim();
+}
+function isMoneyline(c) { return (c.market || c.betType) === "Moneyline"; }
+function candProbEdge(c) {
+  if (!c) return NaN;
+  if (typeof c.probEdge === "number" && Number.isFinite(c.probEdge)) return c.probEdge;
+  const cp = typeof c.coverProb === "number" ? c.coverProb : NaN;
+  const mkt = (typeof c.noVigPrior === "number" && c.noVigPrior > 0.01 && c.noVigPrior < 0.99)
+    ? c.noVigPrior
+    : (typeof c.odds === "number" ? impliedProb(c.odds) : NaN);
+  return (Number.isFinite(cp) && Number.isFinite(mkt)) ? cp - mkt : NaN;
+}
+function candSpreadAbs(c) {
+  if (typeof c.consensusSpreadAbs === "number" && Number.isFinite(c.consensusSpreadAbs)) return c.consensusSpreadAbs;
+  if (typeof c.consensusSpread === "number" && Number.isFinite(c.consensusSpread)) return Math.abs(c.consensusSpread);
+  return null;
+}
+function isUnderdogML(c) {
+  return isMoneyline(c) && typeof c.odds === "number" && c.odds > 0;
+}
+function isHomeDogML(c) {
+  if (!isUnderdogML(c)) return false;
+  const home = String(c.homeTeam || "").toLowerCase().trim();
+  return !!home && String(c.side || c.pick || "").toLowerCase().startsWith(home);
+}
+function dogMlRejectReason(c) {
+  if (!isUnderdogML(c)) return null;
+  const odds = c.odds;
+  const abs = candSpreadAbs(c);
+  const cp = typeof c.coverProb === "number" ? c.coverProb : NaN;
+  if (odds > DOG_ML_HARD_PRICE) return `dog ML hard-never: price ${fmtOdds(odds)} > +${DOG_ML_HARD_PRICE}`;
+  if (abs != null && abs >= DOG_ML_HARD_SPREAD) return `dog ML hard-never: |spread| ${abs} >= ${DOG_ML_HARD_SPREAD}`;
+  if (abs == null) return "dog ML skipped: consensus |spread| unknown";
+  if (abs > DOG_ML_MAX_SPREAD) return `dog ML: consensus |spread| ${abs} > ${DOG_ML_MAX_SPREAD}`;
+  if (!(cp >= DOG_ML_MIN_COVER)) return `dog ML: coverProb ${Number.isFinite(cp) ? (cp * 100).toFixed(1) : "?"}% < ${DOG_ML_MIN_COVER * 100}%`;
+  if (odds > DOG_ML_MAX_PRICE) return `dog ML: price ${fmtOdds(odds)} > +${DOG_ML_MAX_PRICE}`;
+  return null;
+}
+function nflSpreadAbsLine(c) {
+  if (!c || c.market !== "Spread") return null;
+  const m = String(c.side || "").match(/([+-]?\d+(?:\.\d+)?)\s*$/);
+  return m ? Math.abs(parseFloat(m[1])) : null;
+}
+function passesNflBlowout(c) {
+  const abs = nflSpreadAbsLine(c);
+  if (abs != null && abs >= 14 && !(c.ev >= 0.06)) return false; // heavy chalk spread needs a real EV edge
+  return true;
+}
+function rankScore(c) {
+  let s = candProbEdge(c);
+  if (!Number.isFinite(s)) s = -Infinity;
+  if (isHomeDogML(c)) s -= HOME_DOG_ML_RANK_PENALTY;
+  return s;
+}
+function marketPrefNonML(c) {
+  const m = String(c.market || c.betType || "").toLowerCase();
+  if (m === "spread" || m === "total") return 2;
+  if (m === "moneyline") return 0;
+  return 1;
+}
+function betterSameGame(a, b) {
+  const pref = marketPrefNonML(a) - marketPrefNonML(b);
+  if (pref) return pref;
+  return rankScore(a) - rankScore(b);
+}
+function pickBestPerGame(pool) {
   const byGame = new Map();
-  for (const cand of allCands) {
-    const key = `${cand.awayTeam}@${cand.homeTeam}`;
+  for (const cand of pool || []) {
+    const key = gameKey(cand);
+    if (!key) continue;
     const cur = byGame.get(key);
-    if (!cur || cand.ev > cur.ev) byGame.set(key, cand);
+    if (!cur || betterSameGame(cand, cur) > 0) byGame.set(key, cand);
   }
-  const perGame = [...byGame.values()].sort((a, b) => b.ev - a.ev);
+  return [...byGame.values()].sort((a, b) => rankScore(b) - rankScore(a));
+}
+function takeUniqueGamesMaxOneML(pool, maxTake, mlAlready = 0) {
+  const ranked = pickBestPerGame(pool);
+  const out = [];
+  let mlCount = mlAlready;
+  const used = new Set();
+  for (const c of ranked) {
+    if (out.length >= maxTake) break;
+    const g = gameKey(c);
+    if (!g || used.has(g)) continue;
+    if (isMoneyline(c) && mlCount >= MAX_ML_ON_CARD) continue;
+    if (isMoneyline(c)) mlCount++;
+    out.push(c);
+    used.add(g);
+  }
+  return out;
+}
+function rejectionReason(cand, cfg) {
+  const dog = dogMlRejectReason(cand);
+  if (dog) return dog;
+  if (!passesNflBlowout(cand)) {
+    return `Blowout spread |line|=${nflSpreadAbsLine(cand)} needs EV>=6% (EV ${(cand.ev * 100).toFixed(1)}%).`;
+  }
+  const pe = candProbEdge(cand);
+  const evFloor = cfg.evFloor;
+  const peFloor = cfg.probEdgeFloor ?? CONV_PROB_EDGE_FLOOR;
+  if (!(cand.ev >= evFloor) || !(pe >= peFloor)) {
+    return `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% / probEdge ${(pe * 100).toFixed(1)}pp — below conviction floor (EV>=${(evFloor * 100).toFixed(0)}% AND probEdge>=${(peFloor * 100).toFixed(0)}pp).`;
+  }
+  if (isMoneyline(cand)) return "Moneyline held off the card (max 1 ML; Spread/Total preferred).";
+  return "Edged out by higher-probEdge picks on today's card.";
+}
+function selectPicks(allCands, cfg) {
+  const evFloor = cfg.evFloor;
+  const peFloor = cfg.probEdgeFloor ?? CONV_PROB_EDGE_FLOOR;
+  const leanEv = cfg.leanEvFloor ?? LEAN_EV_FLOOR;
+  const leanPe = cfg.leanProbEdgeFloor ?? LEAN_PROB_EDGE_FLOOR;
 
-  const qualified = perGame.filter(x => x.ev >= cfg.evFloor).slice(0, 3);
-  return { picks: qualified, lean: false };
+  const eligible = [];
+  for (const c of allCands || []) {
+    if (!c || typeof c.ev !== "number") continue;
+    if (!passesNflBlowout(c)) {
+      console.log(`[nfl-blowout] Reject ${c.side} |line|=${nflSpreadAbsLine(c)} EV=${(c.ev * 100).toFixed(1)}% < 6%`);
+      continue;
+    }
+    const dog = dogMlRejectReason(c);
+    if (dog) {
+      console.log(`[nfl-dog-ml] Reject ${c.side} ${fmtOdds(c.odds)} — ${dog}`);
+      continue;
+    }
+    eligible.push(c);
+  }
+
+  const conviction = eligible.filter(c => c.ev >= evFloor && candProbEdge(c) >= peFloor);
+  const yes = takeUniqueGamesMaxOneML(conviction, 3);
+  const selected = yes.map(c => ({ ...c, isLean: false }));
+
+  if (selected.length < 3) {
+    const used = new Set(selected.map(gameKey));
+    const leanPool = eligible.filter(c => {
+      if (used.has(gameKey(c))) return false;
+      return c.ev >= leanEv && candProbEdge(c) >= leanPe;
+    });
+    const fills = takeUniqueGamesMaxOneML(leanPool, 3 - selected.length, selected.filter(isMoneyline).length);
+    for (const c of fills) selected.push({ ...c, isLean: true });
+    if (fills.length) console.log(`[nfl-lean-topup] Adding ${fills.length} lean pick(s) — card had ${yes.length} conviction YES`);
+  }
+
+  return { picks: selected, lean: selected.length > 0 && selected.every(c => c.isLean) };
 }
 
 function unitsToRating(u) {
@@ -641,8 +809,9 @@ function unitsToRating(u) {
 const RATING_TO_CONFIDENCE = { "A+": "aplus", "A": "a", "A-": "aminus", "B+": "bplus", "B": "b", "Lean": "lean" };
 
 // ── Assemble final pick objects (exact alpha card shape — the /nfl page is an alpha clone) ──
-function buildFinalPicks(selected, isLean, seasonPhase) {
+function buildFinalPicks(selected, isLeanCard, seasonPhase) {
   return selected.map(c => {
+    const isLean = typeof c.isLean === "boolean" ? c.isLean : !!isLeanCard;
     const units = isLean ? LEAN_UNITS : c.kellyUnits;
     const rating = isLean ? "Lean" : unitsToRating(units);
     const isML = c.market === "Moneyline";
@@ -956,22 +1125,19 @@ exports.handler = async (event) => {
   const { picks: selected, lean } = selectPicks(allCands, cfg);
   const picks = buildFinalPicks(selected, lean, seasonPhase);
 
-  // Rejections: everything considered but not shipped (transparency, mirrors alpha card)
+  // Rejections: everything considered but not shipped (transparency, mirrors alpha card).
+  // Best-per-game is ranked by probEdge (the selection metric), and the reason string reflects the
+  // real gate that held it off the card (dog-ML rule, blowout, or the EV+probEdge dual floor).
   const pickSides = new Set(picks.map(p => p.pick));
   const rejections = [];
   const byGameBest = new Map();
   for (const cand of allCands) {
     const key = `${cand.awayTeam} @ ${cand.homeTeam}`;
-    if (!byGameBest.has(key) || cand.ev > byGameBest.get(key).ev) byGameBest.set(key, cand);
+    if (!byGameBest.has(key) || rankScore(cand) > rankScore(byGameBest.get(key))) byGameBest.set(key, cand);
   }
   for (const [matchup, cand] of byGameBest) {
     if (pickSides.has(cand.side)) continue;
-    rejections.push({
-      matchup,
-      reason: cand.ev < cfg.evFloor
-        ? `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% — below the ${(cfg.evFloor * 100).toFixed(0)}% floor.`
-        : `Edged out by higher-EV picks on today's card.`,
-    });
+    rejections.push({ matchup, reason: rejectionReason(cand, cfg) });
   }
 
   // Same select-to-zero gap as CFB: candidates can exist and still fail the EV floor,
@@ -1038,3 +1204,9 @@ module.exports.buildPublishedParlay = buildPublishedParlay;
 module.exports.noVigProb = noVigProb;
 module.exports.weightedMedian = weightedMedian;
 module.exports.PHASE_CONFIG = PHASE_CONFIG;
+module.exports.MODEL_VERSION = MODEL_VERSION;
+module.exports.dogMlRejectReason = dogMlRejectReason;
+module.exports.candProbEdge = candProbEdge;
+module.exports.rankScore = rankScore;
+module.exports.isMoneyline = isMoneyline;
+module.exports.HOME_DOG_ML_RANK_PENALTY = HOME_DOG_ML_RANK_PENALTY;

@@ -15,7 +15,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-nfl";
-const MODEL_VERSION = "v1.2-nfl-prob-edge";
+const MODEL_VERSION = "v1.3-nfl-sharp";
 const NO_GAMES_MSG = "No NFL Games Scheduled For Today";
 const NO_EDGE_MSG = "No qualifying NFL plays today — WeBetAI passed.";
 
@@ -30,23 +30,29 @@ const NFL_ODDS_SPORTS = ["americanfootball_nfl_preseason", "americanfootball_nfl
 // Label on the card still reflects ESPN season type. Numbers do not get the old preseason
 // damp / extra shrink / forced-lean that would teach the wrong lessons before Week 1.
 // sigmaML is the spread->moneyline win-prob σ, kept SEPARATE from the ATS σ (same design as the
-// CFB pipeline). NFL's ATS σ (13.2) already sits at the empirical spread->win-prob fit (~13-14),
-// so sigmaML == sigmaMargin here and adds no distortion — but the constant is wired so a future
-// refit can tune ML independently of ATS. The dog-ML overpicking is NOT gated by σ on NFL; it is
-// gated by the probEdge dual floor + dog-ML rules below (see selectPicks).
+// CFB pipeline). NFL's ATS σ 13.45 is the canonical empirical spread->win-prob fit (FiveThirtyEight
+// / Pro-Football-Reference; range 13.0-14.0), so sigmaML == sigmaMargin here and adds no distortion
+// — the constant is wired so a future refit can tune ML independently of ATS. The dog-ML overpicking
+// is NOT gated by σ on NFL; it is gated by the probEdge dual floor + dog-ML rules below (selectPicks).
+// marginClamp / totalClamp: the model is a BOUNDED nudge off the no-vig market, never a free
+// projection (elite market-anchored design — the closing line is the most efficient consensus, and
+// an unanchored model just re-earns the vig). modelMargin/modelTotal are clamped to market ± clamp.
+// coverFloor 0.52: parity with omega football MAIN — never ship a side we are not actually favored
+// to win (kills coin-flip spreads and plus-money-dog artifacts at the source). hfa is a site-specific
+// base (~1.8, 2020s consensus is 1.5-2.0, well below the old flat 3.0); NFL_SITE_HFA adds the venue.
 const PHASE_CONFIG = {
   preseason: {
-    sigmaMargin: 13.2, sigmaML: 13.2, sigmaTotal: 10.0, hfa: 2.0,
-    ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0,
+    sigmaMargin: 13.45, sigmaML: 13.45, sigmaTotal: 10.0, hfa: 1.8,
+    ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0, marginClamp: 4.0, totalClamp: 6.0,
     maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.015,
-    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02,
+    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02, coverFloor: 0.52,
     leagueTotal: 44.5,
   },
   regular: {
-    sigmaMargin: 13.2, sigmaML: 13.2, sigmaTotal: 10.0, hfa: 2.0,
-    ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0,
+    sigmaMargin: 13.45, sigmaML: 13.45, sigmaTotal: 10.0, hfa: 1.8,
+    ratingDamp: 1.0, marketWeight: 0.50, shrinkMult: 1.0, marginClamp: 4.0, totalClamp: 6.0,
     maxUnits: 2.5, mlMaxUnits: 0.5, evFloor: 0.03, leanEvFloor: 0.015,
-    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02,
+    probEdgeFloor: 0.04, leanProbEdgeFloor: 0.02, coverFloor: 0.52,
     leagueTotal: 44.5,
   },
 };
@@ -75,6 +81,14 @@ const DOG_ML_MIN_COVER = 0.38;           // dog ML only when model win prob >= 3
 const DOG_ML_MAX_PRICE = 175;            // dog ML only when price <= +175 (longer dogs bleed)
 const DOG_ML_HARD_SPREAD = 13;           // hard never: consensus |spread| >= 13
 const DOG_ML_HARD_PRICE = 300;           // hard never: price > +300
+
+// ── CLV-anchored conviction (beating the sharp close is the elite ROI signal) ──
+// A pick that beats Pinnacle's no-vig close by >= 1.5pp AND has a real model lean is CONVICTION even
+// if its model-vs-market probEdge is under the 4pp floor — CLV is a stronger forward edge than a raw
+// model gap. predCLV also feeds the ranking score so higher-CLV plays sort to the top of the card.
+const CLV_CONV_MIN = 0.015;              // predCLV >= +1.5pp promotes an in-gate pick to conviction
+const CLV_CONV_MIN_COVER = 0.53;         // ...but only if we are clearly favored to win the bet
+const CLV_RANK_WEIGHT = 0.5;             // predCLV weight in the ranking score
 
 // ── Book weighting (sharpness) + bettable retail set ──
 const BOOK_SHARPNESS = {
@@ -127,6 +141,28 @@ function teamRating(name) {
     if (team.toLowerCase().endsWith(last)) return r;
   }
   return 0;
+}
+
+// ── Site-specific home-field advantage (delta in points off the league base ~1.8) ──
+// Flat league HFA is a known amateur error (2020s consensus is ~1.5-2.0, and it is NOT uniform).
+// Loud/altitude/cold-weather sites earn more; dome-share LA venues and Jacksonville near zero.
+// Deltas are conservative; effective HFA = cfg.hfa + delta, clamped to [0.5, 3.2].
+const NFL_SITE_HFA_DELTA = {
+  "Seattle Seahawks": 1.0, "Kansas City Chiefs": 0.8, "Buffalo Bills": 0.8, "Green Bay Packers": 0.7,
+  "Denver Broncos": 0.7, "New Orleans Saints": 0.6, "Pittsburgh Steelers": 0.5, "Baltimore Ravens": 0.5,
+  "Philadelphia Eagles": 0.5, "Minnesota Vikings": 0.4, "Detroit Lions": 0.3, "Cleveland Browns": 0.3,
+  "New England Patriots": 0.2, "Chicago Bears": 0.2, "Tennessee Titans": 0.2, "Cincinnati Bengals": 0.2,
+  "Los Angeles Rams": -0.4, "Los Angeles Chargers": -0.6, "Jacksonville Jaguars": -0.3,
+};
+function siteHfa(homeTeam, baseHfa) {
+  let delta = NFL_SITE_HFA_DELTA[homeTeam];
+  if (delta == null) {
+    const last = (homeTeam || "").trim().split(/\s+/).pop().toLowerCase();
+    for (const [team, d] of Object.entries(NFL_SITE_HFA_DELTA)) {
+      if (team.toLowerCase().endsWith(last)) { delta = d; break; }
+    }
+  }
+  return Math.max(0.5, Math.min(3.2, (baseHfa || 1.8) + (delta || 0)));
 }
 
 // ── Math helpers (identical formulas to alpha) ──
@@ -499,12 +535,16 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
 
   const rHome = teamRatingLive(c.home, ratingOverlay), rAway = teamRatingLive(c.away, ratingOverlay);
   const qbAdjPts = qbMarginAdj(c.home, c.away, qbAdj);
-  const ratingMargin = (rHome - rAway) * cfg.ratingDamp + cfg.hfa + qbAdjPts;
+  const hfa = siteHfa(c.home, cfg.hfa);
+  const ratingMargin = (rHome - rAway) * cfg.ratingDamp + hfa + qbAdjPts;
   const marketMargin = c.consensusSpread != null ? -c.consensusSpread : ratingMargin;
-  const modelMargin = cfg.marketWeight * marketMargin + (1 - cfg.marketWeight) * ratingMargin;
+  // Market-anchored: the model is a BOUNDED nudge off the no-vig line, clamped to ± marginClamp pts.
+  let modelMargin = cfg.marketWeight * marketMargin + (1 - cfg.marketWeight) * ratingMargin;
+  if (cfg.marginClamp != null) modelMargin = Math.max(marketMargin - cfg.marginClamp, Math.min(marketMargin + cfg.marginClamp, modelMargin));
   const indoor = !!(espnGame && espnGame.indoor);
   const ratingTotal = (cfg.leagueTotal || 44.5) + (rHome + rAway) * 0.45 + (indoor ? 0.8 : 0);
-  const modelTotal = c.consensusTotal != null ? 0.5 * ratingTotal + 0.5 * c.consensusTotal : ratingTotal;
+  let modelTotal = c.consensusTotal != null ? 0.5 * ratingTotal + 0.5 * c.consensusTotal : ratingTotal;
+  if (cfg.totalClamp != null && c.consensusTotal != null) modelTotal = Math.max(c.consensusTotal - cfg.totalClamp, Math.min(c.consensusTotal + cfg.totalClamp, modelTotal));
 
   const shrink = (raw, market, prior) => {
     const cap = COVER_PROB_CAPS[`NFL_${market}`] || 0.60;
@@ -633,7 +673,10 @@ function computeCandidates(consensus, espnGame, cfg, ratingOverlay, qbAdj) {
     }
   }
 
-  return cands.filter(x => typeof x.predCLV !== "number" || x.predCLV >= -0.02);
+  // predCLV gate: when a Pinnacle no-vig anchor exists, the bet must beat (or tie) the sharp close.
+  // Beating the closing line is the single best forward predictor of ROI, so a negative predCLV is
+  // dropped outright (omega football MAIN parity — tightened from the old -0.02 tolerance).
+  return cands.filter(x => typeof x.predCLV !== "number" || x.predCLV >= 0);
 }
 
 // ── Match an odds-API game to the ESPN slate (records/venue context) ──
@@ -705,8 +748,18 @@ function passesNflBlowout(c) {
 function rankScore(c) {
   let s = candProbEdge(c);
   if (!Number.isFinite(s)) s = -Infinity;
+  // Reward beating the sharp close: predCLV lifts the rank (bounded so a single big number can't dominate).
+  if (typeof c.predCLV === "number" && Number.isFinite(c.predCLV)) s += CLV_RANK_WEIGHT * Math.max(-0.03, Math.min(0.06, c.predCLV));
   if (isHomeDogML(c)) s -= HOME_DOG_ML_RANK_PENALTY;
   return s;
+}
+function candCover(c) {
+  return typeof c.coverProb === "number" ? c.coverProb : parseFloat(c.coverProb) / (String(c.coverProb).includes("%") ? 100 : 1) || 0;
+}
+// Beat the sharp close by >= 1.5pp with a clear favorite → conviction even under the 4pp probEdge floor.
+function clvPromotes(c, minProbEdge) {
+  return typeof c.predCLV === "number" && c.predCLV >= CLV_CONV_MIN
+    && candCover(c) >= CLV_CONV_MIN_COVER && candProbEdge(c) >= minProbEdge;
 }
 function marketPrefNonML(c) {
   const m = String(c.market || c.betType || "").toLowerCase();
@@ -751,11 +804,18 @@ function rejectionReason(cand, cfg) {
   if (!passesNflBlowout(cand)) {
     return `Blowout spread |line|=${nflSpreadAbsLine(cand)} needs EV>=6% (EV ${(cand.ev * 100).toFixed(1)}%).`;
   }
+  const coverFloor = cfg.coverFloor ?? 0;
+  if (candCover(cand) < coverFloor) {
+    return `${cand.side}: model cover ${(candCover(cand) * 100).toFixed(1)}% below the ${(coverFloor * 100).toFixed(0)}% floor — not favored to win the bet.`;
+  }
+  if (typeof cand.predCLV === "number" && cand.predCLV < 0) {
+    return `${cand.side} ${fmtOdds(cand.odds)}: predicted CLV ${(cand.predCLV * 100).toFixed(1)}pp < 0 — does not beat the sharp close.`;
+  }
   const pe = candProbEdge(cand);
   const evFloor = cfg.evFloor;
   const peFloor = cfg.probEdgeFloor ?? CONV_PROB_EDGE_FLOOR;
-  if (!(cand.ev >= evFloor) || !(pe >= peFloor)) {
-    return `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% / probEdge ${(pe * 100).toFixed(1)}pp — below conviction floor (EV>=${(evFloor * 100).toFixed(0)}% AND probEdge>=${(peFloor * 100).toFixed(0)}pp).`;
+  if (!(cand.ev >= evFloor) || !(pe >= peFloor || clvPromotes(cand, cfg.leanProbEdgeFloor ?? LEAN_PROB_EDGE_FLOOR))) {
+    return `Best market (${cand.side} ${fmtOdds(cand.odds)}) EV ${(cand.ev * 100).toFixed(1)}% / probEdge ${(pe * 100).toFixed(1)}pp — below conviction floor (EV>=${(evFloor * 100).toFixed(0)}% AND probEdge>=${(peFloor * 100).toFixed(0)}pp, or a CLV promotion).`;
   }
   if (isMoneyline(cand)) return "Moneyline held off the card (max 1 ML; Spread/Total preferred).";
   return "Edged out by higher-probEdge picks on today's card.";
@@ -765,6 +825,8 @@ function selectPicks(allCands, cfg) {
   const peFloor = cfg.probEdgeFloor ?? CONV_PROB_EDGE_FLOOR;
   const leanEv = cfg.leanEvFloor ?? LEAN_EV_FLOOR;
   const leanPe = cfg.leanProbEdgeFloor ?? LEAN_PROB_EDGE_FLOOR;
+
+  const coverFloor = cfg.coverFloor ?? 0;
 
   const eligible = [];
   for (const c of allCands || []) {
@@ -778,10 +840,22 @@ function selectPicks(allCands, cfg) {
       console.log(`[nfl-dog-ml] Reject ${c.side} ${fmtOdds(c.odds)} — ${dog}`);
       continue;
     }
+    // Cover floor: only bet a side we are actually favored to win (omega football parity, 52%).
+    if (candCover(c) < coverFloor) {
+      console.log(`[nfl-cover] Reject ${c.side} — cover ${(candCover(c) * 100).toFixed(1)}% < ${(coverFloor * 100).toFixed(0)}%`);
+      continue;
+    }
+    // predCLV gate (defense-in-depth; also enforced in computeCandidates): must beat the sharp close.
+    if (typeof c.predCLV === "number" && c.predCLV < 0) {
+      console.log(`[nfl-clv] Reject ${c.side} ${fmtOdds(c.odds)} — predCLV ${(c.predCLV * 100).toFixed(1)}pp < 0`);
+      continue;
+    }
     eligible.push(c);
   }
 
-  const conviction = eligible.filter(c => c.ev >= evFloor && candProbEdge(c) >= peFloor);
+  // Conviction = the model dual floor (EV>=3% AND probEdge>=4pp) OR a CLV promotion (beats the sharp
+  // close by >=1.5pp with a clear favorite). Either way EV must clear the floor.
+  const conviction = eligible.filter(c => c.ev >= evFloor && (candProbEdge(c) >= peFloor || clvPromotes(c, leanPe)));
   const yes = takeUniqueGamesMaxOneML(conviction, 3);
   const selected = yes.map(c => ({ ...c, isLean: false }));
 
@@ -1209,4 +1283,7 @@ module.exports.dogMlRejectReason = dogMlRejectReason;
 module.exports.candProbEdge = candProbEdge;
 module.exports.rankScore = rankScore;
 module.exports.isMoneyline = isMoneyline;
+module.exports.candCover = candCover;
+module.exports.clvPromotes = clvPromotes;
+module.exports.siteHfa = siteHfa;
 module.exports.HOME_DOG_ML_RANK_PENALTY = HOME_DOG_ML_RANK_PENALTY;

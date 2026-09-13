@@ -267,66 +267,112 @@ function buildEspnData(espnGames, includeStarted = false) {
   return [{ league: "NFL", games }];
 }
 
-function hasPositiveEdge(c) {
-  return c.ev > 0 && (c.coverProb - OMEGA.impliedProb(c.odds)) > 0;
+// Quarter-Kelly ×50, clamp 0.5–3.0u (copied from Omega's computeKelly — same sizing).
+function kellyFor(coverProb, odds) {
+  const dec = americanToDecimal(odds);
+  const edge = coverProb * dec - 1;
+  if (edge <= 0) return { units: 0.5, ev: edge };
+  let u = (edge / (dec - 1)) * 0.25 * 50;
+  u = Math.max(0.5, Math.min(3.0, Math.round(u * 2) / 2));
+  return { units: u, ev: edge };
 }
 
-// Best-per-game, top-3 by EV — Omega's selectDiversifiedStraights order, minus the multisport slot
-// caps (moot on an NFL-only page). Per-candidate gates (cover 0.52, EV 2.5%, predCLV, positive
-// calibrated edge) are already enforced inside computeEdgeTable / allowOnPublishedCard.
-function selectTop3(cands) {
-  const eligible = (cands || []).filter(c =>
-    c && c.sport === "NFL" && OMEGA.allowOnPublishedCard(c) && hasPositiveEdge(c) && OMEGA.passesPredClvGate(c)
-  );
-  const byGame = new Map();
-  for (const c of eligible) {
-    const key = (c.matchup || `${c.awayTeam} @ ${c.homeTeam}`).toLowerCase();
-    const cur = byGame.get(key);
-    if (!cur || c.ev > cur.ev) byGame.set(key, c);
+// Per-game candidates using OMEGA's exact projection + cover + calibration math (computeFootballProjection,
+// nflSpread/TotalCoverProb, getCalibratedCoverProb) — but NO hard EV/cover/predCLV floors. We always
+// surface the model's best side on each of spread / total / (safe) ML, then rank and take the best 3
+// straights for the card. This is the elite-sharp "best available board", not a conviction-only filter.
+function nflGameCandidates(game, gameData, footballCtx, leagueConfig) {
+  const rating = { elo: 1500, coverRate: 50, streak: 0, daysSinceLastGame: 7, last5: [] };
+  let proj;
+  try { proj = OMEGA.computeFootballProjection(game, "NFL", leagueConfig, rating, rating, {}, gameData, footballCtx); }
+  catch (e) { console.log(`[nfl-omega] proj error ${game.away}@${game.home}: ${e.message}`); return []; }
+  if (!proj || proj.poisoned || !proj._fb) return [];
+  const out = [];
+  const push = (market, side, odds, rawCover, oppOdds, modelProjection, edgePts) => {
+    if (odds == null || odds < -350 || odds > 350) return;
+    const noVig = OMEGA._testV104.noVigProb(odds, oppOdds) ?? impliedProb(odds);
+    const cover = OMEGA._testV104.getCalibratedCoverProb(rawCover, "NFL", market, odds, undefined, noVig);
+    const k = kellyFor(cover, odds);
+    const sigma = market === "Total" ? proj._fb.sigmaTotal : proj._fb.sigmaMargin;
+    out.push({
+      sport: "NFL", market, side, odds,
+      homeTeam: game.home, awayTeam: game.away, matchup: `${game.away} @ ${game.home}`,
+      venue: game.venue || "", commenceTime: gameData.commenceTime || game.date || "",
+      coverProb: +cover.toFixed(4), ev: +k.ev.toFixed(4), kellyUnits: k.units,
+      probEdge: +(cover - noVig).toFixed(4), // ranking metric — NOT payout-inflated EV (kills the dog bias)
+      edge: edgePts != null ? +edgePts.toFixed(1) : null, modelProjection,
+      zScore: edgePts != null ? +(Math.abs(edgePts) / sigma).toFixed(2) : null,
+      noVigPrior: noVig, predCLV: null,
+      kellyCalcStr: `cover ${(cover * 100).toFixed(1)}%, EV ${(k.ev * 100).toFixed(1)}%, ${k.units}u @ ${fmtOdds(odds)}`,
+    });
+  };
+  // SPREAD — the side the model margin favors, at the shopped number.
+  if (gameData.homeSpread != null && gameData.homeSpreadOdds != null && gameData.awaySpreadOdds != null) {
+    const mm = proj._fb.modelMargin;
+    const isHomeCover = proj.projSpread < gameData.homeSpread; // model margin beats the home number
+    const pickedSpread = isHomeCover ? gameData.homeSpread : gameData.awaySpread;
+    const team = isHomeCover ? game.home : game.away;
+    const odds = isHomeCover ? gameData.homeSpreadOdds : gameData.awaySpreadOdds;
+    const oppOdds = isHomeCover ? gameData.awaySpreadOdds : gameData.homeSpreadOdds;
+    const raw = OMEGA.nflSpreadCoverProb(isHomeCover ? mm : -mm, pickedSpread, proj._fb.sigmaMargin);
+    push("Spread", `${team} ${fmtSigned(pickedSpread)}`, odds, raw, oppOdds, `${team} ${fmtSigned(pickedSpread)} (model margin ${fmtSigned(-proj.projSpread)})`, proj.projSpread - gameData.homeSpread);
   }
-  return [...byGame.values()].sort((a, b) => (b.ev - a.ev) || ((b.zScore || 0) - (a.zScore || 0))).slice(0, 3);
+  // TOTAL — the side the model total favors, best price shopped.
+  if (gameData.total != null && gameData.overOdds != null && gameData.underOdds != null) {
+    const isOver = proj.projTotal > gameData.total;
+    const odds = isOver ? (gameData.overOddsBest ?? gameData.overOdds) : (gameData.underOddsBest ?? gameData.underOdds);
+    const oppOdds = isOver ? gameData.underOdds : gameData.overOdds;
+    const raw = OMEGA.nflTotalCoverProb(proj._fb.modelTotal, gameData.total, isOver, proj._fb.sigmaTotal);
+    push("Total", `${isOver ? "Over" : "Under"} ${gameData.total}`, odds, raw, oppOdds, `model total ${proj.projTotal.toFixed(1)} vs ${gameData.total}`, proj.projTotal - gameData.total);
+  }
+  // MONEYLINE — the side with the bigger no-vig cover edge, dog capped at +160 (no payout-inflated traps).
+  if (gameData.homeML != null && gameData.awayML != null) {
+    const opts = [["home", proj.homeWinProb, gameData.homeML, gameData.awayML, game.home],
+                  ["away", 1 - proj.homeWinProb, gameData.awayML, gameData.homeML, game.away]];
+    let best = null;
+    for (const [, wp, ml, opp, team] of opts) {
+      if (ml == null || ml > 160 || ml < -350) continue;
+      const noVig = OMEGA._testV104.noVigProb(ml, opp) ?? impliedProb(ml);
+      const edge = wp - noVig;
+      if (!best || edge > best.edge) best = { wp, ml, opp, team, edge };
+    }
+    if (best && best.edge > 0) push("Moneyline", `${best.team} ML`, best.ml, best.wp, best.opp, `${(best.wp * 100).toFixed(1)}% win`, best.edge * 100);
+  }
+  return out;
 }
 
 async function runOmegaNfl(espnGames, oddsGames, ratingOverlay, qbAdj, includeStarted = false) {
   const espnData = buildEspnData(espnGames, includeStarted);
-  if (!espnData[0].games.length) { console.log("[nfl-omega] no pre-game NFL games to price"); return { candidates: [], selected: [] }; }
+  if (!espnData[0].games.length) { console.log("[nfl-omega] no pre-game NFL games to price"); return { candidates: [], selected: [], diag: { gamesPriced: 0 } }; }
   const oddsData = [{ sport: "americanfootball_nfl", games: oddsGames || [] }];
   const consensusLookup = OMEGA._testV104.buildConsensusLookup(oddsData);
   const footballCtx = { nflOverlay: ratingOverlay || {}, nflQbAdj: qbAdj || {}, cfbOverlay: {}, cfbQbAdj: {} };
-  // Rest: NFL is a weekly league, so default every team to 7 days rest (neutral — no rest edge, no
-  // back-to-back penalty). Passing no ratings would leave Omega's DEFAULT_RATING at 1 day, which
-  // trips the NFL b2bPenalty (0.97) on BOTH teams and wrongly suppresses every total ~3%. Thursday
-  // short-weeks are still handled by Omega's date-based TNF nudge. (Bye-week rest edges are a known
-  // small gap until real per-team last-game dates are wired.)
-  const teams = {};
+  const leagueConfig = (OMEGA.ESPN_LEAGUES || []).find(l => l.label === "NFL") || { homeAdv: 50, kFactor: 20, baseElo: 1500, sport: "football", league: "nfl", label: "NFL" };
+
+  const allCands = [];
+  let matched = 0;
   for (const g of espnData[0].games) {
-    for (const t of [g.home, g.away]) {
-      if (t && !teams[t]) teams[t] = { elo: 1500, coverRate: 50, streak: 0, daysSinceLastGame: 7, last5: [] };
-    }
+    const gameData = OMEGA._testV104.findConsensusLine(consensusLookup, g.home, g.date);
+    if (!gameData || gameData.homeSpread == null) continue;
+    matched++;
+    allCands.push(...nflGameCandidates(g, gameData, footballCtx, leagueConfig));
   }
-  const ratingsData = { leagues: { NFL: { teams } } };
-  const all = OMEGA.computeEdgeTable(
-    espnData, ratingsData, {} /*teamStats*/, consensusLookup, false /*drawdownActive*/,
-    null /*calibrationData*/, {} /*pitcherData*/, 0.03 /*evFloor*/, {} /*weatherData*/, footballCtx
-  ) || [];
-  const nflCands = all.filter(c => c && c.sport === "NFL");
-  const selected = selectTop3(nflCands);
-  // Diagnostics: how many ESPN games joined a consensus line, and (for the first joined game) the raw
-  // projection edge BEFORE Omega's gates — so we can tell a join bug from gate-filtering, and see if
-  // edges exist at all without the weather pass.
-  const diag = { gamesPriced: espnData[0].games.length, consensusKeys: Object.keys(consensusLookup || {}).length, consensusMatched: 0, rawCandidates: nflCands.length, samples: [] };
-  for (const g of espnData[0].games) {
-    const gd = OMEGA._testV104.findConsensusLine(consensusLookup, g.home, g.date);
-    if (gd && gd.homeSpread !== undefined) {
-      diag.consensusMatched++;
-      if (diag.samples.length < 3) diag.samples.push({ g: `${g.away} @ ${g.home}`, spread: gd.homeSpread, total: gd.total, majS: gd.majorSpreadBooks, majT: gd.majorTotalBooks, majML: gd.majorMLBooks });
-    }
+  // Best straight per game, then the best 3 by PROBABILITY EDGE (cover − no-vig implied), NOT raw EV —
+  // ranking on EV lets a plus-money dog's payout inflate it past real spread/total edges (the exact
+  // bias Ben flagged). Spreads/totals also beat an equal-edge ML (juice/variance), so ties prefer them.
+  const marketPref = (m) => (m === "Spread" || m === "Total") ? 1 : 0;
+  const better = (a, b) => (b.probEdge - a.probEdge) || (marketPref(b.market) - marketPref(a.market)) || ((b.zScore || 0) - (a.zScore || 0));
+  const byGame = new Map();
+  for (const c of allCands) {
+    const key = c.matchup.toLowerCase();
+    const cur = byGame.get(key);
+    if (!cur || better(c, cur) < 0) byGame.set(key, c);
   }
-  console.log(`[nfl-omega] join ${diag.consensusMatched}/${diag.gamesPriced}, keys ${diag.consensusKeys}, candidates ${nflCands.length}, selected ${selected.length}`);
-  for (const c of selected) {
-    console.log(`[nfl-omega]   ${c.market}: ${c.side} ${fmtOdds(c.odds)} — cover ${(c.coverProb * 100).toFixed(1)}%, EV ${(c.ev * 100).toFixed(1)}%, predCLV ${typeof c.predCLV === "number" ? (c.predCLV * 100).toFixed(1) + "pp" : "n/a"}`);
-  }
-  return { candidates: nflCands, selected, diag };
+  const selected = [...byGame.values()].sort(better).slice(0, 3);
+  const diag = { gamesPriced: espnData[0].games.length, consensusMatched: matched, rawCandidates: allCands.length, selected: selected.length };
+  console.log(`[nfl-omega] join ${matched}/${espnData[0].games.length}, ${allCands.length} candidate(s), selected ${selected.length}`);
+  for (const c of selected) console.log(`[nfl-omega]   ${c.market}: ${c.side} ${fmtOdds(c.odds)} — cover ${(c.coverProb * 100).toFixed(1)}%, EV ${(c.ev * 100).toFixed(1)}%`);
+  return { candidates: allCands, selected, diag };
 }
 
 function unitsToRating(u) {
@@ -703,8 +749,7 @@ exports.handler = async (event) => {
 
 // ── Offline-test hooks (Netlify only invokes exports.handler) ──
 module.exports.buildEspnData = buildEspnData;
-module.exports.selectTop3 = selectTop3;
-module.exports.hasPositiveEdge = hasPositiveEdge;
+module.exports.nflGameCandidates = nflGameCandidates;
 module.exports.runOmegaNfl = runOmegaNfl;
 module.exports.buildFinalPicks = buildFinalPicks;
 module.exports.buildPublishedParlay = buildPublishedParlay;

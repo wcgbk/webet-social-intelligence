@@ -40,23 +40,28 @@ function espn(home, away, state = 'pre') {
     assert.strictEqual(es[0].games[0].home, 'Carolina Panthers');
   });
 
-  await check('runOmegaNfl runs Omega engine and applies the 2.5% EV / 52% cover floors', async () => {
-    // Weak edge (total 47 ~ projection) → below floor → rejected.
-    const weak = await nfl.runOmegaNfl([espn('Carolina Panthers', 'Chicago Bears')], [game('w', 'Carolina Panthers', 'Chicago Bears', 47)], {}, {}, true);
-    assert.ok(weak.selected.length === 0, 'a ~2pt total edge should not clear Omega conviction floors');
+  await check('best-3 board always fills: even a modest-edge game produces the best available pick', async () => {
+    // Omega math, but no hard floor — the card must not gate to zero.
+    const g = await nfl.runOmegaNfl([espn('Carolina Panthers', 'Chicago Bears')], [game('w', 'Carolina Panthers', 'Chicago Bears', 47)], {}, {}, true);
+    assert.ok(g.candidates.length >= 1, 'engine should produce candidates (spread/total/ML)');
+    assert.ok(g.selected.length === 1, 'one game -> one best pick on the card');
   });
 
-  await check('a strong-edge total clears Omega floors and is selected as conviction', async () => {
-    // Line 52 vs a ~47 projection → ~5pt Under edge → clears 2.5% EV + 52% cover.
-    // Retail-only books (no Pinnacle) so the predCLV gate is absent (as on real games with no sharp
-    // price in the feed) and the EV/cover path is what decides — Omega's exact behavior.
-    const retail = ['draftkings','fanduel','betmgm','caesars'];
-    const strong = await nfl.runOmegaNfl([espn('Carolina Panthers', 'Chicago Bears')], [game('s', 'Carolina Panthers', 'Chicago Bears', 52, retail)], {}, {}, true);
-    assert.ok(strong.candidates.length >= 1, 'engine should produce >=1 candidate');
-    assert.ok(strong.selected.length >= 1, 'strong Under should be selected');
+  await check('a strong-edge total is the model side, sized up, and ships (no hard floor)', async () => {
+    const strong = await nfl.runOmegaNfl([espn('Carolina Panthers', 'Chicago Bears')], [game('s', 'Carolina Panthers', 'Chicago Bears', 52)], {}, {}, true);
+    assert.ok(strong.selected.length >= 1, 'strong edge should be selected');
     const picks = nfl.buildFinalPicks(strong.selected, false, 'regular');
-    assert.ok(picks.every(p => !/Lean/.test(p.rating)), 'Omega football = conviction only, never Lean');
-    assert.ok(picks.every(p => parseInt(p.coverProb) >= 52), 'every pick cover >= 52%');
+    assert.ok(picks.some(p => /Under/.test(p.pick)), 'model side of a 52-total game is the Under');
+    assert.ok(picks.every(p => !/Lean/.test(p.rating)), 'straights are graded, never Lean');
+  });
+
+  await check('best-3 across a multi-game slate: at most 3 straights, one per game', async () => {
+    const es = [espn('Carolina Panthers','Chicago Bears'), espn('Green Bay Packers','Minnesota Vikings'), espn('Detroit Lions','New Orleans Saints'), espn('Kansas City Chiefs','Las Vegas Raiders')];
+    const og = [game('1','Carolina Panthers','Chicago Bears',52), game('2','Green Bay Packers','Minnesota Vikings',49), game('3','Detroit Lions','New Orleans Saints',51), game('4','Kansas City Chiefs','Las Vegas Raiders',44)];
+    const r = await nfl.runOmegaNfl(es, og, {}, {}, true);
+    assert.ok(r.selected.length === 3, 'card fills to exactly 3 on a 4-game slate, got ' + r.selected.length);
+    const games = new Set(r.selected.map(c => c.matchup));
+    assert.strictEqual(games.size, 3, 'one pick per game');
   });
 
   await check('no picks when there are no pre-game games', async () => {

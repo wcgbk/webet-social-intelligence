@@ -311,11 +311,22 @@ async function runOmegaNfl(espnGames, oddsGames, ratingOverlay, qbAdj, includeSt
   ) || [];
   const nflCands = all.filter(c => c && c.sport === "NFL");
   const selected = selectTop3(nflCands);
-  console.log(`[nfl-omega] ${nflCands.length} NFL candidate(s) from Omega engine, selected ${selected.length}`);
+  // Diagnostics: how many ESPN games joined a consensus line, and (for the first joined game) the raw
+  // projection edge BEFORE Omega's gates — so we can tell a join bug from gate-filtering, and see if
+  // edges exist at all without the weather pass.
+  const diag = { gamesPriced: espnData[0].games.length, consensusKeys: Object.keys(consensusLookup || {}).length, consensusMatched: 0, rawCandidates: nflCands.length, samples: [] };
+  for (const g of espnData[0].games) {
+    const gd = OMEGA._testV104.findConsensusLine(consensusLookup, g.home, g.date);
+    if (gd && gd.homeSpread !== undefined) {
+      diag.consensusMatched++;
+      if (diag.samples.length < 3) diag.samples.push({ g: `${g.away} @ ${g.home}`, spread: gd.homeSpread, total: gd.total, majS: gd.majorSpreadBooks, majT: gd.majorTotalBooks, majML: gd.majorMLBooks });
+    }
+  }
+  console.log(`[nfl-omega] join ${diag.consensusMatched}/${diag.gamesPriced}, keys ${diag.consensusKeys}, candidates ${nflCands.length}, selected ${selected.length}`);
   for (const c of selected) {
     console.log(`[nfl-omega]   ${c.market}: ${c.side} ${fmtOdds(c.odds)} — cover ${(c.coverProb * 100).toFixed(1)}%, EV ${(c.ev * 100).toFixed(1)}%, predCLV ${typeof c.predCLV === "number" ? (c.predCLV * 100).toFixed(1) + "pp" : "n/a"}`);
   }
-  return { candidates: nflCands, selected };
+  return { candidates: nflCands, selected, diag };
 }
 
 function unitsToRating(u) {
@@ -440,6 +451,7 @@ function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays, extras = {}) {
   };
   if (extras.insights) card.insights = extras.insights;
   if (extras.edgeSummary) card.edgeSummary = extras.edgeSummary;
+  if (extras.debug) card.debug = extras.debug;
   return card;
 }
 
@@ -619,7 +631,7 @@ exports.handler = async (event) => {
 
   // ── Run Omega's EXACT engine on the NFL slate (NFL-only; Omega file untouched) ──
   const includeStarted = !!body.includeStarted; // parity/verification runs can price started games
-  const { candidates: nflCands, selected } = await runOmegaNfl(espnGames, oddsGames, ratingOverlay, qbAdj, includeStarted);
+  const { candidates: nflCands, selected, diag } = await runOmegaNfl(espnGames, oddsGames, ratingOverlay, qbAdj, includeStarted);
   const picks = buildFinalPicks(selected, false, seasonPhase); // Omega football = conviction only, no leans
 
   // Rejections: the best-EV candidate per game that did NOT make the card (transparency).
@@ -643,6 +655,7 @@ exports.handler = async (event) => {
       rejections,
       insights: "WeBetAI ran the Omega engine on today's NFL slate. Games are scheduled, but none cleared the conviction floors (>=52% cover, >=2.5% EV, and beating the sharp close). Passed rather than force a play.",
       edgeSummary: NO_EDGE_MSG,
+      debug: diag,
     });
     if (dryRun) {
       console.log("[nfl] DRY RUN — nothing stored.");

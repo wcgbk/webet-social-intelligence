@@ -233,9 +233,9 @@ async function fetchNFLOdds(dateISO) {
   const games = [];
   for (const sport of NFL_ODDS_SPORTS) {
     try {
-      const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,us2,eu&markets=h2h,spreads,totals,alternate_spreads,alternate_totals&oddsFormat=american&apiKey=${apiKey}`;
+      const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,us2,eu&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${apiKey}`;
       const resp = await fetch(url);
-      if (!resp.ok) { console.log(`[nfl] Odds fetch ${sport}: HTTP ${resp.status}`); continue; }
+      if (!resp.ok) { console.log(`[nfl] Odds fetch ${sport}: HTTP ${resp.status} — ${(await resp.text()).slice(0,160)}`); continue; }
       const data = await resp.json();
       for (const g of data) {
         if (seen.has(g.id)) continue;
@@ -624,6 +624,7 @@ exports.handler = async (event) => {
     const noOdds = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
       noGames: false,
       sportsCovered: ["NFL"],
+      debug: { path: "no-odds", espnGames: espnGames.length, oddsGames: 0 },
     });
     if (!dryRun) await storePicks(dateISO, noOdds, force);
     return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0, skipped: "no NFL odds available" }) };

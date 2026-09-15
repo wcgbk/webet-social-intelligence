@@ -1,6 +1,7 @@
 // generate-picks-omega-background.js
-// v11.8-omega-pass-thin — sharp pass-when-thin: no lean pad-to-3; max 1 same-direction
-// MLB total on the MAIN card (stops Overs mono). Keep F5/UD/A's gates + 2-vs-3 parlay.
+// v11.9-omega-always-3 — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
+// Soft MLB total diversity (prefer non-same-dir when alternatives exist), then fill to 3.
+// Keep F5/UD/A's gates + Claude verify-only + chooseParlay2or3.
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
 // Fill-to-3 lean top-up restored. Football MAIN: predCLV ≥ 0 when present, max 1 slot.
 // JS locks ≤3 then Claude verifies/narrates only those (web_search max_uses 5, one ~180s
@@ -27,7 +28,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.8-omega-pass-thin";
+const MODEL_VERSION = "v11.9-omega-always-3";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -221,9 +222,10 @@ const UNDERDOG_RL_WIN_REJECT_REASON = "underdog RL winProb < 0.50";
 const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
 // Bottom-quartile MLB clubs: never emit plus-money ML or underdog RL, even if EV is juicy.
 const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
-// Best practice 2026-09-15: do NOT force a 3-pick card with correlated Overs.
-const LEAN_PAD_TO_THREE = false;
-const MAX_SAME_DIR_MLB_TOTALS = 1; // at most one Over OR one Under stack — pass rather than mono-total
+// Product 2026-09-15: ALWAYS fill 3 straights + optimized parlay (parlays drive P&L).
+const LEAN_PAD_TO_THREE = true;
+// Soft diversity only: prefer non-same-dir MLB totals first; still fill to 3 with Overs if needed.
+const SOFT_DIVERSIFY_MLB_TOTALS = true;
 const FOOTBALL_MAIN_MAX_SLOTS = 1;
 function candidateAmericanOdds(c) {
   if (!c) return null;
@@ -5316,25 +5318,40 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
   const sportCount = {};
   const remainingYes = (sport) => unique.some(c => c.sport === sport && !usedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))));
 
-  for (const c of unique) {
-    if (selected.length >= maxPicks) break;
+  const tryAdd = (c) => {
+    if (selected.length >= maxPicks) return false;
     const g = matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam));
-    if (!g || usedGames.has(g)) continue;
+    if (!g || usedGames.has(g)) return false;
     const sc = sportCount[c.sport] || 0;
-    if (isFootballSport(c.sport) && ((sportCount.NFL || 0) + (sportCount.NCAAF || 0)) >= FOOTBALL_MAIN_MAX_SLOTS) continue;
+    if (isFootballSport(c.sport) && ((sportCount.NFL || 0) + (sportCount.NCAAF || 0)) >= FOOTBALL_MAIN_MAX_SLOTS) return false;
     if (sc >= 2) {
       const otherHas = unique.some(x => x.sport !== c.sport && remainingYes(x.sport));
-      if (otherHas) continue;
-    }
-    // Pass-when-thin: do not stack same-direction MLB totals (Overs mono / Unders mono).
-    const totDir = mlbTotalDirection(c);
-    if (totDir && countSameDirMlbTotals(selected, totDir) >= MAX_SAME_DIR_MLB_TOTALS) {
-      console.log(`[v11.8-pass-thin] Skip ${c.side} — already have ${MAX_SAME_DIR_MLB_TOTALS} MLB ${totDir} total(s) on card`);
-      continue;
+      if (otherHas) return false;
     }
     selected.push(c);
     usedGames.add(g);
     sportCount[c.sport] = sc + 1;
+    return true;
+  };
+
+  // Pass 1: take best picks, but defer same-direction MLB totals after the first of that direction
+  // so sides / opposite totals can win a slot when they clear gates.
+  const deferredSameDir = [];
+  for (const c of unique) {
+    if (selected.length >= maxPicks) break;
+    const totDir = SOFT_DIVERSIFY_MLB_TOTALS ? mlbTotalDirection(c) : null;
+    if (totDir && countSameDirMlbTotals(selected, totDir) >= 1) {
+      deferredSameDir.push(c);
+      continue;
+    }
+    tryAdd(c);
+  }
+  // Pass 2: fill to maxPicks with deferred same-dir totals (ALWAYS fill when product wants 3).
+  for (const c of deferredSameDir) {
+    if (selected.length >= maxPicks) break;
+    if (tryAdd(c)) {
+      console.log(`[v11.9-always-3] Filled with ${c.side} after soft diversity pass (card → ${selected.length})`);
+    }
   }
 
   if (selected.length >= 2) {
@@ -6291,8 +6308,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP (disabled v11.8 — sharp pass-when-thin; LEAN_PAD_TO_THREE=false) ──
-    // Kept for operator flip; when enabled, still refuse same-direction MLB total stacks.
+    // ── LEAN TIER TOP-UP (v11.9 — ALWAYS fill to 3 straights; parlays need a full card) ──
     if (shouldLeanPadToThree(picks.length)) {
       const needed = 3 - picks.length;
       const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
@@ -6312,8 +6328,8 @@ exports.handler = async (event) => {
           return LEAN_EV_FLOOR;
         };
         const leanSelected = [];
+        const leanDeferred = [];
         for (const c of leanAll) {
-          if (leanSelected.length >= needed) break;
           if (!allowOnPublishedCard(c) || !hasPositiveEdge(c)) continue;
           if (isFootballSport(c.sport)) continue;
           if (c.ev < leanFloorFor(c)) continue;
@@ -6323,11 +6339,21 @@ exports.handler = async (event) => {
           if (pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)))) continue;
           if (picks.find(p => p.pick === c.side) || leanSelected.find(x => x.side === c.side)) continue;
           const dir = mlbTotalDirection(c);
-          const already = picks.concat(leanSelected);
-          if (dir && countSameDirMlbTotals(already.map(x => ({ sport: x.sport || c.sport, market: x.betType || x.market, side: x.pick || x.side })), dir) >= MAX_SAME_DIR_MLB_TOTALS) continue;
+          const already = picks.concat(leanSelected).map(x => ({
+            sport: x.sport || c.sport, market: x.betType || x.market, side: x.pick || x.side,
+          }));
+          if (SOFT_DIVERSIFY_MLB_TOTALS && dir && countSameDirMlbTotals(already, dir) >= 1) {
+            leanDeferred.push(c);
+            continue;
+          }
+          leanSelected.push(c);
+          if (leanSelected.length >= needed) break;
+        }
+        for (const c of leanDeferred) {
+          if (leanSelected.length >= needed) break;
           leanSelected.push(c);
         }
-        const topUps = leanSelected;
+        const topUps = leanSelected.slice(0, needed);
         if (topUps.length > 0) {
           console.log(`[v11.6-lean-topup] Adding ${topUps.length} lean pick(s) — card had only ${picks.length} conviction YES`);
           for (const c of topUps) {
@@ -7100,7 +7126,7 @@ module.exports.MLB_BOTTOM_CLUB_REJECT_REASON = MLB_BOTTOM_CLUB_REJECT_REASON;
 module.exports.passesBottomClubBan = passesBottomClubBan;
 module.exports.isMlbBottomClubName = isMlbBottomClubName;
 module.exports.LEAN_PAD_TO_THREE = LEAN_PAD_TO_THREE;
-module.exports.MAX_SAME_DIR_MLB_TOTALS = MAX_SAME_DIR_MLB_TOTALS;
+module.exports.SOFT_DIVERSIFY_MLB_TOTALS = SOFT_DIVERSIFY_MLB_TOTALS;
 module.exports.shouldLeanPadToThree = shouldLeanPadToThree;
 module.exports.mlbTotalDirection = mlbTotalDirection;
 module.exports.countSameDirMlbTotals = countSameDirMlbTotals;

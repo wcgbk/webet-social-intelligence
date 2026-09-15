@@ -233,13 +233,8 @@
       padding: .875rem 1rem;
       background: var(--teal-light);
     }
-    .standings-rank-line {
-      font-size: .875rem; font-weight: 600; color: var(--olive);
-      line-height: 1.45;
-    }
-    .standings-rank-line .sr-muted { color: var(--txt-m); font-weight: 500; }
     .standings-rank-meta {
-      margin-top: .375rem;
+      margin-top: .25rem;
       font-size: .6875rem; color: var(--txt-m); line-height: 1.4;
     }
     .standings-pdf-links {
@@ -249,9 +244,32 @@
     }
     .standings-pdf-links a { color: var(--teal); font-weight: 600; text-decoration: none; }
     .standings-pdf-links a:hover { text-decoration: underline; }
-    .standings-attr {
-      margin-top: .375rem;
-      font-size: .625rem; color: var(--txt-l); line-height: 1.35;
+    .standings-table {
+      width: 100%; border-collapse: collapse;
+      font-size: .8125rem; margin-top: .35rem;
+    }
+    .standings-table th {
+      text-align: left; font-size: .625rem; font-weight: 600;
+      color: var(--txt-m); text-transform: uppercase; letter-spacing: .03em;
+      padding: .35rem .5rem; border-bottom: 1px solid var(--teal-border);
+    }
+    .standings-table th:nth-child(1),
+    .standings-table td:nth-child(1) { width: 18%; text-align: left; }
+    .standings-table th:nth-child(3),
+    .standings-table td:nth-child(3) { width: 18%; text-align: right; }
+    .standings-table td {
+      padding: .4rem .5rem; border-bottom: 1px solid var(--teal-border);
+      color: var(--olive); font-weight: 600; vertical-align: middle;
+    }
+    .standings-table tr:last-child td { border-bottom: none; }
+    .standings-table tr.webetai-row td { background: var(--teal-lighter); }
+    .standings-table .entry-muted { color: var(--txt-m); font-weight: 500; }
+    .standings-badge {
+      display: inline-block; margin-left: .35rem;
+      font-size: .625rem; font-weight: 700; letter-spacing: .02em;
+      color: var(--teal); background: var(--white);
+      border: 1px solid var(--teal-border); border-radius: 4px;
+      padding: .1rem .35rem; vertical-align: middle;
     }
 
     .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
@@ -451,10 +469,16 @@
     <div class="results-card">
       <div class="results-cumulative" id="nfl-cumulative"></div>
       <div class="standings-rank-wrap" id="circa-standings-rank">
-        <div class="standings-rank-line" id="circa-standings-rank-line">WeBetAI · place pending</div>
-        <div class="standings-rank-meta" id="circa-standings-rank-meta">Matching contest points to the latest Circa Million VIII standings PDF...</div>
+        <table class="standings-table" id="circa-standings-table" aria-label="Our Circa Million VIII entries">
+          <thead>
+            <tr><th>Place</th><th>Entry</th><th>Points</th></tr>
+          </thead>
+          <tbody id="circa-standings-body">
+            <tr><td colspan="3" class="entry-muted">Loading standings...</td></tr>
+          </tbody>
+        </table>
+        <div class="standings-rank-meta" id="circa-standings-rank-meta">Matching our entries to the latest Circa Million VIII standings PDF...</div>
         <div class="standings-pdf-links" id="circa-standings-pdf-links"></div>
-        <div class="standings-attr">WeBetAI is not affiliated with Circa Sports.</div>
       </div>
       <table class="results-table"><tbody id="nfl-results-body"></tbody></table>
     </div>
@@ -833,18 +857,47 @@
   }
 
   let _standingsReq = 0;
-  function fetchStandingsRank(points) {
-    const lineEl = document.getElementById('circa-standings-rank-line');
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function formatStandingsPoints(pts) {
+    const n = Number(pts);
+    if (!Number.isFinite(n)) return '--';
+    return (Math.round(n * 100) / 100).toFixed(2);
+  }
+  function renderStandingsRows(rows) {
+    const body = document.getElementById('circa-standings-body');
+    if (!body) return;
+    if (!rows || !rows.length) {
+      body.innerHTML = '<tr><td colspan="3" class="entry-muted">Standings unavailable</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(function (row) {
+      const found = !!row.found;
+      const place = found ? escapeHtml(row.placeDisplay || '--') : '--';
+      const pts = found ? escapeHtml(formatStandingsPoints(row.points)) : '--';
+      const name = escapeHtml(row.entry || row.alias || '');
+      const badge = row.isWebetai ? '<span class="standings-badge">WeBetAI</span>' : '';
+      const entryHtml = found
+        ? (name + badge)
+        : ('<span class="entry-muted">' + name + badge + ' · not found</span>');
+      const cls = row.isWebetai ? ' class="webetai-row"' : '';
+      return '<tr' + cls + '><td>' + place + '</td><td>' + entryHtml + '</td><td>' + pts + '</td></tr>';
+    }).join('');
+  }
+  function fetchStandingsRank() {
+    const body = document.getElementById('circa-standings-body');
     const metaEl = document.getElementById('circa-standings-rank-meta');
     const linksEl = document.getElementById('circa-standings-pdf-links');
-    if (!lineEl) return;
-    const pts = Number(points);
-    const ptsLabel = Number.isFinite(pts) ? pts.toFixed(1) : '--';
-    lineEl.textContent = 'WeBetAI · ' + ptsLabel + ' pts · place pending';
-    if (metaEl) metaEl.textContent = 'Matching contest points to the latest Circa Million VIII standings PDF...';
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="3" class="entry-muted">Loading standings...</td></tr>';
+    if (metaEl) metaEl.textContent = 'Matching our entries to the latest Circa Million VIII standings PDF...';
     const req = ++_standingsReq;
-    const q = Number.isFinite(pts) ? ('?points=' + encodeURIComponent(String(pts))) : '';
-    fetch('/api/get-circa-standings' + q)
+    fetch('/api/get-circa-standings')
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (req !== _standingsReq) return;
@@ -858,8 +911,8 @@
           }
           linksEl.innerHTML = bits.join('');
         }
-        if (!data || data.error || !data.rank) {
-          lineEl.innerHTML = 'WeBetAI · ' + ptsLabel + ' pts · <span class="sr-muted">place unavailable</span>';
+        if (!data || data.error || !Array.isArray(data.ourEntries)) {
+          renderStandingsRows([]);
           if (metaEl) {
             metaEl.textContent = (data && data.message)
               ? data.message
@@ -867,21 +920,17 @@
           }
           return;
         }
-        const rk = data.rank;
-        const placeBit = rk.placeLabel || ('~' + rk.place + 'th');
-        const prizeBit = rk.prizeLabel || '$0 full-season';
-        lineEl.textContent = 'WeBetAI · ' + ptsLabel + ' pts · ' + placeBit + ' · ' + prizeBit;
-        const field = rk.fieldSize || data.fieldSize;
+        renderStandingsRows(data.ourEntries);
+        const field = data.fieldSize;
         const week = data.week != null ? ('Week ' + data.week) : 'Latest week';
-        const tieBit = rk.tied && rk.count ? (' · tied with ' + rk.count.toLocaleString('en-US') + ' entries') : '';
-        const fieldBit = field ? (' of ' + Number(field).toLocaleString('en-US')) : '';
-        if (metaEl) {
-          metaEl.textContent = week + ' field' + fieldBit + tieBit + '. Prize is an estimate if the season ended at this place range (full-season table only).';
-        }
+        const fieldBit = field ? (' · field of ' + Number(field).toLocaleString('en-US')) : '';
+        const missing = data.ourEntries.filter(function (r) { return !r.found; }).length;
+        const missBit = missing ? (' · ' + missing + ' entry name(s) not found in PDF') : '';
+        if (metaEl) metaEl.textContent = week + fieldBit + missBit;
       })
       .catch(function () {
         if (req !== _standingsReq) return;
-        lineEl.innerHTML = 'WeBetAI · ' + ptsLabel + ' pts · <span class="sr-muted">place unavailable</span>';
+        renderStandingsRows([]);
         if (metaEl) metaEl.textContent = 'Could not reach standings API. Contest points above still update from the graded card.';
       });
   }
@@ -911,7 +960,7 @@
       <div class="cum-card"><div class="cum-value">${record}</div><div class="cum-label">ATS Record</div></div>
       <div class="cum-card"><div class="cum-value">${winRate}</div><div class="cum-label">Win Rate</div></div>
       <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`;
-    fetchStandingsRank(k.points || 0);
+    fetchStandingsRank();
   }
 
   // Filter KPI weeks: history + current/live card. Never dump far-future upcoming rows.

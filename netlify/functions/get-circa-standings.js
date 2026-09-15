@@ -1,7 +1,8 @@
 // get-circa-standings.js
-// API: GET /api/get-circa-standings?points=3.0
+// API: GET /api/get-circa-standings
 // Discovers latest Circa Million VIII Full Season (+ Last Place) standings PDFs,
-// parses a compact points->place map, and returns WeBetAI place/prize estimate.
+// parses ENTRY rows, and returns our PICKWIZARD32-* places/points (WeBetAI = -3).
+// Optional: ?points=3.0 legacy band lookup; ?bands=1 include points bands.
 
 const { getStandings, CACHE_KEY } = require("./lib/circa-standings");
 const { CONTEST } = require("./lib/circa-contest");
@@ -65,6 +66,9 @@ exports.handler = async (event) => {
   try {
     const params = event.queryStringParameters || {};
     const points = params.points;
+    const aliases = params.aliases
+      ? String(params.aliases).split(",").map((a) => a.trim()).filter(Boolean)
+      : undefined;
 
     let store = null;
     try {
@@ -98,7 +102,7 @@ exports.handler = async (event) => {
       return writeBlobRest(key, value);
     };
 
-    const payload = await getStandings({ points, readBlob, writeBlob });
+    const payload = await getStandings({ points, aliases, readBlob, writeBlob });
     if (payload.error) {
       return {
         statusCode: 503,
@@ -106,9 +110,9 @@ exports.handler = async (event) => {
         body: JSON.stringify(payload),
       };
     }
-    // Drop bulky bands from default response when points provided (keep rank).
+    // Drop bulky bands from default response (keep ourEntries + optional legacy rank).
     // Still include bands when ?bands=1 for debugging.
-    if (points != null && params.bands !== "1") {
+    if (params.bands !== "1") {
       const { bands, ...rest } = payload;
       return ok(rest);
     }

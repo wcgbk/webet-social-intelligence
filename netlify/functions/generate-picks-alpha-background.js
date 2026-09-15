@@ -1,6 +1,8 @@
 // generate-picks-alpha-background.js
-// v10.3-alpha-sharp — Deterministic Edge Architecture (ALPHA, primary pipeline)
+// v10.3.1-alpha-no-f5 — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
+// F5 may still be computed for analytics/odds attach, but ALLOW_F5_ON_CARD=false keeps it
+// out of the selectable/published YES pool and parlays (same product rule as Omega MAIN).
 // v10.3 (2026-06-12), fitted on 428 graded REAL daily-run picks (never the backfilled backtest):
 //   shrinkage calibration toward no-vig market price (K: total .30 / spread .35 / ML .50),
 //   per-market total σ (NBA 18.5 / NHL 2.3 / MLB 4.3), Kelly ×50 sizing (grades live again),
@@ -149,7 +151,8 @@ const MLB_PARK_FACTORS = {
 // so it stays disciplined: ×0.5 EV discount (ranking + floor), max 2 slots, 1u sizing cap.
 const F5_ODDS_MARKETS = "h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings";
 const F5_EV_DISCOUNT = 0.5;  // halve the edge for ranking + the EV floor — unvalidated market
-const F5_MAX_SLOTS = 2;      // at most 2 F5 candidates may enter the pool per slate
+const ALLOW_F5_ON_CARD = false; // founder 2026-09-15: F5 stays OFF Alpha published card (control restore kept math; product bans F5)
+const F5_MAX_SLOTS = 0;      // 0 while ALLOW_F5_ON_CARD=false — never merge F5 into selectable pool
 const F5_UNIT_CAP = 1.0;     // never stake an F5 leg above a validated full-game play
 // Calibration caps mirror the F5 function's COVER_PROB_CAPS — sharp models top out ~55-60% hit rate.
 const F5_COVER_PROB_CAPS = { "F5 Moneyline": 0.60, "F5 Total": 0.60, "F5 Run Line": 0.57 };
@@ -3538,7 +3541,7 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
   // ranking directly. First collapse to the best F5 per game (a game often offers both an F5 ML and an
   // F5 total — only one can survive same-game de-corr anyway), then keep the top F5_MAX_SLOTS by
   // discounted EV across DIFFERENT games. Mirrors the old aggregateIntoAlpha cap+de-corr discipline.
-  if (f5Pool.length > 0) {
+  if (f5Pool.length > 0 && ALLOW_F5_ON_CARD && F5_MAX_SLOTS > 0) {
     const bestPerGame = new Map();
     for (const c of f5Pool) {
       const k = (c.matchup || "").toLowerCase().trim();
@@ -3548,6 +3551,8 @@ function computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, dra
     const f5Kept = [...bestPerGame.values()].sort((a, b) => (b.ev ?? 0) - (a.ev ?? 0)).slice(0, F5_MAX_SLOTS);
     for (const c of f5Kept) candidates.push(c);
     console.log(`[v10-f5] ${f5Pool.length} F5 candidate(s) over ${bestPerGame.size} game(s) cleared the discounted EV floor → kept top ${f5Kept.length} (cap ${F5_MAX_SLOTS}, 1/game): ${f5Kept.map(c => `${c.side} ${c.odds > 0 ? "+" : ""}${c.odds} (EV ${(c.ev * 100).toFixed(1)}%, ${c.kellyUnits}u)`).join(" | ")}`);
+  } else if (f5Pool.length > 0) {
+    console.log(`[v10-f5] ${f5Pool.length} F5 candidate(s) computed for analytics — NOT merged into selectable pool (ALLOW_F5_ON_CARD=${ALLOW_F5_ON_CARD}, F5_MAX_SLOTS=${F5_MAX_SLOTS})`);
   }
 
   // ── Bettability guard (Ben-confirmed 2026-06-27) — never publish an off-market / unbettable price ──
@@ -4756,12 +4761,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+      date: dateISO, dateFormatted, model: "v10.3.1-alpha-no-f5",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3-alpha-sharp" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.1-alpha-no-f5" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4936,7 +4941,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3-alpha-sharp",
+      model: "v10.3.1-alpha-no-f5",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4946,7 +4951,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3-alpha-sharp",
+        modelVersion: "v10.3.1-alpha-no-f5",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5085,11 +5090,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+    date: dateISO, dateFormatted, model: "v10.3.1-alpha-no-f5",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.1-alpha-no-f5" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5173,11 +5178,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3-alpha-sharp",
+    date: dateISO, dateFormatted, model: "v10.3.1-alpha-no-f5",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3-alpha-sharp" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.1-alpha-no-f5" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };
@@ -5267,6 +5272,8 @@ async function storePicks(dateISO, picksData) {
 // offline harness exercise the F5 candidate logic (projection math + discount/cap discipline) and the
 // per-event F5 odds extraction without any network. No effect on the deployed function's behavior.
 module.exports.computeF5Candidates = computeF5Candidates;
+module.exports.ALLOW_F5_ON_CARD = ALLOW_F5_ON_CARD;
+module.exports.F5_MAX_SLOTS = F5_MAX_SLOTS;
 module.exports.extractF5FromEvent = extractF5FromEvent;
 module.exports.medianAmerican = medianAmerican;
 module.exports.impliedProb = impliedProb;

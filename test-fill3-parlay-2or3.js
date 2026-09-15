@@ -35,7 +35,7 @@ console.log('\nfill-to-3 + parlay 2-vs-3');
 
 check('versions', () => {
   const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(aSrc.includes('v10.3-alpha-sharp'));
+  assert.ok(aSrc.includes('v10.3.1-alpha-no-f5'));
   assert.strictEqual(omega.MODEL_VERSION, 'v11.7-omega-parlay2v3');
 });
 
@@ -114,7 +114,7 @@ check('Omega buildCorrelatedParlay honest 2-leg label when 2 wins', () => {
 
 check('source: Alpha restored to v10.3 control', () => {
   const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(aSrc.includes('v10.3-alpha-sharp'));
+  assert.ok(aSrc.includes('v10.3.1-alpha-no-f5'));
 });
 
 check('verify-picks-omega preserves generator parlay', () => {

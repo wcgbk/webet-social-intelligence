@@ -53,8 +53,12 @@ const pubRlShape = { sport: 'MLB', betType: 'Run Line', pick: 'Athletics +1.5', 
 console.log('\nalpha control');
 check('Alpha restored to pre-coupling control version', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(src.includes('v10.3-alpha-sharp'));
-  assert.ok(src.includes('modelVersion: "v10.3-alpha-sharp"'));
+  assert.ok(src.includes('v10.3.1-alpha-no-f5'));
+  assert.ok(src.includes('modelVersion: "v10.3.1-alpha-no-f5"'));
+});
+check('Alpha F5 off published card', () => {
+  assert.strictEqual(alpha.ALLOW_F5_ON_CARD, false);
+  assert.strictEqual(alpha.F5_MAX_SLOTS, 0);
 });
 check('Alpha still has no NFL/CFB sport keys', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');

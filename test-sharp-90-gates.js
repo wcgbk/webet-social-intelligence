@@ -14,11 +14,13 @@ function check(name, fn) {
 }
 
 console.log('\nalpha control restore');
-check('Alpha generator restored to v10.3-alpha-sharp', () => {
+check('Alpha generator is v10.3.1-alpha-no-f5 (F5 off)', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(src.includes('v10.3-alpha-sharp'));
-  assert.ok(src.includes('modelVersion: "v10.3-alpha-sharp"'));
+  assert.ok(src.includes('v10.3.1-alpha-no-f5'));
+  assert.ok(src.includes('modelVersion: "v10.3.1-alpha-no-f5"'));
   assert.ok(!src.includes('v10.8-alpha-3plus-parlay2v3'));
+  assert.ok(src.includes('ALLOW_F5_ON_CARD = false'));
+  assert.ok(src.includes('F5_MAX_SLOTS = 0'));
   assert.ok(!src.includes('v10.6-alpha-sharp-90'));
   assert.ok(!src.includes('americanfootball_nfl'));
   assert.ok(!src.includes('americanfootball_ncaaf'));

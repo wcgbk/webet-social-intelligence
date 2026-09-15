@@ -307,13 +307,6 @@
       border: 1px solid var(--teal-border); border-radius: 6px;
       padding: .125rem .5rem; white-space: nowrap;
     }
-    .circa-chip {
-      display: inline-flex; align-items: center;
-      font-size: .6875rem; font-weight: 700;
-      color: var(--olive); background: var(--off-white);
-      border: 1px solid var(--border-lt); border-radius: 6px;
-      padding: .125rem .5rem; white-space: nowrap;
-    }
     .market-row {
       display: flex; flex-wrap: wrap; align-items: center; gap: .375rem;
       margin: -.25rem 0 .625rem;
@@ -1046,7 +1039,6 @@
       const marketChip = marketMove
         ? `<span class="market-chip" title="Live consensus/Pinnacle versus the frozen Circa contest PDF number">${esc(marketMove)}</span>`
         : '';
-      const circaChip = `<span class="circa-chip" title="Frozen Circa Million VIII contest number — no juice, contest ATS">Circa ${esc(p.circaSpread || p.contestLine || p.pick)}</span>`;
       const earlyWarn = p.earlyKickoff
         ? `<div class="early-warn">Early kickoff (rule 8): all five picks must be submitted before this game starts.</div>`
         : '';
@@ -1073,7 +1065,6 @@
         ${scoreBarHTML(p, game, outcome)}
         <div class="pick-line">
           <span class="pick-name">${esc(p.pick)}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
-          ${circaChip}
         </div>
         ${marketChip ? `<div class="market-row">${marketChip}</div>` : ''}
         <div class="pick-divider"></div>

@@ -724,6 +724,7 @@ function mergeKpis(existing, weekNum) {
       if (prev.status && prev.status !== "upcoming") row.status = prev.status;
       if (prev.record) row.record = prev.record;
       if (prev.rate) row.rate = prev.rate;
+      if (Array.isArray(prev.picks) && prev.picks.length) row.picks = prev.picks;
     }
   }
   const cur = weeks.find(w => w.current);
@@ -764,6 +765,10 @@ async function storeCard(weekStr, picksData, force, scheduled, now) {
       if (prev && (!p.result || p.result === "pending")) {
         p.result = prev.result; p.profit = prev.profit;
         p.finalScore = prev.finalScore || null; p.settledAt = prev.settledAt || null;
+        if (prev.awayScore != null) p.awayScore = prev.awayScore;
+        if (prev.homeScore != null) p.homeScore = prev.homeScore;
+        if (prev.status) p.status = prev.status;
+        if (prev.contestPoints != null) p.contestPoints = prev.contestPoints;
       }
     }
   }
@@ -774,7 +779,8 @@ async function storeCard(weekStr, picksData, force, scheduled, now) {
   picksData.weeks = merged.weeks;
   if (incomingPicks.length) {
     const cur = (picksData.weeks || []).find(w => w.current);
-    if (cur) cur.status = "live";
+    const st = cur && String(cur.status || "").toLowerCase();
+    if (cur && st !== "completed" && st !== "graded" && st !== "final") cur.status = "live";
   }
 
   const ok = await putBlob(key, picksData);

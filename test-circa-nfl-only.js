@@ -23,6 +23,7 @@ const {
   RATING_TO_CONFIDENCE,
 } = require("./netlify/functions/lib/circa-contest");
 const lines = require("./netlify/functions/lib/circa-contest-lines");
+const grade = require("./netlify/functions/lib/circa-live-grade");
 const getPicks = require("./netlify/functions/get-picks-circa");
 const gen = require("./netlify/functions/generate-picks-circa-background");
 const trigger = require("./netlify/functions/trigger-picks-circa");
@@ -96,6 +97,20 @@ check("pick cards omit EVEN / sportsbook juice", () => {
   assert.ok(!/>EVEN</.test(html));
   assert.ok(/circa-chip/.test(html));
   assert.ok(/market-chip/.test(html));
+});
+check("live ESPN scoreboard + W/L/P/LIVE badges", () => {
+  assert.ok(html.includes("scoreboardUrls"));
+  assert.ok(html.includes("site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"));
+  assert.ok(html.includes("function findGame"));
+  assert.ok(html.includes("function determineResult"));
+  assert.ok(html.includes("result-win"));
+  assert.ok(html.includes("result-loss"));
+  assert.ok(html.includes("result-push"));
+  assert.ok(/result-badge result-pending">LIVE/.test(html) || html.includes(">LIVE</span>"));
+  assert.ok(html.includes("scheduleRefresh"));
+  assert.ok(html.includes("scoreBarHTML"));
+  assert.ok(html.includes("outcomeOf"));
+  assert.ok(!html.includes("college-football"));
 });
 
 console.log("lib/circa-contest");
@@ -269,6 +284,106 @@ check("selectCircaCard: top 5 unique games, skip started, avoid early unless gap
   assert.strictEqual(swapped.length, 5);
   const keys = new Set(swapped.map(p => p.gameKey));
   assert.strictEqual(keys.size, 5);
+});
+
+console.log("lib/circa-live-grade");
+check("parseContestPick team + Circa spread", () => {
+  assert.deepStrictEqual(grade.parseContestPick("Steelers -3.5"), { team: "Steelers", spread: -3.5 });
+  assert.deepStrictEqual(grade.parseContestPick("Dolphins +3.5"), { team: "Dolphins", spread: 3.5 });
+  assert.deepStrictEqual(grade.parseContestPick("Giants +3"), { team: "Giants", spread: 3 });
+  assert.deepStrictEqual(grade.parseContestPick("Bills -0.5"), { team: "Bills", spread: -0.5 });
+  assert.strictEqual(grade.parseContestPick("Steelers ML"), null);
+});
+check("Week 1 ATS vs Circa number (known 2026-09-13/14 finals)", () => {
+  const games = [
+    { awayTeam: "Atlanta Falcons", awayAbbr: "ATL", homeTeam: "Pittsburgh Steelers", homeAbbr: "PIT", awayScore: 13, homeScore: 20, state: "post", completed: true, startISO: "2026-09-13T17:00:00Z" },
+    { awayTeam: "Miami Dolphins", awayAbbr: "MIA", homeTeam: "Las Vegas Raiders", homeAbbr: "LV", awayScore: 13, homeScore: 27, state: "post", completed: true, startISO: "2026-09-13T20:25:00Z" },
+    { awayTeam: "Washington Commanders", awayAbbr: "WSH", homeTeam: "Philadelphia Eagles", homeAbbr: "PHI", awayScore: 22, homeScore: 24, state: "post", completed: true, startISO: "2026-09-13T20:25:00Z" },
+    { awayTeam: "Buffalo Bills", awayAbbr: "BUF", homeTeam: "Houston Texans", homeAbbr: "HOU", awayScore: 36, homeScore: 31, state: "post", completed: true, startISO: "2026-09-13T17:00:00Z" },
+    { awayTeam: "Dallas Cowboys", awayAbbr: "DAL", homeTeam: "New York Giants", homeAbbr: "NYG", awayScore: 20, homeScore: 28, state: "post", completed: true, startISO: "2026-09-14T00:20:00Z" },
+  ];
+  const picks = [
+    { pick: "Steelers -3.5", matchup: "Atlanta Falcons @ Pittsburgh Steelers", awayTeam: "Atlanta Falcons", homeTeam: "Pittsburgh Steelers", commenceTime: "2026-09-13T17:00:00Z", result: "pending" },
+    { pick: "Dolphins +3.5", matchup: "Miami Dolphins @ Las Vegas Raiders", awayTeam: "Miami Dolphins", homeTeam: "Las Vegas Raiders", commenceTime: "2026-09-13T20:25:00Z", result: "pending" },
+    { pick: "Eagles -4.5", matchup: "Washington Commanders @ Philadelphia Eagles", awayTeam: "Washington Commanders", homeTeam: "Philadelphia Eagles", commenceTime: "2026-09-13T20:25:00Z", result: "pending" },
+    { pick: "Bills -0.5", matchup: "Buffalo Bills @ Houston Texans", awayTeam: "Buffalo Bills", homeTeam: "Houston Texans", commenceTime: "2026-09-13T17:00:00Z", result: "pending" },
+    { pick: "Giants +3", matchup: "Dallas Cowboys @ New York Giants", awayTeam: "Dallas Cowboys", homeTeam: "New York Giants", commenceTime: "2026-09-14T00:20:00Z", result: "pending" },
+  ];
+  const got = picks.map(p => grade.gradeAts(p, grade.findGame(p, games)).result);
+  assert.deepStrictEqual(got, ["win", "loss", "loss", "win", "win"]);
+  const rec = grade.weekRecord(picks.map((p, i) => ({ ...p, result: got[i] })));
+  assert.strictEqual(rec.points, 3);
+  assert.strictEqual(rec.record, "3W-2L-0P");
+  assert.strictEqual(rec.rate, "60%");
+  assert.strictEqual(rec.status, "completed");
+});
+check("in-progress game is live, not a final W/L", () => {
+  const pick = { pick: "Steelers -3.5", matchup: "Atlanta Falcons @ Pittsburgh Steelers", awayTeam: "Atlanta Falcons", homeTeam: "Pittsburgh Steelers", commenceTime: "2026-09-13T17:00:00Z" };
+  const game = { awayTeam: "Atlanta Falcons", awayAbbr: "ATL", homeTeam: "Pittsburgh Steelers", homeAbbr: "PIT", awayScore: 10, homeScore: 14, state: "in", startISO: "2026-09-13T17:00:00Z" };
+  const g = grade.gradeAts(pick, game);
+  assert.strictEqual(g.result, "live");
+  assert.strictEqual(g.awayScore, 10);
+  assert.strictEqual(g.homeScore, 14);
+});
+check("never un-finalize a stored result on ESPN miss", () => {
+  const prev = { pick: "Steelers -3.5", matchup: "Atlanta Falcons @ Pittsburgh Steelers", result: "win", awayScore: 13, homeScore: 20, finalScore: "13-20" };
+  const next = grade.applyGradeToPick(prev, grade.gradeAts(prev, null));
+  assert.strictEqual(next.result, "win");
+  assert.strictEqual(next.finalScore, "13-20");
+});
+check("push on exact cover", () => {
+  const pick = { pick: "Giants +3", matchup: "Dallas Cowboys @ New York Giants", awayTeam: "Dallas Cowboys", homeTeam: "New York Giants" };
+  const game = { awayTeam: "Dallas Cowboys", awayAbbr: "DAL", homeTeam: "New York Giants", homeAbbr: "NYG", awayScore: 24, homeScore: 21, state: "post", completed: true };
+  assert.strictEqual(grade.gradeAts(pick, game).result, "push");
+  assert.strictEqual(grade.contestPoints("push"), 0.5);
+  assert.strictEqual(grade.contestPoints("win"), 1);
+  assert.strictEqual(grade.contestPoints("loss"), 0);
+});
+check("cache-control is short while any pick is live", () => {
+  const live = grade.cacheControlFor({ picks: [{ pick: "Steelers -3.5", result: "live" }] });
+  assert.ok(/max-age=30/.test(live));
+  const done = grade.cacheControlFor({ picks: [{ pick: "Steelers -3.5", result: "win" }] });
+  assert.ok(/max-age=120/.test(done));
+});
+check("skips ESPN when all picks already final with scores", () => {
+  assert.strictEqual(grade.needsEspnFetch([
+    { pick: "Steelers -3.5", result: "win", awayScore: 13, homeScore: 20, finalScore: "13-20" },
+  ]), false);
+  assert.strictEqual(grade.needsEspnFetch([
+    { pick: "Steelers -3.5", result: "pending" },
+  ]), true);
+  assert.strictEqual(grade.needsEspnFetch([
+    { pick: "Steelers -3.5", result: "live", awayScore: 10, homeScore: 14 },
+  ]), true);
+});
+check("mergeGradeIntoCard only patches result/score/kpis/weeks", () => {
+  const existing = {
+    picks: [
+      { pick: "Steelers -3.5", matchup: "Atlanta Falcons @ Pittsburgh Steelers", coreReasoning: "keep me", result: "pending" },
+    ],
+    kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
+    weeks: [{ label: "Week 1", status: "live", current: true, points: null }],
+    contest: "Circa Million VIII",
+  };
+  const graded = {
+    picks: [
+      { pick: "Steelers -3.5", matchup: "Atlanta Falcons @ Pittsburgh Steelers", result: "win", awayScore: 13, homeScore: 20, status: "post", finalScore: "13-20", contestPoints: 1 },
+    ],
+    kpis: { points: 1, wins: 1, losses: 0, pushes: 0, weeksPlayed: 1, totalWeeks: 18 },
+    weeks: [{ label: "Week 1", status: "completed", current: true, points: 1, record: "1W-0L-0P" }],
+  };
+  const merged = grade.mergeGradeIntoCard(existing, graded);
+  assert.strictEqual(merged.picks[0].coreReasoning, "keep me");
+  assert.strictEqual(merged.picks[0].result, "win");
+  assert.strictEqual(merged.picks[0].homeScore, 20);
+  assert.strictEqual(merged.kpis.points, 1);
+  assert.strictEqual(merged.weeks[0].status, "completed");
+  assert.strictEqual(merged.contest, "Circa Million VIII");
+});
+check("mergeGradeIntoCard refuses to wipe an empty graded card onto a live one", () => {
+  const existing = { picks: [{ pick: "Steelers -3.5", matchup: "x", result: "pending" }] };
+  const merged = grade.mergeGradeIntoCard(existing, { picks: [] });
+  assert.strictEqual(merged.picks.length, 1);
 });
 check("selectCircaCard fills to 5 from early when late pool is short", () => {
   const now = new Date("2026-09-10T18:00:00Z");
@@ -523,6 +638,7 @@ check("pipeline files exist", () => {
     "netlify/functions/get-picks-circa.js",
     "netlify/functions/lib/circa-contest.js",
     "netlify/functions/lib/circa-contest-lines.js",
+    "netlify/functions/lib/circa-live-grade.js",
   ]) {
     assert.ok(fs.existsSync(path.join(root, f)), f);
   }
@@ -557,6 +673,66 @@ async function runAsync() {
   } catch (e) {
     failed++;
     console.error("  FAIL week 2 without sheet throws: " + e.message);
+  }
+
+  console.log("lib/circa-live-grade async");
+  try {
+    const games = [
+      { awayTeam: "Atlanta Falcons", awayAbbr: "ATL", homeTeam: "Pittsburgh Steelers", homeAbbr: "PIT", awayScore: 13, homeScore: 20, state: "post", completed: true, startISO: "2026-09-13T17:00:00Z" },
+      { awayTeam: "Miami Dolphins", awayAbbr: "MIA", homeTeam: "Las Vegas Raiders", homeAbbr: "LV", awayScore: 13, homeScore: 27, state: "post", completed: true, startISO: "2026-09-13T20:25:00Z" },
+      { awayTeam: "Washington Commanders", awayAbbr: "WSH", homeTeam: "Philadelphia Eagles", homeAbbr: "PHI", awayScore: 22, homeScore: 24, state: "post", completed: true, startISO: "2026-09-13T20:25:00Z" },
+      { awayTeam: "Buffalo Bills", awayAbbr: "BUF", homeTeam: "Houston Texans", homeAbbr: "HOU", awayScore: 36, homeScore: 31, state: "post", completed: true, startISO: "2026-09-13T17:00:00Z" },
+      { awayTeam: "Dallas Cowboys", awayAbbr: "DAL", homeTeam: "New York Giants", homeAbbr: "NYG", awayScore: 20, homeScore: 28, state: "post", completed: true, startISO: "2026-09-14T00:20:00Z" },
+    ];
+    const payload = {
+      weekNum: 1,
+      week: "2026-W01",
+      picks: [
+        { pick: "Steelers -3.5", matchup: "Atlanta Falcons @ Pittsburgh Steelers", awayTeam: "Atlanta Falcons", homeTeam: "Pittsburgh Steelers", commenceTime: "2026-09-13T17:00:00Z", result: "pending" },
+        { pick: "Dolphins +3.5", matchup: "Miami Dolphins @ Las Vegas Raiders", awayTeam: "Miami Dolphins", homeTeam: "Las Vegas Raiders", commenceTime: "2026-09-13T20:25:00Z", result: "pending" },
+        { pick: "Eagles -4.5", matchup: "Washington Commanders @ Philadelphia Eagles", awayTeam: "Washington Commanders", homeTeam: "Philadelphia Eagles", commenceTime: "2026-09-13T20:25:00Z", result: "pending" },
+        { pick: "Bills -0.5", matchup: "Buffalo Bills @ Houston Texans", awayTeam: "Buffalo Bills", homeTeam: "Houston Texans", commenceTime: "2026-09-13T17:00:00Z", result: "pending" },
+        { pick: "Giants +3", matchup: "Dallas Cowboys @ New York Giants", awayTeam: "Dallas Cowboys", homeTeam: "New York Giants", commenceTime: "2026-09-14T00:20:00Z", result: "pending" },
+      ],
+      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
+      weeks: [{ label: "Week 1", weekNum: 1, status: "live", current: true, points: null, record: "0W-0L" }],
+    };
+    const out = await grade.gradeCircaPayload(payload, { fetchScores: async () => games });
+    assert.deepStrictEqual(out.picks.map(p => p.result), ["win", "loss", "loss", "win", "win"]);
+    assert.strictEqual(out.kpis.points, 3);
+    assert.strictEqual(out.kpis.wins, 3);
+    assert.strictEqual(out.kpis.losses, 2);
+    assert.strictEqual(out.kpis.pushes, 0);
+    assert.strictEqual(out.kpis.weeksPlayed, 1);
+    assert.strictEqual(out.weeks[0].status, "completed");
+    assert.strictEqual(out.weeks[0].record, "3W-2L-0P");
+    assert.strictEqual(out.weeks[0].rate, "60%");
+    assert.strictEqual(out.weeks[0].points, 3);
+    assert.ok(out._grade.changed);
+    console.log("  ok  gradeCircaPayload Week 1 mock ESPN");
+    const already = {
+      weekNum: 1, week: "2026-W01",
+      picks: out.picks.map(p => ({ ...p })),
+      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
+      weeks: [{ label: "Week 1", weekNum: 1, status: "live", current: true, points: null }],
+    };
+    let fetched = false;
+    const rerun = await grade.gradeCircaPayload(already, { fetchScores: async () => { fetched = true; return games; } });
+    assert.strictEqual(fetched, true, "injected fetchScores still runs");
+    assert.strictEqual(rerun.kpis.points, 3);
+    const noFetch = await grade.gradeCircaPayload({
+      weekNum: 1,
+      picks: out.picks.map(p => ({ ...p })),
+      kpis: { points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 },
+      weeks: [{ label: "Week 1", weekNum: 1, status: "live", current: true, points: null }],
+    });
+    assert.strictEqual(noFetch.kpis.points, 3);
+    assert.strictEqual(noFetch.kpis.wins, 3);
+    assert.strictEqual(noFetch.weeks[0].status, "completed");
+    console.log("  ok  recompute KPIs from stored finals without ESPN");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL gradeCircaPayload Week 1 mock ESPN: " + e.message);
   }
 
   console.log("get-picks-circa handler (no blob → pending JSON)");

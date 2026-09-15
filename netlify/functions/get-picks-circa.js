@@ -2,6 +2,9 @@
 // API: GET /api/get-picks-circa  (optional ?week=2026-W01 or ?week=1)
 // Reads edge-picks-circa. If this contest week has no blob / empty picks, return
 // a pending payload — never CFB, never a stale sample card.
+// On read, grades NFL ATS vs the Circa number in each pick (ESPN scoreboard),
+// refreshes week KPIs, and patches result/score fields back to the blob when
+// NETLIFY_AUTH_TOKEN or the Blobs SDK is available — never wipes the live card.
 
 const {
   CONTEST,
@@ -13,6 +16,11 @@ const {
   defaultWeeks,
   visibleWeeks,
 } = require("./lib/circa-contest");
+const {
+  gradeCircaPayload,
+  mergeGradeIntoCard,
+  cacheControlFor,
+} = require("./lib/circa-live-grade");
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -91,6 +99,54 @@ async function readWeek(store, week) {
   }
 }
 
+async function writeBlob(store, key, data) {
+  if (store) {
+    try {
+      await store.setJSON(key, data);
+      return true;
+    } catch (e) {
+      console.log(`[get-picks-circa] store.setJSON ${key} failed: ${e.message}`);
+    }
+  }
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (!token) return false;
+  try {
+    const resp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/${CONTEST.storeName}/${key}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) {
+      console.log(`[get-picks-circa] blob PUT ${key} failed ${resp.status}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.log(`[get-picks-circa] blob PUT ${key} error: ${e.message}`);
+    return false;
+  }
+}
+
+// Persist graded result/score + kpis/weeks only. Never replace the live card.
+async function persistGrade(store, weekStr, existing, graded) {
+  if (!existing || !Array.isArray(existing.picks) || existing.picks.length === 0) return false;
+  const patched = mergeGradeIntoCard(existing, graded);
+  if (!patched || !patched.picks || patched.picks.length === 0) return false;
+  const key = weekBlobKey(weekStr);
+  const okWeek = await writeBlob(store, key, patched);
+  try {
+    let latestWeek = null;
+    if (store) {
+      try { latestWeek = await store.get("latest-week"); } catch (e) {}
+    }
+    if (latestWeek == null) latestWeek = await readBlobRest("latest-week", false);
+    if (!latestWeek || String(latestWeek).trim() === weekStr) {
+      await writeBlob(store, "latest", patched);
+    }
+  } catch (e) {}
+  return okWeek;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
@@ -112,10 +168,24 @@ exports.handler = async (event) => {
 
     const data = await readWeek(store, weekInfo.week);
     if (hasLivePicks(data)) {
-      const payload = normalizePayload(data, weekInfo);
+      let graded = data;
+      try {
+        graded = await gradeCircaPayload(data);
+      } catch (e) {
+        console.error(`[get-picks-circa] ESPN grade failed: ${e.message}`);
+        graded = data;
+      }
+      const payload = normalizePayload(graded, weekInfo);
       payload.pending = false;
       payload.preview = false;
-      return ok(payload, "public, max-age=120, s-maxage=120, stale-while-revalidate=600");
+      if (graded && graded._grade && graded._grade.changed && (store || process.env.NETLIFY_AUTH_TOKEN)) {
+        try {
+          await persistGrade(store, weekInfo.week, data, graded);
+        } catch (e) {
+          console.error(`[get-picks-circa] persist grade failed: ${e.message}`);
+        }
+      }
+      return ok(payload, cacheControlFor(payload));
     }
 
     // No live card for this week — pending empty state (do not fall back to another week's picks).

@@ -175,6 +175,35 @@
     .leg-push { background: #fff8e1; color: #f9a825; }
     .leg-live { background: #eef6ff; color: #2196f3; }
 
+    .pick-score-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem .625rem; margin-bottom: .625rem;
+      border-radius: .5rem; font-size: .8125rem;
+      gap: .5rem; min-width: 0;
+    }
+    .score-bar-live { background: #eef6ff; border: 1px solid #b3d4fc; }
+    .score-bar-win { background: #e8f5e9; border: 1px solid #a5d6a7; }
+    .score-bar-loss { background: #fce4e4; border: 1px solid #f5b7b7; }
+    .score-bar-push { background: #fff8e1; border: 1px solid #ffe082; }
+    .score-teams {
+      display: flex; flex-direction: column; gap: 2px; font-weight: 500; color: var(--olive);
+      min-width: 0; flex: 1;
+    }
+    .score-team { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+    .score-team-name { min-width: 0; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .score-team-score { font-weight: 700; font-family: 'Geist Sans', monospace; min-width: 24px; text-align: right; flex-shrink: 0; }
+    .score-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; min-width: 0; max-width: 50%; }
+    .score-status {
+      font-size: .6875rem; font-weight: 700; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .status-live { background: #2196f3; color: #fff; animation: pulse-live 2s infinite; }
+    .status-win { background: #2e7d32; color: #fff; }
+    .status-loss { background: #c0392b; color: #fff; }
+    .status-push { background: #f9a825; color: #fff; }
+    .score-detail { font-size: .6875rem; color: var(--txt-m); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+    @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+
     /* ─── Results Tracker (card-style) ─── */
     .results-section-title {
       font-size: .6875rem; font-weight: 700; color: var(--teal);
@@ -481,6 +510,296 @@
     } catch(e) { return ''; }
   }
 
+  /* ═══════════════════════════════════════════════
+     LIVE SCORES — ESPN Public API (NFL only, Circa ATS)
+     Pattern matches nfl/index.html scoreboardUrls / findGame / ATS grade.
+     ═══════════════════════════════════════════════ */
+  let circaSec = null;
+  let cachedScores = [];
+  let refreshTimer = null;
+
+  function etDateFromISO(iso) {
+    if (!iso) return null;
+    try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); }
+    catch (e) { return null; }
+  }
+
+  function scoreboardDatesForPicks(data) {
+    const dates = new Set();
+    const addPick = (p) => { const et = etDateFromISO(p && p.commenceTime); if (et) dates.add(et); };
+    for (const p of (data && data.picks) || []) addPick(p);
+    for (const wk of (data && data.weeks) || []) {
+      for (const p of (wk && wk.picks) || []) addPick(p);
+    }
+    return [...dates];
+  }
+
+  function scoreboardUrls(sport, dates) {
+    if (sport !== 'NFL') return [];
+    const urls = [];
+    const push = (dateISO) => {
+      const q = dateISO ? ('?dates=' + String(dateISO).replace(/-/g, '')) : '';
+      urls.push('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard' + q);
+    };
+    const dateList = (dates && dates.length) ? dates : [null];
+    for (const d of dateList) push(d);
+    push(null);
+    return [...new Set(urls)];
+  }
+
+  function mapEspnEvent(ev) {
+    const comp = ev.competitions && ev.competitions[0];
+    if (!comp) return null;
+    const away = (comp.competitors || []).find(c => c.homeAway === 'away');
+    const home = (comp.competitors || []).find(c => c.homeAway === 'home');
+    if (!away || !home) return null;
+    const status = comp.status || ev.status || {};
+    return {
+      awayTeam: (away.team && (away.team.displayName || away.team.shortDisplayName)) || '',
+      awayAbbr: (away.team && away.team.abbreviation) || '',
+      awayScore: parseInt(away.score, 10) || 0,
+      homeTeam: (home.team && (home.team.displayName || home.team.shortDisplayName)) || '',
+      homeAbbr: (home.team && home.team.abbreviation) || '',
+      homeScore: parseInt(home.score, 10) || 0,
+      state: (status.type && status.type.state) || 'pre',
+      detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
+      startISO: ev.date || comp.date || '',
+      completed: !!(status.type && status.type.completed),
+      statusName: (status.type && status.type.name) || '',
+    };
+  }
+
+  function mergeEspnGames(lists) {
+    const map = new Map();
+    const key = (g) => ((g.awayAbbr || g.awayTeam || '') + '|' + (g.homeAbbr || g.homeTeam || '') + '|' + (g.startISO || '')).toLowerCase();
+    const rank = (g) => g.state === 'in' ? 3 : g.state === 'post' ? 2 : 1;
+    for (const list of lists) {
+      for (const g of list || []) {
+        const k = key(g);
+        const prev = map.get(k);
+        if (!prev || rank(g) > rank(prev)) map.set(k, g);
+      }
+    }
+    return [...map.values()];
+  }
+
+  async function fetchNflScores(dates) {
+    const urls = scoreboardUrls('NFL', dates);
+    if (!urls.length) return [];
+    const results = await Promise.all(urls.map(async url => {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.events || []).map(mapEspnEvent).filter(Boolean);
+      } catch (e) {
+        console.warn('Circa score fetch failed', e);
+        return [];
+      }
+    }));
+    return mergeEspnGames(results);
+  }
+
+  function normalizeTeam(name) {
+    return (name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function teamsMatch(pickTeam, espnTeam, espnAbbr) {
+    const p = normalizeTeam(pickTeam);
+    const e = normalizeTeam(espnTeam);
+    if (!p || !e) return false;
+    if (p === e) return true;
+    if (p.includes(e) || e.includes(p)) return true;
+    if (espnAbbr && espnAbbr.length >= 2) {
+      const a = espnAbbr.toLowerCase();
+      if (p.split(' ').includes(a)) return true;
+    }
+    const pLast = p.split(' ').pop();
+    const eLast = e.split(' ').pop();
+    if (pLast.length > 2 && pLast === eLast) return true;
+    return false;
+  }
+
+  function disambiguateDoubleheader(matches, pick) {
+    if (matches.length <= 1) return matches[0] || null;
+    const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+    if (isNaN(ct)) return matches[0];
+    let best = matches[0], bestDiff = Infinity;
+    for (const g of matches) {
+      const gt = g.startISO ? Date.parse(g.startISO) : NaN;
+      if (isNaN(gt)) continue;
+      const diff = Math.abs(gt - ct);
+      if (diff < bestDiff) { bestDiff = diff; best = g; }
+    }
+    return best;
+  }
+
+  function gameMatchesPickWindow(game, pick) {
+    const gStart = game && game.startISO ? Date.parse(game.startISO) : NaN;
+    const pStart = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+    if (!isNaN(gStart) && !isNaN(pStart) && Math.abs(gStart - pStart) > 10 * 3600 * 1000) return false;
+    if (!isNaN(pStart) && pStart > Date.now() + 15 * 60 * 1000 && game && game.state === 'post') return false;
+    return true;
+  }
+
+  function findGame(pick) {
+    const games = (cachedScores || []).filter(g => gameMatchesPickWindow(g, pick));
+    if (pick.homeTeam && pick.awayTeam) {
+      const structured = games.filter(g =>
+        teamsMatch(pick.awayTeam, g.awayTeam, g.awayAbbr) &&
+        teamsMatch(pick.homeTeam, g.homeTeam, g.homeAbbr)
+      );
+      if (structured.length) return disambiguateDoubleheader(structured, pick);
+    }
+    const matchup = (pick.matchup || '').toLowerCase();
+    const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+    const primary = [];
+    for (const g of games) {
+      const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
+      const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
+      const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr)) ||
+                         (awayLast.length > 3 && matchup.includes(awayLast));
+      const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
+                         (homeLast.length > 3 && matchup.includes(homeLast));
+      if (awayMatch && homeMatch) primary.push(g);
+    }
+    if (primary.length) return disambiguateDoubleheader(primary, pick);
+    const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').trim();
+    if (pickTeam) {
+      const secondary = [];
+      for (const g of games) {
+        if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
+          const otherLast = normalizeTeam(
+            teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
+          ).split(' ').pop();
+          if (otherLast.length > 3 && matchup.includes(otherLast)) secondary.push(g);
+        }
+      }
+      if (secondary.length) return disambiguateDoubleheader(secondary, pick);
+    }
+    return null;
+  }
+
+  function determineResult(pick, game) {
+    if (!game) return { status: 'scheduled', label: 'Upcoming' };
+    if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
+    const pickStr = (pick.pick || '').trim();
+    const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').trim();
+    const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr);
+    const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr);
+    const awayScore = game.awayScore;
+    const homeScore = game.homeScore;
+    const isFinal = game.state === 'post';
+
+    if (!isFinal) {
+      let projected = 'live';
+      const sm = pickStr.match(/([+-]\d+(\.\d+)?)/);
+      if (sm && (pickedAway || pickedHome)) {
+        const spread = parseFloat(sm[1]);
+        const ps = pickedAway ? awayScore : homeScore;
+        const os = pickedAway ? homeScore : awayScore;
+        projected = (ps + spread) > os ? 'win' : (ps + spread) === os ? 'live' : 'loss';
+      }
+      return { status: projected, label: game.detail || 'Live', isLive: true };
+    }
+
+    if (/POSTPONED|CANCELL?ED/i.test(game.statusName || '') || game.completed === false) {
+      return { status: 'push', label: 'Push' };
+    }
+    const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
+    if (spreadMatch && (pickedAway || pickedHome)) {
+      const spread = parseFloat(spreadMatch[1]);
+      const pickedScore = pickedAway ? awayScore : homeScore;
+      const oppScore = pickedAway ? homeScore : awayScore;
+      const adjusted = pickedScore + spread;
+      if (adjusted === oppScore) return { status: 'push', label: 'Push' };
+      return adjusted > oppScore ? { status: 'win', label: 'Win' } : { status: 'loss', label: 'Loss' };
+    }
+    return { status: 'scheduled', label: 'Final' };
+  }
+
+  function gameFromPick(p) {
+    const live = findGame(p);
+    if (live) return live;
+    if (p.awayScore == null && p.homeScore == null && !p.finalScore) return null;
+    const scores = (p.finalScore && p.finalScore !== 'PPD') ? String(p.finalScore).split('-') : null;
+    return {
+      awayTeam: p.awayTeam || '',
+      homeTeam: p.homeTeam || '',
+      awayAbbr: '',
+      homeAbbr: '',
+      awayScore: p.awayScore != null ? p.awayScore : (scores ? parseInt(scores[0], 10) || 0 : 0),
+      homeScore: p.homeScore != null ? p.homeScore : (scores ? parseInt(scores[1], 10) || 0 : 0),
+      state: (p.status === 'in' || p.result === 'live') ? 'in' : (p.result === 'pending' || p.status === 'pre' ? 'pre' : 'post'),
+      detail: p.detail || '',
+      startISO: p.commenceTime || '',
+      completed: p.result === 'win' || p.result === 'loss' || p.result === 'push',
+      statusName: p.statusName || '',
+    };
+  }
+
+  function outcomeOf(p) {
+    const game = gameFromPick(p);
+    if (game && (game.state === 'in' || game.state === 'post')) {
+      const r = determineResult(p, game);
+      if (r.isLive) return { result: 'live', game, isLive: true, label: r.label };
+      if (r.status === 'win' || r.status === 'loss' || r.status === 'push') {
+        return { result: r.status, game, isLive: false, label: r.label };
+      }
+    }
+    const server = String(p.result || 'pending').toLowerCase();
+    return { result: server || 'pending', game, isLive: server === 'live', label: server };
+  }
+
+  function scoreBarHTML(pick, game, outcome) {
+    if (!game || game.state === 'pre') return '';
+    const displayStatus = outcome.isLive ? 'live' : outcome.result;
+    if (!['live', 'win', 'loss', 'push'].includes(displayStatus)) return '';
+    const barClass = 'score-bar-' + displayStatus;
+    const statusClass = 'status-' + displayStatus;
+    const statusLabel = outcome.isLive ? 'Live' : (outcome.label || displayStatus);
+    const awayName = teamOnly(game.awayTeam) || teamOnly((pick.matchup || '').split(/\s+@\s+/)[0]) || 'Away';
+    const homeName = teamOnly(game.homeTeam) || teamOnly((pick.matchup || '').split(/\s+@\s+/)[1]) || 'Home';
+    return `<div class="pick-score-bar ${barClass}">
+      <div class="score-teams">
+        <div class="score-team"><span class="score-team-name">${esc(awayName)}</span><span class="score-team-score">${game.awayScore}</span></div>
+        <div class="score-team"><span class="score-team-name">${esc(homeName)}</span><span class="score-team-score">${game.homeScore}</span></div>
+      </div>
+      <div class="score-meta">
+        <span class="score-status ${statusClass}">${esc(statusLabel)}</span>
+        <span class="score-detail">${esc(game.detail || '')}</span>
+      </div>
+    </div>`;
+  }
+
+  function resultBadgeHTML(outcome) {
+    const r = outcome.result;
+    if (outcome.isLive || r === 'live') return '<span class="result-badge result-pending">LIVE</span>';
+    if (r === 'win') return '<span class="result-badge result-win">W</span>';
+    if (r === 'loss') return '<span class="result-badge result-loss">L</span>';
+    if (r === 'push') return '<span class="result-badge result-push">P</span>';
+    return '<span class="result-badge result-pending">...</span>';
+  }
+
+  function scoreChip(game) {
+    if (!game || (game.state !== 'in' && game.state !== 'post')) return '';
+    return `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">(${game.awayScore}-${game.homeScore})</span>`;
+  }
+
+  function weekStatsFromPicks(picks) {
+    let wins = 0, losses = 0, pushes = 0, live = 0, pending = 0;
+    for (const p of picks || []) {
+      const o = outcomeOf(p);
+      if (o.isLive || o.result === 'live') live++;
+      else if (o.result === 'win') wins++;
+      else if (o.result === 'loss') losses++;
+      else if (o.result === 'push') pushes++;
+      else pending++;
+    }
+    const points = wins + pushes * 0.5;
+    return { wins, losses, pushes, live, pending, points };
+  }
+
   function pendingCopy(sec) {
     if (sec.pendingMessage) return sec.pendingMessage;
     const n = sec.weekNum || ((sec.week || '').match(/W0?(\d+)/i) || [])[1] || '';
@@ -489,7 +808,19 @@
   }
 
   function renderKpis(sec) {
-    const k = sec.kpis || {};
+    const k = Object.assign({ points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 }, sec.kpis || {});
+    const picks = (sec.picks || []).filter(p => (p.sport || 'NFL').toUpperCase() === 'NFL').slice(0, 5);
+    const live = weekStatsFromPicks(picks);
+    const liveHasGrade = live.wins + live.losses + live.pushes + live.live > 0;
+    // Week 1 overlay: current card IS the season. Later weeks keep the API rollup
+    // (client poll re-fetches get-picks-circa when a live game goes final).
+    if (liveHasGrade && (Number(sec.weekNum) === 1 || (k.wins + k.losses + k.pushes) === 0)) {
+      k.points = live.points;
+      k.wins = live.wins;
+      k.losses = live.losses;
+      k.pushes = live.pushes;
+      if ((live.wins + live.losses + live.pushes) > 0) k.weeksPlayed = Math.max(k.weeksPlayed || 0, 1);
+    }
     const decided = (k.wins || 0) + (k.losses || 0);
     const winRate = decided > 0 ? Math.round((k.wins / decided) * 100) + '%' : '--';
     const record = `${k.wins || 0}-${k.losses || 0}${k.pushes ? '-' + k.pushes : ''}`;
@@ -580,13 +911,24 @@
   function renderWeeksTable(sec, picks) {
     let tbl = '';
     const weeks = visibleWeeks(sec.weeks || [], picks || []);
+    const openIds = new Set(Array.from(document.querySelectorAll('.day-detail.open')).map(el => el.id));
     for (let w = 0; w < weeks.length; w++) {
       const wk = weeks[w];
+      const weekPicks = (Array.isArray(wk.picks) && wk.picks.length) ? wk.picks : (wk.current ? (picks || []) : []);
+      const liveStats = weekPicks.length ? weekStatsFromPicks(weekPicks) : null;
       const highlight = wk.current ? ' style="background:var(--teal-light);"' : '';
-      const unplayed = wk.status === 'pending' || wk.status === 'upcoming' || wk.points == null;
-      const wkRecord = unplayed ? (wk.record || '0W-0L') : (wk.record || '');
-      const wkPts = unplayed ? '--' : ((wk.points || 0).toFixed(1) + ' pts');
-      const wkRate = unplayed ? '--' : (wk.rate || '--');
+      const hasGrade = liveStats && (liveStats.wins + liveStats.losses + liveStats.pushes + liveStats.live) > 0;
+      const unplayed = !hasGrade && (wk.status === 'pending' || wk.status === 'upcoming' || wk.points == null);
+      const wkRecord = hasGrade
+        ? `${liveStats.wins}W-${liveStats.losses}L-${liveStats.pushes}P`
+        : (unplayed ? (wk.record || '0W-0L') : (wk.record || ''));
+      const wkPts = hasGrade
+        ? (liveStats.points.toFixed(1) + ' pts')
+        : (unplayed ? '--' : ((wk.points || 0).toFixed(1) + ' pts'));
+      const decided = hasGrade ? (liveStats.wins + liveStats.losses) : 0;
+      const wkRate = hasGrade
+        ? (decided > 0 ? Math.round((liveStats.wins / decided) * 100) + '%' : '--')
+        : (unplayed ? '--' : (wk.rate || '--'));
       tbl += `<tr class="week-row" onclick="toggleWeek('nfl-${w}')"${highlight}>
         <td><button class="day-toggle" type="button" style="font-weight:700;">${esc(wk.label)}</button>
           <span style="display:block; font-size:.625rem; color:var(--txt-l); font-weight:400;">${esc(wk.dates)}</span></td>
@@ -594,12 +936,17 @@
         <td>${esc(wkRate)}</td>
         <td>${esc(wkPts)}</td>
       </tr>`;
-      tbl += `<tr class="day-detail" id="week-detail-nfl-${w}"><td colspan="4"><ul class="day-picks-list">`;
-      if (wk.current && picks.length) {
-        for (const p of picks) {
+      const openClass = openIds.has('week-detail-nfl-' + w) ? ' open' : '';
+      tbl += `<tr class="day-detail${openClass}" id="week-detail-nfl-${w}"><td colspan="4"><ul class="day-picks-list">`;
+      if (weekPicks.length) {
+        for (const p of weekPicks) {
+          const o = outcomeOf(p);
+          const right = o.isLive || o.result === 'live' || o.result === 'win' || o.result === 'loss' || o.result === 'push'
+            ? `${scoreChip(o.game)}${resultBadgeHTML(o)}`
+            : `<span style="font-size:.65rem; color:var(--txt-l); margin-right:.25rem;">${esc(gameTimeET(p.commenceTime))}</span>${resultBadgeHTML(o)}`;
           tbl += `<li>
             <span>${esc(p.pick)} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span></span>
-            <span><span style="font-size:.65rem; color:var(--txt-l); margin-right:.25rem;">${esc(gameTimeET(p.commenceTime))}</span><span class="result-badge result-pending">...</span></span>
+            <span>${right}</span>
           </li>`;
         }
       } else {
@@ -670,8 +1017,10 @@
     renderKpis(sec);
     renderWeeksTable(sec, picks);
 
+    const wkLive = weekStatsFromPicks(picks);
+    const liveNote = wkLive.live > 0 ? ` · ${wkLive.live} LIVE` : '';
     document.getElementById('nfl-record-bar').innerHTML =
-      `<span style="font-weight:600; color:var(--txt-b);">This Week: 0W-0L, 0.0 of 5.0 pts</span>`;
+      `<span style="font-weight:600; color:var(--txt-b);">This Week: ${wkLive.wins}W-${wkLive.losses}L${wkLive.pushes ? '-' + wkLive.pushes + 'P' : ''}, ${wkLive.points.toFixed(1)} of 5.0 pts${liveNote}</span>`;
 
     let html = '';
     for (let i = 0; i < picks.length; i++) {
@@ -679,8 +1028,11 @@
       const conf = p.confidence || 'b';
       const badge = badgeClass[conf] || 'badge-b';
       const label = ratingLabel[conf] || 'B';
+      const outcome = outcomeOf(p);
+      const game = outcome.game;
+      const isPreGame = !game || game.state === 'pre';
       const timeStr = gameTimeET(p.commenceTime);
-      const timeChip = timeStr
+      const timeChip = isPreGame && timeStr
         ? `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(timeStr)}</span>`
         : '';
       const probChip = p.coverProb ? `<span class="win-prob">${esc(p.coverProb)}</span>` : '';
@@ -698,6 +1050,16 @@
       const earlyWarn = p.earlyKickoff
         ? `<div class="early-warn">Early kickoff (rule 8): all five picks must be submitted before this game starts.</div>`
         : '';
+      let liveResultHTML = '';
+      if (outcome.isLive || outcome.result === 'live') {
+        liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
+      } else if (outcome.result === 'win') {
+        liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">W</span>';
+      } else if (outcome.result === 'loss') {
+        liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">L</span>';
+      } else if (outcome.result === 'push') {
+        liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">P</span>';
+      }
 
       html += `<div class="pick-card" data-wb-pick="${esc(p.pick)}">
         <div class="pick-header" style="margin-bottom:.25rem;">
@@ -708,6 +1070,7 @@
           <div class="pick-matchup" style="margin-bottom:0;">${esc(shortMatchup(p.matchup))}</div>
           ${timeChip}
         </div>
+        ${scoreBarHTML(p, game, outcome)}
         <div class="pick-line">
           <span class="pick-name">${esc(p.pick)}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
           ${circaChip}
@@ -720,6 +1083,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div class="pick-units">Contest Pick ${i + 1} of 5</div>
           <div style="display:flex; align-items:center; gap:.375rem;">
+            ${liveResultHTML}
             ${edgeBadgeHTML || ''}
           </div>
         </div>
@@ -730,20 +1094,34 @@
     let sum = `<div class="parlay-section">
       <div class="parlay-title">${esc(sec.contest || 'Circa Million VIII')}: This Week's 5-Pick Card</div>`;
     for (const p of picks) {
+      const o = outcomeOf(p);
+      let ptsHtml = `<span style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+1.0 pt</span>`;
+      if (o.isLive || o.result === 'live') {
+        ptsHtml = `<span class="leg-result leg-live">LIVE</span>`;
+      } else if (o.result === 'win') {
+        ptsHtml = `<span class="leg-result leg-win">W +1.0</span>`;
+      } else if (o.result === 'loss') {
+        ptsHtml = `<span class="leg-result leg-loss">L 0.0</span>`;
+      } else if (o.result === 'push') {
+        ptsHtml = `<span class="leg-result leg-push">P +0.5</span>`;
+      }
+      const scoreStr = o.game && (o.game.state === 'in' || o.game.state === 'post')
+        ? ` <span style="font-size:.6875rem; color:var(--txt-m);">(${o.game.awayScore}-${o.game.homeScore})</span>`
+        : '';
       sum += `<div class="parlay-leg" style="display:grid; grid-template-columns:1fr 4.5rem 3.5rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
         <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
           <span class="leg-pick">${esc(p.pick)}</span>
-          <span style="font-size:.6875rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup))}</span>
+          <span style="font-size:.6875rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup))}${scoreStr}</span>
           <span style="font-size:.625rem; color:var(--txt-l);">${esc(gameTimeET(p.commenceTime))}</span>
         </span>
         <span style="font-size:.75rem; color:var(--txt-m); text-align:right;">${esc(p.coverProb || '')}${p.marketMove ? `<div style="font-size:.6rem; color:var(--teal); font-weight:600;">${esc(p.marketMove)}</div>` : ''}</span>
-        <span style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+1.0 pt</span>
+        <span style="text-align:right; white-space:nowrap;">${ptsHtml}</span>
       </div>`;
     }
     sum += `<div style="display:grid; grid-template-columns:1fr 4.5rem 3.5rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
-      <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Max This Week</span>
+      <span style="font-weight:700; font-size:.875rem; color:var(--olive);">This Week</span>
       <span></span>
-      <span style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">5.0 pts</span>
+      <span style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">${wkLive.points.toFixed(1)} / 5.0 pts</span>
     </div></div>`;
     document.getElementById('nfl-summary').innerHTML = sum;
   }
@@ -753,18 +1131,64 @@
     if (el) el.classList.toggle('open');
   }
 
-  async function loadCirca() {
+  function resultSignature(sec) {
+    return ((sec && sec.picks) || []).map(p => {
+      const o = outcomeOf(p);
+      return o.isLive ? 'L' : (o.result || 's');
+    }).join('|');
+  }
+
+  function anyLiveOrKickoff(sec) {
+    const picks = (sec && sec.picks) || [];
+    const now = Date.now();
+    for (const p of picks) {
+      const o = outcomeOf(p);
+      if (o.isLive || o.result === 'live') return true;
+      if (o.result === 'pending' || o.result === 'scheduled') {
+        const t = p.commenceTime ? Date.parse(p.commenceTime) : NaN;
+        if (!isNaN(t) && t <= now + 15 * 60 * 1000) return true;
+        if (isNaN(t)) return true;
+      }
+    }
+    return false;
+  }
+
+  function scheduleRefresh(seconds) {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(async () => {
+      if (!circaSec || !(circaSec.picks || []).length) return;
+      const prev = resultSignature(circaSec);
+      const dates = scoreboardDatesForPicks(circaSec);
+      cachedScores = await fetchNflScores(dates);
+      renderSection(circaSec);
+      const next = resultSignature(circaSec);
+      if (next !== prev) loadCirca({ silent: true, bust: true });
+    }, seconds * 1000);
+  }
+
+  async function loadCirca(opts) {
     try {
       const params = new URLSearchParams(location.search);
       const week = params.get('week');
-      const url = '/.netlify/functions/get-picks-circa' + (week ? ('?week=' + encodeURIComponent(week)) : '');
+      const bust = opts && opts.bust ? ((week ? '&' : '?') + 't=' + Date.now()) : '';
+      const url = '/.netlify/functions/get-picks-circa' + (week ? ('?week=' + encodeURIComponent(week)) : '') + bust;
       const resp = await fetch(url);
       if (!resp.ok) throw new Error('API ' + resp.status);
       const data = await resp.json();
       const sec = (data && data.nfl && Array.isArray(data.nfl.picks)) ? data.nfl : data;
-      renderSection(sec || {});
+      circaSec = sec || {};
+      renderSection(circaSec);
+      const picks = circaSec.picks || [];
+      if (picks.length) {
+        const dates = scoreboardDatesForPicks(circaSec);
+        cachedScores = await fetchNflScores(dates);
+        renderSection(circaSec);
+        if (anyLiveOrKickoff(circaSec)) scheduleRefresh(30);
+        else scheduleRefresh(300);
+      }
     } catch (err) {
       console.error('Failed to load Circa card:', err);
+      if (opts && opts.silent) return;
       renderPending({
         weekLabel: '',
         dateFormatted: '',

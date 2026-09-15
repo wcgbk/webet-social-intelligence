@@ -228,6 +228,32 @@
     .cum-value.negative { color: #c0392b; }
     .cum-label { font-size: .625rem; font-weight: 600; color: var(--txt-m); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
 
+    .standings-rank-wrap {
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1rem;
+      background: var(--teal-light);
+    }
+    .standings-rank-line {
+      font-size: .875rem; font-weight: 600; color: var(--olive);
+      line-height: 1.45;
+    }
+    .standings-rank-line .sr-muted { color: var(--txt-m); font-weight: 500; }
+    .standings-rank-meta {
+      margin-top: .375rem;
+      font-size: .6875rem; color: var(--txt-m); line-height: 1.4;
+    }
+    .standings-pdf-links {
+      margin-top: .5rem;
+      font-size: .6875rem;
+      display: flex; flex-wrap: wrap; gap: .5rem .875rem; align-items: center;
+    }
+    .standings-pdf-links a { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .standings-pdf-links a:hover { text-decoration: underline; }
+    .standings-attr {
+      margin-top: .375rem;
+      font-size: .625rem; color: var(--txt-l); line-height: 1.35;
+    }
+
     .results-table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
     .results-table td {
       padding: .5rem; border-bottom: 1px solid var(--border-lt);
@@ -424,6 +450,12 @@
     <div class="results-section-title">Contest Results &amp; KPI Tracking: NFL</div>
     <div class="results-card">
       <div class="results-cumulative" id="nfl-cumulative"></div>
+      <div class="standings-rank-wrap" id="circa-standings-rank">
+        <div class="standings-rank-line" id="circa-standings-rank-line">WeBetAI · place pending</div>
+        <div class="standings-rank-meta" id="circa-standings-rank-meta">Matching contest points to the latest Circa Million VIII standings PDF...</div>
+        <div class="standings-pdf-links" id="circa-standings-pdf-links"></div>
+        <div class="standings-attr">WeBetAI is not affiliated with Circa Sports.</div>
+      </div>
       <table class="results-table"><tbody id="nfl-results-body"></tbody></table>
     </div>
 
@@ -800,7 +832,61 @@
     return weekBit + ' card pending — lines post Thu 10am PT; final card before Sat 4pm PT';
   }
 
-  function renderKpis(sec) {
+  let _standingsReq = 0;
+  function fetchStandingsRank(points) {
+    const lineEl = document.getElementById('circa-standings-rank-line');
+    const metaEl = document.getElementById('circa-standings-rank-meta');
+    const linksEl = document.getElementById('circa-standings-pdf-links');
+    if (!lineEl) return;
+    const pts = Number(points);
+    const ptsLabel = Number.isFinite(pts) ? pts.toFixed(1) : '--';
+    lineEl.textContent = 'WeBetAI · ' + ptsLabel + ' pts · place pending';
+    if (metaEl) metaEl.textContent = 'Matching contest points to the latest Circa Million VIII standings PDF...';
+    const req = ++_standingsReq;
+    const q = Number.isFinite(pts) ? ('?points=' + encodeURIComponent(String(pts))) : '';
+    fetch('/api/get-circa-standings' + q)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (req !== _standingsReq) return;
+        if (linksEl) {
+          const bits = [];
+          if (data && data.seasonPdfUrl) {
+            bits.push('<a href="' + data.seasonPdfUrl + '" target="_blank" rel="noopener">Season standings PDF</a>');
+          }
+          if (data && data.lastPlacePdfUrl) {
+            bits.push('<a href="' + data.lastPlacePdfUrl + '" target="_blank" rel="noopener">Last Place / booby PDF</a>');
+          }
+          linksEl.innerHTML = bits.join('');
+        }
+        if (!data || data.error || !data.rank) {
+          lineEl.innerHTML = 'WeBetAI · ' + ptsLabel + ' pts · <span class="sr-muted">place unavailable</span>';
+          if (metaEl) {
+            metaEl.textContent = (data && data.message)
+              ? data.message
+              : 'Standings PDF not loaded yet. Contest points above still update from the graded card.';
+          }
+          return;
+        }
+        const rk = data.rank;
+        const placeBit = rk.placeLabel || ('~' + rk.place + 'th');
+        const prizeBit = rk.prizeLabel || '$0 full-season';
+        lineEl.textContent = 'WeBetAI · ' + ptsLabel + ' pts · ' + placeBit + ' · ' + prizeBit;
+        const field = rk.fieldSize || data.fieldSize;
+        const week = data.week != null ? ('Week ' + data.week) : 'Latest week';
+        const tieBit = rk.tied && rk.count ? (' · tied with ' + rk.count.toLocaleString('en-US') + ' entries') : '';
+        const fieldBit = field ? (' of ' + Number(field).toLocaleString('en-US')) : '';
+        if (metaEl) {
+          metaEl.textContent = week + ' field' + fieldBit + tieBit + '. Prize is an estimate if the season ended at this place range (full-season table only).';
+        }
+      })
+      .catch(function () {
+        if (req !== _standingsReq) return;
+        lineEl.innerHTML = 'WeBetAI · ' + ptsLabel + ' pts · <span class="sr-muted">place unavailable</span>';
+        if (metaEl) metaEl.textContent = 'Could not reach standings API. Contest points above still update from the graded card.';
+      });
+  }
+
+    function renderKpis(sec) {
     const k = Object.assign({ points: 0, wins: 0, losses: 0, pushes: 0, weeksPlayed: 0, totalWeeks: 18 }, sec.kpis || {});
     const picks = (sec.picks || []).filter(p => (p.sport || 'NFL').toUpperCase() === 'NFL').slice(0, 5);
     const live = weekStatsFromPicks(picks);
@@ -825,6 +911,7 @@
       <div class="cum-card"><div class="cum-value">${record}</div><div class="cum-label">ATS Record</div></div>
       <div class="cum-card"><div class="cum-value">${winRate}</div><div class="cum-label">Win Rate</div></div>
       <div class="cum-card"><div class="cum-value">${pace}</div><div class="cum-label">Pts Pace</div></div>`;
+    fetchStandingsRank(k.points || 0);
   }
 
   // Filter KPI weeks: history + current/live card. Never dump far-future upcoming rows.

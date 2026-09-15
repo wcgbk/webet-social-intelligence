@@ -7,6 +7,7 @@
 /circa        /circa/index.html        200
 /circa/       /circa/index.html        200
 /api/get-picks-circa  /.netlify/functions/get-picks-circa  200
+/api/get-circa-standings  /.netlify/functions/get-circa-standings  200
 /cfb          /cfb/index.html          200
 /cfb/         /cfb/index.html          200
 /live-edge    /live-edge/index.html    200

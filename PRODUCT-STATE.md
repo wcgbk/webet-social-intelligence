@@ -195,3 +195,7 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 - /api/get-picks-alpha , /api/get-picks-mvp (model version + picks count)
 - /api/get-results-alpha (record/ROI; straight+parlay totals)
 - auth flow: /.netlify/functions/auth-x-init → location header must be x.com
+
+## 2026-09-15 — Alpha control restore
+- Alpha generator/readers restored to pre-coupling `v10.3-alpha-sharp` (commit `7ec1bce` file state) after Omega ports (#19–#23) broke A/B control.
+- Omega MAIN unchanged (`v11.7-omega-parlay2v3`). Never port Omega process into Alpha again without explicit founder order.

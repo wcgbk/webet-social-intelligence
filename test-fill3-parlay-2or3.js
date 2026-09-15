@@ -36,7 +36,7 @@ console.log('\nfill-to-3 + parlay 2-vs-3');
 check('versions', () => {
   const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
   assert.ok(aSrc.includes('v10.3.1-alpha-no-f5'));
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.7-omega-parlay2v3');
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.8-omega-pass-thin');
 });
 
 check('chooseParlay2or3: 3-leg when adjusted EV is clearly better', () => {

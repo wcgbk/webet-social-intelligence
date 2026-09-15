@@ -1,6 +1,6 @@
 // generate-picks-omega-background.js
-// v11.7-omega-parlay2v3 — fill-to-3 + 2-vs-3 parlay compare (best 3-leg, or 2-leg
-// when EV / combined hit-rate is better). Keep sharp-90 F5/UD/A's gates.
+// v11.8-omega-pass-thin — sharp pass-when-thin: no lean pad-to-3; max 1 same-direction
+// MLB total on the MAIN card (stops Overs mono). Keep F5/UD/A's gates + 2-vs-3 parlay.
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
 // Fill-to-3 lean top-up restored. Football MAIN: predCLV ≥ 0 when present, max 1 slot.
 // JS locks ≤3 then Claude verifies/narrates only those (web_search max_uses 5, one ~180s
@@ -27,7 +27,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.7-omega-parlay2v3";
+const MODEL_VERSION = "v11.8-omega-pass-thin";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -221,7 +221,9 @@ const UNDERDOG_RL_WIN_REJECT_REASON = "underdog RL winProb < 0.50";
 const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
 // Bottom-quartile MLB clubs: never emit plus-money ML or underdog RL, even if EV is juicy.
 const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
-const LEAN_PAD_TO_THREE = true;
+// Best practice 2026-09-15: do NOT force a 3-pick card with correlated Overs.
+const LEAN_PAD_TO_THREE = false;
+const MAX_SAME_DIR_MLB_TOTALS = 1; // at most one Over OR one Under stack — pass rather than mono-total
 const FOOTBALL_MAIN_MAX_SLOTS = 1;
 function candidateAmericanOdds(c) {
   if (!c) return null;
@@ -359,6 +361,19 @@ function allowOnPublishedCard(c) {
 }
 function shouldLeanPadToThree(currentCount) {
   return LEAN_PAD_TO_THREE && (currentCount || 0) < 3;
+}
+function mlbTotalDirection(c) {
+  if (!c || String(c.sport || "") !== "MLB") return null;
+  const market = String(c.market || c.betType || "");
+  if (!/total/i.test(market)) return null;
+  const side = String(c.side || c.pick || "");
+  if (/^Over\b/i.test(side)) return "over";
+  if (/^Under\b/i.test(side)) return "under";
+  return null;
+}
+function countSameDirMlbTotals(selected, dir) {
+  if (!dir) return 0;
+  return (selected || []).filter(x => mlbTotalDirection(x) === dir).length;
 }
 // US-regulated books only (mirror of the F5 function's US_BOOKS) — only surface placeable F5 lines.
 const F5_US_BOOKS = new Set([
@@ -5311,6 +5326,12 @@ function selectDiversifiedStraights(cands, maxPicks = 3, defaultFloor = 0.03) {
       const otherHas = unique.some(x => x.sport !== c.sport && remainingYes(x.sport));
       if (otherHas) continue;
     }
+    // Pass-when-thin: do not stack same-direction MLB totals (Overs mono / Unders mono).
+    const totDir = mlbTotalDirection(c);
+    if (totDir && countSameDirMlbTotals(selected, totDir) >= MAX_SAME_DIR_MLB_TOTALS) {
+      console.log(`[v11.8-pass-thin] Skip ${c.side} — already have ${MAX_SAME_DIR_MLB_TOTALS} MLB ${totDir} total(s) on card`);
+      continue;
+    }
     selected.push(c);
     usedGames.add(g);
     sportCount[c.sport] = sc + 1;
@@ -6270,10 +6291,8 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── LEAN TIER TOP-UP (restored v11.6 — product: 3 straights + 1 parlay) ──
-    // Fill remaining slots from lean-tier diversified candidates when conviction YES < 3.
-    // Do NOT lean-fill football below sport EV floor. Prefer MLB lean fill to reach 3 even if
-    // a football YES is already on the card (FOOTBALL_MAIN_MAX_SLOTS=1 still applies upstream).
+    // ── LEAN TIER TOP-UP (disabled v11.8 — sharp pass-when-thin; LEAN_PAD_TO_THREE=false) ──
+    // Kept for operator flip; when enabled, still refuse same-direction MLB total stacks.
     if (shouldLeanPadToThree(picks.length)) {
       const needed = 3 - picks.length;
       const pickedGames = new Set(picks.map(p => matchupKey(p.matchup)));
@@ -6292,18 +6311,23 @@ exports.handler = async (event) => {
           if (c.sport === "MLB") return Math.max(LEAN_EV_FLOOR, MLB_LEAN_EV_FLOOR);
           return LEAN_EV_FLOOR;
         };
-        const topUps = leanAll.filter(c =>
-          allowOnPublishedCard(c) &&
-          hasPositiveEdge(c) &&
-          !isFootballSport(c.sport) && // never lean-pad football; MLB/other fill to 3
-          c.ev >= leanFloorFor(c) &&
-          (c.coverProb || 0) >= sportCoverFloor(c.sport) &&
-          passesPredClvGate(c) &&
-          passesCfbBlowoutGate(c) &&
-          !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
-          !pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam))) &&
-          !picks.find(p => p.pick === c.side)
-        ).slice(0, needed);
+        const leanSelected = [];
+        for (const c of leanAll) {
+          if (leanSelected.length >= needed) break;
+          if (!allowOnPublishedCard(c) || !hasPositiveEdge(c)) continue;
+          if (isFootballSport(c.sport)) continue;
+          if (c.ev < leanFloorFor(c)) continue;
+          if ((c.coverProb || 0) < sportCoverFloor(c.sport)) continue;
+          if (!passesPredClvGate(c) || !passesCfbBlowoutGate(c)) continue;
+          if (rejectedSides.has((c.side || '').toLowerCase().trim())) continue;
+          if (pickedGames.has(matchupKey(c.matchup || formatMatchup(c.awayTeam, c.homeTeam)))) continue;
+          if (picks.find(p => p.pick === c.side) || leanSelected.find(x => x.side === c.side)) continue;
+          const dir = mlbTotalDirection(c);
+          const already = picks.concat(leanSelected);
+          if (dir && countSameDirMlbTotals(already.map(x => ({ sport: x.sport || c.sport, market: x.betType || x.market, side: x.pick || x.side })), dir) >= MAX_SAME_DIR_MLB_TOTALS) continue;
+          leanSelected.push(c);
+        }
+        const topUps = leanSelected;
         if (topUps.length > 0) {
           console.log(`[v11.6-lean-topup] Adding ${topUps.length} lean pick(s) — card had only ${picks.length} conviction YES`);
           for (const c of topUps) {
@@ -7076,7 +7100,10 @@ module.exports.MLB_BOTTOM_CLUB_REJECT_REASON = MLB_BOTTOM_CLUB_REJECT_REASON;
 module.exports.passesBottomClubBan = passesBottomClubBan;
 module.exports.isMlbBottomClubName = isMlbBottomClubName;
 module.exports.LEAN_PAD_TO_THREE = LEAN_PAD_TO_THREE;
+module.exports.MAX_SAME_DIR_MLB_TOTALS = MAX_SAME_DIR_MLB_TOTALS;
 module.exports.shouldLeanPadToThree = shouldLeanPadToThree;
+module.exports.mlbTotalDirection = mlbTotalDirection;
+module.exports.countSameDirMlbTotals = countSameDirMlbTotals;
 module.exports.FOOTBALL_MAIN_MAX_SLOTS = FOOTBALL_MAIN_MAX_SLOTS;
 module.exports.selectDiversifiedStraights = selectDiversifiedStraights;
 module.exports.buildBindingDiversifiedPicks = buildBindingDiversifiedPicks;

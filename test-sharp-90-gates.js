@@ -38,21 +38,28 @@ check('Alpha get-picks/get-results restored to pre-coupling control', () => {
 
 console.log('\nomega sharp-90 / fill gates');
 check('Omega version', () => {
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.7-omega-parlay2v3');
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.8-omega-pass-thin');
 });
 check('F5 stays off MAIN', () => {
   assert.strictEqual(omega.ALLOW_F5_ON_CARD, false);
 });
-check('fill-to-3 lean pad on Omega', () => {
-  assert.strictEqual(omega.LEAN_PAD_TO_THREE, true);
-  assert.strictEqual(omega.shouldLeanPadToThree(0), true);
-  assert.strictEqual(omega.shouldLeanPadToThree(2), true);
-  assert.strictEqual(omega.shouldLeanPadToThree(3), false);
+check('pass-when-thin: lean pad OFF on Omega', () => {
+  assert.strictEqual(omega.LEAN_PAD_TO_THREE, false);
+  assert.strictEqual(omega.shouldLeanPadToThree(0), false);
+  assert.strictEqual(omega.shouldLeanPadToThree(2), false);
+  assert.strictEqual(omega.MAX_SAME_DIR_MLB_TOTALS, 1);
 });
-check('lean top-up path present on Omega', () => {
-  const oSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-omega-background.js'), 'utf8');
-  assert.ok(oSrc.includes('v11.6-lean-topup') || oSrc.includes('LEAN TIER TOP-UP (restored'));
-  assert.ok(!oSrc.includes('No lean pad-to-3 — publishing'));
+check('same-direction MLB totals capped at 1', () => {
+  const pool = [
+    { sport: 'MLB', market: 'Total', side: 'Over 7.5', odds: -110, coverProb: 0.55, ev: 0.05, matchup: 'A @ B', awayTeam: 'A', homeTeam: 'B' },
+    { sport: 'MLB', market: 'Total', side: 'Over 8.5', odds: -110, coverProb: 0.54, ev: 0.045, matchup: 'C @ D', awayTeam: 'C', homeTeam: 'D' },
+    { sport: 'MLB', market: 'Total', side: 'Over 8', odds: -110, coverProb: 0.53, ev: 0.04, matchup: 'E @ F', awayTeam: 'E', homeTeam: 'F' },
+    { sport: 'MLB', market: 'Moneyline', side: 'Yankees ML', odds: -130, coverProb: 0.58, ev: 0.035, matchup: 'Yanks @ Sox', awayTeam: 'Yankees', homeTeam: 'Red Sox' },
+  ];
+  const picked = omega.selectDiversifiedStraights(pool, 3, 0.03);
+  const overs = picked.filter(c => omega.mlbTotalDirection(c) === 'over');
+  assert.ok(overs.length <= 1, 'expected ≤1 Over, got ' + overs.length);
+  assert.ok(picked.some(c => c.side === 'Yankees ML'), 'side should fill after first Over');
 });
 check('fail-closed UD RL missing winProb (Omega)', () => {
   const missing = {

@@ -69,7 +69,7 @@ check('Alpha still has no NFL/CFB sport keys', () => {
 console.log('\nomega');
 const mod = omega;
 check('model version bumped', () => {
-  assert.ok(/^v11\.(6|7)-/.test(mod.MODEL_VERSION));
+  assert.ok(/^v11\.(6|7|8)-/.test(mod.MODEL_VERSION));
 });
 check('F5 constants', () => {
   assert.strictEqual(mod.ALLOW_F5_ON_CARD, false);
@@ -199,10 +199,10 @@ check('Claude verify-only path on Omega', () => {
   assert.ok(omegaSrc.includes('claudeVerified'));
   assert.ok(!omegaSrc.includes('max_uses: 20'));
 });
-check('lean pad-to-3 restored on Omega (fill-to-3)', () => {
-  assert.strictEqual(omega.LEAN_PAD_TO_THREE, true);
-  assert.strictEqual(omega.shouldLeanPadToThree(1), true);
-  assert.ok(!omegaSrc.includes('No lean pad-to-3 — publishing'));
+check('lean pad OFF on Omega (pass-when-thin)', () => {
+  assert.strictEqual(omega.LEAN_PAD_TO_THREE, false);
+  assert.strictEqual(omega.shouldLeanPadToThree(1), false);
+  assert.strictEqual(omega.MAX_SAME_DIR_MLB_TOTALS, 1);
 });
 
 if (failed) {

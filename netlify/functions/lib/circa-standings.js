@@ -1,8 +1,7 @@
 // Circa Million VIII standings: discover weekly PDFs, parse compact points bands,
 // map our contest points -> place range + full-season prize estimate.
-// Pure JS (pdf-parse). No pdftotext binary.
-
-const { PDFParse } = require("pdf-parse");
+// Pure JS (pdf-parse@1.1.1 classic Node API). No pdftotext binary.
+// Lazy-require inside extractPdfText so module load never pulls browser PDF.js.
 
 const WP_MEDIA =
   "https://www.circasports.com/wp-json/wp/v2/media";
@@ -25,8 +24,10 @@ const SHARE_11_100 = 1_310_000 / 90; // equal-share estimate
 const LAST_PRIZE = 100_000;
 const SECOND_LAST_PRIZE = 50_000;
 
+// pdf-parse@1.1.1 often omits inter-column spaces; match place + optional T,
+// then record+points from the right (entry/picks not needed for rank bands).
 const ROW_RE =
-  /^([0-9,]+)(T?)\s+(.+?)\s+(\d+)\s+(\d+-\d+-\d+-\d+)\s+(\d+\.\d{2})\s*$/;
+  /^([0-9,]+)(T?)\s*(.+?)\s*(\d+-\d+-\d+-\d+)\s*(\d+\.\d{2})\s*$/;
 
 const CACHE_KEY = "circa-standings-v1";
 const MEM_TTL_MS = 15 * 60 * 1000;
@@ -149,7 +150,7 @@ function parseStandingsText(text) {
     const m = line.match(ROW_RE);
     if (!m) continue;
     const place = parseInt(m[1].replace(/,/g, ""), 10);
-    const points = parseFloat(m[6]);
+    const points = parseFloat(m[5]);
     if (!Number.isFinite(place) || !Number.isFinite(points)) continue;
     fieldSize += 1;
     const prev = bandsMap.get(points);
@@ -180,19 +181,11 @@ function parseStandingsText(text) {
 }
 
 async function extractPdfText(buffer) {
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    return (result && result.text) || "";
-  } finally {
-    if (parser && typeof parser.destroy === "function") {
-      try {
-        await parser.destroy();
-      } catch (_) {
-        /* ignore */
-      }
-    }
-  }
+  // Classic pdf-parse@1.1.1: require('pdf-parse')(buffer) -> { text, ... }
+  // Keep require inside the function so cold-loading this module never hits DOMMatrix.
+  const pdf = require("pdf-parse");
+  const result = await pdf(buffer);
+  return (result && result.text) || "";
 }
 
 async function downloadPdf(url) {

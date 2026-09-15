@@ -3,6 +3,6 @@
   "private": true,
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "1.1.1"
   }
 }

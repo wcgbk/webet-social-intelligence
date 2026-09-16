@@ -1,5 +1,5 @@
 // generate-picks-alpha-background.js
-// v10.3.1-alpha-no-f5 — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
+// v10.3.2-alpha-parlay-keep — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // F5 may still be computed for analytics/odds attach, but ALLOW_F5_ON_CARD=false keeps it
 // out of the selectable/published YES pool and parlays (same product rule as Omega MAIN).
@@ -4065,18 +4065,27 @@ async function computeBankrollContext() {
 // straight pick with 55% cover at +190 (higher hit rate = better combo prob).
 
 function buildCorrelatedParlay(picks, allCandidates, rejections) {
-  if (!allCandidates || allCandidates.length < 3) {
+  if (!allCandidates || allCandidates.length < 2) {
     // Fallback: use straight picks if not enough candidates
     return buildFallbackParlay(picks);
   }
 
-  // Build a set of rejected sides so the parlay never includes a pick Claude said no to
-  const rejectedSides = new Set((rejections || []).map(r => (r.side || '').toLowerCase().trim()));
+  // Reject by side+matchup (not bare side) — "Over 7.5" on game A must not ban Over 7.5 on game B.
+  const rejectedKeys = new Set((rejections || []).map(r => {
+    const side = (r.side || '').toLowerCase().trim();
+    const m = (r.matchup || '').toLowerCase().trim();
+    return m ? `${side}||${m}` : side;
+  }).filter(Boolean));
+  const rejectKey = (c) => {
+    const side = (c.side || '').toLowerCase().trim();
+    const m = (c.matchup || `${c.awayTeam || ''} vs. ${c.homeTeam || ''}`).toLowerCase().trim();
+    return m ? `${side}||${m}` : side;
+  };
 
   // Filter candidates for parlay eligibility
   const eligible = allCandidates.filter(c => {
-    // Never use a candidate that was explicitly rejected during verification
-    if (rejectedSides.has((c.side || '').toLowerCase().trim())) return false;
+    // Never use a candidate that was explicitly rejected for THIS matchup
+    if (rejectedKeys.has(rejectKey(c))) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
     // Must have >45% cover prob — low-probability legs kill parlays
     if (cp < 0.45) return false;
@@ -4087,7 +4096,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     return true;
   });
 
-  if (eligible.length < 3) return buildFallbackParlay(picks);
+  if (eligible.length < 2) return buildFallbackParlay(picks);
 
   // Score every valid 3-leg combination
   // For efficiency, limit to top 12 candidates (C(12,3) = 220 combos)
@@ -4146,6 +4155,30 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
     }
   }
 
+  // If no +EV 3-leg, try best 2-leg across unique games (parlays are P&L — never drop to empty).
+  if (!bestCombo || bestCombo.parlayEV <= 0) {
+    let best2 = null, best2EV = -Infinity;
+    for (let i = 0; i < pool.length - 1; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        const duo = [pool[i], pool[j]];
+        const matchups = duo.map(x => (x.matchup || `${x.awayTeam} vs. ${x.homeTeam}`).toLowerCase().trim());
+        if (new Set(matchups).size < 2) continue;
+        let combinedProb = 1.0, combinedDecimal = 1.0;
+        for (const leg of duo) {
+          const cp = typeof leg.coverProb === 'number' ? leg.coverProb : parseFloat(leg.coverProb) || 0.5;
+          combinedProb *= cp;
+          const odds = typeof leg.odds === 'number' ? leg.odds : parseInt(leg.odds);
+          combinedDecimal *= odds > 0 ? 1 + (odds / 100) : 1 + (100 / Math.abs(odds));
+        }
+        const parlayEV = (combinedProb * combinedDecimal) - 1;
+        if (parlayEV > best2EV) {
+          best2EV = parlayEV;
+          best2 = { trio: duo, combinedProb, combinedDecimal, parlayEV, uniqueMatchups: 2, uniqueSports: new Set(duo.map(x => x.sport)).size };
+        }
+      }
+    }
+    if (best2 && best2.parlayEV > 0) bestCombo = best2;
+  }
   if (!bestCombo || bestCombo.parlayEV <= 0) return buildFallbackParlay(picks);
 
   // Build the parlay output
@@ -4171,7 +4204,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
   console.log(`[v10-parlay] OPTIMIZED: ${legs.map(l => l.pick).join(' + ')} | EV: ${(bestCombo.parlayEV * 100).toFixed(1)}% | Prob: ${(bestCombo.combinedProb * 100).toFixed(1)}% | ${bestCombo.uniqueMatchups} games, ${bestCombo.uniqueSports} sports | Independent: ${isIndependent}`);
 
   return [{
-    type: "3-leg-parlay-optimized",
+    type: legs.length === 2 ? "2-leg-parlay-optimized" : "3-leg-parlay-optimized",
     legs,
     units: "0.5u",
     combinedOdds: combinedOddsDisplay,
@@ -4207,7 +4240,7 @@ function buildFallbackParlay(picks) {
   }
   const parlayEV = (combinedProb * combinedDecimal) - 1;
   return [{
-    type: "3-leg-parlay-fallback",
+    type: `${legs.length}-leg-parlay-fallback`,
     legs, units: "0.5u",
     combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
     combinedDecimal: +combinedDecimal.toFixed(2),
@@ -4761,12 +4794,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3.1-alpha-no-f5",
+      date: dateISO, dateFormatted, model: "v10.3.2-alpha-parlay-keep",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.1-alpha-no-f5" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.2-alpha-parlay-keep" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4941,7 +4974,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3.1-alpha-no-f5",
+      model: "v10.3.2-alpha-parlay-keep",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4951,7 +4984,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3.1-alpha-no-f5",
+        modelVersion: "v10.3.2-alpha-parlay-keep",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5090,11 +5123,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.1-alpha-no-f5",
+    date: dateISO, dateFormatted, model: "v10.3.2-alpha-parlay-keep",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.1-alpha-no-f5" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.2-alpha-parlay-keep" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5178,11 +5211,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.1-alpha-no-f5",
+    date: dateISO, dateFormatted, model: "v10.3.2-alpha-parlay-keep",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.1-alpha-no-f5" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.2-alpha-parlay-keep" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };

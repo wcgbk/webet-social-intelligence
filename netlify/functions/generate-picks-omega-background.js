@@ -1,5 +1,5 @@
 // generate-picks-omega-background.js
-// v11.9.1-omega-fill15 — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
+// v11.9.2-omega-no-rockies — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
 // Soft MLB total diversity (prefer non-same-dir when alternatives exist), then fill to 3.
 // Keep F5/UD/A's gates + Claude verify-only + chooseParlay2or3.
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
@@ -28,7 +28,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.9.1-omega-fill15";
+const MODEL_VERSION = "v11.9.2-omega-no-rockies";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -221,7 +221,7 @@ const UNDERDOG_RL_MIN_WIN_PROB = 0.50;
 const UNDERDOG_RL_WIN_REJECT_REASON = "underdog RL winProb < 0.50";
 const UNDERDOG_RL_WIN_MISSING_REASON = "underdog RL winProb missing";
 // Bottom-quartile MLB clubs: never emit plus-money ML or underdog RL, even if EV is juicy.
-const MLB_BOTTOM_CLUB_REJECT_REASON = "bottom-quartile MLB club plus-money ML/RL banned";
+const MLB_BOTTOM_CLUB_REJECT_REASON = "Athletics/Rockies banned from published card (any market)";
 // Product 2026-09-15: ALWAYS fill 3 straights + optimized parlay (parlays drive P&L).
 const LEAN_PAD_TO_THREE = true;
 // Soft diversity only: prefer non-same-dir MLB totals first; still fill to 3 with Overs if needed.
@@ -335,15 +335,11 @@ function pickedTeamNameFromSide(c) {
     .trim();
 }
 function passesBottomClubBan(c) {
+  // Founder 2026-09-17: no Athletics/Rockies on published cards — any market (ML/RL/total/F5).
   if (!c) return true;
   if (String(c.sport || "") !== "MLB") return true;
-  if (isF5Candidate(c)) return true; // F5 already off MAIN
-  if (!isFullGameUnderdogML(c) && !isFullGameUnderdogRL(c)) return true;
-  const sideTeam = pickedTeamNameFromSide(c);
-  if (isMlbBottomClubName(sideTeam)) return false;
-  const isHome = pickedTeamIsHome(c);
-  if (isHome === true && isMlbBottomClubName(c.homeTeam)) return false;
-  if (isHome === false && isMlbBottomClubName(c.awayTeam)) return false;
+  const blob = [c.side, c.pick, c.matchup, c.homeTeam, c.awayTeam].map(x => String(x || "")).join(" ");
+  if (isMlbBottomClubName(blob)) return false;
   return true;
 }
 function publishedCardRejectionReason(c) {

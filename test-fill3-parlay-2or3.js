@@ -35,8 +35,8 @@ console.log('\nfill-to-3 + parlay 2-vs-3');
 
 check('versions', () => {
   const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(aSrc.includes('v10.3.3-alpha-lean15'));
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.9.1-omega-fill15');
+  assert.ok(aSrc.includes('v10.3.4-alpha-no-rockies'));
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.9.2-omega-no-rockies');
 });
 
 check('chooseParlay2or3: 3-leg when adjusted EV is clearly better', () => {
@@ -114,7 +114,7 @@ check('Omega buildCorrelatedParlay honest 2-leg label when 2 wins', () => {
 
 check('source: Alpha restored to v10.3 control', () => {
   const aSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(aSrc.includes('v10.3.3-alpha-lean15'));
+  assert.ok(aSrc.includes('v10.3.4-alpha-no-rockies'));
 });
 
 check('verify-picks-omega preserves generator parlay', () => {

@@ -20,7 +20,7 @@ const athleticsDog = {
 };
 const athleticsDog499 = { ...athleticsDog, coverProb: 0.499 };
 const athleticsFlip = { ...athleticsDog, coverProb: 0.50 };
-const favoriteMl = { ...athleticsDog, odds: -130, coverProb: 0.58 };
+const favoriteMl = { sport: 'MLB', market: 'Moneyline', side: 'Yankees ML', odds: -130, coverProb: 0.58, homeTeam: 'Yankees', awayTeam: 'Red Sox', matchup: 'Red Sox @ Yankees' };
 const royalsDog = {
   sport: 'MLB', market: 'Moneyline', side: 'Royals ML',
   odds: 145, coverProb: 0.50, ev: 0.08, source: 'full-game',
@@ -53,8 +53,8 @@ const pubRlShape = { sport: 'MLB', betType: 'Run Line', pick: 'Athletics +1.5', 
 console.log('\nalpha control');
 check('Alpha restored to pre-coupling control version', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(src.includes('v10.3.3-alpha-lean15'));
-  assert.ok(src.includes('modelVersion: "v10.3.3-alpha-lean15"'));
+  assert.ok(src.includes('v10.3.4-alpha-no-rockies'));
+  assert.ok(src.includes('modelVersion: "v10.3.4-alpha-no-rockies"'));
 });
 check('Alpha F5 off published card', () => {
   assert.strictEqual(alpha.ALLOW_F5_ON_CARD, false);
@@ -100,7 +100,7 @@ check('Athletics plus-money ML banned even at 0.50 cover (bottom club)', () => {
   assert.strictEqual(mod.passesUnderdogMlCoverGate(athleticsFlip), true);
   assert.strictEqual(mod.passesBottomClubBan(athleticsFlip), false);
   assert.strictEqual(mod.allowOnPublishedCard(athleticsFlip), false);
-  assert.strictEqual(mod.publishedCardRejectionReason(athleticsFlip), 'bottom-quartile MLB club plus-money ML/RL banned');
+  assert.strictEqual(mod.publishedCardRejectionReason(athleticsFlip), 'Athletics/Rockies banned from published card (any market)');
 });
 check('underdog RL coverProb < 0.50 rejected (Spread + Run Line labels)', () => {
   assert.strictEqual(mod.isFullGameUnderdogRL(runLineLow), true);
@@ -135,9 +135,9 @@ check('Athletics +1.5 banned as bottom-club UD RL even with winProb >= 0.50', ()
   assert.strictEqual(mod.passesUnderdogRlWinGate(runLineMarketFav), true);
   assert.strictEqual(mod.passesBottomClubBan(runLineMarketFav), false);
   assert.strictEqual(mod.allowOnPublishedCard(runLineMarketFav), false);
-  assert.strictEqual(mod.publishedCardRejectionReason(runLineMarketFav), 'bottom-quartile MLB club plus-money ML/RL banned');
+  assert.strictEqual(mod.publishedCardRejectionReason(runLineMarketFav), 'Athletics/Rockies banned from published card (any market)');
 });
-check('favorites / totals / non-MLB not gated', () => {
+check('favorites / totals / non-MLB not gated (non-banned clubs)', () => {
   assert.strictEqual(mod.isFullGameUnderdogML(favoriteMl), false);
   assert.strictEqual(mod.allowOnPublishedCard(favoriteMl), true);
   assert.strictEqual(mod.isFullGameUnderdogRL(favoriteRl), false);
@@ -146,6 +146,12 @@ check('favorites / totals / non-MLB not gated', () => {
   assert.strictEqual(mod.allowOnPublishedCard(nflDog), true);
   assert.strictEqual(mod.isFullGameUnderdogRL(nflSpread), false);
   assert.strictEqual(mod.allowOnPublishedCard(nflSpread), true);
+});
+check('Rockies/Athletics totals and matchups banned from published card', () => {
+  const rockiesOver = { sport: 'MLB', market: 'Total', side: 'Over 11', odds: 105, coverProb: 0.54, matchup: 'Padres @ Rockies', homeTeam: 'Colorado Rockies', awayTeam: 'San Diego Padres' };
+  assert.strictEqual(mod.passesBottomClubBan(rockiesOver), false);
+  assert.strictEqual(mod.allowOnPublishedCard(rockiesOver), false);
+  assert.strictEqual(mod.publishedCardRejectionReason(rockiesOver), 'Athletics/Rockies banned from published card (any market)');
 });
 check('published-pick shape (+odds string, coverProb percent)', () => {
   assert.strictEqual(mod.isFullGameUnderdogML(pubShape), true);

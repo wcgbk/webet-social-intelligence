@@ -21,6 +21,9 @@ const RULES_PDF_URL =
 const WEEK1_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/09/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-1.pdf";
 
+const WEEK2_SOURCE_URL =
+  "https://www.circasports.com/wp-content/uploads/2026/09/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-2.pdf";
+
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
 class ContestLinesError extends Error {
@@ -208,6 +211,93 @@ const WEEK1_GAMES = [
   }),
 ];
 
+
+// Verified against the official Week 2 Contest Point Spreads PDF (image render).
+// Spreads are ½ → .5. Top team on the sheet is visitor; bottom is home.
+// Posted ~2026-09-17T17:30:37Z — after the 17:00/17:15 UTC cron slots.
+const WEEK2_GAMES = [
+  gameRow({
+    away: "Detroit Lions", home: "Buffalo Bills",
+    commenceHint: "Thu Sep 17, 5:20 PM PT", commenceTime: "2026-09-18T00:20:00.000Z",
+    awaySpread: 5.5, homeSpread: -5.5, contestIds: { away: 2, home: 1 },
+  }),
+  gameRow({
+    away: "Green Bay Packers", home: "New York Jets",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: -3.5, homeSpread: 3.5, contestIds: { away: 3, home: 4 },
+  }),
+  gameRow({
+    away: "Minnesota Vikings", home: "Chicago Bears",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: 4.5, homeSpread: -4.5, contestIds: { away: 6, home: 5 },
+  }),
+  gameRow({
+    away: "Pittsburgh Steelers", home: "New England Patriots",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: 5.5, homeSpread: -5.5, contestIds: { away: 8, home: 7 },
+  }),
+  gameRow({
+    away: "Carolina Panthers", home: "Atlanta Falcons",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: -2.5, homeSpread: 2.5, contestIds: { away: 9, home: 10 },
+  }),
+  gameRow({
+    away: "Cleveland Browns", home: "Tampa Bay Buccaneers",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: 8.5, homeSpread: -8.5, contestIds: { away: 12, home: 11 },
+  }),
+  gameRow({
+    away: "Cincinnati Bengals", home: "Houston Texans",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 14, home: 13 },
+  }),
+  gameRow({
+    away: "New Orleans Saints", home: "Baltimore Ravens",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: 8.5, homeSpread: -8.5, contestIds: { away: 16, home: 15 },
+  }),
+  gameRow({
+    away: "Philadelphia Eagles", home: "Tennessee Titans",
+    commenceHint: "Sun Sep 20, 10:00 AM PT", commenceTime: "2026-09-20T17:00:00.000Z",
+    awaySpread: -7, homeSpread: 7, contestIds: { away: 17, home: 18 },
+  }),
+  gameRow({
+    away: "Las Vegas Raiders", home: "Los Angeles Chargers",
+    commenceHint: "Sun Sep 20, 1:05 PM PT", commenceTime: "2026-09-20T20:05:00.000Z",
+    awaySpread: 6.5, homeSpread: -6.5, contestIds: { away: 20, home: 19 },
+  }),
+  gameRow({
+    away: "Jacksonville Jaguars", home: "Denver Broncos",
+    commenceHint: "Sun Sep 20, 1:05 PM PT", commenceTime: "2026-09-20T20:05:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 22, home: 21 },
+  }),
+  gameRow({
+    away: "Washington Commanders", home: "Dallas Cowboys",
+    commenceHint: "Sun Sep 20, 1:25 PM PT", commenceTime: "2026-09-20T20:25:00.000Z",
+    awaySpread: 4, homeSpread: -4, contestIds: { away: 24, home: 23 },
+  }),
+  gameRow({
+    away: "Seattle Seahawks", home: "Arizona Cardinals",
+    commenceHint: "Sun Sep 20, 1:25 PM PT", commenceTime: "2026-09-20T20:25:00.000Z",
+    awaySpread: -4, homeSpread: 4, contestIds: { away: 25, home: 26 },
+  }),
+  gameRow({
+    away: "Miami Dolphins", home: "San Francisco 49ers",
+    commenceHint: "Sun Sep 20, 1:25 PM PT", commenceTime: "2026-09-20T20:25:00.000Z",
+    awaySpread: 13, homeSpread: -13, contestIds: { away: 28, home: 27 },
+  }),
+  gameRow({
+    away: "Indianapolis Colts", home: "Kansas City Chiefs",
+    commenceHint: "Sun Sep 20, 5:20 PM PT", commenceTime: "2026-09-21T00:20:00.000Z",
+    awaySpread: 6.5, homeSpread: -6.5, contestIds: { away: 30, home: 29 },
+  }),
+  gameRow({
+    away: "New York Giants", home: "Los Angeles Rams",
+    commenceHint: "Mon Sep 21, 5:15 PM PT", commenceTime: "2026-09-22T00:15:00.000Z",
+    awaySpread: 7, homeSpread: -7, contestIds: { away: 32, home: 31 },
+  }),
+];
+
 const WEEK_FIXTURES = {
   1: {
     weekNum: 1,
@@ -215,6 +305,13 @@ const WEEK_FIXTURES = {
     fromFixture: true,
     lineSource: LINE_SOURCE,
     games: WEEK1_GAMES,
+  },
+  2: {
+    weekNum: 2,
+    sourceUrl: WEEK2_SOURCE_URL,
+    fromFixture: true,
+    lineSource: LINE_SOURCE,
+    games: WEEK2_GAMES,
   },
 };
 
@@ -250,7 +347,7 @@ function candidateSpreadUrls(weekNum, now = new Date()) {
     13: [2026, 12], 14: [2026, 12], 15: [2026, 12], 16: [2026, 12],
     17: [2026, 12], 18: [2027, 1],
   };
-  const known = { 1: WEEK1_SOURCE_URL };
+  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL };
   if (known[n]) urls.push(known[n]);
   const ym = weekMonth[n];
   if (ym) {
@@ -539,6 +636,7 @@ module.exports = {
   LINE_SOURCE,
   RULES_PDF_URL,
   WEEK1_SOURCE_URL,
+  WEEK2_SOURCE_URL,
   NICK_TO_FULL,
   ContestLinesError,
   fullTeam,
@@ -551,4 +649,5 @@ module.exports = {
   parseContestPdf,
   loadContestLines,
   WEEK1_GAMES,
+  WEEK2_GAMES,
 };

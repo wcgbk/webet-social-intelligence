@@ -402,9 +402,13 @@ check("cover ratings", () => {
 });
 check("cron windows (UTC)", () => {
   assert.strictEqual(circaCronSlot(new Date("2026-09-10T17:15:00Z")), "first");
+  assert.strictEqual(circaCronSlot(new Date("2026-09-17T17:30:00Z")), "first");
+  assert.strictEqual(circaCronSlot(new Date("2026-09-17T17:45:00Z")), "first");
+  assert.strictEqual(circaCronSlot(new Date("2026-09-17T18:00:00Z")), "first");
   assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:00:00Z")), "refresh");
   assert.strictEqual(circaCronSlot(new Date("2026-09-12T20:00:00Z")), "final");
   assert.strictEqual(circaCronSlot(new Date("2026-09-10T13:00:00Z")), null);
+  assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:30:00Z")), null);
   assert.strictEqual(circaCronSlot(new Date("2026-11-25T17:15:00Z")), "holiday-first");
   assert.strictEqual(circaCronSlot(new Date("2026-09-09T17:15:00Z")), null);
 });
@@ -440,6 +444,29 @@ check("Week 1 fixture matches official sheet (Browns +8.5 / Jaguars -8.5)", () =
   const pats = fx.games.find(g => /Patriots/.test(g.away));
   assert.strictEqual(pats.homeSpread, -3);
   assert.strictEqual(pats.awaySpread, 3);
+});
+check("Week 2 fixture matches official sheet (Lions +5.5 / Bills -5.5)", () => {
+  const fx = lines.getWeekFixture(2);
+  assert.ok(fx);
+  assert.strictEqual(fx.weekNum, 2);
+  assert.strictEqual(fx.lineSource, "circa-contest-pdf");
+  assert.strictEqual(fx.games.length, 16);
+  assert.ok(/Week-2\.pdf/.test(fx.sourceUrl));
+  const tnf = fx.games.find(g => /Lions/.test(g.away) && /Bills/.test(g.home));
+  assert.ok(tnf, "Lions @ Bills missing");
+  assert.strictEqual(tnf.awaySpread, 5.5);
+  assert.strictEqual(tnf.homeSpread, -5.5);
+  assert.strictEqual(tnf.commenceTime, "2026-09-18T00:20:00.000Z");
+  const pack = fx.games.find(g => /Packers/.test(g.away) && /Jets/.test(g.home));
+  assert.strictEqual(pack.awaySpread, -3.5);
+  assert.strictEqual(pack.homeSpread, 3.5);
+  const dol = fx.games.find(g => /Dolphins/.test(g.away) && /49ers/.test(g.home));
+  assert.strictEqual(dol.awaySpread, 13);
+  assert.strictEqual(dol.homeSpread, -13);
+  const mon = fx.games.find(g => /Giants/.test(g.away) && /Rams/.test(g.home));
+  assert.strictEqual(mon.awaySpread, 7);
+  assert.strictEqual(mon.homeSpread, -7);
+  assert.strictEqual(mon.commenceTime, "2026-09-22T00:15:00.000Z");
 });
 check("½ parses to .5", () => {
   assert.strictEqual(lines.parseSpreadToken("+8½"), 8.5);
@@ -626,8 +653,9 @@ console.log("netlify.toml");
 check("circa trigger cron + background comment block", () => {
   assert.ok(toml.includes('[functions."trigger-picks-circa"]'));
   assert.ok(toml.includes('[functions."generate-picks-circa-background"]'));
-  assert.ok(toml.includes("15 17") || toml.includes("0,15 17,20"));
+  assert.ok(toml.includes("0,15,30,45 17,18,20") || toml.includes("0,15 17,20"));
   assert.ok(/10:15 AM PT/.test(toml));
+  assert.ok(/10:30|late-PDF catch-up/.test(toml));
   assert.ok(/1:00 PM PT/.test(toml));
   assert.ok(/2026-11-25/.test(toml) && /2026-12-23/.test(toml));
 });
@@ -663,16 +691,30 @@ async function runAsync() {
     console.error("  FAIL loadContestLines week 1 fixture: " + e.message);
   }
   try {
+    const board2 = await lines.loadContestLines(2, { skipFetch: true });
+    assert.strictEqual(board2.weekNum, 2);
+    assert.strictEqual(board2.lineSource, "circa-contest-pdf");
+    assert.ok(board2.fromFixture);
+    assert.ok(board2.games.length >= 16);
+    const tnf = board2.games.find(g => /Lions/.test(g.away) && /Bills/.test(g.home));
+    assert.strictEqual(tnf.awaySpread, 5.5);
+    assert.strictEqual(tnf.homeSpread, -5.5);
+    console.log("  ok  loadContestLines week 2 fixture");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL loadContestLines week 2 fixture: " + e.message);
+  }
+  try {
     let threw = false;
-    try { await lines.loadContestLines(2, { skipFetch: true }); }
+    try { await lines.loadContestLines(3, { skipFetch: true }); }
     catch (e) {
       threw = e instanceof lines.ContestLinesError || /not available/.test(e.message);
     }
-    assert.ok(threw, "week 2 without PDF/fixture must refuse (no Pinnacle fallback)");
-    console.log("  ok  week 2 without sheet throws");
+    assert.ok(threw, "week 3 without PDF/fixture must refuse (no Pinnacle fallback)");
+    console.log("  ok  week 3 without sheet throws");
   } catch (e) {
     failed++;
-    console.error("  FAIL week 2 without sheet throws: " + e.message);
+    console.error("  FAIL week 3 without sheet throws: " + e.message);
   }
 
   console.log("lib/circa-live-grade async");

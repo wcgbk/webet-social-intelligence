@@ -2,6 +2,7 @@
 // Circa Million VIII weekly ATS card. See netlify.toml for UTC crons (PT comments).
 // Intended windows (Sep = PDT = UTC-7):
 //   Thu 17:15 UTC (10:15 AM PT) — first card after Circa lines post ~10:00 AM PT
+//   Thu 17:30 / 17:45 / 18:00 UTC (10:30 / 10:45 / 11:00 AM PT) — late-PDF catch-up
 //   Fri 17:00 UTC (10:00 AM PT) — refresh
 //   Sat 20:00 UTC (1:00 PM PT)  — final, well before Sat 4:00 PM PT deadline
 // Holiday TODO / implemented via the Wed slot in the union cron:

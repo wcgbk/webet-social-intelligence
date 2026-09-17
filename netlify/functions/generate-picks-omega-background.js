@@ -1,5 +1,5 @@
 // generate-picks-omega-background.js
-// v11.9-omega-always-3 — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
+// v11.9.1-omega-fill15 — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
 // Soft MLB total diversity (prefer non-same-dir when alternatives exist), then fill to 3.
 // Keep F5/UD/A's gates + Claude verify-only + chooseParlay2or3.
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
@@ -28,7 +28,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.9-omega-always-3";
+const MODEL_VERSION = "v11.9.1-omega-fill15";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -6331,7 +6331,7 @@ exports.handler = async (event) => {
         const leanDeferred = [];
         for (const c of leanAll) {
           if (!allowOnPublishedCard(c) || !hasPositiveEdge(c)) continue;
-          if (isFootballSport(c.sport)) continue;
+          // v11.9.1: allow football/NBA/NHL leans to fill thin MLB midweeks
           if (c.ev < leanFloorFor(c)) continue;
           if ((c.coverProb || 0) < sportCoverFloor(c.sport)) continue;
           if (!passesPredClvGate(c) || !passesCfbBlowoutGate(c)) continue;
@@ -6574,10 +6574,10 @@ exports.handler = async (event) => {
 // book. The parlay (if any) is also sized at the lean amount, per spec.
 const LEAN_UNITS = 0.25;
 // Two-tier EV floor: conviction = sport floors via computeEdgeTable(0.03+). Lean backfill uses
-// LEAN_EV_FLOOR for non-MLB/non-football; MLB leans require MLB_LEAN_EV_FLOOR (2.0%); football
+// LEAN_EV_FLOOR for non-MLB/non-football; MLB leans require MLB_LEAN_EV_FLOOR (1.5%); football
 // leans never go below sportEvFloor. Skip lean fill when a football YES is already on the card.
 const LEAN_EV_FLOOR = 0.015;
-const MLB_LEAN_EV_FLOOR = 0.02;
+const MLB_LEAN_EV_FLOOR = 0.015; // align with Alpha lean contract 1.5%
 // Keep at most one candidate per matchup (game): prefer a validated full-game pick over an F5 leg, then
 // higher EV. The deterministic fallback paths select top-N directly (no in-selection dedup), so without
 // this they could publish a full-game + F5 pick from the same game (positively correlated).

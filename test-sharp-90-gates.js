@@ -14,10 +14,10 @@ function check(name, fn) {
 }
 
 console.log('\nalpha control restore');
-check('Alpha generator is v10.3.2-alpha-parlay-keep (F5 off)', () => {
+check('Alpha generator is v10.3.3-alpha-lean15 (F5 off)', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(src.includes('v10.3.2-alpha-parlay-keep'));
-  assert.ok(src.includes('modelVersion: "v10.3.2-alpha-parlay-keep"'));
+  assert.ok(src.includes('v10.3.3-alpha-lean15'));
+  assert.ok(src.includes('modelVersion: "v10.3.3-alpha-lean15"'));
   assert.ok(!src.includes('v10.8-alpha-3plus-parlay2v3'));
   assert.ok(src.includes('ALLOW_F5_ON_CARD = false'));
   assert.ok(src.includes('F5_MAX_SLOTS = 0'));
@@ -38,7 +38,7 @@ check('Alpha get-picks/get-results restored to pre-coupling control', () => {
 
 console.log('\nomega sharp-90 / fill gates');
 check('Omega version', () => {
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.9-omega-always-3');
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.9.1-omega-fill15');
 });
 check('F5 stays off MAIN', () => {
   assert.strictEqual(omega.ALLOW_F5_ON_CARD, false);

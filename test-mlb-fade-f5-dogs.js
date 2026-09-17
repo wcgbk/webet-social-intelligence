@@ -53,8 +53,8 @@ const pubRlShape = { sport: 'MLB', betType: 'Run Line', pick: 'Athletics +1.5', 
 console.log('\nalpha control');
 check('Alpha restored to pre-coupling control version', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-alpha-background.js'), 'utf8');
-  assert.ok(src.includes('v10.3.2-alpha-parlay-keep'));
-  assert.ok(src.includes('modelVersion: "v10.3.2-alpha-parlay-keep"'));
+  assert.ok(src.includes('v10.3.3-alpha-lean15'));
+  assert.ok(src.includes('modelVersion: "v10.3.3-alpha-lean15"'));
 });
 check('Alpha F5 off published card', () => {
   assert.strictEqual(alpha.ALLOW_F5_ON_CARD, false);
@@ -69,7 +69,7 @@ check('Alpha still has no NFL/CFB sport keys', () => {
 console.log('\nomega');
 const mod = omega;
 check('model version bumped', () => {
-  assert.ok(/^v11\.(6|7|8|9)-/.test(mod.MODEL_VERSION));
+  assert.ok(/^v11\.(6|7|8|9)(\.\d+)?-/.test(mod.MODEL_VERSION));
 });
 check('F5 constants', () => {
   assert.strictEqual(mod.ALLOW_F5_ON_CARD, false);

@@ -850,7 +850,8 @@
   }
 
   function pendingCopy(sec) {
-    if (sec.pendingMessage) return sec.pendingMessage;
+    // Stale pendingMessage must not win when picks already exist.
+    if (sec.pendingMessage && !(sec.picks || []).length) return sec.pendingMessage;
     const n = sec.weekNum || ((sec.week || '').match(/W0?(\d+)/i) || [])[1] || '';
     const weekBit = n ? ('Week ' + n) : 'Week';
     return weekBit + ' card pending — lines post Thu 10am PT; final card before Sat 4pm PT';
@@ -1133,9 +1134,14 @@
     if (sec.preview && picks.length) banner.removeAttribute('hidden');
     else banner.setAttribute('hidden', '');
 
-    if (!picks.length || sec.pending) {
+    // Belt-and-suspenders: live picks win over a stale pending flag/message.
+    if (!picks.length) {
       renderPending(sec);
       return;
+    }
+    if (sec.pending && picks.length) {
+      sec.pending = false;
+      if (sec.pendingMessage) sec.pendingMessage = null;
     }
 
     document.getElementById('nfl-week-label').textContent = sec.weekLabel || '';

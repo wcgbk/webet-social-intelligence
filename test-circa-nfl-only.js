@@ -421,6 +421,40 @@ check("exports handler + payload helpers", () => {
   assert.strictEqual(getPicks.hasLivePicks({ picks: [{ pick: "Jets +3" }] }), true);
   assert.strictEqual(getPicks.hasLivePicks({ preview: true, picks: [{ pick: "Jets +3" }] }), false);
 });
+check("normalizePayload clears stale pendingMessage when live picks exist", () => {
+  const weekInfo = { weekNum: 2, week: "2026-W02" };
+  const raw = {
+    weekNum: 2,
+    week: "2026-W02",
+    picks: [
+      { pick: "Giants +7", sport: "NFL", betType: "spread" },
+      { pick: "Chiefs -6.5", sport: "NFL", betType: "spread" },
+    ],
+    pendingMessage: "Week 2 card pending — lines post Thu 10am PT; final card before Sat 4pm PT",
+    noPlays: "Week 2 card pending — lines post Thu 10am PT; final card before Sat 4pm PT",
+    error: true,
+    errorCode: "contest-pdf-unavailable",
+    errorMessage: "stale",
+    weeks: [
+      { label: "Week 1", status: "completed", current: false, points: 3 },
+      { label: "Week 2", status: "pending", current: true },
+    ],
+  };
+  const out = getPicks.normalizePayload(raw, weekInfo);
+  assert.strictEqual(out.pending, false);
+  assert.strictEqual(out.pendingMessage, null);
+  assert.strictEqual(out.noPlays, null);
+  assert.strictEqual(out.error, false);
+  assert.strictEqual(out.errorCode, null);
+  assert.strictEqual(out.errorMessage, null);
+  assert.strictEqual(out.picks.length, 2);
+  const w1 = out.weeks.find(w => w.label === "Week 1");
+  const w2 = out.weeks.find(w => w.label === "Week 2" || w.current);
+  assert.ok(w1, "Week 1 preserved");
+  assert.strictEqual(w1.status, "completed");
+  assert.ok(w2, "Week 2 present");
+  assert.strictEqual(w2.status, "live");
+});
 
 console.log("lib/circa-contest-lines");
 check("Week 1 fixture matches official sheet (Browns +8.5 / Jaguars -8.5)", () => {
@@ -640,8 +674,20 @@ check("live card payload is flat (not nested under .nfl)", () => {
   });
   assert.strictEqual(card.contest, "Circa Million VIII");
   assert.strictEqual(card.preview, false);
+  assert.strictEqual(card.pending, false);
   assert.ok(Array.isArray(card.picks));
   assert.ok(!card.nfl);
+  assert.ok(!("pendingMessage" in card) || card.pendingMessage == null);
+  assert.ok(!("noPlays" in card) || card.noPlays == null);
+  const cur = (card.weeks || []).find(w => w.current);
+  assert.ok(cur);
+  assert.strictEqual(cur.status, "live");
+});
+check("UI treats picks as live even if pending flag/message is stale", () => {
+  const html = fs.readFileSync(path.join(root, "circa/index.html"), "utf8");
+  assert.ok(/Belt-and-suspenders: live picks win over a stale pending/.test(html));
+  assert.ok(!/if \(!picks\.length \|\| sec\.pending\)/.test(html));
+  assert.ok(/if \(!picks\.length\)/.test(html));
 });
 
 console.log("trigger-picks-circa");

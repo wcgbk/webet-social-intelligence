@@ -480,6 +480,7 @@ function strategyForCard(picks, weekNum, lineNotes) {
 /**
  * Intended Circa cron windows (UTC). Sep = PDT = UTC-7.
  *   Thu 17:15 — first card (10:15 AM PT)
+ *   Thu 17:30 / 17:45 / 18:00 — late-PDF catch-up (10:30 / 10:45 / 11:00 AM PT)
  *   Fri 17:00 — refresh (10:00 AM PT)
  *   Sat 20:00 — final (1:00 PM PT)
  * Holiday: Wed 17:15 UTC on 2026-11-25 and 2026-12-23.
@@ -490,7 +491,8 @@ function circaCronSlot(now = new Date(), slackMin = 12) {
   const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
   const near = (h, m) => Math.abs(mins - (h * 60 + m)) <= slackMin;
   const ymdPT = ymdInTz(now, "America/Los_Angeles");
-  if (day === 4 && near(17, 15)) return "first";
+  // Thu first + catch-up: Circa sometimes posts after the 10:00/10:15 AM PT slots.
+  if (day === 4 && (near(17, 15) || near(17, 30) || near(17, 45) || near(18, 0))) return "first";
   if (day === 5 && near(17, 0)) return "refresh";
   if (day === 6 && near(20, 0)) return "final";
   if (day === 3 && near(17, 15) && HOLIDAY_LINES_POST[ymdPT]) return "holiday-first";

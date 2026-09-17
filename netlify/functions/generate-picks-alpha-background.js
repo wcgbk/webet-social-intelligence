@@ -1,5 +1,5 @@
 // generate-picks-alpha-background.js
-// v10.3.3-alpha-lean15 — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
+// v10.3.4-alpha-no-rockies — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // F5 may still be computed for analytics/odds attach, but ALLOW_F5_ON_CARD=false keeps it
 // out of the selectable/published YES pool and parlays (same product rule as Omega MAIN).
@@ -3726,6 +3726,10 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
       console.log(`[v10-beta] WARNING: Claude selected rank ${sel.candidateRank} which is not in candidate table — skipping`);
       continue;
     }
+    if (involvesBannedMlbClub(c)) {
+      console.log(`[v10-ban] Skipping banned club side: ${c.side}`);
+      continue;
+    }
 
     // ── EV INVARIANT (single serialization choke-point) ──
     // EV is DEFINED as the Kelly edge of the CURRENT coverProb at the CURRENT price. Any upstream
@@ -4084,6 +4088,7 @@ function buildCorrelatedParlay(picks, allCandidates, rejections) {
 
   // Filter candidates for parlay eligibility
   const eligible = allCandidates.filter(c => {
+    if (involvesBannedMlbClub(c)) return false;
     // Never use a candidate that was explicitly rejected for THIS matchup
     if (rejectedKeys.has(rejectKey(c))) return false;
     const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb) || 0;
@@ -4794,12 +4799,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3.3-alpha-lean15",
+      date: dateISO, dateFormatted, model: "v10.3.4-alpha-no-rockies",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.3-alpha-lean15" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.4-alpha-no-rockies" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4809,7 +4814,7 @@ exports.handler = async (event) => {
   }
 
   // ── PHASE 2: CLAUDE AS VALIDATOR + NARRATOR ──
-  const candidateTable = allCandidates.slice(0, 15);
+  const candidateTable = allCandidates.filter(c => !involvesBannedMlbClub(c)).slice(0, 15);
   const userMessage = formatCandidateTable(candidateTable, dateISO, dateFormatted);
 
   console.log(`[v10] Sending ${candidateTable.length} candidates to Claude (${userMessage.length} chars)`);
@@ -4900,6 +4905,7 @@ exports.handler = async (event) => {
         const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
+          !involvesBannedMlbClub(c) &&
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
           !pickedGames.has((c.matchup || '').toLowerCase().trim()) &&
           !picks.find(p => p.pick === c.side)
@@ -4974,7 +4980,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3.3-alpha-lean15",
+      model: "v10.3.4-alpha-no-rockies",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4984,7 +4990,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3.3-alpha-lean15",
+        modelVersion: "v10.3.4-alpha-no-rockies",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5033,6 +5039,20 @@ exports.handler = async (event) => {
 // thinSlate:true so the results tracker scores them separately from the conviction
 // book. The parlay (if any) is also sized at the lean amount, per spec.
 const LEAN_UNITS = 0.25;
+
+// Founder 2026-09-17: Athletics/Rockies off published Alpha cards (any market).
+function isMlbBottomClubName(name) {
+  const s = String(name || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return false;
+  return /\bathletics\b/.test(s) || /\brockies\b/.test(s);
+}
+function involvesBannedMlbClub(c) {
+  if (!c) return false;
+  if (String(c.sport || "") !== "MLB") return false;
+  const blob = [c.side, c.pick, c.matchup, c.homeTeam, c.awayTeam].map(x => String(x || "")).join(" ");
+  return isMlbBottomClubName(blob);
+}
+
 // Keep at most one candidate per matchup (game): prefer a validated full-game pick over an F5 leg, then
 // higher EV. The deterministic fallback paths select top-N directly (no in-selection dedup), so without
 // this they could publish a full-game + F5 pick from the same game (positively correlated).
@@ -5050,7 +5070,7 @@ function dedupeCandidatesByGame(cands) {
 
 async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) {
   console.log(`[v10-lean] Building thin-slate Lean card from ${leanCandidates.length} candidate(s)`);
-  const top = dedupeCandidatesByGame(leanCandidates).slice(0, 3);
+  const top = dedupeCandidatesByGame(leanCandidates.filter(c => !involvesBannedMlbClub(c))).slice(0, 3);
   const picks = top.map(c => {
     const isF5 = (c.market || '').startsWith('F5');
     const isF5Total = c.market === 'F5 Total';
@@ -5123,11 +5143,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.3-alpha-lean15",
+    date: dateISO, dateFormatted, model: "v10.3.4-alpha-no-rockies",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.3-alpha-lean15" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.4-alpha-no-rockies" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5211,11 +5231,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.3-alpha-lean15",
+    date: dateISO, dateFormatted, model: "v10.3.4-alpha-no-rockies",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.3-alpha-lean15" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.4-alpha-no-rockies" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };

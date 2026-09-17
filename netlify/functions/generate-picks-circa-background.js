@@ -781,6 +781,15 @@ async function storeCard(weekStr, picksData, force, scheduled, now) {
     const cur = (picksData.weeks || []).find(w => w.current);
     const st = cur && String(cur.status || "").toLowerCase();
     if (cur && st !== "completed" && st !== "graded" && st !== "final") cur.status = "live";
+    // Live cards must never carry leftover pending empty-state fields.
+    picksData.pending = false;
+    picksData.preview = false;
+    delete picksData.pendingMessage;
+    delete picksData.noPlays;
+    if (!picksData.error) {
+      delete picksData.errorCode;
+      delete picksData.errorMessage;
+    }
   }
 
   const ok = await putBlob(key, picksData);
@@ -792,6 +801,12 @@ async function storeCard(weekStr, picksData, force, scheduled, now) {
 }
 
 function liveCardPayload({ weekNum, week, picks, strategy, sourceUrl, rulesUrl }) {
+  const weeks = defaultWeeks(weekNum);
+  const cur = weeks.find(w => w.current);
+  if (cur && Array.isArray(picks) && picks.length) {
+    const st = String(cur.status || "").toLowerCase();
+    if (st !== "completed" && st !== "graded" && st !== "final") cur.status = "live";
+  }
   return {
     preview: false,
     pending: false,
@@ -804,13 +819,14 @@ function liveCardPayload({ weekNum, week, picks, strategy, sourceUrl, rulesUrl }
     weekNum,
     picks,
     kpis: defaultKpis(),
-    weeks: defaultWeeks(weekNum),
+    weeks,
     modelVersion: MODEL_VERSION,
     model: MODEL_VERSION,
     generatedAt: new Date().toISOString(),
     lineSource: CONTEST_LINE_SOURCE,
     sourceUrl: sourceUrl || null,
     rulesUrl: rulesUrl || CONTEST.rulesUrl || RULES_PDF_URL,
+    // Explicitly omit pending empty-state fields on live cards.
   };
 }
 

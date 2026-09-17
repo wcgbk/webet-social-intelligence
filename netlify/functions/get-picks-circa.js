@@ -44,10 +44,23 @@ function hasLivePicks(data) {
 function normalizePayload(data, weekInfo) {
   if (!data || typeof data !== "object") return pendingPayload(weekInfo);
   const weekNum = data.weekNum || weekInfo.weekNum;
+  const picks = Array.isArray(data.picks) ? data.picks : [];
+  const live = hasLivePicks(data);
+  const weeksSrc = Array.isArray(data.weeks) && data.weeks.length ? data.weeks.map((w) => ({ ...w })) : defaultWeeks(weekNum);
+  if (live) {
+    const cur = weeksSrc.find((w) => w.current) || weeksSrc.find((w) => {
+      const m = String(w.label || "").match(/week\s*(\d+)/i);
+      return m && Number(m[1]) === Number(weekNum);
+    });
+    if (cur) {
+      const st = String(cur.status || "").toLowerCase();
+      if (st !== "completed" && st !== "graded" && st !== "final") cur.status = "live";
+    }
+  }
+  const realError = !live && !!data.error;
   return {
-    preview: !!data.preview,
-    pending: !hasLivePicks(data),
-    error: false,
+    preview: live ? false : !!data.preview,
+    pending: !live,
     contest: data.contest || CONTEST.name,
     weekLabel: data.weekLabel || pendingPayload(weekInfo).weekLabel,
     dateFormatted: data.dateFormatted || pendingPayload(weekInfo).dateFormatted,
@@ -55,22 +68,21 @@ function normalizePayload(data, weekInfo) {
     strategy: data.strategy || pendingPayload(weekInfo).strategy,
     week: data.week || weekInfo.week,
     weekNum,
-    picks: Array.isArray(data.picks) ? data.picks : [],
+    picks,
     kpis: data.kpis || defaultKpis(),
-    weeks: visibleWeeks(
-      Array.isArray(data.weeks) && data.weeks.length ? data.weeks : defaultWeeks(weekNum),
-      Array.isArray(data.picks) ? data.picks : []
-    ),
+    weeks: visibleWeeks(weeksSrc, picks),
     modelVersion: data.modelVersion || data.model || CONTEST.modelVersion,
     generatedAt: data.generatedAt || null,
-    pendingMessage: data.pendingMessage || pendingPayload(weekInfo).pendingMessage,
+    // Never echo a stale pendingMessage once the card has live picks.
+    pendingMessage: live ? null : (data.pendingMessage || pendingPayload(weekInfo).pendingMessage),
+    noPlays: live ? null : (data.noPlays || null),
     lineSourceNote: data.lineSourceNote || null,
     lineSource: data.lineSource || null,
     sourceUrl: data.sourceUrl || null,
     rulesUrl: data.rulesUrl || CONTEST.rulesUrl,
-    error: !!data.error,
-    errorCode: data.errorCode || null,
-    errorMessage: data.errorMessage || null,
+    error: realError,
+    errorCode: realError ? (data.errorCode || null) : null,
+    errorMessage: realError ? (data.errorMessage || null) : null,
   };
 }
 

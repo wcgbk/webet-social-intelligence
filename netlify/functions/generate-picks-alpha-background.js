@@ -1,5 +1,5 @@
 // generate-picks-alpha-background.js
-// v10.3.2-alpha-parlay-keep — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
+// v10.3.3-alpha-lean15 — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // F5 may still be computed for analytics/odds attach, but ALLOW_F5_ON_CARD=false keeps it
 // out of the selectable/published YES pool and parlays (same product rule as Omega MAIN).
@@ -4794,12 +4794,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3.2-alpha-parlay-keep",
+      date: dateISO, dateFormatted, model: "v10.3.3-alpha-lean15",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.2-alpha-parlay-keep" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.3-alpha-lean15" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4884,7 +4884,7 @@ exports.handler = async (event) => {
     }
 
     // ── LEAN TIER TOP-UP ──
-    // Claude rejected picks down below 3. Pull from the +3% EV lean tier to fill up.
+    // Claude left us below 3. Pull from the contract lean tier (+1.5% EV) to fill.
     // Never use a side Claude explicitly rejected — only candidates it didn't see or
     // ranked lower than the conviction bar.
     if (picks.length < 3) {
@@ -4897,7 +4897,7 @@ exports.handler = async (event) => {
         }).filter(Boolean)
       );
       try {
-        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.03, weatherData);
+        const leanAll = computeEdgeTable(espnData, ratingsData, teamStats, consensusLookup, bankrollCtx.drawdownActive, calibrationData, pitcherData, 0.015, weatherData);
         leanAll.sort((a, b) => b.ev - a.ev);
         const topUps = leanAll.filter(c =>
           !rejectedSides.has((c.side || '').toLowerCase().trim()) &&
@@ -4974,7 +4974,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3.2-alpha-parlay-keep",
+      model: "v10.3.3-alpha-lean15",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4984,7 +4984,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3.2-alpha-parlay-keep",
+        modelVersion: "v10.3.3-alpha-lean15",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5123,11 +5123,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.2-alpha-parlay-keep",
+    date: dateISO, dateFormatted, model: "v10.3.3-alpha-lean15",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.2-alpha-parlay-keep" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.3-alpha-lean15" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5211,11 +5211,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.2-alpha-parlay-keep",
+    date: dateISO, dateFormatted, model: "v10.3.3-alpha-lean15",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.2-alpha-parlay-keep" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.3-alpha-lean15" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };

@@ -38,7 +38,13 @@ check('Alpha get-picks/get-results restored to pre-coupling control', () => {
 
 console.log('\nomega sharp-90 / fill gates');
 check('Omega version', () => {
-  assert.strictEqual(omega.MODEL_VERSION, 'v11.9.2-omega-no-rockies');
+  assert.strictEqual(omega.MODEL_VERSION, 'v11.9.3-omega-no-nba-nhl');
+check('NBA/NHL off Omega until regular season', () => {
+  assert.strictEqual(omega.ENABLE_NBA_NHL, false);
+  assert.ok(!omega.ODDS_SPORTS.includes('basketball_nba'));
+  assert.ok(!omega.ODDS_SPORTS.includes('icehockey_nhl'));
+  assert.ok(!omega.ESPN_LEAGUES.some(l => l.label === 'NBA' || l.label === 'NHL'));
+});
 });
 check('F5 stays off MAIN', () => {
   assert.strictEqual(omega.ALLOW_F5_ON_CARD, false);

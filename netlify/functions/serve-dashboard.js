@@ -100,12 +100,24 @@ exports.handler = async (event) => {
       .split('WeBetAI - Social Intelligence | Dashboard').join(escHtml(title))
       .split(`content="${BASE_DESC}"`).join(`content="${escAttr(desc)}"`)
       .split('content="https://webetsocial.com/dashboard"').join(`content="${escAttr(url)}"`);
-    // Plain /dashboard uses the Betty daily card (chat CTA). Panel shares (?view=)
-    // keep the default Earth OG + panel title so picks/etc. show normal page metadata.
-    html = html.split('content="https://webetsocial.com/daily-betty-og-v13.jpg"').join('content="https://webetsocial.com/og-image.png"');
-    html = html.split('content="https://webetsocial.com/daily-betty-og.jpg"').join('content="https://webetsocial.com/og-image.png"');
-    html = html.split('content="https://webetsocial.com/daily-alpha-og-card.jpg"').join('content="https://webetsocial.com/og-image.png"');
-    html = html.split('content="https://webetsocial.com/daily-alpha-og-card.jpg?v=20260902"').join('content="https://webetsocial.com/og-image.png"');
+    // NFL Betty share card: ?view=nfl unfurls daily-betty-nfl-og-v1.jpg (main NFL X post).
+    // Other panel shares keep Earth og-image.png + panel title.
+    if (rawView === 'nfl') {
+      const og = `${SITE_URL}/daily-betty-nfl-og-v1.jpg`;
+      html = html
+        .split('content="https://webetsocial.com/daily-betty-og-v13.jpg"').join(`content="${escAttr(og)}"`)
+        .split('content="https://webetsocial.com/daily-betty-og.jpg"').join(`content="${escAttr(og)}"`)
+        .split('content="https://webetsocial.com/daily-alpha-og-card.jpg"').join(`content="${escAttr(og)}"`)
+        .split('content="https://webetsocial.com/daily-alpha-og-card.jpg?v=20260902"').join(`content="${escAttr(og)}"`)
+        .split('content="https://webetsocial.com/og-image.png"').join(`content="${escAttr(og)}"`);
+    } else {
+      // Plain /dashboard uses the Betty daily card (chat CTA). Panel shares (?view=)
+      // keep the default Earth OG + panel title so picks/etc. show normal page metadata.
+      html = html.split('content="https://webetsocial.com/daily-betty-og-v13.jpg"').join('content="https://webetsocial.com/og-image.png"');
+      html = html.split('content="https://webetsocial.com/daily-betty-og.jpg"').join('content="https://webetsocial.com/og-image.png"');
+      html = html.split('content="https://webetsocial.com/daily-alpha-og-card.jpg"').join('content="https://webetsocial.com/og-image.png"');
+      html = html.split('content="https://webetsocial.com/daily-alpha-og-card.jpg?v=20260902"').join('content="https://webetsocial.com/og-image.png"');
+    }
   }
 
   return {

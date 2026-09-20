@@ -1,5 +1,5 @@
 // generate-picks-omega-background.js
-// v11.9.2-omega-no-rockies — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
+// v11.9.3-omega-no-nba-nhl — product: ALWAYS 3 straights + optimized 2-or-3 parlay (parlays = P&L).
 // Soft MLB total diversity (prefer non-same-dir when alternatives exist), then fill to 3.
 // Keep F5/UD/A's gates + Claude verify-only + chooseParlay2or3.
 // (RL fail-closed if winProb missing) + bottom-club plus-money ML/RL ban.
@@ -28,7 +28,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
-const MODEL_VERSION = "v11.9.2-omega-no-rockies";
+const MODEL_VERSION = "v11.9.3-omega-no-nba-nhl";
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select from a large candidate table, compute projections, probabilities, or Kelly sizing — the statistical model has already done this AND already locked the straight card via diversification.
@@ -87,9 +87,10 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
 }`;
 
 // ── Sport keys for The Odds API ──
+// NBA/NHL: OFF until regular season tip-off (founder 2026-09-20). Preseason junk was landing on MAIN.
+const ENABLE_NBA_NHL = false;
 const ODDS_SPORTS = [
-  "basketball_nba",
-  "icehockey_nhl",
+  ...(ENABLE_NBA_NHL ? ["basketball_nba", "icehockey_nhl"] : []),
   // "basketball_ncaab", // v10.1: disabled — 48.7% accuracy, -7.0% ROI in backtest. Re-enable next season.
   "baseball_mlb",
   "americanfootball_nfl",
@@ -107,10 +108,12 @@ const ODDS_SPORTS = [
 
 // ── ESPN sport/league slugs ──
 const ESPN_LEAGUES = [
-  { sport: "basketball", league: "nba", label: "NBA", homeAdv: 100, kFactor: 20, baseElo: 1500 },
-  // NHL: kFactor=6 per FiveThirtyEight methodology (high luck sport, low-count discrete events).
-  // homeAdv=50 per published NHL Elo calibration (Neil Paine / FiveThirtyEight).
-  { sport: "hockey", league: "nhl", label: "NHL", homeAdv: 50, kFactor: 6, baseElo: 1500 },
+  ...(ENABLE_NBA_NHL ? [
+    { sport: "basketball", league: "nba", label: "NBA", homeAdv: 100, kFactor: 20, baseElo: 1500 },
+    // NHL: kFactor=6 per FiveThirtyEight methodology (high luck sport, low-count discrete events).
+    // homeAdv=50 per published NHL Elo calibration (Neil Paine / FiveThirtyEight).
+    { sport: "hockey", league: "nhl", label: "NHL", homeAdv: 50, kFactor: 6, baseElo: 1500 },
+  ] : []),
   // { sport: "basketball", league: "mens-college-basketball", label: "NCAAB", homeAdv: 120, kFactor: 32, baseElo: 1500 }, // v10.1: disabled
 
   // MLB: kFactor=4 per FiveThirtyEight (highest luck component in major team sports).
@@ -343,6 +346,9 @@ function passesBottomClubBan(c) {
   return true;
 }
 function publishedCardRejectionReason(c) {
+  if (!ENABLE_NBA_NHL && c && (c.sport === "NBA" || c.sport === "NHL")) {
+    return "NBA/NHL disabled on Omega until regular season";
+  }
   if (!allowOnOmegaCard(c)) {
     return "F5 disabled on Omega MAIN card (ALLOW_F5_ON_CARD=false) — computed for analytics only.";
   }
@@ -355,6 +361,7 @@ function publishedCardRejectionReason(c) {
   return null;
 }
 function allowOnPublishedCard(c) {
+  if (!ENABLE_NBA_NHL && c && (c.sport === "NBA" || c.sport === "NHL")) return false;
   return allowOnOmegaCard(c) && passesUnderdogMlCoverGate(c) && passesUnderdogRlCoverGate(c) && passesUnderdogRlWinGate(c) && passesBottomClubBan(c);
 }
 function shouldLeanPadToThree(currentCount) {
@@ -7087,6 +7094,7 @@ module.exports.fetchPitcherFIP = fetchPitcherFIP;
 // v10.4 test-only exports (offline validation; no effect on the deployed handler)
 module.exports._testV104 = { pitcherForGame, parlayUnitsFor, applyMarketUnitCaps, findConsensusLine, buildConsensusLookup, computeLineMovementSignal, getCalibratedCoverProb, noVigProb, buildCorrelatedParlay, buildFallbackParlay, selectParlayLegs, assembleParlay, parlayMarketRank, chooseParlay2or3, parlayComboStats, bestParlayComboOfSize };
 module.exports.MODEL_VERSION = MODEL_VERSION;
+module.exports.ENABLE_NBA_NHL = ENABLE_NBA_NHL;
 module.exports.ODDS_SPORTS = ODDS_SPORTS;
 module.exports.ESPN_LEAGUES = ESPN_LEAGUES;
 module.exports.SPORT_STD_DEVS = SPORT_STD_DEVS;

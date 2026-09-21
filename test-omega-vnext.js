@@ -18,7 +18,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.0.1-omega-vnext-clv');
+assert.strictEqual(config.MODEL_VERSION, 'v12.0.2-omega-vnext-clv');
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
 assert.strictEqual(config.LEAN_PAD, false);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);
@@ -58,6 +58,22 @@ assert.deepStrictEqual(nhl.project({}), []);
 assert.strictEqual(typeof mlb.project, 'function');
 assert.strictEqual(typeof nfl.project, 'function');
 assert.strictEqual(typeof cfb.project, 'function');
+
+const narrate = require(path.join(root, 'narrate'));
+const fb = narrate.buildFallbackNarrative({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105' });
+assert.ok(fb.includes('WeBetAI'));
+assert.ok(!/clears Omega vNext gates|predicted CLV/i.test(fb));
+const replaced = narrate.ensureNarrative({
+  pick: 'Lakers ML', matchup: 'A @ B', sport: 'NBA', odds: '+120',
+  coreReasoning: 'clears Omega vNext gates: calibrated cover 67%, predicted CLV 3¢. Method: sport-hybrid.',
+});
+assert.ok(!/clears Omega vNext gates/i.test(replaced.coreReasoning));
+assert.ok(replaced.coreReasoning.length > 40);
+
+// Parlay legs should expose coreReasoning field for public cards
+if (parlays.length) {
+  assert.ok('coreReasoning' in parlays[0].legs[0]);
+}
 
 console.log('PASS test-omega-vnext', {
   MODEL_VERSION,

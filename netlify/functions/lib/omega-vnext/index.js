@@ -11,6 +11,7 @@ const { selectStraights, toPickObject, applyDailyCap } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
+const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks } = require('./store');
 
 const mlb = require('./sports/mlb');
@@ -60,6 +61,28 @@ function projectAll(snap) {
   return raw;
 }
 
+function annotateMajorBooks(candidates, snap) {
+  const bySport = snap.oddsBySport || {};
+  return (candidates || []).map(c => {
+    const events = bySport[c.sport] || [];
+    const ev = events.find(e =>
+      (e.home_team === c.homeTeam && e.away_team === c.awayTeam) ||
+      (e.home_team === c.awayTeam && e.away_team === c.homeTeam)
+    );
+    const offering = majorBookStillOffers(ev, c);
+    return {
+      ...c,
+      majorBooksOffering: offering == null ? true : offering,
+      lockSnapshot: c.lockSnapshot || {
+        odds: c.oddsStr || c.odds,
+        line: c.line != null ? c.line : null,
+        book: c.book || null,
+        capturedAt: snap.fetchedAt || new Date().toISOString(),
+      },
+    };
+  });
+}
+
 /**
  * Full Omega vNext pipeline. Writes edge-picks-omega unless dryRun.
  */
@@ -82,14 +105,35 @@ async function generateOmegaVnext(opts = {}) {
   console.log(`[omega-vnext] raw candidates=${candidates.length}`);
 
   candidates = calibrateAll(candidates).map(attachEv);
+  candidates = annotateMajorBooks(candidates, snap);
   const { yesPool, rejected } = applyGates(candidates);
   console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length}`);
 
   const selected = selectStraights(yesPool, MAX_STRAIGHTS);
-  let picks = selected.map(c => toPickObject(c, { modelVersion: MODEL_VERSION }));
+
+  // QA hard-fails before narrate/store — drop + refill; empty OK
+  let qaCtx = {};
+  try {
+    const sports = [...new Set(selected.map(c => c.sport).concat(yesPool.slice(0, 12).map(c => c.sport)))];
+    qaCtx = await loadQaContext(dateISO, sports);
+    console.log(`[omega-vnext] QA context loaded sports=${sports.join(',')}`);
+  } catch (e) {
+    console.error(`[omega-vnext] QA context load failed (continuing): ${e.message}`);
+  }
+
+  const qa = applyHardFails(selected, yesPool, qaCtx, {
+    maxN: MAX_STRAIGHTS,
+    modelVersion: MODEL_VERSION,
+  });
+  let picks = qa.picks;
+  const hardFails = qa.hardFails || [];
+  if (hardFails.length) {
+    console.log(`[omega-vnext] QA hard-fails=${hardFails.length}: ${hardFails.map(h => h.reason).join('; ')}`);
+  }
   picks = applyDailyCap(picks);
 
-  let parlayLegs = optimizeParlay(yesPool, picks);
+  const poolForParlay = qa.yesPoolRemaining || yesPool;
+  let parlayLegs = optimizeParlay(poolForParlay, picks);
 
   const narr = await narrateAndVerify({
     picks,
@@ -97,15 +141,14 @@ async function generateOmegaVnext(opts = {}) {
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
   picks = narr.picks;
-  // If Claude vetoed some, rebuild parlay from remaining yes excluding vetoed sides
   if (narr.rejections && narr.rejections.length) {
     const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
-    const pool2 = yesPool.filter(c => !veto.has((c.side || '').toLowerCase()));
+    const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
     parlayLegs = optimizeParlay(pool2, picks);
   }
 
-  picks = attachClvFields(picks, MODEL_VERSION);
-  parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION);
+  picks = attachClvFields(picks, MODEL_VERSION, dateISO);
+  parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
 
   const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0);
   const sportsCovered = [...new Set(picks.map(p => p.sport))];
@@ -129,6 +172,12 @@ async function generateOmegaVnext(opts = {}) {
   }));
 
   const rejections = [
+    ...hardFails.map(h => ({
+      matchup: h.matchup,
+      side: h.side,
+      reason: `QA_HARDFAIL: ${h.reason}`,
+      hardFail: true,
+    })),
     ...(narr.rejections || []),
     ...rejected.slice(0, 40).map(r => ({
       matchup: r.matchup,
@@ -153,6 +202,7 @@ async function generateOmegaVnext(opts = {}) {
       aplusLocks: picks.filter(p => p.rating === 'aplus').length,
       sportsCovered,
       modelVersion: MODEL_VERSION,
+      qaHardFails: hardFails.length,
     },
     generatedAt: now.toISOString(),
     parlayLegs: empty ? [] : parlayLegs,
@@ -162,9 +212,12 @@ async function generateOmegaVnext(opts = {}) {
     candidateTable,
     modelNotes: MODEL_NOTES,
     engine: 'omega-vnext',
+    qaHardFails: hardFails,
   };
   if (empty) {
-    picksData.noPlays = 'No qualifying CLV-positive edges today.';
+    picksData.noPlays = hardFails.length
+      ? 'No qualifying edges after QA hard-fails.'
+      : 'No qualifying CLV-positive edges today.';
     picksData.edgeSummary = picksData.edgeSummary || picksData.noPlays;
   }
 
@@ -172,7 +225,7 @@ async function generateOmegaVnext(opts = {}) {
     await storePicks(dateISO, picksData, { force, simMode });
   }
 
-  console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length}`);
+  console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length} hardFails=${hardFails.length}`);
   return picksData;
 }
 

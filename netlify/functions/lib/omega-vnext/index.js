@@ -106,7 +106,7 @@ async function generateOmegaVnext(opts = {}) {
 
   candidates = calibrateAll(candidates).map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
-  const { yesPool, rejected } = applyGates(candidates);
+  const { yesPool, rejected } = applyGates(candidates, { cardDate: dateISO });
   console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length}`);
 
   const selected = selectStraights(yesPool, MAX_STRAIGHTS);
@@ -130,11 +130,11 @@ async function generateOmegaVnext(opts = {}) {
   if (hardFails.length) {
     console.log(`[omega-vnext] QA hard-fails=${hardFails.length}: ${hardFails.map(h => h.reason).join('; ')}`);
   }
-  // Provisional straight-only trim; final 5u cap (incl. parlay) applied after optimizeParlay
+  // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
   picks = applyDailyCap(picks);
 
   const poolForParlay = qa.yesPoolRemaining || yesPool;
-  let parlayLegs = optimizeParlay(poolForParlay, picks);
+  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
 
   const narr = await narrateAndVerify({
     picks,
@@ -147,7 +147,7 @@ async function generateOmegaVnext(opts = {}) {
   if (narr.rejections && narr.rejections.length) {
     const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
     const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
-    parlayLegs = optimizeParlay(pool2, picks);
+    parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
     // Re-narrate new parlay legs after veto-driven re-optimize
     parlayLegs = await narrateParlayLegsOnly({
       parlayLegs,
@@ -160,7 +160,7 @@ async function generateOmegaVnext(opts = {}) {
   picks = attachClvFields(picks, MODEL_VERSION, dateISO);
   parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
 
-  // Final daily unit cap: straights + parlay ≤ DAILY_UNIT_CAP (4.0u MAX). Sort grade then units.
+  // Final unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX. Sort grade then units.
   {
     const capped = applyDailyUnitCap(picks, parlayLegs);
     picks = capped.picks;

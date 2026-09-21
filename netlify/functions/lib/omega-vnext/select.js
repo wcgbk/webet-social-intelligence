@@ -1,6 +1,10 @@
 'use strict';
 
-const { SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION, DAILY_UNIT_CAP } = require('./config');
+const {
+  SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
+  DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
+  MAX_STRAIGHT_UNITS_PER_PICK,
+} = require('./config');
 const {
   kellyFraction, kellyToUnits, unitsToRating, ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
@@ -56,7 +60,8 @@ function fmtU(n) {
 
 function toPickObject(c, opts = {}) {
   const kFrac = kellyFraction(c.coverProb, c.odds, KELLY_FRACTION);
-  let units = kellyToUnits(kFrac, 1.5);
+  const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
+  let units = kellyToUnits(kFrac, perPickCap);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
   const rating = unitsToRating(units);
 
@@ -118,10 +123,12 @@ function applyDailyCap(picks) {
 }
 
 /**
- * DAILY_UNIT_CAP (4.0u MAX) includes straights + parlay stake. Not a fill target —
- * total may be under the cap. Overage: cut parlay first (floor 0.25u), then
- * lowest-confidence straights in 0.25u steps (floor 0.25u). Recompute grades;
- * sort A+→B then units desc.
+ * Unit structure (v12.0.9):
+ * - Parlay fixed at PARLAY_FIXED_UNITS (0.5u) when present — never scaled
+ * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
+ * - Total ≤ DAILY_UNIT_CAP (4.0u)
+ * Overage: reduce lowest-confidence straights in 0.25u steps (floor 0.25u).
+ * Recompute grades; sort A+→B then units desc. Never force-fill to max.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
   let out = (picks || []).map(p => ({ ...p }));
@@ -129,59 +136,49 @@ function applyDailyUnitCap(picks, parlayLegs) {
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
 
-  const totalOf = () => {
-    const s = out.reduce((acc, p) => acc + parseU(p.units), 0);
-    const p = parlays.reduce((acc, pl) => acc + parseU(pl.units), 0);
-    return s + p;
+  // Lock published parlays to fixed 0.5u
+  for (const pl of parlays) {
+    pl.units = fmtU(PARLAY_FIXED_UNITS);
+  }
+
+  const straightTotalOf = () => out.reduce((acc, p) => acc + parseU(p.units), 0);
+  const parlayTotalOf = () => parlays.reduce((acc, pl) => acc + parseU(pl.units), 0);
+  const totalOf = () => straightTotalOf() + parlayTotalOf();
+
+  const reduceStraightsTo = (budget) => {
+    let st = straightTotalOf();
+    while (st > budget + 1e-9 && out.length) {
+      const order = out
+        .map((_, i) => i)
+        .sort((a, b) => {
+          const ra = ratingRank(out[a].rating);
+          const rb = ratingRank(out[b].rating);
+          if (ra !== rb) return rb - ra; // lowest grade first
+          return parseU(out[a].units) - parseU(out[b].units);
+        });
+      let reduced = false;
+      for (const idx of order) {
+        const u = parseU(out[idx].units);
+        if (u > 0.25) {
+          const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
+          out[idx].units = fmtU(nu);
+          out[idx].rating = unitsToRating(nu);
+          out[idx].confidence = ratingToConfidence(out[idx].rating);
+          st = straightTotalOf();
+          reduced = true;
+          break;
+        }
+      }
+      if (!reduced) break;
+    }
   };
 
-  let total = totalOf();
-  if (total <= DAILY_UNIT_CAP) {
-    out = sortByGradeThenUnits(out);
-    return { picks: out, parlayLegs: parlays };
-  }
+  // 1) Straights ≤ 3.5u
+  reduceStraightsTo(STRAIGHT_UNIT_BUDGET);
 
-  // 1) Scale parlay down first
-  while (total > DAILY_UNIT_CAP && parlays.length) {
-    let cut = false;
-    for (const pl of parlays) {
-      const u = parseU(pl.units);
-      if (u > 0.25) {
-        const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
-        pl.units = fmtU(nu);
-        total = totalOf();
-        cut = true;
-        break;
-      }
-    }
-    if (!cut) break;
-  }
-
-  // 2) Reduce lowest-confidence straights (highest ratingRank first)
-  while (total > DAILY_UNIT_CAP && out.length) {
-    const order = out
-      .map((_, i) => i)
-      .sort((a, b) => {
-        const ra = ratingRank(out[a].rating);
-        const rb = ratingRank(out[b].rating);
-        if (ra !== rb) return rb - ra; // lowest grade first
-        return parseU(out[a].units) - parseU(out[b].units);
-      });
-    let reduced = false;
-    for (const idx of order) {
-      const u = parseU(out[idx].units);
-      if (u > 0.25) {
-        const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
-        out[idx].units = fmtU(nu);
-        out[idx].rating = unitsToRating(nu);
-        out[idx].confidence = ratingToConfidence(out[idx].rating);
-        total = totalOf();
-        reduced = true;
-        break;
-      }
-    }
-    if (!reduced) break;
-  }
+  // 2) Total ≤ 4.0u (parlay fixed — only straights can absorb remaining overage)
+  const maxStraightsForTotal = Math.max(0, DAILY_UNIT_CAP - parlayTotalOf());
+  reduceStraightsTo(Math.min(STRAIGHT_UNIT_BUDGET, maxStraightsForTotal));
 
   out = sortByGradeThenUnits(out);
   return { picks: out, parlayLegs: parlays };

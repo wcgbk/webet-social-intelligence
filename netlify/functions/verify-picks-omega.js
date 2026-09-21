@@ -26,10 +26,12 @@ function impliedProb(odds) { return odds < 0 ? Math.abs(odds) / (Math.abs(odds) 
 function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10); }
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
-function unitsToRating(u) { if (u >= 1.5) return "aplus"; if (u >= 1.0) return "a"; if (u >= 0.75) return "aminus"; if (u >= 0.5) return "bplus"; return "b"; } // aligned w/ omega-vnext thresholds
-function confFromUnits(u) { return u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b"; }
+function unitsToRating(u) { if (u >= 1.25) return "aplus"; if (u >= 1.0) return "a"; if (u >= 0.75) return "aminus"; if (u >= 0.5) return "bplus"; return "b"; } // aligned w/ omega-vnext v12.0.9
+function confFromUnits(u) { return u >= 1.25 ? 90 : u >= 1.0 ? 82 : u >= 0.75 ? 75 : u >= 0.5 ? 68 : 60; }
 
-// Omega v12.0.8: total daily units (straights + parlay) ≤ 4.0u MAX (not a fill target)
+// Omega v12.0.9: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX (not a fill target)
+const OMEGA_STRAIGHT_UNIT_BUDGET = 3.5;
+const OMEGA_PARLAY_FIXED_UNITS = 0.5;
 const OMEGA_DAILY_UNIT_CAP = 4.0;
 function enforceOmegaDailyUnitCap(picksData) {
   if (!picksData || !Array.isArray(picksData.picks)) return;
@@ -39,57 +41,48 @@ function enforceOmegaDailyUnitCap(picksData) {
     const m = { 'A+': 0, aplus: 0, A: 1, a: 1, 'A-': 2, aminus: 2, 'B+': 3, bplus: 3, B: 4, b: 4 };
     return m[r] != null ? m[r] : 4;
   };
-  let total = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
   const parlays = Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs : [];
-  total += parlays.reduce((s, pl) => s + parseU(pl.units), 0);
-  if (total <= OMEGA_DAILY_UNIT_CAP) return;
-  // Cut parlay first
-  while (total > OMEGA_DAILY_UNIT_CAP) {
-    let cut = false;
-    for (const pl of parlays) {
-      const u = parseU(pl.units);
-      if (u > 0.25) {
-        pl.units = fmtU(Math.max(0.25, u - 0.25));
-        total -= 0.25;
-        cut = true;
-        break;
+  // Lock published parlays to fixed 0.5u
+  for (const pl of parlays) pl.units = fmtU(OMEGA_PARLAY_FIXED_UNITS);
+
+  const reduceStraightsTo = (budget) => {
+    let st = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+    while (st > budget + 1e-9 && picksData.picks.length) {
+      const order = picksData.picks
+        .map((p, i) => i)
+        .sort((a, b) => {
+          const ra = ratingRank(picksData.picks[a].rating);
+          const rb = ratingRank(picksData.picks[b].rating);
+          if (ra !== rb) return rb - ra;
+          return parseU(picksData.picks[a].units) - parseU(picksData.picks[b].units);
+        });
+      let reduced = false;
+      for (const idx of order) {
+        const u = parseU(picksData.picks[idx].units);
+        if (u > 0.25) {
+          const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
+          picksData.picks[idx].units = fmtU(nu);
+          picksData.picks[idx].rating = unitsToRating(nu);
+          picksData.picks[idx].confidence = confFromUnits(nu);
+          st = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+          reduced = true;
+          break;
+        }
       }
+      if (!reduced) break;
     }
-    if (!cut) break;
-  }
-  // Then lowest-confidence straights
-  while (total > OMEGA_DAILY_UNIT_CAP) {
-    const order = picksData.picks
-      .map((p, i) => i)
-      .sort((a, b) => {
-        const ra = ratingRank(picksData.picks[a].rating);
-        const rb = ratingRank(picksData.picks[b].rating);
-        if (ra !== rb) return rb - ra;
-        return parseU(picksData.picks[a].units) - parseU(picksData.picks[b].units);
-      });
-    let reduced = false;
-    for (const idx of order) {
-      const u = parseU(picksData.picks[idx].units);
-      if (u > 0.25) {
-        const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
-        picksData.picks[idx].units = fmtU(nu);
-        picksData.picks[idx].rating = unitsToRating(nu);
-        picksData.picks[idx].confidence = confFromUnits(nu);
-        total -= 0.25;
-        reduced = true;
-        break;
-      }
-    }
-    if (!reduced) break;
-  }
-  // Sort grade then units
+  };
+
+  reduceStraightsTo(OMEGA_STRAIGHT_UNIT_BUDGET);
+  const parlayU = parlays.reduce((s, pl) => s + parseU(pl.units), 0);
+  reduceStraightsTo(Math.min(OMEGA_STRAIGHT_UNIT_BUDGET, Math.max(0, OMEGA_DAILY_UNIT_CAP - parlayU)));
+
   picksData.picks.sort((a, b) => {
     const ra = ratingRank(a.rating), rb = ratingRank(b.rating);
     if (ra !== rb) return ra - rb;
     return parseU(b.units) - parseU(a.units);
   });
   const straightU = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
-  const parlayU = parlays.reduce((s, pl) => s + parseU(pl.units), 0);
   if (picksData.summary) {
     picksData.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
   }

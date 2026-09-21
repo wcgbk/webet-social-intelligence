@@ -73,8 +73,12 @@ function kellyToUnits(kellyFrac, unitCap = 2.0) {
   return u;
 }
 
+/**
+ * Remapped for ≤3.5u straight budget (v12.0.9): A+ only at ≥1.25u hammers.
+ * Previously 1.5u→A+ was too common when each straight capped at 1.5u.
+ */
 function unitsToRating(u) {
-  if (u >= 1.5) return 'aplus';
+  if (u >= 1.25) return 'aplus';
   if (u >= 1.0) return 'a';
   if (u >= 0.75) return 'aminus';
   if (u >= 0.5) return 'bplus';
@@ -168,6 +172,25 @@ function sortByGradeThenUnits(picks) {
   });
 }
 
+
+/** America/New_York calendar date YYYY-MM-DD from ISO / Date. */
+function etCalendarDate(isoOrDate) {
+  if (isoOrDate == null || isoOrDate === '') return null;
+  try {
+    const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
+    if (!Number.isFinite(d.getTime())) return null;
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  } catch (_) {
+    return null;
+  }
+}
+
+/** True when commenceTime falls on cardDateISO in America/New_York. */
+function isSameEtDay(commenceTime, cardDateISO) {
+  const et = etCalendarDate(commenceTime);
+  return et != null && et === String(cardDateISO || '');
+}
+
 module.exports = {
   americanToImplied,
   americanToDecimal,
@@ -188,4 +211,6 @@ module.exports = {
   formatMoneylinePick,
   ratingRank,
   sortByGradeThenUnits,
+  etCalendarDate,
+  isSameEtDay,
 };

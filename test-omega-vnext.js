@@ -19,7 +19,10 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.0.8-omega-vnext-clv');
+assert.strictEqual(config.MODEL_VERSION, 'v12.0.9-omega-vnext-dayscope');
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
+assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
+assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
 assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
 assert.strictEqual(config.LEAN_PAD, false);
@@ -103,7 +106,7 @@ if (parlays.length) {
   assert.ok(parlays[0].type.includes('parlay'));
 }
 
-// Daily unit cap includes parlay ≤ 4.0u MAX
+// Daily unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX
 {
   const fat = [
     { pick: 'A', rating: 'aplus', units: '1.5u', confidence: 90 },
@@ -112,13 +115,71 @@ if (parlays.length) {
   ];
   const fatParlay = [{ units: '1.5u', legs: [] }];
   const capped = select.applyDailyUnitCap(fat, fatParlay);
-  const total = capped.picks.reduce((s, p) => s + parseFloat(p.units), 0)
-    + capped.parlayLegs.reduce((s, pl) => s + parseFloat(pl.units), 0);
+  const straightU = capped.picks.reduce((s, p) => s + parseFloat(p.units), 0);
+  const parlayU = capped.parlayLegs.reduce((s, pl) => s + parseFloat(pl.units), 0);
+  const total = straightU + parlayU;
+  assert.ok(straightU <= 3.5 + 1e-9, `straight budget=${straightU}`);
+  assert.strictEqual(parlayU, 0.5, 'parlay must be fixed 0.5u');
   assert.ok(total <= 4.0 + 1e-9, `cap total=${total}`);
-  // Parlay should be cut first toward 0.25
-  assert.ok(parseFloat(capped.parlayLegs[0].units) <= 1.5);
-  // Sorted by grade
   assert.strictEqual(capped.picks[0].rating, 'aplus');
+}
+
+// Grade remap: 1.0u → A (not A+); 1.25u → A+
+assert.strictEqual(math.unitsToRating(1.0), 'a');
+assert.strictEqual(math.unitsToRating(1.24), 'a');
+assert.strictEqual(math.unitsToRating(1.25), 'aplus');
+assert.strictEqual(math.unitsToRating(0.75), 'aminus');
+
+// Day-scope: same ET calendar day only
+{
+  assert.strictEqual(math.etCalendarDate('2026-09-22T23:30:00Z'), '2026-09-22'); // evening ET still Tue
+  assert.strictEqual(math.etCalendarDate('2026-09-23T03:30:00Z'), '2026-09-22'); // late night ET = Tue
+  assert.strictEqual(math.etCalendarDate('2026-09-27T17:00:00Z'), '2026-09-27'); // Sun NFL
+  assert.ok(math.isSameEtDay('2026-09-22T18:00:00Z', '2026-09-22'));
+  assert.ok(!math.isSameEtDay('2026-09-26T19:00:00Z', '2026-09-22'), 'Sat CFB must not pass Tue card');
+  assert.ok(!math.isSameEtDay('2026-09-27T17:00:00Z', '2026-09-22'), 'Sun NFL must not pass Tue card');
+
+  const tue = '2026-09-22';
+  const mixed = [
+    { sport: 'MLB', matchup: 'A @ B', side: 'B -1.5', market: 'Spread', odds: -110, coverProb: 0.56, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: '2026-09-22T23:05:00Z', homeTeam: 'B', awayTeam: 'A' },
+    { sport: 'NCAAF', matchup: 'C @ D', side: 'D -7', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: '2026-09-26T19:00:00Z', homeTeam: 'D', awayTeam: 'C' },
+    { sport: 'NFL', matchup: 'E @ F', side: 'F -3', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: '2026-09-27T17:00:00Z', homeTeam: 'F', awayTeam: 'E' },
+  ];
+  const gated = gates.applyGates(mixed, { cardDate: tue });
+  assert.strictEqual(gated.yesPool.length, 1, 'only Tue MLB should pass');
+  assert.strictEqual(gated.yesPool[0].sport, 'MLB');
+  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day'));
+
+  // ingest filter helper
+  const { filterEventsSameEtDay } = require(path.join(root, 'ingest'));
+  const filtered = filterEventsSameEtDay([
+    { id: 1, commence_time: '2026-09-22T23:05:00Z' },
+    { id: 2, commence_time: '2026-09-26T19:00:00Z' },
+  ], tue);
+  assert.strictEqual(filtered.length, 1);
+  assert.strictEqual(filtered[0].id, 1);
+}
+
+// Fixed 0.5u parlay stake
+{
+  const pool = [
+    { sport: 'MLB', matchup: 'A @ B', side: 'Under 8.5', market: 'Total', odds: -110, coverProb: 0.56, ev: 0.05, edgePct: 0.04, commenceTime: '2026-09-22T23:05:00Z', homeTeam: 'B', awayTeam: 'A' },
+    { sport: 'MLB', matchup: 'C @ D', side: 'Over 9.0', market: 'Total', odds: -105, coverProb: 0.55, ev: 0.045, edgePct: 0.035, commenceTime: '2026-09-22T23:10:00Z', homeTeam: 'D', awayTeam: 'C' },
+    { sport: 'MLB', matchup: 'E @ F', side: 'F -1.5', market: 'Spread', odds: -110, coverProb: 0.54, ev: 0.04, edgePct: 0.03, commenceTime: '2026-09-22T23:15:00Z', homeTeam: 'F', awayTeam: 'E' },
+  ];
+  const pls = parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' });
+  assert.ok(pls.length >= 1, 'parlay should form from same-day pool');
+  assert.strictEqual(parseFloat(pls[0].units), 0.5);
+  // Weekend legs must be excluded even if in pool
+  const withWeekend = pool.concat([
+    { sport: 'NFL', matchup: 'G @ H', side: 'H -3', market: 'Spread', odds: -110, coverProb: 0.60, ev: 0.10, edgePct: 0.08, commenceTime: '2026-09-27T17:00:00Z', homeTeam: 'H', awayTeam: 'G' },
+  ]);
+  const pls2 = parlay.optimizeParlay(withWeekend, [], { cardDate: '2026-09-22' });
+  if (pls2.length) {
+    for (const leg of pls2[0].legs) {
+      assert.ok(math.isSameEtDay(leg.commenceTime, '2026-09-22'), `parlay leg off-day: ${leg.commenceTime}`);
+    }
+  }
 }
 
 assert.deepStrictEqual(nba.project({}), []);
@@ -169,6 +230,8 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
 console.log('PASS test-omega-vnext', {
   MODEL_VERSION,
   DAILY_UNIT_CAP: config.DAILY_UNIT_CAP,
+  STRAIGHT_UNIT_BUDGET: config.STRAIGHT_UNIT_BUDGET,
+  PARLAY_FIXED_UNITS: config.PARLAY_FIXED_UNITS,
   yesPool: yesPool.length,
   straights: picks.length,
   parlayLegs: parlays.length ? parlays[0].legs.length : 0,

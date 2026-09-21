@@ -1,9 +1,10 @@
 'use strict';
 
-const { KELLY_FRACTION } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS } = require('./config');
 const {
   americanToDecimal, formatAmerican, kellyFraction, kellyToUnits,
   formatMoneylinePick, formatEdgePct, unitsToRating, ratingToConfidence,
+  isSameEtDay,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
 
@@ -66,9 +67,11 @@ function enumerateCombos(pool, size) {
  * Optimize MOST LIKELY TO HIT among +EV parlays.
  * Prefer 3-leg cross-game; 2-leg only if clearly better EV/hit.
  */
-function optimizeParlay(yesPool, straights = []) {
+function optimizeParlay(yesPool, straights = [], opts = {}) {
+  const cardDate = opts.cardDate || opts.dateISO || null;
   const pool = (yesPool || [])
     .filter(c => Number.isFinite(c.coverProb) && Number.isFinite(c.odds) && c.ev > 0)
+    .filter(c => !cardDate || (c.commenceTime && isSameEtDay(c.commenceTime, cardDate)))
     .map(c => ({
       ...c,
       side: c.side,
@@ -126,14 +129,8 @@ function optimizeParlay(yesPool, straights = []) {
   const straightSides = new Set((straights || []).map(p => p.pick || p.side));
   const independent = !chosen.legs.every(l => straightSides.has(l.side));
 
-  // ¼ Kelly on parlay; typical ~0.5u
-  const parlayKelly = kellyFraction(chosen.combinedProb, (() => {
-    const dec = chosen.combinedDecimal;
-    return dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
-  })(), KELLY_FRACTION);
-  let stake = kellyToUnits(Math.max(parlayKelly, 0.005), 0.75);
-  stake = Math.max(0.25, Math.min(0.75, stake || 0.5));
-  if (!stake) stake = 0.5;
+  // v12.0.9: published parlay always fixed PARLAY_FIXED_UNITS (0.5u)
+  const stake = PARLAY_FIXED_UNITS;
 
   const combinedOdds = chosen.combinedDecimal >= 2
     ? `+${Math.round((chosen.combinedDecimal - 1) * 100)}`
@@ -142,7 +139,7 @@ function optimizeParlay(yesPool, straights = []) {
   const legs = chosen.legs.map(l => {
     // Grade chrome for card badges — size as if straight so A/A-/B+ colors match
     const kFrac = kellyFraction(l.coverProb, l.odds, KELLY_FRACTION);
-    const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.5) || 0.25;
+    const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25) || 0.25;
     const rating = l.rating || unitsToRating(legUnits);
     const confidence = (typeof l.confidence === 'number' || typeof l.confidence === 'string')
       ? l.confidence

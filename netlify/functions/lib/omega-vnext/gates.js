@@ -1,15 +1,27 @@
 'use strict';
 
 const { GATES } = require('./config');
+const { isSameEtDay } = require('./odds_math');
 
 function sportFloor(map, sport) {
   return map[sport] != null ? map[sport] : map.default;
 }
 
-function gateReason(c) {
+/**
+ * @param {object} c candidate
+ * @param {{ cardDate?: string }} opts cardDate = ET YYYY-MM-DD for same-day scope
+ */
+function gateReason(c, opts = {}) {
   const sport = c.sport || 'default';
   const minEV = sportFloor(GATES.minEV, sport);
   const minCP = sportFloor(GATES.minCoverProb, sport);
+  const cardDate = opts.cardDate || opts.dateISO || null;
+
+  // Same ET calendar day only — reject weekend football on Tue/Wed cards, etc.
+  if (GATES.sameEtDayOnly && cardDate) {
+    if (!c.commenceTime) return 'missing-commenceTime';
+    if (!isSameEtDay(c.commenceTime, cardDate)) return 'not-same-et-day';
+  }
 
   if (GATES.pregameOnly && c.commenceTime) {
     const t = Date.parse(c.commenceTime);
@@ -32,12 +44,13 @@ function gateReason(c) {
 
 /**
  * Filter to YES pool. Empty OK — no force-fill.
+ * Pass opts.cardDate (ET YYYY-MM-DD) to enforce same-day commenceTime scope.
  */
-function applyGates(candidates) {
+function applyGates(candidates, opts = {}) {
   const yes = [];
   const rejected = [];
   for (const c of candidates || []) {
-    const reason = gateReason(c);
+    const reason = gateReason(c, opts);
     if (reason) rejected.push({ ...c, rejectReason: reason });
     else yes.push(c);
   }

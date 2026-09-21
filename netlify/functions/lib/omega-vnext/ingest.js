@@ -3,6 +3,7 @@
 const {
   SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
 } = require('./config');
+const { isSameEtDay, etCalendarDate } = require('./odds_math');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -42,10 +43,11 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
       }
       const data = await fetchJson(url, 15000);
       // historical endpoint wraps in { data: [...] }
-      const events = Array.isArray(data) ? data : (data && data.data) || [];
+      const rawEvents = Array.isArray(data) ? data : (data && data.data) || [];
+      const events = filterEventsSameEtDay(rawEvents, dateISO);
       out.bySport[label] = events;
       const remaining = null; // header not available via fetch easily
-      console.log(`[omega-vnext/ingest] ${label}: ${events.length} events`);
+      console.log(`[omega-vnext/ingest] ${label}: ${events.length}/${rawEvents.length} events (same-ET-day ${dateISO || 'n/a'})`);
     } catch (e) {
       console.error(`[omega-vnext/ingest] Odds ${label} failed: ${e.message}`);
       out.bySport[label] = [];
@@ -57,6 +59,23 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
 function dateParamET(dateISO) {
   return String(dateISO || '').replace(/-/g, '');
 }
+
+/** Keep only events whose commence_time falls on cardDateISO (ET calendar day). */
+function filterEventsSameEtDay(events, dateISO) {
+  if (!dateISO) return events || [];
+  const kept = [];
+  let dropped = 0;
+  for (const ev of events || []) {
+    const t = ev.commence_time || ev.commenceTime || ev.date;
+    if (t && isSameEtDay(t, dateISO)) kept.push(ev);
+    else dropped += 1;
+  }
+  if (dropped) {
+    console.log(`[omega-vnext/ingest] day-scope drop ${dropped} event(s) not on ${dateISO} ET`);
+  }
+  return kept;
+}
+
 
 async function fetchEspnScoreboard(label, dateISO) {
   const cfg = ESPN_LEAGUES[label];
@@ -86,7 +105,11 @@ async function fetchEspnScoreboard(label, dateISO) {
         awayScore: away.score != null ? Number(away.score) : null,
       };
     });
-    return { league: label, games };
+    const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
+    if (sameDay.length !== games.length) {
+      console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
+    }
+    return { league: label, games: sameDay };
   } catch (e) {
     console.error(`[omega-vnext/ingest] ESPN ${label}: ${e.message}`);
     return { league: label, games: [] };
@@ -171,4 +194,7 @@ module.exports = {
   fetchEspnScoreboard,
   fetchEspnStandings,
   enabledSportLabels,
+  filterEventsSameEtDay,
+  etCalendarDate,
+  isSameEtDay,
 };

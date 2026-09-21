@@ -28,20 +28,19 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-omega"]
-  schedule = "0 13 * * *"
-  # OMEGA MAIN multi-sport — 9:00am ET. NFL/CFB standalones follow at 9:05 / 9:10 (see their
-  # schedules) so the live daily process shares morning gen+QA timing without Odds API burst.
-  # Writes edge-picks-omega → /omega. CLV via trigger-clv (track-clv-omega). Verify at 10:30am ET.
+  schedule = "30 13 * * *"
+  # OMEGA vNext (v12 CLV-first) — 9:30am ET (13:30 UTC in EDT). Generate early enough for QA;
+  # verify 10:30am ET; public card live by ~11:00am ET. Writes edge-picks-omega → /omega.
+  # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
 
 [functions."generate-picks-omega-background"]
-  # Background function — 15min timeout for Omega pick generation
+  # Background function — 15min timeout for Omega pick generation (omega-vnext)
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."verify-picks-omega"]
   schedule = "30 14 * * *"
-  # Omega QA — 10:30am ET, mirrors verify-picks incl. the Hard Rock Bet placeability check.
-  # NOTE (2026-09-05): verify-picks-nfl.js / verify-picks-cfb.js do NOT exist — no twin verify
-  # crons added. NFL/CFB standalones rely on JS-select discipline + CLV (track-clv-nfl/cfb).
-  # Optional follow-up: thin verify wrappers cloning omega verify for their stores.
+  # Omega QA — 10:30am ET (14:30 UTC EDT). Target: publish unlock by 11:00am ET.
+  # Placeability advisory; must not invent sides. Empty card remains valid.
 
 [functions."self-optimize-omega"]
   schedule = "0 9 * * 0"

@@ -1,3 +1,13 @@
+
+// v12: preserve omega-vnext bet-time fields on CLV records
+function attachModelClvFields(rec, pick) {
+  if (!rec || !pick) return rec;
+  if (pick.modelVersion != null) rec.modelVersion = pick.modelVersion;
+  if (pick.p_model != null) rec.p_model = pick.p_model;
+  if (pick.fair_sharp_p != null) rec.fair_sharp_p = pick.fair_sharp_p;
+  if (pick.predictedClv != null) rec.predictedClv = pick.predictedClv;
+  return rec;
+}
 // track-clv.js
 // API endpoint: GET/POST /.netlify/functions/track-clv
 //
@@ -883,6 +893,15 @@ exports.handler = async (event) => {
     try {
       const { getStore } = await import('@netlify/blobs');
       const store = getStore('edge-picks-omega');
+      // Merge bet-time model fields from picks blob onto CLV rows
+      try {
+        const srcPicks = (picksData && picksData.picks) || [];
+        const byKey = new Map(srcPicks.map(p => [`${p.pick}||${p.matchup}`, p]));
+        if (Array.isArray(clvData.picks)) {
+          clvData.picks = clvData.picks.map(rec => attachModelClvFields(rec, byKey.get(`${rec.pick}||${rec.matchup}`)));
+        }
+        if (picksData && picksData.model) clvData.modelVersion = picksData.model;
+      } catch (e) { console.error('[track-clv] model field merge:', e.message); }
       await store.setJSON(`clv-${dateISO}`, clvData);
       console.log(`[track-clv] Stored CLV data at clv-${dateISO}`);
     } catch (blobErr) {

@@ -1,3 +1,6 @@
+// OBSERVER_ONLY_HARD (v12): this function MUST NOT mutate live Omega candidates,
+// coverProb, gates, or generator params. Writes to self-optimize-params are for
+// human review dashboards only — generateOmegaVnext never applies them.
 // self-optimize.js
 // Weekly performance OBSERVER for WeBetAI (v10.4 rebuild, 2026-08-03).
 //

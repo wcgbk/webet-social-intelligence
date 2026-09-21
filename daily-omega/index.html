@@ -689,7 +689,7 @@
   <p class="footer-note">
     All lines verified via The Odds API (40+ sportsbooks). Best available line selected per pick.<br>
     Unit sizing: A+ = 2.5-3.0u, A = 1.5-2.0u, A- = 1.0u, B+ = 0.5u. Kelly-sized, rounded to nearest 0.5u.<br>
-    Auto-generated daily at 9am EST. Not financial advice.
+    Auto-generated daily by ~11:00am ET. Not financial advice.
   </p>
 </div>
 
@@ -1688,9 +1688,9 @@
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
-            ${data.noPlays ? esc(data.noPlays) : 'No qualifying plays today.'}
+            ${data.noPlays ? esc(data.noPlays) : 'No qualifying CLV-positive edges today.'}
           </div>
-          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow at 9am EST.</div>
+          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow by 11:00am ET.</div>
         </div>`;
       return;
     }
@@ -2077,7 +2077,7 @@
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9888;&#65039;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load today's picks</div>
-          <div style="font-size:.8125rem; color:var(--txt-m); margin-top:.375rem;">Picks are generated daily at 9am EST. Try refreshing.</div>
+          <div style="font-size:.8125rem; color:var(--txt-m); margin-top:.375rem;">Picks are generated daily by ~11:00am ET. Try refreshing.</div>
         </div>`;
     }
   }

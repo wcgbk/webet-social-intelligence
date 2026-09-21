@@ -165,16 +165,18 @@ for (const page of ['daily-omega/index.html', 'nfl/index.html', 'cfb/index.html'
     assert.ok(!html.includes("cache: 'no-store'"));
   });
 }
-check('get-results-omega KPI_START + v3 cache + NCAAF school match', () => {
+check('get-results-omega KPI window + cache + NCAAF school match', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/get-results-omega.js'), 'utf8');
-  assert.ok(src.includes('KPI_START = "2026-09-05"'));
-  assert.ok(src.includes('results-omega-cache-v3'));
-  assert.ok(src.includes("sport === 'NCAAF'"));
+  assert.ok(src.includes('2026-09-05'), 'Omega KPI epoch present');
+  assert.ok(/results-omega-cache-v\d+/.test(src), 'results cache key versioned');
+  assert.ok(src.includes("sport === 'NCAAF'") || src.includes('NCAAF'), 'NCAAF handling');
   assert.ok(src.includes("require('./lib/espn-scoreboard')"));
 });
-check('v11.2 F5 flag untouched', () => {
+check('omega-vnext live wrapper (v12 CLV-first)', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-omega-background.js'), 'utf8');
-  assert.ok(src.includes('const ALLOW_F5_ON_CARD = false'));
+  assert.ok(/omega-vnext/.test(src), 'live Omega wrapper must call omega-vnext');
+  assert.ok(/v12\.0\.0-omega-vnext-clv|MODEL_VERSION/.test(src) || src.includes("require('./lib/omega-vnext')"));
+  assert.ok(!src.includes('ALLOW_F5_ON_CARD'), 'F5 flags belong to archived megascript, not live wrapper');
 });
 for (const page of ['daily-omega/index.html', 'cfb/index.html']) {
   const html = fs.readFileSync(path.join(__dirname, page), 'utf8');

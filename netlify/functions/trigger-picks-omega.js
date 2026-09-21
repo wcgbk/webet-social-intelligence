@@ -1,10 +1,9 @@
 // trigger-picks-omega.js
-// Scheduled function — runs daily at 9:00 AM EDT (13:00 UTC).
-// Fires generate-picks-omega-background — the improved Omega model.
-// 1hr earlier than beta/production for maximum CLV runway.
+// Scheduled — 9:30 AM ET (13:30 UTC during EDT) → generate-picks-omega-background (omega-vnext).
+// Verify at 10:30am ET; public /omega live target ~11:00am ET.
 
 exports.handler = async (event) => {
-  console.log("[trigger-picks-omega] Scheduled run triggered");
+  console.log("[trigger-picks-omega] Scheduled run triggered (omega-vnext)");
 
   const siteURL = process.env.URL || "https://webetsocial.com";
 
@@ -23,7 +22,7 @@ exports.handler = async (event) => {
     );
 
     console.log(`[trigger-picks-omega] Background function triggered: ${response.status}`);
-    return { statusCode: 200, body: "Omega triggered" };
+    return { statusCode: 200, body: "Omega vNext triggered" };
   } catch (err) {
     console.error(`[trigger-picks-omega] Failed: ${err.message}`);
     return { statusCode: 500, body: err.message };

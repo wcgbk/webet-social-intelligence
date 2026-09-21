@@ -27,7 +27,7 @@ function liveCacheHeaders(isGenerating) {
 function generatingPayload(dateKey) {
   return {
     error: false,
-    noPlays: "Today's card is generating. Check back at 9am ET.",
+    noPlays: "Today's card is generating. Check back by 11:00am ET.",
     date: dateKey, picks: [], rejections: [],
     summary: { totalPicks: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [] },
   };

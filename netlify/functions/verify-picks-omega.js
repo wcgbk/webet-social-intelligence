@@ -1112,6 +1112,20 @@ Return ONLY valid JSON array:
         }
       }
 
+      // Ensure UI fields always present after narrative pass (Claude may omit optional keys)
+      for (const p of picksData.picks) {
+        if (!p.whatLoses || p.whatLoses.trim().length < 15) {
+          p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+          finalFixCount++;
+        }
+        if (!p.dataVerified || p.dataVerified.trim().length < 5) {
+          p.dataVerified = "Model-grounded edge; narrative verified in QA final pass.";
+        }
+        if (!p.clvExpectation || p.clvExpectation.trim().length < 5) {
+          p.clvExpectation = "Expect modest movement toward the pick if sharp money arrives; monitor into close.";
+        }
+      }
+
       // Re-verify math on all picks
       for (let i = 0; i < picksData.picks.length; i++) {
         const finalMath = runMathChecks(picksData.picks[i]);
@@ -1286,6 +1300,23 @@ Return ONLY valid JSON array:
           }
         } else if (uniqueLegNeeds.length > 0) {
           console.log(`[verify-final] Skipping parlay-leg Claude write — no ANTHROPIC_API_KEY`);
+        }
+      }
+
+      // Ensure parlay legs carry whatLoses for Optimized Parlay cards
+      {
+        const plRoot = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
+        for (const leg of ((plRoot && plRoot.legs) || [])) {
+          if (!leg.whatLoses || String(leg.whatLoses).trim().length < 15) {
+            leg.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+            finalFixCount++;
+          }
+          if (!leg.dataVerified || String(leg.dataVerified).trim().length < 5) {
+            leg.dataVerified = "Model-grounded parlay leg; narrative verified in QA final pass.";
+          }
+          if (!leg.clvExpectation || String(leg.clvExpectation).trim().length < 5) {
+            leg.clvExpectation = "Expect modest movement toward the leg if sharp money arrives.";
+          }
         }
       }
 

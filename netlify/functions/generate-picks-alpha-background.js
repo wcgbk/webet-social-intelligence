@@ -1,5 +1,7 @@
 // generate-picks-alpha-background.js
-// v10.3.4-alpha-no-rockies — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
+// v10.3.5-alpha-no-selfopt — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
+// v10.3.5 (2026-09-21): PHASE 1C2 self-opt APPLICATION REMOVED — fetch/log params only;
+//   zero candidate mutation (match Omega observer rule). Generators never steer from self-opt.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
 // F5 may still be computed for analytics/odds attach, but ALLOW_F5_ON_CARD=false keeps it
 // out of the selectable/published YES pool and parlays (same product rule as Omega MAIN).
@@ -4431,48 +4433,15 @@ exports.handler = async (event) => {
       console.log(`[v10] Prediction market: ${pmSignals} candidates matched, ${confirms} confirmed, ${cautions} cautioned (type-aligned)`);
     }
 
-    // ── PHASE 1C2: SELF-OPTIMIZATION PARAMETER APPLICATION ──
-    // Apply data-driven Kelly multipliers and cover prob adjustments from self-optimize.js
+    // ── PHASE 1C2: SELF-OPTIMIZATION PARAMETER APPLICATION — REMOVED (v10.3.5) ──
+    // Self-optimize is now an OBSERVER (analytics + alarms), never a steerer. The old
+    // application inflated coverProb (×(1+adj)) for whatever segment ran hot in the trailing
+    // 45 days — pure momentum-chasing that manufactured phantom EV and stuffed regressing
+    // segments into the A-/1u tier. Its unit multipliers mostly vanished in 0.5u rounding.
+    // Sizing policy = static generator caps; probabilities come from the pricing model +
+    // calibration only. Generators must NEVER apply selfOptParams to live candidates.
     if (selfOptParams) {
-      let soAdj = 0;
-      for (const c of allCandidates) {
-        let combined = 1.0;
-
-        // Sport-specific multiplier from self-optimization
-        const soSportMult = selfOptParams.sportKellyMult?.[c.sport];
-        if (soSportMult && soSportMult !== 1.0) combined *= soSportMult;
-
-        // Market-specific multiplier from self-optimization
-        const soMarketMult = selfOptParams.marketKellyMult?.[c.market];
-        if (soMarketMult && soMarketMult !== 1.0) combined *= soMarketMult;
-
-        // Only apply if combined adjustment is meaningful
-        if (Math.abs(combined - 1.0) > 0.01) {
-          const old = c.kellyUnits;
-          c.kellyUnits = Math.max(0.5, Math.round(c.kellyUnits * combined * 2) / 2);
-          if (old !== c.kellyUnits) {
-            c.kellyCalcStr += ` [SELF-OPT: ${combined.toFixed(3)}x, ${old}u→${c.kellyUnits}u]`;
-            soAdj++;
-          }
-        }
-
-        // Cover probability cap adjustment
-        const sm = `${c.sport}_${c.market}`;
-        const capAdj = selfOptParams.coverProbAdjust?.[sm];
-        if (capAdj && Math.abs(capAdj) > 0.005) {
-          // This is informational — caps are already set in COVER_PROB_CAPS
-          // The self-optimize engine suggests adjustments; we apply them as a secondary multiplier
-          const probShift = 1.0 + capAdj;
-          c.coverProb = +Math.min(0.70, c.coverProb * probShift).toFixed(4);
-          // Re-derive EV from the shrunk coverProb so the two can never desync. Every other
-          // coverProb mutation (alt-line, PM-blend, weather) already recomputes EV; this one
-          // silently did not, which inflated the displayed EV vs the win-prob badge
-          // (2026-08-26 MLB Moneyline bug). EV is drawdown-independent, so pass false.
-          const soKelly = computeKelly(c.coverProb, c.odds, false);
-          c.ev = +(c.source === "F5" ? soKelly.ev * F5_EV_DISCOUNT : soKelly.ev).toFixed(4);
-        }
-      }
-      console.log(`[v10-selfopt] Applied self-optimization to ${soAdj} candidates (sample: ${selfOptParams.sampleSize})`);
+      console.log(`[v10-selfopt] Params loaded (sample: ${selfOptParams.sampleSize}) — observational only as of v10.3.5, no candidate mutation`);
     }
 
     // ── PHASE 1D: OPENING LINE / STALE LINE DETECTION ──
@@ -4799,12 +4768,12 @@ exports.handler = async (event) => {
     if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
     else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
     await storePicks(dateISO, {
-      date: dateISO, dateFormatted, model: "v10.3.4-alpha-no-rockies",
+      date: dateISO, dateFormatted, model: "v10.3.5-alpha-no-selfopt",
       pipelineError,
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: pipelineError
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
-      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.4-alpha-no-rockies" },
+      summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.5-alpha-no-selfopt" },
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
@@ -4980,7 +4949,7 @@ exports.handler = async (event) => {
     const picksData = {
       date: dateISO,
       dateFormatted,
-      model: "v10.3.4-alpha-no-rockies",
+      model: "v10.3.5-alpha-no-selfopt",
       picks,
       rejections,
       edgeSummary: claudeOutput.edgeSummary || "",
@@ -4990,7 +4959,7 @@ exports.handler = async (event) => {
         totalUnits: `${finalTotalUnits.toFixed(1)}u`,
         aplusLocks: picks.filter(p => p.rating === "A+").length,
         sportsCovered,
-        modelVersion: "v10.3.4-alpha-no-rockies",
+        modelVersion: "v10.3.5-alpha-no-selfopt",
       },
       generatedAt: now.toISOString(),
       parlayLegs: buildCorrelatedParlay(picks, allCandidates, rejections),
@@ -5143,11 +5112,11 @@ async function buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now) 
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.4-alpha-no-rockies",
+    date: dateISO, dateFormatted, model: "v10.3.5-alpha-no-selfopt",
     picks,
     rejections: leanCandidates.slice(picks.length, picks.length + 7).map(c => ({ matchup: c.matchup, side: c.side, reason: "Below lean priority." })),
     edgeSummary: "Thin slate — no conviction edges today. WeBetAI published its best low-risk Lean plays (0.25u) from candidates clearing the +3% EV floor. These are tracked separately from conviction picks.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.4-alpha-no-rockies" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(2)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.5-alpha-no-selfopt" },
     generatedAt: now.toISOString(), parlayLegs, sgps: [],
     thinSlate: true,
     fallback: true,
@@ -5231,11 +5200,11 @@ async function fallbackToTopCandidates(dateISO, dateFormatted, candidateTable, a
 
   const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const picksData = {
-    date: dateISO, dateFormatted, model: "v10.3.4-alpha-no-rockies",
+    date: dateISO, dateFormatted, model: "v10.3.5-alpha-no-selfopt",
     picks,
     rejections: allCandidates.slice(3, 10).map(c => ({ matchup: c.matchup, side: c.side, reason: "Lower edge priority." })),
     edgeSummary: "WeBetAI's deterministic model found today's top edges across all sports. Picks ranked by normalized z-score.",
-    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.4-alpha-no-rockies" },
+    summary: { totalPicks: picks.length, totalStraightBets: picks.length, totalUnits: `${totalUnits.toFixed(1)}u`, aplusLocks: 0, sportsCovered: [...new Set(picks.map(p => p.sport))], modelVersion: "v10.3.5-alpha-no-selfopt" },
     generatedAt: now.toISOString(), parlayLegs: [], sgps: [],
     fallback: true,
   };

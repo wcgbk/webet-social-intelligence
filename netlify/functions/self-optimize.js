@@ -1,22 +1,21 @@
 // self-optimize.js
-// Self-optimization engine for WeBetAI v10.5
-// Runs weekly (Sunday night). Analyzes last 14-30 days of results data,
-// computes optimal parameter adjustments, and stores them in Netlify Blobs.
-// The picks pipeline reads these parameters at runtime, creating a closed-loop
-// feedback system that continuously improves without manual intervention.
+// Weekly performance OBSERVER for WeBetAI Alpha (aligned with self-optimize-omega.js, 2026-09-21).
 //
-// Parameters tuned:
-// 1. Sport-specific Kelly multipliers (which sports are we sharpest at?)
-// 2. Market-specific accuracy (spreads vs totals vs ML — where do we hit?)
-// 3. Edge bucket calibration (what edge ranges actually win?)
-// 4. Cover probability cap adjustment (are we over/under-confident?)
-// 5. Home advantage drift (has home-court advantage changed this season?)
+// Runs Sunday. Analyzes the last 45 days of graded Alpha results and stores an
+// analytics + alarms report. This is an OBSERVER, not a steerer:
+// generators must NEVER apply these parameters to live picks. The old closed
+// loop inflated coverProb for whatever segment ran hot in the trailing window
+// (momentum-chasing — it manufactured phantom EV and stuffed regressing
+// segments into the top unit tier right as they mean-reverted), and its unit
+// multipliers mostly evaporated in 0.5u rounding anyway. Sizing policy now
+// lives in the generator's static per-market caps, changed deliberately.
 //
-// Philosophy: CONSERVATIVE adjustments. Each parameter moves at most 10% per cycle.
-// Catastrophic overfitting is prevented by:
-// - Minimum sample sizes (15+ picks per bucket)
-// - Mean-reversion bias (parameters drift back toward 1.0 over time)
-// - Max adjustment caps per cycle
+// What this computes weekly (stored for humans / dashboards / Discord digests):
+// 1. Per-sport / per-market win rate AND ROI
+// 2. Grade-level accuracy (diagnostic — not fed back into Kelly)
+// 3. Edge-bucket performance + confidence calibration when cover data is present
+//
+// Storing the analytics blob is fine. Auto-steering from it is not.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 
@@ -29,7 +28,7 @@ exports.handler = async (event) => {
   // ── Step 1: Fetch recent results ──
   // 2026-06-12: repointed from edge-picks/results-cache (production store — FROZEN since the
   // prod cron was paused Jun 5) to the live alpha track record. Alpha is the primary pipeline;
-  // self-optimization must learn from the model that is actually running.
+  // the observer report must reflect the model that is actually running (no auto-steer).
   let allResults = [];
   try {
     const resultsResp = await fetch(
@@ -128,13 +127,15 @@ exports.handler = async (event) => {
     if (won) buckets.byGrade[grade].wins++; else buckets.byGrade[grade].losses++;
   }
 
-  // ── Step 3: Compute optimal parameters ──
+  // ── Step 3: Compute the weekly report ──
+  // observationalOnly: generators may load this blob for logging but apply NOTHING from it.
+  // Multiplier fields remain as diagnostics of where the model has been sharp.
   const params = {
     generatedAt: new Date().toISOString(),
     sampleSize: allResults.length,
+    observationalOnly: true,
     sportKellyMult: {},
     marketKellyMult: {},
-    coverProbAdjust: {},
     edgeBucketPerformance: {},
   };
 
@@ -167,20 +168,11 @@ exports.handler = async (event) => {
     console.log(`[self-optimize] ${market}: ${data.wins}W-${data.losses}L (${(marketWinRate*100).toFixed(0)}%), mult=${finalMult.toFixed(3)}`);
   }
 
-  // Cover probability cap adjustment
-  // If we're winning at rates above our predicted cover prob, caps are too low
-  // If we're losing despite high predicted cover prob, caps are too high
-  for (const [sm, data] of Object.entries(buckets.bySportMarket)) {
-    if (data.count < MIN_SAMPLE) continue;
-    const accuracy = data.wins / data.count;
-    // If accuracy > 55%, model is under-confident → raise cap slightly
-    // If accuracy < 48%, model is over-confident → lower cap slightly
-    if (accuracy > 0.55) {
-      params.coverProbAdjust[sm] = +Math.min(0.03, (accuracy - 0.55) * 0.5).toFixed(3);
-    } else if (accuracy < 0.48) {
-      params.coverProbAdjust[sm] = +Math.max(-0.03, (accuracy - 0.48) * 0.5).toFixed(3);
-    }
-  }
+  // coverProbAdjust REMOVED (observer rule). Shifting claimed probabilities toward whatever
+  // segment ran hot in the trailing window is momentum-chasing — it corrupted calibration
+  // and EV at the exact moment segments mean-reverted. Probability fixes belong in the
+  // pricing model's calibration constants, changed deliberately, never from a live loop.
+  // Per-segment win rates remain visible in buckets.bySportMarket (stored with history).
 
   // Edge bucket performance — identifies which edge ranges are profitable
   // This tells us whether to tighten or loosen edge thresholds
@@ -201,18 +193,17 @@ exports.handler = async (event) => {
     const roi = wagered > 0 ? data.profit / wagered : 0;
     params.sportROI[sport] = +roi.toFixed(4);
 
-    // If ROI is strongly positive, boost Kelly more aggressively (up to 1.20x)
+    // Diagnostic blend only — generators do not apply sportKellyMult (observer rule).
     if (roi > 0.05) {
       const roiBoost = Math.min(1.20, 1.0 + roi * 2);
-      // Blend with accuracy-based multiplier (70% accuracy, 30% ROI)
       const accuracyMult = params.sportKellyMult[sport] || 1.0;
       params.sportKellyMult[sport] = +((accuracyMult * 0.7 + roiBoost * 0.3)).toFixed(3);
-      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, blended mult=${params.sportKellyMult[sport]}`);
+      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, diagnostic mult=${params.sportKellyMult[sport]}`);
     } else if (roi < -0.05) {
       const roiPenalty = Math.max(0.85, 1.0 + roi * 2);
       const accuracyMult = params.sportKellyMult[sport] || 1.0;
       params.sportKellyMult[sport] = +((accuracyMult * 0.7 + roiPenalty * 0.3)).toFixed(3);
-      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, blended mult=${params.sportKellyMult[sport]}`);
+      console.log(`[self-optimize] ${sport} ROI=${(roi*100).toFixed(1)}%, diagnostic mult=${params.sportKellyMult[sport]}`);
     }
   }
 
@@ -277,7 +268,7 @@ exports.handler = async (event) => {
         body: JSON.stringify(params),
       }
     );
-    console.log(`[self-optimize] Stored optimized parameters (${allResults.length} results analyzed)`);
+    console.log(`[self-optimize] Stored observer report (${allResults.length} results analyzed; observationalOnly=true)`);
   } catch (e) {
     console.log(`[self-optimize] Failed to store params: ${e.message}`);
   }
@@ -299,9 +290,9 @@ exports.handler = async (event) => {
     statusCode: 200,
     body: JSON.stringify({
       sampleSize: allResults.length,
+      observationalOnly: true,
       sportMults: params.sportKellyMult,
       marketMults: params.marketKellyMult,
-      coverProbAdj: params.coverProbAdjust,
     }),
   };
 };

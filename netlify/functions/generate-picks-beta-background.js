@@ -3151,42 +3151,11 @@ exports.handler = async (event) => {
       console.log(`[v10] Prediction market: ${pmSignals} candidates matched, ${confirms} confirmed, ${cautions} cautioned (type-aligned)`);
     }
 
-    // ── PHASE 1C2: SELF-OPTIMIZATION PARAMETER APPLICATION ──
-    // Apply data-driven Kelly multipliers and cover prob adjustments from self-optimize.js
+    // ── PHASE 1C2: SELF-OPTIMIZATION PARAMETER APPLICATION — REMOVED ──
+    // Self-optimize is an OBSERVER only. Generators must never apply selfOptParams to live
+    // candidates (product hard rule). Fetch/log remains for analytics parity with Omega.
     if (selfOptParams) {
-      let soAdj = 0;
-      for (const c of allCandidates) {
-        let combined = 1.0;
-
-        // Sport-specific multiplier from self-optimization
-        const soSportMult = selfOptParams.sportKellyMult?.[c.sport];
-        if (soSportMult && soSportMult !== 1.0) combined *= soSportMult;
-
-        // Market-specific multiplier from self-optimization
-        const soMarketMult = selfOptParams.marketKellyMult?.[c.market];
-        if (soMarketMult && soMarketMult !== 1.0) combined *= soMarketMult;
-
-        // Only apply if combined adjustment is meaningful
-        if (Math.abs(combined - 1.0) > 0.01) {
-          const old = c.kellyUnits;
-          c.kellyUnits = Math.max(0.5, Math.round(c.kellyUnits * combined * 2) / 2);
-          if (old !== c.kellyUnits) {
-            c.kellyCalcStr += ` [SELF-OPT: ${combined.toFixed(3)}x, ${old}u→${c.kellyUnits}u]`;
-            soAdj++;
-          }
-        }
-
-        // Cover probability cap adjustment
-        const sm = `${c.sport}_${c.market}`;
-        const capAdj = selfOptParams.coverProbAdjust?.[sm];
-        if (capAdj && Math.abs(capAdj) > 0.005) {
-          // This is informational — caps are already set in COVER_PROB_CAPS
-          // The self-optimize engine suggests adjustments; we apply them as a secondary multiplier
-          const probShift = 1.0 + capAdj;
-          c.coverProb = +Math.min(0.70, c.coverProb * probShift).toFixed(4);
-        }
-      }
-      console.log(`[v10-selfopt] Applied self-optimization to ${soAdj} candidates (sample: ${selfOptParams.sampleSize})`);
+      console.log(`[v10-selfopt] Params loaded (sample: ${selfOptParams.sampleSize}) — observational only, no candidate mutation`);
     }
 
     // ── PHASE 1D: OPENING LINE / STALE LINE DETECTION ──

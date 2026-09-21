@@ -3,7 +3,7 @@
 const { KELLY_FRACTION } = require('./config');
 const {
   americanToDecimal, formatAmerican, kellyFraction, kellyToUnits,
-  formatMoneylinePick, formatEdgePct,
+  formatMoneylinePick, formatEdgePct, unitsToRating, ratingToConfidence,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
 
@@ -139,31 +139,39 @@ function optimizeParlay(yesPool, straights = []) {
     ? `+${Math.round((chosen.combinedDecimal - 1) * 100)}`
     : `${Math.round(-100 / (chosen.combinedDecimal - 1))}`;
 
-  const legs = chosen.legs.map(l => ({
-    pick: formatMoneylinePick(l.side, l.market),
-    pickDisplay: formatMoneylinePick(l.side, l.market),
-    sport: l.sport,
-    matchup: l.matchup,
-    betType: l.market,
-    odds: formatAmerican(l.odds),
-    commenceTime: l.commenceTime || '',
-    coverProb: `${(l.coverProb * 100).toFixed(0)}%`,
-    ev: `${((l.ev || 0) * 100).toFixed(1)}%`,
-    edgePct: l.edgePct != null
-      ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
-      : undefined,
-    // Optional card chrome — straights carry rating/units; legs may inherit later from matching straight
-    rating: l.rating || null,
-    confidence: l.confidence || null,
-    units: l.units || null,
-    coreReasoning: l.coreReasoning || '',
-    homeTeam: l.homeTeam,
-    awayTeam: l.awayTeam,
-    p_model: l.p_model,
-    fair_sharp_p: l.fair_sharp_p,
-    predictedClv: l.predictedClv,
-    modelVersion: l.modelVersion,
-  }));
+  const legs = chosen.legs.map(l => {
+    // Grade chrome for card badges — size as if straight so A/A-/B+ colors match
+    const kFrac = kellyFraction(l.coverProb, l.odds, KELLY_FRACTION);
+    const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.5) || 0.25;
+    const rating = l.rating || unitsToRating(legUnits);
+    const confidence = (typeof l.confidence === 'number' || typeof l.confidence === 'string')
+      ? l.confidence
+      : ratingToConfidence(rating);
+    return {
+      pick: formatMoneylinePick(l.side, l.market),
+      pickDisplay: formatMoneylinePick(l.side, l.market),
+      sport: l.sport,
+      matchup: l.matchup,
+      betType: l.market,
+      odds: formatAmerican(l.odds),
+      commenceTime: l.commenceTime || '',
+      coverProb: `${(l.coverProb * 100).toFixed(0)}%`,
+      ev: `${((l.ev || 0) * 100).toFixed(1)}%`,
+      edgePct: l.edgePct != null
+        ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
+        : undefined,
+      rating,
+      confidence,
+      units: l.units || `${legUnits}u`,
+      coreReasoning: l.coreReasoning || '',
+      homeTeam: l.homeTeam,
+      awayTeam: l.awayTeam,
+      p_model: l.p_model,
+      fair_sharp_p: l.fair_sharp_p,
+      predictedClv: l.predictedClv,
+      modelVersion: l.modelVersion,
+    };
+  });
 
   return [{
     type: `${legs.length}-leg-parlay-${independent ? 'optimized' : 'straight'}`,

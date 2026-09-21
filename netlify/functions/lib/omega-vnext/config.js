@@ -1,18 +1,19 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.0.7-omega-vnext-clv';
+const MODEL_VERSION = 'v12.0.8-omega-vnext-clv';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
 /**
- * Hard cap on TOTAL daily units bet: straights + Daily Lock Parlay stake ≤ 5.0u.
- * If sum would exceed 5: (1) scale parlay down first (floor 0.25u), then
+ * Hard MAX on TOTAL daily units bet: straights + Daily Lock Parlay stake ≤ 4.0u.
+ * Card does NOT have to equal 4u — only the ceiling. If sum would exceed 4:
+ * (1) scale parlay down first (floor 0.25u), then
  * (2) reduce lowest-confidence straights in 0.25u steps (floor 0.25u),
  * preserving grade order (A+ > A > A- > B+ > B) after recompute + sort.
  */
-const DAILY_UNIT_CAP = 5.0;
+const DAILY_UNIT_CAP = 4.0;
 const LEAN_PAD = false; // empty card OK — never force-fill
 
 const SPORTS_ENABLED = {
@@ -92,6 +93,7 @@ const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.5, NBA: 2.5, NHL: 0.15 }; // pts or 
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.0.8 omega-vnext: DAILY_UNIT_CAP max 4.0u (not a fill target); parlay leg rating badges; Daily Lock titles + summary UX.',
   'v12.0.7 omega-vnext: fix isotonic soft-cap (was inflating ~hi); stronger shrink so Edge badge stays honest vs sharp fair.',
   'v12.0.6 omega-vnext: daily unit cap 5.0u incl. parlay; ML pick labels; Edge badge = model edge after shrink vs no-vig sharp; stronger shrink; Daily Lock Parlay UX.',
   'v12.0.5 omega-vnext: ensure whatLoses/dataVerified/clvExpectation after Claude narrate + verify.',
@@ -106,7 +108,7 @@ const MODEL_NOTES = [
   'Weekly CLV report is OBSERVER ONLY — no auto-steer.',
   'QA hard-fails drop scratched SP (MLB), QB out/doubtful (NFL/NCAAF), and stale odds before publish.',
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
-  'DAILY_UNIT_CAP=5.0 includes straights + parlay; overage cuts parlay first then lowest-confidence straights.',
+  'DAILY_UNIT_CAP=4.0 MAX includes straights + parlay (card may be under 4u); overage cuts parlay first then lowest-confidence straights.',
 ].join(' ');
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';

@@ -26,11 +26,11 @@ function impliedProb(odds) { return odds < 0 ? Math.abs(odds) / (Math.abs(odds) 
 function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10); }
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
-function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
+function unitsToRating(u) { if (u >= 1.5) return "aplus"; if (u >= 1.0) return "a"; if (u >= 0.75) return "aminus"; if (u >= 0.5) return "bplus"; return "b"; } // aligned w/ omega-vnext thresholds
 function confFromUnits(u) { return u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b"; }
 
-// Omega v12.0.6: total daily units (straights + parlay) ≤ 5.0u
-const OMEGA_DAILY_UNIT_CAP = 5.0;
+// Omega v12.0.8: total daily units (straights + parlay) ≤ 4.0u MAX (not a fill target)
+const OMEGA_DAILY_UNIT_CAP = 4.0;
 function enforceOmegaDailyUnitCap(picksData) {
   if (!picksData || !Array.isArray(picksData.picks)) return;
   const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
@@ -74,6 +74,7 @@ function enforceOmegaDailyUnitCap(picksData) {
         const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
         picksData.picks[idx].units = fmtU(nu);
         picksData.picks[idx].rating = unitsToRating(nu);
+        picksData.picks[idx].confidence = confFromUnits(nu);
         total -= 0.25;
         reduced = true;
         break;

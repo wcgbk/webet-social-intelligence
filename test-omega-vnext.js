@@ -19,9 +19,9 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.0.7-omega-vnext-clv');
+assert.strictEqual(config.MODEL_VERSION, 'v12.0.8-omega-vnext-clv');
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
-assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
+assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
 assert.strictEqual(config.LEAN_PAD, false);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);
 assert.ok(Math.abs(math.evAtOdds(0.55, -110) - (0.55 * (100/110 + 1) - 1)) < 1e-9);
@@ -103,7 +103,7 @@ if (parlays.length) {
   assert.ok(parlays[0].type.includes('parlay'));
 }
 
-// Daily unit cap includes parlay ≤ 5.0u
+// Daily unit cap includes parlay ≤ 4.0u MAX
 {
   const fat = [
     { pick: 'A', rating: 'aplus', units: '1.5u', confidence: 90 },
@@ -114,7 +114,7 @@ if (parlays.length) {
   const capped = select.applyDailyUnitCap(fat, fatParlay);
   const total = capped.picks.reduce((s, p) => s + parseFloat(p.units), 0)
     + capped.parlayLegs.reduce((s, pl) => s + parseFloat(pl.units), 0);
-  assert.ok(total <= 5.0 + 1e-9, `cap total=${total}`);
+  assert.ok(total <= 4.0 + 1e-9, `cap total=${total}`);
   // Parlay should be cut first toward 0.25
   assert.ok(parseFloat(capped.parlayLegs[0].units) <= 1.5);
   // Sorted by grade
@@ -146,12 +146,22 @@ if (parlays.length) {
   assert.ok('coreReasoning' in parlays[0].legs[0]);
 }
 
+// Parlay legs carry rating/confidence for badge chrome
+if (parlays.length) {
+  assert.ok(parlays[0].legs[0].rating, 'parlay leg must have rating');
+  assert.ok(parlays[0].legs[0].confidence != null, 'parlay leg must have confidence');
+}
+
 // UI file checks
 const html = require('fs').readFileSync(path.join(__dirname, 'daily-omega/index.html'), 'utf8');
 assert.ok(!/Unlock — 1 WeBit/.test(html));
 assert.ok(!/graded with the slip/i.test(html));
 assert.ok(!/Sharp Depth \(premium gate/.test(html));
 assert.ok(/Daily Lock Parlay/.test(html));
+assert.ok(/Daily Lock - Top 3 Straight Picks/.test(html));
+assert.ok(/Daily Lock - Top 3 Leg Parlay/.test(html));
+assert.ok(/resolveRatingKey/.test(html));
+assert.ok(!/apiParlay\.correlationNote/.test(html));
 assert.ok(/Bet Slip — Summary/.test(html));
 assert.ok(/ensureMlLabel/.test(html));
 assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));

@@ -118,9 +118,10 @@ function applyDailyCap(picks) {
 }
 
 /**
- * DAILY_UNIT_CAP includes straights + parlay stake.
- * Overage: cut parlay first (floor 0.25u), then lowest-confidence straights
- * in 0.25u steps (floor 0.25u). Recompute grades; sort A+→B then units desc.
+ * DAILY_UNIT_CAP (4.0u MAX) includes straights + parlay stake. Not a fill target —
+ * total may be under the cap. Overage: cut parlay first (floor 0.25u), then
+ * lowest-confidence straights in 0.25u steps (floor 0.25u). Recompute grades;
+ * sort A+→B then units desc.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
   let out = (picks || []).map(p => ({ ...p }));

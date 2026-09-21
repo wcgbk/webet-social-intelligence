@@ -9,7 +9,7 @@
 const { isCfbSport, formatCfbPickDisplay, formatCfbMatchupDisplay } = require('./cfb-school-name');
 
 const PICK_KEEP = [
-  'pick', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
+  'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
   'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
 ];

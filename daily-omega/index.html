@@ -779,10 +779,24 @@
     if (m && m[1].trim()) return (formatCfbSchoolName(m[1]) + m[2]).replace(/\s+/g, ' ').trim();
     return formatCfbSchoolName(s);
   }
-  function displayPick(pick, sport) {
+  /** Append " ML" for bare moneyline team-name picks (idempotent). */
+  function ensureMlLabel(pick, betType) {
+    const s = String(pick || '').trim();
+    if (!s) return s;
+    const m = String(betType || '');
+    const isML = /moneyline/i.test(m) || (!m && !/[+-]\d/.test(s) && !/^(?:F5\s+)?(?:Over|Under)\b/i.test(s) && !/\bML\b/i.test(s) && !/\d/.test(s));
+    // Only force when betType says moneyline, or pick looks like bare team name with moneyline context
+    if (/moneyline/i.test(m)) {
+      if (/\bML\b/i.test(s) || /[+-]\d/.test(s) || /^(?:F5\s+)?(?:Over|Under)\b/i.test(s)) return s;
+      return s + ' ML';
+    }
+    return s;
+  }
+  function displayPick(pick, sport, betType) {
     if (!pick) return '';
     if (String(sport || '').toUpperCase() === 'PARLAY') return pick;
-    return isCfbSport(sport) ? formatCfbPickDisplay(pick) : pick;
+    const labeled = ensureMlLabel(pick, betType);
+    return isCfbSport(sport) ? formatCfbPickDisplay(labeled) : labeled;
   }
   function displayTeam(name, sport) {
     return isCfbSport(sport) ? formatCfbSchoolName(name) : teamOnly(name);
@@ -1531,7 +1545,7 @@
     }
 
     const edgeBadgeHTML = (p.edgePct || p.ev)
-      ? `<span class="edge-badge" title="Calibrated edge at the posted price"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>`
+      ? `<span class="edge-badge" title="Calibrated model edge after shrink vs no-vig sharp (not CLV cents)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>`
       : '';
 
     const ratingHTML = badge && label
@@ -1560,7 +1574,7 @@
         </div>
         ${scorebar}
         <div class="pick-line">
-          <span class="pick-name">${esc(displayPick(p.pick, p.sport))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
+          <span class="pick-name">${esc(displayPick(p.pick, p.sport, p.betType))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
           <span class="pick-odds">${esc(p.odds || '')}</span>
         </div>
         <div class="pick-divider"></div>
@@ -1618,11 +1632,18 @@
   }
 
   function renderPicks(data) {
-    const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5 };
+    const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5, 'A+': 0, 'A': 1, 'A-': 2, 'B+': 3, 'B': 4, 'Lean': 5 };
     const picks = (data.picks || []).slice(0, 3).sort((a, b) => {
-      const rA = ratingOrder[a.confidence] ?? 4;
-      const rB = ratingOrder[b.confidence] ?? 4;
-      return rA - rB;
+      const keyA = (typeof a.rating === 'string' && ratingOrder[a.rating] != null) ? a.rating
+        : (typeof a.confidence === 'string' ? a.confidence : a.rating);
+      const keyB = (typeof b.rating === 'string' && ratingOrder[b.rating] != null) ? b.rating
+        : (typeof b.confidence === 'string' ? b.confidence : b.rating);
+      const rA = ratingOrder[keyA] ?? 4;
+      const rB = ratingOrder[keyB] ?? 4;
+      if (rA !== rB) return rA - rB;
+      const uA = parseFloat(a.units) || 0;
+      const uB = parseFloat(b.units) || 0;
+      return uB - uA;
     });
     picksDataGlobal = { ...data, picks };
     const summary = data.summary || {};
@@ -1719,7 +1740,7 @@
     const straightSummaryRows = [];
     for (let i = 0; i < picks.length; i++) {
       const p = picks[i];
-      const rendered = renderPickCard(p, { dollarPerUnit, depthSlot: true, showStake: true });
+      const rendered = renderPickCard(p, { dollarPerUnit, depthSlot: false, showStake: true });
       html += rendered.html;
       legResults.push({ pick: p, game: rendered.game, result: rendered.result });
 
@@ -1739,7 +1760,7 @@
       else if (rendered.result.status === 'push') resultBadge = '<span class="leg-result leg-push">— P</span>';
 
       straightSummaryRows.push({
-        label: esc(displayPick(p.pick, p.sport)),
+        label: esc(displayPick(p.pick, p.sport, p.betType)),
         sub: esc(shortMatchup(p.matchup, p.sport)),
         meta: resultBadge,
         units: `${(p.units || '1u').toString().replace(/u$/i, '')}u`,
@@ -1748,10 +1769,27 @@
       });
     }
 
-    html += sectionSummaryHTML('Straight Bets — Summary', straightSummaryRows, totalStraightUnits, totalStraightRisk, totalStraightWin);
+    // ONE summary table: straights + Daily Lock Parlay row (no separate bottom parlay summary)
+    const combinedSummaryRows = straightSummaryRows.slice();
+    if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
+      const legCount = optimizedParlayLegs.length;
+      combinedSummaryRows.push({
+        label: 'Daily Lock Parlay',
+        sub: esc(`${legCount}-leg · ${parlayOddsStr || ''}`),
+        meta: '',
+        units: `${parlayUnits}u`,
+        risk: parlayRisk.toLocaleString(),
+        win: Math.round(parlayWin).toLocaleString(),
+        highlight: true,
+      });
+    }
+    const summaryTotalUnits = totalStraightUnits + (apiParlay ? parlayUnits : 0);
+    const summaryTotalRisk = totalStraightRisk + (apiParlay ? parlayRisk : 0);
+    const summaryTotalWin = totalStraightWin + (apiParlay ? parlayWin : 0);
+    html += sectionSummaryHTML('Bet Slip — Summary', combinedSummaryRows, summaryTotalUnits, summaryTotalRisk, summaryTotalWin);
     html += `</div>`;
 
-    // ═══ SECTION 2: Optimized Parlay (API only — hide if empty) ═══
+    // ═══ SECTION 2: Daily Lock Parlay legs only (API) — no redundant odds/units card ═══
     let parlayBonusResult = null;
     if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
       const legCount = optimizedParlayLegs.length;
@@ -1762,24 +1800,17 @@
           : '');
 
       html += `<div class="card-section">
-        <div class="card-section-title parlay-sec">Optimized ${legCount} Pick Parlay</div>
-        <div class="parlay-section" style="margin-bottom:.75rem;">
-          <div class="parlay-header">
-            <span class="parlay-name">Daily Lock Parlay</span>
-            <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
-          </div>
-          <div class="parlay-payout">${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${Math.round(parlayWin).toLocaleString()}</div>
-          ${corrNote}
-        </div>`;
+        <div class="card-section-title parlay-sec">Daily Lock Parlay</div>
+        ${corrNote}`;
 
       for (const rawLeg of optimizedParlayLegs) {
         const leg = enrichParlayLeg(rawLeg, picks);
-        const isStraightDup = picks.some(p => p.pick === leg.pick);
+        const isStraightDup = picks.some(p => p.pick === leg.pick || p.pick === ensureMlLabel(leg.pick, leg.betType));
         const rendered = renderPickCard(leg, {
           dollarPerUnit,
           showStake: false,
           parlayOnly: !isStraightDup,
-          footerNote: 'Parlay leg — graded with the slip',
+          footerNote: `${esc(leg.betType || 'Leg')} · ${esc(leg.odds || '')}`,
           depthSlot: false,
         });
         html += rendered.html;
@@ -1820,21 +1851,6 @@
         </div>`;
       }
 
-      html += sectionSummaryHTML(
-        'Parlay — Summary',
-        [{
-          label: `${legCount}-Team Parlay`,
-          sub: esc(parlayOddsStr || ''),
-          meta: '',
-          units: `${parlayUnits}u`,
-          risk: parlayRisk.toLocaleString(),
-          win: Math.round(parlayWin).toLocaleString(),
-          highlight: true,
-        }],
-        parlayUnits,
-        parlayRisk,
-        parlayWin
-      );
       html += `</div>`;
     }
 
@@ -2024,7 +2040,7 @@
       for (const td of todayDetails) {
         const p = td.pick;
         html += `<li>
-          <span>${esc(displayPick(p.pick, p.sport))} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span></span>
+          <span>${esc(displayPick(p.pick, p.sport, p.betType))} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span></span>
           <span>${td.rightSide}</span>
         </li>`;
       }
@@ -2064,7 +2080,7 @@
           const profitBadge = p.result === 'pending' ? '' :
             `<span class="${p.profit >= 0 ? 'profit-positive' : 'profit-negative'}" style="font-size:.65rem; margin-left:.25rem;">${p.profit >= 0 ? '+' : ''}$${Math.abs(p.profit)}</span>`;
           html += `<li>
-            <span>${esc(displayPick(p.pick, p.sport))} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span>${p.score ? ` <span style="color:var(--txt-m); font-weight:600;">(${p.score})</span>` : ''}</span>
+            <span>${esc(displayPick(p.pick, p.sport, p.betType))} <span style="color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}</span>${p.score ? ` <span style="color:var(--txt-m); font-weight:600;">(${p.score})</span>` : ''}</span>
             <span><span class="result-badge ${rb}">${rl}</span>${profitBadge}</span>
           </li>`;
         }
@@ -2171,7 +2187,7 @@
 
         html += '<div style="margin-bottom:.625rem; padding-bottom:.625rem;' + (p < picks.length - 1 ? ' border-bottom:1px solid var(--border-lt);' : '') + '">';
         html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.25rem;">';
-        html += '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">' + esc(displayPick(pick.pick, pick.sport)) + ' ' + esc(pick.odds) + '</span>';
+        html += '<span style="font-size:.8125rem; font-weight:600; color:var(--olive);">' + esc(displayPick(pick.pick, pick.sport, pick.betType)) + ' ' + esc(pick.odds) + '</span>';
 
         if (agent) {
           var vClass = agent.verdict === 'agree' ? 'agree' : agent.verdict === 'disagree' ? 'disagree' : 'caution';
@@ -2227,97 +2243,6 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeVerifyModal();
   });
-</script>
-<script>
-// ── Sharp Depth (premium gate v1) — WeBit-gated depth on today's card ──
-(function () {
-  var css = document.createElement('style');
-  css.textContent = [
-    '.wb-unlock-bar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;background:#eef6f5;border:1px solid rgba(0,76,84,.18);border-radius:12px;padding:.625rem .875rem;margin:0 0 1rem;}',
-    '.wb-unlock-txt{font-size:.8125rem;color:#0f3d42;font-weight:600;}',
-    '.wb-unlock-txt small{display:block;font-weight:500;color:#5b7d7a;font-size:.6875rem;margin-top:1px;}',
-    '.wb-unlock-btn{flex-shrink:0;background:#004C54;color:#fff;border:none;border-radius:18px;padding:.45rem .9rem;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;}',
-    '.wb-unlock-btn:disabled{opacity:.55;cursor:default;}',
-    '.wb-depth{background:#f0f7f6;border:1px solid rgba(0,76,84,.15);border-radius:10px;padding:.625rem .75rem;margin-top:.625rem;font-size:.75rem;color:#1d4a4f;line-height:1.5;}',
-    '.wb-depth .t{font-size:.625rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#00767c;margin-bottom:.375rem;display:flex;align-items:center;gap:.3rem;}',
-    '.wb-depth code{display:block;background:rgba(0,76,84,.06);border-radius:6px;padding:.375rem .5rem;font-size:.6875rem;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:.25rem 0;}',
-    '.wb-depth .row{margin:.2rem 0;}',
-    '@media (max-width:560px){.wb-unlock-bar{flex-direction:column;align-items:stretch;text-align:center;}}'
-  ].join('\n');
-  document.head.appendChild(css);
-
-  var depthData = null;
-
-  function renderDepth() {
-    if (!depthData) return;
-    depthData.forEach(function (d) {
-      var card = document.querySelector('.pick-card[data-wb-pick="' + (window.CSS && CSS.escape ? CSS.escape(d.pick) : d.pick) + '"]');
-      if (!card) {
-        var cards = document.querySelectorAll('.pick-card[data-wb-pick]');
-        for (var i = 0; i < cards.length; i++) if (cards[i].getAttribute('data-wb-pick') === d.pick) { card = cards[i]; break; }
-      }
-      if (!card) return;
-      var slot = card.querySelector('.wb-depth-slot');
-      if (!slot || slot.childNodes.length) return;
-      var el = document.createElement('div');
-      el.className = 'wb-depth';
-      var h = '<div class="t">🔓 Sharp Depth</div>';
-      if (d.kellyCalc) h += '<div class="row"><strong>Kelly math:</strong><code>' + escTxt(d.kellyCalc) + '</code></div>';
-      if (d.zScore != null) h += '<div class="row"><strong>Model z-score:</strong> ' + escTxt(String(d.zScore)) + (d.coverProb ? ' · <strong>Calibrated:</strong> ' + escTxt(d.coverProb) : '') + '</div>';
-      if (d.whatLoses) h += '<div class="row"><strong>What beats this pick:</strong> ' + escTxt(d.whatLoses) + '</div>';
-      if (d.clvExpectation) h += '<div class="row"><strong>Line move expectation:</strong> ' + escTxt(d.clvExpectation) + '</div>';
-      el.innerHTML = h;
-      slot.appendChild(el);
-    });
-  }
-
-  function escTxt(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-
-  function insertBar(user) {
-    if (document.getElementById('wb-unlock-bar')) return;
-    var firstCard = document.querySelector('.pick-card[data-wb-pick]');
-    if (!firstCard) return;
-    var bar = document.createElement('div');
-    bar.className = 'wb-unlock-bar';
-    bar.id = 'wb-unlock-bar';
-    var signedIn = !!user;
-    bar.innerHTML = '<span class="wb-unlock-txt">Sharp Depth: the full Kelly math, model z-scores, and failure scenarios behind today’s card.<small>' +
-      (signedIn ? '1 WeBit unlocks the whole day · your balance: ' + Number(user.credit_balance || 0).toLocaleString() : 'Sign in free — 1,000 WeBit included') + '</small></span>' +
-      '<button class="wb-unlock-btn" id="wb-unlock-btn" type="button">' + (signedIn ? '🔓 Unlock — 1 WeBit' : '𝕏 Sign in to unlock') + '</button>';
-    firstCard.parentNode.insertBefore(bar, firstCard);
-    document.getElementById('wb-unlock-btn').addEventListener('click', function () {
-      if (!signedIn) { location.href = '/.netlify/functions/auth-x-init'; return; }
-      var btn = this;
-      btn.disabled = true; btn.textContent = 'Unlocking…';
-      fetch('/.netlify/functions/get-picks-premium', { method: 'POST', credentials: 'include' })
-        .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
-        .then(function (res) {
-          if (res.s === 401) { location.href = '/.netlify/functions/auth-x-init'; return; }
-          if (res.s === 402) { btn.disabled = false; btn.textContent = 'Need WeBit — get a pack'; btn.onclick = function () { location.href = '/webit'; }; return; }
-          if (!res.j || !res.j.ok) throw new Error('failed');
-          depthData = res.j.depth || [];
-          renderDepth();
-          btn.textContent = '✓ Unlocked · balance ' + Number(res.j.balance).toLocaleString();
-        })
-        .catch(function () { btn.disabled = false; btn.textContent = 'Try again'; });
-    });
-  }
-
-  var user = null;
-  fetch('/.netlify/functions/auth-me', { credentials: 'include' })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .catch(function () { return null; })
-    .then(function (u) {
-      if (u && u.error) u = null;
-      user = u;
-      var tries = 0;
-      var iv = setInterval(function () {
-        tries++;
-        if (document.querySelector('.pick-card[data-wb-pick]')) { clearInterval(iv); insertBar(user); }
-        else if (tries > 40) clearInterval(iv);
-      }, 500);
-    });
-})();
 </script>
 <script src="/nav.js" defer></script>
 

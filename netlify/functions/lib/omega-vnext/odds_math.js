@@ -111,6 +111,63 @@ function normCdf(z) {
   return clamp(p, 0.001, 0.999);
 }
 
+
+/**
+ * Honest UI Edge badge value (fraction 0–1): calibrated EV at posted American odds.
+ * EV = coverProb * decimal(odds) - 1. Never predictedClv cents, never raw coverProb.
+ */
+function calibratedEdgeFraction(coverProb, american) {
+  return evAtOdds(coverProb, american);
+}
+
+/** Format as "X.X%" for card badges. */
+function formatEdgePct(edgeFrac) {
+  if (!Number.isFinite(edgeFrac)) return null;
+  return `${(edgeFrac * 100).toFixed(1)}%`;
+}
+
+/**
+ * Append " ML" when the market is moneyline and the pick string is bare team name.
+ * Idempotent — skips if already has ML, spread number, or Over/Under.
+ */
+function formatMoneylinePick(side, market) {
+  const s = String(side || '').trim();
+  if (!s) return s;
+  const m = String(market || '');
+  const isML = /moneyline/i.test(m) || (/\bml\b/i.test(m) && !/spread|total|run line/i.test(m));
+  if (!isML) return s;
+  if (/\bML\b/i.test(s)) return s;
+  if (/[+-]\d/.test(s)) return s;
+  if (/^(?:F5\s+)?(?:Over|Under)\b/i.test(s)) return s;
+  return `${s} ML`;
+}
+
+/** Grade rank: lower = higher confidence (A+ first). */
+function ratingRank(rating) {
+  const r = String(rating || '').toLowerCase().replace(/\s+/g, '');
+  const map = {
+    aplus: 0, 'a+': 0,
+    a: 1,
+    aminus: 2, 'a-': 2,
+    bplus: 3, 'b+': 3,
+    b: 4,
+    lean: 5,
+  };
+  return map[r] != null ? map[r] : 4;
+}
+
+/** Sort picks: grade (A+→B) then higher units first. */
+function sortByGradeThenUnits(picks) {
+  return [...(picks || [])].sort((a, b) => {
+    const ra = ratingRank(a.rating || a.confidence);
+    const rb = ratingRank(b.rating || b.confidence);
+    if (ra !== rb) return ra - rb;
+    const ua = parseFloat(String(a.units || '0').replace(/[^0-9.]/g, '')) || 0;
+    const ub = parseFloat(String(b.units || '0').replace(/[^0-9.]/g, '')) || 0;
+    return ub - ua;
+  });
+}
+
 module.exports = {
   americanToImplied,
   americanToDecimal,
@@ -126,4 +183,9 @@ module.exports = {
   americanCentsDiff,
   clamp,
   normCdf,
+  calibratedEdgeFraction,
+  formatEdgePct,
+  formatMoneylinePick,
+  ratingRank,
+  sortByGradeThenUnits,
 };

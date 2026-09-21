@@ -3,6 +3,7 @@
 const { KELLY_FRACTION } = require('./config');
 const {
   americanToDecimal, formatAmerican, kellyFraction, kellyToUnits,
+  formatMoneylinePick, formatEdgePct,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
 
@@ -139,7 +140,8 @@ function optimizeParlay(yesPool, straights = []) {
     : `${Math.round(-100 / (chosen.combinedDecimal - 1))}`;
 
   const legs = chosen.legs.map(l => ({
-    pick: l.side,
+    pick: formatMoneylinePick(l.side, l.market),
+    pickDisplay: formatMoneylinePick(l.side, l.market),
     sport: l.sport,
     matchup: l.matchup,
     betType: l.market,
@@ -148,7 +150,7 @@ function optimizeParlay(yesPool, straights = []) {
     coverProb: `${(l.coverProb * 100).toFixed(0)}%`,
     ev: `${((l.ev || 0) * 100).toFixed(1)}%`,
     edgePct: l.edgePct != null
-      ? (typeof l.edgePct === 'number' ? `${(l.edgePct * (l.edgePct <= 1 ? 100 : 1)).toFixed(1)}%` : String(l.edgePct))
+      ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
       : undefined,
     // Optional card chrome — straights carry rating/units; legs may inherit later from matching straight
     rating: l.rating || null,

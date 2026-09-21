@@ -23,11 +23,14 @@ function shrinkTowardSharp(pModel, pSharp, market) {
   return clamp(raw, 0.02, 0.98);
 }
 
-/** Mild monotone clip: pull extreme calibrated probs inward. */
-function isotonicClip(p, lo = 0.35, hi = 0.72) {
+/**
+ * Mild monotone clip: pull extreme calibrated probs inward.
+ * v12.0.6: tighter band (0.40–0.60) so Edge/EV badges stay honest vs soft 65%+ covers.
+ */
+function isotonicClip(p, lo = 0.40, hi = 0.60) {
   if (!Number.isFinite(p)) return p;
-  if (p < lo) return lo + (p - 0.02) * 0.15;
-  if (p > hi) return hi + (0.98 - p) * 0.15;
+  if (p < lo) return lo + (p - 0.02) * 0.12;
+  if (p > hi) return hi + (0.98 - p) * 0.12;
   return p;
 }
 

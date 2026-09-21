@@ -7,7 +7,7 @@ const { ingest } = require('./ingest');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
-const { selectStraights, toPickObject, applyDailyCap } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -130,6 +130,7 @@ async function generateOmegaVnext(opts = {}) {
   if (hardFails.length) {
     console.log(`[omega-vnext] QA hard-fails=${hardFails.length}: ${hardFails.map(h => h.reason).join('; ')}`);
   }
+  // Provisional straight-only trim; final 5u cap (incl. parlay) applied after optimizeParlay
   picks = applyDailyCap(picks);
 
   const poolForParlay = qa.yesPoolRemaining || yesPool;
@@ -159,7 +160,16 @@ async function generateOmegaVnext(opts = {}) {
   picks = attachClvFields(picks, MODEL_VERSION, dateISO);
   parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
 
-  const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0);
+  // Final daily unit cap: straights + parlay ≤ DAILY_UNIT_CAP (5.0u). Sort grade then units.
+  {
+    const capped = applyDailyUnitCap(picks, parlayLegs);
+    picks = capped.picks;
+    parlayLegs = capped.parlayLegs;
+  }
+  picks = sortByGradeThenUnits(picks);
+
+  const parlayUnits = (parlayLegs || []).reduce((s, pl) => s + (parseFloat(pl.units) || 0), 0);
+  const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0) + parlayUnits;
   const sportsCovered = [...new Set(picks.map(p => p.sport))];
 
   const candidateTable = yesPool.slice(0, 15).map((c, i) => ({

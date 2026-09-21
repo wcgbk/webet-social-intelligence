@@ -18,7 +18,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.0.3-omega-vnext-clv');
+assert.strictEqual(config.MODEL_VERSION, 'v12.0.4-omega-vnext-clv');
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
 assert.strictEqual(config.LEAN_PAD, false);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);
@@ -43,6 +43,7 @@ assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));
+assert.ok('whatLoses' in picks[0] && 'dataVerified' in picks[0] && 'clvExpectation' in picks[0]);
 const withClv = clv.attachClvFields(picks);
 assert.ok(withClv[0].modelVersion === MODEL_VERSION);
 
@@ -60,6 +61,9 @@ assert.strictEqual(typeof nfl.project, 'function');
 assert.strictEqual(typeof cfb.project, 'function');
 
 const narrate = require(path.join(root, 'narrate'));
+const narrateSrc = require('fs').readFileSync(path.join(root, 'narrate.js'), 'utf8');
+assert.ok(narrateSrc.includes("claude-sonnet-4-6"), 'narrate must use claude-sonnet-4-6');
+assert.ok(!narrateSrc.includes("claude-sonnet-4-20250514"), 'old sonnet date-id must be gone');
 const fb = narrate.buildFallbackNarrative({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105' });
 assert.ok(fb.includes('WeBetAI'));
 assert.ok(!/clears Omega vNext gates|predicted CLV/i.test(fb));

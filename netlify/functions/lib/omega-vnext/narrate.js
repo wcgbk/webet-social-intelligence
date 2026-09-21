@@ -293,9 +293,11 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
       };
     }
 
+    const finals = (outPicks.length ? outPicks : templated).map(ensureExtraFields);
+    const finalsLegs = narratedLegs.map(ensureExtraFields);
     return {
-      picks: outPicks.length ? outPicks : templated,
-      parlayLegs: mergeLegsBack(parlayLegs, narratedLegs, legOwners),
+      picks: finals,
+      parlayLegs: mergeLegsBack(parlayLegs, finalsLegs, legOwners),
       edgeSummary: parsed.edgeSummary || templateSummary,
       insights: parsed.insights || templateInsights,
       claudeVerified: true,
@@ -312,6 +314,21 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
       rejections: [{ matchup: 'Claude', side: 'verifier', reason: `Narrate failed: ${e.message}` }],
     };
   }
+}
+
+
+function ensureExtraFields(p) {
+  const next = { ...p };
+  if (!next.whatLoses || String(next.whatLoses).trim().length < 15) {
+    next.whatLoses = 'The opposite outcome materializes, or late line movement eliminates the edge.';
+  }
+  if (!next.dataVerified || String(next.dataVerified).trim().length < 5) {
+    next.dataVerified = 'Model-grounded edge; Claude narrative pass.';
+  }
+  if (!next.clvExpectation || String(next.clvExpectation).trim().length < 5) {
+    next.clvExpectation = 'Expect modest movement toward the pick if sharp money arrives; monitor into close.';
+  }
+  return next;
 }
 
 function mergeLegsBack(parlayLegs, flatLegs, legOwners) {

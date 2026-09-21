@@ -167,7 +167,7 @@ for (const page of ['daily-omega/index.html', 'nfl/index.html', 'cfb/index.html'
 }
 check('get-results-omega KPI window + cache + NCAAF school match', () => {
   const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/get-results-omega.js'), 'utf8');
-  assert.ok(src.includes('2026-09-05'), 'Omega KPI epoch present');
+  assert.ok(src.includes('2026-09-22'), 'Omega KPI epoch present (v12 reset)');
   assert.ok(/results-omega-cache-v\d+/.test(src), 'results cache key versioned');
   assert.ok(src.includes("sport === 'NCAAF'") || src.includes('NCAAF'), 'NCAAF handling');
   assert.ok(src.includes("require('./lib/espn-scoreboard')"));

@@ -13,7 +13,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v4';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v5';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -375,13 +375,13 @@ exports.handler = async (event) => {
       }
     } catch (e) {}
 
-    // OMEGA: KPIs reset to start 2026-09-05 (Ben/Omega-directed). Omega store ONLY —
-    // no alpha/beta back-merge. Daily + cumulative ignore any pre-floor blob dates.
-    // Optional ?from=YYYY-MM-DD can raise the floor further; default stays 2026-09-05 (intentional MAIN reset).
+    // OMEGA: KPIs reset to start 2026-09-22 for v12.0.0-omega-vnext-clv cutover.
+    // Omega store ONLY — no alpha/beta back-merge. Daily + cumulative ignore any pre-floor blob dates.
+    // Optional ?from=YYYY-MM-DD can raise the floor further; default stays 2026-09-22 (v12 MAIN reset).
     const params = event.queryStringParameters || {};
-    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) && params.from > "2026-09-05")
+    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) && params.from > "2026-09-22")
       ? params.from
-      : "2026-09-05";
+      : "2026-09-22";
     const alphaDatesRaw = await getDatesFromStore(alphaStoreUrl, authHeaders);
     const alphaDates = alphaDatesRaw.filter(d => d >= KPI_START);
 

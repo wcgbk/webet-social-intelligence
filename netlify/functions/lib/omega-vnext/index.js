@@ -160,7 +160,7 @@ async function generateOmegaVnext(opts = {}) {
   picks = attachClvFields(picks, MODEL_VERSION, dateISO);
   parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
 
-  // Final daily unit cap: straights + parlay ≤ DAILY_UNIT_CAP (5.0u). Sort grade then units.
+  // Final daily unit cap: straights + parlay ≤ DAILY_UNIT_CAP (4.0u MAX). Sort grade then units.
   {
     const capped = applyDailyUnitCap(picks, parlayLegs);
     picks = capped.picks;

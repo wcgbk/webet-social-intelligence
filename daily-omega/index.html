@@ -1503,13 +1503,34 @@
       .replace(/Model edge/g, 'WeBetAI edge');
   }
 
+  /** Normalize rating → badge key (aplus/a/aminus/…). Never use numeric confidence as a key. */
+  function resolveRatingKey(p) {
+    const map = {
+      'A+': 'aplus', 'a+': 'aplus', aplus: 'aplus',
+      'A': 'a', a: 'a',
+      'A-': 'aminus', 'a-': 'aminus', aminus: 'aminus',
+      'B+': 'bplus', 'b+': 'bplus', bplus: 'bplus',
+      'B': 'b', b: 'b',
+      'Lean': 'lean', lean: 'lean',
+    };
+    if (typeof p.rating === 'string' && map[p.rating] != null) return map[p.rating];
+    if (typeof p.confidence === 'string' && badgeClass[p.confidence]) return p.confidence;
+    const u = parseFloat(String(p.units || '0').replace(/[^0-9.]/g, '')) || 0;
+    if (u >= 1.5) return 'aplus';
+    if (u >= 1.0) return 'a';
+    if (u >= 0.75) return 'aminus';
+    if (u >= 0.5) return 'bplus';
+    if (u > 0) return 'b';
+    return null;
+  }
+
   /** Full pick-card chrome — reused for straights and each parlay leg. */
   function renderPickCard(p, opts) {
     opts = opts || {};
     const dollarPerUnit = opts.dollarPerUnit || 150;
-    const conf = p.confidence || (p.rating === 'A+' ? 'aplus' : p.rating === 'A' ? 'a' : p.rating === 'A-' ? 'aminus' : p.rating === 'B+' ? 'bplus' : p.rating === 'B' ? 'b' : null);
+    const conf = resolveRatingKey(p);
     const badge = conf ? (badgeClass[conf] || 'badge-b') : null;
-    const label = conf ? (ratingLabel[conf] || p.rating || 'B') : (p.rating || null);
+    const label = conf ? (ratingLabel[conf] || 'B') : null;
 
     const game = findGame(p);
     const result = determineResult(p, game);
@@ -1554,13 +1575,14 @@
           ? `<span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">PARLAY LEG</span>`
           : '');
 
-    const showStake = opts.showStake !== false && p.units;
+    const showStake = opts.showStake !== false && p.units && !opts.parlayOnly;
     const unitsNum = parseFloat(p.units) || 0;
     const risk = showStake ? wholeUp(unitsNum * dollarPerUnit) : 0;
     const win = showStake ? wholeUp(calcWinnings(risk, p.odds || '-110')) : 0;
+    // Parlay legs: no redundant market·odds footer (odds already on the pick line)
     const footerLeft = showStake
       ? `${esc(p.units)} - Bet $${risk.toLocaleString()} — To Win +$${win.toLocaleString()}`
-      : (opts.footerNote || `${esc(p.betType || 'Leg')} · ${esc(p.odds || '')}`);
+      : (opts.footerNote || '');
 
     const borderStyle = opts.parlayOnly ? ' style="border:1px solid var(--teal);"' : '';
     const card = `<div class="pick-card" data-wb-pick="${esc(p.pick)}"${borderStyle}>
@@ -1620,15 +1642,21 @@
     const base = withLegCommenceTime(leg, straights) || leg;
     const match = (straights || []).find(p => p.pick === base.pick && (p.matchup || '') === (base.matchup || ''))
       || (straights || []).find(p => p.pick === base.pick);
-    if (!match) return { ...base };
-    return {
+    const merged = match ? {
       ...base,
       rating: base.rating || match.rating,
       confidence: base.confidence || match.confidence,
       coreReasoning: (base.coreReasoning && base.coreReasoning.length > 40) ? base.coreReasoning : (match.coreReasoning || base.coreReasoning),
       edgePct: base.edgePct || match.edgePct,
       commenceTime: base.commenceTime || match.commenceTime,
-    };
+      units: base.units || match.units,
+    } : { ...base };
+    // Ensure letter-grade badge key even when API omitted rating (derive from units)
+    if (!resolveRatingKey(merged) && merged.units) {
+      const key = resolveRatingKey({ units: merged.units });
+      if (key) { merged.rating = key; }
+    }
+    return merged;
   }
 
   function renderPicks(data) {
@@ -1735,7 +1763,7 @@
 
     // ═══ SECTION 1: Top 3 Straight Picks ═══
     html += `<div class="card-section">
-      <div class="card-section-title">Top 3 Straight Picks</div>`;
+      <div class="card-section-title">Daily Lock - Top 3 Straight Picks</div>`;
 
     const straightSummaryRows = [];
     for (let i = 0; i < picks.length; i++) {
@@ -1774,8 +1802,8 @@
     if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
       const legCount = optimizedParlayLegs.length;
       combinedSummaryRows.push({
-        label: 'Daily Lock Parlay',
-        sub: esc(`${legCount}-leg · ${parlayOddsStr || ''}`),
+        label: esc(`Daily Lock Parlay ${parlayOddsStr || ''}`.trim()),
+        sub: '',
         meta: '',
         units: `${parlayUnits}u`,
         risk: parlayRisk.toLocaleString(),
@@ -1793,15 +1821,9 @@
     let parlayBonusResult = null;
     if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
       const legCount = optimizedParlayLegs.length;
-      const corrNote = apiParlay.correlationNote
-        ? `<div style="font-size:.6875rem; color:var(--teal); margin-bottom:.5rem;">${esc(apiParlay.correlationNote)}</div>`
-        : (apiParlay.independent
-          ? `<div style="font-size:.6875rem; color:var(--teal); margin-bottom:.5rem;">Independently optimized from ${apiParlay.candidatesScanned || '?'} candidates · ${apiParlay.uniqueGames || legCount} games · ${apiParlay.uniqueSports || '?'} sports</div>`
-          : '');
 
       html += `<div class="card-section">
-        <div class="card-section-title parlay-sec">Daily Lock Parlay</div>
-        ${corrNote}`;
+        <div class="card-section-title parlay-sec">Daily Lock - Top 3 Leg Parlay</div>`;
 
       for (const rawLeg of optimizedParlayLegs) {
         const leg = enrichParlayLeg(rawLeg, picks);
@@ -1809,8 +1831,8 @@
         const rendered = renderPickCard(leg, {
           dollarPerUnit,
           showStake: false,
-          parlayOnly: !isStraightDup,
-          footerNote: `${esc(leg.betType || 'Leg')} · ${esc(leg.odds || '')}`,
+          parlayOnly: true,
+          footerNote: '',
           depthSlot: false,
         });
         html += rendered.html;

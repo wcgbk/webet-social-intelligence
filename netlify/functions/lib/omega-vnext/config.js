@@ -121,6 +121,7 @@ const MODEL_NOTES = [
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
   'Day-scope: every straight + parlay leg commenceTime must fall on the card ET date (America/New_York).',
   'Unit structure: straights ≤3.5u + fixed 0.5u parlay = max 4.0u; may be under; never force-fill.',
+  'Live card (get-picks-omega): newest store date with real picks ≤ tomorrowET; sticky prior-day when empty/missing; ?date= sticky unless forceEmpty.',
 ].join(' ');
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';

@@ -1924,7 +1924,14 @@
 
   async function loadPicks() {
     try {
-      const resp = await fetch('/api/get-picks-omega');
+      // Live page: no date param — get-picks-omega resolves newest card ≤ tomorrow ET
+      // with sticky prior-day fallback. Optional ?date=YYYY-MM-DD still works for history.
+      const qs = new URLSearchParams(location.search);
+      const dateParam = qs.get('date');
+      const apiQs = (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam))
+        ? ('?date=' + encodeURIComponent(dateParam))
+        : '';
+      const resp = await fetch('/api/get-picks-omega' + apiQs);
       if (!resp.ok) throw new Error('API returned ' + resp.status);
       const data = await resp.json();
       picksData = data;
@@ -1940,7 +1947,7 @@
       document.getElementById('picks-container').innerHTML = `
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9888;&#65039;</div>
-          <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load today's picks</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load Omega picks</div>
           <div style="font-size:.8125rem; color:var(--txt-m); margin-top:.375rem;">Picks are generated daily by ~11:00am ET. Try refreshing.</div>
         </div>`;
     }

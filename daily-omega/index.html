@@ -190,6 +190,24 @@
       font-size: .6875rem; font-weight: 700; color: var(--teal);
       text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
     }
+    .card-section { margin-bottom: 1.25rem; }
+    .card-section-title {
+      font-size: .8125rem; font-weight: 700; color: var(--olive);
+      text-transform: uppercase; letter-spacing: .04em;
+      margin: .25rem 0 .75rem; padding-bottom: .375rem;
+      border-bottom: 2px solid var(--olive);
+    }
+    .card-section-title.parlay-sec {
+      color: var(--teal); border-bottom-color: var(--teal);
+    }
+    .section-summary {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: .875rem 1rem; margin-top: .5rem;
+    }
+    .section-summary-title {
+      font-size: .6875rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
     .parlay-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: .625rem;
@@ -1459,229 +1477,224 @@
      RENDER
      ═══════════════════════════════════════════════ */
 
+  function cleanReasoning(text) {
+    return (text || '')
+      .replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '')
+      .replace(/\[\d+[^\]]*\]/g, '')
+      .replace(/Model projects/g, 'WeBetAI projects')
+      .replace(/The model/g, 'WeBetAI')
+      .replace(/the model/g, 'WeBetAI')
+      .replace(/Model:/g, 'WeBetAI:')
+      .replace(/Model shows/g, 'WeBetAI shows')
+      .replace(/Model edge/g, 'WeBetAI edge');
+  }
+
+  /** Full pick-card chrome — reused for straights and each parlay leg. */
+  function renderPickCard(p, opts) {
+    opts = opts || {};
+    const dollarPerUnit = opts.dollarPerUnit || 150;
+    const conf = p.confidence || (p.rating === 'A+' ? 'aplus' : p.rating === 'A' ? 'a' : p.rating === 'A-' ? 'aminus' : p.rating === 'B+' ? 'bplus' : p.rating === 'B' ? 'b' : null);
+    const badge = conf ? (badgeClass[conf] || 'badge-b') : null;
+    const label = conf ? (ratingLabel[conf] || p.rating || 'B') : (p.rating || null);
+
+    const game = findGame(p);
+    const result = determineResult(p, game);
+    const scorebar = scoreBarHTML(p, game, result);
+    const deltaChip = progressDeltaHTML(p, game, result);
+    const probChip = liveProbHTML(p, game, result);
+
+    const isPreGame = !game || game.state === 'pre';
+    const isLiveOrDone = game && (game.state === 'in' || game.state === 'post');
+    let gameTimeStr = '';
+    if (isPreGame && game && game.startTimeEST) {
+      gameTimeStr = game.startTimeEST + ' EST';
+    } else if (isPreGame && game && game.detail) {
+      gameTimeStr = game.detail;
+    } else if (isPreGame && p.commenceTime) {
+      try {
+        const ct = new Date(p.commenceTime);
+        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST';
+      } catch (e) {}
+    }
+
+    let liveResultHTML = '';
+    if (result.isLive) liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
+    else if (result.status === 'win') liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">✓ WIN</span>';
+    else if (result.status === 'loss') liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">✗ LOSS</span>';
+    else if (result.status === 'push') liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">— PUSH</span>';
+
+    let timeChip = '';
+    if (isPreGame && gameTimeStr) {
+      timeChip = `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(gameTimeStr)}</span>`;
+    } else if (isLiveOrDone && game) {
+      timeChip = '';
+    }
+
+    const edgeBadgeHTML = (p.edgePct || p.ev)
+      ? `<span class="edge-badge" title="Calibrated edge at the posted price"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>`
+      : '';
+
+    const ratingHTML = badge && label
+      ? `<span class="rating-badge ${badge}">${esc(label)}</span>`
+      : (opts.parlayOnly
+          ? `<span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">PARLAY LEG</span>`
+          : '');
+
+    const showStake = opts.showStake !== false && p.units;
+    const unitsNum = parseFloat(p.units) || 0;
+    const risk = showStake ? wholeUp(unitsNum * dollarPerUnit) : 0;
+    const win = showStake ? wholeUp(calcWinnings(risk, p.odds || '-110')) : 0;
+    const footerLeft = showStake
+      ? `${esc(p.units)} - Bet $${risk.toLocaleString()} — To Win +$${win.toLocaleString()}`
+      : (opts.footerNote || `${esc(p.betType || 'Leg')} · ${esc(p.odds || '')}`);
+
+    const borderStyle = opts.parlayOnly ? ' style="border:1px solid var(--teal);"' : '';
+    const card = `<div class="pick-card" data-wb-pick="${esc(p.pick)}"${borderStyle}>
+        <div class="pick-header" style="margin-bottom:.25rem;">
+          <span class="sport-tag">${esc(p.sport || '')}</span>
+          ${ratingHTML}
+        </div>
+        <div class="pick-matchup-row">
+          <div class="pick-matchup">${esc(shortMatchup(p.matchup, p.sport))}</div>
+          ${timeChip}
+        </div>
+        ${scorebar}
+        <div class="pick-line">
+          <span class="pick-name">${esc(displayPick(p.pick, p.sport))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
+          <span class="pick-odds">${esc(p.odds || '')}</span>
+        </div>
+        <div class="pick-divider"></div>
+        <div class="pick-analysis">${esc(cleanReasoning(p.coreReasoning))}</div>
+        <div class="pick-footer">
+          <div class="pick-units">${footerLeft}</div>
+          <div class="pick-footer-right">
+            ${liveResultHTML}
+            ${edgeBadgeHTML || ''}
+          </div>
+        </div>
+        ${opts.depthSlot ? '<div class="wb-depth-slot"></div>' : ''}
+      </div>`;
+
+    return { html: card, game, result };
+  }
+
+  function sectionSummaryHTML(title, rows, totalUnits, totalRisk, totalWin) {
+    let html = `<div class="section-summary">
+      <div class="section-summary-title">${esc(title)}</div>`;
+    for (const row of rows) {
+      html += `<div class="parlay-leg bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;${row.highlight ? ' background:var(--teal-light);' : ''}">
+        <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
+          <span class="leg-pick">${row.label}</span>
+          ${row.sub ? `<span style="font-size:.6875rem; color:var(--txt-l);">${row.sub}</span>` : ''}
+          ${row.meta || ''}
+        </span>
+        <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${row.units}</span>
+        <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${row.risk}</span>
+        <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+$${row.win}</span>
+      </div>`;
+    }
+    html += `<div class="bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
+      <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Total</span>
+      <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); font-weight:600; text-align:right;">${parseFloat(totalUnits.toFixed(2))}u</span>
+      <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${Number(totalRisk).toLocaleString()}</span>
+      <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">+$${Math.round(totalWin).toLocaleString()}</span>
+    </div></div>`;
+    return html;
+  }
+
+  function enrichParlayLeg(leg, straights) {
+    const base = withLegCommenceTime(leg, straights) || leg;
+    const match = (straights || []).find(p => p.pick === base.pick && (p.matchup || '') === (base.matchup || ''))
+      || (straights || []).find(p => p.pick === base.pick);
+    if (!match) return { ...base };
+    return {
+      ...base,
+      rating: base.rating || match.rating,
+      confidence: base.confidence || match.confidence,
+      coreReasoning: (base.coreReasoning && base.coreReasoning.length > 40) ? base.coreReasoning : (match.coreReasoning || base.coreReasoning),
+      edgePct: base.edgePct || match.edgePct,
+      commenceTime: base.commenceTime || match.commenceTime,
+    };
+  }
+
   function renderPicks(data) {
     const ratingOrder = { aplus: 0, a: 1, aminus: 2, bplus: 3, b: 4, lean: 5 };
     const picks = (data.picks || []).slice(0, 3).sort((a, b) => {
       const rA = ratingOrder[a.confidence] ?? 4;
       const rB = ratingOrder[b.confidence] ?? 4;
-      return rA - rB; // highest rating letter grade first (A+ > A > A- > B+ > B)
+      return rA - rB;
     });
-    // Store sorted picks globally so verify button indices match displayed order
     picksDataGlobal = { ...data, picks };
-    const rejections = data.rejections || [];
     const summary = data.summary || {};
 
-    // Date
     document.getElementById('date-header').textContent = data.dateFormatted || data.date || 'Today';
-    // (verify-all-btn removed 2026-06-27 — no show-logic needed)
 
-    // Daily Edge Summary
     const summaryEl = document.getElementById('daily-edge-summary');
     const summaryText = document.getElementById('daily-edge-text');
     const edgeSummary = data.edgeSummary || '';
     if (edgeSummary) {
-      summaryText.textContent = edgeSummary.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Mm]odel projects/g, 'WeBetAI projects').replace(/[Tt]he model/g, 'WeBetAI');
+      summaryText.textContent = cleanReasoning(edgeSummary);
       summaryEl.style.display = 'block';
     } else if (picks.length > 0) {
-      // Auto-generate summary from picks
-      const sportSet = [...new Set(picks.map(p => p.sport))];
-      const sportStr = sportSet.join(', ');
-      const pickDescs = picks.map(p => {
-        const edge = p.modelEdge || '';
-        return `${p.pick} (${p.odds})`;
-      }).join(', ');
-      summaryText.textContent = `Today's top edges across ${sportStr}: ${pickDescs}. All picks pass WeBetAI's 6-filter framework with verified model edges and positive expected value.`;
+      const sportStr = [...new Set(picks.map(p => p.sport))].join(', ');
+      const pickDescs = picks.map(p => `${p.pick} (${p.odds})`).join(', ');
+      summaryText.textContent = `Today's top edges across ${sportStr}: ${pickDescs}.`;
       summaryEl.style.display = 'block';
     }
 
-    // Insights — prefer the server-written LLM summary (verify-picks final pass); else template
     const insightsEl = document.getElementById('insights-section');
     const insightsText = document.getElementById('insights-text');
     if (data.insights && data.insights.trim().length > 20) {
-      insightsText.textContent = data.insights.replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/[Tt]he model/g, 'WeBetAI');
+      insightsText.textContent = cleanReasoning(data.insights);
       insightsEl.style.display = 'block';
     } else if (picks.length > 0) {
       const sportSet = [...new Set(picks.map(p => p.sport))];
-      const marketSet = [...new Set(picks.map(p => p.betType || p.market || ''))];
-      const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
-      const topRating = picks[0] ? (picks[0].rating || '') : '';
-      const lines = [];
-
-      // Market type + sport-specific explanation
-      const overs = picks.filter(p => (p.pick || '').toLowerCase().startsWith('over'));
-      const unders = picks.filter(p => (p.pick || '').toLowerCase().startsWith('under'));
-      const allTotals = picks.every(p => (p.betType || '').toLowerCase() === 'total');
-      const allSpreads = picks.every(p => /spread|puck|run/i.test(p.betType || ''));
-
-      if (allTotals && overs.length === picks.length) {
-        lines.push(`All ${picks.length} picks are overs today across ${sportSet.join(' and ')}. WeBetAI evaluated spreads, moneylines, and totals for every game across 12+ leagues \u2014 the biggest edges all landed on over/unders.`);
-      } else if (allTotals) {
-        const overCount = overs.length;
-        const underCount = unders.length;
-        lines.push(`${picks.length} total plays today (${overCount} over${overCount !== 1 ? 's' : ''}, ${underCount} under${underCount !== 1 ? 's' : ''}) across ${sportSet.join(' and ')}. WeBetAI scanned every market type across 12+ leagues and the strongest value landed on totals.`);
-      } else if (allSpreads) {
-        lines.push(`All picks are spreads today across ${sportSet.join(' and ')} \u2014 the strongest edges came from point spreads after evaluating every market type.`);
-      } else {
-        lines.push(`Mixed markets today across ${sportSet.join(' and ')} \u2014 each pick was the highest-edge option for its game after evaluating spreads, totals, and moneylines.`);
-      }
-
-      // Sizing explanation
-      lines.push(`${totalUnits}u total exposure across ${picks.length} picks, staying within the 4u daily cap. Each pick is sized by expected value \u2014 higher conviction means more units.`);
-
-      insightsText.textContent = lines.join(' ');
+      const totalUnitsInsight = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
+      insightsText.textContent = `Mixed slate across ${sportSet.join(' and ')}. ${totalUnitsInsight}u total straight exposure, sized to edge within the daily cap.`;
       insightsEl.style.display = 'block';
     }
 
-    // Build bet summary
-    const el = (id) => document.getElementById(id);
-    const numPicks = picks.length;
     const dollarPerUnit = 150;
-    const parlayUnits = picks.some(p => p.thinSlate) ? 0.25 : 0.5; // 0.25u when a lean is on the card
-    const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
+    // Optimized parlay ONLY from API — never fake with 3 straights
+    const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0 && data.parlayLegs[0].legs && data.parlayLegs[0].legs.length)
+      ? data.parlayLegs[0] : null;
+    const optimizedParlayLegs = apiParlay ? apiParlay.legs : null;
 
-    let totalUnits = 0;
-    let totalRisk = 0;
-    let totalWinnings = 0;
-    let summaryHTML = '';
+    let parlayUnits = 0.5;
+    if (apiParlay && apiParlay.units) parlayUnits = parseFloat(apiParlay.units) || 0.5;
+    else if (picks.some(p => p.thinSlate)) parlayUnits = 0.25;
+    const parlayRisk = apiParlay ? wholeUp(parlayUnits * dollarPerUnit) : 0;
+    const parlayOddsStr = apiParlay
+      ? (apiParlay.combinedOdds || calcParlayOdds(apiParlay.legs.map(l => l.odds || '-110')))
+      : null;
+    const parlayWin = apiParlay
+      ? wholeUp(calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110')))
+      : 0;
 
-    // Use optimized parlay from API (independently selected legs) or fallback to straight picks
-    const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0) ? data.parlayLegs[0] : null;
-    let parlayOddsStr, parlayWin, optimizedParlayLegs;
-    if (apiParlay && apiParlay.legs) {
-      optimizedParlayLegs = apiParlay.legs;
-      parlayOddsStr = apiParlay.combinedOdds || calcParlayOdds(apiParlay.legs.map(l => l.odds || '-110'));
-      parlayWin = wholeUp(calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110')));
-    } else {
-      optimizedParlayLegs = null;
-      const fallbackLegs = picks.map(p => p.odds || '-110');
-      parlayOddsStr = picks.length === 3 ? calcParlayOdds(fallbackLegs) : null;
-      parlayWin = picks.length === 3 ? wholeUp(calcParlayWinnings(parlayRisk, fallbackLegs)) : 0;
+    let totalStraightUnits = 0;
+    let totalStraightRisk = 0;
+    let totalStraightWin = 0;
+    for (const p of picks) {
+      const u = parseFloat(p.units) || 1;
+      const risk = wholeUp(u * dollarPerUnit);
+      const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
+      totalStraightUnits += u;
+      totalStraightRisk += risk;
+      totalStraightWin += win;
     }
 
-    if (numPicks > 0) {
-      // Pre-compute units/risk/win for each pick
-      for (const p of picks) {
-        const u = parseFloat(p.units) || 1;
-        const risk = wholeUp(u * dollarPerUnit);
-        const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
-        totalUnits += u;
-        totalRisk += risk;
-        totalWinnings += win;
-      }
-      if ((apiParlay && apiParlay.legs && apiParlay.legs.length) || (optimizedParlayLegs && optimizedParlayLegs.length) || picks.length === 3) {
-        totalUnits += parlayUnits;
-        totalRisk += parlayRisk;
-        totalWinnings += parlayWin;
-      }
-
-    }
-
-    // Bet summary is built later after legResults are populated
-    function buildBetSummary() {
-      if (numPicks === 0) { document.getElementById('bet-summary').innerHTML = ''; return; }
-
-      let html = `<div class="parlay-section">
-        <div class="parlay-title">Today's Recommended Bets — Summary</div>`;
-
-      // Each straight pick as a parlay-leg style row
-      for (let i = 0; i < picks.length; i++) {
-        const p = picks[i];
-        const u = parseFloat(p.units) || 1;
-        const uLabel = (p.units || '1.0u').toString().replace(/u$/i, '');
-        const risk = wholeUp(u * dollarPerUnit);
-        const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
-
-        const lr = legResults[i];
-        let resultBadge = '';
-        if (lr && lr.result) {
-          if (lr.result.isLive) resultBadge = '<span class="leg-result leg-live">LIVE</span>';
-          else if (lr.result.status === 'win') resultBadge = '<span class="leg-result leg-win">✓ W</span>';
-          else if (lr.result.status === 'loss') resultBadge = '<span class="leg-result leg-loss">✗ L</span>';
-          else if (lr.result.status === 'push') resultBadge = '<span class="leg-result leg-push">— P</span>';
-        }
-
-        const gameLabel = shortMatchup(p.matchup, p.sport);
-        const lrGame = lr ? lr.game : null;
-        const lrIsPreGame = !lrGame || lrGame.state === 'pre';
-        let summaryTime = '';
-        if (lrIsPreGame && lrGame && lrGame.startTimeEST) {
-          summaryTime = lrGame.startTimeEST;
-        } else if (lrIsPreGame && p.commenceTime) {
-          try { summaryTime = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {}
-        }
-        let timeLine = '';
-        if (lrIsPreGame && summaryTime) {
-          const stWithTz = summaryTime.includes('EST') || summaryTime.includes('EDT') ? summaryTime : summaryTime + ' EST';
-          timeLine = `<span style="font-size:.625rem; color:var(--txt-l);">${esc(stWithTz)}</span>`;
-        } else if (!lrIsPreGame && resultBadge) {
-          timeLine = resultBadge;
-        }
-
-        html += `<div class="parlay-leg bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem;">
-          <span style="display:flex; flex-direction:column; gap:1px; min-width:0;">
-            <span class="leg-pick">${esc(displayPick(p.pick, p.sport))}</span>
-            <span style="font-size:.6875rem; color:var(--txt-l);">${esc(gameLabel)}</span>
-            ${timeLine}
-          </span>
-          <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${uLabel}u</span>
-          <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${risk.toLocaleString()}</span>
-          <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+$${Math.round(win).toLocaleString()}</span>
-        </div>`;
-      }
-
-      // Parlay row — use actual parlay legs (optimized or straight), only show final W/L
-      if ((apiParlay && apiParlay.legs && apiParlay.legs.length) || (optimizedParlayLegs && optimizedParlayLegs.length) || picks.length === 3) {
-        let summaryParlayLegResults;
-        if (optimizedParlayLegs) {
-          summaryParlayLegResults = optimizedParlayLegs.map(leg => {
-            const straightMatch = legResults.find(lr => lr.pick.pick === leg.pick);
-            if (straightMatch) return straightMatch;
-            if (parlayBonusResult && parlayBonusResult.pick.pick === leg.pick) return parlayBonusResult;
-            return { pick: leg, game: null, result: { status: 'scheduled', label: 'Upcoming' } };
-          });
-        } else {
-          summaryParlayLegResults = legResults;
-        }
-        const anyLive = summaryParlayLegResults.some(l => l.result.isLive);
-        const finalStatuses = summaryParlayLegResults.map(l => l.result.isLive ? 'live' : l.result.status);
-        let parlayBadge = '';
-        if (anyLive) parlayBadge = '<span class="leg-result leg-live">LIVE</span>';
-        else if (finalStatuses.includes('loss')) parlayBadge = '<span class="leg-result leg-loss">✗ L</span>';
-        else if (finalStatuses.every(s => s === 'win')) parlayBadge = '<span class="leg-result leg-win">✓ W</span>';
-
-        html += `<div class="parlay-leg bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.5rem .625rem; background:var(--teal-light);">
-          <span style="display:flex; align-items:center; gap:4px; min-width:0;">
-            <span class="leg-pick">${summaryParlayLegResults.length}-Team Parlay</span>
-            ${parlayBadge}
-          </span>
-          <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); text-align:right;">${parlayUnits}u</span>
-          <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${parlayRisk.toLocaleString()}</span>
-          <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:600; text-align:right; white-space:nowrap;">+$${Math.round(parlayWin).toLocaleString()}</span>
-        </div>`;
-      }
-
-      // Total row
-      html += `<div class="bet-summary-grid" style="display:grid; grid-template-columns:1fr 2.75rem 3.5rem 3.75rem; gap:0 .375rem; align-items:center; padding:.75rem .625rem; border-top:2px solid var(--olive); margin-top:.375rem;">
-        <span style="font-weight:700; font-size:.875rem; color:var(--olive);">Total</span>
-        <span class="bet-summary-unit" style="font-size:.75rem; color:var(--txt-m); font-weight:600; text-align:right;">${parseFloat(totalUnits.toFixed(2))}u</span>
-        <span class="bet-summary-risk" style="font-size:.8125rem; font-weight:700; color:var(--olive); text-align:right;">$${totalRisk.toLocaleString()}</span>
-        <span class="bet-summary-win" style="font-size:.75rem; color:var(--teal); font-weight:700; text-align:right; white-space:nowrap;">+$${Math.round(totalWinnings).toLocaleString()}</span>
-      </div>`;
-
-      html += '</div>';
-      document.getElementById('bet-summary').innerHTML = html;
-    }
-
-    // Update hero trust bar (may not exist on /edge-picks)
+    const combinedUnits = totalStraightUnits + (apiParlay ? parlayUnits : 0);
     const _hp = document.getElementById('hero-picks');
     const _hu = document.getElementById('hero-units');
     const _ha = document.getElementById('hero-accuracy');
-    if (_hp) _hp.textContent = numPicks + ' Picks Today';
-    if (_hu) _hu.textContent = parseFloat(totalUnits.toFixed(2)) + 'u Total Units';
+    if (_hp) _hp.textContent = picks.length + ' Picks Today';
+    if (_hu) _hu.textContent = parseFloat(combinedUnits.toFixed(2)) + 'u Total Units';
     if (_ha && !_ha._set) _ha.textContent = '-- Accuracy';
 
-    // Picks container
     const container = document.getElementById('picks-container');
+    // Clear legacy combined bet-summary — section totals live under each section
+    const betSummaryEl = document.getElementById('bet-summary');
+    if (betSummaryEl) betSummaryEl.innerHTML = '';
 
     if (picks.length === 0) {
       container.innerHTML = `
@@ -1695,332 +1708,145 @@
       return;
     }
 
-    // Collect results for record bar
     let wins = 0, losses = 0, pushes = 0, pending = 0, hasAnyLive = false;
-    const legResults = []; // store per-leg results for parlay
-
-    // Render top 3 picks with scores
+    const legResults = [];
     let html = '';
+
+    // ═══ SECTION 1: Top 3 Straight Picks ═══
+    html += `<div class="card-section">
+      <div class="card-section-title">Top 3 Straight Picks</div>`;
+
+    const straightSummaryRows = [];
     for (let i = 0; i < picks.length; i++) {
       const p = picks[i];
-      const conf = p.confidence || 'b';
-      const badge = badgeClass[conf] || 'badge-b';
-      const label = ratingLabel[conf] || p.rating || 'B';
-      // Live score
-      const game = findGame(p);
-      const result = determineResult(p, game);
-      const scorebar = scoreBarHTML(p, game, result);
-      const deltaChip = progressDeltaHTML(p, game, result);
-      const probChip = liveProbHTML(p, game, result);
-      legResults.push({ pick: p, game, result });
+      const rendered = renderPickCard(p, { dollarPerUnit, depthSlot: true, showStake: true });
+      html += rendered.html;
+      legResults.push({ pick: p, game: rendered.game, result: rendered.result });
 
-      // Only count final results toward record — not mid-game projections
-      if (result.isLive) { pending++; hasAnyLive = true; }
-      else if (result.status === 'win') wins++;
-      else if (result.status === 'loss') losses++;
-      else if (result.status === 'push') pushes++;
+      if (rendered.result.isLive) { pending++; hasAnyLive = true; }
+      else if (rendered.result.status === 'win') wins++;
+      else if (rendered.result.status === 'loss') losses++;
+      else if (rendered.result.status === 'push') pushes++;
       else pending++;
 
-      // Game status: start time OR live result
-      const isPreGame = !game || game.state === 'pre';
-      const isLiveOrDone = game && (game.state === 'in' || game.state === 'post');
-      let gameTimeStr = '';
-      if (isPreGame && game && game.startTimeEST) {
-        gameTimeStr = game.startTimeEST + ' EST';
-      } else if (isPreGame && game && game.detail) {
-        gameTimeStr = game.detail;
-      } else if (isPreGame && p.commenceTime) {
-        // Fallback: use commence time from Odds API stored in pick data
-        try {
-          const ct = new Date(p.commenceTime);
-          gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST';
-        } catch(e) {}
-      }
+      const u = parseFloat(p.units) || 1;
+      const risk = wholeUp(u * dollarPerUnit);
+      const win = wholeUp(calcWinnings(risk, p.odds || '-110'));
+      let resultBadge = '';
+      if (rendered.result.isLive) resultBadge = '<span class="leg-result leg-live">LIVE</span>';
+      else if (rendered.result.status === 'win') resultBadge = '<span class="leg-result leg-win">✓ W</span>';
+      else if (rendered.result.status === 'loss') resultBadge = '<span class="leg-result leg-loss">✗ L</span>';
+      else if (rendered.result.status === 'push') resultBadge = '<span class="leg-result leg-push">— P</span>';
 
-      // Live/final result badge — only show WIN/LOSS after game is final, not mid-game projections
-      let liveResultHTML = '';
-      if (result.isLive) {
-        liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
-      } else if (result.status === 'win') {
-        liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">✓ WIN</span>';
-      } else if (result.status === 'loss') {
-        liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">✗ LOSS</span>';
-      } else if (result.status === 'push') {
-        liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">— PUSH</span>';
-      }
-
-      // Time or score chip for team name row
-      let timeChip = '';
-      if (isPreGame && gameTimeStr) {
-        timeChip = `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(gameTimeStr)}</span>`;
-      } else if (isLiveOrDone && game) {
-        // Score is shown in the scorebar below — don't duplicate here
-        timeChip = '';
-      }
-
-      const edgeBadgeHTML = (p.edgePct || p.ev) ? `<span class="edge-badge" title="Calibrated edge at the posted price (cover probability minus implied). Not raw model-vs-market gap, not Kelly EV."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>` : '';
-
-      html += `<div class="pick-card" data-wb-pick="${esc(p.pick)}">
-        <div class="pick-header" style="margin-bottom:.25rem;">
-          <span class="sport-tag">${esc(p.sport)}</span>
-          <span class="rating-badge ${badge}">${esc(label)}</span>
-        </div>
-        <div class="pick-matchup-row">
-          <div class="pick-matchup">${esc(shortMatchup(p.matchup, p.sport))}</div>
-          ${timeChip}
-        </div>
-        ${scorebar}
-        <div class="pick-line">
-          <span class="pick-name">${esc(displayPick(p.pick, p.sport))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
-          <span class="pick-odds">${esc(p.odds)}</span>
-        </div>
-        <div class="pick-divider"></div>
-        <div class="pick-analysis">${esc((p.coreReasoning || '').replace(/<cite[^>]*>/g, '').replace(/<\/cite>/g, '').replace(/\[\d+[^\]]*\]/g, '').replace(/Model projects/g, 'WeBetAI projects').replace(/The model/g, 'WeBetAI').replace(/the model/g, 'WeBetAI').replace(/Model:/g, 'WeBetAI:').replace(/Model shows/g, 'WeBetAI shows').replace(/Model edge/g, 'WeBetAI edge').replace(/15\.1-point edge/g, '9.5-point edge'))}</div>
-        <div class="pick-footer">
-          <div class="pick-units">${esc(p.units || '1.0u')} - Bet $${wholeUp((parseFloat(p.units)||1)*dollarPerUnit).toLocaleString()} — To Win +$${wholeUp(calcWinnings(wholeUp((parseFloat(p.units)||1)*dollarPerUnit), p.odds||'-110')).toLocaleString()}</div>
-          <div class="pick-footer-right">
-            ${liveResultHTML}
-            ${edgeBadgeHTML || ''}
-          </div>
-        </div>
-        <div class="wb-depth-slot"></div>
-      </div>`;
+      straightSummaryRows.push({
+        label: esc(displayPick(p.pick, p.sport)),
+        sub: esc(shortMatchup(p.matchup, p.sport)),
+        meta: resultBadge,
+        units: `${(p.units || '1u').toString().replace(/u$/i, '')}u`,
+        risk: risk.toLocaleString(),
+        win: Math.round(win).toLocaleString(),
+      });
     }
 
-    // ── Parlay Bonus Card (PARLAY ONLY replacement leg) ──
+    html += sectionSummaryHTML('Straight Bets — Summary', straightSummaryRows, totalStraightUnits, totalStraightRisk, totalStraightWin);
+    html += `</div>`;
+
+    // ═══ SECTION 2: Optimized Parlay (API only — hide if empty) ═══
     let parlayBonusResult = null;
-    if (optimizedParlayLegs) {
-      const bonusLeg = withLegCommenceTime(optimizedParlayLegs.find(leg => !picks.some(p => p.pick === leg.pick)), picks);
-      if (bonusLeg) {
-        const bonusGame = findGame(bonusLeg);
-        const bonusResult = determineResult(bonusLeg, bonusGame);
-        const bonusScorebar = scoreBarHTML(bonusLeg, bonusGame, bonusResult);
-        const bonusDeltaChip = progressDeltaHTML(bonusLeg, bonusGame, bonusResult);
-        const bonusProbChip = liveProbHTML(bonusLeg, bonusGame, bonusResult);
-        parlayBonusResult = { pick: bonusLeg, game: bonusGame, result: bonusResult };
+    if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
+      const legCount = optimizedParlayLegs.length;
+      const corrNote = apiParlay.correlationNote
+        ? `<div style="font-size:.6875rem; color:var(--teal); margin-bottom:.5rem;">${esc(apiParlay.correlationNote)}</div>`
+        : (apiParlay.independent
+          ? `<div style="font-size:.6875rem; color:var(--teal); margin-bottom:.5rem;">Independently optimized from ${apiParlay.candidatesScanned || '?'} candidates · ${apiParlay.uniqueGames || legCount} games · ${apiParlay.uniqueSports || '?'} sports</div>`
+          : '');
 
-        const isPreGame = !bonusGame || bonusGame.state === 'pre';
-        let gameTimeStr = '';
-        if (isPreGame && bonusGame && bonusGame.startTimeEST) {
-          gameTimeStr = bonusGame.startTimeEST + ' EST';
-        } else if (isPreGame && bonusLeg.commenceTime) {
-          try { gameTimeStr = new Date(bonusLeg.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST'; } catch(e) {}
-        }
-
-        let liveResultHTML = '';
-        if (bonusResult.isLive) {
-          liveResultHTML = '<span class="leg-result leg-live" style="font-size:.75rem;">LIVE</span>';
-        } else if (bonusResult.status === 'win') {
-          liveResultHTML = '<span class="leg-result leg-win" style="font-size:.75rem;">✓ WIN</span>';
-        } else if (bonusResult.status === 'loss') {
-          liveResultHTML = '<span class="leg-result leg-loss" style="font-size:.75rem;">✗ LOSS</span>';
-        } else if (bonusResult.status === 'push') {
-          liveResultHTML = '<span class="leg-result leg-push" style="font-size:.75rem;">— PUSH</span>';
-        }
-
-        let timeChip = '';
-        if (isPreGame && gameTimeStr) {
-          timeChip = `<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">${esc(gameTimeStr)}</span>`;
-        }
-
-        const edgeBadgeHTML = bonusLeg.ev ? `<span class="edge-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(bonusLeg.ev)}</span>` : '';
-
-        html += `<div class="pick-card" style="border:1px solid var(--teal); position:relative;">
-          <div class="pick-header" style="margin-bottom:.25rem;">
-            <span class="sport-tag">${esc(bonusLeg.sport)}</span>
-            <span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">OPTIMIZED PARLAY</span>
+      html += `<div class="card-section">
+        <div class="card-section-title parlay-sec">Optimized ${legCount} Pick Parlay</div>
+        <div class="parlay-section" style="margin-bottom:.75rem;">
+          <div class="parlay-header">
+            <span class="parlay-name">Daily Lock Parlay</span>
+            <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
           </div>
-          <div class="pick-matchup-row">
-            <div class="pick-matchup">${esc(shortMatchup(bonusLeg.matchup || '', bonusLeg.sport))}</div>
-            ${timeChip}
-          </div>
-          ${bonusScorebar}
-          <div class="pick-line">
-            <span class="pick-name">${esc(displayPick(bonusLeg.pick, bonusLeg.sport))}${bonusDeltaChip}${bonusProbChip}</span>
-            <span class="pick-odds">${esc(bonusLeg.odds)}</span>
-          </div>
-          <div class="pick-divider"></div>
-          <div class="pick-analysis">${esc(bonusLeg.sport)} ${esc(bonusLeg.betType || '')} play at ${esc(bonusLeg.odds)} with ${esc(bonusLeg.coverProb || '')} cover probability and ${esc(bonusLeg.ev || '')} expected value. Selected by WeBetAI's parlay optimizer after scanning all qualifying candidates across every league.</div>
-          <div class="pick-footer">
-            <div class="pick-units" style="font-size:.75rem; color:var(--txt-l);">${esc(bonusLeg.coverProb || '')} cover · ${esc(bonusLeg.ev || '')} EV</div>
-            <div class="pick-footer-right">
-              ${liveResultHTML}
-              ${edgeBadgeHTML}
-            </div>
-          </div>
+          <div class="parlay-payout">${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${Math.round(parlayWin).toLocaleString()}</div>
+          ${corrNote}
         </div>`;
-      }
-    }
 
-    // ── Parlay Card (2 or 3 legs from API) ──
-    if ((apiParlay && apiParlay.legs && apiParlay.legs.length) || (optimizedParlayLegs && optimizedParlayLegs.length) || picks.length === 3) {
-      // Determine parlay status using actual parlay legs (optimized or straight)
-      let parlayLegResults;
-      if (optimizedParlayLegs) {
-        parlayLegResults = optimizedParlayLegs.map(leg => {
-          const isStraight = legResults.find(lr => lr.pick.pick === leg.pick);
-          if (isStraight) return isStraight;
-          if (parlayBonusResult && parlayBonusResult.pick.pick === leg.pick) return parlayBonusResult;
-          return { pick: leg, game: null, result: { status: 'scheduled', label: 'Upcoming' } };
+      for (const rawLeg of optimizedParlayLegs) {
+        const leg = enrichParlayLeg(rawLeg, picks);
+        const isStraightDup = picks.some(p => p.pick === leg.pick);
+        const rendered = renderPickCard(leg, {
+          dollarPerUnit,
+          showStake: false,
+          parlayOnly: !isStraightDup,
+          footerNote: 'Parlay leg — graded with the slip',
+          depthSlot: false,
         });
-      } else {
-        parlayLegResults = legResults;
+        html += rendered.html;
+        if (!isStraightDup) {
+          parlayBonusResult = { pick: leg, game: rendered.game, result: rendered.result };
+          if (rendered.result.isLive) hasAnyLive = true;
+        }
       }
+
+      // Parlay status bar
+      const parlayLegResults = optimizedParlayLegs.map(leg => {
+        const enriched = enrichParlayLeg(leg, picks);
+        const straightMatch = legResults.find(lr => lr.pick.pick === enriched.pick);
+        if (straightMatch) return straightMatch;
+        if (parlayBonusResult && parlayBonusResult.pick.pick === enriched.pick) return parlayBonusResult;
+        const g = findGame(enriched);
+        const r = determineResult(enriched, g);
+        return { pick: enriched, game: g, result: r };
+      });
       const parlayAnyLive = parlayLegResults.some(l => l.result.isLive);
       const parlayFinalStatuses = parlayLegResults.map(l => l.result.isLive ? 'live' : l.result.status);
       let parlayStatus = 'scheduled';
       let parlayLabel = 'Pending';
-      const anyLoss = !parlayAnyLive && parlayFinalStatuses.includes('loss');
-      const anyLive = parlayAnyLive || parlayFinalStatuses.includes('live');
-      const allWin = !parlayAnyLive && parlayFinalStatuses.every(s => s === 'win');
-      const allDecided = !parlayAnyLive && parlayFinalStatuses.every(s => ['win','loss','push'].includes(s));
-
-      if (anyLive) { parlayStatus = 'live'; parlayLabel = 'Live'; }
-      else if (anyLoss) { parlayStatus = 'loss'; parlayLabel = 'Loss'; }
-      else if (allWin) { parlayStatus = 'win'; parlayLabel = 'Win'; }
-      else if (allDecided) {
+      if (parlayAnyLive || parlayFinalStatuses.includes('live')) { parlayStatus = 'live'; parlayLabel = 'Live'; }
+      else if (parlayFinalStatuses.includes('loss')) { parlayStatus = 'loss'; parlayLabel = 'Loss'; }
+      else if (parlayFinalStatuses.every(s => s === 'win')) { parlayStatus = 'win'; parlayLabel = 'Win'; }
+      else if (parlayFinalStatuses.every(s => ['win','loss','push'].includes(s))) {
         const pushCount = parlayFinalStatuses.filter(s => s === 'push').length;
         if (pushCount === parlayFinalStatuses.length) { parlayStatus = 'push'; parlayLabel = 'Push'; }
         else { parlayStatus = 'win'; parlayLabel = 'Win (reduced)'; }
       }
-
-      const legCount = parlayLegResults.length;
-      const legsHit = parlayFinalStatuses.filter(s => s === 'win').length;
-      const parlayStatusNote = parlayStatus === 'live' || parlayStatus === 'scheduled'
-        ? `${legsHit} of ${legCount} legs hit` : '';
-
-      const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk} — To Win +$${Math.round(parlayWin).toLocaleString()}`;
-
-      const isOptimized = apiParlay && apiParlay.independent;
-      const parlayTitle = `${isOptimized ? 'Optimized' : 'Recommended'} ${legCount}-Team Parlay`;
-      const parlaySubtitle = isOptimized
-        ? `<div style="font-size:.6875rem; color:var(--teal); margin-bottom:.375rem;">Independently optimized from ${apiParlay.candidatesScanned || '?'} candidates · ${apiParlay.uniqueGames || 3} games · ${apiParlay.uniqueSports || '?'} sports</div>`
-        : '';
-      const parlayEvBadge = '';
-
-      html += `<div class="parlay-section">
-        <div class="parlay-title">${parlayTitle}</div>
-        ${parlaySubtitle}
-        <div class="parlay-header">
-          <span class="parlay-name">Daily Lock Parlay${parlayEvBadge}</span>
-          <span class="parlay-odds">${parlayOddsStr}</span>
-        </div>
-        <div class="parlay-payout">${parlayPayStr}</div>`;
-
-      // Use optimized parlay legs if available, otherwise straight picks
-      const parlayLegSource = optimizedParlayLegs || legResults.map(lr => lr.pick);
-      const useLegResults = !optimizedParlayLegs;
-
-      if (useLegResults) {
-        // Old behavior: render from straight pick leg results
-        for (const lr of legResults) {
-          const p = lr.pick;
-          const r = lr.result;
-          const g = lr.game;
-          let legResultHTML = '';
-          if (r.isLive) legResultHTML = '<span class="leg-result leg-live">LIVE</span>';
-          else if (r.status === 'win') legResultHTML = '<span class="leg-result leg-win">✓ W</span>';
-          else if (r.status === 'loss') legResultHTML = '<span class="leg-result leg-loss">✗ L</span>';
-          else if (r.status === 'push') legResultHTML = '<span class="leg-result leg-push">— P</span>';
-
-          let scoreStr = '';
-          if (g && (g.state === 'in' || g.state === 'post')) {
-            scoreStr = ` <span style="font-size:.6875rem; color:var(--txt-m);">(${g.awayScore}-${g.homeScore})</span>`;
-          }
-
-          let parlayTimeLine = '';
-          if (legResultHTML) { parlayTimeLine = legResultHTML; }
-          else {
-            let pTime = '';
-            if (g && g.state === 'pre' && g.startTimeEST) pTime = g.startTimeEST;
-            else if (p.commenceTime) { try { pTime = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
-            if (pTime) { const ptWithTz = pTime.includes('EST') || pTime.includes('EDT') ? pTime : pTime + ' EST'; parlayTimeLine = `<span style="font-size:.625rem; color:var(--txt-l);">${esc(ptWithTz)}</span>`; }
-          }
-
-          html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span class="leg-pick">${esc(displayPick(p.pick, p.sport))}</span>
-              <span class="leg-odds">${esc(p.odds)}</span>
-            </div>
-            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}${scoreStr}</div>
-            ${parlayTimeLine ? `<div>${parlayTimeLine}</div>` : ''}
-          </div>`;
-        }
-      } else {
-        // New: render from optimized parlay legs with live results
-        for (const rawLeg of optimizedParlayLegs) {
-          const leg = withLegCommenceTime(rawLeg, picks);
-          const isStraightPick = picks.some(p => p.pick === leg.pick);
-          const independentBadge = !isStraightPick
-            ? '<span style="background:var(--teal-light); color:var(--teal); font-size:.5625rem; font-weight:700; padding:1px 5px; border-radius:3px; margin-left:4px;">PARLAY ONLY</span>'
-            : '';
-          const coverBadge = leg.coverProb
-            ? `<span style="font-size:.625rem; color:var(--green); font-weight:600; margin-left:4px;">${leg.coverProb}</span>`
-            : '';
-
-          // Get live result for this parlay leg
-          const legGame = findGame(leg);
-          const legResult = determineResult(leg, legGame);
-          let legBadgeHTML = '';
-          if (legResult.isLive) legBadgeHTML = '<span class="leg-result leg-live">LIVE</span>';
-          else if (legResult.status === 'win') legBadgeHTML = '<span class="leg-result leg-win">✓ W</span>';
-          else if (legResult.status === 'loss') legBadgeHTML = '<span class="leg-result leg-loss">✗ L</span>';
-          else if (legResult.status === 'push') legBadgeHTML = '<span class="leg-result leg-push">— P</span>';
-
-          let legScoreStr = '';
-          if (legGame && (legGame.state === 'in' || legGame.state === 'post')) {
-            legScoreStr = ` <span style="font-size:.6875rem; color:var(--txt-m);">(${legGame.awayScore}-${legGame.homeScore})</span>`;
-          }
-
-          let legTimeLine = '';
-          if (legBadgeHTML) { legTimeLine = legBadgeHTML; }
-          else {
-            let pTime = '';
-            if (legGame && legGame.state === 'pre' && legGame.startTimeEST) pTime = legGame.startTimeEST;
-            else if (leg.commenceTime) { try { pTime = new Date(leg.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
-            if (pTime) { const ptTz = pTime.includes('EST') || pTime.includes('EDT') ? pTime : pTime + ' EST'; legTimeLine = `<span style="font-size:.625rem; color:var(--txt-l);">${esc(ptTz)}</span>`; }
-          }
-
-          html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span class="leg-pick">${esc(displayPick(leg.pick, leg.sport))}${independentBadge}${coverBadge}</span>
-              <span class="leg-odds">${esc(leg.odds)}</span>
-            </div>
-            <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(leg.matchup || '', leg.sport))} · ${esc(leg.sport || '')}/${esc(leg.betType || '')}${legScoreStr}</div>
-            ${legTimeLine ? `<div>${legTimeLine}</div>` : ''}
-          </div>`;
-        }
-      }
-
       if (parlayStatus !== 'scheduled') {
-        const pBarClass = `score-bar-${parlayStatus}`;
-        const pStatusClass = `status-${parlayStatus}`;
-        html += `<div class="pick-score-bar ${pBarClass}" style="margin-top:.625rem;">
+        const legsHit = parlayFinalStatuses.filter(s => s === 'win').length;
+        const note = parlayStatus === 'live' ? `${legsHit} of ${legCount} legs hit` : parlayLabel;
+        html += `<div class="pick-score-bar score-bar-${parlayStatus}" style="margin-bottom:.5rem;">
           <span style="font-weight:600;">Parlay ${parlayLabel}</span>
-          <span class="score-status ${pStatusClass}">${parlayStatusNote || parlayLabel}</span>
+          <span class="score-status status-${parlayStatus}">${note}</span>
         </div>`;
       }
 
+      html += sectionSummaryHTML(
+        'Parlay — Summary',
+        [{
+          label: `${legCount}-Team Parlay`,
+          sub: esc(parlayOddsStr || ''),
+          meta: '',
+          units: `${parlayUnits}u`,
+          risk: parlayRisk.toLocaleString(),
+          win: Math.round(parlayWin).toLocaleString(),
+          highlight: true,
+        }],
+        parlayUnits,
+        parlayRisk,
+        parlayWin
+      );
       html += `</div>`;
     }
 
     container.innerHTML = html;
 
-    // Build bet summary (after legResults are populated)
-    buildBetSummary();
-
-    // Record bar
     const recordEl = document.getElementById('record-bar-content');
     recordEl.innerHTML = `
       <span style="font-weight:600; color:var(--txt-b);">Today's Record: ${wins}W-${losses}L${pushes > 0 ? '-' + pushes + 'P' : ''}</span>
     `;
 
-    // Schedule auto-refresh if any games are live or upcoming
-    if (hasAnyLive || pending > 0) {
-      scheduleRefresh(30);  // every 30s
-    } else {
-      scheduleRefresh(300); // every 5 min if all final
-    }
+    if (hasAnyLive || pending > 0) scheduleRefresh(30);
+    else scheduleRefresh(300);
   }
 
   function resultSignature(data) {

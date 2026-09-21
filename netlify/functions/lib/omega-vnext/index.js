@@ -9,7 +9,7 @@ const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
 const { selectStraights, toPickObject, applyDailyCap } = require('./select');
 const { optimizeParlay } = require('./parlay');
-const { narrateAndVerify } = require('./narrate');
+const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks } = require('./store');
@@ -137,14 +137,23 @@ async function generateOmegaVnext(opts = {}) {
 
   const narr = await narrateAndVerify({
     picks,
+    parlayLegs,
     dateFormatted,
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
   picks = narr.picks;
+  parlayLegs = narr.parlayLegs || parlayLegs;
   if (narr.rejections && narr.rejections.length) {
     const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
     const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
     parlayLegs = optimizeParlay(pool2, picks);
+    // Re-narrate new parlay legs after veto-driven re-optimize
+    parlayLegs = await narrateParlayLegsOnly({
+      parlayLegs,
+      dateFormatted,
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      straightPicks: picks,
+    });
   }
 
   picks = attachClvFields(picks, MODEL_VERSION, dateISO);

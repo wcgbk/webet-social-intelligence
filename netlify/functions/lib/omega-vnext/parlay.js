@@ -147,6 +147,16 @@ function optimizeParlay(yesPool, straights = []) {
     commenceTime: l.commenceTime || '',
     coverProb: `${(l.coverProb * 100).toFixed(0)}%`,
     ev: `${((l.ev || 0) * 100).toFixed(1)}%`,
+    edgePct: l.edgePct != null
+      ? (typeof l.edgePct === 'number' ? `${(l.edgePct * (l.edgePct <= 1 ? 100 : 1)).toFixed(1)}%` : String(l.edgePct))
+      : undefined,
+    // Optional card chrome — straights carry rating/units; legs may inherit later from matching straight
+    rating: l.rating || null,
+    confidence: l.confidence || null,
+    units: l.units || null,
+    coreReasoning: l.coreReasoning || '',
+    homeTeam: l.homeTeam,
+    awayTeam: l.awayTeam,
     p_model: l.p_model,
     fair_sharp_p: l.fair_sharp_p,
     predictedClv: l.predictedClv,

@@ -1049,10 +1049,13 @@ exports.handler = async (event) => {
 - Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
 - Always say "WeBetAI" not "the model"
 
-Also write a "whatLoses" field: one sentence describing the specific scenario that beats this pick.
+Also write:
+- "whatLoses": one sentence describing the specific scenario that beats this pick
+- "dataVerified": brief note that the edge is model-grounded (no invented injuries/stats)
+- "clvExpectation": one sentence on expected closing-line movement
 
 Return ONLY valid JSON array:
-[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
+[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
               messages: [{ role: "user", content: `Write narratives for these picks:\n${pickDescriptions}` }],
             }),
           });
@@ -1074,9 +1077,18 @@ Return ONLY valid JSON array:
                   if (n.whatLoses && n.whatLoses.length > 10) {
                     picksData.picks[idx].whatLoses = n.whatLoses;
                   }
+                  if (n.dataVerified && n.dataVerified.length > 5) {
+                    picksData.picks[idx].dataVerified = n.dataVerified;
+                  }
+                  if (n.clvExpectation && n.clvExpectation.length > 5) {
+                    picksData.picks[idx].clvExpectation = n.clvExpectation;
+                  }
                 }
               }
             }
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            console.log(`[verify-final] Anthropic HTTP ${resp.status}${errBody ? ': ' + errBody.slice(0, 180) : ''}`);
           }
         } catch (e) {
           console.log(`[verify-final] Claude narrative write failed: ${e.message}`);
@@ -1140,6 +1152,10 @@ Return ONLY valid JSON array:
           // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
           commenceTime: p.commenceTime || '',
           ev: p.ev,
+          coreReasoning: p.coreReasoning || '',
+          whatLoses: p.whatLoses || '',
+          dataVerified: p.dataVerified || '',
+          clvExpectation: p.clvExpectation || '',
         }));
 
         let combinedDecimal = 1.0, combinedProb = 1.0;
@@ -1166,6 +1182,110 @@ Return ONLY valid JSON array:
         if (picksData.parlayLegs && picksData.parlayLegs.length) {
           picksData.parlayLegs = [];
           console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
+        }
+      }
+
+      // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──
+      // Straights get writeups above; parlay legs often differ from the straight card and were
+      // previously left with empty/fallback blurbs. Mirror the straight Claude pass per-leg.
+      {
+        const plRoot = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
+        const legs = (plRoot && Array.isArray(plRoot.legs)) ? plRoot.legs : [];
+        const needsLeg = [];
+        for (let i = 0; i < legs.length; i++) {
+          const leg = legs[i];
+          // Prefer matching straight narrative when same pick+matchup already has real prose
+          const match = picksData.picks.find(p => p.pick === leg.pick && p.matchup === leg.matchup);
+          if (match && match.coreReasoning && match.coreReasoning.length > 80 && !/replaces a|statistical edge on this/i.test(match.coreReasoning)) {
+            leg.coreReasoning = match.coreReasoning;
+            if (match.whatLoses) leg.whatLoses = match.whatLoses;
+            if (match.dataVerified) leg.dataVerified = match.dataVerified;
+            if (match.clvExpectation) leg.clvExpectation = match.clvExpectation;
+          }
+          const cr = leg.coreReasoning || "";
+          if (cr.length < 80 || /replaces a|statistical edge on this|clears Omega vNext gates/i.test(cr)) {
+            needsLeg.push(i);
+          } else if (!leg.whatLoses || leg.whatLoses.trim().length < 15) {
+            needsLeg.push(i);
+          }
+        }
+        const uniqueLegNeeds = [...new Set(needsLeg)];
+        if (uniqueLegNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
+          console.log(`[verify-final] Writing parlay-leg narratives for ${uniqueLegNeeds.length} leg(s) via Claude`);
+          const legDescriptions = uniqueLegNeeds.map(i => {
+            const leg = legs[i];
+            return `Leg ${i + 1}: ${leg.pick} ${leg.odds || ''} | ${leg.sport || ''} ${leg.betType || ''} | ${leg.matchup || ''} | Cover: ${leg.coverProb || ''} | EV: ${leg.ev || ''}`;
+          }).join('\n');
+          try {
+            const resp = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              signal: AbortSignal.timeout(25000),
+              headers: {
+                "x-api-key": process.env.ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+                "anthropic-beta": "prompt-caching-2024-07-31",
+              },
+              body: JSON.stringify({
+                model: "claude-sonnet-4-6",
+                max_tokens: 2000,
+                system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI parlay legs. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+- Be 2-4 sentences
+- Explain in GENERAL terms why WeBetAI favors the side named in the leg
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given
+- Never use technical jargon; never restate projections/lines/numbers (shown separately)
+- Always say "WeBetAI" not "the model"
+
+Also write whatLoses, dataVerified, and clvExpectation (one sentence each).
+
+Return ONLY valid JSON array:
+[{ "legIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
+                messages: [{ role: "user", content: `Write narratives for these parlay legs:\n${legDescriptions}` }],
+              }),
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              const textOut = data.content?.[0]?.text || "";
+              const jsonMatch = textOut.match(/\[[\s\S]*\]/);
+              if (jsonMatch) {
+                const narratives = JSON.parse(jsonMatch[0]);
+                for (const n of narratives) {
+                  const idx = (n.legIndex || 1) - 1;
+                  if (idx >= 0 && idx < legs.length) {
+                    if (n.coreReasoning && n.coreReasoning.length > 30) {
+                      legs[idx].coreReasoning = n.coreReasoning;
+                      finalFixCount++;
+                      console.log(`[verify-final] Wrote parlay-leg narrative for leg ${idx + 1}: "${legs[idx].pick}"`);
+                    }
+                    if (n.whatLoses && n.whatLoses.length > 10) legs[idx].whatLoses = n.whatLoses;
+                    if (n.dataVerified && n.dataVerified.length > 5) legs[idx].dataVerified = n.dataVerified;
+                    if (n.clvExpectation && n.clvExpectation.length > 5) legs[idx].clvExpectation = n.clvExpectation;
+                  }
+                }
+              }
+            } else {
+              const errBody = await resp.text().catch(() => '');
+              console.log(`[verify-final] Anthropic parlay-leg HTTP ${resp.status}${errBody ? ': ' + errBody.slice(0, 180) : ''}`);
+            }
+          } catch (e) {
+            console.log(`[verify-final] Claude parlay-leg narrative write failed: ${e.message}`);
+            for (const i of uniqueLegNeeds) {
+              const leg = legs[i];
+              if (!leg.coreReasoning || leg.coreReasoning.length < 80) {
+                const isTotal = /over|under/i.test(leg.pick || '');
+                leg.coreReasoning = isTotal
+                  ? `WeBetAI likes this total as a parlay leg — scoring trends and pace support the direction at the posted number.`
+                  : `WeBetAI likes this side as a parlay leg — form and matchup factors diverge from the market price enough to include it on the slip.`;
+                finalFixCount++;
+              }
+              if (!leg.whatLoses || leg.whatLoses.length < 15) {
+                leg.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+              }
+            }
+          }
+        } else if (uniqueLegNeeds.length > 0) {
+          console.log(`[verify-final] Skipping parlay-leg Claude write — no ANTHROPIC_API_KEY`);
         }
       }
 

@@ -6,7 +6,7 @@
  * Narratives: ESPN-style 3–5 sentence journalistic blurbs (not math templates).
  */
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 function resolveAnthropicKey(explicit) {
   return explicit
@@ -62,7 +62,7 @@ function lockedRow(p, i, kind) {
 const SYSTEM_PROMPT = `You are THE LOCK — WeBetAI's sports betting analyst. You VERIFY and NARRATE pre-locked picks. You do NOT select sides, invent replacements, compute projections, probabilities, or Kelly sizing — the statistical model has already locked the card.
 
 YOUR JOB:
-1. Use web search (sparingly — tight budget) to verify injury status, recent news, starting pitchers (MLB), QB status (NFL/NCAAF), outdoor weather, and recent form for EACH locked pick/leg.
+1. When web search is available, use it sparingly to verify injury status, recent news, starting pitchers (MLB), QB status (NFL/NCAAF), outdoor weather, and recent form. When tools are disabled, write grounded journalistic prose from the locked table only — do NOT invent specific injuries, records, or weather.
 2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, SP scratch, QB out/doubtful, severe weather, material lineup change). You do NOT choose replacements.
 3. Write 3-5 sentence coreReasoning for each ACCEPTED straight AND each parlay leg.
 4. You MAY reduce straight pick units by up to 50% with justification. You MUST NOT increase units. Do not change parlay leg units.
@@ -85,10 +85,24 @@ NARRATIVE RULES (coreReasoning):
 OUTPUT — Return ONLY valid JSON (no markdown fences):
 {
   "picks": [
-    { "idx": 0, "coreReasoning": "3-5 journalistic sentences...", "veto": false, "unitCut": null }
+    {
+      "idx": 0,
+      "coreReasoning": "3-5 journalistic sentences...",
+      "whatLoses": "One sentence — concrete scenario that beats this pick.",
+      "dataVerified": "Brief note on facts checked (form/injuries/SP/QB) or 'model edge; no live news tool'.",
+      "clvExpectation": "One sentence on expected closing-line movement.",
+      "veto": false,
+      "unitCut": null
+    }
   ],
   "parlayLegs": [
-    { "idx": 0, "coreReasoning": "2-4 journalistic sentences..." }
+    {
+      "idx": 0,
+      "coreReasoning": "2-4 journalistic sentences...",
+      "whatLoses": "One sentence — scenario that beats this leg.",
+      "dataVerified": "Brief verification note.",
+      "clvExpectation": "Expected line move for this leg."
+    }
   ],
   "edgeSummary": "1-2 sentence editorial Daily Edge Summary. Sharp, specific, WeBetAI not 'the model'. Plain English.",
   "insights": "1-2 sentences on slate texture / sizing / sport mix. Plain English."
@@ -140,13 +154,18 @@ Write journalistic coreReasoning for every straight and every parlay leg. Return
   return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
 }
 
-/** Prefer web_search; on tool/HTTP failure retry once without tools so narratives still ship. */
+/** Prefer no-web_search first (web_search is flaky on Netlify). Retry once without tools. */
 async function callClaude(opts) {
   try {
-    return await callClaudeOnce({ ...opts, useWebSearch: true });
-  } catch (e) {
-    console.error(`[omega-vnext/narrate] web_search path failed (${e.message}) — retrying without tools`);
     return await callClaudeOnce({ ...opts, useWebSearch: false });
+  } catch (e) {
+    console.error(`[omega-vnext/narrate] Anthropic no-tools call failed (${e.message}) — retrying once without tools`);
+    try {
+      return await callClaudeOnce({ ...opts, useWebSearch: false });
+    } catch (e2) {
+      console.error(`[omega-vnext/narrate] Anthropic retry failed: ${e2.message}`);
+      throw e2;
+    }
   }
 }
 
@@ -171,11 +190,18 @@ function applyStraightRows(templated, parsed) {
       if (Number.isFinite(cut) && cut < cur && cut >= cur * 0.5) units = `${cut}u`;
     }
     const prose = (row.coreReasoning || '').trim();
-    outPicks.push({
+    const next = {
       ...base,
       units,
       coreReasoning: prose.length > 40 ? prose : base.coreReasoning,
-    });
+    };
+    const wl = (row.whatLoses || '').trim();
+    const dv = (row.dataVerified || '').trim();
+    const clv = (row.clvExpectation || '').trim();
+    if (wl.length > 10) next.whatLoses = wl;
+    if (dv.length > 5) next.dataVerified = dv;
+    if (clv.length > 5) next.clvExpectation = clv;
+    outPicks.push(next);
   }
   return { outPicks, rejections };
 }
@@ -188,8 +214,15 @@ function applyLegRows(legsTemplated, parsed) {
   return legsTemplated.map((leg, i) => {
     const row = byIdx.get(i);
     const prose = row && (row.coreReasoning || '').trim();
-    if (prose && prose.length > 30) return { ...leg, coreReasoning: prose };
-    return ensureNarrative(leg);
+    const base = (prose && prose.length > 30) ? { ...leg, coreReasoning: prose } : ensureNarrative(leg);
+    if (!row) return base;
+    const wl = (row.whatLoses || '').trim();
+    const dv = (row.dataVerified || '').trim();
+    const clv = (row.clvExpectation || '').trim();
+    if (wl.length > 10) base.whatLoses = wl;
+    if (dv.length > 5) base.dataVerified = dv;
+    if (clv.length > 5) base.clvExpectation = clv;
+    return base;
   });
 }
 

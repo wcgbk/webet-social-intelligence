@@ -94,7 +94,7 @@ OUTPUT — Return ONLY valid JSON (no markdown fences):
   "insights": "1-2 sentences on slate texture / sizing / sport mix. Plain English."
 }`;
 
-async function callClaude({ apiKey, lockedStraights, lockedLegs, dateFormatted }) {
+async function callClaudeOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted, useWebSearch }) {
   const userPrompt = `Date: ${dateFormatted}
 
 LOCKED STRAIGHT PICKS (verify + narrate; may veto on news only):
@@ -105,6 +105,16 @@ ${JSON.stringify((lockedLegs || []).map(({ _contextEv, _contextCover, ...r }) =>
 
 Write journalistic coreReasoning for every straight and every parlay leg. Return JSON only.`;
 
+  const body = {
+    model: CLAUDE_MODEL,
+    max_tokens: 4000,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userPrompt }],
+  };
+  if (useWebSearch) {
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+  }
+
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -112,14 +122,8 @@ Write journalistic coreReasoning for every straight and every parlay leg. Return
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 4000,
-      system: SYSTEM_PROMPT,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-    signal: AbortSignal.timeout(120000),
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(useWebSearch ? 120000 : 60000),
   });
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
@@ -134,6 +138,16 @@ Write journalistic coreReasoning for every straight and every parlay leg. Return
   const jsonEnd = text.lastIndexOf('}');
   if (jsonStart < 0 || jsonEnd < 0) throw new Error('no JSON in Claude response');
   return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+}
+
+/** Prefer web_search; on tool/HTTP failure retry once without tools so narratives still ship. */
+async function callClaude(opts) {
+  try {
+    return await callClaudeOnce({ ...opts, useWebSearch: true });
+  } catch (e) {
+    console.error(`[omega-vnext/narrate] web_search path failed (${e.message}) — retrying without tools`);
+    return await callClaudeOnce({ ...opts, useWebSearch: false });
+  }
 }
 
 function applyStraightRows(templated, parsed) {

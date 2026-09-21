@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.0.2-omega-vnext-clv';
+const MODEL_VERSION = 'v12.0.3-omega-vnext-clv';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -86,6 +86,7 @@ const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.5, NBA: 2.5, NHL: 0.15 }; // pts or 
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.0.3 omega-vnext: Claude narrate retries without web_search on tool failure.',
   'v12.0.2 omega-vnext: journalistic Claude narratives + full parlay-leg pick cards.',
   'v12.0.1 omega-vnext: CLV-first composer + realized close-grade loop + QA hard-fails.',
   'v1 projections: sport power/market-hybrid (MLB Pythag/Elo-lite; NFL/CFB normal-spread; NBA/NHL disabled).',

@@ -18,7 +18,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.0.2-omega-vnext-clv');
+assert.strictEqual(config.MODEL_VERSION, 'v12.0.3-omega-vnext-clv');
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
 assert.strictEqual(config.LEAN_PAD, false);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);

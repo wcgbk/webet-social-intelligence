@@ -1,7 +1,10 @@
 'use strict';
 
 const { SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION, DAILY_UNIT_CAP } = require('./config');
-const { kellyFraction, kellyToUnits, unitsToRating, ratingToConfidence, formatAmerican } = require('./odds_math');
+const {
+  kellyFraction, kellyToUnits, unitsToRating, ratingToConfidence, formatAmerican,
+  formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
+} = require('./odds_math');
 
 function matchupKey(c) {
   return String(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`).toLowerCase().trim();
@@ -32,17 +35,23 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
     if (picked.length >= maxN) break;
     const g = matchupKey(c);
     if (usedGames.has(g)) continue;
-    // soft: prefer not taking 3 from same sport if alternatives within score band exist —
-    // handled via softSportMixBonus on remaining scores; re-sort lightly
     const scored = { ...c, _score: scoreCandidate(c, sports) };
     picked.push(scored);
     usedGames.add(g);
     sports.add(c.sport);
   }
 
-  // Re-rank final by score
   picked.sort((a, b) => (b._score || 0) - (a._score || 0));
   return picked;
+}
+
+function parseU(u) {
+  return parseFloat(String(u || '0').replace(/[^0-9.]/g, '')) || 0;
+}
+
+function fmtU(n) {
+  const nu = Math.round(n * 4) / 4;
+  return `${nu}u`;
 }
 
 function toPickObject(c, opts = {}) {
@@ -50,25 +59,35 @@ function toPickObject(c, opts = {}) {
   let units = kellyToUnits(kFrac, 1.5);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
   const rating = unitsToRating(units);
-  const edgePctVal = ((c.edgePct != null ? c.edgePct : (c.coverProb - 0)) * 100);
+
+  // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
+  // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.
+  const edgeFrac = (c.edgePct != null && Math.abs(c.edgePct) <= 1)
+    ? c.edgePct
+    : null;
+  const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
+  const evStr = formatEdgePct(c.ev) || edgePctStr;
+
   const isML = /moneyline/i.test(c.market || '');
+  const pickLabel = formatMoneylinePick(c.side, c.market);
   const calibratedPct = ((c.coverProb || 0) * 100).toFixed(1);
   const modelEdge = isML
-    ? `Model Win Prob: ${calibratedPct}%, Edge: ${edgePctVal.toFixed(1)}%`
-    : `Model p: ${calibratedPct}%, Line: ${c.line != null ? c.line : c.consensusLine}, Edge: ${edgePctVal.toFixed(1)}%`;
+    ? `Model Win Prob: ${calibratedPct}%, Edge: ${edgePctStr}`
+    : `Model p: ${calibratedPct}%, Line: ${c.line != null ? c.line : c.consensusLine}, Edge: ${edgePctStr}`;
 
   return {
     sport: c.sport,
     matchup: c.matchup || `${c.awayTeam} @ ${c.homeTeam}`,
-    pick: c.side,
+    pick: pickLabel,
+    pickDisplay: pickLabel,
     betType: c.market,
     odds: c.oddsStr || formatAmerican(c.odds),
     rating,
     confidence: ratingToConfidence(rating),
     units: `${units}u`,
-    ev: `${((c.ev || 0) * 100).toFixed(1)}%`,
-    evRaw: c.ev,
-    edgePct: `${edgePctVal.toFixed(1)}%`,
+    ev: evStr,
+    evRaw: c.ev != null ? c.ev : edgeFrac,
+    edgePct: edgePctStr,
     coverProb: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
     winProbability: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
     coreReasoning: c.coreReasoning || '',
@@ -91,30 +110,80 @@ function toPickObject(c, opts = {}) {
   };
 }
 
+/**
+ * Cap straights only (legacy). Prefer applyDailyUnitCap with parlay.
+ */
 function applyDailyCap(picks) {
-  let total = picks.reduce((s, p) => s + parseFloat(p.units), 0);
-  if (total <= DAILY_UNIT_CAP) return picks;
-  const out = picks.map(p => ({ ...p }));
-  const order = out.map((_, i) => i).sort((a, b) => parseFloat(out[a].units) - parseFloat(out[b].units));
-  while (total > DAILY_UNIT_CAP) {
+  return applyDailyUnitCap(picks, null).picks;
+}
+
+/**
+ * DAILY_UNIT_CAP includes straights + parlay stake.
+ * Overage: cut parlay first (floor 0.25u), then lowest-confidence straights
+ * in 0.25u steps (floor 0.25u). Recompute grades; sort A+→B then units desc.
+ */
+function applyDailyUnitCap(picks, parlayLegs) {
+  let out = (picks || []).map(p => ({ ...p }));
+  let parlays = Array.isArray(parlayLegs)
+    ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
+    : [];
+
+  const totalOf = () => {
+    const s = out.reduce((acc, p) => acc + parseU(p.units), 0);
+    const p = parlays.reduce((acc, pl) => acc + parseU(pl.units), 0);
+    return s + p;
+  };
+
+  let total = totalOf();
+  if (total <= DAILY_UNIT_CAP) {
+    out = sortByGradeThenUnits(out);
+    return { picks: out, parlayLegs: parlays };
+  }
+
+  // 1) Scale parlay down first
+  while (total > DAILY_UNIT_CAP && parlays.length) {
+    let cut = false;
+    for (const pl of parlays) {
+      const u = parseU(pl.units);
+      if (u > 0.25) {
+        const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
+        pl.units = fmtU(nu);
+        total = totalOf();
+        cut = true;
+        break;
+      }
+    }
+    if (!cut) break;
+  }
+
+  // 2) Reduce lowest-confidence straights (highest ratingRank first)
+  while (total > DAILY_UNIT_CAP && out.length) {
+    const order = out
+      .map((_, i) => i)
+      .sort((a, b) => {
+        const ra = ratingRank(out[a].rating);
+        const rb = ratingRank(out[b].rating);
+        if (ra !== rb) return rb - ra; // lowest grade first
+        return parseU(out[a].units) - parseU(out[b].units);
+      });
     let reduced = false;
     for (const idx of order) {
-      const u = parseFloat(out[idx].units);
+      const u = parseU(out[idx].units);
       if (u > 0.25) {
-        out[idx].units = `${(u - 0.25).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}u`;
-        // normalize
-        const nu = Math.round((u - 0.25) * 4) / 4;
-        out[idx].units = `${nu}u`;
+        const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
+        out[idx].units = fmtU(nu);
         out[idx].rating = unitsToRating(nu);
         out[idx].confidence = ratingToConfidence(out[idx].rating);
-        total -= 0.25;
+        total = totalOf();
         reduced = true;
         break;
       }
     }
     if (!reduced) break;
   }
-  return out;
+
+  out = sortByGradeThenUnits(out);
+  return { picks: out, parlayLegs: parlays };
 }
 
 module.exports = {
@@ -122,5 +191,8 @@ module.exports = {
   selectStraights,
   toPickObject,
   applyDailyCap,
+  applyDailyUnitCap,
   matchupKey,
+  formatMoneylinePick,
+  sortByGradeThenUnits,
 };

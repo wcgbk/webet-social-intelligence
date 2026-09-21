@@ -29,6 +29,72 @@ function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g
 function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
 function confFromUnits(u) { return u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b"; }
 
+// Omega v12.0.6: total daily units (straights + parlay) ≤ 5.0u
+const OMEGA_DAILY_UNIT_CAP = 5.0;
+function enforceOmegaDailyUnitCap(picksData) {
+  if (!picksData || !Array.isArray(picksData.picks)) return;
+  const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
+  const fmtU = (n) => `${Math.round(n * 4) / 4}u`;
+  const ratingRank = (r) => {
+    const m = { 'A+': 0, aplus: 0, A: 1, a: 1, 'A-': 2, aminus: 2, 'B+': 3, bplus: 3, B: 4, b: 4 };
+    return m[r] != null ? m[r] : 4;
+  };
+  let total = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+  const parlays = Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs : [];
+  total += parlays.reduce((s, pl) => s + parseU(pl.units), 0);
+  if (total <= OMEGA_DAILY_UNIT_CAP) return;
+  // Cut parlay first
+  while (total > OMEGA_DAILY_UNIT_CAP) {
+    let cut = false;
+    for (const pl of parlays) {
+      const u = parseU(pl.units);
+      if (u > 0.25) {
+        pl.units = fmtU(Math.max(0.25, u - 0.25));
+        total -= 0.25;
+        cut = true;
+        break;
+      }
+    }
+    if (!cut) break;
+  }
+  // Then lowest-confidence straights
+  while (total > OMEGA_DAILY_UNIT_CAP) {
+    const order = picksData.picks
+      .map((p, i) => i)
+      .sort((a, b) => {
+        const ra = ratingRank(picksData.picks[a].rating);
+        const rb = ratingRank(picksData.picks[b].rating);
+        if (ra !== rb) return rb - ra;
+        return parseU(picksData.picks[a].units) - parseU(picksData.picks[b].units);
+      });
+    let reduced = false;
+    for (const idx of order) {
+      const u = parseU(picksData.picks[idx].units);
+      if (u > 0.25) {
+        const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
+        picksData.picks[idx].units = fmtU(nu);
+        picksData.picks[idx].rating = unitsToRating(nu);
+        total -= 0.25;
+        reduced = true;
+        break;
+      }
+    }
+    if (!reduced) break;
+  }
+  // Sort grade then units
+  picksData.picks.sort((a, b) => {
+    const ra = ratingRank(a.rating), rb = ratingRank(b.rating);
+    if (ra !== rb) return ra - rb;
+    return parseU(b.units) - parseU(a.units);
+  });
+  const straightU = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+  const parlayU = parlays.reduce((s, pl) => s + parseU(pl.units), 0);
+  if (picksData.summary) {
+    picksData.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
+  }
+}
+
+
 // v10.4.7: QA replacements/backfills must obey the SAME sizing discipline as the generator's main
 // path — per-market caps (F5 0.5u, Moneyline = the config-tunable ML cap, Total 1.5u, RL/Spread/
 // Puck 1.0u) and the coverProb downsizing gates (sub-50% → 1.0u, sub-42% → 0.5u). Previously these
@@ -561,8 +627,10 @@ async function autoFixPicks(picksData, pickReports) {
     }
   }
 
-  // Recalculate summary
-  const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
+  // Recalculate summary + enforce 5u daily cap (straights + parlay)
+  enforceOmegaDailyUnitCap(picksData);
+  const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
+    + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
   if (picksData.summary) {
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
@@ -574,6 +642,7 @@ async function autoFixPicks(picksData, pickReports) {
 
 // ── Write updated picks back to blob ──
 async function updatePicksBlob(dateKey, picksData) {
+  try { enforceOmegaDailyUnitCap(picksData); } catch (e) { console.error('[verify] unit cap', e.message); }
   picksData.verifiedAt = new Date().toISOString();
   // verified is set by the caller (final pass) based on whether the FINAL card is genuinely clean.
   // Do NOT force true here — a red-flagged pick that couldn't be resolved must not be stamped "verified".

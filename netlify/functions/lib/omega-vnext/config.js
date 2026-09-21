@@ -1,12 +1,18 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.0.5-omega-vnext-clv';
+const MODEL_VERSION = 'v12.0.6-omega-vnext-clv';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
-const DAILY_UNIT_CAP = 4.0;
+/**
+ * Hard cap on TOTAL daily units bet: straights + Daily Lock Parlay stake ≤ 5.0u.
+ * If sum would exceed 5: (1) scale parlay down first (floor 0.25u), then
+ * (2) reduce lowest-confidence straights in 0.25u steps (floor 0.25u),
+ * preserving grade order (A+ > A > A- > B+ > B) after recompute + sort.
+ */
+const DAILY_UNIT_CAP = 5.0;
 const LEAN_PAD = false; // empty card OK — never force-fill
 
 const SPORTS_ENABLED = {
@@ -42,8 +48,8 @@ const MAJOR_LIQUIDITY_BOOKS = [
   'draftkings', 'fanduel', 'betmgm', 'caesars', 'williamhill_us', 'espnbet', 'pinnacle',
 ];
 
-/** Shrinkage toward no-vig sharp (higher K = more trust in market). */
-const SHRINK_K = { Total: 0.30, Spread: 0.35, Moneyline: 0.50, default: 0.40 };
+/** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.0.6: stronger shrink. */
+const SHRINK_K = { Total: 0.45, Spread: 0.50, Moneyline: 0.65, default: 0.50 };
 
 /** Gate floors — conservative v1. Empty OK. */
 const GATES = {
@@ -86,17 +92,20 @@ const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.5, NBA: 2.5, NHL: 0.15 }; // pts or 
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.0.6 omega-vnext: daily unit cap 5.0u incl. parlay; ML pick labels; Edge badge = model edge after shrink vs no-vig sharp; stronger shrink; Daily Lock Parlay UX.',
   'v12.0.5 omega-vnext: ensure whatLoses/dataVerified/clvExpectation after Claude narrate + verify.',
   'v12.0.4 omega-vnext: Claude sonnet-4-6 narrate (match verify) + whatLoses/dataVerified/clvExpectation + verify parlay-leg writeups.',
   'v12.0.3 omega-vnext: Claude narrate retries without web_search on tool failure.',
   'v12.0.2 omega-vnext: journalistic Claude narratives + full parlay-leg pick cards.',
   'v12.0.1 omega-vnext: CLV-first composer + realized close-grade loop + QA hard-fails.',
   'v1 projections: sport power/market-hybrid (MLB Pythag/Elo-lite; NFL/CFB normal-spread; NBA/NHL disabled).',
-  'Calibration: shrink p_model toward no-vig sharp with market K; not full isotonic walk-forward yet.',
+  'Calibration: shrink p_model toward no-vig sharp with market K; isotonic clip soft-caps extremes.',
+  'Edge badge (edgePct): calibrated model edge after shrink = coverProb - no-vig sharp fair (fallback: vs book implied). Not predictedClv cents, not raw coverProb, not dog-inflated EV%.',
   'Predicted CLV is a proxy; realized no-vig CLV graded by track-clv-omega (Pinnacle/Circa/Bookmaker).',
   'Weekly CLV report is OBSERVER ONLY — no auto-steer.',
   'QA hard-fails drop scratched SP (MLB), QB out/doubtful (NFL/NCAAF), and stale odds before publish.',
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
+  'DAILY_UNIT_CAP=5.0 includes straights + parlay; overage cuts parlay first then lowest-confidence straights.',
 ].join(' ');
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';

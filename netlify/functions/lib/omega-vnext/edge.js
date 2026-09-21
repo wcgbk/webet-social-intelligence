@@ -2,7 +2,7 @@
 
 const { SHARP_BOOKS, US_BOOKS, MAJOR_LIQUIDITY_BOOKS } = require('./config');
 const {
-  americanToImplied, deVigMarket, evAtOdds, formatAmerican, clamp,
+  americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
 } = require('./odds_math');
 
 function bookKey(b) {
@@ -108,6 +108,7 @@ function sharpFairForSide(sideBundles, targetSide, targetPoint) {
 /**
  * predicted CLV proxy in "cents": positive when best US price is better than sharp mid
  * OR when model fair implies value vs sharp (blend).
+ * NOTE: this is NOT the Edge badge — do not display as %.
  */
 function predictedClvCents(bestUsAmerican, sharpAmerican, pModel, fairSharpP) {
   let priceClv = 0;
@@ -156,16 +157,30 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
 
 /**
  * After calibration, recompute EV at best US odds using coverProb.
+ *
+ * UI Edge badge (edgePct) = model edge after shrink vs no-vig sharp fair:
+ *   coverProb - fair_sharp_p
+ * Fallback when sharp fair missing: coverProb - vigged book implied.
+ * NOT predictedClv cents, NOT raw coverProb, NOT full Kelly EV% (dogs inflate EV%).
+ * `ev` remains true EV at posted odds for sizing/gates.
  */
 function attachEv(c) {
   const ev = evAtOdds(c.coverProb, c.odds);
-  const edgePct = (Number.isFinite(c.coverProb) && Number.isFinite(americanToImplied(c.odds)))
-    ? c.coverProb - americanToImplied(c.odds)
-    : null;
+  const implied = americanToImplied(c.odds);
+  const fair = (c.fair_sharp_p != null && Number.isFinite(c.fair_sharp_p))
+    ? c.fair_sharp_p
+    : (c.sharpFairP != null && Number.isFinite(c.sharpFairP) ? c.sharpFairP : null);
+  let edgeFrac = null;
+  if (Number.isFinite(c.coverProb) && Number.isFinite(fair)) {
+    edgeFrac = c.coverProb - fair;
+  } else if (Number.isFinite(c.coverProb) && Number.isFinite(implied)) {
+    edgeFrac = c.coverProb - implied;
+  }
   return {
     ...c,
     ev: ev != null ? +ev.toFixed(4) : null,
-    edgePct: edgePct != null ? +edgePct.toFixed(4) : null,
+    edgePct: edgeFrac != null ? +edgeFrac.toFixed(4) : null,
+    edgePctDisplay: formatEdgePct(edgeFrac),
   };
 }
 

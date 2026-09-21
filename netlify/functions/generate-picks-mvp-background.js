@@ -3154,22 +3154,9 @@ function buildFinalPicks(candidateTable, claudeSelections, allCandidates, drawdo
     const kellyRating = unitsToRating(finalUnits);
     const kellyConfidence = ratingToConfidence(kellyRating);
 
-    // v11.1-mvp: Apply grade-calibrated Kelly multiplier from self-optimize data.
-    // self-optimize.js computes gradeAccuracy (actual win rate per grade) weekly.
-    // If A+ is actually hitting 63% and B is hitting 52%, size accordingly.
-    // Guard: require ≥10 picks in the grade bucket for the multiplier to activate.
-    if (buildFinalPicks._gradeAccuracy) {
-      const gradeData = buildFinalPicks._gradeAccuracy[kellyRating];
-      if (gradeData && gradeData.count >= 10) {
-        // Map actual accuracy to multiplier: 50%→0.90, 55%→1.00, 60%→1.10, 65%→1.20
-        const gradeMult = Math.max(0.80, Math.min(1.25, 0.40 + gradeData.accuracy * 1.20));
-        const gradeAdjUnits = Math.max(0.5, Math.min(3.0, Math.round(finalUnits * gradeMult * 2) / 2));
-        if (gradeAdjUnits !== finalUnits) {
-          console.log(`[v11-grade] ${kellyRating} grade mult ${gradeMult.toFixed(2)}x (${(gradeData.accuracy*100).toFixed(0)}% actual, n=${gradeData.count}): ${finalUnits}u → ${gradeAdjUnits}u`);
-          finalUnits = gradeAdjUnits;
-        }
-      }
-    }
+    // v11.1-mvp gradeAccuracy Kelly steering REMOVED (product hard rule): self-opt is
+    // observer-only. Never resize units from weekly gradeAccuracy feedback.
+    // (buildFinalPicks._gradeAccuracy may still be set for logging; do not apply.)
 
     // Fix model edge display — use calibrated coverProb (not raw modelProjection)
     const isML = c.market === "Moneyline";
@@ -3795,42 +3782,11 @@ exports.handler = async (event) => {
       console.log(`[v10] Prediction market: ${pmSignals} candidates matched, ${confirms} confirmed, ${cautions} cautioned (type-aligned)`);
     }
 
-    // ── PHASE 1C2: SELF-OPTIMIZATION PARAMETER APPLICATION ──
-    // Apply data-driven Kelly multipliers and cover prob adjustments from self-optimize.js
+    // ── PHASE 1C2: SELF-OPTIMIZATION PARAMETER APPLICATION — REMOVED ──
+    // Self-optimize is an OBSERVER only. Generators must never apply selfOptParams to live
+    // candidates (product hard rule). Fetch/log remains for analytics parity with Omega.
     if (selfOptParams) {
-      let soAdj = 0;
-      for (const c of allCandidates) {
-        let combined = 1.0;
-
-        // Sport-specific multiplier from self-optimization
-        const soSportMult = selfOptParams.sportKellyMult?.[c.sport];
-        if (soSportMult && soSportMult !== 1.0) combined *= soSportMult;
-
-        // Market-specific multiplier from self-optimization
-        const soMarketMult = selfOptParams.marketKellyMult?.[c.market];
-        if (soMarketMult && soMarketMult !== 1.0) combined *= soMarketMult;
-
-        // Only apply if combined adjustment is meaningful
-        if (Math.abs(combined - 1.0) > 0.01) {
-          const old = c.kellyUnits;
-          c.kellyUnits = Math.max(0.5, Math.round(c.kellyUnits * combined * 2) / 2);
-          if (old !== c.kellyUnits) {
-            c.kellyCalcStr += ` [SELF-OPT: ${combined.toFixed(3)}x, ${old}u→${c.kellyUnits}u]`;
-            soAdj++;
-          }
-        }
-
-        // Cover probability cap adjustment
-        const sm = `${c.sport}_${c.market}`;
-        const capAdj = selfOptParams.coverProbAdjust?.[sm];
-        if (capAdj && Math.abs(capAdj) > 0.005) {
-          // This is informational — caps are already set in COVER_PROB_CAPS
-          // The self-optimize engine suggests adjustments; we apply them as a secondary multiplier
-          const probShift = 1.0 + capAdj;
-          c.coverProb = +Math.min(0.70, c.coverProb * probShift).toFixed(4);
-        }
-      }
-      console.log(`[v10-selfopt] Applied self-optimization to ${soAdj} candidates (sample: ${selfOptParams.sampleSize})`);
+      console.log(`[v10-selfopt] Params loaded (sample: ${selfOptParams.sampleSize}) — observational only, no candidate mutation`);
     }
 
     // ── PHASE 1D: OPENING LINE / STALE LINE DETECTION ──
@@ -4225,8 +4181,8 @@ exports.handler = async (event) => {
 
     // ── PHASE 3: MERGE JS NUMBERS + CLAUDE SELECTIONS ──
     const selections = claudeOutput.selections || [];
-    // v11.1-mvp: Pass gradeAccuracy from self-optimize params into buildFinalPicks via static prop
-    buildFinalPicks._gradeAccuracy = selfOptParams?.gradeAccuracy || null;
+    // Observational only: do not pass gradeAccuracy into sizing (self-opt hard rule).
+    buildFinalPicks._gradeAccuracy = null;
     let picks = buildFinalPicks(candidateTable, selections, allCandidates, bankrollCtx.drawdownActive);
 
     // ── v11.1-mvp: ADVERSARIAL A+ CHECK ──

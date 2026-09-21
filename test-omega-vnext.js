@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.0.6-omega-vnext-clv');
+assert.strictEqual(config.MODEL_VERSION, 'v12.0.7-omega-vnext-clv');
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
 assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
 assert.strictEqual(config.LEAN_PAD, false);
@@ -44,6 +44,12 @@ assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low'
 
 const pCal = calibrate.shrinkTowardSharp(0.60, 0.52, 'Spread');
 assert.ok(pCal > 0.52 && pCal < 0.60);
+// isotonic must compress toward band — not inflate just-above-hi values
+assert.ok(calibrate.isotonicClip(0.60) <= 0.60, 'isotonic must not inflate at hi');
+assert.ok(calibrate.isotonicClip(0.72) < 0.65, 'isotonic must pull 0.72 down');
+const edgeProbe = edge.attachEv({ coverProb: calibrate.isotonicClip(calibrate.shrinkTowardSharp(0.725, 0.475, 'Spread')), odds: 105, fair_sharp_p: 0.475 });
+assert.ok(edgeProbe.edgePct < 0.12, 'calibrated edge vs sharp should be modest, got '+edgeProbe.edgePct);
+
 
 // Edge display: model edge after shrink vs fair_sharp (not predictedClv, not raw coverProb)
 const withEv = edge.attachEv({

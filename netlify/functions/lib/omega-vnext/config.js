@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.0.6-omega-vnext-clv';
+const MODEL_VERSION = 'v12.0.7-omega-vnext-clv';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -49,7 +49,7 @@ const MAJOR_LIQUIDITY_BOOKS = [
 ];
 
 /** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.0.6: stronger shrink. */
-const SHRINK_K = { Total: 0.45, Spread: 0.50, Moneyline: 0.65, default: 0.50 };
+const SHRINK_K = { Total: 0.55, Spread: 0.65, Moneyline: 0.70, default: 0.60 };
 
 /** Gate floors — conservative v1. Empty OK. */
 const GATES = {
@@ -92,6 +92,7 @@ const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.5, NBA: 2.5, NHL: 0.15 }; // pts or 
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.0.7 omega-vnext: fix isotonic soft-cap (was inflating ~hi); stronger shrink so Edge badge stays honest vs sharp fair.',
   'v12.0.6 omega-vnext: daily unit cap 5.0u incl. parlay; ML pick labels; Edge badge = model edge after shrink vs no-vig sharp; stronger shrink; Daily Lock Parlay UX.',
   'v12.0.5 omega-vnext: ensure whatLoses/dataVerified/clvExpectation after Claude narrate + verify.',
   'v12.0.4 omega-vnext: Claude sonnet-4-6 narrate (match verify) + whatLoses/dataVerified/clvExpectation + verify parlay-leg writeups.',

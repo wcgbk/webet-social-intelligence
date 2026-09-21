@@ -82,6 +82,7 @@ function toPickObject(c, opts = {}) {
     predictedClv: c.predictedClv,
     modelVersion: opts.modelVersion,
     book: c.book,
+    line: c.line != null ? c.line : null,
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,
   };

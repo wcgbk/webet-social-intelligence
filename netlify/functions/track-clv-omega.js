@@ -1,12 +1,68 @@
 
-// v12: preserve omega-vnext bet-time fields on CLV records
+// v12.0.1: preserve omega-vnext bet-time fields + realized close-grade aliases
+const {
+  attachRealizedAliases,
+  summarizeBySportMarket,
+  etIsoWeekKey,
+  isSundayET,
+} = require('./lib/omega-vnext/clv_grade');
+const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
+
 function attachModelClvFields(rec, pick) {
   if (!rec || !pick) return rec;
   if (pick.modelVersion != null) rec.modelVersion = pick.modelVersion;
   if (pick.p_model != null) rec.p_model = pick.p_model;
   if (pick.fair_sharp_p != null) rec.fair_sharp_p = pick.fair_sharp_p;
   if (pick.predictedClv != null) rec.predictedClv = pick.predictedClv;
-  return rec;
+  if (pick.pickId != null) rec.pickId = pick.pickId;
+  if (pick.timestamp != null) rec.timestamp = pick.timestamp;
+  if (pick.timestampET != null) rec.timestampET = pick.timestampET;
+  if (pick.book != null) rec.book = pick.book;
+  if (pick.line != null) rec.line = pick.line;
+  if (pick.lockSnapshot != null) rec.lockSnapshot = pick.lockSnapshot;
+  if (pick.date != null) rec.date = pick.date;
+  return attachRealizedAliases(rec);
+}
+
+async function writeWeeklyObserver(store, dateISO, forceWeekly) {
+  const sunday = isSundayET();
+  if (!sunday && !forceWeekly) return null;
+  const weekKey = etIsoWeekKey();
+  // Aggregate recent clv blobs from KPI floor
+  let dates = [];
+  try {
+    dates = await store.get('picks-dates', { type: 'json' }) || [];
+  } catch (_) { dates = []; }
+  if (!Array.isArray(dates)) dates = [];
+  const floor = CLV_KPI_FLOOR || '2026-09-22';
+  const window = dates.filter(d => d >= floor).slice(-21);
+  const allPicks = [];
+  for (const d of window) {
+    try {
+      const blob = await store.get(`clv-${d}`, { type: 'json' });
+      if (!blob || !Array.isArray(blob.picks)) continue;
+      for (const p of blob.picks) allPicks.push({ ...p, date: p.date || d });
+    } catch (_) { /* skip */ }
+  }
+  const summary = summarizeBySportMarket(allPicks, { floorDate: floor });
+  const artifact = {
+    banner: 'OBSERVER ONLY — no auto-steer.',
+    observerOnly: true,
+    autoSteer: false,
+    weekKey,
+    generatedAt: new Date().toISOString(),
+    floorDate: floor,
+    daysIncluded: window,
+    ...summary,
+  };
+  try {
+    await store.setJSON(`omega-clv-weekly-${weekKey}`, artifact);
+    await store.setJSON('omega-clv-weekly-latest', artifact);
+    console.log(`[track-clv] Wrote weekly observer omega-clv-weekly-${weekKey} n=${summary.n}`);
+  } catch (e) {
+    console.error(`[track-clv] weekly observer write failed: ${e.message}`);
+  }
+  return artifact;
 }
 // track-clv.js
 // API endpoint: GET/POST /.netlify/functions/track-clv
@@ -70,7 +126,7 @@ const ODDS_SPORTS_MAP = {
 // ── Sharp-book anchor priority (the-odds-api book keys) ──
 // Pinnacle first (the reference sharp), then exchanges / sharp US books. Surfaced by
 // regions us,us2,eu. If none are present for a market we fall back to an all-book median.
-const SHARP_BOOKS = ['pinnacle', 'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook', 'circasports'];
+const SHARP_BOOKS = ['pinnacle', 'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook', 'circasports', 'circa', 'bookmaker'];
 
 // Full-game vs first-five-innings (F5) market keys. F5 is ONLY served by the per-event
 // odds endpoint (the bulk /odds call rejects it), so F5 closes are fetched per game.
@@ -902,8 +958,79 @@ exports.handler = async (event) => {
         }
         if (picksData && picksData.model) clvData.modelVersion = picksData.model;
       } catch (e) { console.error('[track-clv] model field merge:', e.message); }
+      // Realized close-grade aliases on every row
+      if (Array.isArray(clvData.picks)) {
+        clvData.picks = clvData.picks.map(r => attachRealizedAliases(r));
+      }
+      clvData.realizedSchema = 'v12.0.1-beatClose-aliases';
+      clvData.observerBanner = 'Weekly CLV report is OBSERVER ONLY — no auto-steer.';
+
+      // Best-effort: grade parlay legs into clvData.parlayLegs (does not affect bySport contract)
+      try {
+        const parlays = (picksData && picksData.parlayLegs) || [];
+        const flatLegs = [];
+        for (const pl of parlays) {
+          for (const leg of (pl.legs || [])) {
+            if (!leg || leg.odds == null) continue;
+            flatLegs.push({
+              pick: leg.pick || leg.side,
+              matchup: leg.matchup,
+              sport: leg.sport,
+              betType: leg.betType || leg.market,
+              market: leg.betType || leg.market,
+              odds: leg.odds,
+              book: leg.book || null,
+              pickId: leg.pickId || null,
+              modelVersion: leg.modelVersion || picksData.model,
+              p_model: leg.p_model,
+              fair_sharp_p: leg.fair_sharp_p,
+              predictedClv: leg.predictedClv,
+              commenceTime: leg.commenceTime || '',
+              units: null,
+              isParlayLeg: true,
+            });
+          }
+        }
+        // Reuse already-computed straight closes when matchup+pick overlap; else leave pending
+        if (flatLegs.length) {
+          const byKey = new Map((clvData.picks || []).map(p => [`${p.pick}||${p.matchup}`, p]));
+          clvData.parlayLegs = flatLegs.map(leg => {
+            const hit = byKey.get(`${leg.pick}||${leg.matchup}`);
+            if (hit && hit.clv != null) {
+              return attachRealizedAliases({
+                ...leg,
+                closingOdds: hit.closingOdds,
+                clv: hit.clv,
+                clvCents: hit.clvCents,
+                beatClosing: hit.beatClosing,
+                anchorBook: hit.anchorBook,
+                closeSnapshotAt: hit.closeSnapshotAt,
+                note: 'matched-straight-close',
+              });
+            }
+            return { ...leg, clv: null, beatClose: null, note: 'parlay-leg-close-pending' };
+          });
+        }
+      } catch (e) {
+        console.error('[track-clv] parlay leg grade:', e.message);
+      }
+
       await store.setJSON(`clv-${dateISO}`, clvData);
       console.log(`[track-clv] Stored CLV data at clv-${dateISO}`);
+
+      // Weekly observer artifact (Sunday ET or ?weekly=1)
+      try {
+        const qs = (event.queryStringParameters || {});
+        const bodyWeekly = (() => {
+          try {
+            const b = event.body ? (typeof event.body === 'string' ? JSON.parse(event.body) : event.body) : {};
+            return !!(b && b.weekly);
+          } catch (_) { return false; }
+        })();
+        await writeWeeklyObserver(store, dateISO, qs.weekly === '1' || qs.weekly === 'true' || bodyWeekly);
+      } catch (e) {
+        console.error('[track-clv] weekly observer:', e.message);
+      }
     } catch (blobErr) {
       console.error('[track-clv] Failed to store CLV via SDK, trying API:', blobErr.message);
       const token = process.env.NETLIFY_AUTH_TOKEN;

@@ -1169,6 +1169,8 @@ Return ONLY valid JSON array:
         }
       }
 
+      // QA_HARDFAIL soft: generator already dropped SP/QB/stale; verify does not force-fill leans.
+      // Claude remains narrator/verifier only — structural hard-fails live in omega-vnext/qa_hardfail.js.
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
       picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
 

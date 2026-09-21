@@ -2,7 +2,7 @@
 /**
  * Omega background generator — THIN WRAPPER around lib/omega-vnext.
  * Legacy megascript archived at archive/generate-picks-omega-legacy-v11.js (unused).
- * MODEL_VERSION: v12.0.0-omega-vnext-clv
+ * MODEL_VERSION: v12.0.1-omega-vnext-clv
  *
  * Store: edge-picks-omega → /omega
  * Product: up to 3 straights + 1 optimized parlay; empty OK; no lean force-fill;

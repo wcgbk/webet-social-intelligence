@@ -34,7 +34,7 @@ function summarizeClvBlobs(blobs) {
       if (cents == null) continue;
       valid.push({
         cents,
-        beat: p.beatClosing === true,
+        beat: p.beatClosing === true || p.beatClose === true,
         family: marketFamily(p.market || p.betType, p.source),
       });
     }

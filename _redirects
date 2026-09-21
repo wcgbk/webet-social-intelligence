@@ -45,3 +45,4 @@
 /users    /users/index.html    200
 /users/   /users/index.html    200
 /api/admin-list-users  /.netlify/functions/admin-list-users  200
+/api/get-omega-clv-report /.netlify/functions/get-omega-clv-report 200

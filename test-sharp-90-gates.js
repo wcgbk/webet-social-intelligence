@@ -11,7 +11,7 @@ const live = require('./netlify/functions/generate-picks-omega-background');
 const { applyGates } = require('./netlify/functions/lib/omega-vnext/gates');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.1.0-omega-vnext-linemove');
+assert.strictEqual(live.MODEL_VERSION, 'v12.2.1-omega-vnext-placeability');
 assert.ok(fs.existsSync(path.join(__dirname, 'archive/generate-picks-omega-legacy-v11.js')));
 
 const future = new Date(Date.now() + 864e5).toISOString();

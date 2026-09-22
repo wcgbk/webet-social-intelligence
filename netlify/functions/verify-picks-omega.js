@@ -212,15 +212,23 @@ function runNarrativeChecks(pick) {
   return { checks, warnings, errors, severity: hasCritical ? "critical" : warnings.length > 0 ? "warning" : "clean" };
 }
 
-// ── Hard Rock Bet placeability check (Ben-directed, 2026-08-22) ──
-// QA must confirm every published bet — each straight pick AND each parlay leg — is a bet a
-// user can actually place at a major US sportsbook, using Hard Rock Bet as the confirmation
-// book, at a price/line in the ballpark of what the card expresses. Ballpark: the market
-// exists at Hard Rock for that game; totals/spreads point within 0.5 of the published line;
-// Hard Rock's price no more than ~3 implied-probability points worse than published
-// (≈20-25 American cents). Missing market/game → error; point drift ≤0.5 or worse-but-close
-// price → warning. ADVISORY: findings go to the QA report + Discord alert; this check never
-// modifies the published card (severity is never escalated to critical, so auto-fix ignores it).
+// ── Hard Rock + US-major placeability (soft-veto) ──
+// Confirm every published bet is shoppable. Hard Rock is the preferred book (market exists,
+// totals/spreads point within 0.5, price within ~3–6 implied points). When Hard Rock misses,
+// majors coverage can still save the pick: pick.placeableBooks / bestPlaceable from generate
+// when present, otherwise a live US_BOOK_PRIORITY scan. Drop the pick only when Hard Rock
+// AND majors both fail. Odds API down or a game missing from the feed → warn only, do not
+// clear the card. Empty card OK. Never lean-refill a dropped side. Severity stays off
+// "critical" so auto-fix does not invent a replacement; the soft-veto drop is separate.
+const {
+  US_BOOK_PRIORITY,
+  PLACEABILITY,
+} = require('./lib/omega-vnext/config');
+const {
+  assessPlaceability,
+  verifyPlaceabilityDecision,
+  applyPlaceabilityDrops,
+} = require('./lib/omega-vnext/edge');
 const HR_BOOK_KEYS = new Set(["hardrockbet", "hardrockbet_oh", "hardrock"]);
 const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl", NCAAF: "americanfootball_ncaaf" };
 function sportEvFloor(sport, defaultFloor = 0.03) {
@@ -381,29 +389,92 @@ function hrEvaluate(pick, game) {
   return out;
 }
 
+function oddsBookmakerParam(picksData) {
+  const rows = [...(picksData.picks || [])];
+  for (const pl of picksData.parlayLegs || []) rows.push(...(pl.legs || []));
+  const needsLiveMajors = rows.some(p => !Array.isArray(p.placeableBooks));
+  if (!needsLiveMajors) return "hardrockbet,hardrockbet_oh";
+  return [...new Set([...US_BOOK_PRIORITY, "hardrockbet_oh"])].join(",");
+}
+
+function liveMajorsFor(pick, game) {
+  if (!game || !Array.isArray(game.bookmakers)) return [];
+  const betType = pick.betType || pick.market || "";
+  const isF5 = betType.startsWith("F5");
+  const marketKey = isF5
+    ? HR_F5_MARKETS[betType]
+    : (betType === "Moneyline" ? "h2h" : betType === "Total" ? "totals" : (betType === "Spread" ? "spreads" : null));
+  if (!marketKey) return [];
+  const drift = PLACEABILITY.maxPointDrift != null ? PLACEABILITY.maxPointDrift : 0.5;
+  const prices = [];
+  for (const b of game.bookmakers) {
+    const market = hrMarketFrom(b, marketKey);
+    if (!market) continue;
+    const { outcome, pubPoint } = hrFindOutcome(market, pick, marketKey);
+    if (!outcome || !Number.isFinite(outcome.price)) continue;
+    if (pubPoint !== null && Number.isFinite(outcome.point) && Math.abs(outcome.point - pubPoint) > drift) continue;
+    prices.push({ book: b.key, american: Number(outcome.price) });
+  }
+  return assessPlaceability(prices, parseOdds(pick.odds)).placeableBooks;
+}
+
+function decisionForPick(pick, hr, { feedDown = false, gameMissing = false, livePlaceableBooks = null } = {}) {
+  return verifyPlaceabilityDecision({
+    pick,
+    hr,
+    apiDown: false,
+    feedDown,
+    gameMissing,
+    livePlaceableBooks: Array.isArray(pick.placeableBooks) ? null : livePlaceableBooks,
+  });
+}
+
 async function runHardRockCheck(picksData) {
-  const summary = { book: "Hard Rock Bet", checked: 0, available: 0, warnings: 0, errors: 0, skipped: false };
+  const summary = { book: "Hard Rock Bet", checked: 0, available: 0, warnings: 0, errors: 0, skipped: false, apiDown: false };
   const pickResults = [];
   const parlayFindings = [];
+  const legDecisions = [];
   const apiKey = process.env.ODDS_API_KEY;
-  if (!apiKey) { summary.skipped = true; summary.reason = "No ODDS_API_KEY"; return { summary, pickResults, parlayFindings }; }
+  if (!apiKey) {
+    summary.skipped = true;
+    summary.apiDown = true;
+    summary.reason = "No ODDS_API_KEY";
+    const decision = verifyPlaceabilityDecision({ apiDown: true });
+    for (const _p of (picksData.picks || [])) {
+      pickResults.push({
+        available: false, hrOdds: null, hrPoint: null,
+        warnings: [decision.warning], errors: [], notes: [], decision,
+      });
+    }
+    return { summary, pickResults, parlayFindings, legDecisions };
+  }
 
-  // One main-lines fetch per sport (bookmakers param scopes cost to Hard Rock only),
-  // plus one per-event fetch per F5 game.
+  // Main-lines fetch: Hard Rock only when every pick already carries placeableBooks.
+  // Otherwise include US_BOOK_PRIORITY so majors coverage can be rechecked live.
+  // Plus one per-event fetch per F5 game.
   const bySport = {};
   for (const p of (picksData.picks || [])) (bySport[p.sport] = bySport[p.sport] || []).push(p);
+  for (const pl of (picksData.parlayLegs || [])) {
+    for (const leg of (pl.legs || [])) (bySport[leg.sport] = bySport[leg.sport] || []).push(leg);
+  }
+  const bookmakers = oddsBookmakerParam(picksData);
   const sportGames = {};
+  let anySportOk = false;
+  let sportsAttempted = 0;
   for (const sport of Object.keys(bySport)) {
     const key = HR_SPORT_KEYS[sport];
     if (!key) continue;
+    sportsAttempted++;
     try {
       const resp = await fetch(
-        `https://api.the-odds-api.com/v4/sports/${key}/odds?markets=h2h,spreads,totals&oddsFormat=american&bookmakers=hardrockbet,hardrockbet_oh&apiKey=${apiKey}`,
+        `https://api.the-odds-api.com/v4/sports/${key}/odds?markets=h2h,spreads,totals&oddsFormat=american&bookmakers=${bookmakers}&apiKey=${apiKey}`,
         { signal: AbortSignal.timeout(12000) }
       );
       sportGames[sport] = resp.ok ? await resp.json() : null;
+      if (resp.ok) anySportOk = true;
     } catch (e) { sportGames[sport] = null; }
   }
+  if (sportsAttempted > 0 && !anySportOk) summary.apiDown = true;
 
   const f5Cache = {};
   async function gameForPick(pick) {
@@ -431,16 +502,27 @@ async function runHardRockCheck(picksData) {
   for (const pick of (picksData.picks || [])) {
     summary.checked++;
     const { game, feedDown } = await gameForPick(pick);
+    const down = feedDown || summary.apiDown;
     let r;
     if (!game) {
       r = { available: false, hrOdds: null, hrPoint: null, warnings: [], errors: [], notes: [] };
-      // A game missing from the upcoming-odds feed usually means it already started —
-      // unknowable rather than unplaceable, so warn instead of error.
-      r.warnings.push(feedDown
+      // Feed down or game already started: unknowable, not unplaceable. Warn, do not drop.
+      r.warnings.push(down
         ? `HardRock: odds feed unavailable — placeability not confirmed`
         : `HardRock: game not in the current odds feed (already started?) — placeability not confirmed`);
+      r.decision = verifyPlaceabilityDecision({
+        pick, apiDown: !!summary.apiDown, feedDown: down, gameMissing: !down, hr: { unknowable: true },
+      });
     } else {
       r = hrCheckOne(pick, game);
+      const liveBooks = Array.isArray(pick.placeableBooks) ? null : liveMajorsFor(pick, game);
+      r.decision = decisionForPick(pick, r, { livePlaceableBooks: liveBooks });
+      // Majors still cover: keep the pick. HR miss is a warning, not a drop signal.
+      if (r.decision && !r.decision.drop && r.decision.warning && r.errors && r.errors.length) {
+        r.warnings.push(r.decision.warning);
+        r.warnings.push(...r.errors);
+        r.errors = [];
+      }
     }
     if (r.available) summary.available++;
     summary.warnings += r.warnings.length;
@@ -450,17 +532,39 @@ async function runHardRockCheck(picksData) {
 
   // Parlay legs: same per-leg confirmation + same-game structural check (a standard parlay
   // with two legs from one game is typically not buildable — books require an SGP instead).
+  // A failing leg is recorded for the soft-veto. The parlay is cleared, not refilled.
   for (const pl of (picksData.parlayLegs || [])) {
     const legGames = [];
     for (const leg of (pl.legs || [])) {
       const idx = (picksData.picks || []).findIndex(p => p.pick === leg.pick && p.matchup === leg.matchup);
+      let decision = null;
       if (idx >= 0 && pickResults[idx]) {
         const r = pickResults[idx];
+        decision = r.decision || null;
         if (!r.available && r.errors.length) parlayFindings.push({ level: "error", note: `Parlay leg "${leg.pick}": ${r.errors[0]}` });
       } else {
-        const { game } = await gameForPick(leg);
-        const r = game ? hrCheckOne(leg, game) : null;
-        if (!r || !r.available) parlayFindings.push({ level: "error", note: `Parlay leg "${leg.pick}" not confirmed at Hard Rock Bet` });
+        const { game, feedDown } = await gameForPick(leg);
+        const down = feedDown || summary.apiDown;
+        if (!game) {
+          decision = verifyPlaceabilityDecision({
+            pick: leg, apiDown: !!summary.apiDown, feedDown: down, gameMissing: !down, hr: { unknowable: true },
+          });
+          parlayFindings.push({ level: "warning", note: `Parlay leg "${leg.pick}" not reconfirmed — odds feed ${down ? "unavailable" : "missing this game"}` });
+        } else {
+          const r = hrCheckOne(leg, game);
+          const liveBooks = Array.isArray(leg.placeableBooks) ? null : liveMajorsFor(leg, game);
+          decision = decisionForPick(leg, r, { livePlaceableBooks: liveBooks });
+          if (decision && decision.drop) {
+            parlayFindings.push({ level: "error", note: `Parlay leg "${leg.pick}" failed placeability (Hard Rock + majors)` });
+          } else if (!r.available && !(decision && decision.warning)) {
+            parlayFindings.push({ level: "warning", note: `Parlay leg "${leg.pick}" not confirmed at Hard Rock Bet` });
+          }
+        }
+      }
+      if (decision && decision.drop && idx < 0) {
+        legDecisions.push({
+          drop: true, pick: leg.pick, matchup: leg.matchup, reason: decision.reason,
+        });
       }
       legGames.push(hrLastWord((leg.matchup || "").replace(/\s*(vs\.?|@|at)\s*/gi, " ")));
     }
@@ -471,12 +575,13 @@ async function runHardRockCheck(picksData) {
   }
   summary.errors += parlayFindings.filter(f => f.level === "error").length;
   summary.warnings += parlayFindings.filter(f => f.level === "warning").length;
-  return { summary, pickResults, parlayFindings };
+  return { summary, pickResults, parlayFindings, legDecisions };
 }
 
 // ── Open→pick steam recheck (Omega v12.1 line-move) ──
 // Load latest morning snap; hard-fail / flag critical on adverse steam past verify thresholds.
-// Empty card OK — never lean force-fill. Hard Rock placeability remains advisory-only.
+// Empty card OK — never lean force-fill. Placeability soft-veto is separate from steam:
+// it drops a pick only when Hard Rock and US majors both fail, and it does not refill.
 async function runOmegaSteamRecheck(picksData, pickReports) {
   const out = { checked: 0, failed: 0, reasons: [] };
   try {
@@ -890,17 +995,26 @@ exports.handler = async (event) => {
 
     console.log(`[verify] Math/narrative: ${totalErrors} errors, ${totalWarnings} warnings`);
 
-    // ── Step 1.5: Hard Rock Bet placeability check (advisory) ──
-    // Confirms each bet (straights + parlay legs) is actually placeable at Hard Rock Bet in
-    // the ballpark of the published odds/line. Findings flow into the report + Discord; the
-    // severity stays below "critical" so auto-fix never rewrites the card because of it.
-    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [] };
+    // ── Step 1.5: Hard Rock + US-major placeability (soft-veto) ──
+    // Drop a pick only when Hard Rock and majors coverage both fail. Odds API down
+    // warns and leaves the card. Do not mark critical — auto-fix must not invent a
+    // replacement side. Empty card OK.
+    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [], legDecisions: [] };
+    let blockStraightRefill = false;
+    let blockParlayRefill = false;
+    let placeabilityDropped = 0;
     try {
       hrCheck = await runHardRockCheck(picksData);
+      const decisions = (hrCheck.pickResults || []).map(r => (r && r.decision) || { drop: false });
+      const legDecisions = hrCheck.legDecisions || [];
       for (let i = 0; i < pickReports.length; i++) {
         const r = hrCheck.pickResults[i];
         if (!r) continue;
         pickReports[i].hardRock = { available: r.available, hrOdds: r.hrOdds, hrPoint: r.hrPoint, notes: r.notes || [] };
+        if (r.decision && r.decision.drop) {
+          pickReports[i].placeabilityDrop = r.decision.reason;
+          continue;
+        }
         for (const w of r.warnings) { pickReports[i].warnings.push(w); totalWarnings++; }
         for (const e of r.errors) { pickReports[i].errors.push(e); totalErrors++; }
         if (pickReports[i].severity === "clean" && (r.warnings.length > 0 || r.errors.length > 0)) {
@@ -909,9 +1023,23 @@ exports.handler = async (event) => {
       }
       totalErrors += hrCheck.parlayFindings.filter(f => f.level === "error").length;
       totalWarnings += hrCheck.parlayFindings.filter(f => f.level === "warning").length;
+      const anyDrop = decisions.some(d => d.drop) || legDecisions.some(d => d.drop);
+      if (anyDrop && !hrCheck.summary.apiDown && !hrCheck.summary.skipped) {
+        const applied = applyPlaceabilityDrops(picksData, decisions, legDecisions);
+        for (let i = pickReports.length - 1; i >= 0; i--) {
+          if (decisions[i] && decisions[i].drop) pickReports.splice(i, 1);
+        }
+        placeabilityDropped = applied.dropped;
+        if (applied.dropped > 0) blockStraightRefill = true;
+        if (applied.parlayCleared) blockParlayRefill = true;
+        console.log(`[verify-placeability] soft-veto dropped ${applied.dropped} straight(s); parlayCleared=${applied.parlayCleared}; remaining=${picksData.picks.length}`);
+        await updatePicksBlob(dateKey, picksData);
+      } else if (hrCheck.summary.apiDown || hrCheck.summary.skipped) {
+        console.log(`[verify-placeability] odds API unavailable — card left intact (${hrCheck.summary.reason || "feed down"})`);
+      }
       console.log(`[verify-hardrock] ${hrCheck.summary.available}/${hrCheck.summary.checked} bets confirmed at Hard Rock Bet | ${hrCheck.summary.errors} error(s), ${hrCheck.summary.warnings} warning(s)`);
     } catch (e) {
-      console.log(`[verify-hardrock] Check failed (non-fatal): ${e.message}`);
+      console.log(`[verify-hardrock] Check failed (non-fatal, card unchanged): ${e.message}`);
     }
 
     // ── Step 1.6: Open→pick steam recheck (hard-fail / replace; empty OK) ──
@@ -1113,7 +1241,8 @@ exports.handler = async (event) => {
       // only EV>3% candidates that Claude didn't actively reject, de-correlated, 1 per game.
       // (If the pool is genuinely exhausted — a truly lean slate — we publish fewer, honestly.)
       const TARGET_PICKS = 3;
-      if (picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
+      // Placeability soft-veto does not refill. Empty slots stay empty.
+      if (!blockStraightRefill && picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
         const onCard = new Set(picksData.picks.map(p => p.pick));
         const rejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
         const dirKey = (sport, side) => `${sport}|${/over/i.test(side) ? 'over' : /under/i.test(side) ? 'under' : 'side'}`;
@@ -1331,7 +1460,9 @@ Return ONLY valid JSON array:
         parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
         (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
 
-      if (!parlayInvalid) {
+      if (blockParlayRefill) {
+        console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
+      } else if (!parlayInvalid) {
         console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
       } else if (picksData.picks.length >= 2) {
         const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
@@ -1522,6 +1653,7 @@ Return ONLY valid JSON array:
       sharpRedFlags: sharpReplacements.length,
       picks: pickReports,
       hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
+      placeability: { dropped: placeabilityDropped, parlayCleared: blockParlayRefill },
       steamRecheck: steamCheck,
       sharpReview: sharpResult,
       summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? "skipped" : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,

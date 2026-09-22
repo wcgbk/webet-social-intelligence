@@ -125,6 +125,8 @@ function toPickObject(c, opts = {}) {
     predictedResidualClv: c.predictedResidualClv != null ? c.predictedResidualClv : null,
     openPrint: c.openPrint || null,
     lineMove: c.lineMove || null,
+    ...(Array.isArray(c.placeableBooks) ? { placeableBooks: c.placeableBooks.slice() } : {}),
+    ...(c.bestPlaceable ? { bestPlaceable: c.bestPlaceable } : {}),
   };
 }
 

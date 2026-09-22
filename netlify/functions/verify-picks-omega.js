@@ -62,8 +62,7 @@ function enforceOmegaDailyUnitCap(picksData) {
         if (u > 0.25) {
           const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
           picksData.picks[idx].units = fmtU(nu);
-          picksData.picks[idx].rating = unitsToRating(nu);
-          picksData.picks[idx].confidence = confFromUnits(nu);
+          // Quality grades are edge/CLV based — never rewrite from stake size.
           st = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
           reduced = true;
           break;
@@ -673,13 +672,12 @@ async function autoFixPicks(picksData, pickReports) {
     }
   }
 
-  // Fix grade mismatches
+  // Grades are quality (edge/CLV) — do not force them back to unit-sized letters.
+  // Keep existing rating/confidence from generator; only ensure confidence exists.
   for (const p of picksData.picks) {
-    const u = parseUnits(p.units);
-    const correctGrade = unitsToRating(u);
-    if (p.rating !== correctGrade) {
-      console.log(`[verify-fix] Grade fix: "${p.pick}" ${p.rating} → ${correctGrade}`);
-      p.rating = correctGrade;
+    if (p.rating && (p.confidence == null || p.confidence === '')) {
+      const map = { aplus: 90, a: 82, aminus: 75, bplus: 68, b: 60 };
+      p.confidence = map[String(p.rating).toLowerCase()] || 60;
     }
   }
 

@@ -6,8 +6,9 @@ const {
   MAX_STRAIGHT_UNITS_PER_PICK,
 } = require('./config');
 const {
-  kellyFraction, kellyToUnits, unitsToRating, ratingToConfidence, formatAmerican,
+  kellyFraction, kellyToUnits, ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
+  parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
 
 function matchupKey(c) {
@@ -68,14 +69,14 @@ function toPickObject(c, opts = {}) {
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
-  const rating = unitsToRating(units);
 
   // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
   // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.
-  const edgeFrac = (c.edgePct != null && Math.abs(c.edgePct) <= 1)
-    ? c.edgePct
-    : null;
+  const edgeFrac = parseEdgeFraction(c.edgePct);
   const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
+  const qualityClv = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
+  const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
+  const rating = qualityToRating(edgeFrac, qualityClv, c.uncertainty);
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -93,6 +94,8 @@ function toPickObject(c, opts = {}) {
     betType: c.market,
     odds: c.oddsStr || formatAmerican(c.odds),
     rating,
+    qualityGrade: rating,
+    qualityScore: +pickQuality.toFixed(6),
     confidence: ratingToConfidence(rating),
     units: `${units}u`,
     ev: evStr,
@@ -137,8 +140,8 @@ function applyDailyCap(picks) {
  * - Parlay fixed at PARLAY_FIXED_UNITS (0.5u) when present — never scaled
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
  * - Total ≤ DAILY_UNIT_CAP (4.0u)
- * Overage: reduce lowest-confidence straights in 0.25u steps (floor 0.25u).
- * Recompute grades; sort A+→B then units desc. Never force-fill to max.
+ * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
+ * Preserve quality grades; align grade/stake hierarchy; never force-fill to max.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
   let out = (picks || []).map(p => ({ ...p }));
@@ -164,6 +167,9 @@ function applyDailyUnitCap(picks, parlayLegs) {
           const ra = ratingRank(out[a].rating);
           const rb = ratingRank(out[b].rating);
           if (ra !== rb) return rb - ra; // lowest grade first
+          const qa = pickQualityScore(out[a]);
+          const qb = pickQualityScore(out[b]);
+          if (Math.abs(qa - qb) > 1e-12) return qa - qb;
           return parseU(out[a].units) - parseU(out[b].units);
         });
       let reduced = false;
@@ -172,8 +178,7 @@ function applyDailyUnitCap(picks, parlayLegs) {
         if (u > 0.25) {
           const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
           out[idx].units = fmtU(nu);
-          out[idx].rating = unitsToRating(nu);
-          out[idx].confidence = ratingToConfidence(out[idx].rating);
+          // Rating/confidence describe quality, not stake size. Never downgrade on trim.
           st = straightTotalOf();
           reduced = true;
           break;
@@ -188,7 +193,40 @@ function applyDailyUnitCap(picks, parlayLegs) {
 
   // 2) Total ≤ 4.0u (parlay fixed — only straights can absorb remaining overage)
   const maxStraightsForTotal = Math.max(0, DAILY_UNIT_CAP - parlayTotalOf());
-  reduceStraightsTo(Math.min(STRAIGHT_UNIT_BUDGET, maxStraightsForTotal));
+  const finalStraightBudget = Math.min(STRAIGHT_UNIT_BUDGET, maxStraightsForTotal);
+  reduceStraightsTo(finalStraightBudget);
+
+  // A higher quality grade must never carry less stake than a lower one. Use any
+  // remaining budget to lift the better pick first; if that cannot fully resolve
+  // the inversion, trim the lower-grade pick. Grades themselves never change.
+  let straightTotal = straightTotalOf();
+  const ordered = out.map((_, i) => i).sort((a, b) => {
+    const rankDelta = ratingRank(out[a].rating) - ratingRank(out[b].rating);
+    if (rankDelta) return rankDelta;
+    return pickQualityScore(out[b]) - pickQualityScore(out[a]);
+  });
+  for (let hiPos = 0; hiPos < ordered.length; hiPos++) {
+    for (let loPos = hiPos + 1; loPos < ordered.length; loPos++) {
+      const hi = out[ordered[hiPos]];
+      const lo = out[ordered[loPos]];
+      if (ratingRank(hi.rating) >= ratingRank(lo.rating)) continue;
+      let hiUnits = parseU(hi.units);
+      let loUnits = parseU(lo.units);
+      if (hiUnits >= loUnits) continue;
+
+      const headroom = Math.max(0, finalStraightBudget - straightTotal);
+      const lift = Math.floor(Math.min(loUnits - hiUnits, headroom, Math.max(0, MAX_STRAIGHT_UNITS_PER_PICK - hiUnits)) * 4 + 1e-9) / 4;
+      if (lift > 0) {
+        hiUnits += lift;
+        hi.units = fmtU(hiUnits);
+        straightTotal += lift;
+      }
+      if (hiUnits < loUnits) {
+        lo.units = fmtU(hiUnits);
+        straightTotal -= (loUnits - hiUnits);
+      }
+    }
+  }
 
   out = sortByGradeThenUnits(out);
   return { picks: out, parlayLegs: parlays };

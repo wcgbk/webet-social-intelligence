@@ -3,8 +3,8 @@
 const { KELLY_FRACTION, PARLAY_FIXED_UNITS } = require('./config');
 const {
   americanToDecimal, formatAmerican, kellyFraction, kellyToUnits,
-  formatMoneylinePick, formatEdgePct, unitsToRating, ratingToConfidence,
-  isSameEtDay,
+  formatMoneylinePick, formatEdgePct, ratingToConfidence,
+  isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
 
@@ -137,13 +137,14 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     : `${Math.round(-100 / (chosen.combinedDecimal - 1))}`;
 
   const legs = chosen.legs.map(l => {
-    // Grade chrome for card badges — size as if straight so A/A-/B+ colors match
+    // Leg grade is edge-first quality, independent of the synthetic straight stake.
     const kFrac = kellyFraction(l.coverProb, l.odds, KELLY_FRACTION);
     const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25) || 0.25;
-    const rating = l.rating || unitsToRating(legUnits);
-    const confidence = (typeof l.confidence === 'number' || typeof l.confidence === 'string')
-      ? l.confidence
-      : ratingToConfidence(rating);
+    const edgeFrac = parseEdgeFraction(l.edgePct != null ? l.edgePct : l.ev);
+    const qualityClv = l.predictedResidualClv != null ? l.predictedResidualClv : l.predictedClv;
+    const legQuality = qualityScore(edgeFrac, qualityClv, l.uncertainty);
+    const rating = qualityToRating(edgeFrac, qualityClv, l.uncertainty);
+    const confidence = ratingToConfidence(rating);
     return {
       pick: formatMoneylinePick(l.side, l.market),
       pickDisplay: formatMoneylinePick(l.side, l.market),
@@ -158,6 +159,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
         ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
         : undefined,
       rating,
+      qualityGrade: rating,
+      qualityScore: +legQuality.toFixed(6),
       confidence,
       units: l.units || `${legUnits}u`,
       coreReasoning: l.coreReasoning || '',
@@ -166,6 +169,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       p_model: l.p_model,
       fair_sharp_p: l.fair_sharp_p,
       predictedClv: l.predictedClv,
+      predictedResidualClv: l.predictedResidualClv != null ? l.predictedResidualClv : null,
+      uncertainty: l.uncertainty,
       modelVersion: l.modelVersion,
     };
   });

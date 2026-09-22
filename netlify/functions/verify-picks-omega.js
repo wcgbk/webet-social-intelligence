@@ -26,8 +26,6 @@ function impliedProb(odds) { return odds < 0 ? Math.abs(odds) / (Math.abs(odds) 
 function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10); }
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
-function unitsToRating(u) { if (u >= 1.25) return "aplus"; if (u >= 1.0) return "a"; if (u >= 0.75) return "aminus"; if (u >= 0.5) return "bplus"; return "b"; } // aligned w/ omega-vnext v12.0.9
-function confFromUnits(u) { return u >= 1.25 ? 90 : u >= 1.0 ? 82 : u >= 0.75 ? 75 : u >= 0.5 ? 68 : 60; }
 
 // Omega v12.0.9: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX (not a fill target)
 const OMEGA_STRAIGHT_UNIT_BUDGET = 3.5;
@@ -107,6 +105,54 @@ function cappedKellyUnits(c) {
   if (cp > 0 && cp < 0.50) u = Math.min(u, 1.0);
   if (cp > 0 && cp < 0.42) u = Math.min(u, 0.5);
   return Math.max(0.5, Math.round(u * 2) / 2);
+}
+
+const { toPickObject } = require('./lib/omega-vnext/select');
+
+/**
+ * Edge fraction for a verify candidate.
+ * omega-vnext candidateTable stores generator edgePct on `edge` (not edgePct).
+ * Fallback is coverProb − book implied when neither field is present.
+ */
+function edgeFractionForCandidate(c) {
+  if (!c) return null;
+  if (c.edgePct != null && c.edgePct !== '') return c.edgePct;
+  if (typeof c.edge === 'number' && Number.isFinite(c.edge)) return c.edge;
+  const cp = typeof c.coverProb === 'number' ? c.coverProb : parseFloat(c.coverProb);
+  const odds = typeof c.odds === 'number' ? c.odds : parseOdds(c.odds);
+  if (Number.isFinite(cp) && cp > 0 && cp <= 1 && Number.isFinite(odds) && odds !== 0) {
+    return cp - impliedProb(odds);
+  }
+  return null;
+}
+
+function cardModelVersion(picksData) {
+  if (!picksData) return undefined;
+  return picksData.model || (picksData.summary && picksData.summary.modelVersion) || undefined;
+}
+
+/**
+ * Replacement / backfill pick. Rating, qualityGrade, and confidence come from
+ * toPickObject (quality/edge). Units stay on verify cappedKellyUnits only.
+ */
+function buildQualityReplacement(c, opts = {}) {
+  const edgePct = edgeFractionForCandidate(c);
+  const oddsNum = typeof c.odds === 'number' ? c.odds : parseOdds(c.odds);
+  const normalized = {
+    ...c,
+    side: c.side || c.pick,
+    market: c.market || c.betType,
+    odds: Number.isFinite(oddsNum) ? oddsNum : c.odds,
+    edgePct,
+  };
+  const pick = toPickObject(normalized, { modelVersion: opts.modelVersion });
+  pick.units = `${cappedKellyUnits(c)}u`;
+  return pick;
+}
+
+/** Drop pass blocks TARGET_PICKS refill. Earlier steam hard-fails count too. */
+function steamDropBlocksStraightRefill(droppedSteam, steamHardFails) {
+  return Number(droppedSteam) > 0 || Number(steamHardFails) > 0;
 }
 
 // ── Math Checks ──
@@ -732,29 +778,8 @@ async function autoFixPicks(picksData, pickReports) {
       if (c.verification === 'FAIL') continue;
       if (claudeRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
-      // Build a replacement pick object
-      replacement = {
-        sport: c.sport,
-        matchup: c.matchup,
-        pick: c.side,
-        betType: c.market,
-        odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-        rating: unitsToRating(cappedKellyUnits(c)),
-        confidence: confFromUnits(cappedKellyUnits(c)),
-        units: `${cappedKellyUnits(c)}u`,
-        ev: `${(c.ev * 100).toFixed(1)}%`,
-        evRaw: c.ev,
-        edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
-        edgePoints: c.edge,
-        coverProb: `${(c.coverProb * 100).toFixed(0)}%`,
-        zScore: c.zScore,
-        kellyCalc: c.kellyCalcStr || "",
-        winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
-        coreReasoning: `WeBetAI projects a statistical edge on this play. ${c.sport} ${c.market} pick replacing a flagged selection.`,
-        whatLoses: "Opposite outcome or line movement against the pick.",
-        modelEdge: `Edge: ${c.edge}`,
-        commenceTime: c.commenceTime || "",
-      };
+      // Quality/edge grade via toPickObject. Units stay on cappedKellyUnits.
+      replacement = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
       break;
     }
 
@@ -946,6 +971,9 @@ async function storeReport(dateKey, report) {
   } catch (e) { console.error("[verify] Store error:", e.message); }
 }
 
+exports.buildQualityReplacement = buildQualityReplacement;
+exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
+
 // ── Handler ──
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
@@ -1059,7 +1087,7 @@ exports.handler = async (event) => {
       await updatePicksBlob(dateKey, picksData);
     }
 
-    // Steam hard-fails still on card after autofix → drop (empty OK; no lean force-fill)
+    // Steam hard-fails still on card after autofix → drop (empty OK; no TARGET_PICKS refill)
     try {
       const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
       const kept = [];
@@ -1077,6 +1105,10 @@ exports.handler = async (event) => {
           continue;
         }
         kept.push(pick);
+      }
+      // Adverse steam must not be undone by TARGET_PICKS backfill (same flag as placeability).
+      if (steamDropBlocksStraightRefill(droppedSteam, steamCheck.failed)) {
+        blockStraightRefill = true;
       }
       if (droppedSteam > 0) {
         picksData.picks = kept;
@@ -1129,28 +1161,7 @@ exports.handler = async (event) => {
           if (c.verification === 'FAIL') continue;
           if (sharpRejectedSides.has(c.side)) { console.log(`[verify-sharp] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
-          replacement = {
-            sport: c.sport,
-            matchup: c.matchup,
-            pick: c.side,
-            betType: c.market,
-            odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-            rating: unitsToRating(cappedKellyUnits(c)),
-            confidence: confFromUnits(cappedKellyUnits(c)),
-            units: `${cappedKellyUnits(c)}u`,
-            ev: `${(c.ev * 100).toFixed(1)}%`,
-            evRaw: c.ev,
-            edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
-            edgePoints: c.edge,
-            coverProb: `${(c.coverProb * 100).toFixed(0)}%`,
-            zScore: c.zScore,
-            kellyCalc: c.kellyCalcStr || "",
-            winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
-            coreReasoning: `WeBetAI projects a statistical edge on this ${c.sport} ${c.market} play. This pick replaces a sharp-review flagged selection.`,
-            whatLoses: "The opposite outcome materializes, or late line movement eliminates the edge.",
-            modelEdge: `Edge: ${c.edge}`,
-            commenceTime: c.commenceTime || "",
-          };
+          replacement = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
           break;
         }
 
@@ -1174,7 +1185,7 @@ exports.handler = async (event) => {
           const curU = parseUnits(badPick.units);
           const newU = Math.max(0.5, (isNaN(curU) ? 1 : curU) - 0.5);
           badPick.units = `${newU}u`;
-          badPick.rating = unitsToRating(newU);
+          // Stake trim only. Leave quality rating / qualityGrade alone (v12.1+ — never rewrite from units).
           badPick.sharpConcern = flag.reason;
           sharpReplacements.push({
             index: pickIdx,
@@ -1228,7 +1239,7 @@ exports.handler = async (event) => {
     // ── Step 3c: FINAL PASS — re-verify entire card, write real narratives, rebuild parlay ──
     // After any replacements, the published card must be perfect:
     // 1. Every pick has a real narrative (not generic)
-    // 2. Grades match units
+    // 2. Grades stay quality/edge — never rewritten from units
     // 3. Math checks pass
     // 4. Parlay is recalculated with the final picks
     {
@@ -1241,7 +1252,7 @@ exports.handler = async (event) => {
       // only EV>3% candidates that Claude didn't actively reject, de-correlated, 1 per game.
       // (If the pool is genuinely exhausted — a truly lean slate — we publish fewer, honestly.)
       const TARGET_PICKS = 3;
-      // Placeability soft-veto does not refill. Empty slots stay empty.
+      // Placeability soft-veto and adverse steam drops do not refill. Empty slots stay empty.
       if (!blockStraightRefill && picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
         const onCard = new Set(picksData.picks.map(p => p.pick));
         const rejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
@@ -1262,26 +1273,11 @@ exports.handler = async (event) => {
           if (matchupsOnCard.has(c.matchup)) continue;          // one pick per game
           const k = dirKey(c.sport, c.side);
           if ((dirCount[k] || 0) >= 2) continue;                // avoid 3 same-direction same-sport legs
-          const u = cappedKellyUnits(c);
-          picksData.picks.push({
-            sport: c.sport, matchup: c.matchup, pick: c.side, betType: c.market,
-            odds: `${c.odds > 0 ? '+' : ''}${c.odds}`,
-            rating: unitsToRating(u),
-            confidence: u >= 2.0 ? "aplus" : u >= 1.25 ? "a" : u >= 0.75 ? "aminus" : u >= 0.5 ? "bplus" : "b",
-            units: `${u}u`,
-            ev: `${(c.ev * 100).toFixed(1)}%`, evRaw: c.ev,
-            edgePct: `${((c.coverProb - impliedProb(c.odds)) * 100).toFixed(1)}%`,
-            edgePoints: c.edge,
-            coverProb: `${(c.coverProb * 100).toFixed(0)}%`,
-            zScore: c.zScore,
-            kellyCalc: c.kellyCalcStr || "",
-            winProbability: `${(c.coverProb * 100).toFixed(0)}%`,
-            coreReasoning: "",          // written by the narrative pass below
-            whatLoses: "",
-            modelEdge: `Edge: ${c.edge}`,
-            commenceTime: c.commenceTime || "",
-          });
-          onCard.add(c.side); matchupsOnCard.add(c.matchup); dirCount[k] = (dirCount[k] || 0) + 1;
+          const built = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
+          picksData.picks.push(built);
+          onCard.add(c.side);
+          if (built.pick) onCard.add(built.pick);
+          matchupsOnCard.add(c.matchup); dirCount[k] = (dirCount[k] || 0) + 1;
           backfilled++;
           console.log(`[verify-backfill] Added ${c.side} (EV ${(c.ev * 100).toFixed(1)}%) to refill card toward ${TARGET_PICKS}`);
         }

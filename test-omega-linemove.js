@@ -11,11 +11,13 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.1-omega-vnext-pregen');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.2-omega-vnext-verify-steam');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
 assert.ok(/9:15 ET line snap/.test(config.MODEL_NOTES));
+assert.ok(/blockStraightRefill/.test(config.MODEL_NOTES));
+assert.ok(/qualityToRating/.test(config.MODEL_NOTES));
 assert.ok(Array.isArray(config.US_BOOK_PRIORITY));
 assert.ok(config.US_BOOK_PRIORITY[0] === 'draftkings');
 assert.ok(config.LINE_MOVE.rejectSteamAgainstCents === 18);
@@ -343,6 +345,29 @@ const bgSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-p
 assert.ok(/CAPTURE_HEALTH/.test(bgSrc));
 assert.ok(/statusCode: 503/.test(bgSrc));
 assert.ok(/shadow/.test(bgSrc));
+
+// C1: adverse steam drop sets blockStraightRefill so TARGET_PICKS backfill does not run.
+{
+  const verifySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/verify-picks-omega.js'), 'utf8');
+  const steamAt = verifySrc.indexOf('let droppedSteam = 0');
+  const steamEnd = verifySrc.indexOf('Step 3: Sharp handicapper review', steamAt);
+  assert.ok(steamAt > 0 && steamEnd > steamAt, 'steam drop block present');
+  const steamRegion = verifySrc.slice(steamAt, steamEnd);
+  assert.ok(
+    /steamDropBlocksStraightRefill\(\s*droppedSteam\s*,\s*steamCheck\.failed\s*\)/.test(steamRegion),
+    'steam drop pass consults droppedSteam before refill'
+  );
+  assert.ok(/blockStraightRefill\s*=\s*true/.test(steamRegion), 'steam drop sets blockStraightRefill');
+  assert.ok(
+    /Placeability soft-veto and adverse steam drops do not refill/.test(verifySrc),
+    'backfill comment gates placeability and steam'
+  );
+  assert.ok(/if\s*\(\s*!blockStraightRefill\s*&&/.test(verifySrc), 'straight refill is gated by blockStraightRefill');
+  const verify = require('./netlify/functions/verify-picks-omega');
+  assert.strictEqual(verify.steamDropBlocksStraightRefill(1, 0), true, 'dropped steam blocks refill');
+  assert.strictEqual(verify.steamDropBlocksStraightRefill(0, 2), true, 'earlier steam hard-fails block refill');
+  assert.strictEqual(verify.steamDropBlocksStraightRefill(0, 0), false, 'clean card may still refill');
+}
 
 console.log('PASS test-omega-linemove', {
   MODEL_VERSION: config.MODEL_VERSION,

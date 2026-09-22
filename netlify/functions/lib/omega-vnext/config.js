@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.1-omega-vnext-pregen';
+const MODEL_VERSION = 'v12.3.2-omega-vnext-verify-steam';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -172,6 +172,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.2 omega-vnext: verify adverse steam drops set blockStraightRefill so TARGET_PICKS backfill cannot undo the steam gate (empty/short card OK). Verify replace/backfill grades use toPickObject / qualityToRating (edge), not units.',
   'v12.3.1 omega-vnext: 9:15 ET line snap + capture health gate; feed warm 9:00; shadow dry-run 9:05 (isolated omega-shadow/*); TSP live hold lifted (observer /live-ai only — zero Omega hard dep).',
   'v12.3.0 omega-vnext: game-day rest/B2B + soft QB status (ESPN injuries) + MLB weather total adj on top of EPA/SP/park seeds. Soft fallback if feeds fail; empty card OK; no lean force-fill. Market blend + calibrate shrink unchanged. No NBA/NHL.',
   'v12.2.2 omega-vnext: Kalshi/Polymarket OBSERVER sidecar. Read-only implied probs logged to omega-pm-observer/{date} (alias pm-sidecar-{date}) when a PM moneyline maps cleanly 1:1 to a game ML. NEVER mixes PM prices into selection, grades, unit caps, or gates. No order placement. Soft-fail if PM APIs are down.',

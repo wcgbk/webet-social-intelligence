@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.1.1-omega-vnext-qualitygrades';
+const MODEL_VERSION = 'v12.1.2-omega-vnext-edgelegend';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -129,10 +129,11 @@ const QA_HARDFAIL = {
 /** Selection score weights — CLV first, then EV, then uncertainty penalty. */
 /** Grade = pick quality (edge / expected CLV), NOT units and NOT coverProb. */
 const QUALITY_GRADE = {
-  aplus: 0.050,  // ≥5.0% calibrated edge
-  a: 0.035,      // ≥3.5%
-  aminus: 0.025, // ≥2.5%
-  bplus: 0.018,  // ≥1.8%
+  // Exact band edges (5.0%, 3.5%, 2.0%) default to the HIGHER grade (>=).
+  aplus: 0.050,  // ≥5.0% calibrated edge → A+
+  a: 0.035,      // ≥3.5% and <5.0% → A
+  aminus: 0.020, // ≥2.0% and <3.5% → A-
+  bplus: 0.018,  // ≥1.8% (below publish gates for straights; rare on card)
 };
 
 const SELECT_WEIGHTS = {
@@ -151,7 +152,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
-  'v12.1.1 omega-vnext: grades = quality (calibrated edge + expected CLV), not units/hit-rate; sort quality then units; A+ stake ≥ A on same card unless hard cap. v12.1.0 omega-vnext: US open→pick line-move pipeline (capture-omega-lines 6:00/7:30/9:00 ET); steamToward/Against gates + verify recheck; openPrint on lockSnapshot for CLV; stronger shrink; NFL/CFB HFA +0.1.',
+  'v12.1.2 omega-vnext: Edge legend mobile (no Today\'s Record); A- floor 2.0%; exact 5%/3.5%/2% → higher grade; parlay legs sorted by quality grade. v12.1.1 omega-vnext: grades = quality (calibrated edge + expected CLV), not units/hit-rate; sort quality then units; A+ stake ≥ A on same card unless hard cap. v12.1.0 omega-vnext: US open→pick line-move pipeline (capture-omega-lines 6:00/7:30/9:00 ET); steamToward/Against gates + verify recheck; openPrint on lockSnapshot for CLV; stronger shrink; NFL/CFB HFA +0.1.',
   'v12.0.9 omega-vnext: SAME ET calendar day only (straights + parlay legs); parlay fixed 0.5u; straights ≤3.5u; card max 4.0u; remapped grades (fewer A+).',
   'v12.0.8 omega-vnext: DAILY_UNIT_CAP max 4.0u (not a fill target); parlay leg rating badges; Daily Lock titles + summary UX.',
   'v12.0.7 omega-vnext: fix isotonic soft-cap (was inflating ~hi); stronger shrink so Edge badge stays honest vs sharp fair.',

@@ -391,15 +391,17 @@
     }
     .show-more-bar.has-more { display: block; }
 
-    .rl-right { display:flex; flex-wrap:wrap; gap:.5rem .75rem; align-items:center; justify-content:flex-end; font-size:.75rem; }
     .record-legend-bar {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center; justify-content: flex-start; flex-wrap: nowrap;
+      gap: .5rem .625rem;
       background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: .75rem; padding: .625rem 1rem; margin-bottom: .75rem;
-      font-size: .8125rem; font-weight: 600;
+      border-radius: .75rem; padding: .5rem .75rem; margin-bottom: .75rem;
+      font-size: .75rem; font-weight: 500; color: var(--txt-m);
+      white-space: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
     }
-    .rl-left { display: flex; align-items: center; gap: .25rem; }
-    .rl-right { display: flex; align-items: center; gap: .75rem; font-size: .75rem; color: var(--txt-m); font-weight: 500; }
+    .edge-legend-label { font-weight: 700; color: var(--txt-b); flex-shrink: 0; }
+    .record-legend-bar > span { display: inline-flex; align-items: center; flex-shrink: 0; }
+    .record-legend-bar .legend-dot { margin-right: 3px; }
 
     @media (max-width: 480px) {
       .results-cumulative { grid-template-columns: repeat(2, 1fr); }
@@ -407,8 +409,8 @@
       .cum-card:nth-child(2) { border-right: none; }
       .results-table { font-size: .75rem; }
       .results-table td { padding: .375rem .25rem; }
-      .record-legend-bar { flex-wrap: wrap; gap: .5rem; }
-      .rl-right { font-size: .65rem; gap: .5rem; }
+      .record-legend-bar { font-size: .625rem; gap: .35rem .45rem; padding: .4rem .55rem; }
+      .record-legend-bar .legend-dot { width: 6px; height: 6px; margin-right: 2px; }
     }
 
     /* ─── Loading ─── */
@@ -577,11 +579,6 @@
       .verify-agent-badge { gap: 8px; }
       .verify-modal { width: 95%; padding: 1rem; }
 
-      /* Record bar: record left, grade scale right — single line */
-      .record-legend-bar { flex-wrap: nowrap; gap: .25rem; padding: .5rem .75rem; }
-      .rl-left { font-size: .75rem; white-space: nowrap; flex-shrink: 0; }
-      .rl-right { font-size: .6rem; gap: .375rem; flex-shrink: 0; margin-left: auto; }
-
       /* Pick card: hide inline edge badge on mobile, keep bottom one */
       .edge-inline-mobile { display: none !important; }
       .edge-badge { font-size: .6875rem; padding: .125rem .5rem; }
@@ -684,14 +681,12 @@
     <p id="insights-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
   </div>
 
-  <!-- Record + Legend bar -->
-  <div id="record-legend-bar" class="record-legend-bar">
-    <div id="record-bar-content" class="rl-left"></div>
-    <div class="rl-right" title="Grade = price quality (edge vs the market). Units on each card = how hard WeBetAI sizes the bet.">
-      <span><span class="legend-dot dot-aplus"></span>A+ Strong edge (~5%+)</span>
-      <span><span class="legend-dot dot-a"></span>A Solid (~3.5–5%)</span>
-      <span><span class="legend-dot dot-aminus"></span>A- Playable (~2.5–3.5%)</span>
-    </div>
+  <!-- Edge grade legend (record lives in KPI / results) -->
+  <div id="record-legend-bar" class="record-legend-bar" title="Exact 5.0% and 3.5% default to the higher grade. Units on each card are Kelly stake, separate from the letter.">
+    <span class="edge-legend-label">Edge:</span>
+    <span><span class="legend-dot dot-aplus"></span>A+ Strong 5%+</span>
+    <span><span class="legend-dot dot-a"></span>A Solid 3.5% - 5%</span>
+    <span><span class="legend-dot dot-aminus"></span>A- Playable 2.0% - 3.5%</span>
   </div>
 
 
@@ -707,7 +702,7 @@
 
   <p class="footer-note">
     All lines verified via The Odds API (40+ sportsbooks). Best available line selected per pick.<br>
-    Grade = price quality (edge vs the market). Units on each card = Kelly stake (separate from the letter).<br>
+    Grade = calibrated edge (5%+ = A+, 3.5%+ = A, 2.0%+ = A-; exact band edges go higher). Units = Kelly stake.<br>
     Auto-generated daily by ~11:00am ET. Not financial advice.
   </p>
 </div>
@@ -1821,12 +1816,24 @@
     // ═══ SECTION 2: Daily Lock Parlay legs only (API) — no redundant odds/units card ═══
     let parlayBonusResult = null;
     if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
-      const legCount = optimizedParlayLegs.length;
+      const sortedParlayLegs = optimizedParlayLegs.slice().sort((a, b) => {
+        const keyA = (typeof a.rating === 'string' && ratingOrder[a.rating] != null) ? a.rating
+          : (typeof a.confidence === 'string' ? a.confidence : a.rating);
+        const keyB = (typeof b.rating === 'string' && ratingOrder[b.rating] != null) ? b.rating
+          : (typeof b.confidence === 'string' ? b.confidence : b.rating);
+        const rA = ratingOrder[keyA] ?? 4;
+        const rB = ratingOrder[keyB] ?? 4;
+        if (rA !== rB) return rA - rB;
+        const eA = parseFloat(String(a.edgePct || a.ev || '0').replace(/[^0-9.+-]/g, '')) || 0;
+        const eB = parseFloat(String(b.edgePct || b.ev || '0').replace(/[^0-9.+-]/g, '')) || 0;
+        return eB - eA;
+      });
+      const legCount = sortedParlayLegs.length;
 
       html += `<div class="card-section">
         <div class="card-section-title parlay-sec">Daily Lock - Top 3 Leg Parlay</div>`;
 
-      for (const rawLeg of optimizedParlayLegs) {
+      for (const rawLeg of sortedParlayLegs) {
         const leg = enrichParlayLeg(rawLeg, picks);
         const isStraightDup = picks.some(p => p.pick === leg.pick || p.pick === ensureMlLabel(leg.pick, leg.betType));
         const rendered = renderPickCard(leg, {
@@ -1844,7 +1851,7 @@
       }
 
       // Parlay status bar
-      const parlayLegResults = optimizedParlayLegs.map(leg => {
+      const parlayLegResults = sortedParlayLegs.map(leg => {
         const enriched = enrichParlayLeg(leg, picks);
         const straightMatch = legResults.find(lr => lr.pick.pick === enriched.pick);
         if (straightMatch) return straightMatch;
@@ -1878,11 +1885,6 @@
     }
 
     container.innerHTML = html;
-
-    const recordEl = document.getElementById('record-bar-content');
-    recordEl.innerHTML = `
-      <span style="font-weight:600; color:var(--txt-b);">Today's Record: ${wins}W-${losses}L${pushes > 0 ? '-' + pushes + 'P' : ''}</span>
-    `;
 
     if (hasAnyLive || pending > 0) scheduleRefresh(30);
     else scheduleRefresh(300);

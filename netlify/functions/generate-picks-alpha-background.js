@@ -1,5 +1,5 @@
 // generate-picks-alpha-background.js
-// v10.3.5-alpha-no-selfopt — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
+// v10.3.6-alpha-no-nba-nhl-preseason — Alpha control (v10.3) with F5 OFF published card (founder 2026-09-15).
 // v10.3.5 (2026-09-21): PHASE 1C2 self-opt APPLICATION REMOVED — fetch/log params only;
 //   zero candidate mutation (match Omega observer rule). Generators never steer from self-opt.
 // JS computes ALL projections, edges, and Kelly sizing. Claude SELECTS and narrates.
@@ -81,8 +81,10 @@ OUTPUT FORMAT — Return ONLY valid JSON (no text before or after the JSON):
 
 // ── Sport keys for The Odds API ──
 const ODDS_SPORTS = [
-  "basketball_nba",
-  "icehockey_nhl",
+  // NBA / NHL disabled through preseason — Odds API returns exhibition games that
+  // pollute Alpha cards. Re-enable when regular season tips off.
+  // "basketball_nba",
+  // "icehockey_nhl",
   // "basketball_ncaab", // v10.1: disabled — 48.7% accuracy, -7.0% ROI in backtest. Re-enable next season.
   "baseball_mlb",
   "soccer_epl",
@@ -98,10 +100,11 @@ const ODDS_SPORTS = [
 
 // ── ESPN sport/league slugs ──
 const ESPN_LEAGUES = [
-  { sport: "basketball", league: "nba", label: "NBA", homeAdv: 100, kFactor: 20, baseElo: 1500 },
+  // NBA / NHL disabled through preseason (same as ODDS_SPORTS). Re-enable with regular season.
+  // { sport: "basketball", league: "nba", label: "NBA", homeAdv: 100, kFactor: 20, baseElo: 1500 },
   // NHL: kFactor=6 per FiveThirtyEight methodology (high luck sport, low-count discrete events).
   // homeAdv=50 per published NHL Elo calibration (Neil Paine / FiveThirtyEight).
-  { sport: "hockey", league: "nhl", label: "NHL", homeAdv: 50, kFactor: 6, baseElo: 1500 },
+  // { sport: "hockey", league: "nhl", label: "NHL", homeAdv: 50, kFactor: 6, baseElo: 1500 },
   // { sport: "basketball", league: "mens-college-basketball", label: "NCAAB", homeAdv: 120, kFactor: 32, baseElo: 1500 }, // v10.1: disabled
 
   // MLB: kFactor=4 per FiveThirtyEight (highest luck component in major team sports).

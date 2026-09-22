@@ -9,9 +9,9 @@ PR B (`feat/omega-v12.2-placeability`, v12.2.1) is shipping: generate-time place
 Shipped in `feat/omega-v12.2.2-pm-observer` → MODEL_VERSION `v12.2.2-omega-vnext-pm-observer`.
 Read-only Kalshi + Polymarket moneyline observer. Maps only clean 1:1 game MLs. Artifacts: `omega-pm-observer/{date}` (+ `pm-sidecar-{date}`) in edge-picks-omega. Soft-fail hook after generate + scheduled `capture-omega-pm-observer` (10:15 ET). Never mutates rating/units/edge/ev. No orders. Today's 2026-09-22 live card was NOT regenerated.
 
-## 4. TSP historical — NEXT (after Kalshi/Poly)
+## 4. TSP historical — DONE (scaffold + public fetch)
 
-After the Kalshi observer. TOS-safe only: no live `tsp.live` member scrape (`TSP_FETCH_ON_HOLD=true` stays). Prefer public Performance Terminal wager-log feeds / records-transparency / archived records (~2011+). Observer-only into isolated `tsp-research` blob — never edge-picks-omega live config/selection. Do NOT copy TSP picks into Omega; do NOT train Omega to mimic Hermes.
+Shipped `feat/omega-tsp-public-records-observer`. Public Performance Terminal Lambda CSVs → isolated `tsp-research` blob (`snapshots/{date}`, `digests/{date}`, `manual/`). On-demand `fetch-tsp-public-records` + daily `monitor-tsp-public-records` (11:00 ET). `TSP_FETCH_ON_HOLD=true` unchanged — no `tsp.live` member scrape. Never writes edge-picks-omega; never copies TSP picks into Omega; never trains to mimic Hermes. Docs: `docs/TSP-RESEARCH-OBSERVER.md`. Live 2026-09-22 Omega card untouched.
 
 ## 5. Walk-forward — scaffold only
 
@@ -22,6 +22,7 @@ A later PR may add the walk-forward scaffold. No coefficient fit in the engines 
 - Walk-forward scaffold (item 5)
 - Historical Omega replay
 - Deeper engines beyond seeds (EPA/SP seeds → live multi-day feeds)
+- (TSP member live feed still ON HOLD pending permission)
 
 ## Live card
 

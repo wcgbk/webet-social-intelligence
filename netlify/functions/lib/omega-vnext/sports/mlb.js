@@ -13,7 +13,7 @@ const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'MLB';
 
-function projectGame(event, standings) {
+function projectGame(event, standings, espnGame) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
@@ -24,7 +24,12 @@ function projectGame(event, standings) {
   const modelTotal = 8.6 + Math.abs(hPow + aPow) * 0.02; // league-ish
 
   const out = [];
-  const uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.18 : 0.28;
+  let uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.18 : 0.28;
+  // Starter presence from ESPN (when already fetched) — modest confidence bump, no FIP rewrite
+  const homeSp = espnGame && espnGame.homeProbable;
+  const awaySp = espnGame && espnGame.awayProbable;
+  if (homeSp && awaySp) uncertainty = Math.max(0.12, uncertainty - 0.04);
+  else if (homeSp || awaySp) uncertainty = Math.max(0.14, uncertainty - 0.02);
 
   // Moneyline
   {
@@ -105,10 +110,36 @@ function projectGame(event, standings) {
   return out;
 }
 
-function project({ oddsEvents, standings }) {
+function findEspnGame(ev, espnGames) {
+  if (!espnGames || !espnGames.length) return null;
+  const home = (ev.home_team || '').toLowerCase();
+  const away = (ev.away_team || '').toLowerCase();
+  return espnGames.find(g => {
+    const gh = (g.homeTeam || '').toLowerCase();
+    const ga = (g.awayTeam || '').toLowerCase();
+    return (gh.includes(home.split(' ').pop()) || home.includes(gh.split(' ').pop()))
+      && (ga.includes(away.split(' ').pop()) || away.includes(ga.split(' ').pop()));
+  }) || null;
+}
+
+function project({ oddsEvents, standings, espnGames }) {
   const all = [];
+  const games = (espnGames && espnGames.games) || espnGames || [];
   for (const ev of oddsEvents || []) {
-    all.push(...projectGame(ev, standings || {}));
+    const eg = findEspnGame(ev, games);
+    const cands = projectGame(ev, standings || {}, eg);
+    if (eg && (eg.homeProbable || eg.awayProbable)) {
+      for (const c of cands) {
+        if (/moneyline|spread/i.test(c.market || '')) {
+          c.assumedStarter = eg.homeProbable
+            ? { name: eg.homeProbable.name, teamSide: 'home', id: eg.homeProbable.id }
+            : (eg.awayProbable ? { name: eg.awayProbable.name, teamSide: 'away', id: eg.awayProbable.id } : null);
+          c.probablePitcher = c.assumedStarter;
+          c.startersKnown = !!(eg.homeProbable && eg.awayProbable);
+        }
+      }
+    }
+    all.push(...cands);
   }
   return all;
 }

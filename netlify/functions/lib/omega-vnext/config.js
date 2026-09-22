@@ -1,13 +1,13 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.0.9-omega-vnext-dayscope';
+const MODEL_VERSION = 'v12.1.0-omega-vnext-linemove';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
 /**
- * Unit structure (v12.0.9):
+ * Unit structure (v12.0.9+):
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
  * - Parlay fixed at PARLAY_FIXED_UNITS (0.5u) when published, else omit
  * - Card MAX = DAILY_UNIT_CAP (4.0u) = 3.5 + 0.5
@@ -50,16 +50,50 @@ const ESPN_LEAGUES = {
 };
 
 const SHARP_BOOKS = ['pinnacle', 'circa', 'circasports', 'bookmaker', 'betonlineag', 'lowvig'];
-const US_BOOKS = [
+
+/**
+ * Major US retail books — priority order for open prints / best-price /
+ * placeability context (Hard Rock kept for verify placeability).
+ */
+const US_BOOK_PRIORITY = [
   'draftkings', 'fanduel', 'betmgm', 'caesars', 'williamhill_us',
-  'espnbet', 'betrivers', 'fanatics', 'hardrockbet', 'bovada',
+  'espnbet', 'hardrockbet', 'betrivers', 'fanatics',
 ];
+
+const US_BOOKS = [
+  ...US_BOOK_PRIORITY,
+  'bovada',
+];
+
 const MAJOR_LIQUIDITY_BOOKS = [
   'draftkings', 'fanduel', 'betmgm', 'caesars', 'williamhill_us', 'espnbet', 'pinnacle',
 ];
 
-/** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.0.6: stronger shrink. */
-const SHRINK_K = { Total: 0.55, Spread: 0.65, Moneyline: 0.70, default: 0.60 };
+/**
+ * Open→pick line-move / steam gates (US books + sharp refs).
+ * Morning polls: 6:00, 7:30, 9:00 ET via capture-omega-lines.
+ */
+const LINE_MOVE = {
+  /** Morning capture slots (ET HHMM). */
+  captureSlotsET: ['0600', '0730', '0900'],
+  /** UTC cron union targets during EDT (UTC-4). */
+  captureSlotsUtcEDT: ['1000', '1130', '1300'],
+  steamTowardEpsilon: 0.15,
+  /** Generate: reject when odds shortened against pick by this many American cents. */
+  rejectSteamAgainstCents: 18,
+  rejectSteamAgainstPts: { Spread: 1.0, Total: 1.0 },
+  /** Soft score adj when steam aligns / opposes. */
+  scoreBoostSteamToward: 0.03,
+  scorePenaltySteamAgainst: 0.04,
+  boostSteamTowardCents: 8,
+  boostSteamTowardPts: 0.5,
+  /** Verify (10:30): harder adverse thresholds — drop + refill; empty OK. */
+  verifyAdverseCents: 20,
+  verifyAdversePts: { Spread: 1.5, Total: 1.5 },
+};
+
+/** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.1: slightly stronger. */
+const SHRINK_K = { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 };
 
 /** Gate floors — conservative v1. Empty OK. */
 const GATES = {
@@ -71,6 +105,8 @@ const GATES = {
   requireMajorBook: true,
   pregameOnly: true,
   sameEtDayOnly: true,
+  /** Reject when open→now steam strongly against (LINE_MOVE thresholds). */
+  rejectAdverseSteam: true,
 };
 
 /**
@@ -85,6 +121,9 @@ const QA_HARDFAIL = {
   requireMajorBookStillOffered: true,
   /** When assumed SP unknown, still hard-fail ML/Spread if late scratch signal for either team. */
   mlbScratchWithoutAssumedSp: true,
+  /** Open→pick adverse steam (verify recheck). */
+  adverseSteamCents: LINE_MOVE.verifyAdverseCents,
+  adverseSteamPts: LINE_MOVE.verifyAdversePts,
 };
 
 /** Selection score weights — CLV first, then EV, then uncertainty penalty. */
@@ -98,11 +137,13 @@ const SELECT_WEIGHTS = {
 
 const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 };
 const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 14.0, NHL: 1.8, MLB: 3.5 };
-const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.5, NBA: 2.5, NHL: 0.15 }; // pts or runs
+/** Slight HFA lift v12.1 (NFL/CFB rest/HFA tweak — no multi-day EPA). */
+const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.1.0 omega-vnext: US open→pick line-move pipeline (capture-omega-lines 6:00/7:30/9:00 ET); steamToward/Against gates + verify recheck; openPrint on lockSnapshot for CLV; stronger shrink; NFL/CFB HFA +0.1.',
   'v12.0.9 omega-vnext: SAME ET calendar day only (straights + parlay legs); parlay fixed 0.5u; straights ≤3.5u; card max 4.0u; remapped grades (fewer A+).',
   'v12.0.8 omega-vnext: DAILY_UNIT_CAP max 4.0u (not a fill target); parlay leg rating badges; Daily Lock titles + summary UX.',
   'v12.0.7 omega-vnext: fix isotonic soft-cap (was inflating ~hi); stronger shrink so Edge badge stays honest vs sharp fair.',
@@ -113,15 +154,16 @@ const MODEL_NOTES = [
   'v12.0.2 omega-vnext: journalistic Claude narratives + full parlay-leg pick cards.',
   'v12.0.1 omega-vnext: CLV-first composer + realized close-grade loop + QA hard-fails.',
   'v1 projections: sport power/market-hybrid (MLB Pythag/Elo-lite; NFL/CFB normal-spread; NBA/NHL disabled).',
-  'Calibration: shrink p_model toward no-vig sharp with market K; isotonic clip soft-caps extremes.',
+  'Calibration: shrink p_model toward no-vig sharp with market K; isotonic clip soft-caps extremes (no 15% fake edges).',
   'Edge badge (edgePct): calibrated model edge after shrink = coverProb - no-vig sharp fair (fallback: vs book implied). Not predictedClv cents, not raw coverProb, not dog-inflated EV%.',
-  'Predicted CLV is a proxy; realized no-vig CLV graded by track-clv-omega (Pinnacle/Circa/Bookmaker).',
-  'Weekly CLV report is OBSERVER ONLY — no auto-steer.',
-  'QA hard-fails drop scratched SP (MLB), QB out/doubtful (NFL/NCAAF), and stale odds before publish.',
+  'Predicted CLV is a proxy; residual CLV uses open→now steam; realized no-vig CLV graded by track-clv-omega (Pinnacle/Circa/Bookmaker).',
+  'Weekly CLV report is OBSERVER ONLY — no auto-steer. openPrint+lockSnapshot populate open→close path.',
+  'QA hard-fails drop scratched SP (MLB), QB out/doubtful (NFL/NCAAF), stale odds, and adverse open→pick steam before publish.',
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
   'Day-scope: every straight + parlay leg commenceTime must fall on the card ET date (America/New_York).',
   'Unit structure: straights ≤3.5u + fixed 0.5u parlay = max 4.0u; may be under; never force-fill.',
   'Live card (get-picks-omega): newest store date with real picks ≤ tomorrowET; sticky prior-day when empty/missing; ?date= sticky unless forceEmpty.',
+  'US books prioritized: DK/FD/BetMGM/Caesars/ESPN BET/Hard Rock/BetRivers/Fanatics; sharp refs Pinnacle/Circa/Bookmaker for CLV context.',
 ].join(' ');
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
@@ -143,8 +185,10 @@ module.exports = {
   ODDS_SPORT_KEYS,
   ESPN_LEAGUES,
   SHARP_BOOKS,
+  US_BOOK_PRIORITY,
   US_BOOKS,
   MAJOR_LIQUIDITY_BOOKS,
+  LINE_MOVE,
   SHRINK_K,
   GATES,
   QA_HARDFAIL,

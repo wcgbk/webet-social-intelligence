@@ -2,6 +2,7 @@
 
 const { GATES } = require('./config');
 const { isSameEtDay } = require('./odds_math');
+const { adverseSteamReason } = require('./line_path');
 
 function sportFloor(map, sport) {
   return map[sport] != null ? map[sport] : map.default;
@@ -39,6 +40,13 @@ function gateReason(c, opts = {}) {
   }
   // Positive edge vs implied
   if (Number.isFinite(c.edgePct) && c.edgePct <= 0) return 'nonpositive-edge';
+
+  // Open→now adverse steam (when line-move annotated)
+  if (GATES.rejectAdverseSteam && c.lineMove) {
+    const steamReason = adverseSteamReason(c.lineMove, { verify: false });
+    if (steamReason) return steamReason;
+  }
+
   return null;
 }
 

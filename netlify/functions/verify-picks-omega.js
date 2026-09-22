@@ -458,6 +458,68 @@ async function runHardRockCheck(picksData) {
   return { summary, pickResults, parlayFindings };
 }
 
+// ── Open→pick steam recheck (Omega v12.1 line-move) ──
+// Load latest morning snap; hard-fail / flag critical on adverse steam past verify thresholds.
+// Empty card OK — never lean force-fill. Hard Rock placeability remains advisory-only.
+async function runOmegaSteamRecheck(picksData, pickReports) {
+  const out = { checked: 0, failed: 0, reasons: [] };
+  try {
+    const linePath = require('./lib/omega-vnext/line_path');
+    const { LINE_MOVE } = require('./lib/omega-vnext/config');
+    const dateISO = picksData.date;
+    if (!dateISO || !Array.isArray(picksData.picks)) return out;
+    const loaded = await linePath.loadLinePath(dateISO);
+    const openSnap = loaded.earliest;
+    const nowSnap = loaded.latest || loaded.earliest;
+    if (!openSnap) {
+      console.log('[verify-steam] no morning line snaps — skip steam recheck');
+      return out;
+    }
+    for (let i = 0; i < picksData.picks.length; i++) {
+      const pick = picksData.picks[i];
+      const key = linePath.gameKey(pick.awayTeam, pick.homeTeam);
+      const openG = (openSnap.games || {})[key];
+      const nowG = ((nowSnap && nowSnap.games) || {})[key];
+      if (!openG) continue;
+      const openWithTs = { ...openG, capturedAt: openSnap.capturedAt || null };
+      const cand = {
+        market: pick.betType || pick.market,
+        side: pick.pick || pick.side,
+        homeTeam: pick.homeTeam,
+        awayTeam: pick.awayTeam,
+        odds: typeof pick.odds === 'number' ? pick.odds : parseInt(String(pick.odds).replace(/[^0-9\-+]/g, ''), 10),
+        line: pick.line != null ? pick.line : null,
+        predictedClv: pick.predictedClv,
+      };
+      const move = linePath.computeOpenToNowMove(cand, openWithTs, nowG || null);
+      pick.lineMove = move;
+      if (move.openPrint && !pick.openPrint) {
+        pick.openPrint = move.openPrint;
+        pick.lockSnapshot = pick.lockSnapshot || {};
+        pick.lockSnapshot.openPrint = move.openPrint;
+      }
+      out.checked++;
+      const reason = linePath.adverseSteamReason(move, { verify: true });
+      if (reason) {
+        out.failed++;
+        out.reasons.push({ pick: pick.pick, reason });
+        if (pickReports[i]) {
+          pickReports[i].errors.push(`STEAM_HARDFAIL: ${reason}`);
+          pickReports[i].severity = 'critical';
+          pickReports[i].steamHardFail = reason;
+        }
+        console.log(`[verify-steam] HARDFAIL ${pick.pick}: ${reason}`);
+      } else if (move.steamAgainst && pickReports[i]) {
+        pickReports[i].warnings.push(`steam against (below verify threshold): towardScore=${move.towardScore}`);
+      }
+    }
+    console.log(`[verify-steam] checked=${out.checked} failed=${out.failed} open=${openSnap.hhmm || openSnap.slot} latest=${(nowSnap && (nowSnap.hhmm || nowSnap.slot)) || 'n/a'} threshCents=${LINE_MOVE.verifyAdverseCents}`);
+  } catch (e) {
+    console.log(`[verify-steam] skipped: ${e.message}`);
+  }
+  return out;
+}
+
 // ── Sharp Handicapper Review (Claude) ──
 async function sharpReview(picks, dateFormatted) {
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -837,12 +899,58 @@ exports.handler = async (event) => {
       console.log(`[verify-hardrock] Check failed (non-fatal): ${e.message}`);
     }
 
+    // ── Step 1.6: Open→pick steam recheck (hard-fail / replace; empty OK) ──
+    let steamCheck = { checked: 0, failed: 0, reasons: [] };
+    try {
+      steamCheck = await runOmegaSteamRecheck(picksData, pickReports);
+      totalErrors += steamCheck.failed;
+    } catch (e) {
+      console.log(`[verify-steam] Check failed (non-fatal): ${e.message}`);
+    }
+
     // ── Step 2: Auto-fix critical issues ──
     const fixResult = await autoFixPicks(picksData, pickReports);
     if (fixResult.fixed) {
       console.log(`[verify] Auto-fixed ${fixResult.replacements.length} pick(s)`);
       // Write updated picks back to blob so the page shows clean data
       await updatePicksBlob(dateKey, picksData);
+    }
+
+    // Steam hard-fails still on card after autofix → drop (empty OK; no lean force-fill)
+    try {
+      const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
+      const kept = [];
+      let droppedSteam = 0;
+      for (const pick of picksData.picks) {
+        const r = pick.lineMove ? adverseSteamReason(pick.lineMove, { verify: true }) : null;
+        if (r) {
+          console.log(`[verify-steam] dropping ${pick.pick}: ${r}`);
+          picksData.rejections = picksData.rejections || [];
+          picksData.rejections.unshift({
+            matchup: pick.matchup, side: pick.pick,
+            reason: `QA_HARDFAIL: ${r}`, hardFail: true,
+          });
+          droppedSteam++;
+          continue;
+        }
+        kept.push(pick);
+      }
+      if (droppedSteam > 0) {
+        picksData.picks = kept;
+        if (kept.length === 0) {
+          picksData.parlayLegs = [];
+          picksData.noPlays = 'No qualifying edges after steam QA hard-fails.';
+        }
+        if (picksData.summary) {
+          picksData.summary.totalStraightBets = kept.length;
+          picksData.summary.totalPicks = kept.length;
+        }
+        enforceOmegaDailyUnitCap(picksData);
+        await updatePicksBlob(dateKey, picksData);
+        console.log(`[verify-steam] dropped ${droppedSteam} adverse-steam pick(s); remaining=${kept.length}`);
+      }
+    } catch (e) {
+      console.log(`[verify-steam] drop pass skipped: ${e.message}`);
     }
 
     // ── Step 3: Sharp handicapper review ──
@@ -1405,6 +1513,7 @@ Return ONLY valid JSON array:
       sharpRedFlags: sharpReplacements.length,
       picks: pickReports,
       hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
+      steamRecheck: steamCheck,
       sharpReview: sharpResult,
       summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? "skipped" : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
       verifiedAt: new Date().toISOString(),

@@ -77,6 +77,19 @@ function filterEventsSameEtDay(events, dateISO) {
 }
 
 
+
+function extractProbable(competitor) {
+  if (!competitor) return null;
+  const probs = competitor.probables || competitor.probablePitchers || [];
+  if (Array.isArray(probs) && probs.length) {
+    const p = probs[0];
+    const name = (p.athlete && (p.athlete.displayName || p.athlete.fullName)) || p.displayName || p.name || null;
+    if (name) return { name, id: (p.athlete && p.athlete.id) || p.id || null };
+  }
+  // Some scoreboards nest under competitor.athletes / roster hints — skip if absent
+  return null;
+}
+
 async function fetchEspnScoreboard(label, dateISO) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return { league: label, games: [] };
@@ -91,6 +104,8 @@ async function fetchEspnScoreboard(label, dateISO) {
       const competitors = comp.competitors || [];
       const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
       const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+      const homeProb = extractProbable(home);
+      const awayProb = extractProbable(away);
       return {
         id: ev.id,
         name: ev.name,
@@ -103,6 +118,8 @@ async function fetchEspnScoreboard(label, dateISO) {
         awayAbbr: (away.team && away.team.abbreviation) || '',
         homeScore: home.score != null ? Number(home.score) : null,
         awayScore: away.score != null ? Number(away.score) : null,
+        homeProbable: homeProb,
+        awayProbable: awayProb,
       };
     });
     const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));

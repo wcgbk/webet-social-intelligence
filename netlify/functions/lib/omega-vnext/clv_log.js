@@ -70,7 +70,13 @@ function enrichBetTimeFields(p, { modelVersion = MODEL_VERSION, date = null } = 
       line,
       book,
       capturedAt: ts.iso,
+      openPrint: p.openPrint || null,
     },
+    openPrint: p.openPrint || (p.lockSnapshot && p.lockSnapshot.openPrint) || null,
+    steamToward: !!p.steamToward,
+    steamAgainst: !!p.steamAgainst,
+    predictedResidualClv: p.predictedResidualClv != null ? p.predictedResidualClv : null,
+    lineMove: p.lineMove || null,
   };
 }
 
@@ -108,6 +114,10 @@ function betTimeClvSeed(pick) {
     timestamp: enriched.timestamp,
     timestampET: enriched.timestampET,
     lockSnapshot: enriched.lockSnapshot,
+    openPrint: enriched.openPrint || null,
+    steamToward: !!enriched.steamToward,
+    steamAgainst: !!enriched.steamAgainst,
+    predictedResidualClv: enriched.predictedResidualClv != null ? enriched.predictedResidualClv : null,
     capturedAt: enriched.timestamp,
   };
 }

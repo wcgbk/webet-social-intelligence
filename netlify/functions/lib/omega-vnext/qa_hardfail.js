@@ -14,6 +14,7 @@ const {
   QA_HARDFAIL, MAJOR_LIQUIDITY_BOOKS, MAX_STRAIGHTS, ESPN_LEAGUES,
 } = require('./config');
 const { matchupKey, selectStraights, toPickObject } = require('./select');
+const { adverseSteamReason } = require('./line_path');
 
 function normName(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -225,6 +226,15 @@ function evaluateHardFail(pick, ctx = {}) {
     }
   }
 
+  // Open→pick adverse steam (generate annotate or verify recheck)
+  {
+    const move = pick.lineMove || ctx.lineMove || null;
+    if (move) {
+      const reason = adverseSteamReason(move, { verify: !!ctx.verifySteam });
+      if (reason) return reason;
+    }
+  }
+
   // Market no longer offered at major books
   if (cfg.requireMajorBookStillOffered && ctx.majorBooksOffering === false) {
     return 'market_gone: no longer offered at major liquidity books';
@@ -400,6 +410,15 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     };
     if (c.assumedStarter) obj.assumedStarter = c.assumedStarter;
     if (c.probablePitcher) obj.probablePitcher = c.probablePitcher;
+    if (c.openPrint) {
+      obj.openPrint = c.openPrint;
+      obj.lockSnapshot = obj.lockSnapshot || {};
+      obj.lockSnapshot.openPrint = c.openPrint;
+    }
+    if (c.lineMove) obj.lineMove = c.lineMove;
+    if (c.steamToward != null) obj.steamToward = !!c.steamToward;
+    if (c.steamAgainst != null) obj.steamAgainst = !!c.steamAgainst;
+    if (c.predictedResidualClv != null) obj.predictedResidualClv = c.predictedResidualClv;
     return obj;
   });
 

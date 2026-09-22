@@ -13,6 +13,7 @@ const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks } = require('./store');
+const { loadLinePath, annotateLineMoves } = require('./line_path');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -42,6 +43,7 @@ function projectAll(snap) {
     raw.push(...mlb.project({
       oddsEvents: snap.oddsBySport.MLB || [],
       standings: snap.standingsBySport.MLB || {},
+      espnGames: snap.espnBySport && snap.espnBySport.MLB,
     }));
   }
   if (SPORTS_ENABLED.NFL) {
@@ -78,6 +80,7 @@ function annotateMajorBooks(candidates, snap) {
         line: c.line != null ? c.line : null,
         book: c.book || null,
         capturedAt: snap.fetchedAt || new Date().toISOString(),
+        openPrint: c.openPrint || null,
       },
     };
   });
@@ -106,6 +109,23 @@ async function generateOmegaVnext(opts = {}) {
 
   candidates = calibrateAll(candidates).map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
+
+  // Open→pick US line-move (earliest morning snap → latest pre-generate)
+  let linePathMeta = { earliest: null, latest: null };
+  try {
+    const loaded = await loadLinePath(dateISO);
+    linePathMeta = loaded;
+    if (loaded.earliest) {
+      candidates = annotateLineMoves(candidates, loaded.earliest, loaded.latest || loaded.earliest);
+      const withOpen = candidates.filter(c => c.openPrint).length;
+      console.log(`[omega-vnext] line-move open=${loaded.earliest.hhmm || loaded.earliest.slot} latest=${(loaded.latest && (loaded.latest.hhmm || loaded.latest.slot)) || 'n/a'} annotated=${withOpen}/${candidates.length}`);
+    } else {
+      console.log(`[omega-vnext] line-move: no morning snaps for ${dateISO} (continuing without steam gates)`);
+    }
+  } catch (e) {
+    console.error(`[omega-vnext] line-move load failed: ${e.message}`);
+  }
+
   const { yesPool, rejected } = applyGates(candidates, { cardDate: dateISO });
   console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length}`);
 
@@ -186,6 +206,10 @@ async function generateOmegaVnext(opts = {}) {
     matchup: c.matchup,
     commenceTime: c.commenceTime,
     predictedClv: c.predictedClv,
+    predictedResidualClv: c.predictedResidualClv,
+    steamToward: !!c.steamToward,
+    steamAgainst: !!c.steamAgainst,
+    openPrint: c.openPrint || null,
     projMethod: c.projMethod,
     selected: picks.some(p => p.pick === c.side && p.matchup === c.matchup),
   }));
@@ -232,6 +256,12 @@ async function generateOmegaVnext(opts = {}) {
     modelNotes: MODEL_NOTES,
     engine: 'omega-vnext',
     qaHardFails: hardFails,
+    linePath: {
+      earliestSlot: linePathMeta.earliest ? (linePathMeta.earliest.hhmm || linePathMeta.earliest.slot) : null,
+      latestSlot: linePathMeta.latest ? (linePathMeta.latest.hhmm || linePathMeta.latest.slot) : null,
+      openPollCount: linePathMeta.path && Array.isArray(linePathMeta.path.polls)
+        ? linePathMeta.path.polls.length : 0,
+    },
   };
   if (empty) {
     picksData.noPlays = hardFails.length

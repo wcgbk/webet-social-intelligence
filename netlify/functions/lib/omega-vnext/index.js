@@ -98,7 +98,10 @@ function annotateMajorBooks(candidates, snap) {
 
 /**
  * Full Omega vNext pipeline. Writes edge-picks-omega unless dryRun.
+ * Walk-forward calibration is a SEPARATE observer (capture-omega-walkforward);
+ * this generator never reads walk-forward fit params — shrink stays static config.
  */
+
 async function generateOmegaVnext(opts = {}) {
   const dateISO = opts.date || todayET();
   const dateFormatted = formatDateLong(dateISO);

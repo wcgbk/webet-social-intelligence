@@ -138,4 +138,72 @@ async function readPmObserver(dateISO) {
     || (await readJson(`pm-sidecar-${dateISO}`));
 }
 
-module.exports = { storePicks, readPicks, storeJson, readJson, storePmObserver, readPmObserver };
+
+/** Walk-forward observer keys only — never live picks / fit blobs. */
+const { WALKFORWARD_KEY_RE, LIVE_KEY_RE, assertWalkforwardKey: assertWfKey } = (() => {
+  try { return require('./walk_forward'); }
+  catch (_) {
+    return {
+      WALKFORWARD_KEY_RE: /^omega-walkforward\/(?:samples\/\d{4}-\d{2}-\d{2}|reports\/(?:\d{4}-\d{2}-\d{2}|latest)|priors-offline)$/,
+      LIVE_KEY_RE: /^(?:picks-\d{4}-\d{2}-\d{2}|picks-sim-|latest-date|picks-dates|self-optimize-params)/,
+      assertWalkforwardKey: null,
+    };
+  }
+})();
+
+function assertWalkforwardKey(key) {
+  if (typeof assertWfKey === 'function') return assertWfKey(key);
+  const k = String(key || '');
+  if (LIVE_KEY_RE.test(k) || k.includes('self-optimize-params') || k.startsWith('omega-walkforward/fit')) {
+    throw new Error(`omega-walkforward refused live key: ${k}`);
+  }
+  if (!WALKFORWARD_KEY_RE.test(k)) {
+    throw new Error(`omega-walkforward refused key: ${k}`);
+  }
+  return k;
+}
+
+function refuseFitPayload(label, payload) {
+  if (payload && payload.fitApplied === true) {
+    throw new Error(`omega-walkforward refused ${label}: fitApplied`);
+  }
+  if (payload && payload.appliedToCalibrate === true) {
+    throw new Error(`omega-walkforward refused ${label}: appliedToCalibrate`);
+  }
+  if (payload && payload.coefficients != null) {
+    throw new Error(`omega-walkforward refused ${label}: coefficients present`);
+  }
+}
+
+async function storeWalkforwardSamples(dateISO, samplesBlob) {
+  const key = assertWalkforwardKey(`omega-walkforward/samples/${dateISO}`);
+  refuseFitPayload('samples', samplesBlob);
+  await storeJson(key, samplesBlob);
+  return key;
+}
+
+async function storeWalkforwardReport(dateISO, report) {
+  const key = assertWalkforwardKey(`omega-walkforward/reports/${dateISO}`);
+  refuseFitPayload('report', report);
+  await storeJson(key, report);
+  try {
+    await storeJson(assertWalkforwardKey('omega-walkforward/reports/latest'), report);
+  } catch (e) {
+    console.error(`[omega-vnext/store] walkforward report latest: ${e.message}`);
+  }
+  return key;
+}
+
+async function storeWalkforwardPriorsOffline(priors) {
+  const key = assertWalkforwardKey('omega-walkforward/priors-offline');
+  refuseFitPayload('priors-offline', priors);
+  await storeJson(key, priors);
+  return key;
+}
+
+module.exports = {
+  storePicks, readPicks, storeJson, readJson, storePmObserver, readPmObserver,
+  WALKFORWARD_KEY_RE, assertWalkforwardKey,
+  storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
+};
+

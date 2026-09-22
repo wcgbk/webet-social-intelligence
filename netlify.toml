@@ -201,6 +201,15 @@
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 
+
+[functions."capture-omega-walkforward"]
+  schedule = "15 15 * * *"
+  # Omega walk-forward OBSERVER — 11:15am ET (15:15 UTC in EDT).
+  # Reads picks-{date}+clv-{date}; writes omega-walkforward/* only.
+  # SCAFFOLD: FIT_ENABLED=false until Mon 11am ET ≥2026-09-29. No Discord. Soft-fail.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+
 [functions."capture-opening-lines"]
   schedule = "0 10 * * *"
   # 10:00 UTC = 6am EDT. Capture early morning lines before US sharp action.

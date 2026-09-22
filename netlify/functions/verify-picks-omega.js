@@ -140,11 +140,28 @@ function runMathChecks(pick) {
     }
   }
 
-  // Grade check
-  const expectedGrade = unitsToRating(units);
-  if (pick.rating && pick.rating !== expectedGrade) {
-    checks.gradeMatch = false;
-    warnings.push(`Grade mismatch: "${pick.rating}" but ${units}u should be "${expectedGrade}"`);
+  // Grade check — quality/edge bands (v12.1+), NOT units
+  // A+ ≥5.0%, A ≥3.5%, A- ≥2.0%, else B. Exact band edges use higher grade.
+  const edgeFrac = (() => {
+    const raw = pick.edgePct != null ? pick.edgePct : pick.ev;
+    if (raw == null) return null;
+    if (typeof raw === 'number') return raw > 1 ? raw / 100 : raw;
+    const n = parseFloat(String(raw).replace(/[^0-9.+-]/g, ''));
+    if (!Number.isFinite(n)) return null;
+    return Math.abs(n) > 1 ? n / 100 : n;
+  })();
+  if (edgeFrac != null) {
+    let expectedGrade = 'b';
+    if (edgeFrac >= 0.050) expectedGrade = 'aplus';
+    else if (edgeFrac >= 0.035) expectedGrade = 'a';
+    else if (edgeFrac >= 0.020) expectedGrade = 'aminus';
+    const norm = String(pick.rating || '').toLowerCase().replace(/\+/g, 'plus').replace(/-/g, 'minus');
+    const normMap = { 'a+': 'aplus', aplus: 'aplus', a: 'a', 'a-': 'aminus', aminus: 'aminus', b: 'b', 'b+': 'bplus', bplus: 'bplus' };
+    const have = normMap[norm] || norm;
+    if (pick.rating && have !== expectedGrade) {
+      checks.gradeMatch = false;
+      warnings.push(`Grade mismatch: "${pick.rating}" but edge ${(edgeFrac * 100).toFixed(1)}% should be "${expectedGrade}"`);
+    }
   }
 
   const hasCritical = errors.some(e => e.startsWith("CRITICAL"));
@@ -1163,16 +1180,10 @@ exports.handler = async (event) => {
         }
       }
 
-      // Fix grades + strip any stale sharp-review annotations (sharp review is informational-only now)
+      // Strip stale sharp-review annotations only.
+      // Grades stay quality/edge from generator — NEVER rewrite from units (v12.1+).
       for (const p of picksData.picks) {
         delete p.sharpConcern; delete p._dropRedFlag;
-        const u = parseUnits(p.units);
-        const correctGrade = unitsToRating(u);
-        if (p.rating !== correctGrade) {
-          console.log(`[verify-final] Grade fix: "${p.pick}" ${p.rating} → ${correctGrade}`);
-          p.rating = correctGrade;
-          finalFixCount++;
-        }
       }
 
       // Identify picks needing real narratives (generic, too short, or contains "replaces")

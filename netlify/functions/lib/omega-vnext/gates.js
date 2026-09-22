@@ -22,9 +22,27 @@ function failsPlaceability(c) {
   return false;
 }
 
+const PREGAME_GRACE_MS = 5 * 60 * 1000;
+
+/**
+ * Clock for pregameOnly. Live calls omit asOf and stay on Date.now().
+ * Historical replay passes asOfMs or an ISO asOf so a past slate is judged
+ * against the snapshot, not wall-clock now. Unparseable asOf falls back to now.
+ */
+function resolvePregameAsOfMs(opts = {}) {
+  if (opts && Number.isFinite(opts.asOfMs)) return opts.asOfMs;
+  if (opts && opts.asOf != null && opts.asOf !== '') {
+    const n = typeof opts.asOf === 'number' ? opts.asOf : Date.parse(opts.asOf);
+    if (Number.isFinite(n)) return n;
+  }
+  return Date.now();
+}
+
 /**
  * @param {object} c candidate
- * @param {{ cardDate?: string }} opts cardDate = ET YYYY-MM-DD for same-day scope
+ * @param {{ cardDate?: string, asOfMs?: number, asOf?: string|number }} opts
+ *   cardDate = ET YYYY-MM-DD for same-day scope.
+ *   asOfMs / asOf = pregame clock (snapshot instant). Omit for live Date.now().
  */
 function gateReason(c, opts = {}) {
   const sport = c.sport || 'default';
@@ -40,7 +58,8 @@ function gateReason(c, opts = {}) {
 
   if (GATES.pregameOnly && c.commenceTime) {
     const t = Date.parse(c.commenceTime);
-    if (Number.isFinite(t) && t < Date.now() - 5 * 60 * 1000) {
+    const asOfMs = resolvePregameAsOfMs(opts);
+    if (Number.isFinite(t) && t < asOfMs - PREGAME_GRACE_MS) {
       return 'in-progress-or-started';
     }
   }
@@ -71,6 +90,8 @@ function gateReason(c, opts = {}) {
 /**
  * Filter to YES pool. Empty OK — no force-fill.
  * Pass opts.cardDate (ET YYYY-MM-DD) to enforce same-day commenceTime scope.
+ * Pass opts.asOfMs or opts.asOf to judge pregame against a snapshot instant
+ * (historical replay). Omit both for live Date.now() semantics.
  */
 function applyGates(candidates, opts = {}) {
   const yes = [];
@@ -83,4 +104,4 @@ function applyGates(candidates, opts = {}) {
   return { yesPool: yes, rejected };
 }
 
-module.exports = { applyGates, gateReason, failsPlaceability };
+module.exports = { applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS };

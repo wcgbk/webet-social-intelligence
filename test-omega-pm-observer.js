@@ -7,7 +7,7 @@ const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const pm = require(path.join(root, 'pm_observer'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.3-omega-vnext-espn-copy');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.4-omega-vnext-replay-asof');
 assert.ok(/pm.?observer|Kalshi\/Polymarket OBSERVER/i.test(config.MODEL_NOTES));
 assert.ok(config.MODEL_NOTES.includes('NEVER') || /never mixes|NEVER mixes/i.test(config.MODEL_NOTES));
 

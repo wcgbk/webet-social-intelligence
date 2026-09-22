@@ -224,7 +224,17 @@ async function generateOmegaVnext(opts = {}) {
   const placeableAnnotated = candidates.filter(c => Array.isArray(c.placeableBooks)).length;
   console.log(`[omega-vnext] placeability annotated=${placeableAnnotated}/${candidates.length}`);
 
-  const { yesPool, rejected } = applyGates(candidates, { cardDate: dateISO });
+  // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
+  // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
+  const gateOpts = { cardDate: dateISO };
+  if (replayLike) {
+    const asOfMs = Date.parse(opts.historicalSnapshot);
+    if (Number.isFinite(asOfMs)) gateOpts.asOfMs = asOfMs;
+  }
+  const { yesPool, rejected } = applyGates(candidates, gateOpts);
+  if (gateOpts.asOfMs != null) {
+    console.log(`[omega-vnext] pregame asOf=${new Date(gateOpts.asOfMs).toISOString()}`);
+  }
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
   console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
 

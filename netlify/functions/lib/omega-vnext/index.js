@@ -108,6 +108,7 @@ async function generateOmegaVnext(opts = {}) {
   const force = !!opts.force;
   const simMode = !!opts.simMode;
   const dryRun = !!opts.dryRun;
+  const skipNarrate = !!opts.skipNarrate;
   const now = new Date();
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode}`);
@@ -176,25 +177,29 @@ async function generateOmegaVnext(opts = {}) {
   const poolForParlay = qa.yesPoolRemaining || yesPool;
   let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
 
-  const narr = await narrateAndVerify({
-    picks,
-    parlayLegs,
-    dateFormatted,
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
-  picks = narr.picks;
-  parlayLegs = narr.parlayLegs || parlayLegs;
-  if (narr.rejections && narr.rejections.length) {
-    const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
-    const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
-    parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
-    // Re-narrate new parlay legs after veto-driven re-optimize
-    parlayLegs = await narrateParlayLegsOnly({
+  let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
+  if (!skipNarrate) {
+    narr = await narrateAndVerify({
+      picks,
       parlayLegs,
       dateFormatted,
       apiKey: process.env.ANTHROPIC_API_KEY,
-      straightPicks: picks,
     });
+    picks = narr.picks;
+    parlayLegs = narr.parlayLegs || parlayLegs;
+    if (narr.rejections && narr.rejections.length) {
+      const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
+      const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
+      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
+      parlayLegs = await narrateParlayLegsOnly({
+        parlayLegs,
+        dateFormatted,
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        straightPicks: picks,
+      });
+    }
+  } else {
+    console.log('[omega-vnext] skipNarrate=true (replay/eval path)');
   }
 
   picks = attachClvFields(picks, MODEL_VERSION, dateISO);

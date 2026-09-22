@@ -866,3 +866,16 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+[functions."monitor-tsp-public-records"]
+  schedule = "0 15 * * *"
+  # Daily TSP public-records observer digest — 11:00am ET (15:00 UTC in EDT).
+  # Writes tsp-research digests/{date} only. NEVER edge-picks-omega.
+  # tsp.live member scrape remains ON HOLD (fetch-tsp-live).
+  included_files = ["netlify/functions/lib/tsp-research/**"]
+
+[functions."fetch-tsp-public-records"]
+  # On-demand public Performance Terminal downloader (no schedule).
+  # OBSERVER ONLY → tsp-research snapshots/{date}.
+  included_files = ["netlify/functions/lib/tsp-research/**"]
+

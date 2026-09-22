@@ -9,7 +9,7 @@ const wf = require(path.join(root, 'walk_forward'));
 const store = require(path.join(root, 'store'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.2.2-omega-vnext-pm-observer');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.0-omega-vnext-game-day');
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 assert.strictEqual(wf.KPI_FLOOR, config.CLV_KPI_FLOOR);
 assert.strictEqual(wf.OBSERVER_ONLY, true);
@@ -32,7 +32,7 @@ const pick = {
   fair_sharp_p: 0.52,
   edgePct: '3.2%',
   units: '1.25u',
-  modelVersion: 'v12.2.2-omega-vnext-pm-observer',
+  modelVersion: 'v12.3.0-omega-vnext-game-day',
 };
 const clv = {
   pickId: 'abc123',
@@ -98,7 +98,7 @@ assert.strictEqual(early.reason, 'before-kpi-floor');
 assert.deepStrictEqual(early.samples, []);
 
 const card = {
-  model: 'v12.2.2-omega-vnext-pm-observer',
+  model: 'v12.3.0-omega-vnext-game-day',
   picks: [pick],
   parlayLegs: [{
     legs: [

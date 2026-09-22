@@ -89,4 +89,53 @@ async function storePicks(dateISO, picksData, { force = false, simMode = false }
   return true;
 }
 
-module.exports = { storePicks, readPicks };
+
+async function storeJson(key, data) {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore(BLOB_STORE);
+    await store.setJSON(key, data);
+    console.log(`[omega-vnext/store] wrote ${key}`);
+    return true;
+  } catch (sdkErr) {
+    console.error(`[omega-vnext/store] SDK setJSON ${key}: ${sdkErr.message} — REST`);
+  }
+  const resp = await blobFetch(key, { method: 'PUT', body: data });
+  if (!resp.ok) throw new Error(`blob PUT ${key} → ${resp.status}`);
+  console.log(`[omega-vnext/store] REST wrote ${key}`);
+  return true;
+}
+
+async function readJson(key) {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore(BLOB_STORE);
+    return await store.get(key, { type: 'json' });
+  } catch (_) {
+    try {
+      const resp = await blobFetch(key);
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  }
+}
+
+/** Observer-only PM sidecar. Keys: omega-pm-observer/{date} + alias pm-sidecar-{date}. */
+async function storePmObserver(dateISO, artifact) {
+  const primary = `omega-pm-observer/${dateISO}`;
+  const alias = `pm-sidecar-${dateISO}`;
+  await storeJson(primary, artifact);
+  try { await storeJson(alias, artifact); } catch (e) {
+    console.error(`[omega-vnext/store] pm alias ${alias}: ${e.message}`);
+  }
+  return primary;
+}
+
+async function readPmObserver(dateISO) {
+  return (await readJson(`omega-pm-observer/${dateISO}`))
+    || (await readJson(`pm-sidecar-${dateISO}`));
+}
+
+module.exports = { storePicks, readPicks, storeJson, readJson, storePmObserver, readPmObserver };

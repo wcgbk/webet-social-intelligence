@@ -192,6 +192,15 @@
   # Alpha capture-opening-lines (edge-picks) left unchanged.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
+
+[functions."capture-omega-pm-observer"]
+  schedule = "15 14 * * *"
+  # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after 9:30 generate.
+  # OBSERVER ONLY: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
+  # Never mutates live card / selection / grades / units. Soft-fail if PM APIs down.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+
 [functions."capture-opening-lines"]
   schedule = "0 10 * * *"
   # 10:00 UTC = 6am EDT. Capture early morning lines before US sharp action.

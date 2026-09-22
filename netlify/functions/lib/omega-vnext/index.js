@@ -12,7 +12,8 @@ const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
-const { storePicks } = require('./store');
+const { storePicks, storePmObserver } = require('./store');
+const { runPmObserver } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves } = require('./line_path');
 
 const mlb = require('./sports/mlb');
@@ -286,6 +287,38 @@ async function generateOmegaVnext(opts = {}) {
   if (!dryRun) {
     await storePicks(dateISO, picksData, { force, simMode });
   }
+
+  // Prediction-market OBSERVER sidecar — non-blocking, never mutates picks.
+  // Runs after candidates/picks exist; API failures must not fail generate.
+  let pmObserver = null;
+  if (!dryRun && !simMode) {
+    try {
+      const pool = [
+        ...picks.map(p => ({
+          sport: p.sport, homeTeam: p.homeTeam, awayTeam: p.awayTeam,
+          side: p.pick || p.side, market: p.betType || p.market || 'Moneyline',
+          matchup: p.matchup, rating: p.rating, units: p.units,
+          edgePct: p.edgePct, ev: p.ev, coverProb: p.coverProb,
+        })),
+        ...yesPool.slice(0, 25).map(c => ({
+          sport: c.sport, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
+          side: c.side, market: c.market, matchup: c.matchup,
+          rating: null, units: null, edgePct: c.edgePct, ev: c.ev, coverProb: c.coverProb,
+        })),
+      ];
+      pmObserver = await runPmObserver({
+        dateISO, candidates: pool, picks: picks.map(p => ({ ...p })),
+        modelVersion: MODEL_VERSION,
+      });
+      await storePmObserver(dateISO, pmObserver);
+      console.log(`[omega-vnext] pm-observer mapped=${pmObserver.mappedCount} poly=${pmObserver.sources.polymarket.ok} kalshi=${pmObserver.sources.kalshi.ok}`);
+    } catch (e) {
+      console.error(`[omega-vnext] pm-observer soft-fail: ${e.message}`);
+      pmObserver = { observer: 'omega-pm-observer', date: dateISO, error: e.message, mappedCount: 0, notes: [] };
+    }
+  }
+
+  if (pmObserver) picksData.pmObserver = { mappedCount: pmObserver.mappedCount, key: `omega-pm-observer/${dateISO}` };
 
   console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length} hardFails=${hardFails.length}`);
   return picksData;

@@ -1,29 +1,52 @@
 # Omega noon-90 queue
 
-PR A (`feat/omega-v12.2-sport-engines`) is the deep sport-engine pass: NFL/CFB EPA-style priors and MLB starter + park factors inside omega-vnext only. Today's live card was not regenerated.
+Shipped today (2026-09-22 ET) toward ~90th-percentile Omega architecture. **Today's live 2026-09-22 Omega card was NOT force-regenerated.** Alpha live steering untouched. No Discord. No Alpha pollution into Omega selection.
 
-PR B (`feat/omega-v12.2-placeability`, v12.2.1) is shipping: generate-time placeability soft-veto. The published price must be within juice ballpark (≤3pp implied worse OR ≤15 American cents worse) at ≥2 US retail books from `US_BOOK_PRIORITY` (`PLACEABILITY.minMajorBooks`). Reject reason `placeability-soft-veto`, distinct from `insufficient-liquidity` (that gate still counts Pinnacle). Verify drops a pick only when Hard Rock and majors coverage both fail; if the odds API is down, warn and leave the card. Empty card OK — no lean refill. Items 3–4 shipped (v12.2.2 PM observer + TSP public-records research); item 5 remains. The 2026-09-22 production card was not regenerated.
+## Done
 
-## 3. Kalshi / Polymarket observer sidecar — DONE (v12.2.2)
+### Sport engines + placeability + observers (prior today)
+- PR A sport engines EPA/SP/park (`feat/omega-v12.2-sport-engines`)
+- Placeability soft-veto v12.2.1 (`feat/omega-v12.2-placeability`)
+- Kalshi/Polymarket observer v12.2.2 (`#71`)
+- TSP public Performance Terminal research observer (`#72`) — **public CSVs ≠ decade member archive**; member `tsp.live` still **ON HOLD**
 
-Shipped in `feat/omega-v12.2.2-pm-observer` → MODEL_VERSION `v12.2.2-omega-vnext-pm-observer`.
-Read-only Kalshi + Polymarket moneyline observer. Maps only clean 1:1 game MLs. Artifacts: `omega-pm-observer/{date}` (+ `pm-sidecar-{date}`) in edge-picks-omega. Soft-fail hook after generate + scheduled `capture-omega-pm-observer` (10:15 ET). Never mutates rating/units/edge/ev. No orders. Today's 2026-09-22 live card was NOT regenerated.
+### A) Walk-forward calibration SCAFFOLD (`#74`)
+- `walk_forward.js` + `capture-omega-walkforward` (15:15 UTC / 11:15am ET EDT)
+- Blobs: `omega-walkforward/samples|reports|priors-offline` only
+- `FIT_ENABLED=false`; `getFitParams()` always null
+- Offline priors document Alpha/TSP as **priors only** — **not** an Omega empirical CLV percentile
+- Actual fit remains **Mon 11:00 ET ≥2026-09-29**
+- Tests prove generator does not read fit params
 
-## 4. TSP historical — DONE (scaffold + public fetch)
+### B) Historical replay harness (`#76`)
+- `replay.js` + CLI `scripts/replay-omega-cli.js` + `replay-omega-historical`
+- Eval store only: `omega-replay/{runId}/picks-{date}` — **never** live `picks-{date}`
+- Default dry-run; hard max 14 days; `skipNarrate` for eval
+- **Odds API quota caution:** ≈1 historical call × sports × days (~3/day with MLB+NFL+NCAAF)
 
-Shipped `feat/omega-tsp-public-records-observer`. Public Performance Terminal Lambda CSVs → isolated `tsp-research` blob (`snapshots/{date}`, `digests/{date}`, `manual/`). On-demand `fetch-tsp-public-records` + daily `monitor-tsp-public-records` (11:00 ET). `TSP_FETCH_ON_HOLD=true` unchanged — no `tsp.live` member scrape. Never writes edge-picks-omega; never copies TSP picks into Omega; never trains to mimic Hermes. Docs: `docs/TSP-RESEARCH-OBSERVER.md`. Live 2026-09-22 Omega card untouched.
+### C) Deeper game-day engines (`#75`) → **MODEL_VERSION `v12.3.0-omega-vnext-game-day`**
+- NFL/CFB: prior-day rest/B2B HFA tweaks + soft ESPN QB status on EPA seeds
+- MLB: weather total adj on SP/park stacks
+- Soft fallbacks if feeds fail; empty card OK; no lean force-fill
 
-## 5. Walk-forward — scaffold only
+## What runs tomorrow vs scaffold-only
 
-A later PR may add the walk-forward scaffold. No coefficient fit in the engines change. The actual fit is Monday 11:00 ET on or after 2026-09-29. Do not refit or mutate the self-opt loop before that.
+| Path | Tomorrow |
+|------|----------|
+| Generate (9:30 ET etc.) | **Runs** v12.3.0 game-day engines (rest/QB/weather when feeds OK) |
+| Shrink / isotonic / gates | **Unchanged** static `SHRINK_K` — walk-forward does **not** steer |
+| Walk-forward capture | **Runs** observer writes samples/reports; **no fit** |
+| Historical replay | **On-demand only** (dry-run default); not on generate cron |
+| PM / TSP observers | Unchanged schedules; TSP member live still ON HOLD |
 
 ## Remaining toward ~90th
 
-- Walk-forward scaffold (item 5)
-- Historical Omega replay
-- Deeper engines beyond seeds (EPA/SP seeds → live multi-day feeds)
-- (TSP member live feed still ON HOLD pending permission)
+- Walk-forward **fit** (Mon 11am ET ≥2026-09-29) — not before
+- Replay close-join → real CLV/ROI metrics (placeholders today)
+- Stronger multi-day EPA live feeds beyond seeds + prior-day rest
+- Member `tsp.live` still **ON HOLD** pending permission
+- Public TSP feeds ≠ full decade member archive (honesty unchanged)
 
 ## Live card
 
-The 2026-09-22 production Omega card was left alone: no force generate, no verify, no Discord, no self-opt mutation.
+The **2026-09-22** production Omega card was left alone: no force generate, no verify overwrite, no Discord, no self-opt mutation.

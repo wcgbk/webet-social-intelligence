@@ -1,26 +1,28 @@
 'use strict';
 /**
- * NCAAF/CFB v1 — normal-spread σ≈16 + HFA. Higher uncertainty than NFL.
+ * NCAAF/CFB — EPA-style prior when both teams match (cfb-epa-v1*),
+ * else standings power + HFA (cfb-normal-*). Higher uncertainty than NFL.
+ * Market blend unchanged; calibrate shrink runs later.
  */
-const { HFA } = require('../config');
 const {
-  formatMatchup, fuzzyTeam, powerFromStandings,
+  formatMatchup,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
+const { footballProjection } = require('./epa');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'NCAAF';
 
-function projectGame(event, standings) {
+function projectGame(event, standings, efficiency) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const hPow = powerFromStandings(fuzzyTeam(home, standings));
-  const aPow = powerFromStandings(fuzzyTeam(away, standings));
-  const modelMargin = (hPow - aPow) + HFA.NCAAF;
-  const modelTotal = 52 + Math.abs(hPow + aPow) * 0.04;
-  const uncertainty = 0.22;
+  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency });
+  const modelMargin = env.modelMargin;
+  const modelTotal = env.modelTotal;
+  const uncertainty = env.uncertainty;
+  const methods = env.methods;
   const out = [];
 
   {
@@ -31,7 +33,7 @@ function projectGame(event, standings) {
       p = blendWithMarket(p, americanToImplied((b.prices.find(x => x.book === 'pinnacle') || b.prices[0] || {}).american), 0.45);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: 'cfb-normal-ml', uncertainty,
+        market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
@@ -47,7 +49,7 @@ function projectGame(event, standings) {
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: 'cfb-normal-spread', uncertainty,
+        market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
@@ -62,7 +64,7 @@ function projectGame(event, standings) {
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
-        projMethod: 'cfb-total-baseline', uncertainty: uncertainty + 0.05,
+        projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
@@ -71,9 +73,9 @@ function projectGame(event, standings) {
   return out;
 }
 
-function project({ oddsEvents, standings }) {
+function project({ oddsEvents, standings, efficiency } = {}) {
   const all = [];
-  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}));
+  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}, efficiency || {}));
   return all;
 }
 

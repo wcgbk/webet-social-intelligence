@@ -1,0 +1,201 @@
+{
+  "_meta": {
+    "units": "epa_per_play",
+    "defEpa": "higher is better (EPA prevented per play, not EPA allowed)",
+    "offSuccess": "offensive success rate",
+    "defSuccess": "defensive success rate (higher = more stops)",
+    "note": "v1 cached NFL prior. Not a live EPA scrape. Opponent blend is applied in code when standings are clean."
+  },
+  "Arizona Cardinals": {
+    "offEpa": 0.02,
+    "defEpa": -0.04,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Atlanta Falcons": {
+    "offEpa": 0.03,
+    "defEpa": -0.02,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Baltimore Ravens": {
+    "offEpa": 0.13,
+    "defEpa": 0.05,
+    "offSuccess": 0.48,
+    "defSuccess": 0.45
+  },
+  "Buffalo Bills": {
+    "offEpa": 0.12,
+    "defEpa": 0.02,
+    "offSuccess": 0.47,
+    "defSuccess": 0.44
+  },
+  "Carolina Panthers": {
+    "offEpa": -0.1,
+    "defEpa": -0.08,
+    "offSuccess": 0.4,
+    "defSuccess": 0.4
+  },
+  "Chicago Bears": {
+    "offEpa": -0.03,
+    "defEpa": -0.01,
+    "offSuccess": 0.42,
+    "defSuccess": 0.43
+  },
+  "Cincinnati Bengals": {
+    "offEpa": 0.09,
+    "defEpa": -0.03,
+    "offSuccess": 0.46,
+    "defSuccess": 0.42
+  },
+  "Cleveland Browns": {
+    "offEpa": -0.06,
+    "defEpa": -0.02,
+    "offSuccess": 0.41,
+    "defSuccess": 0.42
+  },
+  "Dallas Cowboys": {
+    "offEpa": 0.0,
+    "defEpa": -0.06,
+    "offSuccess": 0.43,
+    "defSuccess": 0.41
+  },
+  "Denver Broncos": {
+    "offEpa": -0.02,
+    "defEpa": 0.08,
+    "offSuccess": 0.42,
+    "defSuccess": 0.46
+  },
+  "Detroit Lions": {
+    "offEpa": 0.15,
+    "defEpa": -0.02,
+    "offSuccess": 0.48,
+    "defSuccess": 0.42
+  },
+  "Green Bay Packers": {
+    "offEpa": 0.08,
+    "defEpa": 0.01,
+    "offSuccess": 0.46,
+    "defSuccess": 0.43
+  },
+  "Houston Texans": {
+    "offEpa": 0.05,
+    "defEpa": 0.03,
+    "offSuccess": 0.45,
+    "defSuccess": 0.44
+  },
+  "Indianapolis Colts": {
+    "offEpa": 0.0,
+    "defEpa": -0.03,
+    "offSuccess": 0.43,
+    "defSuccess": 0.42
+  },
+  "Jacksonville Jaguars": {
+    "offEpa": -0.04,
+    "defEpa": -0.05,
+    "offSuccess": 0.42,
+    "defSuccess": 0.41
+  },
+  "Kansas City Chiefs": {
+    "offEpa": 0.04,
+    "defEpa": 0.06,
+    "offSuccess": 0.44,
+    "defSuccess": 0.45
+  },
+  "Las Vegas Raiders": {
+    "offEpa": -0.05,
+    "defEpa": -0.04,
+    "offSuccess": 0.41,
+    "defSuccess": 0.42
+  },
+  "Los Angeles Chargers": {
+    "offEpa": 0.02,
+    "defEpa": 0.06,
+    "offSuccess": 0.44,
+    "defSuccess": 0.45
+  },
+  "Los Angeles Rams": {
+    "offEpa": 0.06,
+    "defEpa": -0.04,
+    "offSuccess": 0.45,
+    "defSuccess": 0.42
+  },
+  "Miami Dolphins": {
+    "offEpa": 0.04,
+    "defEpa": -0.05,
+    "offSuccess": 0.44,
+    "defSuccess": 0.41
+  },
+  "Minnesota Vikings": {
+    "offEpa": 0.06,
+    "defEpa": 0.07,
+    "offSuccess": 0.45,
+    "defSuccess": 0.45
+  },
+  "New England Patriots": {
+    "offEpa": -0.08,
+    "defEpa": -0.03,
+    "offSuccess": 0.4,
+    "defSuccess": 0.42
+  },
+  "New Orleans Saints": {
+    "offEpa": -0.02,
+    "defEpa": -0.02,
+    "offSuccess": 0.42,
+    "defSuccess": 0.42
+  },
+  "New York Giants": {
+    "offEpa": -0.09,
+    "defEpa": -0.07,
+    "offSuccess": 0.4,
+    "defSuccess": 0.41
+  },
+  "New York Jets": {
+    "offEpa": -0.06,
+    "defEpa": 0.01,
+    "offSuccess": 0.41,
+    "defSuccess": 0.43
+  },
+  "Philadelphia Eagles": {
+    "offEpa": 0.1,
+    "defEpa": 0.08,
+    "offSuccess": 0.46,
+    "defSuccess": 0.46
+  },
+  "Pittsburgh Steelers": {
+    "offEpa": -0.01,
+    "defEpa": 0.05,
+    "offSuccess": 0.43,
+    "defSuccess": 0.45
+  },
+  "San Francisco 49ers": {
+    "offEpa": 0.03,
+    "defEpa": 0.04,
+    "offSuccess": 0.44,
+    "defSuccess": 0.44
+  },
+  "Seattle Seahawks": {
+    "offEpa": 0.01,
+    "defEpa": 0.0,
+    "offSuccess": 0.43,
+    "defSuccess": 0.43
+  },
+  "Tampa Bay Buccaneers": {
+    "offEpa": 0.07,
+    "defEpa": -0.01,
+    "offSuccess": 0.45,
+    "defSuccess": 0.43
+  },
+  "Tennessee Titans": {
+    "offEpa": -0.07,
+    "defEpa": -0.06,
+    "offSuccess": 0.41,
+    "defSuccess": 0.41
+  },
+  "Washington Commanders": {
+    "offEpa": 0.11,
+    "defEpa": -0.06,
+    "offSuccess": 0.47,
+    "defSuccess": 0.41
+  }
+}

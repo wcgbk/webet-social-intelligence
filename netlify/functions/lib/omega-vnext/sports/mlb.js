@@ -1,35 +1,63 @@
 'use strict';
 /**
- * MLB v1 projection — Pythag/Elo-lite + HFA. NOT legacy FIP/ensemble spaghetti.
- * Limitations: no pitcher FIP/weather park factors in v1; market-anchored blend.
+ * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
+ * projMethod mlb-sp-park-v1-* when a starter rate or park factor is used;
+ * otherwise mlb-pythag-lite+hfa / mlb-normal-rl / mlb-total-baseline.
+ * Market blend unchanged. assumedStarter stays tagged for QA hard-fail.
  */
 const { HFA } = require('../config');
 const {
   formatMatchup, fuzzyTeam, powerFromStandings,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
+const { resolvePark, resolveSpQuality, applySpPark } = require('./mlb_env');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'MLB';
 
-function projectGame(event, standings, espnGame) {
+function projectGame(event, standings, espnGame, ctx) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
   const hPow = powerFromStandings(fuzzyTeam(home, standings));
   const aPow = powerFromStandings(fuzzyTeam(away, standings));
-  // runs-ish differential
-  const modelMargin = (hPow - aPow) * 0.35 + HFA.MLB;
-  const modelTotal = 8.6 + Math.abs(hPow + aPow) * 0.02; // league-ish
+  const baseMargin = (hPow - aPow) * 0.35 + HFA.MLB;
+  const baseTotal = 8.6 + Math.abs(hPow + aPow) * 0.02;
 
   const out = [];
   let uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.18 : 0.28;
-  // Starter presence from ESPN (when already fetched) — modest confidence bump, no FIP rewrite
   const homeSp = espnGame && espnGame.homeProbable;
   const awaySp = espnGame && espnGame.awayProbable;
   if (homeSp && awaySp) uncertainty = Math.max(0.12, uncertainty - 0.04);
   else if (homeSp || awaySp) uncertainty = Math.max(0.14, uncertainty - 0.02);
+
+  const bag = ctx || {};
+  const park = resolvePark(home, bag.parkFactors, espnGame);
+  const homeQ = resolveSpQuality(homeSp, bag.mlbPitcherStats, home);
+  const awayQ = resolveSpQuality(awaySp, bag.mlbPitcherStats, away);
+  const adj = applySpPark({
+    modelMargin: baseMargin,
+    modelTotal: baseTotal,
+    homeQ,
+    awayQ,
+    parkFactor: park ? park.factor : null,
+  });
+  const modelMargin = adj.modelMargin;
+  const modelTotal = adj.modelTotal;
+  const methods = (adj.usedSp || adj.usedPark)
+    ? {
+      ml: 'mlb-sp-park-v1-ml',
+      spread: 'mlb-sp-park-v1-spread',
+      total: 'mlb-sp-park-v1-total',
+      family: 'mlb-sp-park-v1',
+    }
+    : {
+      ml: 'mlb-pythag-lite+hfa',
+      spread: 'mlb-normal-rl',
+      total: 'mlb-total-baseline',
+      family: null,
+    };
 
   // Moneyline
   {
@@ -38,14 +66,14 @@ function projectGame(event, standings, espnGame) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
       const mktImp = americanToImplied(
-        (b.prices.find(p => p.book === 'pinnacle') || b.prices[0] || {}).american
+        (b.prices.find(px => px.book === 'pinnacle') || b.prices[0] || {}).american
       );
       p = blendWithMarket(p, mktImp, 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
-        modelRawP: p, projMethod: 'mlb-pythag-lite+hfa', uncertainty,
+        modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +(modelMargin).toFixed(2),
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
@@ -60,12 +88,7 @@ function projectGame(event, standings, espnGame) {
       const isHome = b.side === home;
       const line = b.point;
       if (line == null) continue;
-      // Convert to home-line perspective for cover formula
-      const marketLineHome = isHome ? line : -line;
-      let pCover = spreadCoverProb(modelMargin, marketLineHome, SPORT);
-      if (!isHome) pCover = 1 - spreadCoverProb(modelMargin, -marketLineHome, SPORT);
-      // simpler: if picking this side's line
-      pCover = spreadCoverProb(
+      let pCover = spreadCoverProb(
         isHome ? modelMargin : -modelMargin,
         line,
         SPORT
@@ -77,7 +100,7 @@ function projectGame(event, standings, espnGame) {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
-        modelRawP: pCover, projMethod: 'mlb-normal-rl', uncertainty,
+        modelRawP: pCover, projMethod: methods.spread, uncertainty,
         consensusLine: line, modelProjection: +(modelMargin).toFixed(2),
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
@@ -99,7 +122,7 @@ function projectGame(event, standings, espnGame) {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: sideLabel, line,
-        modelRawP: p, projMethod: 'mlb-total-baseline', uncertainty: uncertainty + 0.05,
+        modelRawP: p, projMethod: methods.total, uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
@@ -122,12 +145,16 @@ function findEspnGame(ev, espnGames) {
   }) || null;
 }
 
-function project({ oddsEvents, standings, espnGames }) {
+function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactors } = {}) {
   const all = [];
   const games = (espnGames && espnGames.games) || espnGames || [];
+  const ctx = {
+    mlbPitcherStats: mlbPitcherStats || {},
+    parkFactors: parkFactors || {},
+  };
   for (const ev of oddsEvents || []) {
     const eg = findEspnGame(ev, games);
-    const cands = projectGame(ev, standings || {}, eg);
+    const cands = projectGame(ev, standings || {}, eg, ctx);
     if (eg && (eg.homeProbable || eg.awayProbable)) {
       for (const c of cands) {
         if (/moneyline|spread/i.test(c.market || '')) {

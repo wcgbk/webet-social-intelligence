@@ -1,0 +1,199 @@
+{
+  "_meta": {
+    "units": "run_environment_multiplier",
+    "neutral": 1.0,
+    "note": "v1 static park factors. Coors is intentionally elevated. Keyed by home team; abbr is a fallback."
+  },
+  "Arizona Diamondbacks": {
+    "park": 1.02,
+    "abbr": "ARI",
+    "venue": "Chase Field",
+    "team": "Arizona Diamondbacks"
+  },
+  "Atlanta Braves": {
+    "park": 1.0,
+    "abbr": "ATL",
+    "venue": "Truist Park",
+    "team": "Atlanta Braves"
+  },
+  "Baltimore Orioles": {
+    "park": 1.01,
+    "abbr": "BAL",
+    "venue": "Camden Yards",
+    "team": "Baltimore Orioles"
+  },
+  "Boston Red Sox": {
+    "park": 1.06,
+    "abbr": "BOS",
+    "venue": "Fenway Park",
+    "team": "Boston Red Sox"
+  },
+  "Chicago Cubs": {
+    "park": 1.02,
+    "abbr": "CHC",
+    "venue": "Wrigley Field",
+    "team": "Chicago Cubs"
+  },
+  "Chicago White Sox": {
+    "park": 1.03,
+    "abbr": "CWS",
+    "venue": "Rate Field",
+    "team": "Chicago White Sox"
+  },
+  "Cincinnati Reds": {
+    "park": 1.1,
+    "abbr": "CIN",
+    "venue": "Great American Ball Park",
+    "team": "Cincinnati Reds"
+  },
+  "Cleveland Guardians": {
+    "park": 0.98,
+    "abbr": "CLE",
+    "venue": "Progressive Field",
+    "team": "Cleveland Guardians"
+  },
+  "Colorado Rockies": {
+    "park": 1.21,
+    "abbr": "COL",
+    "venue": "Coors Field",
+    "team": "Colorado Rockies"
+  },
+  "Detroit Tigers": {
+    "park": 0.97,
+    "abbr": "DET",
+    "venue": "Comerica Park",
+    "team": "Detroit Tigers"
+  },
+  "Houston Astros": {
+    "park": 1.02,
+    "abbr": "HOU",
+    "venue": "Daikin Park",
+    "team": "Houston Astros"
+  },
+  "Kansas City Royals": {
+    "park": 1.0,
+    "abbr": "KC",
+    "venue": "Kauffman Stadium",
+    "team": "Kansas City Royals"
+  },
+  "Los Angeles Angels": {
+    "park": 0.98,
+    "abbr": "LAA",
+    "venue": "Angel Stadium",
+    "team": "Los Angeles Angels"
+  },
+  "Los Angeles Dodgers": {
+    "park": 0.96,
+    "abbr": "LAD",
+    "venue": "Dodger Stadium",
+    "team": "Los Angeles Dodgers"
+  },
+  "Miami Marlins": {
+    "park": 0.93,
+    "abbr": "MIA",
+    "venue": "loanDepot park",
+    "team": "Miami Marlins"
+  },
+  "Milwaukee Brewers": {
+    "park": 1.01,
+    "abbr": "MIL",
+    "venue": "American Family Field",
+    "team": "Milwaukee Brewers"
+  },
+  "Minnesota Twins": {
+    "park": 1.0,
+    "abbr": "MIN",
+    "venue": "Target Field",
+    "team": "Minnesota Twins"
+  },
+  "New York Mets": {
+    "park": 0.96,
+    "abbr": "NYM",
+    "venue": "Citi Field",
+    "team": "New York Mets"
+  },
+  "New York Yankees": {
+    "park": 1.04,
+    "abbr": "NYY",
+    "venue": "Yankee Stadium",
+    "team": "New York Yankees"
+  },
+  "Athletics": {
+    "park": 0.97,
+    "abbr": "ATH",
+    "venue": "Sutter Health Park",
+    "team": "Athletics"
+  },
+  "Philadelphia Phillies": {
+    "park": 1.04,
+    "abbr": "PHI",
+    "venue": "Citizens Bank Park",
+    "team": "Philadelphia Phillies"
+  },
+  "Pittsburgh Pirates": {
+    "park": 0.95,
+    "abbr": "PIT",
+    "venue": "PNC Park",
+    "team": "Pittsburgh Pirates"
+  },
+  "San Diego Padres": {
+    "park": 0.93,
+    "abbr": "SD",
+    "venue": "Petco Park",
+    "team": "San Diego Padres"
+  },
+  "San Francisco Giants": {
+    "park": 0.92,
+    "abbr": "SF",
+    "venue": "Oracle Park",
+    "team": "San Francisco Giants"
+  },
+  "Seattle Mariners": {
+    "park": 0.94,
+    "abbr": "SEA",
+    "venue": "T-Mobile Park",
+    "team": "Seattle Mariners"
+  },
+  "St. Louis Cardinals": {
+    "park": 0.98,
+    "abbr": "STL",
+    "venue": "Busch Stadium",
+    "team": "St. Louis Cardinals"
+  },
+  "Tampa Bay Rays": {
+    "park": 0.96,
+    "abbr": "TB",
+    "venue": "Tropicana Field",
+    "team": "Tampa Bay Rays"
+  },
+  "Texas Rangers": {
+    "park": 1.06,
+    "abbr": "TEX",
+    "venue": "Globe Life Field",
+    "team": "Texas Rangers"
+  },
+  "Toronto Blue Jays": {
+    "park": 1.01,
+    "abbr": "TOR",
+    "venue": "Rogers Centre",
+    "team": "Toronto Blue Jays"
+  },
+  "Washington Nationals": {
+    "park": 1.01,
+    "abbr": "WSH",
+    "venue": "Nationals Park",
+    "team": "Washington Nationals"
+  },
+  "Oakland Athletics": {
+    "park": 0.97,
+    "abbr": "OAK",
+    "venue": "Sutter Health Park",
+    "team": "Oakland Athletics"
+  },
+  "Sacramento Athletics": {
+    "park": 0.97,
+    "abbr": "SAC",
+    "venue": "Sutter Health Park",
+    "team": "Sacramento Athletics"
+  }
+}

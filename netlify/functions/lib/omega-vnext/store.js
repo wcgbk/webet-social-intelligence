@@ -138,7 +138,6 @@ async function readPmObserver(dateISO) {
     || (await readJson(`pm-sidecar-${dateISO}`));
 }
 
-
 /** Walk-forward observer keys only — never live picks / fit blobs. */
 const { WALKFORWARD_KEY_RE, LIVE_KEY_RE, assertWalkforwardKey: assertWfKey } = (() => {
   try { return require('./walk_forward'); }
@@ -201,9 +200,48 @@ async function storeWalkforwardPriorsOffline(priors) {
   return key;
 }
 
+/** Historical replay eval store — NEVER live picks-{date} / latest-date. */
+const REPLAY_KEY_RE = /^omega-replay\/[A-Za-z0-9._-]+\/(?:picks-\d{4}-\d{2}-\d{2}|summary|meta)$/;
+
+function assertReplayKey(key) {
+  const k = String(key || '');
+  if (/^(?:picks-\d{4}-\d{2}-\d{2}|latest-date|picks-dates|picks-sim-)/.test(k)) {
+    throw new Error(`omega-replay refused live key: ${k}`);
+  }
+  if (!REPLAY_KEY_RE.test(k)) {
+    throw new Error(`omega-replay refused key: ${k}`);
+  }
+  return k;
+}
+
+async function storeReplayCard(runId, dateISO, picksData) {
+  const safeRun = String(runId || '').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64);
+  if (!safeRun) throw new Error('omega-replay refused empty runId');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO || ''))) {
+    throw new Error(`omega-replay refused bad date: ${dateISO}`);
+  }
+  const key = assertReplayKey(`omega-replay/${safeRun}/picks-${dateISO}`);
+  const payload = {
+    ...(picksData || {}),
+    replay: true,
+    evalStore: true,
+    runId: safeRun,
+    isolation: { neverWrites: ['picks-{date}', 'latest-date', 'picks-dates'] },
+  };
+  await storeJson(key, payload);
+  return key;
+}
+
+async function storeReplaySummary(runId, summary) {
+  const safeRun = String(runId || '').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64);
+  const key = assertReplayKey(`omega-replay/${safeRun}/summary`);
+  await storeJson(key, summary);
+  return key;
+}
+
 module.exports = {
   storePicks, readPicks, storeJson, readJson, storePmObserver, readPmObserver,
   WALKFORWARD_KEY_RE, assertWalkforwardKey,
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
+  REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
 };
-

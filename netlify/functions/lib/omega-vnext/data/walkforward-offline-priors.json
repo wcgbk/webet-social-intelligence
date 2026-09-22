@@ -1,0 +1,29 @@
+{
+  "role": "OFFLINE PRIORS ONLY",
+  "appliedToCalibrate": false,
+  "coefficients": null,
+  "fitEnabled": false,
+  "doNotApply": true,
+  "sources": [
+    {
+      "id": "alpha-public-blobs",
+      "store": "edge-picks",
+      "kind": "alpha-clv-and-picks",
+      "status": "OFFLINE_PRIOR_ONLY",
+      "note": "Alpha public pick and CLV blobs are a different model (MLB control, v10.x). They are not Omega lock-to-close grades and are not an Omega empirical CLV percentile. Do not steer Omega shrink, isotonic bands, or gates from Alpha."
+    },
+    {
+      "id": "tsp-public-performance-terminal",
+      "store": "tsp-research",
+      "kind": "public-wager-log-csv",
+      "status": "OFFLINE_PRIOR_ONLY",
+      "note": "Public TSP Performance Terminal CSVs are not a decade of member-archive closes. Member tsp.live remains ON HOLD. Do not train Omega to mimic Hermes and do not copy TSP picks onto the Omega card. Public TSP records are not an Omega empirical CLV percentile."
+    }
+  ],
+  "honesty": [
+    "Scaffold only. No shrink, isotonic, or gate coefficients are fit from these priors.",
+    "Do not claim an Omega empirical CLV percentile from Alpha or from TSP.",
+    "Actual Omega walk-forward fit is Monday 11:00 America/New_York on or after 2026-09-29, using Omega lock-to-close samples on or after CLV_KPI_FLOOR (2026-09-22) only.",
+    "The 2026-09-22 close set is too sparse to steer. calibrate.js must not read this file."
+  ]
+}

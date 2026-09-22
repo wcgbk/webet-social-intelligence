@@ -1,6 +1,7 @@
 'use strict';
 /** Omega v12.1 open→pick line-move — pure unit tests (no network). */
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
@@ -10,7 +11,11 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.0-omega-vnext-game-day');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.1-omega-vnext-pregen');
+assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
+assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
+assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
+assert.ok(/9:15 ET line snap/.test(config.MODEL_NOTES));
 assert.ok(Array.isArray(config.US_BOOK_PRIORITY));
 assert.ok(config.US_BOOK_PRIORITY[0] === 'draftkings');
 assert.ok(config.LINE_MOVE.rejectSteamAgainstCents === 18);
@@ -265,6 +270,79 @@ const { earliest, latest } = linePath.earliestAndLatestPolls({
 });
 assert.strictEqual(earliest.hhmm, '0600');
 assert.strictEqual(latest.hhmm, '0900');
+
+const emptyHealth = linePath.assessCaptureHealth('2026-09-22', { path: { polls: [] } }, {
+  retriedCapture: true,
+  retryOk: false,
+});
+assert.strictEqual(emptyHealth.hardFail, true);
+assert.strictEqual(emptyHealth.ok, false);
+assert.strictEqual(emptyHealth.usableSnapCount, 0);
+assert.ok(emptyHealth.missingSlotsET.includes('0915'));
+assert.strictEqual(emptyHealth.reason, 'CAPTURE_HEALTH: zero usable morning line snaps for 2026-09-22 after retry');
+
+const partialHealth = linePath.assessCaptureHealth('2026-09-22', {
+  path: { polls: [
+    { hhmm: '0600', gameCount: 4, games: { a: { homeTeam: 'A' } } },
+    { hhmm: '0730', gameCount: 0, games: {} },
+  ] },
+});
+assert.strictEqual(partialHealth.hardFail, false);
+assert.strictEqual(partialHealth.ok, false);
+assert.strictEqual(partialHealth.usableSnapCount, 1);
+assert.deepStrictEqual(partialHealth.presentSlotsET, ['0600']);
+assert.ok(partialHealth.missingSlotsET.includes('0915'));
+assert.ok(partialHealth.warning);
+assert.strictEqual(partialHealth.reason, null);
+
+const fullHealth = linePath.assessCaptureHealth('2026-09-22', {
+  path: { polls: ['0600', '0730', '0900', '0915'].map((hhmm) => ({
+    hhmm, gameCount: 2, games: { a: 1, b: 1 },
+  })) },
+});
+assert.strictEqual(fullHealth.ok, true);
+assert.strictEqual(fullHealth.hardFail, false);
+assert.strictEqual(fullHealth.warning, null);
+assert.strictEqual(fullHealth.usableSnapCount, 4);
+assert.deepStrictEqual(fullHealth.missingSlotsET, []);
+// 13:05Z = 9:05am EDT. 0915 has not come due; 0600 has.
+assert.deepStrictEqual(
+  linePath.missingDueSlots(['0600', '0915'], new Date('2026-09-22T13:05:00Z')),
+  ['0600']
+);
+assert.deepStrictEqual(
+  linePath.missingDueSlots(['0915'], new Date('2026-09-22T13:30:00Z')),
+  ['0915']
+);
+
+const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
+assert.ok(/\[functions\."capture-omega-lines"\]\s*\n\s*schedule = "0,30 10,11 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-lines-late"\]\s*\n\s*schedule = "0,15 13 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13 \* \* \*"/.test(toml));
+const tspBlock = toml.split('[functions."fetch-tsp-live"]')[1].split('\n[functions.')[0];
+assert.ok(/^\s*schedule = "\*\/15 \* \* \* \*"/m.test(tspBlock));
+
+const captureSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/capture-omega-lines.js'), 'utf8');
+assert.ok(captureSrc.includes("'1315'"));
+assert.ok(/'1315': '0915'/.test(captureSrc));
+const lateSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/capture-omega-lines-late.js'), 'utf8');
+assert.ok(/capture-omega-lines/.test(lateSrc));
+
+for (const f of ['index.js', 'select.js', 'gates.js', 'ingest.js']) {
+  const src = fs.readFileSync(path.join(root, f), 'utf8');
+  assert.ok(!/fetch-tsp-live/.test(src), `${f} must not require fetch-tsp-live`);
+  assert.ok(!/['"]tsp-live['"]/.test(src), `${f} must not name the tsp-live store`);
+}
+const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
+assert.ok(/CAPTURE_HEALTH/.test(indexSrc));
+assert.ok(/storeShadowPicks/.test(indexSrc));
+assert.ok(!/storePmObserver\(dateISO/.test(indexSrc.slice(indexSrc.indexOf('if (!dryRun && shadow)'), indexSrc.indexOf('} else if (!dryRun && !simMode)'))));
+
+const bgSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/generate-picks-omega-background.js'), 'utf8');
+assert.ok(/CAPTURE_HEALTH/.test(bgSrc));
+assert.ok(/statusCode: 503/.test(bgSrc));
+assert.ok(/shadow/.test(bgSrc));
 
 console.log('PASS test-omega-linemove', {
   MODEL_VERSION: config.MODEL_VERSION,

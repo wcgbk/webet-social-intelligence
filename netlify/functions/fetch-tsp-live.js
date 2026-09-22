@@ -105,12 +105,12 @@ async function runFetch() {
   const fetchedAt = new Date().toISOString();
   const base = { fetchedAt, sourceUrl: SOURCE_URL, source: "TSP.Live — Hermes A.I. (private member feed)" };
 
-  // ── ON HOLD 2026-08-25 (Ben) — feed paused pending permission from The Sharp Plays.
-  // Hard stop BEFORE any network request so NOTHING hits tsp.live from any invocation path
-  // (cron is also disabled in netlify.toml). Re-enable: set this to false after TSP approves.
-  const TSP_FETCH_ON_HOLD = true;
+  // Hold lifted by WeBet 2026-09-22. Feed stays isolated (tsp-live blob → /live-ai).
+  // Omega generate does not read this store. Missing cookie soft-fails as NO_COOKIE below
+  // (no throw). Flip back to true only to hard-stop requests again.
+  const TSP_FETCH_ON_HOLD = false;
   if (TSP_FETCH_ON_HOLD) {
-    console.log("[tsp-live] ON HOLD — no request made (awaiting TSP permission).");
+    console.log("[tsp-live] ON HOLD — no request made.");
     return { ...base, status: "ON_HOLD", selections: [], count: 0 };
   }
 

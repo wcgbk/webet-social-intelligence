@@ -185,8 +185,7 @@ function qualityToRating(edgeFrac, predictedClv, uncertainty) {
   if (score >= QUALITY_GRADE.aplus) return 'aplus';
   if (score >= QUALITY_GRADE.a) return 'a';
   if (score >= QUALITY_GRADE.aminus) return 'aminus';
-  if (score >= QUALITY_GRADE.bplus) return 'bplus';
-  return 'b';
+  return 'b'; // <2.0% — B only (no B+ on quality path)
 }
 
 /** Resolve a persisted quality score, or calculate it from pick fields. */

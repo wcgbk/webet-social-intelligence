@@ -17,9 +17,14 @@ function matchupKey(c) {
 function scoreCandidate(c, selectedSports) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
-  const clv = (c.predictedClv || 0) / 100; // scale cents-ish to ~EV units
+  // Prefer residual CLV (open→now adjusted) when present; else predictedClv
+  const clvRaw = (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv) || 0;
+  const clv = clvRaw / 100; // scale cents-ish to ~EV units
   const unc = c.uncertainty != null ? c.uncertainty : 0.15;
   let s = w.w_ev * ev + w.w_clv * clv - w.w_uncertainty * unc;
+  if (typeof c._steamScoreAdj === 'number') s += c._steamScoreAdj;
+  // Extra bump when steam with pick AND still +EV
+  if (c.steamToward && ev > 0) s += (w.softSportMixBonus || 0.02);
   if (selectedSports && selectedSports.size && !selectedSports.has(c.sport)) {
     s += w.softSportMixBonus;
   }
@@ -112,6 +117,11 @@ function toPickObject(c, opts = {}) {
     line: c.line != null ? c.line : null,
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,
+    steamToward: !!c.steamToward,
+    steamAgainst: !!c.steamAgainst,
+    predictedResidualClv: c.predictedResidualClv != null ? c.predictedResidualClv : null,
+    openPrint: c.openPrint || null,
+    lineMove: c.lineMove || null,
   };
 }
 

@@ -20,6 +20,12 @@ function attachModelClvFields(rec, pick) {
   if (pick.book != null) rec.book = pick.book;
   if (pick.line != null) rec.line = pick.line;
   if (pick.lockSnapshot != null) rec.lockSnapshot = pick.lockSnapshot;
+  if (pick.openPrint != null) rec.openPrint = pick.openPrint;
+  else if (pick.lockSnapshot && pick.lockSnapshot.openPrint) rec.openPrint = pick.lockSnapshot.openPrint;
+  if (pick.predictedResidualClv != null) rec.predictedResidualClv = pick.predictedResidualClv;
+  if (pick.steamToward != null) rec.steamToward = !!pick.steamToward;
+  if (pick.steamAgainst != null) rec.steamAgainst = !!pick.steamAgainst;
+  if (pick.lineMove != null) rec.lineMove = pick.lineMove;
   if (pick.date != null) rec.date = pick.date;
   return attachRealizedAliases(rec);
 }

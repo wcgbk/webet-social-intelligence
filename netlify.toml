@@ -183,6 +183,15 @@
   # games get results written before the 8am/9am pick runs read bankroll/drawdown state).
   # 17:00 UTC = 1pm EDT (afternoon games). 23:00 UTC = 7pm EDT (evening games). Merges results.
 
+
+[functions."capture-omega-lines"]
+  schedule = "0,30 10,11,13 * * *"
+  # Omega-only US morning line-path (edge-picks-omega). EDT slots:
+  #   10:00 UTC = 6:00am ET, 11:30 UTC = 7:30am ET, 13:00 UTC = 9:00am ET
+  # Union cron also fires 10:30/11:00/13:30 — handler no-ops outside ±5min of allowed UTC slots.
+  # Alpha capture-opening-lines (edge-picks) left unchanged.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."capture-opening-lines"]
   schedule = "0 10 * * *"
   # 10:00 UTC = 6am EDT. Capture early morning lines before US sharp action.

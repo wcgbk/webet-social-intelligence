@@ -4,7 +4,7 @@ const { KELLY_FRACTION, PARLAY_FIXED_UNITS } = require('./config');
 const {
   americanToDecimal, formatAmerican, kellyFraction, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
-  isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating,
+  isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
 
@@ -136,7 +136,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     ? `+${Math.round((chosen.combinedDecimal - 1) * 100)}`
     : `${Math.round(-100 / (chosen.combinedDecimal - 1))}`;
 
-  const legs = chosen.legs.map(l => {
+  const legs = sortByGradeThenUnits(chosen.legs.map(l => {
     // Leg grade is edge-first quality, independent of the synthetic straight stake.
     const kFrac = kellyFraction(l.coverProb, l.odds, KELLY_FRACTION);
     const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25) || 0.25;
@@ -173,7 +173,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       uncertainty: l.uncertainty,
       modelVersion: l.modelVersion,
     };
-  });
+  }));
 
   return [{
     type: `${legs.length}-leg-parlay-${independent ? 'optimized' : 'straight'}`,

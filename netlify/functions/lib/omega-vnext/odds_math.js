@@ -1,5 +1,7 @@
 'use strict';
 
+const { QUALITY_GRADE } = require('./config');
+
 function americanToImplied(american) {
   const a = Number(american);
   if (!Number.isFinite(a) || a === 0) return null;
@@ -146,6 +148,60 @@ function formatMoneylinePick(side, market) {
   return `${s} ML`;
 }
 
+
+/** Parse edge as fraction — accepts 0.053, 5.3, or "5.3%". */
+function parseEdgeFraction(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  const n = parseFloat(String(v).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  return Math.abs(n) > 1 ? n / 100 : n;
+}
+
+/**
+ * Quality score: calibrated edge + small expected-CLV bonus − uncertainty.
+ * Does NOT use cover probability (hit rate ≠ quality).
+ */
+function qualityScore(edgeFrac, predictedClv, uncertainty) {
+  const edge = parseEdgeFraction(edgeFrac);
+  if (edge == null) return 0;
+
+  // Edge remains decisive. CLV is expressed in cents-ish units and can move the
+  // score by at most 0.15 percentage points; uncertainty is an even smaller nudge.
+  const clv = Number(predictedClv);
+  const clvBonus = Number.isFinite(clv) ? clamp(clv, -3, 3) * 0.0005 : 0;
+  const unc = Number(uncertainty);
+  const uncertaintyAdj = Number.isFinite(unc)
+    ? clamp((0.18 - unc) * 0.005, -0.001, 0.001)
+    : 0;
+  return edge + clvBonus + uncertaintyAdj;
+}
+
+/** Letter grade from edge-first quality. Thresholds come from shared config. */
+function qualityToRating(edgeFrac, predictedClv, uncertainty) {
+  const edge = parseEdgeFraction(edgeFrac);
+  if (edge == null) return 'b';
+  const score = qualityScore(edge, predictedClv, uncertainty);
+  if (score >= QUALITY_GRADE.aplus) return 'aplus';
+  if (score >= QUALITY_GRADE.a) return 'a';
+  if (score >= QUALITY_GRADE.aminus) return 'aminus';
+  if (score >= QUALITY_GRADE.bplus) return 'bplus';
+  return 'b';
+}
+
+/** Resolve a persisted quality score, or calculate it from pick fields. */
+function pickQualityScore(pick) {
+  const persisted = Number(pick && pick.qualityScore);
+  if (Number.isFinite(persisted)) return persisted;
+  const edge = pick && pick.edgePct != null
+    ? pick.edgePct
+    : pick && pick.evRaw != null ? pick.evRaw : pick && pick.ev;
+  const clv = pick && pick.predictedResidualClv != null
+    ? pick.predictedResidualClv
+    : pick && pick.predictedClv;
+  return qualityScore(edge, clv, pick && pick.uncertainty);
+}
+
 /** Grade rank: lower = higher confidence (A+ first). */
 function ratingRank(rating) {
   const r = String(rating || '').toLowerCase().replace(/\s+/g, '');
@@ -160,12 +216,14 @@ function ratingRank(rating) {
   return map[r] != null ? map[r] : 4;
 }
 
-/** Sort picks: grade (A+→B) then higher units first. */
+/** Sort picks: grade (A+→B), quality, then units — all descending. */
 function sortByGradeThenUnits(picks) {
   return [...(picks || [])].sort((a, b) => {
-    const ra = ratingRank(a.rating || a.confidence);
-    const rb = ratingRank(b.rating || b.confidence);
+    const ra = ratingRank(a.rating || a.qualityGrade || a.confidence);
+    const rb = ratingRank(b.rating || b.qualityGrade || b.confidence);
     if (ra !== rb) return ra - rb;
+    const qualityDelta = pickQualityScore(b) - pickQualityScore(a);
+    if (Math.abs(qualityDelta) > 1e-12) return qualityDelta;
     const ua = parseFloat(String(a.units || '0').replace(/[^0-9.]/g, '')) || 0;
     const ub = parseFloat(String(b.units || '0').replace(/[^0-9.]/g, '')) || 0;
     return ub - ua;
@@ -210,6 +268,10 @@ module.exports = {
   formatEdgePct,
   formatMoneylinePick,
   ratingRank,
+  parseEdgeFraction,
+  qualityScore,
+  qualityToRating,
+  pickQualityScore,
   sortByGradeThenUnits,
   etCalendarDate,
   isSameEtDay,

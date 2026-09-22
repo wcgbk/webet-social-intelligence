@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.1.0-omega-vnext-linemove');
+assert.strictEqual(config.MODEL_VERSION, 'v12.1.1-omega-vnext-qualitygrades');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -35,6 +35,13 @@ assert.strictEqual(math.formatMoneylinePick('Iowa Hawkeyes ML', 'Moneyline'), 'I
 assert.strictEqual(math.formatMoneylinePick('Giants +6.5', 'Spread'), 'Giants +6.5');
 assert.strictEqual(math.formatMoneylinePick('Over 45.5', 'Total'), 'Over 45.5');
 assert.strictEqual(select.formatMoneylinePick('Mississippi State Bulldogs', 'Moneyline'), 'Mississippi State Bulldogs ML');
+
+
+// Quality grades from edge, not units / not coverProb
+assert.strictEqual(math.qualityToRating(0.053, 0, 0.1), 'aplus');
+assert.strictEqual(math.qualityToRating(0.047, 0, 0.1), 'a');
+assert.strictEqual(math.qualityToRating(0.038, 0, 0.1), 'a');
+assert.ok(math.qualityScore(0.053, 0, 0.1) > math.qualityScore(0.047, 0, 0.1));
 
 // Sort: A+ before A before B, then higher units
 const sorted = math.sortByGradeThenUnits([

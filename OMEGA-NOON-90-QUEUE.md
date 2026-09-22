@@ -27,6 +27,3 @@ A later PR may add the walk-forward scaffold. No coefficient fit in the engines 
 ## Live card
 
 The 2026-09-22 production Omega card was left alone: no force generate, no verify, no Discord, no self-opt mutation.
-## Live card
-
-The 2026-09-22 production Omega card was left alone: no force generate, no verify, no Discord, no self-opt mutation.

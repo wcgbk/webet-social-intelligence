@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.1-omega-vnext-pregen');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.2-omega-vnext-verify-steam');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -233,6 +233,49 @@ assert.ok(!/apiParlay\.correlationNote/.test(html));
 assert.ok(/Bet Slip — Summary/.test(html));
 assert.ok(/ensureMlLabel/.test(html));
 assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
+
+// C2: verify replace/backfill grades are quality/edge, not units → rating.
+{
+  const verifySrc = require('fs').readFileSync(path.join(__dirname, 'netlify/functions/verify-picks-omega.js'), 'utf8');
+  assert.ok(!/rating:\s*unitsToRating\s*\(/.test(verifySrc), 'no rating: unitsToRating(...) write');
+  assert.ok(!/\.rating\s*=\s*unitsToRating\s*\(/.test(verifySrc), 'no .rating = unitsToRating(...) write');
+  assert.ok(!/unitsToRating\s*\(\s*cappedKellyUnits\s*\(/.test(verifySrc));
+  assert.ok(!/unitsToRating\s*\(\s*u\s*\)/.test(verifySrc));
+  assert.ok(!/confFromUnits\s*\(/.test(verifySrc));
+  assert.ok(!/confidence:\s*u\s*>=/.test(verifySrc), 'confidence must not be a letter derived from units');
+  assert.ok(/toPickObject/.test(verifySrc));
+  assert.ok(/buildQualityReplacement/.test(verifySrc));
+  assert.ok(/require\('\.\/lib\/omega-vnext\/select'\)/.test(verifySrc));
+
+  const verify = require('./netlify/functions/verify-picks-omega');
+  // candidateTable shape: edge fraction lives on `edge`, stake would be a low units grade.
+  const highEdgeLowUnits = verify.buildQualityReplacement({
+    sport: 'NFL', matchup: 'A @ B', side: 'B -3', market: 'Spread',
+    odds: -110, coverProb: 0.53, ev: 0.02, edge: 0.055, kellyUnits: 0.5,
+    predictedClv: 0, homeTeam: 'B', awayTeam: 'A',
+  }, { modelVersion: MODEL_VERSION });
+  assert.strictEqual(highEdgeLowUnits.rating, 'aplus');
+  assert.strictEqual(highEdgeLowUnits.qualityGrade, 'aplus');
+  assert.strictEqual(highEdgeLowUnits.units, '0.5u');
+  assert.strictEqual(typeof highEdgeLowUnits.confidence, 'number');
+  assert.strictEqual(highEdgeLowUnits.confidence, math.ratingToConfidence('aplus'));
+  assert.notStrictEqual(highEdgeLowUnits.rating, math.unitsToRating(0.5));
+  assert.ok(typeof highEdgeLowUnits.qualityScore === 'number' && highEdgeLowUnits.qualityScore >= 0.05);
+  assert.strictEqual(highEdgeLowUnits.modelVersion, MODEL_VERSION);
+
+  // High stake, thin edge → B, not the units letter (1.5u would be A+ on the old map).
+  const lowEdgeHighUnits = verify.buildQualityReplacement({
+    sport: 'NFL', matchup: 'C @ D', side: 'Over 45.5', market: 'Total',
+    odds: -110, coverProb: 0.54, ev: 0.03, edgePct: 0.012, kellyUnits: 1.5,
+    predictedClv: 0, uncertainty: 0.12, homeTeam: 'D', awayTeam: 'C',
+  }, { modelVersion: MODEL_VERSION });
+  assert.strictEqual(lowEdgeHighUnits.rating, 'b');
+  assert.strictEqual(lowEdgeHighUnits.qualityGrade, 'b');
+  assert.strictEqual(lowEdgeHighUnits.units, '1.5u');
+  assert.strictEqual(typeof lowEdgeHighUnits.confidence, 'number');
+  assert.notStrictEqual(lowEdgeHighUnits.rating, math.unitsToRating(1.5));
+  assert.strictEqual(lowEdgeHighUnits.rating, math.qualityToRating(0.012, 0, 0.12));
+}
 
 console.log('PASS test-omega-vnext', {
   MODEL_VERSION,

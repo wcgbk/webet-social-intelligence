@@ -19,9 +19,12 @@ exports.handler = async (event) => {
       catch (_) { body = {}; }
     }
     const qs = (event && event.queryStringParameters) || {};
+    // Scheduled morning cron always force-overwrites same-day cards so overnight
+    // preview cards don't block the real 9:30am rebuild after line captures.
+    const force = !!(body.force || qs.force === 'true' || body.scheduled || qs.scheduled === 'true');
     const opts = {
       date: body.date || qs.date,
-      force: !!(body.force || qs.force === 'true'),
+      force,
       simMode: !!(body.simMode || body.sim),
       historicalSnapshot: body.historicalSnapshot,
       dryRun: !!body.dryRun,

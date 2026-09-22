@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.0-omega-vnext-game-day';
+const MODEL_VERSION = 'v12.3.1-omega-vnext-pregen';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -89,13 +89,15 @@ const MAJOR_LIQUIDITY_BOOKS = [
 
 /**
  * Open→pick line-move / steam gates (US books + sharp refs).
- * Morning polls: 6:00, 7:30, 9:00 ET via capture-omega-lines.
+ * Morning polls: 6:00, 7:30, 9:00, 9:15 ET.
+ * 6:00/7:30 on capture-omega-lines; 9:00/9:15 on capture-omega-lines-late.
+ * 9:30 capture removed so it does not race trigger-picks-omega.
  */
 const LINE_MOVE = {
   /** Morning capture slots (ET HHMM). */
-  captureSlotsET: ['0600', '0730', '0900'],
-  /** UTC cron union targets during EDT (UTC-4). */
-  captureSlotsUtcEDT: ['1000', '1130', '1300'],
+  captureSlotsET: ['0600', '0730', '0900', '0915'],
+  /** UTC cron targets during EDT (UTC-4). 13:30 is not a capture slot. */
+  captureSlotsUtcEDT: ['1000', '1130', '1300', '1315'],
   steamTowardEpsilon: 0.15,
   /** Generate: reject when odds shortened against pick by this many American cents. */
   rejectSteamAgainstCents: 18,
@@ -170,6 +172,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.1 omega-vnext: 9:15 ET line snap + capture health gate; feed warm 9:00; shadow dry-run 9:05 (isolated omega-shadow/*); TSP live hold lifted (observer /live-ai only — zero Omega hard dep).',
   'v12.3.0 omega-vnext: game-day rest/B2B + soft QB status (ESPN injuries) + MLB weather total adj on top of EPA/SP/park seeds. Soft fallback if feeds fail; empty card OK; no lean force-fill. Market blend + calibrate shrink unchanged. No NBA/NHL.',
   'v12.2.2 omega-vnext: Kalshi/Polymarket OBSERVER sidecar. Read-only implied probs logged to omega-pm-observer/{date} (alias pm-sidecar-{date}) when a PM moneyline maps cleanly 1:1 to a game ML. NEVER mixes PM prices into selection, grades, unit caps, or gates. No order placement. Soft-fail if PM APIs are down.',
   'v12.2.1 omega-vnext: placeability soft-veto. Published price must be offered within juice ballpark (≤3pp implied worse OR ≤15 American cents worse) at ≥2 US retail books from US_BOOK_PRIORITY (PLACEABILITY.minMajorBooks; not sharp-only, not Pinnacle). Reject reason placeability-soft-veto, distinct from insufficient-liquidity. Verify drops a pick only when Hard Rock and majors coverage both fail; odds-API down warns and does not clear the card. Empty card OK, no lean refill.',

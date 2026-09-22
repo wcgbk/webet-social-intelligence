@@ -47,15 +47,14 @@
   # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
 
 [functions."fetch-tsp-live"]
-  # schedule = "*/15 * * * *"
-  # PAUSED 2026-08-25 (Ben) — Live AI / TSP.Live feed ON HOLD pending permission from The
-  # Sharp Plays. Cron disabled AND a hard kill-switch in fetch-tsp-live.js ensures NO requests
-  # hit tsp.live from any path. Re-enable: uncomment the schedule + flip TSP_FETCH_ON_HOLD=false.
-  # PRIVATE Live AI Picks feed (Ben-directed 2026-08-25) — pulls Ben's subscribed TSP.Live
-  # Hermes A.I. page every 15 min using TSP_SESSION_COOKIE (Netlify env), parses the cards,
-  # writes to the isolated "tsp-live" blob store → passcode-gated /live-ai page.
-  # PRIVATE-USE ONLY: never expose publicly (paid membership content). Needs env:
-  # TSP_SESSION_COOKIE (member cookie) + TSP_PAGE_KEY (page passcode). Zero external API cost.
+  schedule = "*/15 * * * *"
+  # Hold lifted by WeBet 2026-09-22. Still isolated: tsp-live blob → passcode-gated /live-ai.
+  # Omega generate/select/grades/units/gates do not read this feed. Soft-fails with NO_COOKIE
+  # when TSP_SESSION_COOKIE is missing (no throw into the Omega day).
+  # PRIVATE Live AI Picks feed — pulls the subscribed TSP.Live Hermes A.I. page every 15 min
+  # using TSP_SESSION_COOKIE (Netlify env), parses the cards, writes to the isolated
+  # "tsp-live" blob store. PRIVATE-USE ONLY: never expose publicly (paid membership content).
+  # Needs env: TSP_SESSION_COOKIE (member cookie) + TSP_PAGE_KEY (page passcode). Zero external API cost.
 
 [functions."trigger-picks-nfl"]
   schedule = "5 13 * * *"
@@ -185,12 +184,33 @@
 
 
 [functions."capture-omega-lines"]
-  schedule = "0,30 10,11,13 * * *"
-  # Omega-only US morning line-path (edge-picks-omega). EDT slots:
-  #   10:00 UTC = 6:00am ET, 11:30 UTC = 7:30am ET, 13:00 UTC = 9:00am ET
-  # Union cron also fires 10:30/11:00/13:30 — handler no-ops outside ±5min of allowed UTC slots.
+  schedule = "0,30 10,11 * * *"
+  # Omega-only US morning line-path (edge-picks-omega). 6:00/7:30 ET window:
+  #   10:00 UTC = 6:00am ET, 11:30 UTC = 7:30am ET.
+  # Union also fires 10:30/11:00 — handler no-ops outside ±5min of allowed UTC slots.
+  # 9:00/9:15 ET are on the thin second function capture-omega-lines-late.
+  # 9:30 capture removed so it does not race trigger-picks-omega (13:30 UTC).
   # Alpha capture-opening-lines (edge-picks) left unchanged.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."capture-omega-lines-late"]
+  schedule = "0,15 13 * * *"
+  # 13:00 UTC = 9:00am ET, 13:15 UTC = 9:15am ET. Dedicated late-morning snaps.
+  # 9:30 (13:30) intentionally omitted — races trigger-picks-omega.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."warm-omega-feeds"]
+  schedule = "0 13 * * *"
+  # 13:00 UTC = 9:00am ET (EDT). Prefetch ESPN injuries/QB, MLB weather, StatsAPI SP
+  # into omega-feed-warm/{date}. Soft-fail. Does not write the live card.
+  # Same minute as other 9:00 jobs is fine (independent).
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."trigger-omega-shadow"]
+  schedule = "5 13 * * *"
+  # 13:05 UTC ≈ 9:05am ET (EDT). Shadow dry-run → omega-shadow/picks-{date} only.
+  # Never latest-date / picks-dates / live picks-{date}. Same minute as NFL trigger is fine.
+  # See docs/OMEGA-SHADOW-DRYRUN.md.
 
 
 [functions."capture-omega-pm-observer"]
@@ -880,7 +900,8 @@
   schedule = "0 15 * * *"
   # Daily TSP public-records observer digest — 11:00am ET (15:00 UTC in EDT).
   # Writes tsp-research digests/{date} only. NEVER edge-picks-omega.
-  # tsp.live member scrape remains ON HOLD (fetch-tsp-live).
+  # Member tsp.live fetch hold lifted 2026-09-22; still isolated (tsp-live → /live-ai).
+  # Omega does not depend on it. This monitor stays public-records only.
   included_files = ["netlify/functions/lib/tsp-research/**"]
 
 [functions."fetch-tsp-public-records"]

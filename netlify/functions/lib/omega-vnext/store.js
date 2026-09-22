@@ -31,10 +31,61 @@ async function readPicks(dateISO) {
   }
 }
 
-async function storePicks(dateISO, picksData, { force = false, simMode = false } = {}) {
-  const pickKey = simMode ? `picks-sim-${dateISO}` : `picks-${dateISO}`;
+/**
+ * Where a card write is allowed to go.
+ * shadow:true → omega-shadow/picks-{date} only. Never latest-date, picks-dates,
+ * live picks-{date}, or OVERWRITE_GUARD. See docs/OMEGA-SHADOW-DRYRUN.md.
+ */
+function resolvePicksStoreTarget(dateISO, { simMode = false, shadow = false } = {}) {
+  if (shadow) {
+    return {
+      key: `omega-shadow/picks-${dateISO}`,
+      touchLatestDate: false,
+      touchPicksDates: false,
+      overwriteGuard: false,
+      shadow: true,
+    };
+  }
+  if (simMode) {
+    return {
+      key: `picks-sim-${dateISO}`,
+      touchLatestDate: false,
+      touchPicksDates: false,
+      overwriteGuard: false,
+      shadow: false,
+    };
+  }
+  return {
+    key: `picks-${dateISO}`,
+    touchLatestDate: true,
+    touchPicksDates: true,
+    overwriteGuard: true,
+    shadow: false,
+  };
+}
 
-  if (!simMode && !force) {
+function shadowPayload(dateISO, picksData, key) {
+  return {
+    ...(picksData || {}),
+    shadow: true,
+    storeKey: key,
+    date: (picksData && picksData.date) || dateISO,
+  };
+}
+
+async function storePicks(dateISO, picksData, opts = {}) {
+  const force = !!opts.force;
+  // A shadow-marked payload must not fall through onto live keys.
+  const shadow = opts.shadow === true || !!(picksData && picksData.shadow === true);
+  const simMode = shadow ? false : !!opts.simMode;
+  const target = resolvePicksStoreTarget(dateISO, { simMode, shadow });
+  const pickKey = target.key;
+  if (target.shadow && !String(pickKey).startsWith('omega-shadow/')) {
+    throw new Error(`shadow store refused non-shadow key: ${pickKey}`);
+  }
+  const payload = target.shadow ? shadowPayload(dateISO, picksData, pickKey) : picksData;
+
+  if (target.overwriteGuard && !force) {
     const existing = await readPicks(dateISO);
     if (existing && Array.isArray(existing.picks) && existing.picks.length > 0) {
       const err = new Error(`REFUSING overwrite: picks-${dateISO} already has ${existing.picks.length} picks. Pass force:true to override.`);
@@ -43,13 +94,15 @@ async function storePicks(dateISO, picksData, { force = false, simMode = false }
     }
   }
 
-  // Prefer SDK
+  // Prefer SDK. Shadow returns before any latest-date / picks-dates write.
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await store.setJSON(pickKey, picksData);
-    if (!simMode) {
+    await store.setJSON(pickKey, payload);
+    if (target.touchLatestDate) {
       await store.set('latest-date', dateISO);
+    }
+    if (target.touchPicksDates) {
       try {
         let dates = await store.get('picks-dates', { type: 'json' });
         if (!Array.isArray(dates)) dates = [];
@@ -62,16 +115,18 @@ async function storePicks(dateISO, picksData, { force = false, simMode = false }
         console.error(`[omega-vnext/store] picks-dates: ${e.message}`);
       }
     }
-    console.log(`[omega-vnext/store] wrote ${pickKey} (${(picksData.picks || []).length} picks)`);
+    console.log(`[omega-vnext/store] wrote ${pickKey} (${(payload.picks || []).length} picks)${target.shadow ? ' shadow' : ''}`);
     return true;
   } catch (sdkErr) {
     console.error(`[omega-vnext/store] SDK failed: ${sdkErr.message} — trying REST`);
   }
 
-  const resp = await blobFetch(pickKey, { method: 'PUT', body: picksData });
+  const resp = await blobFetch(pickKey, { method: 'PUT', body: payload });
   if (!resp.ok) throw new Error(`blob PUT ${pickKey} → ${resp.status}`);
-  if (!simMode) {
+  if (target.touchLatestDate) {
     await blobFetch('latest-date', { method: 'PUT', body: JSON.stringify(dateISO) });
+  }
+  if (target.touchPicksDates) {
     try {
       const dResp = await blobFetch('picks-dates');
       let dates = dResp.ok ? await dResp.json() : [];
@@ -85,8 +140,13 @@ async function storePicks(dateISO, picksData, { force = false, simMode = false }
       console.error(`[omega-vnext/store] picks-dates REST: ${e.message}`);
     }
   }
-  console.log(`[omega-vnext/store] REST wrote ${pickKey}`);
+  console.log(`[omega-vnext/store] REST wrote ${pickKey}${target.shadow ? ' shadow' : ''}`);
   return true;
+}
+
+/** Isolated shadow card. Does not touch live picks, latest-date, or picks-dates. */
+async function storeShadowPicks(dateISO, picksData) {
+  return storePicks(dateISO, picksData, { shadow: true, force: true });
 }
 
 
@@ -240,7 +300,7 @@ async function storeReplaySummary(runId, summary) {
 }
 
 module.exports = {
-  storePicks, readPicks, storeJson, readJson, storePmObserver, readPmObserver,
+  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson, storePmObserver, readPmObserver,
   WALKFORWARD_KEY_RE, assertWalkforwardKey,
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,

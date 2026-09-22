@@ -43,6 +43,22 @@ assert.strictEqual(summary.clvPlaceholder, null);
 assert.strictEqual(summary.roiPlaceholder, null);
 assert.ok(summary.notes.some(n => /never wrote live/i.test(n)));
 
+const shadowTarget = store.resolvePicksStoreTarget('2026-09-22', { shadow: true, simMode: true });
+assert.strictEqual(shadowTarget.key, 'omega-shadow/picks-2026-09-22');
+assert.strictEqual(shadowTarget.touchLatestDate, false);
+assert.strictEqual(shadowTarget.touchPicksDates, false);
+assert.strictEqual(shadowTarget.overwriteGuard, false);
+assert.strictEqual(shadowTarget.shadow, true);
+const liveTarget = store.resolvePicksStoreTarget('2026-09-22', {});
+assert.strictEqual(liveTarget.key, 'picks-2026-09-22');
+assert.strictEqual(liveTarget.touchLatestDate, true);
+assert.strictEqual(liveTarget.touchPicksDates, true);
+assert.strictEqual(liveTarget.overwriteGuard, true);
+const shadowDoc = fs.readFileSync(path.join(__dirname, 'docs/OMEGA-SHADOW-DRYRUN.md'), 'utf8');
+assert.ok(/omega-shadow\/picks-/.test(shadowDoc));
+assert.ok(/latest-date/.test(shadowDoc));
+assert.ok(/9:05/.test(shadowDoc));
+
 let storePicksCalled = false;
 const fakeGenerate = async (opts) => {
   assert.strictEqual(opts.dryRun, true, 'generate must be dry for live store');

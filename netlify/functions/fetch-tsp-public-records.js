@@ -2,7 +2,8 @@
 /**
  * On-demand / one-shot downloader for PUBLIC TSP Performance Terminal records.
  * Writes isolated tsp-research blob snapshots. NEVER writes edge-picks-omega.
- * Does NOT scrape tsp.live member pages (TSP_FETCH_ON_HOLD remains true there).
+ * Does NOT scrape tsp.live member pages. Member fetch-tsp-live is a separate
+ * isolated /live-ai job (hold lifted 2026-09-22) and is not imported here.
  */
 
 const {

@@ -444,6 +444,67 @@ function earliestAndLatestPolls(pathDoc) {
   return { earliest: polls[0], latest: polls[polls.length - 1] };
 }
 
+function pollGameCount(poll) {
+  if (!poll || typeof poll !== 'object') return 0;
+  const games = poll.games;
+  const keyCount = games && typeof games === 'object' ? Object.keys(games).length : 0;
+  const declared = Number(poll.gameCount);
+  if (Number.isFinite(declared) && declared > 0) return declared;
+  return keyCount;
+}
+
+function isUsablePoll(poll) {
+  return pollGameCount(poll) > 0;
+}
+
+/** Required slots whose ET clock time has arrived. Later slots are not "missing" yet. */
+function missingDueSlots(missingSlotsET, now = new Date()) {
+  const nowSlot = hhmmET(now);
+  return (missingSlotsET || []).filter((s) => String(s) <= String(nowSlot));
+}
+
+/**
+ * Capture-health view of a loaded line path. Does not fetch or invent snaps.
+ * A poll is usable only when it has games (gameCount > 0 or a non-empty games map).
+ */
+function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
+  const required = (opts.requiredSlotsET || (LINE_MOVE && LINE_MOVE.captureSlotsET) || ['0600', '0730', '0900', '0915']).slice();
+  const polls = (linePathMeta && linePathMeta.path && Array.isArray(linePathMeta.path.polls))
+    ? linePathMeta.path.polls
+    : [];
+  const usable = polls.filter(isUsablePoll);
+  const present = [];
+  for (const slot of required) {
+    const hit = usable.some((p) => String(p.hhmm || '') === slot || String(p.slot || '') === slot);
+    if (hit) present.push(slot);
+  }
+  const missing = required.filter((s) => !present.includes(s));
+  const usableSnapCount = usable.length;
+  const hardFail = usableSnapCount === 0;
+  const retriedCapture = !!opts.retriedCapture;
+  const retryOk = opts.retryOk == null ? null : !!opts.retryOk;
+  let warning = null;
+  let reason = null;
+  if (hardFail) {
+    reason = `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`;
+    warning = reason;
+  } else if (missing.length) {
+    warning = `CAPTURE_HEALTH: missing required morning snaps ${missing.join(',')} for ${dateISO} (present ${present.join(',') || 'none'}; usable=${usableSnapCount})`;
+  }
+  return {
+    ok: !hardFail && missing.length === 0,
+    requiredSlotsET: required,
+    presentSlotsET: present,
+    missingSlotsET: missing,
+    usableSnapCount,
+    retriedCapture,
+    retryOk,
+    warning,
+    hardFail,
+    reason,
+  };
+}
+
 /**
  * Load line path for date; return { path, earliest, latest }.
  */
@@ -453,8 +514,10 @@ async function loadLinePath(dateISO) {
     const { earliest, latest } = earliestAndLatestPolls(path);
     return { path, earliest, latest };
   }
-  // Fallback: try common morning snap keys
-  const slots = ['0600', '0730', '0900'];
+  // Fallback: try common morning snap keys (6:00 / 7:30 / 9:00 / 9:15 ET).
+  const slots = (LINE_MOVE.captureSlotsET && LINE_MOVE.captureSlotsET.length)
+    ? LINE_MOVE.captureSlotsET.slice()
+    : ['0600', '0730', '0900', '0915'];
   const found = [];
   for (const hhmm of slots) {
     const snap = await readJsonBlob(snapBlobKey(dateISO, hhmm));
@@ -519,6 +582,10 @@ module.exports = {
   adverseSteamReason,
   annotateLineMoves,
   earliestAndLatestPolls,
+  pollGameCount,
+  isUsablePoll,
+  missingDueSlots,
+  assessCaptureHealth,
   loadLinePath,
   storeLinePoll,
   readJsonBlob,

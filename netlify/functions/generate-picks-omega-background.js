@@ -21,18 +21,23 @@ exports.handler = async (event) => {
     const qs = (event && event.queryStringParameters) || {};
     // Scheduled morning cron always force-overwrites same-day cards so overnight
     // preview cards don't block the real 9:30am rebuild after line captures.
+    // shadow:true writes omega-shadow/* only — storePicks will not touch latest-date.
     const force = !!(body.force || qs.force === 'true' || body.scheduled || qs.scheduled === 'true');
+    const shadow = body.shadow === true || body.shadow === 'true' || qs.shadow === 'true';
+    const skipNarrate = body.skipNarrate === true || body.skipNarrate === 'true' || qs.skipNarrate === 'true';
     const opts = {
       date: body.date || qs.date,
       force,
-      simMode: !!(body.simMode || body.sim),
+      simMode: shadow ? false : !!(body.simMode || body.sim),
       historicalSnapshot: body.historicalSnapshot,
       dryRun: !!body.dryRun,
+      shadow,
+      skipNarrate,
     };
 
     const result = await generateOmegaVnext(opts);
     const n = (result && result.picks && result.picks.length) || 0;
-    console.log(`[omega-vnext-wrapper] OK picks=${n} model=${MODEL_VERSION}`);
+    console.log(`[omega-vnext-wrapper] OK picks=${n} model=${MODEL_VERSION} shadow=${shadow}`);
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -42,12 +47,27 @@ exports.handler = async (event) => {
         picks: n,
         parlay: (result.parlayLegs || []).length,
         noPlays: result.noPlays || null,
+        shadow: !!result.shadow,
+        storeKey: result.storeKey || null,
+        captureHealth: result.captureHealth || null,
       }),
     };
   } catch (err) {
     console.error(`[omega-vnext-wrapper] FATAL: ${err.message}`);
     if (err.code === 'OVERWRITE_GUARD') {
       return { statusCode: 409, body: err.message };
+    }
+    if (err.code === 'CAPTURE_HEALTH') {
+      return {
+        statusCode: 503,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ok: false,
+          code: 'CAPTURE_HEALTH',
+          error: err.message,
+          captureHealth: err.captureHealth || null,
+        }),
+      };
     }
     return { statusCode: 500, body: err.message || 'Omega vNext failed' };
   }

@@ -56,9 +56,11 @@ assert.doesNotThrow(() => assertResearchKey('snapshots/2026-09-22'));
 assert.doesNotThrow(() => assertResearchKey('digests/2026-09-22'));
 assert.doesNotThrow(() => assertResearchKey('manual/hermes-csv'));
 
-// fetch-tsp-live still hard-holds member scrape
+// Member fetch-tsp-live hold lifted 2026-09-22. Research-module flag above stays true.
+// Omega generate must not require this module.
 const liveSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/fetch-tsp-live.js'), 'utf8');
-assert.ok(/TSP_FETCH_ON_HOLD\s*=\s*true/.test(liveSrc), 'fetch-tsp-live must keep TSP_FETCH_ON_HOLD=true');
+assert.ok(/const TSP_FETCH_ON_HOLD = false;/.test(liveSrc), 'fetch-tsp-live hold lifted 2026-09-22');
+assert.ok(!/const TSP_FETCH_ON_HOLD = true;/.test(liveSrc));
 
 // Omega live config store name unchanged / not pointed at tsp-research
 const omegaCfg = require(path.join(__dirname, 'netlify/functions/lib/omega-vnext/config'));

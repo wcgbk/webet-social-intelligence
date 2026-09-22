@@ -10,7 +10,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.1.0-omega-vnext-linemove');
+assert.strictEqual(config.MODEL_VERSION, 'v12.2.1-omega-vnext-placeability');
 assert.ok(Array.isArray(config.US_BOOK_PRIORITY));
 assert.ok(config.US_BOOK_PRIORITY[0] === 'draftkings');
 assert.ok(config.LINE_MOVE.rejectSteamAgainstCents === 18);

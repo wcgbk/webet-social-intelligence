@@ -172,6 +172,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       predictedResidualClv: l.predictedResidualClv != null ? l.predictedResidualClv : null,
       uncertainty: l.uncertainty,
       modelVersion: l.modelVersion,
+      ...(Array.isArray(l.placeableBooks) ? { placeableBooks: l.placeableBooks.slice() } : {}),
+      ...(l.bestPlaceable ? { bestPlaceable: l.bestPlaceable } : {}),
     };
   }));
 

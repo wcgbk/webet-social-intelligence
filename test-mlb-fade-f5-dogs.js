@@ -9,7 +9,7 @@ const path = require('path');
 const live = require('./netlify/functions/generate-picks-omega-background');
 const { LEAN_PAD, MODEL_VERSION } = require('./netlify/functions/lib/omega-vnext/config');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.1.0-omega-vnext-linemove');
+assert.strictEqual(live.MODEL_VERSION, 'v12.2.1-omega-vnext-placeability');
 assert.strictEqual(MODEL_VERSION, live.MODEL_VERSION);
 assert.strictEqual(LEAN_PAD, false, 'empty card OK — no lean force-fill');
 assert.ok(fs.existsSync(path.join(__dirname, 'archive/generate-picks-omega-legacy-v11.js')));

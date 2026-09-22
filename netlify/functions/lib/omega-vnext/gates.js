@@ -1,11 +1,25 @@
 'use strict';
 
-const { GATES } = require('./config');
+const { GATES, PLACEABILITY } = require('./config');
 const { isSameEtDay } = require('./odds_math');
 const { adverseSteamReason } = require('./line_path');
 
 function sportFloor(map, sport) {
   return map[sport] != null ? map[sport] : map.default;
+}
+
+/**
+ * US retail placeability. Distinct from insufficient-liquidity (that gate
+ * counts MAJOR_LIQUIDITY_BOOKS, including Pinnacle, with no juice test).
+ * Legacy candidates with no annotation are not vetoed.
+ */
+function failsPlaceability(c) {
+  if (!c || c.placeable === true) return false;
+  if (c.placeable === false) return true;
+  if (Array.isArray(c.placeableBooks)) {
+    return c.placeableBooks.length < PLACEABILITY.minMajorBooks;
+  }
+  return false;
 }
 
 /**
@@ -47,6 +61,10 @@ function gateReason(c, opts = {}) {
     if (steamReason) return steamReason;
   }
 
+  // After quality gates: a strong edge that is not shoppable at US retail
+  // books is a soft-veto, not a published ticket. Empty card OK.
+  if (failsPlaceability(c)) return 'placeability-soft-veto';
+
   return null;
 }
 
@@ -65,4 +83,4 @@ function applyGates(candidates, opts = {}) {
   return { yesPool: yes, rejected };
 }
 
-module.exports = { applyGates, gateReason };
+module.exports = { applyGates, gateReason, failsPlaceability };

@@ -130,8 +130,15 @@ async function generateOmegaVnext(opts = {}) {
     console.error(`[omega-vnext] line-move load failed: ${e.message}`);
   }
 
+  // placeableBooks / bestPlaceable are attached in enrichCandidateWithEdge
+  // (sport project, before calibrate + attachEv). Gates then soft-veto
+  // unshoppable US retail lines. Do not publish those.
+  const placeableAnnotated = candidates.filter(c => Array.isArray(c.placeableBooks)).length;
+  console.log(`[omega-vnext] placeability annotated=${placeableAnnotated}/${candidates.length}`);
+
   const { yesPool, rejected } = applyGates(candidates, { cardDate: dateISO });
-  console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length}`);
+  const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
+  console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
 
   const selected = selectStraights(yesPool, MAX_STRAIGHTS);
 
@@ -215,6 +222,8 @@ async function generateOmegaVnext(opts = {}) {
     steamAgainst: !!c.steamAgainst,
     openPrint: c.openPrint || null,
     projMethod: c.projMethod,
+    placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
+    bestPlaceable: c.bestPlaceable || null,
     selected: picks.some(p => p.pick === c.side && p.matchup === c.matchup),
   }));
 

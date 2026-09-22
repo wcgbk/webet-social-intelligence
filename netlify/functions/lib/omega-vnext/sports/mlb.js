@@ -11,6 +11,7 @@ const {
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { resolvePark, resolveSpQuality, applySpPark } = require('./mlb_env');
+const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
@@ -43,20 +44,48 @@ function projectGame(event, standings, espnGame, ctx) {
     awayQ,
     parkFactor: park ? park.factor : null,
   });
-  const modelMargin = adj.modelMargin;
-  const modelTotal = adj.modelTotal;
+  let modelMargin = adj.modelMargin;
+  let modelTotal = adj.modelTotal;
+  const gdBag = (ctx && ctx.gameDay) || {};
+  const restTable = (gdBag.restByTeam && (gdBag.restByTeam.MLB || gdBag.restByTeam)) || {};
+  const gd = applyGameDayAdjustments({
+    sport: SPORT,
+    modelMargin,
+    modelTotal,
+    uncertainty,
+    home,
+    away,
+    restByTeam: restTable,
+    qbByTeam: {},
+    hfaBase: HFA.MLB,
+  });
+  modelMargin = gd.modelMargin;
+  modelTotal = gd.modelTotal;
+  uncertainty = gd.uncertainty;
+  const weatherKey = `${away}|${home}`;
+  const weather = (ctx && ctx.weatherByGame && (ctx.weatherByGame[weatherKey] || ctx.weatherByGame[home]))
+    || (espnGame && espnGame.weather)
+    || null;
+  const wx = applyWeatherTotalAdj(modelTotal, weather);
+  modelTotal = wx.modelTotal;
+  const gameDayMeta = {
+    ...(gd.gameDay || {}),
+    weatherNote: wx.weatherNote,
+    applied: !!(gd.gameDay && gd.gameDay.applied) || wx.applied,
+  };
+  const usedGameday = gameDayMeta.applied;
   const methods = (adj.usedSp || adj.usedPark)
     ? {
-      ml: 'mlb-sp-park-v1-ml',
-      spread: 'mlb-sp-park-v1-spread',
-      total: 'mlb-sp-park-v1-total',
-      family: 'mlb-sp-park-v1',
+      ml: usedGameday ? 'mlb-sp-park-v1-gameday-ml' : 'mlb-sp-park-v1-ml',
+      spread: usedGameday ? 'mlb-sp-park-v1-gameday-spread' : 'mlb-sp-park-v1-spread',
+      total: usedGameday ? 'mlb-sp-park-v1-gameday-total' : 'mlb-sp-park-v1-total',
+      family: usedGameday ? 'mlb-sp-park-v1-gameday' : 'mlb-sp-park-v1',
     }
     : {
-      ml: 'mlb-pythag-lite+hfa',
-      spread: 'mlb-normal-rl',
-      total: 'mlb-total-baseline',
-      family: null,
+      ml: usedGameday ? 'mlb-pythag-lite+hfa-gameday' : 'mlb-pythag-lite+hfa',
+      spread: usedGameday ? 'mlb-normal-rl-gameday' : 'mlb-normal-rl',
+      total: usedGameday ? 'mlb-total-baseline-gameday' : 'mlb-total-baseline',
+      family: usedGameday ? 'mlb-gameday' : null,
     };
 
   // Moneyline
@@ -75,6 +104,7 @@ function projectGame(event, standings, espnGame, ctx) {
         market: 'Moneyline', side: b.side, line: null,
         modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +(modelMargin).toFixed(2),
+        gameDay: gameDayMeta,
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
       out.push(raw);
@@ -102,6 +132,7 @@ function projectGame(event, standings, espnGame, ctx) {
         market: 'Spread', side: sideLabel, line,
         modelRawP: pCover, projMethod: methods.spread, uncertainty,
         consensusLine: line, modelProjection: +(modelMargin).toFixed(2),
+        gameDay: gameDayMeta,
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
       out.push(raw);
@@ -124,6 +155,7 @@ function projectGame(event, standings, espnGame, ctx) {
         market: 'Total', side: sideLabel, line,
         modelRawP: p, projMethod: methods.total, uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
+        gameDay: gameDayMeta,
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
       out.push(raw);
@@ -145,12 +177,14 @@ function findEspnGame(ev, espnGames) {
   }) || null;
 }
 
-function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactors } = {}) {
+function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactors, gameDay, weatherByGame } = {}) {
   const all = [];
   const games = (espnGames && espnGames.games) || espnGames || [];
   const ctx = {
     mlbPitcherStats: mlbPitcherStats || {},
     parkFactors: parkFactors || {},
+    gameDay: gameDay || {},
+    weatherByGame: weatherByGame || (gameDay && gameDay.weatherByGame) || {},
   };
   for (const ev of oddsEvents || []) {
     const eg = findEspnGame(ev, games);

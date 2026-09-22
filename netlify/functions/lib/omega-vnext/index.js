@@ -40,6 +40,7 @@ function formatDateLong(dateISO) {
 
 function projectAll(snap) {
   const raw = [];
+  const gameDay = snap.gameDay || {};
   if (SPORTS_ENABLED.MLB) {
     raw.push(...mlb.project({
       oddsEvents: snap.oddsBySport.MLB || [],
@@ -47,6 +48,8 @@ function projectAll(snap) {
       espnGames: snap.espnBySport && snap.espnBySport.MLB,
       mlbPitcherStats: snap.mlbPitcherStats || {},
       parkFactors: snap.parkFactors || {},
+      gameDay,
+      weatherByGame: gameDay.weatherByGame || {},
     }));
   }
   if (SPORTS_ENABLED.NFL) {
@@ -54,6 +57,7 @@ function projectAll(snap) {
       oddsEvents: snap.oddsBySport.NFL || [],
       standings: snap.standingsBySport.NFL || {},
       efficiency: (snap.efficiencyBySport && snap.efficiencyBySport.NFL) || {},
+      gameDay,
     }));
   }
   if (SPORTS_ENABLED.NCAAF) {
@@ -61,6 +65,7 @@ function projectAll(snap) {
       oddsEvents: snap.oddsBySport.NCAAF || [],
       standings: snap.standingsBySport.NCAAF || {},
       efficiency: (snap.efficiencyBySport && snap.efficiencyBySport.NCAAF) || {},
+      gameDay,
     }));
   }
   if (SPORTS_ENABLED.NBA) raw.push(...nba.project({}));

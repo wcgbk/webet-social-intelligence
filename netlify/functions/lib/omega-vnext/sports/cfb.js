@@ -1,28 +1,52 @@
 'use strict';
 /**
- * NCAAF/CFB — EPA-style prior when both teams match (cfb-epa-v1*),
- * else standings power + HFA (cfb-normal-*). Higher uncertainty than NFL.
- * Market blend unchanged; calibrate shrink runs later.
+ * NCAAF/CFB — EPA-style off/def prior when both teams match (cfb-epa-v1*),
+ * else standings power + HFA (cfb-normal-*). Game-day rest/QB soft adj
+ * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. Market blend
+ * unchanged; calibrate shrink runs later in the pipeline.
  */
 const {
   formatMatchup,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { footballProjection } = require('./epa');
+const { applyGameDayAdjustments } = require('./game_day');
+const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'NCAAF';
 
-function projectGame(event, standings, efficiency) {
+function tagMethods(methods, gameDayApplied) {
+  if (!gameDayApplied || !methods) return methods;
+  const out = { ...methods };
+  for (const k of ['ml', 'spread', 'total']) {
+    if (out[k] && !String(out[k]).includes('gameday')) out[k] = `${out[k]}-gameday`;
+  }
+  if (out.family && !String(out.family).includes('gameday')) out.family = `${out.family}-gameday`;
+  return out;
+}
+
+function projectGame(event, standings, efficiency, gameDay) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
   const env = footballProjection({ sport: SPORT, home, away, standings, efficiency });
-  const modelMargin = env.modelMargin;
-  const modelTotal = env.modelTotal;
-  const uncertainty = env.uncertainty;
-  const methods = env.methods;
+  const gd = applyGameDayAdjustments({
+    sport: SPORT,
+    modelMargin: env.modelMargin,
+    modelTotal: env.modelTotal,
+    uncertainty: env.uncertainty,
+    home,
+    away,
+    restByTeam: (gameDay && gameDay.restByTeam && gameDay.restByTeam.NCAAF) || (gameDay && gameDay.restByTeam) || {},
+    qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NCAAF) || (gameDay && gameDay.qbByTeam) || {},
+    hfaBase: HFA.NCAAF,
+  });
+  const modelMargin = gd.modelMargin;
+  const modelTotal = gd.modelTotal;
+  const uncertainty = gd.uncertainty;
+  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied);
   const out = [];
 
   {
@@ -35,6 +59,7 @@ function projectGame(event, standings, efficiency) {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
+        gameDay: gd.gameDay || null,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -51,6 +76,7 @@ function projectGame(event, standings, efficiency) {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
+        gameDay: gd.gameDay || null,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -66,6 +92,7 @@ function projectGame(event, standings, efficiency) {
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
         projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
+        gameDay: gd.gameDay || null,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -73,9 +100,9 @@ function projectGame(event, standings, efficiency) {
   return out;
 }
 
-function project({ oddsEvents, standings, efficiency } = {}) {
+function project({ oddsEvents, standings, efficiency, gameDay } = {}) {
   const all = [];
-  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}, efficiency || {}));
+  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}, efficiency || {}, gameDay || {}));
   return all;
 }
 

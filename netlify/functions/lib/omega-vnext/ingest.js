@@ -121,6 +121,7 @@ async function fetchEspnScoreboard(label, dateISO) {
         awayScore: away.score != null ? Number(away.score) : null,
         homeProbable: homeProb,
         awayProbable: awayProb,
+        weather: extractWeather(comp),
       };
     });
     const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
@@ -237,6 +238,101 @@ async function fetchMlbPitcherStats(dateISO) {
  * EPA seeds + park table + optional StatsAPI. Each piece fails soft to {}.
  * deps is for tests — production calls the real loaders.
  */
+
+const { prevEtDate, restMapFromScoreboard } = require('./sports/game_day');
+
+/** Soft QB out/doubtful/questionable map from ESPN injuries (football). */
+async function fetchFootballQbStatusMap(leagueSlug) {
+  const out = {};
+  try {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/football/${leagueSlug}/injuries`;
+    const data = await fetchJson(url, 8000);
+    const apply = (teamName, pos, status, athleteName) => {
+      if ((pos || '').toUpperCase() !== 'QB') return;
+      const st = String(status || '').toLowerCase();
+      if (!st) return;
+      if (!/(out|doubtful|questionable|injured reserve|\bir\b|ruled out)/i.test(st)) return;
+      const key = teamName;
+      // Prefer worse status if multiple
+      const rank = (s) => (/out|ruled out|ir|injured reserve/.test(s) ? 3 : /doubtful/.test(s) ? 2 : 1);
+      const prev = out[key];
+      if (prev && rank(String(prev.qbStatus)) >= rank(st)) return;
+      out[key] = { team: teamName, qbStatus: st, qbName: athleteName || null };
+    };
+    for (const team of (data.injuries || data.teams || [])) {
+      const teamName = team.displayName || (team.team && team.team.displayName) || '';
+      for (const inj of (team.injuries || team.athletes || [])) {
+        apply(
+          teamName,
+          (inj.athlete && inj.athlete.position && inj.athlete.position.abbreviation) || inj.position,
+          inj.status || inj.type,
+          (inj.athlete && inj.athlete.displayName) || inj.displayName
+        );
+      }
+    }
+  } catch (e) {
+    console.log(`[omega-vnext/ingest] QB status ${leagueSlug} soft-fail: ${e.message}`);
+  }
+  return out;
+}
+
+function extractWeather(comp) {
+  if (!comp) return null;
+  const w = comp.weather || comp.situation && comp.situation.weather || null;
+  if (!w || typeof w !== 'object') return null;
+  const temp = w.temperature != null ? Number(w.temperature) : (w.temp != null ? Number(w.temp) : null);
+  const wind = w.windSpeed != null ? Number(String(w.windSpeed).replace(/[^\d.]/g, '')) : null;
+  return {
+    tempF: Number.isFinite(temp) ? temp : null,
+    condition: w.condition || w.displayValue || w.type || null,
+    windMph: Number.isFinite(wind) ? wind : null,
+    windDir: w.windDirection || w.displayValue || null,
+  };
+}
+
+async function loadGameDayContext(dateISO, labels, espnBySport) {
+  const gameDay = {
+    restByTeam: { MLB: {}, NFL: {}, NCAAF: {} },
+    qbStatusBySport: { NFL: {}, NCAAF: {} },
+    weatherByGame: {},
+  };
+  const prev = prevEtDate(dateISO);
+  if (prev) {
+    for (const label of labels) {
+      if (!['MLB', 'NFL', 'NCAAF'].includes(label)) continue;
+      try {
+        const board = await fetchEspnScoreboard(label, prev);
+        const map = restMapFromScoreboard((board && board.games) || [], prev);
+        gameDay.restByTeam[label] = map;
+        console.log(`[omega-vnext/ingest] rest ${label} playedYesterday=${Object.keys(map).length} (from ${prev})`);
+      } catch (e) {
+        console.error(`[omega-vnext/ingest] rest ${label} soft-fail: ${e.message}`);
+        gameDay.restByTeam[label] = {};
+      }
+    }
+  }
+  try {
+    if (labels.includes('NFL')) gameDay.qbStatusBySport.NFL = await fetchFootballQbStatusMap('nfl');
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] NFL QB soft-fail: ${e.message}`);
+  }
+  try {
+    if (labels.includes('NCAAF')) gameDay.qbStatusBySport.NCAAF = await fetchFootballQbStatusMap('college-football');
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] CFB QB soft-fail: ${e.message}`);
+  }
+  // Weather from today's MLB ESPN board already fetched
+  const mlbBoard = espnBySport && espnBySport.MLB;
+  for (const g of (mlbBoard && mlbBoard.games) || []) {
+    // weather may not be on our mapped games — leave empty unless present
+    if (g.weather) {
+      const key = `${g.awayTeam || ''}|${g.homeTeam || ''}`;
+      gameDay.weatherByGame[key] = g.weather;
+    }
+  }
+  return gameDay;
+}
+
 async function loadSportEngines(dateISO, deps) {
   const loadSeeds = (deps && deps.loadSeeds) || loadEfficiencySeeds;
   const loadParks = (deps && deps.loadParks) || loadParkFactors;
@@ -298,6 +394,13 @@ async function ingest(dateISO, opts = {}) {
   const standingsBySport = {};
   for (const row of standingsList) standingsBySport[row.label] = row.ratings;
 
+  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
+  try {
+    gameDay = await loadGameDayContext(dateISO, labels, espnBySport);
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] gameDay soft-fail: ${e.message}`);
+  }
+
   return {
     dateISO,
     oddsBySport: odds.bySport,
@@ -306,6 +409,7 @@ async function ingest(dateISO, opts = {}) {
     efficiencyBySport: engines.efficiencyBySport,
     mlbPitcherStats: engines.mlbPitcherStats,
     parkFactors: engines.parkFactors,
+    gameDay,
     fetchedAt: odds.fetchedAt,
     snapshotNote: odds.snapshotNote,
   };
@@ -320,6 +424,8 @@ module.exports = {
   loadEfficiencySeeds,
   loadParkFactors,
   loadSportEngines,
+  loadGameDayContext,
+  fetchFootballQbStatusMap,
   enabledSportLabels,
   filterEventsSameEtDay,
   etCalendarDate,

@@ -381,8 +381,8 @@ async function generateOmegaVnext(opts = {}) {
   }
   if (empty) {
     picksData.noPlays = hardFails.length
-      ? 'No qualifying edges after QA hard-fails.'
-      : 'No qualifying CLV-positive edges today.';
+      ? 'WeBetAI passed after late checks. Nothing left was worth a stake.'
+      : 'WeBetAI passed on today\'s board. No number was soft enough to lock.';
     picksData.edgeSummary = picksData.edgeSummary || picksData.noPlays;
   }
 

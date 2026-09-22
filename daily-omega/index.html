@@ -391,6 +391,7 @@
     }
     .show-more-bar.has-more { display: block; }
 
+    .rl-right { display:flex; flex-wrap:wrap; gap:.5rem .75rem; align-items:center; justify-content:flex-end; font-size:.75rem; }
     .record-legend-bar {
       display: flex; align-items: center; justify-content: space-between;
       background: var(--white); border: 1px solid var(--border-lt);
@@ -686,10 +687,10 @@
   <!-- Record + Legend bar -->
   <div id="record-legend-bar" class="record-legend-bar">
     <div id="record-bar-content" class="rl-left"></div>
-    <div class="rl-right">
-      <span><span class="legend-dot dot-aplus"></span>A+ (2.0u+)</span>
-      <span><span class="legend-dot dot-a"></span>A (1.5u)</span>
-      <span><span class="legend-dot dot-aminus"></span>A- (1.0u)</span>
+    <div class="rl-right" title="Grade = price quality (edge vs the market). Units on each card = how hard WeBetAI sizes the bet.">
+      <span><span class="legend-dot dot-aplus"></span>A+ Strong edge (~5%+)</span>
+      <span><span class="legend-dot dot-a"></span>A Solid (~3.5–5%)</span>
+      <span><span class="legend-dot dot-aminus"></span>A- Playable (~2.5–3.5%)</span>
     </div>
   </div>
 
@@ -706,7 +707,7 @@
 
   <p class="footer-note">
     All lines verified via The Odds API (40+ sportsbooks). Best available line selected per pick.<br>
-    Unit sizing: A+ = 2.5-3.0u, A = 1.5-2.0u, A- = 1.0u, B+ = 0.5u. Kelly-sized, rounded to nearest 0.5u.<br>
+    Grade = price quality (edge vs the market). Units on each card = Kelly stake (separate from the letter).<br>
     Auto-generated daily by ~11:00am ET. Not financial advice.
   </p>
 </div>

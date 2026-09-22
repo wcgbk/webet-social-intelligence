@@ -1,27 +1,28 @@
 'use strict';
 /**
- * NFL v1 — point-spread normal approx (σ≈13.5) + HFA. Market-anchored.
- * Limitations: no QB injury/epa models; no weather; key numbers soft only via market blend.
+ * NFL — EPA-style off/def prior when both teams match (nfl-epa-v1*),
+ * else standings power + HFA (nfl-normal-*). Market blend unchanged;
+ * calibrate shrink runs later in the pipeline.
  */
-const { HFA } = require('../config');
 const {
-  formatMatchup, fuzzyTeam, powerFromStandings,
+  formatMatchup,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
+const { footballProjection } = require('./epa');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'NFL';
 
-function projectGame(event, standings) {
+function projectGame(event, standings, efficiency) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const hPow = powerFromStandings(fuzzyTeam(home, standings));
-  const aPow = powerFromStandings(fuzzyTeam(away, standings));
-  const modelMargin = (hPow - aPow) + HFA.NFL;
-  const modelTotal = 45 + Math.abs(hPow + aPow) * 0.05;
-  const uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.16 : 0.26;
+  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency });
+  const modelMargin = env.modelMargin;
+  const modelTotal = env.modelTotal;
+  const uncertainty = env.uncertainty;
+  const methods = env.methods;
   const out = [];
 
   {
@@ -32,7 +33,7 @@ function projectGame(event, standings) {
       p = blendWithMarket(p, americanToImplied((b.prices.find(x => x.book === 'pinnacle') || b.prices[0] || {}).american), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: 'nfl-normal-ml', uncertainty,
+        market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
@@ -48,7 +49,7 @@ function projectGame(event, standings) {
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: 'nfl-normal-spread', uncertainty,
+        market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
@@ -63,7 +64,7 @@ function projectGame(event, standings) {
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
-        projMethod: 'nfl-total-baseline', uncertainty: uncertainty + 0.04,
+        projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
@@ -72,9 +73,9 @@ function projectGame(event, standings) {
   return out;
 }
 
-function project({ oddsEvents, standings }) {
+function project({ oddsEvents, standings, efficiency } = {}) {
   const all = [];
-  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}));
+  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}, efficiency || {}));
   return all;
 }
 

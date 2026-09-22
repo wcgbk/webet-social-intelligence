@@ -44,18 +44,22 @@ function projectAll(snap) {
       oddsEvents: snap.oddsBySport.MLB || [],
       standings: snap.standingsBySport.MLB || {},
       espnGames: snap.espnBySport && snap.espnBySport.MLB,
+      mlbPitcherStats: snap.mlbPitcherStats || {},
+      parkFactors: snap.parkFactors || {},
     }));
   }
   if (SPORTS_ENABLED.NFL) {
     raw.push(...nfl.project({
       oddsEvents: snap.oddsBySport.NFL || [],
       standings: snap.standingsBySport.NFL || {},
+      efficiency: (snap.efficiencyBySport && snap.efficiencyBySport.NFL) || {},
     }));
   }
   if (SPORTS_ENABLED.NCAAF) {
     raw.push(...cfb.project({
       oddsEvents: snap.oddsBySport.NCAAF || [],
       standings: snap.standingsBySport.NCAAF || {},
+      efficiency: (snap.efficiencyBySport && snap.efficiencyBySport.NCAAF) || {},
     }));
   }
   if (SPORTS_ENABLED.NBA) raw.push(...nba.project({}));

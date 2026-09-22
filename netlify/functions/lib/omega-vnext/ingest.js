@@ -4,6 +4,7 @@ const {
   SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
 } = require('./config');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
+const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -180,26 +181,131 @@ async function fetchEspnStandings(label) {
   return {};
 }
 
+function stripMeta(table) {
+  const out = {};
+  if (!table || typeof table !== 'object' || Array.isArray(table)) return out;
+  for (const [k, v] of Object.entries(table)) {
+    if (!k || k.startsWith('_')) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function loadEfficiencySeeds() {
+  const nfl = require('./sports/data/nfl-epa-seed.json');
+  const cfb = require('./sports/data/cfb-epa-seed.json');
+  return { NFL: stripMeta(nfl), NCAAF: stripMeta(cfb) };
+}
+
+function loadParkFactors() {
+  return stripMeta(require('./sports/data/mlb-park-factors.json'));
+}
+
+/**
+ * One StatsAPI pull per generate. Player lines preferred; team rates are a
+ * fallback index only. Any failure returns an empty index — never throws.
+ */
+async function fetchMlbPitcherStats(dateISO) {
+  const empty = emptyPitcherIndex();
+  try {
+    const season = mlbSeasonFromDate(dateISO);
+    const playerUrl = `https://statsapi.mlb.com/api/v1/stats?stats=season&group=pitching&season=${season}&sportId=1&playerPool=all&limit=2000&gameType=R`;
+    const teamUrl = `https://statsapi.mlb.com/api/v1/teams/stats?season=${season}&sportId=1&group=pitching&stats=season&gameType=R`;
+    const [playerRes, teamRes] = await Promise.allSettled([
+      fetchJson(playerUrl, 8000),
+      fetchJson(teamUrl, 8000),
+    ]);
+    if (playerRes.status === 'rejected') {
+      console.error(`[omega-vnext/ingest] MLB player stats failed: ${playerRes.reason && playerRes.reason.message}`);
+    }
+    if (teamRes.status === 'rejected') {
+      console.error(`[omega-vnext/ingest] MLB team pitching failed: ${teamRes.reason && teamRes.reason.message}`);
+    }
+    const players = playerRes.status === 'fulfilled' ? playerRes.value : null;
+    const teams = teamRes.status === 'fulfilled' ? teamRes.value : null;
+    if (!players && !teams) return empty;
+    const idx = buildPitcherIndex(players, teams);
+    console.log(`[omega-vnext/ingest] MLB pitcher stats season=${season} players=${Object.keys(idx.byId).length} teams=${Object.keys(idx.byTeam).length}`);
+    return idx;
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] MLB pitcher stats failed (standings fallback): ${e.message}`);
+    return empty;
+  }
+}
+
+/**
+ * EPA seeds + park table + optional StatsAPI. Each piece fails soft to {}.
+ * deps is for tests — production calls the real loaders.
+ */
+async function loadSportEngines(dateISO, deps) {
+  const loadSeeds = (deps && deps.loadSeeds) || loadEfficiencySeeds;
+  const loadParks = (deps && deps.loadParks) || loadParkFactors;
+  const fetchPitchers = (deps && deps.fetchPitchers) || ((d) => fetchMlbPitcherStats(d));
+  let efficiencyBySport = { NFL: {}, NCAAF: {} };
+  let parkFactors = {};
+  let mlbPitcherStats = emptyPitcherIndex();
+  try {
+    const seeds = await loadSeeds();
+    efficiencyBySport = {
+      NFL: stripMeta(seeds && seeds.NFL),
+      NCAAF: stripMeta(seeds && (seeds.NCAAF || seeds.CFB)),
+    };
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] EPA/efficiency load failed (standings fallback): ${e.message}`);
+    efficiencyBySport = { NFL: {}, NCAAF: {} };
+  }
+  try {
+    parkFactors = stripMeta(await loadParks());
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] park factors load failed (neutral fallback): ${e.message}`);
+    parkFactors = {};
+  }
+  try {
+    const fetched = await fetchPitchers(dateISO);
+    mlbPitcherStats = fetched && typeof fetched === 'object'
+      ? fetched
+      : emptyPitcherIndex();
+    if (!mlbPitcherStats.byId || !mlbPitcherStats.byName || !mlbPitcherStats.byTeam) {
+      mlbPitcherStats = {
+        byId: (mlbPitcherStats && mlbPitcherStats.byId) || {},
+        byName: (mlbPitcherStats && mlbPitcherStats.byName) || {},
+        byTeam: (mlbPitcherStats && mlbPitcherStats.byTeam) || {},
+      };
+    }
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] MLB pitcher stats failed (standings fallback): ${e.message}`);
+    mlbPitcherStats = emptyPitcherIndex();
+  }
+  const nNfl = Object.keys(efficiencyBySport.NFL || {}).length;
+  const nCfb = Object.keys(efficiencyBySport.NCAAF || {}).length;
+  const nParks = Object.keys(parkFactors || {}).length;
+  const nPit = Object.keys((mlbPitcherStats && mlbPitcherStats.byId) || {}).length;
+  console.log(`[omega-vnext/ingest] engines epa NFL=${nNfl} NCAAF=${nCfb} parks=${nParks} pitchers=${nPit}`);
+  return { efficiencyBySport, parkFactors, mlbPitcherStats };
+}
+
 async function ingest(dateISO, opts = {}) {
   const labels = enabledSportLabels();
   // Also fetch standings for disabled sports? No — only enabled.
-  const [odds, ...espnParts] = await Promise.all([
+  const [odds, espnParts, standingsList, engines] = await Promise.all([
     fetchOddsMultiSport(dateISO, opts),
-    ...labels.map(l => fetchEspnScoreboard(l, dateISO)),
+    Promise.all(labels.map(l => fetchEspnScoreboard(l, dateISO))),
+    Promise.all(labels.map(async (l) => ({ label: l, ratings: await fetchEspnStandings(l) }))),
+    loadSportEngines(dateISO),
   ]);
   const espnBySport = {};
   for (const part of espnParts) espnBySport[part.league] = part;
-
   const standingsBySport = {};
-  await Promise.all(labels.map(async (l) => {
-    standingsBySport[l] = await fetchEspnStandings(l);
-  }));
+  for (const row of standingsList) standingsBySport[row.label] = row.ratings;
 
   return {
     dateISO,
     oddsBySport: odds.bySport,
     espnBySport,
     standingsBySport,
+    efficiencyBySport: engines.efficiencyBySport,
+    mlbPitcherStats: engines.mlbPitcherStats,
+    parkFactors: engines.parkFactors,
     fetchedAt: odds.fetchedAt,
     snapshotNote: odds.snapshotNote,
   };
@@ -210,6 +316,10 @@ module.exports = {
   fetchOddsMultiSport,
   fetchEspnScoreboard,
   fetchEspnStandings,
+  fetchMlbPitcherStats,
+  loadEfficiencySeeds,
+  loadParkFactors,
+  loadSportEngines,
   enabledSportLabels,
   filterEventsSameEtDay,
   etCalendarDate,

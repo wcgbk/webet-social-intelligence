@@ -1,0 +1,321 @@
+{
+  "_meta": {
+    "units": "epa_per_play",
+    "defEpa": "higher is better (EPA prevented per play, not EPA allowed)",
+    "offSuccess": "offensive success rate",
+    "defSuccess": "defensive success rate (higher = more stops)",
+    "note": "v1 cached FBS prior for a top set, not every program. Missing teams fall back to standings power."
+  },
+  "Ohio State Buckeyes": {
+    "offEpa": 0.22,
+    "defEpa": 0.12,
+    "offSuccess": 0.51,
+    "defSuccess": 0.47
+  },
+  "Georgia Bulldogs": {
+    "offEpa": 0.16,
+    "defEpa": 0.14,
+    "offSuccess": 0.49,
+    "defSuccess": 0.48
+  },
+  "Texas Longhorns": {
+    "offEpa": 0.19,
+    "defEpa": 0.08,
+    "offSuccess": 0.5,
+    "defSuccess": 0.46
+  },
+  "Oregon Ducks": {
+    "offEpa": 0.21,
+    "defEpa": 0.06,
+    "offSuccess": 0.5,
+    "defSuccess": 0.45
+  },
+  "Alabama Crimson Tide": {
+    "offEpa": 0.14,
+    "defEpa": 0.09,
+    "offSuccess": 0.48,
+    "defSuccess": 0.46
+  },
+  "Ole Miss Rebels": {
+    "offEpa": 0.2,
+    "defEpa": 0.02,
+    "offSuccess": 0.5,
+    "defSuccess": 0.44
+  },
+  "Notre Dame Fighting Irish": {
+    "offEpa": 0.15,
+    "defEpa": 0.07,
+    "offSuccess": 0.48,
+    "defSuccess": 0.45
+  },
+  "Penn State Nittany Lions": {
+    "offEpa": 0.13,
+    "defEpa": 0.1,
+    "offSuccess": 0.48,
+    "defSuccess": 0.46
+  },
+  "Indiana Hoosiers": {
+    "offEpa": 0.17,
+    "defEpa": 0.05,
+    "offSuccess": 0.49,
+    "defSuccess": 0.45
+  },
+  "Tennessee Volunteers": {
+    "offEpa": 0.16,
+    "defEpa": 0.01,
+    "offSuccess": 0.49,
+    "defSuccess": 0.43
+  },
+  "Miami Hurricanes": {
+    "offEpa": 0.14,
+    "defEpa": 0.03,
+    "offSuccess": 0.48,
+    "defSuccess": 0.44
+  },
+  "Clemson Tigers": {
+    "offEpa": 0.08,
+    "defEpa": 0.06,
+    "offSuccess": 0.46,
+    "defSuccess": 0.45
+  },
+  "LSU Tigers": {
+    "offEpa": 0.12,
+    "defEpa": -0.02,
+    "offSuccess": 0.47,
+    "defSuccess": 0.42
+  },
+  "Michigan Wolverines": {
+    "offEpa": 0.07,
+    "defEpa": 0.08,
+    "offSuccess": 0.45,
+    "defSuccess": 0.46
+  },
+  "Texas A&M Aggies": {
+    "offEpa": 0.09,
+    "defEpa": 0.04,
+    "offSuccess": 0.46,
+    "defSuccess": 0.44
+  },
+  "Oklahoma Sooners": {
+    "offEpa": 0.11,
+    "defEpa": -0.01,
+    "offSuccess": 0.47,
+    "defSuccess": 0.43
+  },
+  "Missouri Tigers": {
+    "offEpa": 0.1,
+    "defEpa": 0.02,
+    "offSuccess": 0.46,
+    "defSuccess": 0.44
+  },
+  "South Carolina Gamecocks": {
+    "offEpa": 0.08,
+    "defEpa": 0.0,
+    "offSuccess": 0.46,
+    "defSuccess": 0.43
+  },
+  "Arizona State Sun Devils": {
+    "offEpa": 0.12,
+    "defEpa": -0.02,
+    "offSuccess": 0.47,
+    "defSuccess": 0.42
+  },
+  "Boise State Broncos": {
+    "offEpa": 0.11,
+    "defEpa": 0.03,
+    "offSuccess": 0.47,
+    "defSuccess": 0.44
+  },
+  "SMU Mustangs": {
+    "offEpa": 0.13,
+    "defEpa": -0.01,
+    "offSuccess": 0.48,
+    "defSuccess": 0.43
+  },
+  "BYU Cougars": {
+    "offEpa": 0.1,
+    "defEpa": 0.04,
+    "offSuccess": 0.46,
+    "defSuccess": 0.44
+  },
+  "Iowa State Cyclones": {
+    "offEpa": 0.06,
+    "defEpa": 0.07,
+    "offSuccess": 0.45,
+    "defSuccess": 0.45
+  },
+  "Kansas State Wildcats": {
+    "offEpa": 0.05,
+    "defEpa": 0.05,
+    "offSuccess": 0.45,
+    "defSuccess": 0.45
+  },
+  "USC Trojans": {
+    "offEpa": 0.09,
+    "defEpa": -0.03,
+    "offSuccess": 0.46,
+    "defSuccess": 0.42
+  },
+  "Florida Gators": {
+    "offEpa": 0.07,
+    "defEpa": -0.04,
+    "offSuccess": 0.45,
+    "defSuccess": 0.42
+  },
+  "Florida State Seminoles": {
+    "offEpa": 0.04,
+    "defEpa": -0.02,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Auburn Tigers": {
+    "offEpa": 0.03,
+    "defEpa": -0.01,
+    "offSuccess": 0.44,
+    "defSuccess": 0.43
+  },
+  "Kentucky Wildcats": {
+    "offEpa": 0.02,
+    "defEpa": 0.0,
+    "offSuccess": 0.44,
+    "defSuccess": 0.43
+  },
+  "Arkansas Razorbacks": {
+    "offEpa": 0.04,
+    "defEpa": -0.03,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Wisconsin Badgers": {
+    "offEpa": 0.01,
+    "defEpa": 0.02,
+    "offSuccess": 0.43,
+    "defSuccess": 0.44
+  },
+  "Iowa Hawkeyes": {
+    "offEpa": -0.02,
+    "defEpa": 0.06,
+    "offSuccess": 0.42,
+    "defSuccess": 0.45
+  },
+  "Kansas Jayhawks": {
+    "offEpa": 0.06,
+    "defEpa": -0.05,
+    "offSuccess": 0.45,
+    "defSuccess": 0.41
+  },
+  "Nebraska Cornhuskers": {
+    "offEpa": 0.03,
+    "defEpa": -0.02,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Colorado Buffaloes": {
+    "offEpa": 0.05,
+    "defEpa": -0.06,
+    "offSuccess": 0.45,
+    "defSuccess": 0.41
+  },
+  "Utah Utes": {
+    "offEpa": 0.02,
+    "defEpa": 0.01,
+    "offSuccess": 0.44,
+    "defSuccess": 0.43
+  },
+  "Arizona Wildcats": {
+    "offEpa": 0.04,
+    "defEpa": -0.04,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Washington Huskies": {
+    "offEpa": 0.03,
+    "defEpa": -0.01,
+    "offSuccess": 0.44,
+    "defSuccess": 0.43
+  },
+  "Michigan State Spartans": {
+    "offEpa": 0.0,
+    "defEpa": -0.03,
+    "offSuccess": 0.43,
+    "defSuccess": 0.42
+  },
+  "Illinois Fighting Illini": {
+    "offEpa": 0.05,
+    "defEpa": -0.02,
+    "offSuccess": 0.45,
+    "defSuccess": 0.42
+  },
+  "Minnesota Golden Gophers": {
+    "offEpa": 0.01,
+    "defEpa": -0.01,
+    "offSuccess": 0.43,
+    "defSuccess": 0.43
+  },
+  "Louisville Cardinals": {
+    "offEpa": 0.06,
+    "defEpa": -0.03,
+    "offSuccess": 0.45,
+    "defSuccess": 0.42
+  },
+  "Duke Blue Devils": {
+    "offEpa": 0.04,
+    "defEpa": 0.02,
+    "offSuccess": 0.44,
+    "defSuccess": 0.44
+  },
+  "North Carolina Tar Heels": {
+    "offEpa": 0.02,
+    "defEpa": -0.04,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "NC State Wolfpack": {
+    "offEpa": 0.01,
+    "defEpa": 0.0,
+    "offSuccess": 0.43,
+    "defSuccess": 0.43
+  },
+  "Pittsburgh Panthers": {
+    "offEpa": 0.0,
+    "defEpa": 0.01,
+    "offSuccess": 0.43,
+    "defSuccess": 0.43
+  },
+  "Texas Tech Red Raiders": {
+    "offEpa": 0.08,
+    "defEpa": -0.05,
+    "offSuccess": 0.46,
+    "defSuccess": 0.41
+  },
+  "TCU Horned Frogs": {
+    "offEpa": 0.03,
+    "defEpa": -0.02,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Baylor Bears": {
+    "offEpa": 0.02,
+    "defEpa": -0.03,
+    "offSuccess": 0.44,
+    "defSuccess": 0.42
+  },
+  "Memphis Tigers": {
+    "offEpa": 0.07,
+    "defEpa": -0.04,
+    "offSuccess": 0.45,
+    "defSuccess": 0.42
+  },
+  "UCF Knights": {
+    "offEpa": 0.05,
+    "defEpa": -0.03,
+    "offSuccess": 0.45,
+    "defSuccess": 0.42
+  },
+  "James Madison Dukes": {
+    "offEpa": 0.06,
+    "defEpa": 0.01,
+    "offSuccess": 0.45,
+    "defSuccess": 0.43
+  }
+}

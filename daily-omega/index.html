@@ -145,7 +145,7 @@
     .pick-footer { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; min-width: 0; }
     .pick-footer-right { display: flex; align-items: center; gap: .375rem; flex-shrink: 0; }
     .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
-    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
+    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.65; margin-bottom: .625rem; }
     .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
 
     /* ─── Win Prob Badge ─── */
@@ -662,18 +662,20 @@
     <!-- Verify Picks button removed 2026-06-27 — user-facing verify feature retired per Ben -->
   </div>
 
-  <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
-    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+  <div id="daily-edge-summary" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.25rem 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--green);">
+    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem;">
       <span style="font-size: .6875rem; font-weight: 600; color: var(--green); background: var(--green-light); border: 1px solid var(--green-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Daily Edge</span>
     </div>
-    <p id="daily-edge-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+    <p style="font-size: .75rem; color: var(--txt-m); line-height: 1.45; margin: 0 0 .5rem;">Why WeBetAI locked the card, and where the number still pays.</p>
+    <p id="daily-edge-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.7; font-weight: 400; margin: 0;"></p>
   </div>
 
-  <div id="insights-section" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--teal);">
-    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem;">
+  <div id="insights-section" style="background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: 1.25rem 1.125rem; margin-bottom: .75rem; display: none; border-left: 3px solid var(--teal);">
+    <div style="display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem;">
       <span style="font-size: .6875rem; font-weight: 600; color: var(--teal); background: var(--teal-light); border: 1px solid var(--teal-border); border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;">Insights</span>
     </div>
-    <p id="insights-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.65; font-weight: 400;"></p>
+    <p style="font-size: .75rem; color: var(--txt-m); line-height: 1.45; margin: 0 0 .5rem;">Sport mix, what to watch before lock, and how the card is built.</p>
+    <p id="insights-text" style="font-size: .8125rem; color: var(--txt-b); line-height: 1.7; font-weight: 400; margin: 0;"></p>
   </div>
 
   <!-- Edge grade legend (record lives in KPI / results) -->
@@ -1673,7 +1675,7 @@
     } else if (picks.length > 0) {
       const sportStr = [...new Set(picks.map(p => p.sport))].join(', ');
       const pickDescs = picks.map(p => `${p.pick} (${p.odds})`).join(', ');
-      summaryText.textContent = `Today's top edges across ${sportStr}: ${pickDescs}.`;
+      summaryText.textContent = `WeBetAI's card in ${sportStr} is built around ${pickDescs}. The prices on these sides are why they are locked, and each stake stays inside a normal daily card. Read the blurb under the number for the matchup. Pass on any play that does not sound like your game.`;
       summaryEl.style.display = 'block';
     }
 
@@ -1685,7 +1687,7 @@
     } else if (picks.length > 0) {
       const sportSet = [...new Set(picks.map(p => p.sport))];
       const totalUnitsInsight = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
-      insightsText.textContent = `Mixed slate across ${sportSet.join(' and ')}. ${totalUnitsInsight}u total straight exposure, sized to edge within the daily cap.`;
+      insightsText.textContent = `The mix on the card is ${sportSet.join(' and ')}. Straight exposure is ${totalUnitsInsight}u, sized to the price rather than piled onto one game. Before lock, check the starter in any baseball game and the quarterback plus the weather in any football game. The card is a short list on purpose. You do not have to play every line.`;
       insightsEl.style.display = 'block';
     }
 
@@ -1732,13 +1734,17 @@
     if (betSummaryEl) betSummaryEl.innerHTML = '';
 
     if (picks.length === 0) {
+      const rawEmpty = (data.noPlays || '').trim();
+      const emptyHeadline = (!rawEmpty || /CLV|hard-fail|the model/i.test(rawEmpty))
+        ? 'WeBetAI passed on today\'s board. No number was soft enough to lock.'
+        : rawEmpty;
       container.innerHTML = `
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
-            ${data.noPlays ? esc(data.noPlays) : 'No qualifying CLV-positive edges today.'}
+            ${esc(emptyHeadline)}
           </div>
-          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow by 11:00am ET.</div>
+          <div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">WeBetAI would rather pass than force a number. A fresh board is up by 11:00am ET.</div>
         </div>`;
       return;
     }
@@ -2093,7 +2099,7 @@
 
       html += `<tr class="day-detail${visibleCount > MAX_VISIBLE ? ' extra-day' : ''}" id="day-detail-${i}"${visibleCount > MAX_VISIBLE ? ' style="display:none"' : ''}><td colspan="4">`;
       if (day.noPlays) {
-        html += `<div style="padding:.5rem .25rem; font-size:.8125rem; color:var(--txt-m); font-style:italic;">No qualifying plays — model passed.</div>`;
+        html += `<div style="padding:.5rem .25rem; font-size:.8125rem; color:var(--txt-m); font-style:italic;">WeBetAI passed that day. No number was soft enough to lock.</div>`;
       } else if (day.picks && day.picks.length > 0) {
         html += '<ul class="day-picks-list">';
         for (const p of day.picks) {

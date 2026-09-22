@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.2-omega-vnext-verify-steam');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.3-omega-vnext-espn-copy');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -146,11 +146,17 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.ok(!math.isSameEtDay('2026-09-26T19:00:00Z', '2026-09-22'), 'Sat CFB must not pass Tue card');
   assert.ok(!math.isSameEtDay('2026-09-27T17:00:00Z', '2026-09-22'), 'Sun NFL must not pass Tue card');
 
-  const tue = '2026-09-22';
+  // Kickoff must still be pregame. A fixed Sep 22 night tip is already
+  // behind Date.now() once that evening passes, so use a few hours ahead
+  // and the ET date of that tip. Off-days stay later in the week.
+  const tueKick = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const tue = math.etCalendarDate(tueKick);
+  const offSat = new Date(Date.now() + 4 * 864e5).toISOString();
+  const offSun = new Date(Date.now() + 5 * 864e5).toISOString();
   const mixed = [
-    { sport: 'MLB', matchup: 'A @ B', side: 'B -1.5', market: 'Spread', odds: -110, coverProb: 0.56, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: '2026-09-22T23:05:00Z', homeTeam: 'B', awayTeam: 'A' },
-    { sport: 'NCAAF', matchup: 'C @ D', side: 'D -7', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: '2026-09-26T19:00:00Z', homeTeam: 'D', awayTeam: 'C' },
-    { sport: 'NFL', matchup: 'E @ F', side: 'F -3', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: '2026-09-27T17:00:00Z', homeTeam: 'F', awayTeam: 'E' },
+    { sport: 'MLB', matchup: 'A @ B', side: 'B -1.5', market: 'Spread', odds: -110, coverProb: 0.56, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: tueKick, homeTeam: 'B', awayTeam: 'A' },
+    { sport: 'NCAAF', matchup: 'C @ D', side: 'D -7', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: offSat, homeTeam: 'D', awayTeam: 'C' },
+    { sport: 'NFL', matchup: 'E @ F', side: 'F -3', market: 'Spread', odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, predictedClv: 2, liquid: true, commenceTime: offSun, homeTeam: 'F', awayTeam: 'E' },
   ];
   const gated = gates.applyGates(mixed, { cardDate: tue });
   assert.strictEqual(gated.yesPool.length, 1, 'only Tue MLB should pass');
@@ -199,15 +205,103 @@ const narrate = require(path.join(root, 'narrate'));
 const narrateSrc = require('fs').readFileSync(path.join(root, 'narrate.js'), 'utf8');
 assert.ok(narrateSrc.includes("claude-sonnet-4-6"), 'narrate must use claude-sonnet-4-6');
 assert.ok(!narrateSrc.includes("claude-sonnet-4-20250514"), 'old sonnet date-id must be gone');
-const fb = narrate.buildFallbackNarrative({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105' });
-assert.ok(fb.includes('WeBetAI'));
-assert.ok(!/clears Omega vNext gates|predicted CLV/i.test(fb));
+assert.ok(/4–6 sentence journalistic blurbs/.test(narrateSrc), 'header states 4-6 sentence blurbs');
+assert.ok(/4-6 sentence/.test(narrateSrc), 'prompt asks for 4-6 sentence straights');
+assert.ok(/3-5 sentence/.test(narrateSrc), 'prompt asks for 3-5 sentence legs and sections');
+assert.ok(!/2-4 sentence/.test(narrateSrc), 'stubby 2-4 sentence parlay rule must be gone');
+assert.ok(!/1-2 sentence/.test(narrateSrc), 'thin 1-2 sentence edge/insights rule must be gone');
+assert.ok(/NARRATIVE_MAX_TOKENS = 5800/.test(narrateSrc), 'max_tokens raised into 5500-6000');
+assert.ok(/max_tokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
+assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Claude');
+assert.ok(narrateSrc.includes('JSON.stringify(lockedLegs || [], null, 2)'));
+assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callClaudeOnce must not strip context');
+assert.ok(/ESPN/.test(narrateSrc) && /handicap/i.test(narrateSrc));
+assert.ok(/No em dashes/.test(narrateSrc));
+
+function countSentences(text) {
+  const masked = String(text || '').replace(/(\d)\.(\d)/g, '$1<$2');
+  return masked.split(/[.!?]+/).map(s => s.trim()).filter(Boolean).length;
+}
+const JARGON = /\bthe model\b|Kelly|coverProb|\bCLV\b|\bEV%|ORtg|DVOA|\bFIP\b|xFIP|\bATS\b|clears Omega vNext gates|predicted CLV|form and injuries line up/i;
+function assertDeskCopy(text, label, minSentences, maxSentences) {
+  assert.ok(text && text.includes('WeBetAI'), `${label} brands WeBetAI`);
+  assert.ok(!JARGON.test(text), `${label} leaked jargon: ${text}`);
+  assert.ok(!text.includes('—'), `${label} uses an em dash`);
+  const n = countSentences(text);
+  assert.ok(n >= minSentences && n <= maxSentences, `${label} has ${n} sentences, want ${minSentences}-${maxSentences}: ${text}`);
+}
+
+const fb = narrate.buildFallbackNarrative({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105', units: '1u', rating: 'a', edgePct: '4.2%' });
+assertDeskCopy(fb, 'total fallback', 4, 6);
+assert.ok(/Under 45\.5/.test(fb) && /DAL @ NYG/.test(fb));
+assert.ok(/little high/i.test(fb), 'total fallback translates the number into English');
+assert.ok(/under/i.test(fb));
+
+const fbDog = narrate.buildFallbackNarrative({ pick: 'Giants +6.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Spread', odds: '-110', units: '0.75u', steamAgainst: true, edgePct: 0.028 });
+assertDeskCopy(fbDog, 'dog fallback', 4, 6);
+assert.ok(/Giants \+6\.5/.test(fbDog));
+assert.ok(/points/i.test(fbDog));
+assert.ok(/leaning the other way/i.test(fbDog), 'steam against is translated, not dumped as cents');
+
+const fbMl = narrate.buildFallbackNarrative({ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '+120', edgePct: '5.4%', steamToward: true });
+assertDeskCopy(fbMl, 'ml fallback', 4, 6);
+assert.ok(/\+120/.test(fbMl) && /Yankees ML/.test(fbMl));
+assert.ok(/strong/i.test(fbMl) && /leaning this way/i.test(fbMl));
+
 const replaced = narrate.ensureNarrative({
   pick: 'Lakers ML', matchup: 'A @ B', sport: 'NBA', odds: '+120',
   coreReasoning: 'clears Omega vNext gates: calibrated cover 67%, predicted CLV 3¢. Method: sport-hybrid.',
 });
 assert.ok(!/clears Omega vNext gates/i.test(replaced.coreReasoning));
 assert.ok(replaced.coreReasoning.length > 40);
+assertDeskCopy(replaced.coreReasoning, 'replaced template', 4, 6);
+
+const extra = narrate.ensureExtraFields({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105', edgePct: '4.0%' });
+assert.ok(!/opposite outcome|monitor into close|Model-grounded/i.test(`${extra.whatLoses} ${extra.clvExpectation} ${extra.dataVerified}`));
+assert.ok(/Under 45\.5/.test(extra.whatLoses) && /DAL @ NYG/.test(extra.whatLoses));
+assert.ok(/closing number|close/i.test(extra.clvExpectation));
+assert.ok(!/\bCLV\b|Kelly|coverProb/i.test(extra.clvExpectation));
+assert.ok(/WeBetAI/.test(extra.dataVerified) && !/the model/i.test(extra.dataVerified));
+const kept = narrate.ensureExtraFields({ ...extra, whatLoses: extra.whatLoses, clvExpectation: extra.clvExpectation, dataVerified: extra.dataVerified });
+assert.strictEqual(kept.whatLoses, extra.whatLoses);
+
+const row = narrate.lockedRow({
+  sport: 'NFL', matchup: 'DAL @ NYG', pick: 'Under 45.5', betType: 'Total',
+  odds: '-105', units: '1u', rating: 'a', ev: '4.2%', coverProb: '55%',
+  edgePct: '4.2%', steamToward: true, lineMove: { oddsMoveCents: -12, lineMovePts: -0.5 },
+}, 0, 'straight');
+assert.strictEqual(row._contextEv, '4.2%');
+assert.strictEqual(row._contextCover, '55%');
+assert.strictEqual(row.edgeBand, 'solid');
+assert.strictEqual(row.rating, 'A');
+assert.strictEqual(row.grade, 'A');
+assert.ok(/toward/i.test(row.steamHint));
+assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Claude');
+assert.strictEqual(narrate.edgeBandFrom({ edgePct: '5.0%' }), 'strong');
+assert.strictEqual(narrate.edgeBandFrom({ edgePct: 0.05 }), 'strong');
+assert.strictEqual(narrate.edgeBandFrom({ edgePct: '3.5%' }), 'solid');
+assert.strictEqual(narrate.edgeBandFrom({ ev: '2.4%' }), 'modest');
+assert.strictEqual(narrate.edgeBandFrom({ edgePct: '0.0%', ev: '6%' }), null);
+assert.strictEqual(narrate.steamHintFrom({ steamAgainst: true }), 'line has moved against this side, and the price may still be the value');
+assert.strictEqual(narrate.steamHintFrom({ lineMove: { steamToward: true } }), 'line has moved toward this side');
+assert.ok(/held/i.test(narrate.steamHintFrom({ lineMove: { lineMovePts: 0, oddsMoveCents: 0 } }) || ''));
+
+const emptyCopy = narrate.buildCardFallbackCopy({ picks: [], dateFormatted: 'Tuesday, September 22' });
+assertDeskCopy(emptyCopy.edgeSummary, 'empty edge', 3, 5);
+assertDeskCopy(emptyCopy.insights, 'empty insights', 3, 5);
+assert.ok(/starter|quarterback|weather/i.test(emptyCopy.insights));
+const cardCopy = narrate.buildCardFallbackCopy({
+  picks: [
+    { pick: 'Under 45.5', sport: 'NFL', matchup: 'DAL @ NYG', edgePct: '5.5%' },
+    { pick: 'Yankees ML', sport: 'MLB', matchup: 'BOS @ NYY', edgePct: '3.0%' },
+  ],
+  dateFormatted: 'Tuesday, September 22',
+});
+assertDeskCopy(cardCopy.edgeSummary, 'card edge', 3, 5);
+assertDeskCopy(cardCopy.insights, 'card insights', 3, 5);
+assert.ok(/Under 45\.5/.test(cardCopy.edgeSummary) && /Yankees ML/.test(cardCopy.edgeSummary));
+assert.ok(/NFL/.test(cardCopy.insights) && /MLB/.test(cardCopy.insights));
+assert.ok(/starter|quarterback|weather/i.test(cardCopy.insights));
 
 // Parlay legs should expose coreReasoning field for public cards
 if (parlays.length) {
@@ -277,13 +371,64 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(lowEdgeHighUnits.rating, math.qualityToRating(0.012, 0, 0.12));
 }
 
-console.log('PASS test-omega-vnext', {
-  MODEL_VERSION,
-  DAILY_UNIT_CAP: config.DAILY_UNIT_CAP,
-  STRAIGHT_UNIT_BUDGET: config.STRAIGHT_UNIT_BUDGET,
-  PARLAY_FIXED_UNITS: config.PARLAY_FIXED_UNITS,
-  yesPool: yesPool.length,
-  straights: picks.length,
-  parlayLegs: parlays.length ? parlays[0].legs.length : 0,
-  edgeFormula: 'coverProb - fair_sharp_p (fallback: vs book implied)',
+(async () => {
+  const prevA = process.env.ANTHROPIC_API_KEY;
+  const prevB = process.env.ANTHROPIC_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_KEY;
+  try {
+    const empty = await narrate.narrateAndVerify({
+      picks: [], parlayLegs: [], dateFormatted: 'Tuesday, September 22',
+    });
+    assert.strictEqual(empty.claudeVerified, true);
+    assert.strictEqual(empty.picks.length, 0);
+    assertDeskCopy(empty.edgeSummary, 'empty narrate edge', 3, 5);
+    assertDeskCopy(empty.insights, 'empty narrate insights', 3, 5);
+
+    const out = await narrate.narrateAndVerify({
+      picks: [{
+        pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total',
+        odds: '-105', units: '1u', rating: 'a', edgePct: '4.2%', coreReasoning: '',
+      }],
+      parlayLegs: [{
+        units: '0.5u',
+        legs: [{
+          pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline',
+          odds: '+120', edgePct: '3.1%',
+        }],
+      }],
+      dateFormatted: 'Tuesday, September 22',
+      apiKey: '',
+    });
+    assert.strictEqual(out.claudeVerified, false);
+    assertDeskCopy(out.edgeSummary, 'no-key edge', 3, 5);
+    assertDeskCopy(out.insights, 'no-key insights', 3, 5);
+    assertDeskCopy(out.picks[0].coreReasoning, 'no-key straight', 4, 6);
+    assert.ok(/Under 45\.5/.test(out.picks[0].whatLoses));
+    assert.ok(/closing number|holds near|quiet close/i.test(out.picks[0].clvExpectation));
+    assert.ok(!/the model|Kelly|coverProb|\bCLV\b/i.test(out.picks[0].dataVerified));
+    const leg = out.parlayLegs[0].legs[0];
+    assertDeskCopy(leg.coreReasoning, 'no-key leg', 4, 6);
+    assert.ok(/Yankees ML/.test(leg.whatLoses));
+    assert.ok(/starter|quarterback|weather/i.test(out.insights));
+  } finally {
+    if (prevA == null) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevA;
+    if (prevB == null) delete process.env.ANTHROPIC_KEY;
+    else process.env.ANTHROPIC_KEY = prevB;
+  }
+
+  console.log('PASS test-omega-vnext', {
+    MODEL_VERSION,
+    DAILY_UNIT_CAP: config.DAILY_UNIT_CAP,
+    STRAIGHT_UNIT_BUDGET: config.STRAIGHT_UNIT_BUDGET,
+    PARLAY_FIXED_UNITS: config.PARLAY_FIXED_UNITS,
+    yesPool: yesPool.length,
+    straights: picks.length,
+    parlayLegs: parlays.length ? parlays[0].legs.length : 0,
+    edgeFormula: 'coverProb - fair_sharp_p (fallback: vs book implied)',
+  });
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });

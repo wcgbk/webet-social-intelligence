@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.2-omega-vnext-verify-steam');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.3-omega-vnext-espn-copy');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
@@ -192,6 +192,11 @@ const nowSnap = {
   },
 };
 
+// Pregame gate compares commenceTime to Date.now(). Keep the kickoff ahead
+// of the clock and pass that ET date as cardDate so the steam assertion
+// is what fails the candidate, not a started game.
+const kickoff = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+const cardDay = math.etCalendarDate(kickoff);
 const cands = linePath.annotateLineMoves([
   {
     sport: 'NFL',
@@ -206,7 +211,7 @@ const cands = linePath.annotateLineMoves([
     edgePct: 0.04,
     predictedClv: 2.0,
     liquid: true,
-    commenceTime: '2026-09-22T23:20:00Z',
+    commenceTime: kickoff,
   },
 ], openSnap, nowSnap);
 
@@ -215,7 +220,7 @@ assert.ok(cands[0].steamAgainst);
 assert.ok(cands[0].openPrint);
 assert.ok(cands[0]._steamScoreAdj < 0);
 
-const gated = gates.applyGates(cands, { cardDate: '2026-09-22' });
+const gated = gates.applyGates(cands, { cardDate: cardDay });
 assert.strictEqual(gated.yesPool.length, 0, 'adverse steam ML must be gated out; rejected=' + JSON.stringify(gated.rejected.map(r => r.rejectReason)));
 assert.ok(gated.rejected.some(r => /steam_against/.test(r.rejectReason)), 'reasons=' + gated.rejected.map(r => r.rejectReason).join(','));
 
@@ -241,7 +246,7 @@ const towardCands = linePath.annotateLineMoves([
     edgePct: 0.04,
     predictedClv: 1.5,
     liquid: true,
-    commenceTime: '2026-09-22T23:20:00Z',
+    commenceTime: kickoff,
     uncertainty: 0.15,
   },
 ], openSnap, towardSnap);

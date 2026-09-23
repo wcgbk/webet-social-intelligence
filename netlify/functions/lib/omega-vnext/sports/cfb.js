@@ -2,8 +2,8 @@
 /**
  * NCAAF/CFB — EPA-style off/def prior when both teams match (cfb-epa-v1*),
  * else standings power + HFA (cfb-normal-*). Game-day rest/QB soft adj
- * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. ML blend weight
- * unchanged. Spread/total weights unchanged; anchor is no-vig Pinnacle/Circa.
+ * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. Blend weights
+ * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
  * Calibrate shrink runs later in the pipeline.
  */
 const {
@@ -14,7 +14,6 @@ const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments } = require('./game_day');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
-const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'NCAAF';
 
@@ -77,7 +76,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     for (const b of bundles) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
-      p = blendWithMarket(p, americanToImplied((b.prices.find(x => x.book === 'pinnacle') || b.prices[0] || {}).american), 0.45);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.45);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,

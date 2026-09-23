@@ -2,22 +2,22 @@
 /**
  * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
  * v12.3.8: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
- * ML blend weight unchanged (vigged Pinnacle, else first price).
- * Spread/total blend weight unchanged; anchor is no-vig Pinnacle/Circa.
+ * ML / spread / total blend weights unchanged. Every anchor is no-vig
+ * Pinnacle/Circa (one book alone if the other is missing; else sharp no-vig).
+ * Base margin and total come from per-game runs, not season run differential.
  * assumedStarter stays tagged for QA hard-fail.
  */
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, fuzzyTeam, powerFromStandings, mapGamesSoft,
+  formatMatchup, fuzzyTeam, mapGamesSoft,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const {
   resolvePark, resolveSpQuality, applySpPark,
-  resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd,
+  resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd, mlbStandingsEnv,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
-const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'MLB';
 
@@ -55,10 +55,9 @@ function projectGame(event, standings, espnGame, ctx) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const hPow = powerFromStandings(fuzzyTeam(home, standings));
-  const aPow = powerFromStandings(fuzzyTeam(away, standings));
-  const baseMargin = (hPow - aPow) * 0.35 + HFA.MLB;
-  const baseTotal = 8.6 + Math.abs(hPow + aPow) * 0.02;
+  const env0 = mlbStandingsEnv(fuzzyTeam(home, standings), fuzzyTeam(away, standings));
+  const baseMargin = env0.modelMargin;
+  const baseTotal = env0.modelTotal;
 
   const out = [];
   let uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.18 : 0.28;
@@ -140,10 +139,7 @@ function projectGame(event, standings, espnGame, ctx) {
     for (const b of bundles) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
-      const mktImp = americanToImplied(
-        (b.prices.find(px => px.book === 'pinnacle') || b.prices[0] || {}).american
-      );
-      p = blendWithMarket(p, mktImp, 0.5);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,

@@ -9,7 +9,7 @@ const wf = require(path.join(root, 'walk_forward'));
 const store = require(path.join(root, 'store'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 assert.strictEqual(wf.KPI_FLOOR, config.CLV_KPI_FLOOR);
 assert.strictEqual(wf.OBSERVER_ONLY, true);

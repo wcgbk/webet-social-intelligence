@@ -130,9 +130,16 @@ const ODDS_SPORTS_MAP = {
 };
 
 // ── Sharp-book anchor priority (the-odds-api book keys) ──
-// Pinnacle first (the reference sharp), then exchanges / sharp US books. Surfaced by
-// regions us,us2,eu. If none are present for a market we fall back to an all-book median.
-const SHARP_BOOKS = ['pinnacle', 'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook', 'circasports', 'circa', 'bookmaker'];
+// Pinnacle first, then Circa / Bookmaker (the US closing-line books), then the
+// reduced-juice sharps. Exchanges stay a labeled fallback when no US sharp
+// posts both sides. Order is the priority: the first book with a two-way
+// price wins. Regions us,us2,eu. If none are present, all-book median.
+const SHARP_BOOKS = [
+  'pinnacle',
+  'circa', 'circasports',
+  'bookmaker', 'betonlineag', 'lowvig',
+  'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook',
+];
 
 // Full-game vs first-five-innings (F5) market keys. F5 is ONLY served by the per-event
 // odds endpoint (the bulk /odds call rejects it), so F5 closes are fetched per game.

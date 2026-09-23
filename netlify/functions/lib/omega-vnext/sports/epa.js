@@ -11,7 +11,7 @@
 
 const { HFA, ENGINE_SOFT } = require('../config');
 const { clamp } = require('../odds_math');
-const { fuzzyTeam, powerFromStandings } = require('./_common');
+const { fuzzyTeam, powerFromStandings, gamesPlayed } = require('./_common');
 
 const SIERRA_W = 0.2;
 const LEAGUE_SUCCESS = 0.43;
@@ -74,16 +74,6 @@ function lookupEpa(teamName, table) {
     talent: row.talent,
     spPlus: row.spPlus,
   };
-}
-
-function gamesPlayed(st) {
-  if (!st || typeof st !== 'object') return 0;
-  if (Number.isFinite(Number(st.games)) && Number(st.games) > 0) return Number(st.games);
-  const w = Number(st.wins);
-  const l = Number(st.losses);
-  const t = Number(st.ties);
-  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
-  return w + l + (Number.isFinite(t) ? t : 0);
 }
 
 /**
@@ -345,8 +335,8 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   const ratings = standings && typeof standings === 'object' ? standings : {};
   const homeSt = fuzzyTeam(home, ratings);
   const awaySt = fuzzyTeam(away, ratings);
-  const hPow = powerFromStandings(homeSt);
-  const aPow = powerFromStandings(awaySt);
+  const hPow = powerFromStandings(homeSt, sport);
+  const aPow = powerFromStandings(awaySt, sport);
   const hfa = HFA[sport] != null ? HFA[sport] : 0;
   const fallbackMargin = (hPow - aPow) + hfa;
   const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;

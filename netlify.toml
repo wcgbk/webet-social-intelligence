@@ -212,11 +212,21 @@
   # See docs/OMEGA-SHADOW-DRYRUN.md.
 
 
+[functions."capture-omega-pm-observer-open"]
+  schedule = "30 12 * * *"
+  # Morning PM open snap — 8:30am ET (12:30 UTC in EDT), inside 8:00–8:45 ET.
+  # Writes omega-pm-observer/{date}-open (raw ML markets) so 9:30 generate can
+  # compute pmMove. One hour before trigger-picks-omega (13:30 UTC) — no race.
+  # Does not write the live card. Soft-fail if PM APIs are down.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."capture-omega-pm-observer"]
   schedule = "15 14 * * *"
   # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after 9:30 generate.
-  # OBSERVER ONLY: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
-  # Never mutates live card / selection / grades / units. Soft-fail if PM APIs down.
+  # Audit log: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
+  # Generate already applied hard-capped soft score in-process. This job does
+  # not mutate the live card / grades / units. ?slot=open also writes the open key.
+  # Soft-fail if PM APIs down.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 

@@ -182,10 +182,33 @@ async function readJson(key) {
   }
 }
 
-/** Observer-only PM sidecar. Keys: omega-pm-observer/{date} + alias pm-sidecar-{date}. */
+function assertPmDate(dateISO) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`pm-observer refused bad date: ${dateISO}`);
+  }
+  return d;
+}
+
+/** post → omega-pm-observer/{date}; open → omega-pm-observer/{date}-open. */
+function pmObserverStorageKey(dateISO, slot) {
+  const d = assertPmDate(dateISO);
+  if (slot === 'open') return `omega-pm-observer/${d}-open`;
+  if (slot && slot !== 'post') throw new Error(`pm-observer refused slot: ${slot}`);
+  return `omega-pm-observer/${d}`;
+}
+
+function pmObserverAliasKey(dateISO, slot) {
+  const d = assertPmDate(dateISO);
+  if (slot === 'open') return `pm-sidecar-${d}-open`;
+  if (slot && slot !== 'post') throw new Error(`pm-observer refused slot: ${slot}`);
+  return `pm-sidecar-${d}`;
+}
+
+/** Observer audit. Keys: omega-pm-observer/{date} + alias pm-sidecar-{date}. */
 async function storePmObserver(dateISO, artifact) {
-  const primary = `omega-pm-observer/${dateISO}`;
-  const alias = `pm-sidecar-${dateISO}`;
+  const primary = pmObserverStorageKey(dateISO, 'post');
+  const alias = pmObserverAliasKey(dateISO, 'post');
   await storeJson(primary, artifact);
   try { await storeJson(alias, artifact); } catch (e) {
     console.error(`[omega-vnext/store] pm alias ${alias}: ${e.message}`);
@@ -193,9 +216,42 @@ async function storePmObserver(dateISO, artifact) {
   return primary;
 }
 
+/**
+ * Morning open snap for pmMove. Does not touch the post-card audit key
+ * or the live picks card.
+ */
+async function storePmObserverOpen(dateISO, artifact) {
+  const primary = pmObserverStorageKey(dateISO, 'open');
+  const alias = pmObserverAliasKey(dateISO, 'open');
+  const payload = { ...(artifact || {}), slot: 'open', date: assertPmDate(dateISO) };
+  await storeJson(primary, payload);
+  try { await storeJson(alias, payload); } catch (e) {
+    console.error(`[omega-vnext/store] pm open alias ${alias}: ${e.message}`);
+  }
+  return primary;
+}
+
 async function readPmObserver(dateISO) {
   return (await readJson(`omega-pm-observer/${dateISO}`))
     || (await readJson(`pm-sidecar-${dateISO}`));
+}
+
+/** Prior open snap. Null on a bad date or a missing blob. Never throws. */
+async function readPmObserverOpen(dateISO) {
+  let primary;
+  let alias;
+  try {
+    primary = pmObserverStorageKey(dateISO, 'open');
+    alias = pmObserverAliasKey(dateISO, 'open');
+  } catch (_) {
+    return null;
+  }
+  try {
+    return (await readJson(primary)) || (await readJson(alias));
+  } catch (e) {
+    console.warn(`[omega-vnext/store] pm open read soft-fail: ${e.message}`);
+    return null;
+  }
 }
 
 /** Walk-forward observer keys only — never live picks / fit blobs. */
@@ -350,7 +406,9 @@ async function readCaptureHealthDate(dateISO) {
 }
 
 module.exports = {
-  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson, storePmObserver, readPmObserver,
+  storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson,
+  storePmObserver, readPmObserver, storePmObserverOpen, readPmObserverOpen,
+  pmObserverStorageKey, pmObserverAliasKey,
   WALKFORWARD_KEY_RE, assertWalkforwardKey,
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,

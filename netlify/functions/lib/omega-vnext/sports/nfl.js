@@ -17,13 +17,27 @@ const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'NFL';
 
-function tagMethods(methods, gameDayApplied) {
-  if (!gameDayApplied || !methods) return methods;
-  const out = { ...methods };
-  for (const k of ['ml', 'spread', 'total']) {
-    if (out[k] && !String(out[k]).includes('gameday')) out[k] = `${out[k]}-gameday`;
+function tagMethods(methods, gameDayApplied, enginesOn) {
+  let out = methods ? { ...methods } : methods;
+  if (enginesOn && out) {
+    for (const k of ['ml', 'spread', 'total']) {
+      if (out[k] && !String(out[k]).includes('engines')) {
+        out[k] = String(out[k]).replace(/-v1/, '-v1-engines');
+        if (!String(out[k]).includes('engines')) out[k] = `${out[k]}-engines`;
+      }
+    }
+    if (out.family && !String(out.family).includes('engines')) {
+      out.family = String(out.family).includes('-v1')
+        ? String(out.family).replace(/-v1/, '-v1-engines')
+        : `${out.family}-engines`;
+    }
   }
-  if (out.family && !String(out.family).includes('gameday')) out.family = `${out.family}-gameday`;
+  if (gameDayApplied && out) {
+    for (const k of ['ml', 'spread', 'total']) {
+      if (out[k] && !String(out[k]).includes('gameday')) out[k] = `${out[k]}-gameday`;
+    }
+    if (out.family && !String(out.family).includes('gameday')) out.family = `${out.family}-gameday`;
+  }
   return out;
 }
 
@@ -46,7 +60,9 @@ function projectGame(event, standings, efficiency, gameDay) {
   const modelMargin = gd.modelMargin;
   const modelTotal = gd.modelTotal;
   const uncertainty = gd.uncertainty;
-  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied);
+  const enginesOn = !!(env.engineSoft && env.engineSoft.used)
+    || !!(gd.gameDay && gd.gameDay.qbContinuity && gd.gameDay.qbContinuity.marginAdj);
+  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, enginesOn);
   const out = [];
 
   {
@@ -60,6 +76,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gd.gameDay || null,
+        engineSoft: env.engineSoft || null,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -77,6 +94,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
         gameDay: gd.gameDay || null,
+        engineSoft: env.engineSoft || null,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -93,6 +111,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
         gameDay: gd.gameDay || null,
+        engineSoft: env.engineSoft || null,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }

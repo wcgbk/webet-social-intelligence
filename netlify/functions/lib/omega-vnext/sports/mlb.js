@@ -1,21 +1,53 @@
 'use strict';
 /**
  * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
- * projMethod mlb-sp-park-v1-* when a starter rate or park factor is used;
- * otherwise mlb-pythag-lite+hfa / mlb-normal-rl / mlb-total-baseline.
+ * v12.3.7: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
  * Market blend unchanged. assumedStarter stays tagged for QA hard-fail.
  */
-const { HFA } = require('../config');
+const { HFA, ENGINE_SOFT } = require('../config');
 const {
   formatMatchup, fuzzyTeam, powerFromStandings,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
-const { resolvePark, resolveSpQuality, applySpPark } = require('./mlb_env');
+const {
+  resolvePark, resolveSpQuality, applySpPark,
+  resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd,
+} = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'MLB';
+
+function buildMethods({ usedSp, usedPark, enginesOn, usedGameday }) {
+  let base;
+  if (usedSp || usedPark || enginesOn) {
+    base = {
+      ml: enginesOn ? 'mlb-sp-park-v1-engines-ml' : 'mlb-sp-park-v1-ml',
+      spread: enginesOn ? 'mlb-sp-park-v1-engines-spread' : 'mlb-sp-park-v1-spread',
+      total: enginesOn ? 'mlb-sp-park-v1-engines-total' : 'mlb-sp-park-v1-total',
+      family: enginesOn ? 'mlb-sp-park-v1-engines' : 'mlb-sp-park-v1',
+    };
+  } else {
+    base = {
+      ml: 'mlb-pythag-lite+hfa',
+      spread: 'mlb-normal-rl',
+      total: 'mlb-total-baseline',
+      family: enginesOn ? 'mlb-engines' : null,
+    };
+  }
+  if (usedGameday) {
+    for (const k of ['ml', 'spread', 'total']) {
+      if (base[k] && !String(base[k]).includes('gameday')) base[k] = `${base[k]}-gameday`;
+    }
+    if (base.family && !String(base.family).includes('gameday')) {
+      base.family = `${base.family}-gameday`;
+    } else if (!base.family) {
+      base.family = 'mlb-gameday';
+    }
+  }
+  return base;
+}
 
 function projectGame(event, standings, espnGame, ctx) {
   const home = event.home_team;
@@ -46,6 +78,19 @@ function projectGame(event, standings, espnGame, ctx) {
   });
   let modelMargin = adj.modelMargin;
   let modelTotal = adj.modelTotal;
+
+  const homeBp = resolveBullpenQuality(homeQ, home, bag.mlbPitcherStats);
+  const awayBp = resolveBullpenQuality(awayQ, away, bag.mlbPitcherStats);
+  const bp = applyBullpenAdj({
+    modelMargin,
+    modelTotal,
+    homeBullpen: homeBp,
+    awayBullpen: awayBp,
+    caps: ENGINE_SOFT && ENGINE_SOFT.MLB,
+  });
+  modelMargin = bp.modelMargin;
+  modelTotal = bp.modelTotal;
+
   const gdBag = (ctx && ctx.gameDay) || {};
   const restTable = (gdBag.restByTeam && (gdBag.restByTeam.MLB || gdBag.restByTeam)) || {};
   const gd = applyGameDayAdjustments({
@@ -68,32 +113,31 @@ function projectGame(event, standings, espnGame, ctx) {
     || null;
   const wx = applyWeatherTotalAdj(modelTotal, weather);
   modelTotal = wx.modelTotal;
+
+  const effStd = mlbSpKnownStd(homeQ, awayQ, ENGINE_SOFT && ENGINE_SOFT.MLB);
+  const enginesOn = !!(bp.usedBullpen || effStd != null);
+  const usedGameday = !!(gd.gameDay && gd.gameDay.applied) || wx.applied;
   const gameDayMeta = {
     ...(gd.gameDay || {}),
     weatherNote: wx.weatherNote,
-    applied: !!(gd.gameDay && gd.gameDay.applied) || wx.applied,
+    applied: usedGameday,
+    bullpenAdj: bp.usedBullpen ? { marginAdj: bp.marginAdj, totalAdj: bp.totalAdj, capped: bp.capped } : null,
+    spKnownStd: effStd,
+    enginesApplied: enginesOn,
   };
-  const usedGameday = gameDayMeta.applied;
-  const methods = (adj.usedSp || adj.usedPark)
-    ? {
-      ml: usedGameday ? 'mlb-sp-park-v1-gameday-ml' : 'mlb-sp-park-v1-ml',
-      spread: usedGameday ? 'mlb-sp-park-v1-gameday-spread' : 'mlb-sp-park-v1-spread',
-      total: usedGameday ? 'mlb-sp-park-v1-gameday-total' : 'mlb-sp-park-v1-total',
-      family: usedGameday ? 'mlb-sp-park-v1-gameday' : 'mlb-sp-park-v1',
-    }
-    : {
-      ml: usedGameday ? 'mlb-pythag-lite+hfa-gameday' : 'mlb-pythag-lite+hfa',
-      spread: usedGameday ? 'mlb-normal-rl-gameday' : 'mlb-normal-rl',
-      total: usedGameday ? 'mlb-total-baseline-gameday' : 'mlb-total-baseline',
-      family: usedGameday ? 'mlb-gameday' : null,
-    };
+  const methods = buildMethods({
+    usedSp: adj.usedSp,
+    usedPark: adj.usedPark,
+    enginesOn,
+    usedGameday,
+  });
+  const stdOpt = effStd != null ? effStd : undefined;
 
-  // Moneyline
   {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      let p = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
       const mktImp = americanToImplied(
         (b.prices.find(px => px.book === 'pinnacle') || b.prices[0] || {}).american
       );
@@ -111,7 +155,6 @@ function projectGame(event, standings, espnGame, ctx) {
     }
   }
 
-  // Run line (spreads)
   {
     const bundles = collectMarketOutcomes(event, 'spreads');
     for (const b of bundles) {
@@ -121,7 +164,8 @@ function projectGame(event, standings, espnGame, ctx) {
       let pCover = spreadCoverProb(
         isHome ? modelMargin : -modelMargin,
         line,
-        SPORT
+        SPORT,
+        stdOpt
       );
       const mktImp = americanToImplied((b.prices[0] || {}).american);
       pCover = blendWithMarket(pCover, mktImp, 0.5);
@@ -139,7 +183,6 @@ function projectGame(event, standings, espnGame, ctx) {
     }
   }
 
-  // Totals
   {
     const bundles = collectMarketOutcomes(event, 'totals');
     for (const b of bundles) {

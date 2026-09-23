@@ -8,7 +8,7 @@
 
 const { clamp } = require('../odds_math');
 const { fuzzyTeam } = require('./_common');
-const { QA_HARDFAIL } = require('../config');
+const { QA_HARDFAIL, ENGINE_SOFT } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -139,6 +139,55 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   };
 }
 
+
+/**
+ * QB continuity soft adj (NFL/NCAAF).
+ * Empty qbByTeam (feed soft-fail) → 0 (do not invent healthy).
+ * Non-empty map + team absent → healthy continuity credit.
+ * Out/doubtful already handled by qbSoftAdjust — skip those sides.
+ */
+function qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam, caps) {
+  if (sport !== 'NFL' && sport !== 'NCAAF') {
+    return { marginAdj: 0, note: null, used: false };
+  }
+  if (!qbByTeam || typeof qbByTeam !== 'object' || !Object.keys(qbByTeam).length) {
+    return { marginAdj: 0, note: null, used: false };
+  }
+  const cfg = (caps && caps[sport]) || (ENGINE_SOFT && ENGINE_SOFT[sport]) || {};
+  const pts = Number.isFinite(Number(cfg.qbContinuityPts))
+    ? Number(cfg.qbContinuityPts)
+    : (sport === 'NFL' ? 0.55 : 0.55);
+  const maxM = Number.isFinite(Number(cfg.maxAbsMarginAdj))
+    ? Math.abs(Number(cfg.maxAbsMarginAdj))
+    : 1.5;
+  const outStatuses = (QA_HARDFAIL && QA_HARDFAIL.qbOutStatuses) || ['out', 'doubtful'];
+  const isInjured = (qb) => {
+    if (!qb) return false;
+    const st = String(qb.qbStatus || qb.status || '').toLowerCase();
+    if (!st) return false;
+    return outStatuses.some(k => st.includes(k)) || /questionable|q\b/.test(st);
+  };
+  // Continuity only when no injury flag on that side.
+  const homeHealthy = !isInjured(homeQb) ? 1 : 0;
+  const awayHealthy = !isInjured(awayQb) ? 1 : 0;
+  // If both injured or both healthy with no differential, still apply if one side healthier.
+  let raw = (homeHealthy - awayHealthy) * pts;
+  // When map is loaded but BOTH sides have injury flags, continuity is 0 (qbSoftAdjust owns discount).
+  if (isInjured(homeQb) && isInjured(awayQb)) raw = 0;
+  // When both healthy (no flags), no differential — 0. Continuity only helps when one side is flagged-absent and other is flagged.
+  // Re-read design: "no qb injury row → continuity". So:
+  // home missing from map (null) AND away has out → home gets +pts relative.
+  const marginAdj = clamp(raw, -pts, pts);
+  const overall = clamp(marginAdj, -maxM, maxM);
+  return {
+    marginAdj: overall,
+    note: Math.abs(overall) > 1e-9
+      ? `qb-continuity home=${homeHealthy} away=${awayHealthy}`
+      : null,
+    used: Math.abs(overall) > 1e-9,
+  };
+}
+
 /**
  * Apply rest / QB soft adjustments. Weather handled separately for MLB totals.
  */
@@ -173,6 +222,9 @@ function applyGameDayAdjustments({
   margin += qb.marginAdj;
   unc = Math.min(0.45, unc + qb.uncBump);
 
+  const cont = qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam);
+  margin += cont.marginAdj;
+
   const meta = {
     restHome: homeDays,
     restAway: awayDays,
@@ -181,8 +233,9 @@ function applyGameDayAdjustments({
     hfaAdj: +hfaAdj.toFixed(3),
     hfaBase: hfaBase != null ? hfaBase : null,
     qbNote: qb.note,
+    qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
-    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || qb.uncBump > 0,
+    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || qb.uncBump > 0 || cont.used,
   };
 
   return {
@@ -245,6 +298,7 @@ module.exports = {
   lookupRest,
   hfaAdjustment,
   qbSoftAdjust,
+  qbContinuityAdjust,
   applyGameDayAdjustments,
   applyWeatherTotalAdj,
 };

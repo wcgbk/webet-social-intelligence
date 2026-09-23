@@ -7,6 +7,7 @@
  */
 
 const { clamp } = require('../odds_math');
+const { ENGINE_SOFT } = require('../config');
 const { fuzzyTeam } = require('./_common');
 
 const LEAGUE_FIP = 4.15;
@@ -264,6 +265,84 @@ function applySpPark({ modelMargin, modelTotal, homeQ, awayQ, parkFactor }) {
   return { modelMargin: margin, modelTotal: total, usedSp, usedPark };
 }
 
+
+/**
+ * Bullpen residual ≈ team pitching quality − named SP quality.
+ * Only when SP is player-source (named line) and team rate exists.
+ * Soft-fail → null.
+ */
+function resolveBullpenQuality(spQ, teamName, stats) {
+  if (!spQ || spQ.source !== 'player' || !Number.isFinite(spQ.quality)) return null;
+  const bag = stats && typeof stats === 'object' ? stats : {};
+  const teamRow = coerceQualityRow(fuzzyTeam(teamName, bag.byTeam || {}));
+  if (!teamRow || !Number.isFinite(teamRow.quality)) return null;
+  return {
+    quality: clamp(teamRow.quality - spQ.quality, -1.5, 1.5),
+    source: 'bullpen',
+    teamQuality: teamRow.quality,
+    spQuality: spQ.quality,
+  };
+}
+
+/**
+ * Apply capped bullpen residual to margin/total.
+ * Caps are HARD on the bullpen-only contribution (ENGINE_SOFT.MLB).
+ */
+function applyBullpenAdj({ modelMargin, modelTotal, homeBullpen, awayBullpen, caps } = {}) {
+  const cfg = caps || (ENGINE_SOFT && ENGINE_SOFT.MLB) || {};
+  const maxM = Number.isFinite(Number(cfg.maxAbsMarginAdj)) ? Math.abs(Number(cfg.maxAbsMarginAdj)) : 0.35;
+  const maxT = Number.isFinite(Number(cfg.maxAbsTotalAdj)) ? Math.abs(Number(cfg.maxAbsTotalAdj)) : 0.40;
+  const w = Number.isFinite(Number(cfg.bullpenWeight)) ? Number(cfg.bullpenWeight) : 0.35;
+  let margin = Number(modelMargin);
+  let total = Number(modelTotal);
+  if (!Number.isFinite(margin)) margin = 0;
+  if (!Number.isFinite(total)) total = 8.6;
+  const hq = homeBullpen && Number.isFinite(homeBullpen.quality) ? homeBullpen.quality : null;
+  const aq = awayBullpen && Number.isFinite(awayBullpen.quality) ? awayBullpen.quality : null;
+  if (hq == null && aq == null) {
+    return {
+      modelMargin: margin,
+      modelTotal: total,
+      usedBullpen: false,
+      marginAdj: 0,
+      totalAdj: 0,
+      capped: false,
+    };
+  }
+  const h = hq == null ? 0 : hq;
+  const a = aq == null ? 0 : aq;
+  let marginAdj = (h - a) * w * SP_MARGIN_PER_RUN;
+  let totalAdj = -(h + a) * w * SP_TOTAL_PER_RUN * 0.5;
+  const rawM = marginAdj;
+  const rawT = totalAdj;
+  marginAdj = clamp(marginAdj, -maxM, maxM);
+  totalAdj = clamp(totalAdj, -maxT, maxT);
+  return {
+    modelMargin: margin + marginAdj,
+    modelTotal: total + totalAdj,
+    usedBullpen: true,
+    marginAdj,
+    totalAdj,
+    capped: Math.abs(rawM) > maxM + 1e-12 || Math.abs(rawT) > maxT + 1e-12,
+  };
+}
+
+/** Effective spread/ML std when both SPs have player-quality. Soft-fail → null (use sport default). */
+function mlbSpKnownStd(homeQ, awayQ, caps) {
+  const cfg = caps || (ENGINE_SOFT && ENGINE_SOFT.MLB) || {};
+  const bothPlayer = !!(
+    homeQ && homeQ.source === 'player' && Number.isFinite(homeQ.quality)
+    && awayQ && awayQ.source === 'player' && Number.isFinite(awayQ.quality)
+  );
+  if (!bothPlayer) return null;
+  const tighten = Math.min(
+    Number(cfg.spKnownStdTighten) || 0.08,
+    Number(cfg.maxStdTighten) || 0.10
+  );
+  const base = 4.2; // SPORT_SPREAD_STD.MLB — keep local to avoid circular import issues in tests
+  return base * (1 - clamp(tighten, 0, 0.10));
+}
+
 /** MLB season year. Jan/Feb still belong to the previous season. */
 function mlbSeasonFromDate(dateISO) {
   const raw = String(dateISO || '');
@@ -290,5 +369,8 @@ module.exports = {
   resolveSpQuality,
   resolvePark,
   applySpPark,
+  resolveBullpenQuality,
+  applyBullpenAdj,
+  mlbSpKnownStd,
   mlbSeasonFromDate,
 };

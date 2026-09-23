@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.5-omega-vnext-replay-score';
+const MODEL_VERSION = 'v12.3.6-omega-vnext-pm-soft';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -146,7 +146,37 @@ const QA_HARDFAIL = {
   adverseSteamPts: LINE_MOVE.verifyAdversePts,
 };
 
-/** Selection score weights — CLV first, then EV, then uncertainty penalty. */
+/**
+ * Prediction-market soft score (v12.3.6). Moneyline only, clean 1:1 map.
+ * Venue combine is the arithmetic mean of venues with a finite implied
+ * (Polymarket and/or Kalshi). One mapped venue is used alone.
+ *
+ * pmVsBookGap = pmImplied − bookImplied.
+ *   bookImplied prefers fair_sharp_p (no-vig sharp for our side), else
+ *   American-implied from the candidate price.
+ * pmMove = average of per-venue (now − open) for venues mapped in BOTH the
+ *   morning open snap and the generate fetch. Missing open snap, or a venue
+ *   present on only one side, leaves pmMove unused (not a fake move).
+ *
+ * _pmScoreAdj = clamp(
+ *   scoreWeightVsBook * pmVsBookGap + scoreWeightMove * (pmMove or 0),
+ *   ±maxAbsScoreAdj
+ * )
+ *
+ * maxAbsScoreAdj is a HARD CAP. Steam toward/against is +0.03/−0.04; this
+ * cap keeps a large Kalshi/Polymarket disagreement from outranking the US
+ * sportsbook CLV spine. Score only: coverProb, edgePct, EV, gates, Kelly,
+ * grades, shrink, and unit caps are not touched.
+ * Soft-fail: API down or no clean map → _pmScoreAdj = 0. Generate never throws.
+ * Keep the v12.3.6 MODEL_NOTES weights/cap in sync with these numbers.
+ */
+const PM_SOFT = {
+  scoreWeightVsBook: 0.20,
+  scoreWeightMove: 0.08,
+  maxAbsScoreAdj: 0.03,
+  venueCombine: 'average',
+};
+
 /** Grade = pick quality (edge / expected CLV), NOT units and NOT coverProb. */
 const QUALITY_GRADE = {
   // Exact band edges (5.0%, 3.5%, 2.0%) default to the HIGHER grade (>=).
@@ -156,6 +186,7 @@ const QUALITY_GRADE = {
   aminus: 0.020, // ≥2.0% and <3.5% → A-
 };
 
+/** Selection score weights — CLV first, then EV, then uncertainty penalty. */
 const SELECT_WEIGHTS = {
   w_ev: 0.35,
   w_clv: 0.45, // CLV-first
@@ -172,13 +203,14 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.3.6 omega-vnext: Kalshi/Polymarket soft features inside generate, before selectStraights. Moneyline only, clean 1:1 map. Venue combine is the average of available mapped venues. pmVsBookGap = PM implied minus fair_sharp_p (else American-implied). pmMove = current PM implied minus the morning open snap (omega-pm-observer/{date}-open) when that snap exists, averaged per venue present on both sides; omitted otherwise. Score-only _pmScoreAdj = clamp(scoreWeightVsBook*pmVsBookGap + scoreWeightMove*pmMove, ±maxAbsScoreAdj) with weights ${PM_SOFT.scoreWeightVsBook} / ${PM_SOFT.scoreWeightMove} and HARD CAP ±${PM_SOFT.maxAbsScoreAdj} so PM cannot dominate the US sportsbook CLV spine. Does not change coverProb, edgePct, gates, Kelly, grades, shrink, or unit caps. Soft-fail to _pmScoreAdj 0 if PM APIs are down or unmapped; generate continues. Historical replay skips live PM (no as-of snap). Observer audit omega-pm-observer/{date} retained (10:15 ET) plus 8:30 ET open snap; the observer logging path still never mutates locked picks. No TSP. No FIT.`,
   'v12.3.5 omega-vnext: scored historical replay joins real CLV/ROI from clv-{date} / picks-{date} settles (null + scoreReason when closes absent); capture-health ops snapshot at omega-ops/* + optional OMEGA_OPS_WEBHOOK_URL. No gate, weight, Kelly, engine, shrink, or live pick-math changes.',
   'v12.3.4 omega-vnext: historical replay pregame gate uses the snapshot asOf (historicalSnapshot) instead of Date.now(), so past slates are not rejected as in-progress-or-started. Live path unchanged when asOf is unset. 5-minute grace kept. No weight, Kelly, or engine changes.',
   'v12.3.3 omega-vnext: narrate-only ESPN copy. Straights 4-6 sentences, parlay legs 3-5, Daily Edge and insights 3-5. Locked-row context (edge band, steam hint, price compass) reaches Claude and is translated into plain English, not raw EV/CLV/Kelly. Fallback blurbs use the same desk voice. No gate, weight, Kelly, engine, or TSP changes.',
   'v12.3.2 omega-vnext: verify adverse steam drops set blockStraightRefill so TARGET_PICKS backfill cannot undo the steam gate (empty/short card OK). Verify replace/backfill grades use toPickObject / qualityToRating (edge), not units.',
   'v12.3.1 omega-vnext: 9:15 ET line snap + capture health gate; feed warm 9:00; shadow dry-run 9:05 (isolated omega-shadow/*); TSP live hold lifted (observer /live-ai only — zero Omega hard dep).',
   'v12.3.0 omega-vnext: game-day rest/B2B + soft QB status (ESPN injuries) + MLB weather total adj on top of EPA/SP/park seeds. Soft fallback if feeds fail; empty card OK; no lean force-fill. Market blend + calibrate shrink unchanged. No NBA/NHL.',
-  'v12.2.2 omega-vnext: Kalshi/Polymarket OBSERVER sidecar. Read-only implied probs logged to omega-pm-observer/{date} (alias pm-sidecar-{date}) when a PM moneyline maps cleanly 1:1 to a game ML. NEVER mixes PM prices into selection, grades, unit caps, or gates. No order placement. Soft-fail if PM APIs are down.',
+  'v12.2.2 omega-vnext: Kalshi/Polymarket OBSERVER sidecar. Read-only implied probs logged to omega-pm-observer/{date} (alias pm-sidecar-{date}) when a PM moneyline maps cleanly 1:1 to a game ML. v12.2.2 did not apply PM to selection. v12.3.6 adds a hard-capped soft score only. No order placement. Soft-fail if PM APIs are down. Observer logging still does not mutate locked pick rating, units, or edge.',
   'v12.2.1 omega-vnext: placeability soft-veto. Published price must be offered within juice ballpark (≤3pp implied worse OR ≤15 American cents worse) at ≥2 US retail books from US_BOOK_PRIORITY (PLACEABILITY.minMajorBooks; not sharp-only, not Pinnacle). Reject reason placeability-soft-veto, distinct from insufficient-liquidity. Verify drops a pick only when Hard Rock and majors coverage both fail; odds-API down warns and does not clear the card. Empty card OK, no lean refill.',
   'v12.2.0 omega-vnext: NFL/CFB EPA-style off/def priors (seed JSON; Sierra-like standings blend only when pf/pa and games are clean; both teams required) with lower uncertainty. MLB SP quality from StatsAPI FIP/xFIP/ERA once per generate (discounted team prior only when a probable is named) plus static park factors move margin and total. Soft fallback: failed EPA/SP/park load keeps standings/Pythag behavior and never blanks the slate. Market blend and calibrate shrink unchanged. No NBA/NHL.',
   'v12.1.3 omega-vnext: <2% calibrated edge → B (no B+); legend stays A+/A/A-. v12.1.2 omega-vnext: Edge legend mobile (no Today\'s Record); A- floor 2.0%; exact 5%/3.5%/2% → higher grade; parlay legs sorted by quality grade. v12.1.1 omega-vnext: grades = quality (calibrated edge + expected CLV), not units/hit-rate; sort quality then units; A+ stake ≥ A on same card unless hard cap. v12.1.0 omega-vnext: US open→pick line-move pipeline (capture-omega-lines 6:00/7:30/9:00 ET); steamToward/Against gates + verify recheck; openPrint on lockSnapshot for CLV; stronger shrink; NFL/CFB HFA +0.1.',
@@ -228,6 +260,7 @@ module.exports = {
   PLACEABILITY,
   MAJOR_LIQUIDITY_BOOKS,
   LINE_MOVE,
+  PM_SOFT,
   SHRINK_K,
   GATES,
   QA_HARDFAIL,

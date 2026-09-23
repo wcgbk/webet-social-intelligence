@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.4-omega-vnext-replay-asof');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.6-omega-vnext-pm-soft');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -163,11 +163,12 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.strictEqual(gated.yesPool[0].sport, 'MLB');
   assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day'));
 
-  // ingest filter helper
+  // ingest filter helper — same dynamic card date as the gate case above.
+  // A fixed Sep 22 kickoff is the wrong ET day once now+3h crosses midnight.
   const { filterEventsSameEtDay } = require(path.join(root, 'ingest'));
   const filtered = filterEventsSameEtDay([
-    { id: 1, commence_time: '2026-09-22T23:05:00Z' },
-    { id: 2, commence_time: '2026-09-26T19:00:00Z' },
+    { id: 1, commence_time: tueKick },
+    { id: 2, commence_time: offSat },
   ], tue);
   assert.strictEqual(filtered.length, 1);
   assert.strictEqual(filtered[0].id, 1);

@@ -3,7 +3,7 @@
 const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
-  MAX_STRAIGHT_UNITS_PER_PICK,
+  MAX_STRAIGHT_UNITS_PER_PICK, PM_SOFT,
 } = require('./config');
 const {
   kellyFraction, kellyToUnits, ratingToConfidence, formatAmerican,
@@ -15,6 +15,15 @@ function matchupKey(c) {
   return String(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`).toLowerCase().trim();
 }
 
+function clampPmScoreAdj(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 0;
+  const cap = Math.abs(Number(PM_SOFT && PM_SOFT.maxAbsScoreAdj));
+  if (!Number.isFinite(cap)) return 0;
+  if (v > cap) return cap;
+  if (v < -cap) return -cap;
+  return v;
+}
+
 function scoreCandidate(c, selectedSports) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
@@ -24,6 +33,8 @@ function scoreCandidate(c, selectedSports) {
   const unc = c.uncertainty != null ? c.uncertainty : 0.15;
   let s = w.w_ev * ev + w.w_clv * clv - w.w_uncertainty * unc;
   if (typeof c._steamScoreAdj === 'number') s += c._steamScoreAdj;
+  // PM soft feature. Hard-capped here and in computePmFeatures. Score only.
+  s += clampPmScoreAdj(c._pmScoreAdj);
   // Extra bump when steam with pick AND still +EV
   if (c.steamToward && ev > 0) s += (w.softSportMixBonus || 0.02);
   if (selectedSports && selectedSports.size && !selectedSports.has(c.sport)) {
@@ -127,6 +138,7 @@ function toPickObject(c, opts = {}) {
     lineMove: c.lineMove || null,
     ...(Array.isArray(c.placeableBooks) ? { placeableBooks: c.placeableBooks.slice() } : {}),
     ...(c.bestPlaceable ? { bestPlaceable: c.bestPlaceable } : {}),
+    ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
   };
 }
 

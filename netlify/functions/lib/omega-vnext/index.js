@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE,
+  MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
 } = require('./config');
 const { ingest } = require('./ingest');
 const { calibrateAll } = require('./calibrate');
@@ -12,8 +12,8 @@ const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
-const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot } = require('./store');
-const { runPmObserver } = require('./pm_observer');
+const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');
+const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 
@@ -270,6 +270,82 @@ async function generateOmegaVnext(opts = {}) {
     throw err;
   }
 
+  // Kalshi/Polymarket soft features BEFORE gates so yesPool carries _pmScoreAdj
+  // into selectStraights. Score only. API/map failure → 0 and generate continues.
+  // Replay has no as-of PM history; do not apply today's live prices.
+  let pmSoftMeta = {
+    applied: false,
+    skipped: null,
+    priorOpen: false,
+    mapped: 0,
+    sources: null,
+    maxAbsScoreAdj: PM_SOFT.maxAbsScoreAdj,
+    scoreWeightVsBook: PM_SOFT.scoreWeightVsBook,
+    scoreWeightMove: PM_SOFT.scoreWeightMove,
+    venueCombine: PM_SOFT.venueCombine,
+  };
+  // Reuse a successful generate-time fetch for the post-card audit so 9:30
+  // does not hit Kalshi/Polymarket twice. Null means the audit may retry.
+  let pmAuditMarkets = { polyMarkets: null, kalshiMarkets: null };
+  const injectedPm = opts.pmPolyMarkets != null || opts.pmKalshiMarkets != null;
+  if (replayLike && !injectedPm) {
+    candidates = (candidates || []).map(c => ({
+      ...c,
+      _pmScoreAdj: 0,
+      pmFeatures: {
+        pmVsBookGap: null, pmMove: null, pmImplied: null, bookImplied: null,
+        venues: [], _pmScoreAdj: 0, capped: false, reason: 'replay-skip',
+      },
+    }));
+    pmSoftMeta.skipped = 'replay';
+    console.log(`[omega-vnext] pm-soft skipped (historical replay) date=${dateISO}`);
+  } else {
+    try {
+      let prior = opts.pmPriorArtifact || null;
+      if (!prior) {
+        try { prior = await readPmObserverOpen(dateISO); } catch (e) {
+          console.warn(`[omega-vnext] pm open read soft-fail: ${e.message}`);
+          prior = null;
+        }
+      }
+      const annotated = await annotatePmSoftFeatures(candidates, {
+        priorArtifact: prior,
+        polyMarkets: opts.pmPolyMarkets,
+        kalshiMarkets: opts.pmKalshiMarkets,
+        dateISO,
+      });
+      candidates = annotated.candidates;
+      const mapped = (candidates || []).filter(c => c.pmFeatures && c.pmFeatures.pmImplied != null).length;
+      pmSoftMeta = {
+        ...pmSoftMeta,
+        applied: true,
+        skipped: null,
+        priorOpen: !!annotated.priorOpen,
+        mapped,
+        sources: annotated.sources || null,
+      };
+      const polyOk = annotated.sources && annotated.sources.polymarket && annotated.sources.polymarket.ok;
+      const kalshiOk = annotated.sources && annotated.sources.kalshi && annotated.sources.kalshi.ok;
+      pmAuditMarkets = {
+        polyMarkets: polyOk ? (annotated.polyMarkets || []) : null,
+        kalshiMarkets: kalshiOk ? (annotated.kalshiMarkets || []) : null,
+      };
+      console.log(`[omega-vnext] pm-soft mapped=${mapped} priorOpen=${!!annotated.priorOpen} poly=${!!polyOk} kalshi=${!!kalshiOk}`);
+    } catch (e) {
+      console.error(`[omega-vnext] pm-soft soft-fail: ${e.message}`);
+      candidates = (candidates || []).map(c => ({
+        ...c,
+        _pmScoreAdj: 0,
+        pmFeatures: c.pmFeatures || {
+          pmVsBookGap: null, pmMove: null, pmImplied: null, bookImplied: null,
+          venues: [], _pmScoreAdj: 0, capped: false, reason: 'soft-fail',
+        },
+      }));
+      pmSoftMeta.skipped = 'soft-fail';
+      pmSoftMeta.error = e.message;
+    }
+  }
+
   // placeableBooks / bestPlaceable are attached in enrichCandidateWithEdge
   // (sport project, before calibrate + attachEv). Gates then soft-veto
   // unshoppable US retail lines. Do not publish those.
@@ -374,6 +450,8 @@ async function generateOmegaVnext(opts = {}) {
     predictedResidualClv: c.predictedResidualClv,
     steamToward: !!c.steamToward,
     steamAgainst: !!c.steamAgainst,
+    pmFeatures: c.pmFeatures || null,
+    _pmScoreAdj: typeof c._pmScoreAdj === 'number' ? c._pmScoreAdj : 0,
     openPrint: c.openPrint || null,
     projMethod: c.projMethod,
     placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
@@ -430,8 +508,10 @@ async function generateOmegaVnext(opts = {}) {
         ? linePathMeta.path.polls.length : 0,
     },
     captureHealth: captureHealth || null,
+    pmSoft: pmSoftMeta,
     meta: {
       captureHealth: captureHealth || null,
+      pmSoft: pmSoftMeta,
       shadow: !!shadow,
       storeKey: shadow ? `omega-shadow/picks-${dateISO}` : null,
     },
@@ -455,8 +535,9 @@ async function generateOmegaVnext(opts = {}) {
     await storePicks(dateISO, picksData, { force, simMode });
   }
 
-  // Prediction-market OBSERVER sidecar — non-blocking, never mutates picks.
-  // Runs after candidates/picks exist; API failures must not fail generate.
+  // Prediction-market OBSERVER sidecar — non-blocking, never mutates locked picks.
+  // Soft score already ran before selectStraights. This write is the audit log.
+  // API failures must not fail generate.
   // Shadow keeps the artifact under omega-shadow/ and does not call storePmObserver.
   let pmObserver = null;
   if (!dryRun && shadow) {
@@ -477,6 +558,8 @@ async function generateOmegaVnext(opts = {}) {
       pmObserver = await runPmObserver({
         dateISO, candidates: pool, picks: picks.map(p => ({ ...p })),
         modelVersion: MODEL_VERSION,
+        polyMarkets: pmAuditMarkets.polyMarkets,
+        kalshiMarkets: pmAuditMarkets.kalshiMarkets,
       });
       const shadowPmKey = `omega-shadow/pm-observer/${dateISO}`;
       await storeJson(shadowPmKey, { ...pmObserver, shadow: true });
@@ -503,6 +586,8 @@ async function generateOmegaVnext(opts = {}) {
       pmObserver = await runPmObserver({
         dateISO, candidates: pool, picks: picks.map(p => ({ ...p })),
         modelVersion: MODEL_VERSION,
+        polyMarkets: pmAuditMarkets.polyMarkets,
+        kalshiMarkets: pmAuditMarkets.kalshiMarkets,
       });
       await storePmObserver(dateISO, pmObserver);
       console.log(`[omega-vnext] pm-observer mapped=${pmObserver.mappedCount} poly=${pmObserver.sources.polymarket.ok} kalshi=${pmObserver.sources.kalshi.ok}`);

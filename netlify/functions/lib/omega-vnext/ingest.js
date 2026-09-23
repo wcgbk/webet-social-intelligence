@@ -192,10 +192,42 @@ function stripMeta(table) {
   return out;
 }
 
+function loadTalentSeed() {
+  try {
+    return stripMeta(require('./sports/data/cfb-talent-seed.json'));
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] CFB talent seed soft-fail: ${e.message}`);
+    return {};
+  }
+}
+
+/** Attach optional talent/spPlus onto EPA rows without wiping EPA fields. */
+function mergeTalentIntoEfficiency(epaTable, talentTable) {
+  const out = { ...(epaTable || {}) };
+  const talent = talentTable || {};
+  for (const [team, row] of Object.entries(out)) {
+    if (!row || typeof row !== 'object') continue;
+    const t = talent[team];
+    let talentVal = null;
+    if (t != null && typeof t === 'object') {
+      talentVal = t.talent != null ? t.talent : t.spPlus;
+    } else if (Number.isFinite(Number(t))) {
+      talentVal = Number(t);
+    }
+    if (!Number.isFinite(Number(talentVal))) continue;
+    out[team] = { ...row, talent: Number(talentVal) };
+  }
+  return out;
+}
+
 function loadEfficiencySeeds() {
   const nfl = require('./sports/data/nfl-epa-seed.json');
   const cfb = require('./sports/data/cfb-epa-seed.json');
-  return { NFL: stripMeta(nfl), NCAAF: stripMeta(cfb) };
+  const talent = loadTalentSeed();
+  return {
+    NFL: stripMeta(nfl),
+    NCAAF: mergeTalentIntoEfficiency(stripMeta(cfb), talent),
+  };
 }
 
 function loadParkFactors() {
@@ -416,6 +448,8 @@ async function ingest(dateISO, opts = {}) {
 }
 
 module.exports = {
+  loadTalentSeed,
+  mergeTalentIntoEfficiency,
   ingest,
   fetchOddsMultiSport,
   fetchEspnScoreboard,

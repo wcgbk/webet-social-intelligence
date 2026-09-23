@@ -33,17 +33,17 @@ function powerFromStandings(st) {
   return 0;
 }
 
+function resolveSpreadStd(sport, stdOverride) {
+  if (Number.isFinite(stdOverride) && stdOverride > 0) return stdOverride;
+  return SPORT_SPREAD_STD[sport] || 13.5;
+}
+
 /**
- * Spread cover approx via normal: favorite covers if margin > -line for home favorite etc.
- * model spread = homePower - awayPower + HFA (home perspective; negative => home favored)
+ * Spread cover approx via normal.
+ * Optional 4th arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
-function spreadCoverProb(modelSpreadHome, marketLineHome, sport) {
-  // marketLineHome: home team spread number (e.g. -3.5)
-  const std = SPORT_SPREAD_STD[sport] || 13.5;
-  // P(home margin > -marketLine) roughly; use residual vs market
-  const edgePts = modelSpreadHome - (-marketLineHome); // if model says home -6 and market -3, edge = -6 - 3? 
-  // Define modelSpreadHome as expected home margin (positive = home wins by that).
-  // Home covers if homeMargin + marketLineHome > 0 ⇒ homeMargin > -marketLineHome
+function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride) {
+  const std = resolveSpreadStd(sport, stdOverride);
   const z = (modelSpreadHome + marketLineHome) / std;
   return normCdf(z);
 }
@@ -55,8 +55,9 @@ function totalCoverProb(modelTotal, marketTotal, side, sport) {
   return normCdf(-z);
 }
 
-function mlFromSpread(modelSpreadHome, sport) {
-  const std = SPORT_SPREAD_STD[sport] || 13.5;
+/** Optional 3rd arg stdOverride (v12.3.7 MLB SP-known tighten). */
+function mlFromSpread(modelSpreadHome, sport, stdOverride) {
+  const std = resolveSpreadStd(sport, stdOverride);
   return clamp(normCdf(modelSpreadHome / std), 0.05, 0.95);
 }
 
@@ -70,6 +71,7 @@ module.exports = {
   formatMatchup,
   fuzzyTeam,
   powerFromStandings,
+  resolveSpreadStd,
   spreadCoverProb,
   totalCoverProb,
   mlFromSpread,

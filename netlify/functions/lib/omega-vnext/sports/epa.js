@@ -5,9 +5,10 @@
  * defEpa is defensive strength per play (higher = better, sign-flipped EPA allowed).
  * Both teams must match a clean prior; otherwise the caller keeps standings power.
  * Sierra blend only when standings pf/pa and a game count are clean.
+ * v12.3.7: capped success→margin (NFL) and talent/spPlus blend (NCAAF) via ENGINE_SOFT.
  */
 
-const { HFA } = require('../config');
+const { HFA, ENGINE_SOFT } = require('../config');
 const { clamp } = require('../odds_math');
 const { fuzzyTeam, powerFromStandings } = require('./_common');
 
@@ -69,6 +70,8 @@ function lookupEpa(teamName, table) {
     defEpa: Number(row.defEpa),
     offSuccess: row.offSuccess,
     defSuccess: row.defSuccess,
+    talent: row.talent,
+    spPlus: row.spPlus,
   };
 }
 
@@ -92,6 +95,8 @@ function sierraAdjust(epa, standingsRow, cfg) {
     defEpa: Number(epa.defEpa),
     offSuccess: epa.offSuccess,
     defSuccess: epa.defSuccess,
+    talent: epa.talent,
+    spPlus: epa.spPlus,
     adjusted: false,
   };
   if (!standingsRow) return base;
@@ -126,9 +131,96 @@ function successTotalAdj(homeEpa, awayEpa) {
   return (offEnv - defEnv) * 12;
 }
 
+/**
+ * NFL soft success→margin. Isolated contribution, HARD-capped by ENGINE_SOFT.NFL.
+ * Soft-fail (unclean success) → 0.
+ */
+function successMarginAdj(homeEpa, awayEpa, caps) {
+  const cfg = caps || (ENGINE_SOFT && ENGINE_SOFT.NFL) || {};
+  const per = Number.isFinite(Number(cfg.successMarginPerRate)) ? Number(cfg.successMarginPerRate) : 8;
+  const maxM = Number.isFinite(Number(cfg.maxAbsMarginAdj)) ? Math.abs(Number(cfg.maxAbsMarginAdj)) : 1.5;
+  const vals = [
+    homeEpa && homeEpa.offSuccess, homeEpa && homeEpa.defSuccess,
+    awayEpa && awayEpa.offSuccess, awayEpa && awayEpa.defSuccess,
+  ].map(Number);
+  if (vals.some(v => !Number.isFinite(v) || v <= 0 || v >= 1)) {
+    return { marginAdj: 0, used: false, capped: false };
+  }
+  const [hos, hds, aos, ads] = vals;
+  const raw = ((hos - ads) - (aos - hds)) * per;
+  const marginAdj = clamp(raw, -maxM, maxM);
+  return {
+    marginAdj,
+    used: Math.abs(marginAdj) > 1e-9,
+    capped: Math.abs(raw) > maxM + 1e-12,
+    raw,
+  };
+}
+
+/**
+ * Normalize talent/spPlus to roughly −3..+3.
+ * 0–100 scale → (v - 50) / 16.7; already small → pass through.
+ */
+function normalizeTalent(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  if (n >= 0 && n <= 100 && Math.abs(n) > 5) return clamp((n - 50) / 16.7, -3.5, 3.5);
+  return clamp(n, -3.5, 3.5);
+}
+
+function talentOf(epaRow) {
+  if (!epaRow) return null;
+  if (epaRow.talent != null) return normalizeTalent(epaRow.talent);
+  if (epaRow.spPlus != null) return normalizeTalent(epaRow.spPlus);
+  return null;
+}
+
+/**
+ * NCAAF talent/spPlus blend. Both teams required. HARD-capped.
+ * Soft-fail → 0.
+ */
+function talentMarginAdj(homeEpa, awayEpa, caps) {
+  const cfg = caps || (ENGINE_SOFT && ENGINE_SOFT.NCAAF) || {};
+  const w = Number.isFinite(Number(cfg.talentWeight)) ? Number(cfg.talentWeight) : 0.22;
+  const pts = Number.isFinite(Number(cfg.talentPtsPerUnit)) ? Number(cfg.talentPtsPerUnit) : 1;
+  const maxM = Number.isFinite(Number(cfg.maxAbsMarginAdj)) ? Math.abs(Number(cfg.maxAbsMarginAdj)) : 2;
+  const ht = talentOf(homeEpa);
+  const at = talentOf(awayEpa);
+  if (ht == null || at == null) {
+    return { marginAdj: 0, used: false, capped: false };
+  }
+  const raw = (ht - at) * pts * w;
+  const marginAdj = clamp(raw, -maxM, maxM);
+  return {
+    marginAdj,
+    used: Math.abs(marginAdj) > 1e-9,
+    capped: Math.abs(raw) > maxM + 1e-12,
+    raw,
+    homeTalent: ht,
+    awayTalent: at,
+  };
+}
+
 function fallbackUncertainty(sport, homeSt, awaySt) {
   if (sport === 'NCAAF') return 0.22;
   return (homeSt && awaySt) ? 0.16 : 0.26;
+}
+
+function tagEngines(methods, enginesOn) {
+  if (!enginesOn || !methods) return methods;
+  const out = { ...methods };
+  for (const k of ['ml', 'spread', 'total']) {
+    if (out[k] && !String(out[k]).includes('engines')) {
+      out[k] = String(out[k]).replace(/-v1/, '-v1-engines');
+      if (!String(out[k]).includes('engines')) out[k] = `${out[k]}-engines`;
+    }
+  }
+  if (out.family && !String(out.family).includes('engines')) {
+    out.family = String(out.family).includes('-v1')
+      ? String(out.family).replace(/-v1/, '-v1-engines')
+      : `${out.family}-engines`;
+  }
+  return out;
 }
 
 /**
@@ -156,6 +248,7 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
       totalUncBump: cfg.totalUncBump,
       methods: { ...cfg.fallback, family: null },
       usedEpa: false,
+      engineSoft: { used: false },
     };
   }
 
@@ -166,21 +259,39 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   const awayEdge = aAdj.offEpa - hAdj.defEpa;
   let modelMargin = (homeEdge - awayEdge) * cfg.plays + hfa;
   let modelTotal = cfg.baseTotal + (homeEdge + awayEdge) * cfg.plays + successTotalAdj(hAdj, aAdj);
+
+  const engineMeta = { used: false, success: null, talent: null };
+  if (sport === 'NFL') {
+    const sm = successMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NFL);
+    modelMargin += sm.marginAdj;
+    engineMeta.success = sm;
+    if (sm.used) engineMeta.used = true;
+  }
+  if (sport === 'NCAAF') {
+    const tm = talentMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NCAAF);
+    modelMargin += tm.marginAdj;
+    engineMeta.talent = tm;
+    if (tm.used) engineMeta.used = true;
+  }
+
   modelMargin = clamp(modelMargin, -cfg.marginCap, cfg.marginCap);
   modelTotal = clamp(modelTotal, cfg.totalMin, cfg.totalMax);
   const family = cfg.family;
+  let methods = {
+    ml: `${family}-ml`,
+    spread: `${family}-spread`,
+    total: `${family}-total`,
+    family,
+  };
+  methods = tagEngines(methods, engineMeta.used);
   return {
     modelMargin,
     modelTotal,
     uncertainty: cfg.epaUncertainty,
     totalUncBump: cfg.totalUncBump,
-    methods: {
-      ml: `${family}-ml`,
-      spread: `${family}-spread`,
-      total: `${family}-total`,
-      family,
-    },
+    methods,
     usedEpa: true,
+    engineSoft: engineMeta,
   };
 }
 
@@ -190,6 +301,10 @@ module.exports = {
   isCleanEpa,
   lookupEpa,
   sierraAdjust,
+  successTotalAdj,
+  successMarginAdj,
+  talentMarginAdj,
+  normalizeTalent,
   footballProjection,
   fallbackUncertainty,
 };

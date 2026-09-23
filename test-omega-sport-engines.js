@@ -18,7 +18,7 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.4-omega-vnext-replay-asof');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.7-omega-vnext-engines');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
@@ -41,6 +41,14 @@ assert.ok(/Soft fallback/.test(config.MODEL_NOTES));
 assert.ok(/never blanks the slate/.test(config.MODEL_NOTES));
 assert.strictEqual(epa.SPORT_CFG.NFL.family, 'nfl-epa-v1');
 assert.strictEqual(epa.SPORT_CFG.NCAAF.family, 'cfb-epa-v1');
+assert.ok(config.ENGINE_SOFT, 'ENGINE_SOFT exported');
+assert.strictEqual(config.ENGINE_SOFT.MLB.maxAbsMarginAdj, 0.35);
+assert.strictEqual(config.ENGINE_SOFT.MLB.maxAbsTotalAdj, 0.40);
+assert.strictEqual(config.ENGINE_SOFT.NFL.maxAbsMarginAdj, 1.5);
+assert.strictEqual(config.ENGINE_SOFT.NCAAF.maxAbsMarginAdj, 2.0);
+assert.ok(/deeper MLB\/NFL\/NCAAF sport engines/i.test(config.MODEL_NOTES));
+assert.ok(/HARD CAP/i.test(config.MODEL_NOTES));
+assert.ok(/Soft-fail/i.test(config.MODEL_NOTES));
 assert.ok(epa.SPORT_CFG.NFL.epaUncertainty >= 0.12 && epa.SPORT_CFG.NFL.epaUncertainty <= 0.14);
 assert.ok(epa.SPORT_CFG.NCAAF.epaUncertainty >= 0.16 && epa.SPORT_CFG.NCAAF.epaUncertainty <= 0.18);
 
@@ -201,9 +209,9 @@ function byMarket(cands, market) {
       [away]: { offEpa: 0.01, defEpa: -0.04, offSuccess: 0.43, defSuccess: 0.40 },
     },
   });
-  assert.strictEqual(byMarket(withEpa, 'Moneyline').projMethod, 'nfl-epa-v1-ml');
-  assert.strictEqual(byMarket(withEpa, 'Spread').projMethod, 'nfl-epa-v1-spread');
-  assert.strictEqual(byMarket(withEpa, 'Total').projMethod, 'nfl-epa-v1-total');
+  assert.ok(/nfl-epa-v1(-engines)?-ml/.test(byMarket(withEpa, 'Moneyline').projMethod), byMarket(withEpa, 'Moneyline').projMethod);
+  assert.ok(/nfl-epa-v1(-engines)?-spread/.test(byMarket(withEpa, 'Spread').projMethod));
+  assert.ok(/nfl-epa-v1(-engines)?-total/.test(byMarket(withEpa, 'Total').projMethod));
   assert.ok(byMarket(withEpa, 'Moneyline').uncertainty >= 0.12);
   assert.ok(byMarket(withEpa, 'Moneyline').uncertainty <= 0.14);
   assert.notStrictEqual(
@@ -355,7 +363,7 @@ function byMarket(cands, market) {
     'better home SP should raise home margin'
   );
   assert.strictEqual(byMarket(withSp, 'Moneyline').assumedStarter.name, 'Yoshinobu Yamamoto');
-  assert.strictEqual(byMarket(withSp, 'Moneyline').projMethod, 'mlb-sp-park-v1-ml');
+  assert.ok(/mlb-sp-park-v1(-engines)?-ml/.test(byMarket(withSp, 'Moneyline').projMethod), byMarket(withSp, 'Moneyline').projMethod);
 
   const badStaff = {
     byId: {
@@ -496,7 +504,7 @@ function byMarket(cands, market) {
     standings,
     efficiency: {},
   });
-  assert.strictEqual(byMarket(fromSeed, 'Moneyline').projMethod, 'nfl-epa-v1-ml');
+  assert.ok(/nfl-epa-v1(-engines)?-ml/.test(byMarket(fromSeed, 'Moneyline').projMethod), byMarket(fromSeed, 'Moneyline').projMethod);
   assert.notStrictEqual(
     byMarket(fromSeed, 'Spread').modelProjection,
     byMarket(noSeed, 'Spread').modelProjection
@@ -507,7 +515,7 @@ function byMarket(cands, market) {
     standings: {},
     efficiency: seeds.NCAAF,
   });
-  assert.strictEqual(byMarket(cfbSeed, 'Spread').projMethod, 'cfb-epa-v1-spread');
+  assert.ok(/cfb-epa-v1(-engines)?-spread/.test(byMarket(cfbSeed, 'Spread').projMethod), byMarket(cfbSeed, 'Spread').projMethod);
 
   const loaded = await ingest.loadSportEngines('2026-09-22', {
     fetchPitchers: async () => ({ byId: { '1': { quality: 0.4, name: 'Stub' } }, byName: {}, byTeam: {} }),
@@ -561,8 +569,8 @@ function byMarket(cands, market) {
     mlbPitcherStats: {},
   };
   const engSlate = projectAll(liveEngines);
-  assert.ok(engSlate.some(c => c.sport === 'NFL' && c.projMethod === 'nfl-epa-v1-ml'));
-  assert.ok(engSlate.some(c => c.sport === 'NCAAF' && c.projMethod === 'cfb-epa-v1-ml'));
+  assert.ok(engSlate.some(c => c.sport === 'NFL' && /nfl-epa-v1/.test(c.projMethod)));
+  assert.ok(engSlate.some(c => c.sport === 'NCAAF' && /cfb-epa-v1/.test(c.projMethod)));
   assert.ok(engSlate.some(c => c.sport === 'MLB' && String(c.projMethod).startsWith('mlb-sp-park-v1')));
   const coorsRow = engSlate.find(c => c.sport === 'MLB' && c.market === 'Total' && c.homeTeam === 'Colorado Rockies');
   assert.ok(coorsRow, 'Rockies home total should still project when the park table is loaded');
@@ -587,6 +595,129 @@ function byMarket(cands, market) {
   const coorsP = paired.find(c => c.homeTeam === 'Colorado Rockies' && c.market === 'Total').modelProjection;
   const ladP = paired.find(c => c.homeTeam === 'Los Angeles Dodgers' && c.market === 'Total').modelProjection;
   assert.ok(coorsP > ladP, `seed Coors ${coorsP} vs Dodgers ${ladP}`);
+
+
+// ── v12.3.7 ENGINE_SOFT caps + soft-fail ──
+{
+  const absurd = env.applyBullpenAdj({
+    modelMargin: 0,
+    modelTotal: 8.6,
+    homeBullpen: { quality: 9 },
+    awayBullpen: { quality: -9 },
+    caps: config.ENGINE_SOFT.MLB,
+  });
+  assert.ok(absurd.capped);
+  assert.ok(Math.abs(absurd.marginAdj) <= config.ENGINE_SOFT.MLB.maxAbsMarginAdj + 1e-12);
+  assert.ok(Math.abs(absurd.totalAdj) <= config.ENGINE_SOFT.MLB.maxAbsTotalAdj + 1e-12);
+
+  const softBp = env.applyBullpenAdj({
+    modelMargin: 1, modelTotal: 9, homeBullpen: null, awayBullpen: null, caps: config.ENGINE_SOFT.MLB,
+  });
+  assert.strictEqual(softBp.usedBullpen, false);
+  assert.strictEqual(softBp.marginAdj, 0);
+  assert.strictEqual(softBp.modelMargin, 1);
+
+  // Named SP without team row → no bullpen
+  assert.strictEqual(env.resolveBullpenQuality({ quality: 1, source: 'player' }, 'Dodgers', { byTeam: {} }), null);
+  // Team-source SP → no bullpen (avoid double-count)
+  assert.strictEqual(env.resolveBullpenQuality({ quality: 1, source: 'team' }, 'Dodgers', {
+    byTeam: { 'Los Angeles Dodgers': { quality: 0.2 } },
+  }), null);
+}
+
+{
+  const sm = epa.successMarginAdj(
+    { offSuccess: 0.99, defSuccess: 0.99 },
+    { offSuccess: 0.01, defSuccess: 0.01 },
+    config.ENGINE_SOFT.NFL
+  );
+  assert.ok(sm.capped);
+  assert.ok(Math.abs(sm.marginAdj) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-12);
+
+  const soft = epa.successMarginAdj(
+    { offSuccess: null, defSuccess: 0.4 },
+    { offSuccess: 0.4, defSuccess: 0.4 },
+    config.ENGINE_SOFT.NFL
+  );
+  assert.strictEqual(soft.used, false);
+  assert.strictEqual(soft.marginAdj, 0);
+
+  const proj = epa.footballProjection({
+    sport: 'NFL',
+    home: 'Kansas City Chiefs',
+    away: 'Buffalo Bills',
+    standings: {},
+    efficiency: {
+      'Kansas City Chiefs': { offEpa: 0.10, defEpa: 0.04, offSuccess: 0.55, defSuccess: 0.50 },
+      'Buffalo Bills': { offEpa: 0.00, defEpa: 0.00, offSuccess: 0.40, defSuccess: 0.40 },
+    },
+  });
+  assert.ok(proj.engineSoft && proj.engineSoft.used);
+  assert.ok(String(proj.methods.ml).includes('engines'));
+}
+
+{
+  const tm = epa.talentMarginAdj(
+    { talent: 3.5 }, { talent: -3.5 },
+    { ...config.ENGINE_SOFT.NCAAF, talentPtsPerUnit: 20, talentWeight: 1 }
+  );
+  assert.ok(tm.capped);
+  assert.ok(Math.abs(tm.marginAdj) <= config.ENGINE_SOFT.NCAAF.maxAbsMarginAdj + 1e-12);
+
+  const soft = epa.talentMarginAdj({ talent: 1.2 }, { offEpa: 0.1 }, config.ENGINE_SOFT.NCAAF);
+  assert.strictEqual(soft.used, false);
+
+  const withTalent = epa.footballProjection({
+    sport: 'NCAAF',
+    home: 'Ohio State Buckeyes',
+    away: 'Iowa Hawkeyes',
+    standings: {},
+    efficiency: {
+      'Ohio State Buckeyes': { offEpa: 0.05, defEpa: 0.02, talent: 2.0 },
+      'Iowa Hawkeyes': { offEpa: 0.01, defEpa: 0.00, talent: 0.2 },
+    },
+  });
+  assert.ok(withTalent.engineSoft && withTalent.engineSoft.used);
+  assert.ok(String(withTalent.methods.family).includes('engines'));
+
+  const noTalent = epa.footballProjection({
+    sport: 'NCAAF',
+    home: 'Ohio State Buckeyes',
+    away: 'Iowa Hawkeyes',
+    standings: {},
+    efficiency: {
+      'Ohio State Buckeyes': { offEpa: 0.05, defEpa: 0.02 },
+      'Iowa Hawkeyes': { offEpa: 0.01, defEpa: 0.00 },
+    },
+  });
+  assert.ok(!noTalent.engineSoft || !noTalent.engineSoft.used);
+  assert.strictEqual(noTalent.methods.family, 'cfb-epa-v1');
+}
+
+{
+  // Empty QB map → continuity 0
+  const gd = require(path.join(root, 'sports/game_day'));
+  const empty = gd.qbContinuityAdjust('NFL', null, null, {}, config.ENGINE_SOFT);
+  assert.strictEqual(empty.used, false);
+  assert.strictEqual(empty.marginAdj, 0);
+  const cont = gd.qbContinuityAdjust(
+    'NFL',
+    null,
+    { qbStatus: 'out', qbName: 'X' },
+    { 'Buffalo Bills': { qbStatus: 'out' } },
+    config.ENGINE_SOFT
+  );
+  assert.ok(cont.used);
+  assert.ok(Math.abs(cont.marginAdj) <= config.ENGINE_SOFT.NFL.qbContinuityPts + 1e-12);
+}
+
+{
+  // Talent seed merges without wiping EPA
+  const seeds = ingest.loadEfficiencySeeds();
+  assert.ok(seeds.NCAAF['Ohio State Buckeyes'].offEpa != null);
+  assert.ok(Number.isFinite(seeds.NCAAF['Ohio State Buckeyes'].talent));
+}
+
 
   console.log('PASS test-omega-sport-engines', {
     MODEL_VERSION: config.MODEL_VERSION,

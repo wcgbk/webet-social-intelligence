@@ -4,6 +4,14 @@ Shipped today (2026-09-22 ET) toward ~90th-percentile Omega architecture. **Toda
 
 ## Done
 
+### D) Deeper sport engines (`v12.3.7-omega-vnext-engines`)
+- MLB: capped bullpen residual + SP-known std tighten
+- NFL: capped success→margin + QB continuity
+- NCAAF: optional talent seed overlay (capped)
+- Soft-fail; no FIT/TSP/SELECT_WEIGHTS/SHRINK retune; PM soft unchanged
+- See `docs/OMEGA-SPORT-ENGINES.md`
+
+
 ### Sport engines + placeability + observers (prior today)
 - PR A sport engines EPA/SP/park (`feat/omega-v12.2-sport-engines`)
 - Placeability soft-veto v12.2.1 (`feat/omega-v12.2-placeability`)
@@ -43,7 +51,7 @@ Shipped today (2026-09-22 ET) toward ~90th-percentile Omega architecture. **Toda
 
 - Walk-forward **fit** (Mon 11am ET ≥2026-09-29) — not before
 - Replay close-join → real CLV/ROI metrics (placeholders today)
-- Stronger multi-day EPA live feeds beyond seeds + prior-day rest
+- Stronger multi-day EPA **live** feeds beyond seeds (talent/bullpen still seed/StatsAPI)
 - Member `tsp.live` still **ON HOLD** pending permission
 - Public TSP feeds ≠ full decade member archive (honesty unchanged)
 

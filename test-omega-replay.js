@@ -169,7 +169,8 @@ const fakeGenerate = async (opts) => {
   assert.ok(!/storePicks\(dateISO/.test(storeSrc.slice(storeSrc.indexOf('storeReplayCard'))));
 
   const cfg = fs.readFileSync(path.join(root, 'config.js'), 'utf8');
-  assert.ok(/v12\.3\.5-omega-vnext-replay-score/.test(cfg));
+  assert.ok(/v12\.3\.7-omega-vnext-engines/.test(cfg));
+  assert.ok(/v12\.3\.5-omega-vnext-replay-score/.test(cfg) || /scored historical replay/.test(cfg));
 
   const doc = fs.readFileSync(path.join(__dirname, 'docs/OMEGA-HISTORICAL-REPLAY.md'), 'utf8');
   assert.ok(/Quota caution/i.test(doc));

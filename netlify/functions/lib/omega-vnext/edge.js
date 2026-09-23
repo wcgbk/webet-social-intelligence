@@ -3,7 +3,7 @@
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
 const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
-  noVigTwoWay,
+  noVigTwoWay, americanJuiceDelta,
 } = require('./odds_math');
 
 function bookKey(b) {
@@ -84,15 +84,7 @@ function canonicalizeBook(key) {
  * (the scale skips the +100/-100 gap).
  */
 function americanCentsWorse(published, book) {
-  const p = Number(published);
-  const b = Number(book);
-  if (!Number.isFinite(p) || !Number.isFinite(b)) return null;
-  const line = (a) => {
-    if (a >= 100) return a - 100;
-    if (a <= -100) return a + 100;
-    return 0;
-  };
-  return line(p) - line(b);
+  return americanJuiceDelta(published, book);
 }
 
 /**

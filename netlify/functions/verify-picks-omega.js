@@ -5,11 +5,12 @@
 // 1. MATH CHECKS: Recompute EV, Kelly, grade. Flag mismatches.
 // 2. NARRATIVE CHECKS: Verify reasoning mentions correct team, correct length, whatLoses present.
 // 3. SHARP REVIEW: Call Claude as an elite Vegas handicapper to review the full card.
-// 4. AUTO-FIX: If a pick fails critical checks (negative EV, math broken), replace it with the
-//    next best candidate from the candidate table. Rewrite the blob so the page updates.
+// 4. AUTO-FIX: If a pick fails critical checks (negative EV, math broken), drop it.
+//    Do not invent a replacement straight. Empty stays empty.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
-// The goal: up to 3 clean, verified picks when the candidate pool has them. Empty stays empty.
+// Verify may drop, flag, or resize inside the existing unit cap.
+// It does not add a straight and it does not rebuild a locked parlay.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -27,66 +28,26 @@ function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10)
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
 
-// Omega v12.0.9: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX (not a fill target)
-const OMEGA_STRAIGHT_UNIT_BUDGET = 3.5;
-const OMEGA_PARLAY_FIXED_UNITS = 0.5;
-const OMEGA_DAILY_UNIT_CAP = 4.0;
+// Omega v12.0.9: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX (not a fill target).
+// Trim order matches generate (quality, then units). Grades are not rewritten.
 function enforceOmegaDailyUnitCap(picksData) {
   if (!picksData || !Array.isArray(picksData.picks)) return;
-  const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
-  const fmtU = (n) => `${Math.round(n * 4) / 4}u`;
-  const ratingRank = (r) => {
-    const m = { 'A+': 0, aplus: 0, A: 1, a: 1, 'A-': 2, aminus: 2, 'B+': 3, bplus: 3, B: 4, b: 4 };
-    return m[r] != null ? m[r] : 4;
-  };
-  const parlays = Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs : [];
-  // Lock published parlays to fixed 0.5u
-  for (const pl of parlays) pl.units = fmtU(OMEGA_PARLAY_FIXED_UNITS);
-
-  const reduceStraightsTo = (budget) => {
-    let st = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
-    while (st > budget + 1e-9 && picksData.picks.length) {
-      const order = picksData.picks
-        .map((p, i) => i)
-        .sort((a, b) => {
-          const ra = ratingRank(picksData.picks[a].rating);
-          const rb = ratingRank(picksData.picks[b].rating);
-          if (ra !== rb) return rb - ra;
-          return parseU(picksData.picks[a].units) - parseU(picksData.picks[b].units);
-        });
-      let reduced = false;
-      for (const idx of order) {
-        const u = parseU(picksData.picks[idx].units);
-        if (u > 0.25) {
-          const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
-          picksData.picks[idx].units = fmtU(nu);
-          // Quality grades are edge/CLV based — never rewrite from stake size.
-          st = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
-          reduced = true;
-          break;
-        }
-      }
-      if (!reduced) break;
-    }
-  };
-
-  reduceStraightsTo(OMEGA_STRAIGHT_UNIT_BUDGET);
-  const parlayU = parlays.reduce((s, pl) => s + parseU(pl.units), 0);
-  reduceStraightsTo(Math.min(OMEGA_STRAIGHT_UNIT_BUDGET, Math.max(0, OMEGA_DAILY_UNIT_CAP - parlayU)));
-
-  picksData.picks.sort((a, b) => {
-    const ra = ratingRank(a.rating), rb = ratingRank(b.rating);
-    if (ra !== rb) return ra - rb;
-    return parseU(b.units) - parseU(a.units);
-  });
-  const straightU = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+  // Same quality-then-units trim as generate. Grades are not rewritten from stake.
+  const capped = applyDailyUnitCap(picksData.picks, picksData.parlayLegs);
+  picksData.picks = capped.picks;
+  if (Array.isArray(picksData.parlayLegs)) picksData.parlayLegs = capped.parlayLegs;
   if (picksData.summary) {
+    const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
+    const straightU = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
+    const parlayU = (picksData.parlayLegs || []).reduce((s, pl) => s + parseU(pl.units), 0);
+    picksData.summary.totalPicks = picksData.picks.length;
+    picksData.summary.totalStraightBets = picksData.picks.length;
     picksData.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
   }
 }
 
 
-const { toPickObject } = require('./lib/omega-vnext/select');
+const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
@@ -148,9 +109,80 @@ function buildQualityReplacement(c, opts = {}) {
   return toPickObject(normalized, { modelVersion: opts.modelVersion });
 }
 
-/** Drop pass blocks TARGET_PICKS refill. Earlier steam hard-fails count too. */
+/** Drop pass blocks any straight refill. Earlier steam hard-fails count too. */
 function steamDropBlocksStraightRefill(droppedSteam, steamHardFails) {
   return Number(droppedSteam) > 0 || Number(steamHardFails) > 0;
+}
+
+/**
+ * Verify is not a second publisher. A short card stays short, including when
+ * steam did not fire. Steam and placeability still record a block so a later
+ * edit cannot quietly refill those drops.
+ */
+function straightRefillAllowed(ctx = {}) {
+  if (steamDropBlocksStraightRefill(ctx.droppedSteam, ctx.steamHardFails)) return false;
+  if (ctx.blockStraightRefill) return false;
+  return false;
+}
+
+function sameTicketName(a, b) {
+  const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+ml$/, '').trim();
+  const na = norm(a);
+  const nb = norm(b);
+  return na !== '' && na === nb;
+}
+
+function repriceLockedParlay(root, legs) {
+  let combinedDecimal = 1;
+  let combinedProb = 1;
+  let priced = true;
+  for (const leg of legs) {
+    const odds = parseOdds(leg.odds);
+    const p = parseProbability(leg.coverProb);
+    if (!Number.isFinite(odds) || odds === 0 || !Number.isFinite(p)) { priced = false; break; }
+    combinedDecimal *= americanToDecimal(odds);
+    combinedProb *= p;
+  }
+  const type = String(root.type || '').replace(/^\d+(?=-leg-parlay-)/, String(legs.length));
+  const next = { ...root, legs, type: type || root.type };
+  if (!priced) return next;
+  const parlayEV = (combinedProb * combinedDecimal) - 1;
+  next.combinedOdds = formatCombinedAmerican(combinedDecimal);
+  next.combinedDecimal = +combinedDecimal.toFixed(2);
+  next.combinedProb = `${(combinedProb * 100).toFixed(1)}%`;
+  next.ev = `${(parlayEV * 100).toFixed(1)}%`;
+  return next;
+}
+
+/**
+ * Drop or resize a generate-locked parlay. Never compose a new one from the
+ * straight card. `straightCard` is accepted and ignored so a caller cannot
+ * quietly refill by passing the remaining straights.
+ */
+function resolveLockedParlay(parlayLegs, opts = {}) {
+  // Remaining straights are not a parts bin. A caller that passes them cannot refill.
+  void opts.straightCard;
+  const removed = []
+    .concat(opts.removedPicks || [])
+    .filter(Boolean);
+  const existing = Array.isArray(parlayLegs) ? parlayLegs : [];
+  const root = existing[0] || null;
+  const legs = root && Array.isArray(root.legs) ? root.legs : [];
+  if (!root || legs.length < 2) {
+    return { parlayLegs: [], action: legs.length ? 'cleared' : 'none', rebuilt: false };
+  }
+  const kept = legs.filter(leg => !removed.some(name => sameTicketName(name, leg.pick) || sameTicketName(name, leg.side)));
+  if (kept.length === legs.length) {
+    return { parlayLegs: existing, action: 'preserved', rebuilt: false };
+  }
+  if (kept.length < 2) {
+    return { parlayLegs: [], action: 'cleared', rebuilt: false };
+  }
+  return {
+    parlayLegs: [repriceLockedParlay(root, kept)],
+    action: 'resized',
+    rebuilt: false,
+  };
 }
 
 // ── Math Checks ──
@@ -751,61 +783,26 @@ Be honest and direct. Don't flag things just to flag them. Only raise genuine co
   return { verdict: "skip", analysis: "Sharp review unavailable" };
 }
 
-// ── Auto-Fix: Replace bad picks with next best candidate ──
+// ── Auto-Fix: drop a critical pick. Do not invent a replacement straight. ──
 async function autoFixPicks(picksData, pickReports) {
   const criticalIndices = [];
   for (let i = 0; i < pickReports.length; i++) {
-    if (pickReports[i].severity === "critical") criticalIndices.push(i);
+    if (pickReports[i].mathSeverity === "critical") criticalIndices.push(i);
   }
   if (criticalIndices.length === 0) return { fixed: false, replacements: [] };
 
-  const candidateTable = picksData.candidateTable || [];
-  if (candidateTable.length === 0) return { fixed: false, replacements: [], reason: "No candidate table available" };
-
-  const currentPicks = new Set(picksData.picks.map(p => p.pick));
-  const claudeRejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
   const replacements = [];
-
-  for (const idx of criticalIndices) {
+  for (const idx of criticalIndices.slice().sort((a, b) => b - a)) {
     const badPick = picksData.picks[idx];
-
-    // Find next best candidate not already on the card
-    let replacement = null;
-    const currentMatchups = new Set(picksData.picks.map(p => (p.matchup || "").toLowerCase().trim()));
-    for (const c of candidateTable) {
-      if (currentPicks.has(c.side)) continue;
-      if (currentMatchups.has((c.matchup || "").toLowerCase().trim())) continue;
-      if (!candidateClearsSportGates(c)) continue;
-      if (c.verification === 'FAIL') continue;
-      if (claudeRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
-
-      // Quality/edge grade and quarter-Kelly units via toPickObject.
-      replacement = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
-      break;
-    }
-
-    if (replacement) {
-      replacements.push({
-        index: idx,
-        removed: badPick.pick,
-        removedReason: pickReports[idx].errors.join("; "),
-        added: replacement.pick,
-      });
-      picksData.picks[idx] = replacement;
-      currentPicks.delete(badPick.pick);
-      currentPicks.add(replacement.pick);
-      console.log(`[verify-fix] REPLACED pick ${idx + 1}: "${badPick.pick}" → "${replacement.pick}"`);
-    } else {
-      // No replacement available — remove the bad pick entirely
-      replacements.push({
-        index: idx,
-        removed: badPick.pick,
-        removedReason: pickReports[idx].errors.join("; "),
-        added: null,
-      });
-      picksData.picks.splice(idx, 1);
-      console.log(`[verify-fix] REMOVED pick ${idx + 1}: "${badPick.pick}" (no replacement available)`);
-    }
+    if (!badPick) continue;
+    replacements.push({
+      index: idx,
+      removed: badPick.pick,
+      removedReason: (pickReports[idx].errors || []).join("; "),
+      added: null,
+    });
+    picksData.picks.splice(idx, 1);
+    console.log(`[verify-fix] REMOVED pick ${idx + 1}: "${badPick.pick}" (no replacement — verify does not invent straights)`);
   }
 
   // Fix narrative warnings (too short/empty) — add generic narrative if missing
@@ -974,6 +971,8 @@ async function storeReport(dateKey, report) {
 
 exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
+exports.straightRefillAllowed = straightRefillAllowed;
+exports.resolveLockedParlay = resolveLockedParlay;
 exports.formatCombinedAmerican = formatCombinedAmerican;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
@@ -1000,6 +999,7 @@ exports.handler = async (event) => {
 
     const picksData = result.data;
     const dateFormatted = dateKey;
+    const lockedStraightPicks = (picksData.picks || []).map(p => p.pick).filter(Boolean);
 
     // ── Step 1: Math + Narrative checks ──
     let totalWarnings = 0, totalErrors = 0;
@@ -1013,7 +1013,7 @@ exports.handler = async (event) => {
       const severity = math.severity === "critical" || narrative.severity === "critical" ? "critical" : allWarnings.length > 0 ? "warning" : "clean";
       totalWarnings += allWarnings.length;
       totalErrors += allErrors.length;
-      pickReports.push({ pick: `${pick.pick} ${pick.odds}`, sport: pick.sport, severity, mathChecks: math.checks, narrativeChecks: narrative.checks, warnings: allWarnings, errors: allErrors });
+      pickReports.push({ pick: `${pick.pick} ${pick.odds}`, sport: pick.sport, severity, mathSeverity: math.severity, mathChecks: math.checks, narrativeChecks: narrative.checks, warnings: allWarnings, errors: allErrors });
     }
 
     console.log(`[verify] Math/narrative: ${totalErrors} errors, ${totalWarnings} warnings`);
@@ -1026,6 +1026,7 @@ exports.handler = async (event) => {
     let blockStraightRefill = false;
     let blockParlayRefill = false;
     let placeabilityDropped = 0;
+    let droppedSteam = 0;
     try {
       hrCheck = await runHardRockCheck(picksData);
       const decisions = (hrCheck.pickResults || []).map(r => (r && r.decision) || { drop: false });
@@ -1086,7 +1087,7 @@ exports.handler = async (event) => {
     try {
       const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
       const kept = [];
-      let droppedSteam = 0;
+      droppedSteam = 0;
       for (const pick of picksData.picks) {
         const r = pick.lineMove ? adverseSteamReason(pick.lineMove, { verify: true }) : null;
         if (r) {
@@ -1137,167 +1138,35 @@ exports.handler = async (event) => {
     if (sharpResult.verdict === "red_flag") {
       console.log(`[verify-sharp] (informational, no card change) red_flag: ${sharpResult.analysis || ""}`);
     }
-    if (false && sharpResult.pickFlags && sharpResult.pickFlags.length > 0) { // DISABLED: advisory-only now
-      const candidateTable = picksData.candidateTable || [];
-      const currentPickNames = new Set(picksData.picks.map(p => p.pick));
-      const sharpRejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
-
-      for (const flag of sharpResult.pickFlags) {
-        if (flag.flag !== "red_flag") continue; // only act on red flags, not concerns
-        const pickIdx = (flag.pickIndex || 1) - 1; // pickIndex is 1-based
-        if (pickIdx < 0 || pickIdx >= picksData.picks.length) continue;
-        const badPick = picksData.picks[pickIdx];
-
-        // Find replacement from candidate table
-        let replacement = null;
-        for (const c of candidateTable) {
-          if (currentPickNames.has(c.side)) continue;
-          if (!candidateClearsSportGates(c)) continue;
-          if (c.verification === 'FAIL') continue;
-          if (sharpRejectedSides.has(c.side)) { console.log(`[verify-sharp] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
-
-          replacement = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
-          break;
-        }
-
-        if (replacement) {
-          sharpReplacements.push({
-            index: pickIdx,
-            removed: badPick.pick,
-            removedReason: `Sharp review RED FLAG: ${flag.reason}`,
-            added: replacement.pick,
-          });
-          picksData.picks[pickIdx] = replacement;
-          currentPickNames.delete(badPick.pick);
-          currentPickNames.add(replacement.pick);
-          console.log(`[verify-sharp] REPLACED pick ${pickIdx + 1}: "${badPick.pick}" → "${replacement.pick}" (sharp red flag: ${flag.reason})`);
-        } else {
-          // No CLEAN replacement. The sharp review is ADVISORY — a non-deterministic LLM that flags
-          // narrative/situational concerns, not math, and it has red-flagged genuine +EV plays (e.g.
-          // on "What Loses" phrasing). So we DOWNGRADE rather than delete: annotate the concern and
-          // trim 0.5u. Truly broken picks (negative/undefined EV, broken math) are removed upstream by
-          // the math-critical autoFix, not here. This guarantees the sharp review never shrinks the card.
-          const curU = parseUnits(badPick.units);
-          const newU = Math.max(0.5, (isNaN(curU) ? 1 : curU) - 0.5);
-          badPick.units = `${newU}u`;
-          // Stake trim only. Leave quality rating / qualityGrade alone (v12.1+ — never rewrite from units).
-          badPick.sharpConcern = flag.reason;
-          sharpReplacements.push({
-            index: pickIdx,
-            downgraded: badPick.pick,
-            removed: null,
-            removedReason: `Sharp concern (downgraded ${(isNaN(curU) ? 1 : curU)}u→${newU}u, not removed): ${flag.reason}`,
-            added: null,
-          });
-          console.log(`[verify-sharp] DOWNGRADED pick ${pickIdx + 1}: "${badPick.pick}" → ${newU}u (advisory sharp concern)`);
-        }
-      }
-
-      // Card floor: a red-flag drop must never publish an EMPTY card. If every surviving pick is
-      // flagged, retain the single highest-EV one (annotate the concern) rather than going dark.
-      // (Policy choice — flip to an honest "0-play day" if you'd rather show nothing than a flagged play.)
-      const evNum = (p) => { const r = (typeof p.evRaw === "number") ? p.evRaw : parseFloat(String(p.ev)) / 100; return isNaN(r) ? 0 : r; };
-      if (picksData.picks.filter(p => !p._dropRedFlag).length === 0) {
-        const flagged = picksData.picks.filter(p => p._dropRedFlag).sort((a, b) => evNum(b) - evNum(a));
-        if (flagged.length > 0) {
-          const keep = flagged[0];
-          delete keep._dropRedFlag;
-          keep.sharpConcern = "Retained as the card's only qualifying play; sharp review flagged a situational concern — size accordingly.";
-          sharpReplacements = sharpReplacements.filter(r => r.removed !== keep.pick); // it was NOT removed
-          console.log(`[verify-sharp] Card floor: retained "${keep.pick}" (highest EV) rather than publish an empty card`);
-        }
-      }
-
-      // Physically remove any red-flagged picks that had no replacement (filter avoids index-shift)
-      const droppedCount = picksData.picks.filter(p => p._dropRedFlag).length;
-      if (droppedCount > 0) {
-        picksData.picks = picksData.picks.filter(p => !p._dropRedFlag);
-        console.log(`[verify-sharp] Removed ${droppedCount} red-flagged pick(s) with no replacement; ${picksData.picks.length} remain`);
-      }
-
-      // If we made any sharp action (replace / downgrade / drop), recalc summary + update the blob
-      if (sharpReplacements.length > 0 || droppedCount > 0) {
-        const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
-        if (picksData.summary) {
-          picksData.summary.totalPicks = picksData.picks.length;
-          picksData.summary.totalStraightBets = picksData.picks.length;
-          picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
-        }
-        await updatePicksBlob(dateKey, picksData);
-        console.log(`[verify-sharp] Updated blob: ${sharpReplacements.filter(r => r.added).length} replacement(s), ${droppedCount} drop(s)`);
-      }
-    }
 
     // Merge all replacements
     const allReplacements = [...(fixResult.replacements || []), ...sharpReplacements];
 
-    // ── Step 3c: FINAL PASS — re-verify entire card, write real narratives, rebuild parlay ──
-    // After any replacements, the published card must be perfect:
-    // 1. Every pick has a real narrative (not generic)
+    // ── Step 3c: FINAL PASS — re-verify the locked card. Do not rebuild the parlay. ──
+    // After drops, the published card must stay the one generate locked:
+    // 1. Every remaining pick has a real narrative (not generic)
     // 2. Grades stay quality/edge — never rewritten from units
     // 3. Math checks pass
-    // 4. Parlay is recalculated with the final picks
+    // 4. A locked parlay is preserved, or a dropped leg is removed. It is not rebuilt.
     {
       console.log(`[verify-final] Running final verification pass on ${picksData.picks.length} picks`);
       let finalFixCount = 0;
 
-      // ── Backfill: if drops/removals shrank the card below target, refill from the candidate
-      // pool with the next-best CLEAN candidates. A math-critical removal or sharp red-flag drop
-      // must NOT silently shrink the card to 2 when a clean alternative exists. We never force junk:
-      // only EV>3% candidates that Claude didn't actively reject, de-correlated, 1 per game.
-      // (If the pool is genuinely exhausted — a truly lean slate — we publish fewer, honestly.)
-      const TARGET_PICKS = 3;
       // Placeability soft-veto and adverse steam drops do not refill. Empty slots stay empty.
-      if (!blockStraightRefill && picksData.picks.length < TARGET_PICKS && Array.isArray(picksData.candidateTable)) {
-        const onCard = new Set(picksData.picks.map(p => p.pick));
-        const rejectedSides = new Set((picksData.rejections || []).filter(r => r.reason && !r.reason.startsWith('Not selected')).map(r => r.side));
-        const dirKey = (sport, side) => `${sport}|${/over/i.test(side) ? 'over' : /under/i.test(side) ? 'under' : 'side'}`;
-        const matchupsOnCard = new Set(picksData.picks.map(p => p.matchup));
-        const dirCount = {};
-        for (const p of picksData.picks) { const k = dirKey(p.sport, p.pick); dirCount[k] = (dirCount[k] || 0) + 1; }
-
-        // Exclude sides QA removed/flagged THIS run — never re-add a pick we just dropped.
-        const removedThisRun = new Set((allReplacements || []).map(r => r.removed));
-        const pool = picksData.candidateTable
-          .filter(c => !onCard.has(c.side) && !rejectedSides.has(c.side) && !removedThisRun.has(c.side) && candidateClearsSportGates(c))
-          .sort((a, b) => b.ev - a.ev);
-
-        let backfilled = 0;
-        for (const c of pool) {
-          if (picksData.picks.length >= TARGET_PICKS) break;
-          if (matchupsOnCard.has(c.matchup)) continue;          // one pick per game
-          const k = dirKey(c.sport, c.side);
-          if ((dirCount[k] || 0) >= 2) continue;                // avoid 3 same-direction same-sport legs
-          const built = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
-          picksData.picks.push(built);
-          onCard.add(c.side);
-          if (built.pick) onCard.add(built.pick);
-          matchupsOnCard.add(c.matchup); dirCount[k] = (dirCount[k] || 0) + 1;
-          backfilled++;
-          console.log(`[verify-backfill] Added ${c.side} (EV ${(c.ev * 100).toFixed(1)}%) to refill card toward ${TARGET_PICKS}`);
-        }
-        if (backfilled > 0) {
-          finalFixCount += backfilled;
-          if (picksData.summary) {
-            const tu = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
-            picksData.summary.totalPicks = picksData.picks.length;
-            picksData.summary.totalStraightBets = picksData.picks.length;
-            picksData.summary.totalUnits = `${tu.toFixed(1)}u`;
-          }
-          console.log(`[verify-backfill] Refilled card to ${picksData.picks.length} pick(s) from candidate pool`);
-        } else {
-          console.log(`[verify-backfill] No clean candidates available to refill — publishing ${picksData.picks.length} pick(s) honestly`);
-          if (picksData.picks.length < TARGET_PICKS) {
-            picksData.rejections = picksData.rejections || [];
-            if (!picksData.rejections.some(r => r.side === "noFill")) {
-              picksData.rejections.push({
-                matchup: "Card fill",
-                side: "noFill",
-                reason: `Only ${picksData.picks.length} candidate(s) cleared sport EV/coverProb floors — not padding weak legs.`,
-              });
-            }
-          }
-        }
+      // A clean short card does not refill either. Verify does not invent straights.
+      const stillOnCard = new Set(picksData.picks.map(p => p.pick));
+      const removedSinceLock = lockedStraightPicks.filter(p => !stillOnCard.has(p));
+      if (straightRefillAllowed({
+        droppedSteam,
+        steamHardFails: steamCheck.failed,
+        blockStraightRefill,
+        cardLocked: true,
+        removedSinceLock,
+      })) {
+        throw new Error('[verify] refused: straight refill is not a verify action');
+      }
+      if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
+        console.log(`[verify-final] Straight refill blocked — publishing ${picksData.picks.length} pick(s) from the locked card`);
       }
 
       // Strip stale sharp-review annotations only.
@@ -1435,70 +1304,31 @@ Return ONLY valid JSON array:
         }
       }
 
-      // ── Parlay handling (v10.4): PRESERVE the generator's parlay unless it's now invalid ──
-      // The old unconditional daily rebuild (a) discarded the correlated-parlay optimizer's
-      // output (its legs may legitimately differ from the straight card), (b) re-hardcoded
-      // 0.5u over the 0.25u lean-card rule, and (c) dropped each leg's commenceTime —
-      // re-breaking doubleheader settlement every day at 10:30. Rebuild ONLY when the parlay
-      // is missing or a verification action invalidated one of its legs.
-      const removedPicks = new Set(allReplacements.map(r => r.removed).filter(Boolean));
-      const existingParlay = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
-      const parlayLegsArr = (existingParlay && Array.isArray(existingParlay.legs)) ? existingParlay.legs : [];
-      const cardPickSet = new Set(picksData.picks.map(p => p.pick));
-      const isCardMirror = !existingParlay || /fallback|verified|straight/.test(existingParlay.type || "");
-      const parlayInvalid =
-        !existingParlay || parlayLegsArr.length < 2 ||
-        parlayLegsArr.some(l => removedPicks.has(l.pick)) ||
-        (isCardMirror && parlayLegsArr.some(l => !cardPickSet.has(l.pick)));
-
+      // ── Parlay: preserve the generate-locked slip. Drop a leg steam or safety
+      // already removed. Do not compose a new parlay from the straight card.
+      const removedPicks = [
+        ...removedSinceLock,
+        ...allReplacements.map(r => r.removed).filter(Boolean),
+      ];
       if (blockParlayRefill) {
         console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
-      } else if (!parlayInvalid) {
-        console.log(`[verify-final] Parlay preserved — generator output intact (${existingParlay.type})`);
-      } else if (picksData.picks.length >= 2) {
-        const hasLean = picksData.picks.some(p => p.thinSlate || p.dataVerified === 'lean-tier' || (p.rating || '').toLowerCase() === 'lean');
-        const n = Math.min(3, picksData.picks.length);
-        const legs = picksData.picks.slice(0, n).map(p => ({
-          pick: p.pick,
-          sport: p.sport,
-          matchup: p.matchup,
-          betType: p.betType,
-          odds: p.odds,
-          coverProb: p.winProbability || p.coverProb,
-          // Legs MUST carry the start time or doubleheader legs settle against the wrong game.
-          commenceTime: p.commenceTime || '',
-          ev: p.ev,
-          coreReasoning: p.coreReasoning || '',
-          whatLoses: p.whatLoses || '',
-          dataVerified: p.dataVerified || '',
-          clvExpectation: p.clvExpectation || '',
-        }));
-
-        let combinedDecimal = 1.0, combinedProb = 1.0;
-        for (const leg of legs) {
-          const odds = parseOdds(leg.odds);
-          combinedDecimal *= americanToDecimal(odds);
-          combinedProb *= parseProbability(leg.coverProb);
-        }
-        const parlayEV = (combinedProb * combinedDecimal) - 1;
-
-        picksData.parlayLegs = [{
-          type: `${legs.length}-leg-parlay-verified`,
-          legs,
-          units: hasLean ? "0.25u" : "0.5u",
-          combinedOdds: formatCombinedAmerican(combinedDecimal),
-          combinedDecimal: +combinedDecimal.toFixed(2),
-          combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
-          ev: `${(parlayEV * 100).toFixed(1)}%`,
-          correlationNote: "Rebuilt after verification — a leg was invalidated by pick replacement",
-        }];
-        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ ${formatCombinedAmerican(combinedDecimal)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
+      }
+      const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
+        removedPicks,
+        straightCard: picksData.picks,
+      });
+      if (resolvedParlay.rebuilt) {
+        throw new Error('[verify] refused: parlay rebuild is not a verify action');
+      }
+      picksData.parlayLegs = resolvedParlay.parlayLegs;
+      if (resolvedParlay.action === 'preserved') {
+        const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
+        console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
+      } else if (resolvedParlay.action === 'resized') {
         finalFixCount++;
-      } else {
-        if (picksData.parlayLegs && picksData.parlayLegs.length) {
-          picksData.parlayLegs = [];
-          console.log(`[verify-final] Cleared stale parlay — only ${picksData.picks.length} pick(s) remain`);
-        }
+        console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
+      } else if (resolvedParlay.action === 'cleared') {
+        console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
       }
 
       // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──

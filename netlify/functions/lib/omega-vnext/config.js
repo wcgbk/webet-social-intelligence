@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.11-omega-vnext-run-env';
+const MODEL_VERSION = 'v12.3.12-omega-vnext-desk-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -107,7 +107,7 @@ const LINE_MOVE = {
   scorePenaltySteamAgainst: 0.04,
   boostSteamTowardCents: 8,
   boostSteamTowardPts: 0.5,
-  /** Verify (10:30): harder adverse thresholds — drop + refill; empty OK. */
+  /** Verify (10:30): harder adverse thresholds — drop, do not refill. Empty OK. */
   verifyAdverseCents: 20,
   verifyAdversePts: { Spread: 1.5, Total: 1.5 },
 };
@@ -151,7 +151,7 @@ const GATES = {
  * Drop pick + try next diversified YES; else leave slot empty — NO lean force-fill.
  */
 const QA_HARDFAIL = {
-  staleOddsCents: 15, // |american odds move| vs lockSnapshot
+  staleOddsCents: 15, // juice-ladder cents vs lockSnapshot (not raw American subtraction)
   staleLinePts: { Spread: 1.0, Total: 1.0, Moneyline: null },
   qbOutStatuses: ['out', 'doubtful', 'ruled out', 'injured reserve', 'ir'],
   spScratchKeywords: ['scratched', 'changed', 'will not start', 'scrambled'],
@@ -267,6 +267,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.3.12 omega-vnext: desk lock. Verify may drop, flag, or resize inside the 3.5/0.5/${DAILY_UNIT_CAP} cap. It does not add a straight and it does not rebuild a generate-locked parlay from the straight card. Steam and placeability drops are not refilled (blockStraightRefill still records the steam block). Stale-odds cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent hard-fail. Candidate-table rank follows the same quality score as the letter grade. Summary meanClvPct is the probability, not a second copy of the cent figure. Evening walk-forward observer at 23:45 UTC (7:45pm ET in EDT) writes omega-walkforward only, after the 23:00 UTC close pass. The 2026-11-01 EDT→EST cron shift is documented and not applied. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, or isotonic change. FIT off. No TSP. NBA/NHL off. LEAN_PAD false. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.3.11 omega-vnext: run environment. MLB base margin and total come from per-game runs scored and allowed (season totals divided by wins+losses when ESPN pointsFor is a season sum; missing or unclean standings stay on the 8.6 / HFA baseline). A 100-run season gap is about one run, so starter, park, and bullpen residuals move the probability instead of sitting under a clamped 0.95. Moneyline blend uses the same no-vig Pinnacle/Circa anchor as spreads and totals. Weights unchanged: MLB ML 0.50 / spread 0.50 / total 0.45, NFL ML 0.50 / spread 0.50 / total 0.45, NCAAF ML 0.45 / spread 0.45 / total 0.40. fair_sharp prefers a paired same-book no-vig (Pinnacle, then Circa, then the other sharp books) and does not de-vig mixed books. Open-to-now steam cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent move. Capture-health retry labels a canonical slot within 12 minutes, or the latest due slot when the book is empty, and does not insert an off-slot poll. Close grades prefer Circa and Bookmaker ahead of exchanges when Pinnacle is absent. Straight rank is qualityScore (the same calibrated edge as the letter grade), not the old EV/CLV mix, so a plus-money dog does not outrank a cleaner price. SELECT_WEIGHTS numbers are unchanged and unused except softSportMixBonus. No gate, Kelly, unit-cap, global SHRINK_K, or MLB_CALIBRATION change. FIT off. No TSP. NBA/NHL off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.3.10 omega-vnext: sharp blend. Spread and total market anchors are the equal-weight average of no-vig Pinnacle and no-vig Circa (circa or circasports). One of those books is used alone when the other has no two-way price. If both are missing, the anchor is the existing sharp no-vig pair. Never prices[0]. Blend weights unchanged: MLB spread 0.50 / total 0.45, NFL spread 0.50 / total 0.45, NCAAF spread 0.45 / total 0.40. Moneyline blend unchanged (vigged Pinnacle, else the first price) at MLB 0.50 / NFL 0.50 / NCAAF 0.45. No gate, Kelly, unit-cap, or global SHRINK_K change.`,
   `v12.3.9 omega-vnext: card fill. MLB second shrink only. Global SHRINK_K unchanged (Total ${SHRINK_K.Total} / Spread ${SHRINK_K.Spread} / Moneyline ${SHRINK_K.Moneyline} / default ${SHRINK_K.default}). MLB_CALIBRATION.shrinkK Total ${MLB_CALIBRATION.shrinkK.Total} / Spread ${MLB_CALIBRATION.shrinkK.Spread} / Moneyline ${MLB_CALIBRATION.shrinkK.Moneyline} / default ${MLB_CALIBRATION.shrinkK.default}. Isotonic stays global 0.42–0.58 keeping 0.25 of the excess for every sport, so a wild probability still cannot print a 15-point fake edge. At least 3 distinct gate-clear games in the yes pool publish 3 straights. Parlay primary rank is combined hit probability; EV is a tie-break only; a +EV 3-leg is preferred whenever one exists. Verify replacement units are quarter-Kelly via kellyToUnits capped at MAX_STRAIGHT_UNITS_PER_PICK ${MAX_STRAIGHT_UNITS_PER_PICK}, then the 3.5/0.5/${DAILY_UNIT_CAP} daily cap. No alpha-config read and no mlUnitCap ladder. Favorite parlay combinedOdds (decimal < 2) format as minus. NFL/NCAAF/MLB verify cover floor is GATES.minCoverProb 0.48. LEAN_PAD false. FIT off. No TSP. NBA/NHL off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}. GATES unchanged.`,

@@ -91,17 +91,28 @@ function ratingToConfidence(rating) {
   return ({ aplus: 90, a: 82, aminus: 75, bplus: 68, b: 60, lean: 52 })[rating] || 60;
 }
 
-/** Approx American cents difference for CLV proxy (positive = beat). */
+/**
+ * American juice-ladder delta. Positive means `toAmerican` is a worse price
+ * than `fromAmerican`. The +100/−100 gap is one cent, not 200.
+ * +105 → −105 is 10. −110 → −130 is 20.
+ */
+function americanJuiceDelta(fromAmerican, toAmerican) {
+  const from = Number(fromAmerican);
+  const to = Number(toAmerican);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from === 0 || to === 0) return null;
+  const line = (a) => {
+    if (a >= 100) return a - 100;
+    if (a <= -100) return a + 100;
+    return 0;
+  };
+  return line(from) - line(to);
+}
+
+/** Juice-ladder cents the bet beat the close by. Positive = beat. */
 function americanCentsDiff(betAmerican, closeAmerican) {
-  const b = Number(betAmerican);
-  const c = Number(closeAmerican);
-  if (!Number.isFinite(b) || !Number.isFinite(c)) return null;
-  // Normalize both to "cents of value" vs -110 baseline via implied edge
-  const pb = americanToImplied(b);
-  const pc = americanToImplied(c);
-  if (pb == null || pc == null) return null;
-  // Positive when you bet a better price than close (lower implied)
-  return +((pc - pb) * 10000 / 100).toFixed(2); // rough cents-ish scale
+  const delta = americanJuiceDelta(betAmerican, closeAmerican);
+  if (delta == null) return null;
+  return +delta.toFixed(2);
 }
 
 function clamp(x, lo, hi) {
@@ -260,6 +271,7 @@ module.exports = {
   kellyToUnits,
   unitsToRating,
   ratingToConfidence,
+  americanJuiceDelta,
   americanCentsDiff,
   clamp,
   normCdf,

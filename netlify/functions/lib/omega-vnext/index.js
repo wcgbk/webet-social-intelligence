@@ -7,7 +7,7 @@ const { ingest } = require('./ingest');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -438,7 +438,7 @@ async function generateOmegaVnext(opts = {}) {
   const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0) + parlayUnits;
   const sportsCovered = [...new Set(picks.map(p => p.sport))];
 
-  const candidateTable = yesPool.slice(0, 15).map((c, i) => ({
+  const candidateTable = orderedByScore(yesPool).slice(0, 15).map((c, i) => ({
     rank: i + 1,
     sport: c.sport,
     side: c.side,
@@ -461,7 +461,10 @@ async function generateOmegaVnext(opts = {}) {
     projMethod: c.projMethod,
     placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
     bestPlaceable: c.bestPlaceable || null,
-    selected: picks.some(p => p.pick === c.side && p.matchup === c.matchup),
+    selected: picks.some(p => {
+      const labeled = formatMoneylinePick(c.side, c.market);
+      return (p.pick === c.side || p.pick === labeled) && p.matchup === c.matchup;
+    }),
   }));
 
   const rejections = [

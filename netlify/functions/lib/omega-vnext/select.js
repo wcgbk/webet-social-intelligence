@@ -66,6 +66,11 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
   return picked;
 }
 
+/** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
+function orderedByScore(pool) {
+  return [...(pool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+}
+
 function parseU(u) {
   return parseFloat(String(u || '0').replace(/[^0-9.]/g, '')) || 0;
 }
@@ -249,6 +254,7 @@ function applyDailyUnitCap(picks, parlayLegs) {
 module.exports = {
   scoreCandidate,
   selectStraights,
+  orderedByScore,
   toPickObject,
   applyDailyCap,
   applyDailyUnitCap,

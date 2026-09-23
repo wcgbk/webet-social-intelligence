@@ -13,6 +13,7 @@
 const {
   QA_HARDFAIL, MAJOR_LIQUIDITY_BOOKS, MAX_STRAIGHTS, ESPN_LEAGUES,
 } = require('./config');
+const { americanJuiceDelta } = require('./odds_math');
 const { matchupKey, selectStraights, toPickObject } = require('./select');
 const { adverseSteamReason } = require('./line_path');
 
@@ -42,7 +43,9 @@ function americanCentsMove(a, b) {
   const x = parseAmerican(a);
   const y = parseAmerican(b);
   if (x == null || y == null) return null;
-  return Math.abs(x - y);
+  const delta = americanJuiceDelta(x, y);
+  if (delta == null) return null;
+  return Math.abs(delta);
 }
 
 function lineMove(a, b) {

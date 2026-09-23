@@ -47,3 +47,33 @@ Nothing in this list should be coded before that generate.
 - Do not wire TSP or Alpha into Omega select.
 - Leave NBA and NHL off.
 - November 1: move the Omega UTC crons one hour later before the first EST Sunday. That is a process fix for next month, not for tomorrow morning.
+
+## v12.3.12 desk lock — scored before the 9:30 ET generate
+
+Shipped as `v12.3.12-omega-vnext-desk-lock`. The 2026-09-22 card was not regenerated. `SHRINK_K`, `MLB_CALIBRATION.shrinkK`, the 0.42–0.58 isotonic band, Kelly, the 4.0u cap, `LEAN_PAD`, FIT, TSP, NBA/NHL, and Alpha are unchanged. Wednesday's 9:30 ET generate stays on `30 13 * * *`.
+
+What changed:
+
+1. **Verify is not a second publisher.** It may drop a math-broken straight, flag copy, and resize stakes inside the existing cap. It does not add a straight. A steam or placeability drop is not refilled. A generate-locked parlay is kept; a dropped leg is removed, and if fewer than two legs remain the slip is cleared. It is not rebuilt from the straight card. The disabled sharp-review replacement branch is gone.
+2. **Evening post-close observer.** `capture-omega-walkforward-evening` runs at 23:45 UTC (7:45pm ET while EDT holds), after the 23:00 UTC close pass. It writes `omega-walkforward/*` only.
+3. **Nov 1 clock change is written down and not applied.** `netlify.toml` lists the EST crons as comments. Live schedules are still the EDT ones, so Wednesday is unchanged.
+4. **Odds and rank bugfixes, not knob retunes.** Stale-odds cents use the American juice ladder (`+105` to `−105` is 10 cents, not 210). Candidate-table rank follows the same quality score as the letter grade. Verify's stake trim uses that same quality order. A moneyline parlay of the straight card is not marked independent just because the label gained " ML". Summary `meanClvPct` is the probability (`2.0` cents → `0.02`).
+
+## Score after v12.3.12
+
+| Lens | Percentile | Why it is not higher |
+|---|---|---|
+| Processes | 86 | Morning snaps, generate, verify, and an evening write-only resample now bracket the card. The Nov 1 EST shift is scheduled on paper. The live crons are still fixed UTC, which is correct until that Sunday and wrong if nobody applies the comment. |
+| Architecture | 86 | Generate publishes the card. Verify drops, flags, or resizes. Walk-forward, PM, and TSP stay off the selection path. |
+| Math | 84 | The juice ladder, the candidate rank, and the CLV percent scale now match the rest of the desk. The published probability is still shrunk with hand-set `SHRINK_K`, `MLB_CALIBRATION.shrinkK`, and the 0.42–0.58 isotonic band. That is the point under 85. |
+| Overall | 84 | Overall follows Math. The card shape is unchanged: 3 gate-clear straights, a hit-ranked 3-leg, 4.0u cap, no lean pad. |
+
+## Still blocked — do not ship before the closes exist
+
+These are not code bugs. Shipping them before 2026-09-29 would be a guess.
+
+- Do not flip `FIT_ENABLED`. Earliest fit is Monday 11:00 ET on or after 2026-09-29, and only after Pinnacle/Circa closes exist and a shadow week does not lose closing-line value.
+- Do not retune `SHRINK_K`, `MLB_CALIBRATION.shrinkK`, or the isotonic band off one or two cards.
+- Do not wire TSP or Alpha into Omega select. Leave NBA and NHL off. Do not raise the 4.0u cap.
+- Do not hand-edit `picks-2026-09-22`, `picks-2026-09-23`, or `picks-2026-09-24`, and do not force a regenerate.
+- On 2026-11-01, apply the commented EST crons in `netlify.toml` before the first Sunday slate. That includes moving `capture-omega-walkforward-evening` from `45 23 * * *` to `45 0 * * *`. `trigger-clv` is shared with the settler; retiming it is a separate ops change.

@@ -18,7 +18,7 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.8-omega-vnext-engines-build');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
@@ -66,6 +66,10 @@ assert.deepStrictEqual(config.SELECT_WEIGHTS, {
   softSportMixBonus: 0.02,
 });
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
+assert.deepStrictEqual(config.MLB_CALIBRATION, {
+  shrinkK: { Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46 },
+});
+assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB keeps the global isotonic band');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
 assert.ok(epa.SPORT_CFG.NFL.epaUncertainty >= 0.12 && epa.SPORT_CFG.NFL.epaUncertainty <= 0.14);
@@ -488,6 +492,74 @@ function byMarket(cands, market) {
   }, { homeAbbr: 'COL' });
   assert.strictEqual(byAbbr.factor, 1.21);
   assert.strictEqual(env.resolvePark('Colorado Rockies', { 'Colorado Rockies': { park: 1.8 } }, null), null);
+}
+
+// v12.3.10: spreads/totals blend to no-vig Pinnacle/Circa, not prices[0]. ML anchor stays vigged Pinnacle.
+{
+  const edgeMod = require(path.join(root, 'edge'));
+  const common = require(path.join(root, 'sports/_common'));
+  const oddsMath = require(path.join(root, 'odds_math'));
+  for (const f of ['sports/mlb.js', 'sports/nfl.js', 'sports/cfb.js']) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.strictEqual((src.match(/prices\[0\]/g) || []).length, 1, `${f} keeps prices[0] only as the ML fallback`);
+    assert.ok(src.includes('noVigPinnacleCircaImplied'), f);
+  }
+  const home = 'Los Angeles Dodgers';
+  const away = 'San Francisco Giants';
+  const ev = {
+    home_team: home,
+    away_team: away,
+    commence_time: '2026-09-24T23:10:00Z',
+    bookmakers: ['draftkings', 'fanduel', 'pinnacle', 'circa'].map((key) => {
+      const spreadHome = key === 'pinnacle' ? -110 : key === 'circa' ? -108 : -105;
+      const spreadAway = key === 'pinnacle' ? -110 : key === 'circa' ? -112 : -115;
+      const over = key === 'pinnacle' ? -110 : key === 'circa' ? -112 : -105;
+      const under = key === 'pinnacle' ? -110 : key === 'circa' ? -104 : -115;
+      const mlHome = key === 'pinnacle' ? -130 : key === 'circa' ? -128 : -125;
+      const mlAway = key === 'pinnacle' ? 110 : key === 'circa' ? 108 : 105;
+      return {
+        key,
+        markets: [
+          { key: 'h2h', outcomes: [{ name: home, price: mlHome }, { name: away, price: mlAway }] },
+          { key: 'spreads', outcomes: [
+            { name: home, price: spreadHome, point: -1.5 },
+            { name: away, price: spreadAway, point: 1.5 },
+          ]},
+          { key: 'totals', outcomes: [
+            { name: 'Over', price: over, point: 8.5 },
+            { name: 'Under', price: under, point: 8.5 },
+          ]},
+        ],
+      };
+    }),
+  };
+  const cands = mlb.project({ oddsEvents: [ev], standings: {} });
+  const spread = cands.find(c => c.market === 'Spread' && c.line === -1.5 && String(c.side).includes(home));
+  const total = cands.find(c => c.market === 'Total' && /^Over/.test(c.side));
+  const ml = cands.find(c => c.market === 'Moneyline' && c.side === home);
+  const spreadBundles = edgeMod.collectMarketOutcomes(ev, 'spreads');
+  const totalBundles = edgeMod.collectMarketOutcomes(ev, 'totals');
+  const spreadAnchor = edgeMod.noVigPinnacleCircaImplied(spreadBundles, spreadBundles.find(b => b.side === home));
+  const totalAnchor = edgeMod.noVigPinnacleCircaImplied(totalBundles, totalBundles.find(b => b.side === 'Over'));
+  const pinSpread = oddsMath.noVigTwoWay(-110, -110).p1;
+  const circaSpread = oddsMath.noVigTwoWay(-108, -112).p1;
+  assert.ok(Math.abs(spreadAnchor - (pinSpread + circaSpread) / 2) < 1e-9, 'Pinnacle and Circa share the anchor equally');
+  const dkSpread = oddsMath.americanToImplied(-105);
+  assert.ok(Math.abs(spreadAnchor - dkSpread) > 0.005);
+  const pSpread = common.spreadCoverProb(config.HFA.MLB, -1.5, 'MLB');
+  const pTotal = common.totalCoverProb(8.6, 8.5, 'Over', 'MLB');
+  assert.ok(Math.abs(spread.modelRawP - common.blendWithMarket(pSpread, spreadAnchor, 0.5)) < 1e-9);
+  assert.ok(Math.abs(spread.modelRawP - common.blendWithMarket(pSpread, dkSpread, 0.5)) > 1e-4);
+  assert.ok(Math.abs(total.modelRawP - common.blendWithMarket(pTotal, totalAnchor, 0.45)) < 1e-9);
+  const pMl = common.mlFromSpread(config.HFA.MLB, 'MLB');
+  assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, oddsMath.americanToImplied(-130), 0.5)) < 1e-9);
+
+  const softOnly = [
+    { side: 'Home', point: -3, prices: [{ book: 'draftkings', american: -105 }, { book: 'bookmaker', american: -110 }] },
+    { side: 'Away', point: 3, prices: [{ book: 'draftkings', american: -115 }, { book: 'bookmaker', american: -110 }] },
+  ];
+  const fallback = edgeMod.noVigPinnacleCircaImplied(softOnly, softOnly[0]);
+  assert.ok(Math.abs(fallback - 0.5) < 1e-9, 'missing Pinnacle/Circa falls back to sharp no-vig, not prices[0]');
 }
 
 // Seeds + fail-soft ingest wiring. No StatsAPI call.

@@ -9,7 +9,7 @@
 //    next best candidate from the candidate table. Rewrite the blob so the page updates.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
-// The goal: the user ALWAYS sees 3 clean, verified picks with correct math and coherent narratives.
+// The goal: up to 3 clean, verified picks when the candidate pool has them. Empty stays empty.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -86,28 +86,24 @@ function enforceOmegaDailyUnitCap(picksData) {
 }
 
 
-// v10.4.7: QA replacements/backfills must obey the SAME sizing discipline as the generator's main
-// path — per-market caps (F5 0.5u, Moneyline = the config-tunable ML cap, Total 1.5u, RL/Spread/
-// Puck 1.0u) and the coverProb downsizing gates (sub-50% → 1.0u, sub-42% → 0.5u). Previously these
-// sized from the raw candidate Kelly (candidateTable.kellyUnits is pre-cap), so a replacement
-// moneyline could publish above its 0.5u cap. This mirrors applyMarketUnitCaps + the validation gate.
-let _mlUnitCap = 0.5; // overwritten from edge-picks-omega/alpha-config at the top of the handler
-function cappedKellyUnits(c) {
-  let u = typeof c.kellyUnits === 'number' ? c.kellyUnits : (parseFloat(c.kellyUnits) || 0.5);
-  const mkt = (c.market || c.betType || '').toLowerCase();
-  let cap = null;
-  if (mkt.includes('f5')) cap = 0.5;
-  else if (mkt.includes('moneyline')) cap = _mlUnitCap;
-  else if (mkt.includes('total')) cap = 1.5;
-  else if (mkt.includes('run line') || mkt.includes('spread') || mkt.includes('puck')) cap = 1.0;
-  if (cap != null) u = Math.min(u, cap);
-  const cp = typeof c.coverProb === 'number' ? c.coverProb : (parseFloat(c.coverProb) || 0);
-  if (cp > 0 && cp < 0.50) u = Math.min(u, 1.0);
-  if (cp > 0 && cp < 0.42) u = Math.min(u, 0.5);
-  return Math.max(0.5, Math.round(u * 2) / 2);
+const { toPickObject } = require('./lib/omega-vnext/select');
+const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
+
+/** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
+function formatCombinedAmerican(combinedDecimal) {
+  const am = decimalToAmerican(combinedDecimal);
+  if (am == null) return '';
+  return formatAmerican(am);
 }
 
-const { toPickObject } = require('./lib/omega-vnext/select');
+/** Cover probability as a 0–1 fraction. Accepts 0.55 or "55%". */
+function coverProbFraction(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v > 1 ? v / 100 : v;
+  if (v == null || v === '') return null;
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  return n > 1 ? n / 100 : n;
+}
 
 /**
  * Edge fraction for a verify candidate.
@@ -132,22 +128,24 @@ function cardModelVersion(picksData) {
 }
 
 /**
- * Replacement / backfill pick. Rating, qualityGrade, and confidence come from
- * toPickObject (quality/edge). Units stay on verify cappedKellyUnits only.
+ * Replacement / backfill pick. Rating, qualityGrade, confidence, and units
+ * come from toPickObject: quarter-Kelly, 0.25u steps, MAX_STRAIGHT_UNITS_PER_PICK.
+ * The card-level 3.5u / 0.5u / 4.0u cap is enforceOmegaDailyUnitCap on write.
+ * kellyUnits on the candidate is ignored (that field was the Alpha ladder).
  */
 function buildQualityReplacement(c, opts = {}) {
   const edgePct = edgeFractionForCandidate(c);
   const oddsNum = typeof c.odds === 'number' ? c.odds : parseOdds(c.odds);
+  const coverProb = coverProbFraction(c.coverProb != null ? c.coverProb : c.winProbability);
   const normalized = {
     ...c,
     side: c.side || c.pick,
     market: c.market || c.betType,
     odds: Number.isFinite(oddsNum) ? oddsNum : c.odds,
+    coverProb: coverProb != null ? coverProb : c.coverProb,
     edgePct,
   };
-  const pick = toPickObject(normalized, { modelVersion: opts.modelVersion });
-  pick.units = `${cappedKellyUnits(c)}u`;
-  return pick;
+  return toPickObject(normalized, { modelVersion: opts.modelVersion });
 }
 
 /** Drop pass blocks TARGET_PICKS refill. Earlier steam hard-fails count too. */
@@ -269,6 +267,7 @@ function runNarrativeChecks(pick) {
 const {
   US_BOOK_PRIORITY,
   PLACEABILITY,
+  GATES,
 } = require('./lib/omega-vnext/config');
 const {
   assessPlaceability,
@@ -283,8 +282,10 @@ function sportEvFloor(sport, defaultFloor = 0.03) {
   return defaultFloor;
 }
 function sportCoverFloor(sport) {
-  if (sport === "NFL" || sport === "NCAAF") return 0.52;
-  return 0;
+  const map = (GATES && GATES.minCoverProb) || {};
+  if (map[sport] != null) return map[sport];
+  if (map.default != null) return map.default;
+  return 0.48;
 }
 function candidateClearsSportGates(c) {
   if (!c || !(c.ev > sportEvFloor(c.sport, 0.03))) return false;
@@ -778,7 +779,7 @@ async function autoFixPicks(picksData, pickReports) {
       if (c.verification === 'FAIL') continue;
       if (claudeRejectedSides.has(c.side)) { console.log(`[verify-fix] Skipping "${c.side}" — Claude explicitly rejected`); continue; }
 
-      // Quality/edge grade via toPickObject. Units stay on cappedKellyUnits.
+      // Quality/edge grade and quarter-Kelly units via toPickObject.
       replacement = buildQualityReplacement(c, { modelVersion: cardModelVersion(picksData) });
       break;
     }
@@ -828,7 +829,7 @@ async function autoFixPicks(picksData, pickReports) {
     }
   }
 
-  // Recalculate summary + enforce 5u daily cap (straights + parlay)
+  // Recalculate summary + enforce 4.0u daily cap (straights ≤3.5u + parlay 0.5u)
   enforceOmegaDailyUnitCap(picksData);
   const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
     + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
@@ -973,6 +974,9 @@ async function storeReport(dateKey, report) {
 
 exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
+exports.formatCombinedAmerican = formatCombinedAmerican;
+exports.sportCoverFloor = sportCoverFloor;
+exports.candidateClearsSportGates = candidateClearsSportGates;
 
 // ── Handler ──
 exports.handler = async (event) => {
@@ -988,15 +992,6 @@ exports.handler = async (event) => {
     }
 
     console.log(`[verify] Starting verification for ${dateKey}`);
-
-    // v10.4.7: load the tunable ML cap so QA replacements match the generator's live sizing.
-    try {
-      const t = process.env.NETLIFY_AUTH_TOKEN;
-      if (t) {
-        const cfgResp = await fetch(`https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/alpha-config`, { headers: { Authorization: `Bearer ${t}` } });
-        if (cfgResp.ok) { const cfg = await cfgResp.json(); if (typeof cfg.mlUnitCap === 'number' && cfg.mlUnitCap >= 0.5 && cfg.mlUnitCap <= 2) { _mlUnitCap = cfg.mlUnitCap; console.log(`[verify] ML cap for QA sizing: ${_mlUnitCap}u`); } }
-      }
-    } catch (e) { /* keep default 0.5u */ }
 
     const result = await fetchBetaPicks(dateKey);
     if (!result || !result.data || !result.data.picks || result.data.picks.length === 0) {
@@ -1491,13 +1486,13 @@ Return ONLY valid JSON array:
           type: `${legs.length}-leg-parlay-verified`,
           legs,
           units: hasLean ? "0.25u" : "0.5u",
-          combinedOdds: `+${Math.round((combinedDecimal - 1) * 100)}`,
+          combinedOdds: formatCombinedAmerican(combinedDecimal),
           combinedDecimal: +combinedDecimal.toFixed(2),
           combinedProb: `${(combinedProb * 100).toFixed(1)}%`,
           ev: `${(parlayEV * 100).toFixed(1)}%`,
           correlationNote: "Rebuilt after verification — a leg was invalidated by pick replacement",
         }];
-        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ +${Math.round((combinedDecimal - 1) * 100)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
+        console.log(`[verify-final] Parlay rebuilt: ${legs.map(l => l.pick).join(' + ')} @ ${formatCombinedAmerican(combinedDecimal)} (${hasLean ? '0.25u lean card' : '0.5u'})`);
         finalFixCount++;
       } else {
         if (picksData.parlayLegs && picksData.parlayLegs.length) {

@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.8-omega-vnext-engines-build');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);

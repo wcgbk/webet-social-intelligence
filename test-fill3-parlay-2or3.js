@@ -4,7 +4,7 @@ const assert = require('assert');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 const live = require('./netlify/functions/generate-picks-omega-background');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.2.1-omega-vnext-placeability');
+assert.strictEqual(live.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
 
 const future = new Date(Date.now() + 864e5).toISOString();
 const mk = (sport, matchup, side, market, cp, ev) => ({
@@ -23,19 +23,24 @@ const p = optimizeParlay(pool3, []);
 assert.ok(p.length === 1);
 assert.ok(p[0].legs.length === 3, 'prefer 3-leg when available');
 
-// High-hit 2-leg should beat weak 3-leg when clearly better
-const weak3 = [
-  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.51, 0.02),
-  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.51, 0.02),
-  mk('NCAAF', 'E @ F', 'F -7', 'Spread', 0.51, 0.02),
-];
+// A +EV 3-leg is preferred even when its best 2-leg subset converts more often.
 const strong2 = [
   mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
   mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
-  ...weak3.slice(0, 1).map(x => ({ ...x, matchup: 'X @ Y', side: 'Y -1', coverProb: 0.50, ev: 0.01 })),
+  mk('NCAAF', 'X @ Y', 'Y -1', 'Spread', 0.50, 0.01),
 ];
-const p2 = optimizeParlay(strong2, []);
-assert.ok(p2.length === 1);
-assert.ok(p2[0].legs.length >= 2 && p2[0].legs.length <= 3);
+const pPrefer3 = optimizeParlay(strong2, []);
+assert.strictEqual(pPrefer3.length, 1);
+assert.strictEqual(pPrefer3[0].legs.length, 3);
+
+// A 3-leg whose combined EV is negative falls back to the best 2-leg.
+const onlyTwo = [
+  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
+  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
+  mk('NCAAF', 'X @ Y', 'Y -1', 'Spread', 0.36, 0.02),
+];
+const p2 = optimizeParlay(onlyTwo, []);
+assert.strictEqual(p2.length, 1);
+assert.strictEqual(p2[0].legs.length, 2);
 
 console.log('PASS test-fill3-parlay-2or3 (v12)', { legs: p[0].legs.length, type: p[0].type });

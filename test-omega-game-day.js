@@ -9,7 +9,7 @@ const gd = require(path.join(root, 'sports/game_day'));
 const nfl = require(path.join(root, 'sports/nfl'));
 const mlb = require(path.join(root, 'sports/mlb'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
 assert.ok(/game-day rest\/B2B/i.test(config.MODEL_NOTES) || /game-day/.test(config.MODEL_NOTES));
 assert.strictEqual(config.LEAN_PAD, false);
 

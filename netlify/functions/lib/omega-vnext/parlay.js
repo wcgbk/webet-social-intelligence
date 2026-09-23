@@ -63,6 +63,25 @@ function enumerateCombos(pool, size) {
   return out;
 }
 
+function ticketName(s) {
+  return String(s || '').trim().toLowerCase().replace(/\s+ml$/, '').trim();
+}
+
+/** True when every leg is already a straight. Moneyline labels include the " ML" suffix. */
+function parlayIsCardMirror(legs, straights) {
+  if (!Array.isArray(legs) || !legs.length || !Array.isArray(straights) || !straights.length) return false;
+  return legs.every(leg => straights.some(straight => {
+    const pick = ticketName(straight.pick || straight.side);
+    const raw = ticketName(leg.side || leg.pick);
+    const formatted = ticketName(formatMoneylinePick(leg.side || leg.pick, leg.market || leg.betType));
+    if (!pick || (pick !== raw && pick !== formatted)) return false;
+    const game = String(leg.matchup || '').trim().toLowerCase();
+    const pg = String(straight.matchup || '').trim().toLowerCase();
+    if (game && pg && game !== pg) return false;
+    return true;
+  }));
+}
+
 /** Higher combined hit probability wins. EV breaks an exact tie and nothing else. */
 function preferHit(a, b) {
   if (!b) return true;
@@ -127,8 +146,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   const chosen = best3 || best2;
   if (!chosen) return [];
 
-  const straightSides = new Set((straights || []).map(p => p.pick || p.side));
-  const independent = !chosen.legs.every(l => straightSides.has(l.side));
+  const independent = !parlayIsCardMirror(chosen.legs, straights);
 
   // v12.0.9: published parlay always fixed PARLAY_FIXED_UNITS (0.5u)
   const stake = PARLAY_FIXED_UNITS;
@@ -195,4 +213,4 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   }];
 }
 
-module.exports = { optimizeParlay, comboStats, enumerateCombos, preferHit };
+module.exports = { optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror };

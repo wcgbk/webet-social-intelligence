@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
@@ -417,11 +417,77 @@ assert.ok(/shadow/.test(bgSrc));
     /Placeability soft-veto and adverse steam drops do not refill/.test(verifySrc),
     'backfill comment gates placeability and steam'
   );
-  assert.ok(/if\s*\(\s*!blockStraightRefill\s*&&/.test(verifySrc), 'straight refill is gated by blockStraightRefill');
+  assert.ok(!/if\s*\(\s*!blockStraightRefill\s*&&/.test(verifySrc), 'straight refill is not a live branch');
+  assert.ok(!/leg-parlay-verified/.test(verifySrc), 'verify must not stamp a rebuilt parlay');
+  assert.strictEqual(
+    (verifySrc.match(/buildQualityReplacement\(/g) || []).length,
+    1,
+    'replacement builder is defined for grade checks and not called'
+  );
+  assert.ok(!/if\s*\(\s*false\s*&&\s*sharpResult/.test(verifySrc), 'dead sharp replacement branch is gone');
+  assert.ok(/straightRefillAllowed\(/.test(verifySrc));
+  assert.ok(/resolveLockedParlay\(/.test(verifySrc));
   const verify = require('./netlify/functions/verify-picks-omega');
   assert.strictEqual(verify.steamDropBlocksStraightRefill(1, 0), true, 'dropped steam blocks refill');
   assert.strictEqual(verify.steamDropBlocksStraightRefill(0, 2), true, 'earlier steam hard-fails block refill');
-  assert.strictEqual(verify.steamDropBlocksStraightRefill(0, 0), false, 'clean card may still refill');
+  assert.strictEqual(verify.steamDropBlocksStraightRefill(0, 0), false, 'steam predicate is false when nothing steamed');
+  assert.strictEqual(verify.straightRefillAllowed({ droppedSteam: 1, cardLocked: true }), false, 'steam drop cannot refill');
+  assert.strictEqual(verify.straightRefillAllowed({ droppedSteam: 0, steamHardFails: 2, cardLocked: true }), false);
+  assert.strictEqual(
+    verify.straightRefillAllowed({ droppedSteam: 0, steamHardFails: 0, blockStraightRefill: false, cardLocked: true }),
+    false,
+    'a locked short card still does not gain a straight'
+  );
+  assert.strictEqual(
+    verify.straightRefillAllowed({ droppedSteam: 0, steamHardFails: 0, blockStraightRefill: false, cardLocked: false }),
+    false,
+    'verify does not invent a straight even if a caller marks the card unlocked'
+  );
+
+  const locked = [{
+    type: '3-leg-parlay-optimized',
+    units: '0.5u',
+    combinedOdds: '+600',
+    correlationNote: 'locked by generate',
+    legs: [
+      { pick: 'Yankees ML', odds: '-110', coverProb: '55%', matchup: 'Red Sox @ Yankees' },
+      { pick: 'Dodgers -1.5', odds: '-110', coverProb: '54%', matchup: 'Padres @ Dodgers' },
+      { pick: 'Over 8.5', odds: '-105', coverProb: '53%', matchup: 'Cubs @ Cards' },
+    ],
+  }];
+  const temptingStraights = [
+    { pick: 'Yankees ML' },
+    { pick: 'Mets ML' },
+    { pick: 'Under 7.5' },
+  ];
+  const kept = verify.resolveLockedParlay(locked, { removedPicks: [], straightCard: temptingStraights });
+  assert.strictEqual(kept.rebuilt, false);
+  assert.strictEqual(kept.action, 'preserved');
+  assert.deepStrictEqual(kept.parlayLegs[0].legs.map(l => l.pick), ['Yankees ML', 'Dodgers -1.5', 'Over 8.5']);
+  assert.strictEqual(kept.parlayLegs[0].combinedOdds, '+600');
+
+  const resized = verify.resolveLockedParlay(locked, {
+    removedPicks: ['Dodgers -1.5'],
+    straightCard: temptingStraights,
+  });
+  assert.strictEqual(resized.rebuilt, false, 'steam drop must not rebuild the parlay');
+  assert.strictEqual(resized.action, 'resized');
+  assert.deepStrictEqual(resized.parlayLegs[0].legs.map(l => l.pick), ['Yankees ML', 'Over 8.5']);
+  assert.ok(!resized.parlayLegs[0].legs.some(l => /Mets|Under 7\.5/.test(l.pick)));
+  assert.ok(!/verified/.test(resized.parlayLegs[0].type));
+  assert.ok(/^2-leg-parlay-/.test(resized.parlayLegs[0].type));
+
+  const cleared = verify.resolveLockedParlay(locked, {
+    removedPicks: ['Yankees ML', 'Dodgers -1.5'],
+    straightCard: temptingStraights,
+  });
+  assert.strictEqual(cleared.rebuilt, false);
+  assert.strictEqual(cleared.action, 'cleared');
+  assert.deepStrictEqual(cleared.parlayLegs, []);
+
+  const invented = verify.resolveLockedParlay([], { straightCard: temptingStraights });
+  assert.strictEqual(invented.rebuilt, false);
+  assert.deepStrictEqual(invented.parlayLegs, [], 'missing parlay is not filled from straights');
 }
 
 console.log('PASS test-omega-linemove', {

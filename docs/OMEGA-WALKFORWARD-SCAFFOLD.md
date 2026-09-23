@@ -24,9 +24,21 @@ Do not fit shrink, isotonic bands, or gates from the sparse day-1 closes (2026-0
 
 ## Schedule
 
-`capture-omega-walkforward` runs at **15:15 UTC**, which is **11:15am ET during EDT** (same EDT assumption as the other Omega crons; after the November clock change this UTC slot is 10:15am ET).
+`capture-omega-walkforward` runs at **15:15 UTC**, which is **11:15am ET during EDT** (same EDT assumption as the other Omega crons).
 
-That is after the morning generate/verify window and after the 07:00 UTC (3am ET) `track-clv` settle. With no `?date=`, the function refreshes **yesterday ET and today ET** so yesterday's lock→close grades are stored, while today's card may still have null closes. It is not called from `generateOmegaVnext` or from `track-clv-omega`.
+`capture-omega-walkforward-evening` runs at **23:45 UTC**, which is **7:45pm ET during EDT**, after `trigger-clv`'s 23:00 UTC pass. It is the post-close resample. It calls the same writer. It does not mutate `picks-{date}`.
+
+Both jobs are write-only observers. With no `?date=`, each refreshes **yesterday ET and today ET** so lock→close grades are stored, while a card that has not closed yet may still have null closes. Neither is called from `generateOmegaVnext` or from `track-clv-omega`.
+
+### 2026-11-01 EDT → EST
+
+Clocks go from UTC−4 to UTC−5. Every live Omega UTC cron then fires one hour earlier in ET. The prepared replacements are comments in `netlify.toml` under `capture-omega-walkforward-evening`. Do not apply them before Sunday 2026-11-01. Wednesday 2026-09-24 generate stays `30 13 * * *` (9:30am EDT).
+
+| Job | EDT cron (live) | EST cron (not live) |
+|-----|-----------------|---------------------|
+| Morning walk-forward | `15 15 * * *` (11:15am) | `15 16 * * *` |
+| Evening post-close | `45 23 * * *` (7:45pm) | `45 0 * * *` |
+| Generate | `30 13 * * *` (9:30am) | `30 14 * * *` |
 
 `?date=YYYY-MM-DD` captures one date. Dates before the KPI floor are not written. Failures return HTTP 200 and do not throw into the card pipeline. There is no Discord post.
 

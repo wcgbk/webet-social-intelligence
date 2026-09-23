@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -51,6 +51,18 @@ const sorted = math.sortByGradeThenUnits([
   { rating: 'a', units: '1.5u', pick: 'midHigh' },
 ]);
 assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low']);
+
+// Published candidate rank uses the grade score, not raw EV. A +180 dog stays behind.
+{
+  const fav = { edgePct: 0.048, ev: 0.04, odds: -140, sport: 'MLB', side: 'Fav', predictedClv: 0, uncertainty: 0.12 };
+  const dog = { edgePct: 0.021, ev: 0.18, odds: 180, sport: 'MLB', side: 'Dog', predictedClv: 0, uncertainty: 0.12 };
+  const rankedPool = select.orderedByScore([dog, fav]);
+  assert.strictEqual(rankedPool[0].side, 'Fav');
+  assert.strictEqual(rankedPool[1].side, 'Dog');
+  assert.strictEqual(math.americanCentsDiff(105, -105), 10);
+  assert.strictEqual(math.americanCentsDiff(-110, -130), 20);
+  assert.notStrictEqual(math.americanCentsDiff(105, -105), 210);
+}
 
 const pCal = calibrate.shrinkTowardSharp(0.60, 0.52, 'Spread');
 assert.ok(pCal > 0.52 && pCal < 0.60);
@@ -141,6 +153,34 @@ assert.ok(Array.isArray(parlays));
 if (parlays.length) {
   assert.ok(parlays[0].legs.length >= 2 && parlays[0].legs.length <= 3);
   assert.ok(parlays[0].type.includes('parlay'));
+}
+
+// A moneyline parlay of the straight card is not "independent" just because the label gained " ML".
+{
+  const mirrorPool = [
+    {
+      side: 'New York Yankees', market: 'Moneyline', odds: -110, coverProb: 0.56, ev: 0.04,
+      matchup: 'Boston Red Sox @ New York Yankees', sport: 'MLB', commenceTime: '2026-09-23T23:00:00Z',
+      homeTeam: 'New York Yankees', awayTeam: 'Boston Red Sox', edgePct: 0.03,
+    },
+    {
+      side: 'Los Angeles Dodgers', market: 'Moneyline', odds: -115, coverProb: 0.55, ev: 0.035,
+      matchup: 'San Diego Padres @ Los Angeles Dodgers', sport: 'MLB', commenceTime: '2026-09-23T23:10:00Z',
+      homeTeam: 'Los Angeles Dodgers', awayTeam: 'San Diego Padres', edgePct: 0.028,
+    },
+  ];
+  const mirrorStraights = mirrorPool.map(c => ({
+    pick: math.formatMoneylinePick(c.side, c.market),
+    side: c.side,
+    matchup: c.matchup,
+  }));
+  const mirrored = parlay.optimizeParlay(mirrorPool, mirrorStraights, { cardDate: '2026-09-23' });
+  assert.strictEqual(mirrored.length, 1);
+  assert.strictEqual(mirrored[0].independent, false);
+  assert.ok(/straight/.test(mirrored[0].type));
+  const alone = parlay.optimizeParlay(mirrorPool, [], { cardDate: '2026-09-23' });
+  assert.strictEqual(alone[0].independent, true);
+  assert.ok(/optimized/.test(alone[0].type));
 }
 
 // Daily unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX

@@ -80,19 +80,22 @@ function summarizeBySportMarket(picks, { floorDate = '2026-09-22' } = {}) {
   const finalize = (bucket) => {
     const out = {};
     for (const [k, v] of Object.entries(bucket)) {
+      const meanCents = v.n ? +((v.clvSum / v.n).toFixed(2)) : null;
       out[k] = {
         n: v.n,
-        meanClvCents: v.n ? +((v.clvSum / v.n).toFixed(2)) : null,
-        meanClvPct: v.n ? +((v.clvSum / v.n).toFixed(2)) : null,
+        meanClvCents: meanCents,
+        // Probability, not a second copy of the cent figure. 2.0 cents → 0.02.
+        meanClvPct: meanCents == null ? null : +(meanCents / 100).toFixed(4),
         beatClosePct: v.n ? +((v.beats / v.n) * 100).toFixed(1) : null,
       };
     }
     return out;
   };
+  const meanClvCents = n ? +((clvSum / n).toFixed(2)) : null;
   return {
     n,
-    meanClvCents: n ? +((clvSum / n).toFixed(2)) : null,
-    meanClvPct: n ? +((clvSum / n).toFixed(2)) : null,
+    meanClvCents,
+    meanClvPct: meanClvCents == null ? null : +(meanClvCents / 100).toFixed(4),
     beatClosePct: n ? +((beats / n) * 100).toFixed(1) : null,
     bySport: finalize(bySport),
     byMarket: finalize(byMarket),

@@ -9,7 +9,7 @@ const grade = require(path.join(root, 'clv_grade'));
 const clvLog = require(path.join(root, 'clv_log'));
 const qa = require(path.join(root, 'qa_hardfail'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
 assert.ok(config.QA_HARDFAIL);
 assert.strictEqual(config.QA_HARDFAIL.staleOddsCents, 15);
 assert.strictEqual(config.LEAN_PAD, false);
@@ -82,6 +82,23 @@ assert.strictEqual(summary.n, 2);
 assert.ok(summary.bySport.MLB);
 assert.ok(summary.bySport.NFL);
 assert.ok(summary.beatClosePct != null);
+assert.strictEqual(summary.meanClvCents, 0.5);
+assert.strictEqual(summary.meanClvPct, 0.005, 'meanClvPct is the probability, not a copy of the cents');
+assert.strictEqual(summary.bySport.MLB.meanClvCents, 2);
+assert.strictEqual(summary.bySport.MLB.meanClvPct, 0.02);
+
+assert.strictEqual(qa.americanCentsMove(105, -105), 10, 'plus-to-minus cross is 10 juice cents, not 210');
+assert.strictEqual(qa.americanCentsMove(-110, -130), 20);
+assert.strictEqual(qa.americanCentsMove('+105', '-105'), 10);
+{
+  const cross = qa.evaluateHardFail({
+    sport: 'NFL',
+    betType: 'Moneyline',
+    odds: -105,
+    lockSnapshot: { odds: 105, line: null, book: 'dk', capturedAt: 'x' },
+  }, {});
+  assert.strictEqual(cross, null, cross);
+}
 
 // ── bet-time enrichment ──
 const enriched = clvLog.attachClvFields([{

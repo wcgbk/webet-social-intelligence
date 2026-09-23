@@ -9,7 +9,7 @@ const wf = require(path.join(root, 'walk_forward'));
 const store = require(path.join(root, 'store'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 assert.strictEqual(wf.KPI_FLOOR, config.CLV_KPI_FLOOR);
 assert.strictEqual(wf.OBSERVER_ONLY, true);
@@ -244,9 +244,26 @@ assert.ok(/storeWalkforwardSamples/.test(captureSrc));
 
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
 assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "30 13 \* \* \*"/.test(toml), 'Wednesday generate stays 9:30am EDT');
+assert.ok(/2026-11-01/.test(toml));
+assert.ok(/"30 13" → "30 14"/.test(toml) || /30 13.+\u2192.+30 14/.test(toml) || toml.includes('"30 13" → "30 14"'));
+assert.ok(/Do not switch it before/.test(toml));
+
+const eveningSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/capture-omega-walkforward-evening.js'), 'utf8');
+assert.ok(!/discord/i.test(eveningSrc));
+assert.ok(!/storePicks\(/.test(eveningSrc));
+assert.ok(!/latest-date/.test(eveningSrc));
+assert.ok(!/getFitParams\(/.test(eveningSrc));
+assert.ok(/capture-omega-walkforward/.test(eveningSrc));
+assert.ok(/mutatesLiveCard = false/.test(eveningSrc));
+assert.ok(/post-close/.test(eveningSrc));
 
 const doc = fs.readFileSync(path.join(__dirname, 'docs/OMEGA-WALKFORWARD-SCAFFOLD.md'), 'utf8');
 assert.ok(/scaffold/i.test(doc));
+assert.ok(/capture-omega-walkforward-evening/.test(doc));
+assert.ok(/2026-11-01/.test(doc));
+assert.ok(/7:45pm/.test(doc));
 assert.ok(/2026-09-29/.test(doc));
 assert.ok(/11:00/.test(doc));
 assert.ok(/ON HOLD/.test(doc));

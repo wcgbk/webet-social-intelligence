@@ -236,6 +236,33 @@
   # Omega walk-forward OBSERVER — 11:15am ET (15:15 UTC in EDT).
   # Reads picks-{date}+clv-{date}; writes omega-walkforward/* only.
   # SCAFFOLD: FIT_ENABLED=false until Mon 11am ET ≥2026-09-29. No Discord. Soft-fail.
+  # EST from 2026-11-01: this slot becomes 10:15am ET. Prepared replacement is
+  # "15 16 * * *" (11:15am EST). Do not switch it before that Sunday.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."capture-omega-walkforward-evening"]
+  schedule = "45 23 * * *"
+  # Evening post-close walk-forward OBSERVER — 7:45pm ET (23:45 UTC in EDT),
+  # after trigger-clv's 23:00 UTC pass. Writes omega-walkforward/* only.
+  # Never mutates picks-{date}, latest-date, grades, or units. FIT stays off.
+  # EST from 2026-11-01: this slot becomes 6:45pm ET. Prepared replacement is
+  # "45 0 * * *" (7:45pm EST). Do not switch it before that date.
+  # Wednesday 2026-09-24 generate stays on the EDT crons (trigger-picks-omega "30 13").
+  #
+  # Full Omega EDT→EST shift, prepared and NOT applied (clocks change 2026-11-01,
+  # UTC-4 → UTC-5, so each live UTC cron fires one hour earlier in ET until moved):
+  #   trigger-picks-omega              "30 13" → "30 14"   (9:30am ET)
+  #   verify-picks-omega               "30 14" → "30 15"   (10:30am ET)
+  #   capture-omega-lines              "0,30 10,11" → "0,30 11,12"
+  #   capture-omega-lines-late         "0,15 13" → "0,15 14"
+  #   warm-omega-feeds                 "0 13" → "0 14"
+  #   trigger-omega-shadow             "5 13" → "5 14"
+  #   capture-omega-pm-observer-open   "30 12" → "30 13"
+  #   capture-omega-pm-observer        "15 14" → "15 15"
+  #   capture-omega-walkforward        "15 15" → "15 16"
+  #   capture-omega-walkforward-evening "45 23" → "45 0"
+  # trigger-clv "0 7,17,23" is shared with the settler. Its evening pass is the
+  # close this observer follows. Retiming it is a separate ops change, not this ship.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 

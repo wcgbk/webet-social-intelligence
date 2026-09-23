@@ -44,7 +44,9 @@ function scoreCandidate(c, selectedSports) {
 }
 
 /**
- * Greedy diversify: ≤1 per game, up to MAX_STRAIGHTS. Empty OK.
+ * Greedy diversify: ≤1 per game, up to MAX_STRAIGHTS.
+ * When the pool has at least maxN distinct games, the result length is maxN.
+ * A shorter pool stays short. Never pads with leans.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
   const pool = [...(yesPool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));

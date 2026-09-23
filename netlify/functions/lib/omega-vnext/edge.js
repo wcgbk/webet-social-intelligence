@@ -3,6 +3,7 @@
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
 const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
+  noVigTwoWay,
 } = require('./odds_math');
 
 function bookKey(b) {
@@ -304,6 +305,53 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
 }
 
 /**
+ * Opposite side of a two-way bundle (ML team, spread other side, total Over/Under).
+ */
+function oppositeBundle(sideBundles, target) {
+  if (!target) return null;
+  const targetSide = target.side;
+  const targetPoint = target.point;
+  if (targetPoint == null) return (sideBundles || []).find(s => s.side !== targetSide) || null;
+  return (sideBundles || []).find(s => {
+    if (s === target) return false;
+    if (/over|under/i.test(targetSide) && /over|under/i.test(s.side)) return s.point === targetPoint;
+    return s.point === -targetPoint || s.point === targetPoint;
+  }) || null;
+}
+
+function americanForBook(prices, book) {
+  const want = bookKey(book);
+  const row = (prices || []).find(p => bookKey(p.book) === want && Number.isFinite(Number(p.american)));
+  return row ? Number(row.american) : null;
+}
+
+/** No-vig probability for `target` at one book, when that book posts both sides. */
+function noVigForBook(sideBundles, target, book) {
+  const opp = oppositeBundle(sideBundles, target);
+  if (!opp) return null;
+  const a1 = americanForBook(target.prices, book);
+  const a2 = americanForBook(opp.prices, book);
+  if (a1 == null || a2 == null) return null;
+  const nv = noVigTwoWay(a1, a2);
+  return nv ? nv.p1 : null;
+}
+
+/**
+ * Spread/total market anchor: no-vig Pinnacle and Circa at equal weight.
+ * One book alone is used when the other has no two-way price.
+ * Missing both falls back to the existing sharp no-vig pair (still not prices[0]).
+ */
+function noVigPinnacleCircaImplied(sideBundles, target) {
+  if (!target) return null;
+  const pin = noVigForBook(sideBundles, target, 'pinnacle');
+  const circa = noVigForBook(sideBundles, target, 'circa');
+  const circaAlt = circa != null ? circa : noVigForBook(sideBundles, target, 'circasports');
+  const parts = [pin, circaAlt].filter(v => v != null && Number.isFinite(v));
+  if (parts.length) return parts.reduce((s, v) => s + v, 0) / parts.length;
+  return sharpFairForSide(sideBundles, target.side, target.point);
+}
+
+/**
  * Build sharp no-vig fair p for a two-way market given all side bundles.
  */
 function sharpFairForSide(sideBundles, targetSide, targetPoint) {
@@ -311,18 +359,7 @@ function sharpFairForSide(sideBundles, targetSide, targetPoint) {
   const target = sideBundles.find(s => s.side === targetSide && (targetPoint == null || s.point === targetPoint));
   if (!target) return null;
 
-  let opposite = null;
-  if (targetPoint == null) {
-    // ML: other team name
-    opposite = sideBundles.find(s => s.side !== targetSide);
-  } else {
-    // spreads: other team same |point| opposite sign; totals: Over/Under same point
-    opposite = sideBundles.find(s => {
-      if (s === target) return false;
-      if (/over|under/i.test(targetSide) && /over|under/i.test(s.side)) return s.point === targetPoint;
-      return s.point === -targetPoint || s.point === targetPoint;
-    });
-  }
+  const opposite = oppositeBundle(sideBundles, target);
   if (!opposite) {
     const imp = americanToImplied(sharpConsensusAmerican(target.prices));
     return imp;
@@ -434,6 +471,8 @@ module.exports = {
   verifyPlaceabilityDecision,
   applyPlaceabilityDrops,
   sharpFairForSide,
+  noVigPinnacleCircaImplied,
+  oppositeBundle,
   predictedClvCents,
   enrichCandidateWithEdge,
   attachEv,

@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.8-omega-vnext-engines-build';
+const MODEL_VERSION = 'v12.3.10-omega-vnext-sharp-blend';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -112,8 +112,25 @@ const LINE_MOVE = {
   verifyAdversePts: { Spread: 1.5, Total: 1.5 },
 };
 
-/** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.1: slightly stronger. */
+/** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.1: slightly stronger.
+ *  NFL / NCAAF / any non-MLB sport. MLB uses MLB_CALIBRATION.shrinkK. */
 const SHRINK_K = { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 };
+
+/**
+ * MLB-only second shrink (v12.3.9). Global SHRINK_K and the global isotonic
+ * band (0.42–0.58, keep 0.25) stay put for every sport, including MLB.
+ * MLB already blends toward the market. The global second shrink (0.58–0.73)
+ * then pushed a ~1-run starter miss and a real total/park miss under
+ * GATES.minEV (0.03), so a normal Wednesday published an empty card.
+ * These K values are the least ease that still clears that slate: a ~1-run
+ * moneyline priced around -120, a two-ace total, and a park total. Spread K
+ * stays next to the global 0.68 so a pick'em +1.5 does not become the card.
+ * A pick'em moneyline, a 0.25-run moneyline, and a starter the market has
+ * already priced to -190 stay under the EV gate. Not a lean pad.
+ */
+const MLB_CALIBRATION = {
+  shrinkK: { Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46 },
+};
 
 /** Gate floors — conservative v1. Empty OK. */
 const GATES = {
@@ -246,6 +263,8 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.3.10 omega-vnext: sharp blend. Spread and total market anchors are the equal-weight average of no-vig Pinnacle and no-vig Circa (circa or circasports). One of those books is used alone when the other has no two-way price. If both are missing, the anchor is the existing sharp no-vig pair. Never prices[0]. Blend weights unchanged: MLB spread 0.50 / total 0.45, NFL spread 0.50 / total 0.45, NCAAF spread 0.45 / total 0.40. Moneyline blend unchanged (vigged Pinnacle, else the first price) at MLB 0.50 / NFL 0.50 / NCAAF 0.45. No gate, Kelly, unit-cap, or global SHRINK_K change.`,
+  `v12.3.9 omega-vnext: card fill. MLB second shrink only. Global SHRINK_K unchanged (Total ${SHRINK_K.Total} / Spread ${SHRINK_K.Spread} / Moneyline ${SHRINK_K.Moneyline} / default ${SHRINK_K.default}). MLB_CALIBRATION.shrinkK Total ${MLB_CALIBRATION.shrinkK.Total} / Spread ${MLB_CALIBRATION.shrinkK.Spread} / Moneyline ${MLB_CALIBRATION.shrinkK.Moneyline} / default ${MLB_CALIBRATION.shrinkK.default}. Isotonic stays global 0.42–0.58 keeping 0.25 of the excess for every sport, so a wild probability still cannot print a 15-point fake edge. At least 3 distinct gate-clear games in the yes pool publish 3 straights. Parlay primary rank is combined hit probability; EV is a tie-break only; a +EV 3-leg is preferred whenever one exists. Verify replacement units are quarter-Kelly via kellyToUnits capped at MAX_STRAIGHT_UNITS_PER_PICK ${MAX_STRAIGHT_UNITS_PER_PICK}, then the 3.5/0.5/${DAILY_UNIT_CAP} daily cap. No alpha-config read and no mlUnitCap ladder. Favorite parlay combinedOdds (decimal < 2) format as minus. NFL/NCAAF/MLB verify cover floor is GATES.minCoverProb 0.48. LEAN_PAD false. FIT off. No TSP. NBA/NHL off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}. GATES unchanged.`,
   `v12.3.8 omega-vnext: Grok Build 4.7 xhigh redo of v12.3.7 deeper sport engines. Same product intent and caps philosophy. MLB bullpen residual HARD CAP ±${ENGINE_SOFT.MLB.maxAbsMarginAdj} runs margin / ±${ENGINE_SOFT.MLB.maxAbsTotalAdj} total, and the post-bullpen total stays inside the existing 5.5–14.5 run band; SP-known spread/ML std reads SPORT_SPREAD_STD.MLB and tightens by at most ${ENGINE_SOFT.MLB.maxStdTighten} (0 → prior std). NFL success-rate margin and QB continuity stay individually capped, then the STACKED new-engine margin is HARD CAP ±${ENGINE_SOFT.NFL.maxAbsMarginAdj} so the two cannot add past the spine. NCAAF talent/spPlus uses the seed scale (centered values no longer flip sign above 5) at weight ${ENGINE_SOFT.NCAAF.talentWeight}, HARD CAP ±${ENGINE_SOFT.NCAAF.maxAbsMarginAdj}, and QB continuity shares that stack. Soft-fail: missing feed/seed → adj 0, generate continues. No FIT. No TSP. No SHRINK_K, SELECT_WEIGHTS, blend, gate, Kelly, grade, unit cap, or PM_SOFT retune. NBA/NHL off.`,
   `v12.3.7 omega-vnext: deeper MLB/NFL/NCAAF sport engines (capped). MLB: bullpen residual from team pitching − named SP (StatsAPI already loaded) with HARD CAP ±${ENGINE_SOFT.MLB.maxAbsMarginAdj} runs margin / ±${ENGINE_SOFT.MLB.maxAbsTotalAdj} total; when both SPs have player-quality, tighten spread/ML std by up to ${ENGINE_SOFT.MLB.maxStdTighten}. NFL: success-rate mismatch soft margin (capped ±${ENGINE_SOFT.NFL.maxAbsMarginAdj} pts) + QB continuity when injury map is non-empty and team has no flag (capped ±${ENGINE_SOFT.NFL.qbContinuityPts}). NCAAF: optional talent/spPlus seed overlay blended at weight ${ENGINE_SOFT.NCAAF.talentWeight} with HARD CAP ±${ENGINE_SOFT.NCAAF.maxAbsMarginAdj} pts — missing talent → prior EPA/standings. Soft-fail: missing feed/seed → adj 0, generate continues. Feeds existing modelRawP→coverProb pipeline; US sportsbook CLV spine primary. Does not change SHRINK_K, SELECT_WEIGHTS, blend weights, GATES, Kelly, grades, unit caps, or PM_SOFT. No FIT. No TSP. NBA/NHL off.`,
   `v12.3.6 omega-vnext: Kalshi/Polymarket soft features inside generate, before selectStraights. Moneyline only, clean 1:1 map. Venue combine is the average of available mapped venues. pmVsBookGap = PM implied minus fair_sharp_p (else American-implied). pmMove = current PM implied minus the morning open snap (omega-pm-observer/{date}-open) when that snap exists, averaged per venue present on both sides; omitted otherwise. Score-only _pmScoreAdj = clamp(scoreWeightVsBook*pmVsBookGap + scoreWeightMove*pmMove, ±maxAbsScoreAdj) with weights ${PM_SOFT.scoreWeightVsBook} / ${PM_SOFT.scoreWeightMove} and HARD CAP ±${PM_SOFT.maxAbsScoreAdj} so PM cannot dominate the US sportsbook CLV spine. Does not change coverProb, edgePct, gates, Kelly, grades, shrink, or unit caps. Soft-fail to _pmScoreAdj 0 if PM APIs are down or unmapped; generate continues. Historical replay skips live PM (no as-of snap). Observer audit omega-pm-observer/{date} retained (10:15 ET) plus 8:30 ET open snap; the observer logging path still never mutates locked picks. No TSP. No FIT.`,
@@ -308,6 +327,7 @@ module.exports = {
   PM_SOFT,
   ENGINE_SOFT,
   SHRINK_K,
+  MLB_CALIBRATION,
   GATES,
   QA_HARDFAIL,
   QUALITY_GRADE,

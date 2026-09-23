@@ -2,8 +2,9 @@
 /**
  * NCAAF/CFB — EPA-style off/def prior when both teams match (cfb-epa-v1*),
  * else standings power + HFA (cfb-normal-*). Game-day rest/QB soft adj
- * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. Market blend
- * unchanged; calibrate shrink runs later in the pipeline.
+ * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. ML blend weight
+ * unchanged. Spread/total weights unchanged; anchor is no-vig Pinnacle/Circa.
+ * Calibrate shrink runs later in the pipeline.
  */
 const {
   formatMatchup, mapGamesSoft,
@@ -12,7 +13,7 @@ const {
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments } = require('./game_day');
 const { HFA } = require('../config');
-const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'NCAAF';
@@ -93,7 +94,7 @@ function projectGame(event, standings, efficiency, gameDay) {
       if (b.point == null) continue;
       const isHome = b.side === home;
       let p = spreadCoverProb(isHome ? modelMargin : -modelMargin, b.point, SPORT);
-      p = blendWithMarket(p, americanToImplied((b.prices[0] || {}).american), 0.45);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.45);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
@@ -110,7 +111,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     for (const b of bundles) {
       if (b.point == null) continue;
       let p = totalCoverProb(modelTotal, b.point, b.side, SPORT);
-      p = blendWithMarket(p, americanToImplied((b.prices[0] || {}).american), 0.4);
+      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.4);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,

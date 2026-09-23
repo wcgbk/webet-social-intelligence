@@ -2,7 +2,7 @@
 
 const { KELLY_FRACTION, PARLAY_FIXED_UNITS } = require('./config');
 const {
-  americanToDecimal, formatAmerican, kellyFraction, kellyToUnits,
+  americanToDecimal, decimalToAmerican, formatAmerican, kellyFraction, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
@@ -63,9 +63,20 @@ function enumerateCombos(pool, size) {
   return out;
 }
 
+/** Higher combined hit probability wins. EV breaks an exact tie and nothing else. */
+function preferHit(a, b) {
+  if (!b) return true;
+  const dp = a.combinedProb - b.combinedProb;
+  if (dp > 1e-9) return true;
+  if (dp < -1e-9) return false;
+  return a.ev > b.ev + 1e-12;
+}
+
 /**
- * Optimize MOST LIKELY TO HIT among +EV parlays.
- * Prefer 3-leg cross-game; 2-leg only if clearly better EV/hit.
+ * Most likely to CONVERT (hit) among +EV cross-game parlays.
+ * Rank is combined hit probability. EV is a tie-break only.
+ * A clean 3-leg is published whenever one exists. A 2-leg is the fallback
+ * when the pool has fewer than three clean legs.
  */
 function optimizeParlay(yesPool, straights = [], opts = {}) {
   const cardDate = opts.cardDate || opts.dateISO || null;
@@ -92,38 +103,28 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   const scoreCombo = (legs) => {
     const st = comboStats(legs);
     if (st.ev <= 0) return null;
-    if (st.uniqueGames < 2) return null;
-    // Primary: hit probability; secondary: EV; soft prefer more sports
-    return {
-      legs,
-      ...st,
-      score: st.combinedProb * 1.0 + st.ev * 0.15 + (st.uniqueSports > 1 ? 0.01 : 0),
-    };
+    // Clean = one leg per game. A 3-leg must be three games.
+    if (st.uniqueGames !== legs.length) return null;
+    return { legs, ...st };
   };
 
   let best3 = null;
   for (const legs of enumerateCombos(search, 3)) {
     const s = scoreCombo(legs);
     if (!s) continue;
-    if (!best3 || s.score > best3.score) best3 = s;
+    if (preferHit(s, best3)) best3 = s;
   }
 
   let best2 = null;
-  for (const legs of enumerateCombos(search, 2)) {
-    const s = scoreCombo(legs);
-    if (!s) continue;
-    if (!best2 || s.score > best2.score) best2 = s;
+  if (!best3) {
+    for (const legs of enumerateCombos(search, 2)) {
+      const s = scoreCombo(legs);
+      if (!s) continue;
+      if (preferHit(s, best2)) best2 = s;
+    }
   }
 
-  let chosen = best3;
-  // 2-leg only if clearly better EV/hit than best 3-leg
-  if (!best3 && best2) chosen = best2;
-  else if (best3 && best2) {
-    const clearlyBetter =
-      (best2.ev > best3.ev + 0.05 && best2.combinedProb > best3.combinedProb) ||
-      (best2.combinedProb > best3.combinedProb * 1.35 && best2.ev > best3.ev);
-    if (clearlyBetter) chosen = best2;
-  }
+  const chosen = best3 || best2;
   if (!chosen) return [];
 
   const straightSides = new Set((straights || []).map(p => p.pick || p.side));
@@ -132,9 +133,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   // v12.0.9: published parlay always fixed PARLAY_FIXED_UNITS (0.5u)
   const stake = PARLAY_FIXED_UNITS;
 
-  const combinedOdds = chosen.combinedDecimal >= 2
-    ? `+${Math.round((chosen.combinedDecimal - 1) * 100)}`
-    : `${Math.round(-100 / (chosen.combinedDecimal - 1))}`;
+  const combinedAmerican = decimalToAmerican(chosen.combinedDecimal);
+  const combinedOdds = combinedAmerican == null ? '' : formatAmerican(combinedAmerican);
 
   const legs = sortByGradeThenUnits(chosen.legs.map(l => {
     // Leg grade is edge-first quality, independent of the synthetic straight stake.
@@ -195,4 +195,4 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   }];
 }
 
-module.exports = { optimizeParlay, comboStats, enumerateCombos };
+module.exports = { optimizeParlay, comboStats, enumerateCombos, preferHit };

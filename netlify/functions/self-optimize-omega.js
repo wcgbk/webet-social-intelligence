@@ -129,27 +129,20 @@ function buildObserverDigest(params) {
   }
   if (params.oddsUsage) L.push(params.oddsUsage);
 
-  // ── Approve-able proposals (reply-to-approve in the channel) ──
-  // Each maps to a bounded, reversible config change in edge-picks-omega/alpha-config. The connector
-  // Claude applies ONLY these whitelisted actions, ONLY when Ben approves. See the runbook.
-  const props = [];
-  if (pl && pl.verdict === 'positive') props.push(['parlay-stake-up', 'raise parlay stake 0.5u → 0.75u — parlay-leg CLV is positive']);
-  const mlc = (params.marketCLV || {}).Moneyline;
-  if (mlc && mlc.n >= 30 && mlc.beatCloseRate >= 0.52 && mlc.avgCLVCents > 0) props.push(['ml-cap-up', `raise full-game ML cap 0.5u → 1.0u — ML CLV turned positive (${(mlc.beatCloseRate * 100).toFixed(0)}% beat close, n=${mlc.n})`]);
-  if (props.length) {
-    L.push('', '**📈 Proposals — reply in this channel to approve:**');
-    for (const [id, desc] of props) L.push(`• ${desc}\n   → reply \`approve ${id}\``);
+  // Observer only. Omega unit caps are code constants. No alpha-config blob to approve.
+  if (pl && pl.verdict === 'positive') {
+    L.push('', '**Parlay-leg CLV is positive.** Published stake stays the 0.5u code constant.');
   }
 
   // ── Governance dashboard: what's live, what changed, and did QA stay clean ──
   const g = params.governance;
   if (g) {
     L.push('', '━━━ **Governance** ━━━');
-    L.push(`**Live config:** model \`${g.model}\` · parlay ${g.parlayStakeUnits}u · ML cap ${g.mlUnitCap}u`);
+    L.push(`**Live config:** model \`${g.model}\` · parlay ${g.parlayStakeUnits}u fixed · straight cap ${g.maxStraightUnits}u · straights ≤ ${g.straightBudget}u · daily ${g.dailyUnitCap}u (omega-vnext code constants)`);
     if (g.recentChanges && g.recentChanges.length) {
       L.push(`**Config changes this week (${g.recentChanges.length}):** ` + g.recentChanges.map(c => `${c.action || c.note || 'change'} → ${c.to != null ? c.to : ''} (${c.date}${c.by ? ', ' + c.by : ''})`).join('; '));
     } else {
-      L.push('**Config changes this week:** ✅ none — the model was not touched.');
+      L.push('**Config changes this week:** none in a blob — Omega caps are code constants.');
     }
     if (g.qaDays === 0) L.push('**Daily QA (7d):** no audit records found');
     else if (g.qaErrors === 0 && g.qaFixes === 0) L.push(`**Daily QA (7d):** ✅ ${g.qaPicks} picks audited over ${g.qaDays} days — 0 math errors, 0 auto-fixes${g.qaRedFlags ? `, ${g.qaRedFlags} sharp note(s)` : ''}`);
@@ -163,13 +156,13 @@ async function fetchGovernance(token) {
   const H = { Authorization: `Bearer ${token}` };
   const getJSON = async (store, key) => { try { const r = await fetch(`${base}/${store}/${key}`, { headers: H }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
   const getText = async (store, key) => { try { const r = await fetch(`${base}/${store}/${key}`, { headers: H }); return r.ok ? (await r.text()).trim() : null; } catch (e) { return null; } };
-  const cfg = (await getJSON('edge-picks', 'alpha-config')) || {};
+  const {
+    PARLAY_FIXED_UNITS, DAILY_UNIT_CAP, MAX_STRAIGHT_UNITS_PER_PICK, STRAIGHT_UNIT_BUDGET,
+  } = require('./lib/omega-vnext/config');
   let model = null;
   const latest = await getText('edge-picks-omega', 'latest-date');
   if (latest) { const p = await getJSON('edge-picks-omega', `picks-${latest}`); model = p && (p.model || (p.summary && p.summary.modelVersion)); }
-  const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-  const log = await getJSON('edge-picks', 'config-change-log');
-  const recentChanges = Array.isArray(log) ? log.filter(e => (e.date || '') >= cutoff) : [];
+  const recentChanges = [];
   let qaDays = 0, qaPicks = 0, qaErrors = 0, qaFixes = 0, qaRedFlags = 0; const qaFlagged = [];
   for (let back = 1; back <= 7; back++) {
     const d = new Date(Date.now() - back * 86400000).toISOString().split('T')[0];
@@ -184,8 +177,10 @@ async function fetchGovernance(token) {
   }
   return {
     model: model || 'unknown',
-    parlayStakeUnits: cfg.parlayStakeUnits != null ? cfg.parlayStakeUnits : 0.5,
-    mlUnitCap: cfg.mlUnitCap != null ? cfg.mlUnitCap : 0.5,
+    parlayStakeUnits: PARLAY_FIXED_UNITS,
+    maxStraightUnits: MAX_STRAIGHT_UNITS_PER_PICK,
+    straightBudget: STRAIGHT_UNIT_BUDGET,
+    dailyUnitCap: DAILY_UNIT_CAP,
     recentChanges, qaDays, qaPicks, qaErrors, qaFixes, qaRedFlags, qaFlagged,
   };
 }

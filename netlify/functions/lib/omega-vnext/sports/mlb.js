@@ -2,7 +2,9 @@
 /**
  * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
  * v12.3.8: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
- * Market blend unchanged. assumedStarter stays tagged for QA hard-fail.
+ * ML blend weight unchanged (vigged Pinnacle, else first price).
+ * Spread/total blend weight unchanged; anchor is no-vig Pinnacle/Circa.
+ * assumedStarter stays tagged for QA hard-fail.
  */
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
@@ -14,7 +16,7 @@ const {
   resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const { americanToImplied } = require('../odds_math');
 
 const SPORT = 'MLB';
@@ -167,7 +169,7 @@ function projectGame(event, standings, espnGame, ctx) {
         SPORT,
         stdOpt
       );
-      const mktImp = americanToImplied((b.prices[0] || {}).american);
+      const mktImp = noVigPinnacleCircaImplied(bundles, b);
       pCover = blendWithMarket(pCover, mktImp, 0.5);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       let raw = {
@@ -189,7 +191,7 @@ function projectGame(event, standings, espnGame, ctx) {
       const line = b.point;
       if (line == null) continue;
       let p = totalCoverProb(modelTotal, line, b.side, SPORT);
-      const mktImp = americanToImplied((b.prices[0] || {}).american);
+      const mktImp = noVigPinnacleCircaImplied(bundles, b);
       p = blendWithMarket(p, mktImp, 0.45);
       const sideLabel = `${b.side} ${line}`;
       let raw = {

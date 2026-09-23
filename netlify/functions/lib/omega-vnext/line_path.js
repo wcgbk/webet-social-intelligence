@@ -9,6 +9,7 @@ const {
   SITE_ID, BLOB_STORE, US_BOOKS, SHARP_BOOKS, LINE_MOVE, US_BOOK_PRIORITY,
 } = require('./config');
 const { americanToImplied } = require('./odds_math');
+const { americanCentsWorse } = require('./edge');
 
 function gameKey(away, home) {
   return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
@@ -258,7 +259,9 @@ function normToken(name) {
 /**
  * Signed steam toward pick:
  *  +positive ⇒ market moved toward our side (good for residual CLV if we already got better price)
- *  For odds: higher American is better for bettor → move = nowOdds - openOdds (positive = steam toward / got longer)
+ *  For odds: higher American is better for the bettor. The move is American
+ *  cents on the juice ladder (the +100/-100 gap is not 200 cents). Positive
+ *  means the price got longer.
  *  For spread when picking a side: more points for dog / fewer for favorite = toward
  *  We use pick's line perspective: lineMoveToward = openLine - nowLine for favorites (negative line),
  *  but simpler unified rule below.
@@ -293,7 +296,8 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
 
   let oddsMoveCents = null;
   if (openPrint && openPrint.odds != null && nowOdds != null) {
-    oddsMoveCents = +(nowOdds - openPrint.odds).toFixed(2);
+    const worseForBettor = americanCentsWorse(openPrint.odds, nowOdds);
+    oddsMoveCents = worseForBettor == null ? null : +(-worseForBettor).toFixed(2);
   }
 
   let lineMovePts = null;
@@ -463,6 +467,52 @@ function missingDueSlots(missingSlotsET, now = new Date()) {
   return (missingSlotsET || []).filter((s) => String(s) <= String(nowSlot));
 }
 
+function hhmmToMinutes(hhmm) {
+  const s = String(hhmm || '').padStart(4, '0');
+  const h = Number(s.slice(0, 2));
+  const m = Number(s.slice(2, 4));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+/**
+ * Label for a capture-health retry.
+ * A raw 0905 poll sorts between 0900 and 0915 and becomes "latest" before the
+ * real 0915 snap. Use a missing canonical slot only when the clock is within
+ * 12 minutes of it. When the book is empty, label the live fetch with the
+ * latest due canonical slot so health can see one real snap. Otherwise return
+ * null and skip the write — do not invent a 0600 open from a 9:30 price.
+ */
+function canonicalRetrySlot(now, opts = {}) {
+  const list = (opts.slots && opts.slots.length)
+    ? opts.slots
+    : ((LINE_MOVE && LINE_MOVE.captureSlotsET) || ['0600', '0730', '0900', '0915']);
+  const cur = hhmmToMinutes(hhmmET(now instanceof Date ? now : new Date()));
+  const missing = new Set((opts.missingDue || []).map((s) => String(s)));
+  const usable = Number(opts.usableSnapCount) || 0;
+  if (cur == null) return usable === 0 ? list[list.length - 1] : null;
+  let nearestMissing = null;
+  let nearestDist = Infinity;
+  for (const slot of list) {
+    if (!missing.has(String(slot))) continue;
+    const dist = Math.abs(hhmmToMinutes(slot) - cur);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestMissing = String(slot);
+    }
+  }
+  if (nearestMissing && nearestDist <= 12) return nearestMissing;
+  if (usable === 0) {
+    let latest = null;
+    for (const slot of list) {
+      const t = hhmmToMinutes(slot);
+      if (t != null && t <= cur + 2) latest = String(slot);
+    }
+    return latest || String(list[0]);
+  }
+  return null;
+}
+
 /**
  * Capture-health view of a loaded line path. Does not fetch or invent snaps.
  * A poll is usable only when it has games (gameCount > 0 or a non-empty games map).
@@ -585,6 +635,7 @@ module.exports = {
   pollGameCount,
   isUsablePoll,
   missingDueSlots,
+  canonicalRetrySlot,
   assessCaptureHealth,
   loadLinePath,
   storeLinePoll,

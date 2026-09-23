@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -103,6 +103,21 @@ assert.ok(Array.isArray(rejected));
 const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
+
+// Rank is calibrated edge, not dog EV. A +180 with a fatter EV stays behind a -110.
+{
+  const chalk = {
+    sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
+    odds: -110, ev: 0.045, edgePct: 0.05, predictedClv: 1.0, uncertainty: 0.12, coverProb: 0.57,
+  };
+  const dog = {
+    sport: 'MLB', matchup: 'C @ D', side: 'C ML', market: 'Moneyline',
+    odds: 180, ev: 0.09, edgePct: 0.02, predictedClv: 1.0, uncertainty: 0.12, coverProb: 0.40,
+  };
+  assert.ok(select.scoreCandidate(chalk) > select.scoreCandidate(dog));
+  const ranked = select.selectStraights([dog, chalk], 1);
+  assert.strictEqual(ranked[0].matchup, 'A @ B');
+}
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));
 assert.ok('whatLoses' in picks[0] && 'dataVerified' in picks[0] && 'clvExpectation' in picks[0]);

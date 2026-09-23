@@ -23,13 +23,38 @@ function fuzzyTeam(name, ratings) {
   return null;
 }
 
-function powerFromStandings(st) {
+/** League scoring per game. Used only to tell season totals from per-game rates. */
+const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1 };
+
+function gamesPlayed(st) {
+  if (!st || typeof st !== 'object') return 0;
+  if (Number.isFinite(Number(st.games)) && Number(st.games) > 0) return Number(st.games);
+  const w = Number(st.wins);
+  const l = Number(st.losses);
+  const t = Number(st.ties);
+  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
+  return w + l + (Number.isFinite(t) ? t : 0);
+}
+
+/**
+ * Point / run differential.
+ * Pass `sport` so a season total (ESPN pointsFor) becomes per game.
+ * Without a sport, the raw pf − pa is kept — callers that already stored
+ * per-game rates stay on that path.
+ */
+function powerFromStandings(st, sport) {
   if (!st) return 0;
-  if (st.pf != null && st.pa != null && st.pa !== 0) {
-    // Pythagorean-ish differential proxy
-    return (Number(st.pf) - Number(st.pa));
+  const pf = Number(st.pf);
+  const pa = Number(st.pa);
+  if (Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0) {
+    const league = LEAGUE_PPG[sport];
+    const g = gamesPlayed(st);
+    if (league && g >= 2 && (pf > league * 1.8 || pa > league * 1.8)) {
+      return (pf - pa) / g;
+    }
+    return pf - pa;
   }
-  if (st.winPct != null) return (Number(st.winPct) - 0.5) * 20;
+  if (st.winPct != null && Number.isFinite(Number(st.winPct))) return (Number(st.winPct) - 0.5) * 20;
   return 0;
 }
 
@@ -88,6 +113,8 @@ function mapGamesSoft(events, projectGame) {
 module.exports = {
   formatMatchup,
   fuzzyTeam,
+  gamesPlayed,
+  LEAGUE_PPG,
   powerFromStandings,
   resolveSpreadStd,
   spreadCoverProb,

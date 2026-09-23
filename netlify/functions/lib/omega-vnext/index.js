@@ -14,7 +14,7 @@ const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
-const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots } = require('./line_path');
+const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 
 const mlb = require('./sports/mlb');
@@ -190,10 +190,15 @@ async function generateOmegaVnext(opts = {}) {
   let retryOk = null;
   // Retry only for snaps that should already exist (9:05 must not treat 9:15 as failed).
   const dueMissing = missingDueSlots(captureHealth.missingSlotsET, now);
-  if (!replayLike && (captureHealth.usableSnapCount === 0 || dueMissing.length > 0)) {
+  const retrySlot = replayLike ? null : canonicalRetrySlot(now, {
+    slots: requiredSlotsET,
+    missingDue: dueMissing,
+    usableSnapCount: captureHealth.usableSnapCount,
+  });
+  if (retrySlot) {
     retriedCapture = true;
     try {
-      const cap = await runOmegaLineCapture({ force: true, dateISO, now });
+      const cap = await runOmegaLineCapture({ force: true, dateISO, now, etSlot: retrySlot });
       retryOk = !!(cap && Number(cap.gameCount) > 0);
       console.log(JSON.stringify({
         event: 'captureHealthRetry',

@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
@@ -138,6 +138,53 @@ const nowAgainstMl = {
 const moveAgainst = linePath.computeOpenToNowMove(billsMl, openGame, nowAgainstMl);
 assert.ok(moveAgainst.steamAgainst, 'ML shortened 130→105 = steam against');
 assert.ok(moveAgainst.oddsMoveCents === -25);
+
+// Crossing +100/-100 is about 10 cents, not 210. Must not false-reject.
+const crossOpen = {
+  ...extracted,
+  books: {
+    draftkings: {
+      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -115, mlAway: 105,
+    },
+  },
+};
+const crossNow = {
+  ...extracted,
+  books: {
+    draftkings: {
+      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -105, mlAway: -105,
+    },
+  },
+};
+const crossMove = linePath.computeOpenToNowMove(billsMl, crossOpen, crossNow);
+assert.strictEqual(crossMove.oddsMoveCents, -10);
+assert.strictEqual(linePath.adverseSteamReason(crossMove, { verify: false }), null);
+assert.strictEqual(linePath.adverseSteamReason(crossMove, { verify: true }), null);
+
+const at905 = new Date('2026-09-23T13:05:00Z');
+assert.strictEqual(linePath.canonicalRetrySlot(at905, {
+  slots: ['0600', '0730', '0900', '0915'],
+  missingDue: ['0600', '0900'],
+  usableSnapCount: 2,
+}), '0900');
+assert.strictEqual(linePath.canonicalRetrySlot(at905, {
+  slots: ['0600', '0730', '0900', '0915'],
+  missingDue: ['0600'],
+  usableSnapCount: 3,
+}), null);
+const at930 = new Date('2026-09-23T13:30:00Z');
+assert.strictEqual(linePath.canonicalRetrySlot(at930, {
+  slots: ['0600', '0730', '0900', '0915'],
+  missingDue: ['0600', '0730', '0900', '0915'],
+  usableSnapCount: 0,
+}), '0915');
+assert.strictEqual(linePath.canonicalRetrySlot(at930, {
+  slots: ['0600', '0730', '0900', '0915'],
+  missingDue: ['0600'],
+  usableSnapCount: 3,
+}), null);
 
 const genReject = linePath.adverseSteamReason(moveAgainst, { verify: false });
 assert.ok(genReject && /steam_against_odds/.test(genReject), 'generate should reject -25c');

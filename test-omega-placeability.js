@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
 assert.strictEqual(config.PLACEABILITY.minMajorBooks, 2);
 assert.strictEqual(config.PLACEABILITY.maxImpliedWorsePp, 3);
 assert.strictEqual(config.PLACEABILITY.maxAmericanCentsWorse, 15);

@@ -27,15 +27,13 @@ function clampPmScoreAdj(v) {
 function scoreCandidate(c, selectedSports) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
-  // Prefer residual CLV (open→now adjusted) when present; else predictedClv
-  const clvRaw = (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv) || 0;
-  const clv = clvRaw / 100; // scale cents-ish to ~EV units
-  const unc = c.uncertainty != null ? c.uncertainty : 0.15;
-  let s = w.w_ev * ev + w.w_clv * clv - w.w_uncertainty * unc;
+  // Same number the letter grade uses: calibrated edge vs no-vig sharp,
+  // plus a small residual-CLV nudge. Raw EV is not the rank — a +180 dog
+  // inflates EV without a better close. Steam and PM stay score-only.
+  const clvRaw = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
+  let s = qualityScore(c.edgePct, clvRaw, c.uncertainty);
   if (typeof c._steamScoreAdj === 'number') s += c._steamScoreAdj;
-  // PM soft feature. Hard-capped here and in computePmFeatures. Score only.
   s += clampPmScoreAdj(c._pmScoreAdj);
-  // Extra bump when steam with pick AND still +EV
   if (c.steamToward && ev > 0) s += (w.softSportMixBonus || 0.02);
   if (selectedSports && selectedSports.size && !selectedSports.has(c.sport)) {
     s += w.softSportMixBonus;

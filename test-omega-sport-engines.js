@@ -18,7 +18,7 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
@@ -305,8 +305,9 @@ function byMarket(cands, market) {
     [rocks]: { pf: 700, pa: 680, wins: 80, losses: 70 },
     [dodgers]: { pf: 700, pa: 680, wins: 80, losses: 70 },
   };
-  const baseTotal = 8.6 + Math.abs(20 + 20) * 0.02;
-  assert.strictEqual(baseTotal, 9.4);
+  // 700/150 + 680/150 = 9.2. Season totals are per game, not a +20 run power.
+  const baseTotal = (700 / 150) + (680 / 150);
+  assert.ok(Math.abs(baseTotal - 9.2) < 1e-9);
 
   const empty = mlb.project({
     oddsEvents: [synthEvent(dodgers, rocks, { total: 8.5, spread: -1.5 })],
@@ -494,14 +495,14 @@ function byMarket(cands, market) {
   assert.strictEqual(env.resolvePark('Colorado Rockies', { 'Colorado Rockies': { park: 1.8 } }, null), null);
 }
 
-// v12.3.10: spreads/totals blend to no-vig Pinnacle/Circa, not prices[0]. ML anchor stays vigged Pinnacle.
+// v12.3.11: ML, spreads, and totals blend to no-vig Pinnacle/Circa. Never prices[0].
 {
   const edgeMod = require(path.join(root, 'edge'));
   const common = require(path.join(root, 'sports/_common'));
   const oddsMath = require(path.join(root, 'odds_math'));
   for (const f of ['sports/mlb.js', 'sports/nfl.js', 'sports/cfb.js']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
-    assert.strictEqual((src.match(/prices\[0\]/g) || []).length, 1, `${f} keeps prices[0] only as the ML fallback`);
+    assert.strictEqual((src.match(/prices\[0\]/g) || []).length, 0, `${f} must not blend to prices[0]`);
     assert.ok(src.includes('noVigPinnacleCircaImplied'), f);
   }
   const home = 'Los Angeles Dodgers';
@@ -552,7 +553,11 @@ function byMarket(cands, market) {
   assert.ok(Math.abs(spread.modelRawP - common.blendWithMarket(pSpread, dkSpread, 0.5)) > 1e-4);
   assert.ok(Math.abs(total.modelRawP - common.blendWithMarket(pTotal, totalAnchor, 0.45)) < 1e-9);
   const pMl = common.mlFromSpread(config.HFA.MLB, 'MLB');
-  assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, oddsMath.americanToImplied(-130), 0.5)) < 1e-9);
+  const pinMl = oddsMath.noVigTwoWay(-130, 110).p1;
+  const circaMl = oddsMath.noVigTwoWay(-128, 108).p1;
+  const mlAnchor = (pinMl + circaMl) / 2;
+  assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, mlAnchor, 0.5)) < 1e-9);
+  assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, oddsMath.americanToImplied(-130), 0.5)) > 1e-3, 'ML anchor is no-vig, not the vigged Pinnacle price');
 
   const softOnly = [
     { side: 'Home', point: -3, prices: [{ book: 'draftkings', american: -105 }, { book: 'bookmaker', american: -110 }] },
@@ -560,6 +565,79 @@ function byMarket(cands, market) {
   ];
   const fallback = edgeMod.noVigPinnacleCircaImplied(softOnly, softOnly[0]);
   assert.ok(Math.abs(fallback - 0.5) < 1e-9, 'missing Pinnacle/Circa falls back to sharp no-vig, not prices[0]');
+
+  // Broken Pinnacle pair must not be mixed with DraftKings. Circa posts both sides.
+  const splitPin = [
+    { side: 'Home', point: -1.5, prices: [{ book: 'pinnacle', american: -150 }, { book: 'circa', american: -110 }, { book: 'draftkings', american: -105 }] },
+    { side: 'Away', point: 1.5, prices: [{ book: 'circa', american: -110 }, { book: 'draftkings', american: -115 }] },
+  ];
+  const paired = edgeMod.sharpFairForSide(splitPin, 'Home', -1.5);
+  assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Circa pair when Pinnacle is one-sided');
+}
+
+// Season run totals must not saturate the moneyline, and a starter still moves it.
+{
+  const home = 'Los Angeles Dodgers';
+  const away = 'Colorado Rockies';
+  const standings = {
+    [home]: { pf: 780, pa: 560, wins: 96, losses: 54 },
+    [away]: { pf: 620, pa: 860, wins: 52, losses: 98 },
+  };
+  const ev = synthEvent(home, away, { total: 8.5, spread: -1.5 });
+  const bare = mlb.project({
+    oddsEvents: [ev], standings, parkFactors: {}, mlbPitcherStats: {}, espnGames: [],
+  });
+  const pBare = byMarket(bare, 'Moneyline').modelRawP;
+  assert.ok(pBare > 0.5 && pBare < 0.85, `lopsided season slate clamped or flipped: ${pBare}`);
+  assert.ok(Math.abs(byMarket(bare, 'Spread').modelProjection) < 4, byMarket(bare, 'Spread').modelProjection);
+  const withSp = mlb.project({
+    oddsEvents: [ev],
+    standings,
+    parkFactors: {},
+    mlbPitcherStats: {
+      byId: {
+        '11': { id: '11', quality: 1.8, source: 'player', name: 'Ace' },
+        '22': { id: '22', quality: -1.2, source: 'player', name: 'Inn' },
+      },
+      byName: {},
+      byTeam: {},
+    },
+    espnGames: [{
+      homeTeam: home,
+      awayTeam: away,
+      homeProbable: { id: 11, name: 'Ace' },
+      awayProbable: { id: 22, name: 'Inn' },
+    }],
+  });
+  const pSp = byMarket(withSp, 'Moneyline').modelRawP;
+  assert.ok(pSp - pBare > 0.01, `starter residual ${pSp - pBare} did not move the lopsided slate`);
+  const noGames = env.mlbStandingsEnv({ pf: 700, pa: 680 }, { pf: 640, pa: 700 });
+  assert.strictEqual(noGames.usedStandings, false);
+  assert.strictEqual(noGames.modelTotal, 8.6);
+  const perGame = env.mlbStandingsEnv(
+    { pf: 5.0, pa: 4.0, wins: 90, losses: 60 },
+    { pf: 4.2, pa: 4.4, wins: 75, losses: 75 }
+  );
+  assert.strictEqual(perGame.usedStandings, true);
+  assert.ok(Math.abs(perGame.modelTotal - 8.8) < 1e-9);
+  assert.ok(Math.abs(perGame.modelMargin - (0.6 + config.HFA.MLB)) < 1e-9);
+  const seasonNfl = powerFromStandings({ pf: 360, pa: 240, wins: 12, losses: 4 }, 'NFL');
+  assert.ok(Math.abs(seasonNfl - ((360 - 240) / 16)) < 1e-9);
+  assert.strictEqual(powerFromStandings({ pf: 30, pa: 20, wins: 2, losses: 1 }, 'NFL'), 10);
+  const chiefs = 'Kansas City Chiefs';
+  const bills = 'Buffalo Bills';
+  const seasonFb = nfl.project({
+    oddsEvents: [synthEvent(chiefs, bills)],
+    standings: {
+      [chiefs]: { pf: 360, pa: 240, wins: 12, losses: 4 },
+      [bills]: { pf: 280, pa: 300, wins: 8, losses: 8 },
+    },
+    efficiency: {},
+  });
+  const hPow = powerFromStandings({ pf: 360, pa: 240, wins: 12, losses: 4 }, 'NFL');
+  const aPow = powerFromStandings({ pf: 280, pa: 300, wins: 8, losses: 8 }, 'NFL');
+  assert.strictEqual(byMarket(seasonFb, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NFL).toFixed(2));
+  assert.ok(Math.abs(byMarket(seasonFb, 'Spread').modelProjection) < 20);
 }
 
 // Seeds + fail-soft ingest wiring. No StatsAPI call.

@@ -354,10 +354,21 @@ function noVigPinnacleCircaImplied(sideBundles, target) {
 /**
  * Build sharp no-vig fair p for a two-way market given all side bundles.
  */
+/**
+ * No-vig fair for one side.
+ * Prefer a paired same-book price (Pinnacle, then Circa, then the other
+ * sharp books). Mixing Pinnacle on one side with a different book's number
+ * on the other is not a de-vig. The mixed sharpConsensus path remains only
+ * when no book posts both sides.
+ */
 function sharpFairForSide(sideBundles, targetSide, targetPoint) {
-  // Pair opposite sides at same |point|
   const target = sideBundles.find(s => s.side === targetSide && (targetPoint == null || s.point === targetPoint));
   if (!target) return null;
+
+  for (const book of SHARP_BOOKS) {
+    const paired = noVigForBook(sideBundles, target, book);
+    if (paired != null) return paired;
+  }
 
   const opposite = oppositeBundle(sideBundles, target);
   if (!opposite) {

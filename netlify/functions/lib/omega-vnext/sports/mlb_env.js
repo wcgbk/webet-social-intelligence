@@ -7,7 +7,7 @@
  */
 
 const { clamp } = require('../odds_math');
-const { ENGINE_SOFT, SPORT_SPREAD_STD } = require('../config');
+const { ENGINE_SOFT, SPORT_SPREAD_STD, HFA } = require('../config');
 const { fuzzyTeam } = require('./_common');
 
 const LEAGUE_FIP = 4.15;
@@ -362,6 +362,72 @@ function mlbSpKnownStd(homeQ, awayQ, caps) {
   return base * (1 - tighten);
 }
 
+const MLB_RPG_FLOOR = 2;
+const MLB_RPG_CAP = 8;
+/** Above any real per-game rate. ESPN pointsFor above this is a season total. */
+const MLB_SEASON_TOTAL_MIN = 8.1;
+const MLB_MIN_GAMES_FOR_SEASON = 8;
+
+function standingsGames(st) {
+  if (!st || typeof st !== 'object') return 0;
+  if (Number.isFinite(Number(st.games)) && Number(st.games) > 0) return Number(st.games);
+  const w = Number(st.wins);
+  const l = Number(st.losses);
+  const t = Number(st.ties);
+  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
+  return w + l + (Number.isFinite(t) ? t : 0);
+}
+
+/**
+ * Runs scored / allowed per game.
+ * Season totals (pf 700) require a game count. Per-game rates (pf 4.6) pass through.
+ * Unclean rows return null so the caller keeps the 8.6 / HFA baseline.
+ */
+function teamRpg(st) {
+  if (!st || typeof st !== 'object') return null;
+  const pf = Number(st.pf);
+  const pa = Number(st.pa);
+  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf <= 0 || pa <= 0) return null;
+  let rs = pf;
+  let ra = pa;
+  if (pf > MLB_SEASON_TOTAL_MIN || pa > MLB_SEASON_TOTAL_MIN) {
+    const g = standingsGames(st);
+    if (g < MLB_MIN_GAMES_FOR_SEASON) return null;
+    rs = pf / g;
+    ra = pa / g;
+  }
+  if (!(rs >= MLB_RPG_FLOOR && rs <= MLB_RPG_CAP && ra >= MLB_RPG_FLOOR && ra <= MLB_RPG_CAP)) return null;
+  return { rs, ra };
+}
+
+/**
+ * Pregame run environment from team offense and opponent runs allowed.
+ * Home margin = (home runs − away runs) + HFA. Total = the sum.
+ * Equal clubs land on HFA and their own run environment, not a season-RD spike.
+ * Missing either side → neutral { HFA, 8.6 }, which is the old zero-power baseline.
+ */
+function mlbStandingsEnv(homeSt, awaySt) {
+  const hfa = Number.isFinite(Number(HFA && HFA.MLB)) ? Number(HFA.MLB) : 0.12;
+  const neutral = { modelMargin: hfa, modelTotal: 8.6, usedStandings: false };
+  const h = teamRpg(homeSt);
+  const a = teamRpg(awaySt);
+  if (!h || !a) return neutral;
+  const homeRuns = (h.rs + a.ra) / 2;
+  const awayRuns = (a.rs + h.ra) / 2;
+  const modelTotal = homeRuns + awayRuns;
+  const modelMargin = (homeRuns - awayRuns) + hfa;
+  if (!Number.isFinite(modelTotal) || !Number.isFinite(modelMargin)) return neutral;
+  return {
+    modelMargin,
+    modelTotal,
+    usedStandings: true,
+    homeRs: h.rs,
+    homeRa: h.ra,
+    awayRs: a.rs,
+    awayRa: a.ra,
+  };
+}
+
 /** MLB season year. Jan/Feb still belong to the previous season. */
 function mlbSeasonFromDate(dateISO) {
   const raw = String(dateISO || '');
@@ -394,4 +460,6 @@ module.exports = {
   applyBullpenAdj,
   mlbSpKnownStd,
   mlbSeasonFromDate,
+  teamRpg,
+  mlbStandingsEnv,
 };

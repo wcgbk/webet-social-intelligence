@@ -9,7 +9,7 @@ const grade = require(path.join(root, 'clv_grade'));
 const clvLog = require(path.join(root, 'clv_log'));
 const qa = require(path.join(root, 'qa_hardfail'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.10-omega-vnext-sharp-blend');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.11-omega-vnext-run-env');
 assert.ok(config.QA_HARDFAIL);
 assert.strictEqual(config.QA_HARDFAIL.staleOddsCents, 15);
 assert.strictEqual(config.LEAN_PAD, false);
@@ -28,6 +28,38 @@ assert.strictEqual(g.beatClose, false);
 const g2 = grade.gradeNoVigClv(-105, -110, 1.0476);
 assert.strictEqual(g2.beatClose, true);
 assert.ok(g2.clvCents > 0);
+
+const track = require('./netlify/functions/track-clv-omega')._test;
+const sharpOrder = track.SHARP_BOOKS;
+assert.strictEqual(sharpOrder[0], 'pinnacle');
+assert.ok(sharpOrder.indexOf('circa') > 0 && sharpOrder.indexOf('circa') < sharpOrder.indexOf('betfair_ex_eu'));
+assert.ok(sharpOrder.indexOf('bookmaker') < sharpOrder.indexOf('matchbook'));
+const closeGame = {
+  home_team: 'Los Angeles Dodgers',
+  away_team: 'San Francisco Giants',
+  bookmakers: [
+    {
+      key: 'betfair_ex_eu',
+      title: 'Betfair',
+      markets: [{ key: 'h2h', outcomes: [
+        { name: 'Los Angeles Dodgers', price: -140 },
+        { name: 'San Francisco Giants', price: 120 },
+      ] }],
+    },
+    {
+      key: 'circa',
+      title: 'Circa Sports',
+      markets: [{ key: 'h2h', outcomes: [
+        { name: 'Los Angeles Dodgers', price: -125 },
+        { name: 'San Francisco Giants', price: 105 },
+      ] }],
+    },
+  ],
+};
+const closePick = { pick: 'Los Angeles Dodgers ML', betType: 'Moneyline', sport: 'MLB' };
+const close = track.extractClose(closeGame, track.pickSideInfo(closePick), closePick);
+assert.strictEqual(close.sideOdds, -125);
+assert.ok(/circa/i.test(close.anchorBook));
 
 const aliases = grade.attachRealizedAliases({
   clv: 0.0123,

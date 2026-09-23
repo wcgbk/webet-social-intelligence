@@ -12,7 +12,7 @@ const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
-const { storePicks, storeShadowPicks, storePmObserver, storeJson } = require('./store');
+const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot } = require('./store');
 const { runPmObserver } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
@@ -102,6 +102,49 @@ function annotateMajorBooks(candidates, snap) {
  * Walk-forward calibration is a SEPARATE observer (capture-omega-walkforward);
  * this generator never reads walk-forward fit params — shrink stays static config.
  */
+
+
+/**
+ * Ops-only: persist last captureHealth + optional OMEGA_OPS_WEBHOOK_URL POST.
+ * Never touches live picks keys. Soft-fail at call site.
+ */
+async function emitCaptureHealthOps(dateISO, captureHealth, meta = {}) {
+  const snapshot = {
+    event: 'captureHealthOps',
+    date: dateISO,
+    shadow: !!meta.shadow,
+    modelVersion: MODEL_VERSION,
+    ...captureHealth,
+  };
+  try {
+    await storeCaptureHealthSnapshot(dateISO, snapshot);
+  } catch (e) {
+    console.warn(JSON.stringify({ event: 'captureHealthOpsStoreSoftFail', date: dateISO, error: e.message }));
+  }
+  const url = process.env.OMEGA_OPS_WEBHOOK_URL || process.env.OMEGA_CAPTURE_HEALTH_WEBHOOK_URL;
+  if (url) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      });
+      if (!resp.ok) {
+        console.warn(JSON.stringify({
+          event: 'captureHealthOpsWebhookSoftFail',
+          date: dateISO,
+          status: resp.status,
+        }));
+      }
+    } catch (e) {
+      console.warn(JSON.stringify({
+        event: 'captureHealthOpsWebhookSoftFail',
+        date: dateISO,
+        error: e.message,
+      }));
+    }
+  }
+}
 
 async function generateOmegaVnext(opts = {}) {
   const dateISO = opts.date || todayET();
@@ -210,6 +253,15 @@ async function generateOmegaVnext(opts = {}) {
   const healthLog = { event: 'captureHealth', date: dateISO, shadow: !!shadow, ...captureHealth };
   if (captureHealth.warning || captureHealth.hardFail) console.warn(JSON.stringify(healthLog));
   else console.log(JSON.stringify(healthLog));
+
+  // Ops-only signal: persist snapshot + optional HTTP callback. Does NOT change hardFail policy.
+  if (!replayLike && !shadow) {
+    try {
+      await emitCaptureHealthOps(dateISO, captureHealth, { shadow: !!shadow });
+    } catch (e) {
+      console.warn(JSON.stringify({ event: 'captureHealthOpsSoftFail', date: dateISO, error: e.message }));
+    }
+  }
 
   if (captureHealth.hardFail) {
     const err = new Error(captureHealth.reason || `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`);

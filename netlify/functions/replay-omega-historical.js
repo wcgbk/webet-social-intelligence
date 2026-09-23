@@ -6,7 +6,9 @@
  * Never touches live picks-{date}.
  *
  * GET/POST /.netlify/functions/replay-omega-historical
- * Body/query: { from, to, dryRun, runId, maxDays, sports }
+ * Body/query: { from, to, dryRun, runId, maxDays, sports, skipNarrate }
+ * skipNarrate defaults to true. dryRun defaults to true.
+ * Scoring reads clv-{date} and settled picks. It never writes live picks-{date}.
  */
 
 const { runReplayRange, DEFAULT_MAX_DAYS, HARD_MAX_DAYS } = require('./lib/omega-vnext/replay');
@@ -33,18 +35,20 @@ exports.handler = async (event) => {
     return json(200, {
       ok: false,
       error: 'from required (YYYY-MM-DD)',
-      hint: 'Default dryRun=true. Example: ?from=2026-09-15&to=2026-09-21&dryRun=true&maxDays=7',
-      defaults: { dryRun: true, maxDays: DEFAULT_MAX_DAYS, hardMaxDays: HARD_MAX_DAYS },
+      hint: 'Default dryRun=true skipNarrate=true. Example: ?from=2026-09-15&to=2026-09-21&dryRun=true&maxDays=7&runId=mlb-late-sep&skipNarrate=true',
+      defaults: { dryRun: true, skipNarrate: true, maxDays: DEFAULT_MAX_DAYS, hardMaxDays: HARD_MAX_DAYS },
     });
   }
   const dryRaw = body.dryRun != null ? body.dryRun : qs.dryRun;
   const dryRun = dryRaw === false || dryRaw === 'false' || dryRaw === 0 || dryRaw === '0' ? false : true;
+  const skipRaw = body.skipNarrate != null ? body.skipNarrate : qs.skipNarrate;
+  const skipNarrate = !(skipRaw === false || skipRaw === 'false' || skipRaw === 0 || skipRaw === '0');
   const maxDays = Number(body.maxDays || qs.maxDays || DEFAULT_MAX_DAYS);
   const runId = body.runId || qs.runId || `replay-${from}-to-${to}`;
   const sports = parseSports(body.sports || qs.sports);
-  console.log(`[replay-omega-historical] from=${from} to=${to} dryRun=${dryRun} maxDays=${maxDays} runId=${runId}`);
+  console.log(`[replay-omega-historical] from=${from} to=${to} dryRun=${dryRun} skipNarrate=${skipNarrate} maxDays=${maxDays} runId=${runId}`);
   try {
-    const out = await runReplayRange({ from, to, dryRun, maxDays, runId, sports, skipNarrate: true });
+    const out = await runReplayRange({ from, to, dryRun, maxDays, runId, sports, skipNarrate });
     return json(200, { ok: true, ...out });
   } catch (e) {
     console.error(`[replay-omega-historical] soft-fail: ${e.message}`);

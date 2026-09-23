@@ -299,9 +299,60 @@ async function storeReplaySummary(runId, summary) {
   return key;
 }
 
+/** Ops-only capture-health snapshots — NEVER live picks / latest-date. */
+const OPS_KEY_RE = /^omega-ops\/capture-health(?:-latest|-\d{4}-\d{2}-\d{2})$/;
+
+function assertOpsKey(key) {
+  const k = String(key || '');
+  if (/^(?:picks-\d{4}-\d{2}-\d{2}|latest-date|picks-dates|picks-sim-)/.test(k)) {
+    throw new Error(`omega-ops refused live key: ${k}`);
+  }
+  if (!OPS_KEY_RE.test(k)) {
+    throw new Error(`omega-ops refused key: ${k}`);
+  }
+  return k;
+}
+
+/**
+ * Persist last captureHealth snapshot for ops dashboards / alerts.
+ * Does not change hardFail policy. Soft-fail at call sites.
+ */
+async function storeCaptureHealthSnapshot(dateISO, snapshot) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`omega-ops refused bad date: ${dateISO}`);
+  }
+  const payload = {
+    ...(snapshot || {}),
+    date: d,
+    opsOnly: true,
+    storedAt: new Date().toISOString(),
+  };
+  const dated = assertOpsKey(`omega-ops/capture-health-${d}`);
+  const latest = assertOpsKey('omega-ops/capture-health-latest');
+  await storeJson(dated, payload);
+  try {
+    await storeJson(latest, payload);
+  } catch (e) {
+    console.error(`[omega-vnext/store] capture-health latest: ${e.message}`);
+  }
+  return { dated, latest };
+}
+
+async function readCaptureHealthLatest() {
+  return readJson(assertOpsKey('omega-ops/capture-health-latest'));
+}
+
+async function readCaptureHealthDate(dateISO) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  return readJson(assertOpsKey(`omega-ops/capture-health-${d}`));
+}
+
 module.exports = {
   storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson, storePmObserver, readPmObserver,
   WALKFORWARD_KEY_RE, assertWalkforwardKey,
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
+  OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
 };

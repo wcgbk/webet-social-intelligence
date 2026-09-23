@@ -1,12 +1,12 @@
 'use strict';
 /**
  * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
- * v12.3.7: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
+ * v12.3.8: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
  * Market blend unchanged. assumedStarter stays tagged for QA hard-fail.
  */
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, fuzzyTeam, powerFromStandings,
+  formatMatchup, fuzzyTeam, powerFromStandings, mapGamesSoft,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const {
@@ -33,7 +33,7 @@ function buildMethods({ usedSp, usedPark, enginesOn, usedGameday }) {
       ml: 'mlb-pythag-lite+hfa',
       spread: 'mlb-normal-rl',
       total: 'mlb-total-baseline',
-      family: enginesOn ? 'mlb-engines' : null,
+      family: null,
     };
   }
   if (usedGameday) {
@@ -221,7 +221,6 @@ function findEspnGame(ev, espnGames) {
 }
 
 function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactors, gameDay, weatherByGame } = {}) {
-  const all = [];
   const games = (espnGames && espnGames.games) || espnGames || [];
   const ctx = {
     mlbPitcherStats: mlbPitcherStats || {},
@@ -229,7 +228,7 @@ function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactor
     gameDay: gameDay || {},
     weatherByGame: weatherByGame || (gameDay && gameDay.weatherByGame) || {},
   };
-  for (const ev of oddsEvents || []) {
+  return mapGamesSoft(oddsEvents, (ev) => {
     const eg = findEspnGame(ev, games);
     const cands = projectGame(ev, standings || {}, eg, ctx);
     if (eg && (eg.homeProbable || eg.awayProbable)) {
@@ -243,9 +242,8 @@ function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactor
         }
       }
     }
-    all.push(...cands);
-  }
-  return all;
+    return cands;
+  });
 }
 
 module.exports = { project, SPORT };

@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.7-omega-vnext-engines');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.8-omega-vnext-engines-build');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);

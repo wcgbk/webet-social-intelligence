@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.7-omega-vnext-engines');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.8-omega-vnext-engines-build');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
@@ -328,7 +328,10 @@ assert.ok(/\[functions\."capture-omega-lines-late"\]\s*\n\s*schedule = "0,15 13 
 assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13 \* \* \*"/.test(toml));
 assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13 \* \* \*"/.test(toml));
 const tspBlock = toml.split('[functions."fetch-tsp-live"]')[1].split('\n[functions.')[0];
-assert.ok(/^\s*schedule = "\*\/15 \* \* \* \*"/m.test(tspBlock));
+// #82 paused the Hermes fetch. The schedule line stays commented; do not require it live.
+assert.ok(/HOLD intentional/.test(tspBlock), 'TSP hold note');
+assert.ok(/#\s*schedule = "\*\/15 \* \* \* \*"/.test(tspBlock), 'paused TSP schedule is commented');
+assert.ok(!/^\s*schedule\s*=/m.test(tspBlock), 'fetch-tsp-live must not have an active schedule');
 
 const captureSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/capture-omega-lines.js'), 'utf8');
 assert.ok(captureSrc.includes("'1315'"));

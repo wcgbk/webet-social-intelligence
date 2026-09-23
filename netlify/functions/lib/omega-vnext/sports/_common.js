@@ -67,6 +67,24 @@ function blendWithMarket(pModel, marketImplied, wModel = 0.55) {
   return clamp(wModel * pModel + (1 - wModel) * marketImplied, 0.05, 0.95);
 }
 
+/**
+ * One bad event must not blank the rest of the sport. Engine deepen soft-fails.
+ */
+function mapGamesSoft(events, projectGame) {
+  const all = [];
+  for (const ev of events || []) {
+    try {
+      const rows = projectGame(ev);
+      if (Array.isArray(rows) && rows.length) all.push(...rows);
+    } catch (err) {
+      const home = ev && ev.home_team;
+      const away = ev && ev.away_team;
+      console.error(`[omega-vnext] project soft-fail ${away || '?'} @ ${home || '?'}: ${err && err.message}`);
+    }
+  }
+  return all;
+}
+
 module.exports = {
   formatMatchup,
   fuzzyTeam,
@@ -76,5 +94,6 @@ module.exports = {
   totalCoverProb,
   mlFromSpread,
   blendWithMarket,
+  mapGamesSoft,
   HFA,
 };

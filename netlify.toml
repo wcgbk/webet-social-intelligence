@@ -47,14 +47,13 @@
   # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
 
 [functions."fetch-tsp-live"]
-  schedule = "*/15 * * * *"
-  # Hold lifted by WeBet 2026-09-22. Still isolated: tsp-live blob → passcode-gated /live-ai.
-  # Omega generate/select/grades/units/gates do not read this feed. Soft-fails with NO_COOKIE
-  # when TSP_SESSION_COOKIE is missing (no throw into the Omega day).
-  # PRIVATE Live AI Picks feed — pulls the subscribed TSP.Live Hermes A.I. page every 15 min
-  # using TSP_SESSION_COOKIE (Netlify env), parses the cards, writes to the isolated
-  # "tsp-live" blob store. PRIVATE-USE ONLY: never expose publicly (paid membership content).
-  # Needs env: TSP_SESSION_COOKIE (member cookie) + TSP_PAGE_KEY (page passcode). Zero external API cost.
+  # schedule = "*/15 * * * *"
+  # HOLD intentional — paused by WeBet 2026-09-22 evening (Live Picks).
+  # Schedule disabled so Netlify stops invoking every 15 min. Function remains deployable
+  # for on-demand invoke if needed. Omega has zero dependency on this feed
+  # (tsp-live blob → passcode-gated /live-ai only; generate/select/grades/units/gates do not read it).
+  # PRIVATE Live AI Picks feed — when resumed, pulls TSP.Live Hermes A.I. with TSP_SESSION_COOKIE,
+  # writes isolated "tsp-live" blob. Needs env: TSP_SESSION_COOKIE + TSP_PAGE_KEY.
 
 [functions."trigger-picks-nfl"]
   schedule = "5 13 * * *"

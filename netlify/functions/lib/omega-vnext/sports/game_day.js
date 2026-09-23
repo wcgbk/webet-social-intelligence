@@ -141,25 +141,26 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
 
 
 /**
- * QB continuity soft adj (NFL/NCAAF).
- * Empty qbByTeam (feed soft-fail) → 0 (do not invent healthy).
- * Non-empty map + team absent → healthy continuity credit.
- * Out/doubtful already handled by qbSoftAdjust — skip those sides.
+ * QB continuity (NFL and NCAAF). Empty map → 0. Do not invent a healthy slate.
+ * No injury row → healthy (1). Out/doubtful/IR/questionable → not healthy (0).
+ * Margin moves only by the healthy gap, capped at ±qbContinuityPts.
+ * qbSoftAdjust still owns the larger out/doubtful discount; this does not add another one.
+ * nfl.js / cfb.js then stack this with success or talent under maxAbsMarginAdj.
  */
 function qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam, caps) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, note: null, used: false };
   }
-  if (!qbByTeam || typeof qbByTeam !== 'object' || !Object.keys(qbByTeam).length) {
+  if (!qbByTeam || typeof qbByTeam !== 'object' || Array.isArray(qbByTeam) || !Object.keys(qbByTeam).length) {
     return { marginAdj: 0, note: null, used: false };
   }
-  const cfg = (caps && caps[sport]) || (ENGINE_SOFT && ENGINE_SOFT[sport]) || {};
-  const pts = Number.isFinite(Number(cfg.qbContinuityPts))
-    ? Number(cfg.qbContinuityPts)
-    : (sport === 'NFL' ? 0.55 : 0.55);
-  const maxM = Number.isFinite(Number(cfg.maxAbsMarginAdj))
-    ? Math.abs(Number(cfg.maxAbsMarginAdj))
-    : 1.5;
+  const sportCaps = (caps && caps[sport]) || (ENGINE_SOFT && ENGINE_SOFT[sport]) || {};
+  const pts = Number.isFinite(Number(sportCaps.qbContinuityPts))
+    ? Number(sportCaps.qbContinuityPts)
+    : 0.55;
+  const maxM = Number.isFinite(Number(sportCaps.maxAbsMarginAdj))
+    ? Math.abs(Number(sportCaps.maxAbsMarginAdj))
+    : (sport === 'NCAAF' ? 2 : 1.5);
   const outStatuses = (QA_HARDFAIL && QA_HARDFAIL.qbOutStatuses) || ['out', 'doubtful'];
   const isInjured = (qb) => {
     if (!qb) return false;
@@ -167,17 +168,10 @@ function qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam, caps) {
     if (!st) return false;
     return outStatuses.some(k => st.includes(k)) || /questionable|q\b/.test(st);
   };
-  // Continuity only when no injury flag on that side.
   const homeHealthy = !isInjured(homeQb) ? 1 : 0;
   const awayHealthy = !isInjured(awayQb) ? 1 : 0;
-  // If both injured or both healthy with no differential, still apply if one side healthier.
-  let raw = (homeHealthy - awayHealthy) * pts;
-  // When map is loaded but BOTH sides have injury flags, continuity is 0 (qbSoftAdjust owns discount).
-  if (isInjured(homeQb) && isInjured(awayQb)) raw = 0;
-  // When both healthy (no flags), no differential — 0. Continuity only helps when one side is flagged-absent and other is flagged.
-  // Re-read design: "no qb injury row → continuity". So:
-  // home missing from map (null) AND away has out → home gets +pts relative.
-  const marginAdj = clamp(raw, -pts, pts);
+  const raw = (homeHealthy - awayHealthy) * pts;
+  const marginAdj = clamp(raw, -Math.abs(pts), Math.abs(pts));
   const overall = clamp(marginAdj, -maxM, maxM);
   return {
     marginAdj: overall,

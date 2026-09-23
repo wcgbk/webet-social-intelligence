@@ -192,30 +192,49 @@ function stripMeta(table) {
   return out;
 }
 
-function loadTalentSeed() {
+function readTalentFile() {
   try {
-    return stripMeta(require('./sports/data/cfb-talent-seed.json'));
+    return require('./sports/data/cfb-talent-seed.json');
   } catch (e) {
     console.error(`[omega-vnext/ingest] CFB talent seed soft-fail: ${e.message}`);
-    return {};
+    return null;
   }
 }
 
-/** Attach optional talent/spPlus onto EPA rows without wiping EPA fields. */
-function mergeTalentIntoEfficiency(epaTable, talentTable) {
+function loadTalentSeed() {
+  return stripMeta(readTalentFile() || {});
+}
+
+function talentSeedMeta() {
+  const raw = readTalentFile();
+  return (raw && raw._meta && typeof raw._meta === 'object') ? raw._meta : {};
+}
+
+/**
+ * Attach optional talent/spPlus onto EPA rows without wiping EPA fields.
+ * Exact team name only — mascot fuzzy match would cross LSU/Clemson/Auburn.
+ * scale is 'centered' or 'pct_0_100' from the seed meta.
+ */
+function mergeTalentIntoEfficiency(epaTable, talentTable, scale) {
   const out = { ...(epaTable || {}) };
   const talent = talentTable || {};
+  const talentScale = scale === 'pct_0_100' ? 'pct_0_100' : 'centered';
   for (const [team, row] of Object.entries(out)) {
-    if (!row || typeof row !== 'object') continue;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    if (!Object.prototype.hasOwnProperty.call(talent, team)) continue;
     const t = talent[team];
     let talentVal = null;
+    let spPlus = null;
     if (t != null && typeof t === 'object') {
-      talentVal = t.talent != null ? t.talent : t.spPlus;
+      spPlus = t.spPlus != null ? t.spPlus : null;
+      talentVal = t.talent != null ? t.talent : spPlus;
     } else if (Number.isFinite(Number(t))) {
       talentVal = Number(t);
     }
     if (!Number.isFinite(Number(talentVal))) continue;
-    out[team] = { ...row, talent: Number(talentVal) };
+    const next = { ...row, talent: Number(talentVal), talentScale };
+    if (spPlus != null && Number.isFinite(Number(spPlus))) next.spPlus = Number(spPlus);
+    out[team] = next;
   }
   return out;
 }
@@ -224,9 +243,16 @@ function loadEfficiencySeeds() {
   const nfl = require('./sports/data/nfl-epa-seed.json');
   const cfb = require('./sports/data/cfb-epa-seed.json');
   const talent = loadTalentSeed();
+  let scale = 'centered';
+  try {
+    const { talentScaleMode } = require('./sports/epa');
+    scale = talentScaleMode(talentSeedMeta());
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] talent scale soft-fail: ${e.message}`);
+  }
   return {
     NFL: stripMeta(nfl),
-    NCAAF: mergeTalentIntoEfficiency(stripMeta(cfb), talent),
+    NCAAF: mergeTalentIntoEfficiency(stripMeta(cfb), talent, scale),
   };
 }
 
@@ -449,6 +475,7 @@ async function ingest(dateISO, opts = {}) {
 
 module.exports = {
   loadTalentSeed,
+  talentSeedMeta,
   mergeTalentIntoEfficiency,
   ingest,
   fetchOddsMultiSport,

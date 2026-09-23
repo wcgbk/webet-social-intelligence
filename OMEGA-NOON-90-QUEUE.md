@@ -4,6 +4,12 @@ Shipped today (2026-09-22 ET) toward ~90th-percentile Omega architecture. **Toda
 
 ## Done
 
+### D2) Sport-engine redo (`v12.3.8-omega-vnext-engines-build`)
+- Grok Build 4.7 xhigh redo of v12.3.7. Same caps and product intent.
+- Stacked NFL/NCAAF margin cap, centered talent scale, MLB std from `SPORT_SPREAD_STD`, bullpen total stays in the 5.5–14.5 band, per-game soft-fail.
+- No FIT / TSP / SELECT_WEIGHTS / SHRINK / PM_SOFT retune. Live card not regenerated.
+- See `docs/OMEGA-SPORT-ENGINES.md`
+
 ### D) Deeper sport engines (`v12.3.7-omega-vnext-engines`)
 - MLB: capped bullpen residual + SP-known std tighten
 - NFL: capped success→margin + QB continuity

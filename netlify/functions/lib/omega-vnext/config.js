@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.7-omega-vnext-engines';
+const MODEL_VERSION = 'v12.3.8-omega-vnext-engines-build';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -179,10 +179,12 @@ const PM_SOFT = {
 
 
 /**
- * Deeper sport-engine soft adjustments (v12.3.7).
+ * Deeper sport-engine soft adjustments (v12.3.7, hardened v12.3.8).
  * Applied INSIDE sport projectors to modelMargin / modelTotal BEFORE
  * blendWithMarket + calibrate. Hard caps prevent a bad feed from dominating
- * the US sportsbook CLV spine. Soft-fail: missing inputs → adj 0 (prior path).
+ * the US sportsbook CLV spine. NFL/NCAAF maxAbsMarginAdj caps the STACKED
+ * new-engine margin (success or talent + QB continuity), not each piece alone.
+ * Soft-fail: missing inputs → adj 0 (prior path).
  * Does NOT change SHRINK_K, SELECT_WEIGHTS, GATES, Kelly, grades, unit caps,
  * or PM_SOFT. Does NOT weaken v12.3.6 PM soft features or v12.3.0 game-day.
  */
@@ -244,6 +246,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.3.8 omega-vnext: Grok Build 4.7 xhigh redo of v12.3.7 deeper sport engines. Same product intent and caps philosophy. MLB bullpen residual HARD CAP ±${ENGINE_SOFT.MLB.maxAbsMarginAdj} runs margin / ±${ENGINE_SOFT.MLB.maxAbsTotalAdj} total, and the post-bullpen total stays inside the existing 5.5–14.5 run band; SP-known spread/ML std reads SPORT_SPREAD_STD.MLB and tightens by at most ${ENGINE_SOFT.MLB.maxStdTighten} (0 → prior std). NFL success-rate margin and QB continuity stay individually capped, then the STACKED new-engine margin is HARD CAP ±${ENGINE_SOFT.NFL.maxAbsMarginAdj} so the two cannot add past the spine. NCAAF talent/spPlus uses the seed scale (centered values no longer flip sign above 5) at weight ${ENGINE_SOFT.NCAAF.talentWeight}, HARD CAP ±${ENGINE_SOFT.NCAAF.maxAbsMarginAdj}, and QB continuity shares that stack. Soft-fail: missing feed/seed → adj 0, generate continues. No FIT. No TSP. No SHRINK_K, SELECT_WEIGHTS, blend, gate, Kelly, grade, unit cap, or PM_SOFT retune. NBA/NHL off.`,
   `v12.3.7 omega-vnext: deeper MLB/NFL/NCAAF sport engines (capped). MLB: bullpen residual from team pitching − named SP (StatsAPI already loaded) with HARD CAP ±${ENGINE_SOFT.MLB.maxAbsMarginAdj} runs margin / ±${ENGINE_SOFT.MLB.maxAbsTotalAdj} total; when both SPs have player-quality, tighten spread/ML std by up to ${ENGINE_SOFT.MLB.maxStdTighten}. NFL: success-rate mismatch soft margin (capped ±${ENGINE_SOFT.NFL.maxAbsMarginAdj} pts) + QB continuity when injury map is non-empty and team has no flag (capped ±${ENGINE_SOFT.NFL.qbContinuityPts}). NCAAF: optional talent/spPlus seed overlay blended at weight ${ENGINE_SOFT.NCAAF.talentWeight} with HARD CAP ±${ENGINE_SOFT.NCAAF.maxAbsMarginAdj} pts — missing talent → prior EPA/standings. Soft-fail: missing feed/seed → adj 0, generate continues. Feeds existing modelRawP→coverProb pipeline; US sportsbook CLV spine primary. Does not change SHRINK_K, SELECT_WEIGHTS, blend weights, GATES, Kelly, grades, unit caps, or PM_SOFT. No FIT. No TSP. NBA/NHL off.`,
   `v12.3.6 omega-vnext: Kalshi/Polymarket soft features inside generate, before selectStraights. Moneyline only, clean 1:1 map. Venue combine is the average of available mapped venues. pmVsBookGap = PM implied minus fair_sharp_p (else American-implied). pmMove = current PM implied minus the morning open snap (omega-pm-observer/{date}-open) when that snap exists, averaged per venue present on both sides; omitted otherwise. Score-only _pmScoreAdj = clamp(scoreWeightVsBook*pmVsBookGap + scoreWeightMove*pmMove, ±maxAbsScoreAdj) with weights ${PM_SOFT.scoreWeightVsBook} / ${PM_SOFT.scoreWeightMove} and HARD CAP ±${PM_SOFT.maxAbsScoreAdj} so PM cannot dominate the US sportsbook CLV spine. Does not change coverProb, edgePct, gates, Kelly, grades, shrink, or unit caps. Soft-fail to _pmScoreAdj 0 if PM APIs are down or unmapped; generate continues. Historical replay skips live PM (no as-of snap). Observer audit omega-pm-observer/{date} retained (10:15 ET) plus 8:30 ET open snap; the observer logging path still never mutates locked picks. No TSP. No FIT.`,
   'v12.3.5 omega-vnext: scored historical replay joins real CLV/ROI from clv-{date} / picks-{date} settles (null + scoreReason when closes absent); capture-health ops snapshot at omega-ops/* + optional OMEGA_OPS_WEBHOOK_URL. No gate, weight, Kelly, engine, shrink, or live pick-math changes.',

@@ -5,7 +5,8 @@
  * defEpa is defensive strength per play (higher = better, sign-flipped EPA allowed).
  * Both teams must match a clean prior; otherwise the caller keeps standings power.
  * Sierra blend only when standings pf/pa and a game count are clean.
- * v12.3.7: capped success→margin (NFL) and talent/spPlus blend (NCAAF) via ENGINE_SOFT.
+ * v12.3.8: capped success→margin (NFL) and talent/spPlus blend (NCAAF).
+ * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
 const { HFA, ENGINE_SOFT } = require('../config');
@@ -158,20 +159,41 @@ function successMarginAdj(homeEpa, awayEpa, caps) {
 }
 
 /**
- * Normalize talent/spPlus to roughly −3..+3.
- * 0–100 scale → (v - 50) / 16.7; already small → pass through.
+ * Seed `_meta.units` / `_meta.scale`. Centered is the default (cfb-talent-seed).
+ * A 0–100 score is used only when the meta says so — never guessed from magnitude.
  */
-function normalizeTalent(raw) {
+function talentScaleMode(meta) {
+  const units = String((meta && meta.units) || '');
+  const scale = String((meta && meta.scale) || '');
+  const blob = `${units} ${scale}`.toLowerCase();
+  if (/centered|relative_talent/.test(blob)) return 'centered';
+  if (/0\s*[-–]\s*100|percent|percentile|\bpct\b/.test(blob)) return 'pct_0_100';
+  return 'centered';
+}
+
+/**
+ * Normalize talent/spPlus onto roughly −3.5..+3.5.
+ * Centered proxy: clamp; |value| > 15 soft-fails (that is a different scale).
+ * pct_0_100: (v − 50) / 16.7. Do not infer 0–100 from "n > 5" — that flips a
+ * strong centered team (6) into a weak one.
+ */
+function normalizeTalent(raw, scale) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return null;
-  if (n >= 0 && n <= 100 && Math.abs(n) > 5) return clamp((n - 50) / 16.7, -3.5, 3.5);
+  const mode = scale === 'pct_0_100' ? 'pct_0_100' : 'centered';
+  if (mode === 'pct_0_100') {
+    if (n < 0 || n > 100) return null;
+    return clamp((n - 50) / 16.7, -3.5, 3.5);
+  }
+  if (Math.abs(n) > 15) return null;
   return clamp(n, -3.5, 3.5);
 }
 
 function talentOf(epaRow) {
-  if (!epaRow) return null;
-  if (epaRow.talent != null) return normalizeTalent(epaRow.talent);
-  if (epaRow.spPlus != null) return normalizeTalent(epaRow.spPlus);
+  if (!epaRow || typeof epaRow !== 'object') return null;
+  const scale = epaRow.talentScale;
+  if (epaRow.talent != null && epaRow.talent !== '') return normalizeTalent(epaRow.talent, scale);
+  if (epaRow.spPlus != null && epaRow.spPlus !== '') return normalizeTalent(epaRow.spPlus, scale);
   return null;
 }
 
@@ -198,6 +220,97 @@ function talentMarginAdj(homeEpa, awayEpa, caps) {
     raw,
     homeTalent: ht,
     awayTalent: at,
+  };
+}
+
+/**
+ * Scale a sum of new-engine margin pieces down to ±maxAbs.
+ * modelMargin already includes the raw sum. Rest / QB-out / HFA are not in
+ * contributions and stay put. Returns the margin with the scaled sum swapped in.
+ */
+function applyStackedMarginCap(modelMargin, contributions, maxAbs) {
+  let margin = Number(modelMargin);
+  if (!Number.isFinite(margin)) margin = 0;
+  const items = (Array.isArray(contributions) ? contributions : []).map((c) => ({
+    key: c && c.key ? String(c.key) : 'adj',
+    adj: Number.isFinite(Number(c && c.adj)) ? Number(c.adj) : 0,
+  }));
+  const rawSum = items.reduce((s, c) => s + c.adj, 0);
+  const cap = Number.isFinite(Number(maxAbs)) ? Math.abs(Number(maxAbs)) : 0;
+  let scale = 1;
+  let capped = false;
+  if (Math.abs(rawSum) > cap + 1e-12) {
+    scale = Math.abs(rawSum) > 1e-12 ? cap / Math.abs(rawSum) : 0;
+    capped = true;
+  }
+  const byKey = {};
+  let sum = 0;
+  for (const c of items) {
+    const adj = c.adj * scale;
+    byKey[c.key] = adj;
+    sum += adj;
+  }
+  return {
+    modelMargin: margin - rawSum + sum,
+    byKey,
+    rawSum,
+    sum,
+    capped,
+    scale,
+  };
+}
+
+function pieceAdj(row, field) {
+  if (!row || !Number.isFinite(Number(row[field]))) return 0;
+  return Number(row[field]);
+}
+
+/**
+ * Apply the sport's stacked engine cap. Contributions already sit inside modelMargin.
+ * NFL: success + QB continuity. NCAAF: talent + QB continuity.
+ */
+function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
+  const caps = (ENGINE_SOFT && ENGINE_SOFT[sport]) || {};
+  const soft = engineSoft || { used: false };
+  const gd = gameDay ? { ...gameDay } : null;
+  const parts = [];
+  if (sport === 'NFL') {
+    parts.push({ key: 'success', adj: pieceAdj(soft.success, 'appliedMarginAdj') });
+    parts.push({ key: 'continuity', adj: pieceAdj(gd && gd.qbContinuity, 'marginAdj') });
+  } else if (sport === 'NCAAF') {
+    parts.push({ key: 'talent', adj: pieceAdj(soft.talent, 'appliedMarginAdj') });
+    parts.push({ key: 'continuity', adj: pieceAdj(gd && gd.qbContinuity, 'marginAdj') });
+  }
+  const stacked = applyStackedMarginCap(modelMargin, parts, caps.maxAbsMarginAdj);
+  const nextSoft = { ...soft, stacked };
+  if (nextSoft.success && stacked.byKey.success != null) {
+    nextSoft.success = {
+      ...nextSoft.success,
+      rawMarginAdj: nextSoft.success.marginAdj,
+      marginAdj: stacked.byKey.success,
+    };
+  }
+  if (nextSoft.talent && stacked.byKey.talent != null) {
+    nextSoft.talent = {
+      ...nextSoft.talent,
+      rawMarginAdj: nextSoft.talent.marginAdj,
+      marginAdj: stacked.byKey.talent,
+    };
+  }
+  if (gd && gd.qbContinuity && stacked.byKey.continuity != null) {
+    gd.qbContinuity = {
+      ...gd.qbContinuity,
+      rawMarginAdj: gd.qbContinuity.marginAdj,
+      marginAdj: stacked.byKey.continuity,
+      stackCapped: stacked.capped,
+    };
+  }
+  return {
+    modelMargin: stacked.modelMargin,
+    engineSoft: nextSoft,
+    gameDay: gd,
+    enginesOn: Math.abs(stacked.rawSum) > 1e-9 || !!soft.used,
+    stacked,
   };
 }
 
@@ -257,24 +370,43 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   // (homeOff - awayDef) - (awayOff - homeDef), in points, plus HFA.
   const homeEdge = hAdj.offEpa - aAdj.defEpa;
   const awayEdge = aAdj.offEpa - hAdj.defEpa;
-  let modelMargin = (homeEdge - awayEdge) * cfg.plays + hfa;
+  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfa;
   let modelTotal = cfg.baseTotal + (homeEdge + awayEdge) * cfg.plays + successTotalAdj(hAdj, aAdj);
 
   const engineMeta = { used: false, success: null, talent: null };
+  let engineAdd = 0;
   if (sport === 'NFL') {
     const sm = successMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NFL);
-    modelMargin += sm.marginAdj;
+    engineAdd += sm.marginAdj;
     engineMeta.success = sm;
     if (sm.used) engineMeta.used = true;
   }
   if (sport === 'NCAAF') {
     const tm = talentMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NCAAF);
-    modelMargin += tm.marginAdj;
+    engineAdd += tm.marginAdj;
     engineMeta.talent = tm;
     if (tm.used) engineMeta.used = true;
   }
 
-  modelMargin = clamp(modelMargin, -cfg.marginCap, cfg.marginCap);
+  // Sport margin cap can eat the engine add when the base is already on the rail.
+  // appliedMarginAdj is the piece that actually remains inside modelMargin.
+  const cappedBase = clamp(baseMargin, -cfg.marginCap, cfg.marginCap);
+  let modelMargin = clamp(baseMargin + engineAdd, -cfg.marginCap, cfg.marginCap);
+  const appliedEngine = modelMargin - cappedBase;
+  const appliedScale = Math.abs(engineAdd) > 1e-12 ? appliedEngine / engineAdd : 1;
+  const safeScale = appliedScale < 0 ? 0 : appliedScale;
+  if (engineMeta.success) {
+    engineMeta.success = {
+      ...engineMeta.success,
+      appliedMarginAdj: engineMeta.success.marginAdj * safeScale,
+    };
+  }
+  if (engineMeta.talent) {
+    engineMeta.talent = {
+      ...engineMeta.talent,
+      appliedMarginAdj: engineMeta.talent.marginAdj * safeScale,
+    };
+  }
   modelTotal = clamp(modelTotal, cfg.totalMin, cfg.totalMax);
   const family = cfg.family;
   let methods = {
@@ -304,7 +436,10 @@ module.exports = {
   successTotalAdj,
   successMarginAdj,
   talentMarginAdj,
+  talentScaleMode,
   normalizeTalent,
+  applyStackedMarginCap,
+  applyEngineStack,
   footballProjection,
   fallbackUncertainty,
 };

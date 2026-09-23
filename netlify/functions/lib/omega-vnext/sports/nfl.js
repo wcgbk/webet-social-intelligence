@@ -6,10 +6,10 @@
  * unchanged; calibrate shrink runs later in the pipeline.
  */
 const {
-  formatMatchup,
+  formatMatchup, mapGamesSoft,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
-const { footballProjection } = require('./epa');
+const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments } = require('./game_day');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge } = require('../edge');
@@ -57,12 +57,18 @@ function projectGame(event, standings, efficiency, gameDay) {
     qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NFL) || (gameDay && gameDay.qbByTeam) || {},
     hfaBase: HFA.NFL,
   });
-  const modelMargin = gd.modelMargin;
+  const stacked = applyEngineStack({
+    sport: SPORT,
+    modelMargin: gd.modelMargin,
+    engineSoft: env.engineSoft,
+    gameDay: gd.gameDay,
+  });
+  const modelMargin = stacked.modelMargin;
   const modelTotal = gd.modelTotal;
   const uncertainty = gd.uncertainty;
-  const enginesOn = !!(env.engineSoft && env.engineSoft.used)
-    || !!(gd.gameDay && gd.gameDay.qbContinuity && gd.gameDay.qbContinuity.marginAdj);
-  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, enginesOn);
+  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, stacked.enginesOn);
+  const gameDayMeta = stacked.gameDay;
+  const engineSoft = stacked.engineSoft;
   const out = [];
 
   {
@@ -75,8 +81,8 @@ function projectGame(event, standings, efficiency, gameDay) {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
-        gameDay: gd.gameDay || null,
-        engineSoft: env.engineSoft || null,
+        gameDay: gameDayMeta,
+        engineSoft,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -93,8 +99,8 @@ function projectGame(event, standings, efficiency, gameDay) {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
-        gameDay: gd.gameDay || null,
-        engineSoft: env.engineSoft || null,
+        gameDay: gameDayMeta,
+        engineSoft,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -110,8 +116,8 @@ function projectGame(event, standings, efficiency, gameDay) {
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
         projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
-        gameDay: gd.gameDay || null,
-        engineSoft: env.engineSoft || null,
+        gameDay: gameDayMeta,
+        engineSoft,
       };
       out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
@@ -120,9 +126,7 @@ function projectGame(event, standings, efficiency, gameDay) {
 }
 
 function project({ oddsEvents, standings, efficiency, gameDay } = {}) {
-  const all = [];
-  for (const ev of oddsEvents || []) all.push(...projectGame(ev, standings || {}, efficiency || {}, gameDay || {}));
-  return all;
+  return mapGamesSoft(oddsEvents, (ev) => projectGame(ev, standings || {}, efficiency || {}, gameDay || {}));
 }
 
 module.exports = { project, SPORT };

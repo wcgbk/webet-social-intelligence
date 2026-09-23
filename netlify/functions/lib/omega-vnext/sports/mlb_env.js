@@ -7,7 +7,7 @@
  */
 
 const { clamp } = require('../odds_math');
-const { ENGINE_SOFT } = require('../config');
+const { ENGINE_SOFT, SPORT_SPREAD_STD } = require('../config');
 const { fuzzyTeam } = require('./_common');
 
 const LEAGUE_FIP = 4.15;
@@ -20,6 +20,14 @@ const SP_MARGIN_PER_RUN = 0.55;
 const SP_TOTAL_PER_RUN = 0.45;
 const PARK_MIN = 0.75;
 const PARK_MAX = 1.40;
+/** Existing run-environment band. Engine deepen must not leave it. */
+const MLB_TOTAL_MIN = 5.5;
+const MLB_TOTAL_MAX = 14.5;
+
+function finiteOr(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 function num(v) {
   if (v == null || v === '') return null;
@@ -261,7 +269,7 @@ function applySpPark({ modelMargin, modelTotal, homeQ, awayQ, parkFactor }) {
   }
   const usedPark = Number.isFinite(parkFactor);
   if (usedPark) total *= parkFactor;
-  total = clamp(total, 5.5, 14.5);
+  total = clamp(total, MLB_TOTAL_MIN, MLB_TOTAL_MAX);
   return { modelMargin: margin, modelTotal: total, usedSp, usedPark };
 }
 
@@ -309,6 +317,7 @@ function applyBullpenAdj({ modelMargin, modelTotal, homeBullpen, awayBullpen, ca
       capped: false,
     };
   }
+  // Missing side is 0 (league-average residual), same as the SP margin path.
   const h = hq == null ? 0 : hq;
   const a = aq == null ? 0 : aq;
   let marginAdj = (h - a) * w * SP_MARGIN_PER_RUN;
@@ -317,17 +326,26 @@ function applyBullpenAdj({ modelMargin, modelTotal, homeBullpen, awayBullpen, ca
   const rawT = totalAdj;
   marginAdj = clamp(marginAdj, -maxM, maxM);
   totalAdj = clamp(totalAdj, -maxT, maxT);
+  const nextTotal = clamp(total + totalAdj, MLB_TOTAL_MIN, MLB_TOTAL_MAX);
+  const appliedTotalAdj = nextTotal - total;
+  const bandCapped = Math.abs(appliedTotalAdj - totalAdj) > 1e-12;
+  const used = Math.abs(marginAdj) > 1e-9 || Math.abs(appliedTotalAdj) > 1e-9;
   return {
     modelMargin: margin + marginAdj,
-    modelTotal: total + totalAdj,
-    usedBullpen: true,
+    modelTotal: nextTotal,
+    usedBullpen: used,
     marginAdj,
-    totalAdj,
-    capped: Math.abs(rawM) > maxM + 1e-12 || Math.abs(rawT) > maxT + 1e-12,
+    totalAdj: appliedTotalAdj,
+    capped: Math.abs(rawM) > maxM + 1e-12 || Math.abs(rawT) > maxT + 1e-12 || bandCapped,
   };
 }
 
-/** Effective spread/ML std when both SPs have player-quality. Soft-fail → null (use sport default). */
+/**
+ * Spread/ML std when both SPs have player-source quality.
+ * Soft-fail → null (caller keeps SPORT_SPREAD_STD.MLB). Totals std is unchanged.
+ * Tighten of 0 is a real "no shrink", not a missing config.
+ * Hard ceiling is 10% even if the config is set higher.
+ */
 function mlbSpKnownStd(homeQ, awayQ, caps) {
   const cfg = caps || (ENGINE_SOFT && ENGINE_SOFT.MLB) || {};
   const bothPlayer = !!(
@@ -335,12 +353,13 @@ function mlbSpKnownStd(homeQ, awayQ, caps) {
     && awayQ && awayQ.source === 'player' && Number.isFinite(awayQ.quality)
   );
   if (!bothPlayer) return null;
-  const tighten = Math.min(
-    Number(cfg.spKnownStdTighten) || 0.08,
-    Number(cfg.maxStdTighten) || 0.10
-  );
-  const base = 4.2; // SPORT_SPREAD_STD.MLB — keep local to avoid circular import issues in tests
-  return base * (1 - clamp(tighten, 0, 0.10));
+  const requested = finiteOr(cfg.spKnownStdTighten, 0.08);
+  const maxTighten = finiteOr(cfg.maxStdTighten, 0.10);
+  const tighten = clamp(Math.min(requested, maxTighten), 0, 0.10);
+  if (tighten <= 1e-12) return null;
+  const base = Number(SPORT_SPREAD_STD && SPORT_SPREAD_STD.MLB);
+  if (!Number.isFinite(base) || base <= 0) return null;
+  return base * (1 - tighten);
 }
 
 /** MLB season year. Jan/Feb still belong to the previous season. */
@@ -359,6 +378,8 @@ module.exports = {
   TEAM_PRIOR_WEIGHT,
   SP_MARGIN_PER_RUN,
   SP_TOTAL_PER_RUN,
+  MLB_TOTAL_MIN,
+  MLB_TOTAL_MAX,
   parseIp,
   fipFromCounting,
   xfipFromCounting,

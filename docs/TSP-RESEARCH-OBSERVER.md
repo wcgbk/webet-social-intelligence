@@ -7,7 +7,7 @@ Isolated research pipeline for **public** The Sharp Plays / Performance Terminal
 - **Observer only** — writes `tsp-research` blob store. **Never** `edge-picks-omega` live config/selection.
 - **Do not** copy TSP picks into Omega as picks.
 - **Do not** train Omega to mimic Hermes.
-- Member `fetch-tsp-live` hold was lifted 2026-09-22. It writes isolated `tsp-live` → `/live-ai` only and soft-fails without `TSP_SESSION_COOKIE`. This public-records observer does not call it. Do not copy TSP picks into Omega. The research-module flag `TSP_FETCH_ON_HOLD` in `lib/tsp-research/config.js` is unchanged and is not an Omega gate.
+- Member `fetch-tsp-live` is paused again (#82, 2026-09-22 evening): `TSP_FETCH_ON_HOLD = true` and the Netlify schedule is commented. It still writes only the isolated `tsp-live` blob → `/live-ai` when resumed. This public-records observer does not call it. Do not copy TSP picks into Omega. The research-module flag `TSP_FETCH_ON_HOLD` in `lib/tsp-research/config.js` is unchanged and is not an Omega gate.
 - No IP rotate, spoof, or hide-traffic jitter. Normal public HTTPS only. No member cookies for this tranche.
 
 ## What ships

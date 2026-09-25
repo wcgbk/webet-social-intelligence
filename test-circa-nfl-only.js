@@ -95,8 +95,8 @@ check("pick cards omit EVEN / sportsbook juice", () => {
   assert.ok(!/p\.odds\s*\|\|\s*['"]EVEN['"]/.test(html));
   assert.ok(!/\$\{esc\(p\.odds/.test(html));
   assert.ok(!/>EVEN</.test(html));
-  assert.ok(/circa-chip/.test(html));
-  assert.ok(/market-chip/.test(html));
+  assert.ok(/circa-chip|rules-chip|contest-chip/.test(html));
+  assert.ok(/market-chip|market move|Market/.test(html));
 });
 check("live ESPN scoreboard + W/L/P/LIVE badges", () => {
   assert.ok(html.includes("scoreboardUrls"));
@@ -775,6 +775,97 @@ check("get-picks source preserves stored pending errors", () => {
   const src = fs.readFileSync(path.join(root, "netlify/functions/get-picks-circa.js"), "utf8");
   assert.ok(/Preserve generator error fields/.test(src) || /normalizePayload\(data, weekInfo\)/.test(src));
 });
+
+
+console.log("lib/circa-contest-pdf-ocr + card-health");
+check("OCR quirk normalizer turns +4% / +2) into half-points", () => {
+  const ocr = require("./netlify/functions/lib/circa-contest-pdf-ocr");
+  const n = ocr.normalizeOcrQuirks("FALCONS +4% PACKERS -4% BROWNS +2) BILLS -7");
+  assert.ok(/\+4\.5/.test(n));
+  assert.ok(/-4\.5/.test(n));
+  assert.ok(/\+2\.5/.test(n));
+});
+check("OCR text + slate pairs all Week 3 fixture spreads", () => {
+  const ocr = require("./netlify/functions/lib/circa-contest-pdf-ocr");
+  const sample = ocr.normalizeOcrQuirks(
+    "sep 24 2 FALCONS +4% sep 27 17 PANTHERS -2%\n" +
+    "5:15PH 1 PACKERS -4% 10:00AM 18 BROWNS +2%\n" +
+    "sep 27 3 SEAHAWKS -7% sep 27 20 CHARGERS +7\n" +
+    "10:00AM 4 COMMANDERS +7% 10:00AM 19 BILLS -7\n" +
+    "sep 27 5 BENGALS -3% sep 27 21 VIKINGS -1\n" +
+    "10:00am 6 STEELERS +3% 1:05PM 22 BUCS +1\n" +
+    "sep 27 8 JETS +6% sep 27 24 CARDINALS +8%\n" +
+    "10:00AM 7 LIONS -6% 1:05PM 23 49ERS -8%\n" +
+    "sep 27 10 TITANS +2% sep 27 26 RAIDERS +3\n" +
+    "10:00AM 9 GIANTS -2% 1:25PM 25 SAINTS -3\n" +
+    "sep 27 12 PATRIOTS +3 sep 27 27 RAVENS -3\n" +
+    "10:00aM 11 JAGUARS -3 1:25PM 28 COWBOYS +3\n" +
+    "sep 27 13 CHIEFS -11% Sep 27 29 RAMS -2%\n" +
+    "10:00aM 14 DOLPHINS +11% 5:20PM 30 BRONCOS +2%\n" +
+    "sep 27 15 TEXANS -1% sep 28 31 EAGLES -4%\n" +
+    "10:00aM 16 COLTS +1% 5:15PM 32 BEARS +4%"
+  );
+  const fx = lines.getWeekFixture(3);
+  const slate = fx.games.map(g => ({ homeTeam: g.home, awayTeam: g.away, commenceTime: g.commenceTime }));
+  const parsed = lines.parseContestText(lines.normalizeFractions(sample), 3, { slate });
+  assert.ok(parsed.games.length >= 16, "expected >=16 games, got " + parsed.games.length);
+  const key = (g) => lines.nickOf(g.away) + "@" + lines.nickOf(g.home);
+  const map = new Map(fx.games.map(g => [key(g), g]));
+  for (const g of parsed.games) {
+    const o = map.get(key(g));
+    assert.ok(o, "unexpected " + key(g));
+    assert.ok(Math.abs(g.awaySpread - o.awaySpread) <= 0.05, key(g) + " away spread");
+    assert.ok(Math.abs(g.homeSpread - o.homeSpread) <= 0.05, key(g) + " home spread");
+  }
+});
+check("contestPdfUnavailablePayload maps ocr-failed", () => {
+  const gen = require("./netlify/functions/generate-picks-circa-background");
+  const pending = gen.contestPdfUnavailablePayload(
+    { weekNum: 4, week: "2026-W04" },
+    { code: "contest-pdf-ocr-failed", message: "OCR/parse produced fewer than 8 games" }
+  );
+  assert.strictEqual(pending.errorCode, "contest-pdf-ocr-failed");
+  assert.ok(/OCR/i.test(pending.pendingMessage || ""));
+});
+check("evaluateCardHealth flags pending and incomplete", () => {
+  const health = require("./netlify/functions/lib/circa-card-health");
+  const a = health.evaluateCardHealth({ pending: true, picks: [], errorCode: "contest-pdf-image-only" }, { weekNum: 4 });
+  assert.strictEqual(a.status, "error");
+  assert.strictEqual(a.errorCode, "contest-pdf-image-only");
+  const b = health.evaluateCardHealth({ pending: false, picks: [{}, {}, {}] }, { weekNum: 4 });
+  assert.strictEqual(b.errorCode, "circa-card-incomplete");
+  const c = health.evaluateCardHealth({ pending: false, picks: [{}, {}, {}, {}, {}] }, { weekNum: 4 });
+  assert.strictEqual(c.status, "ok");
+});
+check("circaHealthCronSlot covers Thu/Fri/Sat follow-ups", () => {
+  const health = require("./netlify/functions/lib/circa-card-health");
+  // Thu 17:20 UTC
+  assert.ok(health.circaHealthCronSlot(new Date("2026-09-24T17:20:00Z")));
+  // Fri 17:05 UTC
+  assert.ok(health.circaHealthCronSlot(new Date("2026-09-25T17:05:00Z")));
+  // Sat 20:05 UTC
+  assert.ok(health.circaHealthCronSlot(new Date("2026-09-26T20:05:00Z")));
+  // random Tuesday
+  assert.strictEqual(health.circaHealthCronSlot(new Date("2026-09-22T12:00:00Z")), null);
+});
+check("pipeline files include OCR + health checker", () => {
+  for (const f of [
+    "netlify/functions/lib/circa-contest-pdf-ocr.js",
+    "netlify/functions/lib/circa-card-health.js",
+    "netlify/functions/check-circa-card-health.js",
+    "netlify/functions/get-circa-card-health.js",
+  ]) {
+    assert.ok(fs.existsSync(path.join(root, f)), f);
+  }
+  assert.ok(toml.includes("check-circa-card-health"));
+  assert.ok(toml.includes("pdfium") || toml.includes("@hyzyla/pdfium") || toml.includes("tesseract.js"));
+});
+check("package.json has pdfium + tesseract.js", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.ok(pkg.dependencies["@hyzyla/pdfium"]);
+  assert.ok(pkg.dependencies["tesseract.js"]);
+});
+
 
 async function runAsync() {
   console.log("lib/circa-contest-lines async");

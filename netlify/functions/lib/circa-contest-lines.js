@@ -577,6 +577,7 @@ function tryBin(cmd, args, opts = {}) {
 }
 
 function ocrPdf(buf) {
+  // Sync local-only path (system binaries). Netlify uses ocrContestPdfAsync.
   try {
     return withTempPdf(buf, (pdf, dir) => {
       const prefix = path.join(dir, "page");
@@ -595,8 +596,17 @@ function ocrPdf(buf) {
   }
 }
 
-function parseContestPdf(buf, weekNum, opts = {}) {
-  if (!buf || !buf.length) return null;
+function bestParseFromTexts(texts, weekNum, opts = {}) {
+  let best = null;
+  for (const t of texts) {
+    if (!t || String(t).trim().length < 20) continue;
+    const parsed = parseContestText(t, weekNum, opts);
+    if (!best || parsed.games.length > best.games.length) best = parsed;
+  }
+  return best;
+}
+
+function collectTextLayerTexts(buf) {
   const texts = [];
   const literals = extractPdfLiteralStrings(buf);
   if (literals && literals.length > 40) texts.push(literals);
@@ -604,15 +614,57 @@ function parseContestPdf(buf, weekNum, opts = {}) {
     const pdftotext = withTempPdf(buf, (pdf) => tryBin("pdftotext", ["-layout", "-q", pdf, "-"]));
     if (pdftotext && pdftotext.trim().length > 40) texts.push(pdftotext);
   } catch (e) { /* ignore */ }
+  return texts;
+}
+
+function parseContestPdf(buf, weekNum, opts = {}) {
+  // Sync: text-layer + optional system-bin OCR. Prefer parseContestPdfAsync on Netlify.
+  if (!buf || !buf.length) return null;
+  const texts = collectTextLayerTexts(buf);
   if (opts.ocr !== false) {
     const ocr = ocrPdf(buf);
-    if (ocr && ocr.trim().length > 40) texts.push(ocr);
+    if (ocr && ocr.trim().length > 40) {
+      try {
+        const { normalizeOcrQuirks } = require("./circa-contest-pdf-ocr");
+        texts.push(normalizeOcrQuirks(ocr));
+      } catch (e) {
+        texts.push(ocr);
+      }
+    }
   }
-  let best = null;
-  for (const t of texts) {
-    const parsed = parseContestText(t, weekNum, opts);
-    if (!best || parsed.games.length > best.games.length) best = parsed;
+  return bestParseFromTexts(texts, weekNum, opts);
+}
+
+async function parseContestPdfAsync(buf, weekNum, opts = {}) {
+  if (!buf || !buf.length) return null;
+  const texts = collectTextLayerTexts(buf);
+  let ocrMeta = null;
+  if (opts.ocr !== false) {
+    // Fast local system OCR first (no-op on Netlify when binaries missing).
+    const syncOcr = ocrPdf(buf);
+    if (syncOcr && syncOcr.trim().length > 40) {
+      try {
+        const { normalizeOcrQuirks } = require("./circa-contest-pdf-ocr");
+        texts.push(normalizeOcrQuirks(syncOcr));
+      } catch (e) {
+        texts.push(syncOcr);
+      }
+    }
+    let bestSoFar = bestParseFromTexts(texts, weekNum, opts);
+    if (!bestSoFar || bestSoFar.games.length < 8) {
+      try {
+        const { ocrContestPdf } = require("./circa-contest-pdf-ocr");
+        ocrMeta = await ocrContestPdf(buf, opts);
+        if (ocrMeta && ocrMeta.text && ocrMeta.text.trim().length > 40) {
+          texts.push(ocrMeta.text);
+        }
+      } catch (e) {
+        ocrMeta = { error: e.message, text: "", pageCount: 0, engine: "exception" };
+      }
+    }
   }
+  const best = bestParseFromTexts(texts, weekNum, opts);
+  if (best) best.ocrMeta = ocrMeta;
   return best;
 }
 
@@ -679,11 +731,13 @@ async function loadContestLines(weekNum, opts = {}) {
     throw new ContestLinesError(`Invalid Circa contest week: ${weekNum}`);
   }
 
-  const fixture = getWeekFixture(n);
+  const fixture = opts.ignoreFixture ? null : getWeekFixture(n);
   const override = opts.sourceUrl || process.env.CIRCA_SPREADS_URL || "";
   let fetched = null;
   let sourceUrl = override || (fixture && fixture.sourceUrl) || null;
   let parsed = null;
+  let ocrAttempted = false;
+  let ocrMeta = null;
 
   if (!opts.skipFetch) {
     const urls = override ? [override] : candidateSpreadUrls(n, opts.now);
@@ -696,7 +750,9 @@ async function loadContestLines(weekNum, opts = {}) {
     }
     if (fetched && fetched.buffer) {
       try {
-        parsed = parseContestPdf(fetched.buffer, n, opts);
+        ocrAttempted = opts.ocr !== false;
+        parsed = await parseContestPdfAsync(fetched.buffer, n, opts);
+        if (parsed && parsed.ocrMeta) ocrMeta = parsed.ocrMeta;
       } catch (e) {
         parsed = null;
       }
@@ -715,6 +771,7 @@ async function loadContestLines(weekNum, opts = {}) {
       sourceUrl,
       fromFixture: false,
       games: parsed.games,
+      parseNote: ocrMeta && ocrMeta.engine ? `ocr:${ocrMeta.engine}` : null,
     }, { sourceUrl });
   }
 
@@ -723,11 +780,21 @@ async function loadContestLines(weekNum, opts = {}) {
   }
 
   if (fetched && fetched.buffer) {
+    const pages = ocrMeta && ocrMeta.pageCount;
+    if (ocrAttempted && pages > 0) {
+      throw new ContestLinesError(
+        `Official Circa Million VIII Week ${n} contest point spreads PDF was downloaded and rasterized ` +
+        `(${pages} page(s) via ${ocrMeta.engine || "ocr"}) but OCR/parse produced fewer than 8 games` +
+        `${parsed && parsed.games ? ` (got ${parsed.games.length})` : ""}. ` +
+        `Refusing to generate a live card (no Pinnacle or sportsbook fallback).`,
+        "contest-pdf-ocr-failed"
+      );
+    }
     throw new ContestLinesError(
       `Official Circa Million VIII Week ${n} contest point spreads PDF was downloaded but has no usable text layer ` +
-      `(image-only Microsoft Print-to-PDF) and no verified WEEK${n}_GAMES fixture is checked in. ` +
-      `Refusing to generate a live card (no Pinnacle or sportsbook fallback). ` +
-      `Recovery: run scripts/ocr-circa-week-fixture.js ${n}, commit the fixture, and let Fri catch-up cron regenerate.`,
+      `(image-only / vector-outline Microsoft Print-to-PDF) and OCR could not extract a board` +
+      `${ocrMeta && ocrMeta.error ? ` (${ocrMeta.error})` : ""}, and no verified WEEK${n}_GAMES fixture is checked in. ` +
+      `Refusing to generate a live card (no Pinnacle or sportsbook fallback).`,
       "contest-pdf-image-only"
     );
   }
@@ -755,6 +822,7 @@ module.exports = {
   candidateSpreadUrls,
   parseContestText,
   parseContestPdf,
+  parseContestPdfAsync,
   loadContestLines,
   WEEK1_GAMES,
   WEEK2_GAMES,

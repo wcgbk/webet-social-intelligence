@@ -2,7 +2,9 @@
   "name": "webet-social-intelligence",
   "private": true,
   "dependencies": {
+    "@hyzyla/pdfium": "^2.1.13",
     "@netlify/blobs": "^8.1.0",
-    "pdf-parse": "1.1.1"
+    "pdf-parse": "1.1.1",
+    "tesseract.js": "^5.1.1"
   }
 }

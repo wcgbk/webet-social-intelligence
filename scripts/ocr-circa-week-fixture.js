@@ -6,14 +6,14 @@
  *   node scripts/ocr-circa-week-fixture.js 4
  *   node scripts/ocr-circa-week-fixture.js 4 --url https://www.circasports.com/wp-content/uploads/2026/10/...pdf
  *
- * Requires pdftoppm (poppler-utils). Optional: tesseract for OCR text.
+ * Prefers Netlify-safe OCR (pdfium wasm + tesseract.js) via
+ * netlify/functions/lib/circa-contest-pdf-ocr.js. Falls back to pdftoppm/tesseract.
  * Prints a WEEK{N}_GAMES stub + SOURCE_URL to paste into
  * netlify/functions/lib/circa-contest-lines.js, then ship + let Fri catch-up regen.
  */
-const fs = require("fs");
-const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const ocrLib = require("../netlify/functions/lib/circa-contest-pdf-ocr");
+const lines = require("../netlify/functions/lib/circa-contest-lines");
 
 const week = Number(process.argv[2]);
 if (!Number.isInteger(week) || week < 1 || week > 18) {
@@ -55,29 +55,34 @@ async function main() {
     process.exit(2);
   }
 
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "circa-fixture-"));
-  const pdf = path.join(dir, "week.pdf");
-  fs.writeFileSync(pdf, buf);
-  spawnSync("pdftoppm", ["-png", "-r", "200", pdf, path.join(dir, "page")], { stdio: "inherit" });
-  const pages = fs.readdirSync(dir).filter((f) => f.endsWith(".png")).sort();
-  let ocr = "";
-  for (const page of pages) {
-    const r = spawnSync("tesseract", [path.join(dir, page), "stdout"], { encoding: "utf8" });
-    if (r.status === 0 && r.stdout) ocr += r.stdout + "\n";
-  }
+  const ocr = await ocrLib.ocrContestPdf(buf);
+  const text = ocr.text || "";
+  console.error(`OCR engine=${ocr.engine} pages=${ocr.pageCount} chars=${text.length}`);
 
+  const parsed = lines.parseContestText(text, week);
   console.log(`const WEEK${week}_SOURCE_URL =`);
   console.log(`  "${sourceUrl}";`);
   console.log("");
-  console.log(`// TODO: verify spreads against ${path.join(dir, pages[0] || "page-1.png")}`);
-  console.log(`// OCR text preview (may be empty if tesseract missing):`);
+  console.log(`// OCR preview (${ocr.engine}):`);
   console.log("/*");
-  console.log((ocr || "(no OCR — open the PNG and fill gameRow entries by hand)").slice(0, 4000));
+  console.log((text || "(no OCR text)").slice(0, 4000));
   console.log("*/");
   console.log(`const WEEK${week}_GAMES = [`);
-  console.log(`  // gameRow({ away: "...", home: "...", commenceHint: "...", commenceTime: "...", awaySpread: 0, homeSpread: 0, contestIds: { away: 2, home: 1 } }),`);
+  if (parsed.games && parsed.games.length) {
+    for (const g of parsed.games) {
+      console.log(
+        `  gameRow({ away: ${JSON.stringify(g.away)}, home: ${JSON.stringify(g.home)}, ` +
+          `awaySpread: ${g.awaySpread}, homeSpread: ${g.homeSpread} }),`
+      );
+    }
+  } else {
+    console.log(
+      `  // gameRow({ away: "...", home: "...", commenceHint: "...", commenceTime: "...", awaySpread: 0, homeSpread: 0, contestIds: { away: 2, home: 1 } }),`
+    );
+  }
   console.log("];");
-  console.error(`PNG(s) at ${dir} — visually confirm before committing.`);
+  console.error(`Parsed ${parsed.games.length} game(s) from OCR — verify against the official sheet before committing.`);
+  console.error(`Tip: production generate path OCRs automatically (no hand fixture) when ESPN slate pairing succeeds.`);
 }
 
 main().catch((e) => {

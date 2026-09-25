@@ -835,21 +835,29 @@ function contestLinesBlobKey(weekStr) {
 }
 
 function contestPdfUnavailablePayload(weekInfo, err) {
+  const msg = String((err && err.message) || "");
   const code =
     (err && err.code) ||
-    (/image-only|no usable text layer/i.test(String((err && err.message) || ""))
-      ? "contest-pdf-image-only"
-      : "contest-pdf-unavailable");
+    (/ocr-failed|OCR\/parse produced/i.test(msg)
+      ? "contest-pdf-ocr-failed"
+      : /image-only|no usable text layer|vector-outline/i.test(msg)
+        ? "contest-pdf-image-only"
+        : "contest-pdf-unavailable");
   const pending = pendingPayload(weekInfo, {
     error: true,
     errorCode: code,
     errorMessage: err && err.message ? err.message : null,
   });
-  if (code === "contest-pdf-image-only") {
+  if (code === "contest-pdf-ocr-failed") {
     pending.pendingMessage =
-      `Week ${weekInfo.weekNum} card pending — Circa posted an image-only contest PDF with no text layer and no verified week fixture is checked in yet. ` +
+      `Week ${weekInfo.weekNum} card pending — Circa contest PDF was downloaded and OCR ran but could not extract a usable board (≥8 games). ` +
       `WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line. ` +
-      `After the WEEK${weekInfo.weekNum}_GAMES fixture ships, Friday morning catch-up cron (10:00–10:45 AM PT) will regenerate.`;
+      `Thu/Fri/Sat catch-up cron will retry; card-health checker will alert if still failing.`;
+  } else if (code === "contest-pdf-image-only") {
+    pending.pendingMessage =
+      `Week ${weekInfo.weekNum} card pending — Circa posted an image-only/vector-outline contest PDF and OCR could not produce a board yet (no verified week fixture). ` +
+      `WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line. ` +
+      `Catch-up cron + card-health checker will retry/alert.`;
   } else {
     pending.pendingMessage =
       `Week ${weekInfo.weekNum} card pending — official Circa contest point spreads PDF is not available. WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line.`;
@@ -880,9 +888,13 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: "outside NFL season", week }) };
   }
 
+  // ESPN slate first — two-column Circa OCR needs pairWithSlate for home/away.
+  const { games: espnGames } = await fetchESPNWeekSlate(weekNum, CONTEST.seasonYear);
+  console.log(`[circa] ${espnGames.length} ESPN game(s) for ${week}`);
+
   let board;
   try {
-    board = await loadContestLines(weekNum, { now, slate: null });
+    board = await loadContestLines(weekNum, { now, slate: espnGames });
   } catch (e) {
     const cached = await readBlobJson(contestLinesBlobKey(week));
     if (
@@ -898,6 +910,23 @@ exports.handler = async (event) => {
       console.error(`[circa] ${msg}`);
       const pending = contestPdfUnavailablePayload({ weekNum, week }, e);
       const reason = pending.errorCode || "contest-pdf-unavailable";
+      if (!dryRun) {
+        try {
+          const { writeCircaCardHealth } = require("./lib/circa-card-health");
+          await writeCircaCardHealth({
+            weekNum,
+            week,
+            status: "error",
+            errorCode: reason,
+            errorMessage: msg,
+            picksCount: 0,
+            slot: body.slot || null,
+            source: "generate",
+          });
+        } catch (healthErr) {
+          console.log(`[circa] card-health persist skip: ${healthErr.message}`);
+        }
+      }
       if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, error: true, picksData: pending }) };
       const stored = await storeCard(week, pending, force, scheduled, now);
       return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, error: true, stored, reason }) };
@@ -919,9 +948,6 @@ exports.handler = async (event) => {
       console.log(`[circa] contest-lines blob persist skip: ${persistErr.message}`);
     }
   }
-
-  const { games: espnGames } = await fetchESPNWeekSlate(weekNum, CONTEST.seasonYear);
-  console.log(`[circa] ${espnGames.length} ESPN game(s) for ${week}`);
 
   const [ratingOverlay, qbAdj, oddsGames] = await Promise.all([
     fetchLiveRatingOverlay(),
@@ -981,6 +1007,24 @@ exports.handler = async (event) => {
   }
 
   const stored = await storeCard(week, picksData, force, scheduled, now);
+  try {
+    const { writeCircaCardHealth } = require("./lib/circa-card-health");
+    await writeCircaCardHealth({
+      weekNum,
+      week,
+      status: picks.length >= 5 ? "ok" : "error",
+      errorCode: picks.length >= 5 ? null : "circa-card-incomplete",
+      errorMessage: picks.length >= 5 ? null : `Expected 5 picks, got ${picks.length}`,
+      picksCount: picks.length,
+      slot: body.slot || null,
+      source: "generate",
+      lineSource: board.lineSource || CONTEST_LINE_SOURCE,
+      fromFixture: !!board.fromFixture,
+      sourceUrl: board.sourceUrl || null,
+    });
+  } catch (healthErr) {
+    console.log(`[circa] card-health persist skip: ${healthErr.message}`);
+  }
   console.log(`[circa] Done in ${((Date.now() - started) / 1000).toFixed(1)}s (stored: ${stored})`);
   return { statusCode: 200, body: JSON.stringify({ ok: true, picks: picks.length, stored, week }) };
 };

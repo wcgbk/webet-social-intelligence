@@ -72,7 +72,8 @@
   #   Thu 17:15 UTC = 10:15 AM PT — first card (target after ~10:00 AM PT post)
   #   Thu 17:30 / 17:45 / 18:00 UTC = 10:30 / 10:45 / 11:00 AM PT — late-PDF catch-up
   #     (Week 2 sheet posted ~17:30 UTC / 10:30 AM PT, after the 17:00/17:15 slots)
-  #   Fri 17:00 / 17:15 / 17:30 / 17:45 UTC = 10:00–10:45 AM PT — refresh + fixture catch-up
+  #   Fri 17:00 / 17:15 / 17:30 / 17:45 UTC = 10:00–10:45 AM PT — refresh + fixture/OCR catch-up
+#   Health checker (check-circa-card-health): :05/:20/:35/:50 after generate slots
   #   Sat 20:00 UTC = 1:00 PM PT  — final, well before Sat 4:00 PM PT deadline
   #   Wed 17:15 UTC — holiday first card only (2026-11-25 Thanksgiving, 2026-12-23 Christmas)
   # After DST (Nov) 17:15 UTC is 9:15 AM PST; Circa still posts ~10:00 AM PT — TODO
@@ -82,6 +83,20 @@
 [functions."generate-picks-circa-background"]
   # Background function — 15min timeout for Circa Million VIII weekly ATS card
   # Spreads only, 5 unique NFL games, rank by calibrated cover probability.
+  # pdfium.wasm + tesseract.js for image-only / vector-outline Contest Point Spreads PDFs.
+  included_files = [
+    "node_modules/@hyzyla/pdfium/dist/**",
+    "node_modules/tesseract.js/**",
+    "node_modules/tesseract.js-core/**",
+    "netlify/functions/lib/circa-contest-pdf-ocr.js",
+    "netlify/functions/lib/circa-contest-lines.js",
+    "netlify/functions/lib/circa-card-health.js",
+  ]
+
+[functions."check-circa-card-health"]
+  # Follow-up ~5 min after each Circa generate slot (Thu/Fri/Sat + holiday Wed).
+  # Persists circa-ops/card-health-* + alerts when card pending/empty/error/<5 picks.
+  schedule = "5,20,35,50 17,18,20 * * 3,4,5,6"
 
 [functions."trigger-picks-cfb"]
   schedule = "10 13 * * *"

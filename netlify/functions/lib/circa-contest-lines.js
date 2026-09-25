@@ -24,13 +24,16 @@ const WEEK1_SOURCE_URL =
 const WEEK2_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/09/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-2.pdf";
 
+const WEEK3_SOURCE_URL =
+  "https://www.circasports.com/wp-content/uploads/2026/09/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-3.pdf";
+
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
 class ContestLinesError extends Error {
-  constructor(message) {
+  constructor(message, code = "contest-pdf-unavailable") {
     super(message);
     this.name = "ContestLinesError";
-    this.code = "contest-pdf-unavailable";
+    this.code = code || "contest-pdf-unavailable";
   }
 }
 
@@ -298,6 +301,92 @@ const WEEK2_GAMES = [
   }),
 ];
 
+// Verified against the official Week 3 Contest Point Spreads PDF (image render)
+// + ESPN 2026 Week 3 schedule. Spreads are ½ → .5. Top team on the sheet is visitor.
+const WEEK3_GAMES = [
+  gameRow({
+    away: "Atlanta Falcons", home: "Green Bay Packers",
+    commenceHint: "Thu Sep 24, 5:15 PM PT", commenceTime: "2026-09-25T00:15:00.000Z",
+    awaySpread: 4.5, homeSpread: -4.5, contestIds: { away: 2, home: 1 },
+  }),
+  gameRow({
+    away: "Seattle Seahawks", home: "Washington Commanders",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: -7.5, homeSpread: 7.5, contestIds: { away: 3, home: 4 },
+  }),
+  gameRow({
+    away: "Cincinnati Bengals", home: "Pittsburgh Steelers",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: -3.5, homeSpread: 3.5, contestIds: { away: 5, home: 6 },
+  }),
+  gameRow({
+    away: "New York Jets", home: "Detroit Lions",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: 6.5, homeSpread: -6.5, contestIds: { away: 8, home: 7 },
+  }),
+  gameRow({
+    away: "Tennessee Titans", home: "New York Giants",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 10, home: 9 },
+  }),
+  gameRow({
+    away: "New England Patriots", home: "Jacksonville Jaguars",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 12, home: 11 },
+  }),
+  gameRow({
+    away: "Kansas City Chiefs", home: "Miami Dolphins",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: -11.5, homeSpread: 11.5, contestIds: { away: 13, home: 14 },
+  }),
+  gameRow({
+    away: "Houston Texans", home: "Indianapolis Colts",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: -1.5, homeSpread: 1.5, contestIds: { away: 15, home: 16 },
+  }),
+  gameRow({
+    away: "Carolina Panthers", home: "Cleveland Browns",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: -2.5, homeSpread: 2.5, contestIds: { away: 17, home: 18 },
+  }),
+  gameRow({
+    away: "Los Angeles Chargers", home: "Buffalo Bills",
+    commenceHint: "Sun Sep 27, 10:00 AM PT", commenceTime: "2026-09-27T17:00:00.000Z",
+    awaySpread: 7, homeSpread: -7, contestIds: { away: 20, home: 19 },
+  }),
+  gameRow({
+    away: "Minnesota Vikings", home: "Tampa Bay Buccaneers",
+    commenceHint: "Sun Sep 27, 1:05 PM PT", commenceTime: "2026-09-27T20:05:00.000Z",
+    awaySpread: -1, homeSpread: 1, contestIds: { away: 21, home: 22 },
+  }),
+  gameRow({
+    away: "Arizona Cardinals", home: "San Francisco 49ers",
+    commenceHint: "Sun Sep 27, 1:05 PM PT", commenceTime: "2026-09-27T20:05:00.000Z",
+    awaySpread: 8.5, homeSpread: -8.5, contestIds: { away: 24, home: 23 },
+  }),
+  gameRow({
+    away: "Las Vegas Raiders", home: "New Orleans Saints",
+    commenceHint: "Sun Sep 27, 1:25 PM PT", commenceTime: "2026-09-27T20:25:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 26, home: 25 },
+  }),
+  gameRow({
+    away: "Baltimore Ravens", home: "Dallas Cowboys",
+    commenceHint: "Sun Sep 27, 1:25 PM PT · Rio de Janeiro", commenceTime: "2026-09-27T20:25:00.000Z",
+    awaySpread: -3, homeSpread: 3, contestIds: { away: 27, home: 28 },
+    venueHint: "Rio de Janeiro, Brazil",
+  }),
+  gameRow({
+    away: "Los Angeles Rams", home: "Denver Broncos",
+    commenceHint: "Sun Sep 27, 5:20 PM PT", commenceTime: "2026-09-28T00:20:00.000Z",
+    awaySpread: -2.5, homeSpread: 2.5, contestIds: { away: 29, home: 30 },
+  }),
+  gameRow({
+    away: "Philadelphia Eagles", home: "Chicago Bears",
+    commenceHint: "Mon Sep 28, 5:15 PM PT", commenceTime: "2026-09-29T00:15:00.000Z",
+    awaySpread: -4.5, homeSpread: 4.5, contestIds: { away: 31, home: 32 },
+  }),
+];
+
 const WEEK_FIXTURES = {
   1: {
     weekNum: 1,
@@ -312,6 +401,13 @@ const WEEK_FIXTURES = {
     fromFixture: true,
     lineSource: LINE_SOURCE,
     games: WEEK2_GAMES,
+  },
+  3: {
+    weekNum: 3,
+    sourceUrl: WEEK3_SOURCE_URL,
+    fromFixture: true,
+    lineSource: LINE_SOURCE,
+    games: WEEK3_GAMES,
   },
 };
 
@@ -347,7 +443,7 @@ function candidateSpreadUrls(weekNum, now = new Date()) {
     13: [2026, 12], 14: [2026, 12], 15: [2026, 12], 16: [2026, 12],
     17: [2026, 12], 18: [2027, 1],
   };
-  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL };
+  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL };
   if (known[n]) urls.push(known[n]);
   const ym = weekMonth[n];
   if (ym) {
@@ -626,9 +722,20 @@ async function loadContestLines(weekNum, opts = {}) {
     return decorateBoard(fixture, { sourceUrl: sourceUrl || fixture.sourceUrl });
   }
 
+  if (fetched && fetched.buffer) {
+    throw new ContestLinesError(
+      `Official Circa Million VIII Week ${n} contest point spreads PDF was downloaded but has no usable text layer ` +
+      `(image-only Microsoft Print-to-PDF) and no verified WEEK${n}_GAMES fixture is checked in. ` +
+      `Refusing to generate a live card (no Pinnacle or sportsbook fallback). ` +
+      `Recovery: run scripts/ocr-circa-week-fixture.js ${n}, commit the fixture, and let Fri catch-up cron regenerate.`,
+      "contest-pdf-image-only"
+    );
+  }
+
   throw new ContestLinesError(
     `Official Circa Million VIII contest point spreads PDF is not available for week ${n}. ` +
-    `Refusing to generate a live card (no Pinnacle or sportsbook fallback).`
+    `Refusing to generate a live card (no Pinnacle or sportsbook fallback).`,
+    "contest-pdf-unavailable"
   );
 }
 
@@ -637,6 +744,7 @@ module.exports = {
   RULES_PDF_URL,
   WEEK1_SOURCE_URL,
   WEEK2_SOURCE_URL,
+  WEEK3_SOURCE_URL,
   NICK_TO_FULL,
   ContestLinesError,
   fullTeam,
@@ -650,4 +758,5 @@ module.exports = {
   loadContestLines,
   WEEK1_GAMES,
   WEEK2_GAMES,
+  WEEK3_GAMES,
 };

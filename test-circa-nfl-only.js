@@ -406,9 +406,12 @@ check("cron windows (UTC)", () => {
   assert.strictEqual(circaCronSlot(new Date("2026-09-17T17:45:00Z")), "first");
   assert.strictEqual(circaCronSlot(new Date("2026-09-17T18:00:00Z")), "first");
   assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:00:00Z")), "refresh");
+  assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:15:00Z")), "refresh");
+  assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:30:00Z")), "refresh");
+  assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:45:00Z")), "refresh");
   assert.strictEqual(circaCronSlot(new Date("2026-09-12T20:00:00Z")), "final");
   assert.strictEqual(circaCronSlot(new Date("2026-09-10T13:00:00Z")), null);
-  assert.strictEqual(circaCronSlot(new Date("2026-09-11T17:30:00Z")), null);
+  assert.strictEqual(circaCronSlot(new Date("2026-09-11T18:30:00Z")), null);
   assert.strictEqual(circaCronSlot(new Date("2026-11-25T17:15:00Z")), "holiday-first");
   assert.strictEqual(circaCronSlot(new Date("2026-09-09T17:15:00Z")), null);
 });
@@ -702,6 +705,7 @@ check("circa trigger cron + background comment block", () => {
   assert.ok(toml.includes("0,15,30,45 17,18,20") || toml.includes("0,15 17,20"));
   assert.ok(/10:15 AM PT/.test(toml));
   assert.ok(/10:30|late-PDF catch-up/.test(toml));
+  assert.ok(/fixture catch-up|10:00.–10:45|Fri 17:00 \/ 17:15/.test(toml));
   assert.ok(/1:00 PM PT/.test(toml));
   assert.ok(/2026-11-25/.test(toml) && /2026-12-23/.test(toml));
 });
@@ -716,6 +720,60 @@ check("pipeline files exist", () => {
   ]) {
     assert.ok(fs.existsSync(path.join(root, f)), f);
   }
+});
+
+
+console.log("lib/circa-standings parse");
+check("collapsed pdf-parse row keeps PICKWIZARD32-3 + picks 10", () => {
+  const standings = require("./netlify/functions/lib/circa-standings");
+  const row = standings.parseStandingsRow("4,824TPICKWIZARD32-3103-7-0-03.00");
+  assert.ok(row, "row parsed");
+  assert.strictEqual(row.entry, "PICKWIZARD32-3");
+  assert.strictEqual(row.picksCount, 10);
+  assert.strictEqual(row.record, "3-7-0-0");
+  assert.strictEqual(row.points, 3);
+  assert.strictEqual(row.place, 4824);
+  assert.strictEqual(row.tiedFlag, true);
+});
+check("collapsed row with 5 picks does not steal alias -1", () => {
+  const standings = require("./netlify/functions/lib/circa-standings");
+  const row = standings.parseStandingsRow("2,081T@TABLE1VEGAS-155-0-0-05.00");
+  assert.ok(row);
+  assert.strictEqual(row.entry, "@TABLE1VEGAS-1");
+  assert.strictEqual(row.picksCount, 5);
+  assert.strictEqual(row.record, "5-0-0-0");
+  assert.strictEqual(row.points, 5);
+});
+check("spaced standings row still parses", () => {
+  const standings = require("./netlify/functions/lib/circa-standings");
+  const row = standings.parseStandingsRow("4,824T PICKWIZARD32-3                10   3-7-0-0    3.00");
+  assert.ok(row);
+  assert.strictEqual(row.entry, "PICKWIZARD32-3");
+  assert.strictEqual(row.picksCount, 10);
+  assert.strictEqual(row.points, 3);
+});
+
+console.log("get-picks-circa pending error passthrough");
+check("normalizePayload surfaces errorCode on pending blob", () => {
+  const getPicks = require("./netlify/functions/get-picks-circa");
+  const payload = getPicks.normalizePayload({
+    pending: true,
+    picks: [],
+    error: true,
+    errorCode: "contest-pdf-image-only",
+    errorMessage: "image-only",
+    pendingMessage: "pending because image-only",
+    weekNum: 3,
+    week: "2026-W03",
+  }, { weekNum: 3, week: "2026-W03" });
+  assert.strictEqual(payload.pending, true);
+  assert.strictEqual(payload.error, true);
+  assert.strictEqual(payload.errorCode, "contest-pdf-image-only");
+  assert.ok(/image-only/.test(payload.errorMessage || ""));
+});
+check("get-picks source preserves stored pending errors", () => {
+  const src = fs.readFileSync(path.join(root, "netlify/functions/get-picks-circa.js"), "utf8");
+  assert.ok(/Preserve generator error fields/.test(src) || /normalizePayload\(data, weekInfo\)/.test(src));
 });
 
 async function runAsync() {
@@ -751,16 +809,33 @@ async function runAsync() {
     console.error("  FAIL loadContestLines week 2 fixture: " + e.message);
   }
   try {
-    let threw = false;
-    try { await lines.loadContestLines(3, { skipFetch: true }); }
-    catch (e) {
-      threw = e instanceof lines.ContestLinesError || /not available/.test(e.message);
-    }
-    assert.ok(threw, "week 3 without PDF/fixture must refuse (no Pinnacle fallback)");
-    console.log("  ok  week 3 without sheet throws");
+    const board3 = await lines.loadContestLines(3, { skipFetch: true });
+    assert.strictEqual(board3.weekNum, 3);
+    assert.strictEqual(board3.lineSource, "circa-contest-pdf");
+    assert.ok(board3.fromFixture);
+    assert.ok(board3.games.length >= 16);
+    const tnf = board3.games.find(g => /Falcons/.test(g.away) && /Packers/.test(g.home));
+    assert.strictEqual(tnf.awaySpread, 4.5);
+    assert.strictEqual(tnf.homeSpread, -4.5);
+    const rio = board3.games.find(g => /Ravens/.test(g.away) && /Cowboys/.test(g.home));
+    assert.strictEqual(rio.awaySpread, -3);
+    assert.ok(/Rio/i.test(rio.venueHint || rio.commenceHint || ""));
+    console.log("  ok  loadContestLines week 3 fixture");
   } catch (e) {
     failed++;
-    console.error("  FAIL week 3 without sheet throws: " + e.message);
+    console.error("  FAIL loadContestLines week 3 fixture: " + e.message);
+  }
+  try {
+    let threw = false;
+    try { await lines.loadContestLines(4, { skipFetch: true }); }
+    catch (e) {
+      threw = e instanceof lines.ContestLinesError || /not available|image-only/.test(e.message);
+    }
+    assert.ok(threw, "week 4 without PDF/fixture must refuse (no Pinnacle fallback)");
+    console.log("  ok  week 4 without sheet throws");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL week 4 without sheet throws: " + e.message);
   }
 
   console.log("lib/circa-live-grade async");

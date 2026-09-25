@@ -30,11 +30,17 @@ const SHARE_11_100 = 1_310_000 / 90; // equal-share estimate
 const LAST_PRIZE = 100_000;
 const SECOND_LAST_PRIZE = 50_000;
 
-// pdf-parse@1.1.1 often omits inter-column spaces. Parse from the right:
-// place + optional T, ENTRY, picks-count digit, W-L-?-? record, points.
-// Greedy ENTRY so names ending in digits (PICKWIZARD32-1) stay intact.
-const ROW_RE =
-  /^([0-9,]+)(T?)(.+)(\d)(\d+-\d+-\d+-\d+)(\d+\.\d{2})\s*$/;
+// pdf-parse@1.1.1 often omits inter-column spaces.
+// Spaced rows (pdftotext -layout) use ROW_RE_SPACED.
+// Collapsed rows use right-parse: place+T, ENTRY+picks, record, points —
+// picks digit length chosen so picksCount === sum(record parts). That keeps
+// names ending in digits (PICKWIZARD32-3) intact when picks is 10+.
+const ROW_RE_SPACED =
+  /^([0-9,]+)\s*(T?)\s+(.+?)\s+(\d+)\s+(\d+-\d+-\d+-\d+)\s+(\d+\.\d{2})\s*$/;
+const ROW_RE_COLLAPSED =
+  /^([0-9,]+)(T?)(.+)(\d+-\d+-\d+-\d+)(\d+\.\d{2})$/;
+// Back-compat alias (tests / callers): prefer spaced shape documentation.
+const ROW_RE = ROW_RE_SPACED;
 
 const CACHE_KEY = "circa-standings-v2";
 const MEM_TTL_MS = 15 * 60 * 1000;
@@ -147,21 +153,60 @@ async function discoverLatestPdfs() {
   return { season, lastPlace: last };
 }
 
-function parseStandingsRow(line) {
-  const m = String(line || "").match(ROW_RE);
-  if (!m) return null;
-  const place = parseInt(m[1].replace(/,/g, ""), 10);
-  const points = parseFloat(m[6]);
-  const entry = String(m[3] || "").trim();
+function rowFromParts(placeRaw, tiedRaw, entryRaw, picksRaw, record, pointsRaw) {
+  const place = parseInt(String(placeRaw || "").replace(/,/g, ""), 10);
+  const points = parseFloat(pointsRaw);
+  const entry = String(entryRaw || "").trim();
+  const picksCount = Number(picksRaw);
   if (!Number.isFinite(place) || !Number.isFinite(points) || !entry) return null;
+  if (!Number.isFinite(picksCount)) return null;
   return {
     place,
-    tiedFlag: m[2] === "T",
+    tiedFlag: tiedRaw === "T",
     entry,
-    picksCount: Number(m[4]),
-    record: m[5],
+    picksCount,
+    record: String(record || ""),
     points,
   };
+}
+
+function recordSum(record) {
+  return String(record || "")
+    .split("-")
+    .reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
+function splitEntryPicksCollapsed(mid, record) {
+  const target = recordSum(record);
+  const tryDigits = (nDigits) => {
+    if (mid.length <= nDigits) return null;
+    const digits = mid.slice(-nDigits);
+    if (!/^\d+$/.test(digits)) return null;
+    const n = Number(digits);
+    if (n !== target) return null;
+    const entry = mid.slice(0, -nDigits);
+    if (!entry) return null;
+    return { entry, picksCount: n };
+  };
+  return tryDigits(2) || tryDigits(1);
+}
+
+function parseStandingsRow(line) {
+  const raw = String(line || "").replace(/\t/g, " ").trim();
+  if (!raw) return null;
+
+  const spaced = raw.match(ROW_RE_SPACED);
+  if (spaced) {
+    return rowFromParts(spaced[1], spaced[2], spaced[3], spaced[4], spaced[5], spaced[6]);
+  }
+
+  const collapsed = raw.replace(/\s+/g, "");
+  const m = collapsed.match(ROW_RE_COLLAPSED);
+  if (!m) return null;
+  const record = m[4];
+  const split = splitEntryPicksCollapsed(m[3], record);
+  if (!split) return null;
+  return rowFromParts(m[1], m[2], split.entry, split.picksCount, record, m[5]);
 }
 
 function parseStandingsText(text) {
@@ -567,6 +612,8 @@ module.exports = {
   lookupPoints,
   lookupAliasEntries,
   parseStandingsRow,
+  rowFromParts,
+  recordSum,
   parseStandingsText,
   parseWeekFromTitle,
   classifyMedia,

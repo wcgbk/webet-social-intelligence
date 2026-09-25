@@ -830,17 +830,33 @@ function liveCardPayload({ weekNum, week, picks, strategy, sourceUrl, rulesUrl }
   };
 }
 
+function contestLinesBlobKey(weekStr) {
+  return `contest-lines-${weekStr}`;
+}
+
 function contestPdfUnavailablePayload(weekInfo, err) {
+  const code =
+    (err && err.code) ||
+    (/image-only|no usable text layer/i.test(String((err && err.message) || ""))
+      ? "contest-pdf-image-only"
+      : "contest-pdf-unavailable");
   const pending = pendingPayload(weekInfo, {
     error: true,
-    errorCode: "contest-pdf-unavailable",
+    errorCode: code,
     errorMessage: err && err.message ? err.message : null,
   });
-  pending.pendingMessage =
-    `Week ${weekInfo.weekNum} card pending — official Circa contest point spreads PDF is not available. WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line.`;
+  if (code === "contest-pdf-image-only") {
+    pending.pendingMessage =
+      `Week ${weekInfo.weekNum} card pending — Circa posted an image-only contest PDF with no text layer and no verified week fixture is checked in yet. ` +
+      `WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line. ` +
+      `After the WEEK${weekInfo.weekNum}_GAMES fixture ships, Friday morning catch-up cron (10:00–10:45 AM PT) will regenerate.`;
+  } else {
+    pending.pendingMessage =
+      `Week ${weekInfo.weekNum} card pending — official Circa contest point spreads PDF is not available. WeBetAI will not use Pinnacle or other sportsbook numbers as the contest line.`;
+  }
   pending.noPlays = pending.pendingMessage;
   pending.error = true;
-  pending.errorCode = "contest-pdf-unavailable";
+  pending.errorCode = code;
   return pending;
 }
 
@@ -868,14 +884,41 @@ exports.handler = async (event) => {
   try {
     board = await loadContestLines(weekNum, { now, slate: null });
   } catch (e) {
-    const msg = e instanceof ContestLinesError ? e.message : `Contest lines unavailable: ${e.message}`;
-    console.error(`[circa] ${msg}`);
-    const pending = contestPdfUnavailablePayload({ weekNum, week }, e);
-    if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, error: true, picksData: pending }) };
-    const stored = await storeCard(week, pending, force, scheduled, now);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, error: true, stored, reason: "contest-pdf-unavailable" }) };
+    const cached = await readBlobJson(contestLinesBlobKey(week));
+    if (
+      cached &&
+      Array.isArray(cached.games) &&
+      cached.games.length >= 8 &&
+      (cached.lineSource === CONTEST_LINE_SOURCE || cached.lineSource === "circa-contest-pdf")
+    ) {
+      console.log(`[circa] ContestLinesError — recovering board from blob ${contestLinesBlobKey(week)} (${cached.games.length} games)`);
+      board = cached;
+    } else {
+      const msg = e instanceof ContestLinesError ? e.message : `Contest lines unavailable: ${e.message}`;
+      console.error(`[circa] ${msg}`);
+      const pending = contestPdfUnavailablePayload({ weekNum, week }, e);
+      const reason = pending.errorCode || "contest-pdf-unavailable";
+      if (dryRun) return { statusCode: 200, body: JSON.stringify({ ok: true, dryRun: true, pending: true, error: true, picksData: pending }) };
+      const stored = await storeCard(week, pending, force, scheduled, now);
+      return { statusCode: 200, body: JSON.stringify({ ok: true, pending: true, error: true, stored, reason }) };
+    }
   }
   console.log(`[circa] Contest board week ${weekNum}: ${board.games.length} game(s) via ${board.fromFixture ? "verified fixture" : "PDF parse"} (${board.sourceUrl || "no url"})`);
+  if (!dryRun) {
+    try {
+      await putBlob(contestLinesBlobKey(week), {
+        weekNum,
+        week,
+        lineSource: board.lineSource || CONTEST_LINE_SOURCE,
+        sourceUrl: board.sourceUrl || null,
+        fromFixture: !!board.fromFixture,
+        games: board.games,
+        savedAt: new Date().toISOString(),
+      });
+    } catch (persistErr) {
+      console.log(`[circa] contest-lines blob persist skip: ${persistErr.message}`);
+    }
+  }
 
   const { games: espnGames } = await fetchESPNWeekSlate(weekNum, CONTEST.seasonYear);
   console.log(`[circa] ${espnGames.length} ESPN game(s) for ${week}`);

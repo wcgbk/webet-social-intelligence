@@ -57,7 +57,7 @@ function normalizePayload(data, weekInfo) {
       if (st !== "completed" && st !== "graded" && st !== "final") cur.status = "live";
     }
   }
-  const realError = !live && !!data.error;
+  const realError = !live && (!!data.error || !!data.errorCode);
   return {
     preview: live ? false : !!data.preview,
     pending: !live,
@@ -201,10 +201,17 @@ exports.handler = async (event) => {
     }
 
     // No live card for this week — pending empty state (do not fall back to another week's picks).
+    // Preserve generator error fields from the stored blob (e.g. contest-pdf-image-only).
+    if (data && typeof data === "object") {
+      const payload = normalizePayload(data, weekInfo);
+      payload.pending = true;
+      payload.preview = !!data.preview;
+      return ok(payload);
+    }
     const pending = pendingPayload(weekInfo, {
-      kpis: (data && data.kpis) || defaultKpis(),
-      weeks: (data && data.weeks) || defaultWeeks(weekInfo.weekNum),
-      picks: (data && data.picks) || [],
+      kpis: defaultKpis(),
+      weeks: defaultWeeks(weekInfo.weekNum),
+      picks: [],
     });
     return ok(pending);
   } catch (err) {

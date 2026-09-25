@@ -3,7 +3,7 @@
 // Intended windows (Sep = PDT = UTC-7):
 //   Thu 17:15 UTC (10:15 AM PT) — first card after Circa lines post ~10:00 AM PT
 //   Thu 17:30 / 17:45 / 18:00 UTC (10:30 / 10:45 / 11:00 AM PT) — late-PDF catch-up
-//   Fri 17:00 UTC (10:00 AM PT) — refresh
+//   Fri 17:00 / 17:15 / 17:30 / 17:45 UTC (10:00–10:45 AM PT) — refresh + fixture catch-up
 //   Sat 20:00 UTC (1:00 PM PT)  — final, well before Sat 4:00 PM PT deadline
 // Holiday TODO / implemented via the Wed slot in the union cron:
 //   Thanksgiving week Wed Nov 25 2026 17:15 UTC

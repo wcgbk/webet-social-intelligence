@@ -42,7 +42,7 @@ const ROW_RE_COLLAPSED =
 // Back-compat alias (tests / callers): prefer spaced shape documentation.
 const ROW_RE = ROW_RE_SPACED;
 
-const CACHE_KEY = "circa-standings-v2";
+const CACHE_KEY = "circa-standings-v3"; // v3: collapsed-row entry/picks split (PICKWIZARD32-*)
 const MEM_TTL_MS = 15 * 60 * 1000;
 
 let memCache = null; // { key, expires, payload }

@@ -1,6 +1,7 @@
 // Circa card-health ops snapshot (edge-picks-circa store).
 // Mirrors Omega capture-health pattern: persist latest + dated blob, read-only GET.
 // Circa-only — does not touch Omega/Alpha.
+// WeBet Circa Grok Bot polls the circa-ops health blobs; this module has no chat notifier.
 
 "use strict";
 
@@ -139,37 +140,6 @@ function evaluateCardHealth(card, weekInfo) {
   };
 }
 
-async function postCircaDiscordAlert(health) {
-  const token = process.env.DISCORD_BOT_TOKEN;
-  const channel = process.env.DISCORD_CIRCA_CHANNEL || process.env.DISCORD_CHANNEL;
-  if (!token || !channel) {
-    console.log("[circa-health] No DISCORD_BOT_TOKEN/channel — skip notify");
-    return false;
-  }
-  if (!health || health.status === "ok") return false;
-  let msg =
-    `**⚠️ Circa card-health alert — Week ${health.weekNum || "?"}**\n` +
-    `status: \`${health.status}\` errorCode: \`${health.errorCode || "none"}\`\n` +
-    `picks: ${health.picksCount != null ? health.picksCount : "?"}\n` +
-    `${health.errorMessage || ""}\n` +
-    `https://webetsocial.com/circa`;
-  if (msg.length > 1950) msg = msg.slice(0, 1950) + "...";
-  try {
-    const resp = await fetch(`https://discord.com/api/v10/channels/${channel}/messages`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bot ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ content: msg }),
-    });
-    console.log(`[circa-health] Discord notify ${resp.status}`);
-    return resp.ok;
-  } catch (e) {
-    console.log(`[circa-health] Discord error: ${e.message}`);
-    return false;
-  }
-}
 
 module.exports = {
   HEALTH_LATEST,
@@ -181,7 +151,6 @@ module.exports = {
   readCircaCardHealthDate: (iso) => readBlob(`circa-ops/card-health-${iso}`),
   circaHealthCronSlot,
   evaluateCardHealth,
-  postCircaDiscordAlert,
   readBlob,
   putBlob,
   STORE_NAME,

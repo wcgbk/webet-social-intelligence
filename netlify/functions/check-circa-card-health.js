@@ -1,7 +1,7 @@
 // check-circa-card-health.js
 // Follow-up checker after Circa generate cron slots (Thu/Fri/Sat + holiday).
 // If the week card is pending/empty/error or has fewer than 5 picks, persist
-// alert blob (errorCode) and optionally Discord-notify (same pattern as Omega verify).
+// alert blob (errorCode); WeBet Circa Grok Bot polls the circa-ops health blobs.
 
 "use strict";
 
@@ -15,7 +15,6 @@ const {
   circaHealthCronSlot,
   evaluateCardHealth,
   writeCircaCardHealth,
-  postCircaDiscordAlert,
   readBlob,
   STORE_NAME,
 } = require("./lib/circa-card-health");
@@ -69,9 +68,7 @@ exports.handler = async (event) => {
     sourceUrl: card && card.sourceUrl,
   });
 
-  let notified = false;
   if (health.status !== "ok") {
-    notified = await postCircaDiscordAlert(health);
     console.error(
       `[circa-health] ALERT week=${week} errorCode=${health.errorCode} picks=${health.picksCount}`
     );
@@ -84,7 +81,6 @@ exports.handler = async (event) => {
     body: JSON.stringify({
       ok: health.status === "ok",
       health,
-      notified,
       slot: slot || "force",
       store: STORE_NAME,
     }),

@@ -1857,12 +1857,6 @@
         Percentile Rankings
       </button>
 
-      <!-- P2P -->
-      <div class="nav-section-hd">P2P</div>
-      <button class="nav-item" data-panel="p2p" onclick="switchPanel('p2p')">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-        Pick 3 PVP
-      </button>
       <button class="nav-item" data-panel="p2p-sports" onclick="switchPanel('p2p-sports')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span>
         Sports Markets
@@ -1920,7 +1914,7 @@
       <div class="login-nudge-inner">
         <div class="login-nudge-text">
           <div class="login-nudge-title">Claim your 1,000 WeBit</div>
-          <div class="login-nudge-sub">Free on sign in · send a Pick 3 tonight</div>
+          <div class="login-nudge-sub">Free on sign in · keep your picks organized</div>
         </div>
         <button class="login-x-btn" onclick="openSignIn()">
           <svg width="14" height="14" viewBox="0 0 1200 1227" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M714.163 519.284 1160.89 0H1055.03L667.137 450.887 357.328 0H0L468.492 681.821 0 1226.37H105.866L515.491 750.218 842.672 1226.37H1200L714.163 519.284ZM569.165 687.828 521.697 619.934 144.011 79.6978H306.615L611.412 515.685 658.88 583.579 1055.08 1150.3H892.476L569.165 687.828Z"/></svg>
@@ -1945,10 +1939,6 @@
               <button class="suggestion-card" onclick="useSuggestion(this)">
                 <span class="suggestion-card-icon">⚡</span>
                 <span class="suggestion-card-text">Show today's picks</span>
-              </button>
-              <button class="suggestion-card" onclick="switchPanel('p2p')">
-                <span class="suggestion-card-icon">🏆</span>
-                <span class="suggestion-card-text">Challenge someone Pick 3</span>
               </button>
             </div>
           </div>
@@ -2061,11 +2051,6 @@
       </div>
 
 
-      <!-- RANKINGS / P2P LEADERBOARD PANEL -->
-      <div class="panel" id="panel-rankings" style="overflow:hidden;">
-        <iframe src="/pick3p2p/#leaderboard" style="width:100%;height:100%;border:none;"></iframe>
-      </div>
-
       <!-- PERCENTILE PANEL -->
       <div class="panel" id="panel-percentile">
         <div class="feature-scroll">
@@ -2095,11 +2080,6 @@
       <!-- P2P TRENDING PANEL -->
       <div class="panel" id="panel-p2p-trending" style="overflow:hidden;">
         <iframe src="/p2p-trending" style="width:100%;height:100%;border:none;"></iframe>
-      </div>
-
-      <!-- P2P PANEL — same-domain so the wbai session + WeBit balance flow into Pick3P2P -->
-      <div class="panel" id="panel-p2p" style="overflow:hidden;">
-        <iframe src="/pick3p2p" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- ADMIN PANEL -->
@@ -2251,10 +2231,6 @@
               <span class="settings-row-label">Percentile</span>
               <a href="/percentile" class="settings-row-value" style="color:var(--primary)">/percentile</a>
             </div>
-            <div class="settings-row">
-              <span class="settings-row-label">Pick3 P2P</span>
-              <a href="https://pick3p2p.com" class="settings-row-value" style="color:var(--primary)">pick3p2p.com</a>
-            </div>
           </div>
         </div>
       </div>
@@ -2272,10 +2248,6 @@
     <button class="mobile-tab active" data-panel="chat" onclick="switchPanel('chat')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span class="mobile-tab-label">Betty</span>
-    </button>
-    <button class="mobile-tab" data-panel="p2p" onclick="switchPanel('p2p')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      <span class="mobile-tab-label">P2P</span>
     </button>
     <button class="mobile-tab" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
@@ -2500,10 +2472,10 @@
     'p2p-sports': 'Sports Markets',
     'p2p-trending': 'Trending Challenges',
     feed: 'Authentic Press',
-    rankings: 'Pick3 Leaderboard',
+    rankings: 'Leaderboard',
     percentile: 'Percentile Rankings',
     arch: 'Track Record & Architecture',
-    p2p: 'Pick 3 PVP',
+    p2p: 'Challenges',
     guardian: 'Daily Digest',
     builder: 'WeBet Builder',
     sniper: 'Comment Sniper',
@@ -2521,7 +2493,7 @@
   // panel key also resolves, so older /dashboard#panel links keep working.
   const PANEL_SLUGS = {
     picks: 'picks', nfl: 'nfl', cfb: 'cfb', 'grok-beta': 'grok-beta', 'live-picks': 'live-picks', omega: 'omega', grokbot: 'grokbot', gamecast: 'gamecast', percentile: 'track-record',
-    p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
+    p2p: 'challenges', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
     webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
   };
   const SLUG_TO_PANEL = {};
@@ -2990,55 +2962,10 @@
       }
     } catch (_) {}
 
-    // Rich fallback: explain Pick3 P2P concept + how it works
-    el.innerHTML = `
-      <div class="stats-grid">
-        <div class="stat-card" style="background:var(--primary-dim);border-color:rgba(0,76,84,0.15)">
-          <div class="stat-label" style="color:var(--primary)">How It Works</div>
-          <div class="stat-value" style="font-size:1.125rem;color:var(--primary)">Pick 3</div>
-          <div class="stat-sub">Choose 3 games the AI rejected</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Challenge</div>
-          <div class="stat-value" style="font-size:1.125rem">1v1</div>
-          <div class="stat-sub">Battle other cappers head-to-head</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Format</div>
-          <div class="stat-value" style="font-size:1.125rem">SMS</div>
-          <div class="stat-sub">Challenge via text message</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Leaderboard</div>
-          <div class="stat-value" style="font-size:1.125rem">Live</div>
-          <div class="stat-sub">Track your W-L record</div>
-        </div>
-      </div>
-      <div class="bb-card" style="border-color:var(--primary);border-width:2px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <div style="width:44px;height:44px;border-radius:12px;background:var(--primary);display:flex;align-items:center;justify-content:center">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div>
-            <div style="font-size:1rem;font-weight:700;color:var(--fg)">Human vs. AI Rejected Games</div>
-            <div style="font-size:0.8125rem;color:var(--fg-muted)">The AI model passes on games it doesn't like. You pick 3 of them and prove the model wrong.</div>
-          </div>
-        </div>
-        <div style="font-size:0.8125rem;color:var(--fg-muted);line-height:1.6;margin-bottom:16px">
-          Every day, WeBetAI's model analyzes dozens of games but only picks a handful with real edge. The rest get rejected. <strong>Pick3 P2P</strong> lets you challenge friends to pick 3 games from the reject pile — whoever goes 2-1 or better wins. It's the ultimate test: can humans find value where AI can't?
-        </div>
-        <div class="bb-actions">
-          <button class="bb-action-btn primary" onclick="switchPanel('p2p')">Launch Pick3 P2P</button>
-          <button class="bb-action-btn" onclick="switchPanel('chat');chatInput.value='How does Pick3 P2P work?';sendBtn.disabled=false;sendMessage()">Ask Betty About P2P</button>
-        </div>
-      </div>
-      <div class="settings-group">
-        <h3>Leaderboard</h3>
-        <div style="text-align:center;padding:20px;color:var(--fg-dim);font-size:0.8125rem">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--fg-dim)" stroke-width="1.5" style="margin-bottom:8px;opacity:0.4"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg><br>
-          No challenges yet — be the first to start one
-        </div>
-      </div>`;
+    // Keep the dashboard neutral when challenge data is unavailable.
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--fg-dim);font-size:0.875rem">
+      Challenge data is unavailable right now.
+    </div>`;
   }
 
   /* ─── Guardian Daily Digest Panel ─────────────────────────────────── */
@@ -3578,7 +3505,6 @@
       ${why ? `<div class="pick-analysis">${esc(why)}</div>` : ''}
       <div class="pick-follow">
         <button type="button" onclick="togglePickWhy(${idx})">Why</button>
-        <button type="button" class="primary" onclick="switchPanel('p2p')">Pick 3</button>
       </div>
     </div>`;
   }
@@ -3594,7 +3520,7 @@
     contentWrap.className = 'msg-content';
     let extra = '';
     if (!wbUser) {
-      extra = `<div class="picks-claim"><span>Sign in to lock these and send a Pick 3. 1,000 WeBit free.</span><button type="button" onclick="openSignIn()">Sign in</button></div>`;
+      extra = `<div class="picks-claim"><span>Sign in to save these picks. 1,000 WeBit free.</span><button type="button" onclick="openSignIn()">Sign in</button></div>`;
     }
     contentWrap.innerHTML = `<div class="picks-stack">${picks.map((p, i) => pickCardHTML(p, i)).join('')}${extra}</div>`;
     group.appendChild(avatar);
@@ -3968,13 +3894,13 @@
         <div class="profile-stat-card">
           <div class="psc-label">Challenges</div>
           <div class="psc-value">0</div>
-          <div class="psc-sub">Pick 3 PVP record</div>
+          <div class="psc-sub">Challenge record</div>
         </div>
       </div>
       <div class="profile-actions">
         <div class="profile-action-row">
           <button class="profile-btn" onclick="switchPanel('webit')">🪙 WeBit Store</button>
-          <button class="profile-btn" onclick="switchPanel('p2p')">🏆 Challenges</button>
+          <button class="profile-btn" onclick="switchPanel('chat')">🏆 Challenges</button>
         </div>
         <button class="profile-btn danger" onclick="signOut()">Sign out</button>
       </div>`;

@@ -1,36 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>
+  <script>
     if (document.cookie.split(';').some(function(c){ return c.trim().indexOf('ga_exclude=') === 0; })) {
       window['ga-disable-G-848D47V084'] = true;
     }
   </script>
-  <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-
     gtag('config', 'G-848D47V084');
   </script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Feed launch is ON HOLD (TSP permission pending): keep out of search indexes. Remove this tag at launch. -->
-  <meta name="robots" content="noindex" />
-  <title>WeBetAI - Social Intelligence | Grok Bot Live Picks</title>
-  <meta name="description" content="Live feed of every sportsbook pick the WeBetAI Grok bot posts. Updates automatically within seconds of each new pick." />
+  <title>Betty · Free Daily Picks | WeBetAI Grok Bot</title>
+  <meta name="description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks, KPIs, live scores, and PM quotes. 21+ · NFA." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/grokbot" />
-  <meta property="og:title" content="WeBetAI - Social Intelligence | Grok Bot Live Picks" />
-  <meta property="og:description" content="Live feed of every sportsbook pick the WeBetAI Grok bot posts. Updates automatically within seconds of each new pick." />
-  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta property="og:title" content="Betty · Free Daily Picks | WeBetAI Grok Bot" />
+  <meta property="og:description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks. Cadence on. 21+ · NFA." />
+  <meta property="og:image" content="https://webetsocial.com/daily-betty-og-v13.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Grok Bot Live Picks" />
-  <meta name="twitter:description" content="Live feed of every sportsbook pick the WeBetAI Grok bot posts. Updates automatically within seconds of each new pick." />
-  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta name="twitter:title" content="Betty · Free Daily Picks | WeBetAI Grok Bot" />
+  <meta name="twitter:description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks. 21+ · NFA." />
+  <meta name="twitter:image" content="https://webetsocial.com/daily-betty-og-v13.jpg" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
@@ -44,25 +40,17 @@
       --bg: #f2f3f5;
       --olive: #1a2e1a;
       --teal: #004C54;
+      --teal-hover: #003a40;
       --teal-light: #e6f4f1;
       --teal-border: #b8ddd6;
-      --green: #2e7d32;
-      --green-light: #e8f5e9;
-      --green-border: #a5d6a7;
+      --accent: #00B5B9;
       --border-lt: #e0e3e8;
       --txt-b: #1a2e1a;
       --txt-m: #5f6b7a;
       --txt-l: #8b95a3;
-      --live-red: #dc2626;
     }
-
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-    /* Paint the page ground on the root element so mobile browsers
-       (esp. Chrome on iOS) never expose the default white canvas in the
-       dynamic toolbar / overscroll region. */
-    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
-
+    html { background: var(--bg); min-height: 100vh; -webkit-text-size-adjust: 100%; }
     body {
       font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
       background: var(--bg);
@@ -70,7 +58,6 @@
       -webkit-font-smoothing: antialiased;
       min-height: 100vh;
     }
-
     .header {
       background: var(--white);
       border-bottom: 1px solid var(--border-lt);
@@ -85,93 +72,89 @@
       background: var(--teal-light); border: 1px solid var(--teal-border);
       border-radius: 9999px; padding: .2rem .6rem;
     }
+    .main { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 
-    .main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .hero {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.5rem 1.25rem;
+      margin-bottom: 1rem;
+      display: grid;
+      gap: 1.25rem;
+    }
+    @media (min-width: 640px) {
+      .hero { grid-template-columns: 1fr 180px; align-items: center; padding: 1.75rem; }
+    }
+    .eyebrow {
+      font-size: .75rem; font-weight: 600; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem;
+    }
+    .hero h1 {
+      font-size: 1.625rem; font-weight: 700; line-height: 1.2;
+      color: var(--olive); margin-bottom: .625rem;
+    }
+    @media (min-width: 640px) { .hero h1 { font-size: 1.875rem; } }
+    .hero-sub {
+      font-size: .9375rem; color: var(--txt-m); line-height: 1.55; margin-bottom: 1.25rem;
+    }
+    .cta-row { display: flex; flex-wrap: wrap; gap: .625rem; }
+    .cta-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--teal); color: var(--white);
+      font-size: .875rem; font-weight: 600;
+      padding: .7rem 1.125rem; border-radius: 9999px;
+      text-decoration: none; border: none;
+    }
+    .cta-primary:hover { background: var(--teal-hover); }
+    .cta-secondary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--white); color: var(--teal);
+      font-size: .875rem; font-weight: 600;
+      padding: .7rem 1.125rem; border-radius: 9999px;
+      text-decoration: none; border: 1px solid var(--teal-border);
+    }
+    .cta-secondary:hover { background: var(--teal-light); }
+    .hero-portrait {
+      width: 100%; max-width: 180px; margin: 0 auto;
+      border-radius: .875rem; object-fit: cover; aspect-ratio: 1;
+      border: 1px solid var(--border-lt);
+    }
 
-    .date-header { font-size: .9375rem; color: var(--txt-b); font-weight: 500; margin-bottom: .625rem; }
-
-    .live-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: .75rem; padding: .625rem .875rem; margin-bottom: 1rem;
-      font-size: .8125rem;
+    .section {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
     }
-    .live-left { display: flex; align-items: center; gap: .5rem; font-weight: 600; color: var(--live-red); }
-    .live-dot {
-      width: 9px; height: 9px; border-radius: 50%; background: var(--live-red);
-      animation: pulse 1.6s ease-in-out infinite;
+    .section h2 {
+      font-size: 1.0625rem; font-weight: 700; color: var(--olive); margin-bottom: .875rem;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220, 38, 38, .4); }
-      50% { opacity: .6; box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
+    .feature-list li {
+      display: grid; grid-template-columns: 1fr auto; gap: .5rem .75rem;
+      padding-bottom: .75rem; border-bottom: 1px solid var(--border-lt);
+      align-items: baseline;
     }
-    .live-right { color: var(--txt-m); font-size: .75rem; }
-
-    .stats-bar {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem;
-      margin-bottom: 1.25rem;
-    }
-    .stat-box {
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: .75rem; padding: .625rem .375rem; text-align: center;
-    }
-    .stat-label { font-size: .5625rem; font-weight: 600; color: var(--txt-l); text-transform: uppercase; letter-spacing: .05em; }
-    .stat-value { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-top: .125rem; }
-
-    .pick-card {
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
-    }
-    .pick-card.new-pick { animation: flashIn 2.4s ease-out; }
-    @keyframes flashIn {
-      0% { background: var(--green-light); border-color: var(--green-border); }
-      100% { background: var(--white); border-color: var(--border-lt); }
-    }
-    .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; gap: .5rem; }
-    .sport-tag {
-      font-size: .6875rem; font-weight: 600; color: var(--teal);
+    .feature-list li:last-child { border-bottom: none; padding-bottom: 0; }
+    .feature-name { font-size: .875rem; font-weight: 600; color: var(--olive); }
+    .feature-when {
+      font-size: .75rem; font-weight: 500; color: var(--teal);
       background: var(--teal-light); border: 1px solid var(--teal-border);
-      border-radius: 6px; padding: .175rem .5rem; text-transform: uppercase;
+      border-radius: 9999px; padding: .2rem .55rem; white-space: nowrap;
     }
-    .pick-time { font-size: .6875rem; color: var(--txt-l); font-weight: 500; white-space: nowrap; }
+    .feature-desc { grid-column: 1 / -1; font-size: .8125rem; color: var(--txt-m); line-height: 1.45; margin-top: -.25rem; }
 
-    .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; }
-    .pick-line { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .625rem; gap: .5rem; }
-    .pick-name { font-size: .9375rem; font-weight: 600; color: var(--olive); }
-    .pick-odds { font-family: 'Geist Sans', monospace; font-size: .9375rem; font-weight: 700; color: var(--olive); white-space: nowrap; }
-    .pick-divider { height: 1px; background: var(--border-lt); margin-bottom: .625rem; }
-    .pick-analysis { font-size: .8125rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .625rem; }
-    .pick-meta { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
-    .pick-units { font-size: .875rem; font-weight: 700; color: var(--teal); }
-    .pick-book {
-      font-size: .6875rem; font-weight: 600; color: var(--txt-m);
-      background: var(--off-white); border: 1px solid var(--border-lt);
-      border-radius: 6px; padding: .175rem .5rem;
-    }
-    .pick-post-link {
-      font-size: .75rem; font-weight: 600; color: var(--teal); text-decoration: none;
-    }
-    .pick-post-link:hover { text-decoration: underline; }
-
-    .empty-state, .loading {
-      background: var(--white); border: 1px solid var(--border-lt);
-      border-radius: .875rem; padding: 2rem 1.25rem; text-align: center;
-      color: var(--txt-m); font-size: .875rem; line-height: 1.6;
-    }
-    .empty-title { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .375rem; }
-    .empty-sub a { color: var(--teal); font-weight: 600; text-decoration: none; }
-    .empty-sub a:hover { text-decoration: underline; }
-
-    .error-state {
-      background: #fce4e4; border: 1px solid #f5b7b7; border-radius: .875rem;
-      padding: 1rem 1.25rem; text-align: center; color: #b03a3a; font-size: .8125rem;
-      margin-bottom: .75rem; display: none;
-    }
+    .pick3 p { font-size: .875rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .875rem; }
+    .pick3 a.inline { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .pick3 a.inline:hover { text-decoration: underline; }
 
     .footer-note {
-      font-size: .6875rem; color: var(--txt-l); line-height: 1.6;
-      text-align: center; margin-top: 2rem;
+      font-size: .6875rem; color: var(--txt-l); line-height: 1.65;
+      text-align: center; margin-top: 1.5rem;
     }
+    .footer-note a { color: var(--teal); font-weight: 600; text-decoration: none; }
   </style>
 </head>
 <body>
@@ -180,188 +163,78 @@
   <a class="logo" href="/">
     <span class="logo-text">WeBetAI</span>
   </a>
-  <span class="header-badge">Grok Bot Feed</span>
+  <span class="header-badge">Betty · Grok Bot</span>
 </header>
 
 <div class="main">
-  <div class="date-header" id="date-header">Grok Bot Picks</div>
-
-  <div class="live-bar">
-    <div class="live-left"><span class="live-dot"></span><span>LIVE</span></div>
-    <div class="live-right" id="updated-ago">Connecting...</div>
-  </div>
-
-  <div class="stats-bar">
-    <div class="stat-box">
-      <div class="stat-label">Picks Today</div>
-      <div class="stat-value" id="stat-count">-</div>
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Free · Grok Bot · WeBetAI</div>
+      <h1>Meet Betty — free daily picks in your pocket</h1>
+      <p class="hero-sub">Sportsbook + prediction-market Omega cards, every morning. Install once on Grok Bot. Cadence on. No paid hard-sell in the bot MVP.</p>
+      <div class="cta-row">
+        <a class="cta-primary" href="https://x.ai/bot/mFgccFeqlbRT4XQ1s7aDf">Add Betty on Grok Bot</a>
+        <a class="cta-secondary" href="/daily-omega">See today’s card on the site</a>
+      </div>
     </div>
-    <div class="stat-box">
-      <div class="stat-label">Last Pick</div>
-      <div class="stat-value" id="stat-last">-</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-label">Sports</div>
-      <div class="stat-value" id="stat-sports">-</div>
-    </div>
-  </div>
+    <img class="hero-portrait" src="/betty-sms.jpg?v=20260925" alt="Betty — WeBetAI" width="180" height="180" />
+  </section>
 
-  <div class="error-state" id="error-state">Feed temporarily unreachable. Retrying automatically.</div>
+  <section class="section">
+    <h2>What you get — and when</h2>
+    <ul class="feature-list">
+      <li>
+        <span class="feature-name">Today’s Omega card</span>
+        <span class="feature-when">Now · mornings</span>
+        <span class="feature-desc">Straights + daily parlay from public Omega APIs — full reasoning, not truncated.</span>
+      </li>
+      <li>
+        <span class="feature-name">KPIs (Combined + Omega-only)</span>
+        <span class="feature-when">With card · on ask</span>
+        <span class="feature-desc">UI-floor Combined (Alpha thru Sep 21 + Omega from Sep 22) and Omega-only record / ROI.</span>
+      </li>
+      <li>
+        <span class="feature-name">Live score checks</span>
+        <span class="feature-when">On ask · in-game</span>
+        <span class="feature-desc">ESPN public scores mapped to today’s Omega matchups only.</span>
+      </li>
+      <li>
+        <span class="feature-name">Extra Grok + ESPN context</span>
+        <span class="feature-when">On ask</span>
+        <span class="feature-desc">Deeper read on any pick without inventing new bets.</span>
+      </li>
+      <li>
+        <span class="feature-name">Kalshi / Polymarket quotes</span>
+        <span class="feature-when">On ask · read-only</span>
+        <span class="feature-desc">Public quotes mapped to the card — no order placement.</span>
+      </li>
+      <li>
+        <span class="feature-name">Short slate news drip</span>
+        <span class="feature-when">On ask</span>
+        <span class="feature-desc">ESPN-style headlines for today’s card sports.</span>
+      </li>
+    </ul>
+  </section>
 
-  <div id="picks-container">
-    <div class="loading">Loading the live pick feed...</div>
-  </div>
+  <section class="section pick3">
+    <h2>Soft challenge — Pick 3</h2>
+    <p>After you install and see today’s card, challenge a friend vs the AI at <a class="inline" href="https://webetsocial.com/pick3p2p">webetsocial.com/pick3p2p</a>. Leaderboard: <a class="inline" href="https://webetsocial.com/pick3p2p/#leaderboard">#leaderboard</a>.</p>
+    <a class="cta-secondary" href="https://webetsocial.com/pick3p2p">Open Pick 3 PvP</a>
+  </section>
+
+  <section class="section" style="text-align:center;">
+    <h2 style="margin-bottom:.5rem;">Ready?</h2>
+    <p style="font-size:.875rem;color:var(--txt-m);margin-bottom:1rem;line-height:1.5;">Install Betty → get today’s card. Status updates + the rest of the cadence are on by default.</p>
+    <a class="cta-primary" href="https://x.ai/bot/mFgccFeqlbRT4XQ1s7aDf">Add Betty on Grok Bot</a>
+  </section>
 
   <p class="footer-note">
-    Every pick on this page was posted automatically by the WeBetAI Grok bot and mirrored here within seconds.<br>
-    The page refreshes itself, no reload needed. Not financial advice.
+    Free Daily Sportsbook &amp; Prediction Market Picks — From Grok Bot Betty of WeBetAI<br>
+    Follow <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X for daily posts. This bot does not post to X itself.<br>
+    <strong>21+ · NFA · gamble responsibly</strong>
   </p>
 </div>
 
-<script>
-(function () {
-  var POLL_MS = 20000;
-  var API_URL = '/api/grok-bot-picks';
-  var DEMO = /[?&]demo=1/.test(window.location.search);
-
-  var lastFetchAt = null;
-  var seenKeys = {};
-  var firstRender = true;
-
-  var DEMO_PICKS = [
-    { sport: 'NFL', matchup: 'Chiefs @ Ravens', pick: 'Ravens -2.5', betType: 'Spread', odds: '-110', book: 'DraftKings', units: 1.5, analysis: 'Demo pick: home side with rest advantage and a healthy secondary.', postUrl: 'https://x.com', receivedAt: new Date(Date.now() - 4 * 60000).toISOString() },
-    { sport: 'MLB', matchup: 'Yankees @ Red Sox', pick: 'Over 9.5', betType: 'Total', odds: '-105', book: 'FanDuel', units: 1, analysis: 'Demo pick: two bullpen games with wind blowing out at Fenway.', receivedAt: new Date(Date.now() - 47 * 60000).toISOString() },
-    { sport: 'CFB', matchup: 'Georgia @ Clemson', pick: 'Georgia ML', betType: 'Moneyline', odds: '-160', book: 'BetMGM', units: 0.5, receivedAt: new Date(Date.now() - 128 * 60000).toISOString() }
-  ];
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  function pickKey(p) {
-    if (p.id) return 'id:' + p.id;
-    return 'k:' + [p.sport, p.matchup, p.pick, p.odds].map(function (x) { return (x || '').toLowerCase(); }).join('|');
-  }
-
-  function etTime(iso) {
-    if (!iso) return '';
-    try {
-      return new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET';
-    } catch (e) { return ''; }
-  }
-
-  function renderCard(p, isNew) {
-    var html = '<div class="pick-card' + (isNew ? ' new-pick' : '') + '">';
-    html += '<div class="pick-header">';
-    html += '<span class="sport-tag">' + esc(p.sport || p.league || 'Pick') + (p.betType ? ' &middot; ' + esc(p.betType) : '') + '</span>';
-    html += '<span class="pick-time">' + esc(etTime(p.postedAt || p.receivedAt)) + '</span>';
-    html += '</div>';
-    if (p.matchup) html += '<div class="pick-matchup">' + esc(p.matchup) + '</div>';
-    html += '<div class="pick-line"><span class="pick-name">' + esc(p.pick) + '</span>';
-    if (p.odds) html += '<span class="pick-odds">' + esc(p.odds) + '</span>';
-    html += '</div>';
-    if (p.analysis) {
-      html += '<div class="pick-divider"></div>';
-      html += '<div class="pick-analysis">' + esc(p.analysis) + '</div>';
-    }
-    html += '<div class="pick-meta">';
-    var left = '';
-    if (p.units) left += '<span class="pick-units">' + esc(p.units) + 'u</span>';
-    if (p.book) left += '<span class="pick-book">' + esc(p.book) + '</span>';
-    html += '<span style="display:flex;align-items:center;gap:.5rem;">' + left + '</span>';
-    if (p.postUrl && /^https?:\/\//.test(p.postUrl)) {
-      html += '<a class="pick-post-link" href="' + esc(p.postUrl) + '" target="_blank" rel="noopener noreferrer">View post &#8599;</a>';
-    }
-    html += '</div></div>';
-    return html;
-  }
-
-  function renderEmpty(latestDate) {
-    var html = '<div class="empty-state">';
-    html += '<div class="empty-title">No picks posted yet today</div>';
-    html += '<div class="empty-sub">The moment the Grok bot posts a sportsbook pick, it appears here automatically.';
-    if (latestDate) html += '<br>Last active day: <a href="?date=' + esc(latestDate) + '">' + esc(latestDate) + '</a>';
-    html += '</div></div>';
-    return html;
-  }
-
-  function render(data) {
-    var container = document.getElementById('picks-container');
-    var picks = data.picks || [];
-
-    document.getElementById('date-header').textContent = 'Grok Bot Picks: ' + (data.dateFormatted || data.date || '');
-    document.getElementById('stat-count').textContent = picks.length;
-    document.getElementById('stat-last').textContent = picks.length ? etTime(picks[0].postedAt || picks[0].receivedAt).replace(' ET', '') : '-';
-    var sports = {};
-    picks.forEach(function (p) { if (p.sport || p.league) sports[(p.sport || p.league).toUpperCase()] = 1; });
-    var sportList = Object.keys(sports);
-    document.getElementById('stat-sports').textContent = sportList.length ? sportList.length : '-';
-    document.getElementById('stat-sports').title = sportList.join(', ');
-
-    if (!picks.length) {
-      container.innerHTML = renderEmpty(data.latestDate);
-      firstRender = false;
-      return;
-    }
-
-    var html = '';
-    picks.forEach(function (p) {
-      var key = pickKey(p);
-      var isNew = !firstRender && !seenKeys[key];
-      html += renderCard(p, isNew);
-    });
-    container.innerHTML = html;
-    picks.forEach(function (p) { seenKeys[pickKey(p)] = 1; });
-    firstRender = false;
-  }
-
-  function tickUpdatedAgo() {
-    var el = document.getElementById('updated-ago');
-    if (!lastFetchAt) return;
-    var s = Math.max(0, Math.round((Date.now() - lastFetchAt) / 1000));
-    el.textContent = s < 3 ? 'Updated just now' : 'Updated ' + s + 's ago';
-  }
-
-  async function refresh() {
-    if (DEMO) {
-      lastFetchAt = Date.now();
-      render({ date: new Date().toISOString().slice(0, 10), dateFormatted: 'Demo Mode', picks: DEMO_PICKS });
-      document.getElementById('error-state').style.display = 'none';
-      tickUpdatedAgo();
-      return;
-    }
-    try {
-      var qs = window.location.search.match(/[?&]date=(\d{4}-\d{2}-\d{2})/);
-      var url = qs ? API_URL + '?date=' + qs[1] : API_URL;
-      var resp = await fetch(url, { cache: 'no-store' });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var data = await resp.json();
-      if (data.error) throw new Error(data.message || 'API error');
-      lastFetchAt = Date.now();
-      document.getElementById('error-state').style.display = 'none';
-      render(data);
-    } catch (e) {
-      console.warn('Grok bot feed fetch failed:', e.message);
-      document.getElementById('error-state').style.display = 'block';
-      if (firstRender) {
-        document.getElementById('picks-container').innerHTML = renderEmpty(null);
-        firstRender = false;
-      }
-    }
-    tickUpdatedAgo();
-  }
-
-  refresh();
-  setInterval(refresh, POLL_MS);
-  setInterval(tickUpdatedAgo, 1000);
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) refresh();
-  });
-})();
-</script>
-
-  <script src="/js/site-share.js" defer></script>
+<script src="/js/site-share.js" defer></script>
 </body>
 </html>

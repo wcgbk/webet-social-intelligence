@@ -16,16 +16,16 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Betty · Free Daily Sportsbook Picks | WeBetAI Grok Bot</title>
-  <meta name="description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks. Morning card, Big Bets tips, WHY, SCORE, finals. 21+ · NFA." />
+  <title>Betty · Free Daily Picks on Grok Bot | WeBetAI × xAI</title>
+  <meta name="description" content="Betty is a free Grok Bot from WeBetAI. Download Grok, Add Betty, get daily Omega sportsbook picks — summary, WHY, SCORE, KPIs. Built for X. 21+ · NFA." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/grokbot" />
-  <meta property="og:title" content="Betty · Free Daily Sportsbook Picks | WeBetAI" />
-  <meta property="og:description" content="Free daily Omega picks in Grok Bot. Add once. Cadence on. 21+ · NFA." />
+  <meta property="og:title" content="Betty · Free Daily Picks on Grok Bot | WeBetAI" />
+  <meta property="og:description" content="Download Grok. Add Betty. Free daily Omega picks in chat — mornings, WHY, SCORE, finals. 21+ · NFA." />
   <meta property="og:image" content="https://webetsocial.com/betty-og.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Betty · Free Daily Sportsbook Picks | WeBetAI" />
-  <meta name="twitter:description" content="Free daily Omega picks in Grok Bot. Add once. Cadence on. 21+ · NFA." />
+  <meta name="twitter:title" content="Betty · Free Daily Picks on Grok Bot" />
+  <meta name="twitter:description" content="Download Grok. Add Betty. Free daily Omega picks in your pocket." />
   <meta name="twitter:image" content="https://webetsocial.com/betty-og.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -35,248 +35,346 @@
 
   <style>
     :root {
-      --white: #ffffff;
-      --bg: #0b1618;
-      --bg-card: #122226;
-      --bg-elevated: #162a2e;
-      --teal: #004C54;
-      --teal-hover: #003a40;
+      --bg: #000000;
+      --bg-elev: #0a0a0a;
+      --bg-card: #111111;
+      --border: #222222;
+      --border-soft: #1a1a1a;
+      --txt: #ffffff;
+      --txt-m: #a1a1a1;
+      --txt-l: #6b6b6b;
       --accent: #00B5B9;
-      --border: #1e3539;
-      --txt: #f2f6f6;
-      --txt-m: #a8b8bb;
-      --txt-l: #6f8286;
+      --accent-dim: rgba(0,181,185,.12);
+      --accent-border: rgba(0,181,185,.35);
+      --x-white: #e7e9ea;
+      --btn: #ffffff;
+      --btn-fg: #0a0a0a;
     }
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+    html {
+      background: var(--bg);
+      min-height: 100vh; min-height: 100dvh;
+      -webkit-text-size-adjust: 100%;
+      scroll-behavior: smooth;
+    }
     body {
-      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      font-family: 'Geist Sans', 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--txt);
       -webkit-font-smoothing: antialiased;
       min-height: 100vh; min-height: 100dvh;
+      line-height: 1.5;
     }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    .header {
-      background: rgba(11,22,24,.92);
-      border-bottom: 1px solid var(--border);
-      padding: .875rem 1.25rem;
-      display: flex; align-items: center; justify-content: space-between;
+    .nav {
       position: sticky; top: 0; z-index: 100;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .875rem 1.25rem;
+      background: rgba(0,0,0,.82);
+      border-bottom: 1px solid var(--border-soft);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
-    .logo {
-      display: flex; align-items: center; gap: .5rem;
-      color: var(--txt); text-decoration: none; font-weight: 700; font-size: 1rem;
+    .nav-brand {
+      display: flex; align-items: center; gap: .55rem;
+      color: var(--txt); font-weight: 700; font-size: .95rem;
+      text-decoration: none; letter-spacing: -.01em;
     }
-    .logo:hover { text-decoration: none; color: var(--accent); }
-    .header-badge {
-      font-size: .6875rem; font-weight: 600; color: var(--accent);
-      background: rgba(0,181,185,.12); border: 1px solid rgba(0,181,185,.35);
-      border-radius: 9999px; padding: .2rem .6rem;
+    .nav-brand:hover { text-decoration: none; opacity: .9; }
+    .nav-dot {
+      width: .5rem; height: .5rem; border-radius: 9999px;
+      background: var(--accent); box-shadow: 0 0 12px var(--accent);
     }
+    .nav-links { display: flex; align-items: center; gap: .5rem; }
+    .nav-pill {
+      font-size: .7rem; font-weight: 600; color: var(--txt-m);
+      border: 1px solid var(--border); border-radius: 9999px;
+      padding: .35rem .7rem; text-decoration: none;
+    }
+    .nav-pill:hover { color: var(--txt); border-color: #444; text-decoration: none; }
+    .nav-cta {
+      font-size: .75rem; font-weight: 700; color: var(--btn-fg);
+      background: var(--btn); border-radius: 9999px;
+      padding: .4rem .85rem; text-decoration: none;
+    }
+    .nav-cta:hover { opacity: .92; text-decoration: none; }
 
-    .main { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .wrap { max-width: 780px; margin: 0 auto; padding: 0 1.15rem 4rem; }
 
+    /* Hero */
     .hero {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 1.125rem;
-      padding: 1.5rem 1.25rem 1.35rem;
-      margin-bottom: 1rem;
-      overflow: hidden;
+      padding: 2.75rem 0 2rem;
+      text-align: center;
     }
     .eyebrow {
-      font-size: .75rem; font-weight: 600; color: var(--accent);
-      text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem;
+      display: inline-flex; align-items: center; gap: .45rem;
+      font-size: .7rem; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid var(--accent-border);
+      border-radius: 9999px; padding: .35rem .8rem; margin-bottom: 1.15rem;
     }
     .hero h1 {
-      font-size: 1.625rem; font-weight: 700; line-height: 1.2;
-      margin-bottom: .625rem;
+      font-size: clamp(2rem, 6vw, 3.15rem);
+      font-weight: 700; letter-spacing: -.035em; line-height: 1.05;
+      color: var(--x-white); margin-bottom: 1rem;
     }
-    @media (min-width: 640px) { .hero h1 { font-size: 2rem; } }
-    .hero-sub {
-      font-size: .9375rem; color: var(--txt-m); line-height: 1.55;
-      margin-bottom: 1.25rem; max-width: 36rem;
+    .hero h1 em {
+      font-style: normal; color: var(--accent);
     }
-    .cta-row { display: flex; flex-wrap: wrap; gap: .625rem; margin-bottom: 1.35rem; }
-    .cta-primary {
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--accent); color: #003238;
-      font-size: .875rem; font-weight: 700;
-      padding: .75rem 1.25rem; border-radius: 9999px;
-      text-decoration: none; border: none;
+    .hero-lead {
+      font-size: clamp(1rem, 2.4vw, 1.125rem);
+      color: var(--txt-m); max-width: 34rem; margin: 0 auto 1.5rem;
+      line-height: 1.55;
     }
-    .cta-primary:hover { filter: brightness(1.08); text-decoration: none; }
-    .cta-secondary {
-      display: inline-flex; align-items: center; justify-content: center;
-      background: transparent; color: var(--accent);
-      font-size: .875rem; font-weight: 600;
-      padding: .75rem 1.25rem; border-radius: 9999px;
-      text-decoration: none; border: 1px solid rgba(0,181,185,.45);
-    }
-    .cta-secondary:hover { background: rgba(0,181,185,.1); text-decoration: none; }
-
-    .video-block {
-      position: relative;
-      border-radius: .875rem;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      background: #000;
-      aspect-ratio: 16 / 9;
-    }
-    .video-block video {
-      width: 100%; height: 100%;
-      display: block;
-      object-fit: cover;
-      vertical-align: middle;
-    }
-    .video-caption {
-      font-size: .75rem; color: var(--txt-l);
-      margin-top: .65rem; line-height: 1.4;
-    }
-
-    .section {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 1.125rem;
-      padding: 1.35rem 1.25rem;
+    .hero-ctas {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: .65rem;
       margin-bottom: 1rem;
     }
-    .section h2 {
-      font-size: 1.0625rem; font-weight: 700;
-      margin-bottom: .875rem; color: var(--txt);
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--btn); color: var(--btn-fg);
+      font-size: .9rem; font-weight: 700;
+      padding: .85rem 1.35rem; border-radius: 9999px;
+      text-decoration: none; border: none;
     }
-    .section p {
-      font-size: .9rem; color: var(--txt-m); line-height: 1.55;
-      margin-bottom: .75rem;
+    .btn-primary:hover { opacity: .92; text-decoration: none; }
+    .btn-secondary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; color: var(--x-white);
+      font-size: .875rem; font-weight: 600;
+      padding: .85rem 1.25rem; border-radius: 9999px;
+      text-decoration: none; border: 1px solid #333;
     }
-    .section p:last-child { margin-bottom: 0; }
+    .btn-secondary:hover { border-color: #666; background: #0a0a0a; text-decoration: none; }
+    .hero-note {
+      font-size: .8rem; color: var(--txt-l); margin-bottom: 1.75rem;
+    }
+    .hero-note a { color: var(--txt-m); font-weight: 600; }
+    .hero-note a:hover { color: var(--accent); }
 
+    .video-shell {
+      border-radius: 1rem; overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000; aspect-ratio: 16 / 9;
+      max-width: 640px; margin: 0 auto;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.03), 0 24px 80px rgba(0,0,0,.55);
+    }
+    .video-shell video {
+      width: 100%; height: 100%; display: block; object-fit: cover;
+    }
+    .video-cap {
+      font-size: .75rem; color: var(--txt-l);
+      margin-top: .75rem; text-align: center;
+    }
+
+    /* Sections */
+    .section {
+      margin-top: 2.5rem;
+      padding: 1.75rem 1.35rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+    }
+    .section-label {
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: .65rem;
+    }
+    .section h2 {
+      font-size: clamp(1.35rem, 3.5vw, 1.65rem);
+      font-weight: 700; letter-spacing: -.02em;
+      color: var(--x-white); margin-bottom: .65rem; line-height: 1.2;
+    }
+    .section > p {
+      font-size: .95rem; color: var(--txt-m); line-height: 1.55;
+      margin-bottom: 1.25rem; max-width: 38rem;
+    }
+
+    /* Product grid */
+    .grid-3 {
+      display: grid; gap: .75rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) {
+      .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    }
+    .card {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.1rem 1rem;
+    }
+    .card h3 {
+      font-size: .95rem; font-weight: 700; color: var(--txt);
+      margin-bottom: .4rem; letter-spacing: -.01em;
+    }
+    .card p { font-size: .8125rem; color: var(--txt-m); line-height: 1.45; margin: 0; }
+
+    /* Install path — critical for no-Grok users */
+    .install {
+      margin-top: 2.5rem;
+      padding: 1.75rem 1.35rem;
+      background: linear-gradient(180deg, #0d1516 0%, #111111 100%);
+      border: 1px solid var(--accent-border);
+      border-radius: 1.25rem;
+    }
+    .install .section-label { color: var(--accent); }
     .steps {
       list-style: none;
-      display: flex; flex-direction: column; gap: .875rem;
+      display: flex; flex-direction: column; gap: 1rem;
+      margin: 1.25rem 0 1.5rem;
     }
     .steps li {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: .75rem;
+      gap: .9rem;
       align-items: start;
     }
-    .step-num {
-      font-size: .75rem; font-weight: 700; color: #003238;
-      background: var(--accent); border-radius: 9999px;
-      width: 1.75rem; height: 1.75rem;
+    .step-n {
+      width: 2rem; height: 2rem; border-radius: 9999px;
+      background: var(--btn); color: var(--btn-fg);
+      font-size: .8rem; font-weight: 800;
       display: inline-flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
     .step-body h3 {
-      font-size: .9rem; font-weight: 600; color: var(--txt);
-      margin-bottom: .2rem;
+      font-size: 1rem; font-weight: 700; color: var(--txt);
+      margin-bottom: .25rem; letter-spacing: -.01em;
     }
     .step-body p {
-      font-size: .8125rem; color: var(--txt-m); line-height: 1.45;
-      margin: 0;
+      font-size: .875rem; color: var(--txt-m); line-height: 1.5; margin: 0;
     }
+    .store-row {
+      display: flex; flex-wrap: wrap; gap: .55rem;
+      margin-top: .65rem;
+    }
+    .store-btn {
+      display: inline-flex; align-items: center; gap: .4rem;
+      font-size: .8rem; font-weight: 700;
+      color: var(--txt); background: #1a1a1a;
+      border: 1px solid #333; border-radius: .65rem;
+      padding: .55rem .85rem; text-decoration: none;
+    }
+    .store-btn:hover { border-color: #666; text-decoration: none; background: #222; }
+    .store-btn span { font-size: .65rem; font-weight: 500; color: var(--txt-l); display: block; line-height: 1.1; }
+    .store-btn strong { display: block; line-height: 1.15; }
 
-    .feature-list { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
-    .feature-list li {
-      display: grid; grid-template-columns: 1fr auto; gap: .35rem .75rem;
-      padding-bottom: .75rem; border-bottom: 1px solid var(--border);
+    /* Features */
+    .feat-list { list-style: none; display: flex; flex-direction: column; gap: 0; }
+    .feat-list li {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: .35rem .75rem;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
       align-items: baseline;
     }
-    .feature-list li:last-child { border-bottom: none; padding-bottom: 0; }
-    .feature-name { font-size: .875rem; font-weight: 600; color: var(--txt); }
-    .feature-when {
-      font-size: .7rem; font-weight: 600; color: var(--accent);
-      background: rgba(0,181,185,.1); border: 1px solid rgba(0,181,185,.3);
-      border-radius: 9999px; padding: .2rem .55rem; white-space: nowrap;
+    .feat-list li:first-child { padding-top: 0; }
+    .feat-list li:last-child { border-bottom: none; padding-bottom: 0; }
+    .feat-name { font-size: .95rem; font-weight: 700; color: var(--txt); }
+    .feat-when {
+      font-size: .65rem; font-weight: 700; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid var(--accent-border);
+      border-radius: 9999px; padding: .25rem .55rem; white-space: nowrap;
     }
-    .feature-desc {
+    .feat-desc {
       grid-column: 1 / -1;
-      font-size: .8125rem; color: var(--txt-m); line-height: 1.45;
-    }
-
-    .instructions {
-      background: rgba(0,181,185,.08);
-      border: 1px solid rgba(0,181,185,.28);
-      border-radius: 1.125rem;
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-    }
-    .instructions h2 {
-      font-size: .95rem; font-weight: 700; color: var(--accent);
-      margin-bottom: .75rem;
-    }
-    .instructions ol {
-      padding-left: 1.15rem;
-      display: flex; flex-direction: column; gap: .45rem;
-    }
-    .instructions li {
       font-size: .85rem; color: var(--txt-m); line-height: 1.45;
     }
 
-    .portrait-row {
+    /* Big bets */
+    .bets ol {
+      padding-left: 1.15rem;
+      display: flex; flex-direction: column; gap: .55rem;
+    }
+    .bets li {
+      font-size: .9rem; color: var(--txt-m); line-height: 1.45;
+    }
+    .bets li strong { color: var(--txt); font-weight: 700; }
+
+    /* Why Grok Bot */
+    .why-grid {
+      display: grid; gap: .75rem;
+    }
+    @media (min-width: 560px) {
+      .why-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Portrait strip */
+    .identity {
       display: flex; align-items: center; gap: 1rem;
-      margin-top: 1rem; padding-top: 1rem;
+      margin-top: 1.25rem; padding-top: 1.25rem;
       border-top: 1px solid var(--border);
     }
-    .portrait-row img {
-      width: 64px; height: 64px; border-radius: .75rem;
-      object-fit: cover; border: 1px solid var(--border);
-      flex-shrink: 0;
+    .identity img {
+      width: 72px; height: 72px; border-radius: .9rem;
+      object-fit: cover; border: 1px solid var(--border); flex-shrink: 0;
     }
-    .portrait-row p {
-      font-size: .8125rem; color: var(--txt-m); line-height: 1.45; margin: 0;
+    .identity p {
+      font-size: .85rem; color: var(--txt-m); line-height: 1.45; margin: 0;
     }
 
-    .footer-cta {
+    /* Final CTA */
+    .final {
+      margin-top: 2.5rem;
+      text-align: center;
+      padding: 2.25rem 1.35rem;
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 1.125rem;
-      padding: 1.5rem 1.25rem;
-      text-align: center;
-      margin-bottom: 1rem;
+      border-radius: 1.25rem;
     }
-    .footer-cta h2 { font-size: 1.125rem; font-weight: 700; margin-bottom: .5rem; }
-    .footer-cta p {
-      font-size: .875rem; color: var(--txt-m); margin-bottom: 1rem; line-height: 1.5;
+    .final h2 {
+      font-size: clamp(1.35rem, 3.5vw, 1.75rem);
+      font-weight: 700; letter-spacing: -.02em;
+      margin-bottom: .55rem;
     }
-    .footer-cta .cta-row { justify-content: center; margin-bottom: 0; }
+    .final p {
+      font-size: .95rem; color: var(--txt-m);
+      margin-bottom: 1.35rem; max-width: 28rem; margin-left: auto; margin-right: auto;
+    }
+    .final .hero-ctas { margin-bottom: .85rem; }
 
-    .footer-note {
-      font-size: .6875rem; color: var(--txt-l); line-height: 1.65;
-      text-align: center; margin-top: 1.5rem;
+    .footer {
+      margin-top: 2.5rem;
+      text-align: center;
+      font-size: .7rem; color: var(--txt-l); line-height: 1.7;
     }
-    .footer-note a { color: var(--accent); font-weight: 600; }
-    .footer-note strong { color: var(--txt-m); }
+    .footer a { color: var(--txt-m); font-weight: 600; }
+    .footer strong { color: var(--txt-m); }
   </style>
 </head>
 <body>
 
-<header class="header">
-  <a class="logo" href="/">WeBetAI</a>
-  <span class="header-badge">Betty · Free Daily</span>
-</header>
+<nav class="nav">
+  <a class="nav-brand" href="/">
+    <span class="nav-dot" aria-hidden="true"></span>
+    WeBetAI
+  </a>
+  <div class="nav-links">
+    <a class="nav-pill" href="https://x.ai/grok" target="_blank" rel="noopener noreferrer">Grok by xAI</a>
+    <a class="nav-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
+  </div>
+</nav>
 
-<main class="main">
-  <section class="hero">
-    <div class="eyebrow">Free · Grok Bot · WeBetAI</div>
-    <h1>Betty — free daily sportsbook picks</h1>
-    <p class="hero-sub">
-      Omega cards in your pocket every morning. Install Betty once on Grok Bot —
-      get today’s straights + parlay, then ask WHY, SCORE, or for more context anytime.
+<main class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Free · Grok Bot · WeBetAI × xAI</div>
+    <h1>Daily sportsbook picks.<br>Inside <em>Grok</em>.</h1>
+    <p class="hero-lead">
+      Betty is a free Grok Bot from WeBetAI. She delivers today’s Omega card —
+      straights, a daily 3-leg, WHY, SCORE, and KPIs — in the same chat you already use for Grok.
     </p>
-    <div class="cta-row">
-      <a class="cta-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
-      <a class="cta-secondary" href="/daily-omega">See today’s card</a>
-      <a class="cta-secondary" href="/betty-guide">How Betty works</a>
+    <div class="hero-ctas">
+      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
+      <a class="btn-secondary" href="#get-grok">Don’t have Grok? Get it free</a>
     </div>
+    <p class="hero-note">
+      New to Grok? Download the app or open <a href="https://grok.com" target="_blank" rel="noopener noreferrer">grok.com</a>, then come back and Add Betty.
+    </p>
 
-    <div class="video-block">
+    <div class="video-shell">
       <video
         controls
         playsinline
@@ -285,118 +383,230 @@
         title="Betty Free Daily onboarding"
       >
         <source src="/betty-onboarding.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
       </video>
     </div>
-    <p class="video-caption">~15s intro — what Betty does and how to get today’s card after you Add.</p>
+    <p class="video-cap">~15s — what Betty does after you Add her</p>
+  </header>
 
-    <div class="portrait-row">
-      <img src="/betty-intro.jpg" alt="Betty of WeBetAI" width="64" height="64" />
-      <p>by WeBetAI @ webetsocial.com — the same Betty you see on <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a>.</p>
+  <section class="section" aria-labelledby="product">
+    <div class="section-label">The product</div>
+    <h2 id="product">Betty sells the card. Grok Bot is the OS.</h2>
+    <p>
+      You don’t install a separate sports app. You Add a specialist bot into Grok —
+      xAI’s AI product on web, iOS, and Android — and Betty runs the daily free-picks workflow for you.
+    </p>
+    <div class="grid-3">
+      <div class="card">
+        <h3>Betty</h3>
+        <p>WeBetAI’s free daily Omega voice — intro, Big Bets tips, summary-first card, cadence.</p>
+      </div>
+      <div class="card">
+        <h3>Grok Bot</h3>
+        <p>xAI’s bot platform inside Grok. Chat, skills, routines — where Betty lives.</p>
+      </div>
+      <div class="card">
+        <h3>Omega</h3>
+        <p>The live public card: straights + optimized 3-leg, KPIs, site deep-read on /daily-omega.</p>
+      </div>
+    </div>
+    <div class="identity">
+      <img src="/betty-intro.jpg" width="72" height="72" alt="Betty of WeBetAI" />
+      <p>
+        by WeBetAI @ webetsocial.com — same Betty as
+        <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X.
+        Built for people who live in the X / Grok stack.
+      </p>
     </div>
   </section>
 
-  <section class="section">
-    <h2>How it works</h2>
+  <section class="install" id="get-grok" aria-labelledby="install-h">
+    <div class="section-label">Start here if you don’t have Grok yet</div>
+    <h2 id="install-h" style="font-size:clamp(1.35rem,3.5vw,1.65rem);font-weight:700;letter-spacing:-.02em;color:var(--x-white);margin-bottom:.65rem;line-height:1.2;">
+      Get Grok → Add Betty → today’s card
+    </h2>
+    <p style="font-size:.95rem;color:var(--txt-m);line-height:1.55;margin-bottom:0;max-width:38rem;">
+      Onboarding only works after Grok is installed (or open on the web). If a friend sends you this page and you don’t have Grok Bot yet, do this once:
+    </p>
     <ol class="steps">
       <li>
-        <span class="step-num">1</span>
+        <span class="step-n">1</span>
         <div class="step-body">
-          <h3>Add Betty</h3>
-          <p>One tap on Grok Bot. No paid upsell in the free daily flow.</p>
+          <h3>Download Grok (free)</h3>
+          <p>
+            Official xAI apps — or use Grok on the web if you prefer desktop.
+          </p>
+          <div class="store-row">
+            <a class="store-btn" href="https://apps.apple.com/us/app/grok-ai/id6670324846" target="_blank" rel="noopener noreferrer">
+              <span>Download on the</span>
+              <strong>App Store</strong>
+            </a>
+            <a class="store-btn" href="https://play.google.com/store/apps/details?id=ai.x.grok" target="_blank" rel="noopener noreferrer">
+              <span>Get it on</span>
+              <strong>Google Play</strong>
+            </a>
+            <a class="store-btn" href="https://grok.com" target="_blank" rel="noopener noreferrer">
+              <span>Open on web</span>
+              <strong>grok.com</strong>
+            </a>
+            <a class="store-btn" href="https://x.ai/grok" target="_blank" rel="noopener noreferrer">
+              <span>Learn more</span>
+              <strong>x.ai/grok</strong>
+            </a>
+          </div>
         </div>
       </li>
       <li>
-        <span class="step-num">2</span>
+        <span class="step-n">2</span>
         <div class="step-body">
-          <h3>Meet Betty + Big Bets tips</h3>
-          <p>Quick intro, then five short instructions so you get the most out of her.</p>
+          <h3>Add Betty on Grok Bot</h3>
+          <p>
+            Tap the install link. That opens Betty’s public share inside Grok Bot and adds her to your bots.
+          </p>
+          <div class="store-row">
+            <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG" style="padding:.7rem 1.15rem;font-size:.85rem;">Add Betty — free</a>
+          </div>
         </div>
       </li>
       <li>
-        <span class="step-num">3</span>
+        <span class="step-n">3</span>
         <div class="step-body">
-          <h3>Today’s Omega card</h3>
-          <p>Bet summary first, then each pick, then the daily 3-leg parlay — with a link to the full site card.</p>
+          <h3>Meet Betty, then get the card</h3>
+          <p>
+            First messages: quick intro + Big Bets tips. Then today’s Omega bet summary, detail picks, and the daily parlay — with a link to the full site card.
+          </p>
         </div>
       </li>
       <li>
-        <span class="step-num">4</span>
+        <span class="step-n">4</span>
         <div class="step-body">
           <h3>Stay in the chat</h3>
-          <p>Ask WHY, SCORE, KPIs, or for more context. Morning / tip-off / finals cadence stays on.</p>
+          <p>
+            Ask <strong style="color:var(--txt)">WHY</strong>, <strong style="color:var(--txt)">SCORE</strong>, KPIs, or more context. Morning / tip-off / finals cadence stays on by default.
+          </p>
         </div>
       </li>
     </ol>
   </section>
 
-  <section class="instructions">
-    <h2>Betty Big Bets Instructions — Getting The Most Out Of Her</h2>
-    <ol>
-      <li>Read the bet summary first — units, odds, and risk / to-win at a glance.</li>
-      <li>Open any pick for the detail card; ask <strong style="color:var(--txt)">WHY</strong> when you want the full read.</li>
-      <li>Type <strong style="color:var(--txt)">SCORE</strong> during games for live ESPN updates on today’s card only.</li>
-      <li>Check KPIs anytime — Combined floor + Omega-only record.</li>
-      <li>Deep-dive the same card on <a href="/daily-omega">webetsocial.com/daily-omega</a> when you want the full site view.</li>
-    </ol>
-  </section>
-
-  <section class="section">
-    <h2>What you get — and when</h2>
-    <ul class="feature-list">
+  <section class="section" aria-labelledby="features">
+    <div class="section-label">Features</div>
+    <h2 id="features">What Betty actually does</h2>
+    <p>Not a feed. A daily operator in chat — product features you can use the second she lands.</p>
+    <ul class="feat-list">
       <li>
-        <span class="feature-name">Today’s Omega card</span>
-        <span class="feature-when">Now · mornings</span>
-        <span class="feature-desc">Straights + daily 3-leg parlay from live public Omega APIs.</span>
+        <span class="feat-name">Today’s Omega card</span>
+        <span class="feat-when">Mornings</span>
+        <span class="feat-desc">Straights + daily 3-leg from live public Omega APIs. Bet summary first, then each pick.</span>
       </li>
       <li>
-        <span class="feature-name">KPIs (Combined + Omega-only)</span>
-        <span class="feature-when">With card · on ask</span>
-        <span class="feature-desc">UI-floor Combined (Alpha thru Sep 21 + Omega from Sep 22) and Omega-only record / ROI.</span>
+        <span class="feat-name">Big Bets onboarding</span>
+        <span class="feat-when">First open</span>
+        <span class="feat-desc">Five short instructions so you know how to use summary, WHY, SCORE, KPIs, and the site deep-read.</span>
       </li>
       <li>
-        <span class="feature-name">Live score checks</span>
-        <span class="feature-when">On ask · in-game</span>
-        <span class="feature-desc">ESPN public scores mapped to today’s Omega matchups only.</span>
+        <span class="feat-name">KPIs — Combined + Omega-only</span>
+        <span class="feat-when">With card · on ask</span>
+        <span class="feat-desc">UI-floor Combined (Alpha thru Sep 21 + Omega from Sep 22) and Omega-only record / ROI.</span>
       </li>
       <li>
-        <span class="feature-name">Extra Grok + ESPN context</span>
-        <span class="feature-when">On ask</span>
-        <span class="feature-desc">Deeper read on any pick — never invents new bets.</span>
+        <span class="feat-name">Live SCORE</span>
+        <span class="feat-when">In-game</span>
+        <span class="feat-desc">ESPN public scores mapped only to today’s Omega matchups — type SCORE anytime.</span>
       </li>
       <li>
-        <span class="feature-name">Kalshi / Polymarket quotes</span>
-        <span class="feature-when">On ask · read-only</span>
-        <span class="feature-desc">Public quotes mapped to the card — no order placement.</span>
+        <span class="feat-name">WHY + Grok context</span>
+        <span class="feat-when">On ask</span>
+        <span class="feat-desc">Full reasoning and extra Grok + ESPN color on a pick — never invents new bets.</span>
       </li>
       <li>
-        <span class="feature-name">Short slate news drip</span>
-        <span class="feature-when">On ask</span>
-        <span class="feature-desc">ESPN-style headlines for today’s card sports.</span>
+        <span class="feat-name">Prediction-market quotes</span>
+        <span class="feat-when">On ask</span>
+        <span class="feat-desc">Kalshi / Polymarket public quotes mapped to the card. Read-only. No order placement.</span>
+      </li>
+      <li>
+        <span class="feat-name">Cadence</span>
+        <span class="feat-when">Auto</span>
+        <span class="feat-desc">Morning card-ready, tip-off, and evening finals — so the day doesn’t go silent after install.</span>
       </li>
     </ul>
   </section>
 
-  <section class="section">
-    <h2>Soft challenge — Pick 3</h2>
-    <p>After you install and see today’s card, challenge a friend vs the AI at <a href="https://webetsocial.com/pick3p2p">webetsocial.com/pick3p2p</a>. Leaderboard: <a href="https://webetsocial.com/pick3p2p/#leaderboard">#leaderboard</a>.</p>
-    <div class="cta-row" style="margin-bottom:0;margin-top:.875rem;">
-      <a class="cta-secondary" href="https://webetsocial.com/pick3p2p">Open Pick 3 PvP</a>
+  <section class="section bets" aria-labelledby="bets">
+    <div class="section-label">Inside the bot</div>
+    <h2 id="bets">Betty Big Bets Instructions</h2>
+    <p>The same tips she gives you on first open — so the sales page matches the product.</p>
+    <ol>
+      <li>Read the <strong>bet summary</strong> first — units, odds, and risk / to-win at a glance.</li>
+      <li>Open any pick for the detail card; ask <strong>WHY</strong> when you want the full read.</li>
+      <li>Type <strong>SCORE</strong> during games for live ESPN updates on today’s card only.</li>
+      <li>Check <strong>KPIs</strong> anytime — Combined floor + Omega-only record.</li>
+      <li>Deep-dive the same card on <a href="/daily-omega">webetsocial.com/daily-omega</a> when you want the full site view.</li>
+    </ol>
+  </section>
+
+  <section class="section" aria-labelledby="why-grok">
+    <div class="section-label">Why Grok Bot</div>
+    <h2 id="why-grok">Built for the X / xAI stack</h2>
+    <p>
+      Betty isn’t a random web widget. She’s a Grok Bot — so she inherits the product surface people already download for Grok:
+      mobile apps, web, chat, and the bot marketplace.
+    </p>
+    <div class="why-grid">
+      <div class="card">
+        <h3>One install, forever chat</h3>
+        <p>Add once. Betty stays in your Grok Bot list. No new password for WeBet.</p>
+      </div>
+      <div class="card">
+        <h3>Native to how you already read X</h3>
+        <p>See @WeBetSocialAI → land here → Get Grok if needed → Add Betty → card in chat.</p>
+      </div>
+      <div class="card">
+        <h3>Free daily MVP</h3>
+        <p>No paid hard-sell in the free bot flow. Product first. Soft Pick 3 after you understand the card.</p>
+      </div>
+      <div class="card">
+        <h3>Same card on the site</h3>
+        <p>Chat for speed. <a href="/daily-omega">/daily-omega</a> for the full branded deep-read when you want it.</p>
+      </div>
     </div>
   </section>
 
-  <section class="footer-cta">
-    <h2>Ready for today’s card?</h2>
-    <p>Add Betty → get the intro + Big Bets tips → today’s Omega card. Cadence stays on by default.</p>
-    <div class="cta-row">
-      <a class="cta-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
-      <a class="cta-secondary" href="/daily-omega">See today’s card</a>
+  <section class="section" aria-labelledby="pick3">
+    <div class="section-label">After the card</div>
+    <h2 id="pick3">Soft challenge — Pick 3</h2>
+    <p>
+      Once you’ve seen today’s card, challenge a friend vs the AI at
+      <a href="https://webetsocial.com/pick3p2p">webetsocial.com/pick3p2p</a>.
+      Leaderboard: <a href="https://webetsocial.com/pick3p2p/#leaderboard">#leaderboard</a>.
+    </p>
+    <div class="hero-ctas" style="justify-content:flex-start;margin:0;">
+      <a class="btn-secondary" href="https://webetsocial.com/pick3p2p">Open Pick 3 PvP</a>
+      <a class="btn-secondary" href="/betty-guide">How Betty works</a>
     </div>
   </section>
 
-  <p class="footer-note">
+  <section class="final">
+    <h2>Ready. Get Grok. Add Betty.</h2>
+    <p>
+      If Grok is already on your phone, jump straight to Add.
+      If not, grab the free app first — then come back to the same Add link.
+    </p>
+    <div class="hero-ctas">
+      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
+      <a class="btn-secondary" href="#get-grok">Download Grok</a>
+    </div>
+    <p class="hero-note" style="margin-bottom:0;">
+      App Store · Google Play · <a href="https://grok.com" target="_blank" rel="noopener noreferrer">grok.com</a> ·
+      <a href="https://x.ai/grok" target="_blank" rel="noopener noreferrer">x.ai/grok</a>
+    </p>
+  </section>
+
+  <p class="footer">
     Free Daily Sportsbook &amp; Prediction Market Picks — From Grok Bot Betty of WeBetAI<br>
-    Follow <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X for daily posts. This bot does not post to X itself.<br>
+    Follow <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X.
+    This bot does not post to X itself.<br>
+    Grok and Grok Bot are products of xAI.
+    WeBetAI is not affiliated with xAI beyond offering a public Grok Bot.<br>
     <strong>21+ · NFA · gamble responsibly</strong>
   </p>
 </main>

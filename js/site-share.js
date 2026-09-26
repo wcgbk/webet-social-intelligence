@@ -1,7 +1,9 @@
-/*! WeBet Social — stamp UTMs when visitors share the page link */
+/*! WeBet Social — Share popup with one-click social channels + UTM link */
 (function () {
   if (window.__wbSiteShare) return;
   window.__wbSiteShare = true;
+
+  var MENU_ID = 'wb-site-share-menu';
 
   function pageContent() {
     var path = (location.pathname || '/').replace(/\/+$/, '') || 'home';
@@ -26,8 +28,11 @@
     return p === '/grokbot';
   }
 
-  function grokbotShareText() {
-    return 'Free daily Edge sportsbook picks from Betty in Grok Bot. Add Betty, get the morning card (straights + daily parlay) in chat, plus tip-off and finals.';
+  function shareText() {
+    if (isGrokbotPage()) {
+      return 'Free daily Edge sportsbook picks from Betty on Grokbot. Add Betty on Grokbot — morning card (straights + daily parlay) in chat, plus tip-off and finals.';
+    }
+    return document.title || 'WeBet Social';
   }
 
   function toast(msg) {
@@ -35,7 +40,7 @@
     t.textContent = msg;
     t.setAttribute('role', 'status');
     Object.assign(t.style, {
-      position: 'fixed', left: '50%', bottom: isGrokbotPage() ? '112px' : '24px', transform: 'translateX(-50%)',
+      position: 'fixed', left: '50%', bottom: isGrokbotPage() ? '148px' : '24px', transform: 'translateX(-50%)',
       background: 'rgba(18,24,33,.96)', color: '#e8eef6', padding: '10px 14px',
       borderRadius: '10px', font: '600 13px/1.3 system-ui,-apple-system,sans-serif',
       zIndex: '2147483000', border: '1px solid #243041', boxShadow: '0 8px 30px rgba(0,0,0,.35)',
@@ -47,7 +52,7 @@
 
   async function copyTagged() {
     var link = taggedUrl();
-    var payload = isGrokbotPage() ? (grokbotShareText() + '\n' + link) : link;
+    var payload = isGrokbotPage() ? (shareText() + '\n' + link) : link;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(payload);
@@ -64,27 +69,149 @@
     }
   }
 
-  async function shareTagged() {
+  function closeMenu() {
+    var m = document.getElementById(MENU_ID);
+    if (m) m.remove();
+    document.removeEventListener('click', onDocClick, true);
+    document.removeEventListener('keydown', onEsc, true);
+  }
+
+  function onDocClick(e) {
+    var m = document.getElementById(MENU_ID);
+    var btn = document.getElementById('wb-site-share');
+    if (!m) return;
+    if (m.contains(e.target) || (btn && btn.contains(e.target))) return;
+    closeMenu();
+  }
+
+  function onEsc(e) {
+    if (e.key === 'Escape') closeMenu();
+  }
+
+  function openChannel(url) {
+    window.open(url, '_blank', 'noopener,noreferrer,width=640,height=640');
+    closeMenu();
+  }
+
+  function channelRows(link, text) {
+    var encText = encodeURIComponent(text);
+    var encUrl = encodeURIComponent(link);
+    var encBoth = encodeURIComponent(text + '\n' + link);
+    return [
+      { label: 'Post on X', href: 'https://x.com/intent/tweet?text=' + encBoth },
+      { label: 'Facebook', href: 'https://www.facebook.com/sharer/sharer.php?u=' + encUrl + '&quote=' + encText },
+      { label: 'WhatsApp', href: 'https://wa.me/?text=' + encBoth },
+      { label: 'Telegram', href: 'https://t.me/share/url?url=' + encUrl + '&text=' + encText },
+      { label: 'LinkedIn', href: 'https://www.linkedin.com/sharing/share-offsite/?url=' + encUrl },
+      { label: 'Email', href: 'mailto:?subject=' + encodeURIComponent(document.title || 'WeBet') + '&body=' + encBoth },
+      { label: 'SMS', href: 'sms:?&body=' + encBoth }
+    ];
+  }
+
+  function showMenu(anchor) {
+    closeMenu();
     var link = taggedUrl();
-    if (navigator.share) {
-      try {
-        var data = {
-          title: document.title || 'WeBet Social',
-          url: link
-        };
-        if (isGrokbotPage()) data.text = grokbotShareText();
-        await navigator.share(data);
-        return;
-      } catch (e) {
-        if (e && e.name === 'AbortError') return;
-      }
+    var text = shareText();
+    var menu = document.createElement('div');
+    menu.id = MENU_ID;
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Share options');
+    Object.assign(menu.style, {
+      position: 'absolute',
+      zIndex: '2147482999',
+      minWidth: '220px',
+      padding: '8px',
+      background: '#fff',
+      border: '1px solid #d7e4e2',
+      borderRadius: '14px',
+      boxShadow: '0 16px 40px rgba(0,76,84,.18)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px'
+    });
+
+    var title = document.createElement('div');
+    title.textContent = 'Share';
+    Object.assign(title.style, {
+      font: '800 11px/1.2 system-ui,-apple-system,sans-serif',
+      letterSpacing: '.06em',
+      textTransform: 'uppercase',
+      color: '#004C54',
+      padding: '6px 10px 8px'
+    });
+    menu.appendChild(title);
+
+    channelRows(link, text).forEach(function (row) {
+      var a = document.createElement('a');
+      a.href = row.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.setAttribute('role', 'menuitem');
+      a.textContent = row.label;
+      Object.assign(a.style, {
+        display: 'block',
+        padding: '10px 12px',
+        borderRadius: '10px',
+        font: '700 14px/1.2 system-ui,-apple-system,sans-serif',
+        color: '#1a1a1a',
+        textDecoration: 'none',
+        background: 'transparent'
+      });
+      a.addEventListener('mouseenter', function () { a.style.background = 'rgba(0,76,84,.08)'; });
+      a.addEventListener('mouseleave', function () { a.style.background = 'transparent'; });
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        openChannel(row.href);
+      });
+      menu.appendChild(a);
+    });
+
+    var copy = document.createElement('button');
+    copy.type = 'button';
+    copy.setAttribute('role', 'menuitem');
+    copy.textContent = isGrokbotPage() ? 'Copy text + link' : 'Copy link';
+    Object.assign(copy.style, {
+      marginTop: '4px',
+      padding: '10px 12px',
+      borderRadius: '10px',
+      border: '1px solid #004C54',
+      background: '#004C54',
+      color: '#fff',
+      font: '700 14px/1.2 system-ui,-apple-system,sans-serif',
+      cursor: 'pointer',
+      textAlign: 'left'
+    });
+    copy.addEventListener('click', function (e) {
+      e.preventDefault();
+      copyTagged().then(closeMenu);
+    });
+    menu.appendChild(copy);
+
+    var host = anchor.parentNode || document.body;
+    var hostPos = window.getComputedStyle(host).position;
+    if (hostPos === 'static') host.style.position = 'relative';
+    host.appendChild(menu);
+
+    // Position under the Share button, flip if near viewport edge
+    var rect = anchor.getBoundingClientRect();
+    var hostRect = host.getBoundingClientRect();
+    var top = rect.bottom - hostRect.top + 8;
+    var left = rect.right - hostRect.left - menu.offsetWidth;
+    if (left < 0) left = 0;
+    if (rect.bottom + menu.offsetHeight + 16 > window.innerHeight) {
+      top = rect.top - hostRect.top - menu.offsetHeight - 8;
     }
-    await copyTagged();
+    menu.style.top = Math.max(0, top) + 'px';
+    menu.style.left = Math.max(0, left) + 'px';
+
+    setTimeout(function () {
+      document.addEventListener('click', onDocClick, true);
+      document.addEventListener('keydown', onEsc, true);
+    }, 0);
   }
 
   function shouldSkip() {
     var p = (location.pathname || '').replace(/\/+$/, '') || '/';
-    // Homepage only — keep Share on dashboard and other pages
     if (p === '/' || p === '') return true;
     return p === '/admin' || p.indexOf('/admin/') === 0 ||
       p === '/users' || p.indexOf('/users/') === 0 ||
@@ -98,6 +225,7 @@
     b.className = 'wb-site-share-btn';
     b.textContent = 'Share';
     b.setAttribute('aria-label', 'Share this page');
+    b.setAttribute('aria-haspopup', 'menu');
     Object.assign(b.style, {
       display: 'inline-flex',
       alignItems: 'center',
@@ -119,7 +247,9 @@
     b.addEventListener('mouseleave', function () { b.style.opacity = '1'; });
     b.addEventListener('click', function (e) {
       e.preventDefault();
-      shareTagged();
+      e.stopPropagation();
+      if (document.getElementById(MENU_ID)) closeMenu();
+      else showMenu(b);
     });
     return b;
   }
@@ -128,7 +258,6 @@
     var actions = topbar.querySelector('#topbar-actions, .topbar-actions');
     var webit = topbar.querySelector('#topbar-webit-btn, .topbar-webit');
     var btn = makeShareButton();
-    // Pin Share into the fixed right cluster so title length never shifts it
     if (actions) {
       if (webit && webit.parentNode === actions) actions.insertBefore(btn, webit);
       else actions.insertBefore(btn, actions.firstChild);

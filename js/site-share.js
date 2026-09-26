@@ -28,11 +28,55 @@
     return p === '/grokbot';
   }
 
+  /* How-to Share On Socials only — nav Share stays on taggedUrl() / shareNative() */
+  var GROKBOT_SHARE_SHORT = 'https://tinyurl.com/2855hqug';
+  var GROKBOT_SHARE_LONG =
+    'https://webetsocial.com/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=grokbot';
+
   function shareText() {
     if (isGrokbotPage()) {
       return 'Free daily Edge sportsbook picks from Betty in Grok Bot — add her and get the morning card in chat.';
     }
     return document.title || 'WeBet Social';
+  }
+
+  function menuShareLink() {
+    return isGrokbotPage() ? GROKBOT_SHARE_SHORT : taggedUrl();
+  }
+
+  /** Natural, Title Case–friendly captions for the how-to Share menu (not the nav Share). */
+  function menuShareCopy(channel) {
+    if (!isGrokbotPage()) {
+      return { text: shareText(), subject: document.title || 'WeBet' };
+    }
+    var short = GROKBOT_SHARE_SHORT;
+    var base =
+      'Free daily Edge sportsbook picks from Betty in Grok Bot.\n\n' +
+      'Add her, get the morning Edge card in chat, and talk the picks through — voice or text.';
+    var x =
+      'Free daily Edge sportsbook picks from Betty in Grok Bot — add her for the morning card in chat, then talk the picks through.';
+    var linkedin =
+      'Free daily Edge sportsbook picks from Betty in Grok Bot.\n\n' +
+      'Add Betty, get the morning Edge card in chat, and talk the picks through.';
+    var emailBody =
+      'Hey —\n\n' +
+      'Betty of WeBetAI drops free daily Edge sportsbook picks in Grok Bot.\n\n' +
+      'Add her, get the morning card in chat, and talk the picks through (voice or text).\n\n' +
+      short + '\n';
+    var map = {
+      x: x,
+      facebook: base,
+      whatsapp: base,
+      telegram: base,
+      linkedin: linkedin,
+      email: emailBody,
+      sms: base,
+      copy: base
+    };
+    return {
+      text: map[channel] || base,
+      subject: 'Betty · Free Daily Sportsbook Picks on Grok Bot'
+    };
   }
 
   function toast(msg) {
@@ -112,25 +156,56 @@
     closeMenu();
   }
 
-  function channelRows(link, text) {
-    var encText = encodeURIComponent(text);
+  function channelRows(link) {
+    var x = menuShareCopy('x');
+    var fb = menuShareCopy('facebook');
+    var wa = menuShareCopy('whatsapp');
+    var tg = menuShareCopy('telegram');
+    var li = menuShareCopy('linkedin');
+    var em = menuShareCopy('email');
+    var sms = menuShareCopy('sms');
     var encUrl = encodeURIComponent(link);
-    var encBoth = encodeURIComponent(text + '\n' + link);
+    function both(payload) {
+      var t = payload.text || '';
+      return encodeURIComponent(t.indexOf(link) >= 0 ? t : (t + '\n\n' + link));
+    }
+    function textOnly(payload) {
+      return encodeURIComponent(payload.text || '');
+    }
     return [
-      { label: 'Post on X', href: 'https://x.com/intent/tweet?text=' + encBoth },
-      { label: 'Facebook', href: 'https://www.facebook.com/sharer/sharer.php?u=' + encUrl + '&quote=' + encText },
-      { label: 'WhatsApp', href: 'https://wa.me/?text=' + encBoth },
-      { label: 'Telegram', href: 'https://t.me/share/url?url=' + encUrl + '&text=' + encText },
+      { label: 'Post on X', href: 'https://x.com/intent/tweet?text=' + both(x) },
+      { label: 'Facebook', href: 'https://www.facebook.com/sharer/sharer.php?u=' + encUrl + '&quote=' + textOnly(fb) },
+      { label: 'WhatsApp', href: 'https://wa.me/?text=' + both(wa) },
+      { label: 'Telegram', href: 'https://t.me/share/url?url=' + encUrl + '&text=' + textOnly(tg) },
       { label: 'LinkedIn', href: 'https://www.linkedin.com/sharing/share-offsite/?url=' + encUrl },
-      { label: 'Email', href: 'mailto:?subject=' + encodeURIComponent(document.title || 'WeBet') + '&body=' + encBoth },
-      { label: 'SMS', href: 'sms:?&body=' + encBoth }
+      { label: 'Email', href: 'mailto:?subject=' + encodeURIComponent(em.subject) + '&body=' + both(em) },
+      { label: 'SMS', href: 'sms:?&body=' + both(sms) }
     ];
+  }
+
+  async function copyMenuShare() {
+    var link = menuShareLink();
+    var cap = menuShareCopy('copy');
+    var payload = (cap.text || '') + '\n\n' + link;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(payload);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = payload; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+      }
+      toast(isGrokbotPage() ? 'Share text + tiny link copied' : 'Link copied (tracked)');
+      return link;
+    } catch (e) {
+      toast('Could not copy — long-press to share');
+      return link;
+    }
   }
 
   function showMenu(anchor) {
     closeMenu();
-    var link = taggedUrl();
-    var text = shareText();
+    var link = menuShareLink();
     var menu = document.createElement('div');
     menu.id = MENU_ID;
     menu.setAttribute('role', 'menu');
@@ -160,7 +235,7 @@
     });
     menu.appendChild(title);
 
-    channelRows(link, text).forEach(function (row) {
+    channelRows(link).forEach(function (row) {
       var a = document.createElement('a');
       a.href = row.href;
       a.target = '_blank';
@@ -202,7 +277,7 @@
     });
     copy.addEventListener('click', function (e) {
       e.preventDefault();
-      copyTagged().then(closeMenu);
+      copyMenuShare().then(closeMenu);
     });
     menu.appendChild(copy);
 

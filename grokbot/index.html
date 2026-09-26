@@ -383,6 +383,28 @@
     }
     .step-body p { font-size: .86rem; color: var(--txt-m); line-height: 1.45; margin: 0; }
     .store-row { margin-top: .65rem; }
+    .step-share {
+      margin-top: .15rem;
+      padding: 1rem 1rem 1.05rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(0,76,84,.28);
+      background: rgba(0,76,84,.06);
+      box-shadow: 0 8px 22px rgba(0,76,84,.08);
+    }
+    .step-share h3 { font-size: 1.05rem !important; }
+    .step-share .btn-share-socials {
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-top: .7rem;
+      min-width: min(100%, 16rem);
+      padding: .85rem 1.35rem;
+      border: 0; border-radius: 9999px;
+      background: #004C54; color: #fff;
+      font-size: .95rem; font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0,76,84,.22);
+    }
+    .step-share .btn-share-socials:hover { filter: brightness(1.06); }
+
     .how-fallback {
       font-size: .84rem; color: var(--txt-m); line-height: 1.5; margin: 0;
     }
@@ -627,7 +649,7 @@
       <li>
         <span class="step-n">1</span>
         <div class="step-body">
-          <h3>Open Betty on Grok Bot</h3>
+          <h3>Add Betty on Grokbot</h3>
           <p>Use the button below, then choose <strong>Add to Grok Bot</strong> on x.ai.</p>
           <div class="store-row">
             <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grokbot</a>
@@ -636,9 +658,10 @@
       </li>
       <li>
         <span class="step-n">2</span>
-        <div class="step-body">
-          <h3>Allow notifications</h3>
-          <p>Morning Edge card, tip-off, and evening finals land in chat.</p>
+        <div class="step-body step-share">
+          <h3>Share on socials</h3>
+          <p>One tap to post Betty on X, Facebook, WhatsApp, Telegram, and more — or copy the link.</p>
+          <button type="button" class="btn-share-socials" data-wb-share-menu id="share-on-socials">Share on socials</button>
         </div>
       </li>
       <li>
@@ -801,6 +824,23 @@
     playVideo();
     syncBar();
   });
+})();
+</script>
+<script>
+(function () {
+  function bind() {
+    var btn = document.getElementById('share-on-socials');
+    if (!btn || btn.__wbBound) return;
+    btn.__wbBound = true;
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof window.wbOpenShareMenu === 'function') window.wbOpenShareMenu(btn);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+  window.addEventListener('load', bind);
 })();
 </script>
 <script src="/js/site-share.js" defer></script>

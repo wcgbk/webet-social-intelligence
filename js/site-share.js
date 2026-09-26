@@ -1,4 +1,4 @@
-/*! WeBet Social — Share popup with one-click social channels + UTM link */
+/*! WeBet Social — nav Share = native sheet; optional channel popup via wbOpenShareMenu */
 (function () {
   if (window.__wbSiteShare) return;
   window.__wbSiteShare = true;
@@ -69,6 +69,25 @@
     }
   }
 
+  /** Upper-right Share: native iOS/device sheet, clipboard fallback */
+  async function shareNative() {
+    var link = taggedUrl();
+    if (navigator.share) {
+      try {
+        var data = {
+          title: document.title || 'WeBet Social',
+          url: link
+        };
+        if (isGrokbotPage()) data.text = shareText();
+        await navigator.share(data);
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+    await copyTagged();
+  }
+
   function closeMenu() {
     var m = document.getElementById(MENU_ID);
     if (m) m.remove();
@@ -78,9 +97,9 @@
 
   function onDocClick(e) {
     var m = document.getElementById(MENU_ID);
-    var btn = document.getElementById('wb-site-share');
     if (!m) return;
-    if (m.contains(e.target) || (btn && btn.contains(e.target))) return;
+    if (m.contains(e.target)) return;
+    if (e.target && e.target.closest && e.target.closest('[data-wb-share-menu]')) return;
     closeMenu();
   }
 
@@ -115,7 +134,7 @@
     var menu = document.createElement('div');
     menu.id = MENU_ID;
     menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'Share options');
+    menu.setAttribute('aria-label', 'Share on socials');
     Object.assign(menu.style, {
       position: 'absolute',
       zIndex: '2147482999',
@@ -131,7 +150,7 @@
     });
 
     var title = document.createElement('div');
-    title.textContent = 'Share';
+    title.textContent = 'Share on socials';
     Object.assign(title.style, {
       font: '800 11px/1.2 system-ui,-apple-system,sans-serif',
       letterSpacing: '.06em',
@@ -187,28 +206,40 @@
     });
     menu.appendChild(copy);
 
-    var host = anchor.parentNode || document.body;
+    var host = (anchor && anchor.parentNode) || document.body;
     var hostPos = window.getComputedStyle(host).position;
     if (hostPos === 'static') host.style.position = 'relative';
     host.appendChild(menu);
 
-    // Position under the Share button, flip if near viewport edge
-    var rect = anchor.getBoundingClientRect();
-    var hostRect = host.getBoundingClientRect();
-    var top = rect.bottom - hostRect.top + 8;
-    var left = rect.right - hostRect.left - menu.offsetWidth;
-    if (left < 0) left = 0;
-    if (rect.bottom + menu.offsetHeight + 16 > window.innerHeight) {
-      top = rect.top - hostRect.top - menu.offsetHeight - 8;
+    if (anchor && anchor.getBoundingClientRect) {
+      var rect = anchor.getBoundingClientRect();
+      var hostRect = host.getBoundingClientRect();
+      var top = rect.bottom - hostRect.top + 8;
+      var left = rect.left - hostRect.left;
+      if (left + menu.offsetWidth > hostRect.width) {
+        left = Math.max(0, hostRect.width - menu.offsetWidth);
+      }
+      if (rect.bottom + menu.offsetHeight + 16 > window.innerHeight) {
+        top = rect.top - hostRect.top - menu.offsetHeight - 8;
+      }
+      menu.style.top = Math.max(0, top) + 'px';
+      menu.style.left = Math.max(0, left) + 'px';
+    } else {
+      menu.style.position = 'fixed';
+      menu.style.left = '50%';
+      menu.style.top = '30%';
+      menu.style.transform = 'translateX(-50%)';
     }
-    menu.style.top = Math.max(0, top) + 'px';
-    menu.style.left = Math.max(0, left) + 'px';
 
     setTimeout(function () {
       document.addEventListener('click', onDocClick, true);
       document.addEventListener('keydown', onEsc, true);
     }, 0);
   }
+
+  window.wbOpenShareMenu = function (anchor) {
+    showMenu(anchor || null);
+  };
 
   function shouldSkip() {
     var p = (location.pathname || '').replace(/\/+$/, '') || '/';
@@ -225,7 +256,6 @@
     b.className = 'wb-site-share-btn';
     b.textContent = 'Share';
     b.setAttribute('aria-label', 'Share this page');
-    b.setAttribute('aria-haspopup', 'menu');
     Object.assign(b.style, {
       display: 'inline-flex',
       alignItems: 'center',
@@ -247,9 +277,7 @@
     b.addEventListener('mouseleave', function () { b.style.opacity = '1'; });
     b.addEventListener('click', function (e) {
       e.preventDefault();
-      e.stopPropagation();
-      if (document.getElementById(MENU_ID)) closeMenu();
-      else showMenu(b);
+      shareNative();
     });
     return b;
   }

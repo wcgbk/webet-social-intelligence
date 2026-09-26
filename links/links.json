@@ -1,0 +1,33 @@
+{
+  "defaults": {
+    "utm_source": "x",
+    "utm_medium": "social",
+    "utm_campaign": "webet"
+  },
+  "links": [
+    {
+      "id": "betty-x",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "note": "Betty sales page for X posts and bio",
+      "created": "2026-09-26T22:00:03.995Z"
+    },
+    {
+      "id": "6dzbjs",
+      "to": "/daily-omega",
+      "utm_campaign": "omega",
+      "note": "Example: daily Omega card link for X posts",
+      "created": "2026-09-26T22:00:04.107Z"
+    },
+    {
+      "id": "tf265h",
+      "to": "/grokbot#follow",
+      "utm_campaign": "betty",
+      "utm_content": "share_follow",
+      "note": "Example: hash destinations keep the #fragment",
+      "created": "2026-09-26T22:00:04.230Z"
+    }
+  ]
+}

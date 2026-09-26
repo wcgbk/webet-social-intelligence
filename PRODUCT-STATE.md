@@ -173,6 +173,7 @@ Captured from a founder call. These are next steps only. No implementation until
 5. **PVP timing:** the pick-three PVP / peer-to-peer wager prompt is a follow-up sent later in the day (or about an hour after the first day's picks), then on a similar periodic cadence. It is never embedded in the main daily message.
 
 ## Conventions every cycle MUST follow
+- **Links in posts and shares:** use a tracked short link, `node scripts/new-link.js --to /page [--campaign x] [--push]`, which gives `webetsocial.com/r/<id>` with UTMs attached. See `docs/SHORT-LINKS.md`.
 - ⚠️ KNOWN UNTRACKED RISK: the old live site had ~266 curated files; the git-tracked set is smaller, so untracked-but-live pages/assets/functions get DROPPED by every deploy. Already restored: dashboard menu pages (betty,guardian,mlb,p2p-sports,p2p-trending), site images, ALL 168 functions. STILL UNTRACKED (may 404 from non-dashboard links): authenticity, rif, prediction-markets, scorecard, fox, predictions, props, scanner, etc. — restore on report or do a full sweep. Before deleting/assuming a 404 is intentional, check if the dir exists locally & is just untracked.
 - ⚠️ DEPLOY SHIPS ONLY GIT-TRACKED FILES (proven 2026-06-13: untracked images 404'd in prod —
   the CLI walks the git index, not the directory). ANY new/needed static asset MUST be

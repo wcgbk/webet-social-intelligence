@@ -561,6 +561,53 @@
     .footer a { color: var(--txt-m); font-weight: 600; }
     .footer strong { color: var(--txt-m); }
 
+
+    /* Sticky bottom install bar */
+    .sticky-bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+      display: none;
+      align-items: center; justify-content: center; gap: .75rem;
+      padding: .75rem 1rem calc(.75rem + env(safe-area-inset-bottom, 0px));
+      background: rgba(255,255,255,.96);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 -8px 28px rgba(0,76,84,.10);
+    }
+    .sticky-bar.is-visible { display: flex; }
+    .sticky-bar-label {
+      display: none; align-items: center; gap: .5rem;
+      font-size: .85rem; font-weight: 700; color: var(--txt);
+      letter-spacing: -.01em;
+    }
+    .sticky-bar-logo {
+      width: 28px; height: 28px; border-radius: .55rem;
+      object-fit: cover; border: 1px solid var(--border);
+    }
+    .sticky-bar .btn-primary {
+      padding: .85rem 1.4rem; font-size: .95rem;
+    }
+    @media (min-width: 480px) {
+      .sticky-bar-label { display: inline-flex; }
+    }
+    body.sticky-pad {
+      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    body.embed .sticky-bar { display: none !important; }
+    body.embed.sticky-pad { padding-bottom: 0; }
+
+    .x-follow {
+      gap: .45rem;
+    }
+    .x-follow svg {
+      width: 14px; height: 14px; flex-shrink: 0;
+    }
+    .bets-under-video {
+      margin-top: 1.25rem;
+    }
+    .hero-ctas { margin-bottom: .75rem; }
+    .hero-note { margin-bottom: 1.15rem; }
+
     /* Dashboard iframe embed — hide sticky header; standalone /grokbot keeps full chrome */
     body.embed .nav { display: none !important; }
     body.embed { padding-top: 0; }
@@ -571,10 +618,32 @@
 <script>
 (function () {
   try {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  } catch (e) {}
+  try {
     if (new URLSearchParams(location.search).get('embed') === '1') {
       document.documentElement.classList.add('embed');
       document.body.classList.add('embed');
     }
+  } catch (e) {}
+  try {
+    var h = (location.hash || '').toLowerCase();
+    if (h === '#how' || h === '#how-h' || h === '#install' || h === '#install-h' || h.indexOf('install') !== -1) {
+      history.replaceState(null, '', location.pathname + location.search);
+      h = '';
+    }
+    // Stay above the fold on load (Betty video + headline) — never jump to install.
+    if (!h || h === '#how' || h === '#how-h') {
+      window.scrollTo(0, 0);
+    }
+  } catch (e) {}
+  try {
+    window.addEventListener('load', function () {
+      var h2 = (location.hash || '').toLowerCase();
+      if (!h2 || h2 === '#how' || h2 === '#how-h' || h2.indexOf('install') !== -1) {
+        window.scrollTo(0, 0);
+      }
+    });
   } catch (e) {}
 })();
 </script>
@@ -585,7 +654,7 @@
       <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#1a1a1a"/>
       <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
     </svg>
-    WeBetAI
+    WeBet
   </a>
   <a class="nav-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
   <div class="nav-share-slot" aria-label="Share"></div>
@@ -603,29 +672,30 @@
 
     <div class="video-shell">
       <video
-        controls
+        id="betty-intro-video"
+        autoplay
+        muted
         playsinline
-        preload="metadata"
+        controls
+        preload="auto"
         poster="/betty-intro.jpg"
         title="Betty Free Daily onboarding"
       >
         <source src="/betty-onboarding.mp4" type="video/mp4" />
       </video>
     </div>
-    <p class="video-cap">~15s — what happens after you Add Betty</p>
 
     <div class="hero-lead-stack">
-      <p><strong>Install Grok Bot. Add Betty.</strong> She sends you free Edge sportsbook picks every morning — straights, a daily parlay, right in chat.</p>
-      <p>Allow notifications once, and tip-off updates plus evening finals show up without you chasing the site.</p>
+      <p><strong>Meet Betty in Grok Bot.</strong> Every morning she drops your free Edge card in chat — straights plus a daily parlay, bet summary first so you see the board in one glance.</p>
+      <p>Allow notifications once and she’ll ping tip-off and evening finals. Tap <strong>Add Betty</strong> in the header or below — then <strong>Add to Grok Bot</strong> on x.ai (the app prompts if you need it).</p>
     </div>
 
     <div class="hero-ctas">
-      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty — free</a>
-      <a class="btn-secondary" href="#how">How to get the morning card</a>
+      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
+      <a class="btn-secondary" href="#bets">Betty Big Bets Tips</a>
     </div>
     <p class="hero-note">
-      One tap opens Betty’s share page → <strong>Add to Grok Bot</strong>.
-      If the app isn’t installed yet, you’ll be prompted to get Grok Bot.
+      Path: <strong>Add Betty</strong> → <strong>Add to Grok Bot</strong> on x.ai. Free Edge morning card. 21+ · NFA.
     </p>
 
 <section class="bets bets-under-video" aria-labelledby="bets">
@@ -677,43 +747,46 @@
         <div class="x-card-handle">@WeBetSocialAI</div>
         <p class="x-card-bio">Free daily Edge sportsbook picks. Same Betty on Grok Bot — follow for the daily card on X.</p>
       </div>
-      <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer">Follow</a>
+      <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer" aria-label="Follow Us On X">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.828L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/></svg>
+        Follow Us On X
+      </a>
     </div>
   </section>
 
   <section class="install" id="how" aria-labelledby="how-h">
     <div class="section-label">Install</div>
     <h2 id="how-h" style="font-size:clamp(1.35rem,3.5vw,1.65rem);font-weight:700;letter-spacing:-.02em;color:var(--light-txt);margin-bottom:.65rem;line-height:1.2;">
-      Get Betty in two taps
+      Install Betty On Grok Bot
     </h2>
     <p style="font-size:.95rem;color:var(--light-txt-m);line-height:1.55;margin-bottom:0;max-width:38rem;">
-      You don’t need a separate WeBet app. Betty lives in Grok Bot. The Add link is the whole install path — including getting Grok Bot if you don’t have it yet.
+      Use the <strong>Add Betty</strong> button (header, hero, or sticky bar). On x.ai choose <strong>Add to Grok Bot</strong>. No separate WeBet app — Betty lives inside Grok Bot, and the flow prompts the app install if you need it.
     </p>
     <ol class="steps">
       <li>
         <span class="step-n">1</span>
         <div class="step-body">
           <h3>Add Betty</h3>
-          <p>Tap the button. On the share page, choose <strong>Add to Grok Bot</strong>. That copies Betty into your bots.</p>
+          <p>Tap <strong>Add Betty</strong>, then <strong>Add to Grok Bot</strong> on the x.ai page. That puts Betty in your bots list.</p>
           <div class="store-row">
-            <a class="btn-primary btn-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty — free</a>
+            <a class="btn-primary btn-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
           </div>
         </div>
       </li>
       <li>
         <span class="step-n">2</span>
         <div class="step-body">
-          <h3>Allow notifications</h3>
-          <p>Turn them on for Betty so the free morning Edge card (and tip-off / finals) lands in chat every day.</p>
+          <h3>Allow Notifications</h3>
+          <p>Turn them on for Betty so the free morning Edge card, tip-off updates, and evening finals land in chat.</p>
         </div>
       </li>
     </ol>
     <p class="how-fallback">
-      Don’t have Grok Bot yet? The Add flow prompts you to install it.
-      Prefer the store directly:
+      Prefer the store first?
       <a href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">App Store</a>
       ·
       <a href="https://play.google.com/store/apps/details?id=ai.x.grok.bot" target="_blank" rel="noopener noreferrer">Google Play</a>
+      — then come back and tap Add Betty.
     </p>
   </section>
 
@@ -805,13 +878,13 @@
   </section>
 
   <section class="final">
-    <h2>Add Betty. Get free picks every morning.</h2>
+    <h2>Add Betty. Get Free Picks Every Morning.</h2>
     <p>
-      One link. Add to Grok Bot. Allow notifications. That’s the whole install.
+      Tap Add Betty, choose Add to Grok Bot, allow notifications. Free Edge card in chat.
     </p>
     <div class="hero-ctas">
-      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty — free</a>
-      <a class="btn-secondary" href="#how">How it works</a>
+      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
+      <a class="btn-secondary" href="#bets">Betty Big Bets Tips</a>
     </div>
     <p class="hero-note" style="margin-bottom:0;">
       No Grok Bot yet? The Add flow prompts the install.
@@ -830,6 +903,50 @@
 </div><!-- /.fold-light -->
 </main>
 
+<div class="sticky-bar" id="sticky-bar" role="region" aria-label="Install Betty On Grok Bot" hidden>
+  <span class="sticky-bar-label">
+    <img class="sticky-bar-logo" src="/grok-bot-logo.png" width="28" height="28" alt="" />
+    Install Betty On Grok Bot
+  </span>
+  <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
+</div>
+
+<script>
+(function () {
+  function tryPlay() {
+    var v = document.getElementById('betty-intro-video');
+    if (!v) return;
+    try {
+      var p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(function () {});
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryPlay);
+  } else {
+    tryPlay();
+  }
+})();
+
+(function () {
+  var bar = document.getElementById('sticky-bar');
+  if (!bar) return;
+  function sync() {
+    if (document.body.classList.contains('embed')) {
+      bar.classList.remove('is-visible');
+      bar.hidden = true;
+      document.body.classList.remove('sticky-pad');
+      return;
+    }
+    var show = window.scrollY > 60;
+    bar.classList.toggle('is-visible', show);
+    bar.hidden = !show;
+    document.body.classList.toggle('sticky-pad', show);
+  }
+  window.addEventListener('scroll', sync, { passive: true });
+  sync();
+})();
+</script>
 <script src="/js/site-share.js" defer></script>
 </body>
 </html>

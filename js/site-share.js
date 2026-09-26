@@ -21,6 +21,15 @@
     return url.toString();
   }
 
+  function isGrokbotPage() {
+    var p = (location.pathname || '').replace(/\/+$/, '') || '/';
+    return p === '/grokbot';
+  }
+
+  function grokbotShareText() {
+    return 'Free daily Edge sportsbook picks from Betty in Grok Bot. Add Betty, get the morning card (straights + daily parlay) in chat, plus tip-off and finals.';
+  }
+
   function toast(msg) {
     var t = document.createElement('div');
     t.textContent = msg;
@@ -38,15 +47,16 @@
 
   async function copyTagged() {
     var link = taggedUrl();
+    var payload = isGrokbotPage() ? (grokbotShareText() + '\n' + link) : link;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(link);
+        await navigator.clipboard.writeText(payload);
       } else {
         var ta = document.createElement('textarea');
-        ta.value = link; document.body.appendChild(ta); ta.select();
+        ta.value = payload; document.body.appendChild(ta); ta.select();
         document.execCommand('copy'); ta.remove();
       }
-      toast('Link copied (tracked)');
+      toast(isGrokbotPage() ? 'Share text copied' : 'Link copied (tracked)');
       return link;
     } catch (e) {
       toast('Could not copy — long-press to share');
@@ -58,10 +68,12 @@
     var link = taggedUrl();
     if (navigator.share) {
       try {
-        await navigator.share({
+        var data = {
           title: document.title || 'WeBet Social',
           url: link
-        });
+        };
+        if (isGrokbotPage()) data.text = grokbotShareText();
+        await navigator.share(data);
         return;
       } catch (e) {
         if (e && e.name === 'AbortError') return;

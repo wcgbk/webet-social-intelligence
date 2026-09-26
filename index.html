@@ -103,36 +103,27 @@
       font-size: 1.125rem; font-weight: 700;
       color: #ffffff; letter-spacing: -0.04em;
     }
-    .nav-cta {
-      font-family: var(--mono); font-size: 13px; font-weight: 400;
-      color: #ffffff; text-decoration: none;
-      padding: 9px 20px; border-radius: 9999px;
+    /* Both header CTAs share one clear (outline) style: same height, one line, no wrap. */
+    .nav-cta, .nav-cta-grok {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 38px; box-sizing: border-box;
+      font-family: var(--mono); font-size: 13px; font-weight: 500;
+      color: #ffffff; text-decoration: none; white-space: nowrap; line-height: 1;
+      padding: 0 18px; border-radius: 9999px;
+      background: rgba(255,255,255,0.04);
       border: 1.5px solid rgba(255,255,255,0.35);
       letter-spacing: 1px; text-transform: uppercase;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
       transition: all 0.25s;
     }
-    .nav-cta:hover {
+    .nav-cta:hover, .nav-cta-grok:hover {
       background: rgba(255,255,255,0.12);
       border-color: rgba(255,255,255,0.6);
     }
     .nav-right {
       display: flex; align-items: center; gap: 10px;
     }
-    .nav-cta-grok {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-family: var(--mono); font-size: 13px; font-weight: 600;
-      color: #ffffff; text-decoration: none;
-      padding: 8px 16px 8px 12px; border-radius: 9999px;
-      background: #004C54;
-      border: 1.5px solid #004C54;
-      letter-spacing: 0.5px; text-transform: uppercase;
-      transition: all 0.25s;
-    }
-    .nav-cta-grok:hover {
-      background: #003d44;
-      border-color: #003d44;
-      filter: brightness(1.05);
-    }
+    .nav-cta-grok { padding-left: 10px; }
     .nav-cta-grok img {
       width: 20px; height: 20px; border-radius: 5px;
       object-fit: cover; flex-shrink: 0;
@@ -503,8 +494,8 @@
     @media (max-width: 768px) {
       .nav { padding: 0 20px; height: 56px; }
       .nav-wordmark { font-size: 1.125rem; }
-      .nav-cta { font-size: 13px; padding: 8px 18px; }
-      .nav-cta-grok { font-size: 12px; padding: 7px 14px 7px 10px; gap: 6px; }
+      .nav-cta, .nav-cta-grok { font-size: 12px; height: 36px; padding: 0 14px; gap: 6px; }
+      .nav-cta-grok { padding-left: 8px; }
       .nav-cta-grok img { width: 18px; height: 18px; }
       .nav-right { gap: 8px; }
 
@@ -529,9 +520,10 @@
 
     @media (max-width: 430px) {
       .nav { padding: 0 16px; }
-      .nav-cta { font-size: 12px; padding: 7px 16px; }
-      .nav-cta-grok { font-size: 11px; padding: 6px 12px 6px 8px; }
+      .nav-cta, .nav-cta-grok { font-size: 11px; height: 34px; padding: 0 11px; letter-spacing: .4px; }
+      .nav-cta-grok { padding-left: 7px; gap: 5px; }
       .nav-cta-grok img { width: 18px; height: 18px; }
+      .nav-right { gap: 6px; }
 
       .hero-portrait { width: 148px; height: 148px; margin-bottom: 16px; }
       .hero-brand { font-size: 42px; }

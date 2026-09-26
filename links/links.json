@@ -44,6 +44,86 @@
       "utm_content": "reply_love_card",
       "note": "Betty 'some love' reply template, 'full card' link",
       "created": "2026-09-26T22:15:48.556Z"
+    },
+    {
+      "id": "uws7x9",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_kalshi_margin",
+      "note": "Queued reply 2026-09-26: kalshi_margin",
+      "created": "2026-09-26T22:18:24.914Z"
+    },
+    {
+      "id": "gfecak",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_bot_finance",
+      "note": "Queued reply 2026-09-26: bot_finance",
+      "created": "2026-09-26T22:18:25.019Z"
+    },
+    {
+      "id": "tkd6rj",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_cody_roller",
+      "note": "Queued reply 2026-09-26: cody_roller",
+      "created": "2026-09-26T22:18:25.120Z"
+    },
+    {
+      "id": "stnpzf",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_bot_support",
+      "note": "Queued reply 2026-09-26: bot_support",
+      "created": "2026-09-26T22:18:25.225Z"
+    },
+    {
+      "id": "vtskth",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_dk_penix",
+      "note": "Queued reply 2026-09-26: dk_penix",
+      "created": "2026-09-26T22:18:25.332Z"
+    },
+    {
+      "id": "kx9crv",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_sawyer_tutorial",
+      "note": "Queued reply 2026-09-26: sawyer_tutorial",
+      "created": "2026-09-26T22:18:25.437Z"
+    },
+    {
+      "id": "ezpzms",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_underdog_waivers",
+      "note": "Queued reply 2026-09-26: underdog_waivers",
+      "created": "2026-09-26T22:18:25.541Z"
+    },
+    {
+      "id": "djkngc",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "betty",
+      "utm_content": "reply_poly_agents",
+      "note": "Queued reply 2026-09-26: poly_agents",
+      "created": "2026-09-26T22:18:25.648Z"
     }
   ]
 }

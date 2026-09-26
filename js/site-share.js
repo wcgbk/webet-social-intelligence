@@ -29,9 +29,10 @@
   }
 
   /* How-to Share On Socials only — nav Share stays on taggedUrl() / shareNative() */
-  var GROKBOT_SHARE_SHORT = 'https://tinyurl.com/2855hqug';
+  /* First-party short — 302 to live /grokbot#follow (no blank interstitial). TinyURL alt: https://tinyurl.com/26bb4vhr */
+  var GROKBOT_SHARE_SHORT = 'https://webetsocial.com/s/betty';
   var GROKBOT_SHARE_LONG =
-    'https://webetsocial.com/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=grokbot';
+    'https://webetsocial.com/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow';
 
   function shareText() {
     if (isGrokbotPage()) {

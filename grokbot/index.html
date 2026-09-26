@@ -435,7 +435,7 @@
       width: 100%;
       margin-top: 0;
       padding: .92rem 1.5rem;
-      border: 1px solid var(--border);
+      border: 2px solid #004C54;
       border-radius: 9999px;
       background: #fff;
       color: var(--txt);
@@ -444,7 +444,8 @@
       box-shadow: none;
       min-height: 48px;
     }
-    .btn-share-socials:hover { background: var(--bg); filter: none; }
+    .btn-share-socials:hover { background: var(--bg); filter: none; border-color: #004C54; }
+    #follow { scroll-margin-top: 5.5rem; scroll-margin-bottom: 6rem; }
 
     .how-fallback {
       font-size: .84rem; color: var(--txt-m); line-height: 1.5; margin: 0;
@@ -738,7 +739,7 @@
           </div>
         </div>
       </li>
-      <li>
+      <li id="follow">
         <span class="step-n">3</span>
         <div class="step-body">
           <h3>Follow @WeBetSocialAI On X</h3>
@@ -902,6 +903,26 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
   else bind();
   window.addEventListener('load', bind);
+})();
+</script>
+<script>
+(function () {
+  function shouldLandOnFollow() {
+    if (location.hash === '#follow') return true;
+    try {
+      return new URLSearchParams(location.search).get('utm_content') === 'share_follow';
+    } catch (e) { return false; }
+  }
+  function goFollow() {
+    if (!shouldLandOnFollow()) return;
+    var el = document.getElementById('follow');
+    if (!el) return;
+    requestAnimationFrame(function () {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', goFollow);
+  else goFollow();
 })();
 </script>
 <script src="/js/site-share.js" defer></script>

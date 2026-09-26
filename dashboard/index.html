@@ -190,7 +190,10 @@
     .nav-item:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
     .nav-item.active { background: rgba(0,76,84,0.25); color: #00b5b9; }
     .nav-item.active .nav-icon { color: #00b5b9; }
+    button.nav-item-featured,
     a.nav-item-featured {
+      position: relative;
+      overflow: hidden;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -206,22 +209,59 @@
       width: 100%;
       box-sizing: border-box;
       font-family: inherit;
-      transition: filter 0.12s, background 0.12s;
+      cursor: pointer;
+      text-align: left;
+      transition: filter 0.12s, background 0.12s, box-shadow 0.12s;
     }
+    button.nav-item-featured:hover,
     a.nav-item-featured:hover {
       filter: brightness(1.08);
       color: #ffffff;
       text-decoration: none;
     }
+    button.nav-item-featured.active {
+      box-shadow: 0 0 0 2px rgba(255,255,255,.22);
+    }
+    button.nav-item-featured .nav-icon,
     a.nav-item-featured .nav-icon {
       width: 18px; height: 18px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1;
     }
+    button.nav-item-featured .nav-icon img,
     a.nav-item-featured .nav-icon img {
       width: 18px; height: 18px; border-radius: 4px; object-fit: cover;
       display: block;
     }
+    /* Shimmer sweep on Get Grok Bot */
+    button.nav-item-featured::after,
+    a.nav-item-featured::after,
+    .topbar-grokbot::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 35%,
+        rgba(255,255,255,.08) 42%,
+        rgba(255,255,255,.42) 50%,
+        rgba(255,255,255,.08) 58%,
+        transparent 65%
+      );
+      transform: translateX(-120%);
+      animation: grokbot-shimmer 2.6s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+    @keyframes grokbot-shimmer {
+      0%, 18% { transform: translateX(-120%); }
+      48%, 100% { transform: translateX(120%); }
+    }
+    button.nav-item-featured > *,
+    .topbar-grokbot > * { position: relative; z-index: 1; }
     .topbar-grokbot {
+      position: relative;
+      overflow: hidden;
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       height: 34px; box-sizing: border-box;
       padding: 0 12px 0 8px;
@@ -231,6 +271,7 @@
       color: #ffffff;
       font-family: inherit; font-size: 0.75rem; font-weight: 700;
       text-decoration: none; white-space: nowrap; flex-shrink: 0;
+      cursor: pointer;
       transition: filter 0.15s;
     }
     .topbar-grokbot:hover { filter: brightness(1.08); text-decoration: none; color: #fff; }
@@ -241,6 +282,11 @@
     @media (max-width: 520px) {
       .topbar-grokbot-text { display: none; }
       .topbar-grokbot { padding: 0; width: 34px; min-width: 34px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      button.nav-item-featured::after,
+      a.nav-item-featured::after,
+      .topbar-grokbot::after { animation: none; display: none; }
     }
     .nav-icon {
       width: 18px;
@@ -1771,11 +1817,11 @@
     <!-- Navigation Menu -->
     <nav class="nav-menu">
 
-      <!-- Featured: Grok Bot sales page (navigate, do not switchPanel) -->
-      <a class="nav-item-featured" href="/grokbot" aria-label="Get Grok Bot">
+      <!-- Featured: Grok Bot sales — opens in dashboard content (headerless embed) -->
+      <button type="button" class="nav-item-featured" data-panel="grokbot" onclick="switchPanel('grokbot')" aria-label="Get Grok Bot">
         <span class="nav-icon"><img src="/grok-bot-logo.png" width="18" height="18" alt="" /></span>
         Get Grok Bot
-      </a>
+      </button>
 
       <!-- Betty AI -->
       <button class="nav-item active" data-panel="chat" onclick="switchPanel('chat')">
@@ -1849,10 +1895,10 @@
 
       <!-- Stable right cluster: Share (injected) · WeBit · X/avatar — never shifts with title length -->
       <div class="topbar-actions" id="topbar-actions">
-        <a class="topbar-grokbot" href="/grokbot" title="Get Grok Bot" aria-label="Get Grok Bot">
+        <button type="button" class="topbar-grokbot" onclick="switchPanel('grokbot')" title="Get Grok Bot" aria-label="Get Grok Bot">
           <img src="/grok-bot-logo.png" width="18" height="18" alt="" />
           <span class="topbar-grokbot-text">Get Grok Bot</span>
-        </a>
+        </button>
         <button class="topbar-webit" id="topbar-webit-btn" onclick="topbarCoinClick()" title="WeBit tokens">
           <img src="/webet-coin.png" alt="WeBit" class="coin-img" />
           <span class="topbar-webit-bal" id="topbar-webit-bal"></span>
@@ -1974,6 +2020,10 @@
       </div>
 
       <!-- OMEGA MODEL PANEL -->
+      <div class="panel" id="panel-grokbot" style="overflow:hidden;">
+        <iframe id="grokbot-iframe" src="/grokbot?embed=1" title="Get Grok Bot" style="width:100%;height:100%;border:none;background:#f0f7f6;"></iframe>
+      </div>
+
       <div class="panel" id="panel-omega" style="overflow:hidden;">
         <iframe id="omega-iframe" src="/daily-omega" style="width:100%;height:100%;border:none;"></iframe>
       </div>
@@ -2461,6 +2511,7 @@
     admin: 'Admin',
     settings: 'Settings',
     profile: 'My Profile',
+    grokbot: 'Get Grok Bot',
   };
 
   // ── Deep-link slugs ──────────────────────────────────────────────
@@ -2469,7 +2520,7 @@
   // lands on that exact panel. Chat is the home page (no fragment). Any raw
   // panel key also resolves, so older /dashboard#panel links keep working.
   const PANEL_SLUGS = {
-    picks: 'picks', nfl: 'nfl', cfb: 'cfb', 'grok-beta': 'grok-beta', 'live-picks': 'live-picks', omega: 'omega', gamecast: 'gamecast', percentile: 'track-record',
+    picks: 'picks', nfl: 'nfl', cfb: 'cfb', 'grok-beta': 'grok-beta', 'live-picks': 'live-picks', omega: 'omega', grokbot: 'grokbot', gamecast: 'gamecast', percentile: 'track-record',
     p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
     webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
   };
@@ -2523,6 +2574,9 @@
 
     // Update sidebar nav
     document.querySelectorAll('.nav-item[data-panel]').forEach(n => {
+      n.classList.toggle('active', n.dataset.panel === panel);
+    });
+    document.querySelectorAll('.nav-item-featured[data-panel]').forEach(n => {
       n.classList.toggle('active', n.dataset.panel === panel);
     });
 

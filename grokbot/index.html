@@ -560,9 +560,24 @@
     }
     .footer a { color: var(--txt-m); font-weight: 600; }
     .footer strong { color: var(--txt-m); }
+
+    /* Dashboard iframe embed — hide sticky header; standalone /grokbot keeps full chrome */
+    body.embed .nav { display: none !important; }
+    body.embed { padding-top: 0; }
+    body.embed .hero { padding-top: 1.25rem; }
   </style>
 </head>
 <body>
+<script>
+(function () {
+  try {
+    if (new URLSearchParams(location.search).get('embed') === '1') {
+      document.documentElement.classList.add('embed');
+      document.body.classList.add('embed');
+    }
+  } catch (e) {}
+})();
+</script>
 
 <nav class="nav">
   <a class="nav-brand" href="/">

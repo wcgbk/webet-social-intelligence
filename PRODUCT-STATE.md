@@ -161,6 +161,17 @@ Cycle history: PRODUCT-LOOP-LOG.md (repo root). Both must be updated every cycle
 (done: Pick3P2P v1 — see DONE)
 3. (moved to #1)
 
+## QUEUED — Betty CTA & Sharing Flow — Next Steps (founder, 2026-09-26; roadmap only, DO NOT BUILD YET)
+Captured from a founder call. These are next steps only. No implementation until the founder green-lights it.
+1. **Universal CTA:** every Betty reply should steer users toward spending the most time in the Grok Bot app.
+2. **Universal fix:** the Omega card must never appear in any link. Every Omega link must go to the Omega dashboard version.
+3. **Sharing reply:** when asked how to share with friends, Betty points to webetsocial.com/grokbot (the sales page / Grok Bot link) to invite friends, not the profile or the Omega card.
+4. **Daily sharing cadence:** weave sharing prompts into the daily flow, not the main message.
+   - Day 1: follow @WeBetSocialAI on X.
+   - Day 2, or between daily cards: "Share this with three friends you think might make sense."
+   - Every other day or so: "Want to challenge a friend to a peer-to-peer friendly wager that your picks can beat the AI?"
+5. **PVP timing:** the pick-three PVP / peer-to-peer wager prompt is a follow-up sent later in the day (or about an hour after the first day's picks), then on a similar periodic cadence. It is never embedded in the main daily message.
+
 ## Conventions every cycle MUST follow
 - ⚠️ KNOWN UNTRACKED RISK: the old live site had ~266 curated files; the git-tracked set is smaller, so untracked-but-live pages/assets/functions get DROPPED by every deploy. Already restored: dashboard menu pages (betty,guardian,mlb,p2p-sports,p2p-trending), site images, ALL 168 functions. STILL UNTRACKED (may 404 from non-dashboard links): authenticity, rif, prediction-markets, scorecard, fox, predictions, props, scanner, etc. — restore on report or do a full sweep. Before deleting/assuming a 404 is intentional, check if the dir exists locally & is just untracked.
 - ⚠️ DEPLOY SHIPS ONLY GIT-TRACKED FILES (proven 2026-06-13: untracked images 404'd in prod —

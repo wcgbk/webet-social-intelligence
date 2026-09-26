@@ -241,6 +241,7 @@
     }
     .hero-lead strong { color: var(--txt); font-weight: 700; }
     .video-shell {
+      position: relative;
       border-radius: .9rem; overflow: hidden;
       border: 1px solid var(--border);
       background: #e7f2f0;
@@ -252,6 +253,103 @@
     }
     .video-shell video {
       width: 100%; height: 100%; display: block; object-fit: contain; background: #e7f2f0;
+    }
+    /* Custom control strip — time | Unmute & Start Over | mute (native bars can't host custom buttons) */
+    .video-chrome {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      min-height: 2.35rem;
+      padding: .32rem .5rem .38rem;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,20,24,.55) 100%);
+      color: #fff;
+      font-size: .7rem;
+      font-weight: 650;
+      letter-spacing: .01em;
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+    .video-chrome > * { pointer-events: auto; }
+    .video-time {
+      flex: 0 0 auto;
+      min-width: 4.6rem;
+      font-variant-numeric: tabular-nums;
+      opacity: .92;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0,0,0,.45);
+      user-select: none;
+    }
+    .video-unmute {
+      flex: 1 1 auto;
+      appearance: none;
+      -webkit-appearance: none;
+      margin: 0;
+      border: 1px solid rgba(255,255,255,.32);
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 999px;
+      padding: .28rem .65rem;
+      font: inherit;
+      font-size: .68rem;
+      font-weight: 750;
+      line-height: 1.15;
+      letter-spacing: .005em;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .video-unmute:hover,
+    .video-unmute:focus-visible {
+      background: rgba(255,255,255,.22);
+      border-color: rgba(255,255,255,.5);
+      outline: none;
+    }
+    .video-unmute:active { background: rgba(255,255,255,.28); }
+    .video-unmute.is-hidden { display: none; }
+    .video-mute-btn {
+      flex: 0 0 auto;
+      appearance: none;
+      -webkit-appearance: none;
+      margin: 0;
+      width: 2rem;
+      height: 1.85rem;
+      border: 1px solid rgba(255,255,255,.28);
+      background: rgba(255,255,255,.1);
+      color: #fff;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: .45rem;
+      padding: 0;
+      font-size: .85rem;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .video-mute-btn:hover,
+    .video-mute-btn:focus-visible {
+      background: rgba(255,255,255,.2);
+      outline: none;
+    }
+    @media (max-width: 520px) {
+      .video-chrome { min-height: 2.2rem; padding: .28rem .4rem .34rem; gap: .3rem; }
+      .video-time { min-width: 4.1rem; font-size: .65rem; }
+      .video-unmute { font-size: .62rem; padding: .26rem .45rem; }
+      .video-mute-btn { width: 1.85rem; height: 1.7rem; font-size: .8rem; }
     }
     .hero-ctas {
       display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem;
@@ -737,14 +835,19 @@
         muted
         playsinline
         webkit-playsinline
-        controls
         preload="auto"
         poster="/betty-intro.jpg"
         title="Betty on Grok Bot"
         disablepictureinpicture
+        controlslist="nodownload noplaybackrate noremoteplayback"
       >
         <source src="/betty-onboarding.mp4" type="video/mp4" />
       </video>
+      <div class="video-chrome" role="group" aria-label="Betty video controls">
+        <span class="video-time" id="betty-video-time" aria-live="off">0:00 / 0:00</span>
+        <button type="button" class="video-unmute" id="betty-unmute" aria-label="Unmute and start video over">Unmute &amp; Start Over</button>
+        <button type="button" class="video-mute-btn" id="betty-mute-toggle" aria-label="Mute" title="Mute">🔇</button>
+      </div>
     </div>
 
     <section class="bets bets-under-video" aria-labelledby="bets">
@@ -926,8 +1029,87 @@
     document.body.style.paddingBottom = on ? (bar.offsetHeight + 16) + 'px' : '';
   }
 
+
+  function fmtTime(s) {
+    if (!isFinite(s) || s < 0) s = 0;
+    s = Math.floor(s);
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+
+  function syncVideoChrome() {
+    var v = document.getElementById('betty-video');
+    var timeEl = document.getElementById('betty-video-time');
+    var muteBtn = document.getElementById('betty-mute-toggle');
+    var unmuteBtn = document.getElementById('betty-unmute');
+    if (!v || !timeEl) return;
+    timeEl.textContent = fmtTime(v.currentTime) + ' / ' + fmtTime(v.duration);
+    if (muteBtn) {
+      var muted = !!v.muted || v.volume === 0;
+      muteBtn.textContent = muted ? '🔇' : '🔊';
+      muteBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+      muteBtn.title = muted ? 'Unmute' : 'Mute';
+    }
+    if (unmuteBtn && !v.muted && v.volume > 0) {
+      unmuteBtn.classList.add('is-hidden');
+    }
+  }
+
+  function wireVideoChrome() {
+    var v = document.getElementById('betty-video');
+    var unmuteBtn = document.getElementById('betty-unmute');
+    var muteBtn = document.getElementById('betty-mute-toggle');
+    if (!v) return;
+
+    function unmuteAndRestart(e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      try {
+        v.muted = false;
+        v.removeAttribute('muted');
+        v.defaultMuted = false;
+        v.volume = 1;
+        v.currentTime = 0;
+        var p = v.play();
+        if (p && typeof p.catch === 'function') p.catch(function () {});
+        if (unmuteBtn) unmuteBtn.classList.add('is-hidden');
+        syncVideoChrome();
+      } catch (err) {}
+    }
+
+    if (unmuteBtn && !unmuteBtn._wired) {
+      unmuteBtn._wired = true;
+      unmuteBtn.addEventListener('click', unmuteAndRestart);
+    }
+
+    if (muteBtn && !muteBtn._wired) {
+      muteBtn._wired = true;
+      muteBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          if (v.muted || v.volume === 0) {
+            v.muted = false;
+            v.removeAttribute('muted');
+            v.volume = 1;
+          } else {
+            v.muted = true;
+            v.volume = 0;
+          }
+          syncVideoChrome();
+        } catch (err) {}
+      });
+    }
+
+    ['timeupdate', 'loadedmetadata', 'durationchange', 'play', 'pause', 'volumechange'].forEach(function (ev) {
+      v.addEventListener(ev, syncVideoChrome);
+    });
+    syncVideoChrome();
+  }
+
   function boot() {
     playVideo();
+    wireVideoChrome();
     keepTop();
     syncBar();
     setTimeout(keepTop, 50);

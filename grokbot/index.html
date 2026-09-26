@@ -3,45 +3,74 @@
 <head>
   <script>
     (function () {
+      /* Always land at top on /grokbot unless an intentional follow deep-link.
+         X /go/ share links, mobile Safari scroll restoration, and early touchmove
+         used to leave the page mid-fold. */
       try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
       try {
         if (new URLSearchParams(location.search).get('embed') === '1') {
           document.documentElement.classList.add('embed');
         }
       } catch (e) {}
-      function installHash(h) {
+
+      function isInstallHash(h) {
         h = String(h || '').replace(/^#/, '').toLowerCase();
         if (!h) return false;
         if (h === 'how' || h === 'how-h' || h === 'get-betty' || h === 'getbetty') return true;
         return h.indexOf('install') !== -1;
       }
-      var jumped = false;
-      try { jumped = installHash(location.hash); } catch (e) {}
-      if (jumped) {
-        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-        try { window.scrollTo(0, 0); } catch (e) {}
+
+      function intentionalFollow() {
+        try {
+          if (location.hash === '#follow') return true;
+          var p = new URLSearchParams(location.search);
+          if (p.get('utm_content') === 'share_follow') return true;
+          return p.get('utm_source') === 'site_share' && p.get('utm_campaign') === 'page_share';
+        } catch (e) { return false; }
       }
-      function holdTop() {
-        if (!jumped) return;
-        try { window.scrollTo(0, 0); } catch (e) {}
-      }
-      if (jumped) {
-        var frames = 0;
-        function holdFrames() {
-          holdTop();
-          frames += 1;
-          if (frames < 24) requestAnimationFrame(holdFrames);
+
+      var allowDeep = intentionalFollow();
+      try {
+        if (!allowDeep && isInstallHash(location.hash)) {
+          history.replaceState(null, '', location.pathname + location.search);
         }
-        document.addEventListener('DOMContentLoaded', holdFrames);
-        window.addEventListener('load', function () {
-          holdTop();
-          setTimeout(holdTop, 0);
-          setTimeout(holdTop, 280);
-        });
+      } catch (e) {}
+
+      window.__wbAllowScrollJump = allowDeep;
+      window.__wbHoldTopUntil = Date.now() + 2200;
+
+      function holdTop() {
+        if (window.__wbAllowScrollJump) return;
+        if (Date.now() > (window.__wbHoldTopUntil || 0) && window.__wbUserScrolled) return;
+        try { window.scrollTo(0, 0); } catch (e) {}
+        try { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch (e2) {}
       }
+
+      holdTop();
+      var frames = 0;
+      function holdFrames() {
+        holdTop();
+        frames += 1;
+        if (frames < 90) requestAnimationFrame(holdFrames);
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        holdTop();
+        holdFrames();
+      });
+      window.addEventListener('load', function () {
+        holdTop();
+        setTimeout(holdTop, 0);
+        setTimeout(holdTop, 120);
+        setTimeout(holdTop, 400);
+        setTimeout(holdTop, 900);
+        setTimeout(holdTop, 1600);
+      });
       window.addEventListener('pageshow', function () {
         try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
-        holdTop();
+        if (!window.__wbAllowScrollJump) {
+          window.__wbHoldTopUntil = Date.now() + 1800;
+          holdTop();
+        }
       });
     })();
   </script>
@@ -865,7 +894,7 @@
 
     <section class="tutorial-guide" aria-labelledby="talk-betty">
       <div class="section-label" id="talk-betty">Talk To Betty</div>
-      <img src="/betty-start-conversation.png" width="1280" height="720" alt="Betty pointing you to the voice button in Grok Bot" loading="eager" decoding="async" />
+      <img src="/betty-start-conversation.png?v=both-voice-0926" width="1280" height="720" alt="Betty in Grok Bot: walkie-talkie for Quick tips and headset for Full conversation" loading="eager" decoding="async" />
       <p class="talk-prompt">
         <span class="talk-prompt-line">Anytime you want to just talk to me instead of text, just click that button to have a full conversation with me.</span>
         <span class="talk-prompt-line talk-prompt-soft">Or keep typing. Totally up to you.</span>
@@ -958,18 +987,29 @@
 
 <script>
 (function () {
-  var userMoved = false;
-  function markMoved() { userMoved = true; }
-  window.addEventListener('wheel', markMoved, { passive: true, once: true });
-  window.addEventListener('touchmove', markMoved, { passive: true, once: true });
-  window.addEventListener('keydown', markMoved, { once: true });
-  window.addEventListener('pointerdown', markMoved, { passive: true, once: true });
+  window.__wbUserScrolled = false;
+  function markMoved(e) {
+    /* Ignore rubber-band / chrome UI touch during the forced hold window */
+    if (Date.now() < (window.__wbHoldTopUntil || 0)) return;
+    if (window.__wbAllowScrollJump) return;
+    var y = window.scrollY || window.pageYOffset || 0;
+    if (y < 8 && (!e || e.type === 'touchmove' || e.type === 'pointerdown')) return;
+    window.__wbUserScrolled = true;
+  }
+  window.addEventListener('wheel', markMoved, { passive: true });
+  window.addEventListener('touchmove', markMoved, { passive: true });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === 'Home' || e.key === 'End' || e.key === ' ') markMoved(e);
+  });
 
   function keepTop() {
-    if (userMoved) return;
-    if (location.hash && location.hash !== '#') return;
+    if (window.__wbAllowScrollJump) return;
+    if (Date.now() > (window.__wbHoldTopUntil || 0) && window.__wbUserScrolled) return;
     var y = window.scrollY || window.pageYOffset || 0;
-    if (y > 0) window.scrollTo(0, 0);
+    if (y > 0) {
+      try { window.scrollTo(0, 0); } catch (e) {}
+      try { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch (e2) {}
+    }
   }
 
   function playVideo() {
@@ -1122,6 +1162,10 @@
   window.addEventListener('scroll', syncBar, { passive: true });
   window.addEventListener('pageshow', function () {
     try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+    if (!window.__wbAllowScrollJump) {
+      window.__wbHoldTopUntil = Date.now() + 1800;
+      keepTop();
+    }
     var v = document.getElementById('betty-video');
     if (v) {
       try {
@@ -1131,6 +1175,7 @@
       } catch (e) {}
     }
     playVideo();
+    keepTop();
     syncBar();
   });
 })();
@@ -1165,6 +1210,7 @@
   }
   function goFollow() {
     if (!shouldLandOnFollow()) return;
+    window.__wbAllowScrollJump = true;
     var el = document.getElementById('follow');
     if (!el) return;
     requestAnimationFrame(function () {
@@ -1173,6 +1219,30 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', goFollow);
   else goFollow();
+})();
+</script>
+
+<script>
+(function () {
+  /* Mobile WebViews / Chrome often spawn a blank tab when an app-link + _blank
+     or competing navigations race. Force a single same-tab assign. */
+  var ADD = 'https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG';
+  function isAdd(a) {
+    if (!a || !a.getAttribute) return false;
+    var href = a.getAttribute('href') || '';
+    return href.indexOf('x.ai/bot/e6l3ztXGZZ16KhVfkmhkG') !== -1;
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    while (t && t !== document && !(t.tagName === 'A' && isAdd(t))) t = t.parentNode;
+    if (!t || t === document) return;
+    if (e.defaultPrevented) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { window.location.assign(ADD); } catch (err) { window.location.href = ADD; }
+  }, true);
 })();
 </script>
 <script src="/js/site-share.js" defer></script>

@@ -448,6 +448,27 @@
       white-space: normal;
       text-align: center;
     }
+    /* Step 3 profile preview spans full white install card width */
+    .steps li#follow {
+      display: flex;
+      flex-direction: column;
+      gap: .65rem;
+    }
+    .steps li#follow .follow-head {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: .75rem;
+      align-items: start;
+    }
+    .steps li#follow .x-card {
+      width: 100%;
+      margin-top: 0;
+      padding: .75rem .8rem;
+      background: #fff;
+      border: 1px solid rgba(0,76,84,.22);
+      border-radius: .95rem;
+      box-shadow: 0 4px 14px rgba(0,76,84,.06);
+    }
     .btn-share-socials {
       display: inline-flex; align-items: center; justify-content: center;
       width: 100%;
@@ -623,10 +644,16 @@
 
     .tutorial-guide {
       max-width: 560px;
-      margin: 0 auto .75rem;
+      margin: 0 auto 0;
+      padding: 0 0 1.35rem;
       text-align: center;
+      border-bottom: 2px solid rgba(0,76,84,.18);
     }
-    .tutorial-guide .section-label { margin-bottom: .45rem; }
+    .tutorial-guide .section-label {
+      margin-bottom: .45rem;
+      font-size: .78rem;
+      letter-spacing: .1em;
+    }
     .tutorial-guide img {
       display: block;
       width: 100%;
@@ -636,12 +663,25 @@
       box-shadow: 0 8px 24px rgba(0,76,84,.10);
       background: #fff;
     }
-    .tutorial-guide figcaption {
-      margin-top: .45rem;
-      font-size: .8rem;
-      color: var(--txt-m);
+    .tutorial-guide .talk-prompt {
+      margin: .7rem auto 0;
+      max-width: 28rem;
+      font-size: clamp(1.05rem, 3.4vw, 1.22rem);
+      font-weight: 800;
+      color: var(--txt);
+      letter-spacing: -.015em;
       line-height: 1.35;
     }
+    .tutorial-guide .talk-prompt-line {
+      display: block;
+    }
+    .tutorial-guide .talk-prompt strong {
+      color: #004C54;
+      font-weight: 900;
+    }
+    /* Keep Start Voice Chat clearly above Quick Start */
+    .fold-light { padding-top: 1.15rem; }
+    .fold-light .install { margin-top: .85rem; }
   </style>
 </head>
 <body>
@@ -714,15 +754,11 @@
     <section class="tutorial-guide" aria-labelledby="talk-betty">
       <div class="section-label" id="talk-betty">Talk To Betty</div>
       <img src="/betty-start-conversation.png" width="1200" height="675" alt="Talk to Betty — tap Start voice chat to begin the conversation" loading="eager" decoding="async" />
-      <figcaption>In Grok Bot, tap <strong>Start Voice Chat</strong> — or just type. Same Betty either way.</figcaption>
+      <p class="talk-prompt">
+        <span class="talk-prompt-line">Tap <strong>Start Voice Chat</strong> to talk with Betty.</span>
+        <span class="talk-prompt-line">Or just type. Same Betty either way.</span>
+      </p>
     </section>
-
-    <div class="hero-ctas">
-      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
-    </div>
-    <p class="hero-note">
-      Tap <strong>Add Betty On Grokbot</strong> for the free daily Edge card. On the xAI page, choose <strong>Add To Grok Bot</strong>.
-    </p>
   </header>
 </div>
 </div>
@@ -758,22 +794,24 @@
         </div>
       </li>
       <li id="follow">
-        <span class="step-n">3</span>
-        <div class="step-body">
-          <h3>Follow @WeBetSocialAI On X</h3>
-          <p>Follow Betty on X so you don’t miss the card, tips, or drops outside chat.</p>
-          <div class="x-card" role="group" aria-label="Follow @WeBetSocialAI on X" style="margin-top:.7rem;">
-            <img class="x-card-avatar" src="/betty-x-avatar.jpg" width="64" height="64" alt="Betty · WeBetAI" />
-            <div class="x-card-meta">
-              <div class="x-card-name">Betty · WeBetAI</div>
-              <div class="x-card-handle">@WeBetSocialAI</div>
-              <p class="x-card-bio">Free daily Edge sportsbook picks — talk them through with Betty on Grok Bot. Follow so you don’t miss a thing.</p>
-            </div>
-            <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer">
-              <svg class="x-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              Follow @WeBetSocialAI On X
-            </a>
+        <div class="follow-head">
+          <span class="step-n">3</span>
+          <div class="step-body">
+            <h3>Follow @WeBetSocialAI</h3>
+            <p>Follow Betty on X so you don’t miss the card, tips, or drops outside chat.</p>
           </div>
+        </div>
+        <div class="x-card" role="group" aria-label="Follow @WeBetSocialAI">
+          <img class="x-card-avatar" src="/betty-x-avatar.jpg" width="64" height="64" alt="Betty WeBetAI" />
+          <div class="x-card-meta">
+            <div class="x-card-name">Betty WeBetAI</div>
+            <div class="x-card-handle">@WeBetSocialAI</div>
+            <p class="x-card-bio">Free daily Edge sportsbook picks. Talk them through with Betty on Grok Bot. Follow so you don’t miss a thing.</p>
+          </div>
+          <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer">
+            <svg class="x-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            Follow @WeBetSocialAI
+          </a>
         </div>
       </li>
     </ol>

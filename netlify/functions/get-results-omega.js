@@ -6,6 +6,7 @@
 
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
+const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +14,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v6-clv';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v7-dh';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -65,21 +66,9 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
   return false;
 }
 
-// A team pair can appear TWICE on the same day (day-night doubleheader). Team-name matching alone
-// returns the first game, which would settle the nightcap against the opener's final. When >1 game
-// matches, pick the one whose start is nearest the pick's commenceTime.
+// Shared DH rule: js/live-score.js (clear commenceTime, else in/post over a skewed pre).
 function disambiguateDoubleheader(matches, pick) {
-  if (matches.length <= 1) return matches[0] || null;
-  const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
-  if (isNaN(ct)) return matches[0];
-  let best = matches[0], bestDiff = Infinity;
-  for (const g of matches) {
-    const gt = g.startISO ? Date.parse(g.startISO) : NaN;
-    if (isNaN(gt)) continue;
-    const diff = Math.abs(gt - ct);
-    if (diff < bestDiff) { bestDiff = diff; best = g; }
-  }
-  return best;
+  return resolveDoubleheader(matches, pick);
 }
 
 function findGame(pick, games) {
@@ -135,12 +124,7 @@ function findGame(pick, games) {
 // grades correctly while the identical parlay leg does not. Inherit the start time from the straight
 // pick naming the same matchup + selection so both sides resolve to the same game.
 function withLegCommenceTime(leg, picks) {
-  if (leg.commenceTime) return leg;
-  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const sameMatchup = (p) => norm(p.matchup) === norm(leg.matchup);
-  const match = (picks || []).find(p => sameMatchup(p) && norm(p.pick) === norm(leg.pick)) ||
-                (picks || []).find(sameMatchup);
-  return (match && match.commenceTime) ? { ...leg, commenceTime: match.commenceTime } : leg;
+  return inheritCommenceTime(leg, picks);
 }
 
 function gradePick(pick, game) {

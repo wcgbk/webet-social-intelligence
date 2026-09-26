@@ -100,7 +100,7 @@ check("pick cards omit EVEN / sportsbook juice", () => {
 });
 check("live ESPN scoreboard + W/L/P/LIVE badges", () => {
   assert.ok(html.includes("scoreboardUrls"));
-  assert.ok(html.includes("site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"));
+  assert.ok(html.includes("site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"));
   assert.ok(html.includes("function findGame"));
   assert.ok(html.includes("function determineResult"));
   assert.ok(html.includes("result-win"));

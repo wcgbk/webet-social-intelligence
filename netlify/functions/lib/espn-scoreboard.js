@@ -8,6 +8,8 @@
 // - Late-night / Hawaii / UTC spill: a pick stored on ET date D may live on ESPN
 //   date D-1 or D+1. We fetch the adjacent calendar days and merge.
 
+const { fetchScoreboardJson, ESPN_WEB_HOST } = require('../../../js/live-score');
+
 const ESPN_ENDPOINTS = {
   NBA: 'basketball/nba',
   NHL: 'hockey/nhl',
@@ -56,7 +58,7 @@ function scoreboardUrls(sport, dateISO) {
       q.push('groups=' + groups);
       q.push('limit=300');
     }
-    urls.push(`https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard${q.length ? '?' + q.join('&') : ''}`);
+    urls.push(`${ESPN_WEB_HOST}/apis/site/v2/sports/${endpoint}/scoreboard${q.length ? '?' + q.join('&') : ''}`);
   };
   for (const d of scoreboardDates(dateISO)) {
     if (isNcaaf) {
@@ -116,9 +118,8 @@ function mergeGames(lists) {
 
 async function fetchOne(url) {
   try {
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    const data = await resp.json();
+    const data = await fetchScoreboardJson(url);
+    if (!data) return [];
     return (data.events || []).map(mapEvent).filter(Boolean);
   } catch (e) {
     return [];

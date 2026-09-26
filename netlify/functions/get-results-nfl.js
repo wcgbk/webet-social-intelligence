@@ -6,6 +6,7 @@
 
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
+const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +14,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-nfl-cache-v4';
+const RESULTS_CACHE_KEY = 'results-nfl-cache-v5-dh';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -58,6 +59,7 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr) {
 function findGame(pick, games) {
   const matchup = (pick.matchup || '').toLowerCase();
   const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  const primary = [];
   for (const g of games) {
     const awayLast = normalizeTeam(g.awayTeam).split(' ').pop();
     const homeLast = normalizeTeam(g.homeTeam).split(' ').pop();
@@ -65,18 +67,21 @@ function findGame(pick, games) {
                        (awayLast.length > 3 && matchup.includes(awayLast));
     const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr)) ||
                        (homeLast.length > 3 && matchup.includes(homeLast));
-    if (awayMatch && homeMatch) return g;
+    if (awayMatch && homeMatch) primary.push(g);
   }
+  if (primary.length) return resolveDoubleheader(primary, pick);
   const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   if (pickTeam) {
+    const secondary = [];
     for (const g of games) {
       if (teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) || teamsMatch(pickTeam, g.homeTeam, g.homeAbbr)) {
         const otherLast = normalizeTeam(
           teamsMatch(pickTeam, g.awayTeam, g.awayAbbr) ? g.homeTeam : g.awayTeam
         ).split(' ').pop();
-        if (otherLast.length > 3 && matchup.includes(otherLast)) return g;
+        if (otherLast.length > 3 && matchup.includes(otherLast)) secondary.push(g);
       }
     }
+    if (secondary.length) return resolveDoubleheader(secondary, pick);
   }
   return null;
 }
@@ -215,8 +220,9 @@ async function gradeDay(dateISO, picksData) {
   const optimizedLegs = (apiParlay && apiParlay.legs && apiParlay.legs.length >= 2) ? apiParlay.legs : null;
   const parlayInput = optimizedLegs
     ? optimizedLegs.map(leg => {
-      const game = findGame(leg, games);
-      return { result: gradePick(leg, game), odds: leg.odds || '-110' };
+      const eleg = inheritCommenceTime(leg, picks);
+      const game = findGame(eleg, games);
+      return { result: gradePick(eleg, game), odds: eleg.odds || '-110' };
     })
     : [];
   const anyLean = picks.some(p => p.thinSlate);

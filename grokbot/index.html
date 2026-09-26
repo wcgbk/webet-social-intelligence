@@ -423,12 +423,25 @@
     .step-body p { font-size: .86rem; color: var(--txt-m); line-height: 1.45; margin: 0; }
     .store-row { margin-top: .65rem; }
     /* Step CTAs share one width so Add / Share / Follow read as a uniform stack */
+    .steps .x-card {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas: "av meta" "btn btn";
+      gap: .6rem .75rem;
+    }
+    .steps .x-card-avatar { grid-area: av; }
+    .steps .x-card-meta { grid-area: meta; }
     .steps .store-row .btn-primary,
+    .steps .store-row .btn-share-socials,
     .steps .btn-share-socials,
     .steps .x-follow {
+      grid-area: btn;
       width: 100%;
       box-sizing: border-box;
       min-width: 0;
+      max-width: 100%;
     }
     .btn-share-socials {
       display: inline-flex; align-items: center; justify-content: center;

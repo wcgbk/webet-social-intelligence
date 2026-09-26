@@ -14,7 +14,7 @@
  *   /go/x/betty_sep11/alpha_main/dashboard?card=bettyv13
  *     → https://webetsocial.com/dashboard?card=bettyv13&utm_source=x&utm_medium=social&utm_campaign=betty_sep11&utm_content=alpha_main
  *
- * Medium defaults: email|sms → themselves; else social.
+ * Medium defaults: email|sms → themselves; grokbot → bot; else social.
  * Only same-site relative destinations allowed (no open redirects).
  * Non-reserved query params on the /go/ URL are forwarded to the destination
  * (so ?card= / ?view= deep links survive).
@@ -24,6 +24,7 @@ const SEG = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 
 function mediumFor(source) {
   if (source === 'email' || source === 'sms') return source;
+  if (source === 'grokbot') return 'bot';
   return 'social';
 }
 

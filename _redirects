@@ -45,6 +45,15 @@
 /s/betty  /grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow  302
 /s/betty/ /grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow  302
 
+# Betty Grok Bot outbound links — the ONE place bot UTMs live. Betty's scripts use these
+# short links (webetsocial.com/b/...). Change UTMs here only. 302 so edits take effect.
+/b/grokbot   /grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=sales_page  302
+/b/grokbot/  /grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=sales_page  302
+/b/share     /grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=share  302
+/b/share/    /grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=share  302
+/b/omega     /daily-omega?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=daily_omega  302
+/b/omega/    /daily-omega?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=daily_omega  302
+
 # UTM short links — /go/{source}/{campaign}/{content}[/path]
 /go/*  /.netlify/functions/go-redirect  200
 /go     /.netlify/functions/go-redirect  200

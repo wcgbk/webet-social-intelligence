@@ -1232,10 +1232,27 @@
     var href = a.getAttribute('href') || '';
     return href.indexOf('x.ai/bot/e6l3ztXGZZ16KhVfkmhkG') !== -1;
   }
+  /* GA4: count every Add Betty click (existing G-848D47V084 tag). Fire-and-forget,
+     sent via beacon so the same-tab navigation below is not delayed. */
+  function trackAdd(a) {
+    try {
+      if (typeof window.gtag !== 'function') return;
+      var loc = a.classList.contains('nav-cta') ? 'nav'
+        : a.classList.contains('install-bar-btn') ? 'install_bar'
+        : a.classList.contains('btn-primary') ? 'how_it_works' : 'other';
+      window.gtag('event', 'add_betty_click', {
+        button_text: (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100),
+        button_location: loc,
+        link_url: ADD,
+        transport_type: 'beacon'
+      });
+    } catch (err) {}
+  }
   document.addEventListener('click', function (e) {
     var t = e.target;
     while (t && t !== document && !(t.tagName === 'A' && isAdd(t))) t = t.parentNode;
     if (!t || t === document) return;
+    trackAdd(t);
     if (e.defaultPrevented) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (e.button != null && e.button !== 0) return;

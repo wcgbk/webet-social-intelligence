@@ -161,6 +161,45 @@
       font-weight: 700 !important;
       padding: .4rem .85rem !important;
     }
+    @media (max-width: 640px) {
+      .nav {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .35rem;
+        padding: .5rem .7rem;
+      }
+      .nav-brand {
+        position: relative;
+        z-index: 2;
+        max-width: 28%;
+        overflow: hidden;
+        font-size: 0; /* hide WeBetAI text; keep mark so CTA can sit true-center */
+        gap: 0;
+      }
+      .nav-brand .nav-mark { font-size: initial; }
+      .nav-cta {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1;
+        font-size: .72rem;
+        padding: .46rem .85rem;
+        max-width: calc(100% - 7.5rem);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-share-slot {
+        position: relative;
+        z-index: 2;
+        flex: 0 0 auto;
+      }
+      .nav-share-slot .wb-site-share-btn {
+        font-size: .7rem !important;
+        padding: .36rem .7rem !important;
+      }
+    }
 
     .wrap { max-width: 760px; margin: 0 auto; padding: 0 1rem 1.15rem; }
     .fold-dark { background: var(--bg); }
@@ -566,6 +605,7 @@
       margin: 0 auto .75rem;
       text-align: center;
     }
+    .tutorial-guide .section-label { margin-bottom: .45rem; }
     .tutorial-guide img {
       display: block;
       width: 100%;
@@ -603,7 +643,7 @@
     </svg>
     WeBetAI
   </a>
-  <a class="nav-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grokbot</a>
+  <a class="nav-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
   <div class="nav-share-slot" aria-label="Share"></div>
 </nav>
 
@@ -637,20 +677,14 @@
       </video>
     </div>
 
-    <figure class="tutorial-guide">
+    <section class="tutorial-guide" aria-labelledby="talk-betty">
+      <div class="section-label" id="talk-betty">Talk To Betty</div>
       <img src="/betty-start-conversation.png" width="1200" height="675" alt="Talk to Betty — tap Start voice chat to begin the conversation" loading="eager" decoding="async" />
-      <figcaption>In Grok Bot, tap <strong>Start voice chat</strong> — or just type. Same Betty either way.</figcaption>
-    </figure>
-
-    <div class="hero-ctas">
-      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grokbot</a>
-    </div>
-    <p class="hero-note">
-      Tap <strong>Add Betty on Grokbot</strong> to start the conversation. On the xAI page, choose <strong>Add to Grok Bot</strong>.
-    </p>
+      <figcaption>In Grok Bot, tap <strong>Start Voice Chat</strong> — or just type. Same Betty either way.</figcaption>
+    </section>
 
     <section class="bets bets-under-video" aria-labelledby="bets">
-      <div class="section-label">Talk to me</div>
+      <div class="section-label">Talk To Me</div>
       <h2 id="bets">Betty Big Bets Instructions</h2>
       <p>Don’t memorize a manual — just ask me in chat. I’ll walk you through it.</p>
       <ol>
@@ -658,9 +692,16 @@
         <li>Tell me which pick you’re looking at, or ask <strong>WHY</strong> and I’ll walk you through the full read.</li>
         <li>Say <strong>SCORE</strong> during games and I’ll pull live ESPN updates on today’s card only.</li>
         <li>Ask for <strong>KPIs</strong> anytime — Combined floor and Edge-only, no hunting menus.</li>
-        <li>Want the full site view? Ask me for the deep-dive, or open <a href="/daily-omega">webetsocial.com/daily-omega</a> — same card either way.</li>
+        <li>View the card directly on the WeBet website at <a href="https://webetsocial.com/daily-omega">webetsocial.com</a> — keep talking to me in Grokbot for picks, WHY, SCORE, and KPIs.</li>
       </ol>
     </section>
+
+    <div class="hero-ctas">
+      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
+    </div>
+    <p class="hero-note">
+      Tap <strong>Add Betty On Grokbot</strong> to start the conversation. On the xAI page, choose <strong>Add To Grok Bot</strong>.
+    </p>
   </header>
 </div>
 </div>
@@ -669,31 +710,31 @@
 <div class="wrap">
 
   <section class="install" id="how" aria-labelledby="how-h">
-    <div class="section-label">Quick start</div>
+    <div class="section-label">Quick Start</div>
     <h2 id="how-h">Here’s How To Start Talking</h2>
     <ol class="steps">
       <li>
         <span class="step-n">1</span>
         <div class="step-body">
-          <h3>Add Betty on Grokbot</h3>
-          <p>Use the button below, then choose <strong>Add to Grok Bot</strong> on x.ai.</p>
+          <h3>Add Betty On Grokbot</h3>
+          <p>Use the button below, then choose <strong>Add To Grok Bot</strong> on x.ai.</p>
           <div class="store-row">
-            <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grokbot</a>
+            <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
           </div>
         </div>
       </li>
       <li>
         <span class="step-n">2</span>
         <div class="step-body step-share">
-          <h3>Share on socials</h3>
+          <h3>Share On Socials</h3>
           <p>One tap to post Betty on X, Facebook, WhatsApp, Telegram, and more — or copy the link.</p>
-          <button type="button" class="btn-share-socials" data-wb-share-menu id="share-on-socials">Share on socials</button>
+          <button type="button" class="btn-share-socials" data-wb-share-menu id="share-on-socials">Share On Socials</button>
         </div>
       </li>
       <li>
         <span class="step-n">3</span>
         <div class="step-body">
-          <h3>Talk to Betty in chat</h3>
+          <h3>Talk To Betty In Chat</h3>
           <p>Tell me what you’re looking for — <strong>WHY</strong>, <strong>SCORE</strong>, <strong>KPIs</strong>, or just “walk me through it.” See <a href="#bets">Big Bets</a> above.</p>
         </div>
       </li>
@@ -707,7 +748,7 @@
     </p>
   </section>
 
-  <div class="x-card" role="group" aria-label="Follow @WeBetSocialAI on X">
+  <div class="x-card" role="group" aria-label="Follow @WeBetSocialAI On X">
     <img class="x-card-avatar" src="/betty-x-avatar.jpg" width="64" height="64" alt="Betty · WeBetAI" />
     <div class="x-card-meta">
       <div class="x-card-name">Betty · WeBetAI</div>
@@ -716,20 +757,20 @@
     </div>
     <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer">
       <svg class="x-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-      Follow @WeBetSocialAI on X
+      Follow @WeBetSocialAI On X
     </a>
   </div>
 
   <section class="final">
     <h2>Add Betty. Come talk the picks.</h2>
     <p>
-      Tap Add Betty on Grokbot. On the xAI page, choose Add to Grok Bot. Then just talk to me — type or Start voice chat. Allow notifications so the morning card lands in chat.
+      Tap Add Betty On Grokbot. On the xAI page, choose Add to Grok Bot. Then just talk to me — type or Start voice chat. Allow notifications so the morning card lands in chat.
     </p>
     <div class="hero-ctas">
-      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grokbot</a>
+      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
       <a class="btn-secondary" href="#bets">Betty Big Bets</a>
     </div>
-    <p class="hero-note">If Grok Bot isn’t on the phone yet, Add Betty on Grokbot prompts the install.</p>
+    <p class="hero-note">If Grok Bot isn’t on the phone yet, Add Betty On Grokbot prompts the install.</p>
   </section>
 
   <p class="footer">
@@ -749,7 +790,7 @@
     <img class="install-bar-logo" src="/grok-bot-logo.png" width="32" height="32" alt="" />
     <span class="install-bar-copy">Talk To Betty On Grok Bot</span>
   </div>
-  <a class="install-bar-btn" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grokbot</a>
+  <a class="install-bar-btn" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
 </div>
 
 <script>

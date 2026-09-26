@@ -422,18 +422,27 @@
     }
     .step-body p { font-size: .86rem; color: var(--txt-m); line-height: 1.45; margin: 0; }
     .store-row { margin-top: .65rem; }
+    /* Step CTAs share one width so Add / Share / Follow read as a uniform stack */
+    .steps .store-row .btn-primary,
+    .steps .btn-share-socials,
+    .steps .x-follow {
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
     .btn-share-socials {
       display: inline-flex; align-items: center; justify-content: center;
-      margin-top: .65rem;
-      min-width: min(100%, 16rem);
-      padding: .78rem 1.25rem;
+      width: 100%;
+      margin-top: 0;
+      padding: .92rem 1.5rem;
       border: 1px solid var(--border);
       border-radius: 9999px;
       background: #fff;
       color: var(--txt);
-      font-size: .92rem; font-weight: 800;
+      font-size: 1.02rem; font-weight: 800; letter-spacing: -.01em;
       cursor: pointer;
       box-shadow: none;
+      min-height: 48px;
     }
     .btn-share-socials:hover { background: var(--bg); filter: none; }
 
@@ -724,7 +733,9 @@
         <div class="step-body">
           <h3>Share On Socials</h3>
           <p>One tap to post Betty on X, Facebook, WhatsApp, Telegram, and more — or copy the link — so your circle stays in the loop.</p>
-          <button type="button" class="btn-share-socials" data-wb-share-menu id="share-on-socials">Share On Socials</button>
+          <div class="store-row">
+            <button type="button" class="btn-share-socials" data-wb-share-menu id="share-on-socials">Share On Socials</button>
+          </div>
         </div>
       </li>
       <li>

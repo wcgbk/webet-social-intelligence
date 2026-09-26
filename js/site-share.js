@@ -35,7 +35,7 @@
     t.textContent = msg;
     t.setAttribute('role', 'status');
     Object.assign(t.style, {
-      position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)',
+      position: 'fixed', left: '50%', bottom: isGrokbotPage() ? '112px' : '24px', transform: 'translateX(-50%)',
       background: 'rgba(18,24,33,.96)', color: '#e8eef6', padding: '10px 14px',
       borderRadius: '10px', font: '600 13px/1.3 system-ui,-apple-system,sans-serif',
       zIndex: '2147483000', border: '1px solid #243041', boxShadow: '0 8px 30px rgba(0,0,0,.35)',

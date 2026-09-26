@@ -30,7 +30,7 @@
 
   function shareText() {
     if (isGrokbotPage()) {
-      return 'Free daily Edge sportsbook picks from Betty on Grokbot. Add Betty on Grokbot — morning card (straights + daily parlay) in chat, plus tip-off and finals.';
+      return 'Free daily Edge sportsbook picks from Betty in Grok Bot — add her and get the morning card in chat.';
     }
     return document.title || 'WeBet Social';
   }

@@ -29,8 +29,8 @@
   }
 
   /* How-to Share On Socials only — nav Share stays on taggedUrl() / shareNative() */
-  /* First-party short — 302 to live /grokbot#follow (no blank interstitial). TinyURL alt: https://tinyurl.com/26bb4vhr */
-  var GROKBOT_SHARE_SHORT = 'https://webetsocial.com/s/betty';
+  /* Menu share short (TinyURL). Lands on sales page; page scrolls to #follow for site_share. First-party alt: https://webetsocial.com/s/betty */
+  var GROKBOT_SHARE_SHORT = 'https://tinyurl.com/2855hqug';
   var GROKBOT_SHARE_LONG =
     'https://webetsocial.com/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow';
 
@@ -45,24 +45,25 @@
     return isGrokbotPage() ? GROKBOT_SHARE_SHORT : taggedUrl();
   }
 
-  /** Natural, Title Case–friendly captions for the how-to Share menu (not the nav Share). */
+  /** Natural captions for the how-to Share menu (not the nav Share). */
   function menuShareCopy(channel) {
     if (!isGrokbotPage()) {
       return { text: shareText(), subject: document.title || 'WeBet' };
     }
     var short = GROKBOT_SHARE_SHORT;
+    var opener = 'Join me on Grokbot today for free daily sportsbook picks.';
     var base =
-      'Free daily Edge sportsbook picks from Betty in Grok Bot.\n\n' +
-      'Add her, get the morning Edge card in chat, and talk the picks through — voice or text.';
+      opener + '\n\n' +
+      'Follow @WeBetSocialAI on X to stay up to date. Get the morning Edge card in chat, and talk the picks through — voice or text.';
     var x =
-      'Free daily Edge sportsbook picks from Betty in Grok Bot — add her for the morning card in chat, then talk the picks through.';
+      opener + ' Follow @WeBetSocialAI on X to stay up to date — morning Edge card in chat, talk the picks through voice or text.';
     var linkedin =
-      'Free daily Edge sportsbook picks from Betty in Grok Bot.\n\n' +
-      'Add Betty, get the morning Edge card in chat, and talk the picks through.';
+      opener + '\n\n' +
+      'Follow @WeBetSocialAI on X to stay up to date. Get the morning Edge card in chat, and talk the picks through — voice or text.';
     var emailBody =
       'Hey —\n\n' +
-      'Betty of WeBetAI drops free daily Edge sportsbook picks in Grok Bot.\n\n' +
-      'Add her, get the morning card in chat, and talk the picks through (voice or text).\n\n' +
+      opener + '\n\n' +
+      'Follow @WeBetSocialAI on X to stay up to date. Get the morning Edge card in chat, and talk the picks through (voice or text).\n\n' +
       short + '\n';
     var map = {
       x: x,
@@ -76,7 +77,7 @@
     };
     return {
       text: map[channel] || base,
-      subject: 'Betty · Free Daily Sportsbook Picks on Grok Bot'
+      subject: 'Join me on Grokbot today for free daily sportsbook picks'
     };
   }
 

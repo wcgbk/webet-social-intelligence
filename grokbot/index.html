@@ -928,7 +928,10 @@
   function shouldLandOnFollow() {
     if (location.hash === '#follow') return true;
     try {
-      return new URLSearchParams(location.search).get('utm_content') === 'share_follow';
+      var p = new URLSearchParams(location.search);
+      if (p.get('utm_content') === 'share_follow') return true;
+      /* TinyURL https://tinyurl.com/2855hqug and other site_share landings */
+      return p.get('utm_source') === 'site_share' && p.get('utm_campaign') === 'page_share';
     } catch (e) { return false; }
   }
   function goFollow() {

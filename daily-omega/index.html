@@ -21,15 +21,15 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin />
   <title>WeBetAI - Social Intelligence | Daily Omega Picks</title>
-  <meta name="description" content="Omega — WeBetAI's split-test picks lab running head-to-head against Alpha. Same daily process, separate environment, KPIs tracked from September 22, 2026 (Omega v12 CLV-first cutover)." />
+  <meta name="description" content="Omega is WeBetAI's live daily picks model, replacing Alpha. The track record is one cumulative total across every model version since March 19, 2026." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/daily-omega" />
   <meta property="og:title" content="WeBetAI - Social Intelligence | Daily Omega Picks" />
-  <meta property="og:description" content="Omega split-test lab — head-to-head vs Alpha, KPIs from Sep 22, 2026 (v12 cutover)." />
+  <meta property="og:description" content="Omega is WeBetAI's live model. One track record across every model version since Mar 19, 2026." />
   <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="WeBetAI - Social Intelligence | Daily Omega Picks" />
-  <meta name="twitter:description" content="Omega split-test lab — head-to-head vs Alpha, KPIs from Sep 22, 2026 (v12 cutover)." />
+  <meta name="twitter:description" content="Omega is WeBetAI's live model. One track record across every model version since Mar 19, 2026." />
   <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -355,6 +355,8 @@
     .day-detail { display: none; }
     .day-detail.open { display: table-row; }
     .day-detail td { padding: .375rem .5rem .75rem; background: var(--off-white); }
+    .kpi-section-head td { padding: .6rem .5rem .3rem; font-size: .65rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-l); border-top: 1px solid var(--border, #e5e7eb); }
+    .kpi-summary-row td { background: var(--off-white); }
     .day-picks-list { list-style: none; padding: 0; margin: 0; }
     .day-picks-list li {
       display: flex; justify-content: space-between; align-items: center;
@@ -637,7 +639,7 @@
 
   <!-- Results Tracker -->
   <div class="results-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;">
-    <span>Pick Results &amp; Track Record — Omega Version</span>
+    <span>Pick Results &amp; Track Record</span>
     <!-- MVP challenger button removed 2026-06-25 (paused until we return to MVP) -->
   </div>
   <div class="results-card">
@@ -647,13 +649,14 @@
       <div class="cum-card"><div class="cum-value" id="cum-accuracy">--</div><div class="cum-label">Accuracy</div></div>
       <div class="cum-card"><div class="cum-value" id="cum-profit">--</div><div class="cum-label">P/L</div></div>
     </div>
+    <div id="kpi-scope" style="font-size:.7rem; color:var(--txt-l); text-align:center; padding:.1rem .75rem .6rem;">All model versions, cumulative.</div>
     <table class="results-table" id="results-table">
       <tbody id="results-body">
         <tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--txt-m);">Loading results...</td></tr>
       </tbody>
     </table>
     <div class="show-more-bar" id="showMoreBar" onclick="showAllDays()">
-      <span>Show all days &#9660;</span>
+      <span>Show past 30 days + monthly totals &#9660;</span>
     </div>
   </div>
 
@@ -1992,12 +1995,15 @@
   }
 
   // Load results automatically
+  let kpiExpanded = false;
   loadResults();
 
   async function loadResults(opts) {
     try {
-      const q = (opts && opts.bust) ? ('?refresh=1&t=' + Date.now()) : '';
-      const resp = await fetch('/api/get-results-omega' + q);
+      // Page load pulls the last 7 days only; the dropdown asks for 30 (monthly totals ride along).
+      const qs = ['range=' + (kpiExpanded ? '30' : '7')];
+      if (opts && opts.bust) qs.push('refresh=1', 't=' + Date.now());
+      const resp = await fetch('/api/get-results-omega?' + qs.join('&'));
       if (!resp.ok) throw new Error('API ' + resp.status);
       const data = await resp.json();
       resultsSnapshot = data;
@@ -2033,7 +2039,12 @@
     const roiNum = parseFloat(cum.roi) || 0;
     roiEl.className = 'cum-value ' + (roiNum >= 0 ? 'positive' : 'negative');
 
-    // Breakdown row removed
+    // One track record for the algo: every model version (Beta, Alpha, Omega) in one cumulative line.
+    const scopeEl = document.getElementById('kpi-scope');
+    if (scopeEl && data.scope && data.scope.from) {
+      const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      scopeEl.textContent = `All model versions, cumulative since ${fmt(data.scope.from)}. Omega is the live model as of ${fmt(data.scope.omegaStart)}.`;
+    }
 
     // Days table
     const days = data.days || [];
@@ -2109,29 +2120,24 @@
       html += '</ul></td></tr>';
     }
 
-    // ── HISTORICAL DAYS (show 6 initially + today = 7 total) ──
-    const MAX_VISIBLE = 6;
-    let visibleCount = 0;
-
+    // ── HISTORICAL DAYS ── server sends the last 7 days on load, 30 once the dropdown is open.
     for (let i = 0; i < days.length; i++) {
       const day = days[i];
       if (picksData && picksData.date === day.date) continue;
-      visibleCount++;
       const record = `${day.wins}W-${day.losses}L${day.pushes ? '-' + day.pushes + 'P' : ''}`;
       const profitClass = day.profit >= 0 ? 'profit-positive' : 'profit-negative';
       const profitStr = (day.profit >= 0 ? '+$' : '-$') + Math.abs(day.profit).toLocaleString();
       const d = new Date(day.date + 'T12:00:00');
       const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const hidden = visibleCount > MAX_VISIBLE ? ' class="extra-day" style="display:none"' : '';
 
-      html += `<tr${hidden}>
+      html += `<tr>
         <td><button class="day-toggle" onclick="toggleDay(${i})">${esc(shortDate)}</button></td>
         <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${record}</span></td>
         <td>${day.accuracy === '--' ? '--' : day.accuracy + '%'}</td>
         <td class="${profitClass}">${profitStr}</td>
       </tr>`;
 
-      html += `<tr class="day-detail${visibleCount > MAX_VISIBLE ? ' extra-day' : ''}" id="day-detail-${i}"${visibleCount > MAX_VISIBLE ? ' style="display:none"' : ''}><td colspan="4">`;
+      html += `<tr class="day-detail" id="day-detail-${i}"><td colspan="4">`;
       if (day.noPlays) {
         html += `<div style="padding:.5rem .25rem; font-size:.8125rem; color:var(--txt-m); font-style:italic;">WeBetAI passed that day. No number was soft enough to lock.</div>`;
       } else if (day.picks && day.picks.length > 0) {
@@ -2151,12 +2157,42 @@
       html += '</td></tr>';
     }
 
+    // ── EXPANDED: past-30 total, then every month (current month included, may overlap the 30 days) ──
+    if (kpiExpanded) {
+      const summaryRow = (label, t, note) => {
+        const decided = (t.wins || 0) + (t.losses || 0);
+        const rec = `${t.wins || 0}W-${t.losses || 0}L${t.pushes ? '-' + t.pushes + 'P' : ''}`;
+        const pr = t.profit || 0;
+        return `<tr class="kpi-summary-row">
+          <td><span style="font-weight:700;">${esc(label)}</span>${note ? `<div style="font-size:.6rem; color:var(--txt-l); font-weight:500;">${esc(note)}</div>` : ''}</td>
+          <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${rec}</span></td>
+          <td>${decided ? t.accuracy : '--'}</td>
+          <td class="${pr >= 0 ? 'profit-positive' : 'profit-negative'}">${(pr >= 0 ? '+$' : '-$') + Math.abs(pr).toLocaleString()}</td>
+        </tr>`;
+      };
+      const w30 = data.windows && data.windows.last30;
+      if (w30) {
+        html += `<tr class="kpi-section-head"><td colspan="4">Totals</td></tr>`;
+        html += summaryRow('Past 30 days', w30, 'ROI ' + (w30.roi || '0%'));
+      }
+      const months = data.months || [];
+      if (months.length) {
+        html += `<tr class="kpi-section-head"><td colspan="4">Monthly totals</td></tr>`;
+        const curMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 7);
+        for (const m of months) {
+          const short = new Date(m.month + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          html += summaryRow(short, m, (m.month === curMonth ? 'Month to date · ' : '') + 'ROI ' + (m.roi || '0%'));
+        }
+      }
+    }
+
     document.getElementById('results-body').innerHTML = html;
 
     const bar = document.getElementById('showMoreBar');
-    if (visibleCount > MAX_VISIBLE) {
+    if (bar) {
       bar.classList.add('has-more');
-      bar.querySelector('span').textContent = `Show ${visibleCount - MAX_VISIBLE} more days ▼`;
+      bar.style.display = '';
+      bar.querySelector('span').textContent = kpiExpanded ? 'Show past 7 days only \u25B2' : 'Show past 30 days + monthly totals \u25BC';
     }
     applyLiveKpi();
   }
@@ -2165,12 +2201,11 @@
     document.getElementById('day-detail-' + idx).classList.toggle('open');
   }
 
-  function showAllDays() {
-    document.querySelectorAll('.extra-day').forEach(el => {
-      el.style.display = '';
-      el.classList.remove('extra-day');
-    });
-    document.getElementById('showMoreBar').style.display = 'none';
+  async function showAllDays() {
+    const bar = document.getElementById('showMoreBar');
+    kpiExpanded = !kpiExpanded;
+    if (kpiExpanded && bar) bar.querySelector('span').textContent = 'Loading past 30 days…';
+    await loadResults();
   }
   /* ═══════════════════════════════════════════════
      3-AGENT VERIFICATION

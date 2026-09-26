@@ -14,7 +14,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v7-dh';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v8-allver';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -332,6 +332,100 @@ async function gradeDay(dateISO, picksData) {
   };
 }
 
+// ── All-versions KPI helpers (2026-09-26) ──
+const OMEGA_KPI_START = "2026-09-22";
+let LEGACY = { days: [] };
+try { LEGACY = require('./lib/kpi-legacy-alpha.json'); } catch (e) { console.error('[get-results-omega] legacy KPI file missing'); }
+
+function legacyDaysBefore(floor) {
+  return (LEGACY.days || []).filter(d => d.date < floor).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+function pct(n, d) { return d > 0 ? ((n / d) * 100).toFixed(1) + '%' : '0%'; }
+
+// Same rules the Omega page has always used: Record/Accuracy = straight picks (pushes excluded);
+// P/L + ROI = all bets (straights + parlay).
+function aggregateDays(list) {
+  let cw = 0, cl = 0, cp = 0, cpe = 0, cwag = 0, cpr = 0;
+  let sw = 0, sl = 0, swag = 0, spr = 0;
+  let pw = 0, pl = 0, pwag = 0, ppr = 0;
+  for (const day of list) {
+    cw += day.wins || 0; cl += day.losses || 0; cp += day.pushes || 0; cpe += day.pending || 0;
+    cwag += day.wagered || 0; cpr += day.profit || 0;
+    for (const p of (day.picks || [])) {
+      if (p.sport === 'PARLAY' || p.result === 'pending' || p.result === 'push') continue;
+      swag += wholeUp((parseFloat(p.units) || 1) * 150);
+      spr += p.profit || 0;
+      if (p.result === 'win') sw++; else if (p.result === 'loss') sl++;
+    }
+    if (day.parlayResult && day.parlayResult !== 'skip' && day.parlayResult !== 'pending') {
+      pwag += (day.parlayRisk || 75); ppr += day.parlayProfit || 0;
+      if (day.parlayResult === 'win') pw++; else if (day.parlayResult === 'loss') pl++;
+    }
+  }
+  return {
+    cumulative: {
+      wins: cw, losses: cl, pushes: cp, pending: cpe,
+      accuracy: pct(cw, cw + cl),
+      roi: cwag > 0 ? ((cpr / cwag) * 100).toFixed(1) + '%' : '0%',
+      totalWagered: Math.round(cwag), totalProfit: Math.round(cpr),
+    },
+    straight: { wins: sw, losses: sl, accuracy: pct(sw, sw + sl), totalWagered: Math.round(swag), totalProfit: Math.round(spr) },
+    parlay: { wins: pw, losses: pl, accuracy: pct(pw, pw + pl), totalWagered: Math.round(pwag), totalProfit: Math.round(ppr) },
+  };
+}
+
+function flatSummary(list) {
+  const a = aggregateDays(list);
+  return {
+    days: list.length,
+    wins: a.straight.wins, losses: a.straight.losses, pushes: a.cumulative.pushes, pending: a.cumulative.pending,
+    accuracy: a.straight.accuracy, profit: a.cumulative.totalProfit, wagered: a.cumulative.totalWagered, roi: a.cumulative.roi,
+    parlayWins: a.parlay.wins, parlayLosses: a.parlay.losses,
+  };
+}
+
+function shiftDate(iso, deltaDays) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
+// Last N ET calendar days including today.
+function aggregateWindow(list, n) {
+  const today = getEasternDateToday();
+  const from = shiftDate(today, -(n - 1));
+  return { from, through: today, ...flatSummary(list.filter(d => d.date >= from && d.date <= today)) };
+}
+
+// Newest month first, current month included (it can overlap the 30-day window).
+function monthlyTotals(list) {
+  const byMonth = new Map();
+  for (const d of list) {
+    const m = d.date.slice(0, 7);
+    if (!byMonth.has(m)) byMonth.set(m, []);
+    byMonth.get(m).push(d);
+  }
+  return [...byMonth.keys()].sort().reverse().map(m => {
+    const label = new Date(m + '-15T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return { month: m, label, ...flatSummary(byMonth.get(m)) };
+  });
+}
+
+// ?range=7 (default, page load) | 30 (dropdown) | all. Totals/months are always included and tiny;
+// only the per-day pick rows are trimmed, which is what keeps the first paint light.
+function respond(full, event) {
+  const params = (event && event.queryStringParameters) || {};
+  const range = params.range === 'all' ? 'all' : (params.range === '30' ? 30 : 7);
+  let days = full.days || [];
+  if (range !== 'all') {
+    const from = shiftDate(getEasternDateToday(), -(range - 1));
+    days = days.filter(d => d.date >= from);
+  }
+  const body = { ...full, days, range: String(range), totalDays: (full.days || []).length };
+  return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(full) }, body: JSON.stringify(body) };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -354,7 +448,7 @@ exports.handler = async (event) => {
       if (cacheResp.ok) {
         const cached = await cacheResp.json();
         if (cacheIsFresh(cached, event)) {
-          return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(cached) }, body: JSON.stringify(cached) };
+          return respond(cached, event);
         }
       }
     } catch (e) {}
@@ -363,9 +457,7 @@ exports.handler = async (event) => {
     // Omega store ONLY — no alpha/beta back-merge. Daily + cumulative ignore any pre-floor blob dates.
     // Optional ?from=YYYY-MM-DD can raise the floor further; default stays 2026-09-22 (v12 MAIN reset).
     const params = event.queryStringParameters || {};
-    const KPI_START = (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) && params.from > "2026-09-22")
-      ? params.from
-      : "2026-09-22";
+    const KPI_START = OMEGA_KPI_START; // "2026-09-22" — Omega store floor; earlier dates come from the frozen legacy file
     const alphaDatesRaw = await getDatesFromStore(alphaStoreUrl, authHeaders);
     const alphaDates = alphaDatesRaw.filter(d => d >= KPI_START);
 
@@ -377,21 +469,11 @@ exports.handler = async (event) => {
       alphaDates.map(d => [d, { store: 'omega', url: alphaStoreUrl }])
     );
 
-    if (picksLookup.size === 0) {
-      return { statusCode: 200, headers: CORS, body: JSON.stringify({ days: [], cumulative: { wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0%', roi: '0%', totalWagered: 0, totalProfit: 0 }, straight: { wins: 0, losses: 0, accuracy: '0%' }, parlay: { wins: 0, losses: 0, accuracy: '0%' } }) };
-    }
-
-    // Enumerate every calendar date from earliest to today (ET)
-    const allDates = [...picksLookup.keys()].sort();
-    const earliestDate = allDates[0];
+    // Enumerate every calendar date from the Omega epoch to today (ET)
+    const earliestDate = OMEGA_KPI_START;
     const todayET = getEasternDateToday();
     const fullDateRange = getAllDatesInRange(earliestDate, todayET);
 
-    const days = [];
-    let cumWins = 0, cumLosses = 0, cumPushes = 0, cumPending = 0;
-    let cumWagered = 0, cumProfit = 0;
-    let straightWins = 0, straightLosses = 0, straightWagered = 0, straightProfit = 0;
-    let parlayWins = 0, parlayLosses = 0, parlayWagered = 0, parlayProfit = 0;
 
     // PERF (2026-06-18): grade all dates in PARALLEL — was sequential await per date (~15s cold for
     // ~19 days). ESPN score fetches now overlap; cumulative stats are accumulated AFTER, in date order
@@ -416,50 +498,34 @@ exports.handler = async (event) => {
       return day;
     }));
 
-    for (const day of gradedByDate) {
-      if (!day) continue;
-      cumWins += day.wins; cumLosses += day.losses; cumPushes += day.pushes; cumPending += day.pending;
-      cumWagered += day.wagered; cumProfit += day.profit;
+    const omegaDays = gradedByDate.filter(Boolean); // oldest first
 
-      // Straight pick KPIs (exclude parlay row; exclude pushes — stake returned, no action)
-      for (const p of day.picks.filter(p => p.sport !== 'PARLAY' && p.result !== 'pending' && p.result !== 'push')) {
-        const risk = wholeUp((parseFloat(p.units) || 1) * 150);
-        straightWagered += risk;
-        straightProfit += p.profit;
-        if (p.result === 'win') straightWins++;
-        else if (p.result === 'loss') straightLosses++;
-      }
-
-      if (day.parlayResult && day.parlayResult !== 'skip' && day.parlayResult !== 'pending') {
-        parlayWagered += (day.parlayRisk || 75); parlayProfit += day.parlayProfit;
-        if (day.parlayResult === 'win') parlayWins++;
-        else if (day.parlayResult === 'loss') parlayLosses++;
-      }
-
-      days.push(day);
-    }
-
-    const cumDecided = cumWins + cumLosses;
-    const straightDecided = straightWins + straightLosses;
-    const parlayDecided = parlayWins + parlayLosses;
+    // ALL VERSIONS (founder, 2026-09-26): the public track record is one cumulative line for the
+    // algo — Beta + Alpha history frozen through the day before the Omega KPI epoch, then Omega.
+    // Legacy rows come from lib/kpi-legacy-alpha.json (scripts/build-kpi-legacy.js), never regraded.
+    const legacyDays = legacyDaysBefore(OMEGA_KPI_START); // oldest first
+    const allDays = legacyDays.concat(omegaDays);
+    const all = aggregateDays(allDays);
+    const omegaOnly = aggregateDays(omegaDays);
+    const legacy = aggregateDays(legacyDays);
 
     const result = {
-      days: days.reverse(), // newest first for display
-      cumulative: {
-        wins: cumWins, losses: cumLosses, pushes: cumPushes, pending: cumPending,
-        accuracy: cumDecided > 0 ? ((cumWins / cumDecided) * 100).toFixed(1) + '%' : '0%',
-        roi: cumWagered > 0 ? ((cumProfit / cumWagered) * 100).toFixed(1) + '%' : '0%',
-        totalWagered: Math.round(cumWagered), totalProfit: Math.round(cumProfit),
+      days: allDays.slice().reverse(), // newest first; respond() trims to ?range (7 default)
+      cumulative: all.cumulative,
+      straight: all.straight,
+      parlay: all.parlay,
+      scope: {
+        label: 'All model versions',
+        from: allDays.length ? allDays[0].date : null,
+        omegaStart: OMEGA_KPI_START,
+        legacyThrough: LEGACY.through || null,
       },
-      straight: {
-        wins: straightWins, losses: straightLosses,
-        accuracy: straightDecided > 0 ? ((straightWins / straightDecided) * 100).toFixed(1) + '%' : '0%',
-        totalWagered: Math.round(straightWagered), totalProfit: Math.round(straightProfit),
-      },
-      parlay: {
-        wins: parlayWins, losses: parlayLosses,
-        accuracy: parlayDecided > 0 ? ((parlayWins / parlayDecided) * 100).toFixed(1) + '%' : '0%',
-        totalWagered: Math.round(parlayWagered), totalProfit: Math.round(parlayProfit),
+      omegaOnly,
+      legacy,
+      months: monthlyTotals(allDays),
+      windows: {
+        last7: aggregateWindow(allDays, 7),
+        last30: aggregateWindow(allDays, 30),
       },
       cachedAt: Date.now(),
     };
@@ -483,7 +549,7 @@ exports.handler = async (event) => {
       });
     } catch (e) {}
 
-    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cacheControlFor(result) }, body: JSON.stringify(result) };
+    return respond(result, event);
 
   } catch (err) {
     console.error('[get-results-omega] Error:', err.message);

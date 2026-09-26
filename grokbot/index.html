@@ -16,16 +16,16 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Betty - Free Daily Sportsbook Picks | WeBetAI</title>
-  <meta name="description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks, KPIs, live scores, and PM quotes. 21+ · NFA." />
+  <title>Betty · Free Daily Sportsbook Picks | WeBetAI Grok Bot</title>
+  <meta name="description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks. Morning card, Big Bets tips, WHY, SCORE, finals. 21+ · NFA." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/grokbot" />
-  <meta property="og:title" content="Betty - Free Daily Sportsbook Picks | WeBetAI" />
-  <meta property="og:description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks. Cadence on. 21+ · NFA." />
+  <meta property="og:title" content="Betty · Free Daily Sportsbook Picks | WeBetAI" />
+  <meta property="og:description" content="Free daily Omega picks in Grok Bot. Add once. Cadence on. 21+ · NFA." />
   <meta property="og:image" content="https://webetsocial.com/betty-og.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Betty - Free Daily Sportsbook Picks | WeBetAI" />
-  <meta name="twitter:description" content="Install Betty on Grok Bot — free daily Omega sportsbook &amp; prediction-market picks. 21+ · NFA." />
+  <meta name="twitter:title" content="Betty · Free Daily Sportsbook Picks | WeBetAI" />
+  <meta name="twitter:description" content="Free daily Omega picks in Grok Bot. Add once. Cadence on. 21+ · NFA." />
   <meta name="twitter:image" content="https://webetsocial.com/betty-og.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -36,150 +36,309 @@
   <style>
     :root {
       --white: #ffffff;
-      --off-white: #f8f9fa;
-      --bg: #f2f3f5;
-      --olive: #1a2e1a;
+      --bg: #0b1618;
+      --bg-card: #122226;
+      --bg-elevated: #162a2e;
       --teal: #004C54;
       --teal-hover: #003a40;
-      --teal-light: #e6f4f1;
-      --teal-border: #b8ddd6;
       --accent: #00B5B9;
-      --border-lt: #e0e3e8;
-      --txt-b: #1a2e1a;
-      --txt-m: #5f6b7a;
-      --txt-l: #8b95a3;
+      --border: #1e3539;
+      --txt: #f2f6f6;
+      --txt-m: #a8b8bb;
+      --txt-l: #6f8286;
     }
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html { background: var(--bg); min-height: 100vh; -webkit-text-size-adjust: 100%; }
+    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
     body {
       font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
       background: var(--bg);
-      color: var(--txt-b);
+      color: var(--txt);
       -webkit-font-smoothing: antialiased;
-      min-height: 100vh;
+      min-height: 100vh; min-height: 100dvh;
     }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
     .header {
-      background: var(--white);
-      border-bottom: 1px solid var(--border-lt);
+      background: rgba(11,22,24,.92);
+      border-bottom: 1px solid var(--border);
       padding: .875rem 1.25rem;
       display: flex; align-items: center; justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
-    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
-    .logo-text { font-size: 1rem; font-weight: 700; }
+    .logo {
+      display: flex; align-items: center; gap: .5rem;
+      color: var(--txt); text-decoration: none; font-weight: 700; font-size: 1rem;
+    }
+    .logo:hover { text-decoration: none; color: var(--accent); }
     .header-badge {
-      font-size: .6875rem; font-weight: 600; color: var(--teal);
-      background: var(--teal-light); border: 1px solid var(--teal-border);
+      font-size: .6875rem; font-weight: 600; color: var(--accent);
+      background: rgba(0,181,185,.12); border: 1px solid rgba(0,181,185,.35);
       border-radius: 9999px; padding: .2rem .6rem;
     }
-    .main { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+    .main { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 
     .hero {
-      background: var(--white);
-      border: 1px solid var(--border-lt);
-      border-radius: 1rem;
-      padding: 1.5rem 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1.125rem;
+      padding: 1.5rem 1.25rem 1.35rem;
       margin-bottom: 1rem;
-      display: grid;
-      gap: 1.25rem;
-    }
-    @media (min-width: 640px) {
-      .hero { grid-template-columns: 1fr 180px; align-items: center; padding: 1.75rem; }
+      overflow: hidden;
     }
     .eyebrow {
-      font-size: .75rem; font-weight: 600; color: var(--teal);
+      font-size: .75rem; font-weight: 600; color: var(--accent);
       text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem;
     }
     .hero h1 {
       font-size: 1.625rem; font-weight: 700; line-height: 1.2;
-      color: var(--olive); margin-bottom: .625rem;
+      margin-bottom: .625rem;
     }
-    @media (min-width: 640px) { .hero h1 { font-size: 1.875rem; } }
+    @media (min-width: 640px) { .hero h1 { font-size: 2rem; } }
     .hero-sub {
-      font-size: .9375rem; color: var(--txt-m); line-height: 1.55; margin-bottom: 1.25rem;
+      font-size: .9375rem; color: var(--txt-m); line-height: 1.55;
+      margin-bottom: 1.25rem; max-width: 36rem;
     }
-    .cta-row { display: flex; flex-wrap: wrap; gap: .625rem; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: .625rem; margin-bottom: 1.35rem; }
     .cta-primary {
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--teal); color: var(--white);
-      font-size: .875rem; font-weight: 600;
-      padding: .7rem 1.125rem; border-radius: 9999px;
+      background: var(--accent); color: #003238;
+      font-size: .875rem; font-weight: 700;
+      padding: .75rem 1.25rem; border-radius: 9999px;
       text-decoration: none; border: none;
     }
-    .cta-primary:hover { background: var(--teal-hover); }
+    .cta-primary:hover { filter: brightness(1.08); text-decoration: none; }
     .cta-secondary {
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--white); color: var(--teal);
+      background: transparent; color: var(--accent);
       font-size: .875rem; font-weight: 600;
-      padding: .7rem 1.125rem; border-radius: 9999px;
-      text-decoration: none; border: 1px solid var(--teal-border);
+      padding: .75rem 1.25rem; border-radius: 9999px;
+      text-decoration: none; border: 1px solid rgba(0,181,185,.45);
     }
-    .cta-secondary:hover { background: var(--teal-light); }
-    .hero-portrait {
-      width: 100%; max-width: 180px; margin: 0 auto;
-      border-radius: .875rem; object-fit: cover; aspect-ratio: 1;
-      border: 1px solid var(--border-lt);
+    .cta-secondary:hover { background: rgba(0,181,185,.1); text-decoration: none; }
+
+    .video-block {
+      position: relative;
+      border-radius: .875rem;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+      aspect-ratio: 16 / 9;
+    }
+    .video-block video {
+      width: 100%; height: 100%;
+      display: block;
+      object-fit: cover;
+      vertical-align: middle;
+    }
+    .video-caption {
+      font-size: .75rem; color: var(--txt-l);
+      margin-top: .65rem; line-height: 1.4;
     }
 
     .section {
-      background: var(--white);
-      border: 1px solid var(--border-lt);
-      border-radius: 1rem;
-      padding: 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1.125rem;
+      padding: 1.35rem 1.25rem;
       margin-bottom: 1rem;
     }
     .section h2 {
-      font-size: 1.0625rem; font-weight: 700; color: var(--olive); margin-bottom: .875rem;
+      font-size: 1.0625rem; font-weight: 700;
+      margin-bottom: .875rem; color: var(--txt);
     }
+    .section p {
+      font-size: .9rem; color: var(--txt-m); line-height: 1.55;
+      margin-bottom: .75rem;
+    }
+    .section p:last-child { margin-bottom: 0; }
+
+    .steps {
+      list-style: none;
+      display: flex; flex-direction: column; gap: .875rem;
+    }
+    .steps li {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: .75rem;
+      align-items: start;
+    }
+    .step-num {
+      font-size: .75rem; font-weight: 700; color: #003238;
+      background: var(--accent); border-radius: 9999px;
+      width: 1.75rem; height: 1.75rem;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-body h3 {
+      font-size: .9rem; font-weight: 600; color: var(--txt);
+      margin-bottom: .2rem;
+    }
+    .step-body p {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.45;
+      margin: 0;
+    }
+
     .feature-list { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
     .feature-list li {
-      display: grid; grid-template-columns: 1fr auto; gap: .5rem .75rem;
-      padding-bottom: .75rem; border-bottom: 1px solid var(--border-lt);
+      display: grid; grid-template-columns: 1fr auto; gap: .35rem .75rem;
+      padding-bottom: .75rem; border-bottom: 1px solid var(--border);
       align-items: baseline;
     }
     .feature-list li:last-child { border-bottom: none; padding-bottom: 0; }
-    .feature-name { font-size: .875rem; font-weight: 600; color: var(--olive); }
+    .feature-name { font-size: .875rem; font-weight: 600; color: var(--txt); }
     .feature-when {
-      font-size: .75rem; font-weight: 500; color: var(--teal);
-      background: var(--teal-light); border: 1px solid var(--teal-border);
+      font-size: .7rem; font-weight: 600; color: var(--accent);
+      background: rgba(0,181,185,.1); border: 1px solid rgba(0,181,185,.3);
       border-radius: 9999px; padding: .2rem .55rem; white-space: nowrap;
     }
-    .feature-desc { grid-column: 1 / -1; font-size: .8125rem; color: var(--txt-m); line-height: 1.45; margin-top: -.25rem; }
+    .feature-desc {
+      grid-column: 1 / -1;
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.45;
+    }
 
-    .pick3 p { font-size: .875rem; color: var(--txt-m); line-height: 1.55; margin-bottom: .875rem; }
-    .pick3 a.inline { color: var(--teal); font-weight: 600; text-decoration: none; }
-    .pick3 a.inline:hover { text-decoration: underline; }
+    .instructions {
+      background: rgba(0,181,185,.08);
+      border: 1px solid rgba(0,181,185,.28);
+      border-radius: 1.125rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .instructions h2 {
+      font-size: .95rem; font-weight: 700; color: var(--accent);
+      margin-bottom: .75rem;
+    }
+    .instructions ol {
+      padding-left: 1.15rem;
+      display: flex; flex-direction: column; gap: .45rem;
+    }
+    .instructions li {
+      font-size: .85rem; color: var(--txt-m); line-height: 1.45;
+    }
+
+    .portrait-row {
+      display: flex; align-items: center; gap: 1rem;
+      margin-top: 1rem; padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .portrait-row img {
+      width: 64px; height: 64px; border-radius: .75rem;
+      object-fit: cover; border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .portrait-row p {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.45; margin: 0;
+    }
+
+    .footer-cta {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1.125rem;
+      padding: 1.5rem 1.25rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .footer-cta h2 { font-size: 1.125rem; font-weight: 700; margin-bottom: .5rem; }
+    .footer-cta p {
+      font-size: .875rem; color: var(--txt-m); margin-bottom: 1rem; line-height: 1.5;
+    }
+    .footer-cta .cta-row { justify-content: center; margin-bottom: 0; }
 
     .footer-note {
       font-size: .6875rem; color: var(--txt-l); line-height: 1.65;
       text-align: center; margin-top: 1.5rem;
     }
-    .footer-note a { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .footer-note a { color: var(--accent); font-weight: 600; }
+    .footer-note strong { color: var(--txt-m); }
   </style>
 </head>
 <body>
 
 <header class="header">
-  <a class="logo" href="/">
-    <span class="logo-text">WeBetAI</span>
-  </a>
-  <span class="header-badge">by WeBetAI @ webetsocial.com</span>
+  <a class="logo" href="/">WeBetAI</a>
+  <span class="header-badge">Betty · Free Daily</span>
 </header>
 
-<div class="main">
+<main class="main">
   <section class="hero">
-    <div>
-      <div class="eyebrow">Free · Grok Bot · WeBetAI</div>
-      <h1>Betty - Free Daily Sportsbook Picks</h1>
-      <p class="hero-sub">by WeBetAI @ webetsocial.com — free daily Omega picks in Grok Bot</p>
-      <p class="hero-sub">Sportsbook + prediction-market Omega cards, every morning. Install once on Grok Bot. Cadence on. No paid hard-sell in the bot MVP.</p>
-      <div class="cta-row">
-        <a class="cta-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
-        <a class="cta-secondary" href="/daily-omega">See today’s card on the site</a>
-        <a class="cta-secondary" href="/betty-guide">How Betty works</a>
-      </div>
+    <div class="eyebrow">Free · Grok Bot · WeBetAI</div>
+    <h1>Betty — free daily sportsbook picks</h1>
+    <p class="hero-sub">
+      Omega cards in your pocket every morning. Install Betty once on Grok Bot —
+      get today’s straights + parlay, then ask WHY, SCORE, or for more context anytime.
+    </p>
+    <div class="cta-row">
+      <a class="cta-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
+      <a class="cta-secondary" href="/daily-omega">See today’s card</a>
+      <a class="cta-secondary" href="/betty-guide">How Betty works</a>
     </div>
-    <img class="hero-portrait" src="/betty-sms.jpg?v=20260925" alt="Betty — WeBetAI" width="180" height="180" />
+
+    <div class="video-block">
+      <video
+        controls
+        playsinline
+        preload="metadata"
+        poster="/betty-intro.jpg"
+        title="Betty Free Daily onboarding"
+      >
+        <source src="/betty-onboarding.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    </div>
+    <p class="video-caption">~15s intro — what Betty does and how to get today’s card after you Add.</p>
+
+    <div class="portrait-row">
+      <img src="/betty-intro.jpg" alt="Betty of WeBetAI" width="64" height="64" />
+      <p>by WeBetAI @ webetsocial.com — the same Betty you see on <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a>.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li>
+        <span class="step-num">1</span>
+        <div class="step-body">
+          <h3>Add Betty</h3>
+          <p>One tap on Grok Bot. No paid upsell in the free daily flow.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">2</span>
+        <div class="step-body">
+          <h3>Meet Betty + Big Bets tips</h3>
+          <p>Quick intro, then five short instructions so you get the most out of her.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">3</span>
+        <div class="step-body">
+          <h3>Today’s Omega card</h3>
+          <p>Bet summary first, then each pick, then the daily 3-leg parlay — with a link to the full site card.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-num">4</span>
+        <div class="step-body">
+          <h3>Stay in the chat</h3>
+          <p>Ask WHY, SCORE, KPIs, or for more context. Morning / tip-off / finals cadence stays on.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="instructions">
+    <h2>Betty Big Bets Instructions — Getting The Most Out Of Her</h2>
+    <ol>
+      <li>Read the bet summary first — units, odds, and risk / to-win at a glance.</li>
+      <li>Open any pick for the detail card; ask <strong style="color:var(--txt)">WHY</strong> when you want the full read.</li>
+      <li>Type <strong style="color:var(--txt)">SCORE</strong> during games for live ESPN updates on today’s card only.</li>
+      <li>Check KPIs anytime — Combined floor + Omega-only record.</li>
+      <li>Deep-dive the same card on <a href="/daily-omega">webetsocial.com/daily-omega</a> when you want the full site view.</li>
+    </ol>
   </section>
 
   <section class="section">
@@ -188,7 +347,7 @@
       <li>
         <span class="feature-name">Today’s Omega card</span>
         <span class="feature-when">Now · mornings</span>
-        <span class="feature-desc">Straights + daily parlay from public Omega APIs — full reasoning, not truncated.</span>
+        <span class="feature-desc">Straights + daily 3-leg parlay from live public Omega APIs.</span>
       </li>
       <li>
         <span class="feature-name">KPIs (Combined + Omega-only)</span>
@@ -203,7 +362,7 @@
       <li>
         <span class="feature-name">Extra Grok + ESPN context</span>
         <span class="feature-when">On ask</span>
-        <span class="feature-desc">Deeper read on any pick without inventing new bets.</span>
+        <span class="feature-desc">Deeper read on any pick — never invents new bets.</span>
       </li>
       <li>
         <span class="feature-name">Kalshi / Polymarket quotes</span>
@@ -218,16 +377,21 @@
     </ul>
   </section>
 
-  <section class="section pick3">
+  <section class="section">
     <h2>Soft challenge — Pick 3</h2>
-    <p>After you install and see today’s card, challenge a friend vs the AI at <a class="inline" href="https://webetsocial.com/pick3p2p">webetsocial.com/pick3p2p</a>. Leaderboard: <a class="inline" href="https://webetsocial.com/pick3p2p/#leaderboard">#leaderboard</a>.</p>
-    <a class="cta-secondary" href="https://webetsocial.com/pick3p2p">Open Pick 3 PvP</a>
+    <p>After you install and see today’s card, challenge a friend vs the AI at <a href="https://webetsocial.com/pick3p2p">webetsocial.com/pick3p2p</a>. Leaderboard: <a href="https://webetsocial.com/pick3p2p/#leaderboard">#leaderboard</a>.</p>
+    <div class="cta-row" style="margin-bottom:0;margin-top:.875rem;">
+      <a class="cta-secondary" href="https://webetsocial.com/pick3p2p">Open Pick 3 PvP</a>
+    </div>
   </section>
 
-  <section class="section" style="text-align:center;">
-    <h2 style="margin-bottom:.5rem;">Ready?</h2>
-    <p style="font-size:.875rem;color:var(--txt-m);margin-bottom:1rem;line-height:1.5;">Install Betty → get today’s card. Status updates + the rest of the cadence are on by default.</p>
-    <a class="cta-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
+  <section class="footer-cta">
+    <h2>Ready for today’s card?</h2>
+    <p>Add Betty → get the intro + Big Bets tips → today’s Omega card. Cadence stays on by default.</p>
+    <div class="cta-row">
+      <a class="cta-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
+      <a class="cta-secondary" href="/daily-omega">See today’s card</a>
+    </div>
   </section>
 
   <p class="footer-note">
@@ -235,7 +399,7 @@
     Follow <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X for daily posts. This bot does not post to X itself.<br>
     <strong>21+ · NFA · gamble responsibly</strong>
   </p>
-</div>
+</main>
 
 <script src="/js/site-share.js" defer></script>
 </body>

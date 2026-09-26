@@ -38,30 +38,30 @@
 
   <style>
     :root {
-      --bg: #000000;
-      --bg-elev: #0a0a0a;
-      --bg-card: #111111;
-      --border: #222222;
-      --border-soft: #1a1a1a;
-      --txt: #ffffff;
-      --txt-m: #a1a1a1;
-      --txt-l: #6b6b6b;
+      --bg: #f0f7f6;
+      --bg-elev: #ffffff;
+      --bg-card: #ffffff;
+      --border: #d7e4e2;
+      --border-soft: #e3ecea;
+      --txt: #1a1a1a;
+      --txt-m: #5a5a5a;
+      --txt-l: #7a7a7a;
       --accent: #004C54;
-      --accent-dim: rgba(0,76,84,.14);
-      --accent-border: rgba(0,76,84,.45);
-      --x-white: #e7e9ea;
+      --accent-dim: rgba(0,76,84,.10);
+      --accent-border: rgba(0,76,84,.35);
+      --x-white: #1a1a1a; /* legacy alias → dark text on light theme */
       --btn: #004C54;
       --btn-fg: #ffffff;
-      --light-bg: #ffffff;
-      --light-elev: #f4f5f6;
+      --light-bg: #f0f7f6;
+      --light-elev: #ffffff;
       --light-card: #ffffff;
-      --light-border: #e6e8ea;
-      --light-txt: #0f1419;
-      --light-txt-m: #536471;
-      --light-txt-l: #8b98a5;
+      --light-border: #d7e4e2;
+      --light-txt: #1a1a1a;
+      --light-txt-m: #5a5a5a;
+      --light-txt-l: #7a7a7a;
       --cta: #004C54;
       --cta-fg: #ffffff;
-      --cta-glow: 0 0 0 3px rgba(0,76,84,.28), 0 14px 42px rgba(0,76,84,.32);
+      --cta-glow: 0 0 0 3px rgba(0,76,84,.22), 0 14px 42px rgba(0,76,84,.22);
     }
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html {
@@ -88,7 +88,7 @@
       align-items: center;
       gap: .5rem;
       padding: .65rem 1rem;
-      background: rgba(0,0,0,.88);
+      background: rgba(255,255,255,.92);
       border-bottom: 1px solid var(--border-soft);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
@@ -169,13 +169,13 @@
     .btn-primary:hover { filter: brightness(1.08); text-decoration: none; transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0,76,84,.5), 0 14px 40px rgba(0,76,84,.4); }
     .btn-secondary {
       display: inline-flex; align-items: center; justify-content: center;
-      background: transparent; color: var(--x-white);
+      background: #ffffff; color: var(--txt);
       font-size: .9rem; font-weight: 700;
       padding: .95rem 1.35rem; border-radius: 9999px;
-      text-decoration: none; border: 1px solid var(--accent-border);
+      text-decoration: none; border: 1px solid var(--border);
       transition: border-color .15s ease, background .15s ease, color .15s ease;
     }
-    .btn-secondary:hover { border-color: var(--accent); color: #fff; background: rgba(0,76,84,.18); text-decoration: none; }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); text-decoration: none; }
 
     /* Conversion CTAs — WeBet dark green */
     .fold-light .btn-primary,
@@ -216,9 +216,9 @@
     .video-shell {
       border-radius: 1rem; overflow: hidden;
       border: 1px solid var(--border);
-      background: #000; aspect-ratio: 16 / 9;
+      background: #0a0a0a; aspect-ratio: 16 / 9;
       max-width: 640px; margin: 0 auto;
-      box-shadow: 0 0 0 1px rgba(255,255,255,.03), 0 24px 80px rgba(0,0,0,.55);
+      box-shadow: 0 12px 40px rgba(0,76,84,.12), 0 4px 16px rgba(0,0,0,.08);
     }
     .video-shell video {
       width: 100%; height: 100%; display: block; object-fit: cover;
@@ -274,9 +274,10 @@
     .install {
       margin-top: 2.5rem;
       padding: 1.75rem 1.35rem;
-      background: linear-gradient(180deg, #0d1516 0%, #111111 100%);
-      border: 1px solid var(--accent-border);
+      background: linear-gradient(180deg, #f2f7f8 0%, #ffffff 100%);
+      border: 1px solid rgba(0,76,84,.35);
       border-radius: 1.25rem;
+      box-shadow: 0 18px 50px rgba(0,76,84,.10);
     }
     .install .section-label { color: var(--accent); }
     .steps {
@@ -311,11 +312,11 @@
     .store-btn {
       display: inline-flex; align-items: center; gap: .55rem;
       font-size: .8rem; font-weight: 700;
-      color: var(--txt); background: #1a1a1a;
-      border: 1px solid #333; border-radius: .65rem;
+      color: var(--txt); background: #ffffff;
+      border: 1px solid var(--border); border-radius: .65rem;
       padding: .55rem .85rem; text-decoration: none;
     }
-    .store-btn:hover { border-color: #666; text-decoration: none; background: #222; }
+    .store-btn:hover { border-color: #b8cdc9; text-decoration: none; background: #f7fbfa; }
     .store-btn .store-txt { display: flex; flex-direction: column; align-items: flex-start; gap: .05rem; }
     .store-btn span { font-size: .65rem; font-weight: 500; color: var(--txt-l); display: block; line-height: 1.1; }
     .store-btn strong { display: block; line-height: 1.15; }
@@ -352,7 +353,7 @@
     .grok-bot-logo {
       width: 52px; height: 52px; border-radius: .95rem;
       object-fit: cover; border: 1px solid var(--border);
-      box-shadow: 0 0 0 1px rgba(255,255,255,.04);
+      box-shadow: 0 4px 14px rgba(0,76,84,.12);
     }
     @media (min-width: 640px) {
       .grok-bot-logo { width: 60px; height: 60px; }
@@ -407,16 +408,16 @@
     }
 
 
-    /* Above / below fold */
+    /* Whole page is light brand — no black fold split */
     .fold-dark {
-      background: #000;
+      background: var(--bg);
       padding-bottom: .5rem;
     }
     .fold-light {
-      background: var(--light-bg);
-      color: var(--light-txt);
+      background: var(--bg);
+      color: var(--txt);
       padding: 2.5rem 0 3.5rem;
-      border-top: 1px solid #e1e4e8;
+      border-top: 1px solid var(--border-soft);
     }
     .fold-light .section-label { color: var(--accent); }
     .fold-light h2,
@@ -457,22 +458,22 @@
     .fold-light .store-btn:hover { background: var(--light-elev); border-color: #cfd4d9; }
     .fold-light .store-btn span { color: var(--light-txt-l); }
     .fold-light .final {
-      background: #0a0a0a;
-      border: none;
-      color: #fff;
-      box-shadow: 0 24px 60px rgba(0,0,0,.18);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      color: var(--txt);
+      box-shadow: 0 18px 50px rgba(0,76,84,.10);
     }
-    .fold-light .final h2 { color: #fff; }
-    .fold-light .final p { color: #a1a1a1; }
+    .fold-light .final h2 { color: var(--txt); }
+    .fold-light .final p { color: var(--txt-m); }
     .fold-light .final .btn-primary {
       background: var(--cta); color: var(--cta-fg);
       box-shadow: var(--cta-glow);
     }
     .fold-light .final .btn-secondary {
-      color: #fff; border-color: #444; background: transparent;
+      color: var(--txt); border-color: var(--border); background: #fff;
     }
     .fold-light .final .hero-note,
-    .fold-light .final .hero-note a { color: #8b8b8b; }
+    .fold-light .final .hero-note a { color: var(--txt-l); }
     .fold-light .footer { color: var(--light-txt-l); }
     .fold-light .footer a { color: var(--accent); }
     .fold-light a { color: var(--accent); }
@@ -485,37 +486,38 @@
       align-items: center;
       margin-top: 1.35rem;
       padding: 1rem 1.1rem;
-      background: #000;
-      border: 1px solid #2f3336;
+      background: #ffffff;
+      border: 1px solid var(--border);
       border-radius: 1rem;
       text-align: left;
+      box-shadow: 0 8px 28px rgba(0,76,84,.08);
     }
     .x-card-avatar {
       width: 64px; height: 64px; border-radius: 9999px;
-      object-fit: cover; border: 2px solid #2f3336;
+      object-fit: cover; border: 2px solid var(--border);
       flex-shrink: 0;
     }
     .x-card-meta { min-width: 0; }
     .x-card-name {
-      font-size: .95rem; font-weight: 800; color: #e7e9ea;
+      font-size: .95rem; font-weight: 800; color: var(--txt);
       letter-spacing: -.01em; line-height: 1.2;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .x-card-handle {
-      font-size: .85rem; color: #71767b; margin-top: .15rem;
+      font-size: .85rem; color: var(--txt-m); margin-top: .15rem;
     }
     .x-card-bio {
-      font-size: .8rem; color: #cfd9de; margin-top: .35rem; line-height: 1.4;
+      font-size: .8rem; color: var(--txt-m); margin-top: .35rem; line-height: 1.4;
     }
     .x-follow {
       display: inline-flex; align-items: center; justify-content: center;
       font-size: .9rem; font-weight: 800;
-      color: #0f1419; background: #e7e9ea;
+      color: #ffffff; background: #004C54;
       border-radius: 9999px; padding: .55rem 1.15rem;
       text-decoration: none; border: none; white-space: nowrap;
-      transition: background .15s ease, transform .15s ease;
+      transition: filter .15s ease, transform .15s ease;
     }
-    .x-follow:hover { background: #fff; text-decoration: none; transform: translateY(-1px); }
+    .x-follow:hover { filter: brightness(1.08); text-decoration: none; transform: translateY(-1px); }
     @media (max-width: 520px) {
       .x-card {
         grid-template-columns: auto 1fr;
@@ -565,7 +567,7 @@
 <nav class="nav">
   <a class="nav-brand" href="/">
     <svg class="nav-mark" viewBox="0 0 470 419" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#FFFFFF"/>
+      <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#1a1a1a"/>
       <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
     </svg>
     WeBetAI
@@ -607,7 +609,7 @@
       <a class="btn-secondary" href="#how">How to get the morning card</a>
     </div>
     <p class="hero-note">
-      One tap opens Betty’s share page → <strong style="color:var(--txt)">Add to Grok Bot</strong>.
+      One tap opens Betty’s share page → <strong>Add to Grok Bot</strong>.
       If the app isn’t installed yet, you’ll be prompted to get Grok Bot.
     </p>
 

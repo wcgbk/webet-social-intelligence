@@ -115,6 +115,28 @@
       background: rgba(255,255,255,0.12);
       border-color: rgba(255,255,255,0.6);
     }
+    .nav-right {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-cta-grok {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 13px; font-weight: 600;
+      color: #ffffff; text-decoration: none;
+      padding: 8px 16px 8px 12px; border-radius: 9999px;
+      background: #004C54;
+      border: 1.5px solid #004C54;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      transition: all 0.25s;
+    }
+    .nav-cta-grok:hover {
+      background: #003d44;
+      border-color: #003d44;
+      filter: brightness(1.05);
+    }
+    .nav-cta-grok img {
+      width: 20px; height: 20px; border-radius: 5px;
+      object-fit: cover; flex-shrink: 0;
+    }
 
     /* ─── HERO CONTENT — centered block ───────────────────── */
     .hero-body {
@@ -482,6 +504,9 @@
       .nav { padding: 0 20px; height: 56px; }
       .nav-wordmark { font-size: 1.125rem; }
       .nav-cta { font-size: 13px; padding: 8px 18px; }
+      .nav-cta-grok { font-size: 12px; padding: 7px 14px 7px 10px; gap: 6px; }
+      .nav-cta-grok img { width: 18px; height: 18px; }
+      .nav-right { gap: 8px; }
 
       .hero-portrait { width: 168px; height: 168px; margin-bottom: 18px; }
       .hero-brand { font-size: 48px; letter-spacing: -1.5px; }
@@ -505,6 +530,8 @@
     @media (max-width: 430px) {
       .nav { padding: 0 16px; }
       .nav-cta { font-size: 12px; padding: 7px 16px; }
+      .nav-cta-grok { font-size: 11px; padding: 6px 12px 6px 8px; }
+      .nav-cta-grok img { width: 18px; height: 18px; }
 
       .hero-portrait { width: 148px; height: 148px; margin-bottom: 16px; }
       .hero-brand { font-size: 42px; }
@@ -541,7 +568,11 @@
       </svg>
       <span class="nav-wordmark">WeBetAI</span>
     </a>
-    <div>
+    <div class="nav-right">
+      <a href="/grokbot" class="nav-cta-grok" aria-label="Get Grok Bot">
+        <img src="/grok-bot-logo.png" width="20" height="20" alt="" />
+        Get Grok Bot
+      </a>
       <a href="/dashboard?q=Show%20today%27s%20picks" class="nav-cta">Try WeBetAI</a>
     </div>
   </nav>

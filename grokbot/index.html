@@ -17,18 +17,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Betty Grok Bot by WeBetAI - Free Daily Sportsbook Picks</title>
-  <meta name="description" content="Download Grok. Add Betty. Free daily Edge sportsbook picks in Grok Bot — mornings, WHY, SCORE, KPIs. 21+ · NFA." />
+  <meta name="description" content="Get Grok Bot. Add Betty. Free daily Edge sportsbook picks in chat — mornings, tip-off, finals notifications. 21+ · NFA." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/grokbot" />
   <meta property="og:title" content="Betty Grok Bot by WeBetAI - Free Daily Sportsbook Picks" />
-  <meta property="og:description" content="Download Grok. Add Betty. Free daily Edge sportsbook picks in Grok Bot — mornings, WHY, SCORE, KPIs. 21+ · NFA." />
+  <meta property="og:description" content="Get Grok Bot. Add Betty. Free daily Edge sportsbook picks in chat — mornings, tip-off, finals notifications. 21+ · NFA." />
   <meta property="og:image" content="https://webetsocial.com/betty-grokbot-og.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Betty Grok Bot by WeBetAI - Free Daily Sportsbook Picks" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Betty Grok Bot by WeBetAI - Free Daily Sportsbook Picks" />
-  <meta name="twitter:description" content="Download Grok. Add Betty. Free daily Edge sportsbook picks in Grok Bot — mornings, WHY, SCORE, KPIs. 21+ · NFA." />
+  <meta name="twitter:description" content="Get Grok Bot. Add Betty. Free daily Edge sportsbook picks in chat — mornings, tip-off, finals notifications. 21+ · NFA." />
   <meta name="twitter:image" content="https://webetsocial.com/betty-grokbot-og.jpg" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -214,7 +214,7 @@
     }
     .card p { font-size: .8125rem; color: var(--txt-m); line-height: 1.45; margin: 0; }
 
-    /* Install path — critical for no-Grok users */
+    /* Install path — critical for no-Grok-Bot users */
     .install {
       margin-top: 2.5rem;
       padding: 1.75rem 1.35rem;
@@ -253,13 +253,14 @@
       margin-top: .65rem;
     }
     .store-btn {
-      display: inline-flex; align-items: center; gap: .4rem;
+      display: inline-flex; align-items: center; gap: .55rem;
       font-size: .8rem; font-weight: 700;
       color: var(--txt); background: #1a1a1a;
       border: 1px solid #333; border-radius: .65rem;
       padding: .55rem .85rem; text-decoration: none;
     }
     .store-btn:hover { border-color: #666; text-decoration: none; background: #222; }
+    .store-btn .store-txt { display: flex; flex-direction: column; align-items: flex-start; gap: .05rem; }
     .store-btn span { font-size: .65rem; font-weight: 500; color: var(--txt-l); display: block; line-height: 1.1; }
     .store-btn strong { display: block; line-height: 1.15; }
 
@@ -285,6 +286,50 @@
     .feat-desc {
       grid-column: 1 / -1;
       font-size: .85rem; color: var(--txt-m); line-height: 1.45;
+    }
+
+
+    .hero-brand-row {
+      display: flex; align-items: center; justify-content: center; gap: .75rem;
+      margin-bottom: 1.15rem;
+    }
+    .grok-bot-logo {
+      width: 52px; height: 52px; border-radius: .95rem;
+      object-fit: cover; border: 1px solid var(--border);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.04);
+    }
+    @media (min-width: 640px) {
+      .grok-bot-logo { width: 60px; height: 60px; }
+    }
+    .hero-lead-stack {
+      display: flex; flex-direction: column; gap: .55rem;
+      max-width: 34rem; margin: 0 auto 1.5rem;
+      text-align: center;
+    }
+    .hero-lead-stack p {
+      font-size: 1.05rem; color: var(--txt-m); line-height: 1.55; margin: 0;
+    }
+    .hero-lead-stack p strong { color: var(--txt); font-weight: 600; }
+    /* Big Bets sits right under video — especially important on mobile */
+    .bets-under-video {
+      margin-top: 1.75rem;
+      text-align: left;
+      padding: 1.25rem 1.1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 1.1rem;
+    }
+    .bets-under-video .section-label { margin-bottom: .35rem; }
+    .bets-under-video h2 {
+      font-size: clamp(1.2rem, 3.2vw, 1.45rem);
+      font-weight: 700; letter-spacing: -.02em;
+      color: var(--x-white); margin-bottom: .45rem; line-height: 1.2;
+    }
+    .bets-under-video > p {
+      font-size: .875rem; color: var(--txt-m); margin-bottom: .85rem; line-height: 1.45;
+    }
+    .store-btn img.store-logo {
+      width: 22px; height: 22px; border-radius: .4rem; object-fit: cover;
     }
 
     /* Big bets */
@@ -356,25 +401,31 @@
     WeBetAI
   </a>
   <div class="nav-links">
-    <a class="nav-pill" href="https://x.ai/grok" target="_blank" rel="noopener noreferrer">Grok by xAI</a>
+    <a class="nav-pill" href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">Grok Bot</a>
     <a class="nav-cta" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty</a>
   </div>
 </nav>
 
 <main class="wrap">
   <header class="hero">
-    <div class="eyebrow">Free · Grok Bot · WeBetAI × xAI</div>
-    <h1>Daily sportsbook picks.<br>Inside <em>Grok</em>.</h1>
-    <p class="hero-lead">
-      Betty is a free Grok Bot from WeBetAI. She delivers today’s Edge card —
-      straights, a daily 3-leg, WHY, SCORE, and KPIs — in the same chat you already use for Grok.
-    </p>
+    <div class="hero-brand-row">
+      <img class="grok-bot-logo" src="/grok-bot-logo.png" width="60" height="60" alt="Grok Bot app icon" />
+      <div class="eyebrow" style="margin-bottom:0;">Free · Grok Bot · WeBetAI × xAI</div>
+    </div>
+    <h1>Daily sportsbook picks.<br>Inside <em>Grok Bot</em>.</h1>
+    <div class="hero-lead-stack">
+      <p><strong>Betty</strong> is a free Grok Bot from WeBetAI. She drops your Edge card in chat every morning — straights, a daily parlay, and the numbers that matter.</p>
+      <p>Allow notifications once. You get the morning card, tip-off updates, and evening finals without refreshing the site.</p>
+    </div>
     <div class="hero-ctas">
       <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
-      <a class="btn-secondary" href="#get-grok">Don’t have Grok? Get it free</a>
+      <a class="btn-secondary" href="#get-grokbot">Don’t have Grok Bot? Get it free</a>
     </div>
     <p class="hero-note">
-      New to Grok? Download the app or open <a href="https://grok.com" target="_blank" rel="noopener noreferrer">grok.com</a>, then come back and Add Betty.
+      New to Grok Bot? Download the app
+      (<a href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">App Store</a>
+      · <a href="https://play.google.com/store/apps/details?id=ai.x.grok.bot" target="_blank" rel="noopener noreferrer">Google Play</a>),
+      then come back and Add Betty.
     </p>
 
     <div class="video-shell">
@@ -389,14 +440,29 @@
       </video>
     </div>
     <p class="video-cap">~15s — what Betty does after you Add her</p>
+
+    <section class="bets bets-under-video" aria-labelledby="bets">
+      <div class="section-label">Inside the bot</div>
+      <h2 id="bets">Betty Big Bets Instructions</h2>
+      <p>The same tips she gives you on first open — so this page matches the product.</p>
+      <ol>
+        <li>Read the <strong>bet summary</strong> first — units, odds, and risk / to-win at a glance.</li>
+        <li>Open any pick for the detail card; ask <strong>WHY</strong> when you want the full read.</li>
+        <li>Type <strong>SCORE</strong> during games for live ESPN updates on today’s card only.</li>
+        <li>Check <strong>KPIs</strong> anytime — Combined floor + Edge-only record.</li>
+        <li>Deep-dive the same card on <a href="/daily-omega">webetsocial.com/daily-omega</a> when you want the full site view.</li>
+      </ol>
+    </section>
   </header>
+
 
   <section class="section" aria-labelledby="product">
     <div class="section-label">The product</div>
     <h2 id="product">Betty sells the card. Grok Bot is the OS.</h2>
     <p>
-      You don’t install a separate sports app. You Add a specialist bot into Grok —
-      xAI’s AI product on web, iOS, and Android — and Betty runs the daily free-picks workflow for you.
+      You don’t install a separate sports app. You Add a specialist bot in
+      <a href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">Grok Bot</a>
+      — xAI’s always-on agents app on iOS and Android — and Betty runs the daily free-picks workflow for you.
     </p>
     <div class="grid-3">
       <div class="card">
@@ -405,7 +471,7 @@
       </div>
       <div class="card">
         <h3>Grok Bot</h3>
-        <p>xAI’s bot platform inside Grok. Chat, skills, routines — where Betty lives.</p>
+        <p>xAI’s agents app — chat, skills, routines, notifications. Where Betty lives.</p>
       </div>
       <div class="card">
         <h3>Edge</h3>
@@ -417,43 +483,35 @@
       <p>
         by WeBetAI @ webetsocial.com — same Betty as
         <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X.
-        Built for people who live in the X / Grok stack.
+        Built for people who live in the X / Grok Bot stack.
       </p>
     </div>
   </section>
 
-  <section class="install" id="get-grok" aria-labelledby="install-h">
-    <div class="section-label">Start here if you don’t have Grok yet</div>
+  <section class="install" id="get-grokbot" aria-labelledby="install-h">
+    <div class="section-label">Start here if you don’t have Grok Bot yet</div>
     <h2 id="install-h" style="font-size:clamp(1.35rem,3.5vw,1.65rem);font-weight:700;letter-spacing:-.02em;color:var(--x-white);margin-bottom:.65rem;line-height:1.2;">
-      Get Grok → Add Betty → today’s card
+      Get Grok Bot → Add Betty → turn on notifications
     </h2>
     <p style="font-size:.95rem;color:var(--txt-m);line-height:1.55;margin-bottom:0;max-width:38rem;">
-      Onboarding only works after Grok is installed (or open on the web). If a friend sends you this page and you don’t have Grok Bot yet, do this once:
+      Betty only runs inside Grok Bot. If a friend sends you this page and you don’t have the app yet, do this once:
     </p>
     <ol class="steps">
       <li>
         <span class="step-n">1</span>
         <div class="step-body">
-          <h3>Download Grok (free)</h3>
+          <h3>Download Grok Bot (free)</h3>
           <p>
-            Official xAI apps — or use Grok on the web if you prefer desktop.
+            Official xAI Grok Bot app — the home for Add Bot, chat, and daily notifications.
           </p>
           <div class="store-row">
-            <a class="store-btn" href="https://apps.apple.com/us/app/grok-ai/id6670324846" target="_blank" rel="noopener noreferrer">
-              <span>Download on the</span>
-              <strong>App Store</strong>
+            <a class="store-btn" href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">
+              <img class="store-logo" src="/grok-bot-logo.png" width="22" height="22" alt="" />
+              <span class="store-txt"><span>Download on the</span><strong>App Store</strong></span>
             </a>
-            <a class="store-btn" href="https://play.google.com/store/apps/details?id=ai.x.grok" target="_blank" rel="noopener noreferrer">
-              <span>Get it on</span>
-              <strong>Google Play</strong>
-            </a>
-            <a class="store-btn" href="https://grok.com" target="_blank" rel="noopener noreferrer">
-              <span>Open on web</span>
-              <strong>grok.com</strong>
-            </a>
-            <a class="store-btn" href="https://x.ai/grok" target="_blank" rel="noopener noreferrer">
-              <span>Learn more</span>
-              <strong>x.ai/grok</strong>
+            <a class="store-btn" href="https://play.google.com/store/apps/details?id=ai.x.grok.bot" target="_blank" rel="noopener noreferrer">
+              <img class="store-logo" src="/grok-bot-logo.png" width="22" height="22" alt="" />
+              <span class="store-txt"><span>Get it on</span><strong>Google Play</strong></span>
             </a>
           </div>
         </div>
@@ -473,23 +531,24 @@
       <li>
         <span class="step-n">3</span>
         <div class="step-body">
-          <h3>Meet Betty, then get the card</h3>
+          <h3>Allow notifications</h3>
           <p>
-            First messages: quick intro + Big Bets tips. Then today’s Edge bet summary, detail picks, and the daily parlay — with a link to the full site card.
+            Turn them on for Betty so the morning Edge card, tip-off ping, and evening finals land in chat — no need to remember to open the site.
           </p>
         </div>
       </li>
       <li>
         <span class="step-n">4</span>
         <div class="step-body">
-          <h3>Stay in the chat</h3>
+          <h3>Meet Betty, then get the card</h3>
           <p>
-            Ask <strong style="color:var(--txt)">WHY</strong>, <strong style="color:var(--txt)">SCORE</strong>, KPIs, or more context. Morning / tip-off / finals cadence stays on by default.
+            First messages: quick intro + Big Bets tips. Then today’s Edge bet summary, detail picks, and the daily parlay — with a link to the full site card.
           </p>
         </div>
       </li>
     </ol>
   </section>
+
 
   <section class="section" aria-labelledby="features">
     <div class="section-label">Features</div>
@@ -517,9 +576,9 @@
         <span class="feat-desc">ESPN public scores mapped only to today’s Edge matchups — type SCORE anytime.</span>
       </li>
       <li>
-        <span class="feat-name">WHY + Grok context</span>
+        <span class="feat-name">WHY + extra context</span>
         <span class="feat-when">On ask</span>
-        <span class="feat-desc">Full reasoning and extra Grok + ESPN color on a pick — never invents new bets.</span>
+        <span class="feat-desc">Full reasoning and extra ESPN color on a pick — never invents new bets.</span>
       </li>
       <li>
         <span class="feat-name">Prediction-market quotes</span>
@@ -527,32 +586,20 @@
         <span class="feat-desc">Kalshi / Polymarket public quotes mapped to the card. Read-only. No order placement.</span>
       </li>
       <li>
-        <span class="feat-name">Cadence</span>
+        <span class="feat-name">Daily pick notifications</span>
         <span class="feat-when">Auto</span>
-        <span class="feat-desc">Morning card-ready, tip-off, and evening finals — so the day doesn’t go silent after install.</span>
+        <span class="feat-desc">Morning card-ready, tip-off, and evening finals in Grok Bot — allow notifications once and stay current.</span>
       </li>
     </ul>
-  </section>
-
-  <section class="section bets" aria-labelledby="bets">
-    <div class="section-label">Inside the bot</div>
-    <h2 id="bets">Betty Big Bets Instructions</h2>
-    <p>The same tips she gives you on first open — so the sales page matches the product.</p>
-    <ol>
-      <li>Read the <strong>bet summary</strong> first — units, odds, and risk / to-win at a glance.</li>
-      <li>Open any pick for the detail card; ask <strong>WHY</strong> when you want the full read.</li>
-      <li>Type <strong>SCORE</strong> during games for live ESPN updates on today’s card only.</li>
-      <li>Check <strong>KPIs</strong> anytime — Combined floor + Edge-only record.</li>
-      <li>Deep-dive the same card on <a href="/daily-omega">webetsocial.com/daily-omega</a> when you want the full site view.</li>
-    </ol>
   </section>
 
   <section class="section" aria-labelledby="why-grok">
     <div class="section-label">Why Grok Bot</div>
     <h2 id="why-grok">Built for the X / xAI stack</h2>
     <p>
-      Betty isn’t a random web widget. She’s a Grok Bot — so she inherits the product surface people already download for Grok:
-      mobile apps, web, chat, and the bot marketplace.
+      Betty isn’t a random web widget. She’s a Grok Bot — so she inherits the product surface people already download for
+      <a href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">Grok Bot</a>:
+      mobile apps, chat, notifications, and the bot marketplace.
     </p>
     <div class="why-grid">
       <div class="card">
@@ -561,7 +608,7 @@
       </div>
       <div class="card">
         <h3>Native to how you already read X</h3>
-        <p>See @WeBetSocialAI → land here → Get Grok if needed → Add Betty → card in chat.</p>
+        <p>See @WeBetSocialAI → land here → Get Grok Bot if needed → Add Betty → allow notifications → card in chat.</p>
       </div>
       <div class="card">
         <h3>Free daily MVP</h3>
@@ -589,18 +636,18 @@
   </section>
 
   <section class="final">
-    <h2>Ready. Get Grok. Add Betty.</h2>
+    <h2>Ready. Get Grok Bot. Add Betty.</h2>
     <p>
-      If Grok is already on your phone, jump straight to Add.
+      If Grok Bot is already on your phone, jump straight to Add — then allow notifications for the daily card.
       If not, grab the free app first — then come back to the same Add link.
     </p>
     <div class="hero-ctas">
       <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty on Grok Bot</a>
-      <a class="btn-secondary" href="#get-grok">Download Grok</a>
+      <a class="btn-secondary" href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">Download Grok Bot</a>
     </div>
     <p class="hero-note" style="margin-bottom:0;">
-      App Store · Google Play · <a href="https://grok.com" target="_blank" rel="noopener noreferrer">grok.com</a> ·
-      <a href="https://x.ai/grok" target="_blank" rel="noopener noreferrer">x.ai/grok</a>
+      <a href="https://apps.apple.com/us/app/grok-bot/id6794501026" target="_blank" rel="noopener noreferrer">App Store</a>
+      · <a href="https://play.google.com/store/apps/details?id=ai.x.grok.bot" target="_blank" rel="noopener noreferrer">Google Play</a>
     </p>
   </section>
 
@@ -608,7 +655,7 @@
     Free Daily Sportsbook &amp; Prediction Market Picks — From Grok Bot Betty of WeBetAI<br>
     Follow <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X.
     This bot does not post to X itself.<br>
-    Grok and Grok Bot are products of xAI.
+    Grok Bot is a product of xAI.
     WeBetAI is not affiliated with xAI beyond offering a public Grok Bot.<br>
     <strong>21+ · NFA · gamble responsibly</strong>
   </p>

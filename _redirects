@@ -74,6 +74,10 @@
 /r/6dzbjs/  /daily-omega?utm_source=x&utm_medium=social&utm_campaign=omega&utm_content=6dzbjs&utm_id=6dzbjs  302
 /r/tf265h   /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=share_follow&utm_id=tf265h#follow  302
 /r/tf265h/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=share_follow&utm_id=tf265h#follow  302
+/r/love   /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_top&utm_id=love  302
+/r/love/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_top&utm_id=love  302
+/r/card   /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_card&utm_id=card  302
+/r/card/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_card&utm_id=card  302
 # Unknown /r/ ids fall back to the homepage instead of a 404.
 /r/*  /  302
 # <<< SHORT LINKS END

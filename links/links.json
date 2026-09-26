@@ -28,6 +28,22 @@
       "utm_content": "share_follow",
       "note": "Example: hash destinations keep the #fragment",
       "created": "2026-09-26T22:00:04.230Z"
+    },
+    {
+      "id": "love",
+      "to": "/grokbot",
+      "utm_campaign": "betty",
+      "utm_content": "reply_love_top",
+      "note": "Betty 'some love' reply template, top link",
+      "created": "2026-09-26T22:15:48.450Z"
+    },
+    {
+      "id": "card",
+      "to": "/grokbot",
+      "utm_campaign": "betty",
+      "utm_content": "reply_love_card",
+      "note": "Betty 'some love' reply template, 'full card' link",
+      "created": "2026-09-26T22:15:48.556Z"
     }
   ]
 }

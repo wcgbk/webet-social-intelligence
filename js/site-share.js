@@ -30,54 +30,61 @@
 
   /* How-to Share On Socials only — nav Share stays on taggedUrl() / shareNative() */
   /* Menu share short (TinyURL). Lands on sales page; page scrolls to #follow for site_share. First-party alt: https://webetsocial.com/s/betty */
-  var GROKBOT_SHARE_SHORT = 'https://tinyurl.com/2855hqug';
+  var GROKBOT_SHARE_SHORT = 'https://webetsocial.com/s/betty';
   var GROKBOT_SHARE_LONG =
     'https://webetsocial.com/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow';
 
   function shareText() {
     if (isGrokbotPage()) {
-      return 'Free daily Edge sportsbook picks from Betty in Grok Bot — add her and get the morning card in chat.';
+      return 'Join me on Grok Bot for free Daily Sportsbook Edge Picks from Betty.';
     }
-    return document.title || 'WeBet Social';
+    return document.title || 'WeBet AI';
   }
 
   function menuShareLink() {
     return isGrokbotPage() ? GROKBOT_SHARE_SHORT : taggedUrl();
   }
 
-  /** Natural captions for the how-to Share menu (not the nav Share). */
+  /** Natural captions for the how-to Share menu (not the nav Share).
+   *  Spacing template = @WeBetSocialAI Recommended Bets Summary (blank line between sections).
+   *  Product name = Daily Sportsbook Edge Picks. No em/en dash or hyphen-as-pause. */
   function menuShareCopy(channel) {
     if (!isGrokbotPage()) {
-      return { text: shareText(), subject: document.title || 'WeBet' };
+      return { text: shareText(), subject: document.title || 'WeBet AI' };
     }
     var short = GROKBOT_SHARE_SHORT;
-    var opener = 'Join me on Grokbot today for free daily sportsbook picks.';
-    var base =
+    var opener = 'Join me on Grok Bot for free Daily Sportsbook Edge Picks.';
+    var follow = 'Follow @WeBetSocialAI on X to stay up to date.';
+    var getCard = 'Get the Daily Sportsbook Edge Picks card in chat.';
+    var talk = 'Talk the picks through via voice or text with Betty.';
+    /* Multi-line networks: Recommended Bets blank-line rhythm */
+    var spaced =
       opener + '\n\n' +
-      'Follow @WeBetSocialAI on X to stay up to date. Get the morning Edge card in chat, and talk the picks through — voice or text.';
+      follow + '\n\n' +
+      getCard + '\n\n' +
+      talk;
+    /* X intent URL is tight; keep product name + follow, still no dashes */
     var x =
-      opener + ' Follow @WeBetSocialAI on X to stay up to date — morning Edge card in chat, talk the picks through voice or text.';
-    var linkedin =
       opener + '\n\n' +
-      'Follow @WeBetSocialAI on X to stay up to date. Get the morning Edge card in chat, and talk the picks through — voice or text.';
+      follow + '\n\n' +
+      getCard + ' ' + talk;
     var emailBody =
-      'Hey —\n\n' +
-      opener + '\n\n' +
-      'Follow @WeBetSocialAI on X to stay up to date. Get the morning Edge card in chat, and talk the picks through (voice or text).\n\n' +
+      'Hey,\n\n' +
+      spaced + '\n\n' +
       short + '\n';
     var map = {
       x: x,
-      facebook: base,
-      whatsapp: base,
-      telegram: base,
-      linkedin: linkedin,
+      facebook: spaced,
+      whatsapp: spaced,
+      telegram: spaced,
+      linkedin: spaced,
       email: emailBody,
-      sms: base,
-      copy: base
+      sms: spaced,
+      copy: spaced
     };
     return {
-      text: map[channel] || base,
-      subject: 'Join me on Grokbot today for free daily sportsbook picks'
+      text: map[channel] || spaced,
+      subject: 'Join me on Grok Bot for free Daily Sportsbook Edge Picks'
     };
   }
 

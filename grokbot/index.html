@@ -595,6 +595,8 @@
       .hero-ctas a { width: 100%; }
       .store-row .btn-primary { width: 100%; }
       .section, .install, .final, .bets-under-video { padding: 1rem .85rem; }
+      .tutorial-guide { padding-bottom: 1rem; }
+      .tutorial-guide .talk-prompt { max-width: 100%; padding: 0 .15rem; }
       .x-card {
         grid-template-columns: auto minmax(0, 1fr);
         grid-template-areas: "av meta" "btn btn";
@@ -676,6 +678,12 @@
     .tutorial-guide .talk-prompt-line {
       display: block;
     }
+    .tutorial-guide .talk-prompt-soft {
+      margin-top: .35rem;
+      font-size: .92em;
+      font-weight: 650;
+      color: var(--txt-m);
+    }
     .tutorial-guide .talk-prompt strong {
       color: #004C54;
       font-weight: 900;
@@ -754,10 +762,10 @@
 
     <section class="tutorial-guide" aria-labelledby="talk-betty">
       <div class="section-label" id="talk-betty">Talk To Betty</div>
-      <img src="/betty-start-conversation.png" width="1200" height="675" alt="Talk to Betty — tap Start voice chat to begin the conversation" loading="eager" decoding="async" />
+      <img src="/betty-start-conversation.png" width="1280" height="720" alt="Betty pointing you to the voice button in Grok Bot" loading="eager" decoding="async" />
       <p class="talk-prompt">
-        <span class="talk-prompt-line">Tap <strong>Start Voice Chat</strong> to talk with Betty.</span>
-        <span class="talk-prompt-line">Or just type. Same Betty either way.</span>
+        <span class="talk-prompt-line">Anytime you want to just talk to me instead of text, just click that button to have a full conversation with me.</span>
+        <span class="talk-prompt-line talk-prompt-soft">Or keep typing. Totally up to you.</span>
       </p>
     </section>
   </header>

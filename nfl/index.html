@@ -19,7 +19,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="preconnect" href="https://site.api.espn.com" crossorigin />
+  <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin />
   <title>WeBetAI - Social Intelligence | NFL Only Picks</title>
   <meta name="description" content="WeBetAI's dedicated NFL model — sharp-book consensus, line shopping, and calibrated edges on every NFL game day. Preseason lab building toward the 2026 regular season." />
   <meta property="og:type" content="website" />
@@ -710,6 +710,7 @@
   </div>
 </div>
 
+<script src="/js/live-score.js"></script>
 <script>
   if (window.self !== window.top) document.body.classList.add('in-iframe');
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -813,6 +814,7 @@
   let picksDataGlobal = null; // store sorted picks for verify access
   let refreshTimer = null;
   let kpiTimer = null;
+  let resultsSnapshot = null;
 
   function etDateFromISO(iso) {
     if (!iso) return null;
@@ -839,7 +841,7 @@
       const q = [];
       if (dateISO) q.push('dates=' + String(dateISO).replace(/-/g, ''));
       if (groups) { q.push('groups=' + groups); q.push('limit=300'); }
-      urls.push('https://site.api.espn.com/apis/site/v2/sports/' + endpoint + '/scoreboard' + (q.length ? '?' + q.join('&') : ''));
+      urls.push('https://site.web.api.espn.com/apis/site/v2/sports/' + endpoint + '/scoreboard' + (q.length ? '?' + q.join('&') : ''));
     };
     const dateList = (dates && dates.length) ? dates : [null];
     for (const d of dateList) {
@@ -913,9 +915,8 @@
     if (!urls.length) return [];
     const results = await Promise.all(urls.map(async url => {
       try {
-        const resp = await fetch(url);
-        if (!resp.ok) return [];
-        const data = await resp.json();
+        const data = await WeBetLive.fetchScoreboardJson(url);
+        if (!data) return [];
         return (data.events || []).map(ev => mapEspnEvent(ev, sport)).filter(Boolean);
       } catch (e) {
         console.warn('Score fetch failed for', sport, e);
@@ -966,24 +967,13 @@
   // returns the first game, which mislabels the nightcap with the opener's time and grades it against
   // the wrong final. When >1 game matches, pick the one whose start is nearest the pick's commenceTime.
   function disambiguateDoubleheader(matches, pick) {
-    if (matches.length <= 1) return matches[0] || null;
-    const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
-    if (isNaN(ct)) return matches[0];
-    let best = matches[0], bestDiff = Infinity;
-    for (const g of matches) {
-      const gt = g.startISO ? Date.parse(g.startISO) : NaN;
-      if (isNaN(gt)) continue;
-      const diff = Math.abs(gt - ct);
-      if (diff < bestDiff) { bestDiff = diff; best = g; }
-    }
-    return best;
+    return WeBetLive.resolveDoubleheader(matches, pick);
   }
 
   function gameMatchesPickWindow(game, pick) {
     const gStart = game && game.startISO ? Date.parse(game.startISO) : NaN;
     const pStart = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
     if (!isNaN(gStart) && !isNaN(pStart) && Math.abs(gStart - pStart) > 10 * 3600 * 1000) return false;
-    if (!isNaN(pStart) && pStart > Date.now() + 15 * 60 * 1000 && game && game.state === 'post') return false;
     return true;
   }
 
@@ -1040,12 +1030,7 @@
      the opener — the straight bet (which HAS commenceTime) resolves correctly while the identical
      parlay leg does not. Inherit the start time from the straight pick naming the same matchup. ── */
   function withLegCommenceTime(leg, picks) {
-    if (!leg || leg.commenceTime) return leg;
-    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const sameMatchup = (p) => norm(p.matchup) === norm(leg.matchup);
-    const match = (picks || []).find(p => sameMatchup(p) && norm(p.pick) === norm(leg.pick)) ||
-                  (picks || []).find(sameMatchup);
-    return (match && match.commenceTime) ? { ...leg, commenceTime: match.commenceTime } : leg;
+    return WeBetLive.inheritCommenceTime(leg, picks);
   }
 
   /* ── Is this an F5 (first-five-innings) pick? ── */
@@ -1556,10 +1541,12 @@
         let summaryParlayLegResults;
         if (optimizedParlayLegs) {
           summaryParlayLegResults = optimizedParlayLegs.map(leg => {
-            const straightMatch = legResults.find(lr => lr.pick.pick === leg.pick);
+            const enriched = withLegCommenceTime(leg, picks);
+            const straightMatch = legResults.find(lr => WeBetLive.sameGradeTarget(lr.pick, enriched));
             if (straightMatch) return straightMatch;
-            if (parlayBonusResult && parlayBonusResult.pick.pick === leg.pick) return parlayBonusResult;
-            return { pick: leg, game: null, result: { status: 'scheduled', label: 'Upcoming' } };
+            if (parlayBonusResult && WeBetLive.sameGradeTarget(parlayBonusResult.pick, enriched)) return parlayBonusResult;
+            const g = findGame(enriched);
+            return { pick: enriched, game: g, result: determineResult(enriched, g) };
           });
         } else {
           summaryParlayLegResults = legResults;
@@ -1780,10 +1767,12 @@
       let parlayLegResults;
       if (optimizedParlayLegs) {
         parlayLegResults = optimizedParlayLegs.map(leg => {
-          const isStraight = legResults.find(lr => lr.pick.pick === leg.pick);
+          const enriched = withLegCommenceTime(leg, picks);
+          const isStraight = legResults.find(lr => WeBetLive.sameGradeTarget(lr.pick, enriched));
           if (isStraight) return isStraight;
-          if (parlayBonusResult && parlayBonusResult.pick.pick === leg.pick) return parlayBonusResult;
-          return { pick: leg, game: null, result: { status: 'scheduled', label: 'Upcoming' } };
+          if (parlayBonusResult && WeBetLive.sameGradeTarget(parlayBonusResult.pick, enriched)) return parlayBonusResult;
+          const g = findGame(enriched);
+          return { pick: enriched, game: g, result: determineResult(enriched, g) };
         });
       } else {
         parlayLegResults = legResults;
@@ -1943,14 +1932,19 @@
     } else {
       scheduleRefresh(300); // every 5 min if all final
     }
+    applyLiveKpi();
   }
 
   function resultSignature(data) {
-    return (data.picks || []).map(p => {
-      const g = findGame(p);
-      const r = determineResult(p, g);
-      return r.isLive ? 'L' : (r.status || 's');
-    }).join('|');
+    const parts = [];
+    const grade = (p) => {
+      const r = determineResult(p, findGame(p));
+      parts.push(r.isLive ? 'L' : (r.status || 's'));
+    };
+    (data.picks || []).forEach(grade);
+    const legs = (((data.parlayLegs || [])[0] || {}).legs) || [];
+    legs.forEach(raw => grade(withLegCommenceTime(raw, data.picks || [])));
+    return parts.join('|');
   }
 
   function scheduleRefresh(seconds) {
@@ -2009,6 +2003,47 @@
      RESULTS TRACKER
      ═══════════════════════════════════════════════ */
 
+  function liveScoresReady() {
+    return Object.keys(cachedScores || {}).some(s => (cachedScores[s] || []).length);
+  }
+  function settleStatus(result) {
+    if (!result || result.isLive) return 'pending';
+    if (result.status === 'win' || result.status === 'loss' || result.status === 'push') return result.status;
+    return 'pending';
+  }
+  function clientTodayLedger() {
+    if (!picksData || !liveScoresReady()) return null;
+    const dpu = 150;
+    const picks = (picksData.picks || []).slice(0, 3);
+    const straights = picks.map(p => {
+      const st = settleStatus(determineResult(p, findGame(p)));
+      const units = parseFloat(p.units) || 1;
+      const risk = wholeUp(units * dpu);
+      const winAmt = wholeUp(calcWinnings(risk, p.odds || '-110'));
+      return { status: st, risk, winAmt };
+    });
+    const api = (picksData.parlayLegs && picksData.parlayLegs[0]) || null;
+    const rawLegs = api && api.legs && api.legs.length >= 2 ? api.legs : null;
+    let parlay = null;
+    if (rawLegs) {
+      const parlayUnits = picks.some(p => p.thinSlate) ? 0.25 : 0.5;
+      const risk = wholeUp(parlayUnits * dpu);
+      const legs = rawLegs.map(raw => {
+        const leg = withLegCommenceTime(raw, picks);
+        return { status: settleStatus(determineResult(leg, findGame(leg))), odds: leg.odds || '-110' };
+      });
+      parlay = { risk, legs };
+    }
+    const totals = WeBetLive.ledgerTotals(straights, parlay);
+    totals.date = picksData.date;
+    return totals;
+  }
+  function applyLiveKpi() {
+    const today = clientTodayLedger();
+    if (!today || !resultsSnapshot) return;
+    WeBetLive.paintKpi(WeBetLive.mergeTodayKpi(resultsSnapshot, today));
+  }
+
   // Load results automatically
   loadResults();
 
@@ -2018,6 +2053,7 @@
       const resp = await fetch('/api/get-results-nfl' + q);
       if (!resp.ok) throw new Error('API ' + resp.status);
       const data = await resp.json();
+      resultsSnapshot = data;
       renderResults(data);
     } catch (err) {
       console.error('Results load failed:', err);
@@ -2103,16 +2139,16 @@
       const todayAcc = todayDecided > 0 ? Math.round((tWins / todayDecided) * 100) : '0';
       const todayDate = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
 
-      // Today's P/L: use the server-graded profit for today (was hardcoded +$0). The matching
-      // day in data.days is skipped by the historical loop below, so we read it here.
+      // Today's P/L follows the card grades when ESPN scores are loaded. Historical days stay on the server row.
       const todayServerDay = (data.days || []).find(d => picksData && d.date === picksData.date);
-      const todayProfit = todayServerDay ? Math.round(todayServerDay.profit || 0) : 0;
+      const liveToday = clientTodayLedger();
+      const todayProfit = liveToday ? liveToday.profit : (todayServerDay ? Math.round(todayServerDay.profit || 0) : 0);
       const todayProfitStr = (todayProfit >= 0 ? '+$' : '-$') + Math.abs(todayProfit).toLocaleString();
       html += `<tr style="background:var(--teal-light);">
         <td><button class="day-toggle" onclick="toggleDay('today')" style="font-weight:700;">${esc(todayDate)}</button></td>
-        <td style="white-space:nowrap;"><span style="display:inline-block; min-width:3.5rem; text-align:center;">${todayRecord}</span></td>
-        <td>${todayAcc}%</td>
-        <td class="${todayProfit >= 0 ? 'profit-positive' : 'profit-negative'}">${todayProfitStr}</td>
+        <td style="white-space:nowrap;"><span id="today-kpi-record" style="display:inline-block; min-width:3.5rem; text-align:center;">${todayRecord}</span></td>
+        <td id="today-kpi-acc">${todayAcc}%</td>
+        <td id="today-kpi-profit" class="${todayProfit >= 0 ? 'profit-positive' : 'profit-negative'}">${todayProfitStr}</td>
       </tr>`;
       html += `<tr class="day-detail" id="day-detail-today"><td colspan="4">`;
       html += '<ul class="day-picks-list">';
@@ -2175,6 +2211,7 @@
       bar.classList.add('has-more');
       bar.querySelector('span').textContent = `Show ${visibleCount - MAX_VISIBLE} more days ▼`;
     }
+    applyLiveKpi();
   }
 
   function toggleDay(idx) {

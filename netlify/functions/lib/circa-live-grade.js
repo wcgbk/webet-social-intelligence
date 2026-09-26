@@ -8,6 +8,7 @@
 
 const { fetchESPNScores } = require("./espn-scoreboard");
 const { defaultKpis, CONTEST } = require("./circa-contest");
+const { resolveDoubleheader } = require("../../../js/live-score");
 
 const FINAL = new Set(["win", "loss", "push"]);
 
@@ -85,26 +86,11 @@ function gameMatchesPickWindow(game, pick) {
   const gStart = game && game.startISO ? Date.parse(game.startISO) : NaN;
   const pStart = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
   if (!isNaN(gStart) && !isNaN(pStart) && Math.abs(gStart - pStart) > 10 * 3600 * 1000) return false;
-  if (!isNaN(pStart) && pStart > Date.now() + 15 * 60 * 1000 && game && game.state === "post") return false;
   return true;
 }
 
 function disambiguate(matches, pick) {
-  if (matches.length <= 1) return matches[0] || null;
-  const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
-  if (isNaN(ct)) return matches[0];
-  let best = matches[0];
-  let bestDiff = Infinity;
-  for (const g of matches) {
-    const gt = g.startISO ? Date.parse(g.startISO) : NaN;
-    if (isNaN(gt)) continue;
-    const diff = Math.abs(gt - ct);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = g;
-    }
-  }
-  return best;
+  return resolveDoubleheader(matches, pick);
 }
 
 function findGame(pick, games) {

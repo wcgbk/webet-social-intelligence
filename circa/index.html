@@ -16,6 +16,7 @@
     gtag('config', 'G-848D47V084');
   </script>
 
+  <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WeBetAI - Social Intelligence | Circa Million VIII</title>
@@ -529,6 +530,7 @@
   </p>
 </div>
 
+<script src="/js/live-score.js"></script>
 <script>
   if (window.self !== window.top) document.body.classList.add('in-iframe');
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -588,7 +590,7 @@
     const urls = [];
     const push = (dateISO) => {
       const q = dateISO ? ('?dates=' + String(dateISO).replace(/-/g, '')) : '';
-      urls.push('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard' + q);
+      urls.push('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard' + q);
     };
     const dateList = (dates && dates.length) ? dates : [null];
     for (const d of dateList) push(d);
@@ -637,9 +639,8 @@
     if (!urls.length) return [];
     const results = await Promise.all(urls.map(async url => {
       try {
-        const resp = await fetch(url);
-        if (!resp.ok) return [];
-        const data = await resp.json();
+        const data = await WeBetLive.fetchScoreboardJson(url);
+        if (!data) return [];
         return (data.events || []).map(mapEspnEvent).filter(Boolean);
       } catch (e) {
         console.warn('Circa score fetch failed', e);
@@ -670,24 +671,13 @@
   }
 
   function disambiguateDoubleheader(matches, pick) {
-    if (matches.length <= 1) return matches[0] || null;
-    const ct = pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
-    if (isNaN(ct)) return matches[0];
-    let best = matches[0], bestDiff = Infinity;
-    for (const g of matches) {
-      const gt = g.startISO ? Date.parse(g.startISO) : NaN;
-      if (isNaN(gt)) continue;
-      const diff = Math.abs(gt - ct);
-      if (diff < bestDiff) { bestDiff = diff; best = g; }
-    }
-    return best;
+    return WeBetLive.resolveDoubleheader(matches, pick);
   }
 
   function gameMatchesPickWindow(game, pick) {
     const gStart = game && game.startISO ? Date.parse(game.startISO) : NaN;
     const pStart = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
     if (!isNaN(gStart) && !isNaN(pStart) && Math.abs(gStart - pStart) > 10 * 3600 * 1000) return false;
-    if (!isNaN(pStart) && pStart > Date.now() + 15 * 60 * 1000 && game && game.state === 'post') return false;
     return true;
   }
 

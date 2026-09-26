@@ -30,6 +30,7 @@
   <meta name="twitter:image"      content="https://webetsocial.com/edge-og-image.png" />
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
@@ -339,6 +340,7 @@
   </div><!-- /body-wrap -->
 </div><!-- /shell -->
 
+<script src="/js/live-score.js"></script>
 <script>
 /* ═══════════════════════════════════
    CONSTANTS & MAPS
@@ -348,7 +350,8 @@ const GC={aplus:'gb-aplus',a:'gb-a',aminus:'gb-aminus',bplus:'gb-bplus',b:'gb-b'
 const GL={aplus:'A+',a:'A',aminus:'A-',bplus:'B+',b:'B',lean:'Lean'};
 const GO={aplus:0,a:1,aminus:2,bplus:3,b:4,lean:5};
 const CC={aplus:'cp-aplus',lean:'cp-lean'};
-const ESPN_MAP={NBA:'basketball/nba',NHL:'hockey/nhl',MLB:'baseball/mlb',
+const ESPN_MAP={NFL:'football/nfl',NCAAF:'football/college-football',
+  NBA:'basketball/nba',NHL:'hockey/nhl',MLB:'baseball/mlb',
   EPL:'soccer/eng.1','La Liga':'soccer/esp.1','Serie A':'soccer/ita.1',
   Bundesliga:'soccer/ger.1','Ligue 1':'soccer/fra.1',MLS:'soccer/usa.1',
   UCL:'soccer/uefa.champions',Europa:'soccer/uefa.europa'};
@@ -406,7 +409,17 @@ function renderStats(rd,view){
    ESPN
 ═══════════════════════════════════ */
 function norm(s){return(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();}
-function findGame(p){const[a,h]=(p.matchup||'').split(/ vs\.? /i).map(norm);return ESPN.find(g=>{const ga=norm(g.awayTeam),gh=norm(g.homeTeam);return(ga.includes(a)||a.includes(ga))&&(gh.includes(h)||h.includes(gh));;})||null;}
+function findGame(p){
+  const parts=(p.matchup||'').split(/\s+(?:@|vs\.?|at)\s+/i).map(norm).filter(Boolean);
+  const hits=ESPN.filter(g=>{
+    const ga=norm(g.awayTeam), gh=norm(g.homeTeam);
+    if(parts.length<2) return false;
+    const direct=(ga.includes(parts[0])||parts[0].includes(ga))&&(gh.includes(parts[1])||parts[1].includes(gh));
+    const swap=(ga.includes(parts[1])||parts[1].includes(ga))&&(gh.includes(parts[0])||parts[0].includes(gh));
+    return direct||swap;
+  });
+  return (window.WeBetLive?WeBetLive.resolveDoubleheader(hits,p):(hits[0]||null));
+}
 function getResult(p,g){
   const pStart=p&&p.commenceTime?Date.parse(p.commenceTime):NaN;
   if(!isNaN(pStart)&&pStart>Date.now()+15*60*1000)return{status:'sched',isLive:false};
@@ -433,13 +446,29 @@ function rChip(r){
 async function fetchESPN(dateISO,sports){
   const d=(dateISO||'').replace(/-/g,'');
   const eps=[...new Set((sports||[]).map(s=>ESPN_MAP[s]).filter(Boolean))];
-  const res=await Promise.allSettled(eps.map(ep=>fetch(`https://site.api.espn.com/apis/site/v2/sports/${ep}/scoreboard?dates=${d}`).then(r=>r.ok?r.json():null).catch(()=>null)));
+  const urls=[];
+  for(const ep of eps){
+    const base='https://site.web.api.espn.com/apis/site/v2/sports/'+ep+'/scoreboard';
+    if(d) urls.push(base+'?dates='+d);
+    urls.push(base);
+    if(ep.indexOf('college-football')!==-1 && d){
+      urls.push(base+'?dates='+d+'&groups=80&limit=300');
+      urls.push(base+'?dates='+d+'&groups=90&limit=300');
+    }
+  }
+  const res=await Promise.allSettled(urls.map(u=>WeBetLive.fetchScoreboardJson(u)));
   const games=[];
+  const seen=new Set();
   for(const r of res){if(r.status!=='fulfilled'||!r.value)continue;
     for(const ev of(r.value.events||[])){const comp=ev.competitions?.[0];if(!comp)continue;
       const aw=comp.competitors?.find(c=>c.homeAway==='away'),hm=comp.competitors?.find(c=>c.homeAway==='home');
       if(!aw||!hm)continue;
-      games.push({awayTeam:aw.team?.displayName||'',awayScore:parseInt(aw.score)||0,homeTeam:hm.team?.displayName||'',homeScore:parseInt(hm.score)||0,state:(comp.status||ev.status||{}).type?.state||'pre'});}}
+      const startISO=ev.date||comp.date||'';
+      const state=(comp.status||ev.status||{}).type?.state||'pre';
+      const key=((aw.team?.abbreviation||aw.team?.displayName||'')+'|'+(hm.team?.abbreviation||hm.team?.displayName||'')+'|'+startISO).toLowerCase();
+      if(seen.has(key)) continue;
+      seen.add(key);
+      games.push({awayTeam:aw.team?.displayName||'',awayScore:parseInt(aw.score)||0,homeTeam:hm.team?.displayName||'',homeScore:parseInt(hm.score)||0,state,startISO});}}
   return games;}
 
 /* ═══════════════════════════════════

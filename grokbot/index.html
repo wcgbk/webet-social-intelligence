@@ -246,12 +246,12 @@
       background: #e7f2f0;
       aspect-ratio: 16 / 9;
       width: 100%;
-      max-width: 640px;
+      max-width: 450px;
       margin: 0 auto .7rem;
       box-shadow: 0 10px 28px rgba(0,76,84,.1);
     }
     .video-shell video {
-      width: 100%; height: 100%; display: block; object-fit: cover; background: #e7f2f0;
+      width: 100%; height: 100%; display: block; object-fit: contain; background: #e7f2f0;
     }
     .hero-ctas {
       display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem;
@@ -590,7 +590,7 @@
       .hero-brand-row { margin-bottom: .45rem; }
       .hero h1 { margin-bottom: .4rem; }
       .hero-lead { margin-bottom: .55rem; }
-      .video-shell { margin-bottom: .55rem; border-radius: .75rem; }
+      .video-shell { max-width: min(100%, 360px); margin-bottom: .55rem; border-radius: .75rem; }
       .hero-ctas { flex-direction: column; align-items: stretch; }
       .hero-ctas a { width: 100%; }
       .store-row .btn-primary { width: 100%; }
@@ -630,7 +630,7 @@
       .grok-bot-logo { width: 36px; height: 36px; }
       .hero h1 { font-size: 1.28rem; }
       .hero-lead { font-size: .84rem; }
-      .video-shell { width: min(100%, 86vw); }
+      .video-shell { max-width: min(100%, 340px); width: min(100%, 86vw); }
       .btn-primary { padding: .78rem 1.15rem; }
     }
     /* Common laptop heights: keep logo, headline, video, and Add Betty on screen */
@@ -640,7 +640,7 @@
       .grok-bot-logo { width: 44px; height: 44px; }
       .hero h1 { font-size: 2.05rem; margin-bottom: .35rem; }
       .hero-lead { margin-bottom: .4rem; font-size: .95rem; }
-      .video-shell { max-width: 500px; margin-bottom: .45rem; }
+      .video-shell { max-width: 400px; margin-bottom: .45rem; }
     }
 
     .tutorial-guide {

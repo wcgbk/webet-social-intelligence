@@ -422,27 +422,20 @@
     }
     .step-body p { font-size: .86rem; color: var(--txt-m); line-height: 1.45; margin: 0; }
     .store-row { margin-top: .65rem; }
-    .step-share {
-      margin-top: .15rem;
-      padding: 1rem 1rem 1.05rem;
-      border-radius: 1rem;
-      border: 1px solid rgba(0,76,84,.28);
-      background: rgba(0,76,84,.06);
-      box-shadow: 0 8px 22px rgba(0,76,84,.08);
-    }
-    .step-share h3 { font-size: 1.05rem !important; }
-    .step-share .btn-share-socials {
+    .btn-share-socials {
       display: inline-flex; align-items: center; justify-content: center;
-      margin-top: .7rem;
+      margin-top: .65rem;
       min-width: min(100%, 16rem);
-      padding: .85rem 1.35rem;
-      border: 0; border-radius: 9999px;
-      background: #004C54; color: #fff;
-      font-size: .95rem; font-weight: 800;
+      padding: .78rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      background: #fff;
+      color: var(--txt);
+      font-size: .92rem; font-weight: 800;
       cursor: pointer;
-      box-shadow: 0 8px 20px rgba(0,76,84,.22);
+      box-shadow: none;
     }
-    .step-share .btn-share-socials:hover { filter: brightness(1.06); }
+    .btn-share-socials:hover { background: var(--bg); filter: none; }
 
     .how-fallback {
       font-size: .84rem; color: var(--txt-m); line-height: 1.5; margin: 0;
@@ -709,15 +702,18 @@
 <div class="fold-light">
 <div class="wrap">
 
-  <section class="install" id="how" aria-labelledby="how-h">
+    <section class="install" id="how" aria-labelledby="how-h">
     <div class="section-label">Quick Start</div>
     <h2 id="how-h">Here’s How To Start Talking</h2>
+    <p class="lead" style="margin:0 0 .85rem;font-size:.9rem;color:var(--txt-m);line-height:1.45;">
+      Three onboarding steps so you stay up to date on everything Betty — and don’t miss the card, tips, or drops.
+    </p>
     <ol class="steps">
       <li>
         <span class="step-n">1</span>
         <div class="step-body">
           <h3>Add Betty On Grokbot</h3>
-          <p>Use the button below, then choose <strong>Add To Grok Bot</strong> on x.ai.</p>
+          <p>Use the button below, then choose <strong>Add To Grok Bot</strong> on x.ai. That’s how you talk to Betty every day.</p>
           <div class="store-row">
             <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
           </div>
@@ -725,17 +721,29 @@
       </li>
       <li>
         <span class="step-n">2</span>
-        <div class="step-body step-share">
+        <div class="step-body">
           <h3>Share On Socials</h3>
-          <p>One tap to post Betty on X, Facebook, WhatsApp, Telegram, and more — or copy the link.</p>
+          <p>One tap to post Betty on X, Facebook, WhatsApp, Telegram, and more — or copy the link — so your circle stays in the loop.</p>
           <button type="button" class="btn-share-socials" data-wb-share-menu id="share-on-socials">Share On Socials</button>
         </div>
       </li>
       <li>
         <span class="step-n">3</span>
         <div class="step-body">
-          <h3>Talk To Betty In Chat</h3>
-          <p>Tell me what you’re looking for — <strong>WHY</strong>, <strong>SCORE</strong>, <strong>KPIs</strong>, or just “walk me through it.” See <a href="#bets">Big Bets</a> above.</p>
+          <h3>Follow @WeBetSocialAI On X</h3>
+          <p>Follow Betty on X so you don’t miss the card, tips, or drops outside chat.</p>
+          <div class="x-card" role="group" aria-label="Follow @WeBetSocialAI on X" style="margin-top:.7rem;">
+            <img class="x-card-avatar" src="/betty-x-avatar.jpg" width="64" height="64" alt="Betty · WeBetAI" />
+            <div class="x-card-meta">
+              <div class="x-card-name">Betty · WeBetAI</div>
+              <div class="x-card-handle">@WeBetSocialAI</div>
+              <p class="x-card-bio">Free daily Edge sportsbook picks — talk them through with Betty on Grok Bot. Follow so you don’t miss a thing.</p>
+            </div>
+            <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer">
+              <svg class="x-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              Follow @WeBetSocialAI On X
+            </a>
+          </div>
         </div>
       </li>
     </ol>
@@ -746,31 +754,6 @@
       <a href="https://play.google.com/store/apps/details?id=ai.x.grok.bot" target="_blank" rel="noopener noreferrer">Google Play</a>
       — then tap the button above.
     </p>
-  </section>
-
-  <div class="x-card" role="group" aria-label="Follow @WeBetSocialAI On X">
-    <img class="x-card-avatar" src="/betty-x-avatar.jpg" width="64" height="64" alt="Betty · WeBetAI" />
-    <div class="x-card-meta">
-      <div class="x-card-name">Betty · WeBetAI</div>
-      <div class="x-card-handle">@WeBetSocialAI</div>
-      <p class="x-card-bio">Free daily Edge sportsbook picks — talk them through with Betty on Grok Bot. Follow for the card on X.</p>
-    </div>
-    <a class="x-follow" href="https://x.com/intent/follow?screen_name=WeBetSocialAI" target="_blank" rel="noopener noreferrer">
-      <svg class="x-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-      Follow @WeBetSocialAI On X
-    </a>
-  </div>
-
-  <section class="final">
-    <h2>Add Betty. Come talk the picks.</h2>
-    <p>
-      Tap Add Betty On Grokbot. On the xAI page, choose Add to Grok Bot. Then just talk to me — type or Start voice chat. Allow notifications so the morning card lands in chat.
-    </p>
-    <div class="hero-ctas">
-      <a class="btn-primary" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Add Betty On Grokbot</a>
-      <a class="btn-secondary" href="#bets">Betty Big Bets</a>
-    </div>
-    <p class="hero-note">If Grok Bot isn’t on the phone yet, Add Betty On Grokbot prompts the install.</p>
   </section>
 
   <p class="footer">

@@ -148,8 +148,13 @@
     }
     var nav = document.querySelector('nav.nav');
     if (nav) {
-      var cta = nav.querySelector('.nav-cta, .nav-right, a:last-of-type');
+      var slot = nav.querySelector('.nav-share-slot');
       var btn2 = makeShareButton();
+      if (slot) {
+        slot.appendChild(btn2);
+        return true;
+      }
+      var cta = nav.querySelector('.nav-cta, .nav-right, a:last-of-type');
       if (cta && cta.parentNode === nav) nav.insertBefore(btn2, cta);
       else nav.appendChild(btn2);
       return true;

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    if (document.cookie.split(';').some(function(c){ return c.trim().indexOf('ga_exclude=') === 0; })) {
+      window['ga-disable-G-848D47V084'] = true;
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Betty Grok Bot — 24h Cadence &amp; Guided Onboarding | WeBetAI</title>
+  <meta name="description" content="Role-play map for Betty Free Daily Grok Bot: guided onboarding + balanced 24h notification cadence with exact scripts. Max ~3 proactive pings/day. 21+ · NFA." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/grokbot-cadence" />
+  <meta property="og:title" content="Betty Grok Bot — 24h Cadence &amp; Guided Onboarding | WeBetAI" />
+  <meta property="og:description" content="World-class Betty onboarding + balanced 24h loop — exact scripts, CTAs, expected replies. Max ~3 proactive pings/day. 21+ · NFA." />
+  <meta property="og:image" content="https://webetsocial.com/daily-betty-og-v13.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Betty Grok Bot — 24h Cadence &amp; Guided Onboarding | WeBetAI" />
+  <meta name="twitter:description" content="Guided onboarding + 24h cadence role-play map for Betty Free Daily. Exact scripts. 21+ · NFA." />
+  <meta name="twitter:image" content="https://webetsocial.com/daily-betty-og-v13.jpg" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-hover: #003a40;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --accent: #00B5B9;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --warn-bg: #fff8e6;
+      --warn-border: #f0d78c;
+      --warn-txt: #5c4a12;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { background: var(--bg); min-height: 100vh; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem;
+    }
+    .main { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+    .hero {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.5rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .eyebrow {
+      font-size: .75rem; font-weight: 600; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem;
+    }
+    .hero h1 {
+      font-size: 1.5rem; font-weight: 700; line-height: 1.25;
+      color: var(--olive); margin-bottom: .625rem;
+    }
+    @media (min-width: 640px) { .hero h1 { font-size: 1.75rem; } }
+    .hero-sub {
+      font-size: .9375rem; color: var(--txt-m); line-height: 1.55; margin-bottom: 1rem;
+    }
+    .cta-row { display: flex; flex-wrap: wrap; gap: .625rem; }
+    .cta-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--teal); color: var(--white);
+      font-size: .875rem; font-weight: 600;
+      padding: .7rem 1.125rem; border-radius: 9999px;
+      text-decoration: none; border: none;
+    }
+    .cta-primary:hover { background: var(--teal-hover); }
+    .cta-secondary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--white); color: var(--teal);
+      font-size: .875rem; font-weight: 600;
+      padding: .7rem 1.125rem; border-radius: 9999px;
+      text-decoration: none; border: 1px solid var(--teal-border);
+    }
+    .cta-secondary:hover { background: var(--teal-light); }
+
+    .callout {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: 1rem;
+      padding: 1.125rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .callout h2 {
+      font-size: .9375rem; font-weight: 700; color: var(--warn-txt); margin-bottom: .625rem;
+    }
+    .callout table {
+      width: 100%; border-collapse: collapse; font-size: .8125rem;
+    }
+    .callout th, .callout td {
+      text-align: left; padding: .4rem .35rem; vertical-align: top;
+      border-bottom: 1px solid var(--warn-border); color: var(--warn-txt);
+    }
+    .callout th { font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .callout tr:last-child td { border-bottom: none; }
+    .callout .rule {
+      margin-top: .75rem; font-size: .8125rem; color: var(--warn-txt); line-height: 1.5;
+    }
+
+    .toc {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.125rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .toc h2 { font-size: 1rem; font-weight: 700; color: var(--olive); margin-bottom: .75rem; }
+    .toc ol { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: .35rem; }
+    .toc a { color: var(--teal); font-weight: 600; font-size: .875rem; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .toc span { color: var(--txt-m); font-weight: 400; font-size: .8125rem; }
+
+    .beat {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .beat-head {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem .75rem;
+      margin-bottom: .875rem;
+    }
+    .beat-num {
+      font-size: .75rem; font-weight: 700; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .25rem .65rem; letter-spacing: .04em;
+    }
+    .beat-title {
+      font-size: 1.0625rem; font-weight: 700; color: var(--olive); flex: 1;
+    }
+    .beat-when {
+      font-size: .75rem; font-weight: 500; color: var(--txt-m);
+      background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: 9999px; padding: .2rem .55rem;
+    }
+    .mockup-wrap {
+      display: flex; justify-content: center;
+      margin: 0 auto 1rem;
+      max-width: 420px;
+    }
+    .mockup-wrap img {
+      width: 100%; max-width: 420px;
+      border-radius: .875rem;
+      border: 1px solid var(--border-lt);
+      display: block;
+    }
+    .meta-grid {
+      display: grid; gap: .75rem;
+      margin-bottom: .875rem;
+    }
+    .meta-block {
+      background: var(--off-white);
+      border: 1px solid var(--border-lt);
+      border-radius: .75rem;
+      padding: .75rem .875rem;
+    }
+    .meta-label {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .35rem;
+    }
+    .meta-block p, .meta-block ul {
+      font-size: .8125rem; color: var(--txt-m); line-height: 1.5;
+    }
+    .meta-block ul { padding-left: 1.1rem; margin: 0; }
+    .meta-block li { margin-bottom: .2rem; }
+    .meta-block code {
+      font-size: .75rem; background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .25rem; padding: .05rem .3rem; color: var(--olive);
+    }
+    .script-label {
+      font-size: .6875rem; font-weight: 700; color: var(--olive);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem;
+    }
+    .script {
+      background: var(--teal);
+      color: #e8f6f4;
+      border-radius: .875rem;
+      padding: 1rem 1.125rem;
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      font-size: .8125rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-bottom: .75rem;
+      overflow-x: auto;
+    }
+    .script .ex {
+      opacity: .75; font-style: italic;
+    }
+    .tool-note {
+      font-size: .75rem; color: var(--txt-l); line-height: 1.45;
+      border-left: 3px solid var(--teal-border);
+      padding-left: .75rem; margin-top: .25rem;
+    }
+    .tool-note code {
+      font-size: .7rem; background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: .25rem; padding: .05rem .3rem; color: var(--olive);
+    }
+
+    .checklist {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .checklist h2 {
+      font-size: 1.0625rem; font-weight: 700; color: var(--olive); margin-bottom: .875rem;
+    }
+    .checklist ol {
+      list-style: none; display: flex; flex-direction: column; gap: .55rem;
+      counter-reset: qa;
+    }
+    .checklist li {
+      display: flex; gap: .625rem; align-items: flex-start;
+      font-size: .875rem; color: var(--txt-m); line-height: 1.45;
+      counter-increment: qa;
+    }
+    .checklist li::before {
+      content: counter(qa);
+      flex-shrink: 0;
+      width: 1.5rem; height: 1.5rem;
+      border-radius: 9999px;
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      color: var(--teal); font-size: .75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .footer-ctas {
+      background: var(--white);
+      border: 1px solid var(--border-lt);
+      border-radius: 1rem;
+      padding: 1.5rem 1.25rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .footer-ctas h2 {
+      font-size: 1.0625rem; font-weight: 700; color: var(--olive); margin-bottom: .5rem;
+    }
+    .footer-ctas p {
+      font-size: .875rem; color: var(--txt-m); line-height: 1.5; margin-bottom: 1rem;
+    }
+    .footer-note {
+      font-size: .6875rem; color: var(--txt-l); line-height: 1.65;
+      text-align: center; margin-top: 1.5rem;
+    }
+    .footer-note a { color: var(--teal); font-weight: 600; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <a class="logo" href="/">
+    <span class="logo-text">WeBetAI</span>
+  </a>
+  <span class="header-badge">Cadence demo</span>
+</header>
+
+<div class="main">
+  <section class="hero">
+    <div class="eyebrow">Betty · Free Daily · Grok Bot</div>
+    <h1>24h Cadence &amp; Guided Onboarding</h1>
+    <p class="hero-sub">
+      Role-play map for world-class Betty onboarding plus a balanced 24-hour notification loop.
+      Exact scripts, CTAs, and expected user replies — ordered top-to-bottom with phone mockups.
+      Max ~3 proactive pings per day. On-ask (WHY / SCORE / finals) is always OK.
+    </p>
+    <div class="cta-row">
+      <a class="cta-primary" href="https://x.ai/bot/mFgccFeqlbRT4XQ1s7aDf">Add Betty on Grok Bot</a>
+      <a class="cta-secondary" href="/grokbot">Sales page</a>
+      <a class="cta-secondary" href="/daily-omega">Today’s Omega</a>
+    </div>
+  </section>
+
+  <section class="callout" aria-label="Anti-spam balance">
+    <h2>Anti-spam balance (north star)</h2>
+    <table>
+      <thead>
+        <tr><th>Channel</th><th>Cadence</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Proactive push</td>
+          <td>Morning card (~10:16 ET) · first tip-off (1×) · evening finals (1×)</td>
+          <td>Skip tip-off if user already said SCORE that day</td>
+        </tr>
+        <tr>
+          <td>On-ask</td>
+          <td>WHY · SCORE · finals · Pick 3 · markets</td>
+          <td>Always OK</td>
+        </tr>
+        <tr>
+          <td>Soft promo</td>
+          <td>One soft X / Pick 3 line on Message B + finals</td>
+          <td>Never hard-sell mid-game</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="rule"><strong>Rule:</strong> Max ~3 proactive pings/day. Never spam. Demo numbers labeled EXAMPLE — live installs must fetch public APIs, never invent.</p>
+  </section>
+
+  <nav class="toc" aria-label="Beat index">
+    <h2>Beats 01–09</h2>
+    <ol>
+      <li><a href="#beat-01">01 Discover</a> <span>· X → /grokbot → Add</span></li>
+      <li><a href="#beat-02">02 Message A</a> <span>· instant · video attachment</span></li>
+      <li><a href="#beat-03">03 Message B</a> <span>· compact Omega card</span></li>
+      <li><a href="#beat-04">04 WHY</a> <span>· on-ask</span></li>
+      <li><a href="#beat-05">05 SCORE</a> <span>· on-ask · card games only</span></li>
+      <li><a href="#beat-06">06 Morning</a> <span>· ~10:16 ET · proactive #1</span></li>
+      <li><a href="#beat-07">07 Tip-off</a> <span>· proactive #2 · 1×/day</span></li>
+      <li><a href="#beat-08">08 Finals</a> <span>· proactive #3 · evening</span></li>
+      <li><a href="#beat-09">09 Next-day loop</a> <span>· no guilt pings</span></li>
+    </ol>
+  </nav>
+
+  <!-- BEAT 01 -->
+  <article class="beat" id="beat-01">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 01</span>
+      <h2 class="beat-title">Discover (X → /grokbot → Add)</h2>
+      <span class="beat-when">Surface · X / site</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/01-discover-add.png" alt="Beat 01 — Discover Add Betty" width="420" height="auto" loading="eager" />
+    </div>
+    <p class="script-label">Exact caption (template)</p>
+    <pre class="script">Free daily Omega sportsbook picks — morning card, live scores, finals — inside Grok Bot.
+Add Betty → https://webetsocial.com/grokbot
+21+ · NFA · gamble responsibly</pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>Tap <strong>Add Betty on Grok Bot</strong> (opens x.ai share → Add)</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected user action</div>
+        <p>Install / Add bot · open chat</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Success</div>
+        <p>First message in Betty chat (cold open)</p>
+      </div>
+    </div>
+    <p class="tool-note">Surface: X post / reply from @WeBetSocialAI, or site <code>/grokbot</code>.</p>
+  </article>
+
+  <!-- BEAT 02 -->
+  <article class="beat" id="beat-02">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 02</span>
+      <h2 class="beat-title">Message A (instant · before any API)</h2>
+      <span class="beat-when">Trigger · first chat / restart</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/02-message-a-video.png" alt="Beat 02 — Message A video onboarding" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">Exact Betty script</p>
+    <pre class="script">Hey — welcome to WeBetAI. I’m Betty with your free daily sportsbook picks.
+
+Tap play on the intro if it doesn’t start. Cadence is on: morning card, live scores, and final results right here.
+
+Pulling today’s card now — hang tight.</pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>Tap play on video</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected user response</div>
+        <p>Watch (or skip) · wait for Message B · optional “hi” / “today’s picks”</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Latency goal</div>
+        <p>Message A &lt; 2s from open (zero Omega fetches before this)</p>
+      </div>
+    </div>
+    <p class="script-label">Optional bridge (only if fetch &gt;3s)</p>
+    <pre class="script">Card’s loading — one sec.</pre>
+    <p class="tool-note"><strong>Tool call 1 (REQUIRED):</strong> <code>SendToUser { type: "attachment", url: "https://webetsocial.com/betty-onboarding.mp4" }</code> — Never put mp4 in <code>images[]</code>.</p>
+  </article>
+
+  <!-- BEAT 03 -->
+  <article class="beat" id="beat-03">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 03</span>
+      <h2 class="beat-title">Message B (compact card)</h2>
+      <span class="beat-when">After · get-picks-omega + KPIs</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/03-message-b-card.png" alt="Beat 03 — Message B compact Omega card" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">Exact shape (EXAMPLE structure — live numbers from API)</p>
+    <pre class="script"><span class="ex">Today’s Omega · EXAMPLE date
+Combined UI-floor XX% (n=) · Omega-only YY% (n=)
+
+Straights
+Army -3.5 · Army @ Temple · +105 · 1.25u
+Howard +43.5 · Howard @ Rutgers · +100 · 1.25u
+Over 6.5 · BAL @ NYY · -112 · 1.0u
+
+Parlay · EXAMPLE +650 · 0.5u
+· Army -3.5
+· Howard +43.5
+· Over 6.5
+
+Full context → https://webetsocial.com/daily-omega
+Reply WHY · SCORE · or ask for finals in this chat.
+Soft: @WeBetSocialAI · Pick 3 https://webetsocial.com/pick3p2p
+21+ · NFA · gamble responsibly</span></pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">CTAs for user</div>
+        <ul>
+          <li>Reply <code>WHY</code> or <code>WHY Army</code></li>
+          <li>Reply <code>SCORE</code></li>
+          <li>Tap daily-omega link</li>
+          <li>Optional Pick 3 / follow</li>
+        </ul>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected responses</div>
+        <p>WHY / SCORE / “finals” / silence (OK — routines will ping)</p>
+      </div>
+    </div>
+    <p class="tool-note">Public <code>GET https://webetsocial.com/api/get-picks-omega</code> + results KPIs. Structure mirrors real Omega: 3 straights + 1 parlay. Demo picks labeled EXAMPLE.</p>
+  </article>
+
+  <!-- BEAT 04 -->
+  <article class="beat" id="beat-04">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 04</span>
+      <h2 class="beat-title">WHY (on-ask)</h2>
+      <span class="beat-when">User · WHY / WHY Army</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/04-why.png" alt="Beat 04 — WHY pick reasoning" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">User says</p>
+    <pre class="script">WHY · WHY Army · why the over</pre>
+    <p class="script-label">Exact Betty script</p>
+    <pre class="script">Army -3.5 · Army @ Temple · +105 · 1.25u
+
+[paste that pick’s coreReasoning only — short paragraphs, not a wall]
+
+Want another pick’s WHY, or reply SCORE?
+https://webetsocial.com/daily-omega
+21+ · NFA · gamble responsibly</pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>SCORE · another WHY · site</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected</div>
+        <p>SCORE / next pick name / thanks</p>
+      </div>
+    </div>
+    <p class="tool-note">Paste that pick’s <code>coreReasoning</code> only — short paragraphs, not a wall.</p>
+  </article>
+
+  <!-- BEAT 05 -->
+  <article class="beat" id="beat-05">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 05</span>
+      <h2 class="beat-title">SCORE (on-ask · card games only)</h2>
+      <span class="beat-when">User · SCORE / live / scoreboard</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/05-score.png" alt="Beat 05 — SCORE live lines" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">User says</p>
+    <pre class="script">SCORE · live · scoreboard · how’s my pick</pre>
+    <p class="script-label">Exact Betty script (EXAMPLE one-liners)</p>
+    <pre class="script"><span class="ex">Live on today’s card only:
+Army @ Temple · 17–10 · Q3 6:42 · pick Army -3.5 · LIVE
+Howard @ Rutgers · 0–28 · Q2 · pick Howard +43.5 · LIVE
+BAL @ NYY · Final 4–7 · Over 6.5 · L
+
+https://webetsocial.com/daily-omega
+21+ · NFA · gamble responsibly</span></pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>Ask again later · wait for finals ping</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected</div>
+        <p>silence / “thanks” / WHY</p>
+      </div>
+    </div>
+    <p class="tool-note">ESPN <code>site.web.api.espn.com</code> scoreboards · card matchups only.</p>
+  </article>
+
+  <!-- BEAT 06 -->
+  <article class="beat" id="beat-06">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 06</span>
+      <h2 class="beat-title">Morning routine (~10:16 ET · proactive #1)</h2>
+      <span class="beat-when">Daily routine · owner installs</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/06-morning.png" alt="Beat 06 — Morning proactive card" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">Exact script</p>
+    <pre class="script">Card’s live — compact + https://webetsocial.com/daily-omega
+Reply WHY or SCORE.
+21+ · NFA · gamble responsibly</pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Then</div>
+        <p>Same compact card block as Message B, or “open chat for full card” if length-capped.</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>WHY · SCORE · open chat</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected</div>
+        <p>engage or ignore (OK)</p>
+      </div>
+    </div>
+    <p class="tool-note">Trigger: daily routine (owner installs). Proactive ping #1 of max ~3/day.</p>
+  </article>
+
+  <!-- BEAT 07 -->
+  <article class="beat" id="beat-07">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 07</span>
+      <h2 class="beat-title">Game started (proactive #2 · 1×/day)</h2>
+      <span class="beat-when">First card tip-off</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/07-game-start.png" alt="Beat 07 — Tip-off proactive ping" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">Exact script</p>
+    <pre class="script">First card game tipped — Army @ Temple is live. Reply SCORE anytime.
+21+ · NFA · gamble responsibly</pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>SCORE</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected</div>
+        <p>SCORE or silence</p>
+      </div>
+    </div>
+    <p class="tool-note">Trigger: first Omega-card game tips off. <strong>Skip if user already SCORE’d today.</strong></p>
+  </article>
+
+  <!-- BEAT 08 -->
+  <article class="beat" id="beat-08">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 08</span>
+      <h2 class="beat-title">Finals + record (proactive #3 · evening)</h2>
+      <span class="beat-when">All card games final</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/08-finals.png" alt="Beat 08 — Finals and record" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">Exact script (EXAMPLE)</p>
+    <pre class="script"><span class="ex">Finals in — Card 2–1 · +1.8u today.
+Army -3.5 W · Howard +43.5 W · Over 6.5 L · Parlay L
+Reply for tomorrow’s card or WHY on any pick.
+Soft: Pick 3 https://webetsocial.com/pick3p2p
+21+ · NFA · gamble responsibly</span></pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>tomorrow · WHY · Pick 3</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected</div>
+        <p>soft re-open next morning</p>
+      </div>
+    </div>
+    <p class="tool-note">Trigger: all card games final (or ET late window). Proactive ping #3 — last allowed same day.</p>
+  </article>
+
+  <!-- BEAT 09 -->
+  <article class="beat" id="beat-09">
+    <div class="beat-head">
+      <span class="beat-num">BEAT 09</span>
+      <h2 class="beat-title">Next-day loop</h2>
+      <span class="beat-when">Morning routine fires again</span>
+    </div>
+    <div class="mockup-wrap">
+      <img src="img/09-24h-loop.png" alt="Beat 09 — 24h next-day loop" width="420" height="auto" loading="lazy" />
+    </div>
+    <p class="script-label">Loop rule</p>
+    <pre class="script">Morning routine fires again → same Message B shape with new slate.
+No extra “missed you” guilt pings. If user quiet 3+ days, still only morning + tip-off + finals (never escalate volume).</pre>
+    <div class="meta-grid">
+      <div class="meta-block">
+        <div class="meta-label">Primary CTA</div>
+        <p>Same as Message B / morning — WHY · SCORE · open chat</p>
+      </div>
+      <div class="meta-block">
+        <div class="meta-label">Expected</div>
+        <p>Continue engagement or quiet stay — never escalate volume</p>
+      </div>
+    </div>
+    <p class="tool-note">Routines only. Never regenerate Omega · secrets · trading · auto-post X from install.</p>
+  </article>
+
+  <section class="checklist" id="qa">
+    <h2>Guided demo checklist (QA / role-play)</h2>
+    <ol>
+      <li>Fresh Add → Message A attachment mp4 + tap-play copy (no <code>images[]</code>)</li>
+      <li>Message B compact · no coreReasoning wall · daily-omega link · WHY/SCORE invite</li>
+      <li>User <code>WHY Army</code> → one pick reasoning</li>
+      <li>User <code>SCORE</code> → card-only live lines</li>
+      <li>Morning ping once</li>
+      <li>Tip-off ping once (or skipped if SCORE already)</li>
+      <li>Finals + record once</li>
+      <li>No 4th proactive ping same day</li>
+      <li>Footer 21+ · NFA on every Betty reply</li>
+    </ol>
+  </section>
+
+  <section class="footer-ctas">
+    <h2>Try it live</h2>
+    <p>Install Betty, then walk Beats 01–09. Sales page + today’s Omega card for full context.</p>
+    <div class="cta-row" style="justify-content:center;">
+      <a class="cta-primary" href="https://x.ai/bot/mFgccFeqlbRT4XQ1s7aDf">Add Betty on Grok Bot</a>
+      <a class="cta-secondary" href="/grokbot">/grokbot sales</a>
+      <a class="cta-secondary" href="/daily-omega">/daily-omega</a>
+    </div>
+  </section>
+
+  <p class="footer-note">
+    Betty Free Daily — Guided Onboarding + 24h Cadence · WeBetAI<br>
+    Follow <a href="https://x.com/WeBetSocialAI" target="_blank" rel="noopener noreferrer">@WeBetSocialAI</a> on X · Share bot <a href="https://x.ai/bot/mFgccFeqlbRT4XQ1s7aDf">x.ai/bot</a><br>
+    Demo numbers labeled EXAMPLE — live installs fetch public APIs only.<br>
+    <strong>21+ · NFA · gamble responsibly</strong>
+  </p>
+</div>
+
+<script src="/js/site-share.js" defer></script>
+</body>
+</html>

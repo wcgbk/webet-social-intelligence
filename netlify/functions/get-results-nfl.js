@@ -14,7 +14,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-nfl-cache-v5-dh';
+const RESULTS_CACHE_KEY = 'results-nfl-cache-v6-regseason';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -279,10 +279,15 @@ exports.handler = async (event) => {
       }
     } catch (e) {}
 
-    // KPI reset: daily + cumulative from 2026-09-05 forward only (Ben/Omega-directed).
-    const KPI_START = "2026-09-05";
+    // REGULAR SEASON ONLY (Ben, 2026-09-27): preseason days and weeks are dropped entirely.
+    // Every KPI (daily rows + cumulative) counts only ET dates inside the 2026 regular season:
+    // opener NE@SEA Wed 2026-09-09 (8:20 PM ET) through the end of Week 18. NFL weeks run Tue-Mon.
+    const REG_SEASON_START = '2026-09-09';
+    const REG_SEASON_END = '2027-01-12';
+    const WEEK1_TUESDAY = Date.parse('2026-09-08T12:00:00Z');
+    const nflWeek = (d) => Math.floor((Date.parse(d + 'T12:00:00Z') - WEEK1_TUESDAY) / (7 * 86400000)) + 1;
     const nflDatesRaw = await getDatesFromStore(storeUrl, authHeaders);
-    const nflDates = nflDatesRaw.filter(d => d >= KPI_START);
+    const nflDates = nflDatesRaw.filter(d => d >= REG_SEASON_START && d <= REG_SEASON_END);
     if (nflDates.length === 0) {
       // Clean slate — NFL KPIs restart at KPI_START.
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ days: [], cumulative: { wins: 0, losses: 0, pushes: 0, pending: 0, accuracy: '0%', roi: '0%', totalWagered: 0, totalProfit: 0 }, straight: { wins: 0, losses: 0, accuracy: '0%' }, parlay: { wins: 0, losses: 0, accuracy: '0%' } }) };
@@ -334,14 +339,26 @@ exports.handler = async (event) => {
         else if (day.parlayResult === 'loss') parlayLosses++;
       }
 
+      day.week = nflWeek(day.date);
       days.push(day);
     }
+    const weeks = [...new Set(days.map(d => d.week))].sort((a, b) => a - b);
+    const season = {
+      type: 'regular',
+      start: days.length ? days[0].date : REG_SEASON_START,
+      end: days.length ? days[days.length - 1].date : REG_SEASON_START,
+      weeks,
+      label: weeks.length
+        ? `Regular season only · Week${weeks.length > 1 ? 's' : ''} ${weeks[0]}${weeks.length > 1 ? '–' + weeks[weeks.length - 1] : ''}`
+        : 'Regular season only',
+    };
 
     const cumDecided = cumWins + cumLosses;
     const straightDecided = straightWins + straightLosses;
     const parlayDecided = parlayWins + parlayLosses;
 
     const result = {
+      season,
       days: days.reverse(), // newest first
       cumulative: {
         wins: cumWins, losses: cumLosses, pushes: cumPushes, pending: cumPending,

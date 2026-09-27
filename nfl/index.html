@@ -21,7 +21,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin />
   <title>WeBetAI - Social Intelligence | NFL Only Picks</title>
-  <meta name="description" content="WeBetAI's dedicated NFL model — sharp-book consensus, line shopping, and calibrated edges on every NFL game day. Preseason lab building toward the 2026 regular season." />
+  <meta name="description" content="WeBetAI's dedicated NFL model — sharp-book consensus, line shopping, and calibrated edges on every NFL game day. 2026 regular-season track record." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/nfl" />
   <meta property="og:title" content="WeBetAI - Social Intelligence | NFL Only Picks" />
@@ -629,6 +629,7 @@
   <!-- Results Tracker -->
   <div class="results-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;">
     <span>Pick Results &amp; Track Record — NFL Only Picks</span>
+    <span id="kpi-season-window" style="font-size:.75rem;font-weight:500;color:var(--txt-m);">Regular season only</span>
   </div>
   <div class="results-card">
     <div class="results-cumulative" id="results-cumulative">
@@ -2064,6 +2065,14 @@
 
   function renderResults(data) {
     const cum = data.cumulative || {};
+    // Season window label (regular season only — preseason excluded server-side)
+    try {
+      const sw = data.season, el = document.getElementById('kpi-season-window');
+      if (el && sw) {
+        const fmt = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        el.textContent = sw.label + (sw.start && sw.end ? ' (' + fmt(sw.start) + ' – ' + fmt(sw.end) + ')' : '');
+      }
+    } catch (e) {}
     const straight = data.straight || {};
     const parlay = data.parlay || {};
 

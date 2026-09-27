@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- grokbot/welcome/index.html — Betty onboarding landing page (tap target of Betty's first message).
+       Static only: picks load client-side from /api/get-picks-omega; GA = browser gtag events only
+       (betty_link_open on load, GA4 recommended `share` on each share tap). No server-side MP pieces yet. -->
+  <script>
+    if (document.cookie.split(';').some(function(c){ return c.trim().indexOf('ga_exclude=') === 0; })) {
+      window['ga-disable-G-848D47V084'] = true;
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+  <link rel="preload" as="image" href="/img/betty/betty-face-v1.webp" type="image/webp" fetchpriority="high" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <title>WeBetAI - Social Intelligence | Welcome to Grokbot Betty</title>
+  <meta name="description" content="Welcome to Grokbot Betty: today's free sportsbook picks card from WeBetAI, plus an easy way to share Betty with a friend." />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#f0f7f6" />
+  <link rel="canonical" href="https://webetsocial.com/grokbot/welcome" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="WeBetAI" />
+  <meta property="og:url" content="https://webetsocial.com/grokbot/welcome" />
+  <meta property="og:title" content="Welcome to Grokbot Betty" />
+  <meta property="og:description" content="Today's free sportsbook picks card from Betty by WeBetAI." />
+  <meta property="og:image" content="https://webetsocial.com/betty-grokbot-og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Grok Bot Betty - Free Daily Sportsbook Picks" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@WeBetSocialAI" />
+  <meta name="twitter:title" content="Welcome to Grokbot Betty" />
+  <meta name="twitter:description" content="Today's free sportsbook picks card from Betty by WeBetAI." />
+  <meta name="twitter:image" content="https://webetsocial.com/betty-grokbot-og.jpg" />
+  <style>
+    :root { --bg:#f0f7f6; --white:#fff; --teal:#004C54; --teal-2:#006d78; --teal-light:#e6f4f1; --teal-border:#b8ddd6;
+            --olive:#1a2e1a; --txt-m:#5f6b7a; --txt-l:#7d8794; --border:#e0e3e8; --green:#1f9d55; }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    html { -webkit-text-size-adjust:100%; }
+    body { font-family:'Geist Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background:var(--bg);
+           color:var(--olive); -webkit-font-smoothing:antialiased; line-height:1.4; }
+    .wrap { max-width:520px; margin:0 auto; padding:max(.9rem, env(safe-area-inset-top)) 1rem max(2.25rem, env(safe-area-inset-bottom)); }
+    .top { display:flex; align-items:center; justify-content:space-between; min-height:40px; }
+    .brand { font-weight:700; font-size:1rem; letter-spacing:-.01em; color:var(--olive); text-decoration:none; }
+    .top-link { font-size:.8rem; font-weight:600; color:var(--teal); text-decoration:none; padding:.5rem 0 .5rem .5rem; }
+
+    .hero { text-align:center; padding:1rem 0 1.1rem; }
+    .avatar { display:block; width:136px; height:136px; margin:0 auto; border-radius:9999px; overflow:hidden;
+              border:4px solid #fff; box-shadow:0 0 0 2px var(--teal-border), 0 10px 28px rgba(0,76,84,.18);
+              background:#cfd8d6 url("data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYxLjE5LjEwMQD/2wBDAAgYGBwYHCEhISEhISckJygoKCcnJycoKCgrKyszMzMrKysoKCsrMDAzMzc5NzQ0MzQ5OTw8PEhIRUVUVFdnZ3z/xABdAAEBAQAAAAAAAAAAAAAAAAAEBQcBAQEAAAAAAAAAAAAAAAAAAAMEEAACAgICAwEBAAAAAAAAAAABAhEDADEhElETYcEiEQEBAQEBAAAAAAAAAAAAAAABABGhQf/AABEIABAAEAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AM/Zp9ZccEqIH3YgY1qetNsVL/JcBi0GIkEKdwPGRqu6Ort1nQV/Mbx11pFbixq2ZiYCkmOPn7gq+VGGdv/Z") center/cover; }
+    .avatar img { display:block; width:100%; height:100%; object-fit:cover; object-position:50% 30%; }
+    h1 { font-size:1.6rem; line-height:1.15; letter-spacing:-.02em; margin-top:.9rem; }
+    .sub { color:var(--txt-m); font-size:.95rem; margin-top:.35rem; }
+
+    .card { background:var(--white); border:1px solid var(--border); border-radius:16px; padding:1rem 1.15rem 1.1rem;
+            box-shadow:0 1px 2px rgba(16,24,40,.04); }
+    .card-h { display:flex; align-items:baseline; justify-content:space-between; gap:.5rem; margin-bottom:.35rem; }
+    .card-h h2 { font-size:1.05rem; }
+    .state { font-size:.72rem; font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:.05em; }
+    .pick { border-top:1px solid var(--border); padding:.75rem 0; }
+    .pick:first-child { border-top:0; }
+    .pick-top { display:flex; align-items:baseline; justify-content:space-between; gap:.75rem; }
+    .pick-top b { font-size:1rem; font-weight:700; }
+    .odds { font-weight:700; font-size:.95rem; color:var(--teal); white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .meta { display:block; color:var(--txt-m); font-size:.84rem; margin-top:.15rem; }
+    .empty { color:var(--txt-m); font-size:.92rem; padding:.6rem 0 .2rem; }
+    .parlay { background:var(--teal-light); border:1px solid var(--teal-border); border-radius:12px;
+              padding:.7rem .85rem; margin-top:.5rem; font-size:.86rem; }
+    .parlay-h { font-weight:700; color:var(--teal); display:flex; justify-content:space-between; gap:.5rem; margin-bottom:.2rem; }
+    .leg { padding:.2rem 0; line-height:1.35; }
+    .leg b { font-weight:600; }
+    .leg span { color:var(--txt-m); font-size:.8rem; }
+    .skel { height:3.1rem; border-radius:.5rem; margin:.55rem 0; background:linear-gradient(90deg,#eef1f2 0%,#f7f9f9 50%,#eef1f2 100%);
+            background-size:200% 100%; animation:sh 1.2s linear infinite; }
+    @keyframes sh { to { background-position:-200% 0; } }
+    @media (prefers-reduced-motion: reduce) { .skel { animation:none; } }
+
+    .ctas { display:grid; gap:.55rem; margin:1rem 0 .25rem; }
+    .btn { display:flex; align-items:center; justify-content:center; min-height:52px; padding:.75rem 1rem; border-radius:9999px;
+           font-weight:700; font-size:1rem; text-decoration:none; text-align:center; -webkit-tap-highlight-color:transparent; }
+    .btn-primary { background:var(--teal); color:#fff; }
+    .btn-secondary { background:#fff; color:var(--teal); border:1.5px solid var(--teal-border); }
+    .btn:focus-visible { outline:3px solid var(--teal); outline-offset:2px; }
+    .next { margin:.6rem 0 0; font-size:.9rem; color:var(--txt-m); text-align:center; }
+    .next b { color:var(--olive); }
+
+    .foot { color:var(--txt-l); font-size:.75rem; text-align:center; margin-top:1.6rem; line-height:1.65; }
+    .foot a { color:var(--teal); }
+    .foot strong { color:var(--olive); }
+
+    /* ---- Share / invite block (SHARE.md, SPEC §A8) ---- */
+    .gbs { background:#fff; border:1px solid var(--border); border-radius:16px; padding:1.1rem 1.15rem 1.15rem; margin:1rem 0; }
+    .gbs h2 { font-size:1.08rem; line-height:1.25; color:var(--olive); }
+    .gbs-sub { color:var(--txt-m); font-size:.875rem; margin:.3rem 0 .9rem; }
+    .gbs-btn { -webkit-appearance:none; appearance:none; display:flex; align-items:center; justify-content:center; gap:.45rem;
+               min-height:48px; padding:.7rem .9rem; border-radius:.8rem; font:600 .95rem/1.1 'Geist Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+               text-decoration:none; cursor:pointer; border:1.5px solid var(--teal-border); background:var(--teal-light); color:var(--teal);
+               -webkit-tap-highlight-color:transparent; touch-action:manipulation; width:100%; }
+    .gbs-btn svg { width:18px; height:18px; flex-shrink:0; fill:currentColor; }
+    .gbs-btn:focus-visible { outline:3px solid var(--teal); outline-offset:2px; }
+    .gbs-btn:active { transform:scale(.98); }
+    .gbs-primary { background:var(--teal); border-color:var(--teal); color:#fff; min-height:52px; font-size:1rem; }
+    .gbs-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); gap:.5rem; margin-top:.5rem; }
+    .gbs-row .gbs-btn { flex-direction:column; gap:.3rem; min-height:60px; padding:.55rem .3rem; font-size:.82rem; white-space:nowrap; }
+    .gbs-fb { margin-top:.6rem; }
+    .gbs-fb label { display:block; font-size:.75rem; color:var(--txt-m); margin-bottom:.25rem; }
+    .gbs-fb input { width:100%; min-height:44px; padding:.55rem .7rem; border:1px solid var(--border); border-radius:.6rem;
+                    font:500 .8rem ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--olive); background:#f7f8fa;
+                    -webkit-user-select:all; user-select:all; }
+    .gbs-status { font-size:.82rem; color:var(--teal); margin-top:.55rem; font-weight:600; }
+    .gbs-status:empty { margin:0; }
+    .gbs-legal { font-size:.72rem; color:var(--txt-l); margin-top:.7rem; }
+    .nw { white-space:nowrap; }
+    .gbs [hidden] { display:none !important; }
+
+    @media (min-width: 720px) {
+      .wrap { padding-top:1.5rem; }
+      .hero { padding:1.5rem 0 1.4rem; }
+      .avatar { width:152px; height:152px; }
+      h1 { font-size:2rem; }
+      .ctas { grid-template-columns:1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <a class="brand" href="/">WeBetAI</a>
+      <a class="top-link" href="/grokbot">About Betty</a>
+    </header>
+
+    <section class="hero">
+      <picture class="avatar">
+        <source srcset="/img/betty/betty-face-v1.webp" type="image/webp" />
+        <img src="/img/betty/betty-face-v1.jpg" width="360" height="360" alt="Betty, the WeBetAI Grok Bot" fetchpriority="high" decoding="async" />
+      </picture>
+      <h1>Welcome to Grokbot Betty</h1>
+      <p class="sub">Free daily sportsbook picks from WeBetAI.</p>
+    </section>
+
+    <section class="card" aria-labelledby="card-h" aria-live="polite" aria-busy="true" id="card">
+      <div class="card-h"><h2 id="card-h">Today's picks</h2></div>
+      <p class="state" id="state">Loading today's card…</p>
+      <div id="picks"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+      <div id="parlay"></div>
+    </section>
+
+    <section class="gbs" id="gb-share" aria-labelledby="gbs-h">
+      <h2 id="gbs-h">Know someone who bets? Send them Betty.</h2>
+      <p class="gbs-sub" id="gbs-sub">Free daily sportsbook picks for them too.</p>
+      <button type="button" class="gbs-btn gbs-primary" id="gbs-native" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l4.5 4.5-1.4 1.4L13 5.8V15h-2V5.8L8.9 7.9 7.5 6.5zM5 11h3v2H6v7h12v-7h-2v-2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z"/></svg>
+        <span>Share Betty</span>
+      </button>
+      <div class="gbs-row" id="gbs-row">
+        <a class="gbs-btn" id="gbs-sms" href="sms:?&amp;body=" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>
+          <span>Text a friend</span>
+        </a>
+        <a class="gbs-btn" id="gbs-x" href="https://x.com/intent/tweet" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          <span>Post on X</span>
+        </a>
+        <button type="button" class="gbs-btn" id="gbs-copy">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+          <span>Copy link</span>
+        </button>
+      </div>
+      <div class="gbs-fb" id="gbs-fb" hidden>
+        <label for="gbs-link">Your invite link (press and hold to copy)</label>
+        <input id="gbs-link" type="text" readonly value="https://webetsocial.com/grokbot" inputmode="none" />
+      </div>
+      <p class="gbs-status" id="gbs-status" role="status" aria-live="polite"></p>
+      <p class="gbs-legal">21+ only. Picks are opinions, not guarantees. Gambling problem? Call <span class="nw">1-800-GAMBLER</span>.</p>
+    </section>
+
+    <div class="ctas">
+      <a class="btn btn-primary" id="back-bot" href="https://x.ai/bot/e6l3ztXGZZ16KhVfkmhkG">Back to Betty on Grok</a>
+      <a class="btn btn-secondary" id="full" href="/daily-omega">Full card &amp; record</a>
+    </div>
+    <p class="next">In your Betty chat, reply <b>WHY</b> or <b>SCORE</b> anytime.</p>
+
+    <footer class="foot">
+      <strong>21+ only</strong> · Not financial advice · Please gamble responsibly<br />
+      Gambling problem? Call <a href="tel:18004262537">1-800-GAMBLER</a><br />
+      © WeBetAI · Follow <a href="https://x.com/WeBetSocialAI">@WeBetSocialAI</a> on X
+    </footer>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+    var q = new URLSearchParams(location.search);
+
+    /* 1) GA: betty_link_open on load. iid / src come from the query string when present (validated, never echoed raw). */
+    var iid = (q.get('iid') || '').toLowerCase();
+    iid = /^[a-z0-9]{8,32}$/.test(iid) ? iid : '';
+    var src = (q.get('src') || q.get('utm_source') || '').toLowerCase();
+    src = /^[a-z0-9_.-]{1,40}$/.test(src) ? src : '';
+    var lv = q.get('utm_content') || '';
+    lv = /^[a-z0-9_]{1,40}$/i.test(lv) ? lv : 'direct';
+    window.__gbIid = iid || null;
+    var openP = { link_version: lv };
+    if (iid) openP.install_id = iid;
+    if (src) openP.src = src;
+    if (q.get('gadebug') === '1') openP.debug_mode = true;
+    try { gtag('event', 'betty_link_open', openP); } catch (e) {}
+    /* Drop iid from the address bar (UTMs stay) so a browser-menu share or a copied address bar can't leak the install id. */
+    if (iid && window.history && history.replaceState) {
+      try { var u = new URL(location.href); u.searchParams.delete('iid'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) {}
+    }
+
+    /* 2) Card: same public endpoint /daily-omega uses. Honest states only — never invent picks. */
+    function todayET() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); }
+    function fmtDate(iso) {
+      var p = String(iso || '').split('-'); if (p.length !== 3) return '';
+      return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2], 12)).toLocaleDateString('en-US',
+        { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    }
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+    function join(parts) { return parts.filter(function (x) { return x; }).join(' · '); }
+    var cardEl = document.getElementById('card'), stateEl = document.getElementById('state'),
+        picksEl = document.getElementById('picks'), parlayEl = document.getElementById('parlay');
+    function fail() {
+      stateEl.textContent = "Couldn't load the card. Tap Full card below.";
+      picksEl.textContent = ''; parlayEl.textContent = ''; parlayEl.className = '';
+      cardEl.setAttribute('aria-busy', 'false');
+    }
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 10000);
+    fetch('/api/get-picks-omega', ctrl ? { signal: ctrl.signal } : {}).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      clearTimeout(to);
+      var picks = (d && Array.isArray(d.picks)) ? d.picks.filter(function (p) { return p && (p.pickDisplay || p.pick); }) : [];
+      var cardState = !picks.length ? 'pending' : d.date === todayET() ? 'today' : 'latest';
+      stateEl.textContent = cardState === 'today' ? "Today's card · " + fmtDate(d.date)
+        : cardState === 'latest' ? 'Latest card · ' + fmtDate(d.date) + " · today's posts by 11 AM ET"
+        : "Today's card posts by 11 AM ET. Check back soon.";
+      picksEl.textContent = ''; parlayEl.textContent = ''; parlayEl.className = '';
+      if (!picks.length) {
+        picksEl.appendChild(el('p', 'empty', 'No picks are posted yet. Betty will send the card in your chat when it drops.'));
+      }
+      picks.slice(0, 3).forEach(function (p) {
+        var row = el('div', 'pick'), top = el('div', 'pick-top');
+        top.appendChild(el('b', null, p.pickDisplay || p.pick));
+        if (p.odds) top.appendChild(el('span', 'odds', String(p.odds)));
+        row.appendChild(top);
+        row.appendChild(el('span', 'meta', join([p.matchup, p.sport, p.units])));
+        picksEl.appendChild(row);
+      });
+      var par = picks.length && d.parlayLegs && d.parlayLegs[0];
+      if (par && par.legs && par.legs.length) {
+        parlayEl.className = 'parlay';
+        var h = el('div', 'parlay-h');
+        h.appendChild(el('span', null, par.legs.length + '-leg parlay'));
+        h.appendChild(el('span', null, join([par.combinedOdds, par.units])));
+        parlayEl.appendChild(h);
+        par.legs.forEach(function (l) {
+          var leg = el('div', 'leg');
+          leg.appendChild(el('b', null, l.pickDisplay || l.pick || ''));
+          leg.appendChild(el('span', null, ' ' + join([l.odds, l.matchup, l.sport])));
+          parlayEl.appendChild(leg);
+        });
+      }
+      cardEl.setAttribute('aria-busy', 'false');
+    }).catch(function () { clearTimeout(to); fail(); });
+  })();
+  </script>
+  <script id="gbs-js">
+  (function () {
+    'use strict';
+    var root = document.getElementById('gb-share');
+    if (!root) return;
+
+    /* Every share link lands on /grokbot tagged betty_share / welcome_share_v1 (SHARE.md). Campaign + content go FIRST so an
+       SMS app that truncates the body at an encoded '&' still keeps utm_campaign=betty_share. No short links / ref yet. */
+    var CFG = {
+      base: 'https://webetsocial.com/grokbot',
+      xIntent: 'https://x.com/intent/tweet',
+      contentType: 'betty_invite',
+      itemId: 'welcome_share_v1'
+    };
+    function tagged(source) {
+      return CFG.base + '?utm_campaign=betty_share&utm_content=welcome_share_v1&utm_medium=referral&utm_source=' + source +
+        '&utm_id=b-' + (source === 'native_share' ? 'share' : source);
+    }
+    var C = {
+      sms: function (u) { return 'Try Betty, a free Grok Bot with daily sportsbook picks from WeBetAI. Add her here: ' + u + ' (21+, bet responsibly)'; },
+      x: "Betty is a free Grok Bot that sends daily sportsbook picks from WeBetAI. I've been using it, worth a look \uD83D\uDC47\n\n21+. Picks are opinions, not guarantees. Bet responsibly.",
+      nativeText: 'Betty is a free Grok Bot with daily sportsbook picks from WeBetAI. 21+, bet responsibly.'
+    };
+
+    var $ = function (id) { return document.getElementById(id); };
+    var nativeBtn = $('gbs-native'), smsA = $('gbs-sms'), xA = $('gbs-x'), copyBtn = $('gbs-copy'),
+        fb = $('gbs-fb'), input = $('gbs-link'), statusEl = $('gbs-status');
+
+    var ua = navigator.userAgent || '';
+    var iPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+    var mobileOS = /iPhone|iPad|iPod|Android/i.test(ua) || iPadOS;
+    var coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    var hasNative = typeof navigator.share === 'function' && window.isSecureContext && (mobileOS || coarse);
+
+    /* Links are precomputed (never built inside the tap: iOS clipboard/gesture rules). */
+    smsA.href = 'sms:?&body=' + encodeURIComponent(C.sms(tagged('sms')));
+    xA.href = CFG.xIntent + '?text=' + encodeURIComponent(C.x) + '&url=' + encodeURIComponent(tagged('x'));
+    input.value = tagged('copy');
+    var nativeData = { title: 'Betty by WeBetAI', text: C.nativeText, url: tagged('native_share') };
+
+    /* GA4 recommended `share` event on every tap (GA sees the tap, never whether a message was sent). */
+    function track(method) {
+      var p = { method: method, content_type: CFG.contentType, item_id: CFG.itemId, content_id: CFG.itemId };
+      if (window.__gbIid) p.install_id = window.__gbIid;
+      try { if (typeof window.gtag === 'function') window.gtag('event', 'share', p); } catch (e) {}
+    }
+
+    var statusTimer;
+    function say(msg) { clearTimeout(statusTimer); statusEl.textContent = msg; statusTimer = setTimeout(function () { statusEl.textContent = ''; }, 4000); }
+    function flash(btn, label) {
+      var span = btn.querySelector('span'), old = span.getAttribute('data-l') || span.textContent;
+      span.setAttribute('data-l', old); span.textContent = label;
+      setTimeout(function () { span.textContent = old; }, 2000);
+    }
+    function showManual() {
+      fb.hidden = false;
+      try { input.focus({ preventScroll: true }); input.select(); input.setSelectionRange(0, input.value.length); } catch (e) {}
+    }
+    function legacyCopy() {
+      showManual();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      return ok;
+    }
+
+    copyBtn.addEventListener('click', function () {
+      track('copy');
+      var done = function () { flash(copyBtn, 'Copied!'); say('Link copied. Paste it anywhere.'); };
+      var failed = function () {
+        if (legacyCopy()) { done(); return; }
+        say('Press and hold the link above to copy it.');
+      };
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(done, failed);   /* no await before this line (iOS gesture rule) */
+      } else { failed(); }
+    });
+
+    /* SMS and X are real links (work without JS); we only add tracking. */
+    smsA.addEventListener('click', function () { track('sms'); });
+    xA.addEventListener('click', function () { track('x'); });
+
+    nativeBtn.addEventListener('click', function () {
+      if (navigator.canShare && !navigator.canShare(nativeData)) { say('Pick an option below.'); return; }
+      track('native_share');
+      navigator.share(nativeData).then(function () {}, function (err) {
+        if (err && err.name === 'AbortError') return;   /* user closed the sheet: stay quiet */
+        say('Sharing is blocked here. Use Text, X, or Copy below.');
+        (smsA.hidden ? copyBtn : smsA).focus();
+      });
+    });
+
+    /* Native sheet is the one primary CTA when available; otherwise the first visible option is primary. */
+    smsA.hidden = !mobileOS;
+    nativeBtn.hidden = !hasNative;
+    if (!hasNative) (mobileOS ? smsA : xA).classList.add('gbs-primary');
+  })();
+  </script>
+</body>
+</html>

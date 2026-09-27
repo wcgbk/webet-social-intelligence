@@ -2012,6 +2012,27 @@
       <!-- OMEGA MODEL PANEL -->
       <div class="panel" id="panel-grokbot" style="overflow:hidden;">
         <iframe id="grokbot-iframe" src="/grokbot?embed=1" title="Get Grok Bot" style="width:100%;height:100%;border:none;background:#f0f7f6;"></iframe>
+        <script>
+          /* Self-heal: if the Get Grok Bot frame ever lands on a page that can't be framed
+             (x.ai refuses iframes) or leaves /grokbot, put the Betty page back. */
+          (function () {
+            var f = document.getElementById('grokbot-iframe');
+            if (!f) return;
+            var HOME = '/grokbot?embed=1';
+            function healthy() {
+              try {
+                var l = f.contentWindow.location;
+                return l.origin === location.origin && /^\/grokbot\/?$/.test(l.pathname);
+              } catch (e) { return false; }
+            }
+            window.wbHealGrokbotFrame = function () { if (!healthy()) f.src = HOME; };
+            var heals = 0;
+            f.addEventListener('load', function () {
+              if (healthy()) { heals = 0; return; }
+              if (heals++ < 2) f.src = HOME;
+            });
+          })();
+        </script>
       </div>
 
       <div class="panel" id="panel-omega" style="overflow:hidden;">
@@ -2524,6 +2545,7 @@
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     const target = document.getElementById('panel-' + panel);
     if (target) target.classList.add('active');
+    if (panel === 'grokbot' && typeof window.wbHealGrokbotFrame === 'function') window.wbHealGrokbotFrame();
 
     // Keep the URL + browser-tab title in sync so the current page is shareable and
     // both its tab title and its link-preview show the menu item's name. Chat is home

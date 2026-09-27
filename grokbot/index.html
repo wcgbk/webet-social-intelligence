@@ -7,11 +7,13 @@
          X /go/ share links, mobile Safari scroll restoration, and early touchmove
          used to leave the page mid-fold. */
       try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+      var isEmbed = false;
       try {
-        if (new URLSearchParams(location.search).get('embed') === '1') {
+        if (new URLSearchParams(location.search).get('embed') === '1' || window.self !== window.top) {
+          isEmbed = true;
           document.documentElement.classList.add('embed');
         }
-      } catch (e) {}
+      } catch (e) { isEmbed = true; document.documentElement.classList.add('embed'); }
 
       function isInstallHash(h) {
         h = String(h || '').replace(/^#/, '').toLowerCase();
@@ -36,7 +38,8 @@
         }
       } catch (e) {}
 
-      window.__wbAllowScrollJump = allowDeep;
+      /* Inside the dashboard frame the page always opens at top; never fight the user's scroll. */
+      window.__wbAllowScrollJump = allowDeep || isEmbed;
       window.__wbHoldTopUntil = Date.now() + 2200;
 
       function holdTop() {
@@ -1258,8 +1261,24 @@
     if (e.button != null && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    /* Inside the dashboard iframe, x.ai refuses to be framed ("x.ai refused to connect"),
+       so always leave the frame and open Grok Bot in the full window. */
+    var framed = false;
+    try { framed = window.self !== window.top; } catch (err) { framed = true; }
+    if (framed) {
+      try { window.top.location.assign(ADD); return; } catch (err) {}
+      try { if (window.open(ADD, '_blank', 'noopener')) return; } catch (err) {}
+    }
     try { window.location.assign(ADD); } catch (err) { window.location.href = ADD; }
   }, true);
+  /* No-JS / modified-click fallback: Add links in the frame target the top window. */
+  try {
+    if (window.self !== window.top) {
+      Array.prototype.forEach.call(document.querySelectorAll('a[href*="x.ai/bot/"]'), function (a) {
+        a.setAttribute('target', '_top');
+      });
+    }
+  } catch (err) {}
 })();
 </script>
 <script src="/js/site-share.js" defer></script>

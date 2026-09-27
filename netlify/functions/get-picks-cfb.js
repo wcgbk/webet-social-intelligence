@@ -5,6 +5,8 @@
 // card. Optional: ?date=YYYY-MM-DD for historical picks.
 
 const { publicPicksPayload } = require('./lib/public-picks');
+const { pendingPayload, markReady } = require('./lib/card-readiness');
+const { isPlaceholder, lastRealCard, asPreviousCard } = require('./lib/last-card');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +27,7 @@ function formatDateLong(dateISO) {
 }
 
 function stripPremium(picksData) {
-  return publicPicksPayload(picksData);
+  return markReady(publicPicksPayload(picksData));
 }
 
 function emptyPayload(dateKey, msg) {
@@ -48,6 +50,25 @@ async function readBlobRest(baseUrl, authHeaders, key, asJson) {
   return asJson ? resp.json() : (await resp.text()).trim();
 }
 
+// Today's blob is missing: tell apart "no games today" from "games today, card not generated yet".
+async function todayEmpty(today, okHeaders) {
+  const base = emptyPayload(today, NO_GAMES_MSG);
+  const pending = await pendingPayload('cfb', today, base);
+  if (pending) {
+    return { statusCode: 200, headers: { ...CORS, 'Cache-Control': 'public, max-age=60, s-maxage=60' }, body: JSON.stringify(pending) };
+  }
+  return { statusCode: 200, headers: okHeaders, body: JSON.stringify({ ...base, status: 'no_games', cardReady: false }) };
+}
+
+function previousResponse(prev, today, todayCard) {
+  const todayStatus = todayCard && todayCard.noGames ? 'no_games_today' : 'no_card_yet';
+  return {
+    statusCode: 200,
+    headers: { ...CORS, 'Cache-Control': 'public, max-age=60, s-maxage=60' },
+    body: JSON.stringify(asPreviousCard(stripPremium(prev), today, todayStatus)),
+  };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -65,6 +86,10 @@ exports.handler = async (event) => {
       const { getStore } = await import("@netlify/blobs");
       const store = getStore("edge-picks-cfb");
       const picksData = await store.get(`picks-${dateKey}`, { type: "json" });
+      if (!requestedDate && isPlaceholder(picksData)) {
+        const prev = await lastRealCard((k) => store.get(k, { type: "json" }), today);
+        if (prev) return previousResponse(prev, today, picksData);
+      }
       if (picksData) {
         const cache = (picksData.picks && picksData.picks.length) ? 'public, max-age=120, s-maxage=120, stale-while-revalidate=600' : 'public, max-age=60, s-maxage=60';
         return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(picksData)) };
@@ -72,7 +97,7 @@ exports.handler = async (event) => {
       if (requestedDate) {
         return { statusCode: 200, headers: okHeaders, body: JSON.stringify({ ...emptyPayload(dateKey, `No CFB picks found for ${dateKey}.`), noGames: false }) };
       }
-      return { statusCode: 200, headers: okHeaders, body: JSON.stringify(emptyPayload(today, NO_GAMES_MSG)) };
+      return await todayEmpty(today, okHeaders);
     } catch (blobErr) {
       console.error("[get-picks-cfb] Blobs SDK error:", blobErr.message);
 
@@ -83,6 +108,10 @@ exports.handler = async (event) => {
         const authHeaders = { "Authorization": `Bearer ${token}` };
         try {
           const data = await readBlobRest(baseUrl, authHeaders, `picks-${dateKey}`, true);
+          if (!requestedDate && isPlaceholder(data)) {
+            const prev = await lastRealCard((k) => readBlobRest(baseUrl, authHeaders, k, true), today);
+            if (prev) return previousResponse(prev, today, data);
+          }
           if (data) {
             const cache = (data.picks && data.picks.length) ? 'public, max-age=120, s-maxage=120, stale-while-revalidate=600' : 'public, max-age=60, s-maxage=60';
             return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(data)) };
@@ -93,7 +122,7 @@ exports.handler = async (event) => {
       if (requestedDate) {
         return { statusCode: 200, headers: okHeaders, body: JSON.stringify({ ...emptyPayload(dateKey, `No CFB picks found for ${dateKey}.`), noGames: false }) };
       }
-      return { statusCode: 200, headers: okHeaders, body: JSON.stringify(emptyPayload(today, NO_GAMES_MSG)) };
+      return await todayEmpty(today, okHeaders);
     }
   } catch (err) {
     console.error("[get-picks-cfb] Error:", err.message);

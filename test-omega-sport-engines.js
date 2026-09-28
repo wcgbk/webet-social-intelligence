@@ -872,11 +872,14 @@ function byMarket(cands, market) {
   const cont = gd.qbContinuityAdjust(
     'NFL',
     null,
-    { qbStatus: 'out', qbName: 'X' },
-    { 'Buffalo Bills': { qbStatus: 'out' } },
+    { qbStatus: 'questionable', qbName: 'X' },
+    { 'Buffalo Bills': { qbStatus: 'questionable' } },
     config.ENGINE_SOFT
   );
   assert.ok(cont.used);
+  // Out is priced once by qbSoftAdjust; continuity must not add a second hit.
+  const outOnce = gd.qbContinuityAdjust('NFL', null, { qbStatus: 'out' }, { 'Buffalo Bills': { qbStatus: 'out' } }, config.ENGINE_SOFT);
+  assert.strictEqual(outOnce.marginAdj, 0);
   assert.ok(Math.abs(cont.marginAdj) <= config.ENGINE_SOFT.NFL.qbContinuityPts + 1e-12);
 }
 
@@ -1001,10 +1004,9 @@ function byMarket(cands, market) {
   const plainM = byMarket(plain, 'Moneyline').modelProjection;
   const deepRow = byMarket(deep, 'Moneyline');
   const deepM = deepRow.modelProjection;
-  assert.ok(deepRow.engineSoft.stacked.capped);
   assert.ok(Math.abs(deepRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-9);
-  // HFA 2.1 + QB-out (QB_INJURY.NFL.outMarginPts) + stacked engine 1.5. Plain is HFA only.
-  assert.ok(Math.abs((deepM - plainM) - (config.QB_INJURY.NFL.outMarginPts + config.ENGINE_SOFT.NFL.maxAbsMarginAdj)) < 0.02);
+  // QB out is priced once (qbSoftAdjust); continuity adds nothing for an out QB.
+  assert.ok(Math.abs((deepM - plainM) - (config.QB_INJURY.NFL.outMarginPts + deepRow.engineSoft.stacked.sum)) < 0.02);
 
   const cfbDeep = cfb.project({
     oddsEvents: [synthEvent('Ohio State Buckeyes', 'Iowa Hawkeyes', { total: 51.5, spread: -6.5 })],
@@ -1019,7 +1021,7 @@ function byMarket(cands, market) {
   });
   const cfbRow = byMarket(cfbDeep, 'Moneyline');
   assert.ok(Math.abs(cfbRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NCAAF.maxAbsMarginAdj + 1e-9);
-  assert.ok(cfbRow.engineSoft.stacked.capped);
+  // Continuity no longer stacks on out/doubtful (priced once by qbSoftAdjust).
 }
 
 {

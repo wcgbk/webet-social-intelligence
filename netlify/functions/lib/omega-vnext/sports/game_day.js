@@ -146,7 +146,7 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
 
 /**
  * QB continuity (NFL and NCAAF). Empty map → 0. Do not invent a healthy slate.
- * No injury row → healthy (1). Out/doubtful/IR/questionable → not healthy (0).
+ * No injury row or out/doubtful (priced by qbSoftAdjust) → 1. Questionable → 0.
  * Margin moves only by the healthy gap, capped at ±qbContinuityPts.
  * qbSoftAdjust still owns the larger out/doubtful discount; this does not add another one.
  * nfl.js / cfb.js then stack this with success or talent under maxAbsMarginAdj.
@@ -170,7 +170,11 @@ function qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam, caps) {
     if (!qb) return false;
     const st = String(qb.qbStatus || qb.status || '').toLowerCase();
     if (!st) return false;
-    return outStatuses.some(k => st.includes(k)) || /questionable|q\b/.test(st);
+    // Out/doubtful is already priced once by qbSoftAdjust. Counting it here too
+    // would penalize the same known injury twice (2026-09-28). Continuity only
+    // reflects a questionable QB, which qbSoftAdjust does not move the margin for.
+    if (outStatuses.some(k => st.includes(k))) return false;
+    return /questionable|q\b/.test(st);
   };
   const homeHealthy = !isInjured(homeQb) ? 1 : 0;
   const awayHealthy = !isInjured(awayQb) ? 1 : 0;

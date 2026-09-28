@@ -71,6 +71,14 @@ assert.ok(qbAdj.modelTotal < 45, `QB out lowers total: ${qbAdj.modelTotal}`);
   }
 }
 
+// No double count: continuity does not add a second penalty for out/doubtful
+{
+  const c = gd.qbContinuityAdjust('NFL', { qbStatus: 'out' }, null, { 'Chicago Bears': { qbStatus: 'out' } });
+  assert.strictEqual(c.marginAdj, 0, 'continuity must not re-penalize an out QB');
+  const q = gd.qbContinuityAdjust('NFL', { qbStatus: 'questionable' }, null, { 'Chicago Bears': { qbStatus: 'questionable' } });
+  assert.ok(q.marginAdj < 0, 'questionable home QB still moves continuity');
+}
+
 const soft = gd.applyGameDayAdjustments({
   sport: 'NFL',
   modelMargin: 2,

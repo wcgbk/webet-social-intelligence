@@ -25,7 +25,9 @@ const NO_EDGE_MSG = "No qualifying NFL plays today — WeBetAI passed.";
 // call Omega's own exported computeEdgeTable + gates. No CFB restrictions, no NFL-specific selection
 // math — Omega's projection, calibration, Kelly, cover floor (0.52), EV floor (2.5%) and predCLV
 // gate do all the work, so this can never drift from Omega. Omega itself is never modified.
-const OMEGA = require("./generate-picks-omega-background.js");
+// Legacy v11 football math (computeFootballProjection, _testV104). The live Omega file is now the
+// vnext wrapper and no longer exports these, which crashed this generator (no /nfl card). 2026-09-28
+const OMEGA = require("./lib/omega-legacy-v11.js");
 
 // ── The Odds API sport keys — preseason + regular season are separate keys; query both so the
 // pipeline rolls into September without a code change.

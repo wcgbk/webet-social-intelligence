@@ -67,7 +67,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 200,
         headers: { ...CORS, 'Cache-Control': 'public, max-age=300, s-maxage=300' },
-        body: JSON.stringify(picksData),
+        body: JSON.stringify(require('./lib/no-plays').normalizeEmptyCard(picksData, 'edge')),
       };
     } catch (blobErr) {
       console.error("[get-picks] Blobs SDK error:", blobErr.message);
@@ -97,7 +97,7 @@ exports.handler = async (event) => {
             const picksResp = await fetch(`${baseUrl}/picks-${dateKey}`, { headers: authHeaders });
             if (picksResp.ok) {
               const data = await picksResp.json();
-              return { statusCode: 200, headers: CORS, body: JSON.stringify(data) };
+              return { statusCode: 200, headers: CORS, body: JSON.stringify(require('./lib/no-plays').normalizeEmptyCard(data, 'edge')) };
             }
           } catch (e) {
             console.error("[get-picks] Picks fetch error:", e.message);

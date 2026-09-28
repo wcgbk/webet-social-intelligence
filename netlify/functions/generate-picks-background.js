@@ -1541,11 +1541,23 @@ exports.handler = async (event) => {
   if (allCandidates.length === 0) {
     const failReason = `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.`;
     console.log(`[v10] No edge candidates found — ${failReason}`);
+    const espnGameCount = (espnData||[]).reduce((s,l)=>s+l.games.length,0);
+    const oddsGameCount = (oddsData||[]).reduce((s,l)=>s+l.games.length,0);
+    if (espnGameCount > 0 && oddsGameCount === 0) {
+      // Odds feed failure, not a pass: write nothing so the previous card stays up.
+      console.error("[v10] ESPN shows games but odds feed returned 0 — NOT storing (previous card stays up)");
+      return { statusCode: 503, body: "Odds feed returned 0 games (not stored)" };
+    }
+    const edgeNoGames = espnGameCount === 0;
+    const edgeReason = edgeNoGames
+      ? "There are no games on today's board, so Edge has nothing to price."
+      : `None of the ${espnGameCount} ${espnGameCount === 1 ? "game" : "games"} on today's board cleared Edge's minimum edge thresholds.`;
     await storePicks(dateISO, {
+      ...require("./lib/no-plays").noPlaysFields(edgeReason, { noGames: edgeNoGames }),
       date: dateISO, dateFormatted, model: "v10.0-deterministic-edge",
       picks: [], rejections: [{ matchup: "All games", side: "All markets", reason: failReason }],
       summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.0-deterministic-edge" },
-      edgeSummary: "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",
+      edgeSummary: edgeReason,
       generatedAt: now.toISOString(),
     });
     return { statusCode: 200, body: "No edge candidates" };

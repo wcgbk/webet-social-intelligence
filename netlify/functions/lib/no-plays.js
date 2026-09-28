@@ -65,7 +65,11 @@ function normalizeEmptyCard(card, model) {
   if (card.noPlaysTitle && card.noPlaysReason) return card;
   const noGames = card.noGames === true || /Games Scheduled/i.test(card.noPlays || '');
   let reason;
-  if (model === 'alpha') {
+  if (model === 'edge') {
+    reason = card.noGames === true
+      ? "There are no games on today's board, so Edge has nothing to price."
+      : "None of today's games cleared Edge's minimum edge thresholds.";
+  } else if (model === 'alpha') {
     reason = "None of today's games cleared Alpha's edge thresholds.";
   } else if (model === 'omega') {
     reason = /late checks/i.test(card.noPlays || '')

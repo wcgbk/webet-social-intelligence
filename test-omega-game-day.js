@@ -54,6 +54,23 @@ assert.ok(qbAdj.modelMargin < 3.0, 'home QB out soft-discounts home margin');
 assert.ok(qbAdj.uncertainty > 0.13);
 assert.ok(qbAdj.gameDay.qbNote);
 
+// Known QB injury is priced (margin + total), never a cancel (2026-09-28)
+assert.ok(qbAdj.modelMargin <= 0.0 + 1e-9, `home QB out moves margin >= 3 pts: ${qbAdj.modelMargin}`);
+assert.ok(qbAdj.modelTotal < 45, `QB out lowers total: ${qbAdj.modelTotal}`);
+{
+  const d = gd.qbSoftAdjust('NFL', null, { qbStatus: 'doubtful', qbName: 'X' });
+  assert.ok(Math.abs(d.marginAdj - 2.25) < 1e-9, `doubtful away = +2.25: ${d.marginAdj}`);
+  assert.ok(Math.abs(d.totalAdj + 1.125) < 1e-9, `doubtful total: ${d.totalAdj}`);
+  const m = gd.qbSoftAdjust('MLB', { qbStatus: 'out' }, null);
+  assert.strictEqual(m.marginAdj, 0); assert.strictEqual(m.totalAdj, 0);
+  const qa = require('./netlify/functions/lib/omega-vnext/qa_hardfail');
+  for (const betType of ['Moneyline', 'Spread', 'Total']) {
+    const r = qa.evaluateHardFail({ sport: 'NFL', betType, odds: '-110', homeTeam: 'Chicago Bears', awayTeam: 'Philadelphia Eagles' },
+      { nflQb: { [qa.normName('Chicago Bears')]: { team: 'Chicago Bears', qbStatus: 'out', qbName: 'Caleb Williams' } } });
+    assert.strictEqual(r, null, `QB out must not hard-fail ${betType}: ${r}`);
+  }
+}
+
 const soft = gd.applyGameDayAdjustments({
   sport: 'NFL',
   modelMargin: 2,

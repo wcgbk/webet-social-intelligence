@@ -8,7 +8,7 @@
 
 const { clamp } = require('../odds_math');
 const { fuzzyTeam } = require('./_common');
-const { QA_HARDFAIL, ENGINE_SOFT } = require('../config');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -107,10 +107,12 @@ function lookupQb(teamName, qbByTeam) {
 
 function qbSoftAdjust(sport, homeQb, awayQb) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
-    return { marginAdj: 0, uncBump: 0, note: null };
+    return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
   }
   const outStatuses = (QA_HARDFAIL && QA_HARDFAIL.qbOutStatuses) || ['out', 'doubtful'];
+  const cfg = (QB_INJURY && QB_INJURY[sport]) || { outMarginPts: 3.0, outTotalPts: -1.5, doubtfulWeight: 0.75, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0 };
   let marginAdj = 0;
+  let totalAdj = 0;
   let uncBump = 0;
   const notes = [];
   const apply = (qb, side) => {
@@ -120,8 +122,10 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
     const isOut = outStatuses.some(k => st.includes(k));
     const isQ = /questionable|q\b/.test(st);
     if (isOut) {
-      // Soft discount — QA hard-fail may still drop later.
-      marginAdj += side === 'home' ? -1.75 : 1.75;
+      // Known QB injury is priced into the projection, never a cancel (2026-09-28).
+      const w = /doubtful/.test(st) ? cfg.doubtfulWeight : 1;
+      marginAdj += (side === 'home' ? -1 : 1) * cfg.outMarginPts * w;
+      totalAdj += cfg.outTotalPts * w;
       uncBump += 0.04;
       notes.push(`${side} QB ${qb.qbName || ''} (${st})`.trim());
     } else if (isQ) {
@@ -131,9 +135,9 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   };
   apply(homeQb, 'home');
   apply(awayQb, 'away');
-  if (sport === 'NCAAF') marginAdj *= 1.1;
   return {
-    marginAdj: clamp(marginAdj, -3.5, 3.5),
+    marginAdj: clamp(marginAdj, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
+    totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
     uncBump,
     note: notes.length ? notes.join('; ') : null,
   };
@@ -214,6 +218,7 @@ function applyGameDayAdjustments({
   const awayQb = lookupQb(away, qbByTeam);
   const qb = qbSoftAdjust(sport, homeQb, awayQb);
   margin += qb.marginAdj;
+  total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);
 
   const cont = qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam);
@@ -227,9 +232,11 @@ function applyGameDayAdjustments({
     hfaAdj: +hfaAdj.toFixed(3),
     hfaBase: hfaBase != null ? hfaBase : null,
     qbNote: qb.note,
+    qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
+    qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
-    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || qb.uncBump > 0 || cont.used,
+    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used,
   };
 
   return {

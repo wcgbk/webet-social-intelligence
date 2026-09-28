@@ -165,6 +165,18 @@ const QA_HARDFAIL = {
 };
 
 /**
+ * Known QB injury = price it, never cancel (founder order 2026-09-28).
+ * Sharp practice: a QB listed out/doubtful before kickoff is public and already
+ * in the market number. Keep the game and move the projection by the QB's
+ * value (spread AND total), then let the normal edge gates decide. Doubtful
+ * scales by doubtfulWeight. Used by sports/game_day.js qbSoftAdjust only.
+ */
+const QB_INJURY = {
+  NFL: { outMarginPts: 3.0, outTotalPts: -1.5, doubtfulWeight: 0.75, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0 },
+  NCAAF: { outMarginPts: 3.5, outTotalPts: -2.0, doubtfulWeight: 0.75, maxAbsMarginAdj: 6.0, maxAbsTotalAdj: 4.0 },
+};
+
+/**
  * Prediction-market soft score (v12.3.6). Moneyline only, clean 1:1 map.
  * Venue combine is the arithmetic mean of venues with a finite implied
  * (Polymarket and/or Kalshi). One mapped venue is used alone.
@@ -268,6 +280,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'Patch 2026-09-28 (v12.3.12 label kept): NFL/NCAAF QB out/doubtful is no longer a QA hard-fail. Known QB injuries are priced, not cancelled: qbSoftAdjust moves margin (NFL 3.0 / NCAAF 3.5 pts for out, 0.75x for doubtful) and lowers the total (NFL -1.5 / NCAAF -2.0), before the 0.50/0.45 market blend. Edge gates then decide. MLB SP scratch/change hard-fail unchanged.',
   `v12.3.12 omega-vnext: desk lock. Verify may drop, flag, or resize inside the 3.5/0.5/${DAILY_UNIT_CAP} cap. It does not add a straight and it does not rebuild a generate-locked parlay from the straight card. Steam and placeability drops are not refilled (blockStraightRefill still records the steam block). Stale-odds cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent hard-fail. Candidate-table rank follows the same quality score as the letter grade. Summary meanClvPct is the probability, not a second copy of the cent figure. Evening walk-forward observer at 23:45 UTC (7:45pm ET in EDT) writes omega-walkforward only, after the 23:00 UTC close pass. The 2026-11-01 EDT→EST cron shift is documented and not applied. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, or isotonic change. FIT off. No TSP. NBA/NHL off. LEAN_PAD false. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.3.11 omega-vnext: run environment. MLB base margin and total come from per-game runs scored and allowed (season totals divided by wins+losses when ESPN pointsFor is a season sum; missing or unclean standings stay on the 8.6 / HFA baseline). A 100-run season gap is about one run, so starter, park, and bullpen residuals move the probability instead of sitting under a clamped 0.95. Moneyline blend uses the same no-vig Pinnacle/Circa anchor as spreads and totals. Weights unchanged: MLB ML 0.50 / spread 0.50 / total 0.45, NFL ML 0.50 / spread 0.50 / total 0.45, NCAAF ML 0.45 / spread 0.45 / total 0.40. fair_sharp prefers a paired same-book no-vig (Pinnacle, then Circa, then the other sharp books) and does not de-vig mixed books. Open-to-now steam cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent move. Capture-health retry labels a canonical slot within 12 minutes, or the latest due slot when the book is empty, and does not insert an off-slot poll. Close grades prefer Circa and Bookmaker ahead of exchanges when Pinnacle is absent. Straight rank is qualityScore (the same calibrated edge as the letter grade), not the old EV/CLV mix, so a plus-money dog does not outrank a cleaner price. SELECT_WEIGHTS numbers are unchanged and unused except softSportMixBonus. No gate, Kelly, unit-cap, global SHRINK_K, or MLB_CALIBRATION change. FIT off. No TSP. NBA/NHL off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.3.10 omega-vnext: sharp blend. Spread and total market anchors are the equal-weight average of no-vig Pinnacle and no-vig Circa (circa or circasports). One of those books is used alone when the other has no two-way price. If both are missing, the anchor is the existing sharp no-vig pair. Never prices[0]. Blend weights unchanged: MLB spread 0.50 / total 0.45, NFL spread 0.50 / total 0.45, NCAAF spread 0.45 / total 0.40. Moneyline blend unchanged (vigged Pinnacle, else the first price) at MLB 0.50 / NFL 0.50 / NCAAF 0.45. No gate, Kelly, unit-cap, or global SHRINK_K change.`,
@@ -337,6 +350,7 @@ module.exports = {
   MLB_CALIBRATION,
   GATES,
   QA_HARDFAIL,
+  QB_INJURY,
   QUALITY_GRADE,
   SELECT_WEIGHTS,
   SPORT_SPREAD_STD,

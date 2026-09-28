@@ -1003,8 +1003,8 @@ function byMarket(cands, market) {
   const deepM = deepRow.modelProjection;
   assert.ok(deepRow.engineSoft.stacked.capped);
   assert.ok(Math.abs(deepRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-9);
-  // HFA 2.1 + QB-out 1.75 + stacked engine 1.5. Plain is HFA only.
-  assert.ok(Math.abs((deepM - plainM) - (1.75 + config.ENGINE_SOFT.NFL.maxAbsMarginAdj)) < 0.02);
+  // HFA 2.1 + QB-out (QB_INJURY.NFL.outMarginPts) + stacked engine 1.5. Plain is HFA only.
+  assert.ok(Math.abs((deepM - plainM) - (config.QB_INJURY.NFL.outMarginPts + config.ENGINE_SOFT.NFL.maxAbsMarginAdj)) < 0.02);
 
   const cfbDeep = cfb.project({
     oddsEvents: [synthEvent('Ohio State Buckeyes', 'Iowa Hawkeyes', { total: 51.5, spread: -6.5 })],

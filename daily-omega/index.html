@@ -1721,6 +1721,16 @@
     if (betSummaryEl) betSummaryEl.innerHTML = '';
 
     if (picks.length === 0) {
+      if (data.noPlaysTitle) {
+        // Completed run with zero qualifying plays: "No Qualifying Plays Today" + short reason.
+        container.innerHTML = `
+        <div class="no-plays-card" style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
+          <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">${esc(data.noPlaysTitle)}</div>
+          ${data.noPlaysReason ? `<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">${esc(data.noPlaysReason)}</div>` : ''}
+        </div>`;
+        return;
+      }
       const rawEmpty = (data.noPlays || '').trim();
       const emptyHeadline = (!rawEmpty || /CLV|hard-fail|the model/i.test(rawEmpty))
         ? 'WeBetAI passed on today\'s board. No number was soft enough to lock.'
@@ -1731,7 +1741,6 @@
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
             ${esc(emptyHeadline)}
           </div>
-          <div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">WeBetAI would rather pass than force a number. A fresh board is up by 11:00am ET.</div>
         </div>`;
       return;
     }

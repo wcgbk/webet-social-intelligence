@@ -1574,9 +1574,9 @@
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
-            ${data.noPlays ? esc(data.noPlays) : 'No qualifying plays today.'}
+            ${esc(data.noPlaysTitle || 'No Qualifying Plays Today')}
           </div>
-          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow at 9am EST.</div>
+          ${(data.noPlaysReason || (data.noPlays && !data.noPlaysTitle)) ? `<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">${esc(data.noPlaysReason || data.noPlays)}</div>` : ''}
         </div>`;
       return;
     }

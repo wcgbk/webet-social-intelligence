@@ -1110,7 +1110,9 @@ exports.handler = async (event) => {
         picksData.picks = kept;
         if (kept.length === 0) {
           picksData.parlayLegs = [];
-          picksData.noPlays = 'No qualifying edges after steam QA hard-fails.';
+          Object.assign(picksData, require('./lib/no-plays').noPlaysFields(
+            "The line moved against today's candidates after they were priced, so Omega is passing."));
+          picksData.edgeSummary = picksData.noPlaysReason;
         }
         if (picksData.summary) {
           picksData.summary.totalStraightBets = kept.length;

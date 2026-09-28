@@ -75,7 +75,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 200,
         headers: { ...CORS, 'Cache-Control': 'public, max-age=300, s-maxage=300' },
-        body: JSON.stringify(stripPremium(picksData)),
+        body: JSON.stringify(stripPremium(require('./lib/no-plays').normalizeEmptyCard(picksData, 'alpha'))),
       };
 
     } catch (blobErr) {
@@ -101,7 +101,7 @@ exports.handler = async (event) => {
             const pr = await fetch(`${baseUrl}/picks-${dateKey}`, { headers: authHeaders });
             if (pr.ok) {
               const data = await pr.json();
-              return { statusCode: 200, headers: CORS, body: JSON.stringify(stripPremium(data)) };
+              return { statusCode: 200, headers: CORS, body: JSON.stringify(stripPremium(require('./lib/no-plays').normalizeEmptyCard(data, 'alpha'))) };
             }
           } catch(e) {}
         }

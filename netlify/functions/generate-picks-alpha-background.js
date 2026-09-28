@@ -4768,8 +4768,12 @@ exports.handler = async (event) => {
       return await buildThinSlatePicks(dateISO, dateFormatted, leanCandidates, now);
     }
     const pipelineError = allCandidates._pipelineError || null;
-    if (pipelineError) console.error(`[v10-health] STORING CRASH MARKER — this was NOT a quiet slate: ${pipelineError}`);
-    else console.log("[v10] No edge candidates found (even at +3% floor) — storing no-plays result");
+    if (pipelineError) {
+      // Failed run: write nothing so the previous card stays up until a run completes.
+      console.error(`[v10-health] PIPELINE ERROR — NOT storing (previous card stays up): ${pipelineError}`);
+      return { statusCode: 500, body: `PIPELINE ERROR (not stored): ${pipelineError}` };
+    }
+    console.log("[v10] No edge candidates found (even at +3% floor) — storing No Qualifying Plays Today card");
     await storePicks(dateISO, {
       date: dateISO, dateFormatted, model: "v10.3.5-alpha-no-selfopt",
       pipelineError,
@@ -4777,6 +4781,7 @@ exports.handler = async (event) => {
         ? `⚠️ PIPELINE ERROR — edge computation crashed (${pipelineError}). This is a system failure, not a quiet slate. Check function logs.`
         : `No statistical edges exceeded minimum thresholds. ESPN: ${(espnData||[]).reduce((s,l)=>s+l.games.length,0)} games/${(espnData||[]).length} leagues. Odds: ${(oddsData||[]).reduce((s,l)=>s+l.games.length,0)} games. Ratings: ${ratingsData ? Object.keys(ratingsData.leagues||{}).length : 0} leagues. TeamStats: ${Object.keys(teamStats).length}. Consensus: ${Object.keys(consensusLookup).length} keys.` }],
       summary: { totalPicks: 0, totalStraightBets: 0, totalUnits: "0u", aplusLocks: 0, sportsCovered: [], modelVersion: "v10.3.5-alpha-no-selfopt" },
+      ...require("./lib/no-plays").noPlaysFields("None of today's games cleared Alpha's edge thresholds."),
       edgeSummary: pipelineError
         ? "Pick generation hit a system error today — no card published. The team has been flagged."
         : "No plays today — WeBetAI found no edges exceeding minimum thresholds across all sports.",

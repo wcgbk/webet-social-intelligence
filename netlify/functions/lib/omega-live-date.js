@@ -99,7 +99,32 @@ async function resolveCard(tryDates, loadPicks, { requirePicks = true } = {}) {
     : null;
 }
 
+/**
+ * Live resolution with the completed-run rule:
+ *  - a date after `today` (tomorrow pre-publish) is served only with real picks;
+ *  - otherwise the newest STORED blob wins, even with zero picks, because a blob
+ *    only exists once a run completed (picks or a "No Qualifying Plays Today" card).
+ *    Missing dates (run not finished, or failed) are skipped, so the previous card
+ *    stays up — never a blank in between.
+ */
+async function resolveLiveCard(tryDates, loadPicks, { now = new Date(), today } = {}) {
+  const t = today || todayET(now);
+  for (const dateKey of tryDates) {
+    let picksData = null;
+    try {
+      picksData = await loadPicks(dateKey);
+    } catch (_) {
+      picksData = null;
+    }
+    if (picksData == null) continue;
+    if (dateKey > t && !hasRealPicks(picksData)) continue;
+    return { dateKey, picksData, sticky: tryDates[0] !== dateKey };
+  }
+  return null;
+}
+
 module.exports = {
+  resolveLiveCard,
   todayET,
   tomorrowET,
   isISODate,

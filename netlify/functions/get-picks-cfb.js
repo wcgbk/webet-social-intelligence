@@ -7,6 +7,7 @@
 const { publicPicksPayload } = require('./lib/public-picks');
 const { pendingPayload, markReady } = require('./lib/card-readiness');
 const { isPlaceholder, lastRealCard, asPreviousCard } = require('./lib/last-card');
+const { normalizeEmptyCard } = require('./lib/no-plays');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -92,7 +93,7 @@ exports.handler = async (event) => {
       }
       if (picksData) {
         const cache = (picksData.picks && picksData.picks.length) ? 'public, max-age=120, s-maxage=120, stale-while-revalidate=600' : 'public, max-age=60, s-maxage=60';
-        return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(picksData)) };
+        return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(normalizeEmptyCard(picksData, 'cfb'))) };
       }
       if (requestedDate) {
         return { statusCode: 200, headers: okHeaders, body: JSON.stringify({ ...emptyPayload(dateKey, `No CFB picks found for ${dateKey}.`), noGames: false }) };
@@ -114,7 +115,7 @@ exports.handler = async (event) => {
           }
           if (data) {
             const cache = (data.picks && data.picks.length) ? 'public, max-age=120, s-maxage=120, stale-while-revalidate=600' : 'public, max-age=60, s-maxage=60';
-            return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(data)) };
+            return { statusCode: 200, headers: { ...CORS, 'Cache-Control': cache }, body: JSON.stringify(stripPremium(normalizeEmptyCard(data, 'cfb'))) };
           }
         } catch (e) {}
       }

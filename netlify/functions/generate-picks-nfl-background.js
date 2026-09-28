@@ -13,6 +13,7 @@
 //   force  — override the existing-picks overwrite guard (scheduled cards are protected)
 //   dryRun — compute + log everything, write nothing
 
+const { noPlaysFields, sportReason } = require('./lib/no-plays');
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-nfl";
 const MODEL_VERSION = "v2.0-nfl-omega";
@@ -500,8 +501,11 @@ function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays, extras = {}) {
       sportsCovered: extras.sportsCovered || [],
     },
   };
-  if (extras.insights) card.insights = extras.insights;
-  if (extras.edgeSummary) card.edgeSummary = extras.edgeSummary;
+  // "No Qualifying Plays Today" headline + short reason (lib/no-plays). Only completed runs call this.
+  const reason = extras.reason || sportReason("nfl", { noGames, gamesPriced: extras.gamesPriced || 0 });
+  Object.assign(card, noPlaysFields(reason, { noGames }));
+  card.edgeSummary = reason;
+  card.insights = "";
   if (extras.debug) card.debug = extras.debug;
   return card;
 }
@@ -671,14 +675,9 @@ exports.handler = async (event) => {
 
   const oddsGames = await fetchNFLOdds(dateISO);
   if (!oddsGames.length) {
-    console.log(`[nfl] ESPN shows games but no odds available — writing no-plays card.`);
-    const noOdds = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
-      noGames: false,
-      sportsCovered: ["NFL"],
-      debug: { path: "no-odds", espnGames: espnGames.length, oddsGames: 0 },
-    });
-    if (!dryRun) await storePicks(dateISO, noOdds, force);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0, skipped: "no NFL odds available" }) };
+    // Feed failure, not a pass: write nothing so the previous card stays up until a run completes.
+    console.log(`[nfl] ESPN shows games but no odds available — NOT storing (previous card stays up).`);
+    return { statusCode: 503, body: JSON.stringify({ ok: false, picks: 0, stored: false, error: "no NFL odds available" }) };
   }
 
   // ── Run Omega's EXACT engine on the NFL slate (NFL-only; Omega file untouched) ──
@@ -703,6 +702,7 @@ exports.handler = async (event) => {
     console.log("[nfl] Omega engine surfaced no qualifying NFL plays — writing no-plays card.");
     const noEdge = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
       noGames: false,
+      gamesPriced: (diag && diag.gamesPriced) || 0,
       sportsCovered: ["NFL"],
       rejections,
       insights: "WeBetAI ran the Omega engine on today's NFL slate. Games are scheduled, but none cleared the conviction floors (>=52% cover, >=2.5% EV, and beating the sharp close). Passed rather than force a play.",

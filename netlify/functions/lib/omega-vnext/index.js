@@ -4,6 +4,7 @@ const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
 } = require('./config');
 const { ingest } = require('./ingest');
+const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
@@ -37,6 +38,21 @@ function formatDateLong(dateISO) {
   } catch (_) {
     return dateISO;
   }
+}
+
+/** Same-day games per sport for the no-plays reason (ESPN first, odds as fallback). */
+function slateCountsFor(snap) {
+  const bySport = {};
+  let espn = 0, odds = 0;
+  for (const s of ['MLB', 'NFL', 'NCAAF']) {
+    if (!SPORTS_ENABLED[s]) { bySport[s] = 0; continue; }
+    const e = snap && snap.espnBySport && snap.espnBySport[s] && Array.isArray(snap.espnBySport[s].games)
+      ? snap.espnBySport[s].games.length : 0;
+    const o = snap && snap.oddsBySport && Array.isArray(snap.oddsBySport[s]) ? snap.oddsBySport[s].length : 0;
+    espn += e; odds += o;
+    bySport[s] = e || o;
+  }
+  return { bySport, espn, odds, total: Object.values(bySport).reduce((a, b) => a + b, 0) };
 }
 
 function projectAll(snap) {
@@ -530,10 +546,20 @@ async function generateOmegaVnext(opts = {}) {
     picksData.meta.storeKey = picksData.storeKey;
   }
   if (empty) {
-    picksData.noPlays = hardFails.length
-      ? 'WeBetAI passed after late checks. Nothing left was worth a stake.'
-      : 'WeBetAI passed on today\'s board. No number was soft enough to lock.';
-    picksData.edgeSummary = picksData.edgeSummary || picksData.noPlays;
+    // "No Qualifying Plays Today" card (lib/no-plays). Only a COMPLETED run gets here.
+    const slateCounts = slateCountsFor(snap);
+    if (!shadow && !dryRun && slateCounts.odds === 0 && slateCounts.espn > 0) {
+      // Games on ESPN but no odds for any sport = feed failure, not a pass. Write nothing so
+      // the previous card stays up until a real run completes.
+      const err = new Error(`odds feed empty with ${slateCounts.espn} ESPN game(s) — not storing an empty card`);
+      err.code = 'FEED_DOWN';
+      throw err;
+    }
+    Object.assign(picksData, noPlaysFields(omegaReason({
+      counts: slateCounts.bySport, dateISO, hardFails: hardFails.length,
+    }), { noGames: slateCounts.total === 0 }));
+    picksData.edgeSummary = picksData.noPlaysReason;
+    picksData.insights = picksData.insights || '';
   }
 
   // Shadow writes omega-shadow/* only (no live picks, latest-date, picks-dates, or verify unlock).

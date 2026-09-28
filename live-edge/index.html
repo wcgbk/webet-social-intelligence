@@ -1132,8 +1132,9 @@
           '<div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">' +
           '<div style="font-size:1.5rem; margin-bottom:.5rem;">&#128274;</div>' +
           '<div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">' +
-          esc(data.noPlays || 'Live Edge has not priced this slate yet.') + '</div>' +
-          '<div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Check back tomorrow at 8:30am ET.</div></div>';
+          esc(data.noPlaysTitle || 'No Qualifying Plays Today') + '</div>' +
+          '<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">' +
+          esc(data.noPlaysReason || data.noPlays || 'Live Edge has not priced this slate yet.') + '</div></div>';
         summaryBox.innerHTML = '';
         document.getElementById('record-bar-content').textContent =
           '0-0-0 · 0 pending · this engine has not graded itself yet';

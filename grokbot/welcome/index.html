@@ -250,7 +250,11 @@
         : "Today's card posts by 11 AM ET. Check back soon.";
       picksEl.textContent = ''; parlayEl.textContent = ''; parlayEl.className = '';
       if (!picks.length) {
-        picksEl.appendChild(el('p', 'empty', 'No picks are posted yet. Betty will send the card in your chat when it drops.'));
+        if (d && d.noPlaysTitle) {
+          picksEl.appendChild(el('p', 'empty', d.noPlaysTitle + (d.noPlaysReason ? '. ' + d.noPlaysReason : '')));
+        } else {
+          picksEl.appendChild(el('p', 'empty', 'No picks are posted yet. Betty will send the card in your chat when it drops.'));
+        }
       }
       picks.slice(0, 3).forEach(function (p) {
         var row = el('div', 'pick'), top = el('div', 'pick-top');

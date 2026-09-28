@@ -16,7 +16,9 @@ const {
   liveTryDates,
   stickyTryDates,
   resolveCard,
+  resolveLiveCard,
 } = require('./lib/omega-live-date');
+const { normalizeEmptyCard } = require('./lib/no-plays');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -93,7 +95,7 @@ function okBody(picksData, generating) {
   return {
     statusCode: 200,
     headers: liveCacheHeaders(!!generating),
-    body: JSON.stringify(stripPremium(picksData)),
+    body: JSON.stringify(stripPremium(normalizeEmptyCard(picksData, 'omega'))),
   };
 }
 
@@ -138,10 +140,11 @@ exports.handler = async (event) => {
         return emptyBody(requestedDate, `No Omega picks found for ${requestedDate}.`, false);
       }
 
-      // Live: newest ≤ tomorrow ET with real picks; sticky prior if empty.
+      // Live: tomorrow only with real picks; else newest completed run ≤ today
+      // (a "No Qualifying Plays Today" card counts). Missing days are skipped.
       const tryDates = liveTryDates(knownDates);
-      const resolved = await resolveCard(tryDates, loadPicks, { requirePicks: true });
-      if (resolved && hasRealPicks(resolved.picksData)) {
+      const resolved = await resolveLiveCard(tryDates, loadPicks);
+      if (resolved) {
         return okBody(resolved.picksData, false);
       }
       // No card with picks yet — honest generating empty for today.

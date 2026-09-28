@@ -37,6 +37,7 @@
 //   force  — override the existing-picks overwrite guard (scheduled cards are protected)
 //   dryRun — compute + log everything, write nothing
 
+const { noPlaysFields, sportReason } = require('./lib/no-plays');
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = "edge-picks-cfb";
 const MODEL_VERSION = "v1.1.2-cfb-prob-edge";
@@ -1246,8 +1247,11 @@ function emptyCard(dateISO, dateFormatted, seasonPhase, noPlays, extras = {}) {
       sportsCovered: extras.sportsCovered || [],
     },
   };
-  if (extras.insights) card.insights = extras.insights;
-  if (extras.edgeSummary) card.edgeSummary = extras.edgeSummary;
+  // "No Qualifying Plays Today" headline + short reason (lib/no-plays). Only completed runs call this.
+  const reason = extras.reason || sportReason("cfb", { noGames, gamesPriced: extras.gamesPriced || 0 });
+  Object.assign(card, noPlaysFields(reason, { noGames }));
+  card.edgeSummary = reason;
+  card.insights = "";
   return card;
 }
 
@@ -1413,13 +1417,9 @@ exports.handler = async (event) => {
 
   const oddsGames = await fetchCFBOdds(dateISO);
   if (!oddsGames.length) {
-    console.log(`[cfb] ESPN shows games but no odds available — writing no-plays card.`);
-    const noOdds = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
-      noGames: false,
-      sportsCovered: ["NCAAF"],
-    });
-    if (!dryRun) await storePicks(dateISO, noOdds, force);
-    return { statusCode: 200, body: JSON.stringify({ ok: true, picks: 0, skipped: "no CFB odds available" }) };
+    // Feed failure, not a pass: write nothing so the previous card stays up until a run completes.
+    console.log(`[cfb] ESPN shows games but no odds available — NOT storing (previous card stays up).`);
+    return { statusCode: 503, body: JSON.stringify({ ok: false, picks: 0, stored: false, error: "no CFB odds available" }) };
   }
 
   // Consensus + candidates per game
@@ -1461,6 +1461,7 @@ exports.handler = async (event) => {
     console.log("[cfb] No positive-EV candidates on the slate — writing no-plays card.");
     const noPlaysData = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
       noGames: false,
+      gamesPriced: espnPreGames.length,
       sportsCovered: ["NCAAF"],
     });
     if (!dryRun) await storePicks(dateISO, noPlaysData, force);
@@ -1495,6 +1496,7 @@ exports.handler = async (event) => {
     console.log("[cfb] Candidates existed but none cleared selection floors — writing no-plays card.");
     const noEdge = emptyCard(dateISO, dateFormatted, seasonPhase, NO_EDGE_MSG, {
       noGames: false,
+      gamesPriced: espnPreGames.length,
       sportsCovered: ["NCAAF"],
       rejections: rejections.slice(0, 12),
       insights: "WeBetAI scanned today's college football slate. Games are scheduled, but none cleared the edge filters. Passed rather than force a lean.",

@@ -281,7 +281,8 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
   if (kept.length === 0) {
     data.parlayLegs = [];
     parlayCleared = true;
-    if (!data.noPlays) data.noPlays = 'No qualifying edges after placeability soft-veto.';
+    Object.assign(data, require('../no-plays').noPlaysFields(
+      "Today's candidates are no longer offered at a playable price at the major books, so Omega is passing."));
   }
   if (data.summary) {
     const straightU = kept.reduce((s, p) => s + parseUnitsLoose(p.units), 0);

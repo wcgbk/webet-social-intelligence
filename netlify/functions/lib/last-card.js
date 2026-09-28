@@ -1,11 +1,9 @@
-// Site rule: a sport's card stays up until that sport's next card replaces it.
-// When today has no card (missing, or a "no games" placeholder), serve the most
-// recent card that has picks, flagged so pages can label it.
+// Site rule: a sport's card stays up until that sport's next COMPLETED run replaces it.
+// Generators only write today's blob when a run completes (picks, or a
+// "No Qualifying Plays Today" card). Failed/feed-down runs write nothing.
+// So only a MISSING blob falls back to the most recent card with picks.
 function isPlaceholder(card) {
-  if (!card) return true;
-  const picks = Array.isArray(card.picks) ? card.picks : [];
-  if (picks.length) return false;
-  return card.noGames === true || /Games Scheduled/i.test(card.noPlays || "");
+  return !card;
 }
 
 async function lastRealCard(getJson, today, maxLookback = 14) {

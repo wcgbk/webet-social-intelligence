@@ -153,6 +153,7 @@ const GATES = {
 const QA_HARDFAIL = {
   staleOddsCents: 15, // juice-ladder cents vs lockSnapshot (not raw American subtraction)
   staleLinePts: { Spread: 1.0, Total: 1.0, Moneyline: null },
+  // Used by the soft QB adjusters in sports/game_day.js only. Not a hard-fail since 2026-09-28.
   qbOutStatuses: ['out', 'doubtful', 'ruled out', 'injured reserve', 'ir'],
   spScratchKeywords: ['scratched', 'changed', 'will not start', 'scrambled'],
   requireMajorBookStillOffered: true,
@@ -298,7 +299,7 @@ const MODEL_NOTES = [
   'Edge badge (edgePct): calibrated model edge after shrink = coverProb - no-vig sharp fair (fallback: vs book implied). Not predictedClv cents, not raw coverProb, not dog-inflated EV%.',
   'Predicted CLV is a proxy; residual CLV uses open→now steam; realized no-vig CLV graded by track-clv-omega (Pinnacle/Circa/Bookmaker).',
   'Weekly CLV report is OBSERVER ONLY — no auto-steer. openPrint+lockSnapshot populate open→close path.',
-  'QA hard-fails drop scratched SP (MLB), QB out/doubtful (NFL/NCAAF), stale odds, and adverse open→pick steam before publish.',
+  'QA hard-fails drop scratched SP (MLB), stale odds, and adverse open→pick steam before publish. NFL/NCAAF QB out/doubtful is a soft projection adjustment only (game_day.js), never a hard-fail (2026-09-28).',
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
   'Day-scope: every straight + parlay leg commenceTime must fall on the card ET date (America/New_York).',
   'Unit structure: straights ≤3.5u + fixed 0.5u parlay = max 4.0u; may be under; never force-fill.',

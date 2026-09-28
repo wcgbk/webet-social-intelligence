@@ -152,7 +152,7 @@ assert.strictEqual(enriched[0].line, -3);
   assert.ok(reason && reason.startsWith('stale_line'), reason);
 }
 
-// QB out
+// QB out is NOT a hard-fail (soft projection adjust only, 2026-09-28)
 {
   const reason = qa.evaluateHardFail({
     sport: 'NFL',
@@ -168,7 +168,7 @@ assert.strictEqual(enriched[0].line, -3);
       },
     },
   });
-  assert.ok(reason && reason.startsWith('qb_out'), reason);
+  assert.strictEqual(reason, null, `QB out must not hard-fail: ${reason}`);
 }
 
 // SP changed

@@ -6,7 +6,7 @@
  *
  * Checks:
  *  - MLB: starting pitcher scratched/changed vs assumed SP
- *  - NFL/NCAAF: QB ruled out / downgraded
+ *  - (NFL/NCAAF QB status is soft-adjust only, never a hard-fail)
  *  - Odds stale vs lockSnapshot / market gone at major books
  */
 
@@ -270,15 +270,10 @@ function evaluateHardFail(pick, ctx = {}) {
     }
   }
 
-  // ── NFL / NCAAF QB out ──
-  if (sport === 'NFL' || sport === 'NCAAF' || sport === 'CFB') {
-    const qbMap = sport === 'NFL' ? (ctx.nflQb || {}) : (ctx.cfbQb || {});
-    const homeQb = findQbOut(qbMap, home);
-    const awayQb = findQbOut(qbMap, away);
-    // Projection depends on QB for ML/Spread; Totals also QB-sensitive — hard-fail all when QB out
-    if (homeQb) return `qb_out: ${homeQb.team} QB ${homeQb.qbName || ''} (${homeQb.qbStatus})`;
-    if (awayQb) return `qb_out: ${awayQb.team} QB ${awayQb.qbName || ''} (${awayQb.qbStatus})`;
-  }
+  // ── NFL / NCAAF QB status: NOT a hard-fail (founder order 2026-09-28) ──
+  // A QB out/doubtful is priced into the projection by the soft engines
+  // (sports/game_day.js qbSoftAdjust + qbContinuityAdjust). It must never
+  // cancel a game or drop any market (ML, spread, or total).
 
   return null;
 }

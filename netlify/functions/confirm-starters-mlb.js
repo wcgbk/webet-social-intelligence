@@ -1,4 +1,5 @@
 // confirm-starters-mlb.js
+const { samePlayerName } = require('./lib/player-name');
 // 1:30pm ET re-check of ESPN probable starters against today's Alpha + Omega cards.
 // Flags SP changes; KILLS SP-dependent picks (MLB Total / Moneyline / F5 / Run Line)
 // when the starter used at generation time no longer matches ESPN.
@@ -130,8 +131,9 @@ function processPicks(picksData, currentStarters) {
     const curAway = normalizeTeam(current.awaySP);
     const curHome = normalizeTeam(current.homeSP);
 
-    const awayScratch = origAway && curAway && origAway !== curAway && curAway !== "tbd";
-    const homeScratch = origHome && curHome && origHome !== curHome && curHome !== "tbd";
+    // Tolerant name match: accent/suffix/middle-initial differences are not a scratch.
+    const awayScratch = origAway && curAway && curAway !== "tbd" && !samePlayerName(pick.awaySP, current.awaySP);
+    const homeScratch = origHome && curHome && curHome !== "tbd" && !samePlayerName(pick.homeSP, current.homeSP);
 
     if (awayScratch || homeScratch) {
       scratches++;

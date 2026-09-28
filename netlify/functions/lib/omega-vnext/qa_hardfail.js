@@ -17,6 +17,8 @@ const { americanJuiceDelta } = require('./odds_math');
 const { matchupKey, selectStraights, toPickObject } = require('./select');
 const { adverseSteamReason } = require('./line_path');
 
+const { samePlayerName } = require('../player-name');
+
 function normName(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -156,11 +158,17 @@ async function fetchMlbScratchSignals(dateISO) {
       const comp = (ev.competitions && ev.competitions[0]) || {};
       const notes = (comp.notes || []).map(n => String(n.headline || n.text || '')).join(' | ');
       const headlines = (ev.competitions || []).flatMap(c => (c.notes || []).map(n => n.headline || '')).join(' ');
-      const blob = `${notes} ${headlines} ${ev.name || ''}`.toLowerCase();
+      // Notes only. ev.name ("Red Sox at Yankees") always contains both team names, which
+      // used to make ANY keyword in a note flag BOTH teams as scratched.
+      const blob = `${notes} ${headlines}`.toLowerCase();
+      // "changed" alone also matches "start time changed" / "venue changed"; require pitcher context.
+      const pitcherCtx = /pitcher|starter|\bsp\b|will start|to start|starting/.test(blob);
+      const kwHit = QA_HARDFAIL.spScratchKeywords.some(k => blob.includes(k) && (k !== 'changed' || pitcherCtx));
       for (const c of (comp.competitors || [])) {
         const team = (c.team && (c.team.displayName || c.team.name)) || '';
         if (!team) continue;
-        const scratched = QA_HARDFAIL.spScratchKeywords.some(k => blob.includes(k) && blob.includes(normName(team).split(' ').pop()));
+        const nick = normName((c.team && (c.team.name || c.team.shortDisplayName)) || team.split(' ').pop());
+        const scratched = kwHit && !!nick && blob.includes(nick);
         // Also check probable pitcher change flags on competitor
         const probables = c.probables || c.probablePitchers || [];
         let statusNote = '';
@@ -258,7 +266,7 @@ function evaluateHardFail(pick, ctx = {}) {
       const live = /home/i.test(teamSide) || teamsFuzzy(teamSide, home)
         ? liveHome
         : (/away/i.test(teamSide) || teamsFuzzy(teamSide, away) ? liveAway : (liveHome || liveAway));
-      if (live && live.name && normName(live.name) !== assumedNorm) {
+      if (live && live.name && !samePlayerName(live.name, assumed.name)) {
         return `sp_changed: assumed ${assumed.name} → live ${live.name}`;
       }
     }

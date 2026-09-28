@@ -366,7 +366,7 @@ VOICE:
 
 YOUR JOB:
 1. When web search is available, use it sparingly to verify injuries, recent news, starting pitchers (MLB), quarterback status (NFL/NCAAF), outdoor weather, and recent form. When tools are disabled, write from the locked table only. Do NOT invent specific injuries, records, scores, or weather.
-2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, starter scratch, quarterback out or doubtful, severe weather, material lineup change). You do NOT choose replacements.
+2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, starter scratch, severe weather, material lineup change). Do NOT reject a football pick because a quarterback is out, doubtful, or questionable: WeBetAI already priced the quarterback injury report into the number. You do NOT choose replacements.
 3. Write coreReasoning for every ACCEPTED straight (4-6 sentences) and every parlay leg (3-5 sentences).
 4. You MAY reduce straight units by up to 50% with a reason. You MUST NOT increase units. Do not change parlay leg units.
 5. You MUST NOT invent new picks, swap sides, or override the locked direction.
@@ -490,9 +490,12 @@ async function callClaude(opts) {
 function applyStraightRows(templated, parsed) {
   const rejections = [];
   const outPicks = [];
+  const seen = new Set();
   for (const row of parsed.picks || []) {
     const base = templated[row.idx];
     if (!base) continue;
+    if (seen.has(row.idx)) continue;
+    seen.add(row.idx);
     if (row.veto) {
       rejections.push({
         matchup: base.matchup,
@@ -521,6 +524,11 @@ function applyStraightRows(templated, parsed) {
     if (clv.length > 5) next.clvExpectation = clv;
     outPicks.push(next);
   }
+  // Default is ACCEPT: a locked straight the narrator skipped (no row returned)
+  // stays on the card with template prose. Omission must never drop a pick.
+  templated.forEach((base, idx) => {
+    if (!seen.has(idx)) outPicks.push(base);
+  });
   return { outPicks, rejections };
 }
 
@@ -694,6 +702,7 @@ async function narrateParlayLegsOnly({ parlayLegs, dateFormatted, apiKey, straig
 }
 
 module.exports = {
+  applyStraightRows,
   narrateAndVerify,
   narrateParlayLegsOnly,
   buildFallbackNarrative,

@@ -714,9 +714,9 @@
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9918;</div>
           <div style="font-size:1rem; font-weight:600; color:var(--olive); margin-bottom:.375rem;">
-            ${esc(data.noPlaysTitle || 'No Qualifying Plays Today')}
+            ${data.noPlays ? esc(data.noPlays) : 'No Tier 1 F5 locks today.'}
           </div>
-          ${(() => { const r = data.noPlaysReason || (data.noPlays && !/^no qualifying plays/i.test(data.noPlays) ? data.noPlays : '') || 'No game cleared the Tier 1 first-five bar today.'; return r ? `<div style="font-size:.8125rem; color:var(--txt-m); line-height:1.55;">${esc(r)}</div>` : ''; })()}
+          <div style="font-size:.8125rem; color:var(--txt-m);">Discipline wins long term. Not every slate produces a Tier 1 edge. Check back tomorrow.</div>
         </div>`;
       // Still render the analysis breakdown even with no picks
       renderAnalysisBreakdown(data);

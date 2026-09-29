@@ -29,6 +29,13 @@
 /grokbok/     /grokbot      301
 /grokbot-cadence  /grokbot-cadence/index.html  200
 /grokbot-cadence/ /grokbot-cadence/index.html  200
+# Grok Bot preview video page (Betty). Old/alternate paths 301 here (query string kept).
+/grokbot-preview    /grokbot-preview/index.html  200
+/grokbot-preview/   /grokbot-preview/index.html  200
+/grok-preview       /grokbot-preview/  301
+/grok-preview/      /grokbot-preview/  301
+/grok-bot-preview   /grokbot-preview/  301
+/grok-bot-preview/  /grokbot-preview/  301
 /api/grok-bot-picks    /.netlify/functions/get-grok-bot-picks 200
 /api/grok-bot-webhook  /.netlify/functions/grok-bot-webhook   200
 /live-picks   /live-picks/index.html   200
@@ -94,6 +101,8 @@
 /r/ezpzms/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_underdog_waivers&utm_id=ezpzms  302
 /r/djkngc   /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_poly_agents&utm_id=djkngc  302
 /r/djkngc/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_poly_agents&utm_id=djkngc  302
+/r/betty-video   /grokbot-preview/?utm_source=x&utm_medium=social&utm_campaign=pinned_post&utm_content=betty_video&utm_id=betty-video  302
+/r/betty-video/  /grokbot-preview/?utm_source=x&utm_medium=social&utm_campaign=pinned_post&utm_content=betty_video&utm_id=betty-video  302
 # Unknown /r/ ids fall back to the homepage instead of a 404.
 /r/*  /  302
 # <<< SHORT LINKS END

@@ -134,6 +134,16 @@
       "utm_content": "betty_video",
       "note": "Betty Grok Bot preview video page (pinned X post)",
       "created": "2026-09-29T18:37:06.297Z"
+    },
+    {
+      "id": "betty-grokbot",
+      "to": "/grokbot",
+      "utm_source": "x",
+      "utm_medium": "social",
+      "utm_campaign": "grokbot_share",
+      "utm_content": "betty_grokbot",
+      "note": "Betty Grok Bot sales page share link (video unfurl)",
+      "created": "2026-09-29T18:54:25.249Z"
     }
   ]
 }

@@ -103,6 +103,8 @@
 /r/djkngc/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_poly_agents&utm_id=djkngc  302
 /r/betty-video   /grokbot-preview/?utm_source=x&utm_medium=social&utm_campaign=pinned_post&utm_content=betty_video&utm_id=betty-video  302
 /r/betty-video/  /grokbot-preview/?utm_source=x&utm_medium=social&utm_campaign=pinned_post&utm_content=betty_video&utm_id=betty-video  302
+/r/betty-grokbot   /grokbot?utm_source=x&utm_medium=social&utm_campaign=grokbot_share&utm_content=betty_grokbot&utm_id=betty-grokbot  302
+/r/betty-grokbot/  /grokbot?utm_source=x&utm_medium=social&utm_campaign=grokbot_share&utm_content=betty_grokbot&utm_id=betty-grokbot  302
 # Unknown /r/ ids fall back to the homepage instead of a 404.
 /r/*  /  302
 # <<< SHORT LINKS END

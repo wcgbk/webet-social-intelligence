@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -408,6 +408,45 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 
 assert.deepStrictEqual(nba.project({}), []);
 assert.deepStrictEqual(nhl.project({}), []);
+assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
+assert.strictEqual(require(path.join(root, 'walk_forward')).FIT_ENABLED, false);
+{
+  const home = 'Colorado Avalanche';
+  const away = 'Dallas Stars';
+  const ev = {
+    home_team: home,
+    away_team: away,
+    commence_time: '2026-09-22T23:10:00Z',
+    bookmakers: ['pinnacle', 'draftkings'].map(key => ({
+      key,
+      markets: [
+        { key: 'h2h', outcomes: [{ name: home, price: -125 }, { name: away, price: 105 }] },
+        { key: 'spreads', outcomes: [
+          { name: home, price: -110, point: -1.5 },
+          { name: away, price: -110, point: 1.5 },
+        ]},
+        { key: 'totals', outcomes: [
+          { name: 'Over', price: -110, point: 6 },
+          { name: 'Under', price: -110, point: 6 },
+        ]},
+      ],
+    })),
+  };
+  const direct = nhl.project({
+    oddsEvents: [ev],
+    standings: {
+      [home]: { pf: 3.4, pa: 2.8 },
+      [away]: { pf: 2.9, pa: 3.1 },
+    },
+  });
+  assert.ok(direct.length >= 6);
+  assert.ok(direct.every(c => c.sport === 'NHL' && c.modelRawP > 0.05 && c.modelRawP < 0.95));
+  assert.ok(direct.some(c => c.market === 'Moneyline' && /nhl-standings-hfa/.test(c.projMethod)));
+  assert.ok(direct.some(c => c.market === 'Spread' && /nhl-normal-pl/.test(c.projMethod)));
+  assert.ok(direct.some(c => c.market === 'Total' && /nhl-total-baseline/.test(c.projMethod)));
+  const emptySt = nhl.project({ oddsEvents: [ev], standings: {} });
+  assert.ok(emptySt.length >= 6, 'empty standings still project');
+}
 assert.strictEqual(typeof mlb.project, 'function');
 assert.strictEqual(typeof nfl.project, 'function');
 assert.strictEqual(typeof cfb.project, 'function');

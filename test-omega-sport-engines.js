@@ -18,9 +18,9 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
+assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NCAAF, true);
 assert.strictEqual(config.SPORTS_ENABLED.MLB, true);
@@ -71,13 +71,13 @@ assert.deepStrictEqual(config.MLB_CALIBRATION, {
 });
 assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB keeps the global isotonic band');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
+assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.ok(epa.SPORT_CFG.NFL.epaUncertainty >= 0.12 && epa.SPORT_CFG.NFL.epaUncertainty <= 0.14);
 assert.ok(epa.SPORT_CFG.NCAAF.epaUncertainty >= 0.16 && epa.SPORT_CFG.NCAAF.epaUncertainty <= 0.18);
 
 const touched = [
-  'sports/nfl.js', 'sports/cfb.js', 'sports/mlb.js', 'sports/epa.js', 'sports/mlb_env.js',
-  'ingest.js', 'index.js', 'config.js',
+  'sports/nfl.js', 'sports/cfb.js', 'sports/mlb.js', 'sports/nhl.js', 'sports/epa.js', 'sports/mlb_env.js',
+  'sports/game_day.js', 'ingest.js', 'index.js', 'config.js',
 ].map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 assert.ok(!/tsp\.live/i.test(touched), 'sport engines must not call tsp.live');
 assert.ok(!/generate-picks-alpha/.test(touched));
@@ -641,6 +641,255 @@ function byMarket(cands, market) {
 }
 
 // Seeds + fail-soft ingest wiring. No StatsAPI call.
+// ── NHL projector (enabled; direct project still emits) ──
+{
+  const gd = require(path.join(root, 'sports/game_day'));
+  assert.ok(config.ENGINE_SOFT.NHL, 'ENGINE_SOFT.NHL');
+  assert.ok(config.ENGINE_SOFT.NHL.maxAbsMarginAdj >= 0.25 && config.ENGINE_SOFT.NHL.maxAbsMarginAdj <= 0.35);
+  assert.ok(config.ENGINE_SOFT.NHL.maxAbsTotalAdj >= 0.30 && config.ENGINE_SOFT.NHL.maxAbsTotalAdj <= 0.40);
+  assert.strictEqual(config.HFA.NHL, 0.15);
+  assert.ok(/v12\.3\.13 omega-vnext: NHL/.test(config.MODEL_NOTES));
+  assert.ok(/SPORTS_ENABLED\.NHL = true/.test(config.MODEL_NOTES));
+  assert.ok(/Enabled \(WeBet 2026-09-30\)|WeBet 2026-09-30|ENABLED \(WeBet/.test(config.MODEL_NOTES));
+  assert.strictEqual(gd.SHORT_REST_DAYS.NHL, 1);
+  assert.strictEqual(gd.EXTRA_REST_DAYS.NHL, 2);
+  assert.ok(gd.HFA_ADJ.NHL.max >= 0.08 && gd.HFA_ADJ.NHL.max <= 0.12);
+  assert.strictEqual(gd.qbSoftAdjust('NHL', { qbStatus: 'out' }, null).marginAdj, 0);
+
+  const homeB2b = gd.applyGameDayAdjustments({
+    sport: 'NHL',
+    modelMargin: config.HFA.NHL,
+    modelTotal: 6.2,
+    uncertainty: 0.2,
+    home: 'Colorado Avalanche',
+    away: 'Dallas Stars',
+    restByTeam: { 'Colorado Avalanche': { playedYesterday: true } },
+    qbByTeam: {},
+    hfaBase: config.HFA.NHL,
+  });
+  assert.ok(homeB2b.modelMargin < config.HFA.NHL, 'home B2B trims NHL margin');
+  assert.ok(Math.abs(homeB2b.gameDay.hfaAdj) <= gd.HFA_ADJ.NHL.max + 1e-9);
+  assert.ok(homeB2b.gameDay.applied);
+
+  const nanTotal = gd.applyGameDayAdjustments({
+    sport: 'NHL',
+    modelMargin: 0.15,
+    modelTotal: NaN,
+    uncertainty: 0.2,
+    home: 'A',
+    away: 'B',
+    restByTeam: {},
+    qbByTeam: {},
+  });
+  assert.strictEqual(nanTotal.modelTotal, 6.2);
+
+  const idxSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
+  assert.ok(idxSrc.includes('oddsEvents: snap.oddsBySport.NHL'));
+  assert.ok(idxSrc.includes('standings: snap.standingsBySport.NHL'));
+  assert.ok(!/nhl\.project\(\{\}\)/.test(idxSrc), 'projectAll must not call the empty NHL stub');
+  const ingSrc = fs.readFileSync(path.join(root, 'ingest.js'), 'utf8');
+  assert.ok(ingSrc.includes('NHL: {}'));
+  assert.ok(ingSrc.includes("'MLB', 'NFL', 'NCAAF', 'NHL'"));
+
+  const ptsOnly = ingest.applyNhlStandingStats(
+    { wins: 40, losses: 25, winPct: 1.1, pf: 90, pa: 95 },
+    [
+      { name: 'wins', value: 40 },
+      { name: 'losses', value: 25 },
+      { name: 'otLosses', value: 10 },
+      { name: 'points', value: 90 },
+      { name: 'pointsFor', value: 90 },
+      { name: 'pointsAgainst', value: 95 },
+      { name: 'winPercent', value: 0.62 },
+    ]
+  );
+  assert.strictEqual(ptsOnly.pf, null, 'standings points are not goals');
+  assert.strictEqual(ptsOnly.pa, null);
+  assert.strictEqual(ptsOnly.winPct, 0.62);
+  assert.strictEqual(ptsOnly.otLosses, 10);
+  assert.strictEqual(ptsOnly.games, 75);
+
+  const goalRow = ingest.applyNhlStandingStats({ wins: 45, losses: 25 }, [
+    { name: 'goalsFor', value: 250 },
+    { name: 'goalsAgainst', value: 210 },
+    { name: 'gamesPlayed', value: 80 },
+    { name: 'otLosses', value: 10 },
+    { name: 'points', value: 100 },
+    { name: 'pointsFor', value: 100 },
+  ]);
+  assert.strictEqual(goalRow.pf, 250);
+  assert.strictEqual(goalRow.pa, 210);
+  assert.strictEqual(goalRow.games, 80);
+
+  assert.deepStrictEqual(nhl.project({}), []);
+  assert.deepStrictEqual(nhl.project(), []);
+
+  const home = 'Colorado Avalanche';
+  const away = 'Dallas Stars';
+  const ev = synthEvent(home, away, { total: 6.0, spread: -1.5 });
+  const standings = {
+    [home]: { pf: 280, pa: 220, wins: 48, losses: 22, otLosses: 12, games: 82, winPct: 0.659 },
+    [away]: { pf: 250, pa: 240, wins: 42, losses: 28, otLosses: 12, games: 82, winPct: 0.585 },
+  };
+  const cands = nhl.project({ oddsEvents: [ev], standings });
+  assert.ok(cands.length >= 6, `NHL slate ${cands.length}`);
+  for (const market of ['Moneyline', 'Spread', 'Total']) {
+    const rows = cands.filter(c => c.market === market);
+    assert.ok(rows.length >= 1, market);
+    for (const r of rows) {
+      assert.strictEqual(r.sport, 'NHL');
+      assert.strictEqual(r.homeTeam, home);
+      assert.strictEqual(r.awayTeam, away);
+      assert.ok(r.matchup && r.commenceTime);
+      assert.ok(Number.isFinite(r.modelRawP) && r.modelRawP > 0.05 && r.modelRawP < 0.95, `${market} p ${r.modelRawP}`);
+      assert.ok(r.projMethod, market);
+      assert.ok(r.gameDay);
+    }
+  }
+  assert.ok(/nhl-standings-hfa/.test(byMarket(cands, 'Moneyline').projMethod), byMarket(cands, 'Moneyline').projMethod);
+  assert.ok(/nhl-normal-pl/.test(byMarket(cands, 'Spread').projMethod));
+  assert.ok(/nhl-total-baseline/.test(byMarket(cands, 'Total').projMethod));
+  assert.ok(!/engines/.test(byMarket(cands, 'Spread').projMethod), 'clean GF/GA does not need the winPct residual');
+  const cleanMargin = byMarket(cands, 'Spread').modelProjection;
+  const cleanTotal = byMarket(cands, 'Total').modelProjection;
+  assert.ok(cleanMargin > config.HFA.NHL && cleanMargin < 2, cleanMargin);
+  assert.ok(cleanTotal > 5 && cleanTotal < 8, cleanTotal);
+
+  const otlEnv = nhl.nhlStandingsEnv(
+    { pf: 30, pa: 28, wins: 6, losses: 4, otLosses: 4 },
+    { pf: 28, pa: 30, wins: 5, losses: 5, otLosses: 4 }
+  );
+  const gamesEnv = nhl.nhlStandingsEnv(
+    { pf: 30, pa: 28, games: 14 },
+    { pf: 28, pa: 30, games: 14 }
+  );
+  assert.strictEqual(otlEnv.usedStandings, true);
+  assert.ok(Math.abs(otlEnv.modelMargin - gamesEnv.modelMargin) < 1e-9, 'OT losses count as games played');
+
+  const pointsEnv = nhl.nhlStandingsEnv(
+    { pf: 90, pa: 88, wins: 40, losses: 30, otLosses: 10, games: 80 },
+    { pf: 70, pa: 95, wins: 30, losses: 40, otLosses: 10, games: 80 }
+  );
+  assert.strictEqual(pointsEnv.usedStandings, false, '2*W+OTL must not be read as goals');
+  const goalsNearPoints = nhl.nhlStandingsEnv(
+    { pf: 164, pa: 210, wins: 80, losses: 0, games: 80 },
+    { pf: 220, pa: 200, wins: 40, losses: 30, otLosses: 10, games: 80 }
+  );
+  assert.strictEqual(goalsNearPoints.usedStandings, true, 'above 2 per game cannot be standings points');
+
+  assert.doesNotThrow(() => nhl.project({ oddsEvents: [ev] }));
+  const neutral = nhl.project({ oddsEvents: [ev], standings: {} });
+  assert.ok(neutral.length >= 6);
+  assert.ok(Math.abs(byMarket(neutral, 'Spread').modelProjection - config.HFA.NHL) < 0.05);
+  assert.ok(Math.abs(byMarket(neutral, 'Total').modelProjection - 6.2) < 0.05);
+  assert.ok(!/engines/.test(byMarket(neutral, 'Moneyline').projMethod));
+  assert.ok(!/gameday/.test(byMarket(neutral, 'Moneyline').projMethod));
+
+  const unclean = nhl.project({
+    oddsEvents: [ev],
+    standings: {
+      [home]: { wins: 50, losses: 20, otLosses: 12, games: 82, winPct: 0.70 },
+      [away]: { wins: 30, losses: 40, otLosses: 12, games: 82, winPct: 0.40 },
+    },
+  });
+  const uncleanMargin = byMarket(unclean, 'Spread').modelProjection;
+  assert.ok(uncleanMargin > byMarket(neutral, 'Spread').modelProjection);
+  assert.ok(uncleanMargin - config.HFA.NHL <= config.ENGINE_SOFT.NHL.maxAbsMarginAdj + 1e-9);
+  assert.ok(/engines/.test(byMarket(unclean, 'Moneyline').projMethod));
+  assert.ok(Math.abs(byMarket(unclean, 'Total').modelProjection - 6.2) < 0.05);
+
+  const noDouble = nhl.applyNhlEngineSoft({
+    ...nhl.nhlStandingsEnv(standings[home], standings[away]),
+    homeSt: { ...standings[home], winPct: 0.99 },
+    awaySt: { ...standings[away], winPct: 0.01 },
+  });
+  assert.strictEqual(noDouble.winPct, null, 'clean GF/GA skips the winPct residual');
+  assert.strictEqual(noDouble.marginAdj, 0);
+
+  const absurd = nhl.project({
+    oddsEvents: [ev],
+    standings: {
+      [home]: { pf: 9000, pa: 10, wins: 80, losses: 2, games: 82, winPct: 0.98 },
+      [away]: { pf: 10, pa: 9000, wins: 2, losses: 80, games: 82, winPct: 0.02 },
+    },
+  });
+  const absurdMargin = Math.abs(byMarket(absurd, 'Spread').modelProjection);
+  const absurdTotal = byMarket(absurd, 'Total').modelProjection;
+  assert.ok(absurdMargin <= nhl.NHL_MARGIN_CAP + 1e-9, absurdMargin);
+  assert.ok(absurdMargin < 1.5, `poisoned GF/GA must stay off the 6-goal clamp: ${absurdMargin}`);
+  assert.ok(absurdTotal <= nhl.NHL_TOTAL_MAX + 1e-9 && absurdTotal >= nhl.NHL_TOTAL_MIN, absurdTotal);
+
+  const shotSt = {
+    [home]: { ...standings[home], shotsFor: 42, shotsAgainst: 20, savePct: 0.95, shootingPct: 0.16 },
+    [away]: { ...standings[away], shotsFor: 20, shotsAgainst: 42, savePct: 0.85, shootingPct: 0.05 },
+  };
+  const shotSoft = nhl.applyNhlEngineSoft({
+    modelMargin: 0.15,
+    modelTotal: 6.2,
+    usedStandings: true,
+    homeGoals: 3.1,
+    awayGoals: 3.1,
+    homeSt: shotSt[home],
+    awaySt: shotSt[away],
+  });
+  assert.ok(shotSoft.capped);
+  assert.ok(Math.abs(shotSoft.marginAdj) <= config.ENGINE_SOFT.NHL.maxAbsMarginAdj + 1e-9);
+  assert.ok(Math.abs(shotSoft.totalAdj) <= config.ENGINE_SOFT.NHL.maxAbsTotalAdj + 1e-9);
+  assert.ok(Math.abs(Math.abs(shotSoft.marginAdj) - config.ENGINE_SOFT.NHL.maxAbsMarginAdj) < 1e-9);
+  const shotC = nhl.project({ oddsEvents: [ev], standings: shotSt });
+  assert.ok(/nhl-standings-hfa-engines/.test(byMarket(shotC, 'Moneyline').projMethod), byMarket(shotC, 'Moneyline').projMethod);
+  assert.ok(/engines/.test(byMarket(shotC, 'Spread').projMethod));
+  assert.ok(Math.abs(byMarket(shotC, 'Spread').modelProjection) <= nhl.NHL_MARGIN_CAP);
+  assert.ok(byMarket(shotC, 'Total').modelProjection <= nhl.NHL_TOTAL_MAX);
+  assert.notStrictEqual(byMarket(shotC, 'Spread').modelProjection, cleanMargin);
+
+  const missingShots = nhl.applyNhlEngineSoft({
+    modelMargin: 0.15,
+    modelTotal: 6.2,
+    usedStandings: true,
+    homeGoals: 3.1,
+    awayGoals: 3.1,
+    homeSt: { shotsFor: 30 },
+    awaySt: { savePct: 0.9 },
+  });
+  assert.strictEqual(missingShots.shots, null);
+  assert.strictEqual(missingShots.marginAdj, 0);
+
+  const withG = nhl.project({
+    oddsEvents: [ev],
+    standings,
+    espnGames: [{
+      homeTeam: home,
+      awayTeam: away,
+      homeGoalie: { savePct: 0.930, name: 'Home' },
+      awayGoalie: { savePct: 0.890, name: 'Away' },
+    }],
+  });
+  assert.ok(/engines/.test(byMarket(withG, 'Moneyline').projMethod));
+  const goalieDelta = byMarket(withG, 'Spread').modelProjection - cleanMargin;
+  assert.ok(goalieDelta > 0 && goalieDelta <= config.ENGINE_SOFT.NHL.maxAbsMarginAdj + 1e-9, goalieDelta);
+  assert.ok(Math.abs(byMarket(withG, 'Spread').engineSoft.goalie.marginAdj) <= config.ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj + 1e-9);
+
+  const noGoalie = nhl.applyNhlEngineSoft({
+    modelMargin: 0.15, modelTotal: 6.2, usedStandings: true, homeGoals: 3.1, awayGoals: 3.1,
+    espnGame: { homeGoalie: { name: 'Home' } },
+  });
+  assert.strictEqual(noGoalie.goalie, null);
+  assert.strictEqual(noGoalie.marginAdj, 0);
+
+  const b2b = nhl.project({
+    oddsEvents: [ev],
+    standings,
+    gameDay: { restByTeam: { NHL: { [home]: { playedYesterday: true } } } },
+  });
+  assert.ok(/gameday/.test(byMarket(b2b, 'Moneyline').projMethod), byMarket(b2b, 'Moneyline').projMethod);
+  assert.ok(/nhl-normal-pl/.test(byMarket(b2b, 'Spread').projMethod));
+  assert.ok(byMarket(b2b, 'Spread').modelProjection < cleanMargin);
+
+  const kept = nhl.project({ oddsEvents: [null, ev], standings });
+  assert.ok(kept.length >= 6, 'one bad NHL event must not blank the slate');
+}
+
 (async () => {
   const seeds = ingest.loadEfficiencySeeds();
   const parks = ingest.loadParkFactors();
@@ -725,7 +974,8 @@ function byMarket(cands, market) {
   assert.ok(slate.some(c => c.sport === 'NFL' && c.projMethod === 'nfl-normal-ml'));
   assert.ok(slate.some(c => c.sport === 'NCAAF' && c.projMethod === 'cfb-normal-ml'));
   assert.ok(slate.some(c => c.sport === 'MLB' && c.projMethod === 'mlb-pythag-lite+hfa'));
-  assert.ok(!slate.some(c => c.sport === 'NBA' || c.sport === 'NHL'));
+  assert.ok(!slate.some(c => c.sport === 'NBA'));
+  assert.ok(slate.some(c => c.sport === 'NHL'), 'NHL enabled — candidates on projectAll slate');
   assert.deepStrictEqual(nba.project({}), []);
   assert.deepStrictEqual(nhl.project({}), []);
 

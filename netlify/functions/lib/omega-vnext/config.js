@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.12-omega-vnext-desk-lock';
+const MODEL_VERSION = 'v12.3.13-omega-vnext-nhl-engine';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -30,7 +30,7 @@ const SPORTS_ENABLED = {
   NFL: true,
   NCAAF: true,
   NBA: false, // hooks ready; no preseason
-  NHL: false,
+  NHL: true, // WeBet voice order 2026-09-30 — v12.3.13 NHL engine live
 };
 
 const ODDS_SPORT_KEYS = {
@@ -247,6 +247,23 @@ const ENGINE_SOFT = {
     talentPtsPerUnit: 1.0,
     qbContinuityPts: 0.55,
   },
+  /**
+   * NHL goal-scale residuals (v12.3.13). Enabled 2026-09-30 (WeBet).
+   * Stacked cap covers unclean winPct + shot efficiency + goalie save%.
+   * Each goalie piece is tighter still. Missing inputs → 0.
+   * Rest/B2B is game_day HFA_ADJ.NHL, not this cap.
+   */
+  NHL: {
+    maxAbsMarginAdj: 0.30,
+    maxAbsTotalAdj: 0.35,
+    /** Goals of margin per 1.0 winPct gap. Used only when GF/GA is unclean. */
+    winPctGoalsPerPoint: 1.2,
+    goalieMaxAbsMarginAdj: 0.12,
+    goalieMaxAbsTotalAdj: 0.10,
+    /** 0.010 savePct → 0.08 goals of margin before the goalie cap. */
+    goalieMarginPerSave: 8,
+    goalieTotalPerSave: 6,
+  },
 };
 
 
@@ -280,6 +297,7 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  `v12.3.13 omega-vnext: NHL projector ENABLED (WeBet 2026-09-30). Moneyline, puck line (Spread), and total come from per-game goals for/against plus HFA.NHL ${HFA.NHL} (FiveThirtyEight home ice is about 50 Elo, already this goal HFA). Season totals divide by games, counting OT losses when games is absent. Missing or unclean GF/GA stays on the 6.2 / HFA baseline. A winPct residual runs only on that unclean path. Shot efficiency runs only when both clubs have shots and savePct; a goalie residual runs only when both save rates are present. v1 does not require a goalie confirmation feed. Both residuals sit under ENGINE_SOFT.NHL HARD CAP ±${ENGINE_SOFT.NHL.maxAbsMarginAdj} goals margin / ±${ENGINE_SOFT.NHL.maxAbsTotalAdj} total (goalie alone ±${ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj} / ±${ENGINE_SOFT.NHL.goalieMaxAbsTotalAdj}) and soft-fail to 0. Game-day B2B uses SHORT_REST_DAYS.NHL = 1 with a goal-scale HFA_ADJ (max 0.10). Projections soft-clamp at |margin| 6 and total 12 and still emit a candidate. Blend matches MLB: ML 0.50 / spread 0.50 / total 0.45, no-vig Pinnacle/Circa. SPORTS_ENABLED.NHL = true. Plug-in only on existing select path with MLB/NFL/NCAAF. No Omega core routing change. FIT off. No TSP. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, SELECT_WEIGHTS, or isotonic change. FIT off. No TSP. NBA off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   'Patch 2026-09-28 (v12.3.12 label kept): NFL/NCAAF QB out/doubtful is no longer a QA hard-fail. Known QB injuries are priced once, not cancelled and not double-counted: qbSoftAdjust moves the model injury-blind baseline (margin NFL 3.0 / NCAAF 3.5 for out, 0.75x doubtful; total NFL -1.5 / NCAAF -2.0) before the 0.50/0.45 blend against the current market line (which already embeds the injury). qbContinuityAdjust no longer treats out/doubtful as unhealthy — that would have piled a second penalty on the same known injury. Continuity only moves for questionable. Edge gates then decide. MLB SP scratch/change hard-fail unchanged.',
   `v12.3.12 omega-vnext: desk lock. Verify may drop, flag, or resize inside the 3.5/0.5/${DAILY_UNIT_CAP} cap. It does not add a straight and it does not rebuild a generate-locked parlay from the straight card. Steam and placeability drops are not refilled (blockStraightRefill still records the steam block). Stale-odds cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent hard-fail. Candidate-table rank follows the same quality score as the letter grade. Summary meanClvPct is the probability, not a second copy of the cent figure. Evening walk-forward observer at 23:45 UTC (7:45pm ET in EDT) writes omega-walkforward only, after the 23:00 UTC close pass. The 2026-11-01 EDT→EST cron shift is documented and not applied. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, or isotonic change. FIT off. No TSP. NBA/NHL off. LEAN_PAD false. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   `v12.3.11 omega-vnext: run environment. MLB base margin and total come from per-game runs scored and allowed (season totals divided by wins+losses when ESPN pointsFor is a season sum; missing or unclean standings stay on the 8.6 / HFA baseline). A 100-run season gap is about one run, so starter, park, and bullpen residuals move the probability instead of sitting under a clamped 0.95. Moneyline blend uses the same no-vig Pinnacle/Circa anchor as spreads and totals. Weights unchanged: MLB ML 0.50 / spread 0.50 / total 0.45, NFL ML 0.50 / spread 0.50 / total 0.45, NCAAF ML 0.45 / spread 0.45 / total 0.40. fair_sharp prefers a paired same-book no-vig (Pinnacle, then Circa, then the other sharp books) and does not de-vig mixed books. Open-to-now steam cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent move. Capture-health retry labels a canonical slot within 12 minutes, or the latest due slot when the book is empty, and does not insert an off-slot poll. Close grades prefer Circa and Bookmaker ahead of exchanges when Pinnacle is absent. Straight rank is qualityScore (the same calibrated edge as the letter grade), not the old EV/CLV mix, so a plus-money dog does not outrank a cleaner price. SELECT_WEIGHTS numbers are unchanged and unused except softSportMixBonus. No gate, Kelly, unit-cap, global SHRINK_K, or MLB_CALIBRATION change. FIT off. No TSP. NBA/NHL off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,

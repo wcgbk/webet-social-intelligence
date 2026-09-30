@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.12-omega-vnext-desk-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.PLACEABILITY.minMajorBooks, 2);
 assert.strictEqual(config.PLACEABILITY.maxImpliedWorsePp, 3);
 assert.strictEqual(config.PLACEABILITY.maxAmericanCentsWorse, 15);
@@ -31,7 +31,7 @@ assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
 assert.strictEqual(config.QUALITY_GRADE.a, 0.035);
 assert.strictEqual(config.QUALITY_GRADE.aminus, 0.02);
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
-assert.strictEqual(config.SPORTS_ENABLED.NHL, false);
+assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.DAY_SCOPE_STRICT, true);
 
 // Juice ballpark: either ≤15 American cents worse OR ≤3 implied pp worse.

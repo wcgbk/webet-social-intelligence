@@ -135,6 +135,86 @@ async function fetchEspnScoreboard(label, dateISO) {
   }
 }
 
+function espnStat(stats, names) {
+  const want = new Set(names.map(n => String(n).toLowerCase()));
+  for (const s of stats || []) {
+    const name = String((s && s.name) || '').toLowerCase();
+    if (!want.has(name)) continue;
+    const v = Number(s.value);
+    if (Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+/**
+ * NHL standings extras. Generic pointsFor is often the standings-point total
+ * (2*W+OTL), not goals. Prefer goalsFor / a goal-band average. Otherwise
+ * clear pf/pa so the projector stays on the 6.2 / HFA baseline.
+ * Other sports do not call this.
+ */
+function applyNhlStandingStats(row, stats) {
+  const team = row && typeof row === 'object' ? row : {};
+  const gp = espnStat(stats, ['gamesPlayed', 'games']);
+  const otl = espnStat(stats, ['otLosses', 'overtimeLosses', 'otl']);
+  const ties = espnStat(stats, ['ties']);
+  if (gp != null && gp > 0) team.games = gp;
+  if (otl != null) team.otLosses = otl;
+  if (ties != null) team.ties = ties;
+  if (!(Number(team.games) > 0) && otl != null && Number.isFinite(team.wins) && Number.isFinite(team.losses)) {
+    team.games = team.wins + team.losses + otl + (Number.isFinite(team.ties) ? team.ties : 0);
+  }
+
+  const gf = espnStat(stats, ['goalsFor', 'avgGoalsFor']);
+  const ga = espnStat(stats, ['goalsAgainst', 'avgGoalsAgainst']);
+  const pf = espnStat(stats, ['pointsFor']);
+  const pa = espnStat(stats, ['pointsAgainst']);
+  const avgF = espnStat(stats, ['avgPointsFor']);
+  const avgA = espnStat(stats, ['avgPointsAgainst']);
+  const pts = espnStat(stats, ['points']);
+  const wins = Number.isFinite(Number(team.wins)) ? Number(team.wins) : espnStat(stats, ['wins']);
+  const games = Number(team.games);
+
+  let scoring = null;
+  if (gf != null && ga != null && gf > 0 && ga > 0) {
+    scoring = { pf: gf, pa: ga };
+  } else if (avgF != null && avgA != null && avgF >= 1.8 && avgF <= 6 && avgA >= 1.8 && avgA <= 6) {
+    scoring = { pf: avgF, pa: avgA };
+  } else if (pf != null && pa != null && pf > 0 && pa > 0) {
+    const dupPoints = pts != null && Math.abs(pf - pts) <= Math.max(2, Math.abs(pts) * 0.08);
+    const guessPts = Number.isFinite(wins) && wins >= 0
+      ? (2 * wins + (otl != null ? otl : 0))
+      : null;
+    const nearGuess = guessPts != null && guessPts >= 8
+      && Math.abs(pf - guessPts) <= Math.max(3, guessPts * 0.12);
+    const implied = games > 0 && pf > 6 ? pf / games : pf;
+    const inGoalBand = implied >= 1.8 && implied <= 6 && (games > 0 || pf <= 6);
+    const aheadOfPoints = pts == null || pf > pts * 1.5;
+    if (!dupPoints && !nearGuess && inGoalBand && aheadOfPoints) scoring = { pf, pa };
+  }
+  if (scoring) {
+    team.pf = scoring.pf;
+    team.pa = scoring.pa;
+  } else {
+    team.pf = null;
+    team.pa = null;
+  }
+
+  const wp = espnStat(stats, ['pointPercent', 'pointsPercentage', 'winPercent', 'winPct']);
+  if (wp != null && wp >= 0 && wp <= 1) team.winPct = wp;
+  else if (wp != null && wp > 1 && wp <= 100) team.winPct = wp / 100;
+  else if (!(team.winPct >= 0 && team.winPct <= 1)) team.winPct = null;
+
+  const sf = espnStat(stats, ['shotsFor', 'avgShotsFor', 'shotsPerGame']);
+  const sa = espnStat(stats, ['shotsAgainst', 'avgShotsAgainst']);
+  const sv = espnStat(stats, ['savePct', 'savePercentage']);
+  const sh = espnStat(stats, ['shootingPct', 'shootingPercentage']);
+  if (sf != null) team.shotsFor = sf;
+  if (sa != null) team.shotsAgainst = sa;
+  if (sv != null) team.savePct = sv;
+  if (sh != null) team.shootingPct = sh;
+  return team;
+}
+
 async function fetchEspnStandings(label) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return {};
@@ -175,6 +255,7 @@ async function fetchEspnStandings(label) {
           wins: wins ? Number(wins.value) : null,
           losses: losses ? Number(losses.value) : null,
         };
+        if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
       }
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
@@ -350,14 +431,14 @@ function extractWeather(comp) {
 
 async function loadGameDayContext(dateISO, labels, espnBySport) {
   const gameDay = {
-    restByTeam: { MLB: {}, NFL: {}, NCAAF: {} },
+    restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {} },
     qbStatusBySport: { NFL: {}, NCAAF: {} },
     weatherByGame: {},
   };
   const prev = prevEtDate(dateISO);
   if (prev) {
     for (const label of labels) {
-      if (!['MLB', 'NFL', 'NCAAF'].includes(label)) continue;
+      if (!['MLB', 'NFL', 'NCAAF', 'NHL'].includes(label)) continue;
       try {
         const board = await fetchEspnScoreboard(label, prev);
         const map = restMapFromScoreboard((board && board.games) || [], prev);
@@ -452,7 +533,7 @@ async function ingest(dateISO, opts = {}) {
   const standingsBySport = {};
   for (const row of standingsList) standingsBySport[row.label] = row.ratings;
 
-  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
+  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
   try {
     gameDay = await loadGameDayContext(dateISO, labels, espnBySport);
   } catch (e) {
@@ -486,6 +567,7 @@ module.exports = {
   loadParkFactors,
   loadSportEngines,
   loadGameDayContext,
+  applyNhlStandingStats,
   fetchFootballQbStatusMap,
   enabledSportLabels,
   filterEventsSameEtDay,

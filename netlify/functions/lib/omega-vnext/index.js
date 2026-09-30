@@ -86,7 +86,14 @@ function projectAll(snap) {
     }));
   }
   if (SPORTS_ENABLED.NBA) raw.push(...nba.project({}));
-  if (SPORTS_ENABLED.NHL) raw.push(...nhl.project({}));
+  if (SPORTS_ENABLED.NHL) {
+    raw.push(...nhl.project({
+      oddsEvents: snap.oddsBySport.NHL || [],
+      standings: snap.standingsBySport.NHL || {},
+      gameDay,
+      espnGames: snap.espnBySport && snap.espnBySport.NHL,
+    }));
+  }
   return raw;
 }
 

@@ -428,7 +428,7 @@
   </div>
 
   <p class="footer-note">
-    Every game on today's Daily Edge Picks card, each with its live ESPN Gamecast.<br>
+    Every game on today's Daily Edge Picks card with live ESPN scoring (full pitch Gamecast for MLB; scoreboard strip for football & hockey).<br>
     Full pick analysis, units, and track record live on <a href="/daily-omega" style="color:var(--teal);font-weight:600;">Daily Edge Picks</a>.<br>
     Live game data: ESPN public Gamecast feed, refreshed every 10&ndash;60 seconds in your browser. Not financial advice.
   </p>
@@ -558,35 +558,117 @@
     load();
   }
 
-  async function resolveESPNIds() {
-    if (!GAMES.some(g => g.sport === 'MLB')) return;
-    const dateParam = (PICKSDATA.date || '').replace(/-/g, '');
-    try {
-      const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard' + (dateParam ? '?dates=' + dateParam : ''));
-      if (!resp.ok) return;
-      const data = await resp.json();
-      const evs = (data.events || []).map(ev => {
-        const comp = ev.competitions && ev.competitions[0];
-        if (!comp) return null;
-        const away = (comp.competitors || []).find(c => c.homeAway === 'away');
-        const home = (comp.competitors || []).find(c => c.homeAway === 'home');
-        return { id: ev.id, date: ev.date, away: (away && away.team && away.team.displayName) || '', home: (home && home.team && home.team.displayName) || '' };
-      }).filter(Boolean);
-      for (const g of GAMES) {
-        if (g.sport !== 'MLB') continue;
-        const parts = (g.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(normTeam).filter(Boolean);
-        const matches = evs.filter(ev => {
-          const teams = [normTeam(ev.away), normTeam(ev.home)];
-          return parts.length >= 2 && parts.every(p => teams.some(t => t.includes(lastWord(p)) || normTeam(p).includes(lastWord(t))));
-        });
-        let best = matches[0] || null;
-        if (matches.length > 1 && g.commenceTime) { // doubleheader — nearest start to the pick's commence time
-          const ct = Date.parse(g.commenceTime);
-          best = matches.reduce((a, b) => Math.abs(Date.parse(b.date) - ct) < Math.abs(Date.parse(a.date) - ct) ? b : a);
+  const ESPN_PATH = {
+    MLB: 'baseball/mlb',
+    NFL: 'football/nfl',
+    NCAAF: 'football/college-football',
+    CFB: 'football/college-football',
+    NHL: 'hockey/nhl',
+    NBA: 'basketball/nba',
+  };
+  function sportPath(sport) {
+    const s = String(sport || '').toUpperCase();
+    return ESPN_PATH[s] || null;
+  }
+  function schoolKey(name) {
+    const n = normTeam(name);
+    const drop = new Set(['university','univ','state','st','the','of','and','&']);
+    const parts = n.split(/\s+/).filter(w => w && !drop.has(w));
+    return parts.join(' ') || lastWord(name);
+  }
+  function teamsMatch(pickParts, away, home) {
+    const teams = [normTeam(away), normTeam(home)];
+    const keys = [schoolKey(away), schoolKey(home)];
+    return pickParts.length >= 2 && pickParts.every(p => {
+      const lp = lastWord(p);
+      const sk = schoolKey(p);
+      return teams.some(t => t.includes(lp) || lp.includes(lastWord(t)) || t.includes(sk) || sk.includes(t))
+        || keys.some(k => k.includes(sk) || sk.includes(k) || k.includes(lp));
+    });
+  }
+  async function fetchScoreboard(path, dateParam) {
+    const urls = [];
+    const qs = [];
+    if (dateParam) qs.push('dates=' + dateParam);
+    if (path.indexOf('college-football') >= 0) qs.push('groups=90');
+    const q = qs.length ? ('?' + qs.join('&')) : '';
+    urls.push('https://site.api.espn.com/apis/site/v2/sports/' + path + '/scoreboard' + q);
+    // undated board for spill / late windows
+    if (dateParam) urls.push('https://site.api.espn.com/apis/site/v2/sports/' + path + '/scoreboard' + (path.indexOf('college-football') >= 0 ? '?groups=90' : ''));
+    const byId = new Map();
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        for (const ev of (data.events || [])) {
+          const comp = ev.competitions && ev.competitions[0];
+          if (!comp) continue;
+          const away = (comp.competitors || []).find(c => c.homeAway === 'away');
+          const home = (comp.competitors || []).find(c => c.homeAway === 'home');
+          const st = (comp.status && comp.status.type) || (ev.status && ev.status.type) || {};
+          byId.set(String(ev.id), {
+            id: String(ev.id),
+            date: ev.date,
+            away: (away && away.team && away.team.displayName) || '',
+            home: (home && home.team && home.team.displayName) || '',
+            awayAbbr: (away && away.team && away.team.abbreviation) || '',
+            homeAbbr: (home && home.team && home.team.abbreviation) || '',
+            awayLogo: (away && away.team && away.team.logos && away.team.logos[0] && away.team.logos[0].href) || '',
+            homeLogo: (home && home.team && home.team.logos && home.team.logos[0] && home.team.logos[0].href) || '',
+            awayScore: away ? Number(away.score) : null,
+            homeScore: home ? Number(home.score) : null,
+            state: st.state || 'pre',
+            detail: st.detail || st.shortDetail || '',
+            shortDetail: st.shortDetail || st.detail || '',
+            period: (comp.status && comp.status.period) || (ev.status && ev.status.period) || 0,
+            clock: (comp.status && comp.status.displayClock) || '',
+          });
         }
-        if (best) g.espnId = best.id;
-      }
-    } catch (e) { console.warn('scoreboard resolve failed', e); }
+      } catch (e) { console.warn('scoreboard', url, e); }
+    }
+    return [...byId.values()];
+  }
+  async function resolveESPNIds() {
+    const dateParam = (PICKSDATA.date || '').replace(/-/g, '');
+    const sports = [...new Set(GAMES.map(g => g.sport).filter(Boolean))];
+    for (const sport of sports) {
+      const path = sportPath(sport);
+      if (!path) continue;
+      try {
+        const evs = await fetchScoreboard(path, dateParam);
+        // also try commence-date ET for late kickoffs
+        const altDates = new Set();
+        for (const g of GAMES) {
+          if (String(g.sport).toUpperCase() !== String(sport).toUpperCase()) continue;
+          if (!g.commenceTime) continue;
+          try {
+            const d = new Date(g.commenceTime).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+            if (d && d !== dateParam) altDates.add(d);
+          } catch (e) {}
+        }
+        for (const ad of altDates) {
+          const more = await fetchScoreboard(path, ad);
+          const seen = new Set(evs.map(e => e.id));
+          for (const m of more) if (!seen.has(m.id)) evs.push(m);
+        }
+        for (const g of GAMES) {
+          if (String(g.sport).toUpperCase() !== String(sport).toUpperCase()) continue;
+          const parts = (g.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(normTeam).filter(Boolean);
+          const matches = evs.filter(ev => teamsMatch(parts, ev.away, ev.home));
+          let best = matches[0] || null;
+          if (matches.length > 1 && g.commenceTime) {
+            const ct = Date.parse(g.commenceTime);
+            best = matches.reduce((a, b) => Math.abs(Date.parse(b.date) - ct) < Math.abs(Date.parse(a.date) - ct) ? b : a);
+          }
+          if (best) {
+            g.espnId = best.id;
+            g.espnPath = path;
+            g.board = best; // scoreboard snapshot for non-MLB live strip
+          }
+        }
+      } catch (e) { console.warn('resolve failed', sport, e); }
+    }
   }
 
   /* ═══════════════ PARSE ESPN SUMMARY ═══════════════ */
@@ -1263,14 +1345,54 @@
     return t ? '<span style="font-size:.6875rem; font-weight:600; color:var(--txt-m); background:var(--off-white); border:1px solid var(--border-lt); border-radius:6px; padding:.125rem .5rem;">' + esc(t) + '</span>' : '';
   }
 
-  function gamecastSection(i, g) {
-    if (g.sport !== 'MLB') {
-      return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Live Gamecast is MLB-only for now — ' + esc(g.sport) + ' support coming soon.</div></div></div>';
+  function scoreStripHTML(g) {
+    const b = g.board || {};
+    const state = b.state || 'pre';
+    const away = b.awayAbbr || lastWord(b.away) || 'AWAY';
+    const home = b.homeAbbr || lastWord(b.home) || 'HOME';
+    const aSc = (b.awayScore == null || isNaN(b.awayScore)) ? '—' : String(b.awayScore);
+    const hSc = (b.homeScore == null || isNaN(b.homeScore)) ? '—' : String(b.homeScore);
+    let mid = '';
+    if (state === 'pre') {
+      mid = '<span class="gc-strip-inning">' + esc(b.shortDetail || b.detail || 'Scheduled') + '</span>';
+    } else if (state === 'in') {
+      mid = '<span class="gc-strip-inning">' + esc(b.shortDetail || ((b.clock ? b.clock + ' · ' : '') + (b.detail || 'In Progress'))) + '</span><span class="gc-live-tag">LIVE</span>';
+    } else {
+      mid = '<span class="gc-strip-inning">' + esc(b.shortDetail || b.detail || 'Final') + '</span>';
     }
-    if (!g.espnId) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Waiting for this game on the ESPN feed…</div></div></div>';
-    if (g.err && !g.G) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-err">Live Gamecast unavailable — ESPN feed did not respond. Retrying…</div></div></div>';
-    if (!g.G) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Loading live Gamecast…</div></div></div>';
-    return gamecastHTML(i);
+    const aLogo = b.awayLogo ? '<img class="gc-strip-logo" src="' + esc(b.awayLogo) + '" alt="" loading="lazy"/>' : '';
+    const hLogo = b.homeLogo ? '<img class="gc-strip-logo" src="' + esc(b.homeLogo) + '" alt="" loading="lazy"/>' : '';
+    return '<div class="gc-wrap"><div class="gc-body">' +
+      '<div class="gc-strip" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;background:var(--off-white);border:1px solid var(--border-lt);border-radius:.75rem;">' +
+        '<div style="display:flex;align-items:center;gap:.4rem;min-width:0;"><span style="font-weight:700;">' + esc(away) + '</span>' + aLogo +
+          '<span class="gc-strip-score' + (state === 'pre' ? ' dim' : '') + '">' + esc(aSc) + '</span></div>' +
+        '<div class="gc-strip-mid" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;justify-content:center;">' + mid + '</div>' +
+        '<div style="display:flex;align-items:center;gap:.4rem;min-width:0;"><span class="gc-strip-score' + (state === 'pre' ? ' dim' : '') + '">' + esc(hSc) + '</span>' + hLogo +
+          '<span style="font-weight:700;">' + esc(home) + '</span></div>' +
+      '</div>' +
+      (state === 'pre' ? '<div class="gc-nopitch" style="margin-top:.5rem;">Game not started — live scoreboard will update at tip / first pitch / puck drop.</div>' : '') +
+      (g.sport === 'MLB' ? '' : '<div style="font-size:.6875rem;color:var(--txt-l);margin-top:.5rem;">ESPN live scoreboard · full pitch/box Gamecast remains MLB-first</div>') +
+    '</div></div>';
+  }
+  function gamecastSection(i, g) {
+    if (g.sport === 'MLB') {
+      if (!g.espnId) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Waiting for this game on the ESPN feed…</div></div></div>';
+      if (g.err && !g.G) return '<div class="gc-wrap"><div class="gc-body"><div class="gc-err">Live Gamecast unavailable — ESPN feed did not respond. Retrying…</div></div></div>';
+      if (!g.G) {
+        // show scoreboard strip while summary loads
+        if (g.board) return scoreStripHTML(g) + '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Loading full MLB Gamecast…</div></div></div>';
+        return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Loading live Gamecast…</div></div></div>';
+      }
+      return gamecastHTML(i);
+    }
+    // NCAAF / NFL / NHL / others — ESPN live score strip (games may start closed)
+    if (!g.espnId && !g.board) {
+      return '<div class="gc-wrap"><div class="gc-body"><div class="gc-nopitch">Waiting for this ' + esc(g.sport || 'game') + ' on the ESPN scoreboard…</div></div></div>';
+    }
+    if (g.err && !g.board) {
+      return '<div class="gc-wrap"><div class="gc-body"><div class="gc-err">Live scoreboard unavailable — retrying…</div></div></div>';
+    }
+    return scoreStripHTML(g);
   }
 
   function renderAll() {
@@ -1295,7 +1417,27 @@
   function toggleAB(key) { UI.exp[key] = !UI.exp[key]; renderAll(); }
 
   /* ═══════════════ LIVE LOOP — all games in parallel ═══════════════ */
+  async function refreshBoards() {
+    // Re-resolve scoreboard snapshots so non-MLB (and MLB pre) stay ESPN-fresh
+    const bySport = {};
+    for (const g of GAMES) {
+      const path = g.espnPath || sportPath(g.sport);
+      if (!path) continue;
+      (bySport[path] = bySport[path] || []).push(g);
+    }
+    const dateParam = (PICKSDATA.date || '').replace(/-/g, '');
+    for (const path of Object.keys(bySport)) {
+      try {
+        const evs = await fetchScoreboard(path, dateParam);
+        const map = new Map(evs.map(e => [e.id, e]));
+        for (const g of bySport[path]) {
+          if (g.espnId && map.has(g.espnId)) g.board = map.get(g.espnId);
+        }
+      } catch (e) { console.warn('board refresh', path, e); }
+    }
+  }
   async function load() {
+    await refreshBoards();
     await Promise.all(GAMES.map(async (g) => {
       if (!g.espnId || g.sport !== 'MLB') return;
       try {
@@ -1311,7 +1453,6 @@
         g.fingerprint = fp;
         g.G = parseSummary(data);
         g.chg = computeChanges(g);
-        // Preload headshots — re-renders destroy <img> before slow espncdn first-loads finish
         window.__pre = window.__pre || {};
         for (const id of Object.keys(g.G.athletes)) {
           const hs = g.G.athletes[id].headshot;
@@ -1337,8 +1478,8 @@
 
   function schedule() {
     if (refreshTimer) clearTimeout(refreshTimer);
-    const anyLive = GAMES.some(g => g.G && g.G.state === 'in');
-    const anyPre = GAMES.some(g => g.espnId && (!g.G || g.G.state === 'pre'));
+    const anyLive = GAMES.some(g => (g.G && g.G.state === 'in') || (g.board && g.board.state === 'in'));
+    const anyPre = GAMES.some(g => g.espnId && ((!g.G && (!g.board || g.board.state === 'pre')) || (g.G && g.G.state === 'pre') || (g.board && g.board.state === 'pre')));
     const secs = anyLive ? 10 : (anyPre ? 30 : 60);
     refreshTimer = setTimeout(load, secs * 1000);
   }

@@ -767,7 +767,7 @@
     .mc-pick-side { font-size:.9375rem; font-weight:700; color:var(--olive); display:flex; align-items:center; gap:.4rem; min-width:0; }
     .mc-pick-foot { display:flex; justify-content:space-between; align-items:center; gap:.5rem; margin-top:.45rem; padding-top:.4rem; border-top:1px solid var(--border-lt); }
     .mc-foot-r { margin-left:auto; display:flex; align-items:center; gap:.4rem; }
-    /* live score bar (mirrors /alpha) */
+    /* live score bar (mirrors /daily-omega) */
     .mc-scorebar { display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin-top:.5rem; padding:.5rem .625rem; border-radius:7px; font-size:.75rem; }
     .sb-live { background:#eef6ff; border:1px solid #b3d4fc; }
     .sb-win { background:var(--green-light); border:1px solid var(--green-border); }
@@ -1483,7 +1483,7 @@
   async function loadPickBoard() {
     // Fetch AI picks (includes rejections for remaining top 10)
     try {
-      var resp = await fetch(API_BASE + '/api/get-picks-alpha');
+      var resp = await fetch(API_BASE + '/api/get-picks-omega');
       if (resp.ok) {
         var data = await resp.json();
         picksData = data;
@@ -2068,7 +2068,7 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     MY CHALLENGES — inline accordion w/ live results (mirrors /alpha)
+     MY CHALLENGES — inline accordion w/ live results (mirrors /daily-omega)
      Both sides of a challenge watch the same ESPN-driven live scores.
   ═══════════════════════════════════════════════════════════════ */
   var myChallengesData = [];
@@ -2076,7 +2076,7 @@
   var mcScores = {};          // sport -> [games]
   var mcRefreshTimer = null;
 
-  /* ── ESPN live scores (ported from /alpha) ── */
+  /* ── ESPN live scores (ported from /daily-omega) ── */
   var MC_ESPN = {
     'NBA':'basketball/nba','WNBA':'basketball/wnba','NHL':'hockey/nhl',
     'NCAAB':'basketball/mens-college-basketball','MLB':'baseball/mlb',
@@ -2284,7 +2284,7 @@
 
   /* ── AlphaPix bet-detail enrichment ──
      Older challenges only stored {sport,matchup,side}. We backfill odds / bet type /
-     edge / tip-off from today's live alpha board so existing bets show full detail.
+     edge / tip-off from today's live Omega/Edge board so existing bets show full detail.
      candidateTable is the richest source — it carries odds + market + edge for EVERY
      evaluated side (picks AND rejections), so it's our primary enrichment feed. */
   var mcEnrich = {}; // normalized matchup -> [{ pickStr, odds, grade, ev, betType, edge, startTime }]
@@ -2297,7 +2297,7 @@
   }
   async function mcBuildEnrich() {
     try {
-      var resp = await fetch(API_BASE + '/api/get-picks-alpha');
+      var resp = await fetch(API_BASE + '/api/get-picks-omega');
       if (!resp.ok) return;
       var data = await resp.json();
       mcEnrich = {};
@@ -2441,7 +2441,7 @@
 
   /* AlphaPix-style pick card — minimized: sport tag + bet type + grade, matchup +
      tip-off, pick side + odds, live score, decided result. Missing fields are enriched
-     from the live alpha board (mcLookup) and otherwise simply omitted. */
+     from the live Omega/Edge board (mcLookup) and otherwise simply omitted. */
   function mcPickRowHTML(p, isMe) {
     var game = mcFindGame(p);
     var result = mcResult(p, game);

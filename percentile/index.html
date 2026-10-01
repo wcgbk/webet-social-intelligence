@@ -19,11 +19,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WeBetAI - Social Intelligence | Model Percentile Scorecard</title>
-  <meta name="description" content="Architecture scorecard for WeBetAI's deterministic edge picks pipeline. Design capabilities, data sources, and system ratings." />
+  <meta name="description" content="Architecture scorecard for Daily Edge Picks. Documented elite-desk percentiles and the live Edge record since September 22, 2026." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/percentile" />
   <meta property="og:title" content="WeBetAI - Social Intelligence | Model Percentile Scorecard" />
-  <meta property="og:description" content="Architecture scorecard for WeBetAI's deterministic edge picks pipeline." />
+  <meta property="og:description" content="Architecture scorecard for Daily Edge Picks. Sharp anchors, sport engines, and the live Edge record." />
   <meta property="og:image" content="https://webetsocial.com/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -354,6 +354,7 @@
       line-height: 1.2;
     }
     .kpi-value.positive { color: var(--green); }
+    .kpi-value.negative { color: #c0392b; }
     .kpi-label {
       font-size: .5625rem; font-weight: 600; color: var(--txt-l);
       text-transform: uppercase; letter-spacing: .04em; margin-top: .25rem;
@@ -376,6 +377,8 @@
     .split-row-label { color: var(--txt-m); }
     .split-row-val { font-weight: 600; color: var(--olive); }
     .split-row-val.pos { color: var(--green); }
+    .split-row-val.neg { color: #c0392b; }
+    .qa-note { font-size: .75rem; color: var(--txt-m); line-height: 1.5; margin: 0 0 .875rem; }
     .daily-mini-table { width: 100%; border-collapse: collapse; font-size: .75rem; }
     .daily-mini-table th {
       font-size: .6rem; font-weight: 700; color: var(--txt-l);
@@ -420,162 +423,102 @@
 
   <main class="main">
 
-    <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">v10.4-alpha-mlb</span></h1>
-    <p class="page-sub">Architecture and design assessment of the alpha pipeline — the SOLE production picks model. Foundation (June 2026): a discrete negative-binomial run-distribution for MLB, First-Five-innings folded in, two-sided no-vig de-vig with pitcher-aware moneyline pricing, and true closing-line CLV. August 2026 (v10.4) hardening: candidate ranking moved to calibrated expected value (z-score demoted to a display diagnostic); per-market unit discipline (moneylines and F5 capped, totals carry conviction) driven by measured closing-line value; doubleheader pricing and settlement fully disambiguated by start time; the self-optimization loop converted from a live parameter-mutator to a CLV observer whose changes are human-approved in Discord. Ratings reflect system capabilities, not results.</p>
+    <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">Edge</span></h1>
+    <p class="page-sub">Architecture scorecard for Daily Edge Picks. Prices anchor to a paired no-vig line, Pinnacle first and Circa when Pinnacle is missing. Sport engines cover MLB, NFL, college football, and NHL. Basketball stays off. A card is up to three gate-clear straights plus one 3-leg parlay, inside a 4.0 unit cap (3.5 on straights, 0.5 on the parlay). Walk-forward jobs only store lock-to-close samples. Coefficient fit is off, so those samples do not change the next card. The four percentiles below are the September 23, 2026 elite-desk QA. They are an engineering judgment on that desk lock, not a live results rank, and they were scored before the September 30 hockey engine.</p>
     <div style="text-align:center; margin-bottom:1.25rem;">
-      <button class="summary-btn" onclick="openDailySummary()">Daily Alpha Picks Summary Reasoning</button>
+      <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary</button>
     </div>
 
-    <!-- Live Alpha Performance Stats -->
+    <!-- Live Edge performance — figures come from get-results-omega omegaOnly -->
     <div class="live-stats-section">
       <div class="live-stats-title">
-        Alpha Pick Performance
+        Edge Pick Performance
         <span class="live-badge">Live</span>
       </div>
       <div id="live-stats-body"><div class="stats-loading">Loading stats...</div></div>
     </div>
 
-    <!-- Capability Scorecard (ordered by percentile, highest first) -->
+    <!-- Elite desk QA — documented scores only (2026-09-23 write-up) -->
     <div class="scorecard">
-      <div class="scorecard-title">Capability Breakdown</div>
+      <div class="scorecard-title">Elite Desk QA</div>
+      <p class="qa-note">Scored September 23, 2026 against a sharp closing-line desk, on the v12.3.12 desk lock. Processes 86, Architecture 86, Math 84, Overall 84. Overall follows Math, the weakest lens. These are engineering judgments from that review. They are not a forecast, not computed from the record above, and they predate the September 30 hockey engine.</p>
 
       <div class="metric">
         <div class="metric-header">
-          <span class="metric-name">Execution Architecture</span>
-          <span class="metric-pct pct-elite">98th</span>
+          <span class="metric-name">Processes</span>
+          <span class="metric-pct pct-strong">86</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:98%"></div></div>
-        <div class="metric-rationale">Fully deterministic JS pipeline computes all projections, edges, and Kelly sizing before the AI layer. Claude validates and writes narrative only — structurally cannot override math, add picks outside the candidate table, or increase units. Zero bypass paths.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:86%"></div></div>
+        <div class="metric-rationale">Morning snaps, generate, verify, and an evening write-only resample bracket the card. The November 1 clock change is written down and was not applied on the day this score was given. The live schedules stay on fixed UTC until that change is applied.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
-          <span class="metric-name">Calibration Discipline</span>
-          <span class="metric-pct pct-elite">95th</span>
+          <span class="metric-name">Architecture</span>
+          <span class="metric-pct pct-strong">86</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:95%"></div></div>
-        <div class="metric-rationale">v10.3 shrinkage calibration: every cover probability starts from the no-vig market price and earns only a fitted fraction of the model's claimed deviation (totals 0.30, spreads 0.35, moneylines 0.50 — fitted on 428 graded real picks, Mar–Jun 2026). Displayed EV is honest 3-15%, not marketing numbers. Quarter-Kelly sizing with 0.5u steps, EV &gt; 3% calibrated floor, never worse than -250, moneyline dogs capped at +160. Every rule is enforced in code, not by prompt instruction.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:86%"></div></div>
+        <div class="metric-rationale">Generate publishes the card. Verify may drop a broken straight, flag copy, or resize a stake inside the existing cap. It does not add a pick. Walk-forward samples, prediction-market logs, and outside research stay off the selection path.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
-          <span class="metric-name">Bankroll Management</span>
-          <span class="metric-pct pct-elite">92nd</span>
+          <span class="metric-name">Math</span>
+          <span class="metric-pct pct-strong">84</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:92%"></div></div>
-        <div class="metric-rationale">4u daily exposure cap. 0.5u-3.0u range per pick. Drawdown detection triggers 25% Kelly reduction after 3+ consecutive losses. v10.4 per-market caps enforce measured discipline: totals (the segment with positive closing-line value) carry conviction units; full-game moneylines and F5 are capped at 0.5u until they earn a positive-CLV track record. Parlay sized at 0.5u (0.25u when a lean is on the card). Institutional bankroll management adapted for retail scale.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
+        <div class="metric-rationale">Steam uses the American juice ladder, so a plus-to-minus cross is not treated as a 200-cent move. Straights rank on the same quality score as the letter grade. The published probability is still shrunk with hand-set constants and a 0.42–0.58 isotonic band. That is why this lens stays under 85.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
-          <span class="metric-name">Edge Identification</span>
-          <span class="metric-pct pct-elite">90th</span>
+          <span class="metric-name">Overall</span>
+          <span class="metric-pct pct-strong">84</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
-        <div class="metric-rationale">Cross-sport edge ranking on calibrated expected value (v10.4 — z-scores were not comparable across markets, so they systematically floated moneylines and F5 above totals; z is now a display diagnostic only). MLB cover probabilities come from a discrete negative-binomial run-distribution (analytic convolution of each team's projected run rate) rather than a normal CDF on a point estimate — baseball scoring is discrete and right-skewed, so this correctly prices the 1-run / half-run mass on run lines and the push region on totals. NBA and NHL still use sport-specific total standard deviations (NBA 18.5, NHL 2.3 goals) pending their own discrete models. Edge discount curve compresses outlier edges (log compression above 1 std dev). Consensus-tightness and line-movement discounts shrink edges the market has already priced. The 3% calibrated EV floor filters noise indistinguishable from variance at -110.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Projection Engine</span>
-          <span class="metric-pct pct-strong">88th</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
-        <div class="metric-rationale">Three-method ensemble: Elo-based power ratings, sport-specific efficiency models (pace-adjusted for basketball, shot-based for hockey), and PPG averaging. Injury impact model adjusts projections for star player absences. Back-to-back rest penalty (3% scoring reduction) applied for NBA/NHL. Home-court adjustment baked in. All computed deterministically in JS.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Speed to Market</span>
-          <span class="metric-pct pct-strong">88th</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
-        <div class="metric-rationale">Automated daily at 9am ET via Netlify scheduled function; First-Five lines fold into the same card from a 10am ET pass. 15-minute background worker, now hardened with per-call timeouts + exponential backoff and a deterministic fallback so a slow or rate-limited API can never stall or block a run. Early generation maximizes closing-line-value runway. Picks are final once generated — no mid-day overrides. No human in the loop for generation or delivery.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Data Pipeline</span>
-          <span class="metric-pct pct-strong">87th</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:87%"></div></div>
-        <div class="metric-rationale">Five independent data sources: real-time odds (13 sportsbooks), ESPN stats + injuries, daily-updated Elo ratings, prediction market cross-reference (Kalshi + Polymarket), and real-time breaking news (X/Grok). Each source fails independently without taking down the pipeline.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Sport Coverage</span>
-          <span class="metric-pct pct-strong">88th</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
-        <div class="metric-rationale">NBA, NHL, and MLB active, plus MLB First-Five-innings (F5) folded in as a built-in market — the one genuinely soft corner, EV-discounted ×0.5 and slot/size-capped until closing-line value validates it. NCAAB disabled (sub-50% real accuracy) and all 8 soccer leagues disabled — 38.5% real daily-run record, and the normal goal model is structurally wrong for draw-heavy soccer (a discrete distribution is the prerequisite to re-enable). Quality over quantity: the cross-sport mandate evaluates every game with available lines and selects the highest calibrated EV regardless of sport.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Market Selection</span>
-          <span class="metric-pct pct-strong">85th</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:85%"></div></div>
-        <div class="metric-rationale">Spreads, totals, moneyline, and puck lines evaluated across all sports. Market-specific edge thresholds per sport. Alternate spreads and totals attempted with automatic fallback to core markets based on API plan. System considers every available market type per game before selecting highest-edge option.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Prediction Market Cross-Ref</span>
-          <span class="metric-pct pct-good">82nd</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-good" style="width:82%"></div></div>
-        <div class="metric-rationale">Type-aligned validation against Kalshi and Polymarket. Parses market titles to classify bet type (moneyline, spread, total) and only compares matching types — totals to totals, spreads to spreads. Multi-market aggregation weighted by volume and bid-ask quality. Proportional unit adjustments in 0.5u steps. Prevents false flags like comparing a moneyline market against a totals pick.</div>
-      </div>
-
-      <div class="metric">
-        <div class="metric-header">
-          <span class="metric-name">Self-Correction</span>
-          <span class="metric-pct pct-elite">90th</span>
-        </div>
-        <div class="metric-bar"><div class="metric-fill fill-elite" style="width:90%"></div></div>
-        <div class="metric-rationale">Closing-line value is tracked on every pick 3x daily — Pinnacle-anchored, two-sided no-vig — including a 3am ET overnight run that settles night games (doubleheaders, postponements, and F5 all disambiguated) before the morning pipeline reads bankroll state. v10.4 changed the correction philosophy: the old loop that let trailing performance mutate live probabilities and Kelly multipliers was removed — it chased variance and inflated whatever segment ran hot. Self-optimization is now an <em>observer</em>: each Sunday it aggregates 60 days of CLV by market and by parlay leg, computes real-dollar ROI, and checks the grade ladder, then posts the verdict to Discord. Sizing levers only move on deliberate, human-approved config changes gated by measured CLV — never on a hot streak. Daily 10:30am QA pass audits every published pick's math and narrative.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
+        <div class="metric-rationale">Overall follows Math. The card shape in that review is unchanged: up to three gate-clear straights, a 3-leg ranked by combined hit probability, a 4.0 unit cap, and no lean pad. An empty card is allowed.</div>
       </div>
 
     </div>
 
-    <!-- Data Sources (above Pipeline Architecture) -->
     <div class="scorecard">
-      <div class="scorecard-title">5-Source Data Pipeline</div>
+      <div class="scorecard-title">What Feeds the Card</div>
       <div class="sources-grid">
         <div class="source-chip">
-          <span class="source-name">The Odds API</span>
-          <span class="source-desc">Real-time lines from 13 US/EU sportsbooks</span>
+          <span class="source-name">Sharp anchors</span>
+          <span class="source-desc">Paired no-vig price. Pinnacle first, then Circa, then the other sharp books. One book’s two-way price is never mixed with another book’s other side.</span>
         </div>
         <div class="source-chip">
-          <span class="source-name">ESPN API</span>
-          <span class="source-desc">Team stats, injuries, schedules</span>
+          <span class="source-name">US retail books</span>
+          <span class="source-desc">The published number has to be offered at retail. A missing odds feed warns. It does not invent a line.</span>
         </div>
         <div class="source-chip">
-          <span class="source-name">Internal Elo</span>
-          <span class="source-desc">Daily-updated ratings, splits, streaks</span>
+          <span class="source-name">MLB engine</span>
+          <span class="source-desc">Per-game runs scored and allowed. A named starter, park, and bullpen residual can move that probability. A missing feed adds zero.</span>
         </div>
         <div class="source-chip">
-          <span class="source-name">Kalshi + Polymarket</span>
-          <span class="source-desc">Prediction market cross-reference</span>
+          <span class="source-name">Football engines</span>
+          <span class="source-desc">NFL and college football use EPA when it is present, with a capped QB-continuity adjustment. Missing EPA falls back to season points per game.</span>
         </div>
-        <div class="source-chip" style="grid-column: span 2;">
-          <span class="source-name">X / Grok-3-mini</span>
-          <span class="source-desc">Real-time breaking news: injuries, lineup changes, weather alerts</span>
+        <div class="source-chip">
+          <span class="source-name">NHL engine</span>
+          <span class="source-desc">Enabled September 30, 2026. Per-game goals for and against, plus home ice. Shot and goalie residuals are capped and fail soft to zero.</span>
+        </div>
+        <div class="source-chip">
+          <span class="source-name">Walk-forward store</span>
+          <span class="source-desc">Lock-to-close samples from September 22, 2026 on. Read by the observer only. Generate does not load them.</span>
         </div>
       </div>
     </div>
 
-    <!-- Pipeline Architecture -->
     <div class="scorecard">
-      <div class="scorecard-title">Pipeline Architecture</div>
+      <div class="scorecard-title">Pipeline</div>
 
       <div class="pipeline-step">
         <div class="step-num">1</div>
         <div class="step-content">
-          <div class="step-title">Data Ingestion</div>
-          <div class="step-desc">Fetch real-time odds from 13 sportsbooks, team stats + injuries from ESPN, Elo ratings from internal store, prediction market prices from Kalshi/Polymarket, and breaking news via X/Grok.</div>
+          <div class="step-title">Sharp line</div>
+          <div class="step-desc">Morning snaps record the open. The fair price is a paired no-vig from one book: Pinnacle, then Circa. Open-to-now steam is measured on the American juice ladder.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -583,8 +526,8 @@
       <div class="pipeline-step">
         <div class="step-num">2</div>
         <div class="step-content">
-          <div class="step-title">Projection Engine</div>
-          <div class="step-desc">Three-method ensemble per game: Elo-based power ratings, sport-specific efficiency models (pace-adjusted basketball, shot-based hockey, run-based baseball), and PPG averaging. All computed in JavaScript — no AI involved.</div>
+          <div class="step-title">Sport engines</div>
+          <div class="step-desc">MLB builds the run environment from per-game runs. NFL and college football use EPA and a capped QB adjustment. NHL uses per-game goals and home ice. Basketball is off. A missing feed adds zero and the rest of that slate still runs.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -592,8 +535,8 @@
       <div class="pipeline-step">
         <div class="step-num">3</div>
         <div class="step-content">
-          <div class="step-title">Edge Computation</div>
-          <div class="step-desc">Compare model projections to consensus lines. Calculate spread, total, puck line, and moneyline edges — totals against their own (wider) standard deviations. Rank across sports by calibrated expected value (v10.4 — z-scores were demoted to a display diagnostic, since they were not comparable across markets and floated moneylines above totals). Apply sport-specific minimum edge thresholds (NBA 2.0 pts, NHL 0.4 goals, MLB 0.5 runs). Filter to calibrated EV &gt; 3%. Consensus tightness, line movement, and market misalignment each discount edges the market has already captured.</div>
+          <div class="step-title">Calibration</div>
+          <div class="step-desc">The model probability shrinks toward the sharp price with a fixed constant, then sits inside a 0.42–0.58 isotonic band. Fit is off. There is no shrink map, isotonic table, or gate override loaded from the walk-forward store.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -601,8 +544,8 @@
       <div class="pipeline-step">
         <div class="step-num">4</div>
         <div class="step-content">
-          <div class="step-title">Candidate Ranking</div>
-          <div class="step-desc">Rank all qualifying edges. Compute shrinkage-calibrated cover probabilities: no-vig market price plus a fitted fraction of the model's deviation (fitted on 428 graded real picks); legacy caps remain as guard rails only. Quarter-Kelly unit sizing scaled so calibrated EVs map cleanly across 0.5u-3.0u, with 0.5u step rounding. Top 15 candidates passed to validation.</div>
+          <div class="step-title">Straights</div>
+          <div class="step-desc">Same-day games only. Gate-clear plays rank by quality score, the same number as the letter grade. Up to three straights. The card may be short. Nothing is padded in to fill a quota.</div>
           <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
@@ -610,98 +553,58 @@
       <div class="pipeline-step">
         <div class="step-num">5</div>
         <div class="step-content">
-          <div class="step-title">AI Validation + Narrative</div>
-          <div class="step-desc">Claude receives pre-computed candidate table. Web searches for injury updates, lineup changes, weather. Selects top 3 picks from the table — can reject or reduce units but cannot override math, add picks outside the table, or increase sizing.</div>
-          <span class="step-tag tag-ai">AI Layer</span>
+          <div class="step-title">Parlay</div>
+          <div class="step-desc">One parlay. A clean 3-leg is published when one exists, ranked by combined hit probability, with expected value only as a tie-break. Stake is 0.5 units. Straights share a 3.5 unit budget. The card cap is 4.0 units.</div>
+          <span class="step-tag tag-js">Deterministic</span>
         </div>
       </div>
 
       <div class="pipeline-step">
         <div class="step-num">6</div>
         <div class="step-content">
-          <div class="step-title">Enforcement + Delivery</div>
-          <div class="step-desc">JS enforces 4u daily exposure cap, 0.5u-3.0u per-pick range, drawdown detection (25% Kelly reduction after 3+ consecutive losses). Picks stored to Netlify Blobs, served via API. CLV captured 3x daily, results settled back into the store overnight, and a 10:30am QA function audits the published card.</div>
+          <div class="step-title">Verify and observers</div>
+          <div class="step-desc">Verify can drop, flag, or resize. It cannot add a straight or rebuild the parlay from the straight card. Morning and evening walk-forward jobs write samples only. A null close is not a fit.</div>
           <span class="step-tag tag-auto">Automated</span>
         </div>
       </div>
 
     </div>
 
-    <!-- Design Principles -->
     <div class="gap-card">
-      <div class="gap-title">Design Principles</div>
+      <div class="gap-title">Design Rules</div>
       <div class="gap-item">
-        <span class="gap-label">Math in code, not in prompts:</span> Every projection, edge, and unit size is computed deterministically in JavaScript. Same inputs always produce the same outputs.
+        <span class="gap-label">One fair price:</span> Spreads, totals, and moneylines share a paired no-vig anchor. The Edge figure is the shrink-adjusted gap versus that price.
       </div>
       <div class="gap-item">
-        <span class="gap-label">AI validates, never overrides:</span> Claude receives a pre-ranked candidate table and can only select, reject, or reduce — structurally cannot inflate sizing or fabricate lines.
+        <span class="gap-label">Engines fail soft:</span> A missing starter, EPA row, or goalie rate adds zero. It does not blank the slate and it does not invent the missing number.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Cross-sport by default:</span> Every game with available lines is evaluated. The system picks the highest calibrated EV across all active leagues, not the most popular sport.
+        <span class="gap-label">Short cards are allowed:</span> Three straights is a maximum. Steam and placeability can leave the card empty. Verify does not refill it.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Fail gracefully:</span> Each data source is independent. ESPN down? Elo ratings and odds still produce picks. Prediction markets unavailable? Pipeline continues without that signal.
+        <span class="gap-label">Observers do not publish:</span> Walk-forward fit is off. Samples from September 22, 2026 forward are stored for a later review. Generate does not read them.
       </div>
       <div class="gap-item">
-        <span class="gap-label">Caps enforced in code:</span> Cover probability caps, Kelly clamps, daily exposure limits, and minimum edges are all hard-coded — not prompt instructions that can be ignored.
+        <span class="gap-label">Caps live in code:</span> 3.5 units across straights, 0.5 on the parlay, 4.0 for the card, and 1.25 on any one straight. Quarter-Kelly sizes the straight before those caps.
       </div>
     </div>
 
-    <!-- Roadmap -->
     <div class="gap-card">
-      <div class="gap-title">Profitability Roadmap</div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">Shrinkage calibration: SHIPPED (v10.3)</span> Cover probabilities anchored to the no-vig market price, earning only a fitted fraction of the model's claimed deviation. Fitted on 428 graded real daily-run picks — displayed EV and win probabilities are now honest numbers.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">Market-correct deviations: SHIPPED (v10.3)</span> Totals use full-game total standard deviations (NBA 18.5, NHL 2.3, MLB 4.3) instead of margin deviations, removing a 40-50% systematic overstatement of total edges.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">Settlement truth: SHIPPED (v10.4)</span> The results grader that writes back to the store now disambiguates doubleheaders by start time, voids postponed/canceled games as pushes, and requires five recorded innings before settling an F5 bet — plus an awaited overnight sweep so night games never sit unsettled.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">EV-based ranking + per-market caps: SHIPPED (v10.4)</span> Candidates rank and size on calibrated expected value; totals carry conviction units while moneylines and F5 are capped until closing-line value earns them back.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">CLV observer + Discord approvals: SHIPPED (v10.4)</span> Closing-line value is tracked 3x daily (Pinnacle-anchored, overnight settlement) and aggregated weekly by market and by parlay leg. The observer proposes; a human approves bounded, reversible config changes in Discord. No live parameter mutation.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">Real-data pruning: SHIPPED (v10.3)</span> Soccer disabled (38.5% real win rate across 6 leagues), moneyline dogs capped at +160 (6-14 real record beyond it), and backtest-era sport multipliers removed after real results contradicted them.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">Edge discount curve: SHIPPED</span> Log compression on edges above 1 standard deviation prevents oversizing on inflated projections. Live since v10.0.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">PM type-aligned cross-ref: SHIPPED</span> Prediction market signals parsed by bet type, multi-market aggregated, and proportionally weighted. Eliminates false flags from mismatched market comparisons.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">MLB projection engine: SHIPPED (v10.4)</span> Starter FIP replaces raw ERA (≥30 IP gate), a discrete negative-binomial run distribution prices the run-line and total push mass, and park factors are baked into each projection — the highest-leverage summer upgrade now that MLB carries the slate.
-      </div>
-    </div>
-
-    <!-- Weekly Optimization Loop -->
-    <div class="gap-card">
-      <div class="gap-title">Weekly Optimization Loop — Discord</div>
+      <div class="gap-title">Walk-Forward Observer</div>
       <div class="gap-item" style="border-bottom:none;">
-        The model audits itself every Sunday and reports to a private Discord channel. It is built so improvements are <em>earned, not guessed</em>: live sizing never changes on a hot streak — a lever only moves when the market's own closing line confirms the edge, and only after a human approves it. This is the feedback system that replaced the old loop of automatic parameter tweaks.
+        Two jobs record lock-to-close samples for dates on or after September 22, 2026. They refresh yesterday and today. They do not edit the published card, and they do not post a grade into the next run.
       </div>
       <div class="gap-item">
-        <span class="gap-label">1 · Measure</span> Every published pick's closing-line value is captured 3x daily — anchored to Pinnacle (the sharpest book in the world), two-sided no-vig. CLV, not a short-run win/loss record, is the truth signal for whether an edge is real.
+        <span class="gap-label">Morning</span> Writes the day’s samples and a report after the card is up. A game that has not closed yet keeps a null close.
       </div>
       <div class="gap-item">
-        <span class="gap-label">2 · Observe (Sunday)</span> The self-optimizer aggregates ~60 days of CLV by market and by parlay leg, computes real-dollar ROI per segment, and checks the grade ladder — do higher-graded picks actually win more? It is observational only; it never mutates the live model.
+        <span class="gap-label">Evening</span> Runs after the close pass and writes the same store again. Still write-only.
       </div>
       <div class="gap-item">
-        <span class="gap-label">3 · Report</span> A model-health digest posts to Discord: the parlay-leg CLV verdict (🟢 real edge · 🟡 building · 🔴 variance), a grade-inversion alarm if conviction stops predicting, market ROI, and the Odds-API quota remaining.
+        <span class="gap-label">Fit stays off</span> No coefficient, shrink map, or gate from those samples is applied. The calibrator keeps the fixed constants already on the card.
       </div>
       <div class="gap-item">
-        <span class="gap-label">4 · Propose</span> When CLV crosses a threshold, the digest appends a concrete, bounded proposal — e.g. raise the parlay stake once parlay-leg CLV turns positive, or lift the moneyline cap once ML CLV beats the close over 30+ picks. Nothing is proposed the data hasn't earned.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label">5 · Approve</span> A one-word reply in the channel applies it. Approvals are restricted to the operator, write only a whitelisted, reversible config value — never code, never free-text instructions — and take effect on the next 9am card. Reverting is one reply away.
-      </div>
-      <div class="gap-item">
-        <span class="gap-label" style="color:var(--green);">The rule</span> A parlay of genuinely +CLV legs compounds edge; a parlay carrying a −CLV leg compounds a leak. So parlays are built totals-first (the segment that beats the close) and only scale when their legs are proven — discipline over adrenaline, enforced by process rather than willpower.
+        <span class="gap-label">What a sample holds</span> Sport, market, side, matchup, lock price, close price, closing-line cents, cover probability, sharp fair price, Edge, units, and a result only when the grade is win, loss, push, or void.
       </div>
     </div>
 
@@ -719,98 +622,121 @@
   </div>
 
 <script>
-  // Live alpha stats
-  (function loadAlphaStats() {
-    fetch('/.netlify/functions/get-results-alpha')
-      .then(r => r.json())
+  // Live Edge record. Totals are omegaOnly (floor 2026-09-22). Day rows are the same floor.
+  (function loadEdgeStats() {
+    fetch('/api/get-results-omega?range=all')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(data => {
-        const days = (data.days || []).slice().sort((a, b) => a.date.localeCompare(b.date));
-        if (!days.length) { document.getElementById('live-stats-body').innerHTML = '<div class="stats-loading">No data yet.</div>'; return; }
+        const body = document.getElementById('live-stats-body');
+        const edge = data.omegaOnly;
+        if (!edge || !edge.cumulative || !edge.straight) {
+          body.innerHTML = '<div class="stats-loading">Edge totals are not in this response yet.</div>';
+          return;
+        }
+        const floor = (data.scope && data.scope.omegaStart) || '2026-09-22';
+        const days = (data.days || []).filter(d => d && d.date >= floor && d.source !== 'alpha' && d.source !== 'beta' && !d.noPlays)
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const cum = edge.cumulative;
+        const str = edge.straight;
+        const par = edge.parlay || {};
+        const fmt = d => { const parts = String(d || '').split('-'); if (parts.length < 3) return d || ''; return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10); };
+        const money = n => {
+          const v = Number(n);
+          if (!isFinite(v)) return '--';
+          const sign = v > 0 ? '+' : v < 0 ? '-' : '';
+          return sign + '$' + Math.abs(Math.round(v)).toLocaleString();
+        };
+        const tone = n => { const v = Number(n); return v > 0 ? 'pos' : v < 0 ? 'neg' : ''; };
+        const roiOf = (profit, wagered) => {
+          const w = Number(wagered), pft = Number(profit);
+          if (!(w > 0) || !isFinite(pft)) return '--';
+          return ((pft / w) * 100).toFixed(1) + '%';
+        };
+        const accText = v => {
+          if (v == null || v === '' || v === '--') return '--';
+          const s = String(v);
+          return s.indexOf('%') >= 0 ? s : s + '%';
+        };
+        const dayAcc = d => {
+          const decided = (d.wins || 0) + (d.losses || 0);
+          if (!decided) return '--';
+          return accText(d.accuracy);
+        };
 
-        const cum = data.cumulative || {};
-        const str = data.straight || {};
-        const par = data.parlay || {};
-        const first = days[0].date, last = days[days.length - 1].date;
-        const fmt = d => { const [,m,dd] = d.split('-'); return (parseInt(m)) + '/' + parseInt(dd); };
-        const profitSign = (cum.totalProfit || 0) >= 0 ? '+' : '';
-        const strProfitSign = (str.totalProfit || 0) >= 0 ? '+' : '';
-        const parProfitSign = (par.totalProfit || 0) >= 0 ? '+' : '';
-
-        // Best/worst day
-        const sorted = [...days].sort((a, b) => a.profit - b.profit);
-        const best = sorted[sorted.length - 1], worst = sorted[0];
-        const profitDays = days.filter(d => d.profit > 0).length;
-
-        // Win/loss streaks
+        const graded = days.filter(d => (d.wins || 0) + (d.losses || 0) + (d.pushes || 0) > 0 || (d.wagered || 0) > 0);
+        const streakDays = graded.length ? graded : days;
         let maxW = 0, maxL = 0, curW = 0, curL = 0;
-        for (const d of days) {
-          if (d.wins > d.losses) { curW++; curL = 0; } else { curL++; curW = 0; }
+        for (const d of streakDays) {
+          if ((d.wins || 0) > (d.losses || 0)) { curW++; curL = 0; } else if ((d.losses || 0) > (d.wins || 0)) { curL++; curW = 0; } else { curW = 0; curL = 0; }
           maxW = Math.max(maxW, curW); maxL = Math.max(maxL, curL);
         }
+        const withProfit = days.filter(d => d.profit != null && isFinite(Number(d.profit)) && ((d.wagered || 0) > 0 || (d.wins || 0) + (d.losses || 0) > 0));
+        const sorted = withProfit.slice().sort((a, b) => Number(a.profit) - Number(b.profit));
+        const best = sorted.length ? sorted[sorted.length - 1] : null;
+        const worst = sorted.length ? sorted[0] : null;
+        const profitDays = days.filter(d => Number(d.profit) > 0).length;
 
-        // Show last 10 days in table, rest behind toggle
         const PREVIEW = 10;
-        const showAll = days.length <= PREVIEW;
-
         function renderRows(slice) {
           return slice.map(d => {
-            const pl = d.profit >= 0 ? `+$${d.profit}` : `-$${Math.abs(d.profit)}`;
-            const plClass = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : '';
-            const roi = d.wagered > 0 ? ((d.profit / d.wagered) * 100).toFixed(0) + '%' : '--';
-            const roiClass = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : '';
+            const plClass = tone(d.profit);
+            const roi = (d.roi == null || d.roi === '--') ? '--' : accText(d.roi);
+            const roiClass = tone(d.profit);
             return `<tr>
               <td>${fmt(d.date)}</td>
-              <td class="right">${d.wins}W-${d.losses}L</td>
-              <td class="right">${d.accuracy}</td>
-              <td class="right">$${d.wagered}</td>
-              <td class="right ${plClass}">${pl}</td>
+              <td class="right">${d.wins || 0}W-${d.losses || 0}L</td>
+              <td class="right">${dayAcc(d)}</td>
+              <td class="right">$${Number(d.wagered || 0).toLocaleString()}</td>
+              <td class="right ${plClass}">${money(d.profit)}</td>
               <td class="right ${roiClass}">${roi}</td>
             </tr>`;
           }).join('');
         }
-
-        const recentDays = days.slice(-PREVIEW).reverse();   // newest first (e.g. 8/4 on top), matching /alpha
+        const recentDays = days.slice(-PREVIEW).reverse();
         const olderDays = days.slice(0, -PREVIEW).reverse();
-
-        const totalProfit = cum.totalProfit || 0;
-        const totalPl = totalProfit >= 0 ? `+$${totalProfit}` : `-$${Math.abs(totalProfit)}`;
+        const first = days.length ? days[0].date : floor;
+        const last = days.length ? days[days.length - 1].date : floor;
+        const profitClass = tone(cum.totalProfit);
+        const roiClass = tone(parseFloat(cum.roi));
+        const strRoi = roiOf(str.totalProfit, str.totalWagered);
+        const parRoi = roiOf(par.totalProfit, par.totalWagered);
 
         let html = `
-          <div class="stats-date-range">${fmt(first)} – ${fmt(last)} &nbsp;·&nbsp; ${days.length} days &nbsp;·&nbsp; 3 straight + 1 parlay/day</div>
+          <div class="stats-date-range">${fmt(first)} – ${fmt(last)} &nbsp;·&nbsp; Daily Edge Picks since ${fmt(floor)} &nbsp;·&nbsp; ${days.length} card days</div>
           <div class="kpi-grid">
             <div class="kpi-card">
-              <div class="kpi-value">${cum.wins}W-${cum.losses}L</div>
-              <div class="kpi-label">Record</div>
+              <div class="kpi-value">${str.wins || 0}W-${str.losses || 0}L</div>
+              <div class="kpi-label">Straight record</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-value positive">${cum.accuracy}</div>
-              <div class="kpi-label">Accuracy</div>
+              <div class="kpi-value">${str.accuracy || '--'}</div>
+              <div class="kpi-label">Straight accuracy</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-value positive">${totalPl}</div>
+              <div class="kpi-value ${profitClass === 'pos' ? 'positive' : profitClass === 'neg' ? 'negative' : ''}">${money(cum.totalProfit)}</div>
               <div class="kpi-label">Profit</div>
             </div>
             <div class="kpi-card">
-              <div class="kpi-value positive">${cum.roi}</div>
+              <div class="kpi-value ${roiClass === 'pos' ? 'positive' : roiClass === 'neg' ? 'negative' : ''}">${cum.roi || '--'}</div>
               <div class="kpi-label">ROI</div>
             </div>
           </div>
           <div class="split-row">
             <div class="split-card">
-              <div class="split-card-title">Straight ($150/unit)</div>
-              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${str.wins}W-${str.losses}L</span></div>
-              <div class="split-row-item"><span class="split-row-label">Accuracy</span><span class="split-row-val">${str.accuracy}</span></div>
-              <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${str.totalWagered != null ? '$'+str.totalWagered : '--'}</span></div>
-              <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val pos">${str.totalProfit != null ? strProfitSign+'$'+Math.abs(str.totalProfit) : '--'}</span></div>
-              <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val pos">${str.totalWagered > 0 ? ((str.totalProfit/str.totalWagered)*100).toFixed(1)+'%' : '--'}</span></div>
+              <div class="split-card-title">Straights</div>
+              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${str.wins || 0}W-${str.losses || 0}L</span></div>
+              <div class="split-row-item"><span class="split-row-label">Accuracy</span><span class="split-row-val">${str.accuracy || '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${str.totalWagered != null ? '$' + Number(str.totalWagered).toLocaleString() : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val ${tone(str.totalProfit)}">${str.totalProfit != null ? money(str.totalProfit) : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val ${tone(str.totalProfit)}">${strRoi}</span></div>
             </div>
             <div class="split-card">
-              <div class="split-card-title">Parlay ($75/day)</div>
-              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${par.wins}W-${par.losses}L</span></div>
-              <div class="split-row-item"><span class="split-row-label">Hit Rate</span><span class="split-row-val">${par.accuracy}</span></div>
-              <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${par.totalWagered != null ? '$'+par.totalWagered : '--'}</span></div>
-              <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val pos">${par.totalProfit != null ? parProfitSign+'$'+Math.abs(par.totalProfit) : '--'}</span></div>
-              <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val pos">${par.totalWagered > 0 ? ((par.totalProfit/par.totalWagered)*100).toFixed(1)+'%' : '--'}</span></div>
+              <div class="split-card-title">Parlay</div>
+              <div class="split-row-item"><span class="split-row-label">Record</span><span class="split-row-val">${par.wins || 0}W-${par.losses || 0}L</span></div>
+              <div class="split-row-item"><span class="split-row-label">Hit rate</span><span class="split-row-val">${par.accuracy || '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${par.totalWagered != null ? '$' + Number(par.totalWagered).toLocaleString() : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val ${tone(par.totalProfit)}">${par.totalProfit != null ? money(par.totalProfit) : '--'}</span></div>
+              <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val ${tone(par.totalProfit)}">${parRoi}</span></div>
             </div>
           </div>
           <table class="daily-mini-table">
@@ -822,24 +748,23 @@
             <tbody id="daily-rows-older" style="display:none">${renderRows(olderDays)}</tbody>
             <tr class="totals-row">
               <td>Total</td>
-              <td class="right">${cum.wins}W-${cum.losses}L</td>
-              <td class="right">${cum.accuracy}</td>
-              <td class="right">$${cum.totalWagered}</td>
-              <td class="right pos">${totalPl}</td>
-              <td class="right pos">${cum.roi}</td>
+              <td class="right">${str.wins || 0}W-${str.losses || 0}L</td>
+              <td class="right">${str.accuracy || '--'}</td>
+              <td class="right">${cum.totalWagered != null ? '$' + Number(cum.totalWagered).toLocaleString() : '--'}</td>
+              <td class="right ${profitClass}">${money(cum.totalProfit)}</td>
+              <td class="right ${roiClass}">${cum.roi || '--'}</td>
             </tr>
           </table>
           ${olderDays.length ? `<button class="show-all-btn" id="show-all-btn" onclick="toggleOlderDays(this)">Show all ${days.length} days</button>` : ''}
           <div style="margin-top:.75rem; display:grid; grid-template-columns:1fr 1fr; gap:.375rem; font-size:.75rem; color:var(--txt-m);">
-            <div>Best: <strong style="color:var(--green)">${fmt(best.date)} +$${best.profit}</strong></div>
-            <div>Worst: <strong style="color:#c0392b">${fmt(worst.date)} -$${Math.abs(worst.profit)}</strong></div>
-            <div>Profitable days: <strong>${profitDays}/${days.length}</strong></div>
+            <div>Best: <strong style="color:var(--green)">${best ? fmt(best.date) + ' ' + money(best.profit) : '--'}</strong></div>
+            <div>Worst: <strong style="color:#c0392b">${worst ? fmt(worst.date) + ' ' + money(worst.profit) : '--'}</strong></div>
+            <div>Profitable days: <strong>${profitDays}/${days.length || 0}</strong></div>
             <div>Max win streak: <strong>${maxW}d</strong> &nbsp; Max loss: <strong>${maxL}d</strong></div>
           </div>`;
-
-        document.getElementById('live-stats-body').innerHTML = html;
+        body.innerHTML = html;
       })
-      .catch(() => { document.getElementById('live-stats-body').innerHTML = '<div class="stats-loading">Failed to load stats.</div>'; });
+      .catch(() => { document.getElementById('live-stats-body').innerHTML = '<div class="stats-loading">Failed to load the Edge record.</div>'; });
   })();
 
   function toggleOlderDays(btn) {
@@ -874,60 +799,52 @@
 
   function openDailySummary() {
     document.getElementById('summary-modal').classList.add('open');
-    document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:var(--txt-m);">Loading today\'s picks...</div>';
+    document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:var(--txt-m);">Loading today\'s Edge card...</div>';
 
-    fetch('/api/get-picks-alpha').then(r => r.json()).then(data => {
-      const picks = data.picks || [];
+    fetch('/api/get-picks-omega').then(r => r.json()).then(data => {
+      const picks = data.picks || data.straights || [];
       const edgeSummary = (data.edgeSummary || '').replace(/<cite[^>]*>/g,'').replace(/<\/cite>/g,'');
+      const parlay = (data.parlayLegs && data.parlayLegs[0]) || null;
+      const legs = (parlay && parlay.legs) || [];
 
-      if (picks.length === 0) {
-        document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:var(--txt-m);">No picks generated yet today. Check back after 9am ET.</div>';
+      if (!picks.length && !legs.length) {
+        document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:var(--txt-m);">' + esc(data.noPlays || 'No Edge picks on the card yet.') + '</div>';
         return;
       }
 
-      const sportSet = [...new Set(picks.map(p => p.sport))];
-      const marketSet = [...new Set(picks.map(p => p.betType || ''))];
-      const totalUnits = picks.reduce((s, p) => s + parseFloat(p.units || 0), 0);
-      const allOvers = picks.every(p => (p.pick || '').toLowerCase().startsWith('over'));
-      const allUnders = picks.every(p => (p.pick || '').toLowerCase().startsWith('under'));
-      const allTotals = picks.every(p => (p.betType || '').toLowerCase() === 'total');
-
+      const sportSet = [...new Set(picks.map(p => p.sport).filter(Boolean))];
+      const summary = data.summary || {};
       let html = '';
+      if (edgeSummary) html += `<div class="modal-edge-summary">${esc(edgeSummary)}</div>`;
 
-      // Edge summary
-      if (edgeSummary) {
-        html += `<div class="modal-edge-summary">${esc(edgeSummary)}</div>`;
-      }
-
-      // Each pick
       for (const p of picks) {
         const reasoning = (p.coreReasoning || '').replace(/<cite[^>]*>/g,'').replace(/<\/cite>/g,'').replace(/\[\d+[^\]]*\]/g,'');
         html += `<div class="modal-pick">
           <div class="modal-pick-header">
-            <span class="modal-pick-sport">${esc(p.sport)}</span>
-            <span class="modal-pick-rating">${esc(p.rating || 'A-')}</span>
+            <span class="modal-pick-sport">${esc(p.sport || '')}</span>
+            <span class="modal-pick-rating">${esc(p.rating || '')}</span>
           </div>
           <div class="modal-pick-matchup">${esc(shortMatchup(p.matchup))}</div>
-          <div class="modal-pick-line">${esc(p.pick)} ${esc(p.odds)} &mdash; ${esc(p.units)}</div>
-          <div class="modal-pick-reasoning">${esc(reasoning)}</div>
+          <div class="modal-pick-line">${esc(p.pick || p.side || '')} ${esc(p.odds || '')}${p.units ? ' — ' + esc(p.units) : ''}</div>
+          ${reasoning ? `<div class="modal-pick-reasoning">${esc(reasoning)}</div>` : ''}
         </div>`;
       }
 
-      // Context section
-      let context = `<strong>Leagues scanned:</strong> NBA, NHL, MLB (NCAAB and soccer disabled by real-run results; ${sportSet.length} had qualifying edges today: ${sportSet.join(', ')}).`;
-      context += `<br><strong>Total exposure:</strong> ${totalUnits}u across ${picks.length} picks, within the 4u daily cap.`;
-
-      if (allTotals && allOvers) {
-        context += `<br><strong>Why all overs:</strong> The model evaluated spreads, totals, and moneylines for every game. The largest calibrated edges all landed on over/unders today. This happens when books shade totals conservatively — the model projects based on actual scoring efficiency, not narrative.`;
-      } else if (allTotals) {
-        context += `<br><strong>Why all totals:</strong> Totals edges outranked spread edges across all sports today after z-score normalization.`;
+      if (legs.length) {
+        html += `<div class="modal-pick"><div class="modal-pick-header"><span class="modal-pick-sport">Parlay</span><span class="modal-pick-rating">${legs.length}-leg</span></div>`;
+        html += legs.map(leg => `<div class="modal-pick-line">${esc(shortMatchup(leg.matchup))} — ${esc(leg.pick || leg.side || '')} ${esc(leg.odds || '')}</div>`).join('');
+        html += `</div>`;
       }
 
+      let context = `<strong>Daily Edge Picks.</strong> ${picks.length} straight${picks.length === 1 ? '' : 's'}`;
+      if (sportSet.length) context += ` (${sportSet.join(', ')})`;
+      context += '.';
+      if (legs.length) context += ` Parlay: ${legs.length}-leg.`;
+      if (summary.totalUnits) context += ` Units on the card: ${esc(summary.totalUnits)}.`;
       html += `<div class="modal-context">${context}</div>`;
-
       document.getElementById('summary-modal-body').innerHTML = html;
-    }).catch(err => {
-      document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:#c0392b;">Failed to load picks. Try again.</div>';
+    }).catch(() => {
+      document.getElementById('summary-modal-body').innerHTML = '<div style="text-align:center; padding:2rem; color:#c0392b;">Failed to load the Edge card. Try again.</div>';
     });
   }
 

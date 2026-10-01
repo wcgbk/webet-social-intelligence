@@ -1833,6 +1833,10 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h5v-2.5C6.6 16.2 5 13.8 5 11a7 7 0 0 1 14 0c0 2.8-1.6 5.2-4 6.5V20h5"/></svg></span>
         Daily Edge Picks
       </button>
+      <button class="nav-item" data-panel="p2p" onclick="switchPanel('p2p')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        Pick 3 PVP
+      </button>
 
     </nav>
 
@@ -2046,7 +2050,7 @@
           <div class="feature-header perc-feature-header">
             <div class="perc-header-text">
               <h2 id="percentile-heading">AI Percentile Rankings</h2>
-              <p>How WeBetAI stacks up against all elite betting models</p>
+              <p>Daily Edge record since Sep 22, 2026, plus the documented desk QA</p>
             </div>
             <div class="perc-header-btn">
               <button onclick="switchPanel('arch')" style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8125rem;font-weight:700;color:#fff;background:#004c54;border:none;border-radius:10px;padding:.625rem 1.15rem;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15);white-space:nowrap" onmouseover="this.style.background='#003d44'" onmouseout="this.style.background='#004c54'">View Full Track Record &amp; Architecture <span style="font-size:1.05em;line-height:1">&rarr;</span></button>
@@ -2069,6 +2073,11 @@
       <!-- P2P TRENDING PANEL -->
       <div class="panel" id="panel-p2p-trending" style="overflow:hidden;">
         <iframe src="/p2p-trending" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+
+      <!-- PICK 3 PVP — same-domain iframe so the session reaches /pick3p2p -->
+      <div class="panel" id="panel-p2p" style="overflow:hidden;">
+        <iframe src="/pick3p2p" title="Pick 3 PVP" style="width:100%;height:100%;border:none;"></iframe>
       </div>
 
       <!-- ADMIN PANEL -->
@@ -2237,6 +2246,10 @@
     <button class="mobile-tab active" data-panel="chat" onclick="switchPanel('chat')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span class="mobile-tab-label">Betty</span>
+    </button>
+    <button class="mobile-tab" data-panel="p2p" onclick="switchPanel('p2p')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="mobile-tab-label">Pick 3</span>
     </button>
     <button class="mobile-tab" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
@@ -2464,7 +2477,7 @@
     rankings: 'Leaderboard',
     percentile: 'Percentile Rankings',
     arch: 'Track Record & Architecture',
-    p2p: 'Challenges',
+    p2p: 'Pick 3 PVP',
     guardian: 'Daily Digest',
     builder: 'WeBet Builder',
     sniper: 'Comment Sniper',
@@ -2482,7 +2495,7 @@
   // panel key also resolves, so older /dashboard#panel links keep working.
   const PANEL_SLUGS = {
     picks: 'picks', nfl: 'nfl', cfb: 'cfb', 'grok-beta': 'grok-beta', 'live-picks': 'live-picks', omega: 'omega', grokbot: 'grokbot', gamecast: 'gamecast', percentile: 'track-record',
-    p2p: 'challenges', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
+    p2p: 'pick3', 'p2p-sports': 'markets', 'p2p-trending': 'challenges',
     webit: 'webit', feed: 'press', rankings: 'leaderboard', mlb: 'mlb', arch: 'architecture',
   };
   const SLUG_TO_PANEL = {};
@@ -2805,75 +2818,32 @@
   async function loadPercentile() {
     const el = document.getElementById('percentile-content');
     try {
-      const res = await fetch('/.netlify/functions/get-results-alpha');
+      const res = await fetch('/api/get-results-omega?range=all');
       if (!res.ok) throw new Error('failed');
       const data = await res.json();
+      const edge = data.omegaOnly;
+      if (!edge || !edge.cumulative || !edge.straight) throw new Error('no edge totals');
 
-      const cum = data.cumulative || {};
-      const straight = data.straight || {};
-      const days = data.days || [];
-
-      const winRate = parseFloat(straight.accuracy || cum.accuracy || 0);
-      const roi = parseFloat(cum.roi || 0);
-      const totalProfit = cum.totalProfit || 0;
-      const totalWagered = cum.totalWagered || 0;
-      const daysTracked = days.length;
+      const cum = edge.cumulative;
+      const straight = edge.straight;
+      const floor = (data.scope && data.scope.omegaStart) || '2026-09-22';
+      const days = (data.days || []).filter(d => d && d.date >= floor && d.source !== 'alpha' && d.source !== 'beta' && !d.noPlays);
       const totalPicks = (straight.wins || 0) + (straight.losses || 0);
-      const avgUnitSize = totalPicks > 0 && totalWagered > 0 ? totalWagered / totalPicks : 150;
-      const unitsProfit = avgUnitSize > 0 ? totalProfit / avgUnitSize : 0;
-
-      let wonDollars = 0, lostDollars = 0;
-      for (const d of days) {
-        for (const p of (d.picks || [])) {
-          if (p.result === 'win') wonDollars += (p.profit || 0);
-          else if (p.result === 'loss') lostDollars += Math.abs(p.profit || 0);
-        }
-      }
-      const profitFactor = lostDollars > 0 ? wonDollars / lostDollars : 0;
-
-      function interp(val, curve) {
-        if (val <= curve[0][0]) return curve[0][1];
-        if (val >= curve[curve.length - 1][0]) return curve[curve.length - 1][1];
-        for (let i = 0; i < curve.length - 1; i++) {
-          const [x0, y0] = curve[i], [x1, y1] = curve[i + 1];
-          if (val >= x0 && val <= x1)
-            return Math.round(y0 + (val - x0) / (x1 - x0) * (y1 - y0));
-        }
-        return 50;
-      }
-
-      document.getElementById('percentile-heading').textContent = 'AI Percentile Rankings';
-
-      // ── 4 KPI scorecards (live from /alpha track record) ──
-      const record = `${straight.wins || 0}-${straight.losses || 0}`;
-      const accuracy = straight.accuracy || '0%';
-      const roiNum = parseFloat(cum.roi) || 0;
-      const roiStr = (roiNum >= 0 ? '+' : '') + roiNum.toFixed(1) + '%';
-      const roiClass = roiNum >= 0 ? 'positive' : 'negative';
+      const totalProfit = cum.totalProfit || 0;
+      const roiNum = parseFloat(cum.roi);
+      const roiStr = cum.roi || '--';
+      const roiClass = Number.isFinite(roiNum) ? (roiNum >= 0 ? 'positive' : 'negative') : '';
       const profitClass = totalProfit >= 0 ? 'positive' : 'negative';
       const profitStr = (totalProfit >= 0 ? '+$' : '-$') + Math.abs(totalProfit).toLocaleString();
+      const record = `${straight.wins || 0}-${straight.losses || 0}`;
+      const accuracy = straight.accuracy || '--';
 
-      const metrics = [
-        {
-          metric: 'ROI',
-          value: (roiNum >= 0 ? '+' : '') + roiNum.toFixed(1) + '%',
-          pct: interp(roiNum, [[-10,10],[0,45],[5,60],[10,78],[15,88],[20,94],[25,97],[30,99]])
-        },
-        {
-          metric: 'Win Rate',
-          value: winRate.toFixed(1) + '%',
-          pct: interp(winRate, [[45,10],[50,40],[53,55],[55,65],[57,75],[59,87],[61,92],[63,96],[65,98]])
-        },
-        {
-          metric: 'Units Profit',
-          value: (unitsProfit >= 0 ? '+' : '') + unitsProfit.toFixed(1) + 'u',
-          pct: interp(unitsProfit, [[0,45],[5,55],[10,65],[15,75],[20,82],[25,88],[30,93],[40,97]])
-        },
-        {
-          metric: 'Profit Factor',
-          value: profitFactor.toFixed(2) + 'x',
-          pct: interp(profitFactor, [[0.8,20],[1.0,45],[1.2,60],[1.4,72],[1.6,82],[1.8,88],[2.0,92],[2.5,96]])
-        },
+      // Documented elite-desk QA (2026-09-23, v12.3.12). Engineering judgment, not a results rank.
+      const qa = [
+        { metric: 'Processes', pct: 86 },
+        { metric: 'Architecture', pct: 86 },
+        { metric: 'Math', pct: 84 },
+        { metric: 'Overall', pct: 84 },
       ];
 
       let html = `
@@ -2888,7 +2858,7 @@
           </div>
           <div class="stat-card">
             <div class="stat-label">Accuracy</div>
-            <div class="stat-value positive">${accuracy}</div>
+            <div class="stat-value">${accuracy}</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">P/L</div>
@@ -2896,41 +2866,37 @@
           </div>
         </div>
         <div style="padding:10px 14px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:20px;font-size:0.8125rem;color:var(--primary)">
-          <strong>${totalPicks} Graded Picks · ${daysTracked} Days Live</strong>
+          <strong>Daily Edge Picks · ${totalPicks} graded straights · ${days.length} card days since ${floor}</strong>
         </div>
-        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:12px">Percentile vs Elite Models</div>
+        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:8px">Elite desk QA · Sep 23, 2026</div>
+        <div style="font-size:0.75rem;color:var(--fg-muted);line-height:1.45;margin-bottom:12px">Engineering judgment from the desk-lock review. Not a live results percentile, and scored before the Sep 30 hockey engine.</div>
       `;
 
-      metrics.forEach(m => {
-        const barColor = m.pct >= 90 ? 'var(--primary)' : m.pct >= 75 ? '#1abc9c' : '#e67e22';
+      qa.forEach(m => {
         html += `<div class="bb-card" style="padding:16px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
             <span style="font-size:0.875rem;font-weight:700;color:var(--fg)">${m.metric}</span>
-            <span style="font-size:1rem;font-weight:800;color:${barColor}">${m.pct}th</span>
+            <span style="font-size:1rem;font-weight:800;color:var(--primary)">${m.pct}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="flex:1;height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden">
-              <div style="width:${m.pct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.6s ease"></div>
-            </div>
-            <span style="font-size:0.8125rem;font-weight:700;color:var(--fg);min-width:60px;text-align:right">${m.value}</span>
+          <div style="height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden">
+            <div style="width:${m.pct}%;height:100%;background:var(--primary);border-radius:4px"></div>
           </div>
         </div>`;
       });
-
-      // (Full track record + architecture now opens via the button above, in-dashboard.)
 
       el.innerHTML = html;
       return;
     } catch (_) {}
 
     el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--fg-dim);font-size:0.875rem">
-      Unable to load live data. <a href="/alpha" style="color:var(--primary)">View results on /alpha</a>
+      Unable to load the Edge record. <a href="/daily-omega" style="color:var(--primary)">Open Daily Edge Picks</a>
     </div>`;
   }
 
   /* ─── P2P Panel ─────────────────────────────────────────────────── */
   async function loadP2P() {
     const el = document.getElementById('p2p-content');
+    if (!el) return;
     try {
       const res = await fetch('/.netlify/functions/get-p2p-leaderboard');
       const data = await res.json();

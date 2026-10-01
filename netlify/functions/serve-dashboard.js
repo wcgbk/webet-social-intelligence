@@ -19,11 +19,11 @@ const SITE_URL = 'https://webetsocial.com';
 
 // Shareable slug (and raw panel key, for back-compat) → the menu item's display name.
 const VIEW_TITLES = {
-  picks: 'Daily Edge Picks',
+  picks: 'Daily Alpha Picks',
   nfl: 'NFL Only Picks',
   cfb: 'Free College Football Picks',
   'grok-beta': 'Live Edge Picks',
-  omega: 'Daily Omega Picks',
+  omega: 'Daily Edge Picks',
   'live-picks': 'Premium Live Picks',
   gamecast: 'Picks Gamecast',
   'track-record': 'Percentile Rankings', percentile: 'Percentile Rankings',
@@ -42,7 +42,7 @@ const VIEW_DESC = {
   'NFL Model': 'WeBetAI’s dedicated NFL model — calibrated edges on every NFL game day.',
   'Free College Football Picks': 'WeBetAI’s dedicated college football model. Calibrated edges across the FBS slate on every game day.',
   'Picks Gamecast': 'Every game on today’s WeBetAI card with its own live ESPN Gamecast.',
-  'Daily Edge Picks': 'Today’s WeBetAI edge picks across every league, ranked by expected value.',
+  'Daily Alpha Picks': 'Today’s WeBetAI edge picks across every league, ranked by expected value.',
   'Percentile Rankings': 'See how WeBetAI ranks against elite betting models.',
   'Pick 3 PVP': 'Pick 3 head-to-head challenges on WeBetAI.',
   'Sports Markets': 'Live sports markets and prices on WeBetAI.',

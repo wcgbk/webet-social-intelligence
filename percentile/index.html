@@ -423,7 +423,7 @@
     <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">v10.4-alpha-mlb</span></h1>
     <p class="page-sub">Architecture and design assessment of the alpha pipeline — the SOLE production picks model. Foundation (June 2026): a discrete negative-binomial run-distribution for MLB, First-Five-innings folded in, two-sided no-vig de-vig with pitcher-aware moneyline pricing, and true closing-line CLV. August 2026 (v10.4) hardening: candidate ranking moved to calibrated expected value (z-score demoted to a display diagnostic); per-market unit discipline (moneylines and F5 capped, totals carry conviction) driven by measured closing-line value; doubleheader pricing and settlement fully disambiguated by start time; the self-optimization loop converted from a live parameter-mutator to a CLV observer whose changes are human-approved in Discord. Ratings reflect system capabilities, not results.</p>
     <div style="text-align:center; margin-bottom:1.25rem;">
-      <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary Reasoning</button>
+      <button class="summary-btn" onclick="openDailySummary()">Daily Alpha Picks Summary Reasoning</button>
     </div>
 
     <!-- Live Alpha Performance Stats -->

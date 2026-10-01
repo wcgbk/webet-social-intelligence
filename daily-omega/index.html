@@ -21,15 +21,15 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://site.web.api.espn.com" crossorigin />
   <title>WeBetAI - Social Intelligence | Daily Edge Picks</title>
-  <meta name="description" content="Omega is WeBetAI's live daily picks model, with a full track record since March 19, 2026." />
+  <meta name="description" content="WeBetAI live daily picks, with a full track record since March 19, 2026." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://webetsocial.com/daily-omega" />
   <meta property="og:title" content="WeBetAI - Social Intelligence | Daily Edge Picks" />
-  <meta property="og:description" content="Omega is WeBetAI's live daily picks model, with a full track record since Mar 19, 2026." />
+  <meta property="og:description" content="WeBetAI live daily picks, with a full track record since Mar 19, 2026." />
   <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="WeBetAI - Social Intelligence | Daily Edge Picks" />
-  <meta name="twitter:description" content="Omega is WeBetAI's live daily picks model, with a full track record since Mar 19, 2026." />
+  <meta name="twitter:description" content="WeBetAI live daily picks, with a full track record since Mar 19, 2026." />
   <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
@@ -451,7 +451,7 @@
     .mobile-dropdown a:hover { background: var(--teal-light); }
     .in-iframe .header { display: none !important; }
     .in-iframe .mobile-menu-btn { display: none !important; }
-    /* Same hamburger pattern as NFL; 900px covers tablet 768 where Omega/CFB labels are longer than NFL's. */
+    /* Same hamburger pattern as NFL; 900px covers tablet 768 where these labels are longer than NFL's. */
     @media (max-width: 900px) {
       .header-nav { display: none; }
       .header-dash { display: none; }
@@ -616,7 +616,7 @@
         <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
       </svg>
       <span class="logo-text">WeBetAI</span>
-      <span class="header-badge" style="margin-left:2px;"><span class="badge-full">Daily </span>Omega</span>
+      <span class="header-badge" style="margin-left:2px;"><span class="badge-full">Daily </span>Edge Picks</span>
     </a>
     <a href="/alpha/dashboard" class="header-dash">Dashboard</a>
     <nav class="header-nav">
@@ -1947,7 +1947,7 @@
       document.getElementById('picks-container').innerHTML = `
         <div style="text-align:center; padding:3rem 1rem; background:var(--white); border:1px solid var(--border-lt); border-radius:.875rem;">
           <div style="font-size:1.5rem; margin-bottom:.5rem;">&#9888;&#65039;</div>
-          <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load Omega picks</div>
+          <div style="font-size:1rem; font-weight:600; color:var(--olive);">Unable to load today's picks</div>
           <div style="font-size:.8125rem; color:var(--txt-m); margin-top:.375rem;">Picks are generated daily by ~11:00am ET. Try refreshing.</div>
         </div>`;
     }
@@ -2047,11 +2047,12 @@
     const roiNum = parseFloat(cum.roi) || 0;
     roiEl.className = 'cum-value ' + (roiNum >= 0 ? 'positive' : 'negative');
 
-    // One track record for the algo: every model version (Beta, Alpha, Omega) in one cumulative line.
+    // One track record for the algo: every model version in one cumulative line.
     const scopeEl = document.getElementById('kpi-scope');
     if (scopeEl && data.scope && data.scope.from) {
       const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      scopeEl.textContent = `All model versions, cumulative since ${fmt(data.scope.from)}. Omega is the live model as of ${fmt(data.scope.omegaStart)}.`;
+      const liveAsOf = data.scope.omegaStart ? ` The live model starts ${fmt(data.scope.omegaStart)}.` : '';
+      scopeEl.textContent = `All model versions, cumulative since ${fmt(data.scope.from)}.${liveAsOf}`;
     }
 
     // Days table

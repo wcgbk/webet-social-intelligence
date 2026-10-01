@@ -1828,7 +1828,7 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
         Chat With Betty
       </button>
-      <!-- Daily Edge Picks = existing omega panel (same URL/target). Other panels stay in JS for deep links. -->
+      <!-- Daily Edge Picks = omega panel. Alpha + Premium Live intentionally off menu. -->
       <button class="nav-item" data-panel="omega" onclick="switchPanel('omega')">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h5v-2.5C6.6 16.2 5 13.8 5 11a7 7 0 0 1 14 0c0 2.8-1.6 5.2-4 6.5V20h5"/></svg></span>
         Daily Edge Picks
@@ -1837,6 +1837,32 @@
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
         Pick 3 PVP
       </button>
+      <button class="nav-item" data-panel="nfl" onclick="switchPanel('nfl')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M8.75 15.25l6.5-6.5M10 12.5l1.5 1.5M12.5 10l1.5 1.5"/></svg></span>
+        NFL Only Picks
+      </button>
+      <button class="nav-item" data-panel="cfb" onclick="switchPanel('cfb')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9.5" ry="6" transform="rotate(-45 12 12)"/><path d="M7.5 16.5l9-9"/><path d="M2.8 9.5l2.5 2M18.7 12.5l2.5 2"/></svg></span>
+        College Football Picks
+      </button>
+      <button class="nav-item" data-panel="gamecast" onclick="switchPanel('gamecast')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M6 4.5c2.8 4.3 2.8 10.7 0 15M18 4.5c-2.8 4.3-2.8 10.7 0 15"/></svg></span>
+        Picks Gamecast
+      </button>
+      <button class="nav-item" data-panel="percentile" onclick="switchPanel('percentile')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        Percentile Rankings
+      </button>
+
+      <button class="nav-item" data-panel="p2p-sports" onclick="switchPanel('p2p-sports')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span>
+        Sports Markets
+      </button>
+      <button class="nav-item" data-panel="p2p-trending" onclick="switchPanel('p2p-trending')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+        Trending Challenges
+      </button>
+
 
     </nav>
 

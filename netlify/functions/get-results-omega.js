@@ -14,7 +14,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v8-allver';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v9-ncaaf-state';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -44,6 +44,61 @@ function schoolKey(name) {
   return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
 }
 
+// Equal school keys, or equal once a trailing "state" is removed
+// (McNeese State Cowboys vs ESPN "McNeese Cowboys"). Mascots are already gone.
+function ncaafSchoolKeysMatch(aName, bName) {
+  const a = schoolKey(aName);
+  const b = schoolKey(bName);
+  if (!a || !b || a.length <= 2 || b.length <= 2) return false;
+  if (a === b) return true;
+  if (a.endsWith(' state') && a.slice(0, -6) === b) return true;
+  if (b.endsWith(' state') && b.slice(0, -6) === a) return true;
+  return false;
+}
+
+// Michigan State also matches Michigan. When both sides of one game match,
+// keep the exact schoolKey. If that does not pick one side, match neither.
+function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, sport) {
+  const pickedAway = teamsMatch(pickTeam, awayTeam, awayAbbr, sport);
+  const pickedHome = teamsMatch(pickTeam, homeTeam, homeAbbr, sport);
+  if (sport !== 'NCAAF' || !pickedAway || !pickedHome) {
+    return { pickedAway: !!pickedAway, pickedHome: !!pickedHome };
+  }
+  const pS = schoolKey(pickTeam);
+  const awayExact = pS.length > 2 && pS === schoolKey(awayTeam);
+  const homeExact = pS.length > 2 && pS === schoolKey(homeTeam);
+  if (awayExact && !homeExact) return { pickedAway: true, pickedHome: false };
+  if (homeExact && !awayExact) return { pickedAway: false, pickedHome: true };
+  return { pickedAway: false, pickedHome: false };
+}
+
+// Michigan State @ Iowa and Michigan @ Iowa can both pass a trailing-"state" match.
+// Keep the games whose school keys match exactly so the other one is not graded.
+function preferExactSchoolGames(pick, games) {
+  if (!pick || (pick.sport || '') !== 'NCAAF' || !games || games.length < 2) return games;
+  const parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  const pickTeam = String(pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
+  const probes = pickTeam ? parts.concat([pickTeam]) : parts;
+  let best = -1;
+  const scored = games.map(game => {
+    let score = 0;
+    for (const side of [game.awayTeam, game.homeTeam]) {
+      let sideBest = 0;
+      for (const probe of probes) {
+        const pS = schoolKey(probe);
+        const eS = schoolKey(side);
+        if (pS.length > 2 && pS === eS) sideBest = 2;
+        else if (sideBest < 1 && ncaafSchoolKeysMatch(probe, side)) sideBest = 1;
+      }
+      score += sideBest;
+    }
+    if (score > best) best = score;
+    return { game, score };
+  });
+  const top = scored.filter(row => row.score === best).map(row => row.game);
+  return top.length ? top : games;
+}
+
 function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
@@ -56,8 +111,7 @@ function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
     if (pWords.includes(a)) return true;
   }
   if (sport === 'NCAAF') {
-    const pS = schoolKey(pickTeam), eS = schoolKey(espnTeam);
-    if (pS.length > 2 && pS === eS) return true;
+    if (ncaafSchoolKeysMatch(pickTeam, espnTeam)) return true;
     return false;
   }
   const pLast = p.split(' ').pop();
@@ -86,7 +140,7 @@ function findGame(pick, games) {
                        (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
     if (awayMatch && homeMatch) primary.push(g);
   }
-  if (primary.length) return disambiguateDoubleheader(primary, pick);
+  if (primary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, primary), pick);
   const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   if (pickTeam) {
     const secondary = [];
@@ -100,7 +154,7 @@ function findGame(pick, games) {
         if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
       }
     }
-    if (secondary.length) return disambiguateDoubleheader(secondary, pick);
+    if (secondary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, secondary), pick);
   }
   if (matchupParts.length >= 2) {
     const tertiary = [];
@@ -114,7 +168,7 @@ function findGame(pick, games) {
       else if ((part0.includes(homeKey) || homeKey.includes(part0)) &&
           (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
     }
-    if (tertiary.length) return disambiguateDoubleheader(tertiary, pick);
+    if (tertiary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, tertiary), pick);
   }
   return null;
 }
@@ -147,8 +201,9 @@ function gradePick(pick, game) {
     homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
   }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam, game.awayAbbr, pick.sport);
-  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam, game.homeAbbr, pick.sport);
+  const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
+  const pickedAway = side.pickedAway;
+  const pickedHome = side.pickedHome;
 
   if (betType === 'total' || /over|under/i.test(pickStr)) {
     const totalPoints = awayScore + homeScore;

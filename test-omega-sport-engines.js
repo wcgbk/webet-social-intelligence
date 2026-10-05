@@ -180,6 +180,43 @@ function byMarket(cands, market) {
   assert.strictEqual(epa.isCleanEpa({ offEpa: 5, defEpa: 0.1 }), false);
 }
 
+// pointsFor under 1.8× league ppg can still be a season sum. 36 in 3 games is 12, not 36.
+{
+  const cfg = epa.SPORT_CFG.NFL;
+  const w = epa.SIERRA_W;
+  const seed = { offEpa: 0, defEpa: 0 };
+  const early = epa.sierraAdjust(seed, { pf: 36, pa: 90, wins: 0, losses: 3 }, cfg);
+  const offFrom12 = (12 - cfg.leaguePpg) / cfg.plays;
+  assert.strictEqual(early.adjusted, true);
+  assert.ok(Math.abs(early.offEpa - ((1 - w) * seed.offEpa + w * offFrom12)) < 1e-12);
+  assert.ok(early.offEpa <= seed.offEpa, 'pf 36 in 3 games must not raise offEpa');
+
+  const high = epa.sierraAdjust(seed, { pf: 120, pa: 80, games: 4 }, cfg);
+  const offFrom30 = (120 / 4 - cfg.leaguePpg) / cfg.plays;
+  assert.strictEqual(high.adjusted, true);
+  assert.ok(Math.abs(high.offEpa - w * offFrom30) < 1e-12, 'pf 120 in 4 games is divided');
+
+  const rateSeed = { offEpa: 0.12, defEpa: -0.04 };
+  const rate = epa.sierraAdjust(rateSeed, { pf: 22, pa: 22, games: 4 }, cfg);
+  const offFrom22 = (22 - cfg.leaguePpg) / cfg.plays;
+  const defFrom22 = (cfg.leaguePpg - 22) / cfg.plays;
+  assert.strictEqual(rate.adjusted, true);
+  assert.ok(Math.abs(rate.offEpa - ((1 - w) * rateSeed.offEpa + w * offFrom22)) < 1e-12);
+  assert.ok(Math.abs(rate.defEpa - ((1 - w) * rateSeed.defEpa + w * defFrom22)) < 1e-12);
+  assert.ok(Math.abs(rate.offEpa - rateSeed.offEpa) > 1e-6, 'pf 22 passes through, not 22/4');
+
+  const cfbCfg = epa.SPORT_CFG.NCAAF;
+  const cfb = epa.sierraAdjust(
+    seed,
+    { pf: 40, pa: 120, wins: 2, losses: 1 },
+    cfbCfg
+  );
+  const cfbOff = (40 / 3 - cfbCfg.leaguePpg) / cfbCfg.plays;
+  assert.strictEqual(cfb.adjusted, true);
+  assert.ok(Math.abs(cfb.offEpa - w * cfbOff) < 1e-12, 'NCAAF uses the same season-sum band');
+  assert.ok(cfb.offEpa <= seed.offEpa);
+}
+
 // ── NFL candidates: EPA vs fallback ──
 {
   const home = 'Kansas City Chiefs';

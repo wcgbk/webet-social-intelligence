@@ -15,6 +15,9 @@ const { fuzzyTeam, powerFromStandings, gamesPlayed } = require('./_common');
 
 const SIERRA_W = 0.2;
 const LEAGUE_SUCCESS = 0.43;
+/** Clean per-game band. ESPN pointsFor above the max is a season sum, not a rate. */
+const FOOTBALL_PPG_MIN = 6;
+const FOOTBALL_PPG_MAX = 55;
 
 const SPORT_CFG = {
   NFL: {
@@ -78,7 +81,8 @@ function lookupEpa(teamName, table) {
 
 /**
  * Blend seed EPA toward current points/game when standings are clean.
- * Unclean (missing games, absurd ppg) returns the seed unchanged.
+ * Unclean (missing games, games under 2, per-game rate outside 6–55) returns the seed.
+ * gamesPlayed() uses wins+losses+ties when ESPN did not store games.
  */
 function sierraAdjust(epa, standingsRow, cfg) {
   const base = {
@@ -95,11 +99,16 @@ function sierraAdjust(epa, standingsRow, cfg) {
   const pa = Number(standingsRow.pa);
   const g = gamesPlayed(standingsRow);
   if (!Number.isFinite(pf) || !Number.isFinite(pa) || g < 2) return base;
-  // ESPN sometimes sends season totals, sometimes per-game. Totals exceed ~1.8x league ppg.
-  const threshold = cfg.leaguePpg * 1.8;
-  const pfPg = pf > threshold ? pf / g : pf;
-  const paPg = pa > threshold ? pa / g : pa;
-  if (![pfPg, paPg].every(n => Number.isFinite(n) && n >= 6 && n <= 55)) return base;
+  // ESPN sends season sums and per-game rates in the same field. A rate tops out
+  // around 55. 1.8× league ppg (39.6 NFL / 49.5 NCAAF) left a 36-point season
+  // sum as 36 per game when only the other side cleared that cutoff. Divide both.
+  let pfPg = pf;
+  let paPg = pa;
+  if (pf > FOOTBALL_PPG_MAX || pa > FOOTBALL_PPG_MAX) {
+    pfPg = pf / g;
+    paPg = pa / g;
+  }
+  if (![pfPg, paPg].every(n => Number.isFinite(n) && n >= FOOTBALL_PPG_MIN && n <= FOOTBALL_PPG_MAX)) return base;
   const offFromSt = (pfPg - cfg.leaguePpg) / cfg.plays;
   const defFromSt = (cfg.leaguePpg - paPg) / cfg.plays;
   const w = SIERRA_W;

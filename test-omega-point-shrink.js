@@ -1,7 +1,8 @@
 'use strict';
 /**
- * NFL/NCAAF point-space shrink before the CDF, and the model-vs-line review block.
- * MLB and NHL stay on the pre-change probability path.
+ * NFL/NCAAF point-space shrink before the CDF (λ=1, no pull), and a private
+ * model-vs-line review flag. The flag does not reject and does not change
+ * coverProb, edge, or EV versus the pre-item-5 path. MLB and NHL stay identical.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -13,8 +14,9 @@ const nfl = require(path.join(root, 'sports/nfl'));
 const cfb = require(path.join(root, 'sports/cfb'));
 const mlb = require(path.join(root, 'sports/mlb'));
 const nhl = require(path.join(root, 'sports/nhl'));
-const { applyGates, gateReason } = require(path.join(root, 'gates'));
-const { calibrateCandidate } = require(path.join(root, 'calibrate'));
+const { applyGates, gateReason, buildGapReview } = require(path.join(root, 'gates'));
+const { calibrateCandidate, calibrateAll } = require(path.join(root, 'calibrate'));
+const { attachEv } = require(path.join(root, 'edge'));
 const { selectStraights, toPickObject } = require(path.join(root, 'select'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
 const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
@@ -31,7 +33,10 @@ assert.deepStrictEqual(config.POINT_SHRINK, {
   NFL: { total: 1, margin: 1 },
   NCAAF: { total: 1, margin: 1 },
 });
-assert.deepStrictEqual(config.MODEL_LINE_GAP, { NFL: 8, NCAAF: 10 });
+assert.deepStrictEqual(config.MODEL_LINE_GAP, { NFL: 8, NCAAF: 10, mode: 'flag' });
+assert.ok(/block' failed the 2026-10-06 replay gate/.test(
+  fs.readFileSync(path.join(root, 'config.js'), 'utf8'),
+));
 
 const NFL_PLAYS = 62;
 const NCAAF_PLAYS = 68;
@@ -121,6 +126,39 @@ function signedEdge(c, modelRawP) {
   return row.coverProb - row.fair_sharp_p;
 }
 
+/** coverProb, edge, and EV the way the card scores a candidate. */
+function cardScore(c, modelRawP) {
+  const row = attachEv(calibrateCandidate({ ...c, modelRawP }));
+  return { coverProb: row.coverProb, edge: row.edgePct, ev: row.ev };
+}
+
+/**
+ * Flag on or off, the score matches the pre-item-5 (unshrunk) probability.
+ * λ=1 does not move the projection. The flag is not an input to the score.
+ */
+function assertPickNeutral(c, ev) {
+  const beforeP = unshrunkModelRawP(c, ev);
+  assert.ok(
+    Math.abs(c.modelRawP - beforeP) < 1e-12,
+    `${c.sport} ${c.market} ${c.side} modelRawP ${c.modelRawP} vs pre-item-5 ${beforeP}`,
+  );
+  const now = cardScore(c, c.modelRawP);
+  const before = cardScore(c, beforeP);
+  const flipped = cardScore({ ...c, gapFlag: !c.gapFlag }, c.modelRawP);
+  assert.ok(Math.abs(now.coverProb - before.coverProb) < 1e-12, `${c.side} coverProb moved`);
+  assert.strictEqual(now.edge, before.edge, `${c.side} edge`);
+  assert.strictEqual(now.ev, before.ev, `${c.side} ev`);
+  assert.strictEqual(now.coverProb, flipped.coverProb);
+  assert.strictEqual(now.edge, flipped.edge);
+  assert.strictEqual(now.ev, flipped.ev);
+  assert.strictEqual(gateReason(attachEv(calibrateCandidate(c))), gateReason(attachEv(calibrateCandidate({ ...c, gapFlag: false }))));
+  assert.notStrictEqual(gateReason(c), 'model_line_gap_review');
+}
+
+function scoreAll(cands) {
+  return calibrateAll(cands).map(attachEv);
+}
+
 function assertEdgesNeverGrow(cands, ev) {
   for (const c of cands) {
     const beforeP = unshrunkModelRawP(c, ev);
@@ -133,7 +171,8 @@ function assertEdgesNeverGrow(cands, ev) {
   }
 }
 
-// 54 vs 38.5 NFL total: gap 15.5 blocks both sides. λ=1 does not pull the total.
+// 54 vs 38.5 NFL total: gap 15.5 is flagged, not rejected. λ=1 does not pull the total.
+// Flagged and unflagged candidates keep the pre-item-5 coverProb / edge / EV.
 {
   const home = 'Miami Dolphins';
   const away = 'Minnesota Vikings';
@@ -148,26 +187,63 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.strictEqual(over.gapFlag, true);
   assert.strictEqual(under.gapFlag, true);
   assert.strictEqual(under.modelLineGap, 15.5);
+  for (const c of cands) assertPickNeutral(c, ev);
+
+  const home2 = 'Detroit Lions';
+  const away2 = 'Chicago Bears';
+  const ev2 = event(home2, away2, 38.5, -3);
+  const cands2 = projectFootball('NFL', ev2, 9);
+  for (const c of cands2) assertPickNeutral(c, ev2);
+  const slate = scoreAll([...cands, ...cands2]);
 
   const logs = [];
   const orig = console.log;
   console.log = (...args) => logs.push(args.join(' '));
   let gated;
   try {
-    gated = applyGates(cands);
+    gated = applyGates(slate);
   } finally {
     console.log = orig;
   }
-  assert.ok(gated.yesPool.every(c => !(c.market === 'Total' && c.gapFlag === true)));
-  const blocked = gated.rejected.filter(r => r.market === 'Total');
-  assert.strictEqual(blocked.length, 2);
-  assert.ok(blocked.every(r => r.rejectReason === 'model_line_gap_review'));
-  assert.ok(blocked.every(r => r.modelLineGap === 15.5));
-  assert.ok(logs.some(l => l.includes('model_line_gap_review') && l.includes('gap=15.5') && l.includes('line=38.5')));
-  assert.ok(!selectStraights(gated.yesPool, 3).some(c => c.market === 'Total' && c.modelLineGap === 15.5));
+  assert.ok(!logs.some(l => l.includes('model_line_gap_review')));
+  assert.ok(!gated.rejected.some(r => r.rejectReason === 'model_line_gap_review'));
+  const scoredOver = gated.yesPool.find(c => c.side === over.side && c.matchup === over.matchup);
+  assert.ok(scoredOver, '54 vs 38.5 over was rejected');
+  assert.strictEqual(scoredOver.gapFlag, true);
+  assert.strictEqual(gateReason(scoredOver), null);
+  const clearedPool = gated.yesPool.map(c => ({ ...c, gapFlag: false }));
+  const picked = selectStraights(gated.yesPool, 3).map(c => `${c.matchup}|${c.side}`);
+  const pickedClear = selectStraights(clearedPool, 3).map(c => `${c.matchup}|${c.side}`);
+  assert.deepStrictEqual(picked, pickedClear);
+  assert.ok(picked.some(s => s.endsWith(`|${over.side}`)));
+
   const tickets = optimizeParlay(gated.yesPool, [], {});
-  const legs = tickets.length ? tickets[0].legs : [];
-  assert.ok(!legs.some(l => /38\.5/.test(String(l.pick || ''))));
+  const ticketsClear = optimizeParlay(clearedPool, [], {});
+  const legKey = (t) => (t[0] ? t[0].legs.map(l => `${l.matchup}|${l.pick}`).sort() : []);
+  assert.deepStrictEqual(legKey(tickets), legKey(ticketsClear));
+  const flaggedLegs = (tickets[0] ? tickets[0].legs : []).filter(l => /38\.5/.test(String(l.pick || '')));
+  assert.ok(flaggedLegs.length >= 1, 'flagged total did not compete for the parlay');
+  for (const leg of flaggedLegs) {
+    assert.strictEqual(leg.gapFlag, true);
+    assert.strictEqual(leg.modelLineGap, 15.5);
+    for (const k of FOOTBALL_AUDIT_KEYS) assert.notStrictEqual(leg[k], undefined, k);
+  }
+
+  const picks = selectStraights(gated.yesPool, 3).map(c => toPickObject(c, { modelVersion: config.MODEL_VERSION }));
+  const review = buildGapReview(slate, picks, tickets);
+  const overRow = review.find(r => r.side === over.side && r.matchup === over.matchup);
+  const underRow = review.find(r => r.side === under.side && r.matchup === under.matchup);
+  assert.ok(overRow);
+  assert.deepStrictEqual(
+    { sport: overRow.sport, line: overRow.line, modelRaw: overRow.modelRaw, gap: overRow.gap },
+    { sport: 'NFL', line: 38.5, modelRaw: 54, gap: 15.5 },
+  );
+  assert.strictEqual(overRow.selected, true);
+  assert.ok(underRow);
+  assert.strictEqual(underRow.modelRaw, 54);
+  assert.strictEqual(underRow.gap, 15.5);
+  assert.strictEqual(underRow.selected, false);
+  assert.strictEqual(review.filter(r => r.line === 38.5 && r.gap === 15.5).length, 4);
   assertEdgesNeverGrow(cands, ev);
 }
 
@@ -192,7 +268,8 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.ok(Math.abs(over.modelRawP - beforeP) < 1e-12, `modelRawP moved ${over.modelRawP} vs ${beforeP}`);
   assert.ok(Math.abs(after - before) < 1e-12, `over edge moved ${after} vs ${before}`);
   assert.ok(after <= before + 1e-9);
-  assertEdgesNeverGrow(cands, ev);
+  for (const c of cands) assertPickNeutral(c, ev);
+  assert.strictEqual(buildGapReview(cands).length, 0);
   assert.notStrictEqual(gateReason(over), 'model_line_gap_review');
 }
 
@@ -226,17 +303,25 @@ function assertEdgesNeverGrow(cands, ev) {
   assertEdgesNeverGrow(cands, ev);
 }
 
-// NCAAF λ is 1, so the margin is not pulled. A 10-point total gap blocks; 9.9 does not.
+// NCAAF λ is 1, so the margin is not pulled. A 10-point total gap is flagged; 9.9 is not.
 {
   const home = 'Ohio State Buckeyes';
   const away = 'Iowa Hawkeyes';
-  const wide = projectFootball('NCAAF', event(home, away, 42, -7.5), 0);
+  const wideEv = event(home, away, 42, -7.5);
+  const wide = projectFootball('NCAAF', wideEv, 0);
   const over = findSide(wide, 'Total', /^Over/);
   assert.strictEqual(over.modelTotalRaw, 52);
   assert.strictEqual(over.modelTotalShrunk, 52);
   assert.strictEqual(over.modelLineGap, 10);
   assert.strictEqual(over.gapFlag, true);
-  assert.strictEqual(gateReason(over), 'model_line_gap_review');
+  assert.notStrictEqual(gateReason(over), 'model_line_gap_review');
+  const wideRow = buildGapReview(wide).find(r => r.side === over.side);
+  assert.ok(wideRow);
+  assert.strictEqual(wideRow.modelRaw, 52);
+  assert.strictEqual(wideRow.line, 42);
+  assert.strictEqual(wideRow.gap, 10);
+  assert.strictEqual(wideRow.selected, false);
+  assertPickNeutral(over, wideEv);
   const spread = wide.find(c => c.market === 'Spread' && c.side.startsWith(home));
   const marketMargin = round4(-spread.marketLine);
   const expected = round4(marketMargin + config.POINT_SHRINK.NCAAF.margin * (spread.modelMarginRaw - marketMargin));
@@ -250,9 +335,11 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.ok(Math.abs(closeOver.modelLineGap) < 10);
   assert.strictEqual(closeOver.gapFlag, false);
   assert.notStrictEqual(gateReason(closeOver), 'model_line_gap_review');
+  assert.ok(!buildGapReview(close).some(r => r.side === closeOver.side));
+  assertPickNeutral(closeOver, event(home, away, 42.1, -3));
 }
 
-// Spread threshold uses margin versus −homeSpread. NFL 8 blocks the spread, not the moneyline.
+// Spread threshold uses margin versus −homeSpread. NFL 8 flags the spread, not the moneyline.
 {
   const home = 'Baltimore Ravens';
   const away = 'Cincinnati Bengals';
@@ -265,11 +352,20 @@ function assertEdgesNeverGrow(cands, ev) {
     assert.strictEqual(c.modelLineGap, round4(c.modelMarginRaw - (-c.marketLine)));
     assert.ok(Math.abs(c.modelLineGap) >= 8);
     assert.strictEqual(c.gapFlag, true);
-    assert.strictEqual(gateReason(c), 'model_line_gap_review');
+    assert.notStrictEqual(gateReason(c), 'model_line_gap_review');
+    const row = buildGapReview(cands).find(r => r.side === c.side);
+    assert.ok(row);
+    assert.strictEqual(row.modelRaw, c.modelMarginRaw);
+    assert.strictEqual(row.line, c.line);
+    assert.strictEqual(row.gap, c.modelLineGap);
+    assert.strictEqual(row.selected, false);
+    assertPickNeutral(c, ev);
   }
   const ml = cands.find(c => c.market === 'Moneyline' && c.side === home);
   assert.strictEqual(ml.gapFlag, false);
   assert.notStrictEqual(gateReason(ml), 'model_line_gap_review');
+  assert.ok(!buildGapReview(cands).some(r => r.side === ml.side));
+  assertPickNeutral(ml, ev);
   assert.ok(ml.modelMarginShrunk != null);
   assertEdgesNeverGrow(cands, ev);
 }
@@ -285,12 +381,22 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.ok(Math.abs(over.modelLineGap) < 8);
   assert.strictEqual(over.gapFlag, false);
   assert.notStrictEqual(gateReason(over), 'model_line_gap_review');
-  const on = projectFootball('NFL', event(home, away, 38.5, -3), 1.5);
+  assert.ok(!buildGapReview(cands).some(r => r.side === over.side));
+  assertPickNeutral(over, ev);
+  const onEv = event(home, away, 38.5, -3);
+  const on = projectFootball('NFL', onEv, 1.5);
   const onOver = findSide(on, 'Total', /^Over/);
   assert.strictEqual(onOver.modelTotalRaw, 46.5);
   assert.strictEqual(onOver.modelLineGap, 8);
   assert.strictEqual(onOver.gapFlag, true);
-  assert.strictEqual(gateReason(onOver), 'model_line_gap_review');
+  assert.notStrictEqual(gateReason(onOver), 'model_line_gap_review');
+  const onRow = buildGapReview(on).find(r => r.side === onOver.side);
+  assert.ok(onRow);
+  assert.strictEqual(onRow.gap, 8);
+  assert.strictEqual(onRow.modelRaw, 46.5);
+  assert.strictEqual(onRow.line, 38.5);
+  assert.strictEqual(onRow.selected, false);
+  assertPickNeutral(onOver, onEv);
 }
 
 // Private pick keeps the fields. Public payload drops them. MLB pick gains none.
@@ -311,35 +417,69 @@ function assertEdgesNeverGrow(cands, ev) {
   }, { modelVersion: config.MODEL_VERSION });
   for (const k of FOOTBALL_AUDIT_KEYS) assert.strictEqual(mlbPick[k], undefined, k);
 
+  const flagged = findSide(projectFootball('NFL', event(home, away, 38.5, -3), 9), 'Total', /^Over/);
+  const flaggedScored = attachEv(calibrateCandidate(flagged));
+  const flaggedPick = toPickObject({ ...flagged, ...flaggedScored, edgePct: flaggedScored.edgePct, ev: flaggedScored.ev }, { modelVersion: config.MODEL_VERSION });
+  for (const k of FOOTBALL_AUDIT_KEYS) assert.strictEqual(flaggedPick[k], flagged[k], k);
+  assert.strictEqual(flaggedPick.gapFlag, true);
+  assert.strictEqual(flaggedPick.modelLineGap, 15.5);
+  const flaggedLeg = {
+    pick: flagged.side,
+    matchup: flagged.matchup,
+    betType: flagged.market,
+    sport: 'NFL',
+    odds: '-110',
+    ...Object.fromEntries(FOOTBALL_AUDIT_KEYS.map(k => [k, flagged[k]])),
+  };
+  assert.strictEqual(flaggedLeg.gapFlag, true);
+
+  const gapReview = buildGapReview([flagged, over], [flaggedPick], [{ legs: [flaggedLeg] }]);
+  assert.strictEqual(gapReview.find(r => r.side === flagged.side).selected, true);
+
   const pub = publicPicksPayload({
     model: config.MODEL_VERSION,
-    candidateTable: [{ rank: 1, ...over }],
-    rejections: [{ side: over.side, reason: 'model_line_gap_review', modelLineGap: 15.5, gapFlag: true }],
-    picks: [pick],
+    candidateTable: [{ rank: 1, ...over, ...flagged }],
+    rejections: [{ side: over.side, reason: 'ev-floor', modelLineGap: 15.5, gapFlag: true }],
+    gapReview,
+    picks: [pick, flaggedPick],
     parlayLegs: [{
       type: '2-leg',
       units: '0.5u',
       combinedOdds: '+250',
-      legs: [pick],
+      legs: [pick, flaggedLeg],
     }],
   });
   assert.strictEqual(pub.candidateTable, undefined);
+  assert.strictEqual(pub.gapReview, undefined);
   assert.deepStrictEqual(pub.rejections, []);
   const pubPick = pub.picks[0];
+  const pubFlagged = pub.picks[1];
   const pubLeg = pub.parlayLegs[0].legs[0];
-  for (const k of FOOTBALL_AUDIT_KEYS) {
-    assert.strictEqual(pubPick[k], undefined, `public pick leaked ${k}`);
-    assert.strictEqual(pubLeg[k], undefined, `public leg leaked ${k}`);
+  const pubFlaggedLeg = pub.parlayLegs[0].legs[1];
+  for (const row of [pubPick, pubFlagged, pubLeg, pubFlaggedLeg]) {
+    for (const k of FOOTBALL_AUDIT_KEYS) {
+      assert.strictEqual(row[k], undefined, `public leaked ${k}`);
+    }
   }
   assert.strictEqual(pubPick.pick, pick.pick);
   assert.strictEqual(pubPick.sport, 'NFL');
   assert.ok(pubPick.odds);
+  assert.strictEqual(pubFlagged.sport, 'NFL');
   const blob = JSON.stringify(pub);
-  for (const k of FOOTBALL_AUDIT_KEYS) assert.ok(!blob.includes(k), `public payload contains ${k}`);
+  for (const k of [...FOOTBALL_AUDIT_KEYS, 'gapReview', 'modelRaw']) {
+    assert.ok(!blob.includes(k), `public payload contains ${k}`);
+  }
+  const beforeKeys = Object.keys(publicPicksPayload({
+    model: config.MODEL_VERSION,
+    picks: [{ pick: pick.pick, sport: 'NFL', odds: pick.odds, units: pick.units, rating: pick.rating }],
+    parlayLegs: [],
+  })).sort();
+  assert.deepStrictEqual(Object.keys(pub).sort(), beforeKeys);
 
   const idx = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
   assert.ok(idx.includes('...footballAuditFields(c)'));
   assert.ok(idx.includes('...footballAuditFields(r)'));
+  assert.ok(idx.includes('gapReview: buildGapReview('));
 }
 
 // MLB and NHL candidates match the pre-change fixture, with no football audit fields.

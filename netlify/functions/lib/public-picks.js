@@ -1,6 +1,7 @@
 // Trim public get-picks payloads. The blob still stores the full generator dump
-// (candidateTable, modelProjections, thinkingText, rejections, Kelly internals).
-// Those are unused on /omega /nfl /cfb cards and dominate TTFB + parse time.
+// (candidateTable, modelProjections, thinkingText, rejections, gapReview,
+// Kelly internals). Those are unused on /omega /nfl /cfb cards and dominate
+// TTFB + parse time. gapReview is the private model-vs-line flag list.
 // Premium Sharp Depth still comes from get-picks-premium.
 //
 // CFB: pick/matchup stay full names (ESPN match keys). pickDisplay/matchupDisplay
@@ -24,6 +25,7 @@ const ROOT_DROP = [
   'candidateTable', 'modelProjections', 'thinkingText', 'sgps',
   'rejections', 'edgeCandidatesCount',
   'teamIdentity',
+  'gapReview',
 ];
 
 function pickPublic(p) {

@@ -7,7 +7,7 @@ const { ingest } = require('./ingest');
 const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
-const { applyGates } = require('./gates');
+const { applyGates, buildGapReview } = require('./gates');
 const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
@@ -537,6 +537,8 @@ async function generateOmegaVnext(opts = {}) {
     },
     generatedAt: now.toISOString(),
     parlayLegs: empty ? [] : parlayLegs,
+    // Private. publicPicksPayload drops this. Flag does not change the pool.
+    gapReview: buildGapReview(candidates, picks, empty ? [] : parlayLegs),
     sgps: [],
     claudeVerified: !!narr.claudeVerified,
     fallback: false,

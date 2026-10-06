@@ -306,7 +306,8 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
  * market blend, shrinkTowardSharp, and isotonicClip and shrinks every
  * football edge, not only a wild one. The targeted control is
  * MODEL_LINE_GAP. A raw gap at or above NFL 8 / NCAAF 10 (54 vs 38.5
- * is the example) is a review block, not a ticket.
+ * is the example) is a private review flag. It does not move the
+ * projection and it does not reject the candidate.
  */
 const POINT_SHRINK = {
   NFL: { total: 1, margin: 1 },
@@ -314,18 +315,26 @@ const POINT_SHRINK = {
 };
 
 /**
- * Raw |model − line| at or above this many points is a human review, not
- * a ticket. Totals compare the model total to the market total. Spreads
+ * Raw |model − line| at or above this many points is a private review
+ * flag. Totals compare the model total to the market total. Spreads
  * compare the model margin to −homeSpread (the market-implied home margin).
  * Same threshold for both markets. NFL 8 is past a normal field-goal to
  * touchdown disagreement (~0.76 total-SD) and is the size that still
  * cleared the EV floor when shrink happened only in probability. NCAAF 10
- * matches the wider total SD (13.5 vs 10.5). Threshold candidates are
- * blocked from straights and parlays with rejectReason model_line_gap_review.
+ * matches the wider total SD (13.5 vs 10.5).
+ *
+ * mode 'flag' keeps the candidate in the pool with the same coverProb,
+ * edge, and EV. The card stores picksData.gapReview. Published picks and
+ * parlay legs keep the private audit fields. publicPicksPayload strips
+ * the list and those fields.
+ *
+ * mode 'block' failed the 2026-10-06 replay gate. Any blocking variant
+ * changed the two-week card. Do not ship 'block'.
  */
 const MODEL_LINE_GAP = {
   NFL: 8,
   NCAAF: 10,
+  mode: 'flag', // 'block' failed the 2026-10-06 replay gate
 };
 
 const CLV_KPI_FLOOR = '2026-09-22';

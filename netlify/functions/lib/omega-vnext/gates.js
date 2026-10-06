@@ -8,6 +8,13 @@ function sportFloor(map, sport) {
   return map[sport] != null ? map[sport] : map.default;
 }
 
+/** Totals and spreads only. Moneyline has no point line to review. */
+function isGapReviewMarket(market) {
+  const m = String(market || '');
+  if (/moneyline|^ml$/i.test(m)) return false;
+  return /total|spread/i.test(m);
+}
+
 /**
  * US retail placeability. Distinct from insufficient-liquidity (that gate
  * counts MAJOR_LIQUIDITY_BOOKS, including Pinnacle, with no juice test).
@@ -52,6 +59,13 @@ function gateReason(c, opts = {}) {
 
   // Unresolved NFL/NCAAF name. Checked before the floors so a bad id cannot publish.
   if (c && c.unknownTeam) return 'unknown_team';
+
+  // Football model-vs-line gap. Review block, not a price floor. Checked
+  // before the floors so the stored reason is the gap, with the points on
+  // the candidate. Moneyline is not a point market. MLB/NHL never set the flag.
+  if (c && c.gapFlag === true && isGapReviewMarket(c.market)) {
+    return 'model_line_gap_review';
+  }
 
   // Same ET calendar day only — reject weekend football on Tue/Wed cards, etc.
   if (GATES.sameEtDayOnly && cardDate) {
@@ -101,10 +115,14 @@ function applyGates(candidates, opts = {}) {
   const rejected = [];
   for (const c of candidates || []) {
     const reason = gateReason(c, opts);
-    if (reason) rejected.push({ ...c, rejectReason: reason });
-    else yes.push(c);
+    if (reason) {
+      if (reason === 'model_line_gap_review') {
+        console.log(`[omega-vnext] model_line_gap_review ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap} line=${c.marketLine}`);
+      }
+      rejected.push({ ...c, rejectReason: reason });
+    } else yes.push(c);
   }
   return { yesPool: yes, rejected };
 }
 
-module.exports = { applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS };
+module.exports = { applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS, isGapReviewMarket };

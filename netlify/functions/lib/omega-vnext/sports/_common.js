@@ -1,7 +1,7 @@
 'use strict';
 
 const { normCdf, clamp, americanToImplied } = require('../odds_math');
-const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA } = require('../config');
+const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA, SHARP_BOOKS, POINT_SHRINK, MODEL_LINE_GAP } = require('../config');
 
 function formatMatchup(away, home) {
   return `${away} @ ${home}`;
@@ -144,6 +144,165 @@ function mapGamesSoft(events, projectGame) {
   return all;
 }
 
+/** λ in [0, 1]. Missing → 1 (no pull). Above 1 would move past the raw model. */
+function clampLambda(lambda) {
+  const n = Number(lambda);
+  if (!Number.isFinite(n)) return 1;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
+}
+
+function round4(n) {
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 10000) / 10000;
+}
+
+/**
+ * projected = line + λ·(model − line). λ = 1 leaves the model. λ = 0 is the line.
+ */
+function shrinkTowardMarketLine(model, line, lambda) {
+  if (!Number.isFinite(model)) return model;
+  if (!Number.isFinite(line)) return model;
+  const lam = clampLambda(lambda);
+  return line + lam * (model - line);
+}
+
+function medianPoint(nums) {
+  const a = (nums || []).filter(n => Number.isFinite(n)).sort((x, y) => x - y);
+  if (!a.length) return null;
+  return a[Math.floor(a.length / 2)];
+}
+
+function bookPoint(event, book, kind) {
+  const want = String(book || '').toLowerCase();
+  const bk = (event && event.bookmakers || []).find(b => String(b.key || '').toLowerCase() === want);
+  if (!bk) return null;
+  if (kind === 'total') {
+    const mkt = (bk.markets || []).find(m => m.key === 'totals');
+    if (!mkt) return null;
+    const over = (mkt.outcomes || []).find(o => /^over$/i.test(o.name) && o.point != null);
+    if (over) return Number(over.point);
+    const any = (mkt.outcomes || []).find(o => o.point != null);
+    return any ? Number(any.point) : null;
+  }
+  const mkt = (bk.markets || []).find(m => m.key === 'spreads');
+  if (!mkt) return null;
+  const home = event.home_team;
+  const row = (mkt.outcomes || []).find(o => o.name === home && o.point != null);
+  return row ? Number(row.point) : null;
+}
+
+/**
+ * Market total or home spread. Pinnacle, else Circa, else the median of
+ * the other sharp books, else the median of every book that posts the number.
+ */
+function sharpMarketLine(event, kind) {
+  if (!event) return null;
+  for (const book of ['pinnacle', 'circa', 'circasports']) {
+    const p = bookPoint(event, book, kind);
+    if (Number.isFinite(p)) return p;
+  }
+  const sharpSet = new Set((SHARP_BOOKS || []).map(b => String(b).toLowerCase()));
+  const sharp = [];
+  const all = [];
+  const seen = new Set();
+  for (const bk of event.bookmakers || []) {
+    const key = String(bk.key || '').toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const p = bookPoint(event, key, kind);
+    if (!Number.isFinite(p)) continue;
+    all.push(p);
+    if (sharpSet.has(key)) sharp.push(p);
+  }
+  const medSharp = medianPoint(sharp);
+  if (Number.isFinite(medSharp)) return medSharp;
+  return medianPoint(all);
+}
+
+/**
+ * One shrink per game. Totals move toward the sharp total. Margins move
+ * toward −homeSpread (the market-implied home margin). The returned
+ * shrunk numbers are what the CDF sees. Stored audit fields are these
+ * same rounded points.
+ */
+function footballPointState(sport, modelTotal, modelMargin, marketTotal, marketSpreadHome) {
+  const spec = (POINT_SHRINK && POINT_SHRINK[sport]) || {};
+  const totalRaw = round4(modelTotal);
+  const marginRaw = round4(modelMargin);
+  const totalLine = Number.isFinite(marketTotal) ? round4(marketTotal) : null;
+  const spreadHome = Number.isFinite(marketSpreadHome) ? round4(marketSpreadHome) : null;
+  const marketMargin = spreadHome == null ? null : round4(-spreadHome);
+  const totalShrunk = totalLine == null || totalRaw == null
+    ? totalRaw
+    : round4(shrinkTowardMarketLine(totalRaw, totalLine, spec.total));
+  const marginShrunk = marketMargin == null || marginRaw == null
+    ? marginRaw
+    : round4(shrinkTowardMarketLine(marginRaw, marketMargin, spec.margin));
+  return {
+    sport,
+    modelTotalRaw: totalRaw,
+    modelMarginRaw: marginRaw,
+    modelTotalShrunk: totalShrunk,
+    modelMarginShrunk: marginShrunk,
+    marketTotal: totalLine,
+    marketSpreadHome: spreadHome,
+    marketMargin,
+  };
+}
+
+const FOOTBALL_AUDIT_KEYS = [
+  'modelTotalRaw', 'modelMarginRaw', 'modelTotalShrunk', 'modelMarginShrunk',
+  'marketLine', 'modelLineGap', 'gapFlag',
+];
+
+function footballAudit(state, market) {
+  const label = String(market || '');
+  const isTotal = /total/i.test(label);
+  const isMl = /moneyline|^ml$/i.test(label);
+  const gap = isTotal
+    ? (state.marketTotal == null || state.modelTotalRaw == null ? null : round4(state.modelTotalRaw - state.marketTotal))
+    : (state.marketMargin == null || state.modelMarginRaw == null ? null : round4(state.modelMarginRaw - state.marketMargin));
+  const line = isTotal ? state.marketTotal : state.marketSpreadHome;
+  const thresh = MODEL_LINE_GAP && MODEL_LINE_GAP[state.sport];
+  const gapFlag = !isMl && gap != null && Number.isFinite(thresh) && Math.abs(gap) >= thresh - 1e-9;
+  return {
+    modelTotalRaw: state.modelTotalRaw,
+    modelMarginRaw: state.modelMarginRaw,
+    modelTotalShrunk: state.modelTotalShrunk,
+    modelMarginShrunk: state.modelMarginShrunk,
+    marketLine: line == null ? null : line,
+    modelLineGap: gap,
+    gapFlag,
+  };
+}
+
+/** Copy private football audit fields onto a pick, candidate-table row, or rejection. */
+function footballAuditFields(c) {
+  if (!c || (c.sport !== 'NFL' && c.sport !== 'NCAAF')) return {};
+  const out = {};
+  for (const k of FOOTBALL_AUDIT_KEYS) {
+    if (c[k] !== undefined) out[k] = c[k];
+  }
+  return out;
+}
+
+/**
+ * Blend the shrunk projection and the raw projection at the same weight.
+ * Keep the lower probability. shrinkTowardSharp and isotonicClip are
+ * increasing in this number, so the edge cannot exceed the pre-shrink
+ * edge. The side the model likes is the shrunk probability; the other
+ * side stays on the raw probability instead of gaining edge.
+ */
+function pricedFromPointShrink(probAt, projRaw, projShrunk, line, anchor, weight) {
+  const pRaw = blendWithMarket(probAt(projRaw, line), anchor, weight);
+  const pShrunk = blendWithMarket(probAt(projShrunk, line), anchor, weight);
+  if (!Number.isFinite(pRaw)) return pShrunk;
+  if (!Number.isFinite(pShrunk)) return pRaw;
+  return pShrunk < pRaw ? pShrunk : pRaw;
+}
+
 module.exports = {
   formatMatchup,
   fuzzyTeam,
@@ -158,4 +317,12 @@ module.exports = {
   blendWithMarket,
   mapGamesSoft,
   HFA,
+  clampLambda,
+  shrinkTowardMarketLine,
+  sharpMarketLine,
+  footballPointState,
+  footballAudit,
+  footballAuditFields,
+  FOOTBALL_AUDIT_KEYS,
+  pricedFromPointShrink,
 };

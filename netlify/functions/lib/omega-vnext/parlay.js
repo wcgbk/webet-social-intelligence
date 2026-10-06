@@ -7,6 +7,7 @@ const {
   isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
+const { footballAuditFields } = require('./sports/_common');
 
 function marketRank(m) {
   if (/total/i.test(m || '')) return 3;
@@ -192,6 +193,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       modelVersion: l.modelVersion,
       ...(Array.isArray(l.placeableBooks) ? { placeableBooks: l.placeableBooks.slice() } : {}),
       ...(l.bestPlaceable ? { bestPlaceable: l.bestPlaceable } : {}),
+      ...footballAuditFields(l),
     };
   }));
 

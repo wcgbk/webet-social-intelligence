@@ -4,11 +4,13 @@
  * else standings power + HFA (nfl-normal-*). Game-day rest/QB soft adj
  * may tag nfl-epa-v1-gameday-* / nfl-normal-*-gameday. Blend weights
  * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
- * Calibrate shrink runs later in the pipeline.
+ * Totals and margins shrink toward the sharp line in points before the
+ * CDF. Calibrate shrink runs later on that probability.
  */
 const {
   formatMatchup, mapGamesSoft,
-  spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
+  spreadCoverProb, totalCoverProb, mlFromSpread,
+  sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments } = require('./game_day');
@@ -77,20 +79,34 @@ function projectGame(event, standings, efficiency, gameDay) {
   const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, stacked.enginesOn);
   const gameDayMeta = stacked.gameDay;
   const engineSoft = stacked.engineSoft;
+  const pts = footballPointState(
+    SPORT,
+    modelTotal,
+    modelMargin,
+    sharpMarketLine(event, 'total'),
+    sharpMarketLine(event, 'spreadHome'),
+  );
   const out = [];
 
   {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
+      const p = pricedFromPointShrink(
+        (proj) => (isHome ? mlFromSpread(proj, SPORT) : 1 - mlFromSpread(proj, SPORT)),
+        pts.modelMarginRaw,
+        pts.modelMarginShrunk,
+        null,
+        noVigPinnacleCircaImplied(bundles, b),
+        0.5,
+      );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
+        ...footballAudit(pts, 'Moneyline'),
       };
       out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
     }
@@ -100,8 +116,14 @@ function projectGame(event, standings, efficiency, gameDay) {
     for (const b of bundles) {
       if (b.point == null) continue;
       const isHome = b.side === home;
-      let p = spreadCoverProb(isHome ? modelMargin : -modelMargin, b.point, SPORT);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
+      const p = pricedFromPointShrink(
+        (proj, line) => spreadCoverProb(proj, line, SPORT),
+        isHome ? pts.modelMarginRaw : -pts.modelMarginRaw,
+        isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
+        b.point,
+        noVigPinnacleCircaImplied(bundles, b),
+        0.5,
+      );
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
@@ -109,6 +131,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
+        ...footballAudit(pts, 'Spread'),
       };
       out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
     }
@@ -117,8 +140,14 @@ function projectGame(event, standings, efficiency, gameDay) {
     const bundles = collectMarketOutcomes(event, 'totals');
     for (const b of bundles) {
       if (b.point == null) continue;
-      let p = totalCoverProb(modelTotal, b.point, b.side, SPORT);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.45);
+      const p = pricedFromPointShrink(
+        (proj, line) => totalCoverProb(proj, line, b.side, SPORT),
+        pts.modelTotalRaw,
+        pts.modelTotalShrunk,
+        b.point,
+        noVigPinnacleCircaImplied(bundles, b),
+        0.45,
+      );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
@@ -126,6 +155,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
+        ...footballAudit(pts, 'Total'),
       };
       out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
     }

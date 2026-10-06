@@ -24,6 +24,7 @@ const nfl = require('./sports/nfl');
 const cfb = require('./sports/cfb');
 const nba = require('./sports/nba');
 const nhl = require('./sports/nhl');
+const { footballAuditFields } = require('./sports/_common');
 
 function todayET() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -493,6 +494,7 @@ async function generateOmegaVnext(opts = {}) {
     projMethod: c.projMethod,
     placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
     bestPlaceable: c.bestPlaceable || null,
+    ...footballAuditFields(c),
     selected: picks.some(p => {
       const labeled = formatMoneylinePick(c.side, c.market);
       return (p.pick === c.side || p.pick === labeled) && p.matchup === c.matchup;
@@ -511,6 +513,7 @@ async function generateOmegaVnext(opts = {}) {
       matchup: r.matchup,
       side: r.side,
       reason: r.rejectReason || 'gate',
+      ...footballAuditFields(r),
     })),
   ];
 

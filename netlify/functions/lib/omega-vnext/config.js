@@ -294,6 +294,44 @@ const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 14.0, NHL: 1.8, MLB: 3.5 
 /** HFA base; game_day.js applies soft rest/B2B deltas on top. */
 const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 
+/**
+ * Point-space shrink of NFL/NCAAF totals and margins toward the market
+ * line BEFORE the normal CDF. projected = line + λ·(model − line), with
+ * the line the sharp total or the home spread. Blend, shrinkTowardSharp,
+ * and isotonicClip then run unchanged on that number. λ is clamped to
+ * [0, 1] at use, so the projection cannot move farther from the line.
+ *
+ * A 15-point total gap (54 vs 38.5) is about 1.5 total SDs. Blending
+ * after the CDF left a ~93% over near a 7% edge. Shrinking in points
+ * first cuts that z by λ.
+ *
+ * NFL totals 0.5 and NFL margins 0.5: one EPA spine, and the published
+ * misses were totals, so both markets keep half the gap.
+ * NCAAF totals 0.5: same total-gap failure mode, wider SD.
+ * NCAAF margins 0.6: college lines move more (HFA 2.6 plus the talent
+ * stack), so the margin keeps a little more of the model and still moves
+ * toward the line. MLB and NHL are not in this table.
+ */
+const POINT_SHRINK = {
+  NFL: { total: 0.5, margin: 0.5 },
+  NCAAF: { total: 0.5, margin: 0.6 },
+};
+
+/**
+ * Raw |model − line| at or above this many points is a human review, not
+ * a ticket. Totals compare the model total to the market total. Spreads
+ * compare the model margin to −homeSpread (the market-implied home margin).
+ * Same threshold for both markets. NFL 8 is past a normal field-goal to
+ * touchdown disagreement (~0.76 total-SD) and is the size that still
+ * cleared the EV floor when shrink happened only in probability. NCAAF 10
+ * matches the wider total SD (13.5 vs 10.5). Threshold candidates are
+ * blocked from straights and parlays with rejectReason model_line_gap_review.
+ */
+const MODEL_LINE_GAP = {
+  NFL: 8,
+  NCAAF: 10,
+};
+
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
@@ -374,6 +412,8 @@ module.exports = {
   SPORT_SPREAD_STD,
   SPORT_TOTAL_STD,
   HFA,
+  POINT_SHRINK,
+  MODEL_LINE_GAP,
   CLV_KPI_FLOOR,
   MODEL_NOTES,
   SITE_ID,

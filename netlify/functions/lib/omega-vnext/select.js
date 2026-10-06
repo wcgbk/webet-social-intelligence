@@ -10,6 +10,7 @@ const {
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
+const { footballAuditFields } = require('./sports/_common');
 
 function matchupKey(c) {
   return String(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`).toLowerCase().trim();
@@ -144,6 +145,7 @@ function toPickObject(c, opts = {}) {
     ...(Array.isArray(c.placeableBooks) ? { placeableBooks: c.placeableBooks.slice() } : {}),
     ...(c.bestPlaceable ? { bestPlaceable: c.bestPlaceable } : {}),
     ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
+    ...footballAuditFields(c),
   };
 }
 

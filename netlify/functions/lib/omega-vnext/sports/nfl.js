@@ -6,6 +6,9 @@
  * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
  * Totals and margins shrink toward the sharp line in points before the
  * CDF. Calibrate shrink runs later on that probability.
+ * Wind and cold from the free ESPN scoreboard adjust the total only
+ * (WEATHER_NFL). A dome, or a game with no weather object, stays put.
+ * The margin is not moved.
  */
 const {
   formatMatchup, mapGamesSoft,
@@ -13,7 +16,8 @@ const {
   sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
-const { applyGameDayAdjustments } = require('./game_day');
+const { applyGameDayAdjustments, applyNflWeatherTotalAdj } = require('./game_day');
+const { resolveTeamId } = require('./team_identity');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -51,7 +55,18 @@ function tagMethods(methods, gameDayApplied, enginesOn) {
   return out;
 }
 
-function projectGame(event, standings, efficiency, gameDay) {
+function findEspnGame(ev, espnGames) {
+  const games = (espnGames && espnGames.games) || espnGames || [];
+  if (!ev || !games.length) return null;
+  const hid = resolveTeamId(SPORT, ev.home_team);
+  const aid = resolveTeamId(SPORT, ev.away_team);
+  if (!hid || !aid) return null;
+  return games.find((g) => {
+    return resolveTeamId(SPORT, g.homeTeam) === hid && resolveTeamId(SPORT, g.awayTeam) === aid;
+  }) || null;
+}
+
+function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
@@ -73,11 +88,24 @@ function projectGame(event, standings, efficiency, gameDay) {
     engineSoft: env.engineSoft,
     gameDay: gd.gameDay,
   });
+  const wx = applyNflWeatherTotalAdj(gd.modelTotal, espnGame && espnGame.weather, {
+    indoor: !!(espnGame && espnGame.indoor === true),
+  });
   const modelMargin = stacked.modelMargin;
-  const modelTotal = gd.modelTotal;
+  const modelTotal = wx.modelTotal;
   const uncertainty = gd.uncertainty;
-  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, stacked.enginesOn);
-  const gameDayMeta = stacked.gameDay;
+  let gameDayApplied = !!(stacked.gameDay && stacked.gameDay.applied);
+  let gameDayMeta = stacked.gameDay;
+  if (wx.applied) {
+    gameDayApplied = true;
+    gameDayMeta = {
+      ...(stacked.gameDay || {}),
+      weatherNote: wx.weatherNote,
+      weatherTotalAdj: wx.totalAdj,
+      applied: true,
+    };
+  }
+  const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
   const engineSoft = stacked.engineSoft;
   const pts = footballPointState(
     SPORT,
@@ -163,8 +191,12 @@ function projectGame(event, standings, efficiency, gameDay) {
   return out;
 }
 
-function project({ oddsEvents, standings, efficiency, gameDay } = {}) {
-  return mapGamesSoft(oddsEvents, (ev) => projectGame(ev, standings || {}, efficiency || {}, gameDay || {}));
+function project({ oddsEvents, standings, efficiency, gameDay, espnGames } = {}) {
+  const games = (espnGames && espnGames.games) || espnGames || [];
+  return mapGamesSoft(oddsEvents, (ev) => {
+    const eg = findEspnGame(ev, games);
+    return projectGame(ev, standings || {}, efficiency || {}, gameDay || {}, eg);
+  });
 }
 
 module.exports = { project, SPORT };

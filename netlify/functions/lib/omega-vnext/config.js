@@ -312,6 +312,27 @@ const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 
 const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 
 /**
+ * NFL total-only weather from the free ESPN scoreboard already fetched
+ * for the slate (competitions[0].weather: temperature, windSpeed,
+ * displayValue). No new paid call. Dome (venue.indoor) or no weather
+ * object adjusts by 0. Wind and cold only subtract from the total.
+ * Margin is not an input. MLB stays on applyWeatherTotalAdj.
+ *
+ * Wind applies at windOnMph and above: windPtsPerMph for each mph above
+ * windBaseMph, capped at windCap. Cold is a flat coldAdj at or below
+ * coldAtOrBelowF. The two together cannot pass totalCap.
+ */
+const WEATHER_NFL = {
+  windOnMph: 15,
+  windBaseMph: 12,
+  windPtsPerMph: 0.25,
+  windCap: 3.0,
+  coldAtOrBelowF: 25,
+  coldAdj: 1.0,
+  totalCap: 3.5,
+};
+
+/**
  * Point-space shrink of NFL/NCAAF totals and margins toward the market
  * line BEFORE the normal CDF. projected = line + λ·(model − line), with
  * the line the sharp total or the home spread. Blend, shrinkTowardSharp,
@@ -435,6 +456,7 @@ module.exports = {
   SPORT_SPREAD_STD,
   SPORT_TOTAL_STD,
   HFA,
+  WEATHER_NFL,
   POINT_SHRINK,
   MODEL_LINE_GAP,
   CLV_KPI_FLOOR,

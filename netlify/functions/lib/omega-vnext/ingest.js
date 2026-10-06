@@ -144,6 +144,7 @@ async function fetchEspnScoreboard(label, dateISO) {
         homeProbable: homeProb,
         awayProbable: awayProb,
         weather: extractWeather(comp),
+        indoor: !!(comp.venue && comp.venue.indoor === true),
         ...scoreboardSeasonFields(ev),
       };
     });

@@ -78,6 +78,7 @@ function projectAll(snap) {
       standings: snap.standingsBySport.NFL || {},
       efficiency: (snap.efficiencyBySport && snap.efficiencyBySport.NFL) || {},
       gameDay,
+      espnGames: snap.espnBySport && snap.espnBySport.NFL,
     }));
   }
   if (SPORTS_ENABLED.NCAAF) {

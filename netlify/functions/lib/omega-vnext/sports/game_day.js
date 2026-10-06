@@ -11,7 +11,7 @@
 const { clamp } = require('../odds_math');
 const { fuzzyTeam } = require('./_common');
 const { rowByIdentity } = require('./team_identity');
-const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY } = require('../config');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -199,7 +199,8 @@ function qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam, caps) {
 }
 
 /**
- * Apply rest / QB soft adjustments. Weather handled separately for MLB totals.
+ * Apply rest / QB soft adjustments. Weather is not applied here.
+ * MLB totals use applyWeatherTotalAdj. NFL totals use applyNflWeatherTotalAdj.
  */
 function applyGameDayAdjustments({
   sport,
@@ -306,6 +307,87 @@ function applyWeatherTotalAdj(modelTotal, weather) {
   return { modelTotal: total, weatherNote: notes.join('; '), applied: true };
 }
 
+function readNflTempF(weather) {
+  const raw = weather.tempF != null ? weather.tempF : weather.temperature;
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function readNflWindMph(weather) {
+  if (weather.windMph != null && weather.windMph !== '') {
+    const n = Number(weather.windMph);
+    if (Number.isFinite(n)) return n;
+  }
+  if (weather.windSpeed != null && weather.windSpeed !== '') {
+    const n = Number(String(weather.windSpeed).replace(/[^\d.]/g, ''));
+    if (Number.isFinite(n)) return n;
+  }
+  const text = [weather.displayValue, weather.condition, weather.windDir]
+    .filter(v => v != null && v !== '')
+    .join(' ');
+  const m = text.match(/(\d+(?:\.\d+)?)\s*mph\b/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * NFL wind / cold total adjustment. Indoor or missing weather → 0.
+ * Subtracts only. Does not read or return a margin.
+ */
+function applyNflWeatherTotalAdj(modelTotal, weather, opts = {}) {
+  const total = Number(modelTotal);
+  const unchanged = {
+    modelTotal: Number.isFinite(total) ? total : modelTotal,
+    totalAdj: 0,
+    weatherNote: null,
+    applied: false,
+  };
+  if (!Number.isFinite(total)) return unchanged;
+  const indoor = opts.indoor === true || (weather && weather.indoor === true);
+  if (indoor) return unchanged;
+  if (!weather || typeof weather !== 'object') return unchanged;
+
+  const cfg = WEATHER_NFL || {};
+  const windOn = Number(cfg.windOnMph);
+  const windBase = Number(cfg.windBaseMph);
+  const perMph = Number(cfg.windPtsPerMph);
+  const windCap = Number(cfg.windCap);
+  const coldAt = Number(cfg.coldAtOrBelowF);
+  const coldPts = Number(cfg.coldAdj);
+  const totalCap = Number(cfg.totalCap);
+
+  const temp = readNflTempF(weather);
+  const wind = readNflWindMph(weather);
+  let windAdj = 0;
+  let coldAdj = 0;
+  const notes = [];
+  if (Number.isFinite(wind) && Number.isFinite(windOn) && wind >= windOn && Number.isFinite(perMph) && perMph > 0) {
+    const above = Number.isFinite(windBase) ? Math.max(0, wind - windBase) : 0;
+    let pts = perMph * above;
+    if (Number.isFinite(windCap) && windCap > 0) pts = Math.min(pts, windCap);
+    windAdj = -pts;
+    if (windAdj < 0) notes.push(`wind ${wind}mph ${windAdj}`);
+  }
+  if (Number.isFinite(temp) && Number.isFinite(coldAt) && temp <= coldAt && Number.isFinite(coldPts) && coldPts > 0) {
+    coldAdj = -coldPts;
+    notes.push(`cold ${temp}F ${coldAdj}`);
+  }
+  let adj = windAdj + coldAdj;
+  if (Number.isFinite(totalCap) && totalCap > 0 && adj < -totalCap) {
+    adj = -totalCap;
+    notes.push(`cap ${adj}`);
+  }
+  if (!(adj < 0)) return unchanged;
+  return {
+    modelTotal: total + adj,
+    totalAdj: adj,
+    weatherNote: notes.join('; '),
+    applied: true,
+  };
+}
+
 module.exports = {
   HFA_ADJ,
   SHORT_REST_DAYS,
@@ -319,4 +401,5 @@ module.exports = {
   qbContinuityAdjust,
   applyGameDayAdjustments,
   applyWeatherTotalAdj,
+  applyNflWeatherTotalAdj,
 };

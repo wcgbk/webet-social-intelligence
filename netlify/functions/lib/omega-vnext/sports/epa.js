@@ -5,6 +5,7 @@
  * defEpa is defensive strength per play (higher = better, sign-flipped EPA allowed).
  * Both teams must match a clean prior; otherwise the caller keeps standings power.
  * Sierra blend only when standings pf/pa and a game count are clean.
+ * Seeds are zero-sum centered once at load (centerSeed). The JSON file stays raw.
  * v12.3.8: capped success→margin (NFL) and talent/spPlus blend (NCAAF).
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
@@ -65,6 +66,132 @@ function isCleanEpa(row) {
   // Per-play scale. Point-level numbers would explode the margin — reject.
   if (Math.abs(off) > 0.8 || Math.abs(def) > 0.8) return false;
   return true;
+}
+
+function teamRows(table) {
+  const rows = [];
+  if (!table || typeof table !== 'object') return rows;
+  for (const [key, row] of Object.entries(table)) {
+    if (!key || key.startsWith('_')) continue;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Mean over rows that have both fields. d = mean(off) − mean(def). */
+function pairMean(rows, offKey, defKey) {
+  let n = 0;
+  let sumOff = 0;
+  let sumDef = 0;
+  for (const row of rows) {
+    const off = Number(row[offKey]);
+    const def = Number(row[defKey]);
+    if (!Number.isFinite(off) || !Number.isFinite(def)) continue;
+    n += 1;
+    sumOff += off;
+    sumDef += def;
+  }
+  if (!n) return null;
+  const meanOff = sumOff / n;
+  const meanDef = sumDef / n;
+  const d = meanOff - meanDef;
+  return { n, meanOff, meanDef, d, half: d / 2 };
+}
+
+/**
+ * successTotalAdj environment is (offEnv − defEnv) × 12.
+ * offEnv − defEnv = ((homeOff + awayOff) − (homeDef + awayDef)) / 2.
+ * LEAGUE_SUCCESS cancels, so an average pair is (mean offSuccess − mean defSuccess) × 12.
+ * defSuccess is higher-is-better (more stops), the same orientation as defEpa,
+ * so the symmetric shift zeros that term. It would not zero a same-sign sum.
+ * Skip the shift when any rate would leave (0, 1): successTotalAdj and
+ * successMarginAdj then return 0 for that pair, and margins would move.
+ */
+function successShiftFor(rows) {
+  const stats = pairMean(rows, 'offSuccess', 'defSuccess');
+  if (!stats) {
+    return { applied: false, d: 0, half: 0, n: 0, reason: 'no paired success rates' };
+  }
+  for (const row of rows) {
+    const off = Number(row.offSuccess);
+    const def = Number(row.defSuccess);
+    if (!Number.isFinite(off) || !Number.isFinite(def)) continue;
+    const off2 = off - stats.half;
+    const def2 = def + stats.half;
+    if (!(off2 > 0 && off2 < 1 && def2 > 0 && def2 < 1)) {
+      return {
+        applied: false,
+        d: stats.d,
+        half: stats.half,
+        n: stats.n,
+        meanOff: stats.meanOff,
+        meanDef: stats.meanDef,
+        reason: 'shift would leave (0, 1); success environment left uncentered',
+      };
+    }
+  }
+  return {
+    applied: true,
+    d: stats.d,
+    half: stats.half,
+    n: stats.n,
+    meanOff: stats.meanOff,
+    meanDef: stats.meanDef,
+    reason: 'defSuccess is higher-is-better; symmetric shift zeros (mean offSuccess - mean defSuccess) * 12',
+  };
+}
+
+/**
+ * Shift that centerSeed would apply. Does not copy or mutate the table.
+ * epa.d is mean(offEpa) − mean(defEpa) on the input (0 after a center).
+ */
+function seedCenterStats(table) {
+  const rows = teamRows(table);
+  const epa = pairMean(rows, 'offEpa', 'defEpa') || {
+    n: 0, meanOff: null, meanDef: null, d: 0, half: 0,
+  };
+  return { epa, success: successShiftFor(rows) };
+}
+
+/**
+ * Symmetric zero-sum re-center. d = mean(off) − mean(def);
+ * off' = off − d/2; def' = def + d/2. Mean(off') === mean(def').
+ * A both-seeded total uses (homeOff − awayDef) + (awayOff − homeDef), which is
+ * 0 for an average pair once the means match. Every (off − def) drops by d,
+ * so margins, the differences of those edges, stay put.
+ * The same shift is applied to offSuccess/defSuccess when successShiftFor
+ * says it zeros the success environment term without leaving (0, 1).
+ * Idempotent. Does not mutate the input. Raw JSON stays the source of truth.
+ * Call once at load. Do not call from footballProjection.
+ */
+function centerSeed(table) {
+  const src = table && typeof table === 'object' ? table : {};
+  const stats = seedCenterStats(src);
+  const out = {};
+  for (const [key, row] of Object.entries(src)) {
+    if (!key || key.startsWith('_') || !row || typeof row !== 'object' || Array.isArray(row)) {
+      out[key] = row;
+      continue;
+    }
+    const next = { ...row };
+    const off = Number(row.offEpa);
+    const def = Number(row.defEpa);
+    if (Number.isFinite(off) && Number.isFinite(def)) {
+      next.offEpa = off - stats.epa.half;
+      next.defEpa = def + stats.epa.half;
+    }
+    if (stats.success.applied) {
+      const offS = Number(row.offSuccess);
+      const defS = Number(row.defSuccess);
+      if (Number.isFinite(offS) && Number.isFinite(defS)) {
+        next.offSuccess = offS - stats.success.half;
+        next.defSuccess = defS + stats.success.half;
+      }
+    }
+    out[key] = next;
+  }
+  return out;
 }
 
 function lookupEpa(teamName, table, sport) {
@@ -455,6 +582,8 @@ module.exports = {
   SIERRA_W,
   SPORT_CFG,
   isCleanEpa,
+  seedCenterStats,
+  centerSeed,
   lookupEpa,
   sierraAdjust,
   successTotalAdj,

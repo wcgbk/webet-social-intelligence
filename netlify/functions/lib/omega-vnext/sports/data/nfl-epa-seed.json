@@ -4,7 +4,14 @@
     "defEpa": "higher is better (EPA prevented per play, not EPA allowed)",
     "offSuccess": "offensive success rate",
     "defSuccess": "defensive success rate (higher = more stops)",
-    "note": "v1 cached NFL prior. Not a live EPA scrape. Opponent blend is applied in code when standings are clean."
+    "note": "v1 cached NFL prior. Not a live EPA scrape. Opponent blend is applied in code when standings are clean.",
+    "centered": {
+      "method": "load-time symmetric zero-sum",
+      "date": "2026-10-05",
+      "dEpa": 0.02375,
+      "dSuccess": 0.008125,
+      "note": "Raw offEpa/defEpa/offSuccess/defSuccess stay the source of truth. loadEfficiencySeeds calls centerSeed, which recomputes d and does not read these fields. d = mean(off) - mean(def); off' = off - d/2; def' = def + d/2. Margins unchanged. Success uses the same shift because defSuccess is higher-is-better and successTotalAdj's environment term is (mean offSuccess - mean defSuccess) * 12."
+    }
   },
   "Arizona Cardinals": {
     "offEpa": 0.02,

@@ -324,16 +324,17 @@ function loadEfficiencySeeds() {
   const nfl = require('./sports/data/nfl-epa-seed.json');
   const cfb = require('./sports/data/cfb-epa-seed.json');
   const talent = loadTalentSeed();
+  // centerSeed recomputes d from the raw file. _meta.centered is a note, not an input.
+  const { centerSeed, talentScaleMode } = require('./sports/epa');
   let scale = 'centered';
   try {
-    const { talentScaleMode } = require('./sports/epa');
     scale = talentScaleMode(talentSeedMeta());
   } catch (e) {
     console.error(`[omega-vnext/ingest] talent scale soft-fail: ${e.message}`);
   }
   return {
-    NFL: stripMeta(nfl),
-    NCAAF: mergeTalentIntoEfficiency(stripMeta(cfb), talent, scale),
+    NFL: centerSeed(stripMeta(nfl)),
+    NCAAF: mergeTalentIntoEfficiency(centerSeed(stripMeta(cfb)), talent, scale),
   };
 }
 

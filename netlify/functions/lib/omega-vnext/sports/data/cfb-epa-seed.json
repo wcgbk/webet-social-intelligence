@@ -4,7 +4,14 @@
     "defEpa": "higher is better (EPA prevented per play, not EPA allowed)",
     "offSuccess": "offensive success rate",
     "defSuccess": "defensive success rate (higher = more stops)",
-    "note": "v1 cached FBS prior for a top set, not every program. Missing teams fall back to standings power."
+    "note": "v1 cached FBS prior for a top set, not every program. Missing teams fall back to standings power.",
+    "centered": {
+      "method": "load-time symmetric zero-sum",
+      "date": "2026-10-05",
+      "dEpa": 0.06692307692307692,
+      "dSuccess": 0.023269230769230768,
+      "note": "Raw offEpa/defEpa/offSuccess/defSuccess stay the source of truth. loadEfficiencySeeds calls centerSeed, which recomputes d and does not read these fields. d = mean(off) - mean(def); off' = off - d/2; def' = def + d/2. Margins unchanged. Success uses the same shift because defSuccess is higher-is-better and successTotalAdj's environment term is (mean offSuccess - mean defSuccess) * 12."
+    }
   },
   "Ohio State Buckeyes": {
     "offEpa": 0.22,

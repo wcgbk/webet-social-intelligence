@@ -224,7 +224,32 @@
   schedule = "5 13 * * *"
   # 13:05 UTC ≈ 9:05am ET (EDT). Shadow dry-run → omega-shadow/picks-{date} only.
   # Never latest-date / picks-dates / live picks-{date}. Same minute as NFL trigger is fine.
-  # See docs/OMEGA-SHADOW-DRYRUN.md.
+  # See docs/OMEGA-SHADOW-DRYRUN.md. NBA shadow is not this job.
+
+[functions."omega-nba-shadow"]
+  # Public HTTP, unscheduled. A POST without the internal secret is 403 and
+  # makes 0 Odds API calls and writes nothing. Schedules are the two wrappers
+  # below. SPORTS_ENABLED.NBA stays false. Does not write the daily card.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."trigger-omega-nba-shadow"]
+  schedule = "30 21 * * *"
+  # 21:30 UTC = 5:30pm ET (EDT), before NBA tips, away from the 13:30 UTC card.
+  # Projects and logs omega-nba-shadow-{ET date}. At most one Odds API call
+  # (9 credits) per ET date, and only after the free /events preflight shows
+  # a same-ET-day NBA game. Netlify cannot pass a body, so this wrapper is
+  # project-only. Grade is trigger-omega-nba-shadow-grade.
+  # EST from 2026-11-01: this slot becomes 4:30pm ET. Prepared replacement is
+  # "30 22 * * *" (5:30pm EST). Do not switch it before that date.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."trigger-omega-nba-shadow-grade"]
+  schedule = "0 12 * * *"
+  # 12:00 UTC = 8:00am ET (EDT). Grades the previous ET date from ESPN finals
+  # into omega-nba-shadow-results-{date}. 0 Odds API credits.
+  # EST from 2026-11-01: this slot becomes 7:00am ET. Prepared replacement is
+  # "0 13 * * *" (8:00am EST). Do not switch it before that date.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 
 [functions."capture-omega-pm-observer-open"]
@@ -272,6 +297,8 @@
   #   capture-omega-lines-late         "0,15 13" → "0,15 14"
   #   warm-omega-feeds                 "0 13" → "0 14"
   #   trigger-omega-shadow             "5 13" → "5 14"
+  #   trigger-omega-nba-shadow         "30 21" → "30 22"   (5:30pm ET)
+  #   trigger-omega-nba-shadow-grade   "0 12" → "0 13"     (8:00am ET)
   #   capture-omega-pm-observer-open   "30 12" → "30 13"
   #   capture-omega-pm-observer        "15 14" → "15 15"
   #   capture-omega-walkforward        "15 15" → "15 16"

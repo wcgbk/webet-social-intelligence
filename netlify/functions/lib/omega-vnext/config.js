@@ -33,6 +33,16 @@ const SPORTS_ENABLED = {
   NHL: true, // WeBet voice order 2026-09-30 — v12.3.13 NHL engine live
 };
 
+/**
+ * NBA shadow log + grade. Independent of SPORTS_ENABLED.NBA, which stays
+ * false so the daily card never selects NBA. Scheduled project (21:30 UTC)
+ * and grade (12:00 UTC, previous ET date) read this constant.
+ * Server env OMEGA_NBA_SHADOW=0 is the kill-switch: no odds fetch, no blob write.
+ */
+const NBA_SHADOW = {
+  enabled: true,
+};
+
 const ODDS_SPORT_KEYS = {
   MLB: 'baseball_mlb',
   NFL: 'americanfootball_nfl',
@@ -404,6 +414,7 @@ module.exports = {
   DAY_SCOPE_TZ,
   DAY_SCOPE_STRICT,
   SPORTS_ENABLED,
+  NBA_SHADOW,
   ODDS_SPORT_KEYS,
   ESPN_LEAGUES,
   SHARP_BOOKS,

@@ -25,6 +25,7 @@ const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+assert.strictEqual(config.NBA_SHADOW.enabled, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.GATES.minEV.NBA, 0.03);
 assert.strictEqual(config.GATES.minCoverProb.NBA, undefined);
@@ -353,7 +354,7 @@ function byMarket(rows, market, sideIncludes) {
   assert.ok(!projectAll(snap).some(c => c.sport === 'NBA'));
 }
 
-// ── source: daily path cannot opt into preseason; shadow is unscheduled ──
+// ── source: daily path cannot opt into preseason; NBA shadow is its own cron ──
 {
   const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
   assert.ok(/if \(SPORTS_ENABLED\.NBA\)/.test(indexSrc));
@@ -363,12 +364,34 @@ function byMarket(rows, market, sideIncludes) {
   const shadowSrc = fs.readFileSync(path.join(root, 'nba_shadow.js'), 'utf8');
   assert.ok(!/selectStraights\s*\(/.test(shadowSrc));
   assert.ok(/allowPreseason:\s*true/.test(shadowSrc));
+  assert.ok(/OMEGA_NBA_SHADOW === '0'/.test(shadowSrc));
+  assert.ok(/slateOddsGate/.test(shadowSrc));
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
-  assert.ok(!/omega-nba-shadow/.test(toml));
+  function fnBlock(name) {
+    const parts = toml.split(`[functions."${name}"]`);
+    assert.strictEqual(parts.length, 2, name);
+    return parts[1].split('[functions.')[0];
+  }
+  const projectBlock = fnBlock('trigger-omega-nba-shadow');
+  const gradeBlock = fnBlock('trigger-omega-nba-shadow-grade');
+  const publicBlock = fnBlock('omega-nba-shadow');
+  assert.ok(/schedule = "30 21 \* \* \*"/.test(projectBlock));
+  assert.ok(/schedule = "0 12 \* \* \*"/.test(gradeBlock));
+  assert.ok(!/schedule\s*=/.test(publicBlock));
+  assert.ok(!/schedule = "30 13 \* \* \*"/.test(projectBlock));
   const trig = fs.readFileSync(path.join(__dirname, 'netlify/functions/trigger-omega-shadow.js'), 'utf8');
   assert.ok(!/OMEGA_NBA_SHADOW/.test(trig));
   assert.ok(!/basketball_nba/.test(trig));
   assert.ok(!/omega-nba-shadow/.test(trig));
+  const projSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/trigger-omega-nba-shadow.js'), 'utf8');
+  const gradeSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/trigger-omega-nba-shadow-grade.js'), 'utf8');
+  assert.ok(/mode:\s*'project'/.test(projSrc));
+  assert.ok(!/grade-prev/.test(projSrc));
+  assert.ok(/mode:\s*'grade-prev'/.test(gradeSrc));
+  const httpSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/omega-nba-shadow.js'), 'utf8');
+  assert.ok(!/body\.OMEGA_NBA_SHADOW/.test(httpSrc));
+  assert.ok(!/params\.OMEGA_NBA_SHADOW/.test(httpSrc));
+  assert.ok(!/body\.shadow\s*===\s*true/.test(httpSrc));
   assert.strictEqual(ingest.scoreboardSeasonFields({ season: { type: 1 } }).preseason, true);
   assert.strictEqual(ingest.scoreboardSeasonFields({ season: { type: { type: 2, name: 'Regular Season' } } }).preseason, false);
   assert.strictEqual(ingest.scoreboardSeasonFields({ season: { slug: 'preseason', type: 3 } }).preseason, true);
@@ -527,20 +550,353 @@ function byMarket(rows, market, sideIncludes) {
   assert.strictEqual(writes[0].data.oddsCalls, 0);
 }
 
-// ── handler stays dark unless the flag is set ──
+// ── preflight skips the paid odds call; one call when the ET slate has a game ──
 {
-  const prev = process.env.OMEGA_NBA_SHADOW;
+  const prevKey = process.env.ODDS_API_KEY;
+  const prevFetch = global.fetch;
+  process.env.ODDS_API_KEY = 'test-key';
+  function jsonResponse(body, ok = true, status = 200) {
+    return { ok, status, json: async () => body };
+  }
+  try {
+    const skippedCalls = [];
+    const skipFetch = async (url) => {
+      skippedCalls.push(String(url));
+      if (String(url).includes('/events')) return jsonResponse([]);
+      throw new Error('odds or ESPN must not run on an empty preflight');
+    };
+    const skipped = await shadow.fetchNbaBoard('2026-10-20', { fetchImpl: skipFetch });
+    assert.strictEqual(skipped.oddsCalls, 0);
+    assert.strictEqual(skipped.skipped, true);
+    assert.strictEqual(skipped.skipReason, 'no-same-et-day');
+    assert.strictEqual(skippedCalls.length, 1);
+    assert.ok(skippedCalls[0].includes('/events'));
+
+    const liveCalls = [];
+    const liveFetch = async (url) => {
+      const u = String(url);
+      liveCalls.push(u);
+      if (u.includes('/events')) {
+        return jsonResponse([{ commence_time: '2026-10-20T23:00:00Z', home_team: 'Boston Celtics', away_team: 'New York Knicks' }]);
+      }
+      if (u.includes('/odds')) return jsonResponse([]);
+      return jsonResponse({ events: [], children: [] });
+    };
+    global.fetch = liveFetch;
+    const live = await shadow.fetchNbaBoard('2026-10-20', { fetchImpl: liveFetch });
+    assert.strictEqual(live.oddsCalls, 1);
+    assert.strictEqual(liveCalls.filter((u) => u.includes('/odds')).length, 1);
+    assert.strictEqual(liveCalls.filter((u) => u.includes('/events')).length, 1);
+  } finally {
+    if (prevKey == null) delete process.env.ODDS_API_KEY;
+    else process.env.ODDS_API_KEY = prevKey;
+    global.fetch = prevFetch;
+  }
+}
+
+// ── a logged ET date does not spend a second odds call ──
+{
+  const bag = new Map();
+  const board = {
+    dateISO: '2026-10-20',
+    oddsEvents: [event('Boston Celtics', 'New York Knicks', { spread: 8.5, total: 220.5, price: 100, homeMl: 150, awayMl: -170 })],
+    standings: {},
+    prior: equalPrior(),
+    espnGames: { games: [{ homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', seasonType: 1, preseason: true }] },
+    preseason: true,
+    asOf: '2026-10-20T15:00:00Z',
+    store: async (key, data) => { bag.set(key, data); },
+    read: async (key) => bag.get(key) || null,
+  };
+  const first = await shadow.runNbaShadow({ ...board, dryRun: false });
+  assert.strictEqual(first.wrote, true);
+  assert.strictEqual(first.oddsCalls, 0);
+  let oddsHits = 0;
+  const second = await shadow.runNbaShadow({
+    dateISO: '2026-10-20',
+    dryRun: false,
+    read: async (key) => bag.get(key) || null,
+    store: async () => { throw new Error('already-logged must not write'); },
+    fetchImpl: async () => { oddsHits += 1; throw new Error('already-logged must not fetch'); },
+  });
+  assert.strictEqual(second.skipped, true);
+  assert.strictEqual(second.reason, 'already-logged');
+  assert.strictEqual(second.oddsCalls, 0);
+  assert.strictEqual(second.wrote, false);
+  assert.strictEqual(oddsHits, 0);
+}
+
+// ── grader summary: W-L, flat 1u, by market, cumulative from the prior blob ──
+{
+  const finals = [
+    { homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', homeScore: 110, awayScore: 100, status: 'final' },
+  ];
+  const slate = {
+    picks: [
+      { market: 'Spread', side: 'Boston Celtics -2.5', line: -2.5, odds: -110, pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Spread', side: 'Boston Celtics -20.5', line: -20.5, odds: -110, pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Total', side: 'Over 205', line: 205, odds: 100, pickSide: 'over', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Moneyline', side: 'Boston Celtics', odds: -150, pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+    ],
+  };
+  const prior = {
+    date: '2026-10-19',
+    cumulative: {
+      from: '2026-10-01',
+      through: '2026-10-19',
+      wl: '1-0',
+      units: 1,
+      priced: 1,
+      unpriced: 0,
+      unitStake: 1,
+      record: { win: 1, loss: 0, push: 0, pending: 0, unmatched: 0 },
+      byMarket: {
+        Moneyline: { win: 1, loss: 0, push: 0, pending: 0, unmatched: 0, units: 1 },
+      },
+    },
+  };
+  const saved = await shadow.gradeNbaShadow({
+    dateISO: '2026-10-20',
+    dryRun: true,
+    slate,
+    finals,
+    priorResults: prior,
+    store: async () => { throw new Error('dryRun must not write'); },
+  });
+  assert.strictEqual(saved.wrote, false);
+  assert.strictEqual(saved.oddsCalls, 0);
+  assert.strictEqual(saved.payload.summary.wl, '3-1');
+  assert.strictEqual(saved.payload.summary.byMarket.Spread.win, 1);
+  assert.strictEqual(saved.payload.summary.byMarket.Spread.loss, 1);
+  assert.strictEqual(saved.payload.summary.byMarket.Total.win, 1);
+  assert.strictEqual(saved.payload.summary.byMarket.Moneyline.win, 1);
+  assert.strictEqual(saved.payload.summary.unitStake, 1);
+  const rowSum = saved.payload.rows.reduce((s, r) => s + (r.profitUnits || 0), 0);
+  assert.ok(Math.abs(saved.payload.summary.units - rowSum) < 1e-9);
+  assert.ok(saved.payload.summary.units > 0);
+  assert.strictEqual(saved.payload.cumulative.wl, '4-1');
+  assert.strictEqual(saved.payload.cumulative.from, '2026-10-01');
+  assert.strictEqual(saved.payload.cumulative.through, '2026-10-20');
+  assert.strictEqual(saved.payload.cumulative.byMarket.Moneyline.win, 2);
+  assert.ok(Math.abs(saved.payload.cumulative.units - (1 + saved.payload.summary.units)) < 1e-9);
+}
+
+function scheduleEvent() {
+  return {
+    httpMethod: 'POST',
+    headers: {
+      'x-nf-event': 'schedule',
+      'user-agent': 'Netlify Clockwork',
+    },
+    body: JSON.stringify({ next_run: '2026-10-21T21:30:00.000Z' }),
+  };
+}
+
+function fixtureBoard() {
+  return {
+    dateISO: '2026-10-20',
+    oddsEvents: [event('Boston Celtics', 'New York Knicks', { spread: 8.5, total: 220.5, price: 100, homeMl: 150, awayMl: -170 })],
+    standings: {},
+    prior: equalPrior(),
+    espnGames: { games: [{ homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', seasonType: 1, preseason: true }] },
+    preseason: true,
+    asOf: '2026-10-20T15:00:00Z',
+  };
+}
+
+// ── unauthenticated POST: 0 odds calls, no writes. Schedule header is not enough on the public URL. ──
+{
+  const prevShadow = process.env.OMEGA_NBA_SHADOW;
+  const prevFetch = global.fetch;
   delete process.env.OMEGA_NBA_SHADOW;
-  const handler = require('./netlify/functions/omega-nba-shadow').handler;
-  const res = await handler({ body: JSON.stringify({ dryRun: false }) });
-  const body = JSON.parse(res.body);
-  assert.strictEqual(res.statusCode, 200);
-  assert.strictEqual(body.skipped, true);
-  assert.strictEqual(body.oddsCalls, 0);
-  assert.strictEqual(body.wrote, false);
-  assert.strictEqual(body.creditsEstimate, 0);
-  if (prev == null) delete process.env.OMEGA_NBA_SHADOW;
-  else process.env.OMEGA_NBA_SHADOW = prev;
+  let fetches = 0;
+  let writes = 0;
+  global.fetch = async () => { fetches += 1; throw new Error('unauthenticated must not fetch'); };
+  try {
+    const publicHandler = require('./netlify/functions/omega-nba-shadow').handler;
+    const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
+    const res = await publicHandler({
+      httpMethod: 'POST',
+      headers: { 'user-agent': 'curl/8.0', 'x-nf-event': 'schedule' },
+      queryStringParameters: { shadow: '1', OMEGA_NBA_SHADOW: '1' },
+      body: JSON.stringify({ dryRun: false, shadow: true, OMEGA_NBA_SHADOW: '1' }),
+    });
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 403);
+    assert.strictEqual(body.oddsCalls, 0);
+    assert.strictEqual(body.wrote, false);
+    assert.strictEqual(body.creditsEstimate, 0);
+    assert.strictEqual(body.sportsEnabledNba, false);
+
+    const naked = await projectHandler({
+      httpMethod: 'POST',
+      headers: { 'user-agent': 'curl/8.0' },
+      body: JSON.stringify({ dryRun: false }),
+    });
+    const nakedBody = JSON.parse(naked.body);
+    assert.strictEqual(naked.statusCode, 403);
+    assert.strictEqual(nakedBody.oddsCalls, 0);
+    assert.strictEqual(nakedBody.wrote, false);
+
+    const reading = await publicHandler({
+      httpMethod: 'POST',
+      headers: {},
+      body: JSON.stringify({ read: true, grade: true }),
+    });
+    const readBody = JSON.parse(reading.body);
+    assert.strictEqual(reading.statusCode, 200);
+    assert.strictEqual(readBody.readOnly, true);
+    assert.strictEqual(readBody.oddsCalls, 0);
+    assert.strictEqual(readBody.wrote, false);
+    assert.strictEqual(fetches, 0);
+    assert.strictEqual(writes, 0);
+  } finally {
+    if (prevShadow == null) delete process.env.OMEGA_NBA_SHADOW;
+    else process.env.OMEGA_NBA_SHADOW = prevShadow;
+    global.fetch = prevFetch;
+  }
+}
+
+// ── scheduled project runs the fixture; grade wrapper writes the results blob ──
+{
+  const prevShadow = process.env.OMEGA_NBA_SHADOW;
+  const prevFetch = global.fetch;
+  delete process.env.OMEGA_NBA_SHADOW;
+  let fetches = 0;
+  global.fetch = async () => { fetches += 1; throw new Error('fixture path must not fetch'); };
+  try {
+    const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
+    const gradeHandler = require('./netlify/functions/trigger-omega-nba-shadow-grade').handler;
+    const writes = [];
+    const res = await projectHandler(scheduleEvent(), {
+      nbaShadowTest: {
+        ...fixtureBoard(),
+        store: async (key, data) => { writes.push({ key, data }); },
+        read: async () => null,
+      },
+    });
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.wrote, true);
+    assert.strictEqual(body.oddsCalls, 0);
+    assert.strictEqual(body.creditsEstimate, 0);
+    assert.strictEqual(body.sportsEnabledNba, false);
+    assert.strictEqual(body.mode, 'project');
+    assert.strictEqual(writes.length, 1);
+    assert.strictEqual(writes[0].key, 'omega-nba-shadow-2026-10-20');
+    assert.strictEqual(writes[0].data.shadowOnly, true);
+    assert.strictEqual(writes[0].data.sportsEnabledNba, false);
+    assert.ok(writes[0].data.picks.length >= 1);
+    assert.ok(writes[0].data.picks.every((p) => p.shadowOnly === true));
+
+    // A grade flag on the project cron stays a project. The grade cron is the other wrapper.
+    const stillProject = await projectHandler({
+      ...scheduleEvent(),
+      body: JSON.stringify({ grade: true, next_run: '2026-10-21T21:30:00.000Z' }),
+    }, {
+      nbaShadowTest: {
+        ...fixtureBoard(),
+        store: async (key, data) => { writes.push({ key, data }); },
+      },
+    });
+    assert.strictEqual(JSON.parse(stillProject.body).mode, 'project');
+    assert.ok(writes.every((w) => w.key.startsWith('omega-nba-shadow-2026-10-20') && !w.key.includes('results')));
+
+    // Client date and dryRun on the cron cannot open another slate or skip the log.
+    const pinned = [];
+    const today = shadow.todayET();
+    const ignored = await projectHandler({
+      ...scheduleEvent(),
+      body: JSON.stringify({ dryRun: true, date: '2020-01-01', grade: true }),
+    }, {
+      nbaShadowTest: {
+        ...fixtureBoard(),
+        dateISO: undefined,
+        store: async (key, data) => { pinned.push({ key, data }); },
+      },
+    });
+    const ignoredBody = JSON.parse(ignored.body);
+    assert.strictEqual(ignoredBody.mode, 'project');
+    assert.strictEqual(ignoredBody.wrote, true);
+    assert.strictEqual(ignoredBody.oddsCalls, 0);
+    assert.strictEqual(pinned.length, 1);
+    assert.strictEqual(pinned[0].key, `omega-nba-shadow-${today}`);
+    assert.notStrictEqual(pinned[0].key, 'omega-nba-shadow-2020-01-01');
+
+    const gradeWrites = [];
+    const finals = [
+      { homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', homeScore: 110, awayScore: 100, status: 'final' },
+    ];
+    const graded = await gradeHandler(scheduleEvent(), {
+      nbaShadowTest: {
+        dateISO: '2026-10-20',
+        slate: { picks: writes[0].data.picks },
+        finals,
+        priorResults: null,
+        store: async (key, data) => { gradeWrites.push({ key, data }); },
+      },
+    });
+    const gradeBody = JSON.parse(graded.body);
+    assert.strictEqual(graded.statusCode, 200);
+    assert.strictEqual(gradeBody.oddsCalls, 0);
+    assert.strictEqual(gradeBody.wrote, true);
+    assert.strictEqual(gradeBody.mode, 'grade-prev');
+    assert.strictEqual(gradeWrites.length, 1);
+    assert.strictEqual(gradeWrites[0].key, 'omega-nba-shadow-results-2026-10-20');
+    assert.strictEqual(gradeWrites[0].data.shadowOnly, true);
+    assert.ok(gradeWrites[0].data.summary);
+    assert.ok(gradeWrites[0].data.summary.wl);
+    assert.ok(gradeWrites[0].data.summary.byMarket);
+    assert.strictEqual(typeof gradeWrites[0].data.summary.units, 'number');
+    assert.ok(gradeWrites[0].data.cumulative);
+    assert.strictEqual(gradeWrites[0].data.cumulative.through, '2026-10-20');
+    assert.strictEqual(fetches, 0);
+  } finally {
+    if (prevShadow == null) delete process.env.OMEGA_NBA_SHADOW;
+    else process.env.OMEGA_NBA_SHADOW = prevShadow;
+    global.fetch = prevFetch;
+  }
+}
+
+// ── kill-switch: scheduled fixture still fetches nothing and writes nothing ──
+{
+  const prevShadow = process.env.OMEGA_NBA_SHADOW;
+  const prevFetch = global.fetch;
+  process.env.OMEGA_NBA_SHADOW = '0';
+  let fetches = 0;
+  global.fetch = async () => { fetches += 1; throw new Error('kill-switch must not fetch'); };
+  try {
+    assert.strictEqual(shadow.shadowLiveEnabled(), false);
+    const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
+    const writes = [];
+    const res = await projectHandler(scheduleEvent(), {
+      nbaShadowTest: {
+        ...fixtureBoard(),
+        store: async () => { writes.push('nope'); throw new Error('kill-switch must not write'); },
+      },
+    });
+    const body = JSON.parse(res.body);
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(body.skipped, true);
+    assert.strictEqual(body.reason, 'OMEGA_NBA_SHADOW=0');
+    assert.strictEqual(body.oddsCalls, 0);
+    assert.strictEqual(body.wrote, false);
+    assert.strictEqual(body.creditsEstimate, 0);
+    assert.strictEqual(writes.length, 0);
+    assert.strictEqual(fetches, 0);
+    const blocked = await shadow.fetchNbaBoard('2026-10-20', {
+      fetchImpl: async () => { fetches += 1; throw new Error('kill-switch must not fetch'); },
+    });
+    assert.strictEqual(blocked.oddsCalls, 0);
+    assert.strictEqual(blocked.skipReason, 'OMEGA_NBA_SHADOW=0');
+    assert.strictEqual(fetches, 0);
+  } finally {
+    if (prevShadow == null) delete process.env.OMEGA_NBA_SHADOW;
+    else process.env.OMEGA_NBA_SHADOW = prevShadow;
+    global.fetch = prevFetch;
+    assert.strictEqual(shadow.shadowLiveEnabled(), config.NBA_SHADOW.enabled === true);
+  }
 }
 
 console.log('PASS test-omega-nba-engine', {

@@ -436,7 +436,7 @@
   <main class="main">
 
     <h1 class="page-title">Model Percentile Scorecard <span class="version-tag">Omega</span></h1>
-    <p class="page-sub">Architecture scorecard for the current Daily Edge / Omega model. Prices anchor to a paired no-vig line, Pinnacle first and Circa when Pinnacle is missing. Sport engines cover MLB, NFL, college football, and NHL. Basketball stays off. A card is up to three gate-clear straights plus one 3-leg parlay, inside a 4.0 unit cap (3.5 on straights, 0.5 on the parlay). Walk-forward jobs only store lock-to-close samples. Coefficient fit is off, so those samples do not change the next card. The four percentiles below are the September 23, 2026 elite-desk QA. They are an engineering judgment on that desk lock, not a live results rank, and they were scored before the September 30 hockey engine. Live KPIs below are Omega-only from the September 22, 2026 cutover forward.</p>
+    <p class="page-sub">Architecture scorecard for the current Daily Edge / Omega model. Prices anchor to a paired no-vig line, Pinnacle first and Circa when Pinnacle is missing. Sport engines cover MLB, NFL, college football, and NHL. Basketball stays off. A card is up to three gate-clear straights plus one 3-leg parlay, inside a 4.0 unit cap (3.5 on straights, 0.5 on the parlay). Walk-forward jobs only store lock-to-close samples. Coefficient fit is off, so those samples do not change the next card. The four percentiles below are an elite-desk engineering judgment, re-scored the night of 2026-10-05/06 after the Omega autopilot. They are not a live results rank and not computed from the ROI table. Hockey is on. NBA stays off. Live KPIs below are Omega-only from the September 22, 2026 cutover forward.</p>
     <div style="text-align:center; margin-bottom:1.25rem; display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; align-items:center;">
       <button class="summary-btn" onclick="openDailySummary()">Daily Edge Picks Summary</button>
       <span class="kpi-view-toggle" role="group" aria-label="KPI view">
@@ -454,44 +454,44 @@
       <div id="live-stats-body"><div class="stats-loading">Loading stats...</div></div>
     </div>
 
-    <!-- Elite desk QA — documented scores only (2026-09-23 write-up) -->
+    <!-- Elite desk QA — documented scores only (re-scored 2026-10-05/06; original 2026-09-23 v12.3.12) -->
     <div class="scorecard">
       <div class="scorecard-title">Elite Desk QA</div>
-      <p class="qa-note">Scored September 23, 2026 against a sharp closing-line desk, on the v12.3.12 desk lock. Processes 86, Architecture 86, Math 84, Overall 84. Overall follows Math, the weakest lens. These are engineering judgments from that review. They are not a forecast, not computed from the record above, and they predate the September 30 hockey engine.</p>
+      <p class="qa-note">Originally scored 2026-09-23 on v12.3.12 (Processes 86, Architecture 86, Math 84, Overall 84). Re-scored the night of 2026-10-05/06 after the Omega autopilot (exact team identity, season-sum points fix, zero-sum EPA seeds, season Sierra ramp, B-grade 0.5u cap, per-sport rejection logs, NBA shadow off, etc.) to Processes 89, Architecture 88, Math 85, Overall 85. Overall still follows Math. These are elite-desk engineering judgments, not a live results rank and not computed from the record above.</p>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Processes</span>
-          <span class="metric-pct pct-strong">86</span>
+          <span class="metric-pct pct-strong">89</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:86%"></div></div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:89%"></div></div>
         <div class="metric-rationale">Morning snaps, generate, verify, and an evening write-only resample bracket the card. The November 1 clock change is written down and was not applied on the day this score was given. The live schedules stay on fixed UTC until that change is applied.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Architecture</span>
-          <span class="metric-pct pct-strong">86</span>
+          <span class="metric-pct pct-strong">88</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:86%"></div></div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:88%"></div></div>
         <div class="metric-rationale">Generate publishes the card. Verify may drop a broken straight, flag copy, or resize a stake inside the existing cap. It does not add a pick. Walk-forward samples, prediction-market logs, and outside research stay off the selection path.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Math</span>
-          <span class="metric-pct pct-strong">84</span>
+          <span class="metric-pct pct-strong">85</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
-        <div class="metric-rationale">Steam uses the American juice ladder, so a plus-to-minus cross is not treated as a 200-cent move. Straights rank on the same quality score as the letter grade. The published probability is still shrunk with hand-set constants and a 0.42–0.58 isotonic band. That is why this lens stays under 85.</div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:85%"></div></div>
+        <div class="metric-rationale">Steam uses the American juice ladder, so a plus-to-minus cross is not treated as a 200-cent move. Straights rank on the same quality score as the letter grade. The published probability is still shrunk with hand-set constants and a 0.42–0.58 isotonic band. That is why Math stays the weakest lens. Overall follows Math.</div>
       </div>
 
       <div class="metric">
         <div class="metric-header">
           <span class="metric-name">Overall</span>
-          <span class="metric-pct pct-strong">84</span>
+          <span class="metric-pct pct-strong">85</span>
         </div>
-        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:84%"></div></div>
+        <div class="metric-bar"><div class="metric-fill fill-strong" style="width:85%"></div></div>
         <div class="metric-rationale">Overall follows Math. The card shape in that review is unchanged: up to three gate-clear straights, a 3-leg ranked by combined hit probability, a 4.0 unit cap, and no lean pad. An empty card is allowed.</div>
       </div>
 

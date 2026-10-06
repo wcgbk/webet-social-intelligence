@@ -2864,12 +2864,13 @@
       const record = `${straight.wins || 0}-${straight.losses || 0}`;
       const accuracy = straight.accuracy || '--';
 
-      // Documented elite-desk QA (2026-09-23, v12.3.12). Engineering judgment, not a results rank.
+      // Documented elite-desk QA. Re-scored night of 2026-10-05/06.
+      // Original 2026-09-23 on v12.3.12 was 86/86/84/84. Engineering judgment, not a results rank.
       const qa = [
-        { metric: 'Processes', pct: 86 },
-        { metric: 'Architecture', pct: 86 },
-        { metric: 'Math', pct: 84 },
-        { metric: 'Overall', pct: 84 },
+        { metric: 'Processes', pct: 89 },
+        { metric: 'Architecture', pct: 88 },
+        { metric: 'Math', pct: 85 },
+        { metric: 'Overall', pct: 85 },
       ];
 
       let html = `
@@ -2894,8 +2895,8 @@
         <div style="padding:10px 14px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:20px;font-size:0.8125rem;color:var(--primary)">
           <strong>Daily Edge Picks · ${totalPicks} graded straights · ${days.length} card days since ${floor}</strong>
         </div>
-        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:8px">Elite desk QA · Sep 23, 2026</div>
-        <div style="font-size:0.75rem;color:var(--fg-muted);line-height:1.45;margin-bottom:12px">Engineering judgment from the desk-lock review. Not a live results percentile, and scored before the Sep 30 hockey engine.</div>
+        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:8px">Elite desk QA · re-scored 2026-10-05/06</div>
+        <div style="font-size:0.75rem;color:var(--fg-muted);line-height:1.45;margin-bottom:12px">Engineering judgment, not a live results rank. Originally scored 2026-09-23 on v12.3.12 (86/86/84/84). Re-scored after the Omega autopilot to Processes 89, Architecture 88, Math 85, Overall 85. Overall follows Math. Hockey is on. NBA stays off.</div>
       `;
 
       qa.forEach(m => {

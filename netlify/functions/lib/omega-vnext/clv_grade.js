@@ -35,6 +35,34 @@ function gradeNoVigClv(betAmerican, closeAmerican, overround) {
   };
 }
 
+/**
+ * Published CLV de-vig: side raw implied divided by the sharp-anchor overround.
+ * Same rounding track-clv writes on clv-{date} (`+(raw / overround).toFixed(4)`).
+ */
+function closingNoVigFromRaw(sideRaw, overround) {
+  const raw = Number(sideRaw);
+  const ov = Number(overround);
+  if (!Number.isFinite(raw) || !Number.isFinite(ov) || ov <= 0) return null;
+  return +(raw / ov).toFixed(4);
+}
+
+/**
+ * CLV = closing no-vig − pick-time no-vig. Positive means the close moved toward the side.
+ * `clvCents` is that difference times 100, rounded to 2 decimals, matching track-clv.
+ */
+function clvFromNoVig(closingNoVig, pickTimeNoVig) {
+  if (closingNoVig == null || pickTimeNoVig == null) return null;
+  if (!Number.isFinite(closingNoVig) || !Number.isFinite(pickTimeNoVig)) return null;
+  const clv = +(closingNoVig - pickTimeNoVig).toFixed(4);
+  return {
+    clv,
+    clvCents: +(clv * 100).toFixed(2),
+    beatClose: clv > 0,
+    pickTimeNoVig,
+    closingNoVig,
+  };
+}
+
 /** Attach realized-close aliases onto an existing track-clv record (mutates + returns). */
 function attachRealizedAliases(rec) {
   if (!rec || typeof rec !== 'object') return rec;
@@ -120,6 +148,8 @@ function isSundayET(d = new Date()) {
 module.exports = {
   americanToImplied,
   gradeNoVigClv,
+  closingNoVigFromRaw,
+  clvFromNoVig,
   attachRealizedAliases,
   summarizeBySportMarket,
   etIsoWeekKey,

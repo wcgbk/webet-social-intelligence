@@ -8,6 +8,8 @@ const {
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
+const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
+const { loadLinePath } = require('./lib/omega-vnext/line_path');
 
 function attachModelClvFields(rec, pick) {
   if (!rec || !pick) return rec;
@@ -647,6 +649,63 @@ async function settleResultsForDate(dateISO, picksData) {
   return settledCount;
 }
 
+async function openOmegaStore() {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    return getStore('edge-picks-omega');
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchCandidateEvents(sportKey) {
+  const apiKey = process.env.ODDS_API_KEY;
+  if (!apiKey || !sportKey) return null;
+  const url = `https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/events?dateFormat=iso&apiKey=${encodeURIComponent(apiKey)}`;
+  try {
+    const body = await memoFetchJson(url, 12000);
+    return Array.isArray(body) ? body : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Non-published candidate closes. Writes clv-candidates-{date} only.
+ * `publishedSnapshotKeys` / `getBulk` are the snapshots the published pass already bought.
+ */
+async function recordCandidateCloses({
+  dateISO, picksData, nowMs, publishedSnapshotKeys, getBulk, espnBySport,
+}) {
+  let lateSnaps = [];
+  try {
+    const loaded = await loadLinePath(dateISO);
+    lateSnaps = (loaded && loaded.path && Array.isArray(loaded.path.polls)) ? loaded.path.polls : [];
+  } catch (_) {
+    lateSnaps = [];
+  }
+  const store = await openOmegaStore();
+  await captureCandidateCloses({
+    dateISO,
+    picksData,
+    nowMs,
+    publishedSnapshotKeys,
+    getBulk,
+    bulkCache: null,
+    lateSnaps,
+    espnBySport: espnBySport || {},
+    store,
+    fetchEvents: fetchCandidateEvents,
+    fetchESPNScores,
+    extractClose,
+    pickSideInfo,
+    findMatchingGame,
+    teamsMatch,
+    gradePick,
+    findGameForGrading,
+  });
+}
+
 const trackClvOmegaHandler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
@@ -697,6 +756,18 @@ const trackClvOmegaHandler = async (event) => {
     const picksData = await loadPicksData(dateISO);
 
     if (!picksData || !picksData.picks || picksData.picks.length === 0) {
+      // Empty published card. Candidate closes still record into their own blob.
+      // This return body stays the published "no picks" contract.
+      try {
+        await recordCandidateCloses({
+          dateISO,
+          picksData,
+          nowMs,
+          publishedSnapshotKeys: new Set(),
+        });
+      } catch (e) {
+        console.error(`[track-clv] candidate closes failed (non-fatal): ${e.message}`);
+      }
       return {
         statusCode: 200,
         headers: CORS,
@@ -742,8 +813,12 @@ const trackClvOmegaHandler = async (event) => {
     // Caches keyed within this run so multiple picks on the same game/snapshot reuse one call.
     const bulkCache = new Map();   // `${sportKey}|${atISO||'live'}` -> games[]
     const eventCache = new Map();  // `${eventId}|${atISO||'live'}`  -> eventObj
+    // Snapshots bought for published picks. Candidate closes reuse these at 0 credits.
+    const publishedSnapshotKeys = new Set();
+    let markPublishedSnapshots = true;
     const getBulk = async (sportKey, atISO) => {
       const k = `${sportKey}|${atISO || 'live'}`;
+      if (markPublishedSnapshots) publishedSnapshotKeys.add(k);
       if (!bulkCache.has(k)) bulkCache.set(k, await fetchBulk(sportKey, atISO));
       return bulkCache.get(k);
     };
@@ -1074,6 +1149,22 @@ const trackClvOmegaHandler = async (event) => {
           console.error('[track-clv] API fallback failed:', apiErr.message);
         }
       }
+    }
+
+    // Candidate closes are a separate private blob. Published clv-{date} is already stored
+    // and is not passed in, so this cannot change those rows or any KPI bucket.
+    try {
+      markPublishedSnapshots = false;
+      await recordCandidateCloses({
+        dateISO,
+        picksData,
+        nowMs,
+        publishedSnapshotKeys,
+        getBulk,
+        espnBySport: espnScoresBySport,
+      });
+    } catch (e) {
+      console.error(`[track-clv] candidate closes failed (non-fatal): ${e.message}`);
     }
 
     // ── Step 6.5: Write results back to picks blob (settlement) — unchanged ──

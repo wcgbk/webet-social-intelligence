@@ -497,6 +497,12 @@ async function generateOmegaVnext(opts = {}) {
     ev: c.ev,
     matchup: c.matchup,
     commenceTime: c.commenceTime,
+    fair_sharp_p: c.fair_sharp_p != null ? c.fair_sharp_p : null,
+    p_model: c.p_model != null ? c.p_model : null,
+    line: c.line != null ? c.line : null,
+    homeTeam: c.homeTeam || null,
+    awayTeam: c.awayTeam || null,
+    uncertainty: c.uncertainty != null ? c.uncertainty : null,
     predictedClv: c.predictedClv,
     predictedResidualClv: c.predictedResidualClv,
     steamToward: !!c.steamToward,
@@ -680,6 +686,21 @@ async function generateOmegaVnext(opts = {}) {
   return picksData;
 }
 
+/**
+ * Logging only. Fields the candidate close pass needs from a stored rejection.
+ * Selection, floors, and ranking do not read them.
+ */
+function rejectionAuditFields(r) {
+  if (!r || typeof r !== 'object') return {};
+  const out = {};
+  for (const k of ['market', 'line', 'odds', 'fair_sharp_p', 'coverProb', 'ev', 'commenceTime', 'predictedClv', 'uncertainty', 'homeTeam', 'awayTeam', 'book', 'p_model']) {
+    if (r[k] !== undefined) out[k] = r[k];
+  }
+  const edge = r.edge != null ? r.edge : r.edgePct;
+  if (edge !== undefined) out.edge = edge;
+  return out;
+}
+
 /** Stored rejection rows per sport. Counts below include every rejection. */
 const REJECTION_PER_SPORT_CAP = 25;
 
@@ -700,7 +721,7 @@ function sampleRejectionsBySport(rows, cap = REJECTION_PER_SPORT_CAP) {
     bySportReason[sport][reason] = (bySportReason[sport][reason] || 0) + 1;
     if (kept[sport] == null) kept[sport] = 0;
     if (kept[sport] < limit) {
-      const row = { sport, matchup: r.matchup, side: r.side, reason, ...footballAuditFields(r) };
+      const row = { sport, matchup: r.matchup, side: r.side, reason, ...rejectionAuditFields(r), ...footballAuditFields(r) };
       if (r && r.hardFail) row.hardFail = true;
       stored.push(row);
       kept[sport] += 1;
@@ -734,6 +755,7 @@ function buildRejectionLog(hardFails, narrRejections, rejected) {
       matchup: n.matchup,
       side: n.side,
       reason: n.reason || 'narrate',
+      ...rejectionAuditFields(n),
     };
     if (n.hardFail) row.hardFail = true;
     rows.push(row);
@@ -744,6 +766,7 @@ function buildRejectionLog(hardFails, narrRejections, rejected) {
       matchup: r.matchup,
       side: r.side,
       reason: r.rejectReason || r.reason || 'gate',
+      ...rejectionAuditFields(r),
       ...footballAuditFields(r),
     };
     if (r.hardFail) row.hardFail = true;
@@ -760,5 +783,6 @@ module.exports = {
   assessCaptureHealth,
   sampleRejectionsBySport,
   buildRejectionLog,
+  rejectionAuditFields,
   REJECTION_PER_SPORT_CAP,
 };

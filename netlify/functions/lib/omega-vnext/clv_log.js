@@ -122,10 +122,47 @@ function betTimeClvSeed(pick) {
   };
 }
 
+/**
+ * Generate-time fields for a non-published side. Does not touch a published
+ * clv-{date} row. `rejectReason` is 'yes-pool-unselected' or the stored gate reason.
+ */
+function candidateSideSeed(row, { date = null, rejectReason = null } = {}) {
+  const side = (row && (row.side || row.pick)) || '';
+  const market = (row && (row.market || row.betType)) || '';
+  const edge = row && row.edge != null ? row.edge : (row && row.edgePct != null ? row.edgePct : null);
+  let line = null;
+  if (row && row.line != null && row.line !== '' && Number.isFinite(Number(row.line))) {
+    line = Number(row.line);
+  } else if (row) {
+    line = parseLineFromPick({ ...row, pick: side, side, market, betType: market });
+  }
+  return {
+    date: date || (row && row.date) || null,
+    sport: (row && row.sport) || null,
+    matchup: (row && row.matchup) || null,
+    market,
+    side,
+    line,
+    odds: row && row.odds != null ? row.odds : null,
+    fair_sharp_p: row && row.fair_sharp_p != null ? row.fair_sharp_p : null,
+    coverProb: row && row.coverProb != null ? row.coverProb : null,
+    edge,
+    ev: row && row.ev != null ? row.ev : null,
+    rejectReason: rejectReason || (row && (row.rejectReason || row.reason)) || null,
+    commenceTime: (row && row.commenceTime) || null,
+    predictedClv: row && row.predictedClv != null ? row.predictedClv : null,
+    uncertainty: row && row.uncertainty != null ? row.uncertainty : null,
+    homeTeam: (row && row.homeTeam) || null,
+    awayTeam: (row && row.awayTeam) || null,
+    book: (row && row.book) || null,
+  };
+}
+
 module.exports = {
   attachClvFields,
   attachClvToParlay,
   betTimeClvSeed,
+  candidateSideSeed,
   enrichBetTimeFields,
   makePickId,
   etTimestamp,

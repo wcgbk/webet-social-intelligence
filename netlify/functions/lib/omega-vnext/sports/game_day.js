@@ -9,6 +9,7 @@
 
 const { clamp } = require('../odds_math');
 const { fuzzyTeam } = require('./_common');
+const { rowByIdentity } = require('./team_identity');
 const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY } = require('../config');
 
 const HFA_ADJ = {
@@ -61,9 +62,10 @@ function restMapFromScoreboard(games, playedDateISO) {
   return out;
 }
 
-function lookupRest(teamName, restByTeam) {
+function lookupRest(teamName, restByTeam, sport) {
   if (!teamName || !restByTeam) return null;
   if (restByTeam[teamName]) return restByTeam[teamName];
+  if (sport === 'NFL' || sport === 'NCAAF') return rowByIdentity(sport, restByTeam, teamName);
   const hit = fuzzyTeam(teamName, restByTeam);
   return hit || null;
 }
@@ -96,10 +98,11 @@ function hfaAdjustment(sport, homeRestDays, awayRestDays) {
   return clamp(adj, -cfg.max, cfg.max);
 }
 
-function lookupQb(teamName, qbByTeam) {
+function lookupQb(teamName, qbByTeam, sport) {
   if (!teamName || !qbByTeam || typeof qbByTeam !== 'object') return null;
   const direct = qbByTeam[teamName] || qbByTeam[normTeamKey(teamName)];
   if (direct) return direct;
+  if (sport === 'NFL' || sport === 'NCAAF') return rowByIdentity(sport, qbByTeam, teamName);
   for (const [k, v] of Object.entries(qbByTeam)) {
     if (normTeamKey(k) === normTeamKey(teamName)) return v;
     if (fuzzyTeam(teamName, { [k]: v })) return v;
@@ -215,15 +218,15 @@ function applyGameDayAdjustments({
   }
   if (!Number.isFinite(unc)) unc = 0.2;
 
-  const homeRest = lookupRest(home, restByTeam);
-  const awayRest = lookupRest(away, restByTeam);
+  const homeRest = lookupRest(home, restByTeam, sport);
+  const awayRest = lookupRest(away, restByTeam, sport);
   const homeDays = restDaysProxy(sport, homeRest);
   const awayDays = restDaysProxy(sport, awayRest);
   const hfaAdj = hfaAdjustment(sport, homeDays, awayDays);
   margin += hfaAdj;
 
-  const homeQb = lookupQb(home, qbByTeam);
-  const awayQb = lookupQb(away, qbByTeam);
+  const homeQb = lookupQb(home, qbByTeam, sport);
+  const awayQb = lookupQb(away, qbByTeam, sport);
   const qb = qbSoftAdjust(sport, homeQb, awayQb);
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;

@@ -284,7 +284,7 @@ function byMarket(cands, market) {
   assert.ok(calibrated.every(c => Number.isFinite(c.coverProb)));
   assert.ok(calibrated.some(c => Math.abs(c.coverProb - c.modelRawP) > 1e-6));
 
-  // Fuzzy mascot match still finds the prior.
+  // Bare mascot is not an NFL identity. Chiefs must not inherit Kansas City's EPA.
   const fuzzy = nfl.project({
     oddsEvents: [synthEvent('Chiefs', 'Bills')],
     standings: {},
@@ -293,7 +293,9 @@ function byMarket(cands, market) {
       'Buffalo Bills': { offEpa: 0.00, defEpa: 0.00 },
     },
   });
-  assert.strictEqual(byMarket(fuzzy, 'Moneyline').projMethod, 'nfl-epa-v1-ml');
+  assert.ok(fuzzy.length >= 6);
+  assert.ok(fuzzy.every((c) => c.unknownTeam === true));
+  assert.ok(!/nfl-epa/.test(byMarket(fuzzy, 'Moneyline').projMethod));
 }
 
 // ── CFB ──

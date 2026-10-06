@@ -14,6 +14,7 @@ const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');
+const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
@@ -191,6 +192,14 @@ async function generateOmegaVnext(opts = {}) {
 
   let candidates = projectAll(snap);
   console.log(`[omega-vnext] raw candidates=${candidates.length}`);
+
+  const unmatchedReport = buildUnmatchedReport(dateISO, snap.oddsBySport, now.toISOString());
+  if (unmatchedReport.count) {
+    const listed = ['NFL', 'NCAAF'].flatMap((s) => unmatchedReport.bySport[s] || []);
+    console.warn(`[omega-vnext] unknown_team count=${unmatchedReport.count} names=${listed.join(' | ')}`);
+  } else {
+    console.log('[omega-vnext] unknown_team count=0');
+  }
 
   candidates = calibrateAll(candidates).map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
@@ -540,6 +549,10 @@ async function generateOmegaVnext(opts = {}) {
     },
     captureHealth: captureHealth || null,
     pmSoft: pmSoftMeta,
+    teamIdentity: {
+      unmatched: unmatchedReport.bySport,
+      unmatchedCount: unmatchedReport.count,
+    },
     meta: {
       captureHealth: captureHealth || null,
       pmSoft: pmSoftMeta,
@@ -567,6 +580,16 @@ async function generateOmegaVnext(opts = {}) {
     }), { noGames: slateCounts.total === 0 }));
     picksData.edgeSummary = picksData.noPlaysReason;
     picksData.insights = picksData.insights || '';
+  }
+
+  // Private unmatched-name blob. dryRun does not write. Not a public card field.
+  if (!dryRun) {
+    try {
+      const stored = await persistUnmatchedReport({ dryRun: false, dateISO, report: unmatchedReport });
+      console.log(`[omega-vnext] unmatched key=${stored.key} count=${unmatchedReport.count}`);
+    } catch (e) {
+      console.error(`[omega-vnext] unmatched store soft-fail: ${e.message}`);
+    }
   }
 
   // Shadow writes omega-shadow/* only (no live picks, latest-date, picks-dates, or verify unlock).

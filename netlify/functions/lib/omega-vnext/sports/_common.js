@@ -7,6 +7,8 @@ function formatMatchup(away, home) {
   return `${away} @ ${home}`;
 }
 
+// MLB and NHL only. NFL/NCAAF identity is team_identity.js (exact ESPN id).
+// Do not send a football name through the substring or mascot branch.
 function fuzzyTeam(name, ratings) {
   if (!name || !ratings) return null;
   if (ratings[name]) return ratings[name];

@@ -1,0 +1,5585 @@
+{
+  "_meta": {
+    "generatedAt": "2026-10-06T03:46:46.040Z",
+    "source": "ESPN site teams API + The Odds API participants",
+    "oddsSport": "americanfootball_ncaaf",
+    "groups": {
+      "fbs": "80",
+      "fcs": "81"
+    },
+    "allowUnresolved": [
+      "Occidental Tigers"
+    ],
+    "sport": "NCAAF",
+    "teamCount": 275,
+    "lookupCount": 1516,
+    "matching": "normalize (lowercase, strip accents, delete okina/apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback."
+  },
+  "teams": {
+    "2": {
+      "espnId": "2",
+      "division": "fbs",
+      "displayName": "Auburn Tigers",
+      "shortDisplayName": "Auburn",
+      "abbreviation": "AUB",
+      "location": "Auburn",
+      "nickname": "Auburn",
+      "name": "Tigers",
+      "oddsNames": [
+        "Auburn Tigers"
+      ],
+      "aliases": []
+    },
+    "5": {
+      "espnId": "5",
+      "division": "fbs",
+      "displayName": "UAB Blazers",
+      "shortDisplayName": "UAB",
+      "abbreviation": "UAB",
+      "location": "UAB",
+      "nickname": "UAB",
+      "name": "Blazers",
+      "oddsNames": [
+        "UAB Blazers"
+      ],
+      "aliases": []
+    },
+    "6": {
+      "espnId": "6",
+      "division": "fbs",
+      "displayName": "South Alabama Jaguars",
+      "shortDisplayName": "South Alabama",
+      "abbreviation": "USA",
+      "location": "South Alabama",
+      "nickname": "South Alabama",
+      "name": "Jaguars",
+      "oddsNames": [
+        "South Alabama Jaguars"
+      ],
+      "aliases": []
+    },
+    "8": {
+      "espnId": "8",
+      "division": "fbs",
+      "displayName": "Arkansas Razorbacks",
+      "shortDisplayName": "Arkansas",
+      "abbreviation": "ARK",
+      "location": "Arkansas",
+      "nickname": "Arkansas",
+      "name": "Razorbacks",
+      "oddsNames": [
+        "Arkansas Razorbacks"
+      ],
+      "aliases": []
+    },
+    "9": {
+      "espnId": "9",
+      "division": "fbs",
+      "displayName": "Arizona State Sun Devils",
+      "shortDisplayName": "Arizona St",
+      "abbreviation": "ASU",
+      "location": "Arizona State",
+      "nickname": "Arizona St",
+      "name": "Sun Devils",
+      "oddsNames": [
+        "Arizona State Sun Devils"
+      ],
+      "aliases": []
+    },
+    "12": {
+      "espnId": "12",
+      "division": "fbs",
+      "displayName": "Arizona Wildcats",
+      "shortDisplayName": "Arizona",
+      "abbreviation": "ARIZ",
+      "location": "Arizona",
+      "nickname": "Arizona",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Arizona Wildcats"
+      ],
+      "aliases": [
+        "Arizona"
+      ]
+    },
+    "13": {
+      "espnId": "13",
+      "division": "fcs",
+      "displayName": "Cal Poly Mustangs",
+      "shortDisplayName": "Cal Poly",
+      "abbreviation": "CP",
+      "location": "Cal Poly",
+      "nickname": "Cal Poly",
+      "name": "Mustangs",
+      "oddsNames": [
+        "Cal Poly Mustangs"
+      ],
+      "aliases": []
+    },
+    "16": {
+      "espnId": "16",
+      "division": "fbs",
+      "displayName": "Sacramento State Hornets",
+      "shortDisplayName": "Sacramento St",
+      "abbreviation": "SAC",
+      "location": "Sacramento State",
+      "nickname": "Sacramento St",
+      "name": "Hornets",
+      "oddsNames": [
+        "Sacramento State Hornets"
+      ],
+      "aliases": []
+    },
+    "21": {
+      "espnId": "21",
+      "division": "fbs",
+      "displayName": "San Diego State Aztecs",
+      "shortDisplayName": "San Diego St",
+      "abbreviation": "SDSU",
+      "location": "San Diego State",
+      "nickname": "San Diego St",
+      "name": "Aztecs",
+      "oddsNames": [
+        "San Diego State Aztecs"
+      ],
+      "aliases": []
+    },
+    "23": {
+      "espnId": "23",
+      "division": "fbs",
+      "displayName": "San José State Spartans",
+      "shortDisplayName": "San José St",
+      "abbreviation": "SJSU",
+      "location": "San José State",
+      "nickname": "San José St",
+      "name": "Spartans",
+      "oddsNames": [
+        "San Jose State Spartans"
+      ],
+      "aliases": [
+        "San Jose St",
+        "San Jose State",
+        "San Jose State Spartans",
+        "San José St",
+        "San José State"
+      ]
+    },
+    "24": {
+      "espnId": "24",
+      "division": "fbs",
+      "displayName": "Stanford Cardinal",
+      "shortDisplayName": "Stanford",
+      "abbreviation": "STAN",
+      "location": "Stanford",
+      "nickname": "Stanford",
+      "name": "Cardinal",
+      "oddsNames": [
+        "Stanford Cardinal"
+      ],
+      "aliases": []
+    },
+    "25": {
+      "espnId": "25",
+      "division": "fbs",
+      "displayName": "California Golden Bears",
+      "shortDisplayName": "California",
+      "abbreviation": "CAL",
+      "location": "California",
+      "nickname": "California",
+      "name": "Golden Bears",
+      "oddsNames": [
+        "California Golden Bears"
+      ],
+      "aliases": []
+    },
+    "26": {
+      "espnId": "26",
+      "division": "fbs",
+      "displayName": "UCLA Bruins",
+      "shortDisplayName": "UCLA",
+      "abbreviation": "UCLA",
+      "location": "UCLA",
+      "nickname": "UCLA",
+      "name": "Bruins",
+      "oddsNames": [
+        "UCLA Bruins"
+      ],
+      "aliases": []
+    },
+    "30": {
+      "espnId": "30",
+      "division": "fbs",
+      "displayName": "USC Trojans",
+      "shortDisplayName": "USC",
+      "abbreviation": "USC",
+      "location": "USC",
+      "nickname": "USC",
+      "name": "Trojans",
+      "oddsNames": [
+        "USC Trojans"
+      ],
+      "aliases": [
+        "Southern California",
+        "Southern California Trojans",
+        "USC"
+      ]
+    },
+    "36": {
+      "espnId": "36",
+      "division": "fbs",
+      "displayName": "Colorado State Rams",
+      "shortDisplayName": "Colorado St",
+      "abbreviation": "CSU",
+      "location": "Colorado State",
+      "nickname": "Colorado St",
+      "name": "Rams",
+      "oddsNames": [
+        "Colorado State Rams"
+      ],
+      "aliases": []
+    },
+    "38": {
+      "espnId": "38",
+      "division": "fbs",
+      "displayName": "Colorado Buffaloes",
+      "shortDisplayName": "Colorado",
+      "abbreviation": "COLO",
+      "location": "Colorado",
+      "nickname": "Colorado",
+      "name": "Buffaloes",
+      "oddsNames": [
+        "Colorado Buffaloes"
+      ],
+      "aliases": []
+    },
+    "41": {
+      "espnId": "41",
+      "division": "fbs",
+      "displayName": "UConn Huskies",
+      "shortDisplayName": "UConn",
+      "abbreviation": "CONN",
+      "location": "UConn",
+      "nickname": "UConn",
+      "name": "Huskies",
+      "oddsNames": [
+        "UConn Huskies"
+      ],
+      "aliases": [
+        "Connecticut",
+        "Connecticut Huskies",
+        "UConn"
+      ]
+    },
+    "43": {
+      "espnId": "43",
+      "division": "fcs",
+      "displayName": "Yale Bulldogs",
+      "shortDisplayName": "Yale",
+      "abbreviation": "YALE",
+      "location": "Yale",
+      "nickname": "Yale",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Yale University Bulldogs"
+      ],
+      "aliases": [
+        "Yale",
+        "Yale University",
+        "Yale University Bulldogs"
+      ]
+    },
+    "46": {
+      "espnId": "46",
+      "division": "fcs",
+      "displayName": "Georgetown Hoyas",
+      "shortDisplayName": "Georgetown",
+      "abbreviation": "GTWN",
+      "location": "Georgetown",
+      "nickname": "Georgetown",
+      "name": "Hoyas",
+      "oddsNames": [
+        "Georgetown Hoyas"
+      ],
+      "aliases": []
+    },
+    "47": {
+      "espnId": "47",
+      "division": "fcs",
+      "displayName": "Howard Bison",
+      "shortDisplayName": "Howard",
+      "abbreviation": "HOW",
+      "location": "Howard",
+      "nickname": "Howard",
+      "name": "Bison",
+      "oddsNames": [
+        "Howard Bison"
+      ],
+      "aliases": []
+    },
+    "48": {
+      "espnId": "48",
+      "division": "fbs",
+      "displayName": "Delaware Blue Hens",
+      "shortDisplayName": "Delaware",
+      "abbreviation": "DEL",
+      "location": "Delaware",
+      "nickname": "Delaware",
+      "name": "Blue Hens",
+      "oddsNames": [
+        "Delaware Blue Hens"
+      ],
+      "aliases": []
+    },
+    "50": {
+      "espnId": "50",
+      "division": "fcs",
+      "displayName": "Florida A&M Rattlers",
+      "shortDisplayName": "Florida A&M",
+      "abbreviation": "FAMU",
+      "location": "Florida A&M",
+      "nickname": "Florida A&M",
+      "name": "Rattlers",
+      "oddsNames": [
+        "Florida A&M Rattlers"
+      ],
+      "aliases": []
+    },
+    "52": {
+      "espnId": "52",
+      "division": "fbs",
+      "displayName": "Florida State Seminoles",
+      "shortDisplayName": "Florida St",
+      "abbreviation": "FSU",
+      "location": "Florida State",
+      "nickname": "Florida St",
+      "name": "Seminoles",
+      "oddsNames": [
+        "Florida State Seminoles"
+      ],
+      "aliases": []
+    },
+    "55": {
+      "espnId": "55",
+      "division": "fbs",
+      "displayName": "Jacksonville State Gamecocks",
+      "shortDisplayName": "Jax State",
+      "abbreviation": "JXST",
+      "location": "Jacksonville State",
+      "nickname": "Jax State",
+      "name": "Gamecocks",
+      "oddsNames": [
+        "Jacksonville State Gamecocks"
+      ],
+      "aliases": []
+    },
+    "56": {
+      "espnId": "56",
+      "division": "fcs",
+      "displayName": "Stetson Hatters",
+      "shortDisplayName": "Stetson",
+      "abbreviation": "STET",
+      "location": "Stetson",
+      "nickname": "Stetson",
+      "name": "Hatters",
+      "oddsNames": [
+        "Stetson Hatters"
+      ],
+      "aliases": []
+    },
+    "57": {
+      "espnId": "57",
+      "division": "fbs",
+      "displayName": "Florida Gators",
+      "shortDisplayName": "Florida",
+      "abbreviation": "FLA",
+      "location": "Florida",
+      "nickname": "Florida",
+      "name": "Gators",
+      "oddsNames": [
+        "Florida Gators"
+      ],
+      "aliases": []
+    },
+    "58": {
+      "espnId": "58",
+      "division": "fbs",
+      "displayName": "South Florida Bulls",
+      "shortDisplayName": "South Florida",
+      "abbreviation": "USF",
+      "location": "South Florida",
+      "nickname": "South Florida",
+      "name": "Bulls",
+      "oddsNames": [
+        "South Florida Bulls"
+      ],
+      "aliases": []
+    },
+    "59": {
+      "espnId": "59",
+      "division": "fbs",
+      "displayName": "Georgia Tech Yellow Jackets",
+      "shortDisplayName": "Georgia Tech",
+      "abbreviation": "GT",
+      "location": "Georgia Tech",
+      "nickname": "Georgia Tech",
+      "name": "Yellow Jackets",
+      "oddsNames": [
+        "Georgia Tech Yellow Jackets"
+      ],
+      "aliases": []
+    },
+    "61": {
+      "espnId": "61",
+      "division": "fbs",
+      "displayName": "Georgia Bulldogs",
+      "shortDisplayName": "Georgia",
+      "abbreviation": "UGA",
+      "location": "Georgia",
+      "nickname": "Georgia",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Georgia Bulldogs"
+      ],
+      "aliases": []
+    },
+    "62": {
+      "espnId": "62",
+      "division": "fbs",
+      "displayName": "Hawai'i Rainbow Warriors",
+      "shortDisplayName": "Hawai'i",
+      "abbreviation": "HAW",
+      "location": "Hawai'i",
+      "nickname": "Hawai'i",
+      "name": "Rainbow Warriors",
+      "oddsNames": [
+        "Hawaii Rainbow Warriors"
+      ],
+      "aliases": [
+        "Hawai'i",
+        "Hawaii",
+        "Hawaii Rainbow Warriors",
+        "Hawaiʻi",
+        "Hawaiʻi Rainbow Warriors"
+      ]
+    },
+    "66": {
+      "espnId": "66",
+      "division": "fbs",
+      "displayName": "Iowa State Cyclones",
+      "shortDisplayName": "Iowa State",
+      "abbreviation": "ISU",
+      "location": "Iowa State",
+      "nickname": "Iowa State",
+      "name": "Cyclones",
+      "oddsNames": [
+        "Iowa State Cyclones"
+      ],
+      "aliases": []
+    },
+    "68": {
+      "espnId": "68",
+      "division": "fbs",
+      "displayName": "Boise State Broncos",
+      "shortDisplayName": "Boise St",
+      "abbreviation": "BOIS",
+      "location": "Boise State",
+      "nickname": "Boise St",
+      "name": "Broncos",
+      "oddsNames": [
+        "Boise State Broncos"
+      ],
+      "aliases": [
+        "Boise St",
+        "Boise State"
+      ]
+    },
+    "70": {
+      "espnId": "70",
+      "division": "fcs",
+      "displayName": "Idaho Vandals",
+      "shortDisplayName": "Idaho",
+      "abbreviation": "IDHO",
+      "location": "Idaho",
+      "nickname": "Idaho",
+      "name": "Vandals",
+      "oddsNames": [
+        "Idaho Vandals"
+      ],
+      "aliases": []
+    },
+    "77": {
+      "espnId": "77",
+      "division": "fbs",
+      "displayName": "Northwestern Wildcats",
+      "shortDisplayName": "Northwestern",
+      "abbreviation": "NU",
+      "location": "Northwestern",
+      "nickname": "Northwestern",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Northwestern Wildcats"
+      ],
+      "aliases": [
+        "Northwestern"
+      ]
+    },
+    "79": {
+      "espnId": "79",
+      "division": "fcs",
+      "displayName": "Southern Illinois Salukis",
+      "shortDisplayName": "S Illinois",
+      "abbreviation": "SIU",
+      "location": "Southern Illinois",
+      "nickname": "S Illinois",
+      "name": "Salukis",
+      "oddsNames": [
+        "Southern Illinois Salukis"
+      ],
+      "aliases": []
+    },
+    "84": {
+      "espnId": "84",
+      "division": "fbs",
+      "displayName": "Indiana Hoosiers",
+      "shortDisplayName": "Indiana",
+      "abbreviation": "IU",
+      "location": "Indiana",
+      "nickname": "Indiana",
+      "name": "Hoosiers",
+      "oddsNames": [
+        "Indiana Hoosiers"
+      ],
+      "aliases": []
+    },
+    "87": {
+      "espnId": "87",
+      "division": "fbs",
+      "displayName": "Notre Dame Fighting Irish",
+      "shortDisplayName": "Notre Dame",
+      "abbreviation": "ND",
+      "location": "Notre Dame",
+      "nickname": "Notre Dame",
+      "name": "Fighting Irish",
+      "oddsNames": [
+        "Notre Dame Fighting Irish"
+      ],
+      "aliases": []
+    },
+    "93": {
+      "espnId": "93",
+      "division": "fcs",
+      "displayName": "Murray State Racers",
+      "shortDisplayName": "Murray St",
+      "abbreviation": "MUR",
+      "location": "Murray State",
+      "nickname": "Murray St",
+      "name": "Racers",
+      "oddsNames": [
+        "Murray State Racers"
+      ],
+      "aliases": []
+    },
+    "96": {
+      "espnId": "96",
+      "division": "fbs",
+      "displayName": "Kentucky Wildcats",
+      "shortDisplayName": "Kentucky",
+      "abbreviation": "UK",
+      "location": "Kentucky",
+      "nickname": "Kentucky",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Kentucky Wildcats"
+      ],
+      "aliases": [
+        "Kentucky"
+      ]
+    },
+    "97": {
+      "espnId": "97",
+      "division": "fbs",
+      "displayName": "Louisville Cardinals",
+      "shortDisplayName": "Louisville",
+      "abbreviation": "LOU",
+      "location": "Louisville",
+      "nickname": "Louisville",
+      "name": "Cardinals",
+      "oddsNames": [
+        "Louisville Cardinals"
+      ],
+      "aliases": []
+    },
+    "98": {
+      "espnId": "98",
+      "division": "fbs",
+      "displayName": "Western Kentucky Hilltoppers",
+      "shortDisplayName": "Western KY",
+      "abbreviation": "WKU",
+      "location": "Western Kentucky",
+      "nickname": "Western KY",
+      "name": "Hilltoppers",
+      "oddsNames": [
+        "Western Kentucky Hilltoppers"
+      ],
+      "aliases": []
+    },
+    "99": {
+      "espnId": "99",
+      "division": "fbs",
+      "displayName": "LSU Tigers",
+      "shortDisplayName": "LSU",
+      "abbreviation": "LSU",
+      "location": "LSU",
+      "nickname": "LSU",
+      "name": "Tigers",
+      "oddsNames": [
+        "LSU Tigers"
+      ],
+      "aliases": [
+        "LSU",
+        "Louisiana State",
+        "Louisiana State Tigers"
+      ]
+    },
+    "103": {
+      "espnId": "103",
+      "division": "fbs",
+      "displayName": "Boston College Eagles",
+      "shortDisplayName": "Boston College",
+      "abbreviation": "BC",
+      "location": "Boston College",
+      "nickname": "Boston College",
+      "name": "Eagles",
+      "oddsNames": [
+        "Boston College Eagles"
+      ],
+      "aliases": []
+    },
+    "107": {
+      "espnId": "107",
+      "division": "fcs",
+      "displayName": "Holy Cross Crusaders",
+      "shortDisplayName": "Holy Cross",
+      "abbreviation": "HC",
+      "location": "Holy Cross",
+      "nickname": "Holy Cross",
+      "name": "Crusaders",
+      "oddsNames": [
+        "Holy Cross Crusaders"
+      ],
+      "aliases": []
+    },
+    "108": {
+      "espnId": "108",
+      "division": "fcs",
+      "displayName": "Harvard Crimson",
+      "shortDisplayName": "Harvard",
+      "abbreviation": "HARV",
+      "location": "Harvard",
+      "nickname": "Harvard",
+      "name": "Crimson",
+      "oddsNames": [
+        "Harvard Crimson"
+      ],
+      "aliases": []
+    },
+    "113": {
+      "espnId": "113",
+      "division": "fbs",
+      "displayName": "Massachusetts Minutemen",
+      "shortDisplayName": "UMass",
+      "abbreviation": "MASS",
+      "location": "Massachusetts",
+      "nickname": "UMass",
+      "name": "Minutemen",
+      "oddsNames": [
+        "UMass Minutemen"
+      ],
+      "aliases": [
+        "UMass",
+        "UMass Minutemen"
+      ]
+    },
+    "119": {
+      "espnId": "119",
+      "division": "fcs",
+      "displayName": "Towson Tigers",
+      "shortDisplayName": "Towson",
+      "abbreviation": "TOW",
+      "location": "Towson",
+      "nickname": "Towson",
+      "name": "Tigers",
+      "oddsNames": [
+        "Towson Tigers"
+      ],
+      "aliases": []
+    },
+    "120": {
+      "espnId": "120",
+      "division": "fbs",
+      "displayName": "Maryland Terrapins",
+      "shortDisplayName": "Maryland",
+      "abbreviation": "MD",
+      "location": "Maryland",
+      "nickname": "Maryland",
+      "name": "Terrapins",
+      "oddsNames": [
+        "Maryland Terrapins"
+      ],
+      "aliases": []
+    },
+    "127": {
+      "espnId": "127",
+      "division": "fbs",
+      "displayName": "Michigan State Spartans",
+      "shortDisplayName": "Michigan St",
+      "abbreviation": "MSU",
+      "location": "Michigan State",
+      "nickname": "Michigan St",
+      "name": "Spartans",
+      "oddsNames": [
+        "Michigan State Spartans"
+      ],
+      "aliases": []
+    },
+    "130": {
+      "espnId": "130",
+      "division": "fbs",
+      "displayName": "Michigan Wolverines",
+      "shortDisplayName": "Michigan",
+      "abbreviation": "MICH",
+      "location": "Michigan",
+      "nickname": "Michigan",
+      "name": "Wolverines",
+      "oddsNames": [
+        "Michigan Wolverines"
+      ],
+      "aliases": []
+    },
+    "135": {
+      "espnId": "135",
+      "division": "fbs",
+      "displayName": "Minnesota Golden Gophers",
+      "shortDisplayName": "Minnesota",
+      "abbreviation": "MINN",
+      "location": "Minnesota",
+      "nickname": "Minnesota",
+      "name": "Golden Gophers",
+      "oddsNames": [
+        "Minnesota Golden Gophers"
+      ],
+      "aliases": []
+    },
+    "142": {
+      "espnId": "142",
+      "division": "fbs",
+      "displayName": "Missouri Tigers",
+      "shortDisplayName": "Missouri",
+      "abbreviation": "MIZ",
+      "location": "Missouri",
+      "nickname": "Missouri",
+      "name": "Tigers",
+      "oddsNames": [
+        "Missouri Tigers"
+      ],
+      "aliases": []
+    },
+    "145": {
+      "espnId": "145",
+      "division": "fbs",
+      "displayName": "Ole Miss Rebels",
+      "shortDisplayName": "Ole Miss",
+      "abbreviation": "MISS",
+      "location": "Ole Miss",
+      "nickname": "Ole Miss",
+      "name": "Rebels",
+      "oddsNames": [
+        "Ole Miss Rebels"
+      ],
+      "aliases": [
+        "Mississippi",
+        "Mississippi Rebels",
+        "Ole Miss"
+      ]
+    },
+    "147": {
+      "espnId": "147",
+      "division": "fcs",
+      "displayName": "Montana State Bobcats",
+      "shortDisplayName": "Montana St",
+      "abbreviation": "MTST",
+      "location": "Montana State",
+      "nickname": "Montana St",
+      "name": "Bobcats",
+      "oddsNames": [
+        "Montana State Bobcats"
+      ],
+      "aliases": []
+    },
+    "149": {
+      "espnId": "149",
+      "division": "fcs",
+      "displayName": "Montana Grizzlies",
+      "shortDisplayName": "Montana",
+      "abbreviation": "MONT",
+      "location": "Montana",
+      "nickname": "Montana",
+      "name": "Grizzlies",
+      "oddsNames": [
+        "Montana Grizzlies"
+      ],
+      "aliases": []
+    },
+    "150": {
+      "espnId": "150",
+      "division": "fbs",
+      "displayName": "Duke Blue Devils",
+      "shortDisplayName": "Duke",
+      "abbreviation": "DUKE",
+      "location": "Duke",
+      "nickname": "Duke",
+      "name": "Blue Devils",
+      "oddsNames": [
+        "Duke Blue Devils"
+      ],
+      "aliases": []
+    },
+    "151": {
+      "espnId": "151",
+      "division": "fbs",
+      "displayName": "East Carolina Pirates",
+      "shortDisplayName": "East Carolina",
+      "abbreviation": "ECU",
+      "location": "East Carolina",
+      "nickname": "East Carolina",
+      "name": "Pirates",
+      "oddsNames": [
+        "East Carolina Pirates"
+      ],
+      "aliases": []
+    },
+    "152": {
+      "espnId": "152",
+      "division": "fbs",
+      "displayName": "NC State Wolfpack",
+      "shortDisplayName": "NC State",
+      "abbreviation": "NCSU",
+      "location": "NC State",
+      "nickname": "NC State",
+      "name": "Wolfpack",
+      "oddsNames": [
+        "NC State Wolfpack"
+      ],
+      "aliases": [
+        "N.C. State",
+        "N.C. State Wolfpack",
+        "NC State",
+        "North Carolina State",
+        "North Carolina State Wolfpack"
+      ]
+    },
+    "153": {
+      "espnId": "153",
+      "division": "fbs",
+      "displayName": "North Carolina Tar Heels",
+      "shortDisplayName": "North Carolina",
+      "abbreviation": "UNC",
+      "location": "North Carolina",
+      "nickname": "North Carolina",
+      "name": "Tar Heels",
+      "oddsNames": [
+        "North Carolina Tar Heels"
+      ],
+      "aliases": []
+    },
+    "154": {
+      "espnId": "154",
+      "division": "fbs",
+      "displayName": "Wake Forest Demon Deacons",
+      "shortDisplayName": "Wake Forest",
+      "abbreviation": "WAKE",
+      "location": "Wake Forest",
+      "nickname": "Wake Forest",
+      "name": "Demon Deacons",
+      "oddsNames": [
+        "Wake Forest Demon Deacons"
+      ],
+      "aliases": []
+    },
+    "155": {
+      "espnId": "155",
+      "division": "fcs",
+      "displayName": "North Dakota Fighting Hawks",
+      "shortDisplayName": "North Dakota",
+      "abbreviation": "UND",
+      "location": "North Dakota",
+      "nickname": "North Dakota",
+      "name": "Fighting Hawks",
+      "oddsNames": [
+        "North Dakota Fighting Hawks"
+      ],
+      "aliases": []
+    },
+    "158": {
+      "espnId": "158",
+      "division": "fbs",
+      "displayName": "Nebraska Cornhuskers",
+      "shortDisplayName": "Nebraska",
+      "abbreviation": "NEB",
+      "location": "Nebraska",
+      "nickname": "Nebraska",
+      "name": "Cornhuskers",
+      "oddsNames": [
+        "Nebraska Cornhuskers"
+      ],
+      "aliases": []
+    },
+    "159": {
+      "espnId": "159",
+      "division": "fcs",
+      "displayName": "Dartmouth Big Green",
+      "shortDisplayName": "Dartmouth",
+      "abbreviation": "DART",
+      "location": "Dartmouth",
+      "nickname": "Dartmouth",
+      "name": "Big Green",
+      "oddsNames": [
+        "Dartmouth Big Green"
+      ],
+      "aliases": []
+    },
+    "160": {
+      "espnId": "160",
+      "division": "fcs",
+      "displayName": "New Hampshire Wildcats",
+      "shortDisplayName": "New Hampshire",
+      "abbreviation": "UNH",
+      "location": "New Hampshire",
+      "nickname": "New Hampshire",
+      "name": "Wildcats",
+      "oddsNames": [
+        "New Hampshire Wildcats"
+      ],
+      "aliases": []
+    },
+    "163": {
+      "espnId": "163",
+      "division": "fcs",
+      "displayName": "Princeton Tigers",
+      "shortDisplayName": "Princeton",
+      "abbreviation": "PRIN",
+      "location": "Princeton",
+      "nickname": "Princeton",
+      "name": "Tigers",
+      "oddsNames": [
+        "Princeton Tigers"
+      ],
+      "aliases": []
+    },
+    "164": {
+      "espnId": "164",
+      "division": "fbs",
+      "displayName": "Rutgers Scarlet Knights",
+      "shortDisplayName": "Rutgers",
+      "abbreviation": "RUTG",
+      "location": "Rutgers",
+      "nickname": "Rutgers",
+      "name": "Scarlet Knights",
+      "oddsNames": [
+        "Rutgers Scarlet Knights"
+      ],
+      "aliases": []
+    },
+    "166": {
+      "espnId": "166",
+      "division": "fbs",
+      "displayName": "New Mexico State Aggies",
+      "shortDisplayName": "New Mexico St",
+      "abbreviation": "NMSU",
+      "location": "New Mexico State",
+      "nickname": "New Mexico St",
+      "name": "Aggies",
+      "oddsNames": [
+        "New Mexico State Aggies"
+      ],
+      "aliases": []
+    },
+    "167": {
+      "espnId": "167",
+      "division": "fbs",
+      "displayName": "New Mexico Lobos",
+      "shortDisplayName": "New Mexico",
+      "abbreviation": "UNM",
+      "location": "New Mexico",
+      "nickname": "New Mexico",
+      "name": "Lobos",
+      "oddsNames": [
+        "New Mexico Lobos"
+      ],
+      "aliases": []
+    },
+    "171": {
+      "espnId": "171",
+      "division": "fcs",
+      "displayName": "Columbia Lions",
+      "shortDisplayName": "Columbia",
+      "abbreviation": "COLU",
+      "location": "Columbia",
+      "nickname": "Columbia",
+      "name": "Lions",
+      "oddsNames": [
+        "Columbia Lions"
+      ],
+      "aliases": []
+    },
+    "172": {
+      "espnId": "172",
+      "division": "fcs",
+      "displayName": "Cornell Big Red",
+      "shortDisplayName": "Cornell",
+      "abbreviation": "COR",
+      "location": "Cornell",
+      "nickname": "Cornell",
+      "name": "Big Red",
+      "oddsNames": [
+        "Cornell Big Red"
+      ],
+      "aliases": []
+    },
+    "183": {
+      "espnId": "183",
+      "division": "fbs",
+      "displayName": "Syracuse Orange",
+      "shortDisplayName": "Syracuse",
+      "abbreviation": "SYR",
+      "location": "Syracuse",
+      "nickname": "Syracuse",
+      "name": "Orange",
+      "oddsNames": [
+        "Syracuse Orange"
+      ],
+      "aliases": []
+    },
+    "189": {
+      "espnId": "189",
+      "division": "fbs",
+      "displayName": "Bowling Green Falcons",
+      "shortDisplayName": "Bowling Green",
+      "abbreviation": "BGSU",
+      "location": "Bowling Green",
+      "nickname": "Bowling Green",
+      "name": "Falcons",
+      "oddsNames": [
+        "Bowling Green Falcons"
+      ],
+      "aliases": []
+    },
+    "193": {
+      "espnId": "193",
+      "division": "fbs",
+      "displayName": "Miami (OH) RedHawks",
+      "shortDisplayName": "Miami OH",
+      "abbreviation": "M-OH",
+      "location": "Miami (OH)",
+      "nickname": "Miami OH",
+      "name": "RedHawks",
+      "oddsNames": [
+        "Miami (OH) RedHawks"
+      ],
+      "aliases": [
+        "Miami (OH)",
+        "Miami (OH) RedHawks",
+        "Miami (Ohio)",
+        "Miami (Ohio) RedHawks",
+        "Miami OH",
+        "Miami Ohio",
+        "Miami Ohio RedHawks"
+      ]
+    },
+    "194": {
+      "espnId": "194",
+      "division": "fbs",
+      "displayName": "Ohio State Buckeyes",
+      "shortDisplayName": "Ohio State",
+      "abbreviation": "OSU",
+      "location": "Ohio State",
+      "nickname": "Ohio State",
+      "name": "Buckeyes",
+      "oddsNames": [
+        "Ohio State Buckeyes"
+      ],
+      "aliases": []
+    },
+    "195": {
+      "espnId": "195",
+      "division": "fbs",
+      "displayName": "Ohio Bobcats",
+      "shortDisplayName": "Ohio",
+      "abbreviation": "OHIO",
+      "location": "Ohio",
+      "nickname": "Ohio",
+      "name": "Bobcats",
+      "oddsNames": [
+        "Ohio Bobcats"
+      ],
+      "aliases": []
+    },
+    "197": {
+      "espnId": "197",
+      "division": "fbs",
+      "displayName": "Oklahoma State Cowboys",
+      "shortDisplayName": "Oklahoma St",
+      "abbreviation": "OKST",
+      "location": "Oklahoma State",
+      "nickname": "Oklahoma St",
+      "name": "Cowboys",
+      "oddsNames": [
+        "Oklahoma State Cowboys"
+      ],
+      "aliases": []
+    },
+    "201": {
+      "espnId": "201",
+      "division": "fbs",
+      "displayName": "Oklahoma Sooners",
+      "shortDisplayName": "Oklahoma",
+      "abbreviation": "OU",
+      "location": "Oklahoma",
+      "nickname": "Oklahoma",
+      "name": "Sooners",
+      "oddsNames": [
+        "Oklahoma Sooners"
+      ],
+      "aliases": []
+    },
+    "202": {
+      "espnId": "202",
+      "division": "fbs",
+      "displayName": "Tulsa Golden Hurricane",
+      "shortDisplayName": "Tulsa",
+      "abbreviation": "TLSA",
+      "location": "Tulsa",
+      "nickname": "Tulsa",
+      "name": "Golden Hurricane",
+      "oddsNames": [
+        "Tulsa Golden Hurricane"
+      ],
+      "aliases": []
+    },
+    "204": {
+      "espnId": "204",
+      "division": "fbs",
+      "displayName": "Oregon State Beavers",
+      "shortDisplayName": "Oregon St",
+      "abbreviation": "ORST",
+      "location": "Oregon State",
+      "nickname": "Oregon St",
+      "name": "Beavers",
+      "oddsNames": [
+        "Oregon State Beavers"
+      ],
+      "aliases": []
+    },
+    "213": {
+      "espnId": "213",
+      "division": "fbs",
+      "displayName": "Penn State Nittany Lions",
+      "shortDisplayName": "Penn State",
+      "abbreviation": "PSU",
+      "location": "Penn State",
+      "nickname": "Penn State",
+      "name": "Nittany Lions",
+      "oddsNames": [
+        "Penn State Nittany Lions"
+      ],
+      "aliases": []
+    },
+    "218": {
+      "espnId": "218",
+      "division": "fbs",
+      "displayName": "Temple Owls",
+      "shortDisplayName": "Temple",
+      "abbreviation": "TEM",
+      "location": "Temple",
+      "nickname": "Temple",
+      "name": "Owls",
+      "oddsNames": [
+        "Temple Owls"
+      ],
+      "aliases": []
+    },
+    "219": {
+      "espnId": "219",
+      "division": "fcs",
+      "displayName": "Pennsylvania Quakers",
+      "shortDisplayName": "Penn",
+      "abbreviation": "PENN",
+      "location": "Pennsylvania",
+      "nickname": "Penn",
+      "name": "Quakers",
+      "oddsNames": [
+        "Pennsylvania Quakers"
+      ],
+      "aliases": []
+    },
+    "221": {
+      "espnId": "221",
+      "division": "fbs",
+      "displayName": "Pittsburgh Panthers",
+      "shortDisplayName": "Pitt",
+      "abbreviation": "PITT",
+      "location": "Pittsburgh",
+      "nickname": "Pitt",
+      "name": "Panthers",
+      "oddsNames": [
+        "Pittsburgh Panthers"
+      ],
+      "aliases": [
+        "Pitt",
+        "Pitt Panthers",
+        "Pittsburgh"
+      ]
+    },
+    "222": {
+      "espnId": "222",
+      "division": "fcs",
+      "displayName": "Villanova Wildcats",
+      "shortDisplayName": "Villanova",
+      "abbreviation": "VILL",
+      "location": "Villanova",
+      "nickname": "Villanova",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Villanova Wildcats"
+      ],
+      "aliases": []
+    },
+    "225": {
+      "espnId": "225",
+      "division": "fcs",
+      "displayName": "Brown Bears",
+      "shortDisplayName": "Brown",
+      "abbreviation": "BRWN",
+      "location": "Brown",
+      "nickname": "Brown",
+      "name": "Bears",
+      "oddsNames": [
+        "Brown Bears"
+      ],
+      "aliases": []
+    },
+    "227": {
+      "espnId": "227",
+      "division": "fcs",
+      "displayName": "Rhode Island Rams",
+      "shortDisplayName": "Rhode Island",
+      "abbreviation": "URI",
+      "location": "Rhode Island",
+      "nickname": "Rhode Island",
+      "name": "Rams",
+      "oddsNames": [
+        "Rhode Island Rams"
+      ],
+      "aliases": []
+    },
+    "228": {
+      "espnId": "228",
+      "division": "fbs",
+      "displayName": "Clemson Tigers",
+      "shortDisplayName": "Clemson",
+      "abbreviation": "CLEM",
+      "location": "Clemson",
+      "nickname": "Clemson",
+      "name": "Tigers",
+      "oddsNames": [
+        "Clemson Tigers"
+      ],
+      "aliases": []
+    },
+    "231": {
+      "espnId": "231",
+      "division": "fcs",
+      "displayName": "Furman Paladins",
+      "shortDisplayName": "Furman",
+      "abbreviation": "FUR",
+      "location": "Furman",
+      "nickname": "Furman",
+      "name": "Paladins",
+      "oddsNames": [
+        "Furman Paladins"
+      ],
+      "aliases": []
+    },
+    "233": {
+      "espnId": "233",
+      "division": "fcs",
+      "displayName": "South Dakota Coyotes",
+      "shortDisplayName": "South Dakota",
+      "abbreviation": "SDAK",
+      "location": "South Dakota",
+      "nickname": "South Dakota",
+      "name": "Coyotes",
+      "oddsNames": [
+        "South Dakota Coyotes"
+      ],
+      "aliases": []
+    },
+    "235": {
+      "espnId": "235",
+      "division": "fbs",
+      "displayName": "Memphis Tigers",
+      "shortDisplayName": "Memphis",
+      "abbreviation": "MEM",
+      "location": "Memphis",
+      "nickname": "Memphis",
+      "name": "Tigers",
+      "oddsNames": [
+        "Memphis Tigers"
+      ],
+      "aliases": []
+    },
+    "236": {
+      "espnId": "236",
+      "division": "fcs",
+      "displayName": "Chattanooga Mocs",
+      "shortDisplayName": "Chattanooga",
+      "abbreviation": "UTC",
+      "location": "Chattanooga",
+      "nickname": "Chattanooga",
+      "name": "Mocs",
+      "oddsNames": [
+        "Chattanooga Mocs"
+      ],
+      "aliases": []
+    },
+    "238": {
+      "espnId": "238",
+      "division": "fbs",
+      "displayName": "Vanderbilt Commodores",
+      "shortDisplayName": "Vanderbilt",
+      "abbreviation": "VAN",
+      "location": "Vanderbilt",
+      "nickname": "Vanderbilt",
+      "name": "Commodores",
+      "oddsNames": [
+        "Vanderbilt Commodores"
+      ],
+      "aliases": []
+    },
+    "239": {
+      "espnId": "239",
+      "division": "fbs",
+      "displayName": "Baylor Bears",
+      "shortDisplayName": "Baylor",
+      "abbreviation": "BAY",
+      "location": "Baylor",
+      "nickname": "Baylor",
+      "name": "Bears",
+      "oddsNames": [
+        "Baylor Bears"
+      ],
+      "aliases": []
+    },
+    "242": {
+      "espnId": "242",
+      "division": "fbs",
+      "displayName": "Rice Owls",
+      "shortDisplayName": "Rice",
+      "abbreviation": "RICE",
+      "location": "Rice",
+      "nickname": "Rice",
+      "name": "Owls",
+      "oddsNames": [
+        "Rice Owls"
+      ],
+      "aliases": []
+    },
+    "245": {
+      "espnId": "245",
+      "division": "fbs",
+      "displayName": "Texas A&M Aggies",
+      "shortDisplayName": "Texas A&M",
+      "abbreviation": "TA&M",
+      "location": "Texas A&M",
+      "nickname": "Texas A&M",
+      "name": "Aggies",
+      "oddsNames": [
+        "Texas A&M Aggies"
+      ],
+      "aliases": []
+    },
+    "248": {
+      "espnId": "248",
+      "division": "fbs",
+      "displayName": "Houston Cougars",
+      "shortDisplayName": "Houston",
+      "abbreviation": "HOU",
+      "location": "Houston",
+      "nickname": "Houston",
+      "name": "Cougars",
+      "oddsNames": [
+        "Houston Cougars"
+      ],
+      "aliases": []
+    },
+    "249": {
+      "espnId": "249",
+      "division": "fbs",
+      "displayName": "North Texas Mean Green",
+      "shortDisplayName": "North Texas",
+      "abbreviation": "UNT",
+      "location": "North Texas",
+      "nickname": "North Texas",
+      "name": "Mean Green",
+      "oddsNames": [
+        "North Texas Mean Green"
+      ],
+      "aliases": []
+    },
+    "251": {
+      "espnId": "251",
+      "division": "fbs",
+      "displayName": "Texas Longhorns",
+      "shortDisplayName": "Texas",
+      "abbreviation": "TEX",
+      "location": "Texas",
+      "nickname": "Texas",
+      "name": "Longhorns",
+      "oddsNames": [
+        "Texas Longhorns"
+      ],
+      "aliases": []
+    },
+    "252": {
+      "espnId": "252",
+      "division": "fbs",
+      "displayName": "BYU Cougars",
+      "shortDisplayName": "BYU",
+      "abbreviation": "BYU",
+      "location": "BYU",
+      "nickname": "BYU",
+      "name": "Cougars",
+      "oddsNames": [
+        "BYU Cougars"
+      ],
+      "aliases": [
+        "BYU",
+        "Brigham Young",
+        "Brigham Young Cougars"
+      ]
+    },
+    "253": {
+      "espnId": "253",
+      "division": "fcs",
+      "displayName": "Southern Utah Thunderbirds",
+      "shortDisplayName": "Southern Utah",
+      "abbreviation": "SUU",
+      "location": "Southern Utah",
+      "nickname": "Southern Utah",
+      "name": "Thunderbirds",
+      "oddsNames": [
+        "Southern Utah Thunderbirds"
+      ],
+      "aliases": []
+    },
+    "254": {
+      "espnId": "254",
+      "division": "fbs",
+      "displayName": "Utah Utes",
+      "shortDisplayName": "Utah",
+      "abbreviation": "UTAH",
+      "location": "Utah",
+      "nickname": "Utah",
+      "name": "Utes",
+      "oddsNames": [
+        "Utah Utes"
+      ],
+      "aliases": []
+    },
+    "256": {
+      "espnId": "256",
+      "division": "fbs",
+      "displayName": "James Madison Dukes",
+      "shortDisplayName": "James Madison",
+      "abbreviation": "JMU",
+      "location": "James Madison",
+      "nickname": "James Madison",
+      "name": "Dukes",
+      "oddsNames": [
+        "James Madison Dukes"
+      ],
+      "aliases": []
+    },
+    "257": {
+      "espnId": "257",
+      "division": "fcs",
+      "displayName": "Richmond Spiders",
+      "shortDisplayName": "Richmond",
+      "abbreviation": "RICH",
+      "location": "Richmond",
+      "nickname": "Richmond",
+      "name": "Spiders",
+      "oddsNames": [
+        "Richmond Spiders"
+      ],
+      "aliases": []
+    },
+    "258": {
+      "espnId": "258",
+      "division": "fbs",
+      "displayName": "Virginia Cavaliers",
+      "shortDisplayName": "Virginia",
+      "abbreviation": "UVA",
+      "location": "Virginia",
+      "nickname": "Virginia",
+      "name": "Cavaliers",
+      "oddsNames": [
+        "Virginia Cavaliers"
+      ],
+      "aliases": []
+    },
+    "259": {
+      "espnId": "259",
+      "division": "fbs",
+      "displayName": "Virginia Tech Hokies",
+      "shortDisplayName": "Virginia Tech",
+      "abbreviation": "VT",
+      "location": "Virginia Tech",
+      "nickname": "Virginia Tech",
+      "name": "Hokies",
+      "oddsNames": [
+        "Virginia Tech Hokies"
+      ],
+      "aliases": []
+    },
+    "264": {
+      "espnId": "264",
+      "division": "fbs",
+      "displayName": "Washington Huskies",
+      "shortDisplayName": "Washington",
+      "abbreviation": "WASH",
+      "location": "Washington",
+      "nickname": "Washington",
+      "name": "Huskies",
+      "oddsNames": [
+        "Washington Huskies"
+      ],
+      "aliases": []
+    },
+    "265": {
+      "espnId": "265",
+      "division": "fbs",
+      "displayName": "Washington State Cougars",
+      "shortDisplayName": "Washington St",
+      "abbreviation": "WSU",
+      "location": "Washington State",
+      "nickname": "Washington St",
+      "name": "Cougars",
+      "oddsNames": [
+        "Washington State Cougars"
+      ],
+      "aliases": []
+    },
+    "275": {
+      "espnId": "275",
+      "division": "fbs",
+      "displayName": "Wisconsin Badgers",
+      "shortDisplayName": "Wisconsin",
+      "abbreviation": "WIS",
+      "location": "Wisconsin",
+      "nickname": "Wisconsin",
+      "name": "Badgers",
+      "oddsNames": [
+        "Wisconsin Badgers"
+      ],
+      "aliases": []
+    },
+    "276": {
+      "espnId": "276",
+      "division": "fbs",
+      "displayName": "Marshall Thundering Herd",
+      "shortDisplayName": "Marshall",
+      "abbreviation": "MRSH",
+      "location": "Marshall",
+      "nickname": "Marshall",
+      "name": "Thundering Herd",
+      "oddsNames": [
+        "Marshall Thundering Herd"
+      ],
+      "aliases": []
+    },
+    "277": {
+      "espnId": "277",
+      "division": "fbs",
+      "displayName": "West Virginia Mountaineers",
+      "shortDisplayName": "West Virginia",
+      "abbreviation": "WVU",
+      "location": "West Virginia",
+      "nickname": "West Virginia",
+      "name": "Mountaineers",
+      "oddsNames": [
+        "West Virginia Mountaineers"
+      ],
+      "aliases": []
+    },
+    "278": {
+      "espnId": "278",
+      "division": "fbs",
+      "displayName": "Fresno State Bulldogs",
+      "shortDisplayName": "Fresno St",
+      "abbreviation": "FRES",
+      "location": "Fresno State",
+      "nickname": "Fresno St",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Fresno State Bulldogs"
+      ],
+      "aliases": []
+    },
+    "282": {
+      "espnId": "282",
+      "division": "fcs",
+      "displayName": "Indiana State Sycamores",
+      "shortDisplayName": "Indiana St",
+      "abbreviation": "INST",
+      "location": "Indiana State",
+      "nickname": "Indiana St",
+      "name": "Sycamores",
+      "oddsNames": [
+        "Indiana State Sycamores"
+      ],
+      "aliases": []
+    },
+    "284": {
+      "espnId": "284",
+      "division": "fcs",
+      "displayName": "Stonehill Skyhawks",
+      "shortDisplayName": "Stonehill",
+      "abbreviation": "STO",
+      "location": "Stonehill",
+      "nickname": "Stonehill",
+      "name": "Skyhawks",
+      "oddsNames": [
+        "Stonehill Skyhawks"
+      ],
+      "aliases": []
+    },
+    "290": {
+      "espnId": "290",
+      "division": "fbs",
+      "displayName": "Georgia Southern Eagles",
+      "shortDisplayName": "GA Southern",
+      "abbreviation": "GASO",
+      "location": "Georgia Southern",
+      "nickname": "GA Southern",
+      "name": "Eagles",
+      "oddsNames": [
+        "Georgia Southern Eagles"
+      ],
+      "aliases": []
+    },
+    "292": {
+      "espnId": "292",
+      "division": "fcs",
+      "displayName": "UT Rio Grande Valley Vaqueros",
+      "shortDisplayName": "UT Rio Grande",
+      "abbreviation": "RGV",
+      "location": "UT Rio Grande Valley",
+      "nickname": "UT Rio Grande",
+      "name": "Vaqueros",
+      "oddsNames": [
+        "UT Rio Grande Valley Vaqueros"
+      ],
+      "aliases": [
+        "UT Rio Grande Valley",
+        "UTRGV",
+        "UTRGV Vaqueros"
+      ]
+    },
+    "295": {
+      "espnId": "295",
+      "division": "fbs",
+      "displayName": "Old Dominion Monarchs",
+      "shortDisplayName": "Old Dominion",
+      "abbreviation": "ODU",
+      "location": "Old Dominion",
+      "nickname": "Old Dominion",
+      "name": "Monarchs",
+      "oddsNames": [
+        "Old Dominion Monarchs"
+      ],
+      "aliases": []
+    },
+    "301": {
+      "espnId": "301",
+      "division": "fcs",
+      "displayName": "San Diego Toreros",
+      "shortDisplayName": "San Diego",
+      "abbreviation": "USD",
+      "location": "San Diego",
+      "nickname": "San Diego",
+      "name": "Toreros",
+      "oddsNames": [
+        "San Diego Toreros"
+      ],
+      "aliases": []
+    },
+    "302": {
+      "espnId": "302",
+      "division": "fcs",
+      "displayName": "UC Davis Aggies",
+      "shortDisplayName": "UC Davis",
+      "abbreviation": "UCD",
+      "location": "UC Davis",
+      "nickname": "UC Davis",
+      "name": "Aggies",
+      "oddsNames": [
+        "UC Davis Aggies"
+      ],
+      "aliases": []
+    },
+    "304": {
+      "espnId": "304",
+      "division": "fcs",
+      "displayName": "Idaho State Bengals",
+      "shortDisplayName": "Idaho St",
+      "abbreviation": "IDST",
+      "location": "Idaho State",
+      "nickname": "Idaho St",
+      "name": "Bengals",
+      "oddsNames": [
+        "Idaho State Bengals"
+      ],
+      "aliases": []
+    },
+    "309": {
+      "espnId": "309",
+      "division": "fbs",
+      "displayName": "Louisiana Ragin' Cajuns",
+      "shortDisplayName": "Louisiana",
+      "abbreviation": "UL",
+      "location": "Louisiana",
+      "nickname": "Louisiana",
+      "name": "Ragin' Cajuns",
+      "oddsNames": [
+        "Louisiana Ragin Cajuns"
+      ],
+      "aliases": []
+    },
+    "311": {
+      "espnId": "311",
+      "division": "fcs",
+      "displayName": "Maine Black Bears",
+      "shortDisplayName": "Maine",
+      "abbreviation": "ME",
+      "location": "Maine",
+      "nickname": "Maine",
+      "name": "Black Bears",
+      "oddsNames": [
+        "Maine Black Bears"
+      ],
+      "aliases": []
+    },
+    "322": {
+      "espnId": "322",
+      "division": "fcs",
+      "displayName": "Lafayette Leopards",
+      "shortDisplayName": "Lafayette",
+      "abbreviation": "LAF",
+      "location": "Lafayette",
+      "nickname": "Lafayette",
+      "name": "Leopards",
+      "oddsNames": [
+        "Lafayette Leopards"
+      ],
+      "aliases": []
+    },
+    "324": {
+      "espnId": "324",
+      "division": "fbs",
+      "displayName": "Coastal Carolina Chanticleers",
+      "shortDisplayName": "Coastal",
+      "abbreviation": "CCU",
+      "location": "Coastal Carolina",
+      "nickname": "Coastal",
+      "name": "Chanticleers",
+      "oddsNames": [
+        "Coastal Carolina Chanticleers"
+      ],
+      "aliases": []
+    },
+    "326": {
+      "espnId": "326",
+      "division": "fbs",
+      "displayName": "Texas State Bobcats",
+      "shortDisplayName": "Texas St",
+      "abbreviation": "TXST",
+      "location": "Texas State",
+      "nickname": "Texas St",
+      "name": "Bobcats",
+      "oddsNames": [
+        "Texas State Bobcats"
+      ],
+      "aliases": []
+    },
+    "328": {
+      "espnId": "328",
+      "division": "fbs",
+      "displayName": "Utah State Aggies",
+      "shortDisplayName": "Utah State",
+      "abbreviation": "USU",
+      "location": "Utah State",
+      "nickname": "Utah State",
+      "name": "Aggies",
+      "oddsNames": [
+        "Utah State Aggies"
+      ],
+      "aliases": []
+    },
+    "331": {
+      "espnId": "331",
+      "division": "fcs",
+      "displayName": "Eastern Washington Eagles",
+      "shortDisplayName": "E Washington",
+      "abbreviation": "EWU",
+      "location": "Eastern Washington",
+      "nickname": "E Washington",
+      "name": "Eagles",
+      "oddsNames": [
+        "Eastern Washington Eagles"
+      ],
+      "aliases": []
+    },
+    "333": {
+      "espnId": "333",
+      "division": "fbs",
+      "displayName": "Alabama Crimson Tide",
+      "shortDisplayName": "Alabama",
+      "abbreviation": "ALA",
+      "location": "Alabama",
+      "nickname": "Alabama",
+      "name": "Crimson Tide",
+      "oddsNames": [
+        "Alabama Crimson Tide"
+      ],
+      "aliases": []
+    },
+    "338": {
+      "espnId": "338",
+      "division": "fbs",
+      "displayName": "Kennesaw State Owls",
+      "shortDisplayName": "Kennesaw St",
+      "abbreviation": "KENN",
+      "location": "Kennesaw State",
+      "nickname": "Kennesaw St",
+      "name": "Owls",
+      "oddsNames": [
+        "Kennesaw State Owls"
+      ],
+      "aliases": []
+    },
+    "344": {
+      "espnId": "344",
+      "division": "fbs",
+      "displayName": "Mississippi State Bulldogs",
+      "shortDisplayName": "Mississippi St",
+      "abbreviation": "MSST",
+      "location": "Mississippi State",
+      "nickname": "Mississippi St",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Mississippi State Bulldogs"
+      ],
+      "aliases": []
+    },
+    "349": {
+      "espnId": "349",
+      "division": "fbs",
+      "displayName": "Army Black Knights",
+      "shortDisplayName": "Army",
+      "abbreviation": "ARMY",
+      "location": "Army",
+      "nickname": "Army",
+      "name": "Black Knights",
+      "oddsNames": [
+        "Army Black Knights"
+      ],
+      "aliases": [
+        "Army"
+      ]
+    },
+    "351": {
+      "espnId": "351",
+      "division": "other",
+      "displayName": "Wingate Bulldogs",
+      "shortDisplayName": "Wingate",
+      "abbreviation": "WINU",
+      "location": "Wingate",
+      "nickname": "Wingate",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Wingate Bulldogs"
+      ],
+      "aliases": []
+    },
+    "356": {
+      "espnId": "356",
+      "division": "fbs",
+      "displayName": "Illinois Fighting Illini",
+      "shortDisplayName": "Illinois",
+      "abbreviation": "ILL",
+      "location": "Illinois",
+      "nickname": "Illinois",
+      "name": "Fighting Illini",
+      "oddsNames": [
+        "Illinois Fighting Illini"
+      ],
+      "aliases": []
+    },
+    "399": {
+      "espnId": "399",
+      "division": "fcs",
+      "displayName": "UAlbany Great Danes",
+      "shortDisplayName": "UAlbany",
+      "abbreviation": "UALB",
+      "location": "UAlbany",
+      "nickname": "UAlbany",
+      "name": "Great Danes",
+      "oddsNames": [
+        "Albany"
+      ],
+      "aliases": [
+        "Albany",
+        "Albany Great Danes",
+        "UAlbany"
+      ]
+    },
+    "2000": {
+      "espnId": "2000",
+      "division": "fcs",
+      "displayName": "Abilene Christian Wildcats",
+      "shortDisplayName": "Abilene Chrstn",
+      "abbreviation": "ACU",
+      "location": "Abilene Christian",
+      "nickname": "Abilene Chrstn",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Abilene Christian Wildcats"
+      ],
+      "aliases": []
+    },
+    "2005": {
+      "espnId": "2005",
+      "division": "fbs",
+      "displayName": "Air Force Falcons",
+      "shortDisplayName": "Air Force",
+      "abbreviation": "AF",
+      "location": "Air Force",
+      "nickname": "Air Force",
+      "name": "Falcons",
+      "oddsNames": [
+        "Air Force Falcons"
+      ],
+      "aliases": []
+    },
+    "2006": {
+      "espnId": "2006",
+      "division": "fbs",
+      "displayName": "Akron Zips",
+      "shortDisplayName": "Akron",
+      "abbreviation": "AKR",
+      "location": "Akron",
+      "nickname": "Akron",
+      "name": "Zips",
+      "oddsNames": [
+        "Akron Zips"
+      ],
+      "aliases": []
+    },
+    "2010": {
+      "espnId": "2010",
+      "division": "fcs",
+      "displayName": "Alabama A&M Bulldogs",
+      "shortDisplayName": "Alabama A&M",
+      "abbreviation": "AAMU",
+      "location": "Alabama A&M",
+      "nickname": "Alabama A&M",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Alabama A&M Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2011": {
+      "espnId": "2011",
+      "division": "fcs",
+      "displayName": "Alabama State Hornets",
+      "shortDisplayName": "Alabama St",
+      "abbreviation": "ALST",
+      "location": "Alabama State",
+      "nickname": "Alabama St",
+      "name": "Hornets",
+      "oddsNames": [
+        "Alabama State Hornets"
+      ],
+      "aliases": []
+    },
+    "2016": {
+      "espnId": "2016",
+      "division": "fcs",
+      "displayName": "Alcorn State Braves",
+      "shortDisplayName": "Alcorn St",
+      "abbreviation": "ALCN",
+      "location": "Alcorn State",
+      "nickname": "Alcorn St",
+      "name": "Braves",
+      "oddsNames": [
+        "Alcorn State Braves"
+      ],
+      "aliases": []
+    },
+    "2025": {
+      "espnId": "2025",
+      "division": "other",
+      "displayName": "Angelo State Rams",
+      "shortDisplayName": "Angelo St",
+      "abbreviation": "AGSU",
+      "location": "Angelo State",
+      "nickname": "Angelo St",
+      "name": "Rams",
+      "oddsNames": [
+        "Angelo State Rams"
+      ],
+      "aliases": []
+    },
+    "2026": {
+      "espnId": "2026",
+      "division": "fbs",
+      "displayName": "App State Mountaineers",
+      "shortDisplayName": "App State",
+      "abbreviation": "APP",
+      "location": "App State",
+      "nickname": "App State",
+      "name": "Mountaineers",
+      "oddsNames": [
+        "Appalachian State Mountaineers"
+      ],
+      "aliases": [
+        "Appalachian St",
+        "Appalachian St Mountaineers",
+        "Appalachian St.",
+        "Appalachian State",
+        "Appalachian State Mountaineers"
+      ]
+    },
+    "2029": {
+      "espnId": "2029",
+      "division": "fcs",
+      "displayName": "Arkansas-Pine Bluff Golden Lions",
+      "shortDisplayName": "AR-Pine Bluff",
+      "abbreviation": "UAPB",
+      "location": "Arkansas-Pine Bluff",
+      "nickname": "AR-Pine Bluff",
+      "name": "Golden Lions",
+      "oddsNames": [
+        "Arkansas Pine Bluff Golden Lions"
+      ],
+      "aliases": []
+    },
+    "2032": {
+      "espnId": "2032",
+      "division": "fbs",
+      "displayName": "Arkansas State Red Wolves",
+      "shortDisplayName": "Arkansas St",
+      "abbreviation": "ARST",
+      "location": "Arkansas State",
+      "nickname": "Arkansas St",
+      "name": "Red Wolves",
+      "oddsNames": [
+        "Arkansas State Red Wolves"
+      ],
+      "aliases": []
+    },
+    "2046": {
+      "espnId": "2046",
+      "division": "fcs",
+      "displayName": "Austin Peay Governors",
+      "shortDisplayName": "Austin Peay",
+      "abbreviation": "APSU",
+      "location": "Austin Peay",
+      "nickname": "Austin Peay",
+      "name": "Governors",
+      "oddsNames": [
+        "Austin Peay Governors"
+      ],
+      "aliases": []
+    },
+    "2050": {
+      "espnId": "2050",
+      "division": "fbs",
+      "displayName": "Ball State Cardinals",
+      "shortDisplayName": "Ball State",
+      "abbreviation": "BALL",
+      "location": "Ball State",
+      "nickname": "Ball State",
+      "name": "Cardinals",
+      "oddsNames": [
+        "Ball State Cardinals"
+      ],
+      "aliases": []
+    },
+    "2065": {
+      "espnId": "2065",
+      "division": "fcs",
+      "displayName": "Bethune-Cookman Wildcats",
+      "shortDisplayName": "Bethune",
+      "abbreviation": "BCU",
+      "location": "Bethune-Cookman",
+      "nickname": "Bethune",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Bethune-Cookman Wildcats"
+      ],
+      "aliases": []
+    },
+    "2083": {
+      "espnId": "2083",
+      "division": "fcs",
+      "displayName": "Bucknell Bison",
+      "shortDisplayName": "Bucknell",
+      "abbreviation": "BUCK",
+      "location": "Bucknell",
+      "nickname": "Bucknell",
+      "name": "Bison",
+      "oddsNames": [
+        "Bucknell Bison"
+      ],
+      "aliases": []
+    },
+    "2084": {
+      "espnId": "2084",
+      "division": "fbs",
+      "displayName": "Buffalo Bulls",
+      "shortDisplayName": "Buffalo",
+      "abbreviation": "BUF",
+      "location": "Buffalo",
+      "nickname": "Buffalo",
+      "name": "Bulls",
+      "oddsNames": [
+        "Buffalo Bulls"
+      ],
+      "aliases": []
+    },
+    "2086": {
+      "espnId": "2086",
+      "division": "fcs",
+      "displayName": "Butler Bulldogs",
+      "shortDisplayName": "Butler",
+      "abbreviation": "BTLR",
+      "location": "Butler",
+      "nickname": "Butler",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Butler Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2097": {
+      "espnId": "2097",
+      "division": "fcs",
+      "displayName": "Campbell Fighting Camels",
+      "shortDisplayName": "Campbell",
+      "abbreviation": "CAM",
+      "location": "Campbell",
+      "nickname": "Campbell",
+      "name": "Fighting Camels",
+      "oddsNames": [
+        "Campbell Fighting Camels"
+      ],
+      "aliases": []
+    },
+    "2110": {
+      "espnId": "2110",
+      "division": "fcs",
+      "displayName": "Central Arkansas Bears",
+      "shortDisplayName": "C Arkansas",
+      "abbreviation": "CARK",
+      "location": "Central Arkansas",
+      "nickname": "C Arkansas",
+      "name": "Bears",
+      "oddsNames": [
+        "Central Arkansas Bears"
+      ],
+      "aliases": []
+    },
+    "2115": {
+      "espnId": "2115",
+      "division": "fcs",
+      "displayName": "Central Connecticut Blue Devils",
+      "shortDisplayName": "C Connecticut",
+      "abbreviation": "CCSU",
+      "location": "Central Connecticut",
+      "nickname": "C Connecticut",
+      "name": "Blue Devils",
+      "oddsNames": [
+        "Central Connecticut Blue Devils"
+      ],
+      "aliases": []
+    },
+    "2116": {
+      "espnId": "2116",
+      "division": "fbs",
+      "displayName": "UCF Knights",
+      "shortDisplayName": "UCF",
+      "abbreviation": "UCF",
+      "location": "UCF",
+      "nickname": "UCF",
+      "name": "Knights",
+      "oddsNames": [
+        "UCF Knights"
+      ],
+      "aliases": [
+        "Central Florida",
+        "Central Florida Knights",
+        "UCF"
+      ]
+    },
+    "2117": {
+      "espnId": "2117",
+      "division": "fbs",
+      "displayName": "Central Michigan Chippewas",
+      "shortDisplayName": "C Michigan",
+      "abbreviation": "CMU",
+      "location": "Central Michigan",
+      "nickname": "C Michigan",
+      "name": "Chippewas",
+      "oddsNames": [
+        "Central Michigan Chippewas"
+      ],
+      "aliases": []
+    },
+    "2127": {
+      "espnId": "2127",
+      "division": "fcs",
+      "displayName": "Charleston Southern Buccaneers",
+      "shortDisplayName": "Charleston So",
+      "abbreviation": "CHSO",
+      "location": "Charleston Southern",
+      "nickname": "Charleston So",
+      "name": "Buccaneers",
+      "oddsNames": [
+        "Charleston Southern Buccaneers"
+      ],
+      "aliases": []
+    },
+    "2130": {
+      "espnId": "2130",
+      "division": "fcs",
+      "displayName": "Chicago State Cougars",
+      "shortDisplayName": "Chicago St",
+      "abbreviation": "CHST",
+      "location": "Chicago State",
+      "nickname": "Chicago St",
+      "name": "Cougars",
+      "oddsNames": [
+        "Chicago State Cougars"
+      ],
+      "aliases": []
+    },
+    "2132": {
+      "espnId": "2132",
+      "division": "fbs",
+      "displayName": "Cincinnati Bearcats",
+      "shortDisplayName": "Cincinnati",
+      "abbreviation": "CIN",
+      "location": "Cincinnati",
+      "nickname": "Cincinnati",
+      "name": "Bearcats",
+      "oddsNames": [
+        "Cincinnati Bearcats"
+      ],
+      "aliases": []
+    },
+    "2142": {
+      "espnId": "2142",
+      "division": "fcs",
+      "displayName": "Colgate Raiders",
+      "shortDisplayName": "Colgate",
+      "abbreviation": "COLG",
+      "location": "Colgate",
+      "nickname": "Colgate",
+      "name": "Raiders",
+      "oddsNames": [
+        "Colgate Raiders"
+      ],
+      "aliases": []
+    },
+    "2166": {
+      "espnId": "2166",
+      "division": "fcs",
+      "displayName": "Davidson Wildcats",
+      "shortDisplayName": "Davidson",
+      "abbreviation": "DAV",
+      "location": "Davidson",
+      "nickname": "Davidson",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Davidson Wildcats"
+      ],
+      "aliases": []
+    },
+    "2168": {
+      "espnId": "2168",
+      "division": "fcs",
+      "displayName": "Dayton Flyers",
+      "shortDisplayName": "Dayton",
+      "abbreviation": "DAY",
+      "location": "Dayton",
+      "nickname": "Dayton",
+      "name": "Flyers",
+      "oddsNames": [
+        "Dayton Flyers"
+      ],
+      "aliases": []
+    },
+    "2169": {
+      "espnId": "2169",
+      "division": "fcs",
+      "displayName": "Delaware State Hornets",
+      "shortDisplayName": "Delaware St",
+      "abbreviation": "DSU",
+      "location": "Delaware State",
+      "nickname": "Delaware St",
+      "name": "Hornets",
+      "oddsNames": [
+        "Delaware State Hornets"
+      ],
+      "aliases": []
+    },
+    "2181": {
+      "espnId": "2181",
+      "division": "fcs",
+      "displayName": "Drake Bulldogs",
+      "shortDisplayName": "Drake",
+      "abbreviation": "DRKE",
+      "location": "Drake",
+      "nickname": "Drake",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Drake Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2184": {
+      "espnId": "2184",
+      "division": "fcs",
+      "displayName": "Duquesne Dukes",
+      "shortDisplayName": "Duquesne",
+      "abbreviation": "DUQ",
+      "location": "Duquesne",
+      "nickname": "Duquesne",
+      "name": "Dukes",
+      "oddsNames": [
+        "Duquesne Dukes"
+      ],
+      "aliases": []
+    },
+    "2193": {
+      "espnId": "2193",
+      "division": "fcs",
+      "displayName": "East Tennessee State Buccaneers",
+      "shortDisplayName": "ETSU",
+      "abbreviation": "ETSU",
+      "location": "East Tennessee State",
+      "nickname": "ETSU",
+      "name": "Buccaneers",
+      "oddsNames": [
+        "East Tennessee State Buccaneers"
+      ],
+      "aliases": []
+    },
+    "2197": {
+      "espnId": "2197",
+      "division": "fcs",
+      "displayName": "Eastern Illinois Panthers",
+      "shortDisplayName": "E Illinois",
+      "abbreviation": "EIU",
+      "location": "Eastern Illinois",
+      "nickname": "E Illinois",
+      "name": "Panthers",
+      "oddsNames": [
+        "Eastern Illinois Panthers"
+      ],
+      "aliases": []
+    },
+    "2198": {
+      "espnId": "2198",
+      "division": "fcs",
+      "displayName": "Eastern Kentucky Colonels",
+      "shortDisplayName": "E Kentucky",
+      "abbreviation": "EKU",
+      "location": "Eastern Kentucky",
+      "nickname": "E Kentucky",
+      "name": "Colonels",
+      "oddsNames": [
+        "Eastern Kentucky Colonels"
+      ],
+      "aliases": []
+    },
+    "2199": {
+      "espnId": "2199",
+      "division": "fbs",
+      "displayName": "Eastern Michigan Eagles",
+      "shortDisplayName": "E Michigan",
+      "abbreviation": "EMU",
+      "location": "Eastern Michigan",
+      "nickname": "E Michigan",
+      "name": "Eagles",
+      "oddsNames": [
+        "Eastern Michigan Eagles"
+      ],
+      "aliases": []
+    },
+    "2210": {
+      "espnId": "2210",
+      "division": "fcs",
+      "displayName": "Elon Phoenix",
+      "shortDisplayName": "Elon",
+      "abbreviation": "ELON",
+      "location": "Elon",
+      "nickname": "Elon",
+      "name": "Phoenix",
+      "oddsNames": [
+        "Elon Phoenix"
+      ],
+      "aliases": []
+    },
+    "2222": {
+      "espnId": "2222",
+      "division": "other",
+      "displayName": "Ferris State Bulldogs",
+      "shortDisplayName": "Ferris St",
+      "abbreviation": "FRST",
+      "location": "Ferris State",
+      "nickname": "Ferris St",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Ferris State Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2226": {
+      "espnId": "2226",
+      "division": "fbs",
+      "displayName": "Florida Atlantic Owls",
+      "shortDisplayName": "FAU",
+      "abbreviation": "FAU",
+      "location": "Florida Atlantic",
+      "nickname": "FAU",
+      "name": "Owls",
+      "oddsNames": [
+        "Florida Atlantic Owls"
+      ],
+      "aliases": []
+    },
+    "2229": {
+      "espnId": "2229",
+      "division": "fbs",
+      "displayName": "Florida International Panthers",
+      "shortDisplayName": "FIU",
+      "abbreviation": "FIU",
+      "location": "Florida International",
+      "nickname": "FIU",
+      "name": "Panthers",
+      "oddsNames": [
+        "Florida International Panthers"
+      ],
+      "aliases": []
+    },
+    "2230": {
+      "espnId": "2230",
+      "division": "fcs",
+      "displayName": "Fordham Rams",
+      "shortDisplayName": "Fordham",
+      "abbreviation": "FOR",
+      "location": "Fordham",
+      "nickname": "Fordham",
+      "name": "Rams",
+      "oddsNames": [
+        "Fordham Rams"
+      ],
+      "aliases": []
+    },
+    "2241": {
+      "espnId": "2241",
+      "division": "fcs",
+      "displayName": "Gardner-Webb Runnin' Bulldogs",
+      "shortDisplayName": "Gardner-Webb",
+      "abbreviation": "GWEB",
+      "location": "Gardner-Webb",
+      "nickname": "Gardner-Webb",
+      "name": "Runnin' Bulldogs",
+      "oddsNames": [
+        "Gardner-Webb Runnin Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2247": {
+      "espnId": "2247",
+      "division": "fbs",
+      "displayName": "Georgia State Panthers",
+      "shortDisplayName": "Georgia St",
+      "abbreviation": "GAST",
+      "location": "Georgia State",
+      "nickname": "Georgia St",
+      "name": "Panthers",
+      "oddsNames": [
+        "Georgia State Panthers"
+      ],
+      "aliases": [
+        "Georgia St",
+        "Georgia State"
+      ]
+    },
+    "2261": {
+      "espnId": "2261",
+      "division": "fcs",
+      "displayName": "Hampton Pirates",
+      "shortDisplayName": "Hampton",
+      "abbreviation": "HAMP",
+      "location": "Hampton",
+      "nickname": "Hampton",
+      "name": "Pirates",
+      "oddsNames": [
+        "Hampton Pirates"
+      ],
+      "aliases": []
+    },
+    "2277": {
+      "espnId": "2277",
+      "division": "fcs",
+      "displayName": "Houston Christian Huskies",
+      "shortDisplayName": "Hou Christian",
+      "abbreviation": "HCU",
+      "location": "Houston Christian",
+      "nickname": "Hou Christian",
+      "name": "Huskies",
+      "oddsNames": [
+        "Houston Baptist Huskies"
+      ],
+      "aliases": [
+        "Houston Baptist",
+        "Houston Baptist Huskies",
+        "Houston Christian"
+      ]
+    },
+    "2287": {
+      "espnId": "2287",
+      "division": "fcs",
+      "displayName": "Illinois State Redbirds",
+      "shortDisplayName": "Illinois St",
+      "abbreviation": "ILST",
+      "location": "Illinois State",
+      "nickname": "Illinois St",
+      "name": "Redbirds",
+      "oddsNames": [
+        "Illinois State Redbirds"
+      ],
+      "aliases": []
+    },
+    "2294": {
+      "espnId": "2294",
+      "division": "fbs",
+      "displayName": "Iowa Hawkeyes",
+      "shortDisplayName": "Iowa",
+      "abbreviation": "IOWA",
+      "location": "Iowa",
+      "nickname": "Iowa",
+      "name": "Hawkeyes",
+      "oddsNames": [
+        "Iowa Hawkeyes"
+      ],
+      "aliases": []
+    },
+    "2296": {
+      "espnId": "2296",
+      "division": "fcs",
+      "displayName": "Jackson State Tigers",
+      "shortDisplayName": "Jackson St",
+      "abbreviation": "JKST",
+      "location": "Jackson State",
+      "nickname": "Jackson St",
+      "name": "Tigers",
+      "oddsNames": [
+        "Jackson State Tigers"
+      ],
+      "aliases": []
+    },
+    "2304": {
+      "espnId": "2304",
+      "division": "other",
+      "displayName": "Johnson C. Smith Golden Bulls",
+      "shortDisplayName": "Johnson C Smth",
+      "abbreviation": "JCSU",
+      "location": "Johnson C. Smith",
+      "nickname": "Johnson C Smth",
+      "name": "Golden Bulls",
+      "oddsNames": [
+        "Johnson C Smith Golden Bulls"
+      ],
+      "aliases": [
+        "Johnson C Smith",
+        "Johnson C Smith Golden Bulls",
+        "Johnson C. Smith"
+      ]
+    },
+    "2305": {
+      "espnId": "2305",
+      "division": "fbs",
+      "displayName": "Kansas Jayhawks",
+      "shortDisplayName": "Kansas",
+      "abbreviation": "KU",
+      "location": "Kansas",
+      "nickname": "Kansas",
+      "name": "Jayhawks",
+      "oddsNames": [
+        "Kansas Jayhawks"
+      ],
+      "aliases": []
+    },
+    "2306": {
+      "espnId": "2306",
+      "division": "fbs",
+      "displayName": "Kansas State Wildcats",
+      "shortDisplayName": "Kansas St",
+      "abbreviation": "KSU",
+      "location": "Kansas State",
+      "nickname": "Kansas St",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Kansas State Wildcats"
+      ],
+      "aliases": [
+        "K-State",
+        "Kansas St",
+        "Kansas St.",
+        "Kansas State"
+      ]
+    },
+    "2309": {
+      "espnId": "2309",
+      "division": "fbs",
+      "displayName": "Kent State Golden Flashes",
+      "shortDisplayName": "Kent State",
+      "abbreviation": "KENT",
+      "location": "Kent State",
+      "nickname": "Kent State",
+      "name": "Golden Flashes",
+      "oddsNames": [
+        "Kent State Golden Flashes"
+      ],
+      "aliases": []
+    },
+    "2310": {
+      "espnId": "2310",
+      "division": "other",
+      "displayName": "Kentucky State Thorobreds",
+      "shortDisplayName": "Kentucky St",
+      "abbreviation": "KYSU",
+      "location": "Kentucky State",
+      "nickname": "Kentucky St",
+      "name": "Thorobreds",
+      "oddsNames": [
+        "Kentucky State University Thorobreds"
+      ],
+      "aliases": [
+        "Kentucky State",
+        "Kentucky State University Thorobreds"
+      ]
+    },
+    "2320": {
+      "espnId": "2320",
+      "division": "fcs",
+      "displayName": "Lamar Cardinals",
+      "shortDisplayName": "Lamar",
+      "abbreviation": "LAM",
+      "location": "Lamar",
+      "nickname": "Lamar",
+      "name": "Cardinals",
+      "oddsNames": [
+        "Lamar Cardinals"
+      ],
+      "aliases": []
+    },
+    "2329": {
+      "espnId": "2329",
+      "division": "fcs",
+      "displayName": "Lehigh Mountain Hawks",
+      "shortDisplayName": "Lehigh",
+      "abbreviation": "LEH",
+      "location": "Lehigh",
+      "nickname": "Lehigh",
+      "name": "Mountain Hawks",
+      "oddsNames": [
+        "Lehigh Mountain Hawks"
+      ],
+      "aliases": []
+    },
+    "2335": {
+      "espnId": "2335",
+      "division": "fbs",
+      "displayName": "Liberty Flames",
+      "shortDisplayName": "Liberty",
+      "abbreviation": "LIB",
+      "location": "Liberty",
+      "nickname": "Liberty",
+      "name": "Flames",
+      "oddsNames": [
+        "Liberty Flames"
+      ],
+      "aliases": []
+    },
+    "2341": {
+      "espnId": "2341",
+      "division": "fcs",
+      "displayName": "Long Island University Sharks",
+      "shortDisplayName": "Long Island",
+      "abbreviation": "LIU",
+      "location": "Long Island University",
+      "nickname": "Long Island",
+      "name": "Sharks",
+      "oddsNames": [
+        "LIU Sharks"
+      ],
+      "aliases": [
+        "LIU",
+        "LIU Sharks",
+        "Long Island Sharks"
+      ]
+    },
+    "2348": {
+      "espnId": "2348",
+      "division": "fbs",
+      "displayName": "Louisiana Tech Bulldogs",
+      "shortDisplayName": "Louisiana Tech",
+      "abbreviation": "LT",
+      "location": "Louisiana Tech",
+      "nickname": "Louisiana Tech",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Louisiana Tech Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2364": {
+      "espnId": "2364",
+      "division": "other",
+      "displayName": "Minnesota State Mavericks",
+      "shortDisplayName": "Minnesota St",
+      "abbreviation": "MNST",
+      "location": "Minnesota State",
+      "nickname": "Minnesota St",
+      "name": "Mavericks",
+      "oddsNames": [
+        "Minnesota State Mavericks"
+      ],
+      "aliases": []
+    },
+    "2368": {
+      "espnId": "2368",
+      "division": "fcs",
+      "displayName": "Marist Red Foxes",
+      "shortDisplayName": "Marist",
+      "abbreviation": "MRST",
+      "location": "Marist",
+      "nickname": "Marist",
+      "name": "Red Foxes",
+      "oddsNames": [
+        "Marist Red Foxes"
+      ],
+      "aliases": []
+    },
+    "2377": {
+      "espnId": "2377",
+      "division": "fcs",
+      "displayName": "McNeese Cowboys",
+      "shortDisplayName": "McNeese",
+      "abbreviation": "MCN",
+      "location": "McNeese",
+      "nickname": "McNeese",
+      "name": "Cowboys",
+      "oddsNames": [
+        "McNeese State Cowboys"
+      ],
+      "aliases": [
+        "McNeese",
+        "McNeese St",
+        "McNeese State",
+        "McNeese State Cowboys"
+      ]
+    },
+    "2382": {
+      "espnId": "2382",
+      "division": "fcs",
+      "displayName": "Mercer Bears",
+      "shortDisplayName": "Mercer",
+      "abbreviation": "MER",
+      "location": "Mercer",
+      "nickname": "Mercer",
+      "name": "Bears",
+      "oddsNames": [
+        "Mercer Bears"
+      ],
+      "aliases": []
+    },
+    "2385": {
+      "espnId": "2385",
+      "division": "fcs",
+      "displayName": "Mercyhurst Lakers",
+      "shortDisplayName": "Mercyhurst",
+      "abbreviation": "MERC",
+      "location": "Mercyhurst",
+      "nickname": "Mercyhurst",
+      "name": "Lakers",
+      "oddsNames": [
+        "Mercyhurst Lakers"
+      ],
+      "aliases": []
+    },
+    "2390": {
+      "espnId": "2390",
+      "division": "fbs",
+      "displayName": "Miami Hurricanes",
+      "shortDisplayName": "Miami",
+      "abbreviation": "MIA",
+      "location": "Miami",
+      "nickname": "Miami",
+      "name": "Hurricanes",
+      "oddsNames": [
+        "Miami Hurricanes"
+      ],
+      "aliases": [
+        "Miami",
+        "Miami (FL)",
+        "Miami FL",
+        "Miami Florida",
+        "Miami Hurricanes"
+      ]
+    },
+    "2393": {
+      "espnId": "2393",
+      "division": "fbs",
+      "displayName": "Middle Tennessee Blue Raiders",
+      "shortDisplayName": "MTSU",
+      "abbreviation": "MTSU",
+      "location": "Middle Tennessee",
+      "nickname": "MTSU",
+      "name": "Blue Raiders",
+      "oddsNames": [
+        "Middle Tennessee Blue Raiders"
+      ],
+      "aliases": []
+    },
+    "2400": {
+      "espnId": "2400",
+      "division": "fcs",
+      "displayName": "Mississippi Valley State Delta Devils",
+      "shortDisplayName": "Miss Valley St",
+      "abbreviation": "MVSU",
+      "location": "Mississippi Valley State",
+      "nickname": "Miss Valley St",
+      "name": "Delta Devils",
+      "oddsNames": [
+        "Mississippi Valley State Delta Devils"
+      ],
+      "aliases": []
+    },
+    "2405": {
+      "espnId": "2405",
+      "division": "fcs",
+      "displayName": "Monmouth Hawks",
+      "shortDisplayName": "Monmouth",
+      "abbreviation": "MONM",
+      "location": "Monmouth",
+      "nickname": "Monmouth",
+      "name": "Hawks",
+      "oddsNames": [
+        "Monmouth Hawks"
+      ],
+      "aliases": []
+    },
+    "2413": {
+      "espnId": "2413",
+      "division": "fcs",
+      "displayName": "Morehead State Eagles",
+      "shortDisplayName": "Morehead St",
+      "abbreviation": "MORE",
+      "location": "Morehead State",
+      "nickname": "Morehead St",
+      "name": "Eagles",
+      "oddsNames": [
+        "Morehead State Eagles"
+      ],
+      "aliases": []
+    },
+    "2415": {
+      "espnId": "2415",
+      "division": "fcs",
+      "displayName": "Morgan State Bears",
+      "shortDisplayName": "Morgan St",
+      "abbreviation": "MORG",
+      "location": "Morgan State",
+      "nickname": "Morgan St",
+      "name": "Bears",
+      "oddsNames": [
+        "Morgan State Bears"
+      ],
+      "aliases": []
+    },
+    "2426": {
+      "espnId": "2426",
+      "division": "fbs",
+      "displayName": "Navy Midshipmen",
+      "shortDisplayName": "Navy",
+      "abbreviation": "NAVY",
+      "location": "Navy",
+      "nickname": "Navy",
+      "name": "Midshipmen",
+      "oddsNames": [
+        "Navy Midshipmen"
+      ],
+      "aliases": []
+    },
+    "2428": {
+      "espnId": "2428",
+      "division": "fcs",
+      "displayName": "North Carolina Central Eagles",
+      "shortDisplayName": "NC Central",
+      "abbreviation": "NCCU",
+      "location": "North Carolina Central",
+      "nickname": "NC Central",
+      "name": "Eagles",
+      "oddsNames": [
+        "North Carolina Central Eagles"
+      ],
+      "aliases": []
+    },
+    "2429": {
+      "espnId": "2429",
+      "division": "fbs",
+      "displayName": "Charlotte 49ers",
+      "shortDisplayName": "Charlotte",
+      "abbreviation": "CLT",
+      "location": "Charlotte",
+      "nickname": "Charlotte",
+      "name": "49ers",
+      "oddsNames": [
+        "Charlotte 49ers"
+      ],
+      "aliases": []
+    },
+    "2433": {
+      "espnId": "2433",
+      "division": "fbs",
+      "displayName": "UL Monroe Warhawks",
+      "shortDisplayName": "UL Monroe",
+      "abbreviation": "ULM",
+      "location": "UL Monroe",
+      "nickname": "UL Monroe",
+      "name": "Warhawks",
+      "oddsNames": [
+        "UL Monroe Warhawks"
+      ],
+      "aliases": [
+        "Louisiana Monroe",
+        "Louisiana Monroe Warhawks",
+        "Louisiana-Monroe",
+        "Louisiana-Monroe Warhawks",
+        "UL Monroe",
+        "ULM"
+      ]
+    },
+    "2439": {
+      "espnId": "2439",
+      "division": "fbs",
+      "displayName": "UNLV Rebels",
+      "shortDisplayName": "UNLV",
+      "abbreviation": "UNLV",
+      "location": "UNLV",
+      "nickname": "UNLV",
+      "name": "Rebels",
+      "oddsNames": [
+        "UNLV Rebels"
+      ],
+      "aliases": [
+        "Nevada Las Vegas",
+        "Nevada-Las Vegas",
+        "UNLV"
+      ]
+    },
+    "2440": {
+      "espnId": "2440",
+      "division": "fbs",
+      "displayName": "Nevada Wolf Pack",
+      "shortDisplayName": "Nevada",
+      "abbreviation": "NEV",
+      "location": "Nevada",
+      "nickname": "Nevada",
+      "name": "Wolf Pack",
+      "oddsNames": [
+        "Nevada Wolf Pack"
+      ],
+      "aliases": []
+    },
+    "2441": {
+      "espnId": "2441",
+      "division": "fcs",
+      "displayName": "New Haven Chargers",
+      "shortDisplayName": "New Haven",
+      "abbreviation": "NHVN",
+      "location": "New Haven",
+      "nickname": "New Haven",
+      "name": "Chargers",
+      "oddsNames": [
+        "New Haven Chargers"
+      ],
+      "aliases": []
+    },
+    "2447": {
+      "espnId": "2447",
+      "division": "fcs",
+      "displayName": "Nicholls Colonels",
+      "shortDisplayName": "Nicholls",
+      "abbreviation": "NICH",
+      "location": "Nicholls",
+      "nickname": "Nicholls",
+      "name": "Colonels",
+      "oddsNames": [
+        "Nicholls State Colonels"
+      ],
+      "aliases": [
+        "Nicholls",
+        "Nicholls State",
+        "Nicholls State Colonels"
+      ]
+    },
+    "2448": {
+      "espnId": "2448",
+      "division": "fcs",
+      "displayName": "North Carolina A&T Aggies",
+      "shortDisplayName": "NC A&T",
+      "abbreviation": "NCAT",
+      "location": "North Carolina A&T",
+      "nickname": "NC A&T",
+      "name": "Aggies",
+      "oddsNames": [
+        "North Carolina A&T Aggies"
+      ],
+      "aliases": []
+    },
+    "2449": {
+      "espnId": "2449",
+      "division": "fbs",
+      "displayName": "North Dakota State Bison",
+      "shortDisplayName": "N Dakota St",
+      "abbreviation": "NDSU",
+      "location": "North Dakota State",
+      "nickname": "N Dakota St",
+      "name": "Bison",
+      "oddsNames": [
+        "North Dakota State Bison"
+      ],
+      "aliases": []
+    },
+    "2450": {
+      "espnId": "2450",
+      "division": "fcs",
+      "displayName": "Norfolk State Spartans",
+      "shortDisplayName": "Norfolk St",
+      "abbreviation": "NORF",
+      "location": "Norfolk State",
+      "nickname": "Norfolk St",
+      "name": "Spartans",
+      "oddsNames": [
+        "Norfolk State Spartans"
+      ],
+      "aliases": []
+    },
+    "2453": {
+      "espnId": "2453",
+      "division": "fcs",
+      "displayName": "North Alabama Lions",
+      "shortDisplayName": "North Alabama",
+      "abbreviation": "UNA",
+      "location": "North Alabama",
+      "nickname": "North Alabama",
+      "name": "Lions",
+      "oddsNames": [
+        "North Alabama Lions"
+      ],
+      "aliases": []
+    },
+    "2458": {
+      "espnId": "2458",
+      "division": "fcs",
+      "displayName": "Northern Colorado Bears",
+      "shortDisplayName": "N Colorado",
+      "abbreviation": "UNCO",
+      "location": "Northern Colorado",
+      "nickname": "N Colorado",
+      "name": "Bears",
+      "oddsNames": [
+        "Northern Colorado Bears"
+      ],
+      "aliases": []
+    },
+    "2459": {
+      "espnId": "2459",
+      "division": "fbs",
+      "displayName": "Northern Illinois Huskies",
+      "shortDisplayName": "N Illinois",
+      "abbreviation": "NIU",
+      "location": "Northern Illinois",
+      "nickname": "N Illinois",
+      "name": "Huskies",
+      "oddsNames": [
+        "Northern Illinois Huskies"
+      ],
+      "aliases": []
+    },
+    "2460": {
+      "espnId": "2460",
+      "division": "fcs",
+      "displayName": "Northern Iowa Panthers",
+      "shortDisplayName": "Northern Iowa",
+      "abbreviation": "UNI",
+      "location": "Northern Iowa",
+      "nickname": "Northern Iowa",
+      "name": "Panthers",
+      "oddsNames": [
+        "Northern Iowa Panthers"
+      ],
+      "aliases": []
+    },
+    "2464": {
+      "espnId": "2464",
+      "division": "fcs",
+      "displayName": "Northern Arizona Lumberjacks",
+      "shortDisplayName": "N Arizona",
+      "abbreviation": "NAU",
+      "location": "Northern Arizona",
+      "nickname": "N Arizona",
+      "name": "Lumberjacks",
+      "oddsNames": [
+        "Northern Arizona Lumberjacks"
+      ],
+      "aliases": []
+    },
+    "2466": {
+      "espnId": "2466",
+      "division": "fcs",
+      "displayName": "Northwestern State Demons",
+      "shortDisplayName": "N'Western St",
+      "abbreviation": "NWST",
+      "location": "Northwestern State",
+      "nickname": "N'Western St",
+      "name": "Demons",
+      "oddsNames": [
+        "Northwestern State Demons"
+      ],
+      "aliases": []
+    },
+    "2483": {
+      "espnId": "2483",
+      "division": "fbs",
+      "displayName": "Oregon Ducks",
+      "shortDisplayName": "Oregon",
+      "abbreviation": "ORE",
+      "location": "Oregon",
+      "nickname": "Oregon",
+      "name": "Ducks",
+      "oddsNames": [
+        "Oregon Ducks"
+      ],
+      "aliases": []
+    },
+    "2502": {
+      "espnId": "2502",
+      "division": "fcs",
+      "displayName": "Portland State Vikings",
+      "shortDisplayName": "Portland St",
+      "abbreviation": "PRST",
+      "location": "Portland State",
+      "nickname": "Portland St",
+      "name": "Vikings",
+      "oddsNames": [
+        "Portland State Vikings"
+      ],
+      "aliases": []
+    },
+    "2504": {
+      "espnId": "2504",
+      "division": "fcs",
+      "displayName": "Prairie View A&M Panthers",
+      "shortDisplayName": "Prairie View",
+      "abbreviation": "PV",
+      "location": "Prairie View A&M",
+      "nickname": "Prairie View",
+      "name": "Panthers",
+      "oddsNames": [
+        "Prairie View A&M Panthers"
+      ],
+      "aliases": []
+    },
+    "2506": {
+      "espnId": "2506",
+      "division": "fcs",
+      "displayName": "Presbyterian Blue Hose",
+      "shortDisplayName": "Presbyterian",
+      "abbreviation": "PRES",
+      "location": "Presbyterian",
+      "nickname": "Presbyterian",
+      "name": "Blue Hose",
+      "oddsNames": [
+        "Presbyterian College Blue Hose"
+      ],
+      "aliases": [
+        "Presbyterian",
+        "Presbyterian College",
+        "Presbyterian College Blue Hose"
+      ]
+    },
+    "2509": {
+      "espnId": "2509",
+      "division": "fbs",
+      "displayName": "Purdue Boilermakers",
+      "shortDisplayName": "Purdue",
+      "abbreviation": "PUR",
+      "location": "Purdue",
+      "nickname": "Purdue",
+      "name": "Boilermakers",
+      "oddsNames": [
+        "Purdue Boilermakers"
+      ],
+      "aliases": []
+    },
+    "2523": {
+      "espnId": "2523",
+      "division": "fcs",
+      "displayName": "Robert Morris Colonials",
+      "shortDisplayName": "Robert Morris",
+      "abbreviation": "RMU",
+      "location": "Robert Morris",
+      "nickname": "Robert Morris",
+      "name": "Colonials",
+      "oddsNames": [
+        "Robert Morris Colonials"
+      ],
+      "aliases": []
+    },
+    "2529": {
+      "espnId": "2529",
+      "division": "fcs",
+      "displayName": "Sacred Heart Pioneers",
+      "shortDisplayName": "Sacred Heart",
+      "abbreviation": "SHU",
+      "location": "Sacred Heart",
+      "nickname": "Sacred Heart",
+      "name": "Pioneers",
+      "oddsNames": [
+        "Sacred Heart Pioneers"
+      ],
+      "aliases": []
+    },
+    "2534": {
+      "espnId": "2534",
+      "division": "fbs",
+      "displayName": "Sam Houston Bearkats",
+      "shortDisplayName": "Sam Houston",
+      "abbreviation": "SHSU",
+      "location": "Sam Houston",
+      "nickname": "Sam Houston",
+      "name": "Bearkats",
+      "oddsNames": [
+        "Sam Houston State Bearkats"
+      ],
+      "aliases": [
+        "Sam Houston St",
+        "Sam Houston State",
+        "Sam Houston State Bearkats"
+      ]
+    },
+    "2535": {
+      "espnId": "2535",
+      "division": "fcs",
+      "displayName": "Samford Bulldogs",
+      "shortDisplayName": "Samford",
+      "abbreviation": "SAM",
+      "location": "Samford",
+      "nickname": "Samford",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Samford Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2542": {
+      "espnId": "2542",
+      "division": "other",
+      "displayName": "Savannah State Tigers",
+      "shortDisplayName": "Savannah St",
+      "abbreviation": "SAV",
+      "location": "Savannah State",
+      "nickname": "Savannah St",
+      "name": "Tigers",
+      "oddsNames": [
+        "Savannah State Tigers"
+      ],
+      "aliases": []
+    },
+    "2545": {
+      "espnId": "2545",
+      "division": "fcs",
+      "displayName": "SE Louisiana Lions",
+      "shortDisplayName": "SE Louisiana",
+      "abbreviation": "SELA",
+      "location": "SE Louisiana",
+      "nickname": "SE Louisiana",
+      "name": "Lions",
+      "oddsNames": [
+        "Southeastern Louisiana Lions"
+      ],
+      "aliases": [
+        "SE Louisiana",
+        "Southeastern Louisiana",
+        "Southeastern Louisiana Lions"
+      ]
+    },
+    "2546": {
+      "espnId": "2546",
+      "division": "fcs",
+      "displayName": "Southeast Missouri State Redhawks",
+      "shortDisplayName": "SE Missouri",
+      "abbreviation": "SEMO",
+      "location": "Southeast Missouri State",
+      "nickname": "SE Missouri",
+      "name": "Redhawks",
+      "oddsNames": [
+        "Southeast Missouri State Redhawks"
+      ],
+      "aliases": []
+    },
+    "2567": {
+      "espnId": "2567",
+      "division": "fbs",
+      "displayName": "SMU Mustangs",
+      "shortDisplayName": "SMU",
+      "abbreviation": "SMU",
+      "location": "SMU",
+      "nickname": "SMU",
+      "name": "Mustangs",
+      "oddsNames": [
+        "SMU Mustangs"
+      ],
+      "aliases": [
+        "SMU",
+        "Southern Methodist",
+        "Southern Methodist Mustangs"
+      ]
+    },
+    "2569": {
+      "espnId": "2569",
+      "division": "fcs",
+      "displayName": "South Carolina State Bulldogs",
+      "shortDisplayName": "SC State",
+      "abbreviation": "SCST",
+      "location": "South Carolina State",
+      "nickname": "SC State",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "South Carolina State Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2571": {
+      "espnId": "2571",
+      "division": "fcs",
+      "displayName": "South Dakota State Jackrabbits",
+      "shortDisplayName": "S Dakota St",
+      "abbreviation": "SDST",
+      "location": "South Dakota State",
+      "nickname": "S Dakota St",
+      "name": "Jackrabbits",
+      "oddsNames": [
+        "South Dakota State Jackrabbits"
+      ],
+      "aliases": []
+    },
+    "2572": {
+      "espnId": "2572",
+      "division": "fbs",
+      "displayName": "Southern Miss Golden Eagles",
+      "shortDisplayName": "Southern Miss",
+      "abbreviation": "USM",
+      "location": "Southern Miss",
+      "nickname": "Southern Miss",
+      "name": "Golden Eagles",
+      "oddsNames": [
+        "Southern Mississippi Golden Eagles"
+      ],
+      "aliases": [
+        "Southern Miss",
+        "Southern Mississippi",
+        "Southern Mississippi Golden Eagles"
+      ]
+    },
+    "2579": {
+      "espnId": "2579",
+      "division": "fbs",
+      "displayName": "South Carolina Gamecocks",
+      "shortDisplayName": "South Carolina",
+      "abbreviation": "SC",
+      "location": "South Carolina",
+      "nickname": "South Carolina",
+      "name": "Gamecocks",
+      "oddsNames": [
+        "South Carolina Gamecocks"
+      ],
+      "aliases": []
+    },
+    "2582": {
+      "espnId": "2582",
+      "division": "fcs",
+      "displayName": "Southern Jaguars",
+      "shortDisplayName": "Southern",
+      "abbreviation": "SOU",
+      "location": "Southern",
+      "nickname": "Southern",
+      "name": "Jaguars",
+      "oddsNames": [
+        "Southern University Jaguars"
+      ],
+      "aliases": [
+        "Southern University",
+        "Southern University Jaguars"
+      ]
+    },
+    "2598": {
+      "espnId": "2598",
+      "division": "other",
+      "displayName": "Saint Francis Red Flash",
+      "shortDisplayName": "Saint Francis",
+      "abbreviation": "SFPA",
+      "location": "Saint Francis",
+      "nickname": "Saint Francis",
+      "name": "Red Flash",
+      "oddsNames": [
+        "St. Francis (PA) Red Flash"
+      ],
+      "aliases": [
+        "Saint Francis",
+        "Saint Francis (PA) Red Flash",
+        "St Francis (PA)",
+        "St Francis PA Red Flash",
+        "St. Francis (PA)",
+        "St. Francis (PA) Red Flash"
+      ]
+    },
+    "2617": {
+      "espnId": "2617",
+      "division": "fcs",
+      "displayName": "Stephen F. Austin Lumberjacks",
+      "shortDisplayName": "SF Austin",
+      "abbreviation": "SFA",
+      "location": "Stephen F. Austin",
+      "nickname": "SF Austin",
+      "name": "Lumberjacks",
+      "oddsNames": [
+        "Stephen F. Austin Lumberjacks"
+      ],
+      "aliases": []
+    },
+    "2619": {
+      "espnId": "2619",
+      "division": "fcs",
+      "displayName": "Stony Brook Seawolves",
+      "shortDisplayName": "Stony Brook",
+      "abbreviation": "STBK",
+      "location": "Stony Brook",
+      "nickname": "Stony Brook",
+      "name": "Seawolves",
+      "oddsNames": [
+        "Stony Brook Seawolves"
+      ],
+      "aliases": []
+    },
+    "2623": {
+      "espnId": "2623",
+      "division": "fbs",
+      "displayName": "Missouri State Bears",
+      "shortDisplayName": "Missouri St",
+      "abbreviation": "MOST",
+      "location": "Missouri State",
+      "nickname": "Missouri St",
+      "name": "Bears",
+      "oddsNames": [
+        "Missouri State Bears"
+      ],
+      "aliases": []
+    },
+    "2627": {
+      "espnId": "2627",
+      "division": "fcs",
+      "displayName": "Tarleton State Texans",
+      "shortDisplayName": "Tarleton St",
+      "abbreviation": "TAR",
+      "location": "Tarleton State",
+      "nickname": "Tarleton St",
+      "name": "Texans",
+      "oddsNames": [
+        "Tarleton State Texans"
+      ],
+      "aliases": []
+    },
+    "2628": {
+      "espnId": "2628",
+      "division": "fbs",
+      "displayName": "TCU Horned Frogs",
+      "shortDisplayName": "TCU",
+      "abbreviation": "TCU",
+      "location": "TCU",
+      "nickname": "TCU",
+      "name": "Horned Frogs",
+      "oddsNames": [
+        "TCU Horned Frogs"
+      ],
+      "aliases": [
+        "TCU",
+        "Texas Christian",
+        "Texas Christian Horned Frogs"
+      ]
+    },
+    "2630": {
+      "espnId": "2630",
+      "division": "fcs",
+      "displayName": "UT Martin Skyhawks",
+      "shortDisplayName": "UT Martin",
+      "abbreviation": "UTM",
+      "location": "UT Martin",
+      "nickname": "UT Martin",
+      "name": "Skyhawks",
+      "oddsNames": [
+        "UT Martin Skyhawks"
+      ],
+      "aliases": []
+    },
+    "2633": {
+      "espnId": "2633",
+      "division": "fbs",
+      "displayName": "Tennessee Volunteers",
+      "shortDisplayName": "Tennessee",
+      "abbreviation": "TENN",
+      "location": "Tennessee",
+      "nickname": "Tennessee",
+      "name": "Volunteers",
+      "oddsNames": [
+        "Tennessee Volunteers"
+      ],
+      "aliases": []
+    },
+    "2634": {
+      "espnId": "2634",
+      "division": "fcs",
+      "displayName": "Tennessee State Tigers",
+      "shortDisplayName": "Tennessee St",
+      "abbreviation": "TNST",
+      "location": "Tennessee State",
+      "nickname": "Tennessee St",
+      "name": "Tigers",
+      "oddsNames": [
+        "Tennessee State Tigers"
+      ],
+      "aliases": []
+    },
+    "2635": {
+      "espnId": "2635",
+      "division": "fcs",
+      "displayName": "Tennessee Tech Golden Eagles",
+      "shortDisplayName": "Tennessee Tech",
+      "abbreviation": "TNTC",
+      "location": "Tennessee Tech",
+      "nickname": "Tennessee Tech",
+      "name": "Golden Eagles",
+      "oddsNames": [
+        "Tennessee Tech Golden Eagles"
+      ],
+      "aliases": []
+    },
+    "2636": {
+      "espnId": "2636",
+      "division": "fbs",
+      "displayName": "UTSA Roadrunners",
+      "shortDisplayName": "UTSA",
+      "abbreviation": "UTSA",
+      "location": "UTSA",
+      "nickname": "UTSA",
+      "name": "Roadrunners",
+      "oddsNames": [
+        "UTSA Roadrunners"
+      ],
+      "aliases": [
+        "UTSA"
+      ]
+    },
+    "2638": {
+      "espnId": "2638",
+      "division": "fbs",
+      "displayName": "UTEP Miners",
+      "shortDisplayName": "UTEP",
+      "abbreviation": "UTEP",
+      "location": "UTEP",
+      "nickname": "UTEP",
+      "name": "Miners",
+      "oddsNames": [
+        "UTEP Miners"
+      ],
+      "aliases": []
+    },
+    "2640": {
+      "espnId": "2640",
+      "division": "fcs",
+      "displayName": "Texas Southern Tigers",
+      "shortDisplayName": "Texas Southern",
+      "abbreviation": "TXSO",
+      "location": "Texas Southern",
+      "nickname": "Texas Southern",
+      "name": "Tigers",
+      "oddsNames": [
+        "Texas Southern Tigers"
+      ],
+      "aliases": []
+    },
+    "2641": {
+      "espnId": "2641",
+      "division": "fbs",
+      "displayName": "Texas Tech Red Raiders",
+      "shortDisplayName": "Texas Tech",
+      "abbreviation": "TTU",
+      "location": "Texas Tech",
+      "nickname": "Texas Tech",
+      "name": "Red Raiders",
+      "oddsNames": [
+        "Texas Tech Red Raiders"
+      ],
+      "aliases": []
+    },
+    "2643": {
+      "espnId": "2643",
+      "division": "fcs",
+      "displayName": "The Citadel Bulldogs",
+      "shortDisplayName": "The Citadel",
+      "abbreviation": "CIT",
+      "location": "The Citadel",
+      "nickname": "The Citadel",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Citadel Bulldogs"
+      ],
+      "aliases": [
+        "Citadel",
+        "Citadel Bulldogs",
+        "The Citadel"
+      ]
+    },
+    "2649": {
+      "espnId": "2649",
+      "division": "fbs",
+      "displayName": "Toledo Rockets",
+      "shortDisplayName": "Toledo",
+      "abbreviation": "TOL",
+      "location": "Toledo",
+      "nickname": "Toledo",
+      "name": "Rockets",
+      "oddsNames": [
+        "Toledo Rockets"
+      ],
+      "aliases": []
+    },
+    "2653": {
+      "espnId": "2653",
+      "division": "fbs",
+      "displayName": "Troy Trojans",
+      "shortDisplayName": "Troy",
+      "abbreviation": "TROY",
+      "location": "Troy",
+      "nickname": "Troy",
+      "name": "Trojans",
+      "oddsNames": [
+        "Troy Trojans"
+      ],
+      "aliases": []
+    },
+    "2655": {
+      "espnId": "2655",
+      "division": "fbs",
+      "displayName": "Tulane Green Wave",
+      "shortDisplayName": "Tulane",
+      "abbreviation": "TULN",
+      "location": "Tulane",
+      "nickname": "Tulane",
+      "name": "Green Wave",
+      "oddsNames": [
+        "Tulane Green Wave"
+      ],
+      "aliases": []
+    },
+    "2674": {
+      "espnId": "2674",
+      "division": "fcs",
+      "displayName": "Valparaiso Beacons",
+      "shortDisplayName": "Valparaiso",
+      "abbreviation": "VAL",
+      "location": "Valparaiso",
+      "nickname": "Valparaiso",
+      "name": "Beacons",
+      "oddsNames": [
+        "Valparaiso Beacons"
+      ],
+      "aliases": []
+    },
+    "2678": {
+      "espnId": "2678",
+      "division": "fcs",
+      "displayName": "VMI Keydets",
+      "shortDisplayName": "VMI",
+      "abbreviation": "VMI",
+      "location": "VMI",
+      "nickname": "VMI",
+      "name": "Keydets",
+      "oddsNames": [
+        "VMI Keydets"
+      ],
+      "aliases": []
+    },
+    "2681": {
+      "espnId": "2681",
+      "division": "fcs",
+      "displayName": "Wagner Seahawks",
+      "shortDisplayName": "Wagner",
+      "abbreviation": "WAG",
+      "location": "Wagner",
+      "nickname": "Wagner",
+      "name": "Seahawks",
+      "oddsNames": [
+        "Wagner Seahawks"
+      ],
+      "aliases": []
+    },
+    "2692": {
+      "espnId": "2692",
+      "division": "fcs",
+      "displayName": "Weber State Wildcats",
+      "shortDisplayName": "Weber St",
+      "abbreviation": "WEB",
+      "location": "Weber State",
+      "nickname": "Weber St",
+      "name": "Wildcats",
+      "oddsNames": [
+        "Weber State Wildcats"
+      ],
+      "aliases": []
+    },
+    "2698": {
+      "espnId": "2698",
+      "division": "fcs",
+      "displayName": "West Georgia Wolves",
+      "shortDisplayName": "West Georgia",
+      "abbreviation": "WGA",
+      "location": "West Georgia",
+      "nickname": "West Georgia",
+      "name": "Wolves",
+      "oddsNames": [
+        "West Georgia Wolves"
+      ],
+      "aliases": []
+    },
+    "2710": {
+      "espnId": "2710",
+      "division": "fcs",
+      "displayName": "Western Illinois Leathernecks",
+      "shortDisplayName": "W Illinois",
+      "abbreviation": "WIU",
+      "location": "Western Illinois",
+      "nickname": "W Illinois",
+      "name": "Leathernecks",
+      "oddsNames": [
+        "Western Illinois Leathernecks"
+      ],
+      "aliases": []
+    },
+    "2711": {
+      "espnId": "2711",
+      "division": "fbs",
+      "displayName": "Western Michigan Broncos",
+      "shortDisplayName": "W Michigan",
+      "abbreviation": "WMU",
+      "location": "Western Michigan",
+      "nickname": "W Michigan",
+      "name": "Broncos",
+      "oddsNames": [
+        "Western Michigan Broncos"
+      ],
+      "aliases": [
+        "Western Michigan",
+        "Western Michigan Broncos"
+      ]
+    },
+    "2717": {
+      "espnId": "2717",
+      "division": "fcs",
+      "displayName": "Western Carolina Catamounts",
+      "shortDisplayName": "W Carolina",
+      "abbreviation": "WCU",
+      "location": "Western Carolina",
+      "nickname": "W Carolina",
+      "name": "Catamounts",
+      "oddsNames": [
+        "Western Carolina Catamounts"
+      ],
+      "aliases": []
+    },
+    "2729": {
+      "espnId": "2729",
+      "division": "fcs",
+      "displayName": "William & Mary Tribe",
+      "shortDisplayName": "William & Mary",
+      "abbreviation": "W&M",
+      "location": "William & Mary",
+      "nickname": "William & Mary",
+      "name": "Tribe",
+      "oddsNames": [
+        "William and Mary Tribe"
+      ],
+      "aliases": []
+    },
+    "2745": {
+      "espnId": "2745",
+      "division": "other",
+      "displayName": "Wisconsin Whitewater Warhawks",
+      "shortDisplayName": "UW-Whitewater",
+      "abbreviation": "UWW",
+      "location": "Wisconsin Whitewater",
+      "nickname": "UW-Whitewater",
+      "name": "Warhawks",
+      "oddsNames": [
+        "Wisconsin-Whitewater Warhawks"
+      ],
+      "aliases": []
+    },
+    "2747": {
+      "espnId": "2747",
+      "division": "fcs",
+      "displayName": "Wofford Terriers",
+      "shortDisplayName": "Wofford",
+      "abbreviation": "WOF",
+      "location": "Wofford",
+      "nickname": "Wofford",
+      "name": "Terriers",
+      "oddsNames": [
+        "Wofford Terriers"
+      ],
+      "aliases": []
+    },
+    "2751": {
+      "espnId": "2751",
+      "division": "fbs",
+      "displayName": "Wyoming Cowboys",
+      "shortDisplayName": "Wyoming",
+      "abbreviation": "WYO",
+      "location": "Wyoming",
+      "nickname": "Wyoming",
+      "name": "Cowboys",
+      "oddsNames": [
+        "Wyoming Cowboys"
+      ],
+      "aliases": []
+    },
+    "2754": {
+      "espnId": "2754",
+      "division": "fcs",
+      "displayName": "Youngstown State Penguins",
+      "shortDisplayName": "Youngstown St",
+      "abbreviation": "YSU",
+      "location": "Youngstown State",
+      "nickname": "Youngstown St",
+      "name": "Penguins",
+      "oddsNames": [
+        "Youngstown St Penguins"
+      ],
+      "aliases": [
+        "Youngstown St",
+        "Youngstown St Penguins",
+        "Youngstown St. Penguins"
+      ]
+    },
+    "2755": {
+      "espnId": "2755",
+      "division": "fcs",
+      "displayName": "Grambling Tigers",
+      "shortDisplayName": "Grambling",
+      "abbreviation": "GRAM",
+      "location": "Grambling",
+      "nickname": "Grambling",
+      "name": "Tigers",
+      "oddsNames": [
+        "Grambling State Tigers"
+      ],
+      "aliases": [
+        "Grambling",
+        "Grambling State",
+        "Grambling State Tigers"
+      ]
+    },
+    "2771": {
+      "espnId": "2771",
+      "division": "fcs",
+      "displayName": "Merrimack Warriors",
+      "shortDisplayName": "Merrimack",
+      "abbreviation": "MRMK",
+      "location": "Merrimack",
+      "nickname": "Merrimack",
+      "name": "Warriors",
+      "oddsNames": [
+        "Merrimack Warriors"
+      ],
+      "aliases": []
+    },
+    "2803": {
+      "espnId": "2803",
+      "division": "fcs",
+      "displayName": "Bryant Bulldogs",
+      "shortDisplayName": "Bryant",
+      "abbreviation": "BRY",
+      "location": "Bryant",
+      "nickname": "Bryant",
+      "name": "Bulldogs",
+      "oddsNames": [
+        "Bryant Bulldogs"
+      ],
+      "aliases": []
+    },
+    "2815": {
+      "espnId": "2815",
+      "division": "fcs",
+      "displayName": "Lindenwood Lions",
+      "shortDisplayName": "Lindenwood",
+      "abbreviation": "LIN",
+      "location": "Lindenwood",
+      "nickname": "Lindenwood",
+      "name": "Lions",
+      "oddsNames": [
+        "Lindenwood Lions"
+      ],
+      "aliases": []
+    },
+    "2837": {
+      "espnId": "2837",
+      "division": "fcs",
+      "displayName": "East Texas A&M Lions",
+      "shortDisplayName": "East Texas A&M",
+      "abbreviation": "ETAM",
+      "location": "East Texas A&M",
+      "nickname": "East Texas A&M",
+      "name": "Lions",
+      "oddsNames": [
+        "East Texas A&M Lions"
+      ],
+      "aliases": []
+    },
+    "2900": {
+      "espnId": "2900",
+      "division": "fcs",
+      "displayName": "St. Thomas Tommies",
+      "shortDisplayName": "St Thomas",
+      "abbreviation": "STMN",
+      "location": "St. Thomas",
+      "nickname": "St Thomas",
+      "name": "Tommies",
+      "oddsNames": [
+        "St. Thomas (MN) Tommies"
+      ],
+      "aliases": [
+        "Saint Thomas (MN) Tommies",
+        "St Thomas (MN)",
+        "St. Thomas",
+        "St. Thomas (MN)",
+        "St. Thomas (MN) Tommies"
+      ]
+    },
+    "2916": {
+      "espnId": "2916",
+      "division": "fcs",
+      "displayName": "Incarnate Word Cardinals",
+      "shortDisplayName": "Incarnate Word",
+      "abbreviation": "UIW",
+      "location": "Incarnate Word",
+      "nickname": "Incarnate Word",
+      "name": "Cardinals",
+      "oddsNames": [
+        "Incarnate Word Cardinals"
+      ],
+      "aliases": []
+    },
+    "3101": {
+      "espnId": "3101",
+      "division": "fcs",
+      "displayName": "Utah Tech Trailblazers",
+      "shortDisplayName": "Utah Tech",
+      "abbreviation": "UTU",
+      "location": "Utah Tech",
+      "nickname": "Utah Tech",
+      "name": "Trailblazers",
+      "oddsNames": [
+        "Dixie State Trailblazers",
+        "Utah Tech Trailblazers"
+      ],
+      "aliases": [
+        "Dixie State",
+        "Dixie State Trailblazers",
+        "Utah Tech"
+      ]
+    },
+    "110242": {
+      "espnId": "110242",
+      "division": "fcs",
+      "displayName": "West Florida Argonauts",
+      "shortDisplayName": "West Florida",
+      "abbreviation": "UWF",
+      "location": "West Florida",
+      "nickname": "West Florida",
+      "name": "Argonauts",
+      "oddsNames": [
+        "West Florida Argonauts"
+      ],
+      "aliases": []
+    }
+  },
+  "lookup": {
+    "aamu": "2010",
+    "abilene christian": "2000",
+    "abilene christian st wildcats": "2000",
+    "abilene christian state wildcats": "2000",
+    "abilene christian wildcats": "2000",
+    "abilene chrstn": "2000",
+    "abilene chrstn wildcats": "2000",
+    "acu": "2000",
+    "af": "2005",
+    "agsu": "2025",
+    "air force": "2005",
+    "air force falcons": "2005",
+    "air force st falcons": "2005",
+    "air force state falcons": "2005",
+    "akr": "2006",
+    "akron": "2006",
+    "akron st zips": "2006",
+    "akron state zips": "2006",
+    "akron zips": "2006",
+    "ala": "333",
+    "alabama": "333",
+    "alabama a and m": "2010",
+    "alabama a and m bulldogs": "2010",
+    "alabama a and m st bulldogs": "2010",
+    "alabama a and m state bulldogs": "2010",
+    "alabama crimson tide": "333",
+    "alabama st": "2011",
+    "alabama st crimson tide": "333",
+    "alabama st hornets": "2011",
+    "alabama state": "2011",
+    "alabama state crimson tide": "333",
+    "alabama state hornets": "2011",
+    "albany": "399",
+    "albany great danes": "399",
+    "alcn": "2016",
+    "alcorn st": "2016",
+    "alcorn st braves": "2016",
+    "alcorn state": "2016",
+    "alcorn state braves": "2016",
+    "alst": "2011",
+    "angelo st": "2025",
+    "angelo st rams": "2025",
+    "angelo state": "2025",
+    "angelo state rams": "2025",
+    "app": "2026",
+    "app st": "2026",
+    "app st mountaineers": "2026",
+    "app state": "2026",
+    "app state mountaineers": "2026",
+    "appalachian st": "2026",
+    "appalachian st mountaineers": "2026",
+    "appalachian state": "2026",
+    "appalachian state mountaineers": "2026",
+    "apsu": "2046",
+    "ar pine bluff": "2029",
+    "ar pine bluff golden lions": "2029",
+    "ariz": "12",
+    "arizona": "12",
+    "arizona st": "9",
+    "arizona st sun devils": "9",
+    "arizona st wildcats": "12",
+    "arizona state": "9",
+    "arizona state sun devils": "9",
+    "arizona state wildcats": "12",
+    "arizona wildcats": "12",
+    "ark": "8",
+    "arkansas": "8",
+    "arkansas pine bluff": "2029",
+    "arkansas pine bluff golden lions": "2029",
+    "arkansas pine bluff st golden lions": "2029",
+    "arkansas pine bluff state golden lions": "2029",
+    "arkansas razorbacks": "8",
+    "arkansas st": "2032",
+    "arkansas st razorbacks": "8",
+    "arkansas st red wolves": "2032",
+    "arkansas state": "2032",
+    "arkansas state razorbacks": "8",
+    "arkansas state red wolves": "2032",
+    "army": "349",
+    "army black knights": "349",
+    "army st black knights": "349",
+    "army state black knights": "349",
+    "arst": "2032",
+    "asu": "9",
+    "aub": "2",
+    "auburn": "2",
+    "auburn st tigers": "2",
+    "auburn state tigers": "2",
+    "auburn tigers": "2",
+    "austin peay": "2046",
+    "austin peay governors": "2046",
+    "austin peay st governors": "2046",
+    "austin peay state governors": "2046",
+    "ball": "2050",
+    "ball st": "2050",
+    "ball st cardinals": "2050",
+    "ball state": "2050",
+    "ball state cardinals": "2050",
+    "bay": "239",
+    "baylor": "239",
+    "baylor bears": "239",
+    "baylor st bears": "239",
+    "baylor state bears": "239",
+    "bc": "103",
+    "bcu": "2065",
+    "bethune": "2065",
+    "bethune cookman": "2065",
+    "bethune cookman st wildcats": "2065",
+    "bethune cookman state wildcats": "2065",
+    "bethune cookman wildcats": "2065",
+    "bethune wildcats": "2065",
+    "bgsu": "189",
+    "bois": "68",
+    "boise st": "68",
+    "boise st broncos": "68",
+    "boise state": "68",
+    "boise state broncos": "68",
+    "boston college": "103",
+    "boston college eagles": "103",
+    "boston college st eagles": "103",
+    "boston college state eagles": "103",
+    "bowling green": "189",
+    "bowling green falcons": "189",
+    "bowling green st falcons": "189",
+    "bowling green state falcons": "189",
+    "brigham young": "252",
+    "brigham young cougars": "252",
+    "brown": "225",
+    "brown bears": "225",
+    "brown st bears": "225",
+    "brown state bears": "225",
+    "brwn": "225",
+    "bry": "2803",
+    "bryant": "2803",
+    "bryant bulldogs": "2803",
+    "bryant st bulldogs": "2803",
+    "bryant state bulldogs": "2803",
+    "btlr": "2086",
+    "buck": "2083",
+    "bucknell": "2083",
+    "bucknell bison": "2083",
+    "bucknell st bison": "2083",
+    "bucknell state bison": "2083",
+    "buf": "2084",
+    "buffalo": "2084",
+    "buffalo bulls": "2084",
+    "buffalo st bulls": "2084",
+    "buffalo state bulls": "2084",
+    "butler": "2086",
+    "butler bulldogs": "2086",
+    "butler st bulldogs": "2086",
+    "butler state bulldogs": "2086",
+    "byu": "252",
+    "byu cougars": "252",
+    "byu st cougars": "252",
+    "byu state cougars": "252",
+    "c arkansas": "2110",
+    "c arkansas bears": "2110",
+    "c connecticut": "2115",
+    "c connecticut blue devils": "2115",
+    "c michigan": "2117",
+    "c michigan chippewas": "2117",
+    "cal": "25",
+    "cal poly": "13",
+    "cal poly mustangs": "13",
+    "cal poly st mustangs": "13",
+    "cal poly state mustangs": "13",
+    "california": "25",
+    "california golden bears": "25",
+    "california st golden bears": "25",
+    "california state golden bears": "25",
+    "cam": "2097",
+    "campbell": "2097",
+    "campbell fighting camels": "2097",
+    "campbell st fighting camels": "2097",
+    "campbell state fighting camels": "2097",
+    "cark": "2110",
+    "ccsu": "2115",
+    "ccu": "324",
+    "central arkansas": "2110",
+    "central arkansas bears": "2110",
+    "central arkansas st bears": "2110",
+    "central arkansas state bears": "2110",
+    "central connecticut": "2115",
+    "central connecticut blue devils": "2115",
+    "central connecticut st blue devils": "2115",
+    "central connecticut state blue devils": "2115",
+    "central florida": "2116",
+    "central florida knights": "2116",
+    "central michigan": "2117",
+    "central michigan chippewas": "2117",
+    "central michigan st chippewas": "2117",
+    "central michigan state chippewas": "2117",
+    "charleston so": "2127",
+    "charleston so buccaneers": "2127",
+    "charleston southern": "2127",
+    "charleston southern buccaneers": "2127",
+    "charleston southern st buccaneers": "2127",
+    "charleston southern state buccaneers": "2127",
+    "charlotte": "2429",
+    "charlotte 49ers": "2429",
+    "charlotte st 49ers": "2429",
+    "charlotte state 49ers": "2429",
+    "chattanooga": "236",
+    "chattanooga mocs": "236",
+    "chattanooga st mocs": "236",
+    "chattanooga state mocs": "236",
+    "chicago st": "2130",
+    "chicago st cougars": "2130",
+    "chicago state": "2130",
+    "chicago state cougars": "2130",
+    "chso": "2127",
+    "chst": "2130",
+    "cin": "2132",
+    "cincinnati": "2132",
+    "cincinnati bearcats": "2132",
+    "cincinnati st bearcats": "2132",
+    "cincinnati state bearcats": "2132",
+    "cit": "2643",
+    "citadel": "2643",
+    "citadel bulldogs": "2643",
+    "clem": "228",
+    "clemson": "228",
+    "clemson st tigers": "228",
+    "clemson state tigers": "228",
+    "clemson tigers": "228",
+    "clt": "2429",
+    "cmu": "2117",
+    "coastal": "324",
+    "coastal carolina": "324",
+    "coastal carolina chanticleers": "324",
+    "coastal carolina st chanticleers": "324",
+    "coastal carolina state chanticleers": "324",
+    "coastal chanticleers": "324",
+    "colg": "2142",
+    "colgate": "2142",
+    "colgate raiders": "2142",
+    "colgate st raiders": "2142",
+    "colgate state raiders": "2142",
+    "colo": "38",
+    "colorado": "38",
+    "colorado buffaloes": "38",
+    "colorado st": "36",
+    "colorado st buffaloes": "38",
+    "colorado st rams": "36",
+    "colorado state": "36",
+    "colorado state buffaloes": "38",
+    "colorado state rams": "36",
+    "colu": "171",
+    "columbia": "171",
+    "columbia lions": "171",
+    "columbia st lions": "171",
+    "columbia state lions": "171",
+    "conn": "41",
+    "connecticut": "41",
+    "connecticut huskies": "41",
+    "cor": "172",
+    "cornell": "172",
+    "cornell big red": "172",
+    "cornell st big red": "172",
+    "cornell state big red": "172",
+    "cp": "13",
+    "csu": "36",
+    "dart": "159",
+    "dartmouth": "159",
+    "dartmouth big green": "159",
+    "dartmouth st big green": "159",
+    "dartmouth state big green": "159",
+    "dav": "2166",
+    "davidson": "2166",
+    "davidson st wildcats": "2166",
+    "davidson state wildcats": "2166",
+    "davidson wildcats": "2166",
+    "day": "2168",
+    "dayton": "2168",
+    "dayton flyers": "2168",
+    "dayton st flyers": "2168",
+    "dayton state flyers": "2168",
+    "del": "48",
+    "delaware": "48",
+    "delaware blue hens": "48",
+    "delaware st": "2169",
+    "delaware st blue hens": "48",
+    "delaware st hornets": "2169",
+    "delaware state": "2169",
+    "delaware state blue hens": "48",
+    "delaware state hornets": "2169",
+    "dixie state": "3101",
+    "dixie state trailblazers": "3101",
+    "drake": "2181",
+    "drake bulldogs": "2181",
+    "drake st bulldogs": "2181",
+    "drake state bulldogs": "2181",
+    "drke": "2181",
+    "dsu": "2169",
+    "duke": "150",
+    "duke blue devils": "150",
+    "duke st blue devils": "150",
+    "duke state blue devils": "150",
+    "duq": "2184",
+    "duquesne": "2184",
+    "duquesne dukes": "2184",
+    "duquesne st dukes": "2184",
+    "duquesne state dukes": "2184",
+    "e illinois": "2197",
+    "e illinois panthers": "2197",
+    "e kentucky": "2198",
+    "e kentucky colonels": "2198",
+    "e michigan": "2199",
+    "e michigan eagles": "2199",
+    "e washington": "331",
+    "e washington eagles": "331",
+    "east carolina": "151",
+    "east carolina pirates": "151",
+    "east carolina st pirates": "151",
+    "east carolina state pirates": "151",
+    "east tennessee st": "2193",
+    "east tennessee st buccaneers": "2193",
+    "east tennessee state": "2193",
+    "east tennessee state buccaneers": "2193",
+    "east texas a and m": "2837",
+    "east texas a and m lions": "2837",
+    "east texas a and m st lions": "2837",
+    "east texas a and m state lions": "2837",
+    "eastern illinois": "2197",
+    "eastern illinois panthers": "2197",
+    "eastern illinois st panthers": "2197",
+    "eastern illinois state panthers": "2197",
+    "eastern kentucky": "2198",
+    "eastern kentucky colonels": "2198",
+    "eastern kentucky st colonels": "2198",
+    "eastern kentucky state colonels": "2198",
+    "eastern michigan": "2199",
+    "eastern michigan eagles": "2199",
+    "eastern michigan st eagles": "2199",
+    "eastern michigan state eagles": "2199",
+    "eastern washington": "331",
+    "eastern washington eagles": "331",
+    "eastern washington st eagles": "331",
+    "eastern washington state eagles": "331",
+    "ecu": "151",
+    "eiu": "2197",
+    "eku": "2198",
+    "elon": "2210",
+    "elon phoenix": "2210",
+    "elon st phoenix": "2210",
+    "elon state phoenix": "2210",
+    "emu": "2199",
+    "etam": "2837",
+    "etsu": "2193",
+    "etsu buccaneers": "2193",
+    "ewu": "331",
+    "famu": "50",
+    "fau": "2226",
+    "fau owls": "2226",
+    "ferris st": "2222",
+    "ferris st bulldogs": "2222",
+    "ferris state": "2222",
+    "ferris state bulldogs": "2222",
+    "fiu": "2229",
+    "fiu panthers": "2229",
+    "fla": "57",
+    "florida": "57",
+    "florida a and m": "50",
+    "florida a and m rattlers": "50",
+    "florida a and m st rattlers": "50",
+    "florida a and m state rattlers": "50",
+    "florida atlantic": "2226",
+    "florida atlantic owls": "2226",
+    "florida atlantic st owls": "2226",
+    "florida atlantic state owls": "2226",
+    "florida gators": "57",
+    "florida international": "2229",
+    "florida international panthers": "2229",
+    "florida international st panthers": "2229",
+    "florida international state panthers": "2229",
+    "florida st": "52",
+    "florida st gators": "57",
+    "florida st seminoles": "52",
+    "florida state": "52",
+    "florida state gators": "57",
+    "florida state seminoles": "52",
+    "for": "2230",
+    "fordham": "2230",
+    "fordham rams": "2230",
+    "fordham st rams": "2230",
+    "fordham state rams": "2230",
+    "fres": "278",
+    "fresno st": "278",
+    "fresno st bulldogs": "278",
+    "fresno state": "278",
+    "fresno state bulldogs": "278",
+    "frst": "2222",
+    "fsu": "52",
+    "fur": "231",
+    "furman": "231",
+    "furman paladins": "231",
+    "furman st paladins": "231",
+    "furman state paladins": "231",
+    "ga southern": "290",
+    "ga southern eagles": "290",
+    "gardner webb": "2241",
+    "gardner webb runnin bulldogs": "2241",
+    "gardner webb st runnin bulldogs": "2241",
+    "gardner webb state runnin bulldogs": "2241",
+    "gaso": "290",
+    "gast": "2247",
+    "georgetown": "46",
+    "georgetown hoyas": "46",
+    "georgetown st hoyas": "46",
+    "georgetown state hoyas": "46",
+    "georgia": "61",
+    "georgia bulldogs": "61",
+    "georgia southern": "290",
+    "georgia southern eagles": "290",
+    "georgia southern st eagles": "290",
+    "georgia southern state eagles": "290",
+    "georgia st": "2247",
+    "georgia st bulldogs": "61",
+    "georgia st panthers": "2247",
+    "georgia state": "2247",
+    "georgia state bulldogs": "61",
+    "georgia state panthers": "2247",
+    "georgia tech": "59",
+    "georgia tech st yellow jackets": "59",
+    "georgia tech state yellow jackets": "59",
+    "georgia tech yellow jackets": "59",
+    "gram": "2755",
+    "grambling": "2755",
+    "grambling st tigers": "2755",
+    "grambling state": "2755",
+    "grambling state tigers": "2755",
+    "grambling tigers": "2755",
+    "gt": "59",
+    "gtwn": "46",
+    "gweb": "2241",
+    "hamp": "2261",
+    "hampton": "2261",
+    "hampton pirates": "2261",
+    "hampton st pirates": "2261",
+    "hampton state pirates": "2261",
+    "harv": "108",
+    "harvard": "108",
+    "harvard crimson": "108",
+    "harvard st crimson": "108",
+    "harvard state crimson": "108",
+    "haw": "62",
+    "hawaii": "62",
+    "hawaii rainbow warriors": "62",
+    "hawaii st rainbow warriors": "62",
+    "hawaii state rainbow warriors": "62",
+    "hc": "107",
+    "hcu": "2277",
+    "holy cross": "107",
+    "holy cross crusaders": "107",
+    "holy cross st crusaders": "107",
+    "holy cross state crusaders": "107",
+    "hou": "248",
+    "hou christian": "2277",
+    "hou christian huskies": "2277",
+    "houston": "248",
+    "houston baptist": "2277",
+    "houston baptist huskies": "2277",
+    "houston christian": "2277",
+    "houston christian huskies": "2277",
+    "houston christian st huskies": "2277",
+    "houston christian state huskies": "2277",
+    "houston cougars": "248",
+    "houston st cougars": "248",
+    "houston state cougars": "248",
+    "how": "47",
+    "howard": "47",
+    "howard bison": "47",
+    "howard st bison": "47",
+    "howard state bison": "47",
+    "idaho": "70",
+    "idaho st": "304",
+    "idaho st bengals": "304",
+    "idaho st vandals": "70",
+    "idaho state": "304",
+    "idaho state bengals": "304",
+    "idaho state vandals": "70",
+    "idaho vandals": "70",
+    "idho": "70",
+    "idst": "304",
+    "ill": "356",
+    "illinois": "356",
+    "illinois fighting illini": "356",
+    "illinois st": "2287",
+    "illinois st fighting illini": "356",
+    "illinois st redbirds": "2287",
+    "illinois state": "2287",
+    "illinois state fighting illini": "356",
+    "illinois state redbirds": "2287",
+    "ilst": "2287",
+    "incarnate word": "2916",
+    "incarnate word cardinals": "2916",
+    "incarnate word st cardinals": "2916",
+    "incarnate word state cardinals": "2916",
+    "indiana": "84",
+    "indiana hoosiers": "84",
+    "indiana st": "282",
+    "indiana st hoosiers": "84",
+    "indiana st sycamores": "282",
+    "indiana state": "282",
+    "indiana state hoosiers": "84",
+    "indiana state sycamores": "282",
+    "inst": "282",
+    "iowa": "2294",
+    "iowa hawkeyes": "2294",
+    "iowa st": "66",
+    "iowa st cyclones": "66",
+    "iowa st hawkeyes": "2294",
+    "iowa state": "66",
+    "iowa state cyclones": "66",
+    "iowa state hawkeyes": "2294",
+    "isu": "66",
+    "iu": "84",
+    "jackson st": "2296",
+    "jackson st tigers": "2296",
+    "jackson state": "2296",
+    "jackson state tigers": "2296",
+    "jacksonville st": "55",
+    "jacksonville st gamecocks": "55",
+    "jacksonville state": "55",
+    "jacksonville state gamecocks": "55",
+    "james madison": "256",
+    "james madison dukes": "256",
+    "james madison st dukes": "256",
+    "james madison state dukes": "256",
+    "jax st": "55",
+    "jax st gamecocks": "55",
+    "jax state": "55",
+    "jax state gamecocks": "55",
+    "jcsu": "2304",
+    "jkst": "2296",
+    "jmu": "256",
+    "johnson c smith": "2304",
+    "johnson c smith golden bulls": "2304",
+    "johnson c smith st golden bulls": "2304",
+    "johnson c smith state golden bulls": "2304",
+    "johnson c smth": "2304",
+    "johnson c smth golden bulls": "2304",
+    "jxst": "55",
+    "k state": "2306",
+    "kansas": "2305",
+    "kansas jayhawks": "2305",
+    "kansas st": "2306",
+    "kansas st jayhawks": "2305",
+    "kansas st wildcats": "2306",
+    "kansas state": "2306",
+    "kansas state jayhawks": "2305",
+    "kansas state wildcats": "2306",
+    "kenn": "338",
+    "kennesaw st": "338",
+    "kennesaw st owls": "338",
+    "kennesaw state": "338",
+    "kennesaw state owls": "338",
+    "kent": "2309",
+    "kent st": "2309",
+    "kent st golden flashes": "2309",
+    "kent state": "2309",
+    "kent state golden flashes": "2309",
+    "kentucky": "96",
+    "kentucky st": "2310",
+    "kentucky st thorobreds": "2310",
+    "kentucky st wildcats": "96",
+    "kentucky state": "2310",
+    "kentucky state thorobreds": "2310",
+    "kentucky state university thorobreds": "2310",
+    "kentucky state wildcats": "96",
+    "kentucky wildcats": "96",
+    "ksu": "2306",
+    "ku": "2305",
+    "kysu": "2310",
+    "laf": "322",
+    "lafayette": "322",
+    "lafayette leopards": "322",
+    "lafayette st leopards": "322",
+    "lafayette state leopards": "322",
+    "lam": "2320",
+    "lamar": "2320",
+    "lamar cardinals": "2320",
+    "lamar st cardinals": "2320",
+    "lamar state cardinals": "2320",
+    "leh": "2329",
+    "lehigh": "2329",
+    "lehigh mountain hawks": "2329",
+    "lehigh st mountain hawks": "2329",
+    "lehigh state mountain hawks": "2329",
+    "lib": "2335",
+    "liberty": "2335",
+    "liberty flames": "2335",
+    "liberty st flames": "2335",
+    "liberty state flames": "2335",
+    "lin": "2815",
+    "lindenwood": "2815",
+    "lindenwood lions": "2815",
+    "lindenwood st lions": "2815",
+    "lindenwood state lions": "2815",
+    "liu": "2341",
+    "liu sharks": "2341",
+    "long island": "2341",
+    "long island sharks": "2341",
+    "long island university": "2341",
+    "long island university sharks": "2341",
+    "long island university st sharks": "2341",
+    "long island university state sharks": "2341",
+    "lou": "97",
+    "louisiana": "309",
+    "louisiana monroe": "2433",
+    "louisiana monroe warhawks": "2433",
+    "louisiana ragin cajuns": "309",
+    "louisiana st ragin cajuns": "309",
+    "louisiana state": "99",
+    "louisiana state ragin cajuns": "309",
+    "louisiana state tigers": "99",
+    "louisiana tech": "2348",
+    "louisiana tech bulldogs": "2348",
+    "louisiana tech st bulldogs": "2348",
+    "louisiana tech state bulldogs": "2348",
+    "louisville": "97",
+    "louisville cardinals": "97",
+    "louisville st cardinals": "97",
+    "louisville state cardinals": "97",
+    "lsu": "99",
+    "lsu st tigers": "99",
+    "lsu state tigers": "99",
+    "lsu tigers": "99",
+    "lt": "2348",
+    "m oh": "193",
+    "maine": "311",
+    "maine black bears": "311",
+    "maine st black bears": "311",
+    "maine state black bears": "311",
+    "marist": "2368",
+    "marist red foxes": "2368",
+    "marist st red foxes": "2368",
+    "marist state red foxes": "2368",
+    "marshall": "276",
+    "marshall st thundering herd": "276",
+    "marshall state thundering herd": "276",
+    "marshall thundering herd": "276",
+    "maryland": "120",
+    "maryland st terrapins": "120",
+    "maryland state terrapins": "120",
+    "maryland terrapins": "120",
+    "mass": "113",
+    "massachusetts": "113",
+    "massachusetts minutemen": "113",
+    "massachusetts st minutemen": "113",
+    "massachusetts state minutemen": "113",
+    "mcn": "2377",
+    "mcneese": "2377",
+    "mcneese cowboys": "2377",
+    "mcneese st": "2377",
+    "mcneese st cowboys": "2377",
+    "mcneese state": "2377",
+    "mcneese state cowboys": "2377",
+    "md": "120",
+    "me": "311",
+    "mem": "235",
+    "memphis": "235",
+    "memphis st tigers": "235",
+    "memphis state tigers": "235",
+    "memphis tigers": "235",
+    "mer": "2382",
+    "merc": "2385",
+    "mercer": "2382",
+    "mercer bears": "2382",
+    "mercer st bears": "2382",
+    "mercer state bears": "2382",
+    "mercyhurst": "2385",
+    "mercyhurst lakers": "2385",
+    "mercyhurst st lakers": "2385",
+    "mercyhurst state lakers": "2385",
+    "merrimack": "2771",
+    "merrimack st warriors": "2771",
+    "merrimack state warriors": "2771",
+    "merrimack warriors": "2771",
+    "mia": "2390",
+    "miami": "2390",
+    "miami fl": "2390",
+    "miami florida": "2390",
+    "miami hurricanes": "2390",
+    "miami oh": "193",
+    "miami oh redhawks": "193",
+    "miami oh st redhawks": "193",
+    "miami oh state redhawks": "193",
+    "miami ohio": "193",
+    "miami ohio redhawks": "193",
+    "miami st hurricanes": "2390",
+    "miami state hurricanes": "2390",
+    "mich": "130",
+    "michigan": "130",
+    "michigan st": "127",
+    "michigan st spartans": "127",
+    "michigan st wolverines": "130",
+    "michigan state": "127",
+    "michigan state spartans": "127",
+    "michigan state wolverines": "130",
+    "michigan wolverines": "130",
+    "middle tennessee": "2393",
+    "middle tennessee blue raiders": "2393",
+    "middle tennessee st blue raiders": "2393",
+    "middle tennessee state blue raiders": "2393",
+    "minn": "135",
+    "minnesota": "135",
+    "minnesota golden gophers": "135",
+    "minnesota st": "2364",
+    "minnesota st golden gophers": "135",
+    "minnesota st mavericks": "2364",
+    "minnesota state": "2364",
+    "minnesota state golden gophers": "135",
+    "minnesota state mavericks": "2364",
+    "miss": "145",
+    "miss valley st": "2400",
+    "miss valley st delta devils": "2400",
+    "miss valley state": "2400",
+    "miss valley state delta devils": "2400",
+    "mississippi": "145",
+    "mississippi rebels": "145",
+    "mississippi st": "344",
+    "mississippi st bulldogs": "344",
+    "mississippi state": "344",
+    "mississippi state bulldogs": "344",
+    "mississippi valley st": "2400",
+    "mississippi valley st delta devils": "2400",
+    "mississippi valley state": "2400",
+    "mississippi valley state delta devils": "2400",
+    "missouri": "142",
+    "missouri st": "2623",
+    "missouri st bears": "2623",
+    "missouri st tigers": "142",
+    "missouri state": "2623",
+    "missouri state bears": "2623",
+    "missouri state tigers": "142",
+    "missouri tigers": "142",
+    "miz": "142",
+    "mnst": "2364",
+    "monm": "2405",
+    "monmouth": "2405",
+    "monmouth hawks": "2405",
+    "monmouth st hawks": "2405",
+    "monmouth state hawks": "2405",
+    "mont": "149",
+    "montana": "149",
+    "montana grizzlies": "149",
+    "montana st": "147",
+    "montana st bobcats": "147",
+    "montana st grizzlies": "149",
+    "montana state": "147",
+    "montana state bobcats": "147",
+    "montana state grizzlies": "149",
+    "more": "2413",
+    "morehead st": "2413",
+    "morehead st eagles": "2413",
+    "morehead state": "2413",
+    "morehead state eagles": "2413",
+    "morg": "2415",
+    "morgan st": "2415",
+    "morgan st bears": "2415",
+    "morgan state": "2415",
+    "morgan state bears": "2415",
+    "most": "2623",
+    "mrmk": "2771",
+    "mrsh": "276",
+    "mrst": "2368",
+    "msst": "344",
+    "msu": "127",
+    "mtst": "147",
+    "mtsu": "2393",
+    "mtsu blue raiders": "2393",
+    "mur": "93",
+    "murray st": "93",
+    "murray st racers": "93",
+    "murray state": "93",
+    "murray state racers": "93",
+    "mvsu": "2400",
+    "n arizona": "2464",
+    "n arizona lumberjacks": "2464",
+    "n c state": "152",
+    "n c state wolfpack": "152",
+    "n colorado": "2458",
+    "n colorado bears": "2458",
+    "n dakota st": "2449",
+    "n dakota st bison": "2449",
+    "n dakota state": "2449",
+    "n dakota state bison": "2449",
+    "n illinois": "2459",
+    "n illinois huskies": "2459",
+    "nau": "2464",
+    "navy": "2426",
+    "navy midshipmen": "2426",
+    "navy st midshipmen": "2426",
+    "navy state midshipmen": "2426",
+    "nc a and t": "2448",
+    "nc a and t aggies": "2448",
+    "nc central": "2428",
+    "nc central eagles": "2428",
+    "nc st": "152",
+    "nc st wolfpack": "152",
+    "nc state": "152",
+    "nc state wolfpack": "152",
+    "ncat": "2448",
+    "nccu": "2428",
+    "ncsu": "152",
+    "nd": "87",
+    "ndsu": "2449",
+    "neb": "158",
+    "nebraska": "158",
+    "nebraska cornhuskers": "158",
+    "nebraska st cornhuskers": "158",
+    "nebraska state cornhuskers": "158",
+    "nev": "2440",
+    "nevada": "2440",
+    "nevada las vegas": "2439",
+    "nevada st wolf pack": "2440",
+    "nevada state wolf pack": "2440",
+    "nevada wolf pack": "2440",
+    "new hampshire": "160",
+    "new hampshire st wildcats": "160",
+    "new hampshire state wildcats": "160",
+    "new hampshire wildcats": "160",
+    "new haven": "2441",
+    "new haven chargers": "2441",
+    "new haven st chargers": "2441",
+    "new haven state chargers": "2441",
+    "new mexico": "167",
+    "new mexico lobos": "167",
+    "new mexico st": "166",
+    "new mexico st aggies": "166",
+    "new mexico st lobos": "167",
+    "new mexico state": "166",
+    "new mexico state aggies": "166",
+    "new mexico state lobos": "167",
+    "nhvn": "2441",
+    "nich": "2447",
+    "nicholls": "2447",
+    "nicholls colonels": "2447",
+    "nicholls st colonels": "2447",
+    "nicholls state": "2447",
+    "nicholls state colonels": "2447",
+    "niu": "2459",
+    "nmsu": "166",
+    "norf": "2450",
+    "norfolk st": "2450",
+    "norfolk st spartans": "2450",
+    "norfolk state": "2450",
+    "norfolk state spartans": "2450",
+    "north alabama": "2453",
+    "north alabama lions": "2453",
+    "north alabama st lions": "2453",
+    "north alabama state lions": "2453",
+    "north carolina": "153",
+    "north carolina a and t": "2448",
+    "north carolina a and t aggies": "2448",
+    "north carolina a and t st aggies": "2448",
+    "north carolina a and t state aggies": "2448",
+    "north carolina central": "2428",
+    "north carolina central eagles": "2428",
+    "north carolina central st eagles": "2428",
+    "north carolina central state eagles": "2428",
+    "north carolina st tar heels": "153",
+    "north carolina state": "152",
+    "north carolina state tar heels": "153",
+    "north carolina state wolfpack": "152",
+    "north carolina tar heels": "153",
+    "north dakota": "155",
+    "north dakota fighting hawks": "155",
+    "north dakota st": "2449",
+    "north dakota st bison": "2449",
+    "north dakota st fighting hawks": "155",
+    "north dakota state": "2449",
+    "north dakota state bison": "2449",
+    "north dakota state fighting hawks": "155",
+    "north texas": "249",
+    "north texas mean green": "249",
+    "north texas st mean green": "249",
+    "north texas state mean green": "249",
+    "northern arizona": "2464",
+    "northern arizona lumberjacks": "2464",
+    "northern arizona st lumberjacks": "2464",
+    "northern arizona state lumberjacks": "2464",
+    "northern colorado": "2458",
+    "northern colorado bears": "2458",
+    "northern colorado st bears": "2458",
+    "northern colorado state bears": "2458",
+    "northern illinois": "2459",
+    "northern illinois huskies": "2459",
+    "northern illinois st huskies": "2459",
+    "northern illinois state huskies": "2459",
+    "northern iowa": "2460",
+    "northern iowa panthers": "2460",
+    "northern iowa st panthers": "2460",
+    "northern iowa state panthers": "2460",
+    "northwestern": "77",
+    "northwestern st": "2466",
+    "northwestern st demons": "2466",
+    "northwestern st wildcats": "77",
+    "northwestern state": "2466",
+    "northwestern state demons": "2466",
+    "northwestern state wildcats": "77",
+    "northwestern wildcats": "77",
+    "notre dame": "87",
+    "notre dame fighting irish": "87",
+    "notre dame st fighting irish": "87",
+    "notre dame state fighting irish": "87",
+    "nu": "77",
+    "nwestern st": "2466",
+    "nwestern st demons": "2466",
+    "nwestern state": "2466",
+    "nwestern state demons": "2466",
+    "nwst": "2466",
+    "odu": "295",
+    "ohio": "195",
+    "ohio bobcats": "195",
+    "ohio st": "194",
+    "ohio st bobcats": "195",
+    "ohio st buckeyes": "194",
+    "ohio state": "194",
+    "ohio state bobcats": "195",
+    "ohio state buckeyes": "194",
+    "oklahoma": "201",
+    "oklahoma sooners": "201",
+    "oklahoma st": "197",
+    "oklahoma st cowboys": "197",
+    "oklahoma st sooners": "201",
+    "oklahoma state": "197",
+    "oklahoma state cowboys": "197",
+    "oklahoma state sooners": "201",
+    "okst": "197",
+    "old dominion": "295",
+    "old dominion monarchs": "295",
+    "old dominion st monarchs": "295",
+    "old dominion state monarchs": "295",
+    "ole miss": "145",
+    "ole miss rebels": "145",
+    "ole miss st rebels": "145",
+    "ole miss state rebels": "145",
+    "ore": "2483",
+    "oregon": "2483",
+    "oregon ducks": "2483",
+    "oregon st": "204",
+    "oregon st beavers": "204",
+    "oregon st ducks": "2483",
+    "oregon state": "204",
+    "oregon state beavers": "204",
+    "oregon state ducks": "2483",
+    "orst": "204",
+    "osu": "194",
+    "ou": "201",
+    "penn": "219",
+    "penn quakers": "219",
+    "penn st": "213",
+    "penn st nittany lions": "213",
+    "penn state": "213",
+    "penn state nittany lions": "213",
+    "pennsylvania": "219",
+    "pennsylvania quakers": "219",
+    "pennsylvania st quakers": "219",
+    "pennsylvania state quakers": "219",
+    "pitt": "221",
+    "pitt panthers": "221",
+    "pittsburgh": "221",
+    "pittsburgh panthers": "221",
+    "pittsburgh st panthers": "221",
+    "pittsburgh state panthers": "221",
+    "portland st": "2502",
+    "portland st vikings": "2502",
+    "portland state": "2502",
+    "portland state vikings": "2502",
+    "prairie view": "2504",
+    "prairie view a and m": "2504",
+    "prairie view a and m panthers": "2504",
+    "prairie view a and m st panthers": "2504",
+    "prairie view a and m state panthers": "2504",
+    "prairie view panthers": "2504",
+    "pres": "2506",
+    "presbyterian": "2506",
+    "presbyterian blue hose": "2506",
+    "presbyterian college": "2506",
+    "presbyterian college blue hose": "2506",
+    "presbyterian st blue hose": "2506",
+    "presbyterian state blue hose": "2506",
+    "prin": "163",
+    "princeton": "163",
+    "princeton st tigers": "163",
+    "princeton state tigers": "163",
+    "princeton tigers": "163",
+    "prst": "2502",
+    "psu": "213",
+    "pur": "2509",
+    "purdue": "2509",
+    "purdue boilermakers": "2509",
+    "purdue st boilermakers": "2509",
+    "purdue state boilermakers": "2509",
+    "pv": "2504",
+    "rgv": "292",
+    "rhode island": "227",
+    "rhode island rams": "227",
+    "rhode island st rams": "227",
+    "rhode island state rams": "227",
+    "rice": "242",
+    "rice owls": "242",
+    "rice st owls": "242",
+    "rice state owls": "242",
+    "rich": "257",
+    "richmond": "257",
+    "richmond spiders": "257",
+    "richmond st spiders": "257",
+    "richmond state spiders": "257",
+    "rmu": "2523",
+    "robert morris": "2523",
+    "robert morris colonials": "2523",
+    "robert morris st colonials": "2523",
+    "robert morris state colonials": "2523",
+    "rutg": "164",
+    "rutgers": "164",
+    "rutgers scarlet knights": "164",
+    "rutgers st scarlet knights": "164",
+    "rutgers state scarlet knights": "164",
+    "s dakota st": "2571",
+    "s dakota st jackrabbits": "2571",
+    "s dakota state": "2571",
+    "s dakota state jackrabbits": "2571",
+    "s illinois": "79",
+    "s illinois salukis": "79",
+    "sac": "16",
+    "sacramento st": "16",
+    "sacramento st hornets": "16",
+    "sacramento state": "16",
+    "sacramento state hornets": "16",
+    "sacred heart": "2529",
+    "sacred heart pioneers": "2529",
+    "sacred heart st pioneers": "2529",
+    "sacred heart state pioneers": "2529",
+    "saint francis": "2598",
+    "saint francis pa red flash": "2598",
+    "saint francis red flash": "2598",
+    "saint francis st red flash": "2598",
+    "saint francis state red flash": "2598",
+    "saint thomas mn tommies": "2900",
+    "sam": "2535",
+    "sam houston": "2534",
+    "sam houston bearkats": "2534",
+    "sam houston st": "2534",
+    "sam houston st bearkats": "2534",
+    "sam houston state": "2534",
+    "sam houston state bearkats": "2534",
+    "samford": "2535",
+    "samford bulldogs": "2535",
+    "samford st bulldogs": "2535",
+    "samford state bulldogs": "2535",
+    "san diego": "301",
+    "san diego st": "21",
+    "san diego st aztecs": "21",
+    "san diego st toreros": "301",
+    "san diego state": "21",
+    "san diego state aztecs": "21",
+    "san diego state toreros": "301",
+    "san diego toreros": "301",
+    "san jose st": "23",
+    "san jose st spartans": "23",
+    "san jose state": "23",
+    "san jose state spartans": "23",
+    "sav": "2542",
+    "savannah st": "2542",
+    "savannah st tigers": "2542",
+    "savannah state": "2542",
+    "savannah state tigers": "2542",
+    "sc": "2579",
+    "sc st": "2569",
+    "sc st bulldogs": "2569",
+    "sc state": "2569",
+    "sc state bulldogs": "2569",
+    "scst": "2569",
+    "sdak": "233",
+    "sdst": "2571",
+    "sdsu": "21",
+    "se louisiana": "2545",
+    "se louisiana lions": "2545",
+    "se louisiana st lions": "2545",
+    "se louisiana state lions": "2545",
+    "se missouri": "2546",
+    "se missouri redhawks": "2546",
+    "sela": "2545",
+    "semo": "2546",
+    "sf austin": "2617",
+    "sf austin lumberjacks": "2617",
+    "sfa": "2617",
+    "sfpa": "2598",
+    "shsu": "2534",
+    "shu": "2529",
+    "siu": "79",
+    "sjsu": "23",
+    "smu": "2567",
+    "smu mustangs": "2567",
+    "smu st mustangs": "2567",
+    "smu state mustangs": "2567",
+    "sou": "2582",
+    "south alabama": "6",
+    "south alabama jaguars": "6",
+    "south alabama st jaguars": "6",
+    "south alabama state jaguars": "6",
+    "south carolina": "2579",
+    "south carolina gamecocks": "2579",
+    "south carolina st": "2569",
+    "south carolina st bulldogs": "2569",
+    "south carolina st gamecocks": "2579",
+    "south carolina state": "2569",
+    "south carolina state bulldogs": "2569",
+    "south carolina state gamecocks": "2579",
+    "south dakota": "233",
+    "south dakota coyotes": "233",
+    "south dakota st": "2571",
+    "south dakota st coyotes": "233",
+    "south dakota st jackrabbits": "2571",
+    "south dakota state": "2571",
+    "south dakota state coyotes": "233",
+    "south dakota state jackrabbits": "2571",
+    "south florida": "58",
+    "south florida bulls": "58",
+    "south florida st bulls": "58",
+    "south florida state bulls": "58",
+    "southeast missouri st": "2546",
+    "southeast missouri st redhawks": "2546",
+    "southeast missouri state": "2546",
+    "southeast missouri state redhawks": "2546",
+    "southeastern louisiana": "2545",
+    "southeastern louisiana lions": "2545",
+    "southern": "2582",
+    "southern california": "30",
+    "southern california trojans": "30",
+    "southern illinois": "79",
+    "southern illinois salukis": "79",
+    "southern illinois st salukis": "79",
+    "southern illinois state salukis": "79",
+    "southern jaguars": "2582",
+    "southern methodist": "2567",
+    "southern methodist mustangs": "2567",
+    "southern miss": "2572",
+    "southern miss golden eagles": "2572",
+    "southern miss st golden eagles": "2572",
+    "southern miss state golden eagles": "2572",
+    "southern mississippi": "2572",
+    "southern mississippi golden eagles": "2572",
+    "southern st jaguars": "2582",
+    "southern state jaguars": "2582",
+    "southern university": "2582",
+    "southern university jaguars": "2582",
+    "southern utah": "253",
+    "southern utah st thunderbirds": "253",
+    "southern utah state thunderbirds": "253",
+    "southern utah thunderbirds": "253",
+    "st francis pa": "2598",
+    "st francis pa red flash": "2598",
+    "st thomas": "2900",
+    "st thomas mn": "2900",
+    "st thomas mn tommies": "2900",
+    "st thomas st tommies": "2900",
+    "st thomas state tommies": "2900",
+    "st thomas tommies": "2900",
+    "stan": "24",
+    "stanford": "24",
+    "stanford cardinal": "24",
+    "stanford st cardinal": "24",
+    "stanford state cardinal": "24",
+    "state thomas": "2900",
+    "state thomas state tommies": "2900",
+    "state thomas tommies": "2900",
+    "stbk": "2619",
+    "stephen f austin": "2617",
+    "stephen f austin lumberjacks": "2617",
+    "stephen f austin st lumberjacks": "2617",
+    "stephen f austin state lumberjacks": "2617",
+    "stet": "56",
+    "stetson": "56",
+    "stetson hatters": "56",
+    "stetson st hatters": "56",
+    "stetson state hatters": "56",
+    "stmn": "2900",
+    "sto": "284",
+    "stonehill": "284",
+    "stonehill skyhawks": "284",
+    "stonehill st skyhawks": "284",
+    "stonehill state skyhawks": "284",
+    "stony brook": "2619",
+    "stony brook seawolves": "2619",
+    "stony brook st seawolves": "2619",
+    "stony brook state seawolves": "2619",
+    "suu": "253",
+    "syr": "183",
+    "syracuse": "183",
+    "syracuse orange": "183",
+    "syracuse st orange": "183",
+    "syracuse state orange": "183",
+    "ta and m": "245",
+    "tar": "2627",
+    "tarleton st": "2627",
+    "tarleton st texans": "2627",
+    "tarleton state": "2627",
+    "tarleton state texans": "2627",
+    "tcu": "2628",
+    "tcu horned frogs": "2628",
+    "tcu st horned frogs": "2628",
+    "tcu state horned frogs": "2628",
+    "tem": "218",
+    "temple": "218",
+    "temple owls": "218",
+    "temple st owls": "218",
+    "temple state owls": "218",
+    "tenn": "2633",
+    "tennessee": "2633",
+    "tennessee st": "2634",
+    "tennessee st tigers": "2634",
+    "tennessee st volunteers": "2633",
+    "tennessee state": "2634",
+    "tennessee state tigers": "2634",
+    "tennessee state volunteers": "2633",
+    "tennessee tech": "2635",
+    "tennessee tech golden eagles": "2635",
+    "tennessee tech st golden eagles": "2635",
+    "tennessee tech state golden eagles": "2635",
+    "tennessee volunteers": "2633",
+    "tex": "251",
+    "texas": "251",
+    "texas a and m": "245",
+    "texas a and m aggies": "245",
+    "texas a and m st aggies": "245",
+    "texas a and m state aggies": "245",
+    "texas christian": "2628",
+    "texas christian horned frogs": "2628",
+    "texas longhorns": "251",
+    "texas southern": "2640",
+    "texas southern st tigers": "2640",
+    "texas southern state tigers": "2640",
+    "texas southern tigers": "2640",
+    "texas st": "326",
+    "texas st bobcats": "326",
+    "texas st longhorns": "251",
+    "texas state": "326",
+    "texas state bobcats": "326",
+    "texas state longhorns": "251",
+    "texas tech": "2641",
+    "texas tech red raiders": "2641",
+    "texas tech st red raiders": "2641",
+    "texas tech state red raiders": "2641",
+    "the citadel": "2643",
+    "the citadel bulldogs": "2643",
+    "the citadel st bulldogs": "2643",
+    "the citadel state bulldogs": "2643",
+    "tlsa": "202",
+    "tnst": "2634",
+    "tntc": "2635",
+    "tol": "2649",
+    "toledo": "2649",
+    "toledo rockets": "2649",
+    "toledo st rockets": "2649",
+    "toledo state rockets": "2649",
+    "tow": "119",
+    "towson": "119",
+    "towson st tigers": "119",
+    "towson state tigers": "119",
+    "towson tigers": "119",
+    "troy": "2653",
+    "troy st trojans": "2653",
+    "troy state trojans": "2653",
+    "troy trojans": "2653",
+    "ttu": "2641",
+    "tulane": "2655",
+    "tulane green wave": "2655",
+    "tulane st green wave": "2655",
+    "tulane state green wave": "2655",
+    "tuln": "2655",
+    "tulsa": "202",
+    "tulsa golden hurricane": "202",
+    "tulsa st golden hurricane": "202",
+    "tulsa state golden hurricane": "202",
+    "txso": "2640",
+    "txst": "326",
+    "uab": "5",
+    "uab blazers": "5",
+    "uab st blazers": "5",
+    "uab state blazers": "5",
+    "ualb": "399",
+    "ualbany": "399",
+    "ualbany great danes": "399",
+    "ualbany st great danes": "399",
+    "ualbany state great danes": "399",
+    "uapb": "2029",
+    "uc davis": "302",
+    "uc davis aggies": "302",
+    "uc davis st aggies": "302",
+    "uc davis state aggies": "302",
+    "ucd": "302",
+    "ucf": "2116",
+    "ucf knights": "2116",
+    "ucf st knights": "2116",
+    "ucf state knights": "2116",
+    "ucla": "26",
+    "ucla bruins": "26",
+    "ucla st bruins": "26",
+    "ucla state bruins": "26",
+    "uconn": "41",
+    "uconn huskies": "41",
+    "uconn st huskies": "41",
+    "uconn state huskies": "41",
+    "uga": "61",
+    "uiw": "2916",
+    "uk": "96",
+    "ul": "309",
+    "ul monroe": "2433",
+    "ul monroe st warhawks": "2433",
+    "ul monroe state warhawks": "2433",
+    "ul monroe warhawks": "2433",
+    "ulm": "2433",
+    "umass": "113",
+    "umass minutemen": "113",
+    "una": "2453",
+    "unc": "153",
+    "unco": "2458",
+    "und": "155",
+    "unh": "160",
+    "uni": "2460",
+    "unlv": "2439",
+    "unlv rebels": "2439",
+    "unlv st rebels": "2439",
+    "unlv state rebels": "2439",
+    "unm": "167",
+    "unt": "249",
+    "uri": "227",
+    "usa": "6",
+    "usc": "30",
+    "usc st trojans": "30",
+    "usc state trojans": "30",
+    "usc trojans": "30",
+    "usd": "301",
+    "usf": "58",
+    "usm": "2572",
+    "usu": "328",
+    "ut martin": "2630",
+    "ut martin skyhawks": "2630",
+    "ut martin st skyhawks": "2630",
+    "ut martin state skyhawks": "2630",
+    "ut rio grande": "292",
+    "ut rio grande valley": "292",
+    "ut rio grande valley st vaqueros": "292",
+    "ut rio grande valley state vaqueros": "292",
+    "ut rio grande valley vaqueros": "292",
+    "ut rio grande vaqueros": "292",
+    "utah": "254",
+    "utah st": "328",
+    "utah st aggies": "328",
+    "utah st utes": "254",
+    "utah state": "328",
+    "utah state aggies": "328",
+    "utah state utes": "254",
+    "utah tech": "3101",
+    "utah tech st trailblazers": "3101",
+    "utah tech state trailblazers": "3101",
+    "utah tech trailblazers": "3101",
+    "utah utes": "254",
+    "utc": "236",
+    "utep": "2638",
+    "utep miners": "2638",
+    "utep st miners": "2638",
+    "utep state miners": "2638",
+    "utm": "2630",
+    "utrgv": "292",
+    "utrgv vaqueros": "292",
+    "utsa": "2636",
+    "utsa roadrunners": "2636",
+    "utsa st roadrunners": "2636",
+    "utsa state roadrunners": "2636",
+    "utu": "3101",
+    "uva": "258",
+    "uw whitewater": "2745",
+    "uw whitewater warhawks": "2745",
+    "uwf": "110242",
+    "uww": "2745",
+    "val": "2674",
+    "valparaiso": "2674",
+    "valparaiso beacons": "2674",
+    "valparaiso st beacons": "2674",
+    "valparaiso state beacons": "2674",
+    "van": "238",
+    "vanderbilt": "238",
+    "vanderbilt commodores": "238",
+    "vanderbilt st commodores": "238",
+    "vanderbilt state commodores": "238",
+    "vill": "222",
+    "villanova": "222",
+    "villanova st wildcats": "222",
+    "villanova state wildcats": "222",
+    "villanova wildcats": "222",
+    "virginia": "258",
+    "virginia cavaliers": "258",
+    "virginia st cavaliers": "258",
+    "virginia state cavaliers": "258",
+    "virginia tech": "259",
+    "virginia tech hokies": "259",
+    "virginia tech st hokies": "259",
+    "virginia tech state hokies": "259",
+    "vmi": "2678",
+    "vmi keydets": "2678",
+    "vmi st keydets": "2678",
+    "vmi state keydets": "2678",
+    "vt": "259",
+    "w and m": "2729",
+    "w carolina": "2717",
+    "w carolina catamounts": "2717",
+    "w illinois": "2710",
+    "w illinois leathernecks": "2710",
+    "w michigan": "2711",
+    "w michigan broncos": "2711",
+    "wag": "2681",
+    "wagner": "2681",
+    "wagner seahawks": "2681",
+    "wagner st seahawks": "2681",
+    "wagner state seahawks": "2681",
+    "wake": "154",
+    "wake forest": "154",
+    "wake forest demon deacons": "154",
+    "wake forest st demon deacons": "154",
+    "wake forest state demon deacons": "154",
+    "wash": "264",
+    "washington": "264",
+    "washington huskies": "264",
+    "washington st": "265",
+    "washington st cougars": "265",
+    "washington st huskies": "264",
+    "washington state": "265",
+    "washington state cougars": "265",
+    "washington state huskies": "264",
+    "wcu": "2717",
+    "web": "2692",
+    "weber st": "2692",
+    "weber st wildcats": "2692",
+    "weber state": "2692",
+    "weber state wildcats": "2692",
+    "west florida": "110242",
+    "west florida argonauts": "110242",
+    "west florida st argonauts": "110242",
+    "west florida state argonauts": "110242",
+    "west georgia": "2698",
+    "west georgia st wolves": "2698",
+    "west georgia state wolves": "2698",
+    "west georgia wolves": "2698",
+    "west virginia": "277",
+    "west virginia mountaineers": "277",
+    "west virginia st mountaineers": "277",
+    "west virginia state mountaineers": "277",
+    "western carolina": "2717",
+    "western carolina catamounts": "2717",
+    "western carolina st catamounts": "2717",
+    "western carolina state catamounts": "2717",
+    "western illinois": "2710",
+    "western illinois leathernecks": "2710",
+    "western illinois st leathernecks": "2710",
+    "western illinois state leathernecks": "2710",
+    "western kentucky": "98",
+    "western kentucky hilltoppers": "98",
+    "western kentucky st hilltoppers": "98",
+    "western kentucky state hilltoppers": "98",
+    "western ky": "98",
+    "western ky hilltoppers": "98",
+    "western michigan": "2711",
+    "western michigan broncos": "2711",
+    "western michigan st broncos": "2711",
+    "western michigan state broncos": "2711",
+    "wga": "2698",
+    "william and mary": "2729",
+    "william and mary st tribe": "2729",
+    "william and mary state tribe": "2729",
+    "william and mary tribe": "2729",
+    "wingate": "351",
+    "wingate bulldogs": "351",
+    "wingate st bulldogs": "351",
+    "wingate state bulldogs": "351",
+    "winu": "351",
+    "wis": "275",
+    "wisconsin": "275",
+    "wisconsin badgers": "275",
+    "wisconsin st badgers": "275",
+    "wisconsin state badgers": "275",
+    "wisconsin whitewater": "2745",
+    "wisconsin whitewater st warhawks": "2745",
+    "wisconsin whitewater state warhawks": "2745",
+    "wisconsin whitewater warhawks": "2745",
+    "wiu": "2710",
+    "wku": "98",
+    "wmu": "2711",
+    "wof": "2747",
+    "wofford": "2747",
+    "wofford st terriers": "2747",
+    "wofford state terriers": "2747",
+    "wofford terriers": "2747",
+    "wsu": "265",
+    "wvu": "277",
+    "wyo": "2751",
+    "wyoming": "2751",
+    "wyoming cowboys": "2751",
+    "wyoming st cowboys": "2751",
+    "wyoming state cowboys": "2751",
+    "yale": "43",
+    "yale bulldogs": "43",
+    "yale st bulldogs": "43",
+    "yale state bulldogs": "43",
+    "yale university": "43",
+    "yale university bulldogs": "43",
+    "youngstown st": "2754",
+    "youngstown st penguins": "2754",
+    "youngstown state": "2754",
+    "youngstown state penguins": "2754",
+    "ysu": "2754"
+  }
+}

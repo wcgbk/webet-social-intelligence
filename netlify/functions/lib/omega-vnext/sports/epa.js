@@ -11,7 +11,8 @@
 
 const { HFA, ENGINE_SOFT } = require('../config');
 const { clamp } = require('../odds_math');
-const { fuzzyTeam, powerFromStandings, gamesPlayed } = require('./_common');
+const { powerFromStandings, gamesPlayed } = require('./_common');
+const { resolveTeamId, rowByIdentity, logUnknownTeam } = require('./team_identity');
 
 const SIERRA_W = 0.2;
 const LEAGUE_SUCCESS = 0.43;
@@ -66,8 +67,10 @@ function isCleanEpa(row) {
   return true;
 }
 
-function lookupEpa(teamName, table) {
-  const row = fuzzyTeam(teamName, table || {});
+function lookupEpa(teamName, table, sport) {
+  if (sport !== 'NFL' && sport !== 'NCAAF') return null;
+  if (!resolveTeamId(sport, teamName)) return null;
+  const row = rowByIdentity(sport, table || {}, teamName);
   if (!isCleanEpa(row)) return null;
   return {
     offEpa: Number(row.offEpa),
@@ -342,15 +345,33 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   const cfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
   const table = efficiency && typeof efficiency === 'object' ? efficiency : {};
   const ratings = standings && typeof standings === 'object' ? standings : {};
-  const homeSt = fuzzyTeam(home, ratings);
-  const awaySt = fuzzyTeam(away, ratings);
+  const hfa = HFA[sport] != null ? HFA[sport] : 0;
+  const unknownNames = [];
+  if (!resolveTeamId(sport, home)) unknownNames.push(home);
+  if (!resolveTeamId(sport, away)) unknownNames.push(away);
+  if (unknownNames.length) {
+    for (const name of unknownNames) logUnknownTeam(sport, name);
+    const fallbackTotal = cfg.baseTotal;
+    return {
+      modelMargin: hfa,
+      modelTotal: fallbackTotal,
+      uncertainty: fallbackUncertainty(sport, null, null),
+      totalUncBump: cfg.totalUncBump,
+      methods: { ...cfg.fallback, family: null },
+      usedEpa: false,
+      engineSoft: { used: false },
+      unknownTeam: true,
+      unknownNames,
+    };
+  }
+  const homeSt = rowByIdentity(sport, ratings, home);
+  const awaySt = rowByIdentity(sport, ratings, away);
   const hPow = powerFromStandings(homeSt, sport);
   const aPow = powerFromStandings(awaySt, sport);
-  const hfa = HFA[sport] != null ? HFA[sport] : 0;
   const fallbackMargin = (hPow - aPow) + hfa;
   const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
-  const homeEpa = lookupEpa(home, table);
-  const awayEpa = lookupEpa(away, table);
+  const homeEpa = lookupEpa(home, table, sport);
+  const awayEpa = lookupEpa(away, table, sport);
 
   if (!homeEpa || !awayEpa) {
     return {
@@ -361,6 +382,8 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
       methods: { ...cfg.fallback, family: null },
       usedEpa: false,
       engineSoft: { used: false },
+      unknownTeam: false,
+      unknownNames: [],
     };
   }
 
@@ -423,6 +446,8 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
     methods,
     usedEpa: true,
     engineSoft: engineMeta,
+    unknownTeam: false,
+    unknownNames: [],
   };
 }
 

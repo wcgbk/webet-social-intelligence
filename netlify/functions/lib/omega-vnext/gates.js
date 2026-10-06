@@ -50,6 +50,9 @@ function gateReason(c, opts = {}) {
   const minCP = sportFloor(GATES.minCoverProb, sport);
   const cardDate = opts.cardDate || opts.dateISO || null;
 
+  // Unresolved NFL/NCAAF name. Checked before the floors so a bad id cannot publish.
+  if (c && c.unknownTeam) return 'unknown_team';
+
   // Same ET calendar day only — reject weekend football on Tue/Wed cards, etc.
   if (GATES.sameEtDayOnly && cardDate) {
     if (!c.commenceTime) return 'missing-commenceTime';

@@ -17,6 +17,14 @@ const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplie
 
 const SPORT = 'NCAAF';
 
+function withIdentity(raw, env) {
+  if (env && env.unknownTeam) {
+    raw.unknownTeam = true;
+    raw.unknownNames = env.unknownNames || [];
+  }
+  return raw;
+}
+
 function tagMethods(methods, gameDayApplied, enginesOn) {
   let out = methods ? { ...methods } : methods;
   if (enginesOn && out) {
@@ -84,7 +92,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         gameDay: gameDayMeta,
         engineSoft,
       };
-      out.push(enrichCandidateWithEdge(raw, b, bundles));
+      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
     }
   }
   {
@@ -102,7 +110,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         gameDay: gameDayMeta,
         engineSoft,
       };
-      out.push(enrichCandidateWithEdge(raw, b, bundles));
+      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
     }
   }
   {
@@ -119,7 +127,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         gameDay: gameDayMeta,
         engineSoft,
       };
-      out.push(enrichCandidateWithEdge(raw, b, bundles));
+      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
     }
   }
   return out;

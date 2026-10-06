@@ -405,6 +405,18 @@ async function readCaptureHealthDate(dateISO) {
   return readJson(assertOpsKey(`omega-ops/capture-health-${d}`));
 }
 
+/** Private daily unmatched football names. Null on a bad date or a missing blob. */
+async function readUnmatchedTeams(dateISO) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  try {
+    return await readJson(`omega-unmatched-${d}`);
+  } catch (e) {
+    console.warn(`[omega-vnext/store] unmatched read soft-fail: ${e.message}`);
+    return null;
+  }
+}
+
 module.exports = {
   storePicks, storeShadowPicks, resolvePicksStoreTarget, readPicks, storeJson, readJson,
   storePmObserver, readPmObserver, storePmObserverOpen, readPmObserverOpen,
@@ -413,4 +425,5 @@ module.exports = {
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
+  readUnmatchedTeams,
 };

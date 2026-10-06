@@ -23,6 +23,7 @@ const PARLAY_KEEP = [
 const ROOT_DROP = [
   'candidateTable', 'modelProjections', 'thinkingText', 'sgps',
   'rejections', 'edgeCandidatesCount',
+  'teamIdentity',
 ];
 
 function pickPublic(p) {

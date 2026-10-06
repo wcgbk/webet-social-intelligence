@@ -1,7 +1,10 @@
 'use strict';
 
 const { normCdf, clamp, americanToImplied } = require('../odds_math');
-const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA, SHARP_BOOKS, POINT_SHRINK, MODEL_LINE_GAP } = require('../config');
+const {
+  SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA, SHARP_BOOKS, POINT_SHRINK, MODEL_LINE_GAP,
+  NFL_KEY_NUMBERS,
+} = require('../config');
 
 function formatMatchup(away, home) {
   return `${away} @ ${home}`;
@@ -97,12 +100,80 @@ function resolveSpreadStd(sport, stdOverride) {
   return SPORT_SPREAD_STD[sport] || 13.5;
 }
 
+function binMass(mean, std, k) {
+  if (!(std > 0) || !Number.isFinite(mean) || !Number.isFinite(k)) return 0;
+  return Math.max(0, normCdf((k + 0.5 - mean) / std) - normCdf((k - 0.5 - mean) / std));
+}
+
+function nearPoint(absLine, target) {
+  return Math.abs(absLine - target) <= 1e-9;
+}
+
+/**
+ * NFL 3/7 key-number cover. Same side convention as legacy
+ * nflSpreadCoverProb: a favorite laying 2.5 (or 6.5) gains the key
+ * number, a favorite laying 3.5 (or 7.5) gives it up, and the dog is
+ * the mirror. Integer 3/7: coverProb = P(win) / (1 − P(push)).
+ * Other sports and other lines are not handled here.
+ */
+function nflKeyNumberCover(modelMargin, line, std) {
+  const normal = normCdf((modelMargin + line) / std);
+  const plain = { coverProb: normal, pWin: normal, pPush: 0, normal, bump: 0 };
+  if (!Number.isFinite(modelMargin) || !Number.isFinite(line) || !(std > 0)) return plain;
+  const table = NFL_KEY_NUMBERS || {};
+  const abs = Math.abs(line);
+  let kn = null;
+  let empirical = null;
+  for (const key of Object.keys(table)) {
+    const n = Number(key);
+    if (!Number.isFinite(n)) continue;
+    if (nearPoint(abs, n) || nearPoint(abs, n - 0.5) || nearPoint(abs, n + 0.5)) {
+      kn = n;
+      empirical = Number(table[key]);
+      break;
+    }
+  }
+  if (kn == null || !(empirical > 0)) return plain;
+
+  const favorite = line < 0;
+  if (line === 0) return plain;
+  const onLow = nearPoint(abs, kn - 0.5);
+  const onHigh = nearPoint(abs, kn + 0.5);
+  const onInt = nearPoint(abs, kn);
+  const keyMargin = favorite ? kn : -kn;
+  const peak = binMass(kn, std, kn);
+  const local = binMass(modelMargin, std, keyMargin);
+  const excess = peak > 1e-12 ? Math.max(0, local * (empirical / peak) - local) : 0;
+  const w = excess / 2;
+
+  if (onLow || onHigh) {
+    let delta = 0;
+    if (onLow) delta = favorite ? w : -w;
+    if (onHigh) delta = favorite ? -w : w;
+    const coverProb = clamp(normal + delta, 0.001, 0.999);
+    return { coverProb, pWin: coverProb, pPush: 0, normal, bump: delta };
+  }
+
+  if (!onInt) return plain;
+  const insideLine = favorite ? -(kn + 0.5) : (kn - 0.5);
+  const pWin = Math.max(0, normCdf((modelMargin + insideLine) / std) - w);
+  const pPush = Math.min(0.5, Math.max(0, local + excess));
+  let coverProb = pWin;
+  if (pPush > 0 && pPush < 1) coverProb = pWin / (1 - pPush);
+  coverProb = clamp(coverProb, 0.001, 0.999);
+  return { coverProb, pWin, pPush, normal, bump: coverProb - normal };
+}
+
 /**
  * Spread cover approx via normal.
+ * NFL half-points next to 3 and 7, and integer 3/7, use nflKeyNumberCover.
  * Optional 4th arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
 function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride) {
   const std = resolveSpreadStd(sport, stdOverride);
+  if (sport === 'NFL' && Number.isFinite(modelSpreadHome) && Number.isFinite(marketLineHome)) {
+    return nflKeyNumberCover(modelSpreadHome, marketLineHome, std).coverProb;
+  }
   const z = (modelSpreadHome + marketLineHome) / std;
   return normCdf(z);
 }
@@ -311,6 +382,7 @@ module.exports = {
   LEAGUE_PPG,
   powerFromStandings,
   resolveSpreadStd,
+  nflKeyNumberCover,
   spreadCoverProb,
   totalCoverProb,
   mlFromSpread,

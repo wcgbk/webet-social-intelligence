@@ -11,9 +11,12 @@ const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const gd = require(path.join(root, 'sports/game_day'));
 const nfl = require(path.join(root, 'sports/nfl'));
+const cfb = require(path.join(root, 'sports/cfb'));
 const mlb = require(path.join(root, 'sports/mlb'));
+const common = require(path.join(root, 'sports/_common'));
 const ingest = require(path.join(root, 'ingest'));
 const parlay = require(path.join(root, 'parlay'));
+const { normCdf, evAtOdds } = require(path.join(root, 'odds_math'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.deepStrictEqual(config.WEATHER_NFL, {
@@ -294,6 +297,102 @@ function findSide(cands, market, re) {
   const otherStats = parlay.comboStats([hotOvers[0], hotOvers[1], rivals[0]]);
   assert.ok(overStats.combinedProb < otherStats.combinedProb);
   assert.strictEqual(parlay.preferHit(otherStats, overStats), true);
+}
+
+// NFL 3/7 key-number mass. NCAAF stays on the normal. Push at −3 is conditional cover.
+{
+  assert.deepStrictEqual(config.NFL_KEY_NUMBERS, { 3: 0.09, 7: 0.06 });
+  const std = config.SPORT_SPREAD_STD.NFL;
+  const cfbStd = config.SPORT_SPREAD_STD.NCAAF;
+  const normal = (mu, line, s) => normCdf((mu + line) / s);
+
+  const mu = 3;
+  const fav25 = common.spreadCoverProb(mu, -2.5, 'NFL');
+  const fav35 = common.spreadCoverProb(mu, -3.5, 'NFL');
+  const gapNfl = fav25 - fav35;
+  const gapNorm = normal(mu, -2.5, std) - normal(mu, -3.5, std);
+  assert.ok(fav25 > fav35);
+  assert.ok(gapNfl > gapNorm, `NFL gap ${gapNfl} vs normal ${gapNorm}`);
+  assert.ok(fav25 > normal(mu, -2.5, std), 'favorite −2.5 gains the 3');
+  assert.ok(fav35 < normal(mu, -3.5, std), 'favorite −3.5 gives up the 3');
+
+  const dog25 = common.spreadCoverProb(-mu, 2.5, 'NFL');
+  const dog35 = common.spreadCoverProb(-mu, 3.5, 'NFL');
+  assert.ok(dog25 < normal(-mu, 2.5, std));
+  assert.ok(dog35 > normal(-mu, 3.5, std));
+  near(fav25 + dog25, 1, 1e-6);
+  near(fav35 + dog35, 1, 1e-6);
+
+  const mu7 = 7;
+  const gap7 = common.spreadCoverProb(mu7, -6.5, 'NFL') - common.spreadCoverProb(mu7, -7.5, 'NFL');
+  const gap7Norm = normal(mu7, -6.5, std) - normal(mu7, -7.5, std);
+  assert.ok(gap7 > gap7Norm, `NFL 7 gap ${gap7} vs normal ${gap7Norm}`);
+  assert.ok(common.spreadCoverProb(mu7, -6.5, 'NFL') > normal(mu7, -6.5, std));
+  assert.ok(common.spreadCoverProb(mu7, -7.5, 'NFL') < normal(mu7, -7.5, std));
+
+  // Lines that are not 3/7 stay on the normal, including NCAAF at the key numbers.
+  for (const line of [-1.5, -4, -6, -10, 0, 4.5, 8.5]) {
+    near(common.spreadCoverProb(mu, line, 'NFL'), normal(mu, line, std));
+  }
+  for (const line of [-2.5, -3, -3.5, -6.5, -7, -7.5, 2.5, 3.5]) {
+    near(common.spreadCoverProb(4, line, 'NCAAF'), normal(4, line, cfbStd));
+  }
+  near(common.spreadCoverProb(1.2, -1.5, 'MLB'), normal(1.2, -1.5, config.SPORT_SPREAD_STD.MLB));
+  near(common.spreadCoverProb(1.2, -1.5, 'MLB', 3.9), normal(1.2, -1.5, 3.9));
+  near(common.mlFromSpread(mu, 'NFL'), normCdf(mu / std));
+
+  const push = common.nflKeyNumberCover(3, -3, std);
+  assert.ok(push.pPush > 0.07 && push.pPush < 0.11, `push mass ${push.pPush}`);
+  near(push.coverProb, push.pWin / (1 - push.pPush));
+  assert.ok(Math.abs(push.coverProb - 0.5) < 0.02, `fair −3 cover ${push.coverProb}`);
+  assert.strictEqual(common.spreadCoverProb(3, -3, 'NFL'), push.coverProb);
+  const ev = evAtOdds(push.coverProb, -110);
+  const evIfPushIsLoss = evAtOdds(push.pWin, -110);
+  near(ev, push.coverProb * (1 + 100 / 110) - 1);
+  assert.ok(ev > evIfPushIsLoss, 'integer −3 does not treat the push as a loss');
+
+  const push7 = common.nflKeyNumberCover(7, -7, std);
+  assert.ok(push7.pPush > 0.04 && push7.pPush < 0.08, `7 push ${push7.pPush}`);
+  near(push7.coverProb, push7.pWin / (1 - push7.pPush));
+
+  // Edge path: the NFL candidate at −2.5 uses the key-number probability.
+  function spreadRow(sportMod, home, away, line) {
+    const rows = sportMod.project({
+      oddsEvents: [synth(home, away, { spread: line })],
+      standings: {},
+      efficiency: {},
+      gameDay: {},
+    });
+    return findSide(rows, 'Spread', new RegExp(home.split(' ').pop()));
+  }
+  const nfl25 = spreadRow(nfl, 'Kansas City Chiefs', 'Buffalo Bills', -2.5);
+  const nfl35 = spreadRow(nfl, 'Kansas City Chiefs', 'Buffalo Bills', -3.5);
+  assert.strictEqual(nfl25.modelMarginRaw, nfl35.modelMarginRaw);
+  const m = nfl25.modelMarginRaw;
+  const gapLive = common.spreadCoverProb(m, -2.5, 'NFL') - common.spreadCoverProb(m, -3.5, 'NFL');
+  const gapLiveNorm = normal(m, -2.5, std) - normal(m, -3.5, std);
+  assert.ok(gapLive > gapLiveNorm);
+  const anchor = 0.5;
+  const blend = (p) => common.blendWithMarket(p, anchor, 0.5);
+  near(nfl25.modelRawP, blend(common.spreadCoverProb(m, -2.5, 'NFL')), 1e-9);
+  near(nfl35.modelRawP, blend(common.spreadCoverProb(m, -3.5, 'NFL')), 1e-9);
+  assert.ok(nfl25.modelRawP - nfl35.modelRawP > blend(normal(m, -2.5, std)) - blend(normal(m, -3.5, std)));
+
+  const cfb25 = spreadRow(cfb, 'Ohio State Buckeyes', 'Iowa Hawkeyes', -2.5);
+  const cfb35 = spreadRow(cfb, 'Ohio State Buckeyes', 'Iowa Hawkeyes', -3.5);
+  const cfb3 = spreadRow(cfb, 'Ohio State Buckeyes', 'Iowa Hawkeyes', -3);
+  assert.strictEqual(cfb25.modelMarginRaw, cfb35.modelMarginRaw);
+  assert.strictEqual(cfb25.modelMarginRaw, cfb3.modelMarginRaw);
+  const cm = cfb25.modelMarginRaw;
+  const cfbBlend = (p) => common.blendWithMarket(p, anchor, 0.45);
+  near(cfb25.modelRawP, cfbBlend(normal(cm, -2.5, cfbStd)), 1e-9);
+  near(cfb35.modelRawP, cfbBlend(normal(cm, -3.5, cfbStd)), 1e-9);
+  near(cfb3.modelRawP, cfbBlend(normal(cm, -3, cfbStd)), 1e-9);
+
+  const nflPush = spreadRow(nfl, 'Kansas City Chiefs', 'Buffalo Bills', -3);
+  const detail = common.nflKeyNumberCover(nflPush.modelMarginRaw, -3, std);
+  assert.ok(detail.pPush > 0);
+  near(nflPush.modelRawP, blend(detail.coverProb), 1e-9);
 }
 
 function jsonResponse(body, status = 200) {

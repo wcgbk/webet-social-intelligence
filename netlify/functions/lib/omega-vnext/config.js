@@ -343,6 +343,19 @@ const WEATHER_NFL = {
 };
 
 /**
+ * Empirical NFL final-margin mass at 3 and 7. Edge-path spreads use this
+ * only for NFL. Half-points next to the number (±2.5/±3.5, ±6.5/±7.5)
+ * move by the local excess of this mass over a normal bin, split across
+ * the two sides. Integer 3 and 7 carry that adjusted bin as push mass.
+ * coverProb is P(win) / (1 − P(push)), which is the probability edge.js
+ * multiplies by the decimal. NCAAF is not adjusted.
+ */
+const NFL_KEY_NUMBERS = {
+  3: 0.09,
+  7: 0.06,
+};
+
+/**
  * Point-space shrink of NFL/NCAAF totals and margins toward the market
  * line BEFORE the normal CDF. projected = line + λ·(model − line), with
  * the line the sharp total or the home spread. Blend, shrinkTowardSharp,
@@ -468,6 +481,7 @@ module.exports = {
   SPORT_TOTAL_STD,
   HFA,
   WEATHER_NFL,
+  NFL_KEY_NUMBERS,
   POINT_SHRINK,
   MODEL_LINE_GAP,
   CLV_KPI_FLOOR,

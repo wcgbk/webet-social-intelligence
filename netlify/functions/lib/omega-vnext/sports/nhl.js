@@ -29,7 +29,17 @@ const NHL_TOTAL_MIN = 3;
 const NHL_TOTAL_MAX = 12;
 const NHL_GPG_FLOOR = 1.5;
 const NHL_GPG_CAP = 5.2;
-const NHL_MIN_GAMES = 5;
+/**
+ * Season-sum GF/GA divides into a per-game rate once games played reach this.
+ * A sum is pf/pa above ~1.8× league gpg, or ingest's nhlSeasonGoals flag
+ * (ESPN Goals For, which is cumulative even when the total is still small).
+ * The rate must still land in [NHL_GPG_FLOOR, NHL_GPG_CAP] = [1.5, 5.2].
+ * gp below this (one game) stays on the 6.2 / HFA baseline. Week-1 clubs
+ * were stuck there when this was 5. Win% and shot season-sums use
+ * NHL_SOFT_MIN_GAMES, not this spine.
+ */
+const NHL_MIN_GAMES = 2;
+const NHL_SOFT_MIN_GAMES = 5;
 const LG_SAVE = 0.905;
 const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
@@ -90,7 +100,11 @@ function teamGpg(st) {
   if (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa)) return null;
   let gf = pf;
   let ga = pa;
-  if (pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8) {
+  // ESPN Goals For is a season sum (nhlSeasonGoals). A large raw total is too,
+  // including rows that never went through ingest. A per-game rate (3.2, or
+  // an avgGoalsFor column) is neither, and is not divided.
+  const seasonSum = st.nhlSeasonGoals === true || pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
+  if (seasonSum) {
     const g = nhlGames(st);
     if (g < NHL_MIN_GAMES) return null;
     gf = pf / g;
@@ -109,7 +123,7 @@ function teamWinPct(st) {
   }
   const g = nhlGames(st);
   const wins = Number(st.wins);
-  if (g >= NHL_MIN_GAMES && Number.isFinite(wins) && wins >= 0 && wins <= g) return wins / g;
+  if (g >= NHL_SOFT_MIN_GAMES && Number.isFinite(wins) && wins >= 0 && wins <= g) return wins / g;
   return null;
 }
 
@@ -175,7 +189,7 @@ function ratePerGame(raw, games, seasonMin) {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   if (n > seasonMin) {
-    if (!(games >= NHL_MIN_GAMES)) return null;
+    if (!(games >= NHL_SOFT_MIN_GAMES)) return null;
     return n / games;
   }
   return n;
@@ -415,7 +429,11 @@ function projectGame(event, standings, espnGame, gameDay) {
   const out = [];
 
   {
-    const bundles = collectMarketOutcomes(event, 'h2h');
+    // Odds API h2h is 3-way and includes Draw. Drop it before any candidate
+    // or de-vig so a Draw side never reaches the gates.
+    const bundles = collectMarketOutcomes(event, 'h2h').filter((b) => {
+      return String(b && b.side || '').trim().toLowerCase() !== 'draw';
+    });
     for (const b of bundles) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
@@ -489,6 +507,7 @@ module.exports = {
   nhlStandingsEnv,
   applyNhlEngineSoft,
   teamGpg,
+  NHL_MIN_GAMES,
   NHL_MARGIN_CAP,
   NHL_TOTAL_MIN,
   NHL_TOTAL_MAX,

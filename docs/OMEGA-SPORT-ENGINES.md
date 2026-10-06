@@ -24,9 +24,9 @@ NHL projections also soft-clamp at |margin| ≤ 6 and total ≤ 12 (floor 3). A 
 
 ## NHL (enabled)
 
-Standings goals for/against become a per-game rate the same way MLB turns a season run total into runs per game: divide by games once the count is at least 5, and count OT losses when `games` is missing. Home goals = (home GF + away GA) / 2. Margin adds `HFA.NHL` (0.15), the goal equivalent of the old ~50 Elo home-ice term. Total is the sum. Equal clubs, or missing / unclean rows, land on HFA and 6.2 (league 3.1 + 3.1).
+Standings goals for/against become a per-game rate the same way MLB turns a season run total into runs per game: divide a season sum by games once the count is at least 2 (`NHL_MIN_GAMES`), and only when the rate lands in [1.5, 5.2]. One game stays on the baseline. Count OT losses when `games` is missing. Home goals = (home GF + away GA) / 2. Margin adds `HFA.NHL` (0.15), the goal equivalent of the old ~50 Elo home-ice term. Total is the sum. Equal clubs, or missing / unclean rows, land on HFA and 6.2 (league 3.1 + 3.1).
 
-ESPN `pointsFor` on hockey is often the standings-point total (2×wins + OTL), not goals. Ingest keeps `goalsFor` / a goal-band average and otherwise clears `pf`/`pa` so that column cannot become a fake goals-per-game rate. The projector also refuses a `pf` that matches 2×wins + OTL.
+ESPN NHL names Goals For `pointsFor` (displayName "Goals For", abbreviation GF) and standings points `points`. Ingest keeps that Goals For/Against column. A bare `pointsFor` with no goals label is cleared only when it matches `points` and the per-game rate looks like standings points (about 2.05 or less). A rate in the goal band (about 1.8–6) is goals, even when GF is close to Pts. The projector also refuses a `pf` that matches 2×wins + OTL. Odds API 3-way `Draw` moneylines are dropped before they become candidates.
 
 A winPct gap may move the margin only when GF/GA is unclean, inside the hard cap. It does not run on a clean goal environment.
 

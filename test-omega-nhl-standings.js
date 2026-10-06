@@ -1,0 +1,207 @@
+'use strict';
+/** NHL Goals For parse, early-season gpg, and Draw filter. No network. */
+const assert = require('assert');
+const path = require('path');
+
+const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
+const config = require(path.join(root, 'config'));
+const ingest = require(path.join(root, 'ingest'));
+const nhl = require(path.join(root, 'sports/nhl'));
+
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
+assert.strictEqual(config.GATES.minEV.NHL, 0.03);
+assert.strictEqual(config.GATES.minCoverProb.default, 0.48);
+assert.strictEqual(nhl.NHL_MIN_GAMES, 2);
+
+function stat(name, value, extra) {
+  return Object.assign({ name, value }, extra || {});
+}
+
+function espnGoals(row, gf, ga, pts, gp, wins, losses, otl) {
+  return ingest.applyNhlStandingStats({ wins, losses }, [
+    stat('gamesPlayed', gp, { displayName: 'Games Played' }),
+    stat('wins', wins, { displayName: 'Wins' }),
+    stat('losses', losses, { displayName: 'Losses' }),
+    stat('otLosses', otl, { displayName: 'Overtime Losses' }),
+    stat('points', pts, { displayName: 'Points', abbreviation: 'PTS' }),
+    stat('pointsFor', gf, { displayName: 'Goals For', abbreviation: 'GF' }),
+    stat('pointsAgainst', ga, { displayName: 'Goals Against', abbreviation: 'GA' }),
+  ]);
+}
+
+// Rangers: ESPN pointsFor is Goals For. GF 11 must survive Pts 6.
+const rangers = espnGoals({}, 11, 6, 6, 4, 3, 1, 0);
+assert.strictEqual(rangers.pf, 11);
+assert.strictEqual(rangers.pa, 6);
+assert.strictEqual(rangers.games, 4);
+const rangersGpg = nhl.teamGpg(rangers);
+assert.ok(rangersGpg, 'Rangers GF/GA is usable at gp 4');
+assert.ok(Math.abs(rangersGpg.gf - 2.75) < 1e-9, rangersGpg.gf);
+assert.ok(Math.abs(rangersGpg.ga - 1.5) < 1e-9, rangersGpg.ga);
+
+// Florida GF 6 / Pts 4 / GP 3. dupPoints used to clear this.
+const florida = espnGoals({}, 6, 7, 4, 3, 1, 0, 2);
+assert.strictEqual(florida.pf, 6, 'Florida GF kept');
+assert.strictEqual(florida.pa, 7);
+const floridaBare = ingest.applyNhlStandingStats({ wins: 1, losses: 0 }, [
+  stat('gamesPlayed', 3),
+  stat('wins', 1),
+  stat('losses', 0),
+  stat('otLosses', 2),
+  stat('points', 4),
+  stat('pointsFor', 6),
+  stat('pointsAgainst', 7),
+]);
+assert.strictEqual(floridaBare.pf, 6, 'goal-band pointsFor is not dupPoints');
+assert.strictEqual(floridaBare.pa, 7);
+
+// The other early GF≈Pts clubs. Label is Goals For, so the rate floor does not clear them.
+const carolina = espnGoals({}, 5, 8, 3, 3, 1, 1, 1);
+assert.strictEqual(carolina.pf, 5);
+assert.strictEqual(carolina.pa, 8);
+const devils = espnGoals({}, 3, 8, 2, 2, 1, 1, 0);
+assert.strictEqual(devils.pf, 3);
+assert.strictEqual(devils.pa, 8);
+const detroit = espnGoals({}, 2, 5, 0, 2, 0, 2, 0);
+assert.strictEqual(detroit.pf, 2, 'Detroit GF kept');
+assert.strictEqual(detroit.pa, 5);
+const nashville = espnGoals({}, 3, 4, 2, 2, 1, 1, 0);
+assert.strictEqual(nashville.pf, 3);
+assert.strictEqual(nashville.pa, 4);
+assert.strictEqual(nashville.nhlSeasonGoals, true);
+const nashvilleGpg = nhl.teamGpg(nashville);
+assert.ok(nashvilleGpg, 'Nashville season sum divides at gp 2');
+assert.ok(Math.abs(nashvilleGpg.gf - 1.5) < 1e-9, nashvilleGpg && nashvilleGpg.gf);
+assert.ok(Math.abs(nashvilleGpg.ga - 2) < 1e-9, nashvilleGpg && nashvilleGpg.ga);
+// Detroit GF 2 / GA 5 / GP 2 is 1.0 and 2.5. 1.0 is outside [1.5, 5.2], so baseline.
+assert.strictEqual(detroit.nhlSeasonGoals, true);
+assert.strictEqual(nhl.teamGpg(detroit), null);
+
+// Abbreviation GF/GA on pointsFor, no displayName, still goals.
+const abbrOnly = ingest.applyNhlStandingStats({ wins: 3, losses: 1 }, [
+  stat('gamesPlayed', 4),
+  stat('points', 6, { abbreviation: 'PTS' }),
+  stat('pointsFor', 11, { abbreviation: 'GF' }),
+  stat('pointsAgainst', 6, { abbreviation: 'GA' }),
+]);
+assert.strictEqual(abbrOnly.pf, 11);
+assert.strictEqual(abbrOnly.pa, 6);
+
+// True standings-points row: pf === pts === 2*W+OTL, no goals label. Rate is ~1.2, not goals.
+const ptsOnly = ingest.applyNhlStandingStats({ wins: 40, losses: 25 }, [
+  stat('wins', 40),
+  stat('losses', 25),
+  stat('otLosses', 10),
+  stat('gamesPlayed', 75),
+  stat('points', 90),
+  stat('pointsFor', 90),
+  stat('pointsAgainst', 95),
+]);
+assert.strictEqual(ptsOnly.pf, null, 'standings points clear to baseline');
+assert.strictEqual(ptsOnly.pa, null);
+assert.strictEqual(ptsOnly.games, 75);
+const ptsEnv = nhl.nhlStandingsEnv(ptsOnly, { pf: 80, pa: 88, wins: 30, losses: 40, otLosses: 10, games: 80 });
+assert.strictEqual(ptsEnv.usedStandings, false);
+assert.strictEqual(ptsEnv.modelTotal, 6.2);
+
+// Explicit goalsFor still beats a pointsFor that is the point total.
+const named = ingest.applyNhlStandingStats({ wins: 45, losses: 25 }, [
+  stat('goalsFor', 250),
+  stat('goalsAgainst', 210),
+  stat('gamesPlayed', 80),
+  stat('points', 100),
+  stat('pointsFor', 100),
+  stat('pointsAgainst', 110),
+]);
+assert.strictEqual(named.pf, 250);
+assert.strictEqual(named.pa, 210);
+
+// Season-sum divide: gp 1 stays on the seed. gp 2+ divides inside [1.5, 5.2].
+assert.strictEqual(nhl.teamGpg({ pf: 8, pa: 6, games: 1 }), null);
+const oneGame = nhl.nhlStandingsEnv(
+  { pf: 8, pa: 6, games: 1, wins: 1, losses: 0 },
+  { pf: 9, pa: 7, games: 1, wins: 0, losses: 1 }
+);
+assert.strictEqual(oneGame.usedStandings, false, 'gp 1 does not adjust gpg');
+assert.strictEqual(oneGame.modelTotal, 6.2);
+assert.ok(Math.abs(oneGame.modelMargin - config.HFA.NHL) < 1e-9);
+
+const two = nhl.teamGpg({ pf: 8, pa: 6, games: 2 });
+assert.ok(two, 'gp 2 divides');
+assert.ok(Math.abs(two.gf - 4) < 1e-9, two && two.gf);
+assert.ok(Math.abs(two.ga - 3) < 1e-9, two && two.ga);
+const twoEnv = nhl.nhlStandingsEnv(
+  { pf: 8, pa: 6, games: 2 },
+  { pf: 7, pa: 6, games: 2 }
+);
+assert.strictEqual(twoEnv.usedStandings, true);
+assert.ok(Math.abs(twoEnv.modelTotal - 6.2) > 0.2, twoEnv.modelTotal);
+
+// gp 4 still inside the old bar of 5, now usable.
+const four = nhl.teamGpg({ pf: 12, pa: 8, games: 4 });
+assert.ok(four);
+assert.ok(Math.abs(four.gf - 3) < 1e-9);
+assert.ok(Math.abs(four.ga - 2) < 1e-9);
+
+// A per-game rate is not divided, including when games are already known.
+const rate = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
+assert.ok(rate);
+assert.ok(Math.abs(rate.gf - 3.2) < 1e-9);
+assert.ok(Math.abs(rate.ga - 2.8) < 1e-9);
+// One game of a marked season sum stays on the seed.
+assert.strictEqual(nhl.teamGpg({ pf: 4, pa: 3, games: 1, nhlSeasonGoals: true }), null);
+
+function nhlEvent(drawName) {
+  const home = 'Colorado Avalanche';
+  const away = 'Dallas Stars';
+  return {
+    home_team: home,
+    away_team: away,
+    commence_time: '2026-10-05T23:00:00Z',
+    bookmakers: ['pinnacle', 'draftkings'].map((key) => ({
+      key,
+      markets: [
+        {
+          key: 'h2h',
+          outcomes: [
+            { name: home, price: -130 },
+            { name: away, price: 110 },
+            { name: drawName, price: 20000 },
+          ],
+        },
+        {
+          key: 'spreads',
+          outcomes: [
+            { name: home, price: -110, point: -1.5 },
+            { name: away, price: -110, point: 1.5 },
+          ],
+        },
+        {
+          key: 'totals',
+          outcomes: [
+            { name: 'Over', price: -110, point: 6.5 },
+            { name: 'Under', price: -110, point: 6.5 },
+          ],
+        },
+      ],
+    })),
+  };
+}
+
+for (const drawName of ['Draw', 'draw', 'DRAW']) {
+  const cands = nhl.project({
+    oddsEvents: [nhlEvent(drawName)],
+    standings: {
+      'Colorado Avalanche': { pf: 280, pa: 220, games: 82, wins: 48, losses: 22, otLosses: 12 },
+      'Dallas Stars': { pf: 250, pa: 240, games: 82, wins: 42, losses: 28, otLosses: 12 },
+    },
+  });
+  const sides = cands.map((c) => String(c.side || ''));
+  assert.ok(sides.length >= 6, sides.length);
+  assert.ok(!sides.some((s) => s.trim().toLowerCase() === 'draw' || /\bdraw\b/i.test(s)), sides.join(' | '));
+  const ml = cands.filter((c) => c.market === 'Moneyline');
+  assert.strictEqual(ml.length, 2, drawName);
+  assert.deepStrictEqual(ml.map((c) => c.side).sort(), ['Colorado Avalanche', 'Dallas Stars']);
+}
+
+console.log('test-omega-nhl-standings: ok');

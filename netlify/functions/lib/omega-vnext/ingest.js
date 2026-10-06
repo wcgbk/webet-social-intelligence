@@ -170,10 +170,53 @@ function espnStat(stats, names) {
   return null;
 }
 
+function normStatLabel(value) {
+  return String(value || '').toLowerCase().replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /**
- * NHL standings extras. Generic pointsFor is often the standings-point total
- * (2*W+OTL), not goals. Prefer goalsFor / a goal-band average. Otherwise
- * clear pf/pa so the projector stays on the 6.2 / HFA baseline.
+ * ESPN NHL Goals For/Against. The live table names the column pointsFor
+ * with displayName "Goals For" and abbreviation GF (same for Against / GA).
+ * An explicit goalsFor name wins. displayName "Goals For" is that same
+ * column. Abbreviation GF/GA counts only on pointsFor/pointsAgainst.
+ * Other sports do not call this.
+ */
+function nhlGoalTotal(stats, side) {
+  const seasonNames = side === 'for' ? ['goalsfor'] : ['goalsagainst'];
+  const avgNames = side === 'for' ? ['avggoalsfor'] : ['avggoalsagainst'];
+  const displayNames = side === 'for'
+    ? ['goals for', 'avg goals for']
+    : ['goals against', 'avg goals against'];
+  const abbr = side === 'for' ? 'gf' : 'ga';
+  const pointsName = side === 'for' ? 'pointsfor' : 'pointsagainst';
+  let byDisplay = null;
+  let byAbbr = null;
+  for (const s of stats || []) {
+    if (!s || typeof s !== 'object') continue;
+    const v = Number(s.value);
+    if (!Number.isFinite(v)) continue;
+    const name = normStatLabel(s.name).replace(/ /g, '');
+    const display = normStatLabel(s.displayName);
+    const ab = normStatLabel(s.abbreviation);
+    // goalsFor is a season total. avgGoalsFor is already per game.
+    if (seasonNames.includes(name)) return { value: v, season: true };
+    if (avgNames.includes(name)) return { value: v, season: false };
+    if (byDisplay == null && displayNames.includes(display)) {
+      byDisplay = { value: v, season: display.indexOf('avg ') !== 0 };
+    }
+    if (byAbbr == null && ab === abbr && name === pointsName) byAbbr = { value: v, season: true };
+  }
+  if (byDisplay != null) return byDisplay;
+  return byAbbr;
+}
+
+/**
+ * NHL standings extras. Prefer Goals For/Against (name or displayName).
+ * A bare pointsFor is standings points (2*W+OTL) only when it sits on
+ * `points` AND the per-game rate looks like standings points (≤ ~2.05).
+ * A rate in the goal band (~1.8–6) is goals, even when GF ≈ Pts
+ * (Florida 6/4, and the other early GF≈Pts clubs once labeled Goals For).
+ * Otherwise clear pf/pa so the projector stays on the 6.2 / HFA baseline.
  * Other sports do not call this.
  */
 function applyNhlStandingStats(row, stats) {
@@ -188,8 +231,10 @@ function applyNhlStandingStats(row, stats) {
     team.games = team.wins + team.losses + otl + (Number.isFinite(team.ties) ? team.ties : 0);
   }
 
-  const gf = espnStat(stats, ['goalsFor', 'avgGoalsFor']);
-  const ga = espnStat(stats, ['goalsAgainst', 'avgGoalsAgainst']);
+  const gfStat = nhlGoalTotal(stats, 'for');
+  const gaStat = nhlGoalTotal(stats, 'against');
+  const gf = gfStat ? gfStat.value : null;
+  const ga = gaStat ? gaStat.value : null;
   const pf = espnStat(stats, ['pointsFor']);
   const pa = espnStat(stats, ['pointsAgainst']);
   const avgF = espnStat(stats, ['avgPointsFor']);
@@ -204,23 +249,33 @@ function applyNhlStandingStats(row, stats) {
   } else if (avgF != null && avgA != null && avgF >= 1.8 && avgF <= 6 && avgA >= 1.8 && avgA <= 6) {
     scoring = { pf: avgF, pa: avgA };
   } else if (pf != null && pa != null && pf > 0 && pa > 0) {
-    const dupPoints = pts != null && Math.abs(pf - pts) <= Math.max(2, Math.abs(pts) * 0.08);
+    const rate = games > 0 ? pf / games : pf;
+    const inGoalBand = rate >= 1.8 && rate <= 6;
+    const standingsPpg = rate <= 2.05;
+    const closeToPts = pts != null && Math.abs(pf - pts) <= Math.max(2, Math.abs(pts) * 0.08);
+    // Standings-points duplicate only. Never when the rate is already a goal rate.
+    const dupPoints = closeToPts && standingsPpg && !inGoalBand;
     const guessPts = Number.isFinite(wins) && wins >= 0
       ? (2 * wins + (otl != null ? otl : 0))
       : null;
     const nearGuess = guessPts != null && guessPts >= 8
-      && Math.abs(pf - guessPts) <= Math.max(3, guessPts * 0.12);
+      && Math.abs(pf - guessPts) <= Math.max(3, guessPts * 0.12)
+      && !inGoalBand;
     const implied = games > 0 && pf > 6 ? pf / games : pf;
-    const inGoalBand = implied >= 1.8 && implied <= 6 && (games > 0 || pf <= 6);
+    const impliedGoal = implied >= 1.8 && implied <= 6 && (games > 0 || pf <= 6);
     const aheadOfPoints = pts == null || pf > pts * 1.5;
-    if (!dupPoints && !nearGuess && inGoalBand && aheadOfPoints) scoring = { pf, pa };
+    if (!dupPoints && !nearGuess && (inGoalBand || (impliedGoal && aheadOfPoints))) scoring = { pf, pa };
   }
   if (scoring) {
     team.pf = scoring.pf;
     team.pa = scoring.pa;
+    // ESPN "Goals For" is a season sum, even when week-1 totals still sit
+    // inside the per-game band. Avg columns stay rates (flag omitted).
+    if (gfStat && gaStat && gfStat.season && gaStat.season) team.nhlSeasonGoals = true;
   } else {
     team.pf = null;
     team.pa = null;
+    team.nhlSeasonGoals = false;
   }
 
   const wp = espnStat(stats, ['pointPercent', 'pointsPercentage', 'winPercent', 'winPct']);

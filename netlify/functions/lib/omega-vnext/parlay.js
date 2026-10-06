@@ -1,6 +1,6 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT } = require('./config');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyFraction, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
@@ -15,6 +15,39 @@ function marketRank(m) {
   return 1; // ML
 }
 
+/** 'over' | 'under' when the leg is a total with a readable side, else null. */
+function totalDirection(leg) {
+  if (!leg) return null;
+  const market = String(leg.market || leg.betType || '');
+  const side = String(leg.side || leg.pick || '');
+  const looksTotal = /total/i.test(market) || /^\s*(over|under)\b/i.test(side);
+  if (!looksTotal) return null;
+  if (/^\s*over\b/i.test(side)) return 'over';
+  if (/^\s*under\b/i.test(side)) return 'under';
+  return null;
+}
+
+/**
+ * Factor in (0, 1] when every leg is a total on one side. Otherwise 1.
+ * A configured factor above 1 is ignored so a probability cannot rise.
+ */
+function sameDirectionTotalFactor(legs) {
+  const list = Array.isArray(legs) ? legs : [];
+  if (list.length < 2) return 1;
+  const sides = [];
+  for (const leg of list) {
+    const side = totalDirection(leg);
+    if (!side) return 1;
+    sides.push(side);
+  }
+  if (!sides.every(s => s === sides[0])) return 1;
+  const table = PARLAY_TOTAL_HAIRCUT || {};
+  const raw = Number(table[sides.length]);
+  if (!Number.isFinite(raw) || raw > 1) return 1;
+  if (raw < 0) return 0;
+  return raw;
+}
+
 function comboStats(legs) {
   let combinedDecimal = 1;
   let combinedProb = 1;
@@ -22,6 +55,9 @@ function comboStats(legs) {
     combinedDecimal *= americanToDecimal(l.odds);
     combinedProb *= l.coverProb;
   }
+  const factor = sameDirectionTotalFactor(legs);
+  const haircutProb = combinedProb * factor;
+  if (Number.isFinite(haircutProb) && haircutProb <= combinedProb) combinedProb = haircutProb;
   const ev = combinedProb * combinedDecimal - 1;
   const games = new Set(legs.map(matchupKey)).size;
   const sports = new Set(legs.map(l => l.sport)).size;
@@ -215,4 +251,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   }];
 }
 
-module.exports = { optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror };
+module.exports = {
+  optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
+  sameDirectionTotalFactor,
+};

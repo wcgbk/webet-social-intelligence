@@ -13,6 +13,7 @@ const gd = require(path.join(root, 'sports/game_day'));
 const nfl = require(path.join(root, 'sports/nfl'));
 const mlb = require(path.join(root, 'sports/mlb'));
 const ingest = require(path.join(root, 'ingest'));
+const parlay = require(path.join(root, 'parlay'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
 assert.deepStrictEqual(config.WEATHER_NFL, {
@@ -210,6 +211,89 @@ function findSide(cands, market, re) {
   const delta = windOver.modelProjection - calmOver.modelProjection;
   assert.ok(Math.abs(delta - (-0.05)) < 0.02, `MLB 20mph delta ${delta}`);
   assert.ok(Math.abs(delta - (-2)) > 0.5, 'MLB wind must not use the NFL scale');
+}
+
+// Same-direction total parlays: haircut combinedProb before EV and ranking.
+{
+  assert.deepStrictEqual(config.PARLAY_TOTAL_HAIRCUT, { 2: 0.95, 3: 0.92 });
+  assert.ok(config.PARLAY_TOTAL_HAIRCUT[2] <= 1);
+  assert.ok(config.PARLAY_TOTAL_HAIRCUT[3] <= 1);
+
+  const future = '2026-10-11T17:00:00Z';
+  const leg = (matchup, side, market, coverProb, ev = 0.08) => ({
+    sport: 'NFL',
+    matchup,
+    side,
+    market,
+    odds: -110,
+    coverProb,
+    ev,
+    edgePct: 0.04,
+    commenceTime: future,
+    homeTeam: matchup.split(' @ ')[1],
+    awayTeam: matchup.split(' @ ')[0],
+  });
+  const overs = [
+    leg('A @ B', 'Over 44.5', 'Total', 0.60),
+    leg('C @ D', 'Over 41.5', 'Total', 0.58),
+    leg('E @ F', 'Over 46.5', 'Total', 0.57),
+  ];
+  const raw = 0.60 * 0.58 * 0.57;
+  const stats = parlay.comboStats(overs);
+  near(stats.combinedProb, raw * 0.92, 1e-12);
+  near(stats.ev, stats.combinedProb * stats.combinedDecimal - 1, 1e-12);
+  assert.ok(stats.combinedProb < raw);
+  assert.strictEqual(parlay.sameDirectionTotalFactor(overs), 0.92);
+
+  const unders = [
+    leg('A @ B', 'Under 44.5', 'Total', 0.55),
+    leg('C @ D', 'Under 41.5', 'Total', 0.54),
+  ];
+  near(parlay.comboStats(unders).combinedProb, 0.55 * 0.54 * 0.95, 1e-12);
+
+  const mixed = [
+    leg('A @ B', 'Over 44.5', 'Total', 0.60),
+    leg('C @ D', 'Under 41.5', 'Total', 0.58),
+    leg('E @ F', 'F -3', 'Spread', 0.57),
+  ];
+  const rawMixed = 0.60 * 0.58 * 0.57;
+  near(parlay.comboStats(mixed).combinedProb, rawMixed, 1e-12);
+  assert.strictEqual(parlay.sameDirectionTotalFactor(mixed), 1);
+
+  const spreadOnly = [
+    leg('A @ B', 'B -2.5', 'Spread', 0.60),
+    leg('C @ D', 'D -3', 'Spread', 0.58),
+    leg('E @ F', 'F -6.5', 'Spread', 0.57),
+  ];
+  near(parlay.comboStats(spreadOnly).combinedProb, rawMixed, 1e-12);
+
+  const ticket = parlay.optimizeParlay(overs, []);
+  assert.strictEqual(ticket.length, 1);
+  assert.strictEqual(ticket[0].legs.length, 3);
+  assert.strictEqual(ticket[0].combinedProb, `${(raw * 0.92 * 100).toFixed(1)}%`);
+  assert.ok(ticket[0].legs.every(l => l.coverProb === '60%' || l.coverProb === '58%' || l.coverProb === '57%'));
+
+  // Raw all-over product beats every other trio. After the haircut it does not.
+  const rivals = [
+    leg('G @ H', 'H -3', 'Spread', 0.605),
+    leg('I @ J', 'J ML', 'Moneyline', 0.605),
+    leg('K @ L', 'L -2.5', 'Spread', 0.605),
+  ];
+  const hotOvers = [
+    leg('A @ B', 'Over 44.5', 'Total', 0.62),
+    leg('C @ D', 'Over 41.5', 'Total', 0.62),
+    leg('E @ F', 'Over 46.5', 'Total', 0.62),
+  ];
+  const rawHot = 0.62 * 0.62 * 0.62;
+  const bestOther = 0.62 * 0.62 * 0.605;
+  assert.ok(rawHot > bestOther);
+  const ranked = parlay.optimizeParlay(hotOvers.concat(rivals), []);
+  assert.strictEqual(ranked.length, 1);
+  assert.ok(ranked[0].legs.some(l => !/^Over\b/.test(l.pick)), 'haircut keeps the all-over off the top ticket');
+  const overStats = parlay.comboStats(hotOvers);
+  const otherStats = parlay.comboStats([hotOvers[0], hotOvers[1], rivals[0]]);
+  assert.ok(overStats.combinedProb < otherStats.combinedProb);
+  assert.strictEqual(parlay.preferHit(otherStats, overStats), true);
 }
 
 function jsonResponse(body, status = 200) {

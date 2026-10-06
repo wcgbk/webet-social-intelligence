@@ -16,6 +16,16 @@ const MAX_STRAIGHTS = 3;
  */
 const STRAIGHT_UNIT_BUDGET = 3.5;
 const PARLAY_FIXED_UNITS = 0.5;
+/**
+ * Same-direction total parlays (every leg Over, or every leg Under) share
+ * a scoring day. Multiply combinedProb by this factor before EV and
+ * ranking. Each value is at most 1, so no ticket's hit probability rises.
+ * A mixed ticket, or any ticket that is not all totals, stays at 1.
+ */
+const PARLAY_TOTAL_HAIRCUT = {
+  2: 0.95,
+  3: 0.92,
+};
 const DAILY_UNIT_CAP = 4.0;
 /** Per-straight Kelly display cap (before card-level 3.5u budget trim). */
 const MAX_STRAIGHT_UNITS_PER_PICK = 1.25;
@@ -429,6 +439,7 @@ module.exports = {
   MAX_STRAIGHTS,
   STRAIGHT_UNIT_BUDGET,
   PARLAY_FIXED_UNITS,
+  PARLAY_TOTAL_HAIRCUT,
   DAILY_UNIT_CAP,
   MAX_STRAIGHT_UNITS_PER_PICK,
   LEAN_PAD,

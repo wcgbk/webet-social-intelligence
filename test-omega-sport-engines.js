@@ -161,10 +161,11 @@ function byMarket(cands, market) {
 }
 
 // Sierra blend only when standings are clean; unclean keeps the seed.
+// pf/pa are season sums: 136 and 64 over 4 games are 34 and 16 per game.
 {
   const clean = epa.sierraAdjust(
     { offEpa: 0, defEpa: 0 },
-    { pf: 34, pa: 16, wins: 3, losses: 1 },
+    { pf: 136, pa: 64, wins: 3, losses: 1 },
     epa.SPORT_CFG.NFL
   );
   assert.strictEqual(clean.adjusted, true);
@@ -180,7 +181,7 @@ function byMarket(cands, market) {
   assert.strictEqual(epa.isCleanEpa({ offEpa: 5, defEpa: 0.1 }), false);
 }
 
-// pointsFor under 1.8× league ppg can still be a season sum. 36 in 3 games is 12, not 36.
+// Season sums are divided whenever gp >= 2. 36 in 3 games is 12, not 36.
 {
   const cfg = epa.SPORT_CFG.NFL;
   const w = epa.SIERRA_W;
@@ -197,13 +198,22 @@ function byMarket(cands, market) {
   assert.ok(Math.abs(high.offEpa - w * offFrom30) < 1e-12, 'pf 120 in 4 games is divided');
 
   const rateSeed = { offEpa: 0.12, defEpa: -0.04 };
-  const rate = epa.sierraAdjust(rateSeed, { pf: 22, pa: 22, games: 4 }, cfg);
+  const summedRate = epa.sierraAdjust(rateSeed, { pf: 22, pa: 22, games: 4 }, cfg);
+  assert.strictEqual(summedRate.adjusted, false, 'pf 22 in 4 games is 5.5, outside the band');
+  assert.strictEqual(summedRate.offEpa, rateSeed.offEpa);
+  const rate = epa.sierraAdjust(rateSeed, {
+    pf: 40,
+    pa: 40,
+    games: 4,
+    avgPointsFor: 22,
+    avgPointsAgainst: 22,
+  }, cfg);
   const offFrom22 = (22 - cfg.leaguePpg) / cfg.plays;
   const defFrom22 = (cfg.leaguePpg - 22) / cfg.plays;
   assert.strictEqual(rate.adjusted, true);
   assert.ok(Math.abs(rate.offEpa - ((1 - w) * rateSeed.offEpa + w * offFrom22)) < 1e-12);
   assert.ok(Math.abs(rate.defEpa - ((1 - w) * rateSeed.defEpa + w * defFrom22)) < 1e-12);
-  assert.ok(Math.abs(rate.offEpa - rateSeed.offEpa) > 1e-6, 'pf 22 passes through, not 22/4');
+  assert.ok(Math.abs(rate.offEpa - rateSeed.offEpa) > 1e-6, 'avgPointsFor 22 is the rate, not 40/4');
 
   const cfbCfg = epa.SPORT_CFG.NCAAF;
   const cfb = epa.sierraAdjust(
@@ -231,8 +241,8 @@ function byMarket(cands, market) {
   assert.ok(missing.length >= 6, 'fallback must still emit a slate');
   assert.ok(absent.length === missing.length);
   for (const c of missing) assert.ok(/nfl-normal-|nfl-total-baseline/.test(c.projMethod), c.projMethod);
-  const hPow = powerFromStandings(standings[home]);
-  const aPow = powerFromStandings(standings[away]);
+  const hPow = powerFromStandings(standings[home], 'NFL');
+  const aPow = powerFromStandings(standings[away], 'NFL');
   assert.strictEqual(byMarket(missing, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NFL).toFixed(2));
   assert.strictEqual(byMarket(missing, 'Total').modelProjection, +(45 + Math.abs(hPow + aPow) * 0.05).toFixed(2));
   assert.strictEqual(byMarket(missing, 'Moneyline').uncertainty, 0.16);
@@ -313,8 +323,8 @@ function byMarket(cands, market) {
   assert.strictEqual(byMarket(missing, 'Spread').projMethod, 'cfb-normal-spread');
   assert.strictEqual(byMarket(missing, 'Total').projMethod, 'cfb-total-baseline');
   assert.strictEqual(byMarket(missing, 'Moneyline').uncertainty, 0.22);
-  const hPow = powerFromStandings(standings[home]);
-  const aPow = powerFromStandings(standings[away]);
+  const hPow = powerFromStandings(standings[home], 'NCAAF');
+  const aPow = powerFromStandings(standings[away], 'NCAAF');
   assert.strictEqual(byMarket(missing, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NCAAF).toFixed(2));
 
   const withEpa = cfb.project({
@@ -662,7 +672,7 @@ function byMarket(cands, market) {
   assert.ok(Math.abs(perGame.modelMargin - (0.6 + config.HFA.MLB)) < 1e-9);
   const seasonNfl = powerFromStandings({ pf: 360, pa: 240, wins: 12, losses: 4 }, 'NFL');
   assert.ok(Math.abs(seasonNfl - ((360 - 240) / 16)) < 1e-9);
-  assert.strictEqual(powerFromStandings({ pf: 30, pa: 20, wins: 2, losses: 1 }, 'NFL'), 10);
+  assert.ok(Math.abs(powerFromStandings({ pf: 30, pa: 20, wins: 2, losses: 1 }, 'NFL') - (10 / 3)) < 1e-9);
   const chiefs = 'Kansas City Chiefs';
   const bills = 'Buffalo Bills';
   const seasonFb = nfl.project({

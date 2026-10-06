@@ -215,6 +215,27 @@ function applyNhlStandingStats(row, stats) {
   return team;
 }
 
+/**
+ * NFL/NCAAF only. Additive. ESPN pointsFor stays the season sum.
+ * gamesPlayed/games is stored when that stat exists. avgPointsFor is stored
+ * only under that per-game name, and only as a pair. Other sports do not call this.
+ */
+function applyFootballStandingExtras(row, stats) {
+  const team = row && typeof row === 'object' ? row : {};
+  const gp = espnStat(stats, ['gamesPlayed', 'games']);
+  if (gp != null && gp > 0) {
+    team.gamesPlayed = gp;
+    team.games = gp;
+  }
+  const avgF = espnStat(stats, ['avgPointsFor']);
+  const avgA = espnStat(stats, ['avgPointsAgainst']);
+  if (avgF != null && avgA != null) {
+    team.avgPointsFor = avgF;
+    team.avgPointsAgainst = avgA;
+  }
+  return team;
+}
+
 async function fetchEspnStandings(label) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return {};
@@ -256,6 +277,7 @@ async function fetchEspnStandings(label) {
           losses: losses ? Number(losses.value) : null,
         };
         if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
+        else if (label === 'NFL' || label === 'NCAAF') applyFootballStandingExtras(ratings[team], stats);
       }
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
@@ -569,6 +591,7 @@ module.exports = {
   loadSportEngines,
   loadGameDayContext,
   applyNhlStandingStats,
+  applyFootballStandingExtras,
   fetchFootballQbStatusMap,
   enabledSportLabels,
   filterEventsSameEtDay,

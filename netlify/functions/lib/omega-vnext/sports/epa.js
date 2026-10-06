@@ -12,12 +12,12 @@
 
 const { HFA, ENGINE_SOFT } = require('../config');
 const { clamp } = require('../odds_math');
-const { powerFromStandings, gamesPlayed } = require('./_common');
+const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
 const { resolveTeamId, rowByIdentity, logUnknownTeam } = require('./team_identity');
 
 const SIERRA_W = 0.2;
 const LEAGUE_SUCCESS = 0.43;
-/** Clean per-game band. ESPN pointsFor above the max is a season sum, not a rate. */
+/** Sanity band for a per-game rate after season sums are divided. Not a divide trigger. */
 const FOOTBALL_PPG_MIN = 6;
 const FOOTBALL_PPG_MAX = 55;
 
@@ -211,8 +211,10 @@ function lookupEpa(teamName, table, sport) {
 
 /**
  * Blend seed EPA toward current points/game when standings are clean.
- * Unclean (missing games, games under 2, per-game rate outside 6–55) returns the seed.
- * gamesPlayed() uses wins+losses+ties when ESPN did not store games.
+ * ESPN pointsFor/pointsAgainst are season sums. gp >= 2 always divides both.
+ * gp < 2 returns the seed. Divided rates must land in [6, 55] or the seed is kept.
+ * An explicit avgPointsFor-style pair is the rate and is not divided.
+ * gamesPlayed() prefers gamesPlayed, then games, else wins+losses+ties.
  */
 function sierraAdjust(epa, standingsRow, cfg) {
   const base = {
@@ -225,16 +227,18 @@ function sierraAdjust(epa, standingsRow, cfg) {
     adjusted: false,
   };
   if (!standingsRow) return base;
-  const pf = Number(standingsRow.pf);
-  const pa = Number(standingsRow.pa);
   const g = gamesPlayed(standingsRow);
-  if (!Number.isFinite(pf) || !Number.isFinite(pa) || g < 2) return base;
-  // ESPN sends season sums and per-game rates in the same field. A rate tops out
-  // around 55. 1.8× league ppg (39.6 NFL / 49.5 NCAAF) left a 36-point season
-  // sum as 36 per game when only the other side cleared that cutoff. Divide both.
-  let pfPg = pf;
-  let paPg = pa;
-  if (pf > FOOTBALL_PPG_MAX || pa > FOOTBALL_PPG_MAX) {
+  if (g < 2) return base;
+  const explicit = explicitPointsPerGame(standingsRow);
+  let pfPg;
+  let paPg;
+  if (explicit) {
+    pfPg = explicit.pfPg;
+    paPg = explicit.paPg;
+  } else {
+    const pf = Number(standingsRow.pf);
+    const pa = Number(standingsRow.pa);
+    if (!Number.isFinite(pf) || !Number.isFinite(pa)) return base;
     pfPg = pf / g;
     paPg = pa / g;
   }

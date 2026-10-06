@@ -25,11 +25,13 @@ function fuzzyTeam(name, ratings) {
   return null;
 }
 
-/** League scoring per game. Used only to tell season totals from per-game rates. */
+/** League scoring per game. NFL/NCAAF no longer use this as a divide trigger. */
 const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1 };
 
 function gamesPlayed(st) {
   if (!st || typeof st !== 'object') return 0;
+  const explicit = Number(st.gamesPlayed);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
   if (Number.isFinite(Number(st.games)) && Number(st.games) > 0) return Number(st.games);
   const w = Number(st.wins);
   const l = Number(st.losses);
@@ -39,16 +41,46 @@ function gamesPlayed(st) {
 }
 
 /**
+ * Per-game points already stored under a name that says so.
+ * Magnitude is not a signal. Both sides must be present.
+ */
+function explicitPointsPerGame(st) {
+  if (!st || typeof st !== 'object') return null;
+  const pairs = [
+    ['avgPointsFor', 'avgPointsAgainst'],
+    ['avgPf', 'avgPa'],
+    ['pointsPerGame', 'pointsAllowedPerGame'],
+    ['pfPerGame', 'paPerGame'],
+  ];
+  for (const [fk, ak] of pairs) {
+    if (st[fk] == null || st[ak] == null) continue;
+    const pfPg = Number(st[fk]);
+    const paPg = Number(st[ak]);
+    if (Number.isFinite(pfPg) && Number.isFinite(paPg)) return { pfPg, paPg };
+  }
+  return null;
+}
+
+/**
  * Point / run differential.
- * Pass `sport` so a season total (ESPN pointsFor) becomes per game.
- * Without a sport, the raw pf − pa is kept — callers that already stored
- * per-game rates stay on that path.
+ * NFL and NCAAF pointsFor/pointsAgainst are season sums: gp >= 2 divides
+ * both, gp < 2 keeps the raw difference. An explicit per-game pair is not
+ * divided. Without a sport, the raw pf − pa is kept.
+ * MLB, NHL, and NBA do not call this. Their branch still uses the 1.8×
+ * league-ppg split so that latent path stays put.
  */
 function powerFromStandings(st, sport) {
   if (!st) return 0;
   const pf = Number(st.pf);
   const pa = Number(st.pa);
-  if (Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0) {
+  const hasDiff = Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0;
+  const football = sport === 'NFL' || sport === 'NCAAF';
+  if (football) {
+    const g = gamesPlayed(st);
+    const explicit = explicitPointsPerGame(st);
+    if (g >= 2 && explicit) return explicit.pfPg - explicit.paPg;
+    if (hasDiff) return g >= 2 ? (pf - pa) / g : (pf - pa);
+  } else if (hasDiff) {
     const league = LEAGUE_PPG[sport];
     const g = gamesPlayed(st);
     if (league && g >= 2 && (pf > league * 1.8 || pa > league * 1.8)) {
@@ -116,6 +148,7 @@ module.exports = {
   formatMatchup,
   fuzzyTeam,
   gamesPlayed,
+  explicitPointsPerGame,
   LEAGUE_PPG,
   powerFromStandings,
   resolveSpreadStd,

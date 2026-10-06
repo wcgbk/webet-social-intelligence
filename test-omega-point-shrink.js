@@ -28,8 +28,8 @@ assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 
 assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 });
 assert.deepStrictEqual(config.POINT_SHRINK, {
-  NFL: { total: 0.5, margin: 0.5 },
-  NCAAF: { total: 0.5, margin: 0.6 },
+  NFL: { total: 1, margin: 1 },
+  NCAAF: { total: 1, margin: 1 },
 });
 assert.deepStrictEqual(config.MODEL_LINE_GAP, { NFL: 8, NCAAF: 10 });
 
@@ -133,7 +133,7 @@ function assertEdgesNeverGrow(cands, ev) {
   }
 }
 
-// 54 vs 38.5 NFL total: gap 15.5 blocks both sides. Shrunk total is 46.25.
+// 54 vs 38.5 NFL total: gap 15.5 blocks both sides. λ=1 does not pull the total.
 {
   const home = 'Miami Dolphins';
   const away = 'Minnesota Vikings';
@@ -142,7 +142,7 @@ function assertEdgesNeverGrow(cands, ev) {
   const over = findSide(cands, 'Total', /^Over/);
   const under = findSide(cands, 'Total', /^Under/);
   assert.strictEqual(over.modelTotalRaw, 54);
-  assert.strictEqual(over.modelTotalShrunk, 46.25);
+  assert.strictEqual(over.modelTotalShrunk, 54);
   assert.strictEqual(over.marketLine, 38.5);
   assert.strictEqual(over.modelLineGap, 15.5);
   assert.strictEqual(over.gapFlag, true);
@@ -171,7 +171,7 @@ function assertEdgesNeverGrow(cands, ev) {
   assertEdgesNeverGrow(cands, ev);
 }
 
-// 47 vs 42.5 → shrunk 44.75, and the over edge is strictly smaller than the unshrunk path.
+// 47 vs 42.5 stays under the NFL 8 block. λ=1 leaves the total, so the edge matches the unshrunk path.
 {
   const home = 'Kansas City Chiefs';
   const away = 'Buffalo Bills';
@@ -180,17 +180,18 @@ function assertEdgesNeverGrow(cands, ev) {
   const over = findSide(cands, 'Total', /^Over/);
   const under = findSide(cands, 'Total', /^Under/);
   assert.strictEqual(over.modelTotalRaw, 47);
-  assert.strictEqual(over.modelTotalShrunk, 44.75);
+  assert.strictEqual(over.modelTotalShrunk, 47);
   assert.strictEqual(over.marketLine, 42.5);
   assert.strictEqual(over.modelLineGap, 4.5);
   assert.strictEqual(over.gapFlag, false);
-  assert.strictEqual(under.modelTotalShrunk, 44.75);
+  assert.strictEqual(under.modelTotalShrunk, 47);
   assert.strictEqual(under.gapFlag, false);
   const beforeP = unshrunkModelRawP(over, ev);
   const after = signedEdge(over, over.modelRawP);
   const before = signedEdge(over, beforeP);
-  assert.ok(after < before, `over edge ${after} not strictly under ${before}`);
-  assert.ok(over.modelRawP < beforeP);
+  assert.ok(Math.abs(over.modelRawP - beforeP) < 1e-12, `modelRawP moved ${over.modelRawP} vs ${beforeP}`);
+  assert.ok(Math.abs(after - before) < 1e-12, `over edge moved ${after} vs ${before}`);
+  assert.ok(after <= before + 1e-9);
   assertEdgesNeverGrow(cands, ev);
   assert.notStrictEqual(gateReason(over), 'model_line_gap_review');
 }
@@ -225,13 +226,14 @@ function assertEdgesNeverGrow(cands, ev) {
   assertEdgesNeverGrow(cands, ev);
 }
 
-// NCAAF margin λ is 0.6. A 10-point total gap blocks; 9.9 does not.
+// NCAAF λ is 1, so the margin is not pulled. A 10-point total gap blocks; 9.9 does not.
 {
   const home = 'Ohio State Buckeyes';
   const away = 'Iowa Hawkeyes';
   const wide = projectFootball('NCAAF', event(home, away, 42, -7.5), 0);
   const over = findSide(wide, 'Total', /^Over/);
   assert.strictEqual(over.modelTotalRaw, 52);
+  assert.strictEqual(over.modelTotalShrunk, 52);
   assert.strictEqual(over.modelLineGap, 10);
   assert.strictEqual(over.gapFlag, true);
   assert.strictEqual(gateReason(over), 'model_line_gap_review');
@@ -239,8 +241,7 @@ function assertEdgesNeverGrow(cands, ev) {
   const marketMargin = round4(-spread.marketLine);
   const expected = round4(marketMargin + config.POINT_SHRINK.NCAAF.margin * (spread.modelMarginRaw - marketMargin));
   assert.strictEqual(spread.modelMarginShrunk, expected);
-  const half = round4(marketMargin + 0.5 * (spread.modelMarginRaw - marketMargin));
-  assert.notStrictEqual(spread.modelMarginShrunk, half);
+  assert.strictEqual(spread.modelMarginShrunk, spread.modelMarginRaw);
   assertEdgesNeverGrow(wide, event(home, away, 42, -7.5));
 
   const close = projectFootball('NCAAF', event(home, away, 42.1, -3), 0);
@@ -301,7 +302,7 @@ function assertEdgesNeverGrow(cands, ev) {
   const priced = calibrateCandidate(over);
   const pick = toPickObject({ ...over, ...priced, edgePct: 0.03, ev: 0.04 }, { modelVersion: config.MODEL_VERSION });
   for (const k of FOOTBALL_AUDIT_KEYS) assert.strictEqual(pick[k], over[k], k);
-  assert.strictEqual(pick.modelTotalShrunk, 44.75);
+  assert.strictEqual(pick.modelTotalShrunk, 47);
 
   const mlbPick = toPickObject({
     sport: 'MLB', market: 'Moneyline', side: 'New York Yankees',

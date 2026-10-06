@@ -300,21 +300,17 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
  * the line the sharp total or the home spread. Blend, shrinkTowardSharp,
  * and isotonicClip then run unchanged on that number. λ is clamped to
  * [0, 1] at use, so the projection cannot move farther from the line.
+ * λ = 1 leaves the model. MLB and NHL are not in this table.
  *
- * A 15-point total gap (54 vs 38.5) is about 1.5 total SDs. Blending
- * after the CDF left a ~93% over near a 7% edge. Shrinking in points
- * first cuts that z by λ.
- *
- * NFL totals 0.5 and NFL margins 0.5: one EPA spine, and the published
- * misses were totals, so both markets keep half the gap.
- * NCAAF totals 0.5: same total-gap failure mode, wider SD.
- * NCAAF margins 0.6: college lines move more (HFA 2.6 plus the talent
- * stack), so the margin keeps a little more of the model and still moves
- * toward the line. MLB and NHL are not in this table.
+ * Shipped λ is 1 on totals and margins. A pull below 1 stacks on the
+ * market blend, shrinkTowardSharp, and isotonicClip and shrinks every
+ * football edge, not only a wild one. The targeted control is
+ * MODEL_LINE_GAP. A raw gap at or above NFL 8 / NCAAF 10 (54 vs 38.5
+ * is the example) is a review block, not a ticket.
  */
 const POINT_SHRINK = {
-  NFL: { total: 0.5, margin: 0.5 },
-  NCAAF: { total: 0.5, margin: 0.6 },
+  NFL: { total: 1, margin: 1 },
+  NCAAF: { total: 1, margin: 1 },
 };
 
 /**

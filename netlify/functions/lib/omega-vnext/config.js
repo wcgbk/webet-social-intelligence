@@ -29,6 +29,14 @@ const PARLAY_TOTAL_HAIRCUT = {
 const DAILY_UNIT_CAP = 4.0;
 /** Per-straight Kelly display cap (before card-level 3.5u budget trim). */
 const MAX_STRAIGHT_UNITS_PER_PICK = 1.25;
+/**
+ * Post-Kelly stake cap for quality grade B only.
+ * Grade B is qualityToRating 'b': calibrated edge under QUALITY_GRADE.aminus (2%).
+ * Applied after Kelly units and the letter grade both exist. Lowers a stake
+ * above this value and never raises one. A- / A / A+ are not capped.
+ * The parlay ticket is not on this path (PARLAY_FIXED_UNITS, or thin-slate 0.25u).
+ */
+const B_GRADE_UNIT_CAP = 0.5;
 const LEAN_PAD = false; // empty card OK — never force-fill
 
 /** Same ET calendar day only — no weekend football on Tue/Wed cards. */
@@ -455,6 +463,7 @@ module.exports = {
   PARLAY_TOTAL_HAIRCUT,
   DAILY_UNIT_CAP,
   MAX_STRAIGHT_UNITS_PER_PICK,
+  B_GRADE_UNIT_CAP,
   LEAN_PAD,
   DAY_SCOPE_TZ,
   DAY_SCOPE_STRICT,

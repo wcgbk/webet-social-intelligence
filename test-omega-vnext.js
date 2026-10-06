@@ -610,6 +610,7 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(highEdgeLowUnits.modelVersion, MODEL_VERSION);
 
   // High stake, thin edge → B, not the units letter (1.5u would be A+ on the old map).
+  // Kelly still sizes the bet; the post-Kelly B cap then lowers it to 0.5u.
   const lowEdgeHighUnits = verify.buildQualityReplacement({
     sport: 'NFL', matchup: 'C @ D', side: 'Over 45.5', market: 'Total',
     odds: -110, coverProb: 0.54, ev: 0.03, edgePct: 0.012, kellyUnits: 9,
@@ -618,7 +619,9 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(lowEdgeHighUnits.rating, 'b');
   assert.strictEqual(lowEdgeHighUnits.qualityGrade, 'b');
   const loKelly = math.kellyToUnits(math.kellyFraction(0.54, -110, config.KELLY_FRACTION), config.MAX_STRAIGHT_UNITS_PER_PICK);
-  assert.strictEqual(lowEdgeHighUnits.units, `${loKelly}u`);
+  assert.ok(loKelly > config.B_GRADE_UNIT_CAP);
+  assert.strictEqual(lowEdgeHighUnits.units, `${config.B_GRADE_UNIT_CAP}u`);
+  assert.ok(parseFloat(lowEdgeHighUnits.units) < loKelly);
   assert.notStrictEqual(lowEdgeHighUnits.units, '9u');
   assert.strictEqual(typeof lowEdgeHighUnits.confidence, 'number');
   assert.notStrictEqual(lowEdgeHighUnits.rating, math.unitsToRating(1.5));

@@ -3,7 +3,7 @@
 const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
-  MAX_STRAIGHT_UNITS_PER_PICK, PM_SOFT,
+  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, PM_SOFT,
 } = require('./config');
 const {
   kellyFraction, kellyToUnits, ratingToConfidence, formatAmerican,
@@ -81,6 +81,34 @@ function fmtU(n) {
   return `${nu}u`;
 }
 
+/** Card grade B only. 'b+' / 'bplus' are not B. */
+function isGradeB(rating) {
+  return String(rating == null ? '' : rating).trim().toLowerCase() === 'b';
+}
+
+/**
+ * Post-Kelly B-grade cap. Other grades return `units` unchanged.
+ * A result is never higher than the stake passed in.
+ */
+function capBGradeStake(units, rating) {
+  const u = typeof units === 'number' && Number.isFinite(units) ? units : parseU(units);
+  if (!isGradeB(rating)) return u;
+  const cap = Number(B_GRADE_UNIT_CAP);
+  if (!Number.isFinite(cap) || !(u > cap)) return u;
+  return cap;
+}
+
+function applyBGradeUnitCap(pick) {
+  if (!pick || typeof pick !== 'object') return pick;
+  const rating = pick.rating != null && String(pick.rating).trim() !== ''
+    ? pick.rating
+    : pick.qualityGrade;
+  const u = parseU(pick.units);
+  const next = capBGradeStake(u, rating);
+  if (!(next < u - 1e-9)) return pick;
+  return { ...pick, units: fmtU(next) };
+}
+
 function toPickObject(c, opts = {}) {
   const kFrac = kellyFraction(c.coverProb, c.odds, KELLY_FRACTION);
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
@@ -94,6 +122,9 @@ function toPickObject(c, opts = {}) {
   const qualityClv = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, c.uncertainty);
+  // Kelly (and drawdown) already ran. Grade stays the edge letter.
+  // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
+  units = capBGradeStake(units, rating);
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -162,10 +193,13 @@ function applyDailyCap(picks) {
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
  * - Total ≤ DAILY_UNIT_CAP (4.0u)
  * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
- * Preserve quality grades; align grade/stake hierarchy; never force-fill to max.
+ * Grade B straights are capped at B_GRADE_UNIT_CAP before that trim.
+ * The cap only lowers. Preserve quality grades; align grade/stake hierarchy
+ * without lifting a B back over the cap; never force-fill to max.
+ * Parlay tickets stay PARLAY_FIXED_UNITS and are not B-capped.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
-  let out = (picks || []).map(p => ({ ...p }));
+  let out = (picks || []).map(p => applyBGradeUnitCap({ ...p }));
   let parlays = Array.isArray(parlayLegs)
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
@@ -234,6 +268,8 @@ function applyDailyUnitCap(picks, parlayLegs) {
       let hiUnits = parseU(hi.units);
       let loUnits = parseU(lo.units);
       if (hiUnits >= loUnits) continue;
+      // A B is already at or under the post-Kelly cap. Do not lift it.
+      if (isGradeB(hi.rating || hi.qualityGrade)) continue;
 
       const headroom = Math.max(0, finalStraightBudget - straightTotal);
       const lift = Math.floor(Math.min(loUnits - hiUnits, headroom, Math.max(0, MAX_STRAIGHT_UNITS_PER_PICK - hiUnits)) * 4 + 1e-9) / 4;
@@ -249,6 +285,8 @@ function applyDailyUnitCap(picks, parlayLegs) {
     }
   }
 
+  // Hierarchy trims can only lower a B. Re-apply so a lift cannot undo the cap.
+  out = out.map(applyBGradeUnitCap);
   out = sortByGradeThenUnits(out);
   return { picks: out, parlayLegs: parlays };
 }

@@ -90,7 +90,8 @@ function cardModelVersion(picksData) {
 
 /**
  * Replacement / backfill pick. Rating, qualityGrade, confidence, and units
- * come from toPickObject: quarter-Kelly, 0.25u steps, MAX_STRAIGHT_UNITS_PER_PICK.
+ * come from toPickObject: quarter-Kelly, 0.25u steps, MAX_STRAIGHT_UNITS_PER_PICK,
+ * then B_GRADE_UNIT_CAP when the quality grade is B.
  * The card-level 3.5u / 0.5u / 4.0u cap is enforceOmegaDailyUnitCap on write.
  * kellyUnits on the candidate is ignored (that field was the Alpha ladder).
  */

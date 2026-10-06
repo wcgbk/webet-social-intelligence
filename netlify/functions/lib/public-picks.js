@@ -23,7 +23,7 @@ const PARLAY_KEEP = [
 
 const ROOT_DROP = [
   'candidateTable', 'modelProjections', 'thinkingText', 'sgps',
-  'rejections', 'edgeCandidatesCount',
+  'rejections', 'rejectionCounts', 'edgeCandidatesCount',
   'teamIdentity',
   'gapReview',
 ];

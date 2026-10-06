@@ -374,6 +374,70 @@ function byMarket(rows, market, sideIncludes) {
   assert.strictEqual(ingest.scoreboardSeasonFields({ season: { slug: 'preseason', type: 3 } }).preseason, true);
 }
 
+// ── rejection log: per-sport sample, full counts, public payload drops them ──
+{
+  const { sampleRejectionsBySport, buildRejectionLog, REJECTION_PER_SPORT_CAP } = require(path.join(root, 'index'));
+  assert.strictEqual(REJECTION_PER_SPORT_CAP, 25);
+  function gateRows(sport, n, reason) {
+    return Array.from({ length: n }, (_, i) => ({
+      sport,
+      matchup: `${sport} game ${i}`,
+      side: `${sport} side ${i}`,
+      rejectReason: reason,
+    }));
+  }
+  const mixed = [
+    ...gateRows('MLB', 40, 'ev-floor'),
+    ...gateRows('NFL', 20, 'coverProb-floor'),
+    ...gateRows('NFL', 10, 'odds-out-of-band'),
+    ...gateRows('NHL', 10, 'ev-floor'),
+  ];
+  const sampled = sampleRejectionsBySport(mixed, 25);
+  assert.strictEqual(sampled.rejectionCounts.total, 80);
+  assert.strictEqual(sampled.rejectionCounts.stored, 60);
+  assert.strictEqual(sampled.rejectionCounts.perSportCap, 25);
+  assert.strictEqual(sampled.rows.filter(r => r.sport === 'MLB').length, 25);
+  assert.strictEqual(sampled.rows.filter(r => r.sport === 'NFL').length, 25);
+  assert.strictEqual(sampled.rows.filter(r => r.sport === 'NHL').length, 10);
+  assert.strictEqual(sampled.rejectionCounts.bySportReason.MLB['ev-floor'], 40);
+  assert.strictEqual(sampled.rejectionCounts.bySportReason.NFL['coverProb-floor'], 20);
+  assert.strictEqual(sampled.rejectionCounts.bySportReason.NFL['odds-out-of-band'], 10);
+  assert.strictEqual(sampled.rejectionCounts.bySportReason.NHL['ev-floor'], 10);
+  assert.strictEqual(sampled.rows.findIndex(r => r.sport === 'NHL'), 50);
+  assert.ok(sampled.rows.every(r => r.sport && r.reason));
+
+  const log = buildRejectionLog(
+    [{ sport: 'NHL', matchup: 'A @ B', side: 'A', reason: 'stale' }],
+    [{ matchup: 'C @ D', side: 'veto', reason: 'news' }],
+    gateRows('NHL', 3, 'coverProb-floor')
+  );
+  assert.strictEqual(log.rows[0].reason, 'QA_HARDFAIL: stale');
+  assert.strictEqual(log.rows[0].hardFail, true);
+  assert.strictEqual(log.rows[0].sport, 'NHL');
+  assert.strictEqual(log.rows[1].sport, 'unknown');
+  assert.strictEqual(log.rows[1].reason, 'news');
+  assert.strictEqual(log.rejectionCounts.bySportReason.NHL['QA_HARDFAIL: stale'], 1);
+  assert.strictEqual(log.rejectionCounts.bySportReason.NHL['coverProb-floor'], 3);
+  assert.strictEqual(log.rejectionCounts.total, 5);
+
+  const indexSrc2 = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
+  assert.ok(!/rejected\.slice\(\s*0\s*,\s*40\s*\)/.test(indexSrc2));
+  assert.ok(/orderedByScore\(yesPool\)\.slice\(0,\s*15\)/.test(indexSrc2));
+  assert.ok(indexSrc2.includes('sampleRejectionsBySport'));
+  const pubSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/public-picks.js'), 'utf8');
+  assert.ok(pubSrc.includes("'rejectionCounts'"));
+  const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
+  const pub = publicPicksPayload({
+    picks: [],
+    rejections: sampled.rows,
+    rejectionCounts: sampled.rejectionCounts,
+    teamIdentity: { leaked: true },
+  });
+  assert.deepStrictEqual(pub.rejections, []);
+  assert.strictEqual(pub.rejectionCounts, undefined);
+  assert.strictEqual(pub.teamIdentity, undefined);
+}
+
 // ── shadow fixture, grader, and the unscheduled handler ──
 (async () => {
   const writes = [];

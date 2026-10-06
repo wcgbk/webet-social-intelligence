@@ -509,21 +509,9 @@ async function generateOmegaVnext(opts = {}) {
     }),
   }));
 
-  const rejections = [
-    ...hardFails.map(h => ({
-      matchup: h.matchup,
-      side: h.side,
-      reason: `QA_HARDFAIL: ${h.reason}`,
-      hardFail: true,
-    })),
-    ...(narr.rejections || []),
-    ...rejected.slice(0, 40).map(r => ({
-      matchup: r.matchup,
-      side: r.side,
-      reason: r.rejectReason || 'gate',
-      ...footballAuditFields(r),
-    })),
-  ];
+  const rejectionLog = buildRejectionLog(hardFails, narr.rejections, rejected);
+  const rejections = rejectionLog.rows;
+  const rejectionCounts = rejectionLog.rejectionCounts;
 
   const empty = picks.length === 0;
   const picksData = {
@@ -532,6 +520,7 @@ async function generateOmegaVnext(opts = {}) {
     model: MODEL_VERSION,
     picks,
     rejections,
+    rejectionCounts,
     edgeSummary: narr.edgeSummary || '',
     insights: narr.insights || '',
     summary: {
@@ -686,10 +675,85 @@ async function generateOmegaVnext(opts = {}) {
   return picksData;
 }
 
+/** Stored rejection rows per sport. Counts below include every rejection. */
+const REJECTION_PER_SPORT_CAP = 25;
+
+/**
+ * Logging only. Keeps up to `cap` rows per sport in first-seen order.
+ * bySportReason counts every input row, including rows the cap does not store.
+ * Selection, floors, and ranking do not read this.
+ */
+function sampleRejectionsBySport(rows, cap = REJECTION_PER_SPORT_CAP) {
+  const limit = Number.isFinite(cap) && cap >= 0 ? cap : REJECTION_PER_SPORT_CAP;
+  const bySportReason = {};
+  const kept = {};
+  const stored = [];
+  for (const r of rows || []) {
+    const sport = r && r.sport ? String(r.sport) : 'unknown';
+    const reason = (r && (r.reason || r.rejectReason)) || 'gate';
+    if (!bySportReason[sport]) bySportReason[sport] = {};
+    bySportReason[sport][reason] = (bySportReason[sport][reason] || 0) + 1;
+    if (kept[sport] == null) kept[sport] = 0;
+    if (kept[sport] < limit) {
+      const row = { sport, matchup: r.matchup, side: r.side, reason, ...footballAuditFields(r) };
+      if (r && r.hardFail) row.hardFail = true;
+      stored.push(row);
+      kept[sport] += 1;
+    }
+  }
+  return {
+    rows: stored,
+    rejectionCounts: {
+      bySportReason,
+      total: (rows || []).length,
+      stored: stored.length,
+      perSportCap: limit,
+    },
+  };
+}
+
+function buildRejectionLog(hardFails, narrRejections, rejected) {
+  const rows = [];
+  for (const h of hardFails || []) {
+    rows.push({
+      sport: h.sport || 'unknown',
+      matchup: h.matchup,
+      side: h.side,
+      reason: `QA_HARDFAIL: ${h.reason}`,
+      hardFail: true,
+    });
+  }
+  for (const n of narrRejections || []) {
+    const row = {
+      sport: n.sport || 'unknown',
+      matchup: n.matchup,
+      side: n.side,
+      reason: n.reason || 'narrate',
+    };
+    if (n.hardFail) row.hardFail = true;
+    rows.push(row);
+  }
+  for (const r of rejected || []) {
+    const row = {
+      sport: r.sport || 'unknown',
+      matchup: r.matchup,
+      side: r.side,
+      reason: r.rejectReason || r.reason || 'gate',
+      ...footballAuditFields(r),
+    };
+    if (r.hardFail) row.hardFail = true;
+    rows.push(row);
+  }
+  return sampleRejectionsBySport(rows, REJECTION_PER_SPORT_CAP);
+}
+
 module.exports = {
   generateOmegaVnext,
   MODEL_VERSION,
   projectAll,
   todayET,
   assessCaptureHealth,
+  sampleRejectionsBySport,
+  buildRejectionLog,
+  REJECTION_PER_SPORT_CAP,
 };

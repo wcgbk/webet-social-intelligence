@@ -91,6 +91,23 @@ function extractProbable(competitor) {
   return null;
 }
 
+/**
+ * ESPN season.type is either a number (1 = preseason) or { type, name }.
+ * slug/name "preseason" also counts. Other sports ignore these fields.
+ */
+function scoreboardSeasonFields(ev) {
+  const season = (ev && ev.season) || {};
+  const typeObj = season.type && typeof season.type === 'object' ? season.type : null;
+  const raw = typeObj ? (typeObj.type != null ? typeObj.type : typeObj.id) : season.type;
+  const seasonTypeNum = Number(raw);
+  const seasonType = Number.isFinite(seasonTypeNum) ? seasonTypeNum : null;
+  const label = `${season.slug || ''} ${typeObj ? (typeObj.name || '') : ''} ${typeObj ? (typeObj.abbreviation || '') : ''}`;
+  return {
+    seasonType,
+    preseason: seasonType === 1 || /preseason/i.test(label),
+  };
+}
+
 async function fetchEspnScoreboard(label, dateISO) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return { league: label, games: [] };
@@ -122,6 +139,7 @@ async function fetchEspnScoreboard(label, dateISO) {
         homeProbable: homeProb,
         awayProbable: awayProb,
         weather: extractWeather(comp),
+        ...scoreboardSeasonFields(ev),
       };
     });
     const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
@@ -220,6 +238,36 @@ function applyNhlStandingStats(row, stats) {
  * gamesPlayed/games is stored when that stat exists. avgPointsFor is stored
  * only under that per-game name, and only as a pair. Other sports do not call this.
  */
+/**
+ * NBA only. Additive. avgPointsFor/Against stay per-game and are never
+ * divided here. pointsFor/Against are copied as ESPN sent them. The
+ * projector splits a season sum from a rate. Pace and ratings are copied
+ * when the standings row has them. Other sports do not call this.
+ */
+function applyNbaStandingExtras(row, stats) {
+  const team = row && typeof row === 'object' ? row : {};
+  const gp = espnStat(stats, ['gamesPlayed', 'games']);
+  if (gp != null && gp > 0) {
+    team.gamesPlayed = gp;
+    team.games = gp;
+  }
+  const avgF = espnStat(stats, ['avgPointsFor']);
+  const avgA = espnStat(stats, ['avgPointsAgainst']);
+  if (avgF != null) team.avgPointsFor = avgF;
+  if (avgA != null) team.avgPointsAgainst = avgA;
+  const pf = espnStat(stats, ['pointsFor']);
+  const pa = espnStat(stats, ['pointsAgainst']);
+  if (pf != null) team.pointsFor = pf;
+  if (pa != null) team.pointsAgainst = pa;
+  const pace = espnStat(stats, ['pace', 'paceFactor', 'avgPace']);
+  if (pace != null) team.pace = pace;
+  const off = espnStat(stats, ['offensiveRating', 'offRtg', 'avgOffensiveRating']);
+  const def = espnStat(stats, ['defensiveRating', 'defRtg', 'avgDefensiveRating']);
+  if (off != null) team.offRtg = off;
+  if (def != null) team.defRtg = def;
+  return team;
+}
+
 function applyFootballStandingExtras(row, stats) {
   const team = row && typeof row === 'object' ? row : {};
   const gp = espnStat(stats, ['gamesPlayed', 'games']);
@@ -278,6 +326,7 @@ async function fetchEspnStandings(label) {
         };
         if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
         else if (label === 'NFL' || label === 'NCAAF') applyFootballStandingExtras(ratings[team], stats);
+        else if (label === 'NBA') applyNbaStandingExtras(ratings[team], stats);
       }
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
@@ -454,14 +503,14 @@ function extractWeather(comp) {
 
 async function loadGameDayContext(dateISO, labels, espnBySport) {
   const gameDay = {
-    restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {} },
+    restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
     qbStatusBySport: { NFL: {}, NCAAF: {} },
     weatherByGame: {},
   };
   const prev = prevEtDate(dateISO);
   if (prev) {
     for (const label of labels) {
-      if (!['MLB', 'NFL', 'NCAAF', 'NHL'].includes(label)) continue;
+      if (!['MLB', 'NFL', 'NCAAF', 'NHL'].includes(label) && label !== 'NBA') continue;
       try {
         const board = await fetchEspnScoreboard(label, prev);
         const map = restMapFromScoreboard((board && board.games) || [], prev);
@@ -588,7 +637,7 @@ async function ingest(dateISO, opts = {}) {
   const standingsBySport = {};
   for (const row of standingsList) standingsBySport[row.label] = row.ratings;
 
-  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
+  let gameDay = { restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} }, weatherByGame: {} };
   try {
     gameDay = await loadGameDayContext(dateISO, labels, espnBySport);
   } catch (e) {
@@ -624,6 +673,8 @@ module.exports = {
   loadGameDayContext,
   applyNhlStandingStats,
   applyFootballStandingExtras,
+  applyNbaStandingExtras,
+  scoreboardSeasonFields,
   fetchFootballQbStatusMap,
   enabledSportLabels,
   filterEventsSameEtDay,

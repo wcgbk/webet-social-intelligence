@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Game-day adjustments for NFL/CFB/MLB/NHL projections.
+ * Game-day adjustments for NFL/CFB/MLB/NHL/NBA projections.
  * Rest/B2B from prior-day scoreboard; soft QB status; small HFA tweaks.
- * NHL rest is goal-scale (B2B). No QB adjustment for hockey.
+ * NHL rest is goal-scale (B2B). NBA rest is point-scale (B2B).
+ * No QB adjustment for hockey or basketball.
  * Soft-fail friendly: missing inputs leave margin/total/uncertainty unchanged.
  */
 
@@ -17,11 +18,13 @@ const HFA_ADJ = {
   NCAAF: { max: 0.5, shortRest: -0.4, extraRest: 0.3 },
   MLB: { max: 0.05, shortRest: -0.04, extraRest: 0.03 },
   NHL: { max: 0.10, shortRest: -0.08, extraRest: 0.05 },
+  // Point scale. Home B2B ≈ shortRest*0.5 (−1.5). Away B2B ≈ +1.8. Cap 2.5.
+  NBA: { max: 2.5, shortRest: -3.0, extraRest: 0.8 },
 };
 
 /** Days since last game considered "short rest" by sport. */
-const SHORT_REST_DAYS = { NFL: 6, NCAAF: 5, MLB: 1, NHL: 1 };
-const EXTRA_REST_DAYS = { NFL: 9, NCAAF: 8, MLB: 2, NHL: 2 };
+const SHORT_REST_DAYS = { NFL: 6, NCAAF: 5, MLB: 1, NHL: 1, NBA: 1 };
+const EXTRA_REST_DAYS = { NFL: 9, NCAAF: 8, MLB: 2, NHL: 2, NBA: 3 };
 
 function normTeamKey(name) {
   return String(name || '')
@@ -65,7 +68,7 @@ function restMapFromScoreboard(games, playedDateISO) {
 function lookupRest(teamName, restByTeam, sport) {
   if (!teamName || !restByTeam) return null;
   if (restByTeam[teamName]) return restByTeam[teamName];
-  if (sport === 'NFL' || sport === 'NCAAF') return rowByIdentity(sport, restByTeam, teamName);
+  if (sport === 'NFL' || sport === 'NCAAF' || sport === 'NBA') return rowByIdentity(sport, restByTeam, teamName);
   const hit = fuzzyTeam(teamName, restByTeam);
   return hit || null;
 }
@@ -214,7 +217,10 @@ function applyGameDayAdjustments({
   let unc = Number(uncertainty);
   if (!Number.isFinite(margin)) margin = 0;
   if (!Number.isFinite(total)) {
-    total = sport === 'MLB' ? 8.6 : (sport === 'NHL' ? 6.2 : 45);
+    if (sport === 'MLB') total = 8.6;
+    else if (sport === 'NHL') total = 6.2;
+    else if (sport === 'NBA') total = 228;
+    else total = 45;
   }
   if (!Number.isFinite(unc)) unc = 0.2;
 

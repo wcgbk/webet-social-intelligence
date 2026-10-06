@@ -1,0 +1,541 @@
+{
+  "_meta": {
+    "generatedAt": "2026-10-06T04:35:54.463Z",
+    "source": "ESPN site teams API. Hand aliases for Odds API full-name variants. No Odds API call.",
+    "oddsSport": "basketball_nba",
+    "sport": "NBA",
+    "teamCount": 30,
+    "lookupCount": 100,
+    "seasonLabel": "identity is stable across seasons",
+    "matching": "normalize (lowercase, strip accents, delete apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback. Los Angeles and LA are not keys."
+  },
+  "teams": {
+    "1": {
+      "espnId": "1",
+      "displayName": "Atlanta Hawks",
+      "shortDisplayName": "Hawks",
+      "abbreviation": "ATL",
+      "location": "Atlanta",
+      "nickname": "Atlanta",
+      "name": "Hawks",
+      "oddsNames": [
+        "Atlanta Hawks"
+      ],
+      "aliases": []
+    },
+    "2": {
+      "espnId": "2",
+      "displayName": "Boston Celtics",
+      "shortDisplayName": "Celtics",
+      "abbreviation": "BOS",
+      "location": "Boston",
+      "nickname": "Boston",
+      "name": "Celtics",
+      "oddsNames": [
+        "Boston Celtics"
+      ],
+      "aliases": []
+    },
+    "3": {
+      "espnId": "3",
+      "displayName": "New Orleans Pelicans",
+      "shortDisplayName": "Pelicans",
+      "abbreviation": "NO",
+      "location": "New Orleans",
+      "nickname": "New Orleans",
+      "name": "Pelicans",
+      "oddsNames": [
+        "New Orleans Pelicans",
+        "NO Pelicans",
+        "NOLA Pelicans"
+      ],
+      "aliases": [
+        "NO Pelicans",
+        "NOLA Pelicans"
+      ]
+    },
+    "4": {
+      "espnId": "4",
+      "displayName": "Chicago Bulls",
+      "shortDisplayName": "Bulls",
+      "abbreviation": "CHI",
+      "location": "Chicago",
+      "nickname": "Chicago",
+      "name": "Bulls",
+      "oddsNames": [
+        "Chicago Bulls"
+      ],
+      "aliases": []
+    },
+    "5": {
+      "espnId": "5",
+      "displayName": "Cleveland Cavaliers",
+      "shortDisplayName": "Cavaliers",
+      "abbreviation": "CLE",
+      "location": "Cleveland",
+      "nickname": "Cleveland",
+      "name": "Cavaliers",
+      "oddsNames": [
+        "Cleveland Cavaliers"
+      ],
+      "aliases": []
+    },
+    "6": {
+      "espnId": "6",
+      "displayName": "Dallas Mavericks",
+      "shortDisplayName": "Mavericks",
+      "abbreviation": "DAL",
+      "location": "Dallas",
+      "nickname": "Dallas",
+      "name": "Mavericks",
+      "oddsNames": [
+        "Dallas Mavericks"
+      ],
+      "aliases": []
+    },
+    "7": {
+      "espnId": "7",
+      "displayName": "Denver Nuggets",
+      "shortDisplayName": "Nuggets",
+      "abbreviation": "DEN",
+      "location": "Denver",
+      "nickname": "Denver",
+      "name": "Nuggets",
+      "oddsNames": [
+        "Denver Nuggets"
+      ],
+      "aliases": []
+    },
+    "8": {
+      "espnId": "8",
+      "displayName": "Detroit Pistons",
+      "shortDisplayName": "Pistons",
+      "abbreviation": "DET",
+      "location": "Detroit",
+      "nickname": "Detroit",
+      "name": "Pistons",
+      "oddsNames": [
+        "Detroit Pistons"
+      ],
+      "aliases": []
+    },
+    "9": {
+      "espnId": "9",
+      "displayName": "Golden State Warriors",
+      "shortDisplayName": "Warriors",
+      "abbreviation": "GS",
+      "location": "Golden State",
+      "nickname": "Golden State",
+      "name": "Warriors",
+      "oddsNames": [
+        "Golden State Warriors",
+        "GS Warriors"
+      ],
+      "aliases": [
+        "GS Warriors"
+      ]
+    },
+    "10": {
+      "espnId": "10",
+      "displayName": "Houston Rockets",
+      "shortDisplayName": "Rockets",
+      "abbreviation": "HOU",
+      "location": "Houston",
+      "nickname": "Houston",
+      "name": "Rockets",
+      "oddsNames": [
+        "Houston Rockets"
+      ],
+      "aliases": []
+    },
+    "11": {
+      "espnId": "11",
+      "displayName": "Indiana Pacers",
+      "shortDisplayName": "Pacers",
+      "abbreviation": "IND",
+      "location": "Indiana",
+      "nickname": "Indiana",
+      "name": "Pacers",
+      "oddsNames": [
+        "Indiana Pacers"
+      ],
+      "aliases": []
+    },
+    "12": {
+      "espnId": "12",
+      "displayName": "LA Clippers",
+      "shortDisplayName": "Clippers",
+      "abbreviation": "LAC",
+      "location": "LA",
+      "nickname": "LA",
+      "name": "Clippers",
+      "oddsNames": [
+        "LA Clippers",
+        "Los Angeles Clippers",
+        "L.A. Clippers"
+      ],
+      "aliases": [
+        "Los Angeles Clippers",
+        "L.A. Clippers"
+      ]
+    },
+    "13": {
+      "espnId": "13",
+      "displayName": "Los Angeles Lakers",
+      "shortDisplayName": "Lakers",
+      "abbreviation": "LAL",
+      "location": "Los Angeles",
+      "nickname": "Los Angeles",
+      "name": "Lakers",
+      "oddsNames": [
+        "Los Angeles Lakers",
+        "LA Lakers",
+        "L.A. Lakers"
+      ],
+      "aliases": [
+        "LA Lakers",
+        "L.A. Lakers"
+      ]
+    },
+    "14": {
+      "espnId": "14",
+      "displayName": "Miami Heat",
+      "shortDisplayName": "Heat",
+      "abbreviation": "MIA",
+      "location": "Miami",
+      "nickname": "Miami",
+      "name": "Heat",
+      "oddsNames": [
+        "Miami Heat"
+      ],
+      "aliases": []
+    },
+    "15": {
+      "espnId": "15",
+      "displayName": "Milwaukee Bucks",
+      "shortDisplayName": "Bucks",
+      "abbreviation": "MIL",
+      "location": "Milwaukee",
+      "nickname": "Milwaukee",
+      "name": "Bucks",
+      "oddsNames": [
+        "Milwaukee Bucks"
+      ],
+      "aliases": []
+    },
+    "16": {
+      "espnId": "16",
+      "displayName": "Minnesota Timberwolves",
+      "shortDisplayName": "Timberwolves",
+      "abbreviation": "MIN",
+      "location": "Minnesota",
+      "nickname": "Minnesota",
+      "name": "Timberwolves",
+      "oddsNames": [
+        "Minnesota Timberwolves"
+      ],
+      "aliases": []
+    },
+    "17": {
+      "espnId": "17",
+      "displayName": "Brooklyn Nets",
+      "shortDisplayName": "Nets",
+      "abbreviation": "BKN",
+      "location": "Brooklyn",
+      "nickname": "Brooklyn",
+      "name": "Nets",
+      "oddsNames": [
+        "Brooklyn Nets"
+      ],
+      "aliases": []
+    },
+    "18": {
+      "espnId": "18",
+      "displayName": "New York Knicks",
+      "shortDisplayName": "Knicks",
+      "abbreviation": "NY",
+      "location": "New York",
+      "nickname": "New York",
+      "name": "Knicks",
+      "oddsNames": [
+        "New York Knicks",
+        "NY Knicks"
+      ],
+      "aliases": [
+        "NY Knicks"
+      ]
+    },
+    "19": {
+      "espnId": "19",
+      "displayName": "Orlando Magic",
+      "shortDisplayName": "Magic",
+      "abbreviation": "ORL",
+      "location": "Orlando",
+      "nickname": "Orlando",
+      "name": "Magic",
+      "oddsNames": [
+        "Orlando Magic"
+      ],
+      "aliases": []
+    },
+    "20": {
+      "espnId": "20",
+      "displayName": "Philadelphia 76ers",
+      "shortDisplayName": "76ers",
+      "abbreviation": "PHI",
+      "location": "Philadelphia",
+      "nickname": "Philadelphia",
+      "name": "76ers",
+      "oddsNames": [
+        "Philadelphia 76ers",
+        "Philadelphia Sixers",
+        "Philly 76ers"
+      ],
+      "aliases": [
+        "Philadelphia Sixers",
+        "Philly 76ers"
+      ]
+    },
+    "21": {
+      "espnId": "21",
+      "displayName": "Phoenix Suns",
+      "shortDisplayName": "Suns",
+      "abbreviation": "PHX",
+      "location": "Phoenix",
+      "nickname": "Phoenix",
+      "name": "Suns",
+      "oddsNames": [
+        "Phoenix Suns"
+      ],
+      "aliases": []
+    },
+    "22": {
+      "espnId": "22",
+      "displayName": "Portland Trail Blazers",
+      "shortDisplayName": "Trail Blazers",
+      "abbreviation": "POR",
+      "location": "Portland",
+      "nickname": "Portland",
+      "name": "Trail Blazers",
+      "oddsNames": [
+        "Portland Trail Blazers",
+        "Portland Blazers"
+      ],
+      "aliases": [
+        "Portland Blazers"
+      ]
+    },
+    "23": {
+      "espnId": "23",
+      "displayName": "Sacramento Kings",
+      "shortDisplayName": "Kings",
+      "abbreviation": "SAC",
+      "location": "Sacramento",
+      "nickname": "Sacramento",
+      "name": "Kings",
+      "oddsNames": [
+        "Sacramento Kings"
+      ],
+      "aliases": []
+    },
+    "24": {
+      "espnId": "24",
+      "displayName": "San Antonio Spurs",
+      "shortDisplayName": "Spurs",
+      "abbreviation": "SA",
+      "location": "San Antonio",
+      "nickname": "San Antonio",
+      "name": "Spurs",
+      "oddsNames": [
+        "San Antonio Spurs",
+        "SA Spurs"
+      ],
+      "aliases": [
+        "SA Spurs"
+      ]
+    },
+    "25": {
+      "espnId": "25",
+      "displayName": "Oklahoma City Thunder",
+      "shortDisplayName": "Thunder",
+      "abbreviation": "OKC",
+      "location": "Oklahoma City",
+      "nickname": "Oklahoma City",
+      "name": "Thunder",
+      "oddsNames": [
+        "Oklahoma City Thunder",
+        "OKC Thunder"
+      ],
+      "aliases": [
+        "OKC Thunder"
+      ]
+    },
+    "26": {
+      "espnId": "26",
+      "displayName": "Utah Jazz",
+      "shortDisplayName": "Jazz",
+      "abbreviation": "UTAH",
+      "location": "Utah",
+      "nickname": "Utah",
+      "name": "Jazz",
+      "oddsNames": [
+        "Utah Jazz"
+      ],
+      "aliases": []
+    },
+    "27": {
+      "espnId": "27",
+      "displayName": "Washington Wizards",
+      "shortDisplayName": "Wizards",
+      "abbreviation": "WSH",
+      "location": "Washington",
+      "nickname": "Washington",
+      "name": "Wizards",
+      "oddsNames": [
+        "Washington Wizards"
+      ],
+      "aliases": []
+    },
+    "28": {
+      "espnId": "28",
+      "displayName": "Toronto Raptors",
+      "shortDisplayName": "Raptors",
+      "abbreviation": "TOR",
+      "location": "Toronto",
+      "nickname": "Toronto",
+      "name": "Raptors",
+      "oddsNames": [
+        "Toronto Raptors"
+      ],
+      "aliases": []
+    },
+    "29": {
+      "espnId": "29",
+      "displayName": "Memphis Grizzlies",
+      "shortDisplayName": "Grizzlies",
+      "abbreviation": "MEM",
+      "location": "Memphis",
+      "nickname": "Memphis",
+      "name": "Grizzlies",
+      "oddsNames": [
+        "Memphis Grizzlies"
+      ],
+      "aliases": []
+    },
+    "30": {
+      "espnId": "30",
+      "displayName": "Charlotte Hornets",
+      "shortDisplayName": "Hornets",
+      "abbreviation": "CHA",
+      "location": "Charlotte",
+      "nickname": "Charlotte",
+      "name": "Hornets",
+      "oddsNames": [
+        "Charlotte Hornets"
+      ],
+      "aliases": []
+    }
+  },
+  "lookup": {
+    "atlanta hawks": "1",
+    "atl": "1",
+    "atlanta": "1",
+    "boston celtics": "2",
+    "bos": "2",
+    "boston": "2",
+    "brooklyn nets": "17",
+    "bkn": "17",
+    "brooklyn": "17",
+    "charlotte hornets": "30",
+    "cha": "30",
+    "charlotte": "30",
+    "chicago bulls": "4",
+    "chi": "4",
+    "chicago": "4",
+    "cleveland cavaliers": "5",
+    "cle": "5",
+    "cleveland": "5",
+    "dallas mavericks": "6",
+    "dal": "6",
+    "dallas": "6",
+    "denver nuggets": "7",
+    "den": "7",
+    "denver": "7",
+    "detroit pistons": "8",
+    "det": "8",
+    "detroit": "8",
+    "golden state warriors": "9",
+    "gs": "9",
+    "gs warriors": "9",
+    "golden state": "9",
+    "houston rockets": "10",
+    "hou": "10",
+    "houston": "10",
+    "indiana pacers": "11",
+    "ind": "11",
+    "indiana": "11",
+    "la clippers": "12",
+    "lac": "12",
+    "los angeles clippers": "12",
+    "l a clippers": "12",
+    "los angeles lakers": "13",
+    "lal": "13",
+    "la lakers": "13",
+    "l a lakers": "13",
+    "memphis grizzlies": "29",
+    "mem": "29",
+    "memphis": "29",
+    "miami heat": "14",
+    "mia": "14",
+    "miami": "14",
+    "milwaukee bucks": "15",
+    "mil": "15",
+    "milwaukee": "15",
+    "minnesota timberwolves": "16",
+    "min": "16",
+    "minnesota": "16",
+    "new orleans pelicans": "3",
+    "no": "3",
+    "no pelicans": "3",
+    "nola pelicans": "3",
+    "new orleans": "3",
+    "new york knicks": "18",
+    "ny": "18",
+    "ny knicks": "18",
+    "new york": "18",
+    "oklahoma city thunder": "25",
+    "okc": "25",
+    "okc thunder": "25",
+    "oklahoma city": "25",
+    "orlando magic": "19",
+    "orl": "19",
+    "orlando": "19",
+    "philadelphia 76ers": "20",
+    "phi": "20",
+    "philadelphia sixers": "20",
+    "philly 76ers": "20",
+    "philadelphia": "20",
+    "phoenix suns": "21",
+    "phx": "21",
+    "phoenix": "21",
+    "portland trail blazers": "22",
+    "por": "22",
+    "portland blazers": "22",
+    "portland": "22",
+    "sacramento kings": "23",
+    "sac": "23",
+    "sacramento": "23",
+    "san antonio spurs": "24",
+    "sa": "24",
+    "sa spurs": "24",
+    "san antonio": "24",
+    "toronto raptors": "28",
+    "tor": "28",
+    "toronto": "28",
+    "utah jazz": "26",
+    "utah": "26",
+    "washington wizards": "27",
+    "wsh": "27",
+    "washington": "27"
+  }
+}

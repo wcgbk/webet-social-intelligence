@@ -29,7 +29,7 @@ const SPORTS_ENABLED = {
   MLB: true,
   NFL: true,
   NCAAF: true,
-  NBA: false, // hooks ready; no preseason
+  NBA: false, // shadow engine only; daily card stays off
   NHL: true, // WeBet voice order 2026-09-30 — v12.3.13 NHL engine live
 };
 
@@ -290,7 +290,14 @@ const SELECT_WEIGHTS = {
 };
 
 const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2 };
-const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 14.0, NHL: 1.8, MLB: 3.5 };
+/**
+ * Total residual SD. NBA is 18: spread SD (12) is the home-margin residual.
+ * Total = H+A and pace shocks move both scores the same way, so SD(total)
+ * is wider than SD(margin). A pace-aware model still leaves about 16–19
+ * (legacy omega used 18.5). 18 pulls total probabilities toward 0.5.
+ * It does not change a gate. NBA stays off the daily card.
+ */
+const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 };
 /** HFA base; game_day.js applies soft rest/B2B deltas on top. */
 const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 

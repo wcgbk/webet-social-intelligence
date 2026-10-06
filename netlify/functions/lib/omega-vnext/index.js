@@ -87,7 +87,15 @@ function projectAll(snap) {
       gameDay,
     }));
   }
-  if (SPORTS_ENABLED.NBA) raw.push(...nba.project({}));
+  // Real board when the flag is on. Preseason is not admitted on this path.
+  if (SPORTS_ENABLED.NBA) {
+    raw.push(...nba.project({
+      oddsEvents: snap.oddsBySport.NBA || [],
+      standings: snap.standingsBySport.NBA || {},
+      gameDay,
+      espnGames: snap.espnBySport && snap.espnBySport.NBA,
+    }).filter(c => !c.shadowOnly && !c.preseason));
+  }
   if (SPORTS_ENABLED.NHL) {
     raw.push(...nhl.project({
       oddsEvents: snap.oddsBySport.NHL || [],

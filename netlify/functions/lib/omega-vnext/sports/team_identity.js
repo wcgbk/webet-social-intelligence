@@ -3,15 +3,18 @@
 const { normalizeTeamName } = require('./team_normalize');
 const ncaafTable = require('./data/ncaaf-team-ids.json');
 const nflTable = require('./data/nfl-team-ids.json');
+const nbaTable = require('./data/nba-team-ids.json');
 
 const TABLES = {
   NFL: nflTable,
   NCAAF: ncaafTable,
+  NBA: nbaTable,
 };
 
 function tableFor(sport) {
   if (sport === 'NFL') return TABLES.NFL;
   if (sport === 'NCAAF' || sport === 'CFB') return TABLES.NCAAF;
+  if (sport === 'NBA') return TABLES.NBA;
   return null;
 }
 

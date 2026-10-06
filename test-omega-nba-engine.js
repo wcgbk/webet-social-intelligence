@@ -1,0 +1,491 @@
+'use strict';
+/**
+ * NBA vnext engine, shadow only. SPORTS_ENABLED.NBA stays false.
+ * No network. No blob writes.
+ */
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
+const config = require(path.join(root, 'config'));
+const id = require(path.join(root, 'sports/team_identity'));
+const nba = require(path.join(root, 'sports/nba'));
+const gd = require(path.join(root, 'sports/game_day'));
+const ingest = require(path.join(root, 'ingest'));
+const { projectAll } = require(path.join(root, 'index'));
+const { calibrateAll } = require(path.join(root, 'calibrate'));
+const { attachEv } = require(path.join(root, 'edge'));
+const { applyGates } = require(path.join(root, 'gates'));
+const { selectStraights } = require(path.join(root, 'select'));
+const shadow = require(path.join(root, 'nba_shadow'));
+
+const ids = require(path.join(root, 'sports/data/nba-team-ids.json'));
+const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
+
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
+assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
+assert.strictEqual(config.GATES.minEV.NBA, 0.03);
+assert.strictEqual(config.GATES.minCoverProb.NBA, undefined);
+assert.strictEqual(config.GATES.minCoverProb.default, 0.48);
+assert.strictEqual(config.SPORT_SPREAD_STD.NBA, 12);
+assert.strictEqual(config.SPORT_TOTAL_STD.NBA, 18);
+assert.ok(config.HFA.NBA >= 2.0 && config.HFA.NBA <= 2.5);
+assert.strictEqual(config.HFA.NBA, 2.5);
+assert.strictEqual(shadow.ODDS_CREDITS_PER_RUN, 9);
+assert.strictEqual(shadow.ODDS_REGIONS, 'us,us2,eu');
+assert.strictEqual(shadow.ODDS_MARKETS, 'h2h,spreads,totals');
+
+// ── identity: all 30 teams, no mascot / last-word match ──
+{
+  const teams = Object.values(ids.teams);
+  assert.strictEqual(teams.length, 30);
+  assert.strictEqual(ids._meta.teamCount, 30);
+  const seen = new Set();
+  for (const team of teams) {
+    assert.ok(team.espnId, team.displayName);
+    assert.strictEqual(id.resolveTeamId('NBA', team.displayName), String(team.espnId), team.displayName);
+    seen.add(String(team.espnId));
+    for (const name of team.oddsNames || []) {
+      assert.strictEqual(id.resolveTeamId('NBA', name), String(team.espnId), name);
+    }
+  }
+  assert.strictEqual(seen.size, 30);
+  assert.strictEqual(id.resolveTeamId('NBA', 'LA Clippers'), '12');
+  assert.strictEqual(id.resolveTeamId('NBA', 'Los Angeles Clippers'), '12');
+  assert.strictEqual(id.resolveTeamId('NBA', 'L.A. Clippers'), '12');
+  assert.strictEqual(id.resolveTeamId('NBA', 'Los Angeles Lakers'), '13');
+  assert.strictEqual(id.resolveTeamId('NBA', 'LA Lakers'), '13');
+  assert.notStrictEqual(id.resolveTeamId('NBA', 'Los Angeles Lakers'), id.resolveTeamId('NBA', 'Los Angeles Clippers'));
+  for (const banned of ['Celtics', 'Lakers', 'Clippers', 'Blazers', 'Trail Blazers', 'Heat', 'Jazz', 'Los Angeles', 'LA']) {
+    assert.strictEqual(id.resolveTeamId('NBA', banned), null, banned);
+  }
+  const report = id.buildUnmatchedReport('2026-10-06', {
+    NFL: [],
+    NCAAF: [],
+    NBA: [{ home_team: 'Boston Celtics', away_team: 'Lakers' }],
+  });
+  assert.deepStrictEqual(Object.keys(report.bySport).sort(), ['NCAAF', 'NFL']);
+}
+
+// ── prior seed: labeled season, zero-sum net rating ──
+{
+  assert.strictEqual(seed._meta.season, '2025-26');
+  assert.strictEqual(seed._meta.method, 'prior-season net rating, zero-sum');
+  assert.ok(Math.abs(seed._meta.leaguePpg - 115.6069) < 1e-4);
+  const names = Object.keys(seed).filter(k => !k.startsWith('_'));
+  assert.strictEqual(names.length, 30);
+  const sum = names.reduce((s, n) => s + seed[n].netRtg, 0);
+  assert.ok(Math.abs(sum) < 1e-6, `netRtg sum ${sum}`);
+  assert.ok(Math.abs(seed['Oklahoma City Thunder'].netRtg - 10.9156) < 1e-4);
+  assert.ok(seed['Washington Wizards'].netRtg < -11);
+  const centered = nba.centerNbaSeed(seed);
+  const sum2 = names.reduce((s, n) => s + centered[n].netRtg, 0);
+  assert.ok(Math.abs(sum2) < 1e-6);
+  const again = nba.centerNbaSeed(centered);
+  assert.ok(Math.abs(again['Oklahoma City Thunder'].netRtg - centered['Oklahoma City Thunder'].netRtg) < 1e-9);
+  const loaded = nba.loadPrior();
+  assert.strictEqual(loaded._meta.season, '2025-26');
+}
+
+// ── season sums vs explicit per-game, and the games-played ramp ──
+{
+  const league = seed._meta.leaguePpg;
+  const explicit = ingest.applyNbaStandingExtras({ pf: 117.8, pa: 110.2 }, [
+    { name: 'avgPointsFor', value: 117.8 },
+    { name: 'avgPointsAgainst', value: 110.2 },
+    { name: 'pointsFor', value: 9657 },
+    { name: 'pointsAgainst', value: 9020 },
+    { name: 'gamesPlayed', value: 82 },
+  ]);
+  assert.strictEqual(explicit.avgPointsFor, 117.8);
+  const fromAvg = nba.resolveTeamRates(explicit, league);
+  assert.strictEqual(fromAvg.source, 'per-game');
+  assert.ok(Math.abs(fromAvg.offPpg - 117.8) < 1e-9, 'explicit avg is not divided by games');
+
+  const fromSum = nba.resolveTeamRates({
+    pointsFor: 9657,
+    pointsAgainst: 9020,
+    gamesPlayed: 82,
+  }, league);
+  assert.strictEqual(fromSum.source, 'season-sum');
+  assert.ok(Math.abs(fromSum.offPpg - 9657 / 82) < 1e-9);
+
+  assert.strictEqual(nba.resolveTeamRates({
+    pointsFor: 9657,
+    pointsAgainst: 9020,
+    gamesPlayed: 1,
+  }, league), null);
+
+  const ratings = nba.resolveTeamRates({
+    offRtg: 118,
+    defRtg: 110,
+    pace: 100,
+    gamesPlayed: 10,
+  }, league);
+  assert.strictEqual(ratings.source, 'ratings');
+  assert.ok(Math.abs(ratings.offPpg - 118) < 1e-9);
+
+  assert.strictEqual(nba.seasonWeight(0, false), 0);
+  assert.strictEqual(nba.seasonWeight(1, false), 0);
+  assert.strictEqual(nba.seasonWeight(10, false), 0.5);
+  assert.strictEqual(nba.seasonWeight(20, false), 1);
+  assert.strictEqual(nba.seasonWeight(40, false), 1);
+  assert.strictEqual(nba.seasonWeight(40, true), 0);
+  assert.strictEqual(nba.NBA_RAMP_GAMES, 20);
+}
+
+const LEAGUE = seed._meta.leaguePpg;
+const PACE = seed._meta.leaguePace;
+
+function equalPrior() {
+  const row = { offPpg: LEAGUE, defPpg: LEAGUE, pace: PACE, netRtg: 0 };
+  return {
+    _meta: { season: '2025-26', leaguePpg: LEAGUE, leaguePace: PACE },
+    'Boston Celtics': { ...row },
+    'New York Knicks': { ...row },
+  };
+}
+
+function event(home, away, opts = {}) {
+  const spread = opts.spread != null ? opts.spread : -2.5;
+  const total = opts.total != null ? opts.total : 231.5;
+  const homeMl = opts.homeMl != null ? opts.homeMl : -130;
+  const awayMl = opts.awayMl != null ? opts.awayMl : 110;
+  const price = opts.price != null ? opts.price : -110;
+  const books = opts.books || ['pinnacle', 'draftkings', 'fanduel'];
+  return {
+    home_team: home,
+    away_team: away,
+    commence_time: opts.commence || '2026-10-20T23:00:00Z',
+    seasonType: opts.seasonType,
+    preseason: opts.preseason,
+    bookmakers: books.map(key => ({
+      key,
+      markets: [
+        { key: 'h2h', outcomes: [{ name: home, price: homeMl }, { name: away, price: awayMl }] },
+        { key: 'spreads', outcomes: [
+          { name: home, price, point: spread },
+          { name: away, price, point: -spread },
+        ] },
+        { key: 'totals', outcomes: [
+          { name: 'Over', price, point: total },
+          { name: 'Under', price, point: total },
+        ] },
+      ],
+    })),
+  };
+}
+
+function byMarket(rows, market, sideIncludes) {
+  return rows.find(c => c.market === market && (!sideIncludes || String(c.side).includes(sideIncludes)));
+}
+
+// ── projection sanity: equal clubs → HFA and 2× league ppg ──
+{
+  const env = nba.projectEnvironment({
+    homeProfile: { offPpg: LEAGUE, defPpg: LEAGUE, pace: PACE },
+    awayProfile: { offPpg: LEAGUE, defPpg: LEAGUE, pace: PACE },
+    league: { ppg: LEAGUE, pace: PACE },
+    hfa: config.HFA.NBA,
+  });
+  assert.ok(Math.abs(env.modelMargin - config.HFA.NBA) < 1e-9);
+  assert.ok(Math.abs(env.modelTotal - 2 * LEAGUE) < 1e-6);
+  assert.ok(Math.abs(env.modelTotal - 231.2) < 0.5);
+
+  const rows = nba.project({
+    oddsEvents: [event('Boston Celtics', 'New York Knicks')],
+    standings: {},
+    prior: equalPrior(),
+    espnGames: { games: [{ homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', seasonType: 2, preseason: false }] },
+  });
+  assert.ok(rows.length >= 6);
+  const spread = byMarket(rows, 'Spread', 'Boston Celtics');
+  const total = byMarket(rows, 'Total', 'Over');
+  assert.ok(Math.abs(spread.modelProjection - config.HFA.NBA) < 0.02, String(spread.modelProjection));
+  assert.ok(Math.abs(total.modelProjection - 2 * LEAGUE) < 0.05, String(total.modelProjection));
+  assert.ok(/nba-net-prior/.test(spread.projMethod), spread.projMethod);
+  assert.strictEqual(spread.preseason, false);
+  assert.strictEqual(spread.shadowOnly, false);
+
+  const calibrated = calibrateAll(rows);
+  const tot = calibrated.find(c => c.market === 'Total');
+  assert.strictEqual(tot.calibK, config.SHRINK_K.Total);
+  assert.strictEqual(tot.sport, 'NBA');
+
+  const b2b = nba.project({
+    oddsEvents: [event('Boston Celtics', 'New York Knicks')],
+    standings: {},
+    prior: equalPrior(),
+    gameDay: { restByTeam: { NBA: { Boston: { playedYesterday: true } } } },
+  });
+  const b2bSpread = byMarket(b2b, 'Spread', 'Boston Celtics');
+  assert.ok(b2bSpread.modelProjection < config.HFA.NBA, `home B2B ${b2bSpread.modelProjection}`);
+  assert.ok(Math.abs(b2bSpread.modelProjection - (config.HFA.NBA - 1.5)) < 0.05);
+  assert.ok(/-gameday/.test(b2bSpread.projMethod));
+
+  const awayB2b = gd.applyGameDayAdjustments({
+    sport: 'NBA',
+    modelMargin: config.HFA.NBA,
+    modelTotal: 2 * LEAGUE,
+    uncertainty: 0.3,
+    home: 'Boston Celtics',
+    away: 'New York Knicks',
+    restByTeam: { 'New York Knicks': { playedYesterday: true } },
+    qbByTeam: {},
+  });
+  assert.ok(awayB2b.modelMargin > config.HFA.NBA);
+  assert.ok(Math.abs(awayB2b.gameDay.hfaAdj) <= gd.HFA_ADJ.NBA.max + 1e-9);
+
+  const nanTotal = gd.applyGameDayAdjustments({
+    sport: 'NBA',
+    modelMargin: 2.5,
+    modelTotal: NaN,
+    uncertainty: 0.2,
+    home: 'Boston Celtics',
+    away: 'New York Knicks',
+    restByTeam: {},
+    qbByTeam: {},
+  });
+  assert.strictEqual(nanTotal.modelTotal, 228);
+  assert.strictEqual(gd.SHORT_REST_DAYS.NBA, 1);
+  assert.strictEqual(gd.EXTRA_REST_DAYS.NBA, 3);
+
+  const current = {
+    'Boston Celtics': { avgPointsFor: 125, avgPointsAgainst: 105, gamesPlayed: 20, pace: PACE },
+    'New York Knicks': { avgPointsFor: LEAGUE, avgPointsAgainst: LEAGUE, gamesPlayed: 20, pace: PACE },
+  };
+  const full = byMarket(nba.project({
+    oddsEvents: [event('Boston Celtics', 'New York Knicks')],
+    standings: current,
+    prior: equalPrior(),
+  }), 'Spread', 'Boston Celtics');
+  assert.ok(/nba-ppg-pace/.test(full.projMethod), full.projMethod);
+  assert.ok(full.modelProjection > config.HFA.NBA + 5, String(full.modelProjection));
+
+  const early = byMarket(nba.project({
+    oddsEvents: [event('Boston Celtics', 'New York Knicks')],
+    standings: {
+      'Boston Celtics': { avgPointsFor: 125, avgPointsAgainst: 105, gamesPlayed: 1, pace: PACE },
+      'New York Knicks': { avgPointsFor: LEAGUE, avgPointsAgainst: LEAGUE, gamesPlayed: 1, pace: PACE },
+    },
+    prior: equalPrior(),
+  }), 'Spread', 'Boston Celtics');
+  assert.ok(Math.abs(early.modelProjection - config.HFA.NBA) < 0.05, `gp<2 stays on prior ${early.modelProjection}`);
+
+  const pre = byMarket(nba.project({
+    oddsEvents: [event('Boston Celtics', 'New York Knicks', { preseason: true, seasonType: 1 })],
+    standings: current,
+    prior: equalPrior(),
+    allowPreseason: true,
+  }), 'Spread', 'Boston Celtics');
+  assert.strictEqual(pre.preseason, true);
+  assert.ok(Math.abs(pre.modelProjection - config.HFA.NBA) < 0.05, 'preseason stays on the prior');
+
+  assert.deepStrictEqual(nba.project({
+    oddsEvents: [event('Boston Celtics', 'New York Knicks', { preseason: true, seasonType: 1 })],
+    prior: equalPrior(),
+  }), []);
+  assert.deepStrictEqual(nba.project({}), []);
+
+  const unknown = nba.project({
+    oddsEvents: [event('Boston Celtics', 'Lakers')],
+    prior: equalPrior(),
+  });
+  assert.ok(unknown.length > 0);
+  assert.ok(unknown.every(c => c.unknownTeam === true));
+  assert.ok(unknown.every(c => /nba-unknown-team/.test(c.projMethod)));
+  const gated = applyGates(calibrateAll(unknown).map(attachEv), {
+    cardDate: '2026-10-20',
+    asOf: '2026-10-20T15:00:00Z',
+  });
+  assert.ok(gated.rejected.length > 0);
+  assert.ok(gated.rejected.every(c => c.rejectReason === 'unknown_team'));
+  assert.strictEqual(gated.yesPool.length, 0);
+}
+
+// ── flag off: NBA never enters the daily selection pool ──
+{
+  const snap = {
+    oddsBySport: {
+      MLB: [],
+      NFL: [],
+      NCAAF: [],
+      NHL: [],
+      NBA: [event('Boston Celtics', 'New York Knicks')],
+    },
+    standingsBySport: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
+    espnBySport: {
+      NBA: { games: [{ homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', seasonType: 2, preseason: false }] },
+    },
+    efficiencyBySport: { NFL: {}, NCAAF: {} },
+    parkFactors: {},
+    mlbPitcherStats: { byId: {}, byName: {}, byTeam: {} },
+    gameDay: { restByTeam: { NBA: {} } },
+  };
+  const slate = projectAll(snap);
+  assert.ok(!slate.some(c => c.sport === 'NBA'));
+  const { yesPool } = applyGates(calibrateAll(slate).map(attachEv), { cardDate: '2026-10-20' });
+  assert.ok(!yesPool.some(c => c.sport === 'NBA'));
+  assert.ok(!selectStraights(yesPool, config.MAX_STRAIGHTS).some(c => c.sport === 'NBA'));
+
+  assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+  config.SPORTS_ENABLED.NBA = true;
+  try {
+    const live = projectAll(snap);
+    assert.ok(live.some(c => c.sport === 'NBA'), 'flag-on branch passes the real board');
+    const preSnap = {
+      ...snap,
+      oddsBySport: {
+        ...snap.oddsBySport,
+        NBA: [event('Boston Celtics', 'New York Knicks', { preseason: true, seasonType: 1 })],
+      },
+      espnBySport: {
+        NBA: { games: [{ homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', seasonType: 1, preseason: true }] },
+      },
+    };
+    assert.ok(!projectAll(preSnap).some(c => c.sport === 'NBA'), 'preseason stays off the daily path');
+  } finally {
+    config.SPORTS_ENABLED.NBA = false;
+  }
+  assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+  assert.ok(!projectAll(snap).some(c => c.sport === 'NBA'));
+}
+
+// ── source: daily path cannot opt into preseason; shadow is unscheduled ──
+{
+  const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
+  assert.ok(/if \(SPORTS_ENABLED\.NBA\)/.test(indexSrc));
+  assert.ok(indexSrc.includes('oddsEvents: snap.oddsBySport.NBA'));
+  assert.ok(!/nba\.project\(\{\}\)/.test(indexSrc));
+  assert.ok(!/allowPreseason\s*:\s*true/.test(indexSrc));
+  const shadowSrc = fs.readFileSync(path.join(root, 'nba_shadow.js'), 'utf8');
+  assert.ok(!/selectStraights\s*\(/.test(shadowSrc));
+  assert.ok(/allowPreseason:\s*true/.test(shadowSrc));
+  const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
+  assert.ok(!/omega-nba-shadow/.test(toml));
+  const trig = fs.readFileSync(path.join(__dirname, 'netlify/functions/trigger-omega-shadow.js'), 'utf8');
+  assert.ok(!/OMEGA_NBA_SHADOW/.test(trig));
+  assert.ok(!/basketball_nba/.test(trig));
+  assert.ok(!/omega-nba-shadow/.test(trig));
+  assert.strictEqual(ingest.scoreboardSeasonFields({ season: { type: 1 } }).preseason, true);
+  assert.strictEqual(ingest.scoreboardSeasonFields({ season: { type: { type: 2, name: 'Regular Season' } } }).preseason, false);
+  assert.strictEqual(ingest.scoreboardSeasonFields({ season: { slug: 'preseason', type: 3 } }).preseason, true);
+}
+
+// ── shadow fixture, grader, and the unscheduled handler ──
+(async () => {
+  const writes = [];
+  const refuse = async () => { throw new Error('dryRun must not write'); };
+  const board = {
+    dateISO: '2026-10-20',
+    oddsEvents: [event('Boston Celtics', 'New York Knicks', { spread: 8.5, total: 220.5, price: 100, homeMl: 150, awayMl: -170 })],
+    standings: {},
+    prior: equalPrior(),
+    espnGames: { games: [{ homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', seasonType: 1, preseason: true }] },
+    preseason: true,
+    asOf: '2026-10-20T15:00:00Z',
+    store: refuse,
+  };
+  const dry = await shadow.runNbaShadow({ ...board, dryRun: true });
+  assert.strictEqual(dry.wrote, false);
+  assert.strictEqual(dry.oddsCalls, 0);
+  assert.strictEqual(dry.creditsEstimate, 0);
+  assert.strictEqual(dry.key, 'omega-nba-shadow-2026-10-20');
+  assert.ok(dry.candidateCount >= 6, `candidates ${dry.candidateCount}`);
+  assert.ok(dry.yesCount >= 1, `yes ${dry.yesCount} rejected ${dry.rejectedCount}`);
+  assert.strictEqual(dry.payload.shadowOnly, true);
+  assert.strictEqual(dry.payload.sportsEnabledNba, false);
+  assert.ok(dry.payload.selection.includes('not daily'));
+  assert.ok(dry.payload.picks.every(p => p.shadowOnly === true));
+  assert.ok(dry.payload.picks.every(p => p.preseason === true));
+  assert.strictEqual(writes.length, 0);
+
+  const live = await shadow.runNbaShadow({
+    ...board,
+    dryRun: false,
+    store: async (key, data) => { writes.push({ key, data }); },
+  });
+  assert.strictEqual(live.wrote, true);
+  assert.strictEqual(writes.length, 1);
+  assert.strictEqual(writes[0].key, 'omega-nba-shadow-2026-10-20');
+  assert.strictEqual(writes[0].data.shadowOnly, true);
+  assert.ok(writes[0].data.picks.length >= 1);
+
+// ── grader fixture: win / loss / push / pending / unmatched; dryRun writes nothing ──
+{
+  const finals = [
+    { homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', homeScore: 110, awayScore: 100, status: 'final' },
+    { homeTeam: 'Los Angeles Lakers', awayTeam: 'LA Clippers', homeScore: null, awayScore: null, status: 'pre' },
+  ];
+  const slate = {
+    picks: [
+      { market: 'Spread', side: 'Boston Celtics -2.5', line: -2.5, pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Spread', side: 'Boston Celtics -10', line: -10, pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Spread', side: 'Boston Celtics -20.5', line: -20.5, pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Total', side: 'Over 220.5', line: 220.5, pickSide: 'over', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Moneyline', side: 'Boston Celtics', pickSide: 'home', homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', matchup: 'New York Knicks @ Boston Celtics' },
+      { market: 'Spread', side: 'Los Angeles Lakers -1.5', line: -1.5, pickSide: 'home', homeTeam: 'Los Angeles Lakers', awayTeam: 'LA Clippers', matchup: 'LA Clippers @ Los Angeles Lakers' },
+      { market: 'Moneyline', side: 'Lakers', pickSide: 'home', homeTeam: 'Lakers', awayTeam: 'Boston Celtics', matchup: 'Boston Celtics @ Lakers' },
+    ],
+  };
+  const graded = slate.picks.map((p, i) => shadow.gradeOne(p, i === 6 ? null : finals.find(g => g.homeTeam === p.homeTeam)));
+  assert.deepStrictEqual(graded.map(g => g.result), ['win', 'push', 'loss', 'loss', 'win', 'pending', 'unmatched']);
+
+  const writes = [];
+  const dry = await shadow.gradeNbaShadow({
+    dateISO: '2026-10-20',
+    dryRun: true,
+    slate,
+    finals,
+    store: async () => { throw new Error('dryRun must not write'); },
+  });
+  assert.strictEqual(dry.wrote, false);
+  assert.strictEqual(dry.oddsCalls, 0);
+  assert.strictEqual(dry.key, 'omega-nba-shadow-results-2026-10-20');
+  assert.strictEqual(dry.record.win, 2);
+  assert.strictEqual(dry.record.push, 1);
+  assert.strictEqual(dry.record.loss, 2);
+  assert.strictEqual(dry.record.pending, 1);
+  assert.strictEqual(dry.record.unmatched, 1);
+
+  const saved = await shadow.gradeNbaShadow({
+    dateISO: '2026-10-20',
+    dryRun: false,
+    slate,
+    finals,
+    store: async (key, data) => { writes.push({ key, data }); },
+  });
+  assert.strictEqual(saved.wrote, true);
+  assert.strictEqual(writes[0].key, 'omega-nba-shadow-results-2026-10-20');
+  assert.strictEqual(writes[0].data.shadowOnly, true);
+  assert.strictEqual(writes[0].data.oddsCalls, 0);
+}
+
+// ── handler stays dark unless the flag is set ──
+{
+  const prev = process.env.OMEGA_NBA_SHADOW;
+  delete process.env.OMEGA_NBA_SHADOW;
+  const handler = require('./netlify/functions/omega-nba-shadow').handler;
+  const res = await handler({ body: JSON.stringify({ dryRun: false }) });
+  const body = JSON.parse(res.body);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(body.skipped, true);
+  assert.strictEqual(body.oddsCalls, 0);
+  assert.strictEqual(body.wrote, false);
+  assert.strictEqual(body.creditsEstimate, 0);
+  if (prev == null) delete process.env.OMEGA_NBA_SHADOW;
+  else process.env.OMEGA_NBA_SHADOW = prev;
+}
+
+console.log('PASS test-omega-nba-engine', {
+  model: config.MODEL_VERSION,
+  nbaEnabled: config.SPORTS_ENABLED.NBA,
+  totalSd: config.SPORT_TOTAL_STD.NBA,
+  credits: shadow.ODDS_CREDITS_PER_RUN,
+});
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

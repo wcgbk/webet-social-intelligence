@@ -184,18 +184,19 @@ function byMarket(cands, market) {
 // Season sums are divided whenever gp >= 2. 36 in 3 games is 12, not 36.
 {
   const cfg = epa.SPORT_CFG.NFL;
-  const w = epa.SIERRA_W;
   const seed = { offEpa: 0, defEpa: 0 };
   const early = epa.sierraAdjust(seed, { pf: 36, pa: 90, wins: 0, losses: 3 }, cfg);
+  const w3 = epa.sierraWeight(3, cfg);
   const offFrom12 = (12 - cfg.leaguePpg) / cfg.plays;
   assert.strictEqual(early.adjusted, true);
-  assert.ok(Math.abs(early.offEpa - ((1 - w) * seed.offEpa + w * offFrom12)) < 1e-12);
+  assert.ok(Math.abs(early.offEpa - ((1 - w3) * seed.offEpa + w3 * offFrom12)) < 1e-12);
   assert.ok(early.offEpa <= seed.offEpa, 'pf 36 in 3 games must not raise offEpa');
 
   const high = epa.sierraAdjust(seed, { pf: 120, pa: 80, games: 4 }, cfg);
+  const w4 = epa.sierraWeight(4, cfg);
   const offFrom30 = (120 / 4 - cfg.leaguePpg) / cfg.plays;
   assert.strictEqual(high.adjusted, true);
-  assert.ok(Math.abs(high.offEpa - w * offFrom30) < 1e-12, 'pf 120 in 4 games is divided');
+  assert.ok(Math.abs(high.offEpa - w4 * offFrom30) < 1e-12, 'pf 120 in 4 games is divided');
 
   const rateSeed = { offEpa: 0.12, defEpa: -0.04 };
   const summedRate = epa.sierraAdjust(rateSeed, { pf: 22, pa: 22, games: 4 }, cfg);
@@ -211,8 +212,8 @@ function byMarket(cands, market) {
   const offFrom22 = (22 - cfg.leaguePpg) / cfg.plays;
   const defFrom22 = (cfg.leaguePpg - 22) / cfg.plays;
   assert.strictEqual(rate.adjusted, true);
-  assert.ok(Math.abs(rate.offEpa - ((1 - w) * rateSeed.offEpa + w * offFrom22)) < 1e-12);
-  assert.ok(Math.abs(rate.defEpa - ((1 - w) * rateSeed.defEpa + w * defFrom22)) < 1e-12);
+  assert.ok(Math.abs(rate.offEpa - ((1 - w4) * rateSeed.offEpa + w4 * offFrom22)) < 1e-12);
+  assert.ok(Math.abs(rate.defEpa - ((1 - w4) * rateSeed.defEpa + w4 * defFrom22)) < 1e-12);
   assert.ok(Math.abs(rate.offEpa - rateSeed.offEpa) > 1e-6, 'avgPointsFor 22 is the rate, not 40/4');
 
   const cfbCfg = epa.SPORT_CFG.NCAAF;
@@ -221,9 +222,10 @@ function byMarket(cands, market) {
     { pf: 40, pa: 120, wins: 2, losses: 1 },
     cfbCfg
   );
+  const wCfb = epa.sierraWeight(3, cfbCfg);
   const cfbOff = (40 / 3 - cfbCfg.leaguePpg) / cfbCfg.plays;
   assert.strictEqual(cfb.adjusted, true);
-  assert.ok(Math.abs(cfb.offEpa - w * cfbOff) < 1e-12, 'NCAAF uses the same season-sum band');
+  assert.ok(Math.abs(cfb.offEpa - wCfb * cfbOff) < 1e-12, 'NCAAF uses the same season-sum band');
   assert.ok(cfb.offEpa <= seed.offEpa);
 }
 

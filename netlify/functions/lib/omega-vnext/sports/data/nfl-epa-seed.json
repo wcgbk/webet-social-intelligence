@@ -1,5 +1,8 @@
 {
   "_meta": {
+    "season": 2025,
+    "appliesToSeason": 2026,
+    "seasonNote": "season is the prior season these EPA numbers represent. appliesToSeason is the season this seed covers. The loader warns when the card date's calendar year differs. The label does not change the blend.",
     "units": "epa_per_play",
     "defEpa": "higher is better (EPA prevented per play, not EPA allowed)",
     "offSuccess": "offensive success rate",

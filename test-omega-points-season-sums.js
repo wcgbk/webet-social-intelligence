@@ -15,17 +15,18 @@ const ingest = require(path.join(root, 'ingest'));
 const { powerFromStandings, gamesPlayed } = require(path.join(root, 'sports/_common'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
-assert.strictEqual(epa.SIERRA_W, 0.2);
+assert.strictEqual(epa.sierraWeight(2, epa.SPORT_CFG.NFL), 0.2);
+assert.strictEqual(epa.sierraWeight(2, epa.SPORT_CFG.NCAAF), 0.2);
 
 const nfl = epa.SPORT_CFG.NFL;
 const cfb = epa.SPORT_CFG.NCAAF;
-const w = epa.SIERRA_W;
 
 function close(actual, expected, msg) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${msg || ''} ${actual} vs ${expected}`);
 }
 
-function blend(seed, pfPg, paPg, cfg) {
+function blend(seed, pfPg, paPg, cfg, gp) {
+  const w = epa.sierraWeight(gp, cfg);
   return {
     offEpa: (1 - w) * seed.offEpa + w * ((pfPg - cfg.leaguePpg) / cfg.plays),
     defEpa: (1 - w) * seed.defEpa + w * ((cfg.leaguePpg - paPg) / cfg.plays),
@@ -61,14 +62,14 @@ const zero = { offEpa: 0, defEpa: 0 };
   const row = { pf: 46, pa: 55, wins: 2, losses: 1 };
   assert.strictEqual(gamesPlayed(row), 3);
   const got = epa.sierraAdjust(zero, row, nfl);
-  const expect = blend(zero, 46 / 3, 55 / 3, nfl);
+  const expect = blend(zero, 46 / 3, 55 / 3, nfl, 3);
   assert.strictEqual(got.adjusted, true);
   assert.strictEqual((46 / 3).toFixed(2), '15.33');
   assert.strictEqual((55 / 3).toFixed(2), '18.33');
   close(got.offEpa, expect.offEpa, 'giants off');
   close(got.defEpa, expect.defEpa, 'giants def');
   assert.ok(got.offEpa < 0, '15.33 ppg is below the NFL league rate');
-  const misread = blend(zero, 46, 55, nfl);
+  const misread = blend(zero, 46, 55, nfl, 3);
   assert.ok(Math.abs(got.offEpa - misread.offEpa) > 0.05);
 }
 
@@ -77,7 +78,7 @@ const zero = { offEpa: 0, defEpa: 0 };
   const row = { pf: 46, pa: 55, wins: 2, losses: 2 };
   assert.strictEqual(gamesPlayed(row), 4);
   const got = epa.sierraAdjust(zero, row, nfl);
-  const expect = blend(zero, 11.5, 13.75, nfl);
+  const expect = blend(zero, 11.5, 13.75, nfl, 4);
   assert.strictEqual(got.adjusted, true);
   close(got.offEpa, expect.offEpa, 'giants gp4 off');
   close(got.defEpa, expect.defEpa, 'giants gp4 def');
@@ -87,7 +88,7 @@ const zero = { offEpa: 0, defEpa: 0 };
 {
   const byField = epa.sierraAdjust(zero, { pf: 46, pa: 55, wins: 2, losses: 1, gamesPlayed: 4 }, nfl);
   const byGames = epa.sierraAdjust(zero, { pf: 46, pa: 55, wins: 2, losses: 1, games: 4 }, nfl);
-  const expect = blend(zero, 11.5, 13.75, nfl);
+  const expect = blend(zero, 11.5, 13.75, nfl, 4);
   assert.strictEqual(byField.adjusted, true);
   close(byField.offEpa, expect.offEpa, 'gamesPlayed field');
   close(byGames.offEpa, expect.offEpa, 'games field');
@@ -99,14 +100,14 @@ const zero = { offEpa: 0, defEpa: 0 };
   const row = { pf: 46, pa: 55, wins: 2, losses: 1, ties: 1 };
   assert.strictEqual(gamesPlayed(row), 4);
   const got = epa.sierraAdjust(zero, row, nfl);
-  close(got.offEpa, blend(zero, 11.5, 13.75, nfl).offEpa, 'ties');
+  close(got.offEpa, blend(zero, 11.5, 13.75, nfl, 4).offEpa, 'ties');
 }
 
 // Patriots 36/51 gp=3 → 12 / 17.
 {
   const row = { pf: 36, pa: 51, wins: 1, losses: 2 };
   const got = epa.sierraAdjust(zero, row, nfl);
-  const expect = blend(zero, 12, 17, nfl);
+  const expect = blend(zero, 12, 17, nfl, 3);
   assert.strictEqual(got.adjusted, true);
   close(got.offEpa, expect.offEpa, 'patriots off');
   close(got.defEpa, expect.defEpa, 'patriots def');
@@ -135,7 +136,7 @@ const zero = { offEpa: 0, defEpa: 0 };
   close(rates.pfPg, 92 / 3, 'ravens pf');
   close(rates.paPg, 78 / 3, 'ravens pa');
   const got = epa.sierraAdjust(seed, row, nfl);
-  const expect = blend(seed, rates.pfPg, rates.paPg, nfl);
+  const expect = blend(seed, rates.pfPg, rates.paPg, nfl, 3);
   assert.strictEqual(got.adjusted, true);
   close(got.offEpa, expect.offEpa, 'ravens off unchanged');
   close(got.defEpa, expect.defEpa, 'ravens def unchanged');
@@ -148,11 +149,11 @@ const zero = { offEpa: 0, defEpa: 0 };
   assert.strictEqual(rates.divided, false);
   assert.strictEqual(rates.pfPg, 48);
   const got = epa.sierraAdjust(zero, row, cfb);
-  const expect = blend(zero, 48 / 3, 42 / 3, cfb);
+  const expect = blend(zero, 48 / 3, 42 / 3, cfb, 3);
   assert.strictEqual(got.adjusted, true);
   close(got.offEpa, expect.offEpa, 'ncaaf off');
   close(got.defEpa, expect.defEpa, 'ncaaf def');
-  const misread = blend(zero, 48, 42, cfb);
+  const misread = blend(zero, 48, 42, cfb, 3);
   assert.ok(got.offEpa < misread.offEpa, 'dividing a 48-point season sum lowers offEpa');
 }
 
@@ -160,7 +161,7 @@ const zero = { offEpa: 0, defEpa: 0 };
 {
   const row = { pf: 46, pa: 55, wins: 2, losses: 1, avgPointsFor: 30 };
   const got = epa.sierraAdjust(zero, row, nfl);
-  close(got.offEpa, blend(zero, 46 / 3, 55 / 3, nfl).offEpa, 'half pair still divides');
+  close(got.offEpa, blend(zero, 46 / 3, 55 / 3, nfl, 3).offEpa, 'half pair still divides');
 }
 
 // Explicit per-game pair is used as the rate and is not divided again.
@@ -175,8 +176,8 @@ const zero = { offEpa: 0, defEpa: 0 };
     avgPointsAgainst: 19,
   };
   const got = epa.sierraAdjust(seed, row, nfl);
-  const expect = blend(seed, 22, 19, nfl);
-  const divided = blend(seed, 46 / 3, 55 / 3, nfl);
+  const expect = blend(seed, 22, 19, nfl, 3);
+  const divided = blend(seed, 46 / 3, 55 / 3, nfl, 3);
   assert.strictEqual(got.adjusted, true);
   close(got.offEpa, expect.offEpa, 'explicit off');
   close(got.defEpa, expect.defEpa, 'explicit def');
@@ -350,7 +351,7 @@ function project(sport, home, away, standings) {
   assert.strictEqual(avg.avgPointsFor, 15.3);
   assert.strictEqual(avg.avgPointsAgainst, 18.3);
   const used = epa.sierraAdjust(zero, avg, nfl);
-  close(used.offEpa, blend(zero, 15.3, 18.3, nfl).offEpa, 'ingested avg');
+  close(used.offEpa, blend(zero, 15.3, 18.3, nfl, 3).offEpa, 'ingested avg');
 
   const half = ingest.applyFootballStandingExtras({ pf: 46, pa: 55 }, [
     { name: 'avgPointsFor', value: 15.3 },

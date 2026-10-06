@@ -5,6 +5,7 @@
  * defEpa is defensive strength per play (higher = better, sign-flipped EPA allowed).
  * Both teams must match a clean prior; otherwise the caller keeps standings power.
  * Sierra blend only when standings pf/pa and a game count are clean.
+ * In-season weight on current points/game ramps with each team's games played.
  * Seeds are zero-sum centered once at load (centerSeed). The JSON file stays raw.
  * v12.3.8: capped success→margin (NFL) and talent/spPlus blend (NCAAF).
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
@@ -15,7 +16,17 @@ const { clamp } = require('../odds_math');
 const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
 const { resolveTeamId, rowByIdentity, logUnknownTeam } = require('./team_identity');
 
-const SIERRA_W = 0.2;
+/**
+ * Sierra weight on current points/game. Prior seed weight is 1 − w.
+ * w is 0 below 2 games (sierraAdjust keeps the seed).
+ * w is 0.20 at 2 games, then rises linearly to 0.50 at midseason
+ * games played, and stays at 0.50 after that.
+ * Midseason is SPORT_CFG[sport].sierraMidseasonGp: NFL 9, NCAAF 6.
+ * Each team uses its own gamesPlayed() count.
+ * A cfg with no midseason gp, or midseason <= 2, keeps 0.20 for every gp >= 2.
+ */
+const SIERRA_W_GP2 = 0.2;
+const SIERRA_W_CAP = 0.5;
 const LEAGUE_SUCCESS = 0.43;
 /** Sanity band for a per-game rate after season sums are divided. Not a divide trigger. */
 const FOOTBALL_PPG_MIN = 6;
@@ -38,6 +49,8 @@ const SPORT_CFG = {
     marginCap: 24,
     totalMin: 32,
     totalMax: 66,
+    // Week 9. Linear Sierra ramp reaches 0.50 here, then stays capped.
+    sierraMidseasonGp: 9,
   },
   NCAAF: {
     plays: 68,
@@ -55,8 +68,58 @@ const SPORT_CFG = {
     marginCap: 31,
     totalMin: 35,
     totalMax: 82,
+    // Game 6 of a 12-game schedule. Linear Sierra ramp reaches 0.50 here.
+    sierraMidseasonGp: 6,
   },
 };
+
+/**
+ * In-season weight on current points/game for one team's games played.
+ * cfgOrSport is SPORT_CFG[sport] or 'NFL' / 'NCAAF'.
+ */
+function sierraWeight(gp, cfgOrSport) {
+  const g = Number(gp);
+  if (!Number.isFinite(g) || g < 2) return 0;
+  const cfg = typeof cfgOrSport === 'string' ? SPORT_CFG[cfgOrSport] : cfgOrSport;
+  const mid = cfg && Number(cfg.sierraMidseasonGp);
+  if (!Number.isFinite(mid) || mid <= 2) return SIERRA_W_GP2;
+  if (g >= mid) return SIERRA_W_CAP;
+  return SIERRA_W_GP2 + (SIERRA_W_CAP - SIERRA_W_GP2) * ((g - 2) / (mid - 2));
+}
+
+/**
+ * Season year of a card date (YYYY-MM-DD). It is the calendar year.
+ * A 2027 card date is season year 2027, including January and February.
+ * Null when the date does not parse. The label does not change projections.
+ */
+function cardSeasonYear(dateISO) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateISO || '').trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return year;
+}
+
+/**
+ * Seed season label vs the card date. seedSeasonStale is true only when
+ * appliesToSeason and the card season year are both finite and they differ.
+ */
+function seedSeasonStatus(meta, dateISO) {
+  const src = meta && typeof meta === 'object' ? meta : {};
+  const season = Number(src.season);
+  const applies = Number(src.appliesToSeason);
+  const year = cardSeasonYear(dateISO);
+  const haveApplies = Number.isFinite(applies);
+  const haveYear = year != null;
+  return {
+    season: Number.isFinite(season) ? season : null,
+    appliesToSeason: haveApplies ? applies : null,
+    cardSeasonYear: year,
+    seedSeasonStale: haveApplies && haveYear && applies !== year,
+  };
+}
 
 function isCleanEpa(row) {
   if (!row || typeof row !== 'object') return false;
@@ -215,6 +278,9 @@ function lookupEpa(teamName, table, sport) {
  * gp < 2 returns the seed. Divided rates must land in [6, 55] or the seed is kept.
  * An explicit avgPointsFor-style pair is the rate and is not divided.
  * gamesPlayed() prefers gamesPlayed, then games, else wins+losses+ties.
+ * Current-season weight is sierraWeight(that gp): 0.20 at gp 2, linear to
+ * 0.50 at the sport midseason gp, capped at 0.50. Prior seed weight is 1 − w.
+ * Home and away each use their own gp.
  */
 function sierraAdjust(epa, standingsRow, cfg) {
   const base = {
@@ -245,7 +311,7 @@ function sierraAdjust(epa, standingsRow, cfg) {
   if (![pfPg, paPg].every(n => Number.isFinite(n) && n >= FOOTBALL_PPG_MIN && n <= FOOTBALL_PPG_MAX)) return base;
   const offFromSt = (pfPg - cfg.leaguePpg) / cfg.plays;
   const defFromSt = (cfg.leaguePpg - paPg) / cfg.plays;
-  const w = SIERRA_W;
+  const w = sierraWeight(g, cfg);
   return {
     ...base,
     offEpa: (1 - w) * base.offEpa + w * offFromSt,
@@ -583,7 +649,11 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
 }
 
 module.exports = {
-  SIERRA_W,
+  SIERRA_W_GP2,
+  SIERRA_W_CAP,
+  sierraWeight,
+  cardSeasonYear,
+  seedSeasonStatus,
   SPORT_CFG,
   isCleanEpa,
   seedCenterStats,

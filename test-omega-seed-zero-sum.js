@@ -18,7 +18,8 @@ const epa = require(path.join(root, 'sports/epa'));
 const ingest = require(path.join(root, 'ingest'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
-assert.strictEqual(epa.SIERRA_W, 0.2);
+assert.strictEqual(epa.sierraWeight(2, epa.SPORT_CFG.NFL), 0.2);
+assert.strictEqual(epa.sierraWeight(2, epa.SPORT_CFG.NCAAF), 0.2);
 assert.strictEqual(epa.SPORT_CFG.NFL.plays, 62);
 assert.strictEqual(epa.SPORT_CFG.NFL.baseTotal, 45);
 assert.strictEqual(epa.SPORT_CFG.NCAAF.plays, 68);
@@ -165,8 +166,9 @@ assert.ok(cfbMargins.pairs >= 52 * 51);
 assertAveragePair('NFL', loaded.NFL);
 assertAveragePair('NCAAF', loaded.NCAAF);
 
-// Texas Tech @ Colorado, both clubs Sierra-blended. The EPA piece is
-// (1 - SIERRA_W) * 2 * d * plays ≈ 7.28. Success is not blended by Sierra,
+// Texas Tech @ Colorado, both clubs at 4 games. NCAAF w(4) = 0.35
+// (0.20 + 0.30 * (4 − 2) / (6 − 2)). The EPA piece is
+// (1 − w) * 2 * d * plays ≈ 5.92. Success is not blended by Sierra,
 // so centering it drops every pair by dSuccess * 12 on top of that.
 {
   const home = 'Colorado Buffaloes';
@@ -190,14 +192,15 @@ assertAveragePair('NCAAF', loaded.NCAAF);
   assert.ok(after.modelTotal < cfg.totalMax - 1 && after.modelTotal > cfg.totalMin + 1);
   assert.ok(Math.abs(before.modelMargin - after.modelMargin) < 1e-9);
   const drop = before.modelTotal - after.modelTotal;
-  const epaDrop = (1 - epa.SIERRA_W) * 2 * cfbStats.epa.d * cfg.plays;
+  const w = epa.sierraWeight(4, cfg);
+  const epaDrop = (1 - w) * 2 * cfbStats.epa.d * cfg.plays;
   const successDrop = cfbStats.success.d * 12;
-  assert.ok(Math.abs(epaDrop - 7.3) < 0.1, `EPA sierra drop ${epaDrop}`);
+  assert.ok(Math.abs(epaDrop - 5.92) < 0.01, `EPA sierra drop ${epaDrop}`);
   assert.ok(
     Math.abs(drop - (epaDrop + successDrop)) < 1e-6,
     `drop ${drop} vs ${epaDrop + successDrop}`
   );
-  assert.ok(Math.abs(drop - 7.3) < 0.5, `Texas Tech @ Colorado drop ${drop}`);
+  assert.ok(Math.abs(drop - 6.2) < 0.05, `Texas Tech @ Colorado drop ${drop}`);
 }
 
 console.log('PASS test-omega-seed-zero-sum', {

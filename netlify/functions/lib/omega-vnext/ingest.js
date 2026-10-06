@@ -495,6 +495,37 @@ async function loadGameDayContext(dateISO, labels, espnBySport) {
   return gameDay;
 }
 
+/**
+ * Season label on the shipped EPA seeds vs the card date.
+ * Warns when appliesToSeason is not the card date's calendar year.
+ * The flag is diagnostic. It does not change efficiency rows or projections.
+ */
+function buildEngineMeta(dateISO) {
+  const { seedSeasonStatus } = require('./sports/epa');
+  const out = { seedSeasonStale: false, NFL: null, NCAAF: null };
+  let nflMeta = {};
+  let cfbMeta = {};
+  try {
+    nflMeta = (require('./sports/data/nfl-epa-seed.json')._meta) || {};
+    cfbMeta = (require('./sports/data/cfb-epa-seed.json')._meta) || {};
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] EPA seed meta unreadable: ${e.message}`);
+    return out;
+  }
+  out.NFL = seedSeasonStatus(nflMeta, dateISO);
+  out.NCAAF = seedSeasonStatus(cfbMeta, dateISO);
+  for (const sport of ['NFL', 'NCAAF']) {
+    const row = out[sport];
+    if (row && row.seedSeasonStale) {
+      console.warn(
+        `[omega-vnext/ingest] EPA seed season stale sport=${sport} season=${row.season} appliesToSeason=${row.appliesToSeason} cardSeason=${row.cardSeasonYear} date=${dateISO}`
+      );
+    }
+  }
+  out.seedSeasonStale = !!(out.NFL && out.NFL.seedSeasonStale) || !!(out.NCAAF && out.NCAAF.seedSeasonStale);
+  return out;
+}
+
 async function loadSportEngines(dateISO, deps) {
   const loadSeeds = (deps && deps.loadSeeds) || loadEfficiencySeeds;
   const loadParks = (deps && deps.loadParks) || loadParkFactors;
@@ -538,8 +569,9 @@ async function loadSportEngines(dateISO, deps) {
   const nCfb = Object.keys(efficiencyBySport.NCAAF || {}).length;
   const nParks = Object.keys(parkFactors || {}).length;
   const nPit = Object.keys((mlbPitcherStats && mlbPitcherStats.byId) || {}).length;
-  console.log(`[omega-vnext/ingest] engines epa NFL=${nNfl} NCAAF=${nCfb} parks=${nParks} pitchers=${nPit}`);
-  return { efficiencyBySport, parkFactors, mlbPitcherStats };
+  const engineMeta = buildEngineMeta(dateISO);
+  console.log(`[omega-vnext/ingest] engines epa NFL=${nNfl} NCAAF=${nCfb} parks=${nParks} pitchers=${nPit} seedSeasonStale=${engineMeta.seedSeasonStale}`);
+  return { efficiencyBySport, parkFactors, mlbPitcherStats, engineMeta };
 }
 
 async function ingest(dateISO, opts = {}) {

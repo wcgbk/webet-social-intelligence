@@ -43,8 +43,12 @@
   # Placeability advisory; must not invent sides. Empty card remains valid.
 
 [functions."self-optimize-omega"]
-  schedule = "0 9 * * 0"
-  # Omega weekly self-optimization (Sunday 9:00 UTC) — reads/writes the omega store only.
+  # schedule = "0 9 * * 0"
+  # PAUSED 2026-10-06 — output edge-picks-omega/self-optimize-params is unused.
+  # Confirmed unread by Edge generate/verify/select (generateOmegaVnext), Betty,
+  # Live Picks, Circa, and the X posting pipeline. Alpha self-optimize stays on:
+  # generate-picks-alpha-background still loads edge-picks/self-optimize-params.
+  # Function code kept. Was Sunday 09:00 UTC.
 
 [functions."fetch-tsp-live"]
   # schedule = "*/15 * * * *"

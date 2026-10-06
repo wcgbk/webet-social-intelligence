@@ -7,6 +7,8 @@
  * Voice: feature-desk matchup storytelling plus a sharp handicapper's price logic.
  */
 
+const { narrateErrorShouldRetry } = require('./fetch_memo');
+
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const NARRATIVE_MAX_TOKENS = 5800;
 
@@ -472,11 +474,19 @@ Argue for the picked side. Say WeBetAI. No em dashes.`;
   return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
 }
 
-/** Prefer no-web_search first (web_search is flaky on Netlify). Retry once without tools. */
+/**
+ * No web_search (flaky on Netlify). Retry once on transient failures.
+ * A 400/401/403 is the same request failing twice — do not spend the second call.
+ * The fallback card keeps the locked sides either way.
+ */
 async function callClaude(opts) {
   try {
     return await callClaudeOnce({ ...opts, useWebSearch: false });
   } catch (e) {
+    if (!narrateErrorShouldRetry(e)) {
+      console.error(`[omega-vnext/narrate] Anthropic call failed (${e.message}) — not retrying a rejected request`);
+      throw e;
+    }
     console.error(`[omega-vnext/narrate] Anthropic no-tools call failed (${e.message}) — retrying once without tools`);
     try {
       return await callClaudeOnce({ ...opts, useWebSearch: false });

@@ -204,7 +204,11 @@ exports.handler = async (event) => {
       const ODDS_SPORTS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl" };
       const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       const linesByPair = {};
+      // Lines only decorate ESPN games. A sport with no ESPN game cannot change
+      // the response, so skip that Odds API pull.
+      const sportsOnSlate = new Set(games.map((g) => g.sport));
       await Promise.all(Object.entries(ODDS_SPORTS).map(async ([sport, key]) => {
+        if (!sportsOnSlate.has(sport)) return;
         try {
           const r = await fetch(`https://api.the-odds-api.com/v4/sports/${key}/odds?regions=us&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${ODDS_KEY}`);
           if (!r.ok) return;

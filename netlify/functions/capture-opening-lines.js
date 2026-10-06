@@ -5,6 +5,7 @@
 // our model's price by pick time, the edge is "captured" and less valuable.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
+const { slateOddsGate } = require("./lib/omega-vnext/fetch_memo");
 
 const ODDS_SPORTS = [
   "basketball_nba", "icehockey_nhl", "basketball_ncaab", "baseball_mlb",
@@ -34,6 +35,13 @@ exports.handler = async (event) => {
 
   for (const sport of ODDS_SPORTS) {
     try {
+      // Free /events list. A successful empty same-ET-day slate stores nothing,
+      // which is the same blob the paid pull would filter down to.
+      const gate = await slateOddsGate({ sportKey: sport, apiKey, dateISO });
+      if (gate.skip) {
+        console.log(`[opening-lines] ${sport}: skip Odds API (${gate.reason}, events=${gate.events})`);
+        continue;
+      }
       const url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,eu&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${apiKey}`;
       const resp = await fetch(url);
       if (!resp.ok) continue;

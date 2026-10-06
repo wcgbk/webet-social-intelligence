@@ -7,6 +7,7 @@ const {
   isSundayET,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
+const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
 
 function attachModelClvFields(rec, pick) {
   if (!rec || !pick) return rec;
@@ -431,9 +432,8 @@ async function fetchESPNScores(dateISO, sport) {
   if (!endpoint) return [];
   try {
     const dateParam = dateISO.replace(/-/g, '');
-    const resp = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard?dates=${dateParam}`, { signal: AbortSignal.timeout(6000) });
-    if (!resp.ok) return [];
-    const data = await resp.json();
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${endpoint}/scoreboard?dates=${dateParam}`;
+    const data = await memoFetchJson(url, 6000);
     return (data.events || []).map(ev => {
       const comp = ev.competitions?.[0];
       if (!comp) return null;
@@ -647,7 +647,7 @@ async function settleResultsForDate(dateISO, picksData) {
   return settledCount;
 }
 
-exports.handler = async (event) => {
+const trackClvOmegaHandler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
@@ -779,6 +779,19 @@ exports.handler = async (event) => {
       if (!sportKey) {
         // Unmapped sport — carry forward any prior capture, else record untracked.
         clvPicks.push(prev || { ...baseRecord, closingOdds: null, clv: null, clvCents: null, beatClosing: null, error: `Sport not mapped: ${pick.sport}` });
+        continue;
+      }
+
+      // A stored historical close at commence (score 0) cannot be improved by
+      // another pull of that same timestamp. Keep the row and skip Odds.
+      if (hasTrueClosingCapture(prev)) {
+        clvPicks.push({
+          ...prev,
+          betType: baseRecord.betType,
+          market: baseRecord.market,
+          segment: baseRecord.segment,
+          source: baseRecord.source,
+        });
         continue;
       }
 
@@ -1120,6 +1133,8 @@ exports.handler = async (event) => {
     };
   }
 };
+
+exports.handler = (event) => runWithFetchMemo(() => trackClvOmegaHandler(event));
 
 // ── Test-only exports (offline validation; no effect on the deployed handler) ──
 // Mirrors the generator's `module.exports.extractF5FromEvent` pattern so the de-vig /

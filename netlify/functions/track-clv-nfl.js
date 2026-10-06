@@ -14,6 +14,7 @@ const STORE = 'edge-picks-nfl';
 const NFL_SPORTS = ['americanfootball_nfl', 'americanfootball_nfl_preseason'];
 const SHARP_BOOKS = ['pinnacle', 'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook', 'circasports'];
 const PRE_PITCH_BUFFER_MIN = 3;
+const { hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -227,6 +228,12 @@ exports.handler = async (event) => {
         units: pick.units || null, pickTimeOdds: pick.odds || 'N/A',
         commenceTime: pick.commenceTime || null,
       };
+      // A stored historical close at commence (score 0) cannot be improved by
+      // another pull of that same timestamp. Keep the row and skip Odds.
+      if (hasTrueClosingCapture(prev)) {
+        clvPicks.push(prev);
+        continue;
+      }
       let commenceISO = pick.commenceTime || null;
       let commenceMs = commenceISO ? Date.parse(commenceISO) : NaN;
       let gameObj = null;

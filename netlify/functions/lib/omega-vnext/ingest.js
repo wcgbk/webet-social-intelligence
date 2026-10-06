@@ -5,6 +5,7 @@ const {
 } = require('./config');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
+const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -14,9 +15,7 @@ function enabledSportLabels() {
 }
 
 async function fetchJson(url, timeoutMs = 12000) {
-  const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url.split('?')[0]}`);
-  return resp.json();
+  return memoFetchJson(url, timeoutMs);
 }
 
 /**
@@ -40,6 +39,12 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
         out.snapshotNote = `historical:${opts.historicalSnapshot}`;
         url = `https://api.the-odds-api.com/v4/historical/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(opts.historicalSnapshot)}`;
       } else {
+        const gate = await slateOddsGate({ sportKey: key, apiKey, dateISO });
+        if (gate.skip) {
+          out.bySport[label] = [];
+          console.log(`[omega-vnext/ingest] ${label}: skip Odds API (${gate.reason}, events=${gate.events})`);
+          continue;
+        }
         url = `https://api.the-odds-api.com/v4/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
       }
       const data = await fetchJson(url, 15000);
@@ -285,6 +290,10 @@ function applyFootballStandingExtras(row, stats) {
 }
 
 async function fetchEspnStandings(label) {
+  return memoValue(`espn-standings:${label}`, () => loadEspnStandings(label));
+}
+
+async function loadEspnStandings(label) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return {};
   // NFL / CFB / MLB standings endpoints differ; best-effort

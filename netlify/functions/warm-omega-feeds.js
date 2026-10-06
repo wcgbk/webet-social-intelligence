@@ -13,12 +13,13 @@ const {
   enabledSportLabels,
 } = require('./lib/omega-vnext/ingest');
 const { etDateISO } = require('./lib/omega-vnext/line_path');
+const { runWithFetchMemo } = require('./lib/omega-vnext/fetch_memo');
 
 function countKeys(obj) {
   return obj && typeof obj === 'object' ? Object.keys(obj).length : 0;
 }
 
-exports.handler = async (event) => {
+async function warmHandler(event) {
   const softErrors = [];
   const now = new Date();
   const qs = (event && event.queryStringParameters) || {};
@@ -113,4 +114,6 @@ exports.handler = async (event) => {
       softErrors,
     }),
   };
-};
+}
+
+exports.handler = (event) => runWithFetchMemo(() => warmHandler(event));

@@ -20,6 +20,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { bettoredgeFetch } = require("./bettoredge-auth");
+const { skipAlphaLiveOdds, slateOddsGate } = require("./lib/omega-vnext/fetch_memo");
 
 // ── BETA system prompt: Claude as SELECTOR + NARRATOR (matches production role) ──
 const THE_LOCK_V10_SYSTEM = `You are THE LOCK — WeBetAI's sports betting analyst. You VALIDATE pre-computed statistical edges and write compelling narratives. You do NOT compute projections, probabilities, or Kelly sizing — the statistical model has already done this.
@@ -758,12 +759,23 @@ async function fetchOdds(dateISO, snapshotTime = null) {
   const allOdds = [];
   for (const sport of ODDS_SPORTS) {
     try {
+      // Soccer is fetched for the historical sim only. Live computeEdgeTable never
+      // selects those leagues, so a live odds pull cannot change a published side.
+      if (skipAlphaLiveOdds(sport, { historical: !!snapshotTime })) {
+        console.log(`[v10] ${sport}: skip live Odds API (not selectable)`);
+        continue;
+      }
       let markets = "h2h,spreads,totals,alternate_spreads,alternate_totals";
       let url;
       if (snapshotTime) {
         // Historical endpoint — lines exactly as-of snapshotTime, no live/final contamination
         url = `https://api.the-odds-api.com/v4/historical/sports/${sport}/odds?regions=us,us2,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(snapshotTime)}`;
       } else {
+        const gate = await slateOddsGate({ sportKey: sport, apiKey, dateISO });
+        if (gate.skip) {
+          console.log(`[v10] ${sport}: skip Odds API (${gate.reason}, events=${gate.events})`);
+          continue;
+        }
         url = `https://api.the-odds-api.com/v4/sports/${sport}/odds?regions=us,us2,eu&markets=${markets}&oddsFormat=american&apiKey=${apiKey}`;
       }
       let resp = await fetch(url);
@@ -5321,3 +5333,4 @@ module.exports.mlbStarterRunMetric = mlbStarterRunMetric;
 module.exports.ipToFloat = ipToFloat;
 module.exports.normTeamMLB = normTeamMLB;
 module.exports.fetchPitcherFIP = fetchPitcherFIP;
+module.exports.fetchOdds = fetchOdds;

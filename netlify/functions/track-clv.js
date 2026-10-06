@@ -17,6 +17,8 @@
 //      where the no-vig probability is the side's raw implied divided by the market
 //      overround (sum of both/all sides' raw implied) from the sharp anchor.
 //
+const { hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
+
 // Positive CLV = the fair (de-vigged) closing probability for our side is higher
 // than the fair probability we bet at → the line moved toward us → we beat the close.
 //
@@ -586,6 +588,19 @@ exports.handler = async (event) => {
       if (!sportKey) {
         // Unmapped sport — carry forward any prior capture, else record untracked.
         clvPicks.push(prev || { ...baseRecord, closingOdds: null, clv: null, clvCents: null, beatClosing: null, error: `Sport not mapped: ${pick.sport}` });
+        continue;
+      }
+
+      // A stored historical close at commence (score 0) cannot be improved by
+      // another pull of that same timestamp. Keep the row and skip Odds.
+      if (hasTrueClosingCapture(prev)) {
+        clvPicks.push({
+          ...prev,
+          betType: baseRecord.betType,
+          market: baseRecord.market,
+          segment: baseRecord.segment,
+          source: baseRecord.source,
+        });
         continue;
       }
 

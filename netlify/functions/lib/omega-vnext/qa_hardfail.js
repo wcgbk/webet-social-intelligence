@@ -18,6 +18,7 @@ const { matchupKey, selectStraights, toPickObject } = require('./select');
 const { adverseSteamReason } = require('./line_path');
 
 const { samePlayerName } = require('../player-name');
+const { memoFetchJson } = require('./fetch_memo');
 
 function normName(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -61,9 +62,7 @@ function lineMove(a, b) {
 // ── Fetch helpers (best-effort; failures = no hard-fail from that signal) ──
 
 async function fetchJson(url, timeoutMs = 10000) {
-  const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  return memoFetchJson(url, timeoutMs);
 }
 
 /**

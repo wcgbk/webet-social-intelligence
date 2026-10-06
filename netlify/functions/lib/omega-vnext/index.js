@@ -18,6 +18,7 @@ const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
+const { runWithFetchMemo } = require('./fetch_memo');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -180,6 +181,9 @@ async function emitCaptureHealthOps(dateISO, captureHealth, meta = {}) {
 }
 
 async function generateOmegaVnext(opts = {}) {
+  if (!opts._fetchMemo) {
+    return runWithFetchMemo(() => generateOmegaVnext({ ...opts, _fetchMemo: true }));
+  }
   const dateISO = opts.date || todayET();
   const dateFormatted = formatDateLong(dateISO);
   const force = !!opts.force;

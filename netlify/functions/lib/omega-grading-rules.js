@@ -3,10 +3,17 @@
 // Forward-only grading rules. Card dates before this ET date (the picks blob
 // dateISO) must grade exactly as they did on 50d3eb9. Do not retune past KPIs.
 const GRADING_RULES_V2_FROM = '2026-10-07';
+// Id matching for every sport (and the White Sox / Red Sox split) starts on
+// this card date. Earlier dates keep the matcher they were graded with.
+const IDENTITY_V2_FROM = '2026-10-07';
 const POSTPONE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
 function rulesV2(dateISO) {
   return typeof dateISO === 'string' && dateISO >= GRADING_RULES_V2_FROM;
+}
+
+function identityV2(dateISO) {
+  return typeof dateISO === 'string' && dateISO >= IDENTITY_V2_FROM;
 }
 
 function nowMs(opts) {
@@ -168,8 +175,10 @@ function mlbSnapshot(pick, game, opts) {
 
 module.exports = {
   GRADING_RULES_V2_FROM,
+  IDENTITY_V2_FROM,
   POSTPONE_CUTOFF_MS,
   rulesV2,
+  identityV2,
   nowMs,
   scheduledStartMs,
   isRescheduled,

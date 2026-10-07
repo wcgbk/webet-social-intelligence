@@ -12,7 +12,7 @@
     ],
     "sport": "NCAAF",
     "teamCount": 275,
-    "lookupCount": 1516,
+    "lookupCount": 1517,
     "matching": "normalize (lowercase, strip accents, delete okina/apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback."
   },
   "teams": {
@@ -1084,7 +1084,8 @@
       "nickname": "Miami OH",
       "name": "RedHawks",
       "oddsNames": [
-        "Miami (OH) RedHawks"
+        "Miami (OH) RedHawks",
+        "Miami RedHawks"
       ],
       "aliases": [
         "Miami (OH)",
@@ -1093,7 +1094,8 @@
         "Miami (Ohio) RedHawks",
         "Miami OH",
         "Miami Ohio",
-        "Miami Ohio RedHawks"
+        "Miami Ohio RedHawks",
+        "Miami RedHawks"
       ]
     },
     "194": {
@@ -5580,6 +5582,7 @@
     "youngstown st penguins": "2754",
     "youngstown state": "2754",
     "youngstown state penguins": "2754",
-    "ysu": "2754"
+    "ysu": "2754",
+    "miami redhawks": "193"
   }
 }

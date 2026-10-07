@@ -478,6 +478,7 @@ async function fetchESPNScores(dateISO, sport) {
         awayInnings: awayLS.length,
         homeInnings: homeLS.length,
         f5Complete: !!f5Complete,
+        period: period,
       };
     }).filter(Boolean);
   } catch (e) { return []; }
@@ -516,10 +517,11 @@ function findGameForGrading(pick, games, dateISO) {
 
 function gradePick(pick, game, opts) {
   const dateISO = (opts && opts.dateISO) || (pick && pick.date) || null;
+  const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
   if (footballGraderOn(dateISO, pick && pick.sport)) {
-    const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
     return resultsGrader._test.gradePick(pick, game, gradeOpts);
   }
+  if (omegaGradingRules.earlyPush(pick, game, gradeOpts) === 'push') return 'push';
   if (!game || game.state !== 'post') return 'pending';
   // Postponed / canceled / suspended games are voided by every major US book (no action).
   // ESPN marks them state:'post' with completed:false — catch BEFORE score-based grading,
@@ -530,12 +532,14 @@ function gradePick(pick, game, opts) {
   const betType = (pick.betType || pick.market || '').toLowerCase();
   const src = (pick.source || '').toLowerCase();
   const isF5 = src === 'f5' || betType.startsWith('f5') || /\bf5\b/.test(pickStr.toLowerCase());
+  const snap = omegaGradingRules.mlbSnapshot(pick, game, gradeOpts);
   // F5 bets settle on the score THROUGH 5 innings. Require >=5 recorded innings per side —
   // a final game missing linescores must stay pending (retried next run), never settle as
   // a phantom 0-0 F5 final or a false void.
-  if (isF5 && ((game.awayInnings || 0) < 5 || (game.homeInnings || 0) < 5)) return 'pending';
-  const awayScore = isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore;
-  const homeScore = isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore;
+  if (isF5 && snap && snap.f5Mode === 'void') return 'push';
+  if (isF5 && !(snap && snap.f5Mode === 'partial') && ((game.awayInnings || 0) < 5 || (game.homeInnings || 0) < 5)) return 'pending';
+  const awayScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.awayScore : (isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore);
+  const homeScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.homeScore : (isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore);
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
   const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
@@ -544,6 +548,12 @@ function gradePick(pick, game, opts) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
     if (lineMatch) {
       const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]), total = awayScore + homeScore;
+      // Short completed game: only an Over already past the line has action.
+      if (snap && !isF5 && !snap.fullOfficial) {
+        if (total > line && ou === 'over') return 'win';
+        if (total > line && ou === 'under') return 'loss';
+        return 'push';
+      }
       if (total === line) return 'push';
       return (ou === 'over' && total > line) || (ou === 'under' && total < line) ? 'win' : 'loss';
     }
@@ -551,6 +561,7 @@ function gradePick(pick, game, opts) {
   if (/spread|puck|run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
     const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
     if (spreadMatch && (pickedAway || pickedHome)) {
+      if (snap && !isF5 && !snap.fullOfficial) return 'push';
       const spread = parseFloat(spreadMatch[1]);
       const pickedScore = pickedAway ? awayScore : homeScore;
       const oppScore = pickedAway ? homeScore : awayScore;
@@ -560,12 +571,16 @@ function gradePick(pick, game, opts) {
     }
   }
   if (pickedAway || pickedHome) {
+    if (snap && !isF5 && !snap.mlOfficial) return 'push';
     const pickedScore = pickedAway ? awayScore : homeScore;
     const oppScore = pickedAway ? homeScore : awayScore;
     if (pickedScore === oppScore) return 'push';
     return pickedScore > oppScore ? 'win' : 'loss';
   }
-  if (/draw/i.test(pickStr)) return awayScore === homeScore ? 'win' : 'loss';
+  if (/draw/i.test(pickStr)) {
+    if (snap && !isF5 && !snap.mlOfficial) return 'push';
+    return awayScore === homeScore ? 'win' : 'loss';
+  }
   return 'pending';
 }
 

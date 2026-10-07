@@ -8,6 +8,7 @@ const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 const { resolveTeamId } = require('./lib/omega-vnext/sports/team_identity');
+const omegaGradingRules = require('./lib/omega-grading-rules');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -257,24 +258,62 @@ function withLegCommenceTime(leg, picks) {
   return inheritCommenceTime(leg, picks);
 }
 
-function gradePick(pick, game) {
+// Set by gradeDay so every gradePick call in that day sees the card date.
+// Absent (direct gradePick, or a vm extract of this function) means pre-v2 rules.
+let gradingContext = null;
+
+function mergeGradeOpts(opts) {
+  const merged = {
+    dateISO: opts && opts.dateISO ? opts.dateISO : null,
+    now: opts && opts.now != null ? opts.now : null,
+  };
+  if (gradingContext) {
+    if (merged.dateISO == null) merged.dateISO = gradingContext.dateISO;
+    if (merged.now == null) merged.now = gradingContext.now;
+  }
+  return merged;
+}
+
+// Present only when this file is loaded as a module. HTML/vm extracts of gradePick
+// skip it via typeof, so those callers keep the pre-v2 body.
+function v2GradeParts(pick, game, opts) {
+  const merged = mergeGradeOpts(opts);
+  return {
+    early: omegaGradingRules.earlyPush(pick, game, merged),
+    snap: omegaGradingRules.mlbSnapshot(pick, game, merged),
+    opts: merged,
+  };
+}
+
+function gradePick(pick, game, opts) {
+  const pickStrEarly = (pick.pick || '').trim();
+  const betTypeEarly = (pick.betType || '').toLowerCase();
+  const isF5 = /\bf5\b|first 5|1st 5|first-5/i.test(pickStrEarly) || betTypeEarly.includes('f5') || /^f5\b/i.test(pickStrEarly);
+  const parts = (typeof v2GradeParts === 'function') ? v2GradeParts(pick, game, opts) : null;
+  const snap = parts && parts.snap;
+  if (parts && parts.early === 'push') return 'push';
   if (!game || game.state !== 'post') return 'pending';
   // Postponed / canceled games are voided by every major US book (no action) — the stake is
   // returned, so we grade them as a push. A push leg is dropped from a parlay and the ticket
   // reprices on the surviving legs (see gradeParlay). ESPN marks these state:'post' with
   // completed:false, so they must be caught BEFORE any score-based grading (0-0 → false "under").
   if (/POSTPONED|CANCELL?ED/i.test(game.statusName) || (game.state === 'post' && !game.completed)) return 'push';
-  const pickStr = (pick.pick || '').trim();
-  const betType = (pick.betType || '').toLowerCase();
+  const pickStr = pickStrEarly;
+  const betType = betTypeEarly;
   // First-Five-Innings picks settle on the first-5 score, NOT the full game.
-  const isF5 = /\bf5\b|first 5|1st 5|first-5/i.test(pickStr) || betType.includes('f5') || /^f5\b/i.test(pickStr);
   let awayScore = game.awayScore;
   let homeScore = game.homeScore;
   if (isF5) {
-    const aL = game.awayLine || [], hL = game.homeLine || [];
-    if (aL.length < 5 || hL.length < 5) return 'pending'; // not enough innings to settle F5
-    awayScore = aL.slice(0, 5).reduce((a, b) => a + b, 0);
-    homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
+    if (snap && snap.f5Mode === 'void') return 'push';
+    if (snap && snap.f5Mode === 'partial') {
+      awayScore = snap.awayScore;
+      homeScore = snap.homeScore;
+    } else {
+      const aL = game.awayLine || [], hL = game.homeLine || [];
+      if (aL.length < 5 || hL.length < 5) return 'pending'; // not enough innings to settle F5
+      awayScore = aL.slice(0, 5).reduce((a, b) => a + b, 0);
+      homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
+    }
   }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
   const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
@@ -287,6 +326,12 @@ function gradePick(pick, game) {
     if (lineMatch) {
       const ou = lineMatch[1].toLowerCase();
       const line = parseFloat(lineMatch[2]);
+      // Short completed game: only an Over already past the line has action.
+      if (snap && !isF5 && !snap.fullOfficial) {
+        if (totalPoints > line && ou === 'over') return 'win';
+        if (totalPoints > line && ou === 'under') return 'loss';
+        return 'push';
+      }
       if (totalPoints === line) return 'push';
       const over = totalPoints > line;
       return (ou === 'over' && over) || (ou === 'under' && !over) ? 'win' : 'loss';
@@ -295,6 +340,7 @@ function gradePick(pick, game) {
   if (betType === 'spread' || betType === 'puck line' || /[+-]\d+(\.\d+)?/.test(pickStr)) {
     const spreadMatch = pickStr.match(/([+-]\d+(\.\d+)?)/);
     if (spreadMatch && (pickedAway || pickedHome)) {
+      if (snap && !isF5 && !snap.fullOfficial) return 'push';
       const spread = parseFloat(spreadMatch[1]);
       const pickedScore = pickedAway ? awayScore : homeScore;
       const oppScore = pickedAway ? homeScore : awayScore;
@@ -304,12 +350,16 @@ function gradePick(pick, game) {
     }
   }
   if (pickedAway || pickedHome) {
+    if (snap && !isF5 && !snap.mlOfficial) return 'push';
     const pickedScore = pickedAway ? awayScore : homeScore;
     const oppScore = pickedAway ? homeScore : awayScore;
     if (pickedScore === oppScore) return 'push';
     return pickedScore > oppScore ? 'win' : 'loss';
   }
-  if (/draw/i.test(pickStr)) return awayScore === homeScore ? 'win' : 'loss';
+  if (/draw/i.test(pickStr)) {
+    if (snap && !isF5 && !snap.mlOfficial) return 'push';
+    return awayScore === homeScore ? 'win' : 'loss';
+  }
   return 'pending';
 }
 
@@ -370,7 +420,20 @@ async function getDatesFromStore(storeUrl, authHeaders) {
   return Array.isArray(dates) ? dates : [];
 }
 
-async function gradeDay(dateISO, picksData) {
+async function gradeDay(dateISO, picksData, opts) {
+  const prevContext = gradingContext;
+  gradingContext = {
+    dateISO: dateISO,
+    now: opts && opts.now != null ? opts.now : null,
+  };
+  try {
+    return await gradeDayBody(dateISO, picksData, opts);
+  } finally {
+    gradingContext = prevContext;
+  }
+}
+
+async function gradeDayBody(dateISO, picksData, opts) {
   const picks = (picksData.picks || []).slice(0, 3);
   if (picks.length === 0) return null;
 
@@ -382,12 +445,17 @@ async function gradeDay(dateISO, picksData) {
     ...(optimizedLegs ? optimizedLegs.map(l => l.sport) : []),
   ].filter(Boolean))];
 
-  const sportResults = await Promise.all(sports.map(async sport => {
-    const games = await fetchESPNScores(dateISO, sport);
-    games.forEach(g => { g._sport = sport; });
-    return games;
-  }));
-  const scoresByGames = sportResults.flat();
+  let scoresByGames;
+  if (opts && Array.isArray(opts.games)) {
+    scoresByGames = opts.games;
+  } else {
+    const sportResults = await Promise.all(sports.map(async sport => {
+      const games = await fetchESPNScores(dateISO, sport);
+      games.forEach(g => { g._sport = sport; });
+      return games;
+    }));
+    scoresByGames = sportResults.flat();
+  }
 
   const dollarPerUnit = 150;
   let dayWins = 0, dayLosses = 0, dayPushes = 0, dayPending = 0;
@@ -411,7 +479,8 @@ async function gradeDay(dateISO, picksData) {
     if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
     const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
     let scoreStr = null;
-    if (game && game.state === 'post' && result === 'push' && (/POSTPONED|CANCELL?ED/i.test(game.statusName) || !game.completed)) {
+    const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
+    if (game && result === 'push' && omegaGradingRules.isPpdScore(pick, game, gradeOpts)) {
       scoreStr = 'PPD';
     } else if (game && game.state === 'post') {
       if (isF5Pick && (game.awayLine || []).length >= 5 && (game.homeLine || []).length >= 5) {
@@ -693,9 +762,12 @@ exports._test = {
   findGame,
   gradePick,
   gradeParlay,
+  gradeDay,
+  aggregateDays,
   withLegCommenceTime,
   ncaafPickedSides,
   teamsMatch,
   calcWinnings,
   wholeUp,
+  GRADING_RULES_V2_FROM: omegaGradingRules.GRADING_RULES_V2_FROM,
 };

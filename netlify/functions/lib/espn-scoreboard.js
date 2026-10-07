@@ -101,6 +101,7 @@ function mapEvent(ev) {
     state: (status.type && status.type.state) || 'pre',
     statusName: (status.type && status.type.name) || '',
     completed: !!(status.type && status.type.completed),
+    period: status.period || 0,
     startISO: ev.date || comp.date || '',
     detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
   };

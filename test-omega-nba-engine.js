@@ -67,7 +67,9 @@ assert.strictEqual(shadow.ODDS_MARKETS, 'h2h,spreads,totals');
     NCAAF: [],
     NBA: [{ home_team: 'Boston Celtics', away_team: 'Lakers' }],
   });
-  assert.deepStrictEqual(Object.keys(report.bySport).sort(), ['NCAAF', 'NFL']);
+  assert.deepStrictEqual(Object.keys(report.bySport).sort(), ['MLB', 'NBA', 'NCAAF', 'NFL', 'NHL']);
+  assert.deepStrictEqual(report.bySport.NBA, ['Lakers']);
+  assert.deepStrictEqual(report.bySport.NFL, []);
 }
 
 // ── prior seed: labeled season, zero-sum net rating ──

@@ -91,14 +91,18 @@ function pfLooksLikeStandingsPoints(st, pf) {
 /**
  * Goals for/against per game.
  * Season totals (pf 250) need a game count. Per-game rates (pf 3.2) pass through.
- * Unclean rows return null so the caller keeps the 6.2 / HFA baseline.
+ * pf or pa that matches standings points (2*W+OTL) returns null, unless
+ * nhlSeasonGoals is set (explicit ESPN Goals For/Against). Other unclean
+ * rows return null so the caller keeps the 6.2 / HFA baseline.
  */
 function teamGpg(st) {
   if (!st || typeof st !== 'object') return null;
   const pf = Number(st.pf != null ? st.pf : st.gf);
   const pa = Number(st.pa != null ? st.pa : st.ga);
   if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf <= 0 || pa <= 0) return null;
-  if (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa)) return null;
+  // Explicit ESPN GF/GA can equal 2*W+OTL (Rangers GA 8). Do not treat that as points.
+  if (st.nhlSeasonGoals !== true &&
+      (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa))) return null;
   let gf = pf;
   let ga = pa;
   // ESPN Goals For is a season sum (nhlSeasonGoals). A large raw total is too,

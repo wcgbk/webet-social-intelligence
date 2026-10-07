@@ -151,6 +151,35 @@ assert.ok(Math.abs(rate.ga - 2.8) < 1e-9);
 // One game of a marked season sum stays on the seed.
 assert.strictEqual(nhl.teamGpg({ pf: 4, pa: 3, games: 1, nhlSeasonGoals: true }), null);
 
+// Rangers 4-1-0, GF 16 / GA 8. GA equals 2*W+OTL, but ESPN labeled Goals For/Against.
+const rangersEspn = espnGoals({}, 16, 8, 8, 5, 4, 1, 0);
+assert.strictEqual(rangersEspn.nhlSeasonGoals, true);
+assert.strictEqual(rangersEspn.pf, 16);
+assert.strictEqual(rangersEspn.pa, 8);
+assert.strictEqual(rangersEspn.games, 5);
+const rangersEspnGpg = nhl.teamGpg(rangersEspn);
+assert.ok(rangersEspnGpg, 'Rangers ESPN GF/GA survives the standings-points guard');
+assert.ok(Math.abs(rangersEspnGpg.gf - 3.2) < 1e-9, rangersEspnGpg && rangersEspnGpg.gf);
+assert.ok(Math.abs(rangersEspnGpg.ga - 1.6) < 1e-9, rangersEspnGpg && rangersEspnGpg.ga);
+
+const rangersFlagged = { wins: 4, losses: 1, otLosses: 0, games: 5, pf: 16, pa: 8, nhlSeasonGoals: true };
+const rangersFlaggedGpg = nhl.teamGpg(rangersFlagged);
+assert.ok(rangersFlaggedGpg, 'nhlSeasonGoals skips the standings-points heuristic');
+assert.ok(Math.abs(rangersFlaggedGpg.gf - 3.2) < 1e-9, rangersFlaggedGpg && rangersFlaggedGpg.gf);
+assert.ok(Math.abs(rangersFlaggedGpg.ga - 1.6) < 1e-9, rangersFlaggedGpg && rangersFlaggedGpg.ga);
+
+// Same numbers without the flag: GA 8 is 2*W+OTL, so the heuristic still clears it.
+assert.strictEqual(
+  nhl.teamGpg({ wins: 4, losses: 1, otLosses: 0, games: 5, pf: 16, pa: 8 }),
+  null
+);
+
+// Genuine standings points (pf 11 = 2*5+1) stay null without nhlSeasonGoals.
+assert.strictEqual(
+  nhl.teamGpg({ wins: 5, otLosses: 1, games: 7, pf: 11, pa: 18 }),
+  null
+);
+
 function nhlEvent(drawName) {
   const home = 'Colorado Avalanche';
   const away = 'Dallas Stars';

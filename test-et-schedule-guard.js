@@ -226,6 +226,72 @@ async function idempotency() {
     assert.strictEqual(JSON.parse(wrong.body).reason, 'outside-et-slot');
     assert.strictEqual(wrongReads, 0);
     assert.strictEqual(fetches, before);
+
+    function isoAtEt(ymd, hour, minute) {
+      const [y, mo, d] = ymd.split('-').map(Number);
+      for (const utcHour of [hour + 4, hour + 5]) {
+        const when = new Date(Date.UTC(y, mo - 1, d, utcHour, minute, 0));
+        const parts = et.etParts(when);
+        if (parts.ymd === ymd && parts.hour === hour && parts.minute === minute) return when.toISOString();
+      }
+      throw new Error(`cannot place ${ymd} ${hour}:${minute} ET`);
+    }
+
+    async function expectRebuild(label, generatedAt) {
+      const prior = fetches;
+      let reads = 0;
+      const res = await triggerOmega.handler(event, {
+        now,
+        readCard: async () => {
+          reads += 1;
+          return { generatedAt, picks: [] };
+        },
+      });
+      assert.strictEqual(res.body, 'Omega vNext triggered', label);
+      assert.strictEqual(reads, 1, `${label} reads the card`);
+      assert.strictEqual(fetches, prior + 1, `${label} force-rebuilds`);
+    }
+
+    await expectRebuild('today 02:00 ET', isoAtEt('2026-10-07', 2, 0));
+    await expectRebuild('today 07:00 ET', isoAtEt('2026-10-07', 7, 0));
+
+    const skip0931 = await triggerOmega.handler(event, {
+      now,
+      readCard: async () => ({ generatedAt: isoAtEt('2026-10-07', 9, 31), picks: [] }),
+    });
+    const body0931 = JSON.parse(skip0931.body);
+    assert.strictEqual(skip0931.statusCode, 200);
+    assert.strictEqual(body0931.skipped, 'et-guard');
+    assert.strictEqual(body0931.reason, 'already-generated');
+    assert.strictEqual(body0931.date, '2026-10-07');
+
+    await expectRebuild('yesterday 09:31 ET', isoAtEt('2026-10-06', 9, 31));
+
+    const priorError = fetches;
+    let errorReads = 0;
+    const errRes = await triggerOmega.handler(event, {
+      now,
+      readCard: async () => {
+        errorReads += 1;
+        throw new Error('blob down');
+      },
+    });
+    assert.strictEqual(errRes.body, 'Omega vNext triggered', 'read error still runs');
+    assert.strictEqual(errorReads, 1);
+    assert.strictEqual(fetches, priorError + 1);
+
+    const priorBypass = fetches;
+    let bypassReads = 0;
+    const bypass = await triggerOmega.handler({ httpMethod: 'POST', body: '{}' }, {
+      now,
+      readCard: async () => {
+        bypassReads += 1;
+        return { generatedAt: isoAtEt('2026-10-07', 9, 31), picks: [] };
+      },
+    });
+    assert.strictEqual(bypass.body, 'Omega vNext triggered', 'non-scheduler bypasses idempotency');
+    assert.strictEqual(bypassReads, 0, 'non-scheduler does not read');
+    assert.strictEqual(fetches, priorBypass + 1);
   } finally {
     global.fetch = prev;
   }

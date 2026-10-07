@@ -207,9 +207,29 @@ function cardGeneratedOnEtDate(card, dateET) {
 }
 
 /**
- * Scheduler-only once-per-ET-date check for the morning Omega card.
- * A read error does not skip: the ET guard is the double-run protection.
- * No card, or a card whose generatedAt is not today's ET date, does not skip.
+ * ET wall minutes of the morning Omega slot minus the guard tolerance.
+ * 09:30 - TOLERANCE_MIN = 09:20. A card written at or after that minute
+ * is the 9:30 run (or a later same-day write). Earlier same-day cards
+ * are overnight or pre-window and must still be rebuilt.
+ */
+function morningCardCutoffMin() {
+  const slot = ET_SCHEDULE['trigger-picks-omega'].etTimes[0];
+  return minutesOf(slot) - TOLERANCE_MIN;
+}
+
+function cardFromMorningRun(card, dateET) {
+  if (!cardGeneratedOnEtDate(card, dateET)) return false;
+  const parts = etParts(new Date(card.generatedAt));
+  return parts.hour * 60 + parts.minute >= morningCardCutoffMin();
+}
+
+/**
+ * Scheduler-only morning idempotency for the Omega card.
+ * Skip only when generatedAt falls on today's ET date and the ET wall
+ * time is at/after 09:20 (09:30 minus TOLERANCE_MIN): this morning's run
+ * already wrote the card. An earlier same-day card does not skip. The
+ * 9:30 invoke still force-rebuilds it. A read error does not skip; the
+ * ET guard alone is the double-run protection. Manual/HTTP never reads.
  */
 async function morningCardIdempotency(event, now, readCard) {
   const guard = etGuard('trigger-picks-omega', event, now);
@@ -221,7 +241,7 @@ async function morningCardIdempotency(event, now, readCard) {
   } catch (_) {
     return { skip: false, guard, readError: true, dateET };
   }
-  if (cardGeneratedOnEtDate(card, dateET)) {
+  if (cardFromMorningRun(card, dateET)) {
     return { skip: true, reason: 'already-generated', dateET, guard };
   }
   return { skip: false, guard, dateET };

@@ -1,7 +1,9 @@
 // trigger-picks-omega.js
 // Scheduled — 9:30 AM ET → generate-picks-omega-background (omega-vnext).
 // Both UTC hours fire; etGuard keeps the 9:30 ET one. A scheduler invoke skips
-// when picks-{ET date} already has generatedAt on that ET date (no second run).
+// only when picks-{ET date} already has generatedAt on that ET date at/after
+// 09:20 ET (09:30 minus the guard tolerance) — the morning run already wrote it.
+// An earlier same-day card (overnight or pre-window) still force-rebuilds.
 // Manual/HTTP still force-triggers. Verify at 10:30am ET; public /omega ~11:00am ET.
 
 const { rejectUnlessEtSlot, morningCardIdempotency, idempotencySkipResponse } = require('./lib/et-schedule');

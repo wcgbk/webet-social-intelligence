@@ -1028,6 +1028,158 @@
     return parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
   }
 
+  // Odds names ("Southern Mississippi") and ESPN display names ("Southern Miss")
+  // differ. Normalized alias -> ESPN displayName, from scripts/data/football-team-aliases.json.
+  function ncaafAliasMap() {
+    return {
+      "albany": "UAlbany Great Danes",
+      "albany great danes": "UAlbany Great Danes",
+      "appalachian st": "App State Mountaineers",
+      "appalachian st mountaineers": "App State Mountaineers",
+      "appalachian state": "App State Mountaineers",
+      "appalachian state mountaineers": "App State Mountaineers",
+      "arizona": "Arizona Wildcats",
+      "army": "Army Black Knights",
+      "boise st": "Boise State Broncos",
+      "boise state": "Boise State Broncos",
+      "brigham young": "BYU Cougars",
+      "brigham young cougars": "BYU Cougars",
+      "byu": "BYU Cougars",
+      "central florida": "UCF Knights",
+      "central florida knights": "UCF Knights",
+      "citadel": "The Citadel Bulldogs",
+      "citadel bulldogs": "The Citadel Bulldogs",
+      "connecticut": "UConn Huskies",
+      "connecticut huskies": "UConn Huskies",
+      "dixie state": "Utah Tech Trailblazers",
+      "dixie state trailblazers": "Utah Tech Trailblazers",
+      "georgia st": "Georgia State Panthers",
+      "georgia state": "Georgia State Panthers",
+      "grambling": "Grambling Tigers",
+      "grambling state": "Grambling Tigers",
+      "grambling state tigers": "Grambling Tigers",
+      "hawaii": "Hawai'i Rainbow Warriors",
+      "hawaii rainbow warriors": "Hawai'i Rainbow Warriors",
+      "houston baptist": "Houston Christian Huskies",
+      "houston baptist huskies": "Houston Christian Huskies",
+      "houston christian": "Houston Christian Huskies",
+      "johnson c smith": "Johnson C. Smith Golden Bulls",
+      "johnson c smith golden bulls": "Johnson C. Smith Golden Bulls",
+      "kansas st": "Kansas State Wildcats",
+      "kansas state": "Kansas State Wildcats",
+      "kentucky": "Kentucky Wildcats",
+      "kentucky state": "Kentucky State Thorobreds",
+      "kentucky state university thorobreds": "Kentucky State Thorobreds",
+      "kstate": "Kansas State Wildcats",
+      "liu": "Long Island University Sharks",
+      "liu sharks": "Long Island University Sharks",
+      "long island sharks": "Long Island University Sharks",
+      "louisiana monroe": "UL Monroe Warhawks",
+      "louisiana monroe warhawks": "UL Monroe Warhawks",
+      "louisiana state": "LSU Tigers",
+      "louisiana state tigers": "LSU Tigers",
+      "louisianamonroe": "UL Monroe Warhawks",
+      "louisianamonroe warhawks": "UL Monroe Warhawks",
+      "lsu": "LSU Tigers",
+      "mcneese": "McNeese Cowboys",
+      "mcneese st": "McNeese Cowboys",
+      "mcneese state": "McNeese Cowboys",
+      "mcneese state cowboys": "McNeese Cowboys",
+      "miami": "Miami Hurricanes",
+      "miami fl": "Miami Hurricanes",
+      "miami florida": "Miami Hurricanes",
+      "miami hurricanes": "Miami Hurricanes",
+      "miami oh": "Miami (OH) RedHawks",
+      "miami oh redhawks": "Miami (OH) RedHawks",
+      "miami ohio": "Miami (OH) RedHawks",
+      "miami ohio redhawks": "Miami (OH) RedHawks",
+      "mississippi": "Ole Miss Rebels",
+      "mississippi rebels": "Ole Miss Rebels",
+      "nc state": "NC State Wolfpack",
+      "nc state wolfpack": "NC State Wolfpack",
+      "nevada las vegas": "UNLV Rebels",
+      "nevadalas vegas": "UNLV Rebels",
+      "nicholls": "Nicholls Colonels",
+      "nicholls state": "Nicholls Colonels",
+      "nicholls state colonels": "Nicholls Colonels",
+      "north carolina state": "NC State Wolfpack",
+      "north carolina state wolfpack": "NC State Wolfpack",
+      "northwestern": "Northwestern Wildcats",
+      "ole miss": "Ole Miss Rebels",
+      "pitt": "Pittsburgh Panthers",
+      "pitt panthers": "Pittsburgh Panthers",
+      "pittsburgh": "Pittsburgh Panthers",
+      "presbyterian": "Presbyterian Blue Hose",
+      "presbyterian college": "Presbyterian Blue Hose",
+      "presbyterian college blue hose": "Presbyterian Blue Hose",
+      "saint francis": "Saint Francis Red Flash",
+      "saint francis pa red flash": "Saint Francis Red Flash",
+      "saint thomas mn tommies": "St. Thomas Tommies",
+      "sam houston st": "Sam Houston Bearkats",
+      "sam houston state": "Sam Houston Bearkats",
+      "sam houston state bearkats": "Sam Houston Bearkats",
+      "san jos st": "San José State Spartans",
+      "san jos state": "San José State Spartans",
+      "san jose st": "San José State Spartans",
+      "san jose state": "San José State Spartans",
+      "san jose state spartans": "San José State Spartans",
+      "se louisiana": "SE Louisiana Lions",
+      "smu": "SMU Mustangs",
+      "southeastern louisiana": "SE Louisiana Lions",
+      "southeastern louisiana lions": "SE Louisiana Lions",
+      "southern california": "USC Trojans",
+      "southern california trojans": "USC Trojans",
+      "southern methodist": "SMU Mustangs",
+      "southern methodist mustangs": "SMU Mustangs",
+      "southern miss": "Southern Miss Golden Eagles",
+      "southern mississippi": "Southern Miss Golden Eagles",
+      "southern mississippi golden eagles": "Southern Miss Golden Eagles",
+      "southern university": "Southern Jaguars",
+      "southern university jaguars": "Southern Jaguars",
+      "st francis pa": "Saint Francis Red Flash",
+      "st francis pa red flash": "Saint Francis Red Flash",
+      "st thomas": "St. Thomas Tommies",
+      "st thomas mn": "St. Thomas Tommies",
+      "st thomas mn tommies": "St. Thomas Tommies",
+      "tcu": "TCU Horned Frogs",
+      "texas christian": "TCU Horned Frogs",
+      "texas christian horned frogs": "TCU Horned Frogs",
+      "the citadel": "The Citadel Bulldogs",
+      "ualbany": "UAlbany Great Danes",
+      "ucf": "UCF Knights",
+      "uconn": "UConn Huskies",
+      "ul monroe": "UL Monroe Warhawks",
+      "ulm": "UL Monroe Warhawks",
+      "umass": "Massachusetts Minutemen",
+      "umass minutemen": "Massachusetts Minutemen",
+      "unlv": "UNLV Rebels",
+      "usc": "USC Trojans",
+      "ut rio grande valley": "UT Rio Grande Valley Vaqueros",
+      "utah tech": "Utah Tech Trailblazers",
+      "utrgv": "UT Rio Grande Valley Vaqueros",
+      "utrgv vaqueros": "UT Rio Grande Valley Vaqueros",
+      "utsa": "UTSA Roadrunners",
+      "western michigan": "Western Michigan Broncos",
+      "western michigan broncos": "Western Michigan Broncos",
+      "yale": "Yale Bulldogs",
+      "yale university": "Yale Bulldogs",
+      "yale university bulldogs": "Yale Bulldogs",
+      "youngstown st": "Youngstown State Penguins",
+      "youngstown st penguins": "Youngstown State Penguins",
+    };
+  }
+
+  // Full alias, or its school-only form (last word dropped). Unknown names stay unchanged.
+  function canonNcaafTeam(name) {
+    const n = normalizeTeam(name);
+    if (!n) return name;
+    const map = ncaafAliasMap();
+    if (map[n]) return map[n];
+    const school = schoolKey(name);
+    if (school && school !== n && map[school]) return map[school];
+    return name;
+  }
+
   // Equal school keys, or equal once a trailing "state" is removed
   // (McNeese State Cowboys vs ESPN "McNeese Cowboys"). Mascots are already gone.
   function ncaafSchoolKeysMatch(aName, bName) {
@@ -1043,6 +1195,7 @@
   // Michigan State also matches Michigan. When both sides of one game match,
   // keep the exact schoolKey. If that does not pick one side, match neither.
   function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, sport) {
+    if (sport === 'NCAAF' && typeof canonNcaafTeam === 'function') pickTeam = canonNcaafTeam(pickTeam);
     const pickedAway = teamsMatch(pickTeam, awayTeam, awayAbbr, sport);
     const pickedHome = teamsMatch(pickTeam, homeTeam, homeAbbr, sport);
     if (sport !== 'NCAAF' || !pickedAway || !pickedHome) {
@@ -1060,8 +1213,12 @@
   // Keep the games whose school keys match exactly so the other one is not graded.
   function preferExactSchoolGames(pick, games) {
     if (!pick || (pick.sport || '') !== 'NCAAF' || !games || games.length < 2) return games;
-    const parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
-    const pickTeam = String(pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
+    let parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+    let pickTeam = String(pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
+    if (typeof canonNcaafTeam === 'function') {
+      parts = parts.map((part) => canonNcaafTeam(part));
+      if (pickTeam) pickTeam = canonNcaafTeam(pickTeam);
+    }
     const probes = pickTeam ? parts.concat([pickTeam]) : parts;
     let best = -1;
     const scored = games.map(game => {
@@ -1126,8 +1283,17 @@
     const sport = pick.sport || '';
     const ncaaf = sport === 'NCAAF';
     const games = (cachedScores[sport] || []).filter(g => gameMatchesPickWindow(g, pick));
-    const matchup = (pick.matchup || '').toLowerCase();
-    const matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+    let matchup = (pick.matchup || '').toLowerCase();
+    let matchupParts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+    if (ncaaf && typeof canonNcaafTeam === 'function') {
+      const canonParts = matchupParts.map((part) => canonNcaafTeam(part));
+      const changed = canonParts.some((part, i) => normalizeTeam(part) !== normalizeTeam(matchupParts[i]));
+      if (changed) {
+        const sep = (matchup.match(/\s+(?:@|vs\.?|at|v)\s+/i) || [' @ '])[0];
+        matchupParts = canonParts;
+        matchup = canonParts.map((part) => normalizeTeam(part)).join(sep);
+      }
+    }
 
     const primary = [];
     for (const g of games) {
@@ -1141,7 +1307,8 @@
     }
     if (primary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, primary), pick);
     // Try matching by pick name (the team we bet on)
-    const pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    let pickTeam = (pick.pick || '').replace(/[+-]\d.*$/, '').replace(/ML$/i, '').replace(/Over|Under/i, '').trim();
+    if (ncaaf && pickTeam && typeof canonNcaafTeam === 'function') pickTeam = canonNcaafTeam(pickTeam);
     if (pickTeam) {
       const secondary = [];
       for (const g of games) {
@@ -1170,6 +1337,15 @@
             (part1.includes(awayKey) || awayKey.includes(part1))) tertiary.push(g);
       }
       if (tertiary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, tertiary), pick);
+    }
+    // Unique exact display name in the commence window. Opponent school-key
+    // substring misses when the odds name is not an ESPN substring.
+    if (ncaaf && pickTeam) {
+      const pFull = normalizeTeam(pickTeam);
+      if (pFull) {
+        const exact = games.filter((g) => normalizeTeam(g.awayTeam) === pFull || normalizeTeam(g.homeTeam) === pFull);
+        if (exact.length === 1) return exact[0];
+      }
     }
     return null;
   }

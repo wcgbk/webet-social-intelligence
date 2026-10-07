@@ -6,6 +6,7 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const { slateOddsGate } = require("./lib/omega-vnext/fetch_memo");
+const { rejectUnlessEtSlot } = require("./lib/et-schedule");
 
 const ODDS_SPORTS = [
   "basketball_nba", "icehockey_nhl", "basketball_ncaab", "baseball_mlb",
@@ -15,6 +16,8 @@ const ODDS_SPORTS = [
 ];
 
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot("capture-opening-lines", event);
+  if (etSkip) return etSkip;
   const apiKey = process.env.ODDS_API_KEY;
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!apiKey || !token) {

@@ -14,6 +14,7 @@ const {
 } = require('./lib/omega-vnext/ingest');
 const { etDateISO } = require('./lib/omega-vnext/line_path');
 const { runWithFetchMemo } = require('./lib/omega-vnext/fetch_memo');
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
 function countKeys(obj) {
   return obj && typeof obj === 'object' ? Object.keys(obj).length : 0;
@@ -116,4 +117,8 @@ async function warmHandler(event) {
   };
 }
 
-exports.handler = (event) => runWithFetchMemo(() => warmHandler(event));
+exports.handler = (event) => {
+  const etSkip = rejectUnlessEtSlot('warm-omega-feeds', event);
+  if (etSkip) return etSkip;
+  return runWithFetchMemo(() => warmHandler(event));
+};

@@ -243,9 +243,9 @@ assert.ok(/clv-\$\{dateISO\}/.test(captureSrc));
 assert.ok(/storeWalkforwardSamples/.test(captureSrc));
 
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
-assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "30 13 \* \* \*"/.test(toml), 'Wednesday generate stays 9:30am EDT');
+assert.ok(/\[functions\."capture-omega-walkforward"\]\s*\n\s*schedule = "15 15,16 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-walkforward-evening"\]\s*\n\s*schedule = "45 23,0 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."trigger-picks-omega"\]\s*\n\s*schedule = "30 13,14 \* \* \*"/.test(toml), '9:30am ET generate fires both UTC hours');
 assert.ok(/2026-11-01/.test(toml));
 assert.ok(/"30 13" → "30 14"/.test(toml) || /30 13.+\u2192.+30 14/.test(toml) || toml.includes('"30 13" → "30 14"'));
 assert.ok(/Do not switch it before/.test(toml));

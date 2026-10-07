@@ -11,8 +11,14 @@
  * Writes omega-nba-shadow-{ET date} only. Does not write the daily card.
  */
 const { handleShadow } = require('./omega-nba-shadow');
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
-exports.handler = (event, context) => handleShadow(event, context, {
-  mode: 'project',
-  trustSchedule: true,
-});
+exports.handler = (event, context) => {
+  const now = (context && context.now instanceof Date) ? context.now : new Date();
+  const etSkip = rejectUnlessEtSlot('trigger-omega-nba-shadow', event, now);
+  if (etSkip) return etSkip;
+  return handleShadow(event, context, {
+    mode: 'project',
+    trustSchedule: true,
+  });
+};

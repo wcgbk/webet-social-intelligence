@@ -1,10 +1,24 @@
 // trigger-picks-omega.js
-// Scheduled — 9:30 AM ET (13:30 UTC during EDT) → generate-picks-omega-background (omega-vnext).
-// Verify at 10:30am ET; public /omega live target ~11:00am ET.
-// force:true — morning run must rebuild even if an early/overnight same-day card exists
-// (OVERWRITE_GUARD otherwise keeps last night's picks and ignores 6/7:30/9 line snaps).
+// Scheduled — 9:30 AM ET → generate-picks-omega-background (omega-vnext).
+// Both UTC hours fire; etGuard keeps the 9:30 ET one. A scheduler invoke skips
+// when picks-{ET date} already has generatedAt on that ET date (no second run).
+// Manual/HTTP still force-triggers. Verify at 10:30am ET; public /omega ~11:00am ET.
 
-exports.handler = async (event) => {
+const { rejectUnlessEtSlot, morningCardIdempotency, idempotencySkipResponse } = require('./lib/et-schedule');
+
+async function readCardBlob(dateET) {
+  const { readPicks } = require('./lib/omega-vnext/store');
+  return readPicks(dateET);
+}
+
+exports.handler = async (event, context) => {
+  const now = (context && context.now instanceof Date) ? context.now : new Date();
+  const etSkip = rejectUnlessEtSlot('trigger-picks-omega', event, now);
+  if (etSkip) return etSkip;
+  const readCard = (context && typeof context.readCard === 'function') ? context.readCard : readCardBlob;
+  const idem = await morningCardIdempotency(event, now, readCard);
+  if (idem.skip) return idempotencySkipResponse(idem);
+
   console.log("[trigger-picks-omega] Scheduled run triggered (omega-vnext)");
 
   const siteURL = process.env.URL || "https://webetsocial.com";

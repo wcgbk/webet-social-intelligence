@@ -95,7 +95,11 @@ function json(statusCode, body) {
   };
 }
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('capture-omega-pm-observer', event);
+  if (etSkip) return etSkip;
   const qs = (event && event.queryStringParameters) || {};
   const dateISO = qs.date || null;
   const slot = String(qs.slot || '').toLowerCase() === 'open' ? 'open' : 'post';

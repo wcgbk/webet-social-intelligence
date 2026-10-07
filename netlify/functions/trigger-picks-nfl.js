@@ -4,7 +4,11 @@
 // NFL game days and "No NFL Games Scheduled For Today" on off days so /nfl never
 // shows a stale last-game-day card.
 
-exports.handler = async () => {
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('trigger-picks-nfl', event);
+  if (etSkip) return etSkip;
   const siteURL = process.env.URL || "https://webetsocial.com";
   console.log("[trigger-picks-nfl] Firing NFL generator (game-day vs no-games decided inside).");
   try {

@@ -4,7 +4,11 @@
 // refreshes every night. Mirrors the trigger-picks-alpha pattern so trend-monitor stays a
 // plain HTTP function (reliably reachable on-demand at /api/trend-monitor).
 
-exports.handler = async () => {
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('trigger-trend-monitor', event);
+  if (etSkip) return etSkip;
   console.log("[trigger-trend-monitor] Scheduled run triggered");
   const siteURL = process.env.URL || "https://webetsocial.com";
   try {

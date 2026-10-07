@@ -63,7 +63,11 @@ async function runMonitor() {
   return { date, digest, snapshotKey, digestKey };
 }
 
-exports.handler = async () => {
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('monitor-tsp-public-records', event);
+  if (etSkip) return etSkip;
   try {
     const out = await runMonitor();
     return {

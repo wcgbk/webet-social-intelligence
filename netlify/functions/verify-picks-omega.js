@@ -979,8 +979,12 @@ exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
 
 // ── Handler ──
+const { rejectUnlessEtSlot } = require("./lib/et-schedule");
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
+  const etSkip = rejectUnlessEtSlot("verify-picks-omega", event);
+  if (etSkip) return etSkip;
 
   try {
     const params = event.queryStringParameters || {};

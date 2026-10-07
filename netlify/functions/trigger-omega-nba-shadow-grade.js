@@ -9,8 +9,14 @@
  * A naked POST is 403. SPORTS_ENABLED.NBA stays false.
  */
 const { handleShadow } = require('./omega-nba-shadow');
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
-exports.handler = (event, context) => handleShadow(event, context, {
-  mode: 'grade-prev',
-  trustSchedule: true,
-});
+exports.handler = (event, context) => {
+  const now = (context && context.now instanceof Date) ? context.now : new Date();
+  const etSkip = rejectUnlessEtSlot('trigger-omega-nba-shadow-grade', event, now);
+  if (etSkip) return etSkip;
+  return handleShadow(event, context, {
+    mode: 'grade-prev',
+    trustSchedule: true,
+  });
+};

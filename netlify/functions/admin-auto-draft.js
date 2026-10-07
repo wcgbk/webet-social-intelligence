@@ -10,7 +10,7 @@ const crypto = require('crypto')
 const { getStore } = require('@netlify/blobs');
 
 // ── Scheduled function config ────────────────────────────────────────────────
-exports.config = { schedule: '0 12 * * *' }; // 12:00 UTC = 7/8 AM ET
+exports.config = { schedule: '0 12,13 * * *' }; // 08:00 ET; both UTC hours, ET guard drops the other
 
 // ── Betty system prompt ──────────────────────────────────────────────────────
 
@@ -40,7 +40,11 @@ const CATEGORY_QUERIES = {
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('admin-auto-draft', event);
+  if (etSkip) return etSkip;
   console.log('[admin-auto-draft] Starting daily auto-draft run');
 
   const siteURL = process.env.URL || 'https://webetsocial.com';

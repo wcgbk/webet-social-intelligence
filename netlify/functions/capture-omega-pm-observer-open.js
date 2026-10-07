@@ -7,6 +7,7 @@
  */
 const { runCapture } = require('./capture-omega-pm-observer');
 const config = require('./lib/omega-vnext/config');
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
 const MODEL_VERSION = config.MODEL_VERSION;
 
@@ -15,6 +16,8 @@ function todayET() {
 }
 
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('capture-omega-pm-observer-open', event);
+  if (etSkip) return etSkip;
   const qs = (event && event.queryStringParameters) || {};
   const dateISO = qs.date || null;
   console.log(`[pm-observer-open] start model=${MODEL_VERSION} date=${dateISO || todayET()}`);

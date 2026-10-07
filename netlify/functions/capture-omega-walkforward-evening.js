@@ -3,17 +3,20 @@
 /**
  * Evening post-close walk-forward OBSERVER.
  *
- * 23:45 UTC = 7:45pm ET during EDT, after trigger-clv's 23:00 UTC pass.
+ * 19:45 ET, after the evening CLV pass. Cron fires 23:45 and 00:45 UTC;
+ * the ET guard keeps the 19:45 ET run in both EDT and EST.
  * Reads picks-{date} and clv-{date}. Writes omega-walkforward/* only.
  * Does not regenerate the live card, does not call calibrate, does not post.
- * FIT stays off. On 2026-11-01 (EDT→EST) the live cron is one hour early;
- * the prepared replacement is 00:45 UTC and must not be activated before that date.
+ * FIT stays off.
  */
 
 const morning = require('./capture-omega-walkforward');
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
-exports.handler = async (event) => {
-  const out = await morning.handler(event);
+exports.handler = async (event, context) => {
+  const etSkip = rejectUnlessEtSlot('capture-omega-walkforward-evening', event);
+  if (etSkip) return etSkip;
+  const out = await morning.handler(event, Object.assign({}, context, { skipEtGuard: true }));
   if (!out || typeof out.body !== 'string') return out;
   try {
     const body = JSON.parse(out.body);

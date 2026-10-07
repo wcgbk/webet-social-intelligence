@@ -377,8 +377,8 @@ function byMarket(rows, market, sideIncludes) {
   const projectBlock = fnBlock('trigger-omega-nba-shadow');
   const gradeBlock = fnBlock('trigger-omega-nba-shadow-grade');
   const publicBlock = fnBlock('omega-nba-shadow');
-  assert.ok(/schedule = "30 21 \* \* \*"/.test(projectBlock));
-  assert.ok(/schedule = "0 12 \* \* \*"/.test(gradeBlock));
+  assert.ok(/schedule = "30 21,22 \* \* \*"/.test(projectBlock));
+  assert.ok(/schedule = "0 12,13 \* \* \*"/.test(gradeBlock));
   assert.ok(!/schedule\s*=/.test(publicBlock));
   assert.ok(!/schedule = "30 13 \* \* \*"/.test(projectBlock));
   const trig = fs.readFileSync(path.join(__dirname, 'netlify/functions/trigger-omega-shadow.js'), 'utf8');
@@ -694,6 +694,10 @@ function scheduleEvent() {
   };
 }
 
+// ET guard uses wall clock. Pin the scheduler tests to the intended ET slot.
+const PROJECT_AT = new Date('2026-10-21T21:30:00.000Z');
+const GRADE_AT = new Date('2026-10-21T12:00:00.000Z');
+
 function fixtureBoard() {
   return {
     dateISO: '2026-10-20',
@@ -771,6 +775,7 @@ function fixtureBoard() {
     const gradeHandler = require('./netlify/functions/trigger-omega-nba-shadow-grade').handler;
     const writes = [];
     const res = await projectHandler(scheduleEvent(), {
+      now: PROJECT_AT,
       nbaShadowTest: {
         ...fixtureBoard(),
         store: async (key, data) => { writes.push({ key, data }); },
@@ -797,6 +802,7 @@ function fixtureBoard() {
       ...scheduleEvent(),
       body: JSON.stringify({ grade: true, next_run: '2026-10-21T21:30:00.000Z' }),
     }, {
+      now: PROJECT_AT,
       nbaShadowTest: {
         ...fixtureBoard(),
         store: async (key, data) => { writes.push({ key, data }); },
@@ -812,6 +818,7 @@ function fixtureBoard() {
       ...scheduleEvent(),
       body: JSON.stringify({ dryRun: true, date: '2020-01-01', grade: true }),
     }, {
+      now: PROJECT_AT,
       nbaShadowTest: {
         ...fixtureBoard(),
         dateISO: undefined,
@@ -831,6 +838,7 @@ function fixtureBoard() {
       { homeTeam: 'Boston Celtics', awayTeam: 'New York Knicks', homeScore: 110, awayScore: 100, status: 'final' },
     ];
     const graded = await gradeHandler(scheduleEvent(), {
+      now: GRADE_AT,
       nbaShadowTest: {
         dateISO: '2026-10-20',
         slate: { picks: writes[0].data.picks },
@@ -873,6 +881,7 @@ function fixtureBoard() {
     const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
     const writes = [];
     const res = await projectHandler(scheduleEvent(), {
+      now: PROJECT_AT,
       nbaShadowTest: {
         ...fixtureBoard(),
         store: async () => { writes.push('nope'); throw new Error('kill-switch must not write'); },

@@ -5,7 +5,7 @@
 
 "use strict";
 
-const { CONTEST, resolveContestWeek, weekKey, circaCronSlot } = require("./circa-contest");
+const { CONTEST, resolveContestWeek, weekKey, circaCronSlot, pacificWall } = require("./circa-contest");
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = CONTEST.storeName;
@@ -84,17 +84,14 @@ async function writeCircaCardHealth(snap) {
  * (Thu/Fri/Sat + holiday Wed) so the background generate has time to finish.
  */
 function circaHealthCronSlot(now = new Date(), slackMin = 8) {
-  const day = now.getUTCDay();
-  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const near = (h, m) => Math.abs(mins - (h * 60 + m)) <= slackMin;
-  // Generate slots: Thu 17:15/30/45 18:00 → check 17:20/35/50 18:05
-  if (day === 4 && (near(17, 20) || near(17, 35) || near(17, 50) || near(18, 5))) return "first-check";
-  // Fri 17:00/15/30/45 → check 17:05/20/35/50
-  if (day === 5 && (near(17, 5) || near(17, 20) || near(17, 35) || near(17, 50))) return "refresh-check";
-  // Sat 20:00 → check 20:05
-  if (day === 6 && near(20, 5)) return "final-check";
-  // Holiday Wed 17:15 → check 17:20
-  if (day === 3 && near(17, 20)) return "holiday-check";
+  const pt = pacificWall(now);
+  const near = (h, m) => Math.abs(pt.mins - (h * 60 + m)) <= slackMin;
+  // ~5 min after each PT generate slot. Wednesday is the holiday clock only;
+  // the date check lives in the generate slot, not here.
+  if (pt.day === 4 && (near(10, 20) || near(10, 35) || near(10, 50) || near(11, 5))) return "first-check";
+  if (pt.day === 5 && (near(10, 5) || near(10, 20) || near(10, 35) || near(10, 50))) return "refresh-check";
+  if (pt.day === 6 && near(13, 5)) return "final-check";
+  if (pt.day === 3 && near(10, 20)) return "holiday-check";
   return null;
 }
 

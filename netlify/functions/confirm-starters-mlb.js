@@ -212,7 +212,11 @@ function processPicks(picksData, currentStarters) {
   return { scratches, killed, remaining: kept.length };
 }
 
-exports.handler = async () => {
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('confirm-starters-mlb', event);
+  if (etSkip) return etSkip;
   try {
     const todayISO = todayET();
     console.log(`[confirm-starters] Running starter check for ${todayISO} (ET) on Alpha+Omega`);

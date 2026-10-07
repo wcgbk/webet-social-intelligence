@@ -4,7 +4,11 @@
 // college football game days and "No College Football Games Scheduled For Today" on
 // off days so /cfb never shows a stale last-game-day card.
 
-exports.handler = async () => {
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('trigger-picks-cfb', event);
+  if (etSkip) return etSkip;
   const siteURL = process.env.URL || "https://webetsocial.com";
   console.log("[trigger-picks-cfb] Firing CFB generator (game-day vs no-games decided inside).");
   try {

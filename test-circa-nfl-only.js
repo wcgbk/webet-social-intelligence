@@ -412,7 +412,8 @@ check("cron windows (UTC)", () => {
   assert.strictEqual(circaCronSlot(new Date("2026-09-12T20:00:00Z")), "final");
   assert.strictEqual(circaCronSlot(new Date("2026-09-10T13:00:00Z")), null);
   assert.strictEqual(circaCronSlot(new Date("2026-09-11T18:30:00Z")), null);
-  assert.strictEqual(circaCronSlot(new Date("2026-11-25T17:15:00Z")), "holiday-first");
+  // 18:15Z is 10:15 PST. 17:15Z is 09:15 PST and is outside the holiday window.
+  assert.strictEqual(circaCronSlot(new Date("2026-11-25T18:15:00Z")), "holiday-first");
   assert.strictEqual(circaCronSlot(new Date("2026-09-09T17:15:00Z")), null);
 });
 
@@ -702,7 +703,7 @@ console.log("netlify.toml");
 check("circa trigger cron + background comment block", () => {
   assert.ok(toml.includes('[functions."trigger-picks-circa"]'));
   assert.ok(toml.includes('[functions."generate-picks-circa-background"]'));
-  assert.ok(toml.includes("0,15,30,45 17,18,20") || toml.includes("0,15 17,20"));
+  assert.ok(toml.includes("0,15,30,45 17,18,19,20,21"));
   assert.ok(/10:15 AM PT/.test(toml));
   assert.ok(/10:30|late-PDF catch-up/.test(toml));
   assert.ok(/fixture catch-up|10:00.–10:45|Fri 17:00 \/ 17:15/.test(toml));

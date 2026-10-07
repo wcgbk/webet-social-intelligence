@@ -19,7 +19,11 @@
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('self-optimize', event);
+  if (etSkip) return etSkip;
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return { statusCode: 500, body: "Missing auth token" };
 

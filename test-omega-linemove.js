@@ -370,10 +370,10 @@ assert.deepStrictEqual(
 );
 
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
-assert.ok(/\[functions\."capture-omega-lines"\]\s*\n\s*schedule = "0,30 10,11 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."capture-omega-lines-late"\]\s*\n\s*schedule = "0,15 13 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-lines"\]\s*\n\s*schedule = "0,30 10,11,12 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."capture-omega-lines-late"\]\s*\n\s*schedule = "0,15 13,14 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13,14 \* \* \*"/.test(toml));
+assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13,14 \* \* \*"/.test(toml));
 const tspBlock = toml.split('[functions."fetch-tsp-live"]')[1].split('\n[functions.')[0];
 // #82 paused the Hermes fetch. The schedule line stays commented; do not require it live.
 assert.ok(/HOLD intentional/.test(tspBlock), 'TSP hold note');

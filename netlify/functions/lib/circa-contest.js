@@ -478,26 +478,37 @@ function strategyForCard(picks, weekNum, lineNotes) {
 }
 
 /**
- * Intended Circa cron windows (UTC). Sep = PDT = UTC-7.
- *   Thu 17:15 — first card (10:15 AM PT)
- *   Thu 17:30 / 17:45 / 18:00 — late-PDF catch-up (10:30 / 10:45 / 11:00 AM PT)
- *   Fri 17:00 / 17:15 / 17:30 / 17:45 — refresh + catch-up (10:00–10:45 AM PT)
- *     so a mid-week fixture ship (image-only PDF) still regenerates Friday morning.
- *   Sat 20:00 — final (1:00 PM PT)
- * Holiday: Wed 17:15 UTC on 2026-11-25 and 2026-12-23.
- * After DST (Nov) 17:15 UTC is 9:15 AM PST; Circa still posts ~10:00 AM PT — TODO if a PST-shifted cron is needed.
+ * America/Los_Angeles wall clock. ET and PT switch DST together, so these
+ * PT times stay put when the UTC cron fires the other hour.
+ */
+function pacificWall(now = new Date()) {
+  const p = hmsInTz(now, "America/Los_Angeles");
+  let hour = p.h;
+  if (hour === 24) hour = 0;
+  return {
+    day: new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay(),
+    mins: hour * 60 + p.min,
+    ymd: ymdInTz(now, "America/Los_Angeles"),
+  };
+}
+
+/**
+ * Intended Circa windows on the Pacific clock (PDT and PST).
+ *   Thu 10:15 / 10:30 / 10:45 / 11:00 — first card + late-PDF catch-up
+ *   Fri 10:00 / 10:15 / 10:30 / 10:45 — refresh + fixture catch-up
+ *   Sat 13:00 — final
+ * Holiday Wednesday 10:15 PT on 2026-11-25 and 2026-12-23.
+ * The ET guard drops the unused UTC twin. This matcher does not use UTC hour.
  */
 function circaCronSlot(now = new Date(), slackMin = 12) {
-  const day = now.getUTCDay();
-  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const near = (h, m) => Math.abs(mins - (h * 60 + m)) <= slackMin;
-  const ymdPT = ymdInTz(now, "America/Los_Angeles");
+  const pt = pacificWall(now);
+  const near = (h, m) => Math.abs(pt.mins - (h * 60 + m)) <= slackMin;
   // Thu first + catch-up: Circa sometimes posts after the 10:00/10:15 AM PT slots.
-  if (day === 4 && (near(17, 15) || near(17, 30) || near(17, 45) || near(18, 0))) return "first";
+  if (pt.day === 4 && (near(10, 15) || near(10, 30) || near(10, 45) || near(11, 0))) return "first";
   // Fri refresh + catch-up: union cron already fires :00/:15/:30/:45; accept all four.
-  if (day === 5 && (near(17, 0) || near(17, 15) || near(17, 30) || near(17, 45))) return "refresh";
-  if (day === 6 && near(20, 0)) return "final";
-  if (day === 3 && near(17, 15) && HOLIDAY_LINES_POST[ymdPT]) return "holiday-first";
+  if (pt.day === 5 && (near(10, 0) || near(10, 15) || near(10, 30) || near(10, 45))) return "refresh";
+  if (pt.day === 6 && near(13, 0)) return "final";
+  if (pt.day === 3 && near(10, 15) && HOLIDAY_LINES_POST[pt.ymd]) return "holiday-first";
   return null;
 }
 
@@ -536,5 +547,6 @@ module.exports = {
   RATING_TO_CONFIDENCE,
   nick,
   strategyForCard,
+  pacificWall,
   circaCronSlot,
 };

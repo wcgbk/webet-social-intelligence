@@ -3,17 +3,17 @@
  * capture-omega-lines.js — Omega-dedicated US morning line-path capture.
  * Writes ONLY to edge-picks-omega (Alpha / edge-picks untouched).
  *
- * Slots (EDT = UTC-4): 6:00, 7:30, 9:00, 9:15 ET → 10:00, 11:30, 13:00, 13:15 UTC.
- * Netlify allows one schedule per function:
- *   capture-omega-lines      → 6:00 / 7:30 ET (union extras no-op)
- *   capture-omega-lines-late → 9:00 / 9:15 ET
- * 9:30 ET (13:30 UTC) is not a capture slot — it races trigger-picks-omega.
- * This handler no-ops outside ALLOWED_UTC_HHMM (±5 min) unless ?force=1.
+ * Slots: 6:00 / 7:30 ET here, 9:00 / 9:15 ET on capture-omega-lines-late.
+ * Netlify crons fire both UTC hours. A scheduler invoke follows the ET guard
+ * and keeps the matched ET slot even when the EDT-only UTC allowlist misses.
+ * Manual calls still no-op outside ALLOWED_UTC_HHMM (±5 min) unless ?force=1.
+ * 9:30 ET is not a capture slot — it races trigger-picks-omega.
  */
 
 const { BLOB_STORE } = require('./lib/omega-vnext/config');
 const { etDateISO, hhmmET } = require('./lib/omega-vnext/line_path');
 const { runOmegaLineCapture } = require('./lib/omega-vnext/capture_runner');
+const { rejectUnlessEtSlot, etGuard } = require('./lib/et-schedule');
 
 /** UTC HHMM windows that map to 6:00 / 7:30 / 9:00 / 9:15 ET during EDT. */
 const ALLOWED_UTC_HHMM = new Set(['1000', '1130', '1300', '1315']);
@@ -40,12 +40,24 @@ function etSlotLabel(utcSlot) {
   return map[utcSlot] || hhmmET();
 }
 
-exports.handler = async (event) => {
+function compactSlot(hhmm) {
+  return String(hhmm || '').replace(':', '');
+}
+
+async function handleCapture(event, functionName) {
   const qs = (event && event.queryStringParameters) || {};
   const force = !!qs.force;
   const now = new Date();
+  if (!force) {
+    const etSkip = rejectUnlessEtSlot(functionName, event, now);
+    if (etSkip) return etSkip;
+  }
+  const guard = etGuard(functionName, event, now);
   const utcSlot = nearestAllowedSlot(utcHHMM(now));
-  if (!force && !utcSlot) {
+  const matchedEt = !force && guard.scheduler && guard.run && guard.matched
+    ? compactSlot(guard.matched)
+    : null;
+  if (!force && !matchedEt && !utcSlot) {
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -60,7 +72,7 @@ exports.handler = async (event) => {
   const dateISO = qs.date || etDateISO(now);
   const etSlot = force
     ? (qs.slot || hhmmET(now))
-    : etSlotLabel(utcSlot || '1000');
+    : (matchedEt || etSlotLabel(utcSlot || '1000'));
 
   try {
     const stored = await runOmegaLineCapture({
@@ -73,7 +85,7 @@ exports.handler = async (event) => {
     const body = {
       date: stored.date,
       etSlot: stored.etSlot,
-      utcSlot: utcSlot || 'forced',
+      utcSlot: utcSlot || (matchedEt ? 'et-guard' : 'forced'),
       gameCount: stored.gameCount,
       sports: stored.sports,
       snapKey: stored.snapKey,
@@ -85,8 +97,10 @@ exports.handler = async (event) => {
     console.error(`[capture-omega-lines] failed: ${e.message}`);
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
-};
+}
 
+exports.handler = (event) => handleCapture(event, 'capture-omega-lines');
+exports.handleCapture = handleCapture;
 exports.ALLOWED_UTC_HHMM = ALLOWED_UTC_HHMM;
 exports.etSlotLabel = etSlotLabel;
 exports.nearestAllowedSlot = nearestAllowedSlot;

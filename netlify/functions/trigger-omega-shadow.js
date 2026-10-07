@@ -7,7 +7,11 @@
  * See docs/OMEGA-SHADOW-DRYRUN.md.
  */
 
-exports.handler = async () => {
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('trigger-omega-shadow', event);
+  if (etSkip) return etSkip;
   console.log('[trigger-omega-shadow] Scheduled shadow dry-run (isolated omega-shadow/*)');
   const siteURL = process.env.URL || 'https://webetsocial.com';
   try {

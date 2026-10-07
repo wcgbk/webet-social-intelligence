@@ -4,10 +4,17 @@
 // Second run merges with first run — already-tracked picks are preserved.
 // Schedule configured in netlify.toml: cron = "0 17,23 * * *"
 
+const { rejectUnlessEtSlot, etGuard } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
   const now = new Date();
-  const hour = now.getUTCHours();
-  const window = hour < 20 ? 'afternoon' : 'evening';
+  const etSkip = rejectUnlessEtSlot('trigger-clv', event, now);
+  if (etSkip) return etSkip;
+  const guard = etGuard('trigger-clv', event, now);
+  let window;
+  if (guard.scheduler && guard.matched === '19:00') window = 'evening';
+  else if (guard.scheduler && (guard.matched === '03:00' || guard.matched === '13:00')) window = 'afternoon';
+  else window = now.getUTCHours() < 20 ? 'afternoon' : 'evening';
   console.log(`[trigger-clv] ${window} capture window — capturing closing lines`);
 
   const siteURL = process.env.URL || "https://webetsocial.com";

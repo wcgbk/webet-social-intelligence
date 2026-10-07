@@ -18,6 +18,7 @@ const {
   readBlob,
   STORE_NAME,
 } = require("./lib/circa-card-health");
+const { rejectUnlessEtSlot } = require("./lib/et-schedule");
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 
@@ -34,6 +35,8 @@ async function readCard(weekStr) {
 }
 
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot("check-circa-card-health", event);
+  if (etSkip) return etSkip;
   let body = {};
   try {
     body = JSON.parse(event.body || "{}");

@@ -3,7 +3,11 @@
 // Fires generate-picks-alpha-background — the improved Alpha model.
 // 1hr earlier than beta/production for maximum CLV runway.
 
+const { rejectUnlessEtSlot } = require('./lib/et-schedule');
+
 exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot('trigger-picks-alpha', event);
+  if (etSkip) return etSkip;
   console.log("[trigger-picks-alpha] Scheduled run triggered");
 
   const siteURL = process.env.URL || "https://webetsocial.com";

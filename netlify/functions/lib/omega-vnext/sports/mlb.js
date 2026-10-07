@@ -5,6 +5,7 @@
  * ML / spread / total blend weights unchanged. Every anchor is no-vig
  * Pinnacle/Circa (one book alone if the other is missing; else sharp no-vig).
  * Base margin and total come from per-game runs, not season run differential.
+ * Season rates are neutralized by each club's home park, then the venue factor is applied once.
  * The finished total then loses the 2026 environment gap (OMEGA_MLB_ROOTFIX)
  * and, when the slate has a sharp total on at least 3 games, the slate mean
  * of (model − sharp no-vig total) instead (OMEGA_MLB_TOTAL_RECENTER).
@@ -62,9 +63,15 @@ function deriveGame(event, standings, espnGame, ctx) {
   const away = event.away_team;
   const commenceTime = event.commence_time;
   const seen = ctx && ctx.fallbackSeen;
+  const bag = ctx || {};
   const homeSt = rowByIdentityOrFuzzy('MLB', standings, home, { fallbackSeen: seen });
   const awaySt = rowByIdentityOrFuzzy('MLB', standings, away, { fallbackSeen: seen });
-  const env0 = mlbStandingsEnv(homeSt, awaySt);
+  const env0 = mlbStandingsEnv(homeSt, awaySt, {
+    parkFactors: bag.parkFactors,
+    homeTeam: home,
+    awayTeam: away,
+    fallbackSeen: seen,
+  });
   const baseMargin = env0.modelMargin;
   const baseTotal = env0.modelTotal;
 
@@ -74,7 +81,6 @@ function deriveGame(event, standings, espnGame, ctx) {
   if (homeSp && awaySp) uncertainty = Math.max(0.12, uncertainty - 0.04);
   else if (homeSp || awaySp) uncertainty = Math.max(0.14, uncertainty - 0.02);
 
-  const bag = ctx || {};
   const park = resolvePark(home, bag.parkFactors, espnGame, seen);
   const homeQ = resolveSpQuality(homeSp, bag.mlbPitcherStats, home, seen);
   const awayQ = resolveSpQuality(awaySp, bag.mlbPitcherStats, away, seen);
@@ -135,6 +141,8 @@ function deriveGame(event, standings, espnGame, ctx) {
     spKnownStd: effStd,
     enginesApplied: enginesOn,
   };
+  if (Number.isFinite(env0.homeParkAdj)) gameDayMeta.homeParkAdj = env0.homeParkAdj;
+  if (Number.isFinite(env0.awayParkAdj)) gameDayMeta.awayParkAdj = env0.awayParkAdj;
   const methods = buildMethods({
     usedSp: adj.usedSp,
     usedPark: adj.usedPark,

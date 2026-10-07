@@ -253,9 +253,68 @@ function resolvePark(homeTeam, parkFactors, espnGame, fallbackSeen) {
   return row || null;
 }
 
+/** One multiplier per park row. Name and abbr keys share a row and count once. */
+function parkFactorValues(parkFactors) {
+  const { nameTable, abbrTable } = splitParkTable(parkFactors);
+  const seen = new Set();
+  const out = [];
+  const rows = Object.values(nameTable).concat(Object.values(abbrTable));
+  for (const row of rows) {
+    if (!row || seen.has(row)) continue;
+    seen.add(row);
+    if (Number.isFinite(row.factor)) out.push(row.factor);
+  }
+  return out;
+}
+
+/**
+ * Home-park exposure for a club's season rates.
+ * About half the games are at pfOwn and half on the road, so
+ * teamParkAdj = (pfOwn + pfRoad) / 2.
+ * pfRoad is the mean of the other parks in the table, (sum − pfOwn) / (n − 1).
+ * A single-row table has no road sample, so pfRoad is 1.
+ * Missing or non-positive own park → 1 (rates unchanged).
+ */
+function teamParkAdj(pfOwn, parkFactors) {
+  const own = Number(pfOwn);
+  if (!Number.isFinite(own) || own <= 0) return 1;
+  const factors = parkFactorValues(parkFactors);
+  let pfRoad = 1;
+  let ownIndex = -1;
+  for (let i = 0; i < factors.length; i++) {
+    if (Math.abs(factors[i] - own) < 1e-9) { ownIndex = i; break; }
+  }
+  if (ownIndex >= 0 && factors.length >= 2) {
+    let sumOthers = 0;
+    for (let i = 0; i < factors.length; i++) {
+      if (i === ownIndex) continue;
+      sumOthers += factors[i];
+    }
+    const road = sumOthers / (factors.length - 1);
+    if (Number.isFinite(road)) pfRoad = road;
+  }
+  const adj = (own + pfRoad) / 2;
+  if (!Number.isFinite(adj) || adj <= 0) return 1;
+  return adj;
+}
+
+/**
+ * Club's own home park, not today's venue. Missing row → 1.
+ * espn home abbr is intentionally not consulted: it is the venue, and
+ * would stick the visitor with the host's park.
+ */
+function clubParkAdj(teamName, parkFactors, fallbackSeen) {
+  if (!teamName || !parkFactors) return 1;
+  const row = resolvePark(teamName, parkFactors, null, fallbackSeen);
+  if (!row || !Number.isFinite(row.factor) || row.factor <= 0) return 1;
+  return teamParkAdj(row.factor, parkFactors);
+}
+
 /**
  * Better SP (positive quality) adds margin for that side and lowers the total.
- * Park factor multiplies the run environment (Coors > 1).
+ * Park factor multiplies the run environment once (Coors > 1).
+ * The total passed in is already park-neutral. This is the only venue multiply.
+ * Margin is not scaled by the venue.
  */
 function applySpPark({ modelMargin, modelTotal, homeQ, awayQ, parkFactor }) {
   let margin = Number(modelMargin);
@@ -385,6 +444,7 @@ function standingsGames(st) {
 /**
  * Runs scored / allowed per game.
  * Season totals (pf 700) require a game count. Per-game rates (pf 4.6) pass through.
+ * These rates still include the club's own home park (about half its games).
  * Unclean rows return null so the caller keeps the 8.6 / HFA baseline.
  */
 function teamRpg(st) {
@@ -404,18 +464,36 @@ function teamRpg(st) {
   return { rs, ra };
 }
 
+/** rs and ra divided by home-park exposure. adj 1 leaves the rates unchanged. */
+function neutralizeRpg(rpg, adj) {
+  if (!rpg || !Number.isFinite(rpg.rs) || !Number.isFinite(rpg.ra)) return null;
+  const a = Number(adj);
+  const d = Number.isFinite(a) && a > 0 ? a : 1;
+  return { rs: rpg.rs / d, ra: rpg.ra / d };
+}
+
 /**
  * Pregame run environment from team offense and opponent runs allowed.
- * Home margin = (home runs − away runs) + HFA. Total = the sum.
+ * Season rates are neutralized by each club's home-park exposure first.
+ * Home margin = (neutral home runs − neutral away runs) + HFA. Total = the sum.
+ * The venue park is not applied here. applySpPark multiplies the total once.
  * Equal clubs land on HFA and their own run environment, not a season-RD spike.
  * Missing either side → neutral { HFA, 8.6 }, which is the old zero-power baseline.
+ * opts is optional: { parkFactors, homeTeam, awayTeam, fallbackSeen }.
+ * No opts, or a club with no park row, uses adj 1 (previous rates).
  */
-function mlbStandingsEnv(homeSt, awaySt) {
+function mlbStandingsEnv(homeSt, awaySt, opts) {
   const hfa = Number.isFinite(Number(HFA && HFA.MLB)) ? Number(HFA.MLB) : 0.12;
   const neutral = { modelMargin: hfa, modelTotal: 8.6, usedStandings: false };
-  const h = teamRpg(homeSt);
-  const a = teamRpg(awaySt);
-  if (!h || !a) return neutral;
+  const hRaw = teamRpg(homeSt);
+  const aRaw = teamRpg(awaySt);
+  if (!hRaw || !aRaw) return neutral;
+  const parkFactors = opts && opts.parkFactors;
+  const seen = opts && opts.fallbackSeen;
+  const homeParkAdj = clubParkAdj(opts && opts.homeTeam, parkFactors, seen);
+  const awayParkAdj = clubParkAdj(opts && opts.awayTeam, parkFactors, seen);
+  const h = neutralizeRpg(hRaw, homeParkAdj);
+  const a = neutralizeRpg(aRaw, awayParkAdj);
   const homeRuns = (h.rs + a.ra) / 2;
   const awayRuns = (a.rs + h.ra) / 2;
   const modelTotal = homeRuns + awayRuns;
@@ -429,6 +507,8 @@ function mlbStandingsEnv(homeSt, awaySt) {
     homeRa: h.ra,
     awayRs: a.rs,
     awayRa: a.ra,
+    homeParkAdj,
+    awayParkAdj,
   };
 }
 
@@ -593,6 +673,8 @@ module.exports = {
   mlbSpKnownStd,
   mlbSeasonFromDate,
   teamRpg,
+  teamParkAdj,
+  neutralizeRpg,
   mlbStandingsEnv,
   MLB_TOTAL_PRIOR_OFFSET,
   MLB_TOTAL_RECENTER_MIN,

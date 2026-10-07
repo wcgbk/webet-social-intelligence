@@ -414,8 +414,18 @@ function byMarket(cands, market) {
   assert.strictEqual(byMarket(coors, 'Total').projMethod, 'mlb-sp-park-v1-total');
   assert.strictEqual(byMarket(coors, 'Moneyline').projMethod, 'mlb-sp-park-v1-ml');
   assert.strictEqual(byMarket(coors, 'Spread').projMethod, 'mlb-sp-park-v1-spread');
-  // Park does not invent a side's margin by itself when powers match.
-  assert.strictEqual(byMarket(coors, 'Spread').modelProjection, byMarket(neutral, 'Spread').modelProjection);
+  // Venue park does not scale margin. This table has only the Rockies row,
+  // so their rates are neutralized and the Dodgers (no row, adj 1) stay raw.
+  // Equal raw powers no longer share a margin once only one club is neutralized.
+  const rs = 700 / 150;
+  const ra = 680 / 150;
+  const colAdj = (1.21 + 1) / 2;
+  const coorsHomeRuns = (rs / colAdj + ra) / 2;
+  const coorsAwayRuns = (rs + ra / colAdj) / 2;
+  const coorsMargin = (coorsHomeRuns - coorsAwayRuns) + config.HFA.MLB;
+  assert.strictEqual(byMarket(coors, 'Spread').modelProjection, +coorsMargin.toFixed(2));
+  assert.strictEqual(byMarket(neutral, 'Spread').modelProjection, +config.HFA.MLB.toFixed(2));
+  assert.notStrictEqual(byMarket(coors, 'Spread').modelProjection, +(coorsMargin * 1.21).toFixed(2));
 
   const spStats = {
     byId: {

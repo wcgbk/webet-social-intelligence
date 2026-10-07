@@ -10,6 +10,9 @@ const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
 const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
 const { loadLinePath } = require('./lib/omega-vnext/line_path');
+const omegaGradingRules = require('./lib/omega-grading-rules');
+const { fetchESPNScores: fetchSharedScoreboard } = require('./lib/espn-scoreboard');
+const resultsGrader = require('./get-results-omega');
 
 function attachModelClvFields(rec, pick) {
   if (!rec || !pick) return rec;
@@ -429,7 +432,14 @@ const ESPN_ENDPOINTS = {
   'Europa': 'soccer/uefa.europa',
 };
 
+function footballGraderOn(dateISO, sport) {
+  return omegaGradingRules.rulesV2(dateISO) && (sport === 'NFL' || sport === 'NCAAF');
+}
+
 async function fetchESPNScores(dateISO, sport) {
+  // NFL/NCAAF were absent from ESPN_ENDPOINTS, so football stayed pending.
+  // From GRADING_RULES_V2_FROM, use the shared board (NCAAF groups 80+90, adjacent dates).
+  if (footballGraderOn(dateISO, sport)) return fetchSharedScoreboard(dateISO, sport);
   const endpoint = ESPN_ENDPOINTS[sport];
   if (!endpoint) return [];
   try {
@@ -473,7 +483,11 @@ async function fetchESPNScores(dateISO, sport) {
   } catch (e) { return []; }
 }
 
-function findGameForGrading(pick, games) {
+function findGameForGrading(pick, games, dateISO) {
+  const cardDate = dateISO || (pick && pick.date) || null;
+  if (footballGraderOn(cardDate, pick && pick.sport)) {
+    return resultsGrader._test.findGame(pick, games);
+  }
   const matchup = (pick.matchup || '').toLowerCase();
   const parts = matchup.split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
   const matches = [];
@@ -500,7 +514,12 @@ function findGameForGrading(pick, games) {
   return best;
 }
 
-function gradePick(pick, game) {
+function gradePick(pick, game, opts) {
+  const dateISO = (opts && opts.dateISO) || (pick && pick.date) || null;
+  if (footballGraderOn(dateISO, pick && pick.sport)) {
+    const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
+    return resultsGrader._test.gradePick(pick, game, gradeOpts);
+  }
   if (!game || game.state !== 'post') return 'pending';
   // Postponed / canceled / suspended games are voided by every major US book (no action).
   // ESPN marks them state:'post' with completed:false — catch BEFORE score-based grading,
@@ -623,18 +642,22 @@ async function writePicksData(dateISO, picksData) {
 // Grade every unsettled pick for a date via ESPN finals and write results back to the picks
 // blob. Mutates picksData in place (so later steps in the same run see the results and the
 // Step 6.5 guard doesn't re-write). Returns the number of picks settled this call.
-async function settleResultsForDate(dateISO, picksData) {
+async function settleResultsForDate(dateISO, picksData, opts) {
   const unsettled = (picksData.picks || []).filter(p => !p.result || p.result === 'pending');
   if (!unsettled.length) return 0;
   const sports = [...new Set(unsettled.map(p => p.sport).filter(Boolean))];
   const scoresBySport = {};
-  await Promise.all(sports.map(async s => { scoresBySport[s] = await fetchESPNScores(dateISO, s); }));
+  await Promise.all(sports.map(async s => {
+    scoresBySport[s] = (opts && opts.gamesBySport && opts.gamesBySport[s])
+      ? opts.gamesBySport[s]
+      : await fetchESPNScores(dateISO, s);
+  }));
   let settledCount = 0;
   for (const p of picksData.picks) {
     if (p.result && p.result !== 'pending') continue;
-    const game = findGameForGrading(p, scoresBySport[p.sport] || []);
+    const game = findGameForGrading(p, scoresBySport[p.sport] || [], dateISO);
     if (!game) continue;
-    const result = gradePick(p, game);
+    const result = gradePick(p, game, { dateISO: dateISO, now: opts && opts.now });
     if (result === 'pending') continue;
     p.result = result;
     p.profit = calcProfit(result, p.units, p.odds || p.pickTimeOdds);
@@ -642,7 +665,7 @@ async function settleResultsForDate(dateISO, picksData) {
     p.settledAt = new Date().toISOString();
     settledCount++;
   }
-  if (settledCount > 0) {
+  if (settledCount > 0 && !(opts && opts.skipWrite)) {
     const ok = await writePicksData(dateISO, picksData);
     if (!ok) console.log(`[track-clv] WARNING: settled ${settledCount} picks for ${dateISO} but blob write failed`);
   }
@@ -701,8 +724,8 @@ async function recordCandidateCloses({
     pickSideInfo,
     findMatchingGame,
     teamsMatch,
-    gradePick,
-    findGameForGrading,
+    gradePick: (pick, game) => gradePick(pick, game, { dateISO: dateISO, now: nowMs }),
+    findGameForGrading: (pick, games) => findGameForGrading(pick, games, dateISO),
   });
 }
 
@@ -977,8 +1000,8 @@ const trackClvOmegaHandler = async (event) => {
     let settledCount = 0;
     for (const clvPick of clvPicks) {
       const sportGames = espnScoresBySport[clvPick.sport] || [];
-      const game = findGameForGrading(clvPick, sportGames);
-      const result = gradePick(clvPick, game);
+      const game = findGameForGrading(clvPick, sportGames, dateISO);
+      const result = gradePick(clvPick, game, { dateISO: dateISO, now: nowMs });
       const profit = calcProfit(result, clvPick.units, clvPick.pickTimeOdds);
       clvPick.result = result;
       clvPick.profit = profit;
@@ -1234,4 +1257,5 @@ module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
+  footballGraderOn,
 };

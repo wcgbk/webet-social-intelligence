@@ -508,7 +508,9 @@ async function gradeDayBody(dateISO, picksData, opts) {
   const parlayUnits = anyLean ? 0.25 : 0.5;
   const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
   const parlayResult = gradeParlay(parlayInput, parlayRisk);
-  if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip') {
+  // From GRADING_RULES_V2_FROM, an all-push parlay returns the stake (same as a straight push).
+  const parlayPushFree = omegaGradingRules.rulesV2(dateISO) && parlayResult.result === 'push';
+  if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip' && !parlayPushFree) {
     dayWagered += parlayRisk;
     dayProfit += parlayResult.profit;
   }
@@ -559,7 +561,11 @@ function aggregateDays(list) {
       if (p.result === 'win') sw++; else if (p.result === 'loss') sl++;
     }
     if (day.parlayResult && day.parlayResult !== 'skip' && day.parlayResult !== 'pending') {
-      pwag += (day.parlayRisk || 75); ppr += day.parlayProfit || 0;
+      // All-push parlays on v2 cards add nothing. Earlier days, including frozen legacy rows, stay put.
+      const parlayPushFree = omegaGradingRules.rulesV2(day.date) && day.parlayResult === 'push';
+      if (!parlayPushFree) {
+        pwag += (day.parlayRisk || 75); ppr += day.parlayProfit || 0;
+      }
       if (day.parlayResult === 'win') pw++; else if (day.parlayResult === 'loss') pl++;
     }
   }

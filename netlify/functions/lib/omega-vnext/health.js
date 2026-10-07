@@ -329,6 +329,8 @@ function buildHealthRecord(input) {
       oddsEvents: oddsN,
       zeroCandidates,
       unresolved,
+      skippedUnresolved: (snap.unresolvedSkipped && snap.unresolvedSkipped[sport]) || 0,
+      neutralSite: (snap.neutralSiteCounts && snap.neutralSiteCounts[sport]) || 0,
       stats,
     };
     if (zeroCandidates) alerts.push({ sport, code: 'zero_candidates', detail: `espn=${espnN} odds=${oddsN} raw=0` });
@@ -381,6 +383,8 @@ function buildHealthRecord(input) {
     alerts,
     bySport,
     calendar: calendar || null,
+    unresolvedSkipped: snap.unresolvedSkipped || {},
+    neutralSite: snap.neutralSiteCounts || {},
     splits: {
       candidates: sideSplit(src.candidates),
       yesPool: sideSplit(src.yesPool),

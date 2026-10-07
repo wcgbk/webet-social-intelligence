@@ -3,7 +3,7 @@
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
 } = require('./config');
-const { sportsForCard } = require('./season_calendar');
+const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
 const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
@@ -220,10 +220,12 @@ async function generateOmegaVnext(opts = {}) {
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow}`);
 
-  const snap = await ingest(dateISO, {
+  const fetched = await ingest(dateISO, {
     historicalSnapshot: opts.historicalSnapshot,
   });
+  const snap = applyUnresolvedSkip(fetched);
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
+  console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
 
   let candidates = projectAll(snap, dateISO);
   const rawBySport = {};

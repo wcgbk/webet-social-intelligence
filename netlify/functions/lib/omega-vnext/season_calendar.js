@@ -388,6 +388,90 @@ function eligibleSports(dateET, opts = {}) {
   return out;
 }
 
+const UNRESOLVED_EXACT = /^(tbd|tba|to be determined)$/i;
+const UNRESOLVED_PATTERN = /\bTBD\b|\bTBA\b|winner of|loser of/i;
+
+/** Empty, TBD/TBA, "To Be Determined", or winner-of / loser-of. */
+function isUnresolvedName(name) {
+  if (name == null) return true;
+  const text = String(name).trim();
+  if (!text) return true;
+  if (UNRESOLVED_EXACT.test(text)) return true;
+  if (UNRESOLVED_PATTERN.test(text)) return true;
+  return false;
+}
+
+function eventSideNames(ev) {
+  if (!ev || typeof ev !== 'object') return { home: '', away: '' };
+  const home = ev.home_team != null ? ev.home_team : ev.homeTeam;
+  const away = ev.away_team != null ? ev.away_team : ev.awayTeam;
+  return { home, away };
+}
+
+function isUnresolvedEvent(ev) {
+  const names = eventSideNames(ev);
+  return isUnresolvedName(names.home) || isUnresolvedName(names.away);
+}
+
+/**
+ * Drop odds and ESPN events whose home or away name is unresolved.
+ * Counts skips per sport. Counts ESPN neutralSite before the drop.
+ * Does not change prices, projections, or model fields.
+ */
+function applyUnresolvedSkip(snap) {
+  const src = snap && typeof snap === 'object' ? snap : {};
+  const skipped = {};
+  const neutralSite = {};
+  const oddsBySport = {};
+  for (const [sport, events] of Object.entries(src.oddsBySport || {})) {
+    const list = Array.isArray(events) ? events : [];
+    const kept = [];
+    let n = 0;
+    for (const ev of list) {
+      if (isUnresolvedEvent(ev)) n += 1;
+      else kept.push(ev);
+    }
+    oddsBySport[sport] = kept;
+    if (n) skipped[sport] = (skipped[sport] || 0) + n;
+  }
+  const espnBySport = {};
+  for (const [sport, block] of Object.entries(src.espnBySport || {})) {
+    const games = Array.isArray(block) ? block : (block && Array.isArray(block.games) ? block.games : null);
+    if (!games) {
+      espnBySport[sport] = block;
+      continue;
+    }
+    let neutral = 0;
+    let n = 0;
+    const kept = [];
+    for (const game of games) {
+      if (game && game.neutralSite === true) neutral += 1;
+      if (isUnresolvedEvent(game)) n += 1;
+      else kept.push(game);
+    }
+    if (neutral) neutralSite[sport] = neutral;
+    if (n) skipped[sport] = (skipped[sport] || 0) + n;
+    espnBySport[sport] = Array.isArray(block) ? kept : { ...block, games: kept };
+  }
+  return {
+    ...src,
+    oddsBySport,
+    espnBySport,
+    unresolvedSkipped: skipped,
+    neutralSiteCounts: neutralSite,
+  };
+}
+
+function formatSkipLog(skipped, neutralSite) {
+  const sports = CARD_SPORTS;
+  const parts = sports.map((sport) => {
+    const skip = skipped && skipped[sport] ? skipped[sport] : 0;
+    const neutral = neutralSite && neutralSite[sport] ? neutralSite[sport] : 0;
+    return `${sport}:skip=${skip},neutral=${neutral}`;
+  });
+  return `[omega-calendar] unresolved ${parts.join(' ')}`;
+}
+
 /** Private health payload: phase per sport for the card date. No model fields. */
 function calendarHealth(dateET, opts = {}) {
   const env = opts.env || process.env;
@@ -425,4 +509,8 @@ module.exports = {
   calendarHealth,
   nbaLive,
   resetStaleWarnings,
+  isUnresolvedName,
+  isUnresolvedEvent,
+  applyUnresolvedSkip,
+  formatSkipLog,
 };

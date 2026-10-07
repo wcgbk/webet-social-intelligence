@@ -964,6 +964,8 @@
       homeAbbr: (home.team && home.team.abbreviation) || '',
       homeScore: parseInt(home.score, 10) || 0,
       state,
+      statusName: (status.type && status.type.name) || '',
+      completed: !!(status.type && status.type.completed),
       detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
       clock: status.displayClock || '',
       period,
@@ -1376,6 +1378,12 @@
       return { status: 'scheduled', label: (game && game.detail) || 'Upcoming' };
     }
     if (game.state === 'pre') return { status: 'scheduled', label: game.detail || 'Upcoming' };
+
+    // Server already voids these for every card date. Do it before any score
+    // so a postponed 0-0 cannot grade as an Under win.
+    if (game.state === 'post' && (/POSTPONED|CANCELL?ED/i.test(game.statusName || '') || game.completed === false)) {
+      return { status: 'push', label: 'Postponed' };
+    }
 
     const isF5 = isF5Pick(pick);
     // Game called before 5 full innings → an F5 bet is void (no action).

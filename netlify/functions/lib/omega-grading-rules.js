@@ -68,25 +68,60 @@ function isPpdScore(pick, game, opts) {
   return false;
 }
 
-// Linescore length is the inning count. Empty arrays are missing data, not 0 innings.
-function inningCounts(game) {
-  const awayLine = Array.isArray(game.awayLine) ? game.awayLine
-    : (Array.isArray(game.awayLinescores) ? game.awayLinescores : null);
-  const homeLine = Array.isArray(game.homeLine) ? game.homeLine
-    : (Array.isArray(game.homeLinescores) ? game.homeLinescores : null);
-  if (awayLine && homeLine && (awayLine.length > 0 || homeLine.length > 0)) {
-    return { awayN: awayLine.length, homeN: homeLine.length, has: true, awayLine, homeLine };
-  }
-  const ai = Number(game.awayInnings);
-  const hi = Number(game.homeInnings);
-  if (Number.isFinite(ai) && Number.isFinite(hi) && (ai > 0 || hi > 0)) {
-    return { awayN: ai, homeN: hi, has: true, awayLine: null, homeLine: null };
-  }
-  return { awayN: 0, homeN: 0, has: false, awayLine: null, homeLine: null };
+function scoreNum(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : 0;
 }
 
 function sumLine(line) {
-  return (line || []).reduce((sum, n) => sum + (Number(n) || 0), 0);
+  let sum = 0;
+  for (const n of line || []) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return null;
+    sum += v;
+  }
+  return sum;
+}
+
+function lineArray(primary, alt) {
+  if (Array.isArray(primary)) return primary;
+  if (Array.isArray(alt)) return alt;
+  return null;
+}
+
+function noInnings() {
+  return { awayN: 0, homeN: 0, has: false, awayLine: null, homeLine: null };
+}
+
+// Linescores count only when both sides played and each line adds up to that
+// side's final score. A one-sided or inconsistent line is missing data, so the
+// snapshot stays null and the ticket grades as it did before (never a void).
+// Empty arrays are missing, not 0 innings.
+// Track-clv stores awayInnings/homeInnings instead of lines. Use those only when
+// both are > 0. awayScoreF5/homeScoreF5 are a 5-inning sum, not a checksum, so
+// a missing pair does not relax that: both counts still have to be > 0.
+function inningCounts(game) {
+  if (!game) return noInnings();
+  const awayLine = lineArray(game.awayLine, game.awayLinescores);
+  const homeLine = lineArray(game.homeLine, game.homeLinescores);
+  const awayHas = !!(awayLine && awayLine.length > 0);
+  const homeHas = !!(homeLine && homeLine.length > 0);
+  if (awayHas && homeHas) {
+    const awaySum = sumLine(awayLine);
+    const homeSum = sumLine(homeLine);
+    if (awaySum === scoreNum(game.awayScore) && homeSum === scoreNum(game.homeScore)) {
+      return { awayN: awayLine.length, homeN: homeLine.length, has: true, awayLine, homeLine };
+    }
+    return noInnings();
+  }
+  // One side posted a line and the other did not. Do not fill the gap from
+  // awayInnings/homeInnings, which may themselves be the bad lengths.
+  if (awayHas || homeHas) return noInnings();
+
+  const ai = Number(game.awayInnings);
+  const hi = Number(game.homeInnings);
+  if (!(Number.isFinite(ai) && Number.isFinite(hi) && ai > 0 && hi > 0)) return noInnings();
+  return { awayN: ai, homeN: hi, has: true, awayLine: null, homeLine: null };
 }
 
 function partialF5Scores(game, info) {

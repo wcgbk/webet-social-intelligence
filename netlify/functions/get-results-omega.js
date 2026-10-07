@@ -258,30 +258,18 @@ function withLegCommenceTime(leg, picks) {
   return inheritCommenceTime(leg, picks);
 }
 
-// Set by gradeDay so every gradePick call in that day sees the card date.
-// Absent (direct gradePick, or a vm extract of this function) means pre-v2 rules.
-let gradingContext = null;
-
-function mergeGradeOpts(opts) {
-  const merged = {
+// Card date and clock come only from the opts argument. gradePick(pick, game) with
+// no opts is the 50d3eb9 path. HTML/vm extracts of gradePick skip this helper via
+// typeof, so those callers keep that same pre-v2 body.
+function v2GradeParts(pick, game, opts) {
+  const gradeOpts = {
     dateISO: opts && opts.dateISO ? opts.dateISO : null,
     now: opts && opts.now != null ? opts.now : null,
   };
-  if (gradingContext) {
-    if (merged.dateISO == null) merged.dateISO = gradingContext.dateISO;
-    if (merged.now == null) merged.now = gradingContext.now;
-  }
-  return merged;
-}
-
-// Present only when this file is loaded as a module. HTML/vm extracts of gradePick
-// skip it via typeof, so those callers keep the pre-v2 body.
-function v2GradeParts(pick, game, opts) {
-  const merged = mergeGradeOpts(opts);
   return {
-    early: omegaGradingRules.earlyPush(pick, game, merged),
-    snap: omegaGradingRules.mlbSnapshot(pick, game, merged),
-    opts: merged,
+    early: omegaGradingRules.earlyPush(pick, game, gradeOpts),
+    snap: omegaGradingRules.mlbSnapshot(pick, game, gradeOpts),
+    opts: gradeOpts,
   };
 }
 
@@ -421,16 +409,7 @@ async function getDatesFromStore(storeUrl, authHeaders) {
 }
 
 async function gradeDay(dateISO, picksData, opts) {
-  const prevContext = gradingContext;
-  gradingContext = {
-    dateISO: dateISO,
-    now: opts && opts.now != null ? opts.now : null,
-  };
-  try {
-    return await gradeDayBody(dateISO, picksData, opts);
-  } finally {
-    gradingContext = prevContext;
-  }
+  return gradeDayBody(dateISO, picksData, opts);
 }
 
 async function gradeDayBody(dateISO, picksData, opts) {
@@ -445,8 +424,14 @@ async function gradeDayBody(dateISO, picksData, opts) {
     ...(optimizedLegs ? optimizedLegs.map(l => l.sport) : []),
   ].filter(Boolean))];
 
+  // opts.games may be the board, a promise (tests yield between dates), or
+  // (dateISO) => board|Promise. Absent means the live ESPN scoreboard.
   let scoresByGames;
-  if (opts && Array.isArray(opts.games)) {
+  if (opts && typeof opts.games === 'function') {
+    scoresByGames = await opts.games(dateISO);
+  } else if (opts && opts.games && typeof opts.games.then === 'function') {
+    scoresByGames = await opts.games;
+  } else if (opts && Array.isArray(opts.games)) {
     scoresByGames = opts.games;
   } else {
     const sportResults = await Promise.all(sports.map(async sport => {
@@ -456,16 +441,18 @@ async function gradeDayBody(dateISO, picksData, opts) {
     }));
     scoresByGames = sportResults.flat();
   }
+  if (!Array.isArray(scoresByGames)) scoresByGames = [];
 
   const dollarPerUnit = 150;
   let dayWins = 0, dayLosses = 0, dayPushes = 0, dayPending = 0;
   let dayWagered = 0, dayProfit = 0;
   const gradedPicks = [];
+  const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
 
   for (const pick of picks) {
     const sportGames = scoresByGames.filter(g => g._sport === pick.sport);
     const game = findGame(pick, sportGames);
-    const result = gradePick(pick, game);
+    const result = gradePick(pick, game, gradeOpts);
     const units = parseFloat(pick.units) || 1;
     const risk = wholeUp(units * dollarPerUnit);
     const winAmount = wholeUp(calcWinnings(risk, pick.odds || '-110'));
@@ -479,7 +466,6 @@ async function gradeDayBody(dateISO, picksData, opts) {
     if (result === 'win' || result === 'loss') { dayWagered += risk; dayProfit += profit; }
     const isF5Pick = /\bf5\b|first 5|1st 5|first-5/i.test(pick.pick || '') || (pick.betType || '').toLowerCase().includes('f5');
     let scoreStr = null;
-    const gradeOpts = { dateISO: dateISO, now: opts && opts.now != null ? opts.now : null };
     if (game && result === 'push' && omegaGradingRules.isPpdScore(pick, game, gradeOpts)) {
       scoreStr = 'PPD';
     } else if (game && game.state === 'post') {
@@ -498,7 +484,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
       const eleg = withLegCommenceTime(leg, picks);
       const sportGames = scoresByGames.filter(g => g._sport === eleg.sport);
       const game = findGame(eleg, sportGames);
-      return { result: gradePick(eleg, game), odds: eleg.odds || '-110' };
+      return { result: gradePick(eleg, game, gradeOpts), odds: eleg.odds || '-110' };
     });
   } else {
     parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));

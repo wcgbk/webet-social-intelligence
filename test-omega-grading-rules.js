@@ -17,6 +17,8 @@ assert.strictEqual(rules.GRADING_RULES_V2_FROM, '2026-10-07');
 assert.strictEqual(results.GRADING_RULES_V2_FROM, '2026-10-07');
 const resultsSrc = fs.readFileSync(path.join(repo, 'netlify/functions/get-results-omega.js'), 'utf8');
 assert.ok(resultsSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v9-ncaaf-state'"));
+assert.ok(!resultsSrc.includes('gradingContext'), 'grade day must not keep a module-level card date');
+assert.ok(!resultsSrc.includes('mergeGradeOpts'), 'grade opts are not merged from shared state');
 
 const V2 = '2026-10-07';
 const PRE = '2026-10-06';
@@ -178,6 +180,69 @@ assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), noLines, v2When, 'win', 'n
 assertBoth(mlbPick('Under 6.5', 'total'), noLines, v2When, 'loss', 'no linescore Under');
 assertBoth(mlbPick('Over 6.5', 'total'), noLines, v2When, 'win', 'no linescore Over');
 assertBoth(mlbPick('Boston Red Sox F5', 'f5'), noLines, v2When, 'pending', 'no linescore F5 stays pending');
+
+// One side's line only, or a line that does not add up to the score, is missing
+// data. Grade the final score (the pre-v2 result). Do not void.
+const homeLineEmpty = mlbGame(5, 2, 9, 0, { awayInnings: 3, homeInnings: 3 });
+assert.strictEqual(homeLineEmpty.awayLine.length, 9);
+assert.strictEqual(homeLineEmpty.homeLine.length, 0);
+assert.strictEqual(rules.inningCounts(homeLineEmpty).has, false);
+assert.strictEqual(rules.mlbSnapshot(mlbPick('Boston Red Sox ML', 'moneyline'), homeLineEmpty, v2When), null);
+assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), homeLineEmpty, v2When, 'win', 'away 9 / home empty does not void');
+assertBoth(mlbPick('Under 6.5', 'total'), homeLineEmpty, v2When, 'loss', 'away 9 / home empty total uses the score');
+
+const sumMismatch = mlbGame(5, 2, 3, 3);
+sumMismatch.awayLine = [1, 0, 0];
+sumMismatch.homeLine = [0, 1, 0];
+assert.notStrictEqual(sumMismatch.awayLine.reduce((s, n) => s + n, 0), sumMismatch.awayScore);
+assert.notStrictEqual(sumMismatch.homeLine.reduce((s, n) => s + n, 0), sumMismatch.homeScore);
+assert.strictEqual(rules.inningCounts(sumMismatch).has, false);
+assert.strictEqual(rules.mlbSnapshot(mlbPick('Boston Red Sox ML', 'moneyline'), sumMismatch, v2When), null);
+assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), sumMismatch, v2When, 'win', 'linescore sum mismatch does not void');
+assertBoth(mlbPick('New York Yankees -1.5', 'spread'), sumMismatch, v2When, 'loss', 'linescore sum mismatch run line uses the score');
+
+// ESPN omits the bottom of the 9th when the home team is already ahead.
+const espn98 = mlbGame(3, 5, 9, 8);
+espn98.awayLine = [0, 1, 0, 0, 2, 0, 0, 0, 0];
+espn98.homeLine = [0, 0, 2, 0, 0, 3, 0, 0];
+assert.strictEqual(espn98.awayLine.reduce((s, n) => s + n, 0), espn98.awayScore);
+assert.strictEqual(espn98.homeLine.reduce((s, n) => s + n, 0), espn98.homeScore);
+const snap98 = rules.mlbSnapshot(mlbPick('New York Yankees ML', 'moneyline'), espn98, v2When);
+assert.ok(snap98, '9/8 home lead is a real linescore');
+assert.strictEqual(snap98.fullOfficial, true, '9/8 home lead is a full game');
+assert.strictEqual(snap98.mlOfficial, true);
+assertBoth(mlbPick('New York Yankees ML', 'moneyline'), espn98, v2When, 'win', '9/8 home lead ML');
+assertBoth(mlbPick('Under 8.5', 'total'), espn98, v2When, 'win', '9/8 home lead total has action');
+assertBoth(mlbPick('New York Yankees -1.5', 'spread'), espn98, v2When, 'win', '9/8 home lead run line has action');
+
+// Track-clv shape: inning counts, no lines. Both counts must be > 0 even when
+// the F5 sums are absent. A one-sided count does not void.
+function inningsOnly(awayScore, homeScore, awayN, homeN, extra) {
+  return Object.assign({
+    state: 'post', completed: true, statusName: 'STATUS_FINAL',
+    awayTeam: 'Boston Red Sox', homeTeam: 'New York Yankees',
+    awayAbbr: 'BOS', homeAbbr: 'NYY',
+    awayScore: awayScore, homeScore: homeScore,
+    awayInnings: awayN, homeInnings: homeN,
+    startISO: '2026-10-07T00:05:00Z',
+    _sport: 'MLB',
+  }, extra || {});
+}
+const clvShort = inningsOnly(1, 0, 3, 3);
+assert.strictEqual(rules.inningCounts(clvShort).has, true);
+assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), clvShort, v2When, 'push', 'track-clv 3 innings voids without F5 sums');
+const clvOneSide = inningsOnly(5, 2, 9, 0);
+assert.strictEqual(rules.mlbSnapshot(mlbPick('Boston Red Sox ML', 'moneyline'), clvOneSide, v2When), null);
+assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), clvOneSide, v2When, 'win', 'track-clv one-sided innings do not void');
+const clv98 = inningsOnly(3, 5, 9, 8);
+const clvSnap98 = rules.mlbSnapshot(mlbPick('New York Yankees ML', 'moneyline'), clv98, v2When);
+assert.strictEqual(clvSnap98 && clvSnap98.fullOfficial, true);
+assertBoth(mlbPick('Under 8.5', 'total'), clv98, v2When, 'win', 'track-clv 9/8 total has action');
+
+// No opts: same call shape as 50d3eb9. A short final is a real result.
+assert.strictEqual(results.gradePick(mlbPick('Boston Red Sox ML', 'moneyline'), short3), 'win', 'no opts ML');
+assert.strictEqual(results.gradePick(mlbPick('Under 6.5', 'total'), short3), 'win', 'no opts total');
+assert.strictEqual(clv.gradePick(mlbPick('Boston Red Sox ML', 'moneyline'), short3), 'win', 'clv no opts ML');
 
 // Same fixtures before the gate grade the old way.
 assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), short3, preWhen, 'win', 'pre-gate 3-inn ML');
@@ -432,6 +497,55 @@ async function twoPushDay(dateISO) {
     const oldFind = old.clv._test.findGameForGrading;
     const oldClvGrade = old.clv._test.gradePick;
     const oldAgg = extractAggregate(old.src);
+
+    // Parallel gradeDay calls must not share a card date. The games provider
+    // yields until both dates are inside it, which is the window the old
+    // module-level context leaked across.
+    const raceGame = mlbGame(1, 0, 3, 3);
+    const raceStraight = [
+      mlbPick('Boston Red Sox ML', 'moneyline'),
+      mlbPick('Under 6.5', 'total'),
+    ];
+    const raceLegs = [
+      mlbPick('Boston Red Sox ML', 'moneyline'),
+      mlbPick('Under 6.5', 'total'),
+    ];
+    const raceCard = { picks: raceStraight, parlayLegs: [{ legs: raceLegs }] };
+    let raceArrived = 0;
+    let openRace;
+    const raceGate = new Promise((resolve) => { openRace = resolve; });
+    let bareDuringRace = null;
+    function racingBoard() {
+      raceArrived += 1;
+      if (raceArrived === 2) {
+        bareDuringRace = results.gradePick(mlbPick('Boston Red Sox ML', 'moneyline'), raceGame);
+        openRace();
+      }
+      return Promise.race([
+        raceGate,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('gradeDay calls did not overlap')), 2000)),
+      ]).then(() => new Promise((resolve) => setImmediate(() => resolve([raceGame]))));
+    }
+    const [day05, day07] = await Promise.all([
+      results.gradeDay('2026-10-05', raceCard, { games: racingBoard, now: startMs }),
+      results.gradeDay('2026-10-07', raceCard, { games: () => racingBoard(), now: startMs }),
+    ]);
+    assert.strictEqual(raceArrived, 2, 'both dates awaited the games provider');
+    assert.strictEqual(bareDuringRace, oldGrade(mlbPick('Boston Red Sox ML', 'moneyline'), raceGame), 'no opts during gradeDay matches 50d3eb9');
+    for (const graded of day05.picks.filter((p) => p.sport !== 'PARLAY')) {
+      const src = raceStraight.find((p) => p.pick === graded.pick);
+      assert.strictEqual(graded.result, oldGrade(src, raceGame), 'concurrent 10-05 ' + graded.pick);
+    }
+    const oldLegInput = raceLegs.map((leg) => ({ result: oldGrade(leg, raceGame), odds: leg.odds || '-110' }));
+    assert.strictEqual(
+      day05.parlayResult,
+      results.gradeParlay(oldLegInput, day05.parlayRisk).result,
+      'concurrent 10-05 parlay matches 50d3eb9 leg grades'
+    );
+    assert.strictEqual(day05.picks.find((p) => p.pick === 'Boston Red Sox ML').result, 'win');
+    assert.strictEqual(day07.picks.find((p) => p.pick === 'Boston Red Sox ML').result, 'push', 'concurrent 10-07 ML voids');
+    assert.strictEqual(day07.picks.find((p) => p.pick === 'Under 6.5').result, 'push', 'concurrent 10-07 total voids');
+    assert.strictEqual(day07.parlayResult, 'push', 'concurrent 10-07 parlay legs void');
 
     const historyGames = [
       ['short3', short3],

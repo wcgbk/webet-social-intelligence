@@ -434,6 +434,7 @@
   </p>
 </div>
 
+<script src="/js/omega-team-identity.js"></script>
 <script>
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   const num = (v, f) => { const n = Number(v); return isNaN(n) ? (f ?? 0) : n; };
@@ -576,15 +577,82 @@
     const parts = n.split(/\s+/).filter(w => w && !drop.has(w));
     return parts.join(' ') || lastWord(name);
   }
-  function teamsMatch(pickParts, away, home) {
+  function cardIdentityOn(ctx) {
+    try {
+      if (typeof OmegaTeamIdentity === 'undefined' || !OmegaTeamIdentity || !OmegaTeamIdentity.IDENTITY_V2_FROM) return false;
+      var date = '';
+      if (ctx && ctx.date) date = String(ctx.date);
+      else if (typeof PICKSDATA !== 'undefined' && PICKSDATA && PICKSDATA.date) date = String(PICKSDATA.date);
+      return date >= OmegaTeamIdentity.IDENTITY_V2_FROM;
+    } catch (e) {
+      return false;
+    }
+  }
+  function sideId(sport, name, espnId) {
+    if (espnId != null && espnId !== '') return String(espnId);
+    if (typeof OmegaTeamIdentity === 'undefined' || !OmegaTeamIdentity) return null;
+    const fromName = name ? OmegaTeamIdentity.resolveTeamId(sport, name) : null;
+    return fromName ? String(fromName) : null;
+  }
+  function teamsMatch(pickParts, away, home, ctx) {
+    if (cardIdentityOn(ctx) && pickParts && pickParts.length >= 2) {
+      const sport = ctx && ctx.sport;
+      const id0 = OmegaTeamIdentity.resolveTeamId(sport, pickParts[0]);
+      const id1 = OmegaTeamIdentity.resolveTeamId(sport, pickParts[1]);
+      const awayId = sideId(sport, away, ctx && ctx.awayId);
+      const homeId = sideId(sport, home, ctx && ctx.homeId);
+      if (id0 && id1 && awayId && homeId && String(id0) !== String(id1)) {
+        const left = String(id0);
+        const right = String(id1);
+        const a = String(awayId);
+        const h = String(homeId);
+        return (a === left && h === right) || (a === right && h === left);
+      }
+    }
     const teams = [normTeam(away), normTeam(home)];
     const keys = [schoolKey(away), schoolKey(home)];
-    return pickParts.length >= 2 && pickParts.every(p => {
+    const legacy = pickParts.length >= 2 && pickParts.every(p => {
       const lp = lastWord(p);
       const sk = schoolKey(p);
       return teams.some(t => t.includes(lp) || lp.includes(lastWord(t)) || t.includes(sk) || sk.includes(t))
         || keys.some(k => k.includes(sk) || sk.includes(k) || k.includes(lp));
     });
+    if (!legacy || !cardIdentityOn(ctx) || typeof OmegaTeamIdentity === 'undefined') return legacy;
+    const sport = ctx && ctx.sport;
+    const awayId = sideId(sport, away, ctx && ctx.awayId);
+    const homeId = sideId(sport, home, ctx && ctx.homeId);
+    if (!awayId || !homeId) return legacy;
+    for (const part of pickParts) {
+      const id = OmegaTeamIdentity.resolveTeamId(sport, part);
+      if (id && String(id) !== String(awayId) && String(id) !== String(homeId)) return false;
+    }
+    return legacy;
+  }
+  function pickSide(pickTeam, away, home, sport, awayId, homeId) {
+    const on = typeof cardIdentityOn === 'function' && cardIdentityOn({ sport: sport });
+    if (on && typeof OmegaTeamIdentity !== 'undefined' && OmegaTeamIdentity && typeof OmegaTeamIdentity.matchSides === 'function') {
+      const byId = OmegaTeamIdentity.matchSides(sport, pickTeam, away, home, awayId, homeId);
+      if (byId && byId.decided) {
+        if (byId.pickedAway) return 'away';
+        if (byId.pickedHome) return 'home';
+        return null;
+      }
+    }
+    const lp = lastWord(pickTeam);
+    const awayHit = lp && lp.length > 2 && (lastWord(away) === lp || normTeam(away).includes(normTeam(pickTeam)) || normTeam(pickTeam).includes(normTeam(away)));
+    const homeHit = lp && lp.length > 2 && (lastWord(home) === lp || normTeam(home).includes(normTeam(pickTeam)) || normTeam(pickTeam).includes(normTeam(home)));
+    if (awayHit && homeHit && on && typeof OmegaTeamIdentity !== 'undefined' && OmegaTeamIdentity) {
+      const pickId = OmegaTeamIdentity.resolveTeamId(sport, pickTeam);
+      const aId = sideId(sport, away, awayId);
+      const hId = sideId(sport, home, homeId);
+      if (pickId && aId && String(pickId) === String(aId) && String(pickId) !== String(hId)) return 'away';
+      if (pickId && hId && String(pickId) === String(hId) && String(pickId) !== String(aId)) return 'home';
+      if (pickId && aId && hId) return null;
+    }
+    if (awayHit && !homeHit) return 'away';
+    if (homeHit && !awayHit) return 'home';
+    if (awayHit && homeHit) return 'away';
+    return null;
   }
   async function fetchScoreboard(path, dateParam) {
     const urls = [];
@@ -612,6 +680,8 @@
             date: ev.date,
             away: (away && away.team && away.team.displayName) || '',
             home: (home && home.team && home.team.displayName) || '',
+            awayId: (away && away.team && away.team.id != null && away.team.id !== '') ? String(away.team.id) : '',
+            homeId: (home && home.team && home.team.id != null && home.team.id !== '') ? String(home.team.id) : '',
             awayAbbr: (away && away.team && away.team.abbreviation) || '',
             homeAbbr: (home && home.team && home.team.abbreviation) || '',
             awayLogo: (away && away.team && away.team.logos && away.team.logos[0] && away.team.logos[0].href) || '',
@@ -654,8 +724,10 @@
         }
         for (const g of GAMES) {
           if (String(g.sport).toUpperCase() !== String(sport).toUpperCase()) continue;
-          const parts = (g.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(normTeam).filter(Boolean);
-          const matches = evs.filter(ev => teamsMatch(parts, ev.away, ev.home));
+          const parts = (g.matchup || '').split(/\s+(?:@|vs\.?|at)\s+/i).map(s => s.trim()).filter(Boolean);
+          const matches = evs.filter(ev => teamsMatch(parts, ev.away, ev.home, {
+            sport: sport, awayId: ev.awayId, homeId: ev.homeId, date: PICKSDATA && PICKSDATA.date,
+          }));
           let best = matches[0] || null;
           if (matches.length > 1 && g.commenceTime) {
             const ct = Date.parse(g.commenceTime);

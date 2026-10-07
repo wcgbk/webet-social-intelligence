@@ -14,6 +14,7 @@
  */
 
 const { SPORTS_ENABLED, MODEL_VERSION } = require('./config');
+const { sportsForCard } = require('./season_calendar');
 const { storeReplayCard, storeReplaySummary, assertReplayKey, readJson, readPicks } = require('./store');
 const { gradeNoVigClv, attachRealizedAliases, summarizeBySportMarket } = require('./clv_grade');
 const { americanToDecimal } = require('./odds_math');
@@ -21,8 +22,9 @@ const { americanToDecimal } = require('./odds_math');
 const DEFAULT_MAX_DAYS = 7;
 const HARD_MAX_DAYS = 14;
 
-function enabledSports() {
-  return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+function enabledSports(dateISO) {
+  if (!dateISO) return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+  return sportsForCard(dateISO);
 }
 
 function parseDateRange(from, to, { maxDays = DEFAULT_MAX_DAYS } = {}) {

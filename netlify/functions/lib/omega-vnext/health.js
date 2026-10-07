@@ -5,6 +5,7 @@
 
 const { SPORTS_ENABLED } = require('./config');
 const { collectUnresolved } = require('./sports/team_identity');
+const { sportsForCard, calendarHealth } = require('./season_calendar');
 
 const SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL', 'NBA'];
 const BANDS = {
@@ -305,8 +306,11 @@ function buildHealthRecord(input) {
   const yesBySport = countBySport(src.yesPool);
   const bySport = {};
   const alerts = [];
+  const calendar = src.dateISO ? calendarHealth(src.dateISO) : null;
+  const onCard = calendar ? new Set(calendar.onCard) : null;
   for (const sport of SPORTS) {
-    const enabled = !!SPORTS_ENABLED[sport];
+    const enabled = onCard ? onCard.has(sport) : !!SPORTS_ENABLED[sport];
+    const phaseRow = calendar && calendar.bySport ? calendar.bySport[sport] : null;
     const espnN = espnGames(snap, sport).length;
     const oddsN = oddsEvents(snap, sport).length;
     const raw = rawBySport[sport] || 0;
@@ -316,6 +320,9 @@ function buildHealthRecord(input) {
     const stats = statSanity(snap, sport);
     bySport[sport] = {
       enabled,
+      phase: phaseRow ? phaseRow.phase : null,
+      phaseNote: phaseRow ? phaseRow.note : null,
+      phaseSource: phaseRow ? phaseRow.source : null,
       raw,
       yes,
       espnGames: espnN,
@@ -366,11 +373,14 @@ function buildHealthRecord(input) {
       detail: `status=${err.status == null ? '' : err.status} ${err.message || ''}`.trim(),
     });
   }
+  // calendar (phase + stale) stays on this private record. compactHealth copies
+  // `alerts` onto the public card, so a stale-calendar warning is not an alert.
   return {
     date: src.dateISO || null,
     status: alerts.length ? 'warn' : 'ok',
     alerts,
     bySport,
+    calendar: calendar || null,
     splits: {
       candidates: sideSplit(src.candidates),
       yesPool: sideSplit(src.yesPool),

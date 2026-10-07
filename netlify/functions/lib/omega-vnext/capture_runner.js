@@ -13,6 +13,7 @@
 const {
   ODDS_SPORT_KEYS, SPORTS_ENABLED, US_BOOK_PRIORITY, SHARP_BOOKS, BLOB_STORE,
 } = require('./config');
+const { sportsForCard } = require('./season_calendar');
 const {
   etDateISO, hhmmET, extractGameBooks, storeLinePoll, gameKey, snapBlobKey, readJsonBlob,
 } = require('./line_path');
@@ -33,8 +34,13 @@ const CAPTURE_BOOKMAKERS = [
  */
 const CAPTURE_SPORTS = ['MLB', 'NFL', 'NCAAF', 'NBA', 'NHL'];
 
-function captureLabels(includeDisabled) {
-  return CAPTURE_SPORTS.filter((label) => SPORTS_ENABLED[label] || includeDisabled);
+function captureLabels(includeDisabled, dateISO) {
+  const onCard = dateISO ? new Set(sportsForCard(dateISO)) : null;
+  return CAPTURE_SPORTS.filter((label) => {
+    if (includeDisabled) return true;
+    if (onCard) return onCard.has(label);
+    return !!SPORTS_ENABLED[label];
+  });
 }
 
 async function fetchSportOdds(sportKey, apiKey, fetchImpl = fetch) {
@@ -78,7 +84,7 @@ async function runOmegaLineCaptureInner(opts = {}) {
   const readSnap = opts.readSnap || ((date, slot) => readJsonBlob(snapBlobKey(date, slot)));
   const gateFn = opts.slateGate || slateOddsGate;
   const fetchOdds = opts.fetchSportOdds || ((sportKey, key) => fetchSportOdds(sportKey, key, opts.fetchImpl || fetch));
-  const labels = captureLabels(includeDisabled);
+  const labels = captureLabels(includeDisabled, dateISO);
   const freshMs = opts.freshSnapMs != null ? opts.freshSnapMs : FRESH_SNAP_MS;
 
   console.log(`[capture-omega-lines] START date=${dateISO} etSlot=${etSlot} store=${BLOB_STORE} force=${!!opts.force}`);
@@ -117,8 +123,7 @@ async function runOmegaLineCaptureInner(opts = {}) {
   const games = {};
   const sportsHit = [];
 
-  for (const label of CAPTURE_SPORTS) {
-    if (!SPORTS_ENABLED[label] && !includeDisabled) continue;
+  for (const label of labels) {
     const sportKey = ODDS_SPORT_KEYS[label];
     if (!sportKey) continue;
     try {

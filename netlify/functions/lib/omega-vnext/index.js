@@ -3,6 +3,7 @@
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
 } = require('./config');
+const { sportsForCard } = require('./season_calendar');
 const { ingest } = require('./ingest');
 const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll } = require('./calibrate');
@@ -44,14 +45,29 @@ function formatDateLong(dateISO) {
   }
 }
 
+function cardDateOf(snap, dateISO) {
+  if (dateISO) return dateISO;
+  if (snap && (snap.dateISO || snap.date)) return snap.dateISO || snap.date;
+  return null;
+}
+
+/** Sports the card prices. No card date keeps the SPORTS_ENABLED kill switch (tests, callers without a date). */
+function sportsOnCard(snap, dateISO) {
+  const date = cardDateOf(snap, dateISO);
+  if (!date) {
+    const sports = ['MLB', 'NFL', 'NCAAF', 'NHL'];
+    if (SPORTS_ENABLED.NBA) sports.push('NBA');
+    return sports.filter((s) => SPORTS_ENABLED[s]);
+  }
+  return sportsForCard(date);
+}
+
 /** Same-day games per sport for the no-plays reason (ESPN first, odds as fallback). */
-function slateCountsFor(snap) {
+function slateCountsFor(snap, dateISO) {
   const bySport = {};
   let espn = 0, odds = 0;
-  const sports = ['MLB', 'NFL', 'NCAAF', 'NHL'];
-  if (SPORTS_ENABLED.NBA) sports.push('NBA');
+  const sports = sportsOnCard(snap, dateISO);
   for (const s of sports) {
-    if (!SPORTS_ENABLED[s]) continue;
     const e = snap && snap.espnBySport && snap.espnBySport[s] && Array.isArray(snap.espnBySport[s].games)
       ? snap.espnBySport[s].games.length : 0;
     const o = snap && snap.oddsBySport && Array.isArray(snap.oddsBySport[s]) ? snap.oddsBySport[s].length : 0;
@@ -61,10 +77,11 @@ function slateCountsFor(snap) {
   return { bySport, espn, odds, total: Object.values(bySport).reduce((a, b) => a + b, 0) };
 }
 
-function projectAll(snap) {
+function projectAll(snap, dateISO) {
   const raw = [];
   const gameDay = snap.gameDay || {};
-  if (SPORTS_ENABLED.MLB) {
+  const on = new Set(sportsOnCard(snap, dateISO));
+  if (on.has('MLB')) {
     raw.push(...mlb.project({
       oddsEvents: snap.oddsBySport.MLB || [],
       standings: snap.standingsBySport.MLB || {},
@@ -75,7 +92,7 @@ function projectAll(snap) {
       weatherByGame: gameDay.weatherByGame || {},
     }));
   }
-  if (SPORTS_ENABLED.NFL) {
+  if (on.has('NFL')) {
     raw.push(...nfl.project({
       oddsEvents: snap.oddsBySport.NFL || [],
       standings: snap.standingsBySport.NFL || {},
@@ -84,7 +101,7 @@ function projectAll(snap) {
       espnGames: snap.espnBySport && snap.espnBySport.NFL,
     }));
   }
-  if (SPORTS_ENABLED.NCAAF) {
+  if (on.has('NCAAF')) {
     raw.push(...cfb.project({
       oddsEvents: snap.oddsBySport.NCAAF || [],
       standings: snap.standingsBySport.NCAAF || {},
@@ -92,8 +109,9 @@ function projectAll(snap) {
       gameDay,
     }));
   }
-  // Real board when the flag is on. Preseason is not admitted on this path.
-  if (SPORTS_ENABLED.NBA) {
+  // Real board only when the card date (or, with no date, SPORTS_ENABLED.NBA) says so.
+  // Preseason candidates are still dropped. NBA_CARD_LIVE stays false.
+  if (on.has('NBA')) {
     raw.push(...nba.project({
       oddsEvents: snap.oddsBySport.NBA || [],
       standings: snap.standingsBySport.NBA || {},
@@ -101,7 +119,7 @@ function projectAll(snap) {
       espnGames: snap.espnBySport && snap.espnBySport.NBA,
     }).filter(c => !c.shadowOnly && !c.preseason));
   }
-  if (SPORTS_ENABLED.NHL) {
+  if (on.has('NHL')) {
     raw.push(...nhl.project({
       oddsEvents: snap.oddsBySport.NHL || [],
       standings: snap.standingsBySport.NHL || {},
@@ -207,7 +225,7 @@ async function generateOmegaVnext(opts = {}) {
   });
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
 
-  let candidates = projectAll(snap);
+  let candidates = projectAll(snap, dateISO);
   const rawBySport = {};
   for (const c of candidates) {
     const s = c && c.sport;
@@ -589,7 +607,7 @@ async function generateOmegaVnext(opts = {}) {
   }
   if (empty) {
     // "No Qualifying Plays Today" card (lib/no-plays). Only a COMPLETED run gets here.
-    const slateCounts = slateCountsFor(snap);
+    const slateCounts = slateCountsFor(snap, dateISO);
     if (!shadow && !dryRun && slateCounts.odds === 0 && slateCounts.espn > 0) {
       // Games on ESPN but no odds for any sport = feed failure, not a pass. Write nothing so
       // the previous card stays up until a real run completes.
@@ -827,6 +845,7 @@ module.exports = {
   MODEL_VERSION,
   projectAll,
   slateCountsFor,
+  sportsOnCard,
   todayET,
   assessCaptureHealth,
   sampleRejectionsBySport,

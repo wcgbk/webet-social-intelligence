@@ -29,7 +29,7 @@ async function warmHandler(event) {
   let engines = { mlbPitcherStats: { byId: {}, byTeam: {}, byName: {} } };
 
   try {
-    const labels = enabledSportLabels();
+    const labels = enabledSportLabels(dateISO);
     const parts = await Promise.all(labels.map(async (label) => {
       try {
         return await fetchEspnScoreboard(label, dateISO);

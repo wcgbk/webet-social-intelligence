@@ -52,6 +52,14 @@ const SPORTS_ENABLED = {
 };
 
 /**
+ * Daily-card NBA switch. Stays false until WeBet approves a live flip.
+ * Season dates are in season_calendar.js. Nothing here turns NBA on by date.
+ * Server env OMEGA_NBA_LIVE=1 is the other explicit on-switch. Either one
+ * is enough; both default off. SPORTS_ENABLED.NBA stays false.
+ */
+const NBA_CARD_LIVE = false;
+
+/**
  * NBA shadow log + grade. Independent of SPORTS_ENABLED.NBA, which stays
  * false so the daily card never selects NBA. Scheduled project (21:30 UTC)
  * and grade (12:00 UTC, previous ET date) read this constant.
@@ -468,6 +476,7 @@ module.exports = {
   DAY_SCOPE_TZ,
   DAY_SCOPE_STRICT,
   SPORTS_ENABLED,
+  NBA_CARD_LIVE,
   NBA_SHADOW,
   ODDS_SPORT_KEYS,
   ESPN_LEAGUES,

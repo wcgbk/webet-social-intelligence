@@ -3,6 +3,7 @@
 const {
   SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
 } = require('./config');
+const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
@@ -10,8 +11,9 @@ const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
 
-function enabledSportLabels() {
-  return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+function enabledSportLabels(dateISO) {
+  if (!dateISO) return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+  return sportsForCard(dateISO);
 }
 
 async function fetchJson(url, timeoutMs = 12000) {
@@ -29,7 +31,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
     return out;
   }
 
-  const sports = enabledSportLabels();
+  const sports = enabledSportLabels(dateISO);
   for (const label of sports) {
     const key = ODDS_SPORT_KEYS[label];
     if (!key) continue;
@@ -706,7 +708,7 @@ async function loadSportEngines(dateISO, deps) {
 }
 
 async function ingest(dateISO, opts = {}) {
-  const labels = enabledSportLabels();
+  const labels = enabledSportLabels(dateISO);
   // Also fetch standings for disabled sports? No — only enabled.
   const [odds, espnParts, standingsList, engines] = await Promise.all([
     fetchOddsMultiSport(dateISO, opts),

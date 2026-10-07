@@ -1,5 +1,6 @@
 // confirm-starters-mlb.js
 const { samePlayerName } = require('./lib/player-name');
+const { resolveTeamId } = require('./lib/omega-vnext/sports/team_identity');
 // 1:30pm ET re-check of ESPN probable starters against today's Alpha + Omega cards.
 // Flags SP changes; KILLS SP-dependent picks (MLB Total / Moneyline / F5 / Run Line)
 // when the starter used at generation time no longer matches ESPN.
@@ -46,15 +47,20 @@ async function fetchCurrentStarters(dateISO) {
       if (!away || !home) continue;
       const awayProb = away.probables?.[0] || {};
       const homeProb = home.probables?.[0] || {};
-      const key = [away.team?.displayName, home.team?.displayName]
-        .map(t => normalizeTeam(t).split(" ").pop()).join("_");
-      map[key] = {
+      const awayName = away.team?.displayName || "";
+      const homeName = home.team?.displayName || "";
+      const awayEspn = resolveTeamId("MLB", awayName);
+      const homeEspn = resolveTeamId("MLB", homeName);
+      const row = {
         awayTeam: away.team?.displayName || "",
         homeTeam: home.team?.displayName || "",
         awaySP: awayProb.athlete?.displayName || awayProb.displayName || "TBD",
         homeSP: homeProb.athlete?.displayName || homeProb.displayName || "TBD",
         status: ev.status?.type?.state || "pre",
       };
+      if (awayEspn && homeEspn) map[awayEspn + "_" + homeEspn] = row;
+      const key = [awayName, homeName].map(t => normalizeTeam(t).split(" ").pop()).join("_");
+      map[key] = row;
     }
     return map;
   } catch (e) {
@@ -95,12 +101,33 @@ async function blobPut(store, key, value, token) {
   } catch (e) { /* fall through */ }
 }
 
-function lookupEspn(currentStarters, pick) {
+function noteIdentityFallback(seen, name) {
+  const token = String(name || "");
+  if (seen && seen.has(token)) return;
+  if (seen) seen.add(token);
+  console.warn(`[omega-team-identity] fallback sport=MLB name=${token}`);
+}
+
+function lookupEspn(currentStarters, pick, fallbackSeen) {
   const parts = matchupParts(pick.matchup);
   if (parts.length < 2) return null;
+  const awayId = resolveTeamId("MLB", parts[0]);
+  const homeId = resolveTeamId("MLB", parts[1]);
+  if (awayId && homeId) {
+    return currentStarters[awayId + "_" + homeId] || currentStarters[homeId + "_" + awayId] || null;
+  }
   const awayKey = normalizeTeam(parts[0]).split(" ").pop();
   const homeKey = normalizeTeam(parts[1]).split(" ").pop();
-  return currentStarters[`${awayKey}_${homeKey}`] || currentStarters[`${homeKey}_${awayKey}`] || null;
+  const legacy = currentStarters[awayKey + "_" + homeKey] || currentStarters[homeKey + "_" + awayKey] || null;
+  if (!legacy) return null;
+  const rowAway = resolveTeamId("MLB", legacy.awayTeam);
+  const rowHome = resolveTeamId("MLB", legacy.homeTeam);
+  if (awayId && rowAway && rowHome && awayId !== rowAway && awayId !== rowHome) return null;
+  if (homeId && rowAway && rowHome && homeId !== rowAway && homeId !== rowHome) return null;
+  for (const name of parts) {
+    if (!resolveTeamId("MLB", name)) noteIdentityFallback(fallbackSeen, name);
+  }
+  return legacy;
 }
 
 function processPicks(picksData, currentStarters) {
@@ -109,13 +136,14 @@ function processPicks(picksData, currentStarters) {
   let killed = 0;
   const kept = [];
   const killedPicks = picksData.killedPicks || [];
+  const fallbackSeen = new Set();
 
   for (const pick of picks) {
     if (String(pick.sport || "") !== "MLB") {
       kept.push(pick);
       continue;
     }
-    const current = lookupEspn(currentStarters, pick);
+    const current = lookupEspn(currentStarters, pick, fallbackSeen);
     if (!current) {
       kept.push(pick);
       continue;

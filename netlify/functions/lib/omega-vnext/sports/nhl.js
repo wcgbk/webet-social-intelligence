@@ -15,9 +15,10 @@
 const { clamp } = require('../odds_math');
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, fuzzyTeam, mapGamesSoft, LEAGUE_PPG,
+  formatMatchup, mapGamesSoft, LEAGUE_PPG,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
+const { rowByIdentityOrFuzzy } = require('./team_identity');
 const { applyGameDayAdjustments } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -373,12 +374,12 @@ function findEspnGame(ev, espnGames) {
   }) || null;
 }
 
-function projectGame(event, standings, espnGame, gameDay) {
+function projectGame(event, standings, espnGame, gameDay, fallbackSeen) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const homeSt = fuzzyTeam(home, standings);
-  const awaySt = fuzzyTeam(away, standings);
+  const homeSt = rowByIdentityOrFuzzy('NHL', standings, home, { fallbackSeen });
+  const awaySt = rowByIdentityOrFuzzy('NHL', standings, away, { fallbackSeen });
   const env = nhlStandingsEnv(homeSt, awaySt);
   const soft = applyNhlEngineSoft({
     modelMargin: env.modelMargin,
@@ -404,6 +405,7 @@ function projectGame(event, standings, espnGame, gameDay) {
     restByTeam: restTable,
     qbByTeam: {},
     hfaBase: HFA.NHL,
+    fallbackSeen,
   });
   const board = clampNhlBoard(gd.modelMargin, gd.modelTotal);
   const modelMargin = board.modelMargin;
@@ -495,9 +497,10 @@ function projectGame(event, standings, espnGame, gameDay) {
 
 function project({ oddsEvents, standings, gameDay, espnGames } = {}) {
   const games = (espnGames && espnGames.games) || espnGames || [];
+  const fallbackSeen = new Set();
   return mapGamesSoft(oddsEvents, (ev) => {
     const eg = findEspnGame(ev, games);
-    return projectGame(ev, standings || {}, eg, gameDay || {});
+    return projectGame(ev, standings || {}, eg, gameDay || {}, fallbackSeen);
   });
 }
 

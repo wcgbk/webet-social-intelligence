@@ -7,7 +7,7 @@
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
-const { resolveTeamId } = require('./lib/omega-vnext/sports/team_identity');
+const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
 const omegaGradingRules = require('./lib/omega-grading-rules');
 
 const CORS = {
@@ -250,6 +250,80 @@ function findGameByIdentity(pick, games) {
   return disambiguateDoubleheader(hits, pick);
 }
 
+// ESPN competitor id when the board has one. Otherwise the display name.
+function competitorId(sport, name, espnId) {
+  if (espnId != null && espnId !== '') return String(espnId);
+  const fromName = name ? resolveTeamId(sport, name) : null;
+  return fromName ? String(fromName) : null;
+}
+
+// Card dates >= IDENTITY_V2_FROM. Both matchup sides resolved → ESPN id pair
+// only. A miss is null so a shared last word cannot grab the other club.
+// An unresolved name uses the legacy matcher, then drops a game whose ids
+// contradict a side that did resolve.
+function findGameIdentityV2(pick, games) {
+  const sport = (pick && pick.sport) || '';
+  const list = games || [];
+  const parts = String((pick && pick.matchup) || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const id0 = resolveTeamId(sport, parts[0]);
+    const id1 = resolveTeamId(sport, parts[1]);
+    if (id0 && id1 && String(id0) !== String(id1)) {
+      const left = String(id0);
+      const right = String(id1);
+      const hits = [];
+      const seen = new Set();
+      for (const g of list) {
+        const awayId = competitorId(sport, g.awayTeam, g.awayId);
+        const homeId = competitorId(sport, g.homeTeam, g.homeId);
+        if (!awayId || !homeId || awayId === homeId) continue;
+        const ordered = awayId === left && homeId === right;
+        const swapped = awayId === right && homeId === left;
+        if (!ordered && !swapped) continue;
+        const key = String(g.id || g.eventId || '') + '|' + String(g.startISO || '') + '|' + awayId + '|' + homeId;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        hits.push(g);
+      }
+      if (hits.length) return disambiguateDoubleheader(hits, pick);
+      return null;
+    }
+  }
+  const legacy = findGame(pick, list);
+  if (!legacy || parts.length < 2) return legacy || null;
+  const awayId = competitorId(sport, legacy.awayTeam, legacy.awayId);
+  const homeId = competitorId(sport, legacy.homeTeam, legacy.homeId);
+  if (!awayId || !homeId) return legacy;
+  for (const part of parts) {
+    const id = resolveTeamId(sport, part);
+    if (id && String(id) !== awayId && String(id) !== homeId) return null;
+  }
+  return legacy;
+}
+
+function findGameForDate(pick, games, dateISO) {
+  if (omegaGradingRules.identityV2(dateISO)) return findGameIdentityV2(pick, games);
+  return findGame(pick, games);
+}
+
+function pickSidesForGrade(pick, game, pickTeamRaw, opts) {
+  const sport = pick && pick.sport;
+  const legacy = ncaafPickedSides(
+    pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, sport, game.awayId, game.homeId
+  );
+  if (!omegaGradingRules.identityV2(opts && opts.dateISO)) return legacy;
+  const byId = matchSides(sport, pickTeamRaw, game.awayTeam, game.homeTeam, game.awayId, game.homeId);
+  if (byId.decided) return { pickedAway: byId.pickedAway, pickedHome: byId.pickedHome };
+  const pickId = resolveTeamId(sport, pickTeamRaw);
+  if (!pickId) return legacy;
+  const awayId = competitorId(sport, game.awayTeam, game.awayId);
+  const homeId = competitorId(sport, game.homeTeam, game.homeId);
+  return {
+    pickedAway: !!(legacy.pickedAway && (!awayId || String(awayId) === String(pickId))),
+    pickedHome: !!(legacy.pickedHome && (!homeId || String(homeId) === String(pickId))),
+  };
+}
+
 // Parlay legs are stored WITHOUT commenceTime, so on a doubleheader date findGame falls back to the
 // opener and settles the leg against the wrong final — the straight bet (which HAS commenceTime)
 // grades correctly while the identical parlay leg does not. Inherit the start time from the straight
@@ -304,7 +378,9 @@ function gradePick(pick, game, opts) {
     }
   }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
+  const side = (typeof pickSidesForGrade === 'function')
+    ? pickSidesForGrade(pick, game, pickTeamRaw, opts)
+    : ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
   const pickedAway = side.pickedAway;
   const pickedHome = side.pickedHome;
 
@@ -451,7 +527,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
 
   for (const pick of picks) {
     const sportGames = scoresByGames.filter(g => g._sport === pick.sport);
-    const game = findGame(pick, sportGames);
+    const game = findGameForDate(pick, sportGames, dateISO);
     const result = gradePick(pick, game, gradeOpts);
     const units = parseFloat(pick.units) || 1;
     const risk = wholeUp(units * dollarPerUnit);
@@ -483,7 +559,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
     parlayInput = optimizedLegs.map(leg => {
       const eleg = withLegCommenceTime(leg, picks);
       const sportGames = scoresByGames.filter(g => g._sport === eleg.sport);
-      const game = findGame(eleg, sportGames);
+      const game = findGameForDate(eleg, sportGames, dateISO);
       return { result: gradePick(eleg, game, gradeOpts), odds: eleg.odds || '-110' };
     });
   } else {
@@ -751,7 +827,7 @@ exports.handler = async (event) => {
 
 // Test-only. Netlify invokes exports.handler; this does not change the response.
 exports._test = {
-  findGame,
+  findGame: findGameForDate,
   gradePick,
   gradeParlay,
   gradeDay,
@@ -762,4 +838,5 @@ exports._test = {
   calcWinnings,
   wholeUp,
   GRADING_RULES_V2_FROM: omegaGradingRules.GRADING_RULES_V2_FROM,
+  IDENTITY_V2_FROM: omegaGradingRules.IDENTITY_V2_FROM,
 };

@@ -9,9 +9,10 @@
  */
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, fuzzyTeam, mapGamesSoft,
+  formatMatchup, mapGamesSoft,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
+const { rowByIdentityOrFuzzy } = require('./team_identity');
 const {
   resolvePark, resolveSpQuality, applySpPark,
   resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd, mlbStandingsEnv,
@@ -55,21 +56,24 @@ function projectGame(event, standings, espnGame, ctx) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const env0 = mlbStandingsEnv(fuzzyTeam(home, standings), fuzzyTeam(away, standings));
+  const seen = ctx && ctx.fallbackSeen;
+  const homeSt = rowByIdentityOrFuzzy('MLB', standings, home, { fallbackSeen: seen });
+  const awaySt = rowByIdentityOrFuzzy('MLB', standings, away, { fallbackSeen: seen });
+  const env0 = mlbStandingsEnv(homeSt, awaySt);
   const baseMargin = env0.modelMargin;
   const baseTotal = env0.modelTotal;
 
   const out = [];
-  let uncertainty = (fuzzyTeam(home, standings) && fuzzyTeam(away, standings)) ? 0.18 : 0.28;
+  let uncertainty = (homeSt && awaySt) ? 0.18 : 0.28;
   const homeSp = espnGame && espnGame.homeProbable;
   const awaySp = espnGame && espnGame.awayProbable;
   if (homeSp && awaySp) uncertainty = Math.max(0.12, uncertainty - 0.04);
   else if (homeSp || awaySp) uncertainty = Math.max(0.14, uncertainty - 0.02);
 
   const bag = ctx || {};
-  const park = resolvePark(home, bag.parkFactors, espnGame);
-  const homeQ = resolveSpQuality(homeSp, bag.mlbPitcherStats, home);
-  const awayQ = resolveSpQuality(awaySp, bag.mlbPitcherStats, away);
+  const park = resolvePark(home, bag.parkFactors, espnGame, seen);
+  const homeQ = resolveSpQuality(homeSp, bag.mlbPitcherStats, home, seen);
+  const awayQ = resolveSpQuality(awaySp, bag.mlbPitcherStats, away, seen);
   const adj = applySpPark({
     modelMargin: baseMargin,
     modelTotal: baseTotal,
@@ -80,8 +84,8 @@ function projectGame(event, standings, espnGame, ctx) {
   let modelMargin = adj.modelMargin;
   let modelTotal = adj.modelTotal;
 
-  const homeBp = resolveBullpenQuality(homeQ, home, bag.mlbPitcherStats);
-  const awayBp = resolveBullpenQuality(awayQ, away, bag.mlbPitcherStats);
+  const homeBp = resolveBullpenQuality(homeQ, home, bag.mlbPitcherStats, seen);
+  const awayBp = resolveBullpenQuality(awayQ, away, bag.mlbPitcherStats, seen);
   const bp = applyBullpenAdj({
     modelMargin,
     modelTotal,
@@ -104,6 +108,7 @@ function projectGame(event, standings, espnGame, ctx) {
     restByTeam: restTable,
     qbByTeam: {},
     hfaBase: HFA.MLB,
+    fallbackSeen: seen,
   });
   modelMargin = gd.modelMargin;
   modelTotal = gd.modelTotal;
@@ -225,6 +230,7 @@ function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactor
     parkFactors: parkFactors || {},
     gameDay: gameDay || {},
     weatherByGame: weatherByGame || (gameDay && gameDay.weatherByGame) || {},
+    fallbackSeen: new Set(),
   };
   return mapGamesSoft(oddsEvents, (ev) => {
     const eg = findEspnGame(ev, games);

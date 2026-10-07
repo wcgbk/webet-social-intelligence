@@ -11,6 +11,7 @@ const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./li
 const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
 const { loadLinePath } = require('./lib/omega-vnext/line_path');
 const omegaGradingRules = require('./lib/omega-grading-rules');
+const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
 const { fetchESPNScores: fetchSharedScoreboard } = require('./lib/espn-scoreboard');
 const resultsGrader = require('./get-results-omega');
 
@@ -172,8 +173,16 @@ function lastWord(name) {
   return parts[parts.length - 1] || '';
 }
 
-// Check if two team names are a fuzzy match
-function teamsMatch(a, b) {
+// Check if two team names are a fuzzy match.
+// sport + dateISO are optional. Before IDENTITY_V2_FROM (or when omitted) the
+// body below is the only path. On/after that date, two resolved ids compare
+// directly so a shared last word cannot match the other club.
+function teamsMatch(a, b, sport, dateISO) {
+  if (omegaGradingRules.identityV2(dateISO)) {
+    const idA = resolveTeamId(sport, a);
+    const idB = resolveTeamId(sport, b);
+    if (idA && idB) return String(idA) === String(idB);
+  }
   if (!a || !b) return false;
   const na = normalizeTeam(a);
   const nb = normalizeTeam(b);
@@ -294,12 +303,35 @@ function sourceKey(pick) {
 // gameObj may be a full-game bulk game object OR a per-event (F5) object — both carry
 // { home_team, away_team, bookmakers:[{ key, title, markets:[{ key, outcomes:[{name, price, point}] }] }] }.
 // Returns { sideOdds, sideRaw, overround, closingLine, anchor, anchorBook } or null.
-function extractClose(gameObj, sideInfo, pick) {
+function closeSides(gameObj, teamText, pick, dateISO) {
+  const sport = pick && pick.sport;
+  if (omegaGradingRules.identityV2(dateISO)) {
+    const byId = matchSides(sport, teamText, gameObj.away_team, gameObj.home_team, null, null);
+    if (byId.decided) return { pickedAway: byId.pickedAway, pickedHome: byId.pickedHome };
+    const pickedAway = teamsMatch(teamText, gameObj.away_team);
+    const pickedHome = teamsMatch(teamText, gameObj.home_team);
+    const pickId = resolveTeamId(sport, teamText);
+    if (!pickId) return { pickedAway, pickedHome };
+    const awayId = resolveTeamId(sport, gameObj.away_team);
+    const homeId = resolveTeamId(sport, gameObj.home_team);
+    return {
+      pickedAway: !!(pickedAway && (!awayId || String(awayId) === String(pickId))),
+      pickedHome: !!(pickedHome && (!homeId || String(homeId) === String(pickId))),
+    };
+  }
+  return {
+    pickedHome: teamsMatch(teamText, gameObj.home_team),
+    pickedAway: teamsMatch(teamText, gameObj.away_team),
+  };
+}
+
+function extractClose(gameObj, sideInfo, pick, dateISO) {
   if (!gameObj || !gameObj.bookmakers) return null;
   const teamText = stripLine(pick.pick || '');
   const isTeamMarket = sideInfo.marketBase !== 'totals' && !sideInfo.isDraw;
-  const pickedHome = isTeamMarket && teamsMatch(teamText, gameObj.home_team);
-  const pickedAway = isTeamMarket && teamsMatch(teamText, gameObj.away_team);
+  const sides = isTeamMarket ? closeSides(gameObj, teamText, pick, dateISO) : { pickedHome: false, pickedAway: false };
+  const pickedHome = sides.pickedHome;
+  const pickedAway = sides.pickedAway;
 
   // Per-book view of the target market's outcomes
   const perBook = [];
@@ -324,7 +356,7 @@ function extractClose(gameObj, sideInfo, pick) {
       let hit = false;
       if (sideInfo.marketBase === 'totals') hit = (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
       else if (sideInfo.isDraw) hit = (n === 'draw');
-      else hit = (pickedHome && teamsMatch(o.name, gameObj.home_team)) || (pickedAway && teamsMatch(o.name, gameObj.away_team));
+      else hit = (pickedHome && teamsMatch(o.name, gameObj.home_team, pick && pick.sport, dateISO)) || (pickedAway && teamsMatch(o.name, gameObj.away_team, pick && pick.sport, dateISO));
       if (hit) { sidePrice = o.price; line = (o.point !== undefined ? o.point : null); break; }
     }
     if (sidePrice == null) return null;
@@ -371,7 +403,7 @@ function extractClose(gameObj, sideInfo, pick) {
 }
 
 // ── Find matching game in an odds-feed array for a pick ──
-function findMatchingGame(pick, oddsData) {
+function findMatchingGameLegacy(pick, oddsData) {
   const matchup = (pick.matchup || '').toLowerCase();
   const pickText = (pick.pick || '').toLowerCase();
 
@@ -385,6 +417,31 @@ function findMatchingGame(pick, oddsData) {
     if ((homeInMatchup || homeInPick) && (awayInMatchup || awayInPick)) return game;
   }
   return null;
+}
+
+function findMatchingGame(pick, oddsData, dateISO) {
+  if (omegaGradingRules.identityV2(dateISO)) {
+    const sport = (pick && pick.sport) || '';
+    const parts = String((pick && pick.matchup) || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const id0 = resolveTeamId(sport, parts[0]);
+      const id1 = resolveTeamId(sport, parts[1]);
+      if (id0 && id1 && String(id0) !== String(id1)) {
+        const left = String(id0);
+        const right = String(id1);
+        for (const game of oddsData || []) {
+          const awayId = resolveTeamId(sport, game.away_team);
+          const homeId = resolveTeamId(sport, game.home_team);
+          if (!awayId || !homeId) continue;
+          const away = String(awayId);
+          const home = String(homeId);
+          if ((away === left && home === right) || (away === right && home === left)) return game;
+        }
+        return null;
+      }
+    }
+  }
+  return findMatchingGameLegacy(pick, oddsData);
 }
 
 // ── Odds API fetchers (live or historical-at-timestamp), with in-run caching ──
@@ -466,8 +523,10 @@ async function fetchESPNScores(dateISO, sport) {
       const f5Complete = isMLB && ((period > 5) || (st === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
       return {
         awayTeam: away.team?.displayName || '', awayAbbr: away.team?.abbreviation || '',
+        awayId: away.team && away.team.id != null && away.team.id !== '' ? String(away.team.id) : '',
         awayScore: parseInt(away.score) || 0,
         homeTeam: home.team?.displayName || '', homeAbbr: home.team?.abbreviation || '',
+        homeId: home.team && home.team.id != null && home.team.id !== '' ? String(home.team.id) : '',
         homeScore: parseInt(home.score) || 0,
         state: st,
         statusName: status.type?.name || '',
@@ -486,6 +545,9 @@ async function fetchESPNScores(dateISO, sport) {
 
 function findGameForGrading(pick, games, dateISO) {
   const cardDate = dateISO || (pick && pick.date) || null;
+  if (omegaGradingRules.identityV2(cardDate)) {
+    return resultsGrader._test.findGame(pick, games, cardDate);
+  }
   if (footballGraderOn(cardDate, pick && pick.sport)) {
     return resultsGrader._test.findGame(pick, games);
   }
@@ -541,8 +603,23 @@ function gradePick(pick, game, opts) {
   const awayScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.awayScore : (isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore);
   const homeScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.homeScore : (isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore);
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
-  const pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
+  let pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
+  let pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
+  if (omegaGradingRules.identityV2(dateISO)) {
+    const byId = matchSides(pick.sport, pickTeamRaw, game.awayTeam, game.homeTeam, game.awayId, game.homeId);
+    if (byId.decided) {
+      pickedAway = byId.pickedAway;
+      pickedHome = byId.pickedHome;
+    } else {
+      const pickId = resolveTeamId(pick.sport, pickTeamRaw);
+      if (pickId) {
+        const awayId = (game.awayId != null && game.awayId !== '') ? String(game.awayId) : (resolveTeamId(pick.sport, game.awayTeam) || null);
+        const homeId = (game.homeId != null && game.homeId !== '') ? String(game.homeId) : (resolveTeamId(pick.sport, game.homeTeam) || null);
+        if (pickedAway && awayId && String(awayId) !== String(pickId)) pickedAway = false;
+        if (pickedHome && homeId && String(homeId) !== String(pickId)) pickedHome = false;
+      }
+    }
+  }
 
   if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
@@ -735,9 +812,9 @@ async function recordCandidateCloses({
     store,
     fetchEvents: fetchCandidateEvents,
     fetchESPNScores,
-    extractClose,
+    extractClose: (gameObj, sideInfo, pick) => extractClose(gameObj, sideInfo, pick, dateISO),
     pickSideInfo,
-    findMatchingGame,
+    findMatchingGame: (pick, oddsData) => findMatchingGame(pick, oddsData, dateISO),
     teamsMatch,
     gradePick: (pick, game) => gradePick(pick, game, { dateISO: dateISO, now: nowMs }),
     findGameForGrading: (pick, games) => findGameForGrading(pick, games, dateISO),
@@ -917,13 +994,13 @@ const trackClvOmegaHandler = async (event) => {
       // Upcoming (or commence unknown) → current line.
       if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
         const games = await getBulk(sportKey, null);
-        gameObj = findMatchingGame(pick, games);
+        gameObj = findMatchingGame(pick, games, dateISO);
         if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
       }
       // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
       if (!gameObj && Number.isFinite(commenceMs)) {
         const games = await getBulk(sportKey, commenceISO);
-        gameObj = findMatchingGame(pick, games);
+        gameObj = findMatchingGame(pick, games, dateISO);
         if (gameObj) snapAt = commenceISO;
       }
 
@@ -934,7 +1011,7 @@ const trackClvOmegaHandler = async (event) => {
         if (ev) extractObj = ev;
       }
 
-      const close = gameObj ? extractClose(extractObj, sideInfo, pick) : null;
+      const close = gameObj ? extractClose(extractObj, sideInfo, pick, dateISO) : null;
 
       // Capture provenance: how close to first pitch this snapshot was.
       let captureMinsToCommence = null;

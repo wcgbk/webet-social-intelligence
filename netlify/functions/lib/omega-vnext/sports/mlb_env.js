@@ -8,7 +8,11 @@
 
 const { clamp } = require('../odds_math');
 const { ENGINE_SOFT, SPORT_SPREAD_STD, HFA } = require('../config');
-const { fuzzyTeam } = require('./_common');
+const { rowByIdentityOrFuzzy } = require('./team_identity');
+
+function mlbTableRow(table, teamName, fallbackSeen) {
+  return rowByIdentityOrFuzzy('MLB', table, teamName, { fallbackSeen });
+}
 
 const LEAGUE_FIP = 4.15;
 const FIP_C = 3.10;
@@ -177,7 +181,7 @@ function coerceQualityRow(row) {
  * If the starter is named but has no line, a discounted team rate is the prior.
  * No named probable → null (do not double-count team pitching already in Pythag).
  */
-function resolveSpQuality(probable, stats, teamName) {
+function resolveSpQuality(probable, stats, teamName, fallbackSeen) {
   const bag = stats && typeof stats === 'object' ? stats : {};
   const byId = bag.byId || {};
   const byName = bag.byName || {};
@@ -191,7 +195,7 @@ function resolveSpQuality(probable, stats, teamName) {
     if (row) return { ...row, source: 'player', name: row.name || probable.name };
   }
   if (!probable || !probable.name) return null;
-  const teamRow = coerceQualityRow(fuzzyTeam(teamName, bag.byTeam || {}));
+  const teamRow = coerceQualityRow(mlbTableRow(bag.byTeam || {}, teamName, fallbackSeen));
   if (!teamRow) return null;
   return {
     ...teamRow,
@@ -237,9 +241,9 @@ function splitParkTable(parkFactors) {
   return { nameTable, abbrTable };
 }
 
-function resolvePark(homeTeam, parkFactors, espnGame) {
+function resolvePark(homeTeam, parkFactors, espnGame, fallbackSeen) {
   const { nameTable, abbrTable } = splitParkTable(parkFactors);
-  let row = fuzzyTeam(homeTeam, nameTable);
+  let row = mlbTableRow(nameTable, homeTeam, fallbackSeen);
   if (!row && espnGame && espnGame.homeAbbr) {
     row = abbrTable[String(espnGame.homeAbbr).toUpperCase()] || null;
   }
@@ -279,10 +283,10 @@ function applySpPark({ modelMargin, modelTotal, homeQ, awayQ, parkFactor }) {
  * Only when SP is player-source (named line) and team rate exists.
  * Soft-fail → null.
  */
-function resolveBullpenQuality(spQ, teamName, stats) {
+function resolveBullpenQuality(spQ, teamName, stats, fallbackSeen) {
   if (!spQ || spQ.source !== 'player' || !Number.isFinite(spQ.quality)) return null;
   const bag = stats && typeof stats === 'object' ? stats : {};
-  const teamRow = coerceQualityRow(fuzzyTeam(teamName, bag.byTeam || {}));
+  const teamRow = coerceQualityRow(mlbTableRow(bag.byTeam || {}, teamName, fallbackSeen));
   if (!teamRow || !Number.isFinite(teamRow.quality)) return null;
   return {
     quality: clamp(teamRow.quality - spQ.quality, -1.5, 1.5),

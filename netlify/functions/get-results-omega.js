@@ -7,6 +7,7 @@
 const { fetchESPNScores } = require('./lib/espn-scoreboard');
 const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
+const { resolveTeamId } = require('./lib/omega-vnext/sports/team_identity');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -58,10 +59,15 @@ function ncaafSchoolKeysMatch(aName, bName) {
 
 // Michigan State also matches Michigan. When both sides of one game match,
 // keep the exact schoolKey. If that does not pick one side, match neither.
-function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, sport) {
+// Identity runs only when that logic still has neither side (never overrides a hit).
+function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, sport, awayEspnId, homeEspnId) {
   const pickedAway = teamsMatch(pickTeam, awayTeam, awayAbbr, sport);
   const pickedHome = teamsMatch(pickTeam, homeTeam, homeAbbr, sport);
-  if (sport !== 'NCAAF' || !pickedAway || !pickedHome) {
+  if (!(pickedAway && pickedHome && sport === 'NCAAF')) {
+    if (!pickedAway && !pickedHome && typeof sidesFromIdentity === 'function') {
+      const byId = sidesFromIdentity(pickTeam, awayTeam, homeTeam, sport, awayEspnId, homeEspnId);
+      if (byId) return byId;
+    }
     return { pickedAway: !!pickedAway, pickedHome: !!pickedHome };
   }
   const pS = schoolKey(pickTeam);
@@ -69,6 +75,10 @@ function ncaafPickedSides(pickTeam, awayTeam, awayAbbr, homeTeam, homeAbbr, spor
   const homeExact = pS.length > 2 && pS === schoolKey(homeTeam);
   if (awayExact && !homeExact) return { pickedAway: true, pickedHome: false };
   if (homeExact && !awayExact) return { pickedAway: false, pickedHome: true };
+  if (typeof sidesFromIdentity === 'function') {
+    const byId = sidesFromIdentity(pickTeam, awayTeam, homeTeam, sport, awayEspnId, homeEspnId);
+    if (byId) return byId;
+  }
   return { pickedAway: false, pickedHome: false };
 }
 
@@ -170,7 +180,73 @@ function findGame(pick, games) {
     }
     if (tertiary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, tertiary), pick);
   }
+  // Name match missed. NCAAF/NFL only: one ESPN id-pair, or a doubleheader
+  // commenceTime already separates. Never replaces a name hit above.
+  if (typeof findGameByIdentity === 'function') return findGameByIdentity(pick, games);
   return null;
+}
+
+// Same 75-minute gap js/live-score.js uses before it will pick one doubleheader.
+const IDENTITY_CLEAR_MARGIN_MS = 75 * 60 * 1000;
+
+function teamIdentityId(sport, name, espnId) {
+  if (typeof resolveTeamId !== 'function') return null;
+  if (sport !== 'NCAAF' && sport !== 'NFL') return null;
+  const fromName = name ? resolveTeamId(sport, name) : null;
+  if (fromName) return String(fromName);
+  if (espnId == null || espnId === '') return null;
+  return String(espnId);
+}
+
+function sidesFromIdentity(pickTeam, awayTeam, homeTeam, sport, awayEspnId, homeEspnId) {
+  const id = teamIdentityId(sport, pickTeam);
+  if (!id) return null;
+  const awayId = teamIdentityId(sport, awayTeam, awayEspnId);
+  const homeId = teamIdentityId(sport, homeTeam, homeEspnId);
+  const awayHit = !!(awayId && awayId === id);
+  const homeHit = !!(homeId && homeId === id);
+  if (awayHit === homeHit) return null;
+  return { pickedAway: awayHit, pickedHome: homeHit };
+}
+
+function identityHits(pick, games) {
+  const sport = (pick && pick.sport) || '';
+  const parts = String((pick && pick.matchup) || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length < 2) return [];
+  const id0 = teamIdentityId(sport, parts[0]);
+  const id1 = teamIdentityId(sport, parts[1]);
+  if (!id0 || !id1 || id0 === id1) return [];
+  const seen = new Set();
+  const hits = [];
+  for (const g of games || []) {
+    const awayId = teamIdentityId(sport, g.awayTeam, g.awayId);
+    const homeId = teamIdentityId(sport, g.homeTeam, g.homeId);
+    if (!awayId || !homeId || awayId === homeId) continue;
+    const ordered = awayId === id0 && homeId === id1;
+    const swapped = awayId === id1 && homeId === id0;
+    if (!ordered && !swapped) continue;
+    const key = (g.startISO || '') + '|' + (g.awayAbbr || g.awayTeam || '') + '|' + (g.homeAbbr || g.homeTeam || '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hits.push(g);
+  }
+  return hits;
+}
+
+function findGameByIdentity(pick, games) {
+  const sport = (pick && pick.sport) || '';
+  if (sport !== 'NCAAF' && sport !== 'NFL') return null;
+  const hits = identityHits(pick, games);
+  if (hits.length === 1) return disambiguateDoubleheader(hits, pick);
+  if (hits.length < 2) return null;
+  const ct = pick && pick.commenceTime ? Date.parse(pick.commenceTime) : NaN;
+  if (!Number.isFinite(ct)) return null;
+  const diffs = hits.map(g => {
+    const gt = g && g.startISO ? Date.parse(g.startISO) : NaN;
+    return Number.isFinite(gt) ? Math.abs(gt - ct) : Infinity;
+  }).sort((a, b) => a - b);
+  if (!(diffs[0] < Infinity && diffs[1] - diffs[0] >= IDENTITY_CLEAR_MARGIN_MS)) return null;
+  return disambiguateDoubleheader(hits, pick);
 }
 
 // Parlay legs are stored WITHOUT commenceTime, so on a doubleheader date findGame falls back to the
@@ -201,7 +277,7 @@ function gradePick(pick, game) {
     homeScore = hL.slice(0, 5).reduce((a, b) => a + b, 0);
   }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\b(Over|Under)\b/gi, '').trim();
-  const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport);
+  const side = ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
   const pickedAway = side.pickedAway;
   const pickedHome = side.pickedHome;
 
@@ -610,4 +686,16 @@ exports.handler = async (event) => {
     console.error('[get-results-omega] Error:', err.message);
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: 'Failed to compute results' }) };
   }
+};
+
+// Test-only. Netlify invokes exports.handler; this does not change the response.
+exports._test = {
+  findGame,
+  gradePick,
+  gradeParlay,
+  withLegCommenceTime,
+  ncaafPickedSides,
+  teamsMatch,
+  calcWinnings,
+  wholeUp,
 };

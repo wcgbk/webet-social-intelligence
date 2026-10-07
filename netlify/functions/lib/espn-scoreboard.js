@@ -73,6 +73,13 @@ function scoreboardUrls(sport, dateISO) {
   return [...new Set(urls)];
 }
 
+function espnTeamId(side) {
+  if (!side) return '';
+  const team = side.team || {};
+  const id = team.id || side.id || '';
+  return id ? String(id) : '';
+}
+
 function mapEvent(ev) {
   const comp = ev.competitions && ev.competitions[0];
   if (!comp) return null;
@@ -83,10 +90,12 @@ function mapEvent(ev) {
   return {
     awayTeam: (away.team && (away.team.displayName || away.team.shortDisplayName)) || '',
     awayAbbr: (away.team && away.team.abbreviation) || '',
+    awayId: espnTeamId(away),
     awayScore: parseInt(away.score, 10) || 0,
     awayLine: (away.linescores || []).map(x => parseInt(x.value, 10) || 0),
     homeTeam: (home.team && (home.team.displayName || home.team.shortDisplayName)) || '',
     homeAbbr: (home.team && home.team.abbreviation) || '',
+    homeId: espnTeamId(home),
     homeScore: parseInt(home.score, 10) || 0,
     homeLine: (home.linescores || []).map(x => parseInt(x.value, 10) || 0),
     state: (status.type && status.type.state) || 'pre',

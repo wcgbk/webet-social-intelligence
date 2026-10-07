@@ -26,6 +26,7 @@ const ROOT_DROP = [
   'rejections', 'rejectionCounts', 'edgeCandidatesCount',
   'teamIdentity',
   'gapReview',
+  'health',
 ];
 
 function pickPublic(p) {

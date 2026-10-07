@@ -7,7 +7,7 @@
 const NO_PLAYS_TITLE = 'No Qualifying Plays Today';
 
 const MODEL_LABEL = { omega: 'Omega', nfl: "Omega's NFL model", cfb: "Omega's college football model" };
-const SPORT_WORD = { MLB: 'baseball', NFL: 'NFL', NCAAF: 'college football' };
+const SPORT_WORD = { MLB: 'baseball', NFL: 'NFL', NCAAF: 'college football', NHL: 'hockey', NBA: 'basketball' };
 
 function gamesWord(n) { return n === 1 ? 'game' : 'games'; }
 
@@ -19,21 +19,28 @@ function mlbOffClause(dateISO) {
   return null; // offseason: not worth mentioning
 }
 
-/** Omega (multi-sport) reason. counts = { MLB, NFL, NCAAF } same-day games. */
+/** Omega (multi-sport) reason. counts = { MLB, NFL, NCAAF, NHL, NBA? } same-day games. */
 function omegaReason({ counts = {}, dateISO, hardFails = 0 } = {}) {
-  const c = { MLB: +counts.MLB || 0, NFL: +counts.NFL || 0, NCAAF: +counts.NCAAF || 0 };
-  const total = c.MLB + c.NFL + c.NCAAF;
+  const c = { MLB: +counts.MLB || 0, NFL: +counts.NFL || 0, NCAAF: +counts.NCAAF || 0, NHL: +counts.NHL || 0 };
+  if (+counts.NBA > 0) c.NBA = +counts.NBA;
+  const total = c.MLB + c.NFL + c.NCAAF + c.NHL + (c.NBA || 0);
   if (!total) return "There are no baseball or football games on today's board, so Omega has nothing to price.";
   const only = Object.keys(c).filter(k => c[k] > 0);
   let core;
   if (total === 1) {
     core = `the one ${SPORT_WORD[only[0]]} game on today's board didn't ${hardFails ? "hold up through Omega's late checks" : "clear Omega's edge floors"}`;
+  } else if (only.length === 1 && (only[0] === 'NHL' || only[0] === 'NBA')) {
+    const word = SPORT_WORD[only[0]];
+    core = hardFails
+      ? `none of the ${total} ${word} games on today's board held up through Omega's edge floors and late checks`
+      : `none of the ${total} ${word} games on today's board cleared Omega's edge floors`;
   } else {
     core = hardFails
       ? `none of the ${total} games on today's board held up through Omega's edge floors and late checks`
       : `none of the ${total} games on today's board cleared Omega's edge floors`;
   }
-  const off = !c.MLB ? mlbOffClause(dateISO) : null;
+  // Baseball off-day copy stays on football-only days. A hockey or basketball slate does not use it.
+  const off = !c.MLB && (c.NFL || c.NCAAF) ? mlbOffClause(dateISO) : null;
   const sentence = `${core.charAt(0).toUpperCase()}${core.slice(1)}.`;
   return off ? `${off} ${sentence}` : sentence;
 }

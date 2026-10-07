@@ -13,8 +13,9 @@ const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
-const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen } = require('./store');
+const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, storeHealthRecord } = require('./store');
 const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
+const { attachGenerateHealth } = require('./health');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
@@ -47,8 +48,10 @@ function formatDateLong(dateISO) {
 function slateCountsFor(snap) {
   const bySport = {};
   let espn = 0, odds = 0;
-  for (const s of ['MLB', 'NFL', 'NCAAF']) {
-    if (!SPORTS_ENABLED[s]) { bySport[s] = 0; continue; }
+  const sports = ['MLB', 'NFL', 'NCAAF', 'NHL'];
+  if (SPORTS_ENABLED.NBA) sports.push('NBA');
+  for (const s of sports) {
+    if (!SPORTS_ENABLED[s]) continue;
     const e = snap && snap.espnBySport && snap.espnBySport[s] && Array.isArray(snap.espnBySport[s].games)
       ? snap.espnBySport[s].games.length : 0;
     const o = snap && snap.oddsBySport && Array.isArray(snap.oddsBySport[s]) ? snap.oddsBySport[s].length : 0;
@@ -205,11 +208,17 @@ async function generateOmegaVnext(opts = {}) {
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
 
   let candidates = projectAll(snap);
+  const rawBySport = {};
+  for (const c of candidates) {
+    const s = c && c.sport;
+    if (!s) continue;
+    rawBySport[s] = (rawBySport[s] || 0) + 1;
+  }
   console.log(`[omega-vnext] raw candidates=${candidates.length}`);
 
   const unmatchedReport = buildUnmatchedReport(dateISO, snap.oddsBySport, now.toISOString());
   if (unmatchedReport.count) {
-    const listed = ['NFL', 'NCAAF'].flatMap((s) => unmatchedReport.bySport[s] || []);
+    const listed = ['NFL', 'NCAAF', 'MLB', 'NHL', 'NBA'].flatMap((s) => unmatchedReport.bySport[s] || []);
     console.warn(`[omega-vnext] unknown_team count=${unmatchedReport.count} names=${listed.join(' | ')}`);
   } else {
     console.log('[omega-vnext] unknown_team count=0');
@@ -595,6 +604,44 @@ async function generateOmegaVnext(opts = {}) {
     picksData.insights = picksData.insights || '';
   }
 
+  // Health is diagnostic. A failure here must not change picks or skip the store.
+  let healthRecord = null;
+  try {
+    healthRecord = attachGenerateHealth(picksData, {
+      dateISO,
+      snap,
+      rawBySport,
+      candidates: candidates.slice(),
+      yesPool: yesPool.slice(),
+      oddsErrors: (snap && snap.oddsErrors) || [],
+    });
+  } catch (e) {
+    console.warn(`[omega-health] attach soft-fail: ${e.message}`);
+  }
+  if (healthRecord) {
+    const skipHealthWrite = dryRun || replayLike || process.env.OMEGA_REPLAY_NO_WRITE === '1';
+    let healthStored = false;
+    if (!skipHealthWrite) {
+      try {
+        const stored = await storeHealthRecord(dateISO, healthRecord);
+        healthStored = true;
+        console.log(`[omega-health] stored key=${stored.key}`);
+      } catch (e) {
+        console.error(`[omega-health] store soft-fail: ${e.message}`);
+      }
+    }
+    console.log(JSON.stringify({
+      event: 'omegaHealth',
+      date: dateISO,
+      status: healthRecord.status,
+      alerts: (healthRecord.alerts || []).length,
+      stored: healthStored,
+    }));
+    for (const alert of healthRecord.alerts || []) {
+      console.warn(`[omega-health] ALERT ${alert.sport || ''} ${alert.code} ${alert.detail || ''}`);
+    }
+  }
+
   // Private unmatched-name blob. dryRun does not write. Not a public card field.
   if (!dryRun) {
     try {
@@ -779,6 +826,7 @@ module.exports = {
   generateOmegaVnext,
   MODEL_VERSION,
   projectAll,
+  slateCountsFor,
   todayET,
   assessCaptureHealth,
   sampleRejectionsBySport,

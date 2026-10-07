@@ -23,7 +23,7 @@ async function fetchJson(url, timeoutMs = 12000) {
  */
 async function fetchOddsMultiSport(dateISO, opts = {}) {
   const apiKey = process.env.ODDS_API_KEY;
-  const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live' };
+  const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live', oddsErrors: [] };
   if (!apiKey) {
     console.log('[omega-vnext/ingest] No ODDS_API_KEY — skipping odds');
     return out;
@@ -57,9 +57,26 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
     } catch (e) {
       console.error(`[omega-vnext/ingest] Odds ${label} failed: ${e.message}`);
       out.bySport[label] = [];
+      out.oddsErrors.push(oddsFailureRecord(label, e));
     }
   }
   return out;
+}
+
+function oddsFailureRecord(sport, err) {
+  const status = err && err.status != null && err.status !== '' ? Number(err.status) : null;
+  let message = String((err && err.message) || 'odds fetch failed');
+  message = message.replace(/https?:\/\/\S+/gi, '');
+  message = message.replace(/apiKey=[^&\s]*/gi, '');
+  message = message.replace(/\bapi[_-]?key\b/gi, '');
+  message = message.replace(/\s+/g, ' ').trim();
+  const creditHint = (status === 401 || status === 429 || /quota|credit/i.test(message)) ? 'quota_or_auth' : null;
+  return {
+    sport,
+    status: Number.isFinite(status) ? status : null,
+    message,
+    creditHint,
+  };
 }
 
 function dateParamET(dateISO) {
@@ -720,6 +737,7 @@ async function ingest(dateISO, opts = {}) {
     gameDay,
     fetchedAt: odds.fetchedAt,
     snapshotNote: odds.snapshotNote,
+    oddsErrors: odds.oddsErrors || [],
   };
 }
 
@@ -737,6 +755,7 @@ module.exports = {
   loadSportEngines,
   loadGameDayContext,
   applyNhlStandingStats,
+  oddsFailureRecord,
   applyFootballStandingExtras,
   applyNbaStandingExtras,
   scoreboardSeasonFields,

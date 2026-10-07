@@ -405,6 +405,63 @@ async function readCaptureHealthDate(dateISO) {
   return readJson(assertOpsKey(`omega-ops/capture-health-${d}`));
 }
 
+function healthBlobKey(dateISO) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`omega-health refused bad date: ${dateISO}`);
+  }
+  return `omega-health-${d}`;
+}
+
+/** Full generate-time health record. Dated key plus omega-health-latest. */
+async function storeHealthRecord(dateISO, record) {
+  const key = healthBlobKey(dateISO);
+  const payload = { ...(record || {}), date: String(dateISO), storedAt: new Date().toISOString() };
+  await storeJson(key, payload);
+  try {
+    await storeJson('omega-health-latest', payload);
+  } catch (e) {
+    console.error(`[omega-vnext/store] health latest: ${e.message}`);
+  }
+  return { key, latest: 'omega-health-latest' };
+}
+
+/**
+ * Read a health blob. A missing blob is null. Transport and non-404 HTTP
+ * failures throw so the ops endpoint can return 5xx.
+ */
+async function readBlobStrict(key) {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore(BLOB_STORE);
+    return await store.get(key, { type: 'json' });
+  } catch (sdkErr) {
+    let resp;
+    try {
+      resp = await blobFetch(key);
+    } catch (e) {
+      const err = new Error(`blob read ${key} failed: ${sdkErr.message}`);
+      err.status = 502;
+      throw err;
+    }
+    if (resp.status === 404) return null;
+    if (!resp.ok) {
+      const err = new Error(`blob read ${key} → ${resp.status}`);
+      err.status = resp.status >= 500 ? resp.status : 502;
+      throw err;
+    }
+    return await resp.json();
+  }
+}
+
+async function readHealthRecord(dateISO) {
+  return readBlobStrict(healthBlobKey(dateISO));
+}
+
+async function readHealthLatest() {
+  return readBlobStrict('omega-health-latest');
+}
+
 /** Private daily unmatched football names. Null on a bad date or a missing blob. */
 async function readUnmatchedTeams(dateISO) {
   const d = String(dateISO || '');
@@ -426,4 +483,5 @@ module.exports = {
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
   readUnmatchedTeams,
+  healthBlobKey, storeHealthRecord, readHealthRecord, readHealthLatest,
 };

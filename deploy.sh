@@ -34,6 +34,6 @@ git push origin main
 
 # 3) Ship the working tree to the live site.
 echo "→ deploying to webetsocial.com…"
-npx netlify deploy --prod --dir . --skip-functions-cache
+npx netlify deploy --prod --dir . --skip-functions-cache --site 87d7bcd9-e95a-479c-bc44-6432a2ffc606  # pinned: webetsocial.com only (10/07 wrong-site incident)
 
 echo "✅ committed + pushed + deployed — live == origin/main"

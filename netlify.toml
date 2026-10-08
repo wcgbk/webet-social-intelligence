@@ -90,15 +90,28 @@
   # Background function — 15min timeout for Circa Million VIII weekly ATS card
   # Spreads only, 5 unique NFL games, rank by calibrated cover probability.
   # pdfium.wasm + tesseract.js for image-only / vector-outline Contest Point Spreads PDFs.
-  # OCR deps are an isolated package (lib/circa-ocr-deps, own lockfile) that
-  # deploy.sh installs with `npm ci --prefix`; the repo root has no node_modules
-  # at deploy time, which is why '@hyzyla/pdfium' was missing from the bundle.
+  # OCR deps: pinned by lib/circa-ocr-deps (own package.json + lockfile).
+  # deploy.sh `npm ci`s that package and stages it as the repo-root
+  # node_modules for the bundle step only (no checkout has a root node_modules,
+  # which is why '@hyzyla/pdfium' was missing). Netlify drops nested
+  # node_modules dirs from the function at runtime, so they must sit at the
+  # zip root. No other function requires these packages, so no other bundle changes.
   included_files = [
-    "netlify/functions/lib/circa-ocr-deps/package.json",
-    "netlify/functions/lib/circa-ocr-deps/node_modules/**",
-    # No symlinks in the zip: a node_modules/.bin symlink left the deployed
-    # bundle without the deps at runtime (package MISSING in /var/task).
-    "!netlify/functions/lib/circa-ocr-deps/node_modules/.bin/**",
+    "node_modules/@hyzyla/pdfium/package.json",
+    "node_modules/@hyzyla/pdfium/dist/**",
+    "node_modules/tesseract.js/**",
+    "node_modules/tesseract.js-core/**",
+    "node_modules/bmp-js/**",
+    "node_modules/idb-keyval/**",
+    "node_modules/is-electron/**",
+    "node_modules/is-url/**",
+    "node_modules/node-fetch/**",
+    "node_modules/regenerator-runtime/**",
+    "node_modules/tr46/**",
+    "node_modules/wasm-feature-detect/**",
+    "node_modules/webidl-conversions/**",
+    "node_modules/whatwg-url/**",
+    "node_modules/zlibjs/**",
     "netlify/functions/lib/circa-contest-pdf-ocr.js",
     "netlify/functions/lib/circa-contest-lines.js",
     "netlify/functions/lib/circa-card-health.js",

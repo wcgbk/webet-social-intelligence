@@ -32,14 +32,22 @@ fi
 echo "→ pushing to origin/main…"
 git push origin main
 
-# 2b) Circa OCR runtime deps (generate-picks-circa-background only). Isolated
-#     package with its own lockfile so no other function bundle changes; bundled
-#     via netlify.toml included_files. Non-fatal: without it Circa OCR fails
-#     loudly (contest-pdf-image-only) and never falls back to sportsbook lines.
+# 2b) Circa OCR runtime deps (generate-picks-circa-background only), pinned by
+#     netlify/functions/lib/circa-ocr-deps/package-lock.json. Netlify drops
+#     nested node_modules dirs from functions at runtime, so the pinned deps are
+#     staged as the repo-root node_modules for this deploy only (bundled via
+#     netlify.toml included_files; no other function requires them) and removed
+#     afterwards. A pre-existing root node_modules is left untouched.
+#     Non-fatal: without it Circa OCR fails loudly (contest-pdf-image-only) and
+#     never falls back to sportsbook lines.
 CIRCA_OCR_DEPS="netlify/functions/lib/circa-ocr-deps"
-if [ -f "$CIRCA_OCR_DEPS/package-lock.json" ]; then
-  echo "→ installing Circa OCR deps ($CIRCA_OCR_DEPS)…"
-  if ! npm ci --prefix "$CIRCA_OCR_DEPS" --omit=dev --no-bin-links --no-audit --no-fund --loglevel=error; then
+if [ -f "$CIRCA_OCR_DEPS/package-lock.json" ] && [ ! -e node_modules ]; then
+  echo "→ staging Circa OCR deps ($CIRCA_OCR_DEPS → node_modules for bundling)…"
+  if npm ci --prefix "$CIRCA_OCR_DEPS" --omit=dev --no-bin-links --no-audit --no-fund --loglevel=error \
+     && mv "$CIRCA_OCR_DEPS/node_modules" node_modules; then
+    trap 'rm -rf node_modules' EXIT
+  else
+    rm -rf node_modules
     echo "⚠️  Circa OCR deps install FAILED — /circa image-only PDF OCR will be unavailable in this deploy."
   fi
 fi

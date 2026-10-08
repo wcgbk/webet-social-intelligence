@@ -870,7 +870,12 @@ check("isolated circa-ocr-deps package is lockfile-pinned + bundled + installed 
   assert.ok(lock.packages["node_modules/@hyzyla/pdfium"]);
   assert.ok(lock.packages["node_modules/tesseract.js-core"]);
   const toml = fs.readFileSync(path.join(root, "netlify.toml"), "utf8");
-  assert.ok(toml.includes("netlify/functions/lib/circa-ocr-deps/node_modules/**"));
+  assert.ok(toml.includes("node_modules/@hyzyla/pdfium/dist/**"));
+  assert.ok(toml.includes("node_modules/tesseract.js-core/**"));
+  for (const name of Object.keys(lock.packages).filter(k => k.startsWith("node_modules/")).map(k => k.slice(13))) {
+    if (name === "opencollective-postinstall") continue;
+    assert.ok(toml.includes(`node_modules/${name}/`), `included_files missing ${name}`);
+  }
   const deploy = fs.readFileSync(path.join(root, "deploy.sh"), "utf8");
   assert.ok(/npm ci --prefix "\$CIRCA_OCR_DEPS"/.test(deploy));
 });

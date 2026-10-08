@@ -12,6 +12,33 @@ const os = require("os");
 const path = require("path");
 const zlib = require("zlib");
 const { spawnSync } = require("child_process");
+const { createRequire } = require("module");
+
+// OCR runtime deps live in lib/circa-ocr-deps (own package.json + lockfile,
+// installed by deploy.sh with `npm ci --prefix`). They are resolved only from
+// here so no other function's module resolution or bundle changes. Falls back
+// to the root node_modules for local dev/tests.
+const OCR_DEPS_DIR = path.join(__dirname, "circa-ocr-deps");
+let _depsRequire = null;
+function depsRequire() {
+  if (!_depsRequire) _depsRequire = createRequire(path.join(OCR_DEPS_DIR, "package.json"));
+  return _depsRequire;
+}
+function requireOcrDep(name) {
+  try {
+    return depsRequire()(name);
+  } catch (e) {
+    if (e && e.code !== "MODULE_NOT_FOUND") throw e;
+    return require(name);
+  }
+}
+function resolveOcrDep(name) {
+  try {
+    return depsRequire().resolve(name);
+  } catch (e) {
+    return require.resolve(name);
+  }
+}
 
 let _pdfiumLibrary = null;
 let _pdfiumInitPromise = null;
@@ -115,8 +142,8 @@ async function getPdfiumLibrary() {
   if (_pdfiumLibrary) return _pdfiumLibrary;
   if (_pdfiumInitPromise) return _pdfiumInitPromise;
   _pdfiumInitPromise = (async () => {
-    const { PDFiumLibrary } = require("@hyzyla/pdfium");
-    const wasmPath = require.resolve("@hyzyla/pdfium/dist/pdfium.wasm");
+    const { PDFiumLibrary } = requireOcrDep("@hyzyla/pdfium");
+    const wasmPath = resolveOcrDep("@hyzyla/pdfium/dist/pdfium.wasm");
     _pdfiumLibrary = await PDFiumLibrary.init({
       wasmBinary: fs.readFileSync(wasmPath),
     });
@@ -201,11 +228,14 @@ async function ocrPngBuffers(pngs, opts = {}) {
     }
   }
 
-  const Tesseract = require("tesseract.js");
+  const Tesseract = requireOcrDep("tesseract.js");
   const parts = [];
   for (const png of pngs) {
     const result = await Tesseract.recognize(png, "eng", {
       logger: () => {},
+      // /var/task is read-only on Netlify; cache eng.traineddata in tmp
+      // (also keeps local runs from dropping it into the repo root).
+      cachePath: os.tmpdir(),
     });
     const text = result && result.data && result.data.text;
     if (text && String(text).trim()) parts.push(String(text));

@@ -90,10 +90,12 @@
   # Background function — 15min timeout for Circa Million VIII weekly ATS card
   # Spreads only, 5 unique NFL games, rank by calibrated cover probability.
   # pdfium.wasm + tesseract.js for image-only / vector-outline Contest Point Spreads PDFs.
+  # OCR deps are an isolated package (lib/circa-ocr-deps, own lockfile) that
+  # deploy.sh installs with `npm ci --prefix`; the repo root has no node_modules
+  # at deploy time, which is why '@hyzyla/pdfium' was missing from the bundle.
   included_files = [
-    "node_modules/@hyzyla/pdfium/dist/**",
-    "node_modules/tesseract.js/**",
-    "node_modules/tesseract.js-core/**",
+    "netlify/functions/lib/circa-ocr-deps/package.json",
+    "netlify/functions/lib/circa-ocr-deps/node_modules/**",
     "netlify/functions/lib/circa-contest-pdf-ocr.js",
     "netlify/functions/lib/circa-contest-lines.js",
     "netlify/functions/lib/circa-card-health.js",

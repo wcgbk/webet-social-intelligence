@@ -861,6 +861,19 @@ check("pipeline files include OCR + health checker", () => {
   assert.ok(toml.includes("check-circa-card-health"));
   assert.ok(toml.includes("pdfium") || toml.includes("@hyzyla/pdfium") || toml.includes("tesseract.js"));
 });
+check("isolated circa-ocr-deps package is lockfile-pinned + bundled + installed by deploy.sh", () => {
+  const dir = path.join(root, "netlify/functions/lib/circa-ocr-deps");
+  const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+  assert.ok(pkg.dependencies["@hyzyla/pdfium"]);
+  assert.ok(pkg.dependencies["tesseract.js"]);
+  const lock = JSON.parse(fs.readFileSync(path.join(dir, "package-lock.json"), "utf8"));
+  assert.ok(lock.packages["node_modules/@hyzyla/pdfium"]);
+  assert.ok(lock.packages["node_modules/tesseract.js-core"]);
+  const toml = fs.readFileSync(path.join(root, "netlify.toml"), "utf8");
+  assert.ok(toml.includes("netlify/functions/lib/circa-ocr-deps/node_modules/**"));
+  const deploy = fs.readFileSync(path.join(root, "deploy.sh"), "utf8");
+  assert.ok(/npm ci --prefix "\$CIRCA_OCR_DEPS"/.test(deploy));
+});
 check("package.json has pdfium + tesseract.js", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   assert.ok(pkg.dependencies["@hyzyla/pdfium"]);

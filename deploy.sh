@@ -32,6 +32,18 @@ fi
 echo "→ pushing to origin/main…"
 git push origin main
 
+# 2b) Circa OCR runtime deps (generate-picks-circa-background only). Isolated
+#     package with its own lockfile so no other function bundle changes; bundled
+#     via netlify.toml included_files. Non-fatal: without it Circa OCR fails
+#     loudly (contest-pdf-image-only) and never falls back to sportsbook lines.
+CIRCA_OCR_DEPS="netlify/functions/lib/circa-ocr-deps"
+if [ -f "$CIRCA_OCR_DEPS/package-lock.json" ]; then
+  echo "→ installing Circa OCR deps ($CIRCA_OCR_DEPS)…"
+  if ! npm ci --prefix "$CIRCA_OCR_DEPS" --omit=dev --no-audit --no-fund --loglevel=error; then
+    echo "⚠️  Circa OCR deps install FAILED — /circa image-only PDF OCR will be unavailable in this deploy."
+  fi
+fi
+
 # 3) Ship the working tree to the live site.
 echo "→ deploying to webetsocial.com…"
 npx netlify deploy --prod --dir . --skip-functions-cache --site 87d7bcd9-e95a-479c-bc44-6432a2ffc606  # pinned: webetsocial.com only (10/07 wrong-site incident)

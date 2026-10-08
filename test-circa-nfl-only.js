@@ -929,6 +929,63 @@ async function runAsync() {
     failed++;
     console.error("  FAIL week 4 without sheet throws: " + e.message);
   }
+  try {
+    const fx = lines.getWeekFixture(5);
+    assert.ok(fx && fx.fromFixture);
+    assert.strictEqual(fx.games.length, 15);
+    assert.strictEqual(fx.pdfSha256, lines.WEEK5_PDF_SHA256);
+    assert.ok(/^[0-9a-f]{64}$/.test(lines.WEEK5_PDF_SHA256));
+    const ids = fx.games.flatMap(g => [g.contestIds.away, g.contestIds.home]).sort((a, b) => a - b);
+    assert.deepStrictEqual(ids, Array.from({ length: 30 }, (_, i) => i + 1));
+    for (const g of fx.games) assert.strictEqual(g.awaySpread + g.homeSpread, 0, `${g.away}@${g.home}`);
+    const tnf = fx.games.find(g => /Buccaneers/.test(g.away) && /Cowboys/.test(g.home));
+    assert.strictEqual(tnf.awaySpread, 8);
+    const lon = fx.games.find(g => /Eagles/.test(g.away) && /Jaguars/.test(g.home));
+    assert.strictEqual(lon.homeSpread, -7.5);
+    assert.ok(/London/.test(lon.venueHint));
+    const hou = fx.games.find(g => /Texans/.test(g.away) && /Titans/.test(g.home));
+    assert.strictEqual(hou.awaySpread, -7.5);
+    const cin = fx.games.find(g => /Bengals/.test(g.away) && /Dolphins/.test(g.home));
+    assert.strictEqual(cin.awaySpread, -7);
+    assert.ok(lines.candidateSpreadUrls(5).includes(lines.WEEK5_SOURCE_URL));
+    console.log("  ok  week 5 fixture shape (15 games, ids 1-30, hash-pinned)");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL week 5 fixture shape: " + e.message);
+  }
+  try {
+    let code = null;
+    try { await lines.loadContestLines(5, { skipFetch: true }); }
+    catch (e) { code = e.code; }
+    assert.strictEqual(code, "contest-pdf-unavailable", "hash-pinned fixture must not be used without the official PDF");
+    const fakePdf = Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(400, 0x20)]);
+    const fakeFetch = async () => ({ ok: true, headers: { get: () => "application/pdf" }, arrayBuffer: async () => fakePdf });
+    code = null;
+    try { await lines.loadContestLines(5, { fetch: fakeFetch, ocr: false }); }
+    catch (e) { code = e.code; }
+    assert.strictEqual(code, "contest-pdf-image-only", "re-issued/different PDF bytes must not use the pinned fixture");
+    assert.ok(!lines.fixtureMatchesPdf(lines.getWeekFixture(5), fakePdf));
+    assert.ok(lines.fixtureMatchesPdf(lines.getWeekFixture(3), fakePdf), "unpinned fixtures keep prior behavior");
+    console.log("  ok  week 5 fixture refused unless official PDF sha256 matches");
+  } catch (e) {
+    failed++;
+    console.error("  FAIL week 5 sha256 guard: " + e.message);
+  }
+  if (process.env.CIRCA_W5_PDF && fs.existsSync(process.env.CIRCA_W5_PDF)) {
+    try {
+      const real = fs.readFileSync(process.env.CIRCA_W5_PDF);
+      const realFetch = async () => ({ ok: true, headers: { get: () => "application/pdf" }, arrayBuffer: async () => real });
+      const board5 = await lines.loadContestLines(5, { fetch: realFetch, ocr: false });
+      assert.strictEqual(board5.lineSource, "circa-contest-pdf");
+      assert.ok(board5.fromFixture);
+      assert.strictEqual(board5.games.length, 15);
+      assert.strictEqual(board5.sourceUrl, lines.WEEK5_SOURCE_URL);
+      console.log("  ok  week 5 official PDF bytes → verified fixture");
+    } catch (e) {
+      failed++;
+      console.error("  FAIL week 5 official PDF bytes: " + e.message);
+    }
+  }
 
   console.log("lib/circa-live-grade async");
   try {

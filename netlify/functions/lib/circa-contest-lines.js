@@ -8,6 +8,7 @@
 // loadContestLines throws ContestLinesError when the board cannot be loaded.
 // Generators must refuse to publish a live card in that case (no Pinnacle fallback).
 
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -26,6 +27,13 @@ const WEEK2_SOURCE_URL =
 
 const WEEK3_SOURCE_URL =
   "https://www.circasports.com/wp-content/uploads/2026/09/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-3.pdf";
+
+const WEEK5_SOURCE_URL =
+  "https://www.circasports.com/wp-content/uploads/2026/10/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-5.pdf";
+// sha256 of the official Week 5 PDF (523,316 bytes; Microsoft: Print To PDF,
+// created 2026-10-08 13:00:31 EDT). The WEEK5 fixture is only used when the
+// downloaded official PDF hashes to exactly this value.
+const WEEK5_PDF_SHA256 = "98db5ea8c00fb675052b9002151bad0bc6a9e3e13b0b56463ce9d05a8e4c1992";
 
 const PDF_NAME = (n) => `Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-${n}.pdf`;
 
@@ -387,6 +395,94 @@ const WEEK3_GAMES = [
   }),
 ];
 
+// Official Week 5 Contest Point Spreads PDF (image-only, no text layer):
+//   https://www.circasports.com/wp-content/uploads/2026/10/Circa-Sports-Million-VIII-Contest-Point-Spreads-Week-5.pdf
+//   sha256 98db5ea8c00fb675052b9002151bad0bc6a9e3e13b0b56463ce9d05a8e4c1992
+// Hand-transcribed from the pdftoppm page render (200/400/600 dpi) and verified
+// twice: (a) visual read of the page image and zoomed crops, (b) independent
+// tesseract OCR diffed row-by-row; OCR misreads of the 7 glyph (Bengals/Dolphins,
+// Texans/Titans) were re-checked at 600 dpi. Home/away + kickoffs match the ESPN
+// 2026 Week 5 schedule. Spreads are ½ → .5. Top team on the sheet is visitor.
+// Used only when the downloaded official PDF hashes to WEEK5_PDF_SHA256.
+const WEEK5_GAMES = [
+  gameRow({
+    away: "Tampa Bay Buccaneers", home: "Dallas Cowboys",
+    commenceHint: "Thu Oct 8, 5:15 PM PT", commenceTime: "2026-10-09T00:15:00.000Z",
+    awaySpread: 8, homeSpread: -8, contestIds: { away: 2, home: 1 },
+  }),
+  gameRow({
+    away: "Philadelphia Eagles", home: "Jacksonville Jaguars",
+    commenceHint: "Sun Oct 11, 6:30 AM PT · London", commenceTime: "2026-10-11T13:30:00.000Z",
+    awaySpread: 7.5, homeSpread: -7.5, contestIds: { away: 4, home: 3 },
+    venueHint: "Tottenham Hotspur Stadium, London, England",
+  }),
+  gameRow({
+    away: "Indianapolis Colts", home: "Pittsburgh Steelers",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: 2.5, homeSpread: -2.5, contestIds: { away: 6, home: 5 },
+  }),
+  gameRow({
+    away: "Minnesota Vikings", home: "New Orleans Saints",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: -2, homeSpread: 2, contestIds: { away: 7, home: 8 },
+  }),
+  gameRow({
+    away: "Cleveland Browns", home: "New York Jets",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: 1.5, homeSpread: -1.5, contestIds: { away: 10, home: 9 },
+  }),
+  gameRow({
+    away: "Cincinnati Bengals", home: "Miami Dolphins",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: -7, homeSpread: 7, contestIds: { away: 11, home: 12 },
+  }),
+  gameRow({
+    away: "Las Vegas Raiders", home: "New England Patriots",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: 3.5, homeSpread: -3.5, contestIds: { away: 14, home: 13 },
+  }),
+  gameRow({
+    away: "New York Giants", home: "Washington Commanders",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: 4, homeSpread: -4, contestIds: { away: 16, home: 15 },
+  }),
+  gameRow({
+    away: "Houston Texans", home: "Tennessee Titans",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: -7.5, homeSpread: 7.5, contestIds: { away: 17, home: 18 },
+  }),
+  gameRow({
+    away: "Denver Broncos", home: "Los Angeles Chargers",
+    commenceHint: "Sun Oct 11, 1:05 PM PT", commenceTime: "2026-10-11T20:05:00.000Z",
+    awaySpread: -3.5, homeSpread: 3.5, contestIds: { away: 19, home: 20 },
+  }),
+  gameRow({
+    away: "San Francisco 49ers", home: "Seattle Seahawks",
+    commenceHint: "Sun Oct 11, 1:25 PM PT", commenceTime: "2026-10-11T20:25:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 22, home: 21 },
+  }),
+  gameRow({
+    away: "Detroit Lions", home: "Arizona Cardinals",
+    commenceHint: "Sun Oct 11, 1:25 PM PT", commenceTime: "2026-10-11T20:25:00.000Z",
+    awaySpread: -5.5, homeSpread: 5.5, contestIds: { away: 23, home: 24 },
+  }),
+  gameRow({
+    away: "Chicago Bears", home: "Green Bay Packers",
+    commenceHint: "Sun Oct 11, 10:00 AM PT", commenceTime: "2026-10-11T17:00:00.000Z",
+    awaySpread: -1.5, homeSpread: 1.5, contestIds: { away: 25, home: 26 },
+  }),
+  gameRow({
+    away: "Baltimore Ravens", home: "Atlanta Falcons",
+    commenceHint: "Sun Oct 11, 5:20 PM PT", commenceTime: "2026-10-12T00:20:00.000Z",
+    awaySpread: 3.5, homeSpread: -3.5, contestIds: { away: 28, home: 27 },
+  }),
+  gameRow({
+    away: "Buffalo Bills", home: "Los Angeles Rams",
+    commenceHint: "Mon Oct 12, 5:15 PM PT", commenceTime: "2026-10-13T00:15:00.000Z",
+    awaySpread: 3, homeSpread: -3, contestIds: { away: 30, home: 29 },
+  }),
+];
+
 const WEEK_FIXTURES = {
   1: {
     weekNum: 1,
@@ -409,6 +505,14 @@ const WEEK_FIXTURES = {
     lineSource: LINE_SOURCE,
     games: WEEK3_GAMES,
   },
+  5: {
+    weekNum: 5,
+    sourceUrl: WEEK5_SOURCE_URL,
+    pdfSha256: WEEK5_PDF_SHA256,
+    fromFixture: true,
+    lineSource: LINE_SOURCE,
+    games: WEEK5_GAMES,
+  },
 };
 
 function getWeekFixture(weekNum) {
@@ -418,10 +522,25 @@ function getWeekFixture(weekNum) {
   return {
     weekNum: fx.weekNum,
     sourceUrl: fx.sourceUrl,
+    pdfSha256: fx.pdfSha256 || null,
     fromFixture: true,
     lineSource: LINE_SOURCE,
     games: fx.games.map((g) => ({ ...g, contestIds: g.contestIds ? { ...g.contestIds } : null })),
   };
+}
+
+function pdfSha256(buf) {
+  if (!buf || !buf.length) return null;
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+
+// Hash-pinned fixtures (pdfSha256 set) are only official-PDF lines when the
+// downloaded official PDF is byte-identical to the one that was hand-verified.
+// Unpinned fixtures (Weeks 1–3) keep their original behavior.
+function fixtureMatchesPdf(fixture, buf) {
+  if (!fixture) return false;
+  if (!fixture.pdfSha256) return true;
+  return pdfSha256(buf) === fixture.pdfSha256;
 }
 
 function pad2(n) {
@@ -443,7 +562,7 @@ function candidateSpreadUrls(weekNum, now = new Date()) {
     13: [2026, 12], 14: [2026, 12], 15: [2026, 12], 16: [2026, 12],
     17: [2026, 12], 18: [2027, 1],
   };
-  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL };
+  const known = { 1: WEEK1_SOURCE_URL, 2: WEEK2_SOURCE_URL, 3: WEEK3_SOURCE_URL, 5: WEEK5_SOURCE_URL };
   if (known[n]) urls.push(known[n]);
   const ym = weekMonth[n];
   if (ym) {
@@ -731,7 +850,7 @@ async function loadContestLines(weekNum, opts = {}) {
     throw new ContestLinesError(`Invalid Circa contest week: ${weekNum}`);
   }
 
-  const fixture = opts.ignoreFixture ? null : getWeekFixture(n);
+  let fixture = opts.ignoreFixture ? null : getWeekFixture(n);
   const override = opts.sourceUrl || process.env.CIRCA_SPREADS_URL || "";
   let fetched = null;
   let sourceUrl = override || (fixture && fixture.sourceUrl) || null;
@@ -757,6 +876,16 @@ async function loadContestLines(weekNum, opts = {}) {
         parsed = null;
       }
     }
+  }
+
+  if (fixture && fixture.pdfSha256 && !fixtureMatchesPdf(fixture, fetched && fetched.buffer)) {
+    // Official PDF missing or re-issued (different bytes): the hand-verified
+    // fixture no longer proves the contest numbers — never use it blind.
+    console.log(
+      `[circa-lines] Week ${n} fixture pinned to sha256 ${fixture.pdfSha256.slice(0, 12)}… ` +
+      `but official PDF is ${fetched && fetched.buffer ? pdfSha256(fetched.buffer).slice(0, 12) + "…" : "unavailable"} — ignoring fixture.`
+    );
+    fixture = null;
   }
 
   if (parsed && parsed.games && parsed.games.length >= 8) {
@@ -812,6 +941,8 @@ module.exports = {
   WEEK1_SOURCE_URL,
   WEEK2_SOURCE_URL,
   WEEK3_SOURCE_URL,
+  WEEK5_SOURCE_URL,
+  WEEK5_PDF_SHA256,
   NICK_TO_FULL,
   ContestLinesError,
   fullTeam,
@@ -819,6 +950,8 @@ module.exports = {
   parseSpreadToken,
   normalizeFractions,
   getWeekFixture,
+  pdfSha256,
+  fixtureMatchesPdf,
   candidateSpreadUrls,
   parseContestText,
   parseContestPdf,
@@ -827,4 +960,5 @@ module.exports = {
   WEEK1_GAMES,
   WEEK2_GAMES,
   WEEK3_GAMES,
+  WEEK5_GAMES,
 };

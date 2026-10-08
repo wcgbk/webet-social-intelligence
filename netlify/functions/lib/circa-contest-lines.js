@@ -875,6 +875,12 @@ async function loadContestLines(weekNum, opts = {}) {
       } catch (e) {
         parsed = null;
       }
+      // Ops visibility only (no effect on which board is used).
+      console.log(
+        `[circa-lines] Week ${n} official PDF sha256 ${pdfSha256(fetched.buffer).slice(0, 12)}… → ` +
+        `parse ${parsed && parsed.games ? parsed.games.length : 0} game(s)` +
+        `${ocrMeta ? ` ocr engine=${ocrMeta.engine || "?"} pages=${ocrMeta.pageCount || 0}${ocrMeta.error ? ` error=${ocrMeta.error}` : ""}` : ""}`
+      );
     }
   }
 

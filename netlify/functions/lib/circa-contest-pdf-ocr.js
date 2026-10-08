@@ -33,9 +33,16 @@ function requireOcrDep(name) {
       return require(name);
     } catch (e2) {
       const installed = fs.existsSync(path.join(OCR_DEPS_DIR, "node_modules", name, "package.json"));
+      let listing = "";
+      try {
+        const top = fs.existsSync(OCR_DEPS_DIR) ? fs.readdirSync(OCR_DEPS_DIR).join(",") : "(no dir)";
+        const nm = path.join(OCR_DEPS_DIR, "node_modules");
+        const mods = fs.existsSync(nm) ? fs.readdirSync(nm).slice(0, 20).join(",") : "(no node_modules)";
+        listing = ` [deps dir: ${top}; node_modules: ${mods}]`;
+      } catch (le) { listing = ` [listing failed: ${le.message}]`; }
       const err = new Error(
         `${e2.message.split("\n")[0]} (circa-ocr-deps: ${e.message.split("\n")[0]}; ` +
-        `${installed ? "package present in" : "package MISSING from"} ${path.join(OCR_DEPS_DIR, "node_modules")})`
+        `${installed ? "package present in" : "package MISSING from"} ${path.join(OCR_DEPS_DIR, "node_modules")})${listing}`
       );
       err.code = e2.code;
       throw err;

@@ -29,7 +29,17 @@ function requireOcrDep(name) {
     return depsRequire()(name);
   } catch (e) {
     if (e && e.code !== "MODULE_NOT_FOUND") throw e;
-    return require(name);
+    try {
+      return require(name);
+    } catch (e2) {
+      const installed = fs.existsSync(path.join(OCR_DEPS_DIR, "node_modules", name, "package.json"));
+      const err = new Error(
+        `${e2.message.split("\n")[0]} (circa-ocr-deps: ${e.message.split("\n")[0]}; ` +
+        `${installed ? "package present in" : "package MISSING from"} ${path.join(OCR_DEPS_DIR, "node_modules")})`
+      );
+      err.code = e2.code;
+      throw err;
+    }
   }
 }
 function resolveOcrDep(name) {

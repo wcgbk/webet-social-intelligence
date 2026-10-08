@@ -96,6 +96,9 @@
   included_files = [
     "netlify/functions/lib/circa-ocr-deps/package.json",
     "netlify/functions/lib/circa-ocr-deps/node_modules/**",
+    # No symlinks in the zip: a node_modules/.bin symlink left the deployed
+    # bundle without the deps at runtime (package MISSING in /var/task).
+    "!netlify/functions/lib/circa-ocr-deps/node_modules/.bin/**",
     "netlify/functions/lib/circa-contest-pdf-ocr.js",
     "netlify/functions/lib/circa-contest-lines.js",
     "netlify/functions/lib/circa-card-health.js",

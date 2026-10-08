@@ -39,7 +39,7 @@ git push origin main
 CIRCA_OCR_DEPS="netlify/functions/lib/circa-ocr-deps"
 if [ -f "$CIRCA_OCR_DEPS/package-lock.json" ]; then
   echo "→ installing Circa OCR deps ($CIRCA_OCR_DEPS)…"
-  if ! npm ci --prefix "$CIRCA_OCR_DEPS" --omit=dev --no-audit --no-fund --loglevel=error; then
+  if ! npm ci --prefix "$CIRCA_OCR_DEPS" --omit=dev --no-bin-links --no-audit --no-fund --loglevel=error; then
     echo "⚠️  Circa OCR deps install FAILED — /circa image-only PDF OCR will be unavailable in this deploy."
   fi
 fi

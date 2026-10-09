@@ -11,8 +11,10 @@ const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const gd = require(path.join(root, 'sports/game_day'));
 const nfl = require(path.join(root, 'sports/nfl'));
+const cfb = require(path.join(root, 'sports/cfb'));
 const { applyEngineStack } = require(path.join(root, 'sports/epa'));
-const { resolveTeamId } = require(path.join(root, 'sports/team_identity'));
+const { resolveTeamId, isFbsTeamId } = require(path.join(root, 'sports/team_identity'));
+const { ingest } = require(path.join(root, 'ingest'));
 const { etCalendarDate } = require(path.join(root, 'odds_math'));
 const rest = require(path.join(root, 'sports/rest_schedule'));
 const { runWithFetchMemo } = require(path.join(root, 'fetch_memo'));
@@ -20,7 +22,7 @@ const { buildHealthRecord } = require(path.join(root, 'health'));
 
 const FIXTURES = '/workspace/omega-replay-2w/inputs/_shared/rest-schedules';
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.13-omega-vnext-nhl-engine');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.14-omega-vnext-rest');
 assert.strictEqual(config.REST_ADJ.NFL.cap, 1);
 assert.strictEqual(config.REST_ADJ.NCAAF.cap, 1);
 assert.strictEqual(config.REST_ADJ.NFL.totalCap, 0);
@@ -211,6 +213,86 @@ assert.strictEqual(gd.etCalendarDaysBetween(MON_W3, SUN_W4), 6);
   assert.ok(Math.abs(both.restAdj) <= 1 && Math.abs(bye.restAdj) <= 1);
 }
 
+// ESPN 60s early is the current game, not a prior. Sunday −60s stays normal.
+// Same pair inside 36h on the previous ET date is still this game.
+{
+  const sun = '2026-10-04T17:00:00Z';
+  const early = '2026-10-04T16:59:00Z';
+  const prior = '2026-09-27T17:00:00Z';
+  const shifted = sched([
+    { teamId: '12', opponentId: '2', commence: prior },
+    { teamId: '2', opponentId: '12', commence: prior },
+    { teamId: '12', opponentId: '2', commence: early },
+    { teamId: '2', opponentId: '12', commence: early },
+  ]);
+  const d = gd.describeMatchRest('NFL', shifted, 'Kansas City Chiefs', 'Buffalo Bills', sun);
+  assert.strictEqual(d.restDays.home, 7);
+  assert.strictEqual(d.restDays.away, 7);
+  assert.strictEqual(d.restCategory.home, 'normal');
+  assert.strictEqual(d.restCategory.away, 'normal');
+  assert.strictEqual(d.restAdj, 0);
+  const cross = '2026-10-03T21:00:00Z';
+  const crossed = sched([
+    { teamId: '12', opponentId: '2', commence: prior },
+    { teamId: '2', opponentId: '12', commence: prior },
+    { teamId: '12', opponentId: '2', commence: cross },
+    { teamId: '2', opponentId: '12', commence: cross },
+  ]);
+  const c = gd.describeMatchRest('NFL', crossed, 'Kansas City Chiefs', 'Buffalo Bills', sun);
+  assert.strictEqual(c.restDays.home, 7);
+  assert.strictEqual(c.restCategory.home, 'normal');
+  assert.strictEqual(c.restAdj, 0);
+  const satNight = sched([
+    { teamId: '12', opponentId: '13', commence: cross },
+    { teamId: '2', opponentId: '13', commence: prior },
+  ]);
+  const other = gd.describeMatchRest('NFL', satNight, 'Kansas City Chiefs', 'Buffalo Bills', sun);
+  assert.strictEqual(other.restDays.home, 1);
+  assert.strictEqual(other.restCategory.home, 'short');
+  assert.strictEqual(other.restDays.away, 7);
+}
+
+// Neutral site drops roadShort and keeps a one-sided rest differential.
+{
+  assert.strictEqual(gd.restMarginAdj('NFL', 'short', 'short', { neutralSite: true }), 0);
+  assert.strictEqual(gd.restMarginAdj('NFL', 'normal', 'short', { neutralSite: true }), 0.55);
+  assert.strictEqual(gd.restMarginAdj('NFL', 'normal', 'short'), 0.9);
+  assert.strictEqual(gd.restMarginAdj('NCAAF', 'short', 'short', { neutralSite: true }), 0);
+  const sat = '2026-09-26T23:00:00Z';
+  const wed = '2026-09-30T23:00:00Z';
+  const geo = resolveTeamId('NCAAF', 'Georgia Bulldogs');
+  const ala = resolveTeamId('NCAAF', 'Alabama Crimson Tide');
+  const board = sched([
+    { teamId: geo, opponentId: ala, commence: sat },
+    { teamId: ala, opponentId: geo, commence: sat },
+  ]);
+  const plain = gd.describeMatchRest('NCAAF', board, 'Georgia Bulldogs', 'Alabama Crimson Tide', wed);
+  const neutral = gd.describeMatchRest('NCAAF', board, 'Georgia Bulldogs', 'Alabama Crimson Tide', wed, { neutralSite: true });
+  assert.strictEqual(plain.restAdj, 0.175);
+  assert.strictEqual(neutral.restAdj, 0);
+  assert.strictEqual(neutral.restCategory.home, 'short');
+  assert.strictEqual(neutral.restCategory.away, 'short');
+  const rows = cfb.project({
+    oddsEvents: [synth('Georgia Bulldogs', 'Alabama Crimson Tide', wed)],
+    standings: {
+      'Georgia Bulldogs': { wins: 2, losses: 0, pf: 60, pa: 20, games: 2 },
+      'Alabama Crimson Tide': { wins: 2, losses: 0, pf: 55, pa: 21, games: 2 },
+    },
+    efficiency: {},
+    gameDay: { restByTeam: { NCAAF: {} }, qbStatusBySport: { NCAAF: {} }, restSchedule: { NCAAF: board } },
+    espnGames: [{
+      homeTeam: 'Georgia Bulldogs',
+      awayTeam: 'Alabama Crimson Tide',
+      commenceTime: wed,
+      neutralSite: true,
+    }],
+  });
+  const spread = rows.find((c) => c.market === 'Spread');
+  assert.strictEqual(spread.restAdj, 0);
+  assert.deepStrictEqual(spread.diag, { neutralSite: true });
+  assert.strictEqual(spread.restDays.home, 4);
+}
+
 // Rest is outside the stacked engine cap. Success 3 is cut to 1.5; rest 0.70 stays.
 {
   const board = sched([
@@ -304,6 +386,25 @@ function projectAt(restSchedule) {
   const plainTot = plain.find((c) => c.market === 'Total');
   assert.strictEqual(tot.modelProjection, plainTot.modelProjection);
   assert.strictEqual(tot.restAdj, 0.35);
+
+  const neutralRows = nfl.project({
+    oddsEvents: [synth('Kansas City Chiefs', 'Buffalo Bills', TNF)],
+    standings,
+    efficiency: {},
+    gameDay: { restByTeam: { NFL: {} }, qbStatusBySport: { NFL: {} }, restSchedule: { NFL: tnfBoard } },
+    espnGames: [{
+      homeTeam: 'Kansas City Chiefs',
+      awayTeam: 'Buffalo Bills',
+      commenceTime: TNF,
+      neutralSite: true,
+    }],
+  });
+  const neutralSpread = neutralRows.find((c) => c.market === 'Spread');
+  assert.strictEqual(neutralSpread.restDays.home, 4);
+  assert.strictEqual(neutralSpread.restCategory.home, 'short');
+  assert.strictEqual(neutralSpread.restCategory.away, 'short');
+  assert.strictEqual(neutralSpread.restAdj, 0);
+  assert.deepStrictEqual(neutralSpread.diag, { neutralSite: true });
 }
 
 // Toggle off is the played-yesterday proxy, schedule or not. Byte-identical.
@@ -347,6 +448,43 @@ function projectAt(restSchedule) {
   } finally {
     if (prev == null) delete process.env.OMEGA_REST_ADJ;
     else process.env.OMEGA_REST_ADJ = prev;
+  }
+}
+
+// Schedule rest does not fuzzy-scan the played-yesterday map.
+{
+  const board = sched([
+    { teamId: '12', opponentId: '2', commence: SUN_W3 },
+    { teamId: '2', opponentId: '12', commence: SUN_W3 },
+  ]);
+  const args = {
+    sport: 'NFL',
+    modelMargin: 1,
+    modelTotal: 45,
+    uncertainty: 0.1,
+    home: 'Kansas City Chiefs',
+    away: 'Buffalo Bills',
+    restByTeam: {
+      'Not Chiefs': { playedYesterday: true },
+      'Not Bills': { playedYesterday: true },
+    },
+    qbByTeam: {},
+    commenceTime: TNF,
+    restSchedule: board,
+  };
+  const warns = [];
+  const orig = console.warn;
+  console.warn = (msg) => { warns.push(String(msg)); };
+  try {
+    const on = gd.applyGameDayAdjustments(args);
+    assert.strictEqual(on.gameDay.restPending, true);
+    assert.strictEqual(on.gameDay.playedYesterdayHome, false);
+    assert.strictEqual(on.gameDay.playedYesterdayAway, false);
+    assert.ok(!warns.some((w) => /exact_only refused fuzzy/.test(w)));
+    gd.applyGameDayAdjustments(Object.assign({}, args, { restSchedule: null }));
+    assert.ok(warns.some((w) => /exact_only refused fuzzy sport=NFL name=Kansas City Chiefs/.test(w)));
+  } finally {
+    console.warn = orig;
   }
 }
 
@@ -397,13 +535,146 @@ function jsonResponse(body) {
     assert.ok(shortGame, 'fixture week had no Thursday-after-Sunday short game');
     assert.strictEqual(shortGame.d.restAdj, 0.35);
 
-    const cfb = await rest.loadFootballRestSchedule('NCAAF', '2026-09-26', { fetchImpl });
+    const cfbSched = await rest.loadFootballRestSchedule('NCAAF', '2026-09-26', { fetchImpl });
     assert.strictEqual(fetches, 0);
-    assert.strictEqual(cfb.source, 'dir');
-    assert.strictEqual(cfb.fetchFailed, false);
-    assert.strictEqual(cfb.week, 4);
-    assert.deepStrictEqual(cfb.weeks, [4, 3, 2]);
-    assert.ok(cfb.games.length > 0);
+    assert.strictEqual(cfbSched.source, 'dir');
+    assert.strictEqual(cfbSched.fetchFailed, false);
+    assert.strictEqual(cfbSched.week, 4);
+    assert.deepStrictEqual(cfbSched.weeks, [4, 3, 2]);
+    assert.ok(cfbSched.games.length > 0);
+
+    // Texas Tech @ Colorado: ESPN 23:30Z, odds 23:31Z. Real rest is 7, not 0.
+    const ttWeek = await rest.loadFootballRestSchedule('NCAAF', '2026-10-03', { fetchImpl });
+    assert.strictEqual(fetches, 0);
+    assert.strictEqual(ttWeek.loaded, true);
+    const ttRows = ttWeek.games.filter((g) => g.teamId === '2641' && String(g.commence).indexOf('2026-10-03T23:30') === 0);
+    assert.ok(ttRows.length >= 1);
+    assert.strictEqual(ttRows[0].opponentId, '38');
+    const tt = gd.describeMatchRest(
+      'NCAAF',
+      ttWeek,
+      'Colorado Buffaloes',
+      'Texas Tech Red Raiders',
+      '2026-10-03T23:31:00Z',
+    );
+    assert.strictEqual(tt.restDays.home, 7);
+    assert.strictEqual(tt.restDays.away, 7);
+    assert.strictEqual(tt.restCategory.home, 'normal');
+    assert.strictEqual(tt.restCategory.away, 'normal');
+    assert.strictEqual(tt.restAdj, 0);
+
+    // Howard @ Rutgers: FCS side is unknown, so the 13-day FBS-only gap is not a bye.
+    assert.strictEqual(isFbsTeamId('47'), false);
+    assert.strictEqual(isFbsTeamId('2815'), false);
+    assert.strictEqual(isFbsTeamId(resolveTeamId('NCAAF', 'Rutgers Scarlet Knights')), true);
+    const howardWeek = await rest.loadFootballRestSchedule('NCAAF', '2026-09-25', { fetchImpl });
+    assert.strictEqual(fetches, 0);
+    const howardPrior = gd.priorKickoff(
+      howardWeek,
+      '47',
+      '2026-09-25T23:00:00Z',
+      resolveTeamId('NCAAF', 'Rutgers Scarlet Knights'),
+    );
+    assert.ok(howardPrior);
+    assert.strictEqual(gd.etCalendarDaysBetween(howardPrior.commence, '2026-09-25T23:00:00Z'), 13);
+    assert.strictEqual(gd.categoryForRest('NCAAF', 13, howardPrior.commence, '2026-09-25T23:00:00Z'), 'bye');
+    const howard = gd.describeMatchRest(
+      'NCAAF',
+      howardWeek,
+      'Rutgers Scarlet Knights',
+      'Howard Bison',
+      '2026-09-25T23:00:00Z',
+    );
+    assert.notStrictEqual(howard.restCategory.home, 'unknown');
+    assert.strictEqual(howard.restDays.away, null);
+    assert.strictEqual(howard.restCategory.away, 'unknown');
+    assert.strictEqual(howard.restAdj, 0);
+
+    // A real Sunday NFL kickoff shifted −60s keeps the unshifted category.
+    const sunday = await rest.loadFootballRestSchedule('NFL', '2026-10-04', { fetchImpl });
+    const nflIds = require(path.join(root, 'sports/data/nfl-team-ids.json'));
+    const sundayKicks = new Map();
+    for (const g of sunday.games) {
+      if (etCalendarDate(g.commence) !== '2026-10-04') continue;
+      if (gd.etWeekday(g.commence) !== 'Sun') continue;
+      if (!sundayKicks.has(g.commence)) sundayKicks.set(g.commence, []);
+      sundayKicks.get(g.commence).push(g);
+    }
+    let sundayGame = null;
+    let unshifted = null;
+    for (const [commence, rows] of sundayKicks) {
+      if (rows.length !== 2) continue;
+      const names = rows.map((r) => nflIds.teams[r.teamId] && nflIds.teams[r.teamId].displayName);
+      if (names.some((n) => !n)) continue;
+      const d = gd.describeMatchRest('NFL', sunday, names[1], names[0], commence);
+      if (d.restDays.home == null || d.restDays.away == null) continue;
+      sundayGame = { commence, names };
+      unshifted = d;
+      break;
+    }
+    assert.ok(sundayGame, 'fixture week had no Sunday NFL pair with a prior kickoff');
+    const shiftedGames = sunday.games.map((g) => {
+      if (g.commence !== sundayGame.commence) return g;
+      return Object.assign({}, g, { commence: new Date(Date.parse(g.commence) - 60000).toISOString() });
+    });
+    const shiftedSunday = gd.describeMatchRest(
+      'NFL',
+      Object.assign({}, sunday, { games: shiftedGames }),
+      sundayGame.names[1],
+      sundayGame.names[0],
+      sundayGame.commence,
+    );
+    assert.deepStrictEqual(shiftedSunday.restCategory, unshifted.restCategory);
+    assert.deepStrictEqual(shiftedSunday.restDays, unshifted.restDays);
+    assert.strictEqual(shiftedSunday.restAdj, unshifted.restAdj);
+    assert.notStrictEqual(shiftedSunday.restDays.home, 0);
+    assert.notStrictEqual(shiftedSunday.restDays.away, 0);
+
+    const snapPath = path.join('/tmp', `omega-frozen-rest-${process.pid}.json`);
+    fs.writeFileSync(snapPath, JSON.stringify({
+      oddsBySport: { NFL: [], NCAAF: [] },
+      espnBySport: {},
+      standingsBySport: {},
+      gameDay: { restByTeam: { NFL: {}, NCAAF: {} }, qbStatusBySport: { NFL: {}, NCAAF: {} } },
+      fetchedAt: '2026-10-03T12:00:00.000Z',
+    }));
+    const prevSnap = process.env.OMEGA_FROZEN_SNAP;
+    process.env.OMEGA_FROZEN_SNAP = snapPath;
+    const origFetch = global.fetch;
+    const urls = [];
+    global.fetch = async (url) => {
+      urls.push(String(url));
+      throw new Error('offline');
+    };
+    try {
+      const frozen = await ingest('2026-10-03');
+      assert.strictEqual(frozen.snapshotNote, 'frozen-replay');
+      assert.strictEqual(frozen.gameDay.restSchedule.NCAAF.source, 'dir');
+      assert.strictEqual(frozen.gameDay.restSchedule.NCAAF.loaded, true);
+      assert.strictEqual(frozen.gameDay.restSchedule.NFL.loaded, true);
+      assert.ok(frozen.gameDay.restSchedule.NCAAF.games.length > 0);
+      assert.ok(urls.every((u) => !/the-odds-api|site\.api\.espn/.test(u)));
+      const fromFrozen = gd.describeMatchRest(
+        'NCAAF',
+        frozen.gameDay.restSchedule.NCAAF,
+        'Colorado Buffaloes',
+        'Texas Tech Red Raiders',
+        '2026-10-03T23:31:00Z',
+      );
+      assert.strictEqual(fromFrozen.restDays.home, 7);
+      assert.strictEqual(fromFrozen.restAdj, 0);
+      delete process.env.OMEGA_REST_SCHEDULE_DIR;
+      const bare = await ingest('2026-10-03');
+      assert.strictEqual(bare.snapshotNote, 'frozen-replay');
+      assert.strictEqual(bare.gameDay.restSchedule, undefined);
+      process.env.OMEGA_REST_SCHEDULE_DIR = FIXTURES;
+    } finally {
+      global.fetch = origFetch;
+      if (prevSnap == null) delete process.env.OMEGA_FROZEN_SNAP;
+      else process.env.OMEGA_FROZEN_SNAP = prevSnap;
+      try { delete require.cache[require.resolve(snapPath)]; } catch (e) { /* temp snap */ }
+      fs.unlinkSync(snapPath);
+    }
 
     // Memoized network path: card week + previous two, ≤3 calls, no date range.
     delete process.env.OMEGA_REST_SCHEDULE_DIR;

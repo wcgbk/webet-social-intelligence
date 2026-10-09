@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.13-omega-vnext-nhl-engine';
+const MODEL_VERSION = 'v12.3.14-omega-vnext-rest';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -360,7 +360,9 @@ const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
  * the NFL size. Public college rest estimates are thin.
  *
  * Either side with no prior regular-season game (week 1, preseason, or a
- * failed scoreboard) is unknown and the game's adj is 0.
+ * failed scoreboard) is unknown and the game's adj is 0. A NCAAF team that
+ * is not FBS is unknown for the same reason. Neutral site drops roadShort
+ * and keeps the rest differential.
  *
  * Sources, kept inside the modest bands rather than the pre-2011 extremes:
  * - FiveThirtyEight, "How Our NFL Predictions Work" (Elo, through 2022):
@@ -566,7 +568,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
-  'Patch 2026-10-09 (v12.3.13 label kept): NFL/NCAAF rest days from ESPN weekly scoreboards (card week and the previous two). Short week, mini-bye, bye, and Monday-night into Sunday move the home margin by the team difference plus a small road-on-short-rest term. Hard cap ±1.0 pt. NCAAF midweek and bye are half the NFL size, same cap. Totals unchanged. OMEGA_REST_ADJ=0 restores the played-yesterday proxy. No gate, Kelly, unit-cap, SHRINK_K, calibration, or parlay change.',
+  'v12.3.14-omega-vnext-rest: NFL/NCAAF rest days from ESPN weekly scoreboards (card week and the previous two). Short week, mini-bye, bye, and Monday-night into Sunday move the home margin by the team difference plus a small road-on-short-rest term. Hard cap ±1.0 pt. NCAAF midweek and bye are half the NFL size, same cap. Totals unchanged. The current kickoff is not a prior game (same team-id pair within 36h, and the prior kickoff must be an earlier ET date). A team that is not FBS is unknown, so the game adj is 0. Neutral site drops the road-short term. OMEGA_REST_ADJ=0 restores the played-yesterday proxy. No gate, Kelly, unit-cap, SHRINK_K, calibration, or parlay change.',
   `v12.3.13 omega-vnext: NHL projector ENABLED (WeBet 2026-09-30). Moneyline, puck line (Spread), and total come from per-game goals for/against plus HFA.NHL ${HFA.NHL} (FiveThirtyEight home ice is about 50 Elo, already this goal HFA). Season totals divide by games, counting OT losses when games is absent. Missing or unclean GF/GA stays on the 6.2 / HFA baseline. A winPct residual runs only on that unclean path. Shot efficiency runs only when both clubs have shots and savePct; a goalie residual runs only when both save rates are present. v1 does not require a goalie confirmation feed. Both residuals sit under ENGINE_SOFT.NHL HARD CAP ±${ENGINE_SOFT.NHL.maxAbsMarginAdj} goals margin / ±${ENGINE_SOFT.NHL.maxAbsTotalAdj} total (goalie alone ±${ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj} / ±${ENGINE_SOFT.NHL.goalieMaxAbsTotalAdj}) and soft-fail to 0. Game-day B2B uses SHORT_REST_DAYS.NHL = 1 with a goal-scale HFA_ADJ (max 0.10). Projections soft-clamp at |margin| 6 and total 12 and still emit a candidate. Blend matches MLB: ML 0.50 / spread 0.50 / total 0.45, no-vig Pinnacle/Circa. SPORTS_ENABLED.NHL = true. Plug-in only on existing select path with MLB/NFL/NCAAF. No Omega core routing change. FIT off. No TSP. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, SELECT_WEIGHTS, or isotonic change. FIT off. No TSP. NBA off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   'Patch 2026-09-28 (v12.3.12 label kept): NFL/NCAAF QB out/doubtful is no longer a QA hard-fail. Known QB injuries are priced once, not cancelled and not double-counted: qbSoftAdjust moves the model injury-blind baseline (margin NFL 3.0 / NCAAF 3.5 for out, 0.75x doubtful; total NFL -1.5 / NCAAF -2.0) before the 0.50/0.45 blend against the current market line (which already embeds the injury). qbContinuityAdjust no longer treats out/doubtful as unhealthy — that would have piled a second penalty on the same known injury. Continuity only moves for questionable. Edge gates then decide. MLB SP scratch/change hard-fail unchanged.',
   `v12.3.12 omega-vnext: desk lock. Verify may drop, flag, or resize inside the 3.5/0.5/${DAILY_UNIT_CAP} cap. It does not add a straight and it does not rebuild a generate-locked parlay from the straight card. Steam and placeability drops are not refilled (blockStraightRefill still records the steam block). Stale-odds cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent hard-fail. Candidate-table rank follows the same quality score as the letter grade. Summary meanClvPct is the probability, not a second copy of the cent figure. Evening walk-forward observer at 23:45 UTC (7:45pm ET in EDT) writes omega-walkforward only, after the 23:00 UTC close pass. The 2026-11-01 EDT→EST cron shift is documented and not applied. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, or isotonic change. FIT off. No TSP. NBA/NHL off. LEAN_PAD false. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,

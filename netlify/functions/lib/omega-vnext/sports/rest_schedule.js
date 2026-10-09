@@ -177,7 +177,11 @@ function isSkippedStatus(ev, comp) {
   return /cancel|postponed|suspended|forfeit/i.test(name);
 }
 
-/** One row per team. Id is the ESPN competitor id. No display-name key. */
+/**
+ * One row per team. Id is the ESPN competitor id. No display-name key.
+ * opponentId is the other competitor so the current game (same pair) can
+ * be excluded from rest.
+ */
 function gamesFromBoard(board, weekNum) {
   const out = [];
   for (const ev of (board && board.events) || []) {
@@ -187,11 +191,21 @@ function gamesFromBoard(board, weekNum) {
     if (isSkippedStatus(ev, comp)) continue;
     const commence = ev.date || comp.date || comp.startDate || null;
     if (!commence || !Number.isFinite(Date.parse(commence))) continue;
-    for (const c of comp.competitors || []) {
+    const competitors = comp.competitors || [];
+    const ids = [];
+    for (const c of competitors) {
       const id = c && c.team && c.team.id;
       if (id == null || id === '') continue;
+      ids.push(String(id));
+    }
+    for (const c of competitors) {
+      const id = c && c.team && c.team.id;
+      if (id == null || id === '') continue;
+      const teamId = String(id);
+      const opponentId = ids.find((other) => other !== teamId) || null;
       out.push({
-        teamId: String(id),
+        teamId,
+        opponentId,
         commence,
         week: weekNum,
       });

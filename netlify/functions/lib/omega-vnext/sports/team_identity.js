@@ -46,6 +46,19 @@ function teamRecord(sport, id) {
   return (table.teams && table.teams[String(id)]) || null;
 }
 
+/**
+ * FBS membership is the ESPN-id division on ncaaf-team-ids (built from
+ * ESPN groups 80). Scoreboard competitors have conferenceId and a game-level
+ * groups object, not an isFBS flag, and conference ids are not a division.
+ * Counting teams on ≥50% of the loaded groups=80 weeks mislabels Howard:
+ * the Bison are on the week-2 and week-4 FBS boards (2 of 3) with a 13-day
+ * gap, which is the phantom bye. Missing and non-fbs rows are not FBS.
+ */
+function isFbsTeamId(id) {
+  const rec = teamRecord('NCAAF', id);
+  return !!(rec && rec.division === 'fbs');
+}
+
 /** Both names resolve to one ESPN id. Unknown or split ids are false. */
 function sameTeam(sport, nameA, nameB) {
   const a = resolveTeamId(sport, nameA);
@@ -287,6 +300,7 @@ module.exports = {
   normalizeTeamName,
   resolveTeamId,
   teamRecord,
+  isFbsTeamId,
   sameTeam,
   resolveEspnSide,
   matchSides,

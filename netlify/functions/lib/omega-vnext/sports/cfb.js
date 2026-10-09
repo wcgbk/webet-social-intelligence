@@ -70,6 +70,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     hfaBase: hfaPts,
     commenceTime,
     restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NCAAF) || null,
+    neutralSite: neutral,
   });
   const stacked = applyEngineStack({
     sport: SPORT,

@@ -90,6 +90,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     hfaBase: hfaPts,
     commenceTime,
     restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NFL) || null,
+    neutralSite: neutral,
   });
   const stacked = applyEngineStack({
     sport: SPORT,

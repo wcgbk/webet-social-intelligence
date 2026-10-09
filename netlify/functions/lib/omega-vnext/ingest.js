@@ -648,7 +648,7 @@ async function fetchMlbPitcherStats(dateISO) {
  */
 
 const { prevEtDate, restMapFromScoreboard } = require('./sports/game_day');
-const { loadFootballRestSchedules } = require('./sports/rest_schedule');
+const { loadFootballRestSchedules, scheduleDir } = require('./sports/rest_schedule');
 
 /** Soft QB out/doubtful/questionable map from ESPN injuries (football). */
 async function fetchFootballQbStatusMap(leagueSlug) {
@@ -846,6 +846,53 @@ async function loadSportEngines(dateISO, deps) {
 }
 
 async function ingest(dateISO, opts = {}) {
+  if (process.env.OMEGA_FROZEN_SNAP) {
+    const frozen = require(process.env.OMEGA_FROZEN_SNAP);
+    const engines = await loadSportEngines(dateISO);
+    let gameDay = frozen.gameDay;
+    // Replay reads odds, ESPN, and injuries from the snap. Rest still
+    // comes from OMEGA_REST_SCHEDULE_DIR so the gate can price rest days
+    // without a sandbox patch and without a live scoreboard call.
+    if (scheduleDir()) {
+      const footballLabels = enabledSportLabels(dateISO).filter((l) => l === 'NFL' || l === 'NCAAF');
+      gameDay = Object.assign({}, frozen.gameDay || {});
+      try {
+        gameDay.restSchedule = await loadFootballRestSchedules(dateISO, {
+          labels: footballLabels,
+          boards: frozen.espnBySport || {},
+        });
+      } catch (e) {
+        console.error(`[omega-vnext/ingest] frozen rest-days soft-fail: ${e.message}`);
+        gameDay.restSchedule = {};
+        for (const sport of footballLabels) {
+          gameDay.restSchedule[sport] = {
+            sport,
+            loaded: false,
+            fetchFailed: true,
+            games: [],
+            weeks: [],
+            calls: 0,
+            source: null,
+            error: e.message,
+          };
+        }
+      }
+    }
+    console.log('[omega-vnext/ingest] FROZEN SNAP replay (no live odds/standings/injuries)');
+    return {
+      dateISO,
+      oddsBySport: frozen.oddsBySport,
+      espnBySport: frozen.espnBySport || {},
+      standingsBySport: frozen.standingsBySport,
+      efficiencyBySport: engines.efficiencyBySport,
+      mlbPitcherStats: engines.mlbPitcherStats,
+      parkFactors: engines.parkFactors,
+      gameDay,
+      fetchedAt: frozen.fetchedAt || new Date().toISOString(),
+      snapshotNote: 'frozen-replay',
+    };
+  }
+
   const labels = enabledSportLabels(dateISO);
   // Also fetch standings for disabled sports? No — only enabled.
   const [odds, espnParts, standingsList, engines] = await Promise.all([

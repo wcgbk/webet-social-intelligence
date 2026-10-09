@@ -13,7 +13,7 @@
  */
 
 const { clamp, etCalendarDate } = require('../odds_math');
-const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId } = require('./team_identity');
+const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId, isFbsTeamId } = require('./team_identity');
 const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
 
 const HFA_ADJ = {
@@ -117,22 +117,35 @@ function restScheduleActive(sport, schedule) {
   return schedule.loaded === true || schedule.fetchFailed === true;
 }
 
+/** Same matchup listed up to 36h off the odds commence is still this game. */
+const CURRENT_GAME_WINDOW_MS = 36 * 60 * 60 * 1000;
+
 /**
- * Latest regular-season kickoff for this ESPN team id strictly before
- * commence. A later game on the same weekly board is not rest.
+ * Latest regular-season kickoff for this ESPN team id on an earlier ET
+ * calendar date. The current game is not rest: the same team-id pair
+ * within ±36h of the odds commence is skipped, and a kickoff on the same
+ * ET date is skipped. An ESPN stamp 60s before the odds commence is the
+ * current game (rest would otherwise be 0).
  */
-function priorKickoff(schedule, teamId, commenceTime) {
+function priorKickoff(schedule, teamId, commenceTime, opponentId) {
   if (!schedule || schedule.fetchFailed || !schedule.loaded) return null;
   if (!teamId || !commenceTime) return null;
   const cutoff = Date.parse(commenceTime);
   if (!Number.isFinite(cutoff)) return null;
+  const cutoffEt = etCalendarDate(commenceTime);
+  if (!cutoffEt) return null;
   const want = String(teamId);
+  const opp = opponentId != null && opponentId !== '' ? String(opponentId) : null;
   let best = null;
   let bestT = -Infinity;
   for (const g of schedule.games || []) {
     if (!g || String(g.teamId) !== want) continue;
     const t = Date.parse(g.commence);
-    if (!Number.isFinite(t) || t >= cutoff) continue;
+    if (!Number.isFinite(t)) continue;
+    const rowOpp = g.opponentId != null && g.opponentId !== '' ? String(g.opponentId) : null;
+    if (opp && rowOpp && rowOpp === opp && Math.abs(t - cutoff) <= CURRENT_GAME_WINDOW_MS) continue;
+    const rowEt = etCalendarDate(g.commence);
+    if (!rowEt || rowEt >= cutoffEt) continue;
     if (t > bestT) {
       bestT = t;
       best = g;
@@ -167,23 +180,30 @@ function categoryPoints(sport, category) {
 }
 
 /** Home-margin points. Caps at REST_ADJ[sport].cap. Does not touch the total. */
-function restMarginAdj(sport, homeCat, awayCat) {
+function restMarginAdj(sport, homeCat, awayCat, opts) {
   const cfg = REST_ADJ[sport];
   if (!cfg) return 0;
   if (homeCat === 'unknown' || awayCat === 'unknown') return 0;
   let adj = categoryPoints(sport, homeCat) - categoryPoints(sport, awayCat);
-  if (awayCat === 'short' && Number.isFinite(Number(cfg.roadShort))) adj += Number(cfg.roadShort);
+  const neutral = !!(opts && opts.neutralSite === true);
+  if (!neutral && awayCat === 'short' && Number.isFinite(Number(cfg.roadShort))) adj += Number(cfg.roadShort);
   const cap = Number(cfg.cap);
   if (Number.isFinite(cap)) adj = clamp(adj, -Math.abs(cap), Math.abs(cap));
   return round3(adj);
 }
 
-function teamRest(sport, schedule, teamName, commenceTime) {
+function teamRest(sport, schedule, teamName, commenceTime, opponentName) {
   const unknown = { restDays: null, category: 'unknown', prevCommence: null, teamId: null };
   if (!restScheduleActive(sport, schedule) || !schedule.loaded || schedule.fetchFailed) return unknown;
   const teamId = resolveTeamId(sport, teamName);
   if (!teamId) return unknown;
-  const prior = priorKickoff(schedule, teamId, commenceTime);
+  // FCS (and anyone outside the FBS id list) only shows up on groups=80
+  // when they play an FBS team. The gap between those games is not a bye.
+  if (sport === 'NCAAF' && !isFbsTeamId(teamId)) {
+    return { restDays: null, category: 'unknown', prevCommence: null, teamId: String(teamId) };
+  }
+  const opponentId = opponentName ? resolveTeamId(sport, opponentName) : null;
+  const prior = priorKickoff(schedule, teamId, commenceTime, opponentId);
   if (!prior) return { restDays: null, category: 'unknown', prevCommence: null, teamId: String(teamId) };
   const days = etCalendarDaysBetween(prior.commence, commenceTime);
   return {
@@ -194,13 +214,13 @@ function teamRest(sport, schedule, teamName, commenceTime) {
   };
 }
 
-function describeMatchRest(sport, schedule, home, away, commenceTime) {
-  const homeRow = teamRest(sport, schedule, home, commenceTime);
-  const awayRow = teamRest(sport, schedule, away, commenceTime);
+function describeMatchRest(sport, schedule, home, away, commenceTime, opts) {
+  const homeRow = teamRest(sport, schedule, home, commenceTime, away);
+  const awayRow = teamRest(sport, schedule, away, commenceTime, home);
   return {
     restDays: { home: homeRow.restDays, away: awayRow.restDays },
     restCategory: { home: homeRow.category, away: awayRow.category },
-    restAdj: restMarginAdj(sport, homeRow.category, awayRow.category),
+    restAdj: restMarginAdj(sport, homeRow.category, awayRow.category, opts),
     totalAdj: 0,
   };
 }
@@ -218,7 +238,8 @@ function restCoverageCounts(sport, schedule, slateGames) {
       seen.add(name);
       slate += 1;
       if (!canKnow) continue;
-      const row = teamRest(sport, schedule, name, g.commence);
+      const opponent = name === g.home ? g.away : g.home;
+      const row = teamRest(sport, schedule, name, g.commence, opponent);
       if (row.restDays != null) known += 1;
     }
   }
@@ -378,6 +399,7 @@ function applyGameDayAdjustments({
   fallbackSeen,
   commenceTime,
   restSchedule,
+  neutralSite,
 } = {}) {
   let margin = Number(modelMargin);
   let total = Number(modelTotal);
@@ -391,18 +413,26 @@ function applyGameDayAdjustments({
   }
   if (!Number.isFinite(unc)) unc = 0.2;
 
-  const homeRest = lookupRest(home, restByTeam, sport, fallbackSeen);
-  const awayRest = lookupRest(away, restByTeam, sport, fallbackSeen);
+  const scheduleOn = restScheduleActive(sport, restSchedule);
+  // The schedule path does not use the played-yesterday map. modelRow on
+  // that map fuzzy-scans every football name and logs the refused match.
+  let homeRest = null;
+  let awayRest = null;
+  if (!scheduleOn) {
+    homeRest = lookupRest(home, restByTeam, sport, fallbackSeen);
+    awayRest = lookupRest(away, restByTeam, sport, fallbackSeen);
+  }
   const homeDays = restDaysProxy(sport, homeRest);
   const awayDays = restDaysProxy(sport, awayRest);
-  const scheduleOn = restScheduleActive(sport, restSchedule);
   let restMeta = null;
   let hfaAdj = 0;
   if (scheduleOn) {
     // Real kickoff gap replaces the played-yesterday proxy. The points
     // are applied on the epa margin path (applyEngineStack), outside the
     // stacked engine cap. A failed scoreboard stays at 0.
-    restMeta = describeMatchRest(sport, restSchedule, home, away, commenceTime);
+    restMeta = describeMatchRest(sport, restSchedule, home, away, commenceTime, {
+      neutralSite: neutralSite === true,
+    });
   } else {
     hfaAdj = hfaAdjustment(sport, homeDays, awayDays);
     margin += hfaAdj;
@@ -583,6 +613,7 @@ module.exports = {
   etWeekday,
   etCalendarDaysBetween,
   restScheduleActive,
+  CURRENT_GAME_WINDOW_MS,
   priorKickoff,
   categoryForRest,
   restMarginAdj,

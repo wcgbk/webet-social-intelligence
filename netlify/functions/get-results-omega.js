@@ -110,7 +110,31 @@ function preferExactSchoolGames(pick, games) {
   return top.length ? top : games;
 }
 
-function teamsMatch(pickTeam, espnTeam, espnAbbr, sport) {
+function idFirstSport(sport) {
+  return sport === 'NFL' || sport === 'MLB' || sport === 'NHL';
+}
+
+// Mascot includes. Identity-v2 dates do not last-word a resolved NFL/MLB/NHL
+// club. Undated and pre-cutoff callers keep the mascot key.
+function mascotKeyAllowed(sport, teamName, dateISO) {
+  if (!omegaGradingRules.identityV2(dateISO)) return true;
+  if (!idFirstSport(sport)) return true;
+  return !resolveTeamId(sport, teamName);
+}
+
+function teamsMatch(pickTeam, espnTeam, espnAbbr, sport, dateISO) {
+  // Identity-v2 card dates: NFL/MLB/NHL resolved ids win. Two different ids
+  // never share a last word (White Sox / Red Sox). Last-word stays only when
+  // at least one name does not resolve. No date, or a date before
+  // IDENTITY_V2_FROM, keeps the 182e714 matcher. NCAAF stays on school keys.
+  // typeof guards keep the vm extract in test-ncaaf-state-suffix on the
+  // name body (that extract does not copy the helpers).
+  if (typeof omegaGradingRules !== 'undefined' && omegaGradingRules.identityV2(dateISO) &&
+      typeof resolveTeamId === 'function' && idFirstSport(sport)) {
+    const a = resolveTeamId(sport, pickTeam);
+    const b = resolveTeamId(sport, espnTeam);
+    if (a && b) return String(a) === String(b);
+  }
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
   if (!p || !e) return false;
@@ -136,7 +160,7 @@ function disambiguateDoubleheader(matches, pick) {
   return resolveDoubleheader(matches, pick);
 }
 
-function findGame(pick, games) {
+function findGame(pick, games, dateISO) {
   const sport = pick.sport || '';
   const ncaaf = sport === 'NCAAF';
   const matchup = (pick.matchup || '').toLowerCase();
@@ -145,10 +169,12 @@ function findGame(pick, games) {
   for (const g of games) {
     const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
     const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
-    const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport)) ||
-                       (awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
-    const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport)) ||
-                       (homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
+    const awayMascot = typeof mascotKeyAllowed !== 'function' || mascotKeyAllowed(sport, g.awayTeam, dateISO);
+    const homeMascot = typeof mascotKeyAllowed !== 'function' || mascotKeyAllowed(sport, g.homeTeam, dateISO);
+    const awayMatch = matchupParts.some(part => teamsMatch(part, g.awayTeam, g.awayAbbr, sport, dateISO)) ||
+                       (awayMascot && awayKey.length > (ncaaf ? 2 : 3) && matchup.includes(awayKey));
+    const homeMatch = matchupParts.some(part => teamsMatch(part, g.homeTeam, g.homeAbbr, sport, dateISO)) ||
+                       (homeMascot && homeKey.length > (ncaaf ? 2 : 3) && matchup.includes(homeKey));
     if (awayMatch && homeMatch) primary.push(g);
   }
   if (primary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, primary), pick);
@@ -156,13 +182,13 @@ function findGame(pick, games) {
   if (pickTeam) {
     const secondary = [];
     for (const g of games) {
-      const awayHit = teamsMatch(pickTeam, g.awayTeam, g.awayAbbr, sport);
-      const homeHit = teamsMatch(pickTeam, g.homeTeam, g.homeAbbr, sport);
+      const awayHit = teamsMatch(pickTeam, g.awayTeam, g.awayAbbr, sport, dateISO);
+      const homeHit = teamsMatch(pickTeam, g.homeTeam, g.homeAbbr, sport, dateISO);
       if (awayHit || homeHit) {
-        const otherKey = ncaaf
-          ? schoolKey(awayHit ? g.homeTeam : g.awayTeam)
-          : normalizeTeam(awayHit ? g.homeTeam : g.awayTeam).split(' ').pop();
-        if (otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
+        const otherTeam = awayHit ? g.homeTeam : g.awayTeam;
+        const otherKey = ncaaf ? schoolKey(otherTeam) : normalizeTeam(otherTeam).split(' ').pop();
+        const otherMascot = typeof mascotKeyAllowed !== 'function' || mascotKeyAllowed(sport, otherTeam, dateISO);
+        if (otherMascot && otherKey.length > (ncaaf ? 2 : 3) && matchup.includes(otherKey)) secondary.push(g);
       }
     }
     if (secondary.length) return disambiguateDoubleheader(preferExactSchoolGames(pick, secondary), pick);
@@ -170,6 +196,9 @@ function findGame(pick, games) {
   if (matchupParts.length >= 2) {
     const tertiary = [];
     for (const g of games) {
+      if (typeof omegaGradingRules !== 'undefined' && omegaGradingRules.identityV2(dateISO) &&
+          idFirstSport(sport) && typeof resolveTeamId === 'function' &&
+          (resolveTeamId(sport, g.awayTeam) || resolveTeamId(sport, g.homeTeam))) continue;
       const awayKey = ncaaf ? schoolKey(g.awayTeam) : normalizeTeam(g.awayTeam).split(' ').pop();
       const homeKey = ncaaf ? schoolKey(g.homeTeam) : normalizeTeam(g.homeTeam).split(' ').pop();
       const part0 = ncaaf ? schoolKey(matchupParts[0]) : normalizeTeam(matchupParts[0]);
@@ -289,10 +318,19 @@ function findGameIdentityV2(pick, games) {
       return null;
     }
   }
-  const legacy = findGame(pick, list);
+  const legacy = findGame(pick, list, omegaGradingRules.IDENTITY_V2_FROM);
   if (!legacy || parts.length < 2) return legacy || null;
   const awayId = competitorId(sport, legacy.awayTeam, legacy.awayId);
   const homeId = competitorId(sport, legacy.homeTeam, legacy.homeId);
+  if (idFirstSport(sport)) {
+    const sideIds = [awayId, homeId].filter(Boolean);
+    if (!sideIds.length) return legacy;
+    for (const part of parts) {
+      const id = resolveTeamId(sport, part);
+      if (id && sideIds.indexOf(String(id)) < 0) return null;
+    }
+    return legacy;
+  }
   if (!awayId || !homeId) return legacy;
   for (const part of parts) {
     const id = resolveTeamId(sport, part);
@@ -303,6 +341,7 @@ function findGameIdentityV2(pick, games) {
 
 function findGameForDate(pick, games, dateISO) {
   if (omegaGradingRules.identityV2(dateISO)) return findGameIdentityV2(pick, games);
+  // Dates before IDENTITY_V2_FROM stay on the name matcher, including last word.
   return findGame(pick, games);
 }
 

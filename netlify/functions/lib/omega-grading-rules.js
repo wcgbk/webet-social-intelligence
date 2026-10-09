@@ -6,6 +6,9 @@ const GRADING_RULES_V2_FROM = '2026-10-07';
 // Id matching for every sport (and the White Sox / Red Sox split) starts on
 // this card date. Earlier dates keep the matcher they were graded with.
 const IDENTITY_V2_FROM = '2026-10-07';
+// Point-aware realized CLV. Earlier card dates keep the price-only CLV that
+// was stored, even when the closing number moved. Do not rewrite those rows.
+const CLV_POINT_AWARE_FROM = '2026-10-09';
 const POSTPONE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
 function rulesV2(dateISO) {
@@ -14,6 +17,10 @@ function rulesV2(dateISO) {
 
 function identityV2(dateISO) {
   return typeof dateISO === 'string' && dateISO >= IDENTITY_V2_FROM;
+}
+
+function clvPointAware(dateISO) {
+  return typeof dateISO === 'string' && dateISO >= CLV_POINT_AWARE_FROM;
 }
 
 function nowMs(opts) {
@@ -176,9 +183,11 @@ function mlbSnapshot(pick, game, opts) {
 module.exports = {
   GRADING_RULES_V2_FROM,
   IDENTITY_V2_FROM,
+  CLV_POINT_AWARE_FROM,
   POSTPONE_CUTOFF_MS,
   rulesV2,
   identityV2,
+  clvPointAware,
   nowMs,
   scheduledStartMs,
   isRescheduled,

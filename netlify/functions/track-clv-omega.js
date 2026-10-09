@@ -5,6 +5,8 @@ const {
   summarizeBySportMarket,
   etIsoWeekKey,
   isSundayET,
+  gradeRealizedClv,
+  pointsEqual,
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
@@ -373,6 +375,9 @@ function extractClose(gameObj, sideInfo, pick, dateISO) {
     if (s) return {
       sideOdds: s.sidePrice, sideRaw: s.sideRaw, overround: s.overround, closingLine: s.line,
       anchor: sb === 'pinnacle' ? 'pinnacle' : 'sharp', anchorBook: b.title,
+      // Same book's full outcome list, so a later point-aware grade can read an
+      // alternate at the bet's number. Consensus anchors have no single book.
+      bookOutcomes: b.outcomes,
     };
   }
 
@@ -400,6 +405,86 @@ function extractClose(gameObj, sideInfo, pick, dateISO) {
     };
   }
   return null;
+}
+
+function outcomeIsSide(o, sideInfo, pick, gameObj, dateISO) {
+  const n = (o && o.name || '').toLowerCase();
+  if (sideInfo.marketBase === 'totals') {
+    return (sideInfo.isOver && n === 'over') || (sideInfo.isUnder && n === 'under');
+  }
+  if (sideInfo.isDraw) return n === 'draw';
+  if (!gameObj) return false;
+  const teamText = stripLine(pick.pick || '');
+  const sides = closeSides(gameObj, teamText, pick, dateISO);
+  if (sides.pickedHome && teamsMatch(o.name, gameObj.home_team, pick && pick.sport, dateISO)) return true;
+  if (sides.pickedAway && teamsMatch(o.name, gameObj.away_team, pick && pick.sport, dateISO)) return true;
+  return false;
+}
+
+// Both sides at the bet's point, from one sharp book's outcomes. Null when the
+// snapshot has only the moved main line.
+function altAtBetPoint(outcomes, sideInfo, pick, gameObj, dateISO, betPoint) {
+  if (!Array.isArray(outcomes) || betPoint == null) return null;
+  const priced = [];
+  for (const o of outcomes) {
+    if (!o || !pointsEqual(o.point, betPoint)) continue;
+    const r = impliedProbability(o.price);
+    if (r != null) priced.push({ o, r });
+  }
+  if (priced.length < 2) return null;
+  const side = priced.find(p => outcomeIsSide(p.o, sideInfo, pick, gameObj, dateISO));
+  if (!side) return null;
+  return {
+    sideRaw: side.r,
+    sideOdds: side.o.price,
+    overround: priced.reduce((a, p) => a + p.r, 0),
+  };
+}
+
+// Pricing fields for a captured close. Pre-cutover and unchanged points match
+// the historical price-only record (no clvMethod / clvReason / clvLine).
+function priceClvRecord(close, pick, sideInfo, dateISO, gameObj) {
+  const betRaw = impliedProbability(pick.odds);
+  const betPoint = parseBetLine(pick, sideInfo);
+  const alt = altAtBetPoint(close && close.bookOutcomes, sideInfo, pick, gameObj, dateISO, betPoint);
+  const graded = gradeRealizedClv({
+    dateISO,
+    betRaw,
+    closeRaw: close.sideRaw,
+    overround: close.overround,
+    closeAmerican: close.sideOdds,
+    betPoint,
+    closePoint: close.closingLine,
+    sport: pick && pick.sport,
+    marketBase: sideInfo && sideInfo.marketBase,
+    isOver: !!(sideInfo && sideInfo.isOver),
+    isF5: !!(sideInfo && sideInfo.isF5),
+    altSideRaw: alt && alt.sideRaw,
+    altOverround: alt && alt.overround,
+    altAmerican: alt && alt.sideOdds,
+  });
+  const rec = {
+    closingOdds: graded.closingOdds != null ? String(graded.closingOdds) : null,
+    closingLine: close.closingLine ?? null,
+    anchor: close.anchor,
+    anchorBook: close.anchorBook,
+    pickTimeImplied: graded.pickTimeImplied,
+    closingImplied: graded.closingImplied,
+    pickTimeNoVig: graded.pickTimeNoVig,
+    closingNoVig: graded.closingNoVig,
+    closingOverround: graded.closingOverround,
+    betDevigMethod: graded.betDevigMethod,
+    clv: graded.clv,
+    clvCents: graded.clvCents,
+    clvRaw: graded.clvRaw,
+    beatClosing: graded.beatClosing,
+  };
+  if (graded.clvMethod) {
+    rec.clvMethod = graded.clvMethod;
+    if (graded.clvReason) rec.clvReason = graded.clvReason;
+    rec.clvLine = betPoint;
+  }
+  return rec;
 }
 
 // ── Find matching game in an odds-feed array for a pick ──
@@ -1037,38 +1122,24 @@ const trackClvOmegaHandler = async (event) => {
           error: gameObj ? 'Could not extract sharp closing price for this market' : 'No matching game found in odds feed',
         };
       } else {
-        const betRaw = impliedProbability(pick.odds);
-        const closingNoVig = +(close.sideRaw / close.overround).toFixed(4);
         // De-vig the price we bet with the close market's two-sided overround as the
         // entry-overround proxy (vig is ~stable intraday). This is a real two-sided
         // de-vig, not a flat haircut — the haircut is the actual per-game/market overround.
-        const pickTimeNoVig = betRaw != null ? +(betRaw / close.overround).toFixed(4) : null;
-        const clv = (pickTimeNoVig != null) ? +(closingNoVig - pickTimeNoVig).toFixed(4) : null;
-        const clvRaw = (betRaw != null && close.sideRaw != null) ? +(close.sideRaw - betRaw).toFixed(4) : null;
-
+        // From CLV_POINT_AWARE_FROM a moved point uses the alt at the bet's number,
+        // or a normal shift of this no-vig (see gradeRealizedClv). Earlier dates
+        // stay on the price-only numbers below.
+        const priced = priceClvRecord(close, pick, sideInfo, dateISO, extractObj);
         rec = {
           ...baseRecord,
-          closingOdds: String(close.sideOdds),
-          closingLine: close.closingLine ?? null,
-          anchor: close.anchor,
-          anchorBook: close.anchorBook,
-          pickTimeImplied: betRaw != null ? +betRaw.toFixed(4) : null,
-          closingImplied: close.sideRaw != null ? +close.sideRaw.toFixed(4) : null,
-          pickTimeNoVig,
-          closingNoVig,
-          closingOverround: +close.overround.toFixed(4),
-          betDevigMethod: 'closing-overround',
+          ...priced,
           // 'clv' is the TRUE two-sided no-vig CLV. Field name preserved for the generator's
           // CLV-feedback loop and get-analytics, which both read pick.clv numerically.
-          clv,
-          clvCents: clv != null ? +(clv * 100).toFixed(2) : null,
-          clvRaw, // legacy raw-implied (closing − bet) difference, for transparency
-          beatClosing: clv != null ? clv > 0 : null,
           closeSnapshotAt: snapAt || new Date().toISOString(),
           captureMinsToCommence,
           captureScore,
         };
-        console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}`);
+        const methodNote = rec.clvMethod ? ` method=${rec.clvMethod}` : '';
+        console.log(`[track-clv] ${pick.sport} ${pick.pick}: bet=${pick.odds} close=${close.sideOdds}@${close.anchorBook}(${close.anchor}) noVigCLV=${rec.clvCents}c min2pitch=${captureMinsToCommence}${methodNote}`);
       }
 
       // Merge: keep whichever capture is closer to first pitch (and ideally pre-pitch).
@@ -1348,6 +1419,7 @@ exports.handler = (event) => runWithFetchMemo(() => trackClvOmegaHandler(event))
 module.exports._test = {
   impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
+  priceClvRecord, altAtBetPoint,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,
   footballGraderOn,
 };

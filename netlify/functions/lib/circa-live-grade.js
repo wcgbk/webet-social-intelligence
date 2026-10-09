@@ -6,7 +6,8 @@
 // result: win | loss | push | live | pending
 // Never invent scores — ESPN scoreboard only (lib/espn-scoreboard.js).
 
-const { fetchESPNScores } = require("./espn-scoreboard");
+const { scoreboardUrls } = require("./espn-scoreboard");
+const { fetchScoreboardJson } = require("../../../js/live-score");
 const { defaultKpis, CONTEST } = require("./circa-contest");
 const { resolveDoubleheader } = require("../../../js/live-score");
 
@@ -71,7 +72,9 @@ function mergeGames(lists) {
   const map = new Map();
   const key = (g) =>
     `${(g.awayAbbr || g.awayTeam || "").toLowerCase()}|${(g.homeAbbr || g.homeTeam || "").toLowerCase()}|${g.startISO || ""}`;
-  const rank = (g) => (g.state === "in" ? 3 : g.state === "post" ? 2 : 1);
+  // Final beats in-progress: a stale/cached "in" response for one date URL must
+  // never shadow a fresh "post" from another (Week 3 Bears/Eagles stuck at 0-7).
+  const rank = (g) => (g.state === "post" ? 3 : g.state === "in" ? 2 : 1);
   for (const list of lists) {
     for (const g of list || []) {
       const k = key(g);
@@ -394,11 +397,51 @@ function gradeChanged(beforePicks, afterPicks, beforeKpis, afterKpis, beforeWeek
   return wsig(beforeWeeks) !== wsig(afterWeeks);
 }
 
+// Circa-local ESPN mapping (shared espn-scoreboard merge prefers "in" over
+// "post"; Circa needs final-wins, so we fetch + merge here without touching
+// the shared Omega grader module).
+function mapEspnEvent(ev) {
+  const comp = ev && ev.competitions && ev.competitions[0];
+  if (!comp) return null;
+  const away = (comp.competitors || []).find((c) => c.homeAway === "away");
+  const home = (comp.competitors || []).find((c) => c.homeAway === "home");
+  if (!away || !home) return null;
+  const status = comp.status || ev.status || {};
+  const t = status.type || {};
+  return {
+    eventId: ev.id ? String(ev.id) : null,
+    awayTeam: (away.team && (away.team.displayName || away.team.shortDisplayName)) || "",
+    awayAbbr: (away.team && away.team.abbreviation) || "",
+    awayScore: parseInt(away.score, 10) || 0,
+    homeTeam: (home.team && (home.team.displayName || home.team.shortDisplayName)) || "",
+    homeAbbr: (home.team && home.team.abbreviation) || "",
+    homeScore: parseInt(home.score, 10) || 0,
+    state: t.state || "pre",
+    statusName: t.name || "",
+    completed: !!t.completed,
+    startISO: ev.date || comp.date || "",
+    detail: t.shortDetail || t.detail || "",
+  };
+}
+
+function bust(url) {
+  // Cache-buster so a CDN-cached in-progress scoreboard cannot pin a game "in".
+  return url + (url.includes("?") ? "&" : "?") + "_cb=" + Math.floor(Date.now() / 60000);
+}
+
 async function fetchNflScoresForPicks(picks, fetchScores) {
   if (typeof fetchScores === "function") return fetchScores(picks) || [];
-  const dates = uniqueEtDates(picks);
+  const dates = uniqueEtDates((picks || []).filter((p) => !FINAL.has(String((p && p.result) || "").toLowerCase()) || (p.awayScore == null && p.homeScore == null)));
   if (!dates.length) return [];
-  const lists = await Promise.all(dates.map((d) => fetchESPNScores(d, "NFL")));
+  const urls = [...new Set(dates.flatMap((d) => scoreboardUrls("NFL", d)))];
+  const lists = await Promise.all(urls.map(async (u) => {
+    try {
+      const data = await fetchScoreboardJson(bust(u));
+      return ((data && data.events) || []).map(mapEspnEvent).filter(Boolean);
+    } catch (e) {
+      return [];
+    }
+  }));
   return mergeGames(lists);
 }
 
@@ -478,4 +521,7 @@ module.exports = {
   uniqueEtDates,
   mergeGames,
   needsEspnFetch,
+  mapEspnEvent,
+  fetchNflScoresForPicks,
+  FINAL,
 };

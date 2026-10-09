@@ -1007,6 +1007,17 @@ exports.handler = async (event) => {
   }
 
   const stored = await storeCard(week, picksData, force, scheduled, now);
+  // Saturday ~1:00 PM PT final = the submitted card. Freeze it once (immutable).
+  if (stored && body.slot === "final") {
+    try {
+      const { ensureFrozen } = require("./lib/circa-season");
+      const io = { read: readBlobJson, write: (k, v) => putBlob(k, v) };
+      const fz = await ensureFrozen(io, weekNum, { now, candidate: picksData, via: "generator-saturday-final" });
+      console.log(`[circa] frozen final card W${weekNum}: ${fz.created ? "created" : (fz.frozen ? "already frozen (kept)" : "skipped " + (fz.reason || ""))}`);
+    } catch (freezeErr) {
+      console.error(`[circa] freeze final card failed: ${freezeErr.message}`);
+    }
+  }
   try {
     const { writeCircaCardHealth } = require("./lib/circa-card-health");
     await writeCircaCardHealth({

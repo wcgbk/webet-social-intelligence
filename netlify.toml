@@ -117,6 +117,24 @@
     "netlify/functions/lib/circa-card-health.js",
   ]
 
+[functions."get-circa-standings"]
+  # Standings row parser (pdf-parse@1.1.1) is pinned in lib/circa-ocr-deps and
+  # staged as root node_modules by deploy.sh. PDF links never depend on it:
+  # discovery + %PDF verification + last-good fallback live in lib/circa-standings.js.
+  included_files = [
+    "node_modules/pdf-parse/**",
+    "node_modules/node-ensure/**",
+    "node_modules/debug/**",
+    "node_modules/ms/**",
+  ]
+
+[functions."regrade-circa"]
+  # Circa ops: re-polls ESPN for every non-final pick on frozen Saturday cards
+  # (weeks 1..current) and writes circa-ops/stuck-game-alert when a game is
+  # still not final 6h after kickoff. Read-only vs picks; never regenerates a card.
+  # Hourly at :40, short (<30s). Does not touch Omega.
+  schedule = "40 * * * *"
+
 [functions."check-circa-card-health"]
   # Follow-up ~5 min after each Circa generate slot (Thu/Fri/Sat + holiday Wed).
   # Persists circa-ops/card-health-* + alerts when card pending/empty/error/<5 picks.

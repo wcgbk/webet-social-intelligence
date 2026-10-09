@@ -120,6 +120,51 @@ async function fetchMedia(search) {
   return resp.json();
 }
 
+function decodeEntities(str) {
+  return String(str || "")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+// Newest = highest "After Week N", tie-broken by upload date.
+function newerPdf(a, b) {
+  if (!b) return true;
+  const aw = Number.isFinite(a.week) ? a.week : -1;
+  const bw = Number.isFinite(b.week) ? b.week : -1;
+  if (aw !== bw) return aw > bw;
+  return String(a.date || "") > String(b.date || "");
+}
+
+function pickLatestPdfs(pool) {
+  let season = null;
+  let last = null;
+  for (const item of pool || []) {
+    const kind = classifyMedia(item);
+    if (!kind || !item.source_url) continue;
+    if (!/\.pdf(\?|$)/i.test(String(item.source_url)) && item.mime_type !== "application/pdf") continue;
+    const title = decodeEntities((item.title && item.title.rendered) || "");
+    const meta = {
+      id: item.id,
+      url: item.source_url,
+      title,
+      date: item.date || item.modified || null,
+      week: parseWeekFromTitle(title, item.source_url),
+    };
+    if (kind === "season") {
+      if (newerPdf(meta, season)) season = meta;
+    } else if (kind === "lastPlace") {
+      if (newerPdf(meta, last)) last = meta;
+    }
+  }
+  return { season, lastPlace: last };
+}
+
 async function discoverLatestPdfs() {
   const [standings, lastPlace] = await Promise.all([
     fetchMedia("Million VIII Standings"),
@@ -128,29 +173,69 @@ async function discoverLatestPdfs() {
   const pool = []
     .concat(Array.isArray(standings) ? standings : [])
     .concat(Array.isArray(lastPlace) ? lastPlace : []);
+  return pickLatestPdfs(pool);
+}
 
-  let season = null;
-  let last = null;
-  for (const item of pool) {
-    const kind = classifyMedia(item);
-    if (!kind || !item.source_url) continue;
-    const meta = {
-      id: item.id,
-      url: item.source_url,
-      title: (item.title && item.title.rendered) || "",
-      date: item.date || item.modified || null,
-      week: parseWeekFromTitle(
-        (item.title && item.title.rendered) || "",
-        item.source_url
-      ),
-    };
-    if (kind === "season") {
-      if (!season || String(meta.date) > String(season.date)) season = meta;
-    } else if (kind === "lastPlace") {
-      if (!last || String(meta.date) > String(last.date)) last = meta;
-    }
+// Confirm the official URL actually serves a PDF (first bytes %PDF or pdf content-type).
+async function verifyPdfUrl(url, fetchImpl) {
+  const f = fetchImpl || fetch;
+  if (!url) return false;
+  try {
+    const resp = await f(url, {
+      headers: { Range: "bytes=0-1023", "User-Agent": "WeBetAI-CircaStandings/1.0" },
+    });
+    if (!resp || !(resp.status === 200 || resp.status === 206)) return false;
+    const ct = String((resp.headers && resp.headers.get && resp.headers.get("content-type")) || "").toLowerCase();
+    let head = "";
+    try {
+      const ab = await resp.arrayBuffer();
+      head = Buffer.from(ab).slice(0, 5).toString("latin1");
+    } catch (_) {}
+    return head.startsWith("%PDF") || (ct.includes("application/pdf") && head === "");
+  } catch (_) {
+    return false;
   }
-  return { season, lastPlace: last };
+}
+
+const PDF_LINKS_KEY = "circa-ops/standings-pdfs-last-good";
+
+// Discover + verify; fall back per-kind to the last verified PDF. Never throws.
+async function resolveStandingsPdfs({ readBlob, writeBlob, discover, verify } = {}) {
+  let lastGood = null;
+  if (typeof readBlob === "function") {
+    try { lastGood = await readBlob(PDF_LINKS_KEY); } catch (_) {}
+  }
+  let found = { season: null, lastPlace: null };
+  let discoverError = null;
+  try {
+    found = await (discover || discoverLatestPdfs)();
+  } catch (e) {
+    discoverError = e.message;
+  }
+  const v = verify || verifyPdfUrl;
+  const out = {};
+  let changed = false;
+  for (const kind of ["season", "lastPlace"]) {
+    const cand = found && found[kind];
+    const prev = lastGood && lastGood[kind];
+    if (cand && prev && cand.url === prev.url) {
+      out[kind] = prev;
+      continue;
+    }
+    const atLeastAsNew = cand && (!prev || newerPdf(cand, prev) || cand.week === prev.week);
+    if (atLeastAsNew && (await v(cand.url))) {
+      out[kind] = { ...cand, verifiedAt: new Date().toISOString() };
+      changed = true;
+      continue;
+    }
+    out[kind] = prev || null;
+  }
+  if (changed && typeof writeBlob === "function") {
+    try {
+      await writeBlob(PDF_LINKS_KEY, { ...out, savedAt: new Date().toISOString() });
+    } catch (_) {}
+  }
+  return { ...out, discoverError };
 }
 
 function rowFromParts(placeRaw, tiedRaw, entryRaw, picksRaw, record, pointsRaw) {
@@ -469,6 +554,11 @@ function buildPayload(meta, parsed, pointsQuery, aliases) {
     seasonMediaId: (meta.season && meta.season.id) || null,
     lastPlaceMediaId: (meta.lastPlace && meta.lastPlace.id) || null,
     seasonTitle: (meta.season && meta.season.title) || null,
+    seasonPdfLabel: (meta.season && meta.season.title) || null,
+    seasonPdfWeek: (meta.season && meta.season.week) || null,
+    lastPlaceTitle: (meta.lastPlace && meta.lastPlace.title) || null,
+    lastPlacePdfLabel: (meta.lastPlace && meta.lastPlace.title) || null,
+    lastPlacePdfWeek: (meta.lastPlace && meta.lastPlace.week) || null,
     updatedAt: (meta.season && meta.season.date) || new Date().toISOString(),
     bands: parsed.bands.map((b) => ({
       points: b.points,
@@ -541,8 +631,8 @@ function cacheIdentity(meta) {
   ].join("|");
 }
 
-async function getStandings({ points, aliases, readBlob, writeBlob } = {}) {
-  const meta = await discoverLatestPdfs();
+async function getStandings({ points, aliases, readBlob, writeBlob, discover, verify } = {}) {
+  const meta = await resolveStandingsPdfs({ readBlob, writeBlob, discover, verify });
   if (!meta.season || !meta.season.url) {
     return {
       ok: false,
@@ -550,6 +640,7 @@ async function getStandings({ points, aliases, readBlob, writeBlob } = {}) {
       message: "No Circa Million VIII standings PDF found yet",
       seasonPdfUrl: null,
       lastPlacePdfUrl: (meta.lastPlace && meta.lastPlace.url) || null,
+      lastPlacePdfLabel: (meta.lastPlace && meta.lastPlace.title) || null,
       ourEntries: lookupAliasEntries({ entriesByName: new Map(), bands: [] }, aliases),
       displayName: "WeBetAI",
       webetaiAlias: resolveWebetaiAlias(),
@@ -581,7 +672,16 @@ async function getStandings({ points, aliases, readBlob, writeBlob } = {}) {
   }
 
   if (!parsed) {
-    parsed = await loadParsedFromPdf(meta.season.url);
+    try {
+      parsed = await loadParsedFromPdf(meta.season.url);
+    } catch (e) {
+      // PDF links stay valid even if row parsing fails (e.g. parser missing).
+      console.error("[circa-standings] parse failed:", e.message);
+      const payload = buildPayload(meta, { fieldSize: 0, bands: [], entriesByName: new Map() }, points, aliases);
+      payload.parseError = e.message;
+      payload.message = "Official standings PDFs linked below; entry lookup unavailable right now.";
+      return payload;
+    }
     if (typeof writeBlob === "function") {
       try {
         await writeBlob(CACHE_KEY, {
@@ -618,6 +718,11 @@ module.exports = {
   parseWeekFromTitle,
   classifyMedia,
   discoverLatestPdfs,
+  pickLatestPdfs,
+  verifyPdfUrl,
+  resolveStandingsPdfs,
+  decodeEntities,
+  PDF_LINKS_KEY,
   extractPdfText,
   getStandings,
   buildPayload,

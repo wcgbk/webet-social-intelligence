@@ -4,6 +4,7 @@
   "description": "Isolated runtime deps for lib/circa-contest-pdf-ocr.js (generate-picks-circa-background only). Installed by deploy.sh via npm ci --prefix; bundled through netlify.toml included_files. Kept out of the root node_modules resolution path so no other function bundle changes.",
   "dependencies": {
     "@hyzyla/pdfium": "2.1.13",
+    "pdf-parse": "1.1.1",
     "tesseract.js": "5.1.1"
   }
 }

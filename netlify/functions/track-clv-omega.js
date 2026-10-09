@@ -14,6 +14,7 @@ const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
 const { loadLinePath } = require('./lib/omega-vnext/line_path');
 const omegaGradingRules = require('./lib/omega-grading-rules');
 const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
+const { etCalendarDate } = require('./lib/omega-vnext/odds_math');
 const { fetchESPNScores: fetchSharedScoreboard } = require('./lib/espn-scoreboard');
 const resultsGrader = require('./get-results-omega');
 
@@ -220,14 +221,11 @@ function medianOdds(arr) {
   return m === null ? null : Math.round(m);
 }
 
-// ET calendar date (America/New_York) for an ISO timestamp — the product runs on ET.
+// ET calendar date (America/New_York). en-CA yields YYYY-MM-DD in that zone.
+// Parsing an en-US locale string as local time rolls an evening ET kickoff
+// forward on any host behind UTC.
 function etDate(iso) {
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return null;
-    return new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-      .toISOString().split('T')[0];
-  } catch (e) { return null; }
+  return etCalendarDate(iso);
 }
 
 // ── Describe which side/market a pick is on ──
@@ -1417,7 +1415,7 @@ exports.handler = (event) => runWithFetchMemo(() => trackClvOmegaHandler(event))
 // Mirrors the generator's `module.exports.extractF5FromEvent` pattern so the de-vig /
 // sharp-anchor / side-parsing logic can be unit-tested without network or blob writes.
 module.exports._test = {
-  impliedProbability, median, medianOdds, teamsMatch, stripLine, parseBetLine,
+  impliedProbability, median, medianOdds, teamsMatch, etDate, stripLine, parseBetLine,
   pickSideInfo, segmentOf, sourceKey, extractClose, findMatchingGame, SHARP_BOOKS,
   priceClvRecord, altAtBetPoint,
   gradePick, calcProfit, findGameForGrading, fetchESPNScores, settleResultsForDate,

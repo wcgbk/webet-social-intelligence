@@ -7,7 +7,7 @@
  */
 
 const { clamp } = require('../odds_math');
-const { ENGINE_SOFT, SPORT_SPREAD_STD, HFA } = require('../config');
+const { ENGINE_SOFT, SPORT_SPREAD_STD, HFA, SHARP_BOOKS } = require('../config');
 const { rowByIdentityOrFuzzy } = require('./team_identity');
 
 function mlbTableRow(table, teamName, fallbackSeen) {
@@ -432,6 +432,134 @@ function mlbStandingsEnv(homeSt, awaySt) {
   };
 }
 
+/**
+ * Fixed prior for (model total − sharp no-vig total), in runs.
+ * Frozen snaps 2026-09-22..2026-10-08, one row per MLB game with a sharp
+ * total (Pinnacle when Circa is absent; else the other sharp books).
+ * n=106, mean of (finished model total − sharp total) +1.185, SD 0.833,
+ * SE 0.081. Pitcher lines are the season StatsAPI pull the generator
+ * already makes (gameType=R), not a refit. Circa posted no totals here.
+ *
+ * Where the +1.185 comes from, on all 113 priced games (means):
+ *   standings run environment                              8.895
+ *   starter quality                                        −0.081
+ *   park multiply (mean park 0.999)                        −0.002
+ *   bullpen residual                                       +0.021
+ *   game-day total / weather                               0
+ *   finished total                                         8.834
+ *   sharp total on the 106 games that have one            7.637
+ *   8.6 fallback                                           0 games
+ *   season-sum divide (pf/pa already per game, all ≤ 5.4)  0 games
+ * Home/away run splits are not on the standings feed. A symmetric
+ * home/road split moves the margin, not this total level.
+ * Park neutralization (the single-apply fix) moves the mean by about
+ * −0.04 and leaves the lean. It is not re-applied here.
+ *
+ * The prior is that level. It is not fit per game. A slate with at least
+ * MLB_TOTAL_RECENTER_MIN sharp totals replaces it with that slate's own
+ * mean. After the prior is removed, the expected leftover is 0, so a
+ * short slate does not subtract the prior a second time.
+ */
+const MLB_TOTAL_PRIOR_OFFSET = 1.185;
+const MLB_TOTAL_RECENTER_MIN = 3;
+
+function mlbToggleOn(name) {
+  const raw = process.env[name];
+  if (raw == null) return true;
+  const s = String(raw).trim().toLowerCase();
+  if (s === '0' || s === 'off') return false;
+  return true;
+}
+
+/** Read at call time. Unset is on. "0" and "off" disable. */
+function mlbTotalFlags() {
+  return {
+    rootfix: mlbToggleOn('OMEGA_MLB_ROOTFIX'),
+    recenter: mlbToggleOn('OMEGA_MLB_TOTAL_RECENTER'),
+  };
+}
+
+function totalPointForBook(event, book) {
+  const want = String(book || '').toLowerCase();
+  const bk = (event && event.bookmakers || []).find(b => String(b.key || '').toLowerCase() === want);
+  if (!bk) return null;
+  const mkt = (bk.markets || []).find(m => m.key === 'totals');
+  if (!mkt) return null;
+  const over = (mkt.outcomes || []).find(o => /^over$/i.test(o.name) && o.point != null);
+  if (over && Number.isFinite(Number(over.point))) return Number(over.point);
+  const any = (mkt.outcomes || []).find(o => o.point != null && Number.isFinite(Number(o.point)));
+  return any ? Number(any.point) : null;
+}
+
+/**
+ * Sharp no-vig total: the run line, not a probability.
+ * Pinnacle and Circa (circa, else circasports) at equal weight when both
+ * post a total. One of them alone when the other is missing. Otherwise
+ * the median of the other sharp books. No sharp total → null (that game
+ * does not enter the slate mean).
+ */
+function sharpNoVigTotal(event) {
+  if (!event) return null;
+  const pin = totalPointForBook(event, 'pinnacle');
+  let circa = totalPointForBook(event, 'circa');
+  if (circa == null) circa = totalPointForBook(event, 'circasports');
+  const anchored = [pin, circa].filter(v => Number.isFinite(v));
+  if (anchored.length === 2) return (anchored[0] + anchored[1]) / 2;
+  if (anchored.length === 1) return anchored[0];
+  const sharpSet = new Set((SHARP_BOOKS || []).map(b => String(b).toLowerCase()));
+  const pts = [];
+  const seen = new Set();
+  for (const bk of event.bookmakers || []) {
+    const key = String(bk.key || '').toLowerCase();
+    if (!key || seen.has(key) || !sharpSet.has(key)) continue;
+    seen.add(key);
+    const p = totalPointForBook(event, key);
+    if (Number.isFinite(p)) pts.push(p);
+  }
+  if (!pts.length) return null;
+  pts.sort((a, b) => a - b);
+  return pts[Math.floor(pts.length / 2)];
+}
+
+/**
+ * Runs to subtract from every MLB modelTotal this generate.
+ * rows: { total, sharp } for each game. sharp may be null.
+ * Root fix subtracts MLB_TOTAL_PRIOR_OFFSET (the 2026 environment gap).
+ * Recenter, when n >= 3 sharp totals, replaces that fixed gap with the
+ * slate mean of (raw total − sharp). The prior is not added on top of
+ * the slate mean. n < 3 uses the prior once.
+ * Both flags off → 0.
+ */
+function mlbTotalLevelShift(rows, flags) {
+  const rootfix = !!(flags && flags.rootfix);
+  const recenter = !!(flags && flags.recenter);
+  if (!rootfix && !recenter) return 0;
+  const prior = MLB_TOTAL_PRIOR_OFFSET;
+  const base = rootfix ? prior : 0;
+  if (!recenter) return base;
+  const gaps = [];
+  for (const row of rows || []) {
+    if (!row || !Number.isFinite(row.total) || !Number.isFinite(row.sharp)) continue;
+    gaps.push((row.total - base) - row.sharp);
+  }
+  if (gaps.length >= MLB_TOTAL_RECENTER_MIN) {
+    const mean = gaps.reduce((s, x) => s + x, 0) / gaps.length;
+    return base + mean;
+  }
+  // Short slate: the prior stands in for the mean. Root fix already
+  // applied it, so the residual prior is 0.
+  return base + (rootfix ? 0 : prior);
+}
+
+/** Shift 0 returns the same total. Any other shift stays inside the existing band. */
+function applyMlbTotalShift(modelTotal, shift) {
+  const s = Number(shift);
+  if (!Number.isFinite(s) || s === 0) return modelTotal;
+  const t = Number(modelTotal);
+  if (!Number.isFinite(t)) return modelTotal;
+  return clamp(t - s, MLB_TOTAL_MIN, MLB_TOTAL_MAX);
+}
+
 /** MLB season year. Jan/Feb still belong to the previous season. */
 function mlbSeasonFromDate(dateISO) {
   const raw = String(dateISO || '');
@@ -466,4 +594,11 @@ module.exports = {
   mlbSeasonFromDate,
   teamRpg,
   mlbStandingsEnv,
+  MLB_TOTAL_PRIOR_OFFSET,
+  MLB_TOTAL_RECENTER_MIN,
+  mlbToggleOn,
+  mlbTotalFlags,
+  sharpNoVigTotal,
+  mlbTotalLevelShift,
+  applyMlbTotalShift,
 };

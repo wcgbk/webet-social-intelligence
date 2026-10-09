@@ -5,17 +5,22 @@
  * ML / spread / total blend weights unchanged. Every anchor is no-vig
  * Pinnacle/Circa (one book alone if the other is missing; else sharp no-vig).
  * Base margin and total come from per-game runs, not season run differential.
+ * The finished total then loses the 2026 environment gap (OMEGA_MLB_ROOTFIX)
+ * and, when the slate has a sharp total on at least 3 games, the slate mean
+ * of (model − sharp no-vig total) instead (OMEGA_MLB_TOTAL_RECENTER).
+ * Both off leaves this total on the pre-correction number. Margin is not shifted.
  * assumedStarter stays tagged for QA hard-fail.
  */
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, mapGamesSoft,
+  formatMatchup,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { rowByIdentityOrFuzzy } = require('./team_identity');
 const {
   resolvePark, resolveSpQuality, applySpPark,
   resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd, mlbStandingsEnv,
+  sharpNoVigTotal, mlbTotalLevelShift, mlbTotalFlags, applyMlbTotalShift,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
@@ -52,7 +57,7 @@ function buildMethods({ usedSp, usedPark, enginesOn, usedGameday }) {
   return base;
 }
 
-function projectGame(event, standings, espnGame, ctx) {
+function deriveGame(event, standings, espnGame, ctx) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
@@ -63,7 +68,6 @@ function projectGame(event, standings, espnGame, ctx) {
   const baseMargin = env0.modelMargin;
   const baseTotal = env0.modelTotal;
 
-  const out = [];
   let uncertainty = (homeSt && awaySt) ? 0.18 : 0.28;
   const homeSp = espnGame && espnGame.homeProbable;
   const awaySp = espnGame && espnGame.awayProbable;
@@ -138,6 +142,20 @@ function projectGame(event, standings, espnGame, ctx) {
     usedGameday,
   });
   const stdOpt = effStd != null ? effStd : undefined;
+  return {
+    event, home, away, commenceTime, modelMargin, modelTotal, uncertainty,
+    methods, gameDayMeta, stdOpt,
+  };
+}
+
+function priceGame(derived, totalShift) {
+  const {
+    home, away, commenceTime, modelMargin, uncertainty,
+    methods, gameDayMeta, stdOpt,
+  } = derived;
+  const modelTotal = applyMlbTotalShift(derived.modelTotal, totalShift);
+  const out = [];
+  const event = derived.event;
 
   {
     const bundles = collectMarketOutcomes(event, 'h2h');
@@ -223,6 +241,25 @@ function findEspnGame(ev, espnGames) {
   }) || null;
 }
 
+function softFail(ev, err) {
+  const home = ev && ev.home_team;
+  const away = ev && ev.away_team;
+  console.error(`[omega-vnext] project soft-fail ${away || '?'} @ ${home || '?'}: ${err && err.message}`);
+}
+
+function tagStarters(cands, eg) {
+  if (!eg || !(eg.homeProbable || eg.awayProbable)) return;
+  for (const c of cands) {
+    if (/moneyline|spread/i.test(c.market || '')) {
+      c.assumedStarter = eg.homeProbable
+        ? { name: eg.homeProbable.name, teamSide: 'home', id: eg.homeProbable.id }
+        : (eg.awayProbable ? { name: eg.awayProbable.name, teamSide: 'away', id: eg.awayProbable.id } : null);
+      c.probablePitcher = c.assumedStarter;
+      c.startersKnown = !!(eg.homeProbable && eg.awayProbable);
+    }
+  }
+}
+
 function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactors, gameDay, weatherByGame } = {}) {
   const games = (espnGames && espnGames.games) || espnGames || [];
   const ctx = {
@@ -232,22 +269,34 @@ function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactor
     weatherByGame: weatherByGame || (gameDay && gameDay.weatherByGame) || {},
     fallbackSeen: new Set(),
   };
-  return mapGamesSoft(oddsEvents, (ev) => {
-    const eg = findEspnGame(ev, games);
-    const cands = projectGame(ev, standings || {}, eg, ctx);
-    if (eg && (eg.homeProbable || eg.awayProbable)) {
-      for (const c of cands) {
-        if (/moneyline|spread/i.test(c.market || '')) {
-          c.assumedStarter = eg.homeProbable
-            ? { name: eg.homeProbable.name, teamSide: 'home', id: eg.homeProbable.id }
-            : (eg.awayProbable ? { name: eg.awayProbable.name, teamSide: 'away', id: eg.awayProbable.id } : null);
-          c.probablePitcher = c.assumedStarter;
-          c.startersKnown = !!(eg.homeProbable && eg.awayProbable);
-        }
-      }
+  const prepared = [];
+  for (const ev of oddsEvents || []) {
+    try {
+      const eg = findEspnGame(ev, games);
+      prepared.push({ ev, eg, derived: deriveGame(ev, standings || {}, eg, ctx) });
+    } catch (err) {
+      softFail(ev, err);
     }
-    return cands;
-  });
+  }
+  const flags = mlbTotalFlags();
+  let shift = 0;
+  if (flags.rootfix || flags.recenter) {
+    shift = mlbTotalLevelShift(prepared.map(p => ({
+      total: p.derived.modelTotal,
+      sharp: sharpNoVigTotal(p.ev),
+    })), flags);
+  }
+  const all = [];
+  for (const p of prepared) {
+    try {
+      const cands = priceGame(p.derived, shift);
+      tagStarters(cands, p.eg);
+      if (cands.length) all.push(...cands);
+    } catch (err) {
+      softFail(p.ev, err);
+    }
+  }
+  return all;
 }
 
 module.exports = { project, SPORT };

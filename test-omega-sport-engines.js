@@ -1,5 +1,9 @@
 'use strict';
 /** Omega v12.2 sport engines — synthetic events only, no network. */
+// These fixtures lock the unshifted MLB engine. The level correction is
+// test-omega-mlb-total-center.js. Both toggles off matches that engine.
+process.env.OMEGA_MLB_ROOTFIX = '0';
+process.env.OMEGA_MLB_TOTAL_RECENTER = '0';
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');

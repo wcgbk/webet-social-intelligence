@@ -1,4 +1,7 @@
 'use strict';
+// MLB golden below is the unshifted engine. Level correction is off here.
+process.env.OMEGA_MLB_ROOTFIX = '0';
+process.env.OMEGA_MLB_TOTAL_RECENTER = '0';
 /**
  * NFL/NCAAF point-space shrink before the CDF (λ=1, no pull), and a private
  * model-vs-line review flag. The flag does not reject and does not change

@@ -12,9 +12,22 @@
  * under ENGINE_SOFT.NHL. Final margin/total soft-clamp (|spread| 6, total 12)
  * and still emit a candidate.
  *
- * GF/GA per game shrinks toward the league mean (K = 34) so an early rate
- * outside [1.5, 5.2] is clamped, not dropped onto the flat 6.2 baseline.
- * OMEGA_NHL_SHRINK_MODE and OMEGA_NHL_SHRINK_K pick the variant at call time.
+ * GF/GA per game. The default OMEGA_NHL_SHRINK_MODE is 'oob' (rescue-only).
+ * A club whose raw rate is outside [1.5, 5.2], which is the same club the
+ * pre-shrink path drops onto the flat 6.2 baseline for a band reason, gets
+ * the shrunk K=34 rate clamped into the band. An in-band club keeps today's
+ * raw rate. OMEGA_NHL_SHRINK_K overrides K at call time.
+ *
+ * Replay gate, frozen inputs 2026-09-22..2026-10-08: mode 'all' (K 34, and
+ * also K 10 and K 20) changed 8 picks and lost $72 versus the unshrunk base,
+ * so it fails. Mode 'oob' changed 0 picks and $0, so it passes and is the
+ * default. Mode 'off' is also 0 changes.
+ *
+ * 'all' is still the principled target: every club shrinks to the league
+ * mean with the a-priori K=34, so a rate just over the cap cannot rank
+ * below a rate just inside it. It stays available as
+ * OMEGA_NHL_SHRINK_MODE=all for a later 4-week retest, pending WeBet's
+ * decision. Do not make 'all' the default until that gate passes.
  */
 const { clamp } = require('../odds_math');
 const { HFA, ENGINE_SOFT } = require('../config');
@@ -48,9 +61,18 @@ const NHL_GPG_IMPLAUSIBLE = 10;
  * Chosen a priori, not fit on a replay.
  * gf_hat = (GF_sum + K * LEAGUE_GPG) / (gp + K), same for GA, then clamped
  * to [NHL_GPG_FLOOR, NHL_GPG_CAP]. OMEGA_NHL_SHRINK_K overrides K at call
- * time (0 or "off" = no shrink). OMEGA_NHL_SHRINK_MODE is 'all' (default),
- * 'oob' (shrink only clubs the old band would have nulled), or 'off'
- * (exact pre-shrink behavior). "0" / "off" disables the mode.
+ * time (0 or "off" = no shrink; under 'oob' that K applies only to a club
+ * the band would have nulled).
+ *
+ * OMEGA_NHL_SHRINK_MODE, read at call time:
+ *   'oob' (default) — rescue only. Out-of-band raw rates, the clubs that
+ *     today fall to the flat 6.2 for a band reason, get the shrunk rate
+ *     clamped into [floor, cap]. In-band clubs keep the raw rate.
+ *   'all' — shrink every club. Principled target. Replay gate
+ *     2026-09-22..2026-10-08 failed it (8 pick changes, −$72 vs base, at
+ *     K 34 and at K 10/20). Left on the env for a later 4-week retest.
+ *     Not the default until WeBet decides the gate has passed.
+ *   'off' or "0" — exact pre-shrink behavior (out-of-band → null / 6.2).
  */
 const NHL_GPG_PRIOR_GAMES = 34;
 /**
@@ -118,10 +140,14 @@ function envToggle(name) {
   return s === '' ? null : s;
 }
 
-/** Read at call time so a replay can switch variants without a new commit. */
+/**
+ * Read at call time so a replay can switch variants without a new commit.
+ * Unset is 'oob': the 2026-09-22..10-08 gate passed oob ($0, 0 pick changes)
+ * and failed 'all' (−$72, 8 pick changes). 'all' stays opt-in.
+ */
 function shrinkSettings() {
   const modeText = envToggle('OMEGA_NHL_SHRINK_MODE');
-  let mode = 'all';
+  let mode = 'oob';
   if (modeText === '0' || modeText === 'off') mode = 'off';
   else if (modeText === 'oob' || modeText === 'all') mode = modeText;
   const kText = envToggle('OMEGA_NHL_SHRINK_K');
@@ -218,12 +244,13 @@ function finishFromSums(gfSum, gaSum, gp, k, mode) {
 
 /**
  * Goals for/against per game.
- * Season sums (nhlSeasonGoals, or a total above ~1.8× league gpg) shrink as
- * (sum + K * LEAGUE_GPG) / (gp + K) once gp reaches NHL_MIN_GAMES.
- * Per-game rates with a known gp convert to sums, then shrink the same way.
+ * Mode 'all' shrinks every season sum, and every per-game rate with a known
+ * gp, as (sum + K * LEAGUE_GPG) / (gp + K) once gp reaches NHL_MIN_GAMES.
+ * The default 'oob' does that only when the raw rate is outside
+ * [NHL_GPG_FLOOR, NHL_GPG_CAP]. An in-band club keeps the raw rate.
  * A per-game rate with no gp keeps the old pass-through: in band, or null.
  * gp below NHL_MIN_GAMES on a season sum stays null (6.2 baseline).
- * [NHL_GPG_FLOOR, NHL_GPG_CAP] clamps the shrunk rate. It does not null it.
+ * The band clamps a shrunk rate. It does not null that rate.
  * Zero goals after 2+ games is real data. A raw rate above
  * NHL_GPG_IMPLAUSIBLE, or a non-finite / negative total, is 'implausible rate'.
  * Standings points (2*W+OTL) still null, unless nhlSeasonGoals is set.

@@ -41,8 +41,10 @@ assert.strictEqual(rangers.pa, 6);
 assert.strictEqual(rangers.games, 4);
 const rangersGpg = nhl.teamGpg(rangers);
 assert.ok(rangersGpg, 'Rangers GF/GA is usable at gp 4');
-assert.ok(Math.abs(rangersGpg.gf - shrunkSum(11, 4)) < 1e-9, rangersGpg.gf);
-assert.ok(Math.abs(rangersGpg.ga - shrunkSum(6, 4)) < 1e-9, rangersGpg.ga);
+// 11/4 and 6/4 sit inside [1.5, 5.2], so the oob default keeps the raw rate.
+assert.ok(Math.abs(rangersGpg.gf - 11 / 4) < 1e-9, rangersGpg.gf);
+assert.ok(Math.abs(rangersGpg.ga - 6 / 4) < 1e-9, rangersGpg.ga);
+assert.strictEqual(rangersGpg.shrinkWeight, 0);
 
 // Florida GF 6 / Pts 4 / GP 3. dupPoints used to clear this.
 const florida = espnGoals({}, 6, 7, 4, 3, 1, 0, 2);
@@ -75,10 +77,11 @@ assert.strictEqual(nashville.pf, 3);
 assert.strictEqual(nashville.pa, 4);
 assert.strictEqual(nashville.nhlSeasonGoals, true);
 const nashvilleGpg = nhl.teamGpg(nashville);
-assert.ok(nashvilleGpg, 'Nashville season sum shrinks at gp 2');
-assert.ok(Math.abs(nashvilleGpg.gf - shrunkSum(3, 2)) < 1e-9, nashvilleGpg && nashvilleGpg.gf);
-assert.ok(Math.abs(nashvilleGpg.ga - shrunkSum(4, 2)) < 1e-9, nashvilleGpg && nashvilleGpg.ga);
-// Detroit GF 2 / GA 5 / GP 2 is 1.0 and 2.5 raw. Shrinkage keeps it; the old band nulled 1.0.
+assert.ok(nashvilleGpg, 'Nashville 1.5 / 2.0 stays on the raw rate');
+assert.ok(Math.abs(nashvilleGpg.gf - 3 / 2) < 1e-9, nashvilleGpg && nashvilleGpg.gf);
+assert.ok(Math.abs(nashvilleGpg.ga - 4 / 2) < 1e-9, nashvilleGpg && nashvilleGpg.ga);
+assert.strictEqual(nashvilleGpg.shrinkWeight, 0);
+// Detroit GF 2 / GA 5 / GP 2 is 1.0 and 2.5 raw. 1.0 is out of band, so oob shrinks it.
 assert.strictEqual(detroit.nhlSeasonGoals, true);
 const detroitGpg = nhl.teamGpg(detroit);
 assert.ok(detroitGpg, 'Detroit 1.0 GF/GP shrinks instead of the 6.2 baseline');
@@ -125,7 +128,7 @@ const named = ingest.applyNhlStandingStats({ wins: 45, losses: 25 }, [
 assert.strictEqual(named.pf, 250);
 assert.strictEqual(named.pa, 210);
 
-// Season-sum shrink: gp 1 stays on the seed. gp 2+ shrinks toward 3.1.
+// Season sum: gp 1 stays on the seed. An in-band gp 2+ rate stays raw.
 assert.strictEqual(nhl.teamGpg({ pf: 8, pa: 6, games: 1 }), null);
 const oneGame = nhl.nhlStandingsEnv(
   { pf: 8, pa: 6, games: 1, wins: 1, losses: 0 },
@@ -136,29 +139,32 @@ assert.strictEqual(oneGame.modelTotal, 6.2);
 assert.ok(Math.abs(oneGame.modelMargin - config.HFA.NHL) < 1e-9);
 
 const two = nhl.teamGpg({ pf: 8, pa: 6, games: 2 });
-assert.ok(two, 'gp 2 shrinks');
-assert.ok(Math.abs(two.gf - shrunkSum(8, 2)) < 1e-9, two && two.gf);
-assert.ok(Math.abs(two.ga - shrunkSum(6, 2)) < 1e-9, two && two.ga);
+assert.ok(two, 'gp 2 in band is usable');
+assert.ok(Math.abs(two.gf - 8 / 2) < 1e-9, two && two.gf);
+assert.ok(Math.abs(two.ga - 6 / 2) < 1e-9, two && two.ga);
+assert.strictEqual(two.shrinkWeight, 0);
 const twoEnv = nhl.nhlStandingsEnv(
   { pf: 8, pa: 6, games: 2 },
   { pf: 7, pa: 6, games: 2 }
 );
 assert.strictEqual(twoEnv.usedStandings, true);
-const twoTotal = (shrunkSum(8, 2) + shrunkSum(6, 2) + shrunkSum(7, 2) + shrunkSum(6, 2)) / 2;
+const twoTotal = (8 / 2 + 6 / 2 + 7 / 2 + 6 / 2) / 2;
 assert.ok(Math.abs(twoEnv.modelTotal - twoTotal) < 1e-9, twoEnv.modelTotal);
 assert.notStrictEqual(twoEnv.modelTotal, 6.2);
 
-// gp 4 still usable, shrunk toward the league mean.
+// gp 4 still usable. 3.0 and 2.0 are in band, so they stay raw.
 const four = nhl.teamGpg({ pf: 12, pa: 8, games: 4 });
 assert.ok(four);
-assert.ok(Math.abs(four.gf - shrunkSum(12, 4)) < 1e-9);
-assert.ok(Math.abs(four.ga - shrunkSum(8, 4)) < 1e-9);
+assert.ok(Math.abs(four.gf - 12 / 4) < 1e-9);
+assert.ok(Math.abs(four.ga - 8 / 4) < 1e-9);
+assert.strictEqual(four.shrinkWeight, 0);
 
-// A per-game rate with known games becomes a sum, then shrinks the same way.
+// An in-band per-game rate with known games stays raw under the oob default.
 const rate = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
 assert.ok(rate);
-assert.ok(Math.abs(rate.gf - shrunkSum(3.2 * 40, 40)) < 1e-9);
-assert.ok(Math.abs(rate.ga - shrunkSum(2.8 * 40, 40)) < 1e-9);
+assert.ok(Math.abs(rate.gf - 3.2) < 1e-9);
+assert.ok(Math.abs(rate.ga - 2.8) < 1e-9);
+assert.strictEqual(rate.shrinkWeight, 0);
 // One game of a marked season sum stays on the seed.
 assert.strictEqual(nhl.teamGpg({ pf: 4, pa: 3, games: 1, nhlSeasonGoals: true }), null);
 
@@ -170,14 +176,16 @@ assert.strictEqual(rangersEspn.pa, 8);
 assert.strictEqual(rangersEspn.games, 5);
 const rangersEspnGpg = nhl.teamGpg(rangersEspn);
 assert.ok(rangersEspnGpg, 'Rangers ESPN GF/GA survives the standings-points guard');
-assert.ok(Math.abs(rangersEspnGpg.gf - shrunkSum(16, 5)) < 1e-9, rangersEspnGpg && rangersEspnGpg.gf);
-assert.ok(Math.abs(rangersEspnGpg.ga - shrunkSum(8, 5)) < 1e-9, rangersEspnGpg && rangersEspnGpg.ga);
+assert.ok(Math.abs(rangersEspnGpg.gf - 16 / 5) < 1e-9, rangersEspnGpg && rangersEspnGpg.gf);
+assert.ok(Math.abs(rangersEspnGpg.ga - 8 / 5) < 1e-9, rangersEspnGpg && rangersEspnGpg.ga);
+assert.strictEqual(rangersEspnGpg.shrinkWeight, 0);
 
 const rangersFlagged = { wins: 4, losses: 1, otLosses: 0, games: 5, pf: 16, pa: 8, nhlSeasonGoals: true };
 const rangersFlaggedGpg = nhl.teamGpg(rangersFlagged);
 assert.ok(rangersFlaggedGpg, 'nhlSeasonGoals skips the standings-points heuristic');
-assert.ok(Math.abs(rangersFlaggedGpg.gf - shrunkSum(16, 5)) < 1e-9, rangersFlaggedGpg && rangersFlaggedGpg.gf);
-assert.ok(Math.abs(rangersFlaggedGpg.ga - shrunkSum(8, 5)) < 1e-9, rangersFlaggedGpg && rangersFlaggedGpg.ga);
+assert.ok(Math.abs(rangersFlaggedGpg.gf - 16 / 5) < 1e-9, rangersFlaggedGpg && rangersFlaggedGpg.gf);
+assert.ok(Math.abs(rangersFlaggedGpg.ga - 8 / 5) < 1e-9, rangersFlaggedGpg && rangersFlaggedGpg.ga);
+assert.strictEqual(rangersFlaggedGpg.shrinkWeight, 0);
 
 // Same numbers without the flag: GA 8 is 2*W+OTL, so the heuristic still clears it.
 assert.strictEqual(

@@ -288,6 +288,20 @@ const ENGINE_SOFT = {
    * Stacked cap covers unclean winPct + shot efficiency + goalie save%.
    * Each goalie piece is tighter still. Missing inputs → 0.
    * Rest/B2B is game_day HFA_ADJ.NHL, not this cap.
+   *
+   * Goal-rate shrink is sports/nhl.js, not this residual cap.
+   * Default OMEGA_NHL_SHRINK_MODE is 'oob' (rescue-only). Replay gate on
+   * frozen inputs 2026-09-22..2026-10-08: mode 'all' (K 34, also K 10 and
+   * K 20) changed 8 picks and lost $72 versus the unshrunk base, so it
+   * fails. Mode 'oob' changed 0 picks and $0, so it passes and ships.
+   * Mode 'off' is also 0 changes and is the exact pre-shrink path.
+   * 'oob' gives the shrunk K=34 rate, clamped into [1.5, 5.2], only to a
+   * club whose raw rate is outside that band (the club the old path drops
+   * on the flat 6.2 for a band reason). In-band clubs keep today's raw
+   * rate. 'all' — shrink every club to the league mean — is the principled
+   * target. It stays available as OMEGA_NHL_SHRINK_MODE=all for a later
+   * 4-week retest, pending WeBet's decision. Do not flip the default
+   * until that gate passes.
    */
   NHL: {
     maxAbsMarginAdj: 0.30,

@@ -43,18 +43,18 @@ function withEnv(extra, fn) {
 delete process.env.OMEGA_NHL_SHRINK_MODE;
 delete process.env.OMEGA_NHL_SHRINK_K;
 
-// (a) Rangers GF 16 / GA 8 at gp 5. GA equals 2W+OTL, but nhlSeasonGoals is real goals.
+// Default is oob. In-band clubs keep the raw rate. Out-of-band clubs shrink.
+// (a) Rangers GF 16 / GA 8 at gp 5 is 3.2 and 1.6, inside the band.
 const rangers = { wins: 4, losses: 1, otLosses: 0, games: 5, pf: 16, pa: 8, nhlSeasonGoals: true };
 const rangersGpg = nhl.teamGpg(rangers);
 assert.ok(rangersGpg, 'explicit Goals For is not standings points');
-assert.ok(Math.abs(rangersGpg.gf - shrunk(16, 5)) < 1e-9, rangersGpg.gf);
-assert.ok(Math.abs(rangersGpg.ga - shrunk(8, 5)) < 1e-9, rangersGpg.ga);
+assert.ok(Math.abs(rangersGpg.gf - 16 / 5) < 1e-9, rangersGpg.gf);
+assert.ok(Math.abs(rangersGpg.ga - 8 / 5) < 1e-9, rangersGpg.ga);
 assert.strictEqual(rangersGpg.gp, 5);
 assert.ok(Math.abs(rangersGpg.gfRaw - 16 / 5) < 1e-9);
-assert.ok(Math.abs(rangersGpg.shrinkWeight - K / (5 + K)) < 1e-9);
-assert.ok(Math.abs(rangersGpg.gf - (16 + 34 * 3.1) / 39) < 1e-9);
+assert.strictEqual(rangersGpg.shrinkWeight, 0);
 
-// (b) Early extremes shrink toward 3.1 and still price the game off the flat 6.2.
+// (b) Early extremes are out of band, so the default still shrinks them off the flat 6.2.
 const avsRow = { pf: 14, pa: 5, games: 2, nhlSeasonGoals: true };
 const flamesRow = { pf: 3, pa: 16, games: 3, nhlSeasonGoals: true };
 const avs = nhl.teamGpg(avsRow);
@@ -77,14 +77,14 @@ assert.strictEqual(early.homeBaseline, null);
 assert.strictEqual(early.awayBaseline, null);
 assert.ok(Math.abs(early.awayGaRaw - 16 / 3) < 1e-9);
 
-// (c) More goals at the same gp never lowers the shrunk rate, including across the old 5.2 null.
-const fewer = nhl.teamGpg({ pf: 10, pa: 12, games: 8, nhlSeasonGoals: true });
-const more = nhl.teamGpg({ pf: 22, pa: 12, games: 8, nhlSeasonGoals: true });
-assert.ok(more.gf > fewer.gf);
+// (c) Default oob: a rate inside the cap stays raw. A rate just over the cap is rescued, not discarded.
 const rateLo = nhl.teamGpg({ pf: 5.1, pa: 3.0, games: 30 });
 const rateHi = nhl.teamGpg({ pf: 5.3, pa: 3.0, games: 30 });
-assert.ok(rateLo && rateHi, 'a 5.3 rate is shrunk, not discarded');
-assert.ok(rateHi.gf > rateLo.gf);
+assert.ok(rateLo && rateHi, 'a 5.3 rate is rescued, not discarded');
+assert.ok(Math.abs(rateLo.gf - 5.1) < 1e-9, rateLo.gf);
+assert.strictEqual(rateLo.shrinkWeight, 0);
+assert.ok(Math.abs(rateHi.gf - shrunk(5.3 * 30, 30)) < 1e-9, rateHi.gf);
+assert.ok(inBand(rateHi.gf));
 assert.ok(Math.abs(rateLo.gfRaw - 5.1) < 1e-9);
 assert.ok(Math.abs(rateHi.gfRaw - 5.3) < 1e-9);
 
@@ -111,11 +111,12 @@ assert.strictEqual(
   null
 );
 
-// (f) Per-game rate with a known gp: sum = rate * gp, then the same shrink.
+// (f) In-band per-game rate with a known gp stays raw under the default.
 const rate = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
 assert.ok(rate);
-assert.ok(Math.abs(rate.gf - shrunk(3.2 * 40, 40)) < 1e-9, rate.gf);
-assert.ok(Math.abs(rate.ga - shrunk(2.8 * 40, 40)) < 1e-9, rate.ga);
+assert.ok(Math.abs(rate.gf - 3.2) < 1e-9, rate.gf);
+assert.ok(Math.abs(rate.ga - 2.8) < 1e-9, rate.ga);
+assert.strictEqual(rate.shrinkWeight, 0);
 assert.ok(Math.abs(rate.gfRaw - 3.2) < 1e-9);
 
 // Unknown gp still passes a rate through only inside the band. Zero after 2+ games shrinks.
@@ -143,11 +144,15 @@ const avalancheGp2 = nhl.teamGpg({ pf: 14, pa: 5, games: 2, nhlSeasonGoals: true
 assert.ok(avalancheGp2, 'Avalanche gp 2, 14/5 (raw 7.0) is not implausible');
 assert.ok(Math.abs(avalancheGp2.gfRaw - 7) < 1e-9, avalancheGp2 && avalancheGp2.gfRaw);
 
-// (h) K is read at call time. 0 is no shrink: in-band stays raw, out-of-band clamps.
+// (h) K is read at call time. Under the oob default it moves only an out-of-band club.
+// 0 / "off" is no shrink: in-band stays raw, out-of-band clamps.
 withEnv({ OMEGA_NHL_SHRINK_K: '10' }, () => {
-  const got = nhl.teamGpg(rangers);
-  assert.ok(Math.abs(got.gf - shrunk(16, 5, 10)) < 1e-9, got.gf);
-  assert.ok(Math.abs(got.shrinkWeight - 10 / 15) < 1e-9);
+  const kept = nhl.teamGpg(rangers);
+  assert.ok(Math.abs(kept.gf - 16 / 5) < 1e-9, kept.gf);
+  assert.strictEqual(kept.shrinkWeight, 0);
+  const hot = nhl.teamGpg(avsRow);
+  assert.ok(Math.abs(hot.gf - shrunk(14, 2, 10)) < 1e-9, hot.gf);
+  assert.ok(Math.abs(hot.shrinkWeight - 10 / 12) < 1e-9);
 });
 withEnv({ OMEGA_NHL_SHRINK_K: '0' }, () => {
   const raw = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
@@ -161,9 +166,11 @@ withEnv({ OMEGA_NHL_SHRINK_K: '0' }, () => {
 withEnv({ OMEGA_NHL_SHRINK_K: 'off' }, () => {
   const raw = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
   assert.ok(Math.abs(raw.gf - 3.2) < 1e-9, raw.gf);
+  const hot = nhl.teamGpg(avsRow);
+  assert.ok(Math.abs(hot.gf - nhl.NHL_GPG_CAP) < 1e-9, hot.gf);
 });
 
-// (i) mode oob keeps an in-band club raw and still rescues Avalanche.
+// (i) Explicit mode oob matches the unset default: in-band stays raw, Avalanche is rescued.
 withEnv({ OMEGA_NHL_SHRINK_MODE: 'oob' }, () => {
   const kept = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
   assert.ok(Math.abs(kept.gf - 3.2) < 1e-9, kept.gf);
@@ -182,6 +189,39 @@ withEnv({ OMEGA_NHL_SHRINK_MODE: 'oob' }, () => {
   assert.ok(hi, 'oob rescues a rate just above the old cap');
   assert.ok(Math.abs(hi.gf - shrunk(5.3 * 30, 30)) < 1e-9, hi.gf);
   assert.ok(inBand(hi.gf));
+  const sameAsDefault = nhl.teamGpg(rangers);
+  assert.ok(Math.abs(sameAsDefault.gf - rangersGpg.gf) < 1e-12);
+  assert.strictEqual(sameAsDefault.shrinkWeight, rangersGpg.shrinkWeight);
+});
+
+// (i2) mode all shrinks every club, including one already inside the band.
+// More goals at the same gp never lowers the rate, including across the old 5.2 null.
+withEnv({ OMEGA_NHL_SHRINK_MODE: 'all' }, () => {
+  const got = nhl.teamGpg(rangers);
+  assert.ok(Math.abs(got.gf - shrunk(16, 5)) < 1e-9, got.gf);
+  assert.ok(Math.abs(got.ga - shrunk(8, 5)) < 1e-9, got.ga);
+  assert.strictEqual(got.gp, 5);
+  assert.ok(Math.abs(got.gfRaw - 16 / 5) < 1e-9);
+  assert.ok(Math.abs(got.shrinkWeight - K / (5 + K)) < 1e-9);
+  assert.ok(Math.abs(got.gf - (16 + 34 * 3.1) / 39) < 1e-9);
+  const fewer = nhl.teamGpg({ pf: 10, pa: 12, games: 8, nhlSeasonGoals: true });
+  const more = nhl.teamGpg({ pf: 22, pa: 12, games: 8, nhlSeasonGoals: true });
+  assert.ok(more.gf > fewer.gf);
+  const lo = nhl.teamGpg({ pf: 5.1, pa: 3.0, games: 30 });
+  const hi = nhl.teamGpg({ pf: 5.3, pa: 3.0, games: 30 });
+  assert.ok(lo && hi);
+  assert.ok(hi.gf > lo.gf, 'all keeps order across the old cap');
+  assert.ok(Math.abs(lo.gf - shrunk(5.1 * 30, 30)) < 1e-9, lo.gf);
+  assert.ok(Math.abs(hi.gf - shrunk(5.3 * 30, 30)) < 1e-9, hi.gf);
+  const shrunkRate = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
+  assert.ok(Math.abs(shrunkRate.gf - shrunk(3.2 * 40, 40)) < 1e-9, shrunkRate.gf);
+  assert.ok(Math.abs(shrunkRate.ga - shrunk(2.8 * 40, 40)) < 1e-9, shrunkRate.ga);
+  assert.ok(shrunkRate.shrinkWeight > 0);
+});
+withEnv({ OMEGA_NHL_SHRINK_MODE: 'all', OMEGA_NHL_SHRINK_K: '10' }, () => {
+  const got = nhl.teamGpg(rangers);
+  assert.ok(Math.abs(got.gf - shrunk(16, 5, 10)) < 1e-9, got.gf);
+  assert.ok(Math.abs(got.shrinkWeight - 10 / 15) < 1e-9);
 });
 
 // (j) mode off (and "0") is the pre-shrink main output.
@@ -317,15 +357,34 @@ const mainNhlFixture = [
   { sport: 'NHL', market: 'Total', side: 'Under 6', line: 6, modelRawP: 0.4999999325447795, modelProjection: 6, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
 ];
 
-withEnv({ OMEGA_NHL_SHRINK_MODE: 'off' }, () => {
-  const rows = nhl.project({
+const inBandStandings = {
+  'Colorado Avalanche': { pf: 3.4, pa: 2.6, wins: 40, losses: 20, otLosses: 5 },
+  'Dallas Stars': { pf: 3.1, pa: 2.9, wins: 35, losses: 25, otLosses: 4 },
+};
+function projectInBand() {
+  return nhl.project({
     oddsEvents: [synthNhl('Colorado Avalanche', 'Dallas Stars')],
-    standings: {
-      'Colorado Avalanche': { pf: 3.4, pa: 2.6, wins: 40, losses: 20, otLosses: 5 },
-      'Dallas Stars': { pf: 3.1, pa: 2.9, wins: 35, losses: 25, otLosses: 4 },
-    },
+    standings: inBandStandings,
   });
-  assert.deepStrictEqual(slim(rows), mainNhlFixture);
+}
+// Unset default is oob, so this in-band slate matches the pre-shrink board.
+assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
+withEnv({ OMEGA_NHL_SHRINK_MODE: 'oob' }, () => {
+  assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
+});
+withEnv({ OMEGA_NHL_SHRINK_MODE: 'off' }, () => {
+  assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
+});
+const allNhlFixture = [
+  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.546426095390771, modelProjection: 0.35, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.453573904609229, modelProjection: 0.35, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4111867145429522, modelProjection: 0.35, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
+  { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5888132854570478, modelProjection: 0.35, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
+  { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.5068838798182105, modelProjection: 6.07, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
+  { sport: 'NHL', market: 'Total', side: 'Under 6', line: 6, modelRawP: 0.4931161201817895, modelProjection: 6.07, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
+];
+withEnv({ OMEGA_NHL_SHRINK_MODE: 'all' }, () => {
+  assert.deepStrictEqual(slim(projectInBand()), allNhlFixture);
 });
 
 const logs = [];

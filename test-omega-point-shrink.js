@@ -482,8 +482,8 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.ok(idx.includes('gapReview: buildGapReview('));
 }
 
-// MLB matches the pre-change fixture. NHL per-game rates with a W-L-OTL gp shrink toward 3.1.
-// Neither sport carries football audit fields.
+// MLB matches the pre-change fixture. NHL in-band per-game rates stay raw under the
+// oob default (same board as mode off). Neither sport carries football audit fields.
 {
   function synth(home, away, opts) {
     const total = opts.total;
@@ -551,12 +551,12 @@ function assertEdgesNeverGrow(cands, ev) {
       { sport: 'MLB', market: 'Total', side: 'Under 8.5', line: 8.5, modelRawP: 0.46769106383505077, modelProjection: 9.13, fair_sharp_p: 0.5, odds: -110, projMethod: 'mlb-total-baseline' },
     ],
     nhl: [
-      { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.546426095390771, modelProjection: 0.35, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
-      { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.453573904609229, modelProjection: 0.35, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
-      { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4111867145429522, modelProjection: 0.35, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
-      { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5888132854570478, modelProjection: 0.35, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
-      { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.5068838798182105, modelProjection: 6.07, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
-      { sport: 'NHL', market: 'Total', side: 'Under 6', line: 6, modelRawP: 0.4931161201817895, modelProjection: 6.07, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
+      { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.554514682531127, modelProjection: 0.45, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
+      { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.445485317468873, modelProjection: 0.45, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
+      { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4186213384597734, modelProjection: 0.45, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
+      { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5813786615402265, modelProjection: 0.45, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
+      { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.4999999325447795, modelProjection: 6, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
+      { sport: 'NHL', market: 'Total', side: 'Under 6', line: 6, modelRawP: 0.4999999325447795, modelProjection: 6, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
     ],
   };
   assert.deepStrictEqual(slim(mlbC), before.mlb);

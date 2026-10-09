@@ -79,6 +79,30 @@ function rateOf(row, sport) {
   return pf;
 }
 
+/**
+ * NHL out-of-band follows the rate the projector actually uses.
+ * A club counts when teamGpg leaves it on the baseline for a bad rate
+ * (out of band, implausible, standings points) or the shrunk rate is still
+ * outside [floor, cap]. Early raw rates that shrink into the band are not
+ * an error. gp<2 and rows with no goals stay on the baseline and are
+ * counted in baselineTeams, not here.
+ */
+const NHL_OOB_REASONS = new Set(['out of band', 'implausible rate', 'standings-points guard']);
+
+function nhlClubHealth(row) {
+  const nhl = require('./sports/nhl');
+  const d = nhl.teamGpgDetail(row) || {};
+  const baseline = !!d.baseline;
+  let outOfBand = false;
+  if (d.baseline && NHL_OOB_REASONS.has(d.baseline)) outOfBand = true;
+  else if (!d.baseline && d.gf != null && d.ga != null) {
+    const lo = nhl.NHL_GPG_FLOOR;
+    const hi = nhl.NHL_GPG_CAP;
+    if (d.gf < lo || d.gf > hi || d.ga < lo || d.ga > hi) outOfBand = true;
+  }
+  return { outOfBand, baseline };
+}
+
 function roundTo(n, places) {
   const f = 10 ** places;
   return Math.round(n * f) / f;
@@ -147,21 +171,26 @@ function statSanity(snap, sport) {
   const rates = [];
   let gpZeroPoints = 0;
   let outOfBand = 0;
+  let baselineTeams = 0;
   let recordMismatch = 0;
   for (const row of rows) {
     const gp = explicitGp(row);
     const pf = pointsOf(row);
     if (gp === 0 && pf != null && pf !== 0) gpZeroPoints += 1;
     const rate = rateOf(row, sport);
-    if (rate != null) {
-      rates.push(rate);
-      if (band && (rate < band[0] || rate > band[1])) outOfBand += 1;
+    if (rate != null) rates.push(rate);
+    if (sport === 'NHL') {
+      const club = nhlClubHealth(row);
+      if (club.outOfBand) outOfBand += 1;
+      if (club.baseline) baselineTeams += 1;
+    } else if (rate != null && band && (rate < band[0] || rate > band[1])) {
+      outOfBand += 1;
     }
     if (rowMismatch(row)) recordMismatch += 1;
   }
   const modal = modalShare(rates, 4);
   const constantStat = modal.n >= 4 && modal.share > 0.8;
-  return {
+  const stats = {
     teams: rows.length,
     gpZeroPoints,
     outOfBand,
@@ -170,6 +199,8 @@ function statSanity(snap, sport) {
     constantValue: constantStat ? modal.value : null,
     constantShare: modal.n ? +modal.share.toFixed(3) : 0,
   };
+  if (sport === 'NHL') stats.baselineTeams = baselineTeams;
+  return stats;
 }
 
 function rowMismatch(row) {

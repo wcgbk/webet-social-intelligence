@@ -11,6 +11,10 @@
  * Missing shots, savePct, or goalie rates soft-fail to 0. Residuals sit
  * under ENGINE_SOFT.NHL. Final margin/total soft-clamp (|spread| 6, total 12)
  * and still emit a candidate.
+ *
+ * GF/GA per game shrinks toward the league mean (K = 34) so an early rate
+ * outside [1.5, 5.2] is clamped, not dropped onto the flat 6.2 baseline.
+ * OMEGA_NHL_SHRINK_MODE and OMEGA_NHL_SHRINK_K pick the variant at call time.
  */
 const { clamp } = require('../odds_math');
 const { HFA, ENGINE_SOFT } = require('../config');
@@ -31,12 +35,31 @@ const NHL_TOTAL_MAX = 12;
 const NHL_GPG_FLOOR = 1.5;
 const NHL_GPG_CAP = 5.2;
 /**
- * Season-sum GF/GA divides into a per-game rate once games played reach this.
+ * Raw GF/GP or GA/GP above this is corrupt, not a hot start.
+ * No NHL club averages 10+ over 2+ games. Real early extremes are ~7 and
+ * still shrink. Above this returns the baseline ('implausible rate').
+ */
+const NHL_GPG_IMPLAUSIBLE = 10;
+/**
+ * Empirical-Bayes prior strength, in games, for GF/GP and GA/GP.
+ * Per-game goals are roughly Poisson, so sampling variance ≈ LEAGUE_GPG (3.1).
+ * Between-team true-talent SD is about 0.30 goals/game.
+ * K = variance / talentSD^2 = 3.1 / 0.30^2 ≈ 34.4, taken as 34.
+ * Chosen a priori, not fit on a replay.
+ * gf_hat = (GF_sum + K * LEAGUE_GPG) / (gp + K), same for GA, then clamped
+ * to [NHL_GPG_FLOOR, NHL_GPG_CAP]. OMEGA_NHL_SHRINK_K overrides K at call
+ * time (0 or "off" = no shrink). OMEGA_NHL_SHRINK_MODE is 'all' (default),
+ * 'oob' (shrink only clubs the old band would have nulled), or 'off'
+ * (exact pre-shrink behavior). "0" / "off" disables the mode.
+ */
+const NHL_GPG_PRIOR_GAMES = 34;
+/**
+ * Season-sum GF/GA is eligible once games played reach this.
  * A sum is pf/pa above ~1.8× league gpg, or ingest's nhlSeasonGoals flag
  * (ESPN Goals For, which is cumulative even when the total is still small).
- * The rate must still land in [NHL_GPG_FLOOR, NHL_GPG_CAP] = [1.5, 5.2].
  * gp below this (one game) stays on the 6.2 / HFA baseline. Week-1 clubs
- * were stuck there when this was 5. Win% and shot season-sums use
+ * were stuck there when this was 5. [NHL_GPG_FLOOR, NHL_GPG_CAP] clamps the
+ * shrunk rate; it does not drop the club. Win% and shot season-sums use
  * NHL_SOFT_MIN_GAMES, not this spine.
  */
 const NHL_MIN_GAMES = 2;
@@ -88,35 +111,165 @@ function pfLooksLikeStandingsPoints(st, pf) {
   return Math.abs(pf - guess) <= Math.max(3, guess * 0.12);
 }
 
-/**
- * Goals for/against per game.
- * Season totals (pf 250) need a game count. Per-game rates (pf 3.2) pass through.
- * pf or pa that matches standings points (2*W+OTL) returns null, unless
- * nhlSeasonGoals is set (explicit ESPN Goals For/Against). Other unclean
- * rows return null so the caller keeps the 6.2 / HFA baseline.
- */
-function teamGpg(st) {
+function envToggle(name) {
+  const raw = process.env[name];
+  if (raw == null) return null;
+  const s = String(raw).trim().toLowerCase();
+  return s === '' ? null : s;
+}
+
+/** Read at call time so a replay can switch variants without a new commit. */
+function shrinkSettings() {
+  const modeText = envToggle('OMEGA_NHL_SHRINK_MODE');
+  let mode = 'all';
+  if (modeText === '0' || modeText === 'off') mode = 'off';
+  else if (modeText === 'oob' || modeText === 'all') mode = modeText;
+  const kText = envToggle('OMEGA_NHL_SHRINK_K');
+  let k = NHL_GPG_PRIOR_GAMES;
+  if (kText === '0' || kText === 'off') k = 0;
+  else if (kText != null) {
+    const n = Number(kText);
+    if (Number.isFinite(n) && n >= 0) k = n;
+  }
+  return { mode, k };
+}
+
+function noneGpg(baseline) {
+  return { gf: null, ga: null, gfRaw: null, gaRaw: null, gp: null, shrinkWeight: null, baseline };
+}
+
+function inGpgBand(x) {
+  return x >= NHL_GPG_FLOOR && x <= NHL_GPG_CAP;
+}
+
+function goalsPair(st) {
   if (!st || typeof st !== 'object') return null;
   const pf = Number(st.pf != null ? st.pf : st.gf);
   const pa = Number(st.pa != null ? st.pa : st.ga);
-  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf <= 0 || pa <= 0) return null;
-  // Explicit ESPN GF/GA can equal 2*W+OTL (Rangers GA 8). Do not treat that as points.
+  return { pf, pa };
+}
+
+/**
+ * Pre-shrink teamGpg. Same nulls and the same { gf, ga } values as main
+ * before this change. Kept so OMEGA_NHL_SHRINK_MODE=off matches that output.
+ */
+function legacyDetail(st) {
+  const pair = goalsPair(st);
+  if (!pair) return noneGpg('no goals data');
+  const { pf, pa } = pair;
+  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf < 0 || pa < 0) return noneGpg('implausible rate');
+  if (pf === 0 || pa === 0) return noneGpg('no goals data');
   if (st.nhlSeasonGoals !== true &&
-      (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa))) return null;
+      (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa))) {
+    return noneGpg('standings-points guard');
+  }
   let gf = pf;
   let ga = pa;
-  // ESPN Goals For is a season sum (nhlSeasonGoals). A large raw total is too,
-  // including rows that never went through ingest. A per-game rate (3.2, or
-  // an avgGoalsFor column) is neither, and is not divided.
+  const g = nhlGames(st);
   const seasonSum = st.nhlSeasonGoals === true || pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
   if (seasonSum) {
-    const g = nhlGames(st);
-    if (g < NHL_MIN_GAMES) return null;
+    if (g < NHL_MIN_GAMES) return noneGpg('gp<2');
     gf = pf / g;
     ga = pa / g;
   }
-  if (!(gf >= NHL_GPG_FLOOR && gf <= NHL_GPG_CAP && ga >= NHL_GPG_FLOOR && ga <= NHL_GPG_CAP)) return null;
-  return { gf, ga };
+  if (!Number.isFinite(gf) || !Number.isFinite(ga)) return noneGpg('implausible rate');
+  if (gf > NHL_GPG_IMPLAUSIBLE || ga > NHL_GPG_IMPLAUSIBLE) return noneGpg('implausible rate');
+  if (!(inGpgBand(gf) && inGpgBand(ga))) return noneGpg('out of band');
+  return {
+    gf,
+    ga,
+    gfRaw: gf,
+    gaRaw: ga,
+    gp: seasonSum ? g : (g > 0 ? g : null),
+    shrinkWeight: 0,
+    baseline: null,
+  };
+}
+
+function finishFromSums(gfSum, gaSum, gp, k, mode) {
+  if (!(gp > 0) || !Number.isFinite(gfSum) || !Number.isFinite(gaSum)) return noneGpg('implausible rate');
+  const gfRaw = gfSum / gp;
+  const gaRaw = gaSum / gp;
+  if (!Number.isFinite(gfRaw) || !Number.isFinite(gaRaw) || gfRaw < 0 || gaRaw < 0) {
+    return noneGpg('implausible rate');
+  }
+  if (gfRaw > NHL_GPG_IMPLAUSIBLE || gaRaw > NHL_GPG_IMPLAUSIBLE) return noneGpg('implausible rate');
+  if (mode === 'oob' && inGpgBand(gfRaw) && inGpgBand(gaRaw)) {
+    return { gf: gfRaw, ga: gaRaw, gfRaw, gaRaw, gp, shrinkWeight: 0, baseline: null };
+  }
+  let gf = gfRaw;
+  let ga = gaRaw;
+  let shrinkWeight = 0;
+  if (k > 0) {
+    gf = (gfSum + k * LEAGUE_GPG) / (gp + k);
+    ga = (gaSum + k * LEAGUE_GPG) / (gp + k);
+    shrinkWeight = k / (gp + k);
+  }
+  return {
+    gf: clamp(gf, NHL_GPG_FLOOR, NHL_GPG_CAP),
+    ga: clamp(ga, NHL_GPG_FLOOR, NHL_GPG_CAP),
+    gfRaw,
+    gaRaw,
+    gp,
+    shrinkWeight,
+    baseline: null,
+  };
+}
+
+/**
+ * Goals for/against per game.
+ * Season sums (nhlSeasonGoals, or a total above ~1.8× league gpg) shrink as
+ * (sum + K * LEAGUE_GPG) / (gp + K) once gp reaches NHL_MIN_GAMES.
+ * Per-game rates with a known gp convert to sums, then shrink the same way.
+ * A per-game rate with no gp keeps the old pass-through: in band, or null.
+ * gp below NHL_MIN_GAMES on a season sum stays null (6.2 baseline).
+ * [NHL_GPG_FLOOR, NHL_GPG_CAP] clamps the shrunk rate. It does not null it.
+ * Zero goals after 2+ games is real data. A raw rate above
+ * NHL_GPG_IMPLAUSIBLE, or a non-finite / negative total, is 'implausible rate'.
+ * Standings points (2*W+OTL) still null, unless nhlSeasonGoals is set.
+ * Returns null from teamGpg when baseline is set. teamGpgDetail keeps the reason.
+ */
+function teamGpgDetail(st) {
+  const cfg = shrinkSettings();
+  if (cfg.mode === 'off') return legacyDetail(st);
+  const pair = goalsPair(st);
+  if (!pair) return noneGpg('no goals data');
+  const { pf, pa } = pair;
+  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf < 0 || pa < 0) return noneGpg('implausible rate');
+  if (st.nhlSeasonGoals !== true &&
+      (pfLooksLikeStandingsPoints(st, pf) || pfLooksLikeStandingsPoints(st, pa))) {
+    return noneGpg('standings-points guard');
+  }
+  const g = nhlGames(st);
+  const seasonSum = st.nhlSeasonGoals === true || pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
+  if (seasonSum) {
+    if (g < NHL_MIN_GAMES) return noneGpg('gp<2');
+    return finishFromSums(pf, pa, g, cfg.k, cfg.mode);
+  }
+  if (!(g > 0)) {
+    if (!(pf > 0 && pa > 0)) return noneGpg('no goals data');
+    if (pf > NHL_GPG_IMPLAUSIBLE || pa > NHL_GPG_IMPLAUSIBLE) return noneGpg('implausible rate');
+    if (inGpgBand(pf) && inGpgBand(pa)) {
+      return { gf: pf, ga: pa, gfRaw: pf, gaRaw: pa, gp: null, shrinkWeight: 0, baseline: null };
+    }
+    return noneGpg('out of band');
+  }
+  if ((pf === 0 || pa === 0) && g < NHL_MIN_GAMES) return noneGpg('no goals data');
+  return finishFromSums(pf * g, pa * g, g, cfg.k, cfg.mode);
+}
+
+function teamGpg(st) {
+  const d = teamGpgDetail(st);
+  if (!d || d.baseline) return null;
+  if (shrinkSettings().mode === 'off') return { gf: d.gf, ga: d.ga };
+  return {
+    gf: d.gf,
+    ga: d.ga,
+    gfRaw: d.gfRaw,
+    gaRaw: d.gaRaw,
+    gp: d.gp,
+    shrinkWeight: d.shrinkWeight,
+  };
 }
 
 function teamWinPct(st) {
@@ -132,22 +285,38 @@ function teamWinPct(st) {
   return null;
 }
 
+function sideDiag(prefix, detail) {
+  const d = detail || {};
+  const onBase = !d || !!d.baseline;
+  return {
+    [`${prefix}GfRaw`]: onBase ? null : d.gfRaw,
+    [`${prefix}GaRaw`]: onBase ? null : d.gaRaw,
+    [`${prefix}Gp`]: onBase ? null : d.gp,
+    [`${prefix}ShrinkWeight`]: onBase ? null : d.shrinkWeight,
+    [`${prefix}Baseline`]: d.baseline || null,
+  };
+}
+
 /**
  * Home margin = (home goals − away goals) + HFA. Total = the sum.
  * Equal clubs land on HFA and 6.2. Missing either side stays on that baseline.
+ * gfRaw / gaRaw / gp / shrinkWeight are private diag on this env. They are
+ * not copied onto candidates.
  */
 function nhlStandingsEnv(homeSt, awaySt) {
   const hfa = Number.isFinite(Number(HFA && HFA.NHL)) ? Number(HFA.NHL) : 0.15;
+  const h = teamGpgDetail(homeSt);
+  const a = teamGpgDetail(awaySt);
+  const diag = { ...sideDiag('home', h), ...sideDiag('away', a) };
   const neutral = {
     modelMargin: hfa,
     modelTotal: NEUTRAL_TOTAL,
     usedStandings: false,
     homeGoals: LEAGUE_GPG,
     awayGoals: LEAGUE_GPG,
+    ...diag,
   };
-  const h = teamGpg(homeSt);
-  const a = teamGpg(awaySt);
-  if (!h || !a) return neutral;
+  if (!h || h.baseline || !a || a.baseline) return neutral;
   const homeGoals = (h.gf + a.ga) / 2;
   const awayGoals = (a.gf + h.ga) / 2;
   const modelTotal = homeGoals + awayGoals;
@@ -163,6 +332,7 @@ function nhlStandingsEnv(homeSt, awaySt) {
     homeGa: h.ga,
     awayGf: a.gf,
     awayGa: a.ga,
+    ...diag,
   };
 }
 
@@ -378,13 +548,17 @@ function findEspnGame(ev, espnGames) {
   }) || null;
 }
 
-function projectGame(event, standings, espnGame, gameDay, fallbackSeen) {
+function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
   const homeSt = rowByIdentityOrFuzzy('NHL', standings, home, { fallbackSeen });
   const awaySt = rowByIdentityOrFuzzy('NHL', standings, away, { fallbackSeen });
   const env = nhlStandingsEnv(homeSt, awaySt);
+  if (baseline) {
+    if (env.homeBaseline) baseline.push(`${home || '?'} (${env.homeBaseline})`);
+    if (env.awayBaseline) baseline.push(`${away || '?'} (${env.awayBaseline})`);
+  }
   const soft = applyNhlEngineSoft({
     modelMargin: env.modelMargin,
     modelTotal: env.modelTotal,
@@ -502,10 +676,21 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen) {
 function project({ oddsEvents, standings, gameDay, espnGames } = {}) {
   const games = (espnGames && espnGames.games) || espnGames || [];
   const fallbackSeen = new Set();
-  return mapGamesSoft(oddsEvents, (ev) => {
+  const baseline = [];
+  const rows = mapGamesSoft(oddsEvents, (ev) => {
     const eg = findEspnGame(ev, games);
-    return projectGame(ev, standings || {}, eg, gameDay || {}, fallbackSeen);
+    return projectGame(ev, standings || {}, eg, gameDay || {}, fallbackSeen, baseline);
   });
+  const seen = new Set();
+  const uniq = [];
+  for (const item of baseline) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    uniq.push(item);
+  }
+  const list = uniq.length ? uniq.join(', ') : '(none)';
+  console.log(`[omega-nhl] baseline teams: ${list}`);
+  return rows;
 }
 
 module.exports = {
@@ -514,7 +699,12 @@ module.exports = {
   nhlStandingsEnv,
   applyNhlEngineSoft,
   teamGpg,
+  teamGpgDetail,
   NHL_MIN_GAMES,
+  NHL_GPG_PRIOR_GAMES,
+  NHL_GPG_IMPLAUSIBLE,
+  NHL_GPG_FLOOR,
+  NHL_GPG_CAP,
   NHL_MARGIN_CAP,
   NHL_TOTAL_MIN,
   NHL_TOTAL_MAX,

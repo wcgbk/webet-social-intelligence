@@ -6,6 +6,7 @@
 
 const { CONTEST, resolveContestWeek, weekBlobKey } = require("./lib/circa-contest");
 const { buildSeason, writeStuckAlert } = require("./lib/circa-season");
+const { rejectUnlessEtSlot } = require("./lib/et-schedule");
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 
@@ -45,7 +46,9 @@ async function makeIo() {
   };
 }
 
-exports.handler = async () => {
+exports.handler = async (event) => {
+  const etSkip = rejectUnlessEtSlot("regrade-circa", event);
+  if (etSkip) return etSkip;
   const now = new Date();
   const cur = resolveContestWeek(now);
   if (cur.preSeason) return { statusCode: 200, body: "Circa regrade no-op (pre-season)" };

@@ -40,6 +40,8 @@ const ET_SCHEDULE = {
     ],
     days: [3, 4, 5, 6],
   },
+  // Circa ops: hourly frozen-card regrade + stuck-game alert (every ET hour at :40).
+  'regrade-circa': { etTimes: ['00:40', '03:40', '04:40', '05:40', '06:40', '07:40', '08:40', '09:40', '10:40', '11:40', '12:40', '13:40', '14:40', '15:40', '16:40', '17:40', '18:40', '19:40', '20:40', '21:40', '22:40', '23:40'] },
   'trigger-picks-cfb': { etTimes: ['09:10'] },
   'confirm-starters-mlb': { etTimes: ['13:30'] },
   'trigger-clv': { etTimes: ['03:00', '13:00', '19:00'] },

@@ -43,16 +43,16 @@ function withEnv(extra, fn) {
 delete process.env.OMEGA_NHL_SHRINK_MODE;
 delete process.env.OMEGA_NHL_SHRINK_K;
 
-// Default is oob. In-band clubs keep the raw rate. Out-of-band clubs shrink.
-// (a) Rangers GF 16 / GA 8 at gp 5 is 3.2 and 1.6, inside the band.
+// Default is all. Every club with a known gp shrinks to the league mean.
+// (a) Rangers GF 16 / GA 8 at gp 5. Raw 3.2 and 1.6 are inside the band.
 const rangers = { wins: 4, losses: 1, otLosses: 0, games: 5, pf: 16, pa: 8, nhlSeasonGoals: true };
 const rangersGpg = nhl.teamGpg(rangers);
 assert.ok(rangersGpg, 'explicit Goals For is not standings points');
-assert.ok(Math.abs(rangersGpg.gf - 16 / 5) < 1e-9, rangersGpg.gf);
-assert.ok(Math.abs(rangersGpg.ga - 8 / 5) < 1e-9, rangersGpg.ga);
+assert.ok(Math.abs(rangersGpg.gf - shrunk(16, 5)) < 1e-9, rangersGpg.gf);
+assert.ok(Math.abs(rangersGpg.ga - shrunk(8, 5)) < 1e-9, rangersGpg.ga);
 assert.strictEqual(rangersGpg.gp, 5);
 assert.ok(Math.abs(rangersGpg.gfRaw - 16 / 5) < 1e-9);
-assert.strictEqual(rangersGpg.shrinkWeight, 0);
+assert.ok(Math.abs(rangersGpg.shrinkWeight - K / (5 + K)) < 1e-9);
 
 // (b) Early extremes are out of band, so the default still shrinks them off the flat 6.2.
 const avsRow = { pf: 14, pa: 5, games: 2, nhlSeasonGoals: true };
@@ -77,14 +77,15 @@ assert.strictEqual(early.homeBaseline, null);
 assert.strictEqual(early.awayBaseline, null);
 assert.ok(Math.abs(early.awayGaRaw - 16 / 3) < 1e-9);
 
-// (c) Default oob: a rate inside the cap stays raw. A rate just over the cap is rescued, not discarded.
+// (c) Default all shrinks a rate inside the cap and a rate just over it.
 const rateLo = nhl.teamGpg({ pf: 5.1, pa: 3.0, games: 30 });
 const rateHi = nhl.teamGpg({ pf: 5.3, pa: 3.0, games: 30 });
-assert.ok(rateLo && rateHi, 'a 5.3 rate is rescued, not discarded');
-assert.ok(Math.abs(rateLo.gf - 5.1) < 1e-9, rateLo.gf);
-assert.strictEqual(rateLo.shrinkWeight, 0);
+assert.ok(rateLo && rateHi, 'a 5.3 rate is shrunk, not discarded');
+assert.ok(Math.abs(rateLo.gf - shrunk(5.1 * 30, 30)) < 1e-9, rateLo.gf);
+assert.ok(rateLo.shrinkWeight > 0);
 assert.ok(Math.abs(rateHi.gf - shrunk(5.3 * 30, 30)) < 1e-9, rateHi.gf);
 assert.ok(inBand(rateHi.gf));
+assert.ok(rateHi.gf > rateLo.gf, 'all keeps order across the old cap');
 assert.ok(Math.abs(rateLo.gfRaw - 5.1) < 1e-9);
 assert.ok(Math.abs(rateHi.gfRaw - 5.3) < 1e-9);
 
@@ -111,12 +112,12 @@ assert.strictEqual(
   null
 );
 
-// (f) In-band per-game rate with a known gp stays raw under the default.
+// (f) In-band per-game rate with a known gp shrinks under the all default.
 const rate = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
 assert.ok(rate);
-assert.ok(Math.abs(rate.gf - 3.2) < 1e-9, rate.gf);
-assert.ok(Math.abs(rate.ga - 2.8) < 1e-9, rate.ga);
-assert.strictEqual(rate.shrinkWeight, 0);
+assert.ok(Math.abs(rate.gf - shrunk(3.2 * 40, 40)) < 1e-9, rate.gf);
+assert.ok(Math.abs(rate.ga - shrunk(2.8 * 40, 40)) < 1e-9, rate.ga);
+assert.ok(rate.shrinkWeight > 0);
 assert.ok(Math.abs(rate.gfRaw - 3.2) < 1e-9);
 
 // Unknown gp still passes a rate through only inside the band. Zero after 2+ games shrinks.
@@ -144,12 +145,12 @@ const avalancheGp2 = nhl.teamGpg({ pf: 14, pa: 5, games: 2, nhlSeasonGoals: true
 assert.ok(avalancheGp2, 'Avalanche gp 2, 14/5 (raw 7.0) is not implausible');
 assert.ok(Math.abs(avalancheGp2.gfRaw - 7) < 1e-9, avalancheGp2 && avalancheGp2.gfRaw);
 
-// (h) K is read at call time. Under the oob default it moves only an out-of-band club.
+// (h) K is read at call time. Under the all default it moves every club.
 // 0 / "off" is no shrink: in-band stays raw, out-of-band clamps.
 withEnv({ OMEGA_NHL_SHRINK_K: '10' }, () => {
   const kept = nhl.teamGpg(rangers);
-  assert.ok(Math.abs(kept.gf - 16 / 5) < 1e-9, kept.gf);
-  assert.strictEqual(kept.shrinkWeight, 0);
+  assert.ok(Math.abs(kept.gf - shrunk(16, 5, 10)) < 1e-9, kept.gf);
+  assert.ok(Math.abs(kept.shrinkWeight - 10 / 15) < 1e-9);
   const hot = nhl.teamGpg(avsRow);
   assert.ok(Math.abs(hot.gf - shrunk(14, 2, 10)) < 1e-9, hot.gf);
   assert.ok(Math.abs(hot.shrinkWeight - 10 / 12) < 1e-9);
@@ -170,7 +171,7 @@ withEnv({ OMEGA_NHL_SHRINK_K: 'off' }, () => {
   assert.ok(Math.abs(hot.gf - nhl.NHL_GPG_CAP) < 1e-9, hot.gf);
 });
 
-// (i) Explicit mode oob matches the unset default: in-band stays raw, Avalanche is rescued.
+// (i) Explicit mode oob: in-band stays raw, Avalanche is rescued. Not the unset default.
 withEnv({ OMEGA_NHL_SHRINK_MODE: 'oob' }, () => {
   const kept = nhl.teamGpg({ pf: 3.2, pa: 2.8, games: 40 });
   assert.ok(Math.abs(kept.gf - 3.2) < 1e-9, kept.gf);
@@ -189,9 +190,10 @@ withEnv({ OMEGA_NHL_SHRINK_MODE: 'oob' }, () => {
   assert.ok(hi, 'oob rescues a rate just above the old cap');
   assert.ok(Math.abs(hi.gf - shrunk(5.3 * 30, 30)) < 1e-9, hi.gf);
   assert.ok(inBand(hi.gf));
-  const sameAsDefault = nhl.teamGpg(rangers);
-  assert.ok(Math.abs(sameAsDefault.gf - rangersGpg.gf) < 1e-12);
-  assert.strictEqual(sameAsDefault.shrinkWeight, rangersGpg.shrinkWeight);
+  const rescuedOnly = nhl.teamGpg(rangers);
+  assert.ok(Math.abs(rescuedOnly.gf - 16 / 5) < 1e-9);
+  assert.strictEqual(rescuedOnly.shrinkWeight, 0);
+  assert.ok(Math.abs(rescuedOnly.gf - rangersGpg.gf) > 1e-6);
 });
 
 // (i2) mode all shrinks every club, including one already inside the band.
@@ -367,8 +369,6 @@ function projectInBand() {
     standings: inBandStandings,
   });
 }
-// Unset default is oob, so this in-band slate matches the pre-shrink board.
-assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
 withEnv({ OMEGA_NHL_SHRINK_MODE: 'oob' }, () => {
   assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
 });
@@ -386,6 +386,8 @@ const allNhlFixture = [
 withEnv({ OMEGA_NHL_SHRINK_MODE: 'all' }, () => {
   assert.deepStrictEqual(slim(projectInBand()), allNhlFixture);
 });
+// Unset default is all, so this in-band slate matches the full shrink board.
+assert.deepStrictEqual(slim(projectInBand()), allNhlFixture);
 
 const logs = [];
 const origLog = console.log;

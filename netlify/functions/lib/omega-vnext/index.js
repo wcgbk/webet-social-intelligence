@@ -29,6 +29,7 @@ const cfb = require('./sports/cfb');
 const nba = require('./sports/nba');
 const nhl = require('./sports/nhl');
 const { footballAuditFields } = require('./sports/_common');
+const { restAuditFields } = require('./sports/game_day');
 
 function todayET() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -545,6 +546,7 @@ async function generateOmegaVnext(opts = {}) {
     placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
     bestPlaceable: c.bestPlaceable || null,
     ...footballAuditFields(c),
+    ...restAuditFields(c),
     selected: picks.some(p => {
       const labeled = formatMoneylinePick(c.side, c.market);
       return (p.pick === c.side || p.pick === labeled) && p.matchup === c.matchup;
@@ -815,7 +817,7 @@ function sampleRejectionsBySport(rows, cap = REJECTION_PER_SPORT_CAP) {
     bySportReason[sport][reason] = (bySportReason[sport][reason] || 0) + 1;
     if (kept[sport] == null) kept[sport] = 0;
     if (kept[sport] < limit) {
-      const row = { sport, matchup: r.matchup, side: r.side, reason, ...rejectionAuditFields(r), ...footballAuditFields(r) };
+      const row = { sport, matchup: r.matchup, side: r.side, reason, ...rejectionAuditFields(r), ...footballAuditFields(r), ...restAuditFields(r) };
       if (r && r.hardFail) row.hardFail = true;
       stored.push(row);
       kept[sport] += 1;
@@ -862,6 +864,7 @@ function buildRejectionLog(hardFails, narrRejections, rejected) {
       reason: r.rejectReason || r.reason || 'gate',
       ...rejectionAuditFields(r),
       ...footballAuditFields(r),
+      ...restAuditFields(r),
     };
     if (r.hardFail) row.hardFail = true;
     rows.push(row);

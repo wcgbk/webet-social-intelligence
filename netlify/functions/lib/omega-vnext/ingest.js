@@ -175,10 +175,19 @@ async function fetchEspnScoreboard(label, dateISO) {
     if (sameDay.length !== games.length) {
       console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
     }
-    return { league: label, games: sameDay };
+    const seasonYear = data && data.season && data.season.year != null ? Number(data.season.year) : null;
+    const weekNumber = data && data.week && data.week.number != null ? Number(data.week.number) : null;
+    const calendar = (data && data.leagues && data.leagues[0] && data.leagues[0].calendar) || null;
+    return {
+      league: label,
+      games: sameDay,
+      seasonYear: Number.isInteger(seasonYear) ? seasonYear : null,
+      weekNumber: Number.isInteger(weekNumber) ? weekNumber : null,
+      calendar: Array.isArray(calendar) ? calendar : null,
+    };
   } catch (e) {
     console.error(`[omega-vnext/ingest] ESPN ${label}: ${e.message}`);
-    return { league: label, games: [] };
+    return { league: label, games: [], seasonYear: null, weekNumber: null, calendar: null };
   }
 }
 
@@ -639,6 +648,7 @@ async function fetchMlbPitcherStats(dateISO) {
  */
 
 const { prevEtDate, restMapFromScoreboard } = require('./sports/game_day');
+const { loadFootballRestSchedules } = require('./sports/rest_schedule');
 
 /** Soft QB out/doubtful/questionable map from ESPN injuries (football). */
 async function fetchFootballQbStatusMap(leagueSlug) {
@@ -719,6 +729,30 @@ async function loadGameDayContext(dateISO, labels, espnBySport) {
     if (labels.includes('NCAAF')) gameDay.qbStatusBySport.NCAAF = await fetchFootballQbStatusMap('college-football');
   } catch (e) {
     console.error(`[omega-vnext/ingest] CFB QB soft-fail: ${e.message}`);
+  }
+  const footballLabels = labels.filter((l) => l === 'NFL' || l === 'NCAAF');
+  if (footballLabels.length) {
+    try {
+      gameDay.restSchedule = await loadFootballRestSchedules(dateISO, {
+        labels: footballLabels,
+        boards: espnBySport || {},
+      });
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] rest-days soft-fail: ${e.message}`);
+      gameDay.restSchedule = {};
+      for (const sport of footballLabels) {
+        gameDay.restSchedule[sport] = {
+          sport,
+          loaded: false,
+          fetchFailed: true,
+          games: [],
+          weeks: [],
+          calls: 0,
+          source: null,
+          error: e.message,
+        };
+      }
+    }
   }
   // Weather from today's MLB ESPN board already fetched
   const mlbBoard = espnBySport && espnBySport.MLB;
@@ -871,6 +905,7 @@ module.exports = {
   ratingsFromStandingsEntries,
   scoreboardSeasonFields,
   fetchFootballQbStatusMap,
+  loadFootballRestSchedules,
   enabledSportLabels,
   filterEventsSameEtDay,
   etCalendarDate,

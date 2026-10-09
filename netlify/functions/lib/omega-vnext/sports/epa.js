@@ -467,6 +467,12 @@ function pieceAdj(row, field) {
 /**
  * Apply the sport's stacked engine cap. Contributions already sit inside modelMargin.
  * NFL: success + QB continuity. NCAAF: talent + QB continuity.
+ *
+ * Football rest (short week, mini-bye, bye, MNF→Sun) is recorded on
+ * gameDay by applyGameDayAdjustments and added here, after the stack.
+ * It is not a `parts` entry, so ENGINE_SOFT.maxAbsMarginAdj cannot scale
+ * it. Its own cap is REST_ADJ (±1.0). The total is not an input here
+ * and is not moved.
  */
 function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
   const caps = (ENGINE_SOFT && ENGINE_SOFT[sport]) || {};
@@ -480,6 +486,7 @@ function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
     parts.push({ key: 'talent', adj: pieceAdj(soft.talent, 'appliedMarginAdj') });
     parts.push({ key: 'continuity', adj: pieceAdj(gd && gd.qbContinuity, 'marginAdj') });
   }
+  // Rest stays out of `parts` on purpose. See the comment above.
   const stacked = applyStackedMarginCap(modelMargin, parts, caps.maxAbsMarginAdj);
   const nextSoft = { ...soft, stacked };
   if (nextSoft.success && stacked.byKey.success != null) {
@@ -504,12 +511,18 @@ function applyEngineStack({ sport, modelMargin, engineSoft, gameDay } = {}) {
       stackCapped: stacked.capped,
     };
   }
+  // Rest is outside the stack. 0 when the schedule path is off, so the
+  // played-yesterday proxy (already inside modelMargin) is unchanged.
+  const restAdj = (gd && gd.restPending === true && Number.isFinite(Number(gd.restAdj)))
+    ? Number(gd.restAdj)
+    : 0;
   return {
-    modelMargin: stacked.modelMargin,
+    modelMargin: stacked.modelMargin + restAdj,
     engineSoft: nextSoft,
     gameDay: gd,
     enginesOn: Math.abs(stacked.rawSum) > 1e-9 || !!soft.used,
     stacked,
+    restAdj,
   };
 }
 

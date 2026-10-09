@@ -348,6 +348,60 @@ const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 
 const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 
 /**
+ * Football rest, points on the home margin. Totals stay put (totalCap 0).
+ * Home margin = (homePoints − awayPoints) + roadShort when the away team
+ * is short. Hard cap ±cap. OMEGA_REST_ADJ=0 skips this and keeps the
+ * played-yesterday HFA proxy in game_day.js (byte-identical to 8c2d498).
+ *
+ * Days are America/New_York calendar days between kickoffs.
+ * NFL: short ≤4 (Thursday after Sunday), normal 5–9 except Monday→Sunday
+ * at exactly 6 days (mnf), mini-bye 10–12, bye ≥13.
+ * NCAAF prices only a Tue/Wed/Thu game on ≤5 days, and a bye ≥13, at half
+ * the NFL size. Public college rest estimates are thin.
+ *
+ * Either side with no prior regular-season game (week 1, preseason, or a
+ * failed scoreboard) is unknown and the game's adj is 0.
+ *
+ * Sources, kept inside the modest bands rather than the pre-2011 extremes:
+ * - FiveThirtyEight, "How Our NFL Predictions Work" (Elo, through 2022):
+ *   +25 Elo on a bye. Home field there is ~48 Elo and about 2 points, so
+ *   25 Elo is about +1.0 point. We use +0.70.
+ * - BTB Analytics, "Is Extra Rest Really an Edge in the NFL?" (2025):
+ *   after the 2011 CBA the bye edge fell to about +0.3 and was not
+ *   significant; markets still priced about +0.4 to +1.0. A mini-bye
+ *   (10 days after Thursday) was not significant. Monday night into
+ *   Sunday was about −0.18 on the margin and −0.37 in the market.
+ * - ELWAY forecasts: bye vs non-bye about +1.0; an extra day when the
+ *   opponent played Monday night about +0.3.
+ * - Zakarian, NFL Analytics, "Does Rest Matter?" (nflverse, 1999–2025,
+ *   7,276 games): only a 4+ day rest gap moves home margin. Smaller gaps
+ *   sit on the baseline, so a normal week is 0.
+ * - BettorEdge bye-week review (2002–2025): 560 of 561 team-games with
+ *   ≤4 days of rest faced an opponent also on ≤4 days, so Thursday has
+ *   no rest differential. The leftover is the road trip (roadShort).
+ *   Thursday totals are not lower (NFL Analytics: Thursday 45.0 vs Sunday
+ *   44.1), so this block does not move the total.
+ */
+const REST_ADJ = {
+  NFL: {
+    short: -0.55,
+    miniBye: 0.35,
+    bye: 0.70,
+    mnf: -0.35,
+    roadShort: 0.35,
+    cap: 1.0,
+    totalCap: 0,
+  },
+  NCAAF: {
+    short: -0.275,
+    bye: 0.35,
+    roadShort: 0.175,
+    cap: 1.0,
+    totalCap: 0,
+  },
+};
+
+/**
  * NFL total-only weather from the free ESPN scoreboard already fetched
  * for the slate (competitions[0].weather: temperature, windSpeed,
  * displayValue). No new paid call. Dome (venue.indoor) or no weather
@@ -486,6 +540,11 @@ function fbGapGuardEnabled() {
   return flagEnabled('OMEGA_FB_GAP_GUARD');
 }
 
+/** Default on. OMEGA_REST_ADJ=0 keeps the played-yesterday rest proxy. */
+function restAdjEnabled() {
+  return flagEnabled('OMEGA_REST_ADJ');
+}
+
 function fbMarketGapLimits(sport) {
   const base = FB_MARKET_GAP[sport];
   if (!base) return null;
@@ -507,6 +566,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'Patch 2026-10-09 (v12.3.13 label kept): NFL/NCAAF rest days from ESPN weekly scoreboards (card week and the previous two). Short week, mini-bye, bye, and Monday-night into Sunday move the home margin by the team difference plus a small road-on-short-rest term. Hard cap ±1.0 pt. NCAAF midweek and bye are half the NFL size, same cap. Totals unchanged. OMEGA_REST_ADJ=0 restores the played-yesterday proxy. No gate, Kelly, unit-cap, SHRINK_K, calibration, or parlay change.',
   `v12.3.13 omega-vnext: NHL projector ENABLED (WeBet 2026-09-30). Moneyline, puck line (Spread), and total come from per-game goals for/against plus HFA.NHL ${HFA.NHL} (FiveThirtyEight home ice is about 50 Elo, already this goal HFA). Season totals divide by games, counting OT losses when games is absent. Missing or unclean GF/GA stays on the 6.2 / HFA baseline. A winPct residual runs only on that unclean path. Shot efficiency runs only when both clubs have shots and savePct; a goalie residual runs only when both save rates are present. v1 does not require a goalie confirmation feed. Both residuals sit under ENGINE_SOFT.NHL HARD CAP ±${ENGINE_SOFT.NHL.maxAbsMarginAdj} goals margin / ±${ENGINE_SOFT.NHL.maxAbsTotalAdj} total (goalie alone ±${ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj} / ±${ENGINE_SOFT.NHL.goalieMaxAbsTotalAdj}) and soft-fail to 0. Game-day B2B uses SHORT_REST_DAYS.NHL = 1 with a goal-scale HFA_ADJ (max 0.10). Projections soft-clamp at |margin| 6 and total 12 and still emit a candidate. Blend matches MLB: ML 0.50 / spread 0.50 / total 0.45, no-vig Pinnacle/Circa. SPORTS_ENABLED.NHL = true. Plug-in only on existing select path with MLB/NFL/NCAAF. No Omega core routing change. FIT off. No TSP. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, SELECT_WEIGHTS, or isotonic change. FIT off. No TSP. NBA off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   'Patch 2026-09-28 (v12.3.12 label kept): NFL/NCAAF QB out/doubtful is no longer a QA hard-fail. Known QB injuries are priced once, not cancelled and not double-counted: qbSoftAdjust moves the model injury-blind baseline (margin NFL 3.0 / NCAAF 3.5 for out, 0.75x doubtful; total NFL -1.5 / NCAAF -2.0) before the 0.50/0.45 blend against the current market line (which already embeds the injury). qbContinuityAdjust no longer treats out/doubtful as unhealthy — that would have piled a second penalty on the same known injury. Continuity only moves for questionable. Edge gates then decide. MLB SP scratch/change hard-fail unchanged.',
   `v12.3.12 omega-vnext: desk lock. Verify may drop, flag, or resize inside the 3.5/0.5/${DAILY_UNIT_CAP} cap. It does not add a straight and it does not rebuild a generate-locked parlay from the straight card. Steam and placeability drops are not refilled (blockStraightRefill still records the steam block). Stale-odds cents use the American juice ladder, so a plus-to-minus cross is not a fake 200-cent hard-fail. Candidate-table rank follows the same quality score as the letter grade. Summary meanClvPct is the probability, not a second copy of the cent figure. Evening walk-forward observer at 23:45 UTC (7:45pm ET in EDT) writes omega-walkforward only, after the 23:00 UTC close pass. The 2026-11-01 EDT→EST cron shift is documented and not applied. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, or isotonic change. FIT off. No TSP. NBA/NHL off. LEAN_PAD false. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
@@ -588,6 +648,8 @@ module.exports = {
   SPORT_SPREAD_STD,
   SPORT_TOTAL_STD,
   HFA,
+  REST_ADJ,
+  restAdjEnabled,
   WEATHER_NFL,
   NFL_KEY_NUMBERS,
   POINT_SHRINK,

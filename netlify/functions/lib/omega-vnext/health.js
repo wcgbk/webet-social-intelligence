@@ -9,6 +9,7 @@ const { gamesPlayed, gamesPlayedInfo, explicitPointsPerGame, footballMarketGapRe
 const { isCleanEpa } = require('./sports/epa');
 const nhl = require('./sports/nhl');
 const { sportsForCard, calendarHealth } = require('./season_calendar');
+const { restCoverageCounts } = require('./sports/game_day');
 
 const SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL', 'NBA'];
 const BANDS = {
@@ -528,6 +529,25 @@ function biasFor(candidates) {
   return out;
 }
 
+function slateGamesForRest(snap, sport) {
+  const odds = snap && snap.oddsBySport && Array.isArray(snap.oddsBySport[sport]) ? snap.oddsBySport[sport] : [];
+  if (odds.length) {
+    return odds.map((ev) => ({
+      home: ev && ev.home_team,
+      away: ev && ev.away_team,
+      commence: ev && ev.commence_time,
+    }));
+  }
+  const espn = snap && snap.espnBySport && snap.espnBySport[sport] && Array.isArray(snap.espnBySport[sport].games)
+    ? snap.espnBySport[sport].games
+    : [];
+  return espn.map((g) => ({
+    home: g && g.homeTeam,
+    away: g && g.awayTeam,
+    commence: g && g.commenceTime,
+  }));
+}
+
 function buildHealthRecord(input) {
   const src = input || {};
   const snap = src.snap || {};
@@ -590,6 +610,16 @@ function buildHealthRecord(input) {
     }, 0);
     bySport[sport].modelMarketGap = gapN;
     if (gapN > 0) alerts.push({ sport, code: 'model_market_gap', detail: `candidates=${gapN}` });
+    if (sport === 'NFL' || sport === 'NCAAF') {
+      const sched = snap.gameDay && snap.gameDay.restSchedule && snap.gameDay.restSchedule[sport];
+      if (sched) {
+        const cov = restCoverageCounts(sport, sched, slateGamesForRest(snap, sport));
+        bySport[sport].rest = cov;
+        if (cov.fetchFailed) {
+          alerts.push({ sport, code: 'rest_unknown', detail: 'weekly scoreboard unavailable' });
+        }
+      }
+    }
   }
   const bias = biasFor(src.candidates);
   for (const sport of SPORTS) {

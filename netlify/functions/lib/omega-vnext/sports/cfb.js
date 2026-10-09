@@ -13,7 +13,7 @@ const {
   sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
-const { applyGameDayAdjustments } = require('./game_day');
+const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -68,6 +68,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     restByTeam: (gameDay && gameDay.restByTeam && gameDay.restByTeam.NCAAF) || (gameDay && gameDay.restByTeam) || {},
     qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NCAAF) || (gameDay && gameDay.qbByTeam) || {},
     hfaBase: hfaPts,
+    commenceTime,
+    restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NCAAF) || null,
   });
   const stacked = applyEngineStack({
     sport: SPORT,
@@ -110,7 +112,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         engineSoft,
         ...footballAudit(pts, 'Moneyline'),
       };
-      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
   {
@@ -135,7 +137,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         engineSoft,
         ...footballAudit(pts, 'Spread'),
       };
-      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
   {
@@ -159,7 +161,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         engineSoft,
         ...footballAudit(pts, 'Total'),
       };
-      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
   return out;

@@ -16,7 +16,7 @@ const {
   sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
-const { applyGameDayAdjustments, applyNflWeatherTotalAdj } = require('./game_day');
+const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const { resolveTeamId } = require('./team_identity');
@@ -88,6 +88,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     restByTeam: (gameDay && gameDay.restByTeam && gameDay.restByTeam.NFL) || (gameDay && gameDay.restByTeam) || {},
     qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NFL) || (gameDay && gameDay.qbByTeam) || {},
     hfaBase: hfaPts,
+    commenceTime,
+    restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NFL) || null,
   });
   const stacked = applyEngineStack({
     sport: SPORT,
@@ -143,7 +145,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         engineSoft,
         ...footballAudit(pts, 'Moneyline'),
       };
-      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
   {
@@ -168,7 +170,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         engineSoft,
         ...footballAudit(pts, 'Spread'),
       };
-      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
   {
@@ -192,7 +194,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         engineSoft,
         ...footballAudit(pts, 'Total'),
       };
-      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
   return out;

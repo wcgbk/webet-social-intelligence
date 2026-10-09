@@ -2,15 +2,19 @@
 
 /**
  * Game-day adjustments for NFL/CFB/MLB/NHL/NBA projections.
- * Rest/B2B from prior-day scoreboard; soft QB status; small HFA tweaks.
+ * MLB/NHL/NBA rest is still the prior-day scoreboard (played yesterday).
+ * NFL/NCAAF rest days come from the weekly scoreboard (rest_schedule.js)
+ * when OMEGA_REST_ADJ is on (the default). OMEGA_REST_ADJ=0 keeps the
+ * played-yesterday HFA proxy for football too.
  * NHL rest is goal-scale (B2B). NBA rest is point-scale (B2B).
  * No QB adjustment for hockey or basketball.
  * Soft-fail friendly: missing inputs leave margin/total/uncertainty unchanged.
+ * Football rest does not move the total.
  */
 
-const { clamp } = require('../odds_math');
-const { rowByIdentity, rowByIdentityOrFuzzy, modelRow } = require('./team_identity');
-const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL } = require('../config');
+const { clamp, etCalendarDate } = require('../odds_math');
+const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId } = require('./team_identity');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -76,6 +80,166 @@ function restDaysProxy(sport, restRow) {
   if (!restRow || !restRow.playedYesterday) return null;
   // Prior-day scoreboard only tells us "played yesterday" → rest ≈ 1 calendar day.
   return 1;
+}
+
+function round3(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+/** Weekday of the ET calendar date, so a 00:20Z Friday kick is Thursday. */
+function etWeekday(iso) {
+  const ymd = etCalendarDate(iso);
+  if (!ymd) return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (![y, m, d].every(Number.isInteger)) return null;
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    weekday: 'short',
+  });
+}
+
+/** Whole ET calendar days from the previous kickoff to this one. */
+function etCalendarDaysBetween(prevIso, nextIso) {
+  const a = etCalendarDate(prevIso);
+  const b = etCalendarDate(nextIso);
+  if (!a || !b) return null;
+  const [ay, am, ad] = a.split('-').map(Number);
+  const [by, bm, bd] = b.split('-').map(Number);
+  if (![ay, am, ad, by, bm, bd].every(Number.isInteger)) return null;
+  const ms = Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad);
+  return Math.round(ms / 86400000);
+}
+
+function restScheduleActive(sport, schedule) {
+  if (sport !== 'NFL' && sport !== 'NCAAF') return false;
+  if (!restAdjEnabled()) return false;
+  if (!schedule || typeof schedule !== 'object') return false;
+  return schedule.loaded === true || schedule.fetchFailed === true;
+}
+
+/**
+ * Latest regular-season kickoff for this ESPN team id strictly before
+ * commence. A later game on the same weekly board is not rest.
+ */
+function priorKickoff(schedule, teamId, commenceTime) {
+  if (!schedule || schedule.fetchFailed || !schedule.loaded) return null;
+  if (!teamId || !commenceTime) return null;
+  const cutoff = Date.parse(commenceTime);
+  if (!Number.isFinite(cutoff)) return null;
+  const want = String(teamId);
+  let best = null;
+  let bestT = -Infinity;
+  for (const g of schedule.games || []) {
+    if (!g || String(g.teamId) !== want) continue;
+    const t = Date.parse(g.commence);
+    if (!Number.isFinite(t) || t >= cutoff) continue;
+    if (t > bestT) {
+      bestT = t;
+      best = g;
+    }
+  }
+  return best;
+}
+
+function categoryForRest(sport, restDays, prevIso, nextIso) {
+  if (restDays == null || !Number.isFinite(restDays) || restDays < 0) return 'unknown';
+  if (sport === 'NCAAF') {
+    const wd = etWeekday(nextIso);
+    if (restDays <= 5 && (wd === 'Tue' || wd === 'Wed' || wd === 'Thu')) return 'short';
+    if (restDays >= 13) return 'bye';
+    return 'normal';
+  }
+  if (restDays <= 4) return 'short';
+  if (restDays >= 13) return 'bye';
+  if (restDays >= 10) return 'mini-bye';
+  if (restDays === 6 && etWeekday(prevIso) === 'Mon' && etWeekday(nextIso) === 'Sun') return 'mnf';
+  return 'normal';
+}
+
+function categoryPoints(sport, category) {
+  const cfg = REST_ADJ[sport];
+  if (!cfg || !category || category === 'unknown' || category === 'normal') return 0;
+  if (category === 'short') return cfg.short;
+  if (category === 'mini-bye') return cfg.miniBye || 0;
+  if (category === 'bye') return cfg.bye || 0;
+  if (category === 'mnf') return cfg.mnf || 0;
+  return 0;
+}
+
+/** Home-margin points. Caps at REST_ADJ[sport].cap. Does not touch the total. */
+function restMarginAdj(sport, homeCat, awayCat) {
+  const cfg = REST_ADJ[sport];
+  if (!cfg) return 0;
+  if (homeCat === 'unknown' || awayCat === 'unknown') return 0;
+  let adj = categoryPoints(sport, homeCat) - categoryPoints(sport, awayCat);
+  if (awayCat === 'short' && Number.isFinite(Number(cfg.roadShort))) adj += Number(cfg.roadShort);
+  const cap = Number(cfg.cap);
+  if (Number.isFinite(cap)) adj = clamp(adj, -Math.abs(cap), Math.abs(cap));
+  return round3(adj);
+}
+
+function teamRest(sport, schedule, teamName, commenceTime) {
+  const unknown = { restDays: null, category: 'unknown', prevCommence: null, teamId: null };
+  if (!restScheduleActive(sport, schedule) || !schedule.loaded || schedule.fetchFailed) return unknown;
+  const teamId = resolveTeamId(sport, teamName);
+  if (!teamId) return unknown;
+  const prior = priorKickoff(schedule, teamId, commenceTime);
+  if (!prior) return { restDays: null, category: 'unknown', prevCommence: null, teamId: String(teamId) };
+  const days = etCalendarDaysBetween(prior.commence, commenceTime);
+  return {
+    restDays: days,
+    category: categoryForRest(sport, days, prior.commence, commenceTime),
+    prevCommence: prior.commence,
+    teamId: String(teamId),
+  };
+}
+
+function describeMatchRest(sport, schedule, home, away, commenceTime) {
+  const homeRow = teamRest(sport, schedule, home, commenceTime);
+  const awayRow = teamRest(sport, schedule, away, commenceTime);
+  return {
+    restDays: { home: homeRow.restDays, away: awayRow.restDays },
+    restCategory: { home: homeRow.category, away: awayRow.category },
+    restAdj: restMarginAdj(sport, homeRow.category, awayRow.category),
+    totalAdj: 0,
+  };
+}
+
+function restCoverageCounts(sport, schedule, slateGames) {
+  const seen = new Set();
+  let slate = 0;
+  let known = 0;
+  const fetchFailed = !!(schedule && schedule.fetchFailed);
+  const canKnow = !!(schedule && schedule.loaded && !fetchFailed);
+  for (const g of slateGames || []) {
+    if (!g) continue;
+    for (const name of [g.home, g.away]) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      slate += 1;
+      if (!canKnow) continue;
+      const row = teamRest(sport, schedule, name, g.commence);
+      if (row.restDays != null) known += 1;
+    }
+  }
+  return { known, slate, fetchFailed };
+}
+
+function stampRestAudit(raw, meta) {
+  if (!raw || !meta || meta.restPending !== true) return raw;
+  raw.restDays = meta.restDays;
+  raw.restCategory = meta.restCategory;
+  raw.restAdj = meta.restAdj;
+  return raw;
+}
+
+function restAuditFields(c) {
+  if (!c) return {};
+  const out = {};
+  if (c.restDays !== undefined) out.restDays = c.restDays;
+  if (c.restCategory !== undefined) out.restCategory = c.restCategory;
+  if (c.restAdj !== undefined) out.restAdj = c.restAdj;
+  return out;
 }
 
 function hfaAdjustment(sport, homeRestDays, awayRestDays) {
@@ -212,6 +376,8 @@ function applyGameDayAdjustments({
   qbByTeam,
   hfaBase,
   fallbackSeen,
+  commenceTime,
+  restSchedule,
 } = {}) {
   let margin = Number(modelMargin);
   let total = Number(modelTotal);
@@ -229,8 +395,18 @@ function applyGameDayAdjustments({
   const awayRest = lookupRest(away, restByTeam, sport, fallbackSeen);
   const homeDays = restDaysProxy(sport, homeRest);
   const awayDays = restDaysProxy(sport, awayRest);
-  const hfaAdj = hfaAdjustment(sport, homeDays, awayDays);
-  margin += hfaAdj;
+  const scheduleOn = restScheduleActive(sport, restSchedule);
+  let restMeta = null;
+  let hfaAdj = 0;
+  if (scheduleOn) {
+    // Real kickoff gap replaces the played-yesterday proxy. The points
+    // are applied on the epa margin path (applyEngineStack), outside the
+    // stacked engine cap. A failed scoreboard stays at 0.
+    restMeta = describeMatchRest(sport, restSchedule, home, away, commenceTime);
+  } else {
+    hfaAdj = hfaAdjustment(sport, homeDays, awayDays);
+    margin += hfaAdj;
+  }
 
   const homeQb = lookupQb(home, qbByTeam, sport, fallbackSeen);
   const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
@@ -242,9 +418,10 @@ function applyGameDayAdjustments({
   const cont = qbContinuityAdjust(sport, homeQb, awayQb, qbByTeam);
   margin += cont.marginAdj;
 
+  const restAdj = restMeta ? restMeta.restAdj : 0;
   const meta = {
-    restHome: homeDays,
-    restAway: awayDays,
+    restHome: scheduleOn && restMeta ? restMeta.restDays.home : homeDays,
+    restAway: scheduleOn && restMeta ? restMeta.restDays.away : awayDays,
     playedYesterdayHome: !!(homeRest && homeRest.playedYesterday),
     playedYesterdayAway: !!(awayRest && awayRest.playedYesterday),
     hfaAdj: +hfaAdj.toFixed(3),
@@ -254,8 +431,14 @@ function applyGameDayAdjustments({
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
-    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used,
+    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used,
   };
+  if (scheduleOn && restMeta) {
+    meta.restDays = restMeta.restDays;
+    meta.restCategory = restMeta.restCategory;
+    meta.restAdj = restMeta.restAdj;
+    meta.restPending = true;
+  }
 
   return {
     modelMargin: margin,
@@ -397,6 +580,17 @@ module.exports = {
   restMapFromScoreboard,
   lookupRest,
   hfaAdjustment,
+  etWeekday,
+  etCalendarDaysBetween,
+  restScheduleActive,
+  priorKickoff,
+  categoryForRest,
+  restMarginAdj,
+  teamRest,
+  describeMatchRest,
+  restCoverageCounts,
+  stampRestAudit,
+  restAuditFields,
   qbSoftAdjust,
   qbContinuityAdjust,
   applyGameDayAdjustments,

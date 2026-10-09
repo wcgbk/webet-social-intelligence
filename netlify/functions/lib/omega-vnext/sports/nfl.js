@@ -19,6 +19,7 @@ const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj } = require('./game_day');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { resolveTeamId } = require('./team_identity');
 
 const SPORT = 'NFL';
 
@@ -54,15 +55,27 @@ function tagMethods(methods, gameDayApplied, enginesOn) {
   return out;
 }
 
-function findEspnGame(ev, espnGames) {
-  return matchEspnGameByIdentity(SPORT, ev, espnGames);
+// Weather still uses a resolved id pair when the board row has no ET date.
+// Neutral HFA does not: that needs matchEspnGameByIdentity (same ET date).
+function findEspnGameByTeam(ev, espnGames) {
+  const games = (espnGames && espnGames.games) || espnGames || [];
+  if (!ev || !games.length) return null;
+  const hid = resolveTeamId(SPORT, ev.home_team);
+  const aid = resolveTeamId(SPORT, ev.away_team);
+  if (!hid || !aid) return null;
+  return games.find((g) => {
+    if (!g) return false;
+    const gh = resolveTeamId(SPORT, g.homeTeam || g.home_team);
+    const ga = resolveTeamId(SPORT, g.awayTeam || g.away_team);
+    return gh === hid && ga === aid;
+  }) || null;
 }
 
-function projectGame(event, standings, efficiency, gameDay, espnGame) {
+function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGame) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const neutral = !!(espnGame && espnGame.neutralSite === true);
+  const neutral = !!(neutralGame && neutralGame.neutralSite === true);
   const hfaPts = neutral ? 0 : HFA.NFL;
   const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
   const gd = applyGameDayAdjustments({
@@ -193,8 +206,9 @@ function stampNeutral(raw, neutral) {
 function project({ oddsEvents, standings, efficiency, gameDay, espnGames } = {}) {
   const games = (espnGames && espnGames.games) || espnGames || [];
   return mapGamesSoft(oddsEvents, (ev) => {
-    const eg = findEspnGame(ev, games);
-    return projectGame(ev, standings || {}, efficiency || {}, gameDay || {}, eg);
+    const dated = matchEspnGameByIdentity(SPORT, ev, games);
+    const eg = dated || findEspnGameByTeam(ev, games);
+    return projectGame(ev, standings || {}, efficiency || {}, gameDay || {}, eg, dated);
   });
 }
 

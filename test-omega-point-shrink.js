@@ -171,8 +171,10 @@ function assertEdgesNeverGrow(cands, ev) {
   }
 }
 
-// 54 vs 38.5 NFL total: gap 15.5 is flagged, not rejected. λ=1 does not pull the total.
-// Flagged and unflagged candidates keep the pre-item-5 coverProb / edge / EV.
+// 54 vs 38.5 NFL total: gap 15.5 is flagged, and the market-gap guard rejects
+// it (NFL total cap 13). λ=1 does not pull the total. The flag itself still
+// does not change the score. A flagged gap under that cap (12.5) still
+// prices, and clearing gapFlag does not change selection or the parlay.
 {
   const home = 'Miami Dolphins';
   const away = 'Minnesota Vikings';
@@ -207,30 +209,14 @@ function assertEdgesNeverGrow(cands, ev) {
   }
   assert.ok(!logs.some(l => l.includes('model_line_gap_review')));
   assert.ok(!gated.rejected.some(r => r.rejectReason === 'model_line_gap_review'));
-  const scoredOver = gated.yesPool.find(c => c.side === over.side && c.matchup === over.matchup);
-  assert.ok(scoredOver, '54 vs 38.5 over was rejected');
+  const scoredOver = gated.rejected.find(c => c.side === over.side && c.matchup === over.matchup);
+  assert.ok(scoredOver, '54 vs 38.5 over was not rejected');
+  assert.strictEqual(scoredOver.rejectReason, 'model_market_gap');
   assert.strictEqual(scoredOver.gapFlag, true);
-  assert.strictEqual(gateReason(scoredOver), null);
-  const clearedPool = gated.yesPool.map(c => ({ ...c, gapFlag: false }));
-  const picked = selectStraights(gated.yesPool, 3).map(c => `${c.matchup}|${c.side}`);
-  const pickedClear = selectStraights(clearedPool, 3).map(c => `${c.matchup}|${c.side}`);
-  assert.deepStrictEqual(picked, pickedClear);
-  assert.ok(picked.some(s => s.endsWith(`|${over.side}`)));
+  assert.strictEqual(gateReason(scoredOver), 'model_market_gap');
+  assert.ok(!gated.yesPool.some(c => c.market === 'Total' && c.modelLineGap === 15.5));
 
-  const tickets = optimizeParlay(gated.yesPool, [], {});
-  const ticketsClear = optimizeParlay(clearedPool, [], {});
-  const legKey = (t) => (t[0] ? t[0].legs.map(l => `${l.matchup}|${l.pick}`).sort() : []);
-  assert.deepStrictEqual(legKey(tickets), legKey(ticketsClear));
-  const flaggedLegs = (tickets[0] ? tickets[0].legs : []).filter(l => /38\.5/.test(String(l.pick || '')));
-  assert.ok(flaggedLegs.length >= 1, 'flagged total did not compete for the parlay');
-  for (const leg of flaggedLegs) {
-    assert.strictEqual(leg.gapFlag, true);
-    assert.strictEqual(leg.modelLineGap, 15.5);
-    for (const k of FOOTBALL_AUDIT_KEYS) assert.notStrictEqual(leg[k], undefined, k);
-  }
-
-  const picks = selectStraights(gated.yesPool, 3).map(c => toPickObject(c, { modelVersion: config.MODEL_VERSION }));
-  const review = buildGapReview(slate, picks, tickets);
+  const review = buildGapReview(slate);
   const overRow = review.find(r => r.side === over.side && r.matchup === over.matchup);
   const underRow = review.find(r => r.side === under.side && r.matchup === under.matchup);
   assert.ok(overRow);
@@ -238,13 +224,58 @@ function assertEdgesNeverGrow(cands, ev) {
     { sport: overRow.sport, line: overRow.line, modelRaw: overRow.modelRaw, gap: overRow.gap },
     { sport: 'NFL', line: 38.5, modelRaw: 54, gap: 15.5 },
   );
-  assert.strictEqual(overRow.selected, true);
+  assert.strictEqual(overRow.selected, false);
   assert.ok(underRow);
   assert.strictEqual(underRow.modelRaw, 54);
   assert.strictEqual(underRow.gap, 15.5);
   assert.strictEqual(underRow.selected, false);
   assert.strictEqual(review.filter(r => r.line === 38.5 && r.gap === 15.5).length, 4);
   assertEdgesNeverGrow(cands, ev);
+
+  // 51 vs 38.5 is flagged (NFL flag starts at 8) and still inside the cap.
+  const midHome = 'Los Angeles Chargers';
+  const midAway = 'Las Vegas Raiders';
+  const midEv = event(midHome, midAway, 38.5, -3);
+  const midHome2 = 'Seattle Seahawks';
+  const midAway2 = 'San Francisco 49ers';
+  const midEv2 = event(midHome2, midAway2, 38.5, -3);
+  const mid1 = projectFootball('NFL', midEv, 6);
+  const mid2 = projectFootball('NFL', midEv2, 6);
+  const midOver = findSide(mid1, 'Total', /^Over/);
+  assert.strictEqual(midOver.modelTotalRaw, 51);
+  assert.strictEqual(midOver.modelLineGap, 12.5);
+  assert.strictEqual(midOver.gapFlag, true);
+  for (const c of mid1) assertPickNeutral(c, midEv);
+  for (const c of mid2) assertPickNeutral(c, midEv2);
+  const midSlate = scoreAll([...mid1, ...mid2]);
+  const midGated = applyGates(midSlate);
+  const midScored = midGated.yesPool.find(c => c.side === midOver.side && c.matchup === midOver.matchup);
+  assert.ok(midScored, '12.5-point NFL total gap was rejected');
+  assert.strictEqual(midScored.gapFlag, true);
+  assert.strictEqual(gateReason(midScored), null);
+  const midCleared = midGated.yesPool.map(c => ({ ...c, gapFlag: false }));
+  const picked = selectStraights(midGated.yesPool, 3).map(c => `${c.matchup}|${c.side}`);
+  const pickedClear = selectStraights(midCleared, 3).map(c => `${c.matchup}|${c.side}`);
+  assert.deepStrictEqual(picked, pickedClear);
+  assert.ok(picked.some(s => s.endsWith(`|${midOver.side}`)));
+
+  const tickets = optimizeParlay(midGated.yesPool, [], {});
+  const ticketsClear = optimizeParlay(midCleared, [], {});
+  const legKey = (t) => (t[0] ? t[0].legs.map(l => `${l.matchup}|${l.pick}`).sort() : []);
+  assert.deepStrictEqual(legKey(tickets), legKey(ticketsClear));
+  const flaggedLegs = (tickets[0] ? tickets[0].legs : []).filter(l => /38\.5/.test(String(l.pick || '')));
+  assert.ok(flaggedLegs.length >= 1, 'flagged total did not compete for the parlay');
+  for (const leg of flaggedLegs) {
+    assert.strictEqual(leg.gapFlag, true);
+    assert.strictEqual(leg.modelLineGap, 12.5);
+    for (const k of FOOTBALL_AUDIT_KEYS) assert.notStrictEqual(leg[k], undefined, k);
+  }
+  const midPicks = selectStraights(midGated.yesPool, 3).map(c => toPickObject(c, { modelVersion: config.MODEL_VERSION }));
+  const midReview = buildGapReview(midSlate, midPicks, tickets);
+  const midRow = midReview.find(r => r.side === midOver.side && r.matchup === midOver.matchup);
+  assert.ok(midRow);
+  assert.strictEqual(midRow.selected, true);
+  assert.strictEqual(midRow.gap, 12.5);
 }
 
 // 47 vs 42.5 stays under the NFL 8 block. λ=1 leaves the total, so the edge matches the unshrunk path.

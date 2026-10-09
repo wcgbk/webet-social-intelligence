@@ -11,10 +11,10 @@
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
-const { HFA, ENGINE_SOFT } = require('../config');
+const { HFA, ENGINE_SOFT, centerDefaultEnabled } = require('../config');
 const { clamp } = require('../odds_math');
 const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
-const { resolveTeamId, rowByIdentity, logUnknownTeam } = require('./team_identity');
+const { resolveTeamId, modelRow, logUnknownTeam } = require('./team_identity');
 
 /**
  * Sierra weight on current points/game. Prior seed weight is 1 − w.
@@ -259,8 +259,7 @@ function centerSeed(table) {
 
 function lookupEpa(teamName, table, sport) {
   if (sport !== 'NFL' && sport !== 'NCAAF') return null;
-  if (!resolveTeamId(sport, teamName)) return null;
-  const row = rowByIdentity(sport, table || {}, teamName);
+  const row = modelRow(sport, table || {}, teamName);
   if (!isCleanEpa(row)) return null;
   return {
     offEpa: Number(row.offEpa),
@@ -277,7 +276,8 @@ function lookupEpa(teamName, table, sport) {
  * ESPN pointsFor/pointsAgainst are season sums. gp >= 2 always divides both.
  * gp < 2 returns the seed. Divided rates must land in [6, 55] or the seed is kept.
  * An explicit avgPointsFor-style pair is the rate and is not divided.
- * gamesPlayed() prefers gamesPlayed, then games, else wins+losses+ties.
+ * gamesPlayed() prefers an explicit count, then wins+losses when losses
+ * was sent, else a W-L record. Wins alone are not a count.
  * Current-season weight is sierraWeight(that gp): 0.20 at gp 2, linear to
  * 0.50 at the sport midseason gp, capped at 0.50. Prior seed weight is 1 − w.
  * Home and away each use their own gp.
@@ -547,11 +547,20 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
   const hfaPts = (hfa != null && Number.isFinite(Number(hfa)))
     ? Number(hfa)
     : (HFA[sport] != null ? HFA[sport] : 0);
+  const homeId = resolveTeamId(sport, home);
+  const awayId = resolveTeamId(sport, away);
   const unknownNames = [];
-  if (!resolveTeamId(sport, home)) unknownNames.push(home);
-  if (!resolveTeamId(sport, away)) unknownNames.push(away);
+  if (!homeId) unknownNames.push(home);
+  if (!awayId) unknownNames.push(away);
   if (unknownNames.length) {
     for (const name of unknownNames) logUnknownTeam(sport, name);
+  }
+  const unknownTeam = unknownNames.length > 0;
+  // A missing side is the centered prior (0), not a made-up rating.
+  // Margin is HFA only when both sides are unknown. OMEGA_CENTER_DEFAULT=0
+  // restores the old rule: any unresolved name zeros the game to HFA.
+  const bothUnknown = unknownNames.length >= 2;
+  if (unknownTeam && (!centerDefaultEnabled() || bothUnknown)) {
     const fallbackTotal = cfg.baseTotal;
     return {
       modelMargin: hfaPts,
@@ -565,14 +574,14 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
       unknownNames,
     };
   }
-  const homeSt = rowByIdentity(sport, ratings, home);
-  const awaySt = rowByIdentity(sport, ratings, away);
+  const homeSt = homeId ? modelRow(sport, ratings, home) : null;
+  const awaySt = awayId ? modelRow(sport, ratings, away) : null;
   const hPow = powerFromStandings(homeSt, sport);
   const aPow = powerFromStandings(awaySt, sport);
   const fallbackMargin = (hPow - aPow) + hfaPts;
   const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
-  const homeEpa = lookupEpa(home, table, sport);
-  const awayEpa = lookupEpa(away, table, sport);
+  const homeEpa = homeId ? lookupEpa(home, table, sport) : null;
+  const awayEpa = awayId ? lookupEpa(away, table, sport) : null;
 
   if (!homeEpa || !awayEpa) {
     return {
@@ -583,8 +592,8 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
       methods: { ...cfg.fallback, family: null },
       usedEpa: false,
       engineSoft: { used: false },
-      unknownTeam: false,
-      unknownNames: [],
+      unknownTeam,
+      unknownNames,
     };
   }
 
@@ -647,8 +656,8 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
     methods,
     usedEpa: true,
     engineSoft: engineMeta,
-    unknownTeam: false,
-    unknownNames: [],
+    unknownTeam,
+    unknownNames,
   };
 }
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizeTeamName } = require('./team_normalize');
+const { teamExactOnly } = require('../config');
 const ncaafTable = require('./data/ncaaf-team-ids.json');
 const nflTable = require('./data/nfl-team-ids.json');
 const nbaTable = require('./data/nba-team-ids.json');
@@ -107,7 +108,8 @@ const EXACT_MODEL_SPORTS = new Set(['NFL', 'NCAAF', 'CFB', 'NHL']);
  * Standings / park / quality row. Identity first: the row whose key resolves
  * to the same ESPN id. fuzzyTeam runs only when the name does not resolve,
  * or when a table key does not resolve, and only for sports outside
- * EXACT_MODEL_SPORTS. Those sports log a miss once and return null.
+ * EXACT_MODEL_SPORTS (or opts.allowFuzzy). Those sports log a miss once
+ * and return null.
  * Logs once per sport+name when `fallbackSeen` is a Set on opts (no module-level memory).
  */
 function rowByIdentityOrFuzzy(sport, table, teamName, opts) {
@@ -134,16 +136,51 @@ function rowByIdentityOrFuzzy(sport, table, teamName, opts) {
   const token = String(sport || '') + '\0' + label;
   if (!seen || !seen.has(token)) {
     if (seen && typeof seen.add === 'function') seen.add(token);
-    const kind = EXACT_MODEL_SPORTS.has(sport) ? 'miss' : 'fallback';
+    const kind = EXACT_MODEL_SPORTS.has(sport) && !(opts && opts.allowFuzzy) ? 'miss' : 'fallback';
     console.warn(`[omega-team-identity] ${kind} sport=${sport} name=${label}`);
   }
-  if (EXACT_MODEL_SPORTS.has(sport)) return null;
+  // NFL/NCAAF/NHL stay exact. allowFuzzy is only the OMEGA_TEAM_EXACT_ONLY=0
+  // path: a resolved name still refuses a different resolved school, and
+  // fuzzy runs only when the name or a table key does not resolve.
+  if (EXACT_MODEL_SPORTS.has(sport) && !(opts && opts.allowFuzzy)) return null;
   return fuzzy(teamName, table);
 }
 
 function lazyFuzzy(name, ratings) {
   const { fuzzyTeam } = require('./_common');
   return fuzzyTeam(name, ratings);
+}
+
+const refusedFuzzyLogged = new Set();
+
+function logRefusedFuzzy(sport, name) {
+  const token = String(sport || '') + '\0' + String(name == null ? '' : name);
+  if (refusedFuzzyLogged.has(token)) return;
+  refusedFuzzyLogged.add(token);
+  console.warn(`[omega-team-identity] exact_only refused fuzzy sport=${sport} name=${name}`);
+}
+
+/**
+ * Model-input row for NFL/NCAAF. Exact ESPN id only when OMEGA_TEAM_EXACT_ONLY
+ * is on (the default). A miss is null — the centered prior — never another
+ * school's row. The toggle off restores the older fallback: fuzzyTeam runs
+ * only when the name does not resolve, or a table key does not resolve.
+ * rowByIdentityOrFuzzy itself still refuses that fuzzy for NFL/NCAAF/NHL,
+ * so the off path passes allowFuzzy. Two resolved schools never share a
+ * row. MLB/NHL callers keep rowByIdentityOrFuzzy. Grading does not use this.
+ */
+function modelRow(sport, table, teamName, opts) {
+  const football = sport === 'NFL' || sport === 'NCAAF';
+  if (!football) return rowByIdentityOrFuzzy(sport, table, teamName, opts);
+  if (!teamExactOnly()) {
+    return rowByIdentityOrFuzzy(sport, table, teamName, Object.assign({}, opts, { allowFuzzy: true }));
+  }
+  const id = resolveTeamId(sport, teamName);
+  const row = id ? rowByIdentity(sport, table, teamName) : null;
+  if (row) return row;
+  const fuzzy = lazyFuzzy(teamName, table);
+  if (fuzzy) logRefusedFuzzy(sport, teamName);
+  return null;
 }
 
 /**
@@ -255,6 +292,7 @@ module.exports = {
   matchSides,
   rowByIdentity,
   rowByIdentityOrFuzzy,
+  modelRow,
   unresolvedKeys,
   logUnknownTeam,
   listUnresolved,

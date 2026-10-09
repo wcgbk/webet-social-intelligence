@@ -9,7 +9,7 @@
  */
 
 const { clamp } = require('../odds_math');
-const { rowByIdentity, rowByIdentityOrFuzzy } = require('./team_identity');
+const { rowByIdentity, rowByIdentityOrFuzzy, modelRow } = require('./team_identity');
 const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL } = require('../config');
 
 const HFA_ADJ = {
@@ -67,7 +67,8 @@ function restMapFromScoreboard(games, playedDateISO) {
 function lookupRest(teamName, restByTeam, sport, fallbackSeen) {
   if (!teamName || !restByTeam) return null;
   if (restByTeam[teamName]) return restByTeam[teamName];
-  if (sport === 'NFL' || sport === 'NCAAF' || sport === 'NBA') return rowByIdentity(sport, restByTeam, teamName);
+  if (sport === 'NBA') return rowByIdentity(sport, restByTeam, teamName);
+  if (sport === 'NFL' || sport === 'NCAAF') return modelRow(sport, restByTeam, teamName, { fallbackSeen }) || null;
   return rowByIdentityOrFuzzy(sport, restByTeam, teamName, { fallbackSeen }) || null;
 }
 
@@ -103,7 +104,7 @@ function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
   if (!teamName || !qbByTeam || typeof qbByTeam !== 'object') return null;
   const direct = qbByTeam[teamName] || qbByTeam[normTeamKey(teamName)];
   if (direct) return direct;
-  if (sport === 'NFL' || sport === 'NCAAF') return rowByIdentity(sport, qbByTeam, teamName);
+  if (sport === 'NFL' || sport === 'NCAAF') return modelRow(sport, qbByTeam, teamName, { fallbackSeen });
   for (const [k, v] of Object.entries(qbByTeam)) {
     if (normTeamKey(k) === normTeamKey(teamName)) return v;
     if (rowByIdentityOrFuzzy(sport, { [k]: v }, teamName, { fallbackSeen })) return v;

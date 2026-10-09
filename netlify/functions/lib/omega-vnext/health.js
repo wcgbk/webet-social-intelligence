@@ -5,7 +5,7 @@
 
 const { SPORTS_ENABLED } = require('./config');
 const { collectUnresolved, resolveTeamId, rowByIdentity } = require('./sports/team_identity');
-const { gamesPlayedInfo, explicitPointsPerGame } = require('./sports/_common');
+const { gamesPlayed, gamesPlayedInfo, explicitPointsPerGame, footballMarketGapReason } = require('./sports/_common');
 const { isCleanEpa } = require('./sports/epa');
 const nhl = require('./sports/nhl');
 const { sportsForCard, calendarHealth } = require('./season_calendar');
@@ -25,6 +25,8 @@ const BIAS_LIMIT = {
   NCAAF: { total: 1.5, margin: 1 },
   NBA: { total: 3, margin: 2 },
 };
+/** |bias_margin| past this multiple of BIAS_LIMIT is a broken rating, not a bad day. */
+const BIAS_MARGIN_EXTREME_MULT = 3;
 
 function num(v) {
   if (v == null || v === '') return null;
@@ -55,16 +57,18 @@ function explicitGp(row) {
 }
 
 function gamesOf(row) {
-  const g = explicitGp(row);
-  if (g != null) return g;
+  const explicit = explicitGp(row);
+  if (explicit != null && explicit > 0) return explicit;
   const w = firstNum(row, ['wins']);
   const l = firstNum(row, ['losses']);
+  // Losses were sent (including 0). Keep OT losses, which gamesPlayed does not add.
   if (w != null && l != null) {
     return w + l + (firstNum(row, ['ties']) || 0) + (firstNum(row, ['otLosses', 'otl']) || 0);
   }
-  const rec = recordParts(row);
-  if (!rec) return null;
-  return rec.wins + rec.losses + rec.ties;
+  if (explicit === 0) return 0;
+  // Same count as power: record "3-2" is 5 games when ESPN omitted losses.
+  const g = gamesPlayed(row);
+  return g > 0 ? g : null;
 }
 
 function pointsOf(row) {
@@ -580,6 +584,12 @@ function buildHealthRecord(input) {
     for (const field of guards.schemaFields) {
       alerts.push({ sport, code: `schema_missing:${field}`, detail: `field=${field}` });
     }
+    const gapN = (src.candidates || []).reduce((n, c) => {
+      if (!c || c.sport !== sport) return n;
+      return footballMarketGapReason(c) ? n + 1 : n;
+    }, 0);
+    bySport[sport].modelMarketGap = gapN;
+    if (gapN > 0) alerts.push({ sport, code: 'model_market_gap', detail: `candidates=${gapN}` });
   }
   const bias = biasFor(src.candidates);
   for (const sport of SPORTS) {
@@ -600,6 +610,13 @@ function buildHealthRecord(input) {
     }
     if (lim && row.marginN && Math.abs(row.marginMean) > lim.margin) {
       alerts.push({ sport, code: 'bias_margin', detail: `mean=${row.marginMean} n=${row.marginN}` });
+    }
+    if (lim && row.marginN && Math.abs(row.marginMean) > lim.margin * BIAS_MARGIN_EXTREME_MULT) {
+      alerts.push({
+        sport,
+        code: 'bias_margin_extreme',
+        detail: `mean=${row.marginMean} n=${row.marginN} limit=${lim.margin}`,
+      });
     }
   }
   const mlbGames = (bySport.MLB.espnGames || 0) + (bySport.MLB.oddsEvents || 0);
@@ -679,6 +696,7 @@ module.exports = {
   SPORTS,
   BANDS,
   BIAS_LIMIT,
+  BIAS_MARGIN_EXTREME_MULT,
   buildHealthRecord,
   compactHealth,
   attachGenerateHealth,

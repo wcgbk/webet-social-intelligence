@@ -428,6 +428,86 @@ const MODEL_LINE_GAP = {
   mode: 'flag', // 'block' failed the 2026-10-06 replay gate
 };
 
+/**
+ * Football model-vs-market reject. Separate from MODEL_LINE_GAP, which only
+ * flags. A candidate is dropped before selection when the raw model is
+ * farther from the sharp line than these caps. The 2026-10-08 NCAAF card
+ * priced Missouri State off a season-sum margin (~64 points vs a 1-point
+ * market). Caps sit above a normal touchdown disagreement and above the
+ * flag thresholds (NFL 8 / NCAAF 10) so a flagged game can still be priced.
+ * NFL is tighter because its margin SD is 13.5 and its total SD is 10.5.
+ * NCAAF margin 14 / total 17 leaves room for a noisy October rating without
+ * letting a 20-point phantom edge through. Read at call time via the
+ * OMEGA_FB_GAP_* env vars so a replay can retune without a new commit.
+ * OMEGA_FB_GAP_GUARD=0 or off disables the reject. "0" on a numeric override
+ * is a real cap of 0, not the disable switch.
+ */
+const FB_MARKET_GAP = {
+  NCAAF: { margin: 14, total: 17 },
+  NFL: { margin: 10, total: 13 },
+};
+
+/**
+ * Env toggles for the NCAAF ratings fix. Each is read at call time.
+ * Unset means the fix is on. "0" / "off" / "false" / "no" disables.
+ * A numeric override uses envNumber; a blank value keeps the default.
+ */
+function flagEnabled(name) {
+  const v = process.env[name];
+  if (v == null) return true;
+  const s = String(v).trim().toLowerCase();
+  if (s === '') return true;
+  if (s === '0' || s === 'off' || s === 'false' || s === 'no') return false;
+  return true;
+}
+
+function envNumber(name, fallback) {
+  const v = process.env[name];
+  if (v == null || String(v).trim() === '') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function ncaafGpFixEnabled() {
+  return flagEnabled('OMEGA_NCAAF_GP_FIX');
+}
+
+/** Default 0: pure per-game point diff. K>0 multiplies power by gp/(gp+K). Not SHRINK_K. */
+function ncaafShrinkK() {
+  const k = envNumber('OMEGA_NCAAF_SHRINK_K', 0);
+  return k > 0 ? k : 0;
+}
+
+function teamExactOnly() {
+  return flagEnabled('OMEGA_TEAM_EXACT_ONLY');
+}
+
+function centerDefaultEnabled() {
+  return flagEnabled('OMEGA_CENTER_DEFAULT');
+}
+
+function fbGapGuardEnabled() {
+  return flagEnabled('OMEGA_FB_GAP_GUARD');
+}
+
+function fbMarketGapLimits(sport) {
+  const base = FB_MARKET_GAP[sport];
+  if (!base) return null;
+  if (sport === 'NCAAF') {
+    return {
+      margin: envNumber('OMEGA_FB_GAP_NCAAF_MARGIN', base.margin),
+      total: envNumber('OMEGA_FB_GAP_NCAAF_TOTAL', base.total),
+    };
+  }
+  if (sport === 'NFL') {
+    return {
+      margin: envNumber('OMEGA_FB_GAP_NFL_MARGIN', base.margin),
+      total: envNumber('OMEGA_FB_GAP_NFL_TOTAL', base.total),
+    };
+  }
+  return { margin: base.margin, total: base.total };
+}
+
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
@@ -516,6 +596,15 @@ module.exports = {
   NFL_KEY_NUMBERS,
   POINT_SHRINK,
   MODEL_LINE_GAP,
+  FB_MARKET_GAP,
+  flagEnabled,
+  envNumber,
+  ncaafGpFixEnabled,
+  ncaafShrinkK,
+  teamExactOnly,
+  centerDefaultEnabled,
+  fbGapGuardEnabled,
+  fbMarketGapLimits,
   CLV_KPI_FLOOR,
   MODEL_NOTES,
   SITE_ID,

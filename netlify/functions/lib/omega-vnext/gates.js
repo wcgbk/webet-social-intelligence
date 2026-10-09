@@ -3,6 +3,7 @@
 const { GATES, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
 const { isSameEtDay, formatMoneylinePick } = require('./odds_math');
 const { adverseSteamReason } = require('./line_path');
+const { footballMarketGapReason } = require('./sports/_common');
 
 function sportFloor(map, sport) {
   return map[sport] != null ? map[sport] : map.default;
@@ -111,6 +112,11 @@ function gateReason(c, opts = {}) {
   // Unresolved NFL/NCAAF name. Checked before the floors so a bad id cannot publish.
   if (c && c.unknownTeam) return 'unknown_team';
 
+  // Absurd model-vs-market gap. Caps live in FB_MARKET_GAP and are wider
+  // than the MODEL_LINE_GAP flag. A normal disagreement still prices.
+  const marketGap = footballMarketGapReason(c);
+  if (marketGap) return marketGap;
+
   // Football model-vs-line gap. Only mode 'block' rejects, and that mode
   // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
   // candidate on the same score and the same gates. Moneyline is not a
@@ -168,6 +174,9 @@ function applyGates(candidates, opts = {}) {
     if (reason) {
       if (reason === 'model_line_gap_review') {
         console.log(`[omega-vnext] model_line_gap_review ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap} line=${c.marketLine}`);
+      }
+      if (reason === 'model_market_gap') {
+        console.log(`[omega-vnext] model_market_gap ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap}`);
       }
       rejected.push({ ...c, rejectReason: reason });
     } else yes.push(c);

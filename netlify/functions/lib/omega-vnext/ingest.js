@@ -2,7 +2,10 @@
 
 const {
   SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
+  ncaafGpFixEnabled, teamExactOnly,
 } = require('./config');
+const { parseWinLossRecord } = require('./sports/_common');
+const { resolveTeamId } = require('./sports/team_identity');
 const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
@@ -429,6 +432,41 @@ function applyNbaStandingExtras(row, stats) {
   return team;
 }
 
+/**
+ * ESPN `overall` is type "total" with value null and displayValue "W-L" or
+ * "W-L-T". College rows omit losses and gamesPlayed. Fill those only when
+ * the field is actually missing — never write losses 0 because the stat
+ * was absent, and never overwrite an explicit NFL loss or game count.
+ * OMEGA_NCAAF_GP_FIX=0 leaves the row untouched beyond the numeric extras.
+ */
+function espnOverallRecord(stats) {
+  for (const s of stats || []) {
+    if (!s || typeof s !== 'object') continue;
+    const name = String(s.name || '').toLowerCase();
+    if (name !== 'overall' && name !== 'overallrecord') continue;
+    const parsed = parseWinLossRecord(s.displayValue || s.summary || s.value);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function fillFootballRecord(team, stats) {
+  if (!ncaafGpFixEnabled()) return team;
+  const parsed = espnOverallRecord(stats);
+  if (!parsed) return team;
+  const lossesMissing = team.losses == null;
+  const gamesMissing = !(Number(team.gamesPlayed) > 0) && !(Number(team.games) > 0);
+  if (team.record == null) team.record = parsed.text;
+  if (team.wins == null) team.wins = parsed.wins;
+  if (lossesMissing) team.losses = parsed.losses;
+  if (team.ties == null) team.ties = parsed.ties;
+  if (gamesMissing) {
+    team.gamesPlayed = parsed.games;
+    team.games = parsed.games;
+  }
+  return team;
+}
+
 function applyFootballStandingExtras(row, stats) {
   const team = row && typeof row === 'object' ? row : {};
   const gp = espnStat(stats, ['gamesPlayed', 'games']);
@@ -442,7 +480,7 @@ function applyFootballStandingExtras(row, stats) {
     team.avgPointsFor = avgF;
     team.avgPointsAgainst = avgA;
   }
-  return team;
+  return fillFootballRecord(team, stats);
 }
 
 async function fetchEspnStandings(label) {
@@ -497,17 +535,34 @@ function talentSeedMeta() {
 
 /**
  * Attach optional talent/spPlus onto EPA rows without wiping EPA fields.
- * Exact team name only — mascot fuzzy match would cross LSU/Clemson/Auburn.
- * scale is 'centered' or 'pct_0_100' from the seed meta.
+ * Exact team identity (same ESPN id) when OMEGA_TEAM_EXACT_ONLY is on.
+ * A mascot match is never a merge: Kentucky does not take Arizona's talent.
+ * The toggle off keeps the old exact display-name key. scale is 'centered'
+ * or 'pct_0_100' from the seed meta.
  */
+function talentValueFor(team, talent) {
+  if (!teamExactOnly()) {
+    if (!Object.prototype.hasOwnProperty.call(talent, team)) return undefined;
+    return talent[team];
+  }
+  const id = resolveTeamId('NCAAF', team);
+  if (!id) return undefined;
+  if (Object.prototype.hasOwnProperty.call(talent, team)) return talent[team];
+  for (const [key, value] of Object.entries(talent)) {
+    if (!key || key.startsWith('_')) continue;
+    if (resolveTeamId('NCAAF', key) === id) return value;
+  }
+  return undefined;
+}
+
 function mergeTalentIntoEfficiency(epaTable, talentTable, scale) {
   const out = { ...(epaTable || {}) };
   const talent = talentTable || {};
   const talentScale = scale === 'pct_0_100' ? 'pct_0_100' : 'centered';
   for (const [team, row] of Object.entries(out)) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-    if (!Object.prototype.hasOwnProperty.call(talent, team)) continue;
-    const t = talent[team];
+    const t = talentValueFor(team, talent);
+    if (t === undefined) continue;
     let talentVal = null;
     let spPlus = null;
     if (t != null && typeof t === 'object') {

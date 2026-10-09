@@ -3,7 +3,7 @@
 const { normCdf, clamp, americanToImplied, etCalendarDate } = require('../odds_math');
 const {
   SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA, SHARP_BOOKS, POINT_SHRINK, MODEL_LINE_GAP,
-  NFL_KEY_NUMBERS,
+  NFL_KEY_NUMBERS, ncaafGpFixEnabled, ncaafShrinkK, fbGapGuardEnabled, fbMarketGapLimits,
 } = require('../config');
 const { resolveTeamId } = require('./team_identity');
 
@@ -61,28 +61,52 @@ function fuzzyTeam(name, ratings) {
 const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1 };
 
 /**
- * Where gamesPlayed() got its number.
- * gamesPlayed / games: an explicit count the model trusts.
- * wl: wins + losses + ties (both W and L present, including 0).
- * winsOnly: losses are missing, or the explicit count equals wins while
- * losses show more games. The model still returns the explicit count when
- * one is present; health treats winsOnly as unknown.
- * unknown: no count. A record string is not read.
+ * A count ESPN actually sent. null and '' are unknown.
+ * Number(null) is 0, so a missing loss must not go through Number().
+ * 0 is real (an unbeaten team has losses 0).
  */
-function gamesPlayedInfo(st) {
-  if (!st || typeof st !== 'object') return { gp: 0, source: 'unknown', known: false };
+function knownCount(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+/**
+ * "W-L" or "W-L-T". Accepts the string or an ESPN stat object whose
+ * displayValue (or summary) is that string. Ties are 0 when the third
+ * number is omitted.
+ */
+function parseWinLossRecord(value) {
+  let text = '';
+  if (typeof value === 'string') text = value.trim();
+  else if (value && typeof value === 'object') {
+    const dv = value.displayValue != null ? String(value.displayValue).trim() : '';
+    const summary = value.summary != null ? String(value.summary).trim() : '';
+    text = dv || summary;
+  }
+  if (!text) return null;
+  const m = text.match(/^(\d+)\s*-\s*(\d+)(?:\s*-\s*(\d+))?$/);
+  if (!m) return null;
+  const wins = Number(m[1]);
+  const losses = Number(m[2]);
+  const ties = m[3] != null ? Number(m[3]) : 0;
+  if (![wins, losses, ties].every((n) => Number.isFinite(n) && n >= 0)) return null;
+  return { text, wins, losses, ties, games: wins + losses + ties };
+}
+
+/** Pre-fix count. Number(null) losses become 0, so wins alone can be gp. */
+function gamesPlayedLegacy(st) {
+  if (!st || typeof st !== 'object') return 0;
   const explicit = Number(st.gamesPlayed);
-  if (Number.isFinite(explicit) && explicit > 0) return tagExplicitGp(st, explicit, 'gamesPlayed');
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
   const games = Number(st.games);
-  if (Number.isFinite(games) && games > 0) return tagExplicitGp(st, games, 'games');
+  if (Number.isFinite(games) && games > 0) return games;
   const w = Number(st.wins);
   const l = Number(st.losses);
-  if (!Number.isFinite(w) || !Number.isFinite(l)) {
-    if (Number.isFinite(w) && !Number.isFinite(l)) return { gp: 0, source: 'winsOnly', known: false };
-    return { gp: 0, source: 'unknown', known: false };
-  }
   const t = Number(st.ties);
-  return { gp: w + l + (Number.isFinite(t) ? t : 0), source: 'wl', known: true };
+  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
+  return w + l + (Number.isFinite(t) ? t : 0);
 }
 
 function tagExplicitGp(st, gp, source) {
@@ -98,7 +122,49 @@ function tagExplicitGp(st, gp, source) {
   return { gp, source, known: true };
 }
 
+/**
+ * Where gamesPlayed() got its number. One helper for the model and the
+ * health guards.
+ * gamesPlayed / games: an explicit count the model trusts.
+ * wl: wins + losses + ties when both W and L were sent, including 0.
+ * record: a W-L[-T] string on record, overall, or summary, same parse
+ * the ratings fix uses. Read when losses was not sent as a number, so
+ * ESPN "3-2" is 5 games and not the win total.
+ * winsOnly: losses are missing and no record parsed, or the explicit
+ * count equals wins while losses show more games. The model still
+ * returns the explicit count when one is present; health treats
+ * winsOnly as unknown.
+ * unknown: no count.
+ */
+function gamesPlayedInfo(st) {
+  if (!st || typeof st !== 'object') return { gp: 0, source: 'unknown', known: false };
+  const explicit = knownCount(st.gamesPlayed);
+  if (explicit != null && explicit > 0) return tagExplicitGp(st, explicit, 'gamesPlayed');
+  const games = knownCount(st.games);
+  if (games != null && games > 0) return tagExplicitGp(st, games, 'games');
+  const losses = knownCount(st.losses);
+  const wins = knownCount(st.wins);
+  if (losses != null && wins != null) {
+    const ties = knownCount(st.ties);
+    return { gp: wins + losses + (ties != null ? ties : 0), source: 'wl', known: true };
+  }
+  const parsed = parseWinLossRecord(st.record)
+    || parseWinLossRecord(st.overall)
+    || parseWinLossRecord(st.summary);
+  if (parsed && parsed.games > 0) return { gp: parsed.games, source: 'record', known: true };
+  if (wins != null && losses == null) return { gp: 0, source: 'winsOnly', known: false };
+  return { gp: 0, source: 'unknown', known: false };
+}
+
+/**
+ * Games played. explicit gamesPlayed, then games, then wins+losses
+ * (+ties) only when losses was actually sent, then a W-L[-T] record,
+ * else 0. Wins alone are never a game count. OMEGA_NCAAF_GP_FIX=0
+ * restores gamesPlayedLegacy. NFL rows that send losses or gp return
+ * the same count either way.
+ */
 function gamesPlayed(st) {
+  if (!ncaafGpFixEnabled()) return gamesPlayedLegacy(st);
   return gamesPlayedInfo(st).gp;
 }
 
@@ -123,16 +189,51 @@ function explicitPointsPerGame(st) {
   return null;
 }
 
+function applyNcaafShrink(raw, g) {
+  if (!Number.isFinite(raw)) return 0;
+  const k = ncaafShrinkK();
+  if (!(k > 0) || !(g > 0)) return raw;
+  return raw * (g / (g + k));
+}
+
+/**
+ * NCAAF points per game versus an even team (0 = centered).
+ * gp known: (pf − pa) / gp. An explicit per-game pair is used only when
+ * gp >= 2, matching the NFL rule. gp unknown: 0, never the season sum.
+ * OMEGA_NCAAF_SHRINK_K > 0 multiplies that rate by gp/(gp+K). Default K is 0.
+ */
+function ncaafPower(st) {
+  if (!st) return 0;
+  const g = gamesPlayed(st);
+  const explicit = explicitPointsPerGame(st);
+  const pf = Number(st.pf);
+  const pa = Number(st.pa);
+  const hasDiff = Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0;
+  if (g >= 2 && explicit) return applyNcaafShrink(explicit.pfPg - explicit.paPg, g);
+  if (hasDiff) {
+    if (g >= 1) return applyNcaafShrink((pf - pa) / g, g);
+    return 0;
+  }
+  if (!Number.isFinite(Number(st.winPct))) return 0;
+  const wp = Number(st.winPct);
+  if (wp >= 0 && wp <= 1) return (wp - 0.5) * 20;
+  return 0;
+}
+
 /**
  * Point / run differential.
- * NFL and NCAAF pointsFor/pointsAgainst are season sums: gp >= 2 divides
- * both, gp < 2 keeps the raw difference. An explicit per-game pair is not
- * divided. Without a sport, the raw pf − pa is kept.
+ * NFL pointsFor/pointsAgainst are season sums: gp >= 2 divides both,
+ * gp < 2 keeps the raw difference. An explicit per-game pair is not
+ * divided. NCAAF with OMEGA_NCAAF_GP_FIX on uses ncaafPower (per-game,
+ * 0 when games are unknown). The toggle off keeps this same NFL formula
+ * for NCAAF, which is why a null loss used to publish the season sum.
+ * Without a sport, the raw pf − pa is kept.
  * MLB, NHL, and NBA do not call this. Their branch still uses the 1.8×
  * league-ppg split so that latent path stays put.
  */
 function powerFromStandings(st, sport) {
   if (!st) return 0;
+  if (sport === 'NCAAF' && ncaafGpFixEnabled()) return ncaafPower(st);
   const pf = Number(st.pf);
   const pa = Number(st.pa);
   const hasDiff = Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0;
@@ -387,6 +488,39 @@ const FOOTBALL_AUDIT_KEYS = [
   'marketLine', 'modelLineGap', 'gapFlag',
 ];
 
+/**
+ * Reject reason when a football candidate's model and the sharp line
+ * disagree past FB_MARKET_GAP. Totals use the total cap. Spreads and
+ * moneylines use the margin cap. Missing market numbers do not reject.
+ * OMEGA_FB_GAP_GUARD=0 restores the old "flag only" path.
+ */
+function footballMarketGapReason(c) {
+  if (!fbGapGuardEnabled()) return null;
+  if (!c || (c.sport !== 'NFL' && c.sport !== 'NCAAF')) return null;
+  const lim = fbMarketGapLimits(c.sport);
+  if (!lim) return null;
+  const isTotal = /total/i.test(String(c.market || ''));
+  let gap = null;
+  if (isTotal) {
+    if (c.modelTotalRaw != null && c.marketTotal != null
+      && Number.isFinite(Number(c.modelTotalRaw)) && Number.isFinite(Number(c.marketTotal))) {
+      gap = Math.abs(Number(c.modelTotalRaw) - Number(c.marketTotal));
+    } else if (c.modelLineGap != null && Number.isFinite(Number(c.modelLineGap))) {
+      gap = Math.abs(Number(c.modelLineGap));
+    }
+    if (gap != null && gap > lim.total + 1e-9) return 'model_market_gap';
+    return null;
+  }
+  if (c.modelMarginRaw != null && c.marketMargin != null
+    && Number.isFinite(Number(c.modelMarginRaw)) && Number.isFinite(Number(c.marketMargin))) {
+    gap = Math.abs(Number(c.modelMarginRaw) - Number(c.marketMargin));
+  } else if (c.modelLineGap != null && Number.isFinite(Number(c.modelLineGap))) {
+    gap = Math.abs(Number(c.modelLineGap));
+  }
+  if (gap != null && gap > lim.margin + 1e-9) return 'model_market_gap';
+  return null;
+}
+
 function footballAudit(state, market) {
   const label = String(market || '');
   const isTotal = /total/i.test(label);
@@ -437,11 +571,14 @@ module.exports = {
   formatMatchup,
   matchEspnGameByIdentity,
   fuzzyTeam,
+  knownCount,
+  parseWinLossRecord,
   gamesPlayed,
   gamesPlayedInfo,
   explicitPointsPerGame,
   LEAGUE_PPG,
   powerFromStandings,
+  footballMarketGapReason,
   resolveSpreadStd,
   nflKeyNumberCover,
   spreadCoverProb,

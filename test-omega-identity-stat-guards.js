@@ -228,12 +228,12 @@ function snap(sport, events, standings, extra) {
   assert.strictEqual(id.resolveTeamId('NHL', 'Stars'), null);
 }
 
-// ── games played: same helper as the model. Record strings are not gp. ──
+// ── games played: same helper as the model. A W-L record is gp. ──
 {
   const recordRow = { record: '4-1', pf: 31, pa: 24 };
-  assert.strictEqual(gamesPlayed(recordRow), 0);
-  assert.strictEqual(gamesPlayedInfo(recordRow).source, 'unknown');
-  assert.strictEqual(gamesPlayedInfo(recordRow).known, false);
+  assert.strictEqual(gamesPlayed(recordRow), 5);
+  assert.strictEqual(gamesPlayedInfo(recordRow).source, 'record');
+  assert.strictEqual(gamesPlayedInfo(recordRow).known, true);
   assert.strictEqual(gamesPlayed({ wins: 4, pf: 30, pa: 20 }), 0);
   assert.strictEqual(gamesPlayedInfo({ wins: 4, pf: 30, pa: 20 }).source, 'winsOnly');
   assert.strictEqual(gamesPlayed({ wins: 4, losses: 2, games: 4, pf: 100, pa: 80 }), 4);
@@ -249,8 +249,8 @@ function snap(sport, events, standings, extra) {
       'Arizona Wildcats': { record: '3-2', pf: 28, pa: 27 },
     }),
   });
-  assert.strictEqual(recordHealth.bySport.NCAAF.stats.gpUnknown, 2);
-  assert.ok(codesOf(recordHealth).includes('NCAAF:gp_unknown'));
+  assert.strictEqual(recordHealth.bySport.NCAAF.stats.gpUnknown, 0);
+  assert.ok(!codesOf(recordHealth).includes('NCAAF:gp_unknown'));
   assert.ok(!codesOf(recordHealth).includes('NCAAF:schema_missing:overall'), codesOf(recordHealth).join(','));
 
   const winsOnly = buildHealthRecord({

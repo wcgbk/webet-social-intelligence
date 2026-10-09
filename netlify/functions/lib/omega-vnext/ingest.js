@@ -179,15 +179,95 @@ async function fetchEspnScoreboard(label, dateISO) {
   }
 }
 
+/**
+ * Home, away, road, division, and conference slices. The overall column
+ * has type pointsfor / total, not one of these prefixes. A stat with no
+ * type is kept (callers that pass a bare {name, value} stay on that row).
+ */
+function isSplitStat(stat) {
+  const type = String((stat && stat.type) || '').toLowerCase().replace(/[\s._-]+/g, '');
+  if (!type || type === 'total' || type === 'overall') return false;
+  if (type.startsWith('home') || type.startsWith('away') || type.startsWith('road')) return true;
+  if (type.includes('homerecord') || type.includes('awayrecord') || type.includes('roadrecord')) return true;
+  if (type.startsWith('vs')) return true;
+  return false;
+}
+
 function espnStat(stats, names) {
   const want = new Set(names.map(n => String(n).toLowerCase()));
   for (const s of stats || []) {
+    if (isSplitStat(s)) continue;
     const name = String((s && s.name) || '').toLowerCase();
     if (!want.has(name)) continue;
     const v = Number(s.value);
     if (Number.isFinite(v)) return v;
   }
   return null;
+}
+
+/** Exact stat name, overall/total slice only. First hit. No substring. */
+function findExactStat(stats, name) {
+  const want = String(name);
+  for (const s of stats || []) {
+    if (!s || isSplitStat(s)) continue;
+    if (s.name === want) return s;
+  }
+  return null;
+}
+
+function statNumber(stat) {
+  return stat ? Number(stat.value) : null;
+}
+
+/**
+ * Season pointsFor / pointsAgainst / winPercent by exact name.
+ * avgPointsFor is not a stand-in for either column (it is a substring of
+ * the old pointsFor regex and used to bind both pf and winPct).
+ * runsFor / runsAgainst count only when the points column is absent.
+ * A home-only slice is not a fallback.
+ */
+function standingNumbers(stats) {
+  const winPct = findExactStat(stats, 'winPercent');
+  const pf = findExactStat(stats, 'pointsFor') || findExactStat(stats, 'runsFor');
+  const pa = findExactStat(stats, 'pointsAgainst') || findExactStat(stats, 'runsAgainst');
+  const wins = findExactStat(stats, 'wins');
+  const losses = findExactStat(stats, 'losses');
+  return {
+    winPct: statNumber(winPct),
+    pf: statNumber(pf),
+    pa: statNumber(pa),
+    wins: statNumber(wins),
+    losses: statNumber(losses),
+  };
+}
+
+function collectStandingsEntries(data) {
+  const entries = [];
+  function walk(node) {
+    if (!node) return;
+    if (Array.isArray(node.standings && node.standings.entries)) {
+      entries.push(...node.standings.entries);
+    }
+    if (Array.isArray(node.entries)) entries.push(...node.entries);
+    (node.children || []).forEach(walk);
+  }
+  if (data && data.standings && data.standings.entries) entries.push(...data.standings.entries);
+  walk(data);
+  return entries;
+}
+
+function ratingsFromStandingsEntries(entries, label) {
+  const ratings = {};
+  for (const e of entries || []) {
+    const team = (e.team && (e.team.displayName || e.team.name)) || '';
+    if (!team) continue;
+    const stats = e.stats || [];
+    ratings[team] = standingNumbers(stats);
+    if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
+    else if (label === 'NFL' || label === 'NCAAF') applyFootballStandingExtras(ratings[team], stats);
+    else if (label === 'NBA') applyNbaStandingExtras(ratings[team], stats);
+  }
+  return ratings;
 }
 
 function normStatLabel(value) {
@@ -380,39 +460,7 @@ async function loadEspnStandings(label) {
   for (const url of urls) {
     try {
       const data = await fetchJson(url, 10000);
-      const ratings = {};
-      const children = data.children || data.children || [];
-      const entries = [];
-      function walk(node) {
-        if (!node) return;
-        if (Array.isArray(node.standings && node.standings.entries)) {
-          entries.push(...node.standings.entries);
-        }
-        if (Array.isArray(node.entries)) entries.push(...node.entries);
-        (node.children || []).forEach(walk);
-      }
-      if (data.standings && data.standings.entries) entries.push(...data.standings.entries);
-      walk(data);
-      for (const e of entries) {
-        const team = (e.team && (e.team.displayName || e.team.name)) || '';
-        if (!team) continue;
-        const stats = e.stats || [];
-        const winPct = stats.find(s => s.name === 'winPercent' || s.name === 'avgPointsFor');
-        const pf = stats.find(s => /pointsFor|avgPointsFor|runsFor/i.test(s.name || ''));
-        const pa = stats.find(s => /pointsAgainst|avgPointsAgainst|runsAgainst/i.test(s.name || ''));
-        const wins = stats.find(s => s.name === 'wins');
-        const losses = stats.find(s => s.name === 'losses');
-        ratings[team] = {
-          winPct: winPct ? Number(winPct.value) : null,
-          pf: pf ? Number(pf.value) : null,
-          pa: pa ? Number(pa.value) : null,
-          wins: wins ? Number(wins.value) : null,
-          losses: losses ? Number(losses.value) : null,
-        };
-        if (label === 'NHL') applyNhlStandingStats(ratings[team], stats);
-        else if (label === 'NFL' || label === 'NCAAF') applyFootballStandingExtras(ratings[team], stats);
-        else if (label === 'NBA') applyNbaStandingExtras(ratings[team], stats);
-      }
+      const ratings = ratingsFromStandingsEntries(collectStandingsEntries(data), label);
       if (Object.keys(ratings).length) return ratings;
     } catch (_) { /* try next */ }
   }
@@ -761,6 +809,11 @@ module.exports = {
   oddsFailureRecord,
   applyFootballStandingExtras,
   applyNbaStandingExtras,
+  isSplitStat,
+  findExactStat,
+  standingNumbers,
+  collectStandingsEntries,
+  ratingsFromStandingsEntries,
   scoreboardSeasonFields,
   fetchFootballQbStatusMap,
   enabledSportLabels,

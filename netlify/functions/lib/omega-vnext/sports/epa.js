@@ -538,11 +538,15 @@ function tagEngines(methods, enginesOn) {
 /**
  * Home margin and total. engine family is null on the standings path.
  */
-function footballProjection({ sport, home, away, standings, efficiency }) {
+function footballProjection({ sport, home, away, standings, efficiency, hfa } = {}) {
   const cfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
   const table = efficiency && typeof efficiency === 'object' ? efficiency : {};
   const ratings = standings && typeof standings === 'object' ? standings : {};
-  const hfa = HFA[sport] != null ? HFA[sport] : 0;
+  // Numeric hfa (including 0) overrides the sport constant. Neutral-site
+  // callers pass 0. Omitted hfa keeps HFA[sport].
+  const hfaPts = (hfa != null && Number.isFinite(Number(hfa)))
+    ? Number(hfa)
+    : (HFA[sport] != null ? HFA[sport] : 0);
   const unknownNames = [];
   if (!resolveTeamId(sport, home)) unknownNames.push(home);
   if (!resolveTeamId(sport, away)) unknownNames.push(away);
@@ -550,7 +554,7 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
     for (const name of unknownNames) logUnknownTeam(sport, name);
     const fallbackTotal = cfg.baseTotal;
     return {
-      modelMargin: hfa,
+      modelMargin: hfaPts,
       modelTotal: fallbackTotal,
       uncertainty: fallbackUncertainty(sport, null, null),
       totalUncBump: cfg.totalUncBump,
@@ -565,7 +569,7 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   const awaySt = rowByIdentity(sport, ratings, away);
   const hPow = powerFromStandings(homeSt, sport);
   const aPow = powerFromStandings(awaySt, sport);
-  const fallbackMargin = (hPow - aPow) + hfa;
+  const fallbackMargin = (hPow - aPow) + hfaPts;
   const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
   const homeEpa = lookupEpa(home, table, sport);
   const awayEpa = lookupEpa(away, table, sport);
@@ -589,7 +593,7 @@ function footballProjection({ sport, home, away, standings, efficiency }) {
   // (homeOff - awayDef) - (awayOff - homeDef), in points, plus HFA.
   const homeEdge = hAdj.offEpa - aAdj.defEpa;
   const awayEdge = aAdj.offEpa - hAdj.defEpa;
-  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfa;
+  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfaPts;
   let modelTotal = cfg.baseTotal + (homeEdge + awayEdge) * cfg.plays + successTotalAdj(hAdj, aAdj);
 
   const engineMeta = { used: false, success: null, talent: null };

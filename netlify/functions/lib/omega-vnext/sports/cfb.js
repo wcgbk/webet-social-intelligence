@@ -8,7 +8,7 @@
  * CDF. Calibrate shrink runs later on that probability.
  */
 const {
-  formatMatchup, mapGamesSoft,
+  formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
   spreadCoverProb, totalCoverProb, mlFromSpread,
   sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
 } = require('./_common');
@@ -51,11 +51,13 @@ function tagMethods(methods, gameDayApplied, enginesOn) {
   return out;
 }
 
-function projectGame(event, standings, efficiency, gameDay) {
+function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency });
+  const neutral = !!(espnGame && espnGame.neutralSite === true);
+  const hfaPts = neutral ? 0 : HFA.NCAAF;
+  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
   const gd = applyGameDayAdjustments({
     sport: SPORT,
     modelMargin: env.modelMargin,
@@ -65,7 +67,7 @@ function projectGame(event, standings, efficiency, gameDay) {
     away,
     restByTeam: (gameDay && gameDay.restByTeam && gameDay.restByTeam.NCAAF) || (gameDay && gameDay.restByTeam) || {},
     qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NCAAF) || (gameDay && gameDay.qbByTeam) || {},
-    hfaBase: HFA.NCAAF,
+    hfaBase: hfaPts,
   });
   const stacked = applyEngineStack({
     sport: SPORT,
@@ -108,7 +110,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         engineSoft,
         ...footballAudit(pts, 'Moneyline'),
       };
-      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
     }
   }
   {
@@ -133,7 +135,7 @@ function projectGame(event, standings, efficiency, gameDay) {
         engineSoft,
         ...footballAudit(pts, 'Spread'),
       };
-      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
     }
   }
   {
@@ -157,14 +159,23 @@ function projectGame(event, standings, efficiency, gameDay) {
         engineSoft,
         ...footballAudit(pts, 'Total'),
       };
-      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
     }
   }
   return out;
 }
 
-function project({ oddsEvents, standings, efficiency, gameDay } = {}) {
-  return mapGamesSoft(oddsEvents, (ev) => projectGame(ev, standings || {}, efficiency || {}, gameDay || {}));
+function stampNeutral(raw, neutral) {
+  if (neutral) raw.diag = { neutralSite: true };
+  return raw;
+}
+
+function project({ oddsEvents, standings, efficiency, gameDay, espnGames } = {}) {
+  const games = (espnGames && espnGames.games) || espnGames || [];
+  return mapGamesSoft(oddsEvents, (ev) => {
+    const eg = matchEspnGameByIdentity(SPORT, ev, games);
+    return projectGame(ev, standings || {}, efficiency || {}, gameDay || {}, eg);
+  });
 }
 
 module.exports = { project, SPORT };

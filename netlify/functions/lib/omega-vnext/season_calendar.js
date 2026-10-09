@@ -12,8 +12,9 @@
  * the explicit live flag (NBA_CARD_LIVE or OMEGA_NBA_LIVE=1). Preseason
  * is never card-eligible, including NBA with the flag on.
  *
- * Neutral-site home-field advantage is NOT applied here and is NOT a model
- * change. NFL Super Bowl and NCAAF bowls/CFP notes record that follow-up.
+ * Neutral-site home-field advantage is not a calendar flag. NFL and NCAAF
+ * projections use HFA 0 when a matched ESPN game has neutralSite true
+ * (resolved team ids + the same ET date). HFA constants stay unchanged.
  *
  * Dates outside every encoded phase are phase 'unknown' and fail open to
  * the kill switch (SPORTS_ENABLED, or the NBA live flag in its place) so a
@@ -92,7 +93,7 @@ const SEASONS = {
       start: '2027-01-13',
       end: '2027-02-15',
       eligible: true,
-      note: 'Postseason eligible (same engine). Wild Card 2027-01-16..01-18, Divisional 01-23..01-24, Conference Championships 01-31, Super Bowl LXI 2027-02-14 SoFi (neutral site). Neutral-site HFA is NOT handled — follow-up; do not change HFA.',
+      note: 'Postseason eligible (same engine). Wild Card 2027-01-16..01-18, Divisional 01-23..01-24, Conference Championships 01-31, Super Bowl LXI 2027-02-14 SoFi (neutral site). HFA constants stay unchanged. A matched ESPN game with neutralSite true uses HFA 0 (resolved team ids + same ET date).',
       source: NFL_SOURCE,
     },
     {
@@ -134,7 +135,7 @@ const SEASONS = {
       start: '2026-12-12',
       end: '2027-01-25',
       eligible: true,
-      note: 'Bowls/CFP eligible. Celebration Bowl 2026-12-12, CFP first round 12-18..12-19, CFP quarterfinals 12-30 and 2027-01-01, semifinals 2027-01-14/01-15, CFP National Championship 2027-01-25 Las Vegas (neutral). Neutral-site HFA is NOT handled (follow-up; do not change HFA). TBD/TBA and winner-of/loser-of names are skipped before candidates. 2026-12-12 also sits on the regular-season Army-Navy date; eligible either way.',
+      note: 'Bowls/CFP eligible. Celebration Bowl 2026-12-12, CFP first round 12-18..12-19, CFP quarterfinals 12-30 and 2027-01-01, semifinals 2027-01-14/01-15, CFP National Championship 2027-01-25 Las Vegas (neutral). HFA constants stay unchanged. A matched ESPN game with neutralSite true uses HFA 0 (resolved team ids + same ET date). TBD/TBA and winner-of/loser-of names are skipped before candidates. 2026-12-12 also sits on the regular-season Army-Navy date; eligible either way.',
       source: NCAAF_SOURCE,
     },
     {

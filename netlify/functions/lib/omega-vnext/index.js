@@ -107,6 +107,7 @@ function projectAll(snap, dateISO) {
       standings: snap.standingsBySport.NCAAF || {},
       efficiency: (snap.efficiencyBySport && snap.efficiencyBySport.NCAAF) || {},
       gameDay,
+      espnGames: snap.espnBySport && snap.espnBySport.NCAAF,
     }));
   }
   // Real board only when the card date (or, with no date, SPORTS_ENABLED.NBA) says so.

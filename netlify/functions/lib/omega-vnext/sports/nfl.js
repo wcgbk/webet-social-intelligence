@@ -11,13 +11,12 @@
  * The margin is not moved.
  */
 const {
-  formatMatchup, mapGamesSoft,
+  formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
   spreadCoverProb, totalCoverProb, mlFromSpread,
   sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj } = require('./game_day');
-const { resolveTeamId } = require('./team_identity');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -56,21 +55,16 @@ function tagMethods(methods, gameDayApplied, enginesOn) {
 }
 
 function findEspnGame(ev, espnGames) {
-  const games = (espnGames && espnGames.games) || espnGames || [];
-  if (!ev || !games.length) return null;
-  const hid = resolveTeamId(SPORT, ev.home_team);
-  const aid = resolveTeamId(SPORT, ev.away_team);
-  if (!hid || !aid) return null;
-  return games.find((g) => {
-    return resolveTeamId(SPORT, g.homeTeam) === hid && resolveTeamId(SPORT, g.awayTeam) === aid;
-  }) || null;
+  return matchEspnGameByIdentity(SPORT, ev, espnGames);
 }
 
 function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency });
+  const neutral = !!(espnGame && espnGame.neutralSite === true);
+  const hfaPts = neutral ? 0 : HFA.NFL;
+  const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
   const gd = applyGameDayAdjustments({
     sport: SPORT,
     modelMargin: env.modelMargin,
@@ -80,7 +74,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     away,
     restByTeam: (gameDay && gameDay.restByTeam && gameDay.restByTeam.NFL) || (gameDay && gameDay.restByTeam) || {},
     qbByTeam: (gameDay && gameDay.qbStatusBySport && gameDay.qbStatusBySport.NFL) || (gameDay && gameDay.qbByTeam) || {},
-    hfaBase: HFA.NFL,
+    hfaBase: hfaPts,
   });
   const stacked = applyEngineStack({
     sport: SPORT,
@@ -136,7 +130,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         engineSoft,
         ...footballAudit(pts, 'Moneyline'),
       };
-      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
     }
   }
   {
@@ -161,7 +155,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         engineSoft,
         ...footballAudit(pts, 'Spread'),
       };
-      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
     }
   }
   {
@@ -185,10 +179,15 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         engineSoft,
         ...footballAudit(pts, 'Total'),
       };
-      out.push(enrichCandidateWithEdge(withIdentity(raw, env), b, bundles));
+      out.push(enrichCandidateWithEdge(stampNeutral(withIdentity(raw, env), neutral), b, bundles));
     }
   }
   return out;
+}
+
+function stampNeutral(raw, neutral) {
+  if (neutral) raw.diag = { neutralSite: true };
+  return raw;
 }
 
 function project({ oddsEvents, standings, efficiency, gameDay, espnGames } = {}) {

@@ -1,13 +1,42 @@
 'use strict';
 
-const { normCdf, clamp, americanToImplied } = require('../odds_math');
+const { normCdf, clamp, americanToImplied, etCalendarDate } = require('../odds_math');
 const {
   SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA, SHARP_BOOKS, POINT_SHRINK, MODEL_LINE_GAP,
   NFL_KEY_NUMBERS,
 } = require('../config');
+const { resolveTeamId } = require('./team_identity');
 
 function formatMatchup(away, home) {
   return `${away} @ ${home}`;
+}
+
+function espnCommenceIso(game) {
+  if (!game || typeof game !== 'object') return null;
+  return game.commenceTime || game.commence_time || game.date || null;
+}
+
+/**
+ * Odds event → ESPN game by resolved team ids and the same America/New_York
+ * calendar date. Exact alias lookup only (resolveTeamId). Missing id or
+ * missing date is a miss. First hit wins. No fuzzy or last-word match.
+ */
+function matchEspnGameByIdentity(sport, ev, espnGames) {
+  const games = (espnGames && espnGames.games) || espnGames || [];
+  if (!ev || !games.length) return null;
+  const hid = resolveTeamId(sport, ev.home_team);
+  const aid = resolveTeamId(sport, ev.away_team);
+  if (!hid || !aid) return null;
+  const evDate = etCalendarDate(ev.commence_time);
+  if (!evDate) return null;
+  return games.find((g) => {
+    if (!g) return false;
+    const gh = resolveTeamId(sport, g.homeTeam || g.home_team);
+    const ga = resolveTeamId(sport, g.awayTeam || g.away_team);
+    if (gh !== hid || ga !== aid) return false;
+    const gd = etCalendarDate(espnCommenceIso(g));
+    return gd != null && gd === evDate;
+  }) || null;
 }
 
 // MLB and NHL only. NFL/NCAAF identity is team_identity.js (exact ESPN id).
@@ -406,6 +435,7 @@ function pricedFromPointShrink(probAt, projRaw, projShrunk, line, anchor, weight
 
 module.exports = {
   formatMatchup,
+  matchEspnGameByIdentity,
   fuzzyTeam,
   gamesPlayed,
   gamesPlayedInfo,

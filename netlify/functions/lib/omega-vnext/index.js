@@ -15,6 +15,7 @@ const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, storeHealthRecord } = require('./store');
+const { persistCandidateLedger } = require('./candidate_ledger');
 const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
 const { attachGenerateHealth } = require('./health');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
@@ -748,6 +749,31 @@ async function generateOmegaVnext(opts = {}) {
       key: shadow ? `omega-shadow/pm-observer/${dateISO}` : `omega-pm-observer/${dateISO}`,
       shadow: !!shadow,
     };
+  }
+
+  // Private full-candidate ledger. Live generate only. Not a card field:
+  // this does not assign onto picksData, picks, or parlayLegs.
+  try {
+    const ledger = await persistCandidateLedger({
+      dateISO,
+      generatedAt: picksData.generatedAt,
+      yesPool,
+      rejected,
+      picks: picksData.picks,
+      parlayLegs: picksData.parlayLegs,
+      oddsBySport: snap && snap.oddsBySport,
+      picksData,
+      dryRun,
+      shadow,
+      simMode,
+      replay: !!replayLike,
+      historicalSnapshot: opts.historicalSnapshot || null,
+    });
+    if (ledger && ledger.wrote) {
+      console.log(`[omega-vnext] candidate ledger key=${ledger.key} n=${ledger.count}`);
+    }
+  } catch (e) {
+    console.error(`[omega-vnext] candidate ledger soft-fail: ${e.message}`);
   }
 
   console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length} hardFails=${hardFails.length}`);

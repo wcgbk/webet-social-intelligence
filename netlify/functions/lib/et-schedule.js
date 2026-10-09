@@ -9,12 +9,32 @@
  * Manual, HTTP, and internal calls do not carry a scheduler body. They
  * bypass the guard and keep the handler's existing behavior.
  *
- * Every-15-min jobs are listed in SCHEDULE_NA and are not guarded.
+ * Every-15-min jobs with no ET window are listed in SCHEDULE_NA and are not
+ * guarded. capture-candidate-closes is every 15 minutes but DST-guarded to the ET window.
  * US Pacific jobs (Circa) are stored as ET. ET and PT switch DST together,
  * so an ET slot stays the same PT wall time all year.
  */
 
 const TOLERANCE_MIN = 10;
+
+/** Inclusive ET quarter-hours. end may be after midnight (next ET day). */
+function quarterHourSlots(startHHMM, endHHMM) {
+  const toMin = (hhmm) => {
+    const [h, m] = String(hhmm).split(':').map(Number);
+    return h * 60 + m;
+  };
+  const start = toMin(startHHMM);
+  let end = toMin(endHHMM);
+  if (end < start) end += 1440;
+  const out = [];
+  for (let t = start; t <= end; t += 15) {
+    const m = t % 1440;
+    const hh = String(Math.floor(m / 60)).padStart(2, '0');
+    const mm = String(m % 60).padStart(2, '0');
+    out.push(`${hh}:${mm}`);
+  }
+  return out;
+}
 
 /** @type {Record<string, {etTimes: string[], days?: number[]}>} */
 const ET_SCHEDULE = {
@@ -56,6 +76,11 @@ const ET_SCHEDULE = {
   'capture-omega-walkforward': { etTimes: ['11:15'] },
   'capture-omega-walkforward-evening': { etTimes: ['19:45'] },
   'capture-opening-lines': { etTimes: ['06:00'] },
+  // 11:30 ET through 01:30 ET next day, every 15 min. Cron is the UTC union
+  // of EDT (UTC-4) and EST (UTC-5); etGuard drops the hours outside this list.
+  // On the fall-back night the 1:00 hour occurs twice. dstFold 'later' keeps
+  // the second (EST) occurrence so the slot still fires once.
+  'capture-candidate-closes': { etTimes: quarterHourSlots('11:30', '01:30'), dstFold: 'later' },
   'verify-picks': { etTimes: ['10:30'] },
   'self-optimize': { etTimes: ['05:00'], days: [0] },
   'trigger-trend-monitor': { etTimes: ['21:00'] },
@@ -162,6 +187,35 @@ function closestEtSlot(etMinutes, etTimes) {
   return best;
 }
 
+function offsetMinutes(date) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'longOffset',
+    hour: '2-digit',
+  });
+  const tz = fmt.formatToParts(date).find((p) => p.type === 'timeZoneName');
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(tz ? tz.value : '');
+  if (!match) return null;
+  const sign = match[1] === '-' ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+/**
+ * True on the first copy of a repeated ET wall time (US fall-back).
+ * The same YYYY-MM-DD HH:MM exists one hour later at the standard offset.
+ * Spring-forward and ordinary days are not a fold.
+ */
+function isEarlierDstFold(now) {
+  const when = now instanceof Date ? now : new Date(now);
+  const wall = etParts(when);
+  const off = offsetMinutes(when);
+  if (off == null) return false;
+  const other = new Date(when.getTime() + 60 * 60 * 1000);
+  const ahead = etParts(other);
+  const aheadOff = offsetMinutes(other);
+  return ahead.ymd === wall.ymd && ahead.et === wall.et && aheadOff != null && aheadOff !== off;
+}
+
 function etGuard(functionName, event, now = new Date()) {
   const parts = etParts(now);
   const scheduler = isSchedulerEvent(event);
@@ -181,6 +235,9 @@ function etGuard(functionName, event, now = new Date()) {
   }
   const matched = closestEtSlot(parts.hour * 60 + parts.minute, spec.etTimes);
   if (!matched) return { ...base, run: false, reason: 'outside-et-slot' };
+  if (spec.dstFold === 'later' && isEarlierDstFold(now)) {
+    return { ...base, run: false, reason: 'dst-fold', matched };
+  }
   return { ...base, run: true, reason: 'et-match', matched };
 }
 

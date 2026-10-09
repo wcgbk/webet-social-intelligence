@@ -9,7 +9,10 @@
 const {
   readCaptureHealthLatest,
   readCaptureHealthDate,
+  readJson,
 } = require('./lib/omega-vnext/store');
+const { coverageBySportMarket, candidateCloseKey } = require('./lib/omega-vnext/candidate_closes_v2');
+const { etParts } = require('./lib/et-schedule');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +40,25 @@ exports.handler = async (event) => {
     } else {
       snap = await readCaptureHealthLatest();
     }
+    const coverageDate = dateISO || etParts(new Date()).ymd;
+    let candidateCloses = null;
+    try {
+      const closeBlob = await readJson(candidateCloseKey(coverageDate));
+      const rows = closeBlob && Array.isArray(closeBlob.candidates) ? closeBlob.candidates : [];
+      const bySportMarket = coverageBySportMarket(rows);
+      const candidates = rows.length;
+      const withClose = rows.filter((row) => row && row.closeNoVig != null).length;
+      candidateCloses = {
+        date: coverageDate,
+        key: candidateCloseKey(coverageDate),
+        candidates,
+        withClose,
+        pct: candidates ? Math.round((1000 * withClose) / candidates) / 10 : 0,
+        bySportMarket,
+      };
+    } catch (err) {
+      candidateCloses = null;
+    }
     return {
       statusCode: 200,
       headers: CORS,
@@ -45,6 +67,7 @@ exports.handler = async (event) => {
         opsOnly: true,
         key: dateISO ? `omega-ops/capture-health-${dateISO}` : 'omega-ops/capture-health-latest',
         snapshot: snap,
+        candidateCloses,
         note: 'Ops signal only — does not change CAPTURE_HEALTH hardFail or live pick selection.',
       }),
     };

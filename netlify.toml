@@ -255,6 +255,28 @@
   # 9:30 (13:30) intentionally omitted — races trigger-picks-omega.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
+[functions."capture-candidate-closes"]
+  # Sharp close for every gate-evaluated Omega candidate. Private blobs only:
+  # reads omega-candidates/{date}, writes clv-candidates-v2/{date}.
+  # Does not write picks-{date}, clv-{date}, or any public card.
+  #
+  # UTC cron is the union that covers 11:30 ET through 01:30 ET next day in
+  # both EDT (UTC-4) and EST (UTC-5). lib/et-schedule etGuard drops the rest.
+  #   EDT: 15:30 UTC = 11:30 ET … 05:30 UTC = 01:30 ET
+  #   EST: 16:30 UTC = 11:30 ET … 06:30 UTC = 01:30 ET
+  # Hour 15 UTC is 10:00 ET during EST (skipped). Hour 6 UTC is 02:00 ET
+  # during EDT (skipped). Fires every 15 minutes inside the window.
+  # On the November fall-back night the 1:00 ET hour occurs twice; etGuard
+  # keeps the later (EST) occurrence so that slot still runs once.
+  #
+  # One live /odds call per sport that has a commence group starting within
+  # 20 minutes or started less than 5 minutes ago. bookmakers is the five
+  # sharp books (≤10 → one region) × markets h2h,spreads,totals = 3 credits.
+  # Daily cap OMEGA_CANDIDATE_CLOSE_CREDIT_CAP (default 90) per ET day.
+  # No historical odds endpoint.
+  schedule = "*/15 15-23,0-6 * * *"
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."warm-omega-feeds"]
   schedule = "0 13,14 * * *"
   # 13:00 UTC = 9:00am ET (EDT). Prefetch ESPN injuries/QB, MLB weather, StatsAPI SP

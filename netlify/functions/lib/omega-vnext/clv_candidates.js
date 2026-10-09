@@ -13,9 +13,16 @@
  *   historical = 10 × 9 = 90 credits
  * GET /events is 0. A hard cap (default 150) stops the next extra pull that
  * would pass it, so one historical close (90) fits and a second (180) does not.
+ *
+ * Full-slate sharp closes live in clv-candidates-v2 (capture-candidate-closes).
+ * This capped sample still writes clv-candidates-{date}. The v1 lambda-compat
+ * handler's getStore() has no blobs context: setJSON throws, and the published
+ * clv-{date} path already falls back to the Netlify REST API. This write does
+ * the same. A thrown getBulk is per commence group, so one sport cannot drop
+ * the rest of the batch.
  */
 
-const { GATES, ODDS_SPORT_KEYS } = require('./config');
+const { GATES, ODDS_SPORT_KEYS, SITE_ID, BLOB_STORE } = require('./config');
 const { parseEdgeFraction, qualityScore, formatMoneylinePick } = require('./odds_math');
 const { candidateSideSeed } = require('./clv_log');
 const { closingNoVigFromRaw, clvFromNoVig, americanToImplied } = require('./clv_grade');
@@ -539,6 +546,59 @@ function indexStored(existing) {
   return map;
 }
 
+function blobRestUrl(key, siteId) {
+  const site = siteId || process.env.SITE_ID || SITE_ID;
+  return `https://api.netlify.com/api/v1/blobs/${site}/${BLOB_STORE}/${key}`;
+}
+
+/**
+ * REST read/write used when getStore's setJSON/get throws (no Lambda blobs
+ * context). Returns null on a missing blob or a transport failure so one
+ * read cannot abort the batch. A PUT that fails still throws.
+ */
+async function restCandidate(key, { method = 'GET', body, fetchImpl, token, siteId } = {}) {
+  const auth = token != null ? token : process.env.NETLIFY_AUTH_TOKEN;
+  if (!auth) throw new Error('NETLIFY_AUTH_TOKEN missing');
+  const doFetch = fetchImpl || fetch;
+  const resp = await doFetch(blobRestUrl(key, siteId), {
+    method,
+    headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' },
+    body: body == null ? undefined : JSON.stringify(body),
+  });
+  return resp;
+}
+
+async function restGetCandidate(key, opts) {
+  try {
+    const resp = await restCandidate(key, { method: 'GET', ...opts });
+    if (!resp || !resp.ok) return null;
+    return await resp.json();
+  } catch (e) {
+    console.error(`[track-clv] candidate REST get ${key} failed: ${e.message}`);
+    return null;
+  }
+}
+
+async function writeCandidateBlob(key, payload, opts) {
+  if (opts.store && typeof opts.store.setJSON === 'function') {
+    try {
+      await opts.store.setJSON(key, payload);
+      return { via: 'sdk' };
+    } catch (e) {
+      console.error(`[track-clv] candidate setJSON ${key} failed: ${e.message} — REST fallback`);
+    }
+  } else if (!opts.allowRest) {
+    return { via: 'skipped' };
+  }
+  const resp = await restCandidate(key, { method: 'PUT', body: payload, ...opts });
+  if (!resp || !resp.ok) {
+    const status = resp ? resp.status : 'no-response';
+    throw new Error(`blob PUT ${key} → ${status}`);
+  }
+  console.log(`[track-clv] candidate REST wrote ${key}`);
+  return { via: 'rest' };
+}
+
 /**
  * Capture closes for the selected sides. `publishedSnapshotKeys` and `getBulk`
  * are the published pass's cache. This function does not receive clv-{date}
@@ -550,12 +610,16 @@ async function captureCandidateCloses(opts = {}) {
   const picksData = opts.picksData || {};
   const selected = Array.isArray(opts.sides) ? opts.sides : selectCandidateSides(picksData, { date: dateISO });
   let existing = opts.existing;
+  const existingKey = `${CANDIDATE_BLOB_PREFIX}${dateISO}`;
   if (existing === undefined && opts.store && typeof opts.store.get === 'function') {
     try {
-      existing = await opts.store.get(`${CANDIDATE_BLOB_PREFIX}${dateISO}`, { type: 'json' });
-    } catch (_) {
-      existing = null;
+      existing = await opts.store.get(existingKey, { type: 'json' });
+    } catch (e) {
+      console.error(`[track-clv] candidate get ${existingKey} failed: ${e.message} — REST fallback`);
+      existing = await restGetCandidate(existingKey, opts);
     }
+  } else if (existing === undefined && opts.allowRest) {
+    existing = await restGetCandidate(existingKey, opts);
   }
   const storedByKey = indexStored(existing);
   const espnBySport = { ...(opts.espnBySport || {}) };
@@ -621,27 +685,32 @@ async function captureCandidateCloses(opts = {}) {
 
   const gamesByKey = new Map();
   for (const decision of plan.decisions) {
-    if (decision.action === 'reuse' || decision.action === 'pull-live' || decision.action === 'pull-historical') {
-      const atISO = decision.action === 'pull-live' || decision.key.endsWith('|live') ? null : decision.commenceISO;
-      const before = bulkCache.has(decision.key) || publishedSnapshotKeys.has(decision.key);
-      const games = await getBulk(decision.sportKey, atISO);
-      gamesByKey.set(decision.key, games);
-      if (!before && (decision.action === 'pull-live' || decision.action === 'pull-historical')) {
-        fetchCounts.pulls += 1;
-        fetchCounts.credits += decision.credits;
-      }
-    } else if (decision.action === 'existing-live') {
-      const group = groupByCommence(selected).find((g) => g.id === decision.groupId);
-      const late = group ? findLateSnap(lateSnaps, group) : null;
-      if (late) {
-        const events = [];
-        for (const side of (group.sides || [])) {
-          const game = findSnapGame(late.snap, side);
-          if (!game) continue;
-          events.push(booksSnapToEvent(game));
+    try {
+      if (decision.action === 'reuse' || decision.action === 'pull-live' || decision.action === 'pull-historical') {
+        const atISO = decision.action === 'pull-live' || decision.key.endsWith('|live') ? null : decision.commenceISO;
+        const before = bulkCache.has(decision.key) || publishedSnapshotKeys.has(decision.key);
+        const games = await getBulk(decision.sportKey, atISO);
+        gamesByKey.set(decision.key, games);
+        if (!before && (decision.action === 'pull-live' || decision.action === 'pull-historical')) {
+          fetchCounts.pulls += 1;
+          fetchCounts.credits += decision.credits;
         }
-        gamesByKey.set(`snap|${decision.groupId}`, events.filter(Boolean));
+      } else if (decision.action === 'existing-live') {
+        const group = groupByCommence(selected).find((g) => g.id === decision.groupId);
+        const late = group ? findLateSnap(lateSnaps, group) : null;
+        if (late) {
+          const events = [];
+          for (const side of (group.sides || [])) {
+            const game = findSnapGame(late.snap, side);
+            if (!game) continue;
+            events.push(booksSnapToEvent(game));
+          }
+          gamesByKey.set(`snap|${decision.groupId}`, events.filter(Boolean));
+        }
       }
+    } catch (e) {
+      decision.error = e.message;
+      console.error(`[track-clv] candidate group ${decision.groupId || decision.key || '?'} failed (continuing): ${e.message}`);
     }
   }
 
@@ -708,10 +777,8 @@ async function captureCandidateCloses(opts = {}) {
   };
   const key = `${CANDIDATE_BLOB_PREFIX}${dateISO}`;
   console.log(`[track-clv] candidate closes date=${dateISO} sides=${filled.length} extraPulls=${credits.extraPulls} extraCredits=${credits.extraCredits} cap=${credits.cap} reused=${credits.reused} skippedEvents=${credits.skippedEvents} skippedCap=${credits.skippedCap} existingLive=${credits.existingLive}`);
-  if (opts.store && typeof opts.store.setJSON === 'function') {
-    await opts.store.setJSON(key, payload);
-  }
-  return { key, payload, plan, credits };
+  const write = await writeCandidateBlob(key, payload, opts);
+  return { key, payload, plan, credits, write };
 }
 
 function candidateBlobKey(dateISO) {

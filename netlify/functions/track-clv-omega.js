@@ -11,6 +11,7 @@ const {
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
 const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
+const { gradeCandidateResults } = require('./lib/omega-vnext/candidate_closes_v2');
 const { loadLinePath } = require('./lib/omega-vnext/line_path');
 const omegaGradingRules = require('./lib/omega-grading-rules');
 const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
@@ -883,6 +884,9 @@ async function recordCandidateCloses({
     lateSnaps = [];
   }
   const store = await openOmegaStore();
+  // getStore() has no Lambda blobs context here: setJSON throws. allowRest
+  // writes clv-candidates-{date} through the same NETLIFY_AUTH_TOKEN path the
+  // published clv-{date} blob already uses. Published keys are not passed in.
   await captureCandidateCloses({
     dateISO,
     picksData,
@@ -893,6 +897,7 @@ async function recordCandidateCloses({
     lateSnaps,
     espnBySport: espnBySport || {},
     store,
+    allowRest: true,
     fetchEvents: fetchCandidateEvents,
     fetchESPNScores,
     extractClose: (gameObj, sideInfo, pick) => extractClose(gameObj, sideInfo, pick, dateISO),
@@ -940,6 +945,21 @@ const trackClvOmegaHandler = async (event) => {
           const n = await settleResultsForDate(swISO, swPicks);
           if (n > 0) console.log(`[track-clv] Sweep settled ${n} picks for ${swISO}`);
         } catch (e) { console.log(`[track-clv] Sweep ${swISO} failed: ${e.message}`); }
+        // Private research rows only. ESPN is free. Does not read or write
+        // picks-{date}, clv-{date}, or any KPI bucket.
+        try {
+          const graded = await gradeCandidateResults({
+            dateISO: swISO,
+            fetchESPNScores,
+            gradePick: (pick, game) => gradePick(pick, game, { dateISO: swISO }),
+            findGameForGrading: (pick, games) => findGameForGrading(pick, games, swISO),
+          });
+          if (graded && graded.graded > 0) {
+            console.log(`[track-clv] candidate v2 graded ${graded.graded} for ${swISO}`);
+          }
+        } catch (e) {
+          console.log(`[track-clv] candidate v2 grade ${swISO} failed (non-fatal): ${e.message}`);
+        }
       }
       // Yesterday's TRUE close capture (historical odds) still runs via self-POST — best
       // effort only; settlement above no longer depends on it surviving.

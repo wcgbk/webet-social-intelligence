@@ -31,16 +31,46 @@ function fuzzyTeam(name, ratings) {
 /** League scoring per game. NFL/NCAAF no longer use this as a divide trigger. */
 const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1 };
 
-function gamesPlayed(st) {
-  if (!st || typeof st !== 'object') return 0;
+/**
+ * Where gamesPlayed() got its number.
+ * gamesPlayed / games: an explicit count the model trusts.
+ * wl: wins + losses + ties (both W and L present, including 0).
+ * winsOnly: losses are missing, or the explicit count equals wins while
+ * losses show more games. The model still returns the explicit count when
+ * one is present; health treats winsOnly as unknown.
+ * unknown: no count. A record string is not read.
+ */
+function gamesPlayedInfo(st) {
+  if (!st || typeof st !== 'object') return { gp: 0, source: 'unknown', known: false };
   const explicit = Number(st.gamesPlayed);
-  if (Number.isFinite(explicit) && explicit > 0) return explicit;
-  if (Number.isFinite(Number(st.games)) && Number(st.games) > 0) return Number(st.games);
+  if (Number.isFinite(explicit) && explicit > 0) return tagExplicitGp(st, explicit, 'gamesPlayed');
+  const games = Number(st.games);
+  if (Number.isFinite(games) && games > 0) return tagExplicitGp(st, games, 'games');
   const w = Number(st.wins);
   const l = Number(st.losses);
+  if (!Number.isFinite(w) || !Number.isFinite(l)) {
+    if (Number.isFinite(w) && !Number.isFinite(l)) return { gp: 0, source: 'winsOnly', known: false };
+    return { gp: 0, source: 'unknown', known: false };
+  }
   const t = Number(st.ties);
-  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
-  return w + l + (Number.isFinite(t) ? t : 0);
+  return { gp: w + l + (Number.isFinite(t) ? t : 0), source: 'wl', known: true };
+}
+
+function tagExplicitGp(st, gp, source) {
+  const w = Number(st.wins);
+  const l = Number(st.losses);
+  if (Number.isFinite(w) && Number.isFinite(l) && l > 0 && gp === w) {
+    const otlRaw = st.otLosses != null ? st.otLosses : st.otl;
+    const otl = Number(otlRaw);
+    const t = Number(st.ties);
+    const full = w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
+    if (full !== gp) return { gp, source: 'winsOnly', known: false };
+  }
+  return { gp, source, known: true };
+}
+
+function gamesPlayed(st) {
+  return gamesPlayedInfo(st).gp;
 }
 
 /**
@@ -378,6 +408,7 @@ module.exports = {
   formatMatchup,
   fuzzyTeam,
   gamesPlayed,
+  gamesPlayedInfo,
   explicitPointsPerGame,
   LEAGUE_PPG,
   powerFromStandings,

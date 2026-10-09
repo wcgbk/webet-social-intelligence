@@ -4,7 +4,10 @@
 // A throw inside the builder must not escape attachGenerateHealth.
 
 const { SPORTS_ENABLED } = require('./config');
-const { collectUnresolved } = require('./sports/team_identity');
+const { collectUnresolved, resolveTeamId, rowByIdentity } = require('./sports/team_identity');
+const { gamesPlayedInfo, explicitPointsPerGame } = require('./sports/_common');
+const { isCleanEpa } = require('./sports/epa');
+const nhl = require('./sports/nhl');
 const { sportsForCard, calendarHealth } = require('./season_calendar');
 
 const SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL', 'NBA'];
@@ -80,17 +83,20 @@ function rateOf(row, sport) {
 }
 
 /**
- * NHL out-of-band follows the rate the projector actually uses.
- * A club counts when teamGpg leaves it on the baseline for a bad rate
- * (out of band, implausible, standings points) or the shrunk rate is still
- * outside [floor, cap]. Early raw rates that shrink into the band are not
- * an error. gp<2 and rows with no goals stay on the baseline and are
- * counted in baselineTeams, not here.
+ * NHL baseline and out-of-band follow the rate the projector uses
+ * (teamGpgDetail). One definition for both counters.
+ * Out of band: the detail baseline is a bad rate ('out of band',
+ * 'implausible rate', 'standings-points guard'), or the rate the model
+ * keeps is still outside [floor, cap]. Early raw rates that shrink into
+ * the band are not an error.
+ * Baseline: any detail baseline, including gp<2 and no goals data, which
+ * are not out of band.
+ * statSanity counts standings rows. Slate names with no standings row are
+ * added with this same helper so the two loops do not replace each other.
  */
 const NHL_OOB_REASONS = new Set(['out of band', 'implausible rate', 'standings-points guard']);
 
 function nhlClubHealth(row) {
-  const nhl = require('./sports/nhl');
   const d = nhl.teamGpgDetail(row) || {};
   const baseline = !!d.baseline;
   let outOfBand = false;
@@ -201,6 +207,194 @@ function statSanity(snap, sport) {
   };
   if (sport === 'NHL') stats.baselineTeams = baselineTeams;
   return stats;
+}
+
+const GUARD_SPORTS = new Set(['NFL', 'NCAAF', 'NHL']);
+const SCHEMA_FIELDS = {
+  NFL: ['losses'],
+  NCAAF: ['overall'],
+  NHL: ['goalsFor', 'goalsAgainst'],
+};
+
+function finiteNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function gpInfoFor(sport, row) {
+  if (!row) return { gp: 0, source: 'unknown', known: false };
+  if (sport === 'NHL') return nhl.nhlGamesInfo(row);
+  return gamesPlayedInfo(row);
+}
+
+function schemaFieldPresent(row, field) {
+  if (!row || typeof row !== 'object') return false;
+  if (field === 'losses') return finiteNum(row.losses) != null;
+  if (field === 'overall') {
+    if (row.overall != null && row.overall !== '') return true;
+    if (typeof row.record === 'string' && row.record.trim()) return true;
+    return finiteNum(row.wins) != null && finiteNum(row.losses) != null;
+  }
+  if (field === 'goalsFor') {
+    if (finiteNum(row.goalsFor) != null || finiteNum(row.gf) != null) return true;
+    if (row.nhlSeasonGoals === true && finiteNum(row.pf) != null) return true;
+    if (finiteNum(row.avgGoalsFor) != null || finiteNum(row.avgPointsFor) != null) return true;
+    return false;
+  }
+  if (field === 'goalsAgainst') {
+    if (finiteNum(row.goalsAgainst) != null || finiteNum(row.ga) != null) return true;
+    if (row.nhlSeasonGoals === true && finiteNum(row.pa) != null) return true;
+    if (finiteNum(row.avgGoalsAgainst) != null || finiteNum(row.avgPointsAgainst) != null) return true;
+    return false;
+  }
+  return row[field] != null && row[field] !== '';
+}
+
+function footballHasScoring(row) {
+  if (!row) return false;
+  if (explicitPointsPerGame(row)) return true;
+  const pf = finiteNum(row.pf);
+  const pa = finiteNum(row.pa);
+  if (pf != null && pa != null && pa !== 0) return true;
+  if (row.winPct != null && finiteNum(row.winPct) != null) return true;
+  return false;
+}
+
+function seasonCut(sport) {
+  const band = BANDS[sport];
+  if (!band) return Infinity;
+  return band[1] * 1.5;
+}
+
+function footballRateMismatch(sport, row) {
+  if (!row) return false;
+  const band = BANDS[sport];
+  if (!band) return false;
+  const g = gamesPlayedInfo(row).gp;
+  const explicit = explicitPointsPerGame(row);
+  const cut = seasonCut(sport);
+  if (g >= 2 && explicit) return explicit.pfPg > cut || explicit.paPg > cut;
+  const pf = finiteNum(row.pf);
+  const pa = finiteNum(row.pa);
+  if (pf == null || pa == null) return false;
+  if (g < 2 && (pf > cut || pa > cut)) return true;
+  if (g >= 2) {
+    const pfPg = pf / g;
+    const paPg = pa / g;
+    if (pfPg < band[0] || paPg < band[0]) return true;
+  }
+  return false;
+}
+
+function onBaseline(sport, name, row, snap) {
+  if (sport === 'NHL') return nhlClubHealth(row).baseline;
+  if (sport === 'NFL' || sport === 'NCAAF') {
+    const eff = snap && snap.efficiencyBySport && snap.efficiencyBySport[sport];
+    if (name && isCleanEpa(rowByIdentity(sport, eff || {}, name))) return false;
+    return !footballHasScoring(row);
+  }
+  return false;
+}
+
+function slateNames(snap, sport) {
+  const out = [];
+  const seen = new Set();
+  for (const ev of oddsEvents(snap, sport)) {
+    if (!ev) continue;
+    for (const name of [ev.home_team, ev.away_team, ev.homeTeam, ev.awayTeam]) {
+      if (name == null || name === '' || seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/**
+ * Slate clubs with no standings row. statSanity already counted every row
+ * through nhlClubHealth, so these are the only names still missing from
+ * baselineTeams / outOfBand.
+ */
+function nhlSlateMissingHealth(snap) {
+  let outOfBand = 0;
+  let baselineTeams = 0;
+  const table = (snap && snap.standingsBySport && snap.standingsBySport.NHL) || {};
+  for (const name of slateNames(snap, 'NHL')) {
+    const row = resolveTeamId('NHL', name) ? rowByIdentity('NHL', table, name) : null;
+    if (row) continue;
+    const club = nhlClubHealth(row);
+    if (club.outOfBand) outOfBand += 1;
+    if (club.baseline) baselineTeams += 1;
+  }
+  return { outOfBand, baselineTeams };
+}
+
+function standingsRows(snap, sport) {
+  const table = snap && snap.standingsBySport && snap.standingsBySport[sport];
+  const rows = [];
+  if (!table || typeof table !== 'object' || Array.isArray(table)) return rows;
+  for (const [key, row] of Object.entries(table)) {
+    if (!key || key.startsWith('_') || !row || typeof row !== 'object') continue;
+    rows.push(row);
+  }
+  return rows;
+}
+
+function inputStatGuards(snap, sport) {
+  const counts = {
+    gpUnknown: 0,
+    rateScale: 0,
+    nhlPointsAsGoals: 0,
+    baselineTeams: 0,
+    schemaMissing: 0,
+  };
+  const schemaFields = [];
+  if (!GUARD_SPORTS.has(sport)) return { counts, schemaFields };
+  const table = (snap && snap.standingsBySport && snap.standingsBySport[sport]) || {};
+  for (const name of slateNames(snap, sport)) {
+    const row = resolveTeamId(sport, name) ? rowByIdentity(sport, table, name) : null;
+    const info = gpInfoFor(sport, row);
+    if (!info.known) counts.gpUnknown += 1;
+    const scale = sport === 'NHL' ? nhl.nhlRateMismatch(row) : footballRateMismatch(sport, row);
+    if (scale) counts.rateScale += 1;
+    if (sport === 'NHL' && row && row.nhlSeasonGoals !== true) {
+      const pf = finiteNum(row.pf != null ? row.pf : row.gf);
+      const pa = finiteNum(row.pa != null ? row.pa : row.ga);
+      if (nhl.pfLooksLikeStandingsPoints(row, pf) || nhl.pfLooksLikeStandingsPoints(row, pa)) {
+        counts.nhlPointsAsGoals += 1;
+      }
+    }
+    // NHL baselineTeams is the standings count plus slate names with no row.
+    // Counting slate rows here would replace that with a second definition.
+    if (sport !== 'NHL' && onBaseline(sport, name, row, snap)) counts.baselineTeams += 1;
+  }
+  const rows = standingsRows(snap, sport);
+  if (rows.length) {
+    for (const field of SCHEMA_FIELDS[sport] || []) {
+      if (rows.every((row) => !schemaFieldPresent(row, field))) schemaFields.push(field);
+    }
+  }
+  counts.schemaMissing = schemaFields.length;
+  return { counts, schemaFields };
+}
+
+function formatGuardLine(record) {
+  const parts = [];
+  for (const sport of ['NFL', 'NHL', 'NCAAF']) {
+    const row = record && record.bySport && record.bySport[sport];
+    const stats = (row && row.stats) || {};
+    const names = row && Array.isArray(row.unresolved) ? row.unresolved : [];
+    const shown = names.slice(0, 3).join('|');
+    parts.push(
+      `${sport} unresolved=${names.length}${shown ? ':' + shown : ''}`
+      + ` gp_unknown=${stats.gpUnknown || 0}`
+      + ` rate_scale=${stats.rateScale || 0}`
+      + ` nhl_points_as_goals=${stats.nhlPointsAsGoals || 0}`
+      + ` baseline_teams=${stats.baselineTeams || 0}`
+      + ` schema_missing=${stats.schemaMissing || 0}`
+    );
+  }
+  return `[omega-guard] ${parts.join(' ')}`;
 }
 
 function rowMismatch(row) {
@@ -349,6 +543,15 @@ function buildHealthRecord(input) {
     const unresolved = collectUnresolved(sport, namesFor(snap, sport));
     const zeroCandidates = !!(enabled && (espnN > 0 || oddsN > 0) && raw === 0);
     const stats = statSanity(snap, sport);
+    const guards = inputStatGuards(snap, sport);
+    const nhlBaseline = stats.baselineTeams;
+    const nhlOutOfBand = stats.outOfBand;
+    Object.assign(stats, guards.counts);
+    if (sport === 'NHL') {
+      const extra = nhlSlateMissingHealth(snap);
+      stats.baselineTeams = (nhlBaseline || 0) + extra.baselineTeams;
+      stats.outOfBand = nhlOutOfBand + extra.outOfBand;
+    }
     bySport[sport] = {
       enabled,
       phase: phaseRow ? phaseRow.phase : null,
@@ -370,6 +573,13 @@ function buildHealthRecord(input) {
     if (stats.gpZeroPoints) alerts.push({ sport, code: 'gp_zero_points', detail: `teams=${stats.gpZeroPoints}` });
     if (stats.outOfBand) alerts.push({ sport, code: 'rate_out_of_band', detail: `teams=${stats.outOfBand}` });
     if (stats.recordMismatch) alerts.push({ sport, code: 'record_mismatch', detail: `teams=${stats.recordMismatch}` });
+    if (stats.gpUnknown) alerts.push({ sport, code: 'gp_unknown', detail: `teams=${stats.gpUnknown}` });
+    if (stats.rateScale) alerts.push({ sport, code: 'rate_scale', detail: `teams=${stats.rateScale}` });
+    if (stats.nhlPointsAsGoals) alerts.push({ sport, code: 'nhl_points_as_goals', detail: `teams=${stats.nhlPointsAsGoals}` });
+    if (stats.baselineTeams) alerts.push({ sport, code: 'baseline_teams', detail: `teams=${stats.baselineTeams}` });
+    for (const field of guards.schemaFields) {
+      alerts.push({ sport, code: `schema_missing:${field}`, detail: `field=${field}` });
+    }
   }
   const bias = biasFor(src.candidates);
   for (const sport of SPORTS) {
@@ -457,6 +667,7 @@ function attachGenerateHealth(picksData, input, buildFn) {
   try {
     const record = build(input);
     if (picksData && record) picksData.health = compactHealth(record);
+    if (record) console.log(formatGuardLine(record));
     return record;
   } catch (e) {
     console.warn(`[omega-health] build soft-fail: ${e && e.message ? e.message : e}`);
@@ -471,6 +682,7 @@ module.exports = {
   buildHealthRecord,
   compactHealth,
   attachGenerateHealth,
+  formatGuardLine,
   rateOf,
   rowMismatch,
 };

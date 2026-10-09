@@ -100,11 +100,15 @@ function isLookupRow(key, row) {
   return true;
 }
 
+// NFL, NCAAF, and NHL model inputs do not fuzzy. MLB still does.
+const EXACT_MODEL_SPORTS = new Set(['NFL', 'NCAAF', 'CFB', 'NHL']);
+
 /**
  * Standings / park / quality row. Identity first: the row whose key resolves
  * to the same ESPN id. fuzzyTeam runs only when the name does not resolve,
- * or when a table key does not resolve. Logs once per sport+name when `fallbackSeen`
- * is a Set on opts (no module-level memory).
+ * or when a table key does not resolve, and only for sports outside
+ * EXACT_MODEL_SPORTS. Those sports log a miss once and return null.
+ * Logs once per sport+name when `fallbackSeen` is a Set on opts (no module-level memory).
  */
 function rowByIdentityOrFuzzy(sport, table, teamName, opts) {
   const fuzzy = (opts && opts.fuzzyTeam) || lazyFuzzy;
@@ -130,8 +134,10 @@ function rowByIdentityOrFuzzy(sport, table, teamName, opts) {
   const token = String(sport || '') + '\0' + label;
   if (!seen || !seen.has(token)) {
     if (seen && typeof seen.add === 'function') seen.add(token);
-    console.warn(`[omega-team-identity] fallback sport=${sport} name=${label}`);
+    const kind = EXACT_MODEL_SPORTS.has(sport) ? 'miss' : 'fallback';
+    console.warn(`[omega-team-identity] ${kind} sport=${sport} name=${label}`);
   }
+  if (EXACT_MODEL_SPORTS.has(sport)) return null;
   return fuzzy(teamName, table);
 }
 

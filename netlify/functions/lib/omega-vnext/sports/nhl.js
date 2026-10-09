@@ -35,7 +35,7 @@ const {
   formatMatchup, mapGamesSoft, LEAGUE_PPG,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
-const { rowByIdentityOrFuzzy } = require('./team_identity');
+const { resolveTeamId, rowByIdentityOrFuzzy, logUnknownTeam } = require('./team_identity');
 const { applyGameDayAdjustments } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -102,17 +102,66 @@ function capsOf(caps) {
   };
 }
 
-function nhlGames(st) {
-  if (!st || typeof st !== 'object') return 0;
+/**
+ * Same count nhlGames() returns, plus where it came from.
+ * `games` wins. Else wins+losses+OTL+ties when both W and L exist.
+ * gamesPlayed is not read (the projector does not read it).
+ * A record string is not read. winsOnly: losses missing, or `games` equals
+ * wins while losses show more games were played.
+ */
+function nhlGamesInfo(st) {
+  if (!st || typeof st !== 'object') return { gp: 0, source: 'unknown', known: false };
   const g = Number(st.games);
-  if (Number.isFinite(g) && g > 0) return g;
+  if (Number.isFinite(g) && g > 0) return tagNhlExplicit(st, g);
   const w = Number(st.wins);
   const l = Number(st.losses);
-  if (!Number.isFinite(w) || !Number.isFinite(l)) return 0;
+  if (!Number.isFinite(w) || !Number.isFinite(l)) {
+    if (Number.isFinite(w) && !Number.isFinite(l)) return { gp: 0, source: 'winsOnly', known: false };
+    return { gp: 0, source: 'unknown', known: false };
+  }
   const otlRaw = st.otLosses != null ? st.otLosses : st.otl;
   const otl = Number(otlRaw);
   const t = Number(st.ties);
-  return w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
+  const gp = w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
+  return { gp, source: 'wl', known: true };
+}
+
+function tagNhlExplicit(st, gp) {
+  const w = Number(st.wins);
+  const l = Number(st.losses);
+  if (Number.isFinite(w) && Number.isFinite(l) && l > 0 && gp === w) {
+    const otlRaw = st.otLosses != null ? st.otLosses : st.otl;
+    const otl = Number(otlRaw);
+    const t = Number(st.ties);
+    const full = w + l + (Number.isFinite(otl) ? otl : 0) + (Number.isFinite(t) ? t : 0);
+    if (full !== gp) return { gp, source: 'winsOnly', known: false };
+  }
+  return { gp, source: 'games', known: true };
+}
+
+function nhlGames(st) {
+  return nhlGamesInfo(st).gp;
+}
+
+/**
+ * pf/pa the model will divide or trust, but the scale disagrees with that path.
+ * Per-game rates flagged nhlSeasonGoals are divided as season sums.
+ * A value above the per-game cap that the magnitude rule does not treat as a
+ * season sum is used as a rate. Alerts only — teamGpg is unchanged.
+ */
+function nhlRateMismatch(st) {
+  if (!st || typeof st !== 'object') return false;
+  const pf = Number(st.pf != null ? st.pf : st.gf);
+  const pa = Number(st.pa != null ? st.pa : st.ga);
+  if (!Number.isFinite(pf) || !Number.isFinite(pa) || pf <= 0 || pa <= 0) return false;
+  const g = nhlGames(st);
+  const inBand = (v) => v >= NHL_GPG_FLOOR && v <= NHL_GPG_CAP;
+  const seasonByMagnitude = pf > LEAGUE_GPG * 1.8 || pa > LEAGUE_GPG * 1.8;
+  if (st.nhlSeasonGoals === true && inBand(pf) && inBand(pa)) return true;
+  if (!st.nhlSeasonGoals && !seasonByMagnitude && g >= NHL_MIN_GAMES && (pf > NHL_GPG_CAP || pa > NHL_GPG_CAP)) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -564,14 +613,13 @@ function buildMethods({ enginesOn, usedGameday }) {
 }
 
 function findEspnGame(ev, espnGames) {
-  if (!espnGames || !espnGames.length || !ev) return null;
-  const home = (ev.home_team || '').toLowerCase();
-  const away = (ev.away_team || '').toLowerCase();
-  return espnGames.find(g => {
-    const gh = (g.homeTeam || '').toLowerCase();
-    const ga = (g.awayTeam || '').toLowerCase();
-    return (gh.includes(home.split(' ').pop()) || home.includes((gh.split(' ').pop() || '')))
-      && (ga.includes(away.split(' ').pop()) || away.includes((ga.split(' ').pop() || '')));
+  const games = (espnGames && espnGames.games) || espnGames || [];
+  if (!ev || !games.length) return null;
+  const hid = resolveTeamId(SPORT, ev.home_team);
+  const aid = resolveTeamId(SPORT, ev.away_team);
+  if (!hid || !aid) return null;
+  return games.find((g) => {
+    return resolveTeamId(SPORT, g.homeTeam) === hid && resolveTeamId(SPORT, g.awayTeam) === aid;
   }) || null;
 }
 
@@ -579,8 +627,19 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
   const home = event.home_team;
   const away = event.away_team;
   const commenceTime = event.commence_time;
-  const homeSt = rowByIdentityOrFuzzy('NHL', standings, home, { fallbackSeen });
-  const awaySt = rowByIdentityOrFuzzy('NHL', standings, away, { fallbackSeen });
+  const unknownNames = [];
+  if (!resolveTeamId(SPORT, home)) unknownNames.push(home);
+  if (!resolveTeamId(SPORT, away)) unknownNames.push(away);
+  for (const name of unknownNames) logUnknownTeam(SPORT, name);
+  const homeSt = rowByIdentityOrFuzzy(SPORT, standings, home, { fallbackSeen });
+  const awaySt = rowByIdentityOrFuzzy(SPORT, standings, away, { fallbackSeen });
+  const stamp = (raw) => {
+    if (unknownNames.length) {
+      raw.unknownTeam = true;
+      raw.unknownNames = unknownNames.slice();
+    }
+    return raw;
+  };
   const env = nhlStandingsEnv(homeSt, awaySt);
   if (baseline) {
     if (env.homeBaseline) baseline.push(`${home || '?'} (${env.homeBaseline})`);
@@ -645,7 +704,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
-      out.push(enrichCandidateWithEdge({
+      out.push(enrichCandidateWithEdge(stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
@@ -653,7 +712,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      }, b, bundles));
+      }), b, bundles));
     }
   }
 
@@ -666,7 +725,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
       pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
-      out.push(enrichCandidateWithEdge({
+      out.push(enrichCandidateWithEdge(stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
@@ -674,7 +733,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         consensusLine: line, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      }, b, bundles));
+      }), b, bundles));
     }
   }
 
@@ -685,7 +744,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       if (line == null) continue;
       let p = totalCoverProb(modelTotal, line, b.side, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
-      out.push(enrichCandidateWithEdge({
+      out.push(enrichCandidateWithEdge(stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${line}`, line,
@@ -693,7 +752,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      }, b, bundles));
+      }), b, bundles));
     }
   }
 
@@ -727,6 +786,9 @@ module.exports = {
   applyNhlEngineSoft,
   teamGpg,
   teamGpgDetail,
+  nhlGamesInfo,
+  pfLooksLikeStandingsPoints,
+  nhlRateMismatch,
   NHL_MIN_GAMES,
   NHL_GPG_PRIOR_GAMES,
   NHL_GPG_IMPLAUSIBLE,

@@ -296,11 +296,16 @@ function byMarket(cands, market) {
     oddsEvents: [synth('Avalanche', 'Stars', { total: 6, spread: -1.5 })],
     standings: nhlStandings,
   });
-  assert.strictEqual(
+  // Bare mascots are not NHL identity. They must not inherit Colorado or Dallas.
+  assert.ok(nhlFull.every((c) => !c.unknownTeam));
+  assert.ok(nhlMascot.every((c) => c.unknownTeam === true));
+  assert.notStrictEqual(
     byMarket(nhlFull, 'Spread').modelProjection,
     byMarket(nhlMascot, 'Spread').modelProjection
   );
-  assert.ok(!byMarket(nhlMascot, 'Moneyline').unknownTeam);
+  const nhlGated = applyGates(nhlMascot, { cardDate: '2026-10-10' });
+  assert.strictEqual(nhlGated.yesPool.length, 0);
+  assert.ok(nhlGated.rejected.every((r) => r.rejectReason === 'unknown_team'));
 
   const yankeesRest = gd.lookupRest('Yankees', { 'New York Yankees': { playedYesterday: true } }, 'MLB');
   assert.strictEqual(yankeesRest.playedYesterday, true);

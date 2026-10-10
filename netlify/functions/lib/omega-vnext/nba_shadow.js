@@ -302,7 +302,7 @@ async function runNbaShadow(opts = {}) {
     allowPreseason: true,
     preseason: !!board.preseason,
   });
-  const calibrated = calibrateAll(raw).map(attachEv);
+  const calibrated = calibrateAll(raw, { cardDate: dateISO }).map(attachEv);
   const { yesPool, rejected } = applyGates(calibrated, {
     cardDate: dateISO,
     asOf: opts.asOf,

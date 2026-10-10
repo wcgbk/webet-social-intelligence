@@ -640,8 +640,9 @@ function footballAuditFields(c) {
 
 /**
  * Blend the shrunk projection and the raw projection at the same weight.
- * Keep the lower probability. shrinkTowardSharp and isotonicClip are
- * increasing in this number, so the edge cannot exceed the pre-shrink
+ * Keep the lower probability. shrinkTowardSharp and bandRetainClip
+ * (historical name isotonicClip; an unfitted band, not a fitted isotonic)
+ * are increasing in this number, so the edge cannot exceed the pre-shrink
  * edge. The side the model likes is the shrunk probability; the other
  * side stays on the raw probability instead of gaining edge.
  */

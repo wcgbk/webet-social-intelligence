@@ -149,12 +149,19 @@ const LINE_MOVE = {
 };
 
 /** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.1: slightly stronger.
- *  NFL / NCAAF / any non-MLB sport. MLB uses MLB_CALIBRATION.shrinkK. */
+ *  NFL / NCAAF / NHL / NBA. MLB uses MLB_CALIBRATION.shrinkK.
+ *  These values are hand-set. OMEGA_CAL_MODE=B may replace the applied K
+ *  with a log-loss fit inside [0.3, 1.0]. The 0.3 floor is a product
+ *  constraint, not a fit. See calibrate.js. */
 const SHRINK_K = { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 };
 
 /**
- * MLB-only second shrink (v12.3.9). Global SHRINK_K and the global isotonic
- * band (0.42–0.58, keep 0.25) stay put for every sport, including MLB.
+ * MLB-only second shrink (v12.3.9). Global SHRINK_K stays the hand-set table.
+ * The second step on the legacy path is an unfitted band, not a fitted
+ * isotonic: outside 0.42–0.58, keep 0.25 of the excess, every sport.
+ * OMEGA_CAL_MODE=legacy is that path. The historical function name was
+ * isotonicClip. Mode A drops the band. Mode C replaces it with a map fit
+ * on the shrunk probability.
  * MLB already blends toward the market. The global second shrink (0.58–0.73)
  * then pushed a ~1-run starter miss and a real total/park miss under
  * GATES.minEV (0.03), so a normal Wednesday published an empty card.

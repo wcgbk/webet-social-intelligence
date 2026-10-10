@@ -1,0 +1,915 @@
+{
+  "data": "/workspace/omega-autopilot/wt-calib/tools/omega-calibration/out/dataset.jsonl",
+  "window": [
+    "2026-09-22",
+    "2026-10-08"
+  ],
+  "n": 4160,
+  "nGames": 341,
+  "scores": {
+    "market": {
+      "logLoss": 0.658108,
+      "brier": 0.234602,
+      "n": 4160
+    },
+    "production": {
+      "logLoss": 0.673287,
+      "brier": 0.240315,
+      "n": 4160
+    },
+    "A": {
+      "logLoss": 0.660488,
+      "brier": 0.235662,
+      "n": 4160
+    },
+    "B": {
+      "logLoss": 0.659223,
+      "brier": 0.235023,
+      "n": 4160
+    },
+    "C": {
+      "logLoss": 0.662862,
+      "brier": 0.236775,
+      "n": 4160
+    },
+    "raw": {
+      "logLoss": 0.672666,
+      "brier": 0.241188,
+      "n": 4160
+    }
+  },
+  "bootstrap": {
+    "ci": {
+      "market": {
+        "logLoss": [
+          0.650143,
+          0.666485
+        ],
+        "brier": [
+          0.231242,
+          0.238166
+        ]
+      },
+      "production": {
+        "logLoss": [
+          0.667722,
+          0.678896
+        ],
+        "brier": [
+          0.237572,
+          0.243076
+        ]
+      },
+      "A": {
+        "logLoss": [
+          0.651789,
+          0.669566
+        ],
+        "brier": [
+          0.231819,
+          0.23966
+        ]
+      },
+      "B": {
+        "logLoss": [
+          0.650774,
+          0.667869
+        ],
+        "brier": [
+          0.231416,
+          0.238745
+        ]
+      },
+      "C": {
+        "logLoss": [
+          0.653058,
+          0.6725
+        ],
+        "brier": [
+          0.232611,
+          0.241063
+        ]
+      },
+      "raw": {
+        "logLoss": [
+          0.659149,
+          0.686953
+        ],
+        "brier": [
+          0.234824,
+          0.247882
+        ]
+      }
+    },
+    "diffs": {
+      "AMinusProductionLl": {
+        "mean": -0.01284,
+        "ci95": [
+          -0.017171,
+          -0.008556
+        ],
+        "excludesZero": true,
+        "pointBetter": true
+      },
+      "AMinusMarketLl": {
+        "mean": 0.002321,
+        "ci95": [
+          -0.001452,
+          0.006371
+        ],
+        "excludesZero": false,
+        "pointBetter": false
+      },
+      "AMinusProductionBr": {
+        "mean": -0.004671,
+        "ci95": [
+          -0.006286,
+          -0.003066
+        ],
+        "excludesZero": true,
+        "pointBetter": true
+      },
+      "AMinusMarketBr": {
+        "mean": 0.001032,
+        "ci95": [
+          -0.00088,
+          0.002923
+        ],
+        "excludesZero": false,
+        "pointBetter": false
+      },
+      "BMinusProductionLl": {
+        "mean": -0.01403,
+        "ci95": [
+          -0.018957,
+          -0.00878
+        ],
+        "excludesZero": true,
+        "pointBetter": true
+      },
+      "BMinusMarketLl": {
+        "mean": 0.001132,
+        "ci95": [
+          -0.001513,
+          0.003964
+        ],
+        "excludesZero": false,
+        "pointBetter": false
+      },
+      "BMinusProductionBr": {
+        "mean": -0.005275,
+        "ci95": [
+          -0.00725,
+          -0.003247
+        ],
+        "excludesZero": true,
+        "pointBetter": true
+      },
+      "BMinusMarketBr": {
+        "mean": 0.000428,
+        "ci95": [
+          -0.000839,
+          0.001792
+        ],
+        "excludesZero": false,
+        "pointBetter": false
+      },
+      "CMinusProductionLl": {
+        "mean": -0.010448,
+        "ci95": [
+          -0.016141,
+          -0.004758
+        ],
+        "excludesZero": true,
+        "pointBetter": true
+      },
+      "CMinusMarketLl": {
+        "mean": 0.004713,
+        "ci95": [
+          0.000114,
+          0.009624
+        ],
+        "excludesZero": true,
+        "pointBetter": false
+      },
+      "CMinusProductionBr": {
+        "mean": -0.003549,
+        "ci95": [
+          -0.005542,
+          -0.001567
+        ],
+        "excludesZero": true,
+        "pointBetter": true
+      },
+      "CMinusMarketBr": {
+        "mean": 0.002155,
+        "ci95": [
+          -0.000107,
+          0.004459
+        ],
+        "excludesZero": false,
+        "pointBetter": false
+      }
+    },
+    "nGames": 341,
+    "B": 1000,
+    "seed": 6167
+  },
+  "byDate": [
+    {
+      "date": "2026-09-22",
+      "n": 181,
+      "nTrain": 0,
+      "logLoss": {
+        "market": 0.660575,
+        "production": 0.666239,
+        "A": 0.658148,
+        "B": 0.658148,
+        "C": 0.658148,
+        "raw": 0.657807
+      },
+      "BLevels": {
+        "handset": 15
+      },
+      "CLevels": {
+        "identity": 15
+      }
+    },
+    {
+      "date": "2026-09-23",
+      "n": 153,
+      "nTrain": 181,
+      "logLoss": {
+        "market": 0.701196,
+        "production": 0.686277,
+        "A": 0.695539,
+        "B": 0.695539,
+        "C": 0.695539,
+        "raw": 0.689937
+      },
+      "BLevels": {
+        "handset": 15
+      },
+      "CLevels": {
+        "identity": 15
+      }
+    },
+    {
+      "date": "2026-09-24",
+      "n": 168,
+      "nTrain": 334,
+      "logLoss": {
+        "market": 0.661192,
+        "production": 0.672667,
+        "A": 0.660668,
+        "B": 0.661733,
+        "C": 0.661428,
+        "raw": 0.662991
+      },
+      "BLevels": {
+        "cell": 2,
+        "sport": 1,
+        "global": 12
+      },
+      "CLevels": {
+        "cell": 2,
+        "sport": 1,
+        "global": 12
+      }
+    },
+    {
+      "date": "2026-09-25",
+      "n": 254,
+      "nTrain": 502,
+      "logLoss": {
+        "market": 0.664819,
+        "production": 0.669603,
+        "A": 0.667236,
+        "B": 0.675054,
+        "C": 0.66849,
+        "raw": 0.682311
+      },
+      "BLevels": {
+        "cell": 3,
+        "global": 12
+      },
+      "CLevels": {
+        "cell": 3,
+        "global": 12
+      }
+    },
+    {
+      "date": "2026-09-26",
+      "n": 1089,
+      "nTrain": 756,
+      "logLoss": {
+        "market": 0.623399,
+        "production": 0.656454,
+        "A": 0.626092,
+        "B": 0.624458,
+        "C": 0.629838,
+        "raw": 0.645639
+      },
+      "BLevels": {
+        "cell": 3,
+        "global": 12
+      },
+      "CLevels": {
+        "cell": 3,
+        "global": 12
+      }
+    },
+    {
+      "date": "2026-09-27",
+      "n": 382,
+      "nTrain": 1845,
+      "logLoss": {
+        "market": 0.666799,
+        "production": 0.6695,
+        "A": 0.660156,
+        "B": 0.665512,
+        "C": 0.66877,
+        "raw": 0.650666
+      },
+      "BLevels": {
+        "cell": 6,
+        "global": 9
+      },
+      "CLevels": {
+        "cell": 6,
+        "global": 9
+      }
+    },
+    {
+      "date": "2026-09-28",
+      "n": 12,
+      "nTrain": 2227,
+      "logLoss": {
+        "market": 0.754793,
+        "production": 0.763381,
+        "A": 0.792465,
+        "B": 0.766319,
+        "C": 0.821029,
+        "raw": 0.864964
+      },
+      "BLevels": {
+        "cell": 6,
+        "global": 9
+      },
+      "CLevels": {
+        "cell": 6,
+        "global": 9
+      }
+    },
+    {
+      "date": "2026-09-29",
+      "n": 89,
+      "nTrain": 2239,
+      "logLoss": {
+        "market": 0.71135,
+        "production": 0.704958,
+        "A": 0.709101,
+        "B": 0.708129,
+        "C": 0.726221,
+        "raw": 0.703903
+      },
+      "BLevels": {
+        "cell": 6,
+        "global": 9
+      },
+      "CLevels": {
+        "cell": 6,
+        "global": 9
+      }
+    },
+    {
+      "date": "2026-09-30",
+      "n": 72,
+      "nTrain": 2328,
+      "logLoss": {
+        "market": 0.687513,
+        "production": 0.690809,
+        "A": 0.687164,
+        "B": 0.685128,
+        "C": 0.684115,
+        "raw": 0.68836
+      },
+      "BLevels": {
+        "cell": 6,
+        "global": 9
+      },
+      "CLevels": {
+        "cell": 6,
+        "global": 9
+      }
+    },
+    {
+      "date": "2026-10-01",
+      "n": 124,
+      "nTrain": 2400,
+      "logLoss": {
+        "market": 0.668988,
+        "production": 0.67396,
+        "A": 0.668627,
+        "B": 0.670711,
+        "C": 0.671121,
+        "raw": 0.670833
+      },
+      "BLevels": {
+        "cell": 6,
+        "global": 9
+      },
+      "CLevels": {
+        "cell": 6,
+        "global": 9
+      }
+    },
+    {
+      "date": "2026-10-02",
+      "n": 82,
+      "nTrain": 2524,
+      "logLoss": {
+        "market": 0.689318,
+        "production": 0.692523,
+        "A": 0.68209,
+        "B": 0.686196,
+        "C": 0.671471,
+        "raw": 0.66902
+      },
+      "BLevels": {
+        "cell": 6,
+        "global": 9
+      },
+      "CLevels": {
+        "cell": 6,
+        "global": 9
+      }
+    },
+    {
+      "date": "2026-10-03",
+      "n": 877,
+      "nTrain": 2606,
+      "logLoss": {
+        "market": 0.658678,
+        "production": 0.676028,
+        "A": 0.662082,
+        "B": 0.659786,
+        "C": 0.66697,
+        "raw": 0.675316
+      },
+      "BLevels": {
+        "cell": 7,
+        "global": 6,
+        "sport": 2
+      },
+      "CLevels": {
+        "cell": 7,
+        "global": 6,
+        "sport": 2
+      }
+    },
+    {
+      "date": "2026-10-04",
+      "n": 248,
+      "nTrain": 3483,
+      "logLoss": {
+        "market": 0.673643,
+        "production": 0.698407,
+        "A": 0.695697,
+        "B": 0.674448,
+        "C": 0.689312,
+        "raw": 0.749848
+      },
+      "BLevels": {
+        "cell": 8,
+        "global": 6,
+        "sport": 1
+      },
+      "CLevels": {
+        "cell": 8,
+        "global": 6,
+        "sport": 1
+      }
+    },
+    {
+      "date": "2026-10-05",
+      "n": 66,
+      "nTrain": 3731,
+      "logLoss": {
+        "market": 0.69761,
+        "production": 0.699839,
+        "A": 0.704802,
+        "B": 0.704858,
+        "C": 0.698439,
+        "raw": 0.719089
+      },
+      "BLevels": {
+        "cell": 10,
+        "sport": 2,
+        "global": 3
+      },
+      "CLevels": {
+        "cell": 10,
+        "sport": 2,
+        "global": 3
+      }
+    },
+    {
+      "date": "2026-10-06",
+      "n": 121,
+      "nTrain": 3797,
+      "logLoss": {
+        "market": 0.669818,
+        "production": 0.671851,
+        "A": 0.669605,
+        "B": 0.669887,
+        "C": 0.671094,
+        "raw": 0.672075
+      },
+      "BLevels": {
+        "cell": 11,
+        "sport": 1,
+        "global": 3
+      },
+      "CLevels": {
+        "cell": 11,
+        "sport": 1,
+        "global": 3
+      }
+    },
+    {
+      "date": "2026-10-07",
+      "n": 82,
+      "nTrain": 3918,
+      "logLoss": {
+        "market": 0.67213,
+        "production": 0.673291,
+        "A": 0.677478,
+        "B": 0.674631,
+        "C": 0.665974,
+        "raw": 0.687656
+      },
+      "BLevels": {
+        "cell": 11,
+        "sport": 1,
+        "global": 3
+      },
+      "CLevels": {
+        "cell": 11,
+        "sport": 1,
+        "global": 3
+      }
+    },
+    {
+      "date": "2026-10-08",
+      "n": 160,
+      "nTrain": 4000,
+      "logLoss": {
+        "market": 0.681638,
+        "production": 0.692488,
+        "A": 0.690102,
+        "B": 0.688457,
+        "C": 0.686697,
+        "raw": 0.70818
+      },
+      "BLevels": {
+        "cell": 11,
+        "sport": 1,
+        "global": 3
+      },
+      "CLevels": {
+        "cell": 11,
+        "sport": 1,
+        "global": 3
+      }
+    }
+  ],
+  "ship": {
+    "B": {
+      "cells": {
+        "MLB|Spread": {
+          "k": 0.3,
+          "kMle": 0,
+          "bound": "policy-floor",
+          "level": "cell",
+          "n": 420,
+          "nGames": 107,
+          "poolN": 420,
+          "poolGames": 107
+        },
+        "MLB|Total": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 554,
+          "nGames": 107,
+          "poolN": 554,
+          "poolGames": 107
+        },
+        "MLB|Moneyline": {
+          "k": 0.3,
+          "kMle": 0,
+          "bound": "policy-floor",
+          "level": "cell",
+          "n": 214,
+          "nGames": 107,
+          "poolN": 214,
+          "poolGames": 107
+        },
+        "NFL|Spread": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 190,
+          "nGames": 33,
+          "poolN": 190,
+          "poolGames": 33
+        },
+        "NFL|Total": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 212,
+          "nGames": 33,
+          "poolN": 212,
+          "poolGames": 33
+        },
+        "NFL|Moneyline": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "sport",
+          "n": 66,
+          "nGames": 33,
+          "poolN": 468,
+          "poolGames": 33
+        },
+        "NCAAF|Spread": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 728,
+          "nGames": 137,
+          "poolN": 728,
+          "poolGames": 137
+        },
+        "NCAAF|Total": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 861,
+          "nGames": 137,
+          "poolN": 861,
+          "poolGames": 137
+        },
+        "NCAAF|Moneyline": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 266,
+          "nGames": 133,
+          "poolN": 266,
+          "poolGames": 133
+        },
+        "NHL|Spread": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 237,
+          "nGames": 64,
+          "poolN": 237,
+          "poolGames": 64
+        },
+        "NHL|Total": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 284,
+          "nGames": 64,
+          "poolN": 284,
+          "poolGames": 64
+        },
+        "NHL|Moneyline": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "cell",
+          "n": 128,
+          "nGames": 64,
+          "poolN": 128,
+          "poolGames": 64
+        },
+        "NBA|Spread": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "global",
+          "n": 0,
+          "nGames": 0,
+          "poolN": 4160,
+          "poolGames": 341
+        },
+        "NBA|Total": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "global",
+          "n": 0,
+          "nGames": 0,
+          "poolN": 4160,
+          "poolGames": 341
+        },
+        "NBA|Moneyline": {
+          "k": 1,
+          "kMle": 1,
+          "bound": null,
+          "level": "global",
+          "n": 0,
+          "nGames": 0,
+          "poolN": 4160,
+          "poolGames": 341
+        }
+      }
+    },
+    "C": {
+      "cells": {
+        "MLB|Spread": {
+          "type": "isotonic",
+          "level": "cell",
+          "n": 420,
+          "nGames": 107,
+          "poolN": 420,
+          "knots": 21,
+          "trainLogLoss": 0.640928
+        },
+        "MLB|Total": {
+          "type": "isotonic",
+          "level": "cell",
+          "n": 554,
+          "nGames": 107,
+          "poolN": 554,
+          "knots": 15,
+          "trainLogLoss": 0.66467
+        },
+        "MLB|Moneyline": {
+          "type": "platt",
+          "a": 0.000441,
+          "b": 0.972756,
+          "bound": null,
+          "level": "cell",
+          "n": 214,
+          "nGames": 107,
+          "poolN": 214,
+          "trainLogLoss": 0.679338
+        },
+        "NFL|Spread": {
+          "type": "platt",
+          "a": -0.000006,
+          "b": 0,
+          "bound": "b",
+          "level": "cell",
+          "n": 190,
+          "nGames": 33,
+          "poolN": 190,
+          "trainLogLoss": 0.693147
+        },
+        "NFL|Total": {
+          "type": "platt",
+          "a": 0.007088,
+          "b": 0.654023,
+          "bound": null,
+          "level": "cell",
+          "n": 212,
+          "nGames": 33,
+          "poolN": 212,
+          "trainLogLoss": 0.656197
+        },
+        "NFL|Moneyline": {
+          "type": "platt",
+          "a": 0.009135,
+          "b": 0.582683,
+          "bound": null,
+          "level": "sport",
+          "n": 66,
+          "nGames": 33,
+          "poolN": 468,
+          "trainLogLoss": 0.675064
+        },
+        "NCAAF|Spread": {
+          "type": "isotonic",
+          "level": "cell",
+          "n": 728,
+          "nGames": 137,
+          "poolN": 728,
+          "knots": 5,
+          "trainLogLoss": 0.691581
+        },
+        "NCAAF|Total": {
+          "type": "isotonic",
+          "level": "cell",
+          "n": 861,
+          "nGames": 137,
+          "poolN": 861,
+          "knots": 39,
+          "trainLogLoss": 0.642784
+        },
+        "NCAAF|Moneyline": {
+          "type": "platt",
+          "a": 0,
+          "b": 1.508185,
+          "bound": null,
+          "level": "cell",
+          "n": 266,
+          "nGames": 133,
+          "poolN": 266,
+          "trainLogLoss": 0.432538
+        },
+        "NHL|Spread": {
+          "type": "platt",
+          "a": 0.011763,
+          "b": 0.847854,
+          "bound": null,
+          "level": "cell",
+          "n": 237,
+          "nGames": 64,
+          "poolN": 237,
+          "trainLogLoss": 0.668196
+        },
+        "NHL|Total": {
+          "type": "platt",
+          "a": 0,
+          "b": 0.433391,
+          "bound": null,
+          "level": "cell",
+          "n": 284,
+          "nGames": 64,
+          "poolN": 284,
+          "trainLogLoss": 0.692156
+        },
+        "NHL|Moneyline": {
+          "type": "platt",
+          "a": 0,
+          "b": 1.590867,
+          "bound": null,
+          "level": "cell",
+          "n": 128,
+          "nGames": 64,
+          "poolN": 128,
+          "trainLogLoss": 0.652338
+        },
+        "NBA|Spread": {
+          "type": "isotonic",
+          "level": "global",
+          "n": 0,
+          "nGames": 0,
+          "poolN": 4160,
+          "knots": 84,
+          "trainLogLoss": 0.653755
+        },
+        "NBA|Total": {
+          "type": "isotonic",
+          "level": "global",
+          "n": 0,
+          "nGames": 0,
+          "poolN": 4160,
+          "knots": 84,
+          "trainLogLoss": 0.653755
+        },
+        "NBA|Moneyline": {
+          "type": "isotonic",
+          "level": "global",
+          "n": 0,
+          "nGames": 0,
+          "poolN": 4160,
+          "knots": 84,
+          "trainLogLoss": 0.653755
+        }
+      }
+    }
+  },
+  "productionCheck": {
+    "n": 4160,
+    "maxAbs": 0
+  },
+  "kPolicy": {
+    "min": 0.3,
+    "max": 1,
+    "minIsProductConstraint": true,
+    "note": "K_MIN matches MLB moneyline hand-set shrinkK 0.30. It is not the log-loss minimizer. kMle records the unconstrained grid minimizer on [0, 1]."
+  },
+  "pool": {
+    "minRows": 80,
+    "minGames": 20,
+    "isoMinRows": 400,
+    "isoMinGames": 50,
+    "isoTrainMargin": 0.001
+  }
+}

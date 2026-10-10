@@ -69,7 +69,7 @@ assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 
 assert.deepStrictEqual(config.MLB_CALIBRATION, {
   shrinkK: { Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46 },
 });
-assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB keeps the global isotonic band');
+assert.ok(config.MLB_CALIBRATION.isotonicLo == null, 'MLB has no separate band; the legacy band is global');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.ok(epa.SPORT_CFG.NFL.epaUncertainty >= 0.12 && epa.SPORT_CFG.NFL.epaUncertainty <= 0.14);
@@ -82,10 +82,10 @@ const touched = [
 assert.ok(!/tsp\.live/i.test(touched), 'sport engines must not call tsp.live');
 assert.ok(!/generate-picks-alpha/.test(touched));
 assert.ok(touched.includes('blendWithMarket'));
-assert.ok(touched.includes('calibrateAll(candidates)'));
+assert.ok(touched.includes('calibrateAll(candidates, { cardDate: dateISO })'));
 {
   const idx = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
-  assert.ok(idx.indexOf('calibrateAll(candidates)') > idx.indexOf('projectAll(snap)'));
+  assert.ok(idx.indexOf('calibrateAll(candidates, { cardDate: dateISO })') > idx.indexOf('projectAll(snap, dateISO)'));
 }
 
 function synthEvent(home, away, opts = {}) {

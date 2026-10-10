@@ -6,7 +6,7 @@ const {
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
 const { noPlaysFields, omegaReason } = require('../no-plays');
-const { calibrateAll } = require('./calibrate');
+const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
 const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
@@ -248,7 +248,10 @@ async function generateOmegaVnext(opts = {}) {
     console.log('[omega-vnext] unknown_team count=0');
   }
 
-  candidates = calibrateAll(candidates).map(attachEv);
+  // cardDate picks the prior-date record for OMEGA_CAL_MODE B and C.
+  // Legacy and A do not read it. Gates, floors, Kelly, and unit caps are unchanged.
+  console.log(`[omega-vnext] cal-mode=${resolveCalMode()} cardDate=${dateISO}`);
+  candidates = calibrateAll(candidates, { cardDate: dateISO }).map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
 
   // Open→pick US line-move (earliest morning snap → latest pre-generate).

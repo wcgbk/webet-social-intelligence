@@ -9,7 +9,7 @@ const { buildHealthRecord } = require(path.join(root, 'health'));
 const healthFn = require(path.join(__dirname, 'netlify/functions/get-omega-capture-health'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
 assert.ok(String(config.MODEL_NOTES).includes('v12.3.17-omega-vnext-cal-a'));
 assert.ok(/shrink K is still hand-set/i.test(config.MODEL_NOTES));
 assert.ok(/empties the live card/.test(config.MODEL_NOTES));

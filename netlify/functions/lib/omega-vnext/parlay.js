@@ -32,7 +32,8 @@ function totalDirection(leg) {
 /**
  * Same-direction totals move together. Sequential Gaussian pair:
  * P = pq + ρ√(p(1-p)q(1-q)), clamped to the Fréchet bounds.
- * Returns joint / independence, which is above 1 when ρ > 0.
+ * Returns joint / independence. Positive ρ is above 1.
+ * That raise is not used for EV. See comboStats.
  */
 function correlatedTotalFactor(probs) {
   if (!Array.isArray(probs) || probs.length < 2) return 1;
@@ -57,27 +58,29 @@ function correlatedTotalFactor(probs) {
   return joint / indep;
 }
 
-/**
- * Factor applied to the independent product when every leg is a total
- * on one side. Otherwise 1.
- * OMEGA_PARLAY_CORR on: positive correlation (factor can exceed 1).
- * Off: PARLAY_TOTAL_HAIRCUT, which is at most 1 (2e0a803).
- */
-function sameDirectionTotalFactor(legs) {
+/** Sides when every leg is a total on one side. Otherwise null. */
+function sameDirectionSides(legs) {
   const list = Array.isArray(legs) ? legs : [];
-  if (list.length < 2) return 1;
+  if (list.length < 2) return null;
   const sides = [];
   for (const leg of list) {
     const side = totalDirection(leg);
-    if (!side) return 1;
+    if (!side) return null;
     sides.push(side);
   }
-  if (!sides.every(s => s === sides[0])) return 1;
-  if (parlayCorrEnabled()) {
-    const factor = correlatedTotalFactor(list.map(l => Number(l.coverProb)));
-    if (!Number.isFinite(factor) || factor <= 0) return 1;
-    return factor;
-  }
+  if (!sides.every(s => s === sides[0])) return null;
+  return sides;
+}
+
+/**
+ * Factor applied to the independent product when every leg is a total
+ * on one side. Otherwise 1.
+ * Always the legacy haircut (at most 1). Positive ρ is not a substitute.
+ * OMEGA_PARLAY_CORR defaults off and cannot replace this with a raise.
+ */
+function sameDirectionTotalFactor(legs) {
+  const sides = sameDirectionSides(legs);
+  if (!sides) return 1;
   const table = PARLAY_TOTAL_HAIRCUT || {};
   const raw = Number(table[sides.length]);
   if (!Number.isFinite(raw) || raw > 1) return 1;
@@ -87,19 +90,27 @@ function sameDirectionTotalFactor(legs) {
 
 function comboStats(legs) {
   let combinedDecimal = 1;
-  let combinedProb = 1;
+  let independent = 1;
   for (const l of legs) {
     combinedDecimal *= americanToDecimal(l.odds);
-    combinedProb *= l.coverProb;
+    independent *= Number(l.coverProb);
   }
-  const factor = sameDirectionTotalFactor(legs);
-  const adjusted = combinedProb * factor;
-  if (Number.isFinite(adjusted)) {
-    if (parlayCorrEnabled()) {
-      if (adjusted > 0) combinedProb = Math.min(0.999, adjusted);
-    } else if (adjusted <= combinedProb) {
-      combinedProb = adjusted;
+  let combinedProb = independent;
+  if (Number.isFinite(independent)) {
+    const haircutProb = independent * sameDirectionTotalFactor(legs);
+    if (Number.isFinite(haircutProb) && haircutProb <= independent) {
+      combinedProb = haircutProb;
     }
+    // Correlation may only lower the joint. The ρ prior is positive, so
+    // this branch does not fire for same-direction totals. The haircut stays.
+    if (parlayCorrEnabled() && sameDirectionSides(legs)) {
+      const corr = correlatedTotalFactor((legs || []).map(l => Number(l.coverProb)));
+      if (Number.isFinite(corr) && corr > 0 && corr < 1) {
+        const lowered = independent * corr;
+        if (Number.isFinite(lowered) && lowered < combinedProb) combinedProb = lowered;
+      }
+    }
+    if (!Number.isFinite(combinedProb) || combinedProb > independent) combinedProb = independent;
   }
   const ev = combinedProb * combinedDecimal - 1;
   const games = new Set(legs.map(matchupKey)).size;
@@ -107,13 +118,60 @@ function comboStats(legs) {
   return { combinedDecimal, combinedProb, ev, uniqueGames: games, uniqueSports: sports };
 }
 
-function conflicts(a, b) {
-  if (matchupKey(a) === matchupKey(b)) return true;
-  // same team ML+spread
-  if (a.homeTeam && a.side && b.side) {
-    const sameGame = matchupKey(a) === matchupKey(b);
-    if (sameGame) return true;
+function leagueKey(leg) {
+  const s = String((leg && leg.sport) || '').trim().toUpperCase();
+  if (s === 'CFB' || s === 'NCAAF') return 'NCAAF';
+  return s;
+}
+
+function normConference(value) {
+  if (value == null) return null;
+  const s = String(value).trim().toLowerCase();
+  return s || null;
+}
+
+/** Conference tokens on a leg. A missing token is not a shared conference. */
+function conferenceSet(leg) {
+  const out = new Set();
+  if (!leg) return out;
+  const add = (value) => {
+    const n = normConference(value);
+    if (n) out.add(n);
+  };
+  add(leg.conference);
+  add(leg.homeConference);
+  add(leg.awayConference);
+  if (Array.isArray(leg.conferences)) {
+    for (const c of leg.conferences) add(c);
   }
+  return out;
+}
+
+function shareConference(a, b) {
+  const left = conferenceSet(a);
+  const right = conferenceSet(b);
+  if (!left.size || !right.size) return false;
+  for (const c of left) {
+    if (right.has(c)) return true;
+  }
+  return false;
+}
+
+/**
+ * De-correlated parlay. Two legs conflict when they are the same game,
+ * when they are same-direction totals in the same league, or when they
+ * are NCAAF totals that share a conference (either side).
+ */
+function legsConflict(a, b) {
+  if (!a || !b) return false;
+  if (matchupKey(a) === matchupKey(b)) return true;
+  const da = totalDirection(a);
+  const db = totalDirection(b);
+  if (!da || !db) return false;
+  const la = leagueKey(a);
+  const lb = leagueKey(b);
+  if (la && la === lb && da === db) return true;
+  if (la === 'NCAAF' && lb === 'NCAAF' && shareConference(a, b)) return true;
   return false;
 }
 
@@ -135,7 +193,7 @@ function enumerateCombos(pool, size) {
     let bad = false;
     for (let i = 0; i < legs.length && !bad; i++) {
       for (let j = i + 1; j < legs.length; j++) {
-        if (conflicts(legs[i], legs[j])) { bad = true; break; }
+        if (legsConflict(legs[i], legs[j])) { bad = true; break; }
       }
     }
     if (!bad) out.push(legs);
@@ -289,9 +347,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     uniqueSports: chosen.uniqueSports,
     independent,
     legMarkets: chosen.legs.map(l => l.market),
-    correlationNote: (parlayCorrEnabled() && sameDirectionTotalFactor(chosen.legs) > 1 + 1e-12)
-      ? `same-direction totals ρ=${PARLAY_TOTAL_RHO} — ${legs.length} legs / ${chosen.uniqueGames} games`
-      : `CLV-first de-correlated — ${legs.length} legs / ${chosen.uniqueGames} games`,
+    correlationNote: `CLV-first de-correlated — ${legs.length} legs / ${chosen.uniqueGames} games`,
     candidatesScanned: search.length,
     source: 'omega-vnext',
   }];
@@ -299,5 +355,5 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
 
 module.exports = {
   optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
-  sameDirectionTotalFactor,
+  sameDirectionTotalFactor, correlatedTotalFactor, legsConflict,
 };

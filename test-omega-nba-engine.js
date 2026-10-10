@@ -23,7 +23,7 @@ const shadow = require(path.join(root, 'nba_shadow'));
 const ids = require(path.join(root, 'sports/data/nba-team-ids.json'));
 const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);

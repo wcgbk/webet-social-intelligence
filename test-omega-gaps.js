@@ -14,8 +14,11 @@ const nhlPeriod = require(path.join(root, 'nhl_period'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const push = require(path.join(root, 'push_ev'));
 const parlay = require(path.join(root, 'parlay'));
+const flags = require(path.join(root, 'gaps_flags'));
 const select = require(path.join(root, 'select'));
 const audit = require(path.join(root, 'audit_card'));
+const ingest = require(path.join(root, 'ingest'));
+const cfb = require(path.join(root, 'sports/cfb'));
 const cal = require(path.join(root, 'calibrate'));
 const edge = require(path.join(root, 'edge'));
 const lateNews = require(path.join(root, 'late_news'));
@@ -39,8 +42,9 @@ function withEnv(name, value, fn) {
   }
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
-assert.ok(/v12\.3\.18-omega-vnext-keys/.test(config.MODEL_NOTES));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
+assert.ok(/v12\.3\.19-omega-vnext-parlay-decorr/.test(config.MODEL_NOTES));
+assert.ok(/OMEGA_PARLAY_CORR defaults off/.test(config.MODEL_NOTES));
 assert.ok(/1 − pPush/.test(config.MODEL_NOTES));
 assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
 
@@ -194,21 +198,141 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   });
 }
 
-// Same-direction totals: positive correlation when on, 0.92 haircut when off.
+// Same-direction totals: haircut only. Positive ρ must not raise EV.
 {
-  const leg = (side, p) => ({ sport: 'NFL', market: 'Total', side, coverProb: p, odds: -110, ev: 0.04, matchup: side, commenceTime: '2026-10-11T17:00:00Z' });
+  withEnv('OMEGA_PARLAY_CORR', null, () => {
+    assert.strictEqual(flags.parlayCorrEnabled(), false);
+  });
+  const leg = (side, p, extra) => ({
+    sport: 'NFL', market: 'Total', side, coverProb: p, odds: -110, ev: 0.04,
+    matchup: side, commenceTime: '2026-10-11T17:00:00Z', ...extra,
+  });
   const overs = [leg('Over 44.5', 0.55), leg('Over 41.5', 0.55)];
-  const factor = parlay.sameDirectionTotalFactor(overs);
-  assert.ok(factor > 1.03 && factor < 1.12, `corr factor ${factor}`);
+  const indep = 0.55 * 0.55;
+  assert.ok(parlay.correlatedTotalFactor([0.55, 0.55]) > 1, 'ρ prior itself is an upward joint');
+  assert.strictEqual(parlay.sameDirectionTotalFactor(overs), 0.95);
   const stats = parlay.comboStats(overs);
-  assert.ok(stats.combinedProb > 0.55 * 0.55);
+  near(stats.combinedProb, indep * 0.95, 1e-12);
+  assert.ok(stats.combinedProb < indep);
+  assert.ok(stats.ev < indep * stats.combinedDecimal - 1);
   const mixed = [leg('Over 44.5', 0.55), { ...leg('Under 41.5', 0.55), market: 'Spread', side: 'A -3' }];
   assert.strictEqual(parlay.sameDirectionTotalFactor(mixed), 1);
-  withEnv('OMEGA_PARLAY_CORR', '0', () => {
-    const three = [leg('Over 44', 0.60), leg('Over 41', 0.58), leg('Over 47', 0.57)];
+  const three = [leg('Over 44', 0.60), leg('Over 41', 0.58), leg('Over 47', 0.57)];
+  const threeIndep = 0.60 * 0.58 * 0.57;
+  assert.strictEqual(parlay.sameDirectionTotalFactor(three), 0.92);
+  near(parlay.comboStats(three).combinedProb, threeIndep * 0.92, 1e-12);
+  withEnv('OMEGA_PARLAY_CORR', '1', () => {
+    assert.strictEqual(flags.parlayCorrEnabled(), true);
     assert.strictEqual(parlay.sameDirectionTotalFactor(three), 0.92);
-    near(parlay.comboStats(three).combinedProb, 0.60 * 0.58 * 0.57 * 0.92, 1e-12);
+    const on = parlay.comboStats(three);
+    near(on.combinedProb, threeIndep * 0.92, 1e-12);
+    assert.ok(on.combinedProb <= threeIndep);
+    assert.ok(on.ev <= threeIndep * on.combinedDecimal - 1 + 1e-12);
   });
+  withEnv('OMEGA_PARLAY_CORR', '', () => {
+    assert.strictEqual(flags.parlayCorrEnabled(), false);
+  });
+}
+
+// 10/11-style slate: three NFL overs must not fill the parlay.
+{
+  const kick = '2026-10-11T17:00:00Z';
+  const row = (sport, matchup, side, market, coverProb, extra) => {
+    const [away, home] = matchup.split(' @ ');
+    return {
+      sport, matchup, side, market, odds: -110, coverProb, ev: 0.06, edgePct: 0.04,
+      commenceTime: kick, homeTeam: home, awayTeam: away, ...extra,
+    };
+  };
+  const o1 = row('NFL', 'Buffalo Bills @ Atlanta Falcons', 'Over 44.5', 'Total', 0.62);
+  const o2 = row('NFL', 'Dallas Cowboys @ Carolina Panthers', 'Over 43.5', 'Total', 0.61, { commenceTime: '2026-10-11T17:30:00Z' });
+  const o3 = row('NFL', 'Green Bay Packers @ Arizona Cardinals', 'Over 46.5', 'Total', 0.60, { commenceTime: '2026-10-11T20:25:00Z' });
+  const nflUnder = row('NFL', 'New York Jets @ Denver Broncos', 'Under 42.5', 'Total', 0.57, { commenceTime: '2026-10-11T20:05:00Z' });
+  const mlb = row('MLB', 'Boston Red Sox @ New York Yankees', 'Under 8.5', 'Total', 0.55, { commenceTime: '2026-10-11T23:05:00Z' });
+  const nhl = row('NHL', 'Dallas Stars @ Colorado Avalanche', 'Colorado Avalanche -1.5', 'Spread', 0.54, { commenceTime: '2026-10-11T23:00:00Z' });
+  assert.strictEqual(parlay.legsConflict(o1, o2), true);
+  assert.strictEqual(parlay.legsConflict(o1, o3), true);
+  assert.strictEqual(parlay.legsConflict(o1, nflUnder), false);
+  assert.strictEqual(parlay.optimizeParlay([o1, o2, o3], [], { cardDate: '2026-10-11' }).length, 0);
+  const alt = [o1, mlb, nhl];
+  assert.ok(
+    parlay.comboStats([o1, o2, o3]).combinedProb > parlay.comboStats(alt).combinedProb,
+    'the haircut would still rank three NFL overs first',
+  );
+  const ticket = parlay.optimizeParlay([o1, o2, o3, nflUnder, mlb, nhl], [], { cardDate: '2026-10-11' });
+  assert.strictEqual(ticket.length, 1);
+  assert.strictEqual(ticket[0].legs.length, 3);
+  const nflOvers = ticket[0].legs.filter(l => l.sport === 'NFL' && /^Over\b/i.test(l.pick));
+  assert.ok(nflOvers.length <= 1, `NFL overs on the ticket: ${nflOvers.map(l => l.pick).join(', ')}`);
+  const sameGame = row('NFL', 'Buffalo Bills @ Atlanta Falcons', 'Atlanta Falcons -3', 'Spread', 0.58);
+  assert.strictEqual(parlay.legsConflict(o1, sameGame), true);
+
+  const secOver = row('NCAAF', 'Auburn Tigers @ Georgia Bulldogs', 'Over 51.5', 'Total', 0.58, { conference: 'SEC', commenceTime: '2026-10-11T16:00:00Z' });
+  const secUnder = row('NCAAF', 'Florida Gators @ Tennessee Volunteers', 'Under 48.5', 'Total', 0.57, { conference: 'SEC', homeConference: 'SEC', commenceTime: '2026-10-11T20:00:00Z' });
+  const bigTenUnder = row('NCAAF', 'Wisconsin Badgers @ Ohio State Buckeyes', 'Under 49.5', 'Total', 0.56, { conference: 'Big Ten', commenceTime: '2026-10-11T16:30:00Z' });
+  const bigTenOver = row('NCAAF', 'Penn State Nittany Lions @ Oregon Ducks', 'Over 52.5', 'Total', 0.56, { conference: 'Big Ten', commenceTime: '2026-10-11T19:30:00Z' });
+  assert.strictEqual(parlay.legsConflict(secOver, secUnder), true, 'same-conference NCAAF totals');
+  assert.strictEqual(parlay.optimizeParlay([secOver, secUnder], [], { cardDate: '2026-10-11' }).length, 0);
+  assert.strictEqual(parlay.legsConflict(secOver, bigTenOver), true, 'same-direction NCAAF totals, different conferences');
+  assert.strictEqual(parlay.legsConflict(secOver, bigTenUnder), false);
+  const ncaafCard = parlay.optimizeParlay([secOver, secUnder, bigTenUnder, mlb], [], { cardDate: '2026-10-11' });
+  assert.strictEqual(ncaafCard.length, 1);
+  const secLegs = ncaafCard[0].legs.filter(l => /Georgia|Tennessee|Auburn|Florida/.test(l.matchup));
+  assert.ok(secLegs.length <= 1, 'same-conference NCAAF totals both landed');
+  const bareOver = row('NCAAF', 'Texas Longhorns @ Oklahoma Sooners', 'Over 55.5', 'Total', 0.55, { commenceTime: '2026-10-11T16:00:00Z' });
+  const bareUnder = row('NCAAF', 'Clemson Tigers @ Florida State Seminoles', 'Under 50.5', 'Total', 0.55, { commenceTime: '2026-10-11T20:00:00Z' });
+  assert.strictEqual(parlay.legsConflict(bareOver, bareUnder), false, 'unknown conference is not a shared conference');
+
+  const mapped = ingest.mapEspnEvent({
+    id: '401',
+    date: kick,
+    competitions: [{
+      date: kick,
+      competitors: [
+        { homeAway: 'home', team: { id: '61', displayName: 'Georgia Bulldogs', conferenceId: '8' } },
+        { homeAway: 'away', team: { id: '333', displayName: 'Alabama Crimson Tide', conferenceId: '8' } },
+      ],
+      groups: { id: '80', name: 'FBS' },
+    }],
+  });
+  assert.strictEqual(mapped.homeConference, '8');
+  assert.strictEqual(mapped.awayConference, '8');
+  assert.strictEqual(mapped.conference, '8');
+  const fbsOnly = ingest.mapEspnEvent({
+    id: '402',
+    date: kick,
+    competitions: [{
+      date: kick,
+      competitors: [
+        { homeAway: 'home', team: { id: '61', displayName: 'Georgia Bulldogs' } },
+        { homeAway: 'away', team: { id: '333', displayName: 'Alabama Crimson Tide' } },
+      ],
+      groups: { id: '80', abbreviation: 'FBS' },
+    }],
+  });
+  assert.strictEqual(fbsOnly.conference, undefined);
+  const ev = {
+    home_team: 'Georgia Bulldogs',
+    away_team: 'Alabama Crimson Tide',
+    commence_time: kick,
+    bookmakers: [{
+      key: 'pinnacle',
+      markets: [
+        { key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 51.5 }, { name: 'Under', price: -110, point: 51.5 }] },
+      ],
+    }],
+  };
+  const priced = cfb.project({
+    oddsEvents: [ev],
+    standings: {},
+    efficiency: {},
+    espnGames: { games: [mapped] },
+  });
+  const stamped = priced.find(c => c.market === 'Total');
+  assert.ok(stamped, 'NCAAF total candidate');
+  assert.strictEqual(stamped.conference, '8');
+  assert.strictEqual(stamped.homeConference, '8');
+  assert.strictEqual(stamped.awayConference, '8');
 }
 
 // Same-game exposure: straight + full parlay stake, cap 1.50u.
@@ -273,6 +397,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(a.configHash, b.configHash);
   assert.strictEqual(a.inputSnapshotHash, b.inputSnapshotHash);
   assert.strictEqual(a.toggles.OMEGA_KEY_MASS, true);
+  assert.strictEqual(a.toggles.OMEGA_PARLAY_CORR, false);
   const moved = audit.buildCardAudit({
     snap: {
       ...snap,

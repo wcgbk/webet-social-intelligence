@@ -48,7 +48,7 @@ assert.strictEqual(cal.resolveCalMode(), 'A');
 assert.strictEqual(cal.resolveCalMode(''), 'A');
 assert.strictEqual(cal.resolveCalMode('legacy'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('0'), 'legacy');
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
 assert.ok(/shrink K is still hand-set/i.test(config.MODEL_NOTES));
 assert.ok(/Mode B stays selectable/.test(config.MODEL_NOTES));
 assert.ok(/Mode C stays selectable/.test(config.MODEL_NOTES));

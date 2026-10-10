@@ -194,6 +194,38 @@ function espnCompetitionVenue(comp) {
   };
 }
 
+/** FBS/FCS/D1 board ids are not conferences. */
+function conferenceToken(value) {
+  if (value == null || value === '') return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  if (s === '80' || s === '81' || s === '90') return null;
+  if (/^(fbs|fcs|d1|division i|ncaa division i)$/i.test(s)) return null;
+  return s;
+}
+
+function competitorConference(side) {
+  if (!side || typeof side !== 'object') return null;
+  const team = side.team && typeof side.team === 'object' ? side.team : {};
+  const fromObj = (obj) => {
+    if (!obj || typeof obj !== 'object') return null;
+    return conferenceToken(obj.abbreviation || obj.shortName || obj.name || obj.id);
+  };
+  return conferenceToken(side.conferenceId != null ? side.conferenceId : team.conferenceId)
+    || fromObj(side.conference)
+    || fromObj(team.conference);
+}
+
+function eventConference(comp, ev, homeConf, awayConf) {
+  if (homeConf && awayConf && homeConf.toLowerCase() === awayConf.toLowerCase()) return homeConf;
+  const groups = (comp && comp.groups && !Array.isArray(comp.groups) && comp.groups)
+    || (ev && ev.groups && !Array.isArray(ev.groups) && ev.groups)
+    || null;
+  if (!groups || typeof groups !== 'object') return null;
+  return conferenceToken(groups.id)
+    || conferenceToken(groups.abbreviation || groups.shortName || groups.name);
+}
+
 function mapEspnEvent(ev) {
   if (!ev || typeof ev !== 'object') return null;
   const comp = (ev.competitions && ev.competitions[0]) || {};
@@ -202,6 +234,9 @@ function mapEspnEvent(ev) {
   const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
   const homeProb = extractProbable(home);
   const awayProb = extractProbable(away);
+  const homeConference = competitorConference(home);
+  const awayConference = competitorConference(away);
+  const conference = eventConference(comp, ev, homeConference, awayConference);
   return {
     id: ev.id,
     name: ev.name,
@@ -222,6 +257,9 @@ function mapEspnEvent(ev) {
     indoor: !!(comp.venue && comp.venue.indoor === true),
     neutralSite: comp.neutralSite === true,
     venue: espnCompetitionVenue(comp),
+    ...(homeConference ? { homeConference } : {}),
+    ...(awayConference ? { awayConference } : {}),
+    ...(conference ? { conference } : {}),
     ...scoreboardSeasonFields(ev),
   };
 }

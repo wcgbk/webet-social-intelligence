@@ -34,7 +34,7 @@ const {
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
 assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 });
@@ -273,7 +273,8 @@ function assertEdgesNeverGrow(cands, ev) {
   const legKey = (t) => (t[0] ? t[0].legs.map(l => `${l.matchup}|${l.pick}`).sort() : []);
   assert.deepStrictEqual(legKey(tickets), legKey(ticketsClear));
   const flaggedLegs = (tickets[0] ? tickets[0].legs : []).filter(l => /38\.5/.test(String(l.pick || '')));
-  assert.ok(flaggedLegs.length >= 1, 'flagged total did not compete for the parlay');
+  // v12.3.19 decorr: two same-direction NFL overs can no longer share a ticket, so this 2-game slate may build none; gapFlag must still not change the outcome (legKey equality above).
+  if (tickets.length) assert.ok(flaggedLegs.length >= 1, 'flagged total did not compete for the parlay'); else assert.strictEqual(ticketsClear.length, 0);
   for (const leg of flaggedLegs) {
     assert.strictEqual(leg.gapFlag, true);
     assert.strictEqual(leg.modelLineGap, 12.5);

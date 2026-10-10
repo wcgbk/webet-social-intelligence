@@ -198,6 +198,27 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
+  const conf = conferenceStamp(espnGame);
+  if (conf) {
+    for (const row of out) Object.assign(row, conf);
+  }
+  return out;
+}
+
+/** Copy scoreboard conference tokens onto the candidate. Missing stays missing. */
+function conferenceStamp(espnGame) {
+  if (!espnGame) return null;
+  const home = espnGame.homeConference || null;
+  const away = espnGame.awayConference || null;
+  let conference = espnGame.conference || null;
+  if (!conference && home && away && String(home).toLowerCase() === String(away).toLowerCase()) {
+    conference = home;
+  }
+  if (!home && !away && !conference) return null;
+  const out = {};
+  if (home) out.homeConference = String(home);
+  if (away) out.awayConference = String(away);
+  if (conference) out.conference = String(conference);
   return out;
 }
 

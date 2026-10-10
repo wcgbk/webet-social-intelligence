@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.18-omega-vnext-keys';
+const MODEL_VERSION = 'v12.3.19-omega-vnext-parlay-decorr';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -21,6 +21,8 @@ const PARLAY_FIXED_UNITS = 0.5;
  * a scoring day. Multiply combinedProb by this factor before EV and
  * ranking. Each value is at most 1, so no ticket's hit probability rises.
  * A mixed ticket, or any ticket that is not all totals, stays at 1.
+ * OMEGA_PARLAY_CORR defaults off. Its ρ prior only raised this joint.
+ * Turning it on must not replace the haircut or lift EV.
  */
 const PARLAY_TOTAL_HAIRCUT = {
   2: 0.95,
@@ -604,6 +606,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.19-omega-vnext-parlay-decorr: Parlay selection keeps one leg per game. It also refuses two same-direction totals in the same league, so three NFL overs cannot fill a ticket. NCAAF totals that share a conference are refused even when the sides differ. A missing conference does not invent a shared conference. Same-direction totals keep the 0.95/0.92 haircut. The joint probability used for EV stays at or below the independent product. Pearson ρ 0.08 only raised that joint, so OMEGA_PARLAY_CORR defaults off. Setting it on does not replace the haircut and cannot raise EV. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.18-omega-vnext-keys: NFL and NCAAF spreads use an empirical key-number margin distribution. NFL totals use the Sports Insights shape. NCAAF totals stay on the normal. OMEGA_KEY_MASS=0 restores nflKeyNumberCover and the plain normal. Stake EV and quarter-Kelly scale by (1 − pPush) after calibration. Mode A still shrinks the conditional coverProb toward the hand-set sharp anchor and does not apply the unfitted band. calibrateCandidate copies pPush and lateNews through. attachEv and toPickObject then apply the push factor to that mode-A coverProb. edgePct stays coverProb − fair_sharp and is not scaled. OMEGA_PUSH_EV=0 leaves evAtOdds and Kelly on the same calibrated coverProb. NHL moneylines, puck lines, and totals are priced from a 60-minute joint and then overtime. OMEGA_NHL_PERIOD=0 restores the full-game normal. Same-direction cross-game totals use Pearson ρ 0.08 inside the Fréchet bounds. OMEGA_PARLAY_CORR=0 restores the 0.95/0.92 haircut. Same-game straight units plus the full parlay stake are capped at 1.50u after the slate cap and the grade hierarchy. A void-pregame parlay leg is not exposure. A void-pregame straight is not trimmed by that cap. OMEGA_GAME_EXPOSURE=0 leaves the slate cap. Late-news still drops or flags only, then resolveLockedParlay and enforceOmegaDailyUnitCap rerun this exposure cap on the surviving card. Each card stores a private audit of model version, config hash, and input snapshot hash. The public payload drops audit, lateNews, and voidedPregame, and omits void-pregame picks and legs. OMEGA_CARD_AUDIT=0 omits the field. No gate floor, SHRINK_K, or cal-mode default change.',
   'v12.3.17-omega-vnext-cal-a late-news: generate stamps lateNews after projectAll(snap, dateISO) and before calibrateAll(candidates, { cardDate }). The stamp records the generate-time MLB probable, NHL goalie (goalieEdge only when goalieResidual ran), and NFL/NCAAF QB tag. It does not change coverProb. Verify at 10:30 ET and pregame-check-omega every 30 minutes from 11:00 through 23:30 ET may void or flag a pick whose commence is inside 90 minutes. MLB drops on a stored probable change, postponement, or suspension. NHL flags a confirmed boxscore starter change and drops only when goalieEdge is true. NFL/NCAAF drops a newly out or IR quarterback and flags newly doubtful. Drop or flag only. Never add or swap a pick. No gate, floor, Kelly, unit-cap, or calibration change.',
   'v12.3.17-omega-vnext-cal-a identity: every slate team string resolves to one ESPN id on NFL, NCAAF, MLB, NBA, and NHL. Explicit aliases ship in the client and the server. Fuzzy matching runs only on the OMEGA_TEAM_EXACT_ONLY=0 allowFuzzy path. A shared league token (NBA "New York", MLB "sox", and the other ambiguous names) must stay unresolved. A suspended final grades as a push, the same as postponed or cancelled. No gate, floor, Kelly, unit-cap, or calibration change.',

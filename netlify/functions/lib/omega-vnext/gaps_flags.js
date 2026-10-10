@@ -31,8 +31,23 @@ function gameExposureEnabled() {
   return flagEnabled('OMEGA_GAME_EXPOSURE');
 }
 
+/**
+ * Default OFF. Unset, blank, 0, off, false, or no stays off.
+ * Any other value turns the prior on.
+ *
+ * The Pearson ρ below only raises the joint probability of same-direction
+ * totals. That raises parlay EV. Cross-game total correlation is a weak
+ * estimate and must not do that, so the flag is not on with the other
+ * construction fixes. Same-direction totals keep PARLAY_TOTAL_HAIRCUT.
+ * When the flag is on, a correlation term is applied only if it lowers
+ * the joint. This prior never does, so turning the flag on adds no EV.
+ */
 function parlayCorrEnabled() {
-  return flagEnabled('OMEGA_PARLAY_CORR');
+  const v = process.env.OMEGA_PARLAY_CORR;
+  if (v == null) return false;
+  const s = String(v).trim().toLowerCase();
+  if (s === '' || s === '0' || s === 'off' || s === 'false' || s === 'no') return false;
+  return true;
 }
 
 function auditCardEnabled() {
@@ -47,10 +62,11 @@ function auditCardEnabled() {
 const GAME_EXPOSURE_CAP = 1.5;
 
 /**
- * Pearson correlation prior for same-direction cross-game totals.
+ * Pearson prior for same-direction cross-game totals.
  * Same-slate overs (or unders) move together. 0.08 is inside the
  * usual 0.05–0.15 band and is a desk prior, not a fitted coefficient.
- * The Fréchet bounds keep the joint inside [max(0, p+q-1), min(p, q)].
+ * Inside the Fréchet bounds it only raises the joint, which raises EV.
+ * Pricing does not apply that raise. OMEGA_PARLAY_CORR defaults off.
  */
 const PARLAY_TOTAL_RHO = 0.08;
 

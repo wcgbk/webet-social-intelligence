@@ -1,0 +1,7638 @@
+{
+  "mustResolve": [
+    {
+      "sport": "MLB",
+      "name": "Anaheim",
+      "id": "3"
+    },
+    {
+      "sport": "MLB",
+      "name": "Angels",
+      "id": "3"
+    },
+    {
+      "sport": "MLB",
+      "name": "ARI",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "Arizona",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "Arizona Diamondbacks",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "Arlington",
+      "id": "13"
+    },
+    {
+      "sport": "MLB",
+      "name": "Astros",
+      "id": "18"
+    },
+    {
+      "sport": "MLB",
+      "name": "ATH",
+      "id": "11"
+    },
+    {
+      "sport": "MLB",
+      "name": "Athletics",
+      "id": "11"
+    },
+    {
+      "sport": "MLB",
+      "name": "ATL",
+      "id": "15"
+    },
+    {
+      "sport": "MLB",
+      "name": "Atlanta",
+      "id": "15"
+    },
+    {
+      "sport": "MLB",
+      "name": "Atlanta Braves",
+      "id": "15"
+    },
+    {
+      "sport": "MLB",
+      "name": "AZ",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "BAL",
+      "id": "1"
+    },
+    {
+      "sport": "MLB",
+      "name": "Baltimore",
+      "id": "1"
+    },
+    {
+      "sport": "MLB",
+      "name": "Baltimore Orioles",
+      "id": "1"
+    },
+    {
+      "sport": "MLB",
+      "name": "Blue Jays",
+      "id": "14"
+    },
+    {
+      "sport": "MLB",
+      "name": "BOS",
+      "id": "2"
+    },
+    {
+      "sport": "MLB",
+      "name": "Boston",
+      "id": "2"
+    },
+    {
+      "sport": "MLB",
+      "name": "Boston Red Sox",
+      "id": "2"
+    },
+    {
+      "sport": "MLB",
+      "name": "Braves",
+      "id": "15"
+    },
+    {
+      "sport": "MLB",
+      "name": "Brewers",
+      "id": "8"
+    },
+    {
+      "sport": "MLB",
+      "name": "Bronx",
+      "id": "10"
+    },
+    {
+      "sport": "MLB",
+      "name": "Cardinals",
+      "id": "24"
+    },
+    {
+      "sport": "MLB",
+      "name": "CHC",
+      "id": "16"
+    },
+    {
+      "sport": "MLB",
+      "name": "Chi Cubs",
+      "id": "16"
+    },
+    {
+      "sport": "MLB",
+      "name": "Chi White Sox",
+      "id": "4"
+    },
+    {
+      "sport": "MLB",
+      "name": "Chicago Cubs",
+      "id": "16"
+    },
+    {
+      "sport": "MLB",
+      "name": "Chicago White Sox",
+      "id": "4"
+    },
+    {
+      "sport": "MLB",
+      "name": "CHW",
+      "id": "4"
+    },
+    {
+      "sport": "MLB",
+      "name": "CIN",
+      "id": "17"
+    },
+    {
+      "sport": "MLB",
+      "name": "Cincinnati",
+      "id": "17"
+    },
+    {
+      "sport": "MLB",
+      "name": "Cincinnati Reds",
+      "id": "17"
+    },
+    {
+      "sport": "MLB",
+      "name": "CLE",
+      "id": "5"
+    },
+    {
+      "sport": "MLB",
+      "name": "Cleveland",
+      "id": "5"
+    },
+    {
+      "sport": "MLB",
+      "name": "Cleveland Guardians",
+      "id": "5"
+    },
+    {
+      "sport": "MLB",
+      "name": "COL",
+      "id": "27"
+    },
+    {
+      "sport": "MLB",
+      "name": "Colorado",
+      "id": "27"
+    },
+    {
+      "sport": "MLB",
+      "name": "Colorado Rockies",
+      "id": "27"
+    },
+    {
+      "sport": "MLB",
+      "name": "Cubs",
+      "id": "16"
+    },
+    {
+      "sport": "MLB",
+      "name": "CWS",
+      "id": "4"
+    },
+    {
+      "sport": "MLB",
+      "name": "D-backs",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "Denver",
+      "id": "27"
+    },
+    {
+      "sport": "MLB",
+      "name": "DET",
+      "id": "6"
+    },
+    {
+      "sport": "MLB",
+      "name": "Detroit",
+      "id": "6"
+    },
+    {
+      "sport": "MLB",
+      "name": "Detroit Tigers",
+      "id": "6"
+    },
+    {
+      "sport": "MLB",
+      "name": "Diamondbacks",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "Dodgers",
+      "id": "19"
+    },
+    {
+      "sport": "MLB",
+      "name": "Flushing",
+      "id": "21"
+    },
+    {
+      "sport": "MLB",
+      "name": "Giants",
+      "id": "26"
+    },
+    {
+      "sport": "MLB",
+      "name": "Guardians",
+      "id": "5"
+    },
+    {
+      "sport": "MLB",
+      "name": "HOU",
+      "id": "18"
+    },
+    {
+      "sport": "MLB",
+      "name": "Houston",
+      "id": "18"
+    },
+    {
+      "sport": "MLB",
+      "name": "Houston Astros",
+      "id": "18"
+    },
+    {
+      "sport": "MLB",
+      "name": "Kansas City",
+      "id": "7"
+    },
+    {
+      "sport": "MLB",
+      "name": "Kansas City Royals",
+      "id": "7"
+    },
+    {
+      "sport": "MLB",
+      "name": "KC",
+      "id": "7"
+    },
+    {
+      "sport": "MLB",
+      "name": "LA Angels",
+      "id": "3"
+    },
+    {
+      "sport": "MLB",
+      "name": "LA Dodgers",
+      "id": "19"
+    },
+    {
+      "sport": "MLB",
+      "name": "LAA",
+      "id": "3"
+    },
+    {
+      "sport": "MLB",
+      "name": "LAD",
+      "id": "19"
+    },
+    {
+      "sport": "MLB",
+      "name": "Los Angeles Angels",
+      "id": "3"
+    },
+    {
+      "sport": "MLB",
+      "name": "Los Angeles Dodgers",
+      "id": "19"
+    },
+    {
+      "sport": "MLB",
+      "name": "Mariners",
+      "id": "12"
+    },
+    {
+      "sport": "MLB",
+      "name": "Marlins",
+      "id": "28"
+    },
+    {
+      "sport": "MLB",
+      "name": "Mets",
+      "id": "21"
+    },
+    {
+      "sport": "MLB",
+      "name": "MIA",
+      "id": "28"
+    },
+    {
+      "sport": "MLB",
+      "name": "Miami",
+      "id": "28"
+    },
+    {
+      "sport": "MLB",
+      "name": "Miami Marlins",
+      "id": "28"
+    },
+    {
+      "sport": "MLB",
+      "name": "MIL",
+      "id": "8"
+    },
+    {
+      "sport": "MLB",
+      "name": "Milwaukee",
+      "id": "8"
+    },
+    {
+      "sport": "MLB",
+      "name": "Milwaukee Brewers",
+      "id": "8"
+    },
+    {
+      "sport": "MLB",
+      "name": "MIN",
+      "id": "9"
+    },
+    {
+      "sport": "MLB",
+      "name": "Minneapolis",
+      "id": "9"
+    },
+    {
+      "sport": "MLB",
+      "name": "Minnesota",
+      "id": "9"
+    },
+    {
+      "sport": "MLB",
+      "name": "Minnesota Twins",
+      "id": "9"
+    },
+    {
+      "sport": "MLB",
+      "name": "Nationals",
+      "id": "20"
+    },
+    {
+      "sport": "MLB",
+      "name": "New York Mets",
+      "id": "21"
+    },
+    {
+      "sport": "MLB",
+      "name": "New York Yankees",
+      "id": "10"
+    },
+    {
+      "sport": "MLB",
+      "name": "NY Mets",
+      "id": "21"
+    },
+    {
+      "sport": "MLB",
+      "name": "NY Yankees",
+      "id": "10"
+    },
+    {
+      "sport": "MLB",
+      "name": "NYM",
+      "id": "21"
+    },
+    {
+      "sport": "MLB",
+      "name": "NYY",
+      "id": "10"
+    },
+    {
+      "sport": "MLB",
+      "name": "Oakland Athletics",
+      "id": "11"
+    },
+    {
+      "sport": "MLB",
+      "name": "Orioles",
+      "id": "1"
+    },
+    {
+      "sport": "MLB",
+      "name": "Padres",
+      "id": "25"
+    },
+    {
+      "sport": "MLB",
+      "name": "PHI",
+      "id": "22"
+    },
+    {
+      "sport": "MLB",
+      "name": "Philadelphia",
+      "id": "22"
+    },
+    {
+      "sport": "MLB",
+      "name": "Philadelphia Phillies",
+      "id": "22"
+    },
+    {
+      "sport": "MLB",
+      "name": "Phillies",
+      "id": "22"
+    },
+    {
+      "sport": "MLB",
+      "name": "Phoenix",
+      "id": "29"
+    },
+    {
+      "sport": "MLB",
+      "name": "Pirates",
+      "id": "23"
+    },
+    {
+      "sport": "MLB",
+      "name": "PIT",
+      "id": "23"
+    },
+    {
+      "sport": "MLB",
+      "name": "Pittsburgh",
+      "id": "23"
+    },
+    {
+      "sport": "MLB",
+      "name": "Pittsburgh Pirates",
+      "id": "23"
+    },
+    {
+      "sport": "MLB",
+      "name": "Rangers",
+      "id": "13"
+    },
+    {
+      "sport": "MLB",
+      "name": "Rays",
+      "id": "30"
+    },
+    {
+      "sport": "MLB",
+      "name": "Red Sox",
+      "id": "2"
+    },
+    {
+      "sport": "MLB",
+      "name": "Reds",
+      "id": "17"
+    },
+    {
+      "sport": "MLB",
+      "name": "Rockies",
+      "id": "27"
+    },
+    {
+      "sport": "MLB",
+      "name": "Royals",
+      "id": "7"
+    },
+    {
+      "sport": "MLB",
+      "name": "Sacramento",
+      "id": "11"
+    },
+    {
+      "sport": "MLB",
+      "name": "Sacramento Athletics",
+      "id": "11"
+    },
+    {
+      "sport": "MLB",
+      "name": "San Diego",
+      "id": "25"
+    },
+    {
+      "sport": "MLB",
+      "name": "San Diego Padres",
+      "id": "25"
+    },
+    {
+      "sport": "MLB",
+      "name": "San Francisco",
+      "id": "26"
+    },
+    {
+      "sport": "MLB",
+      "name": "San Francisco Giants",
+      "id": "26"
+    },
+    {
+      "sport": "MLB",
+      "name": "SD",
+      "id": "25"
+    },
+    {
+      "sport": "MLB",
+      "name": "SEA",
+      "id": "12"
+    },
+    {
+      "sport": "MLB",
+      "name": "Seattle",
+      "id": "12"
+    },
+    {
+      "sport": "MLB",
+      "name": "Seattle Mariners",
+      "id": "12"
+    },
+    {
+      "sport": "MLB",
+      "name": "SF",
+      "id": "26"
+    },
+    {
+      "sport": "MLB",
+      "name": "St. Louis",
+      "id": "24"
+    },
+    {
+      "sport": "MLB",
+      "name": "St. Louis Cardinals",
+      "id": "24"
+    },
+    {
+      "sport": "MLB",
+      "name": "St. Petersburg",
+      "id": "30"
+    },
+    {
+      "sport": "MLB",
+      "name": "STL",
+      "id": "24"
+    },
+    {
+      "sport": "MLB",
+      "name": "Tampa Bay",
+      "id": "30"
+    },
+    {
+      "sport": "MLB",
+      "name": "Tampa Bay Rays",
+      "id": "30"
+    },
+    {
+      "sport": "MLB",
+      "name": "TB",
+      "id": "30"
+    },
+    {
+      "sport": "MLB",
+      "name": "TEX",
+      "id": "13"
+    },
+    {
+      "sport": "MLB",
+      "name": "Texas",
+      "id": "13"
+    },
+    {
+      "sport": "MLB",
+      "name": "Texas Rangers",
+      "id": "13"
+    },
+    {
+      "sport": "MLB",
+      "name": "Tigers",
+      "id": "6"
+    },
+    {
+      "sport": "MLB",
+      "name": "TOR",
+      "id": "14"
+    },
+    {
+      "sport": "MLB",
+      "name": "Toronto",
+      "id": "14"
+    },
+    {
+      "sport": "MLB",
+      "name": "Toronto Blue Jays",
+      "id": "14"
+    },
+    {
+      "sport": "MLB",
+      "name": "Twins",
+      "id": "9"
+    },
+    {
+      "sport": "MLB",
+      "name": "Washington",
+      "id": "20"
+    },
+    {
+      "sport": "MLB",
+      "name": "Washington Nationals",
+      "id": "20"
+    },
+    {
+      "sport": "MLB",
+      "name": "White Sox",
+      "id": "4"
+    },
+    {
+      "sport": "MLB",
+      "name": "WSH",
+      "id": "20"
+    },
+    {
+      "sport": "MLB",
+      "name": "Yankees",
+      "id": "10"
+    },
+    {
+      "sport": "NBA",
+      "name": "ATL",
+      "id": "1"
+    },
+    {
+      "sport": "NBA",
+      "name": "Atlanta",
+      "id": "1"
+    },
+    {
+      "sport": "NBA",
+      "name": "Atlanta Hawks",
+      "id": "1"
+    },
+    {
+      "sport": "NBA",
+      "name": "BKN",
+      "id": "17"
+    },
+    {
+      "sport": "NBA",
+      "name": "BOS",
+      "id": "2"
+    },
+    {
+      "sport": "NBA",
+      "name": "Boston",
+      "id": "2"
+    },
+    {
+      "sport": "NBA",
+      "name": "Boston Celtics",
+      "id": "2"
+    },
+    {
+      "sport": "NBA",
+      "name": "Brooklyn",
+      "id": "17"
+    },
+    {
+      "sport": "NBA",
+      "name": "Brooklyn Nets",
+      "id": "17"
+    },
+    {
+      "sport": "NBA",
+      "name": "CHA",
+      "id": "30"
+    },
+    {
+      "sport": "NBA",
+      "name": "Charlotte",
+      "id": "30"
+    },
+    {
+      "sport": "NBA",
+      "name": "Charlotte Hornets",
+      "id": "30"
+    },
+    {
+      "sport": "NBA",
+      "name": "CHI",
+      "id": "4"
+    },
+    {
+      "sport": "NBA",
+      "name": "Chicago",
+      "id": "4"
+    },
+    {
+      "sport": "NBA",
+      "name": "Chicago Bulls",
+      "id": "4"
+    },
+    {
+      "sport": "NBA",
+      "name": "CLE",
+      "id": "5"
+    },
+    {
+      "sport": "NBA",
+      "name": "Cleveland",
+      "id": "5"
+    },
+    {
+      "sport": "NBA",
+      "name": "Cleveland Cavaliers",
+      "id": "5"
+    },
+    {
+      "sport": "NBA",
+      "name": "DAL",
+      "id": "6"
+    },
+    {
+      "sport": "NBA",
+      "name": "Dallas",
+      "id": "6"
+    },
+    {
+      "sport": "NBA",
+      "name": "Dallas Mavericks",
+      "id": "6"
+    },
+    {
+      "sport": "NBA",
+      "name": "DEN",
+      "id": "7"
+    },
+    {
+      "sport": "NBA",
+      "name": "Denver",
+      "id": "7"
+    },
+    {
+      "sport": "NBA",
+      "name": "Denver Nuggets",
+      "id": "7"
+    },
+    {
+      "sport": "NBA",
+      "name": "DET",
+      "id": "8"
+    },
+    {
+      "sport": "NBA",
+      "name": "Detroit",
+      "id": "8"
+    },
+    {
+      "sport": "NBA",
+      "name": "Detroit Pistons",
+      "id": "8"
+    },
+    {
+      "sport": "NBA",
+      "name": "Golden State",
+      "id": "9"
+    },
+    {
+      "sport": "NBA",
+      "name": "Golden State Warriors",
+      "id": "9"
+    },
+    {
+      "sport": "NBA",
+      "name": "GS",
+      "id": "9"
+    },
+    {
+      "sport": "NBA",
+      "name": "HOU",
+      "id": "10"
+    },
+    {
+      "sport": "NBA",
+      "name": "Houston",
+      "id": "10"
+    },
+    {
+      "sport": "NBA",
+      "name": "Houston Rockets",
+      "id": "10"
+    },
+    {
+      "sport": "NBA",
+      "name": "IND",
+      "id": "11"
+    },
+    {
+      "sport": "NBA",
+      "name": "Indiana",
+      "id": "11"
+    },
+    {
+      "sport": "NBA",
+      "name": "Indiana Pacers",
+      "id": "11"
+    },
+    {
+      "sport": "NBA",
+      "name": "LA Clippers",
+      "id": "12"
+    },
+    {
+      "sport": "NBA",
+      "name": "LAC",
+      "id": "12"
+    },
+    {
+      "sport": "NBA",
+      "name": "LAL",
+      "id": "13"
+    },
+    {
+      "sport": "NBA",
+      "name": "Los Angeles Lakers",
+      "id": "13"
+    },
+    {
+      "sport": "NBA",
+      "name": "MEM",
+      "id": "29"
+    },
+    {
+      "sport": "NBA",
+      "name": "Memphis",
+      "id": "29"
+    },
+    {
+      "sport": "NBA",
+      "name": "Memphis Grizzlies",
+      "id": "29"
+    },
+    {
+      "sport": "NBA",
+      "name": "MIA",
+      "id": "14"
+    },
+    {
+      "sport": "NBA",
+      "name": "Miami",
+      "id": "14"
+    },
+    {
+      "sport": "NBA",
+      "name": "Miami Heat",
+      "id": "14"
+    },
+    {
+      "sport": "NBA",
+      "name": "MIL",
+      "id": "15"
+    },
+    {
+      "sport": "NBA",
+      "name": "Milwaukee",
+      "id": "15"
+    },
+    {
+      "sport": "NBA",
+      "name": "Milwaukee Bucks",
+      "id": "15"
+    },
+    {
+      "sport": "NBA",
+      "name": "MIN",
+      "id": "16"
+    },
+    {
+      "sport": "NBA",
+      "name": "Minnesota",
+      "id": "16"
+    },
+    {
+      "sport": "NBA",
+      "name": "Minnesota Timberwolves",
+      "id": "16"
+    },
+    {
+      "sport": "NBA",
+      "name": "New Orleans",
+      "id": "3"
+    },
+    {
+      "sport": "NBA",
+      "name": "New Orleans Pelicans",
+      "id": "3"
+    },
+    {
+      "sport": "NBA",
+      "name": "New York Knicks",
+      "id": "18"
+    },
+    {
+      "sport": "NBA",
+      "name": "NO",
+      "id": "3"
+    },
+    {
+      "sport": "NBA",
+      "name": "NY",
+      "id": "18"
+    },
+    {
+      "sport": "NBA",
+      "name": "OKC",
+      "id": "25"
+    },
+    {
+      "sport": "NBA",
+      "name": "Oklahoma City",
+      "id": "25"
+    },
+    {
+      "sport": "NBA",
+      "name": "Oklahoma City Thunder",
+      "id": "25"
+    },
+    {
+      "sport": "NBA",
+      "name": "ORL",
+      "id": "19"
+    },
+    {
+      "sport": "NBA",
+      "name": "Orlando",
+      "id": "19"
+    },
+    {
+      "sport": "NBA",
+      "name": "Orlando Magic",
+      "id": "19"
+    },
+    {
+      "sport": "NBA",
+      "name": "PHI",
+      "id": "20"
+    },
+    {
+      "sport": "NBA",
+      "name": "Philadelphia",
+      "id": "20"
+    },
+    {
+      "sport": "NBA",
+      "name": "Philadelphia 76ers",
+      "id": "20"
+    },
+    {
+      "sport": "NBA",
+      "name": "Phoenix",
+      "id": "21"
+    },
+    {
+      "sport": "NBA",
+      "name": "Phoenix Suns",
+      "id": "21"
+    },
+    {
+      "sport": "NBA",
+      "name": "PHX",
+      "id": "21"
+    },
+    {
+      "sport": "NBA",
+      "name": "POR",
+      "id": "22"
+    },
+    {
+      "sport": "NBA",
+      "name": "Portland",
+      "id": "22"
+    },
+    {
+      "sport": "NBA",
+      "name": "Portland Trail Blazers",
+      "id": "22"
+    },
+    {
+      "sport": "NBA",
+      "name": "SA",
+      "id": "24"
+    },
+    {
+      "sport": "NBA",
+      "name": "SAC",
+      "id": "23"
+    },
+    {
+      "sport": "NBA",
+      "name": "Sacramento",
+      "id": "23"
+    },
+    {
+      "sport": "NBA",
+      "name": "Sacramento Kings",
+      "id": "23"
+    },
+    {
+      "sport": "NBA",
+      "name": "San Antonio",
+      "id": "24"
+    },
+    {
+      "sport": "NBA",
+      "name": "San Antonio Spurs",
+      "id": "24"
+    },
+    {
+      "sport": "NBA",
+      "name": "TOR",
+      "id": "28"
+    },
+    {
+      "sport": "NBA",
+      "name": "Toronto",
+      "id": "28"
+    },
+    {
+      "sport": "NBA",
+      "name": "Toronto Raptors",
+      "id": "28"
+    },
+    {
+      "sport": "NBA",
+      "name": "UTAH",
+      "id": "26"
+    },
+    {
+      "sport": "NBA",
+      "name": "Utah Jazz",
+      "id": "26"
+    },
+    {
+      "sport": "NBA",
+      "name": "Washington",
+      "id": "27"
+    },
+    {
+      "sport": "NBA",
+      "name": "Washington Wizards",
+      "id": "27"
+    },
+    {
+      "sport": "NBA",
+      "name": "WSH",
+      "id": "27"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "AAMU",
+      "id": "2010"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Abilene Christian",
+      "id": "2000"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Abilene Christian Wildcats",
+      "id": "2000"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Abilene Chrstn",
+      "id": "2000"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ACU",
+      "id": "2000"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "AFA",
+      "id": "2005"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "AIC",
+      "id": "2022"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Air Force",
+      "id": "2005"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Air Force Falcons",
+      "id": "2005"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "AKR",
+      "id": "2006"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Akron",
+      "id": "2006"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Akron Zips",
+      "id": "2006"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ALA",
+      "id": "333"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama",
+      "id": "333"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama A&M",
+      "id": "2010"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama A&M Bulldogs",
+      "id": "2010"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama Crimson Tide",
+      "id": "333"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama St",
+      "id": "2011"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama State",
+      "id": "2011"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alabama State Hornets",
+      "id": "2011"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ALB",
+      "id": "399"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ALCN",
+      "id": "2016"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alcorn St",
+      "id": "2016"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alcorn State",
+      "id": "2016"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Alcorn State Braves",
+      "id": "2016"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ALST",
+      "id": "2011"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "American Int'l",
+      "id": "2022"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "American International",
+      "id": "2022"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "American International Yellow Jackets",
+      "id": "2022"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "APP",
+      "id": "2026"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "App State",
+      "id": "2026"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "App State Mountaineers",
+      "id": "2026"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Appalachian State Mountaineers",
+      "id": "2026"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "APSU",
+      "id": "2046"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "AR-Pine Bluff",
+      "id": "2029"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ARBA",
+      "id": "124386"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ARIZ",
+      "id": "12"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arizona",
+      "id": "12"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arizona St",
+      "id": "9"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arizona State",
+      "id": "9"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arizona State Sun Devils",
+      "id": "9"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arizona Wildcats",
+      "id": "12"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ARK",
+      "id": "8"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ark Baptist",
+      "id": "124386"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas",
+      "id": "8"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas Baptist",
+      "id": "124386"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas Baptist Buffaloes",
+      "id": "124386"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas Razorbacks",
+      "id": "8"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas St",
+      "id": "2032"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas State",
+      "id": "2032"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas State Red Wolves",
+      "id": "2032"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas-Pine Bluff",
+      "id": "2029"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Arkansas-Pine Bluff Golden Lions",
+      "id": "2029"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ARMY",
+      "id": "349"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Army Black Knights",
+      "id": "349"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ARST",
+      "id": "2032"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ASU",
+      "id": "9"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "AUB",
+      "id": "2"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Auburn",
+      "id": "2"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Auburn Tigers",
+      "id": "2"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Austin Peay",
+      "id": "2046"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Austin Peay Governors",
+      "id": "2046"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BALL",
+      "id": "2050"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ball State",
+      "id": "2050"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ball State Cardinals",
+      "id": "2050"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BAY",
+      "id": "239"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Baylor",
+      "id": "239"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Baylor Bears",
+      "id": "239"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BC",
+      "id": "103"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BCU",
+      "id": "2065"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bethune",
+      "id": "2065"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bethune-Cookman",
+      "id": "2065"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bethune-Cookman Wildcats",
+      "id": "2065"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BGSU",
+      "id": "189"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BOIS",
+      "id": "68"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Boise St",
+      "id": "68"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Boise State",
+      "id": "68"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Boise State Broncos",
+      "id": "68"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Boston College",
+      "id": "103"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Boston College Eagles",
+      "id": "103"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bowling Green",
+      "id": "189"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bowling Green Falcons",
+      "id": "189"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Brown",
+      "id": "225"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Brown Bears",
+      "id": "225"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BRWN",
+      "id": "225"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BRY",
+      "id": "2803"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bryant",
+      "id": "2803"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bryant Bulldogs",
+      "id": "2803"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BTLR",
+      "id": "2086"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BUCK",
+      "id": "2083"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bucknell",
+      "id": "2083"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bucknell Bison",
+      "id": "2083"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BUFF",
+      "id": "2084"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Buffalo",
+      "id": "2084"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Buffalo Bulls",
+      "id": "2084"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Butler",
+      "id": "2086"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Butler Bulldogs",
+      "id": "2086"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BYU",
+      "id": "252"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "BYU Cougars",
+      "id": "252"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "C Arkansas",
+      "id": "2110"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "C Connecticut",
+      "id": "2115"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "C Michigan",
+      "id": "2117"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CAL",
+      "id": "25"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cal Poly",
+      "id": "13"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cal Poly Mustangs",
+      "id": "13"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "California",
+      "id": "25"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "California Golden Bears",
+      "id": "25"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CAM",
+      "id": "2097"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Campbell",
+      "id": "2097"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Campbell Fighting Camels",
+      "id": "2097"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CARK",
+      "id": "2110"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CCSU",
+      "id": "2115"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CCU",
+      "id": "324"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Central Arkansas",
+      "id": "2110"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Central Arkansas Bears",
+      "id": "2110"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Central Connecticut",
+      "id": "2115"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Central Connecticut Blue Devils",
+      "id": "2115"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Central Michigan",
+      "id": "2117"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Central Michigan Chippewas",
+      "id": "2117"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Charleston So",
+      "id": "2127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Charleston Southern",
+      "id": "2127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Charleston Southern Buccaneers",
+      "id": "2127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Charlotte",
+      "id": "2429"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Charlotte 49ers",
+      "id": "2429"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chattanooga",
+      "id": "236"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chattanooga Mocs",
+      "id": "236"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chicago St",
+      "id": "2130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chicago State",
+      "id": "2130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chicago State Cougars",
+      "id": "2130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CHSO",
+      "id": "2127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CHST",
+      "id": "2130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CIN",
+      "id": "2132"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cincinnati",
+      "id": "2132"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cincinnati Bearcats",
+      "id": "2132"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CIT",
+      "id": "2643"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CLEM",
+      "id": "228"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Clemson",
+      "id": "228"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Clemson Tigers",
+      "id": "228"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CLT",
+      "id": "2429"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CMU",
+      "id": "2117"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Coastal",
+      "id": "324"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Coastal Carolina",
+      "id": "324"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Coastal Carolina Chanticleers",
+      "id": "324"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "COLG",
+      "id": "2142"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colgate",
+      "id": "2142"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colgate Raiders",
+      "id": "2142"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "COLO",
+      "id": "38"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colorado",
+      "id": "38"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colorado Buffaloes",
+      "id": "38"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colorado St",
+      "id": "36"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colorado State",
+      "id": "36"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colorado State Rams",
+      "id": "36"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "COLU",
+      "id": "171"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Columbia",
+      "id": "171"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Columbia Lions",
+      "id": "171"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CONN",
+      "id": "41"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CONN Huskies",
+      "id": "41"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "COR",
+      "id": "172"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cornell",
+      "id": "172"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cornell Big Red",
+      "id": "172"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CP",
+      "id": "13"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "CSU",
+      "id": "36"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DART",
+      "id": "159"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Dartmouth",
+      "id": "159"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Dartmouth Big Green",
+      "id": "159"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DAV",
+      "id": "2166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Davidson",
+      "id": "2166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Davidson Wildcats",
+      "id": "2166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DAY",
+      "id": "2168"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Dayton",
+      "id": "2168"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Dayton Flyers",
+      "id": "2168"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DEL",
+      "id": "48"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Delaware",
+      "id": "48"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Delaware Blue Hens",
+      "id": "48"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Delaware St",
+      "id": "2169"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Delaware State",
+      "id": "2169"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Delaware State Hornets",
+      "id": "2169"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Drake",
+      "id": "2181"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Drake Bulldogs",
+      "id": "2181"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DRKE",
+      "id": "2181"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DSU",
+      "id": "2169"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DUKE",
+      "id": "150"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Duke Blue Devils",
+      "id": "150"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "DUQ",
+      "id": "2184"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Duquesne",
+      "id": "2184"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Duquesne Dukes",
+      "id": "2184"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "E Illinois",
+      "id": "2197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "E Kentucky",
+      "id": "2198"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "E Michigan",
+      "id": "2199"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "E Washington",
+      "id": "331"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "East Carolina",
+      "id": "151"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "East Carolina Pirates",
+      "id": "151"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "East Tennessee State",
+      "id": "2193"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "East Tennessee State Buccaneers",
+      "id": "2193"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "East Texas A&M",
+      "id": "2837"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "East Texas A&M Lions",
+      "id": "2837"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Illinois",
+      "id": "2197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Illinois Panthers",
+      "id": "2197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Kentucky",
+      "id": "2198"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Kentucky Colonels",
+      "id": "2198"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Michigan",
+      "id": "2199"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Michigan Eagles",
+      "id": "2199"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Washington",
+      "id": "331"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eastern Washington Eagles",
+      "id": "331"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ECU",
+      "id": "151"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "EIU",
+      "id": "2197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "EKU",
+      "id": "2198"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ELON",
+      "id": "2210"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Elon Phoenix",
+      "id": "2210"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "EMU",
+      "id": "2199"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ETAM",
+      "id": "2837"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ETSU",
+      "id": "2193"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "EWU",
+      "id": "331"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FAMU",
+      "id": "50"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FAU",
+      "id": "2226"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FIU",
+      "id": "2229"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FLA",
+      "id": "57"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida",
+      "id": "57"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida A&M",
+      "id": "50"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida A&M Rattlers",
+      "id": "50"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida Atlantic",
+      "id": "2226"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida Atlantic Owls",
+      "id": "2226"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida Gators",
+      "id": "57"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida International",
+      "id": "2229"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida International Panthers",
+      "id": "2229"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida St",
+      "id": "52"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida State",
+      "id": "52"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Florida State Seminoles",
+      "id": "52"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FOR",
+      "id": "2230"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fordham",
+      "id": "2230"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fordham Rams",
+      "id": "2230"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fort Valley St",
+      "id": "2232"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fort Valley State",
+      "id": "2232"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fort Valley State Wildcats",
+      "id": "2232"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FP",
+      "id": "112334"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Franklin Pierce",
+      "id": "112334"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Franklin Pierce Ravens",
+      "id": "112334"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FRES",
+      "id": "278"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fresno St",
+      "id": "278"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fresno State",
+      "id": "278"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fresno State Bulldogs",
+      "id": "278"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FSU",
+      "id": "52"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FUR",
+      "id": "231"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Furman",
+      "id": "231"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Furman Paladins",
+      "id": "231"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "FVS",
+      "id": "2232"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GA Southern",
+      "id": "290"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Gardner-Webb",
+      "id": "2241"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Gardner-Webb Runnin' Bulldogs",
+      "id": "2241"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GASO",
+      "id": "290"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GAST",
+      "id": "2247"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgetown",
+      "id": "46"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgetown Hoyas",
+      "id": "46"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia",
+      "id": "61"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia Bulldogs",
+      "id": "61"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia Southern",
+      "id": "290"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia Southern Eagles",
+      "id": "290"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia St",
+      "id": "2247"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia State",
+      "id": "2247"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia State Panthers",
+      "id": "2247"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia Tech",
+      "id": "59"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Georgia Tech Yellow Jackets",
+      "id": "59"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GRAM",
+      "id": "2755"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Grambling",
+      "id": "2755"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Grambling Tigers",
+      "id": "2755"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GT",
+      "id": "59"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GTWN",
+      "id": "46"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "GWEB",
+      "id": "2241"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HAMP",
+      "id": "2261"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hampton",
+      "id": "2261"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hampton Pirates",
+      "id": "2261"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HARV",
+      "id": "108"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Harvard",
+      "id": "108"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Harvard Crimson",
+      "id": "108"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HAW",
+      "id": "62"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hawai'i",
+      "id": "62"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hawai'i Rainbow Warriors",
+      "id": "62"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HC",
+      "id": "107"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HCU",
+      "id": "2277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Holy Cross",
+      "id": "107"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Holy Cross Crusaders",
+      "id": "107"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HOU",
+      "id": "248"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hou Christian",
+      "id": "2277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Houston",
+      "id": "248"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Houston Baptist Huskies",
+      "id": "2277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Houston Christian",
+      "id": "2277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Houston Christian Huskies",
+      "id": "2277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Houston Cougars",
+      "id": "248"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "HOW",
+      "id": "47"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Howard",
+      "id": "47"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Howard Bison",
+      "id": "47"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Idaho",
+      "id": "70"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Idaho St",
+      "id": "304"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Idaho State",
+      "id": "304"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Idaho State Bengals",
+      "id": "304"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Idaho Vandals",
+      "id": "70"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "IDHO",
+      "id": "70"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "IDST",
+      "id": "304"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ILL",
+      "id": "356"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Illinois",
+      "id": "356"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Illinois Fighting Illini",
+      "id": "356"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Illinois St",
+      "id": "2287"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Illinois State",
+      "id": "2287"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Illinois State Redbirds",
+      "id": "2287"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ILST",
+      "id": "2287"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Incarnate Word",
+      "id": "2916"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Incarnate Word Cardinals",
+      "id": "2916"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Indiana",
+      "id": "84"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Indiana Hoosiers",
+      "id": "84"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Indiana St",
+      "id": "282"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Indiana State",
+      "id": "282"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Indiana State Sycamores",
+      "id": "282"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "INST",
+      "id": "282"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "IOWA",
+      "id": "2294"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Iowa Hawkeyes",
+      "id": "2294"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Iowa State",
+      "id": "66"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Iowa State Cyclones",
+      "id": "66"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ISU",
+      "id": "66"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "IU",
+      "id": "84"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jackson St",
+      "id": "2296"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jackson State",
+      "id": "2296"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jackson State Tigers",
+      "id": "2296"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jacksonville State",
+      "id": "55"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jacksonville State Gamecocks",
+      "id": "55"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "James Madison",
+      "id": "256"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "James Madison Dukes",
+      "id": "256"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jax State",
+      "id": "55"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "JKST",
+      "id": "2296"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "JMU",
+      "id": "256"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "JXST",
+      "id": "55"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kansas",
+      "id": "2305"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kansas Jayhawks",
+      "id": "2305"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kansas St",
+      "id": "2306"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kansas State",
+      "id": "2306"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kansas State Wildcats",
+      "id": "2306"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "KENN",
+      "id": "338"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kennesaw St",
+      "id": "338"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kennesaw State",
+      "id": "338"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kennesaw State Owls",
+      "id": "338"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "KENT",
+      "id": "2309"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kent State",
+      "id": "2309"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kent State Golden Flashes",
+      "id": "2309"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kentucky",
+      "id": "96"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Kentucky Wildcats",
+      "id": "96"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "KSU",
+      "id": "2306"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "KU",
+      "id": "2305"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LAF",
+      "id": "322"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lafayette",
+      "id": "322"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lafayette Leopards",
+      "id": "322"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LAM",
+      "id": "2320"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lamar",
+      "id": "2320"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lamar Cardinals",
+      "id": "2320"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LEH",
+      "id": "2329"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lehigh",
+      "id": "2329"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lehigh Mountain Hawks",
+      "id": "2329"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LIB",
+      "id": "2335"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Liberty",
+      "id": "2335"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Liberty Flames",
+      "id": "2335"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LIN",
+      "id": "2815"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lindenwood",
+      "id": "2815"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lindenwood Lions",
+      "id": "2815"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LIU",
+      "id": "2341"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LIU Sharks",
+      "id": "2341"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Long Island",
+      "id": "2341"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Long Island University",
+      "id": "2341"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Long Island University Sharks",
+      "id": "2341"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LOU",
+      "id": "97"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Louisiana",
+      "id": "309"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Louisiana Ragin' Cajuns",
+      "id": "309"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Louisiana Tech",
+      "id": "2348"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Louisiana Tech Bulldogs",
+      "id": "2348"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Louisville",
+      "id": "97"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Louisville Cardinals",
+      "id": "97"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LSU",
+      "id": "99"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LSU Tigers",
+      "id": "99"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "LT",
+      "id": "2348"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "M-OH",
+      "id": "193"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Maine",
+      "id": "311"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Maine Black Bears",
+      "id": "311"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Marist",
+      "id": "2368"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Marist Red Foxes",
+      "id": "2368"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Marshall",
+      "id": "276"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Marshall Thundering Herd",
+      "id": "276"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Maryland",
+      "id": "120"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Maryland Terrapins",
+      "id": "120"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MASS",
+      "id": "113"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Massachusetts",
+      "id": "113"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Massachusetts Minutemen",
+      "id": "113"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MCN",
+      "id": "2377"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "McNeese",
+      "id": "2377"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "McNeese Cowboys",
+      "id": "2377"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "McNeese State Cowboys",
+      "id": "2377"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MD",
+      "id": "120"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ME",
+      "id": "311"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MEM",
+      "id": "235"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Memphis",
+      "id": "235"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Memphis Tigers",
+      "id": "235"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MER",
+      "id": "2382"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MERC",
+      "id": "2385"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mercer",
+      "id": "2382"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mercer Bears",
+      "id": "2382"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mercyhurst",
+      "id": "2385"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mercyhurst Lakers",
+      "id": "2385"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Merrimack",
+      "id": "2771"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Merrimack Warriors",
+      "id": "2771"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MIA",
+      "id": "2390"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Miami",
+      "id": "2390"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Miami (OH)",
+      "id": "193"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Miami (OH) RedHawks",
+      "id": "193"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Miami Hurricanes",
+      "id": "2390"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MICH",
+      "id": "130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Michigan",
+      "id": "130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Michigan St",
+      "id": "127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Michigan State",
+      "id": "127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Michigan State Spartans",
+      "id": "127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Michigan Wolverines",
+      "id": "130"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Middle Tennessee",
+      "id": "2393"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Middle Tennessee Blue Raiders",
+      "id": "2393"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MINN",
+      "id": "135"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Minnesota",
+      "id": "135"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Minnesota Golden Gophers",
+      "id": "135"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MISS",
+      "id": "145"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Miss Valley St",
+      "id": "2400"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mississippi St",
+      "id": "344"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mississippi State",
+      "id": "344"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mississippi State Bulldogs",
+      "id": "344"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mississippi Valley State",
+      "id": "2400"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mississippi Valley State Delta Devils",
+      "id": "2400"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Missouri",
+      "id": "142"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Missouri St",
+      "id": "2623"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Missouri State",
+      "id": "2623"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Missouri State Bears",
+      "id": "2623"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Missouri Tigers",
+      "id": "142"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MIZ",
+      "id": "142"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MONM",
+      "id": "2405"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Monmouth",
+      "id": "2405"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Monmouth Hawks",
+      "id": "2405"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MONT",
+      "id": "149"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Montana",
+      "id": "149"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Montana Grizzlies",
+      "id": "149"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Montana St",
+      "id": "147"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Montana State",
+      "id": "147"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Montana State Bobcats",
+      "id": "147"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MORE",
+      "id": "2413"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Morehead St",
+      "id": "2413"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Morehead State",
+      "id": "2413"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Morehead State Eagles",
+      "id": "2413"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MORG",
+      "id": "2415"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Morgan St",
+      "id": "2415"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Morgan State",
+      "id": "2415"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Morgan State Bears",
+      "id": "2415"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MOST",
+      "id": "2623"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MRMK",
+      "id": "2771"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MRSH",
+      "id": "276"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MRST",
+      "id": "2368"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MSST",
+      "id": "344"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MSU",
+      "id": "127"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MTST",
+      "id": "147"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MTSU",
+      "id": "2393"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MUR",
+      "id": "93"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Murray St",
+      "id": "93"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Murray State",
+      "id": "93"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Murray State Racers",
+      "id": "93"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "MVSU",
+      "id": "2400"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "N Arizona",
+      "id": "2464"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "N Colorado",
+      "id": "2458"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "N Dakota St",
+      "id": "2449"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "N Illinois",
+      "id": "2459"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "N'Western St",
+      "id": "2466"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NAU",
+      "id": "2464"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NAVY",
+      "id": "2426"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Navy Midshipmen",
+      "id": "2426"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NC A&T",
+      "id": "2448"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NC Central",
+      "id": "2428"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NC State",
+      "id": "152"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NC State Wolfpack",
+      "id": "152"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NCAT",
+      "id": "2448"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NCCU",
+      "id": "2428"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NCSU",
+      "id": "152"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ND",
+      "id": "87"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NDSU",
+      "id": "2449"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NE State",
+      "id": "196"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NEB",
+      "id": "158"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nebraska",
+      "id": "158"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nebraska Cornhuskers",
+      "id": "158"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NEOS",
+      "id": "196"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NEV",
+      "id": "2440"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nevada",
+      "id": "2440"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nevada Wolf Pack",
+      "id": "2440"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Hampshire",
+      "id": "160"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Hampshire Wildcats",
+      "id": "160"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Haven",
+      "id": "2441"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Haven Chargers",
+      "id": "2441"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Mexico",
+      "id": "167"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Mexico Lobos",
+      "id": "167"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Mexico St",
+      "id": "166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Mexico State",
+      "id": "166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "New Mexico State Aggies",
+      "id": "166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NH",
+      "id": "2441"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NICH",
+      "id": "2447"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nicholls",
+      "id": "2447"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nicholls Colonels",
+      "id": "2447"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NIU",
+      "id": "2459"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NIU Huskies",
+      "id": "2459"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NMSU",
+      "id": "166"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NORF",
+      "id": "2450"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Norfolk St",
+      "id": "2450"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Norfolk State",
+      "id": "2450"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Norfolk State Spartans",
+      "id": "2450"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Alabama",
+      "id": "2453"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Alabama Lions",
+      "id": "2453"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Carolina",
+      "id": "153"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Carolina A&T",
+      "id": "2448"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Carolina A&T Aggies",
+      "id": "2448"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Carolina Central",
+      "id": "2428"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Carolina Central Eagles",
+      "id": "2428"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Carolina Tar Heels",
+      "id": "153"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Dakota",
+      "id": "155"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Dakota Fighting Hawks",
+      "id": "155"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Dakota State",
+      "id": "2449"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Dakota State Bison",
+      "id": "2449"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Texas",
+      "id": "249"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "North Texas Mean Green",
+      "id": "249"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northeastern State",
+      "id": "196"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northeastern State RiverHawks",
+      "id": "196"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Arizona",
+      "id": "2464"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Arizona Lumberjacks",
+      "id": "2464"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Colorado",
+      "id": "2458"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Colorado Bears",
+      "id": "2458"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Illinois",
+      "id": "2459"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Illinois Huskies",
+      "id": "2459"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Iowa",
+      "id": "2460"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northern Iowa Panthers",
+      "id": "2460"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northwestern",
+      "id": "77"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northwestern State",
+      "id": "2466"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northwestern State Demons",
+      "id": "2466"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Northwestern Wildcats",
+      "id": "77"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Notre Dame",
+      "id": "87"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Notre Dame Fighting Irish",
+      "id": "87"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NU",
+      "id": "77"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "NWST",
+      "id": "2466"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ODU",
+      "id": "295"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "OHIO",
+      "id": "195"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ohio Bobcats",
+      "id": "195"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ohio State",
+      "id": "194"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ohio State Buckeyes",
+      "id": "194"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "OK State",
+      "id": "197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oklahoma",
+      "id": "201"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oklahoma Sooners",
+      "id": "201"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oklahoma St",
+      "id": "197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oklahoma State",
+      "id": "197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oklahoma State Cowboys",
+      "id": "197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "OKST",
+      "id": "197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Old Dominion",
+      "id": "295"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Old Dominion Monarchs",
+      "id": "295"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ole Miss",
+      "id": "145"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ole Miss Rebels",
+      "id": "145"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ORE",
+      "id": "2483"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oregon",
+      "id": "2483"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oregon Ducks",
+      "id": "2483"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oregon St",
+      "id": "204"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oregon State",
+      "id": "204"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Oregon State Beavers",
+      "id": "204"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ORST",
+      "id": "204"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "OSU",
+      "id": "194"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "OSU Cowboys",
+      "id": "197"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "OU",
+      "id": "201"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PENN",
+      "id": "219"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Penn State",
+      "id": "213"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Penn State Nittany Lions",
+      "id": "213"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Pennsylvania",
+      "id": "219"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Pennsylvania Quakers",
+      "id": "219"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PITT",
+      "id": "221"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Pittsburgh",
+      "id": "221"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Pittsburgh Panthers",
+      "id": "221"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Portland St",
+      "id": "2502"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Portland State",
+      "id": "2502"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Portland State Vikings",
+      "id": "2502"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Prairie View",
+      "id": "2504"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Prairie View A&M",
+      "id": "2504"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Prairie View A&M Panthers",
+      "id": "2504"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PRES",
+      "id": "2506"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Presbyterian",
+      "id": "2506"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Presbyterian Blue Hose",
+      "id": "2506"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PRIN",
+      "id": "163"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Princeton",
+      "id": "163"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Princeton Tigers",
+      "id": "163"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PRST",
+      "id": "2502"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PSU",
+      "id": "213"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PUR",
+      "id": "2509"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Purdue",
+      "id": "2509"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Purdue Boilermakers",
+      "id": "2509"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "PV",
+      "id": "2504"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RGV",
+      "id": "292"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rhode Island",
+      "id": "227"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rhode Island Rams",
+      "id": "227"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RICE",
+      "id": "242"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rice Owls",
+      "id": "242"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RICH",
+      "id": "257"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Richmond",
+      "id": "257"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Richmond Spiders",
+      "id": "257"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RIO",
+      "id": "131239"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rio Grande",
+      "id": "131239"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rio Grande Red Storm",
+      "id": "131239"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RMU",
+      "id": "2523"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Robert Morris",
+      "id": "2523"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Robert Morris Colonials",
+      "id": "2523"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RUTG",
+      "id": "164"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rutgers",
+      "id": "164"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rutgers Scarlet Knights",
+      "id": "164"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "S Dakota St",
+      "id": "2571"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "S Illinois",
+      "id": "79"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SAC",
+      "id": "16"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sacramento St",
+      "id": "16"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sacramento State",
+      "id": "16"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sacramento State Hornets",
+      "id": "16"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sacred Heart",
+      "id": "2529"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sacred Heart Pioneers",
+      "id": "2529"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SAM",
+      "id": "2535"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sam Houston",
+      "id": "2534"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sam Houston Bearkats",
+      "id": "2534"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sam Houston State Bearkats",
+      "id": "2534"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Samford",
+      "id": "2535"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Samford Bulldogs",
+      "id": "2535"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San Diego",
+      "id": "301"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San Diego St",
+      "id": "21"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San Diego State",
+      "id": "21"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San Diego State Aztecs",
+      "id": "21"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San Diego Toreros",
+      "id": "301"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San José St",
+      "id": "23"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San José State",
+      "id": "23"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "San José State Spartans",
+      "id": "23"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SC",
+      "id": "2579"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SC State",
+      "id": "2569"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SCST",
+      "id": "2569"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SDAK",
+      "id": "233"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SDST",
+      "id": "2571"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SDSU",
+      "id": "21"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SE Louisiana",
+      "id": "2545"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SE Louisiana Lions",
+      "id": "2545"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SE Missouri",
+      "id": "2546"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SELA",
+      "id": "2545"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SEMO",
+      "id": "2546"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SF Austin",
+      "id": "2617"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SFA",
+      "id": "2617"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SHSU",
+      "id": "2534"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SHU",
+      "id": "2529"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SIU",
+      "id": "79"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SJSU",
+      "id": "23"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SMU",
+      "id": "2567"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SMU Mustangs",
+      "id": "2567"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SOU",
+      "id": "2582"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Alabama",
+      "id": "6"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Alabama Jaguars",
+      "id": "6"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Carolina",
+      "id": "2579"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Carolina Gamecocks",
+      "id": "2579"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Carolina State",
+      "id": "2569"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Carolina State Bulldogs",
+      "id": "2569"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Dakota",
+      "id": "233"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Dakota Coyotes",
+      "id": "233"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Dakota State",
+      "id": "2571"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Dakota State Jackrabbits",
+      "id": "2571"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Florida",
+      "id": "58"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "South Florida Bulls",
+      "id": "58"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southeast Missouri State",
+      "id": "2546"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southeast Missouri State Redhawks",
+      "id": "2546"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern",
+      "id": "2582"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Illinois",
+      "id": "79"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Illinois Salukis",
+      "id": "79"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Jaguars",
+      "id": "2582"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Miss",
+      "id": "2572"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Miss Golden Eagles",
+      "id": "2572"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Mississippi Golden Eagles",
+      "id": "2572"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Utah",
+      "id": "253"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Southern Utah Thunderbirds",
+      "id": "253"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "St. Thomas",
+      "id": "2900"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "St. Thomas Tommies",
+      "id": "2900"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "STAN",
+      "id": "24"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stanford",
+      "id": "24"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stanford Cardinal",
+      "id": "24"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "STBK",
+      "id": "2619"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stephen F. Austin",
+      "id": "2617"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stephen F. Austin Lumberjacks",
+      "id": "2617"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "STET",
+      "id": "56"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stetson",
+      "id": "56"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stetson Hatters",
+      "id": "56"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "STMN",
+      "id": "2900"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "STO",
+      "id": "284"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stonehill",
+      "id": "284"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stonehill Skyhawks",
+      "id": "284"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stony Brook",
+      "id": "2619"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Stony Brook Seawolves",
+      "id": "2619"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SUU",
+      "id": "253"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "SYR",
+      "id": "183"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Syracuse",
+      "id": "183"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Syracuse Orange",
+      "id": "183"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TA&M",
+      "id": "245"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TAR",
+      "id": "2627"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tarleton St",
+      "id": "2627"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tarleton State",
+      "id": "2627"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tarleton State Texans",
+      "id": "2627"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TCU",
+      "id": "2628"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TCU Horned Frogs",
+      "id": "2628"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TEM",
+      "id": "218"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Temple",
+      "id": "218"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Temple Owls",
+      "id": "218"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TENN",
+      "id": "2633"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee",
+      "id": "2633"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee St",
+      "id": "2634"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee State",
+      "id": "2634"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee State Tigers",
+      "id": "2634"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee Tech",
+      "id": "2635"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee Tech Golden Eagles",
+      "id": "2635"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tennessee Volunteers",
+      "id": "2633"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TEX",
+      "id": "251"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas",
+      "id": "251"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas A&M",
+      "id": "245"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas A&M Aggies",
+      "id": "245"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas A&M University",
+      "id": "245"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas AM",
+      "id": "245"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas AM Aggies",
+      "id": "245"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas Longhorns",
+      "id": "251"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas Southern",
+      "id": "2640"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas Southern Tigers",
+      "id": "2640"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas St",
+      "id": "326"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas State",
+      "id": "326"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas State Bobcats",
+      "id": "326"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas Tech",
+      "id": "2641"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texas Tech Red Raiders",
+      "id": "2641"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "The Citadel",
+      "id": "2643"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "The Citadel Bulldogs",
+      "id": "2643"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TLSA",
+      "id": "202"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TNST",
+      "id": "2634"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TNTC",
+      "id": "2635"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TOL",
+      "id": "2649"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Toledo",
+      "id": "2649"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Toledo Rockets",
+      "id": "2649"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TOW",
+      "id": "119"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Towson",
+      "id": "119"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Towson Tigers",
+      "id": "119"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TROY",
+      "id": "2653"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Troy Trojans",
+      "id": "2653"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TTU",
+      "id": "2641"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tulane",
+      "id": "2655"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tulane Green Wave",
+      "id": "2655"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TULN",
+      "id": "2655"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tulsa",
+      "id": "202"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tulsa Golden Hurricane",
+      "id": "202"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TXSO",
+      "id": "2640"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "TXST",
+      "id": "326"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UAB",
+      "id": "5"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UAB Blazers",
+      "id": "5"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UAlbany",
+      "id": "399"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UAlbany Great Danes",
+      "id": "399"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UAPB",
+      "id": "2029"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UC Davis",
+      "id": "302"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UC Davis Aggies",
+      "id": "302"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UCD",
+      "id": "302"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UCF",
+      "id": "2116"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UCF Knights",
+      "id": "2116"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UCLA",
+      "id": "26"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UCLA Bruins",
+      "id": "26"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UConn",
+      "id": "41"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UConn Huskies",
+      "id": "41"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UGA",
+      "id": "61"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UIW",
+      "id": "2916"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UK",
+      "id": "96"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UL",
+      "id": "309"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UL Monroe",
+      "id": "2433"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UL Monroe Warhawks",
+      "id": "2433"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "ULM",
+      "id": "2433"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UMass",
+      "id": "113"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UMass Minutemen",
+      "id": "113"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNA",
+      "id": "2453"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNC",
+      "id": "153"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNCO",
+      "id": "2458"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UND",
+      "id": "155"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNH",
+      "id": "160"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNI",
+      "id": "2460"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNLV",
+      "id": "2439"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNLV Rebels",
+      "id": "2439"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNM",
+      "id": "167"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UNT",
+      "id": "249"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "URI",
+      "id": "227"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USA",
+      "id": "6"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USC",
+      "id": "30"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USC Trojans",
+      "id": "30"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USD",
+      "id": "301"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USF",
+      "id": "58"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USM",
+      "id": "2572"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "USU",
+      "id": "328"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UT Martin",
+      "id": "2630"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UT Martin Skyhawks",
+      "id": "2630"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UT Rio Grande",
+      "id": "292"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UT Rio Grande Valley",
+      "id": "292"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UT Rio Grande Valley Vaqueros",
+      "id": "292"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTAH",
+      "id": "254"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Utah State",
+      "id": "328"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Utah State Aggies",
+      "id": "328"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Utah Tech",
+      "id": "3101"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Utah Tech Trailblazers",
+      "id": "3101"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Utah Utes",
+      "id": "254"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTC",
+      "id": "236"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTEP",
+      "id": "2638"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTEP Miners",
+      "id": "2638"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTM",
+      "id": "2630"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTSA",
+      "id": "2636"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTSA Roadrunners",
+      "id": "2636"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UTU",
+      "id": "3101"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UVA",
+      "id": "258"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UVAL",
+      "id": "2355"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "UWF",
+      "id": "110242"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VA Lynchburg",
+      "id": "2355"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VAL",
+      "id": "2674"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Valparaiso",
+      "id": "2674"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Valparaiso Beacons",
+      "id": "2674"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VAN",
+      "id": "238"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Vanderbilt",
+      "id": "238"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Vanderbilt Commodores",
+      "id": "238"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VILL",
+      "id": "222"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Villanova",
+      "id": "222"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Villanova Wildcats",
+      "id": "222"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Virginia",
+      "id": "258"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Virginia Cavaliers",
+      "id": "258"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Virginia Lynchburg",
+      "id": "2355"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Virginia Lynchburg Dragons",
+      "id": "2355"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Virginia Tech",
+      "id": "259"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Virginia Tech Hokies",
+      "id": "259"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VMI",
+      "id": "2678"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VMI Keydets",
+      "id": "2678"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "VT",
+      "id": "259"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "W Carolina",
+      "id": "2717"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "W Illinois",
+      "id": "2710"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "W Michigan",
+      "id": "2711"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "W&M",
+      "id": "2729"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WAG",
+      "id": "2681"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wagner",
+      "id": "2681"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wagner Seahawks",
+      "id": "2681"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WAKE",
+      "id": "154"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wake Forest",
+      "id": "154"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wake Forest Demon Deacons",
+      "id": "154"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WASH",
+      "id": "264"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Washington",
+      "id": "264"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Washington Huskies",
+      "id": "264"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Washington St",
+      "id": "265"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Washington State",
+      "id": "265"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Washington State Cougars",
+      "id": "265"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WCU",
+      "id": "2717"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WEB",
+      "id": "2692"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Weber St",
+      "id": "2692"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Weber State",
+      "id": "2692"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Weber State Wildcats",
+      "id": "2692"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WES",
+      "id": "2698"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "West Florida",
+      "id": "110242"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "West Florida Argonauts",
+      "id": "110242"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "West Georgia",
+      "id": "2698"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "West Georgia Wolves",
+      "id": "2698"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "West Virginia",
+      "id": "277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "West Virginia Mountaineers",
+      "id": "277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Carolina",
+      "id": "2717"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Carolina Catamounts",
+      "id": "2717"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Illinois",
+      "id": "2710"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Illinois Leathernecks",
+      "id": "2710"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Kentucky",
+      "id": "98"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Kentucky Hilltoppers",
+      "id": "98"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western KY",
+      "id": "98"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Michigan",
+      "id": "2711"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Western Michigan Broncos",
+      "id": "2711"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "William & Mary",
+      "id": "2729"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "William and Mary Tribe",
+      "id": "2729"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WIS",
+      "id": "275"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wisconsin",
+      "id": "275"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wisconsin Badgers",
+      "id": "275"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WIU",
+      "id": "2710"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WKU",
+      "id": "98"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WMU",
+      "id": "2711"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WOF",
+      "id": "2747"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wofford",
+      "id": "2747"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wofford Terriers",
+      "id": "2747"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WSU",
+      "id": "265"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WVU",
+      "id": "277"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "WYO",
+      "id": "2751"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wyoming",
+      "id": "2751"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wyoming Cowboys",
+      "id": "2751"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "YALE",
+      "id": "43"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Yale Bulldogs",
+      "id": "43"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Youngstown St",
+      "id": "2754"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Youngstown State",
+      "id": "2754"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Youngstown State Penguins",
+      "id": "2754"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "YSU",
+      "id": "2754"
+    },
+    {
+      "sport": "NFL",
+      "name": "ARI",
+      "id": "22"
+    },
+    {
+      "sport": "NFL",
+      "name": "Arizona",
+      "id": "22"
+    },
+    {
+      "sport": "NFL",
+      "name": "Arizona Cardinals",
+      "id": "22"
+    },
+    {
+      "sport": "NFL",
+      "name": "ATL",
+      "id": "1"
+    },
+    {
+      "sport": "NFL",
+      "name": "Atlanta",
+      "id": "1"
+    },
+    {
+      "sport": "NFL",
+      "name": "Atlanta Falcons",
+      "id": "1"
+    },
+    {
+      "sport": "NFL",
+      "name": "BAL",
+      "id": "33"
+    },
+    {
+      "sport": "NFL",
+      "name": "Baltimore",
+      "id": "33"
+    },
+    {
+      "sport": "NFL",
+      "name": "Baltimore Ravens",
+      "id": "33"
+    },
+    {
+      "sport": "NFL",
+      "name": "BUF",
+      "id": "2"
+    },
+    {
+      "sport": "NFL",
+      "name": "Buffalo",
+      "id": "2"
+    },
+    {
+      "sport": "NFL",
+      "name": "Buffalo Bills",
+      "id": "2"
+    },
+    {
+      "sport": "NFL",
+      "name": "CAR",
+      "id": "29"
+    },
+    {
+      "sport": "NFL",
+      "name": "Carolina",
+      "id": "29"
+    },
+    {
+      "sport": "NFL",
+      "name": "Carolina Panthers",
+      "id": "29"
+    },
+    {
+      "sport": "NFL",
+      "name": "CHI",
+      "id": "3"
+    },
+    {
+      "sport": "NFL",
+      "name": "Chicago",
+      "id": "3"
+    },
+    {
+      "sport": "NFL",
+      "name": "Chicago Bears",
+      "id": "3"
+    },
+    {
+      "sport": "NFL",
+      "name": "CIN",
+      "id": "4"
+    },
+    {
+      "sport": "NFL",
+      "name": "Cincinnati",
+      "id": "4"
+    },
+    {
+      "sport": "NFL",
+      "name": "Cincinnati Bengals",
+      "id": "4"
+    },
+    {
+      "sport": "NFL",
+      "name": "CLE",
+      "id": "5"
+    },
+    {
+      "sport": "NFL",
+      "name": "Cleveland",
+      "id": "5"
+    },
+    {
+      "sport": "NFL",
+      "name": "Cleveland Browns",
+      "id": "5"
+    },
+    {
+      "sport": "NFL",
+      "name": "DAL",
+      "id": "6"
+    },
+    {
+      "sport": "NFL",
+      "name": "Dallas",
+      "id": "6"
+    },
+    {
+      "sport": "NFL",
+      "name": "Dallas Cowboys",
+      "id": "6"
+    },
+    {
+      "sport": "NFL",
+      "name": "DEN",
+      "id": "7"
+    },
+    {
+      "sport": "NFL",
+      "name": "Denver",
+      "id": "7"
+    },
+    {
+      "sport": "NFL",
+      "name": "Denver Broncos",
+      "id": "7"
+    },
+    {
+      "sport": "NFL",
+      "name": "DET",
+      "id": "8"
+    },
+    {
+      "sport": "NFL",
+      "name": "Detroit",
+      "id": "8"
+    },
+    {
+      "sport": "NFL",
+      "name": "Detroit Lions",
+      "id": "8"
+    },
+    {
+      "sport": "NFL",
+      "name": "GB",
+      "id": "9"
+    },
+    {
+      "sport": "NFL",
+      "name": "Green Bay",
+      "id": "9"
+    },
+    {
+      "sport": "NFL",
+      "name": "Green Bay Packers",
+      "id": "9"
+    },
+    {
+      "sport": "NFL",
+      "name": "HOU",
+      "id": "34"
+    },
+    {
+      "sport": "NFL",
+      "name": "Houston",
+      "id": "34"
+    },
+    {
+      "sport": "NFL",
+      "name": "Houston Texans",
+      "id": "34"
+    },
+    {
+      "sport": "NFL",
+      "name": "IND",
+      "id": "11"
+    },
+    {
+      "sport": "NFL",
+      "name": "Indianapolis",
+      "id": "11"
+    },
+    {
+      "sport": "NFL",
+      "name": "Indianapolis Colts",
+      "id": "11"
+    },
+    {
+      "sport": "NFL",
+      "name": "Jacksonville",
+      "id": "30"
+    },
+    {
+      "sport": "NFL",
+      "name": "Jacksonville Jaguars",
+      "id": "30"
+    },
+    {
+      "sport": "NFL",
+      "name": "JAX",
+      "id": "30"
+    },
+    {
+      "sport": "NFL",
+      "name": "Kansas City",
+      "id": "12"
+    },
+    {
+      "sport": "NFL",
+      "name": "Kansas City Chiefs",
+      "id": "12"
+    },
+    {
+      "sport": "NFL",
+      "name": "KC",
+      "id": "12"
+    },
+    {
+      "sport": "NFL",
+      "name": "LAC",
+      "id": "24"
+    },
+    {
+      "sport": "NFL",
+      "name": "LAR",
+      "id": "14"
+    },
+    {
+      "sport": "NFL",
+      "name": "Las Vegas",
+      "id": "13"
+    },
+    {
+      "sport": "NFL",
+      "name": "Las Vegas Raiders",
+      "id": "13"
+    },
+    {
+      "sport": "NFL",
+      "name": "Los Angeles Chargers",
+      "id": "24"
+    },
+    {
+      "sport": "NFL",
+      "name": "Los Angeles Rams",
+      "id": "14"
+    },
+    {
+      "sport": "NFL",
+      "name": "LV",
+      "id": "13"
+    },
+    {
+      "sport": "NFL",
+      "name": "MIA",
+      "id": "15"
+    },
+    {
+      "sport": "NFL",
+      "name": "Miami",
+      "id": "15"
+    },
+    {
+      "sport": "NFL",
+      "name": "Miami Dolphins",
+      "id": "15"
+    },
+    {
+      "sport": "NFL",
+      "name": "MIN",
+      "id": "16"
+    },
+    {
+      "sport": "NFL",
+      "name": "Minnesota",
+      "id": "16"
+    },
+    {
+      "sport": "NFL",
+      "name": "Minnesota Vikings",
+      "id": "16"
+    },
+    {
+      "sport": "NFL",
+      "name": "NE",
+      "id": "17"
+    },
+    {
+      "sport": "NFL",
+      "name": "New England",
+      "id": "17"
+    },
+    {
+      "sport": "NFL",
+      "name": "New England Patriots",
+      "id": "17"
+    },
+    {
+      "sport": "NFL",
+      "name": "New Orleans",
+      "id": "18"
+    },
+    {
+      "sport": "NFL",
+      "name": "New Orleans Saints",
+      "id": "18"
+    },
+    {
+      "sport": "NFL",
+      "name": "New York Giants",
+      "id": "19"
+    },
+    {
+      "sport": "NFL",
+      "name": "New York Jets",
+      "id": "20"
+    },
+    {
+      "sport": "NFL",
+      "name": "NO",
+      "id": "18"
+    },
+    {
+      "sport": "NFL",
+      "name": "NYG",
+      "id": "19"
+    },
+    {
+      "sport": "NFL",
+      "name": "NYJ",
+      "id": "20"
+    },
+    {
+      "sport": "NFL",
+      "name": "PHI",
+      "id": "21"
+    },
+    {
+      "sport": "NFL",
+      "name": "Philadelphia",
+      "id": "21"
+    },
+    {
+      "sport": "NFL",
+      "name": "Philadelphia Eagles",
+      "id": "21"
+    },
+    {
+      "sport": "NFL",
+      "name": "PIT",
+      "id": "23"
+    },
+    {
+      "sport": "NFL",
+      "name": "Pittsburgh",
+      "id": "23"
+    },
+    {
+      "sport": "NFL",
+      "name": "Pittsburgh Steelers",
+      "id": "23"
+    },
+    {
+      "sport": "NFL",
+      "name": "San Francisco",
+      "id": "25"
+    },
+    {
+      "sport": "NFL",
+      "name": "San Francisco 49ers",
+      "id": "25"
+    },
+    {
+      "sport": "NFL",
+      "name": "SEA",
+      "id": "26"
+    },
+    {
+      "sport": "NFL",
+      "name": "Seattle",
+      "id": "26"
+    },
+    {
+      "sport": "NFL",
+      "name": "Seattle Seahawks",
+      "id": "26"
+    },
+    {
+      "sport": "NFL",
+      "name": "SF",
+      "id": "25"
+    },
+    {
+      "sport": "NFL",
+      "name": "Tampa Bay",
+      "id": "27"
+    },
+    {
+      "sport": "NFL",
+      "name": "Tampa Bay Buccaneers",
+      "id": "27"
+    },
+    {
+      "sport": "NFL",
+      "name": "TB",
+      "id": "27"
+    },
+    {
+      "sport": "NFL",
+      "name": "TEN",
+      "id": "10"
+    },
+    {
+      "sport": "NFL",
+      "name": "Tennessee",
+      "id": "10"
+    },
+    {
+      "sport": "NFL",
+      "name": "Tennessee Titans",
+      "id": "10"
+    },
+    {
+      "sport": "NFL",
+      "name": "Washington",
+      "id": "28"
+    },
+    {
+      "sport": "NFL",
+      "name": "Washington Commanders",
+      "id": "28"
+    },
+    {
+      "sport": "NFL",
+      "name": "WSH",
+      "id": "28"
+    },
+    {
+      "sport": "NHL",
+      "name": "ANA",
+      "id": "25"
+    },
+    {
+      "sport": "NHL",
+      "name": "Anaheim",
+      "id": "25"
+    },
+    {
+      "sport": "NHL",
+      "name": "Anaheim Ducks",
+      "id": "25"
+    },
+    {
+      "sport": "NHL",
+      "name": "Blue Jackets",
+      "id": "29"
+    },
+    {
+      "sport": "NHL",
+      "name": "BOS",
+      "id": "1"
+    },
+    {
+      "sport": "NHL",
+      "name": "Boston",
+      "id": "1"
+    },
+    {
+      "sport": "NHL",
+      "name": "Boston Bruins",
+      "id": "1"
+    },
+    {
+      "sport": "NHL",
+      "name": "BUF",
+      "id": "2"
+    },
+    {
+      "sport": "NHL",
+      "name": "Buffalo",
+      "id": "2"
+    },
+    {
+      "sport": "NHL",
+      "name": "Buffalo Sabres",
+      "id": "2"
+    },
+    {
+      "sport": "NHL",
+      "name": "Calgary",
+      "id": "3"
+    },
+    {
+      "sport": "NHL",
+      "name": "Calgary Flames",
+      "id": "3"
+    },
+    {
+      "sport": "NHL",
+      "name": "CAR",
+      "id": "7"
+    },
+    {
+      "sport": "NHL",
+      "name": "Carolina",
+      "id": "7"
+    },
+    {
+      "sport": "NHL",
+      "name": "Carolina Hurricanes",
+      "id": "7"
+    },
+    {
+      "sport": "NHL",
+      "name": "CBJ",
+      "id": "29"
+    },
+    {
+      "sport": "NHL",
+      "name": "CGY",
+      "id": "3"
+    },
+    {
+      "sport": "NHL",
+      "name": "CHI",
+      "id": "4"
+    },
+    {
+      "sport": "NHL",
+      "name": "Chicago",
+      "id": "4"
+    },
+    {
+      "sport": "NHL",
+      "name": "Chicago Blackhawks",
+      "id": "4"
+    },
+    {
+      "sport": "NHL",
+      "name": "COL",
+      "id": "17"
+    },
+    {
+      "sport": "NHL",
+      "name": "Colorado",
+      "id": "17"
+    },
+    {
+      "sport": "NHL",
+      "name": "Colorado Avalanche",
+      "id": "17"
+    },
+    {
+      "sport": "NHL",
+      "name": "Columbus",
+      "id": "29"
+    },
+    {
+      "sport": "NHL",
+      "name": "Columbus Blue Jackets",
+      "id": "29"
+    },
+    {
+      "sport": "NHL",
+      "name": "DAL",
+      "id": "9"
+    },
+    {
+      "sport": "NHL",
+      "name": "Dallas",
+      "id": "9"
+    },
+    {
+      "sport": "NHL",
+      "name": "Dallas Stars",
+      "id": "9"
+    },
+    {
+      "sport": "NHL",
+      "name": "DET",
+      "id": "5"
+    },
+    {
+      "sport": "NHL",
+      "name": "Detroit",
+      "id": "5"
+    },
+    {
+      "sport": "NHL",
+      "name": "Detroit Red Wings",
+      "id": "5"
+    },
+    {
+      "sport": "NHL",
+      "name": "EDM",
+      "id": "6"
+    },
+    {
+      "sport": "NHL",
+      "name": "Edmonton",
+      "id": "6"
+    },
+    {
+      "sport": "NHL",
+      "name": "Edmonton Oilers",
+      "id": "6"
+    },
+    {
+      "sport": "NHL",
+      "name": "FLA",
+      "id": "26"
+    },
+    {
+      "sport": "NHL",
+      "name": "Florida",
+      "id": "26"
+    },
+    {
+      "sport": "NHL",
+      "name": "Florida Panthers",
+      "id": "26"
+    },
+    {
+      "sport": "NHL",
+      "name": "Golden Knights",
+      "id": "37"
+    },
+    {
+      "sport": "NHL",
+      "name": "LA",
+      "id": "8"
+    },
+    {
+      "sport": "NHL",
+      "name": "LAK",
+      "id": "8"
+    },
+    {
+      "sport": "NHL",
+      "name": "Los Angeles",
+      "id": "8"
+    },
+    {
+      "sport": "NHL",
+      "name": "Los Angeles Kings",
+      "id": "8"
+    },
+    {
+      "sport": "NHL",
+      "name": "Maple Leafs",
+      "id": "21"
+    },
+    {
+      "sport": "NHL",
+      "name": "MIN",
+      "id": "30"
+    },
+    {
+      "sport": "NHL",
+      "name": "Minnesota",
+      "id": "30"
+    },
+    {
+      "sport": "NHL",
+      "name": "Minnesota Wild",
+      "id": "30"
+    },
+    {
+      "sport": "NHL",
+      "name": "Montreal",
+      "id": "10"
+    },
+    {
+      "sport": "NHL",
+      "name": "Montreal Canadiens",
+      "id": "10"
+    },
+    {
+      "sport": "NHL",
+      "name": "MTL",
+      "id": "10"
+    },
+    {
+      "sport": "NHL",
+      "name": "Nashville",
+      "id": "27"
+    },
+    {
+      "sport": "NHL",
+      "name": "Nashville Predators",
+      "id": "27"
+    },
+    {
+      "sport": "NHL",
+      "name": "New Jersey",
+      "id": "11"
+    },
+    {
+      "sport": "NHL",
+      "name": "New Jersey Devils",
+      "id": "11"
+    },
+    {
+      "sport": "NHL",
+      "name": "New York Islanders",
+      "id": "12"
+    },
+    {
+      "sport": "NHL",
+      "name": "New York Rangers",
+      "id": "13"
+    },
+    {
+      "sport": "NHL",
+      "name": "NJ",
+      "id": "11"
+    },
+    {
+      "sport": "NHL",
+      "name": "NJD",
+      "id": "11"
+    },
+    {
+      "sport": "NHL",
+      "name": "NSH",
+      "id": "27"
+    },
+    {
+      "sport": "NHL",
+      "name": "NY Islanders",
+      "id": "12"
+    },
+    {
+      "sport": "NHL",
+      "name": "NY Rangers",
+      "id": "13"
+    },
+    {
+      "sport": "NHL",
+      "name": "NYI",
+      "id": "12"
+    },
+    {
+      "sport": "NHL",
+      "name": "NYR",
+      "id": "13"
+    },
+    {
+      "sport": "NHL",
+      "name": "OTT",
+      "id": "14"
+    },
+    {
+      "sport": "NHL",
+      "name": "Ottawa",
+      "id": "14"
+    },
+    {
+      "sport": "NHL",
+      "name": "Ottawa Senators",
+      "id": "14"
+    },
+    {
+      "sport": "NHL",
+      "name": "PHI",
+      "id": "15"
+    },
+    {
+      "sport": "NHL",
+      "name": "Philadelphia",
+      "id": "15"
+    },
+    {
+      "sport": "NHL",
+      "name": "Philadelphia Flyers",
+      "id": "15"
+    },
+    {
+      "sport": "NHL",
+      "name": "PIT",
+      "id": "16"
+    },
+    {
+      "sport": "NHL",
+      "name": "Pittsburgh",
+      "id": "16"
+    },
+    {
+      "sport": "NHL",
+      "name": "Pittsburgh Penguins",
+      "id": "16"
+    },
+    {
+      "sport": "NHL",
+      "name": "Red Wings",
+      "id": "5"
+    },
+    {
+      "sport": "NHL",
+      "name": "San Jose",
+      "id": "18"
+    },
+    {
+      "sport": "NHL",
+      "name": "San Jose Sharks",
+      "id": "18"
+    },
+    {
+      "sport": "NHL",
+      "name": "SEA",
+      "id": "124292"
+    },
+    {
+      "sport": "NHL",
+      "name": "Seattle",
+      "id": "124292"
+    },
+    {
+      "sport": "NHL",
+      "name": "Seattle Kraken",
+      "id": "124292"
+    },
+    {
+      "sport": "NHL",
+      "name": "SJ",
+      "id": "18"
+    },
+    {
+      "sport": "NHL",
+      "name": "SJS",
+      "id": "18"
+    },
+    {
+      "sport": "NHL",
+      "name": "St. Louis",
+      "id": "19"
+    },
+    {
+      "sport": "NHL",
+      "name": "St. Louis Blues",
+      "id": "19"
+    },
+    {
+      "sport": "NHL",
+      "name": "STL",
+      "id": "19"
+    },
+    {
+      "sport": "NHL",
+      "name": "Tampa Bay",
+      "id": "20"
+    },
+    {
+      "sport": "NHL",
+      "name": "Tampa Bay Lightning",
+      "id": "20"
+    },
+    {
+      "sport": "NHL",
+      "name": "TB",
+      "id": "20"
+    },
+    {
+      "sport": "NHL",
+      "name": "TBL",
+      "id": "20"
+    },
+    {
+      "sport": "NHL",
+      "name": "TOR",
+      "id": "21"
+    },
+    {
+      "sport": "NHL",
+      "name": "Toronto",
+      "id": "21"
+    },
+    {
+      "sport": "NHL",
+      "name": "Toronto Maple Leafs",
+      "id": "21"
+    },
+    {
+      "sport": "NHL",
+      "name": "UTA",
+      "id": "129764"
+    },
+    {
+      "sport": "NHL",
+      "name": "Utah",
+      "id": "129764"
+    },
+    {
+      "sport": "NHL",
+      "name": "Utah Mammoth",
+      "id": "129764"
+    },
+    {
+      "sport": "NHL",
+      "name": "VAN",
+      "id": "22"
+    },
+    {
+      "sport": "NHL",
+      "name": "Vancouver",
+      "id": "22"
+    },
+    {
+      "sport": "NHL",
+      "name": "Vancouver Canucks",
+      "id": "22"
+    },
+    {
+      "sport": "NHL",
+      "name": "Vegas",
+      "id": "37"
+    },
+    {
+      "sport": "NHL",
+      "name": "Vegas Golden Knights",
+      "id": "37"
+    },
+    {
+      "sport": "NHL",
+      "name": "VGK",
+      "id": "37"
+    },
+    {
+      "sport": "NHL",
+      "name": "Washington",
+      "id": "23"
+    },
+    {
+      "sport": "NHL",
+      "name": "Washington Capitals",
+      "id": "23"
+    },
+    {
+      "sport": "NHL",
+      "name": "Winnipeg",
+      "id": "28"
+    },
+    {
+      "sport": "NHL",
+      "name": "Winnipeg Jets",
+      "id": "28"
+    },
+    {
+      "sport": "NHL",
+      "name": "WPG",
+      "id": "28"
+    },
+    {
+      "sport": "NHL",
+      "name": "WSH",
+      "id": "23"
+    }
+  ],
+  "mustNotResolve": [
+    {
+      "sport": "MLB",
+      "name": "Chicago"
+    },
+    {
+      "sport": "MLB",
+      "name": "Los Angeles"
+    },
+    {
+      "sport": "MLB",
+      "name": "New York"
+    },
+    {
+      "sport": "MLB",
+      "name": "sox"
+    },
+    {
+      "sport": "NBA",
+      "name": "76ers"
+    },
+    {
+      "sport": "NBA",
+      "name": "blazers"
+    },
+    {
+      "sport": "NBA",
+      "name": "Bucks"
+    },
+    {
+      "sport": "NBA",
+      "name": "Bulls"
+    },
+    {
+      "sport": "NBA",
+      "name": "Cavaliers"
+    },
+    {
+      "sport": "NBA",
+      "name": "Celtics"
+    },
+    {
+      "sport": "NBA",
+      "name": "Clippers"
+    },
+    {
+      "sport": "NBA",
+      "name": "Grizzlies"
+    },
+    {
+      "sport": "NBA",
+      "name": "Hawks"
+    },
+    {
+      "sport": "NBA",
+      "name": "Heat"
+    },
+    {
+      "sport": "NBA",
+      "name": "Hornets"
+    },
+    {
+      "sport": "NBA",
+      "name": "Jazz"
+    },
+    {
+      "sport": "NBA",
+      "name": "Kings"
+    },
+    {
+      "sport": "NBA",
+      "name": "Knicks"
+    },
+    {
+      "sport": "NBA",
+      "name": "LA"
+    },
+    {
+      "sport": "NBA",
+      "name": "Lakers"
+    },
+    {
+      "sport": "NBA",
+      "name": "Los Angeles"
+    },
+    {
+      "sport": "NBA",
+      "name": "Magic"
+    },
+    {
+      "sport": "NBA",
+      "name": "Mavericks"
+    },
+    {
+      "sport": "NBA",
+      "name": "Nets"
+    },
+    {
+      "sport": "NBA",
+      "name": "New York"
+    },
+    {
+      "sport": "NBA",
+      "name": "Nuggets"
+    },
+    {
+      "sport": "NBA",
+      "name": "Pacers"
+    },
+    {
+      "sport": "NBA",
+      "name": "Pelicans"
+    },
+    {
+      "sport": "NBA",
+      "name": "Pistons"
+    },
+    {
+      "sport": "NBA",
+      "name": "Raptors"
+    },
+    {
+      "sport": "NBA",
+      "name": "Rockets"
+    },
+    {
+      "sport": "NBA",
+      "name": "Spurs"
+    },
+    {
+      "sport": "NBA",
+      "name": "Suns"
+    },
+    {
+      "sport": "NBA",
+      "name": "Thunder"
+    },
+    {
+      "sport": "NBA",
+      "name": "Timberwolves"
+    },
+    {
+      "sport": "NBA",
+      "name": "Trail Blazers"
+    },
+    {
+      "sport": "NBA",
+      "name": "Warriors"
+    },
+    {
+      "sport": "NBA",
+      "name": "Wizards"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "49ers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Aggies"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Argonauts"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Aztecs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Badgers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Beacons"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bearcats"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bearkats"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bears"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Beavers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bengals"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Big Green"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Big Red"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bison"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Black Bears"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Black Knights"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Blazers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Blue Devils"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Blue Hens"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Blue Hose"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Blue Raiders"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bobcats"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Boilermakers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Braves"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Broncos"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bruins"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Buccaneers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Buckeyes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Buffaloes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bulldogs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Bulls"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cardinal"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cardinals"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Catamounts"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cavaliers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chanticleers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chargers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Chippewas"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colonels"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Colonials"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Commodores"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cornhuskers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cougars"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cowboys"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Coyotes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Crimson"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Crimson Tide"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Crusaders"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Cyclones"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Delta Devils"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Demon Deacons"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Demons"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Dragons"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ducks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Dukes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Eagles"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Falcons"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fighting Camels"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fighting Hawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fighting Illini"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Fighting Irish"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Flames"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Flyers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Gamecocks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Gators"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Golden Bears"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Golden Eagles"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Golden Flashes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Golden Gophers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Golden Hurricane"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Golden Lions"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Governors"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Great Danes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Green Wave"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Grizzlies"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hatters"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hawkeyes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hilltoppers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hokies"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hoosiers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Horned Frogs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hornets"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hoyas"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Hurricanes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Huskies"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jackrabbits"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jaguars"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Jayhawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Keydets"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Knights"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lakers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Leathernecks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Leopards"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lions"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lobos"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Longhorns"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Lumberjacks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mean Green"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Midshipmen"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Miners"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Minutemen"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mocs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Monarchs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mountain Hawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mountaineers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Mustangs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Nittany Lions"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Orange"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Owls"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Paladins"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Panthers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Penguins"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Phoenix"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Pioneers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Pirates"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Quakers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Racers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ragin' Cajuns"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Raiders"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rainbow Warriors"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rams"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rattlers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Ravens"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Razorbacks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rebels"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Red Foxes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Red Raiders"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Red Storm"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Red Wolves"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Redbirds"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RedHawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "RiverHawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Roadrunners"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Rockets"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Runnin' Bulldogs"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Salukis"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Scarlet Knights"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Seahawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Seawolves"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Seminoles"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sharks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Skyhawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sooners"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Spartans"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Spiders"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sun Devils"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Sycamores"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tar Heels"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Terrapins"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Terriers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Texans"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Thunderbirds"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Thundering Herd"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tigers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tommies"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Toreros"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Trailblazers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Tribe"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Trojans"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Utes"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Vandals"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Vaqueros"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Vikings"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Volunteers"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Warhawks"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Warriors"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wildcats"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wolf Pack"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wolfpack"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wolverines"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Wolves"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Yellow Jackets"
+    },
+    {
+      "sport": "NCAAF",
+      "name": "Zips"
+    },
+    {
+      "sport": "NFL",
+      "name": "49ers"
+    },
+    {
+      "sport": "NFL",
+      "name": "Bears"
+    },
+    {
+      "sport": "NFL",
+      "name": "Bengals"
+    },
+    {
+      "sport": "NFL",
+      "name": "Bills"
+    },
+    {
+      "sport": "NFL",
+      "name": "Broncos"
+    },
+    {
+      "sport": "NFL",
+      "name": "Browns"
+    },
+    {
+      "sport": "NFL",
+      "name": "Buccaneers"
+    },
+    {
+      "sport": "NFL",
+      "name": "Bucs"
+    },
+    {
+      "sport": "NFL",
+      "name": "Cardinals"
+    },
+    {
+      "sport": "NFL",
+      "name": "Chargers"
+    },
+    {
+      "sport": "NFL",
+      "name": "Chiefs"
+    },
+    {
+      "sport": "NFL",
+      "name": "Colts"
+    },
+    {
+      "sport": "NFL",
+      "name": "Commanders"
+    },
+    {
+      "sport": "NFL",
+      "name": "Cowboys"
+    },
+    {
+      "sport": "NFL",
+      "name": "Dolphins"
+    },
+    {
+      "sport": "NFL",
+      "name": "Eagles"
+    },
+    {
+      "sport": "NFL",
+      "name": "Falcons"
+    },
+    {
+      "sport": "NFL",
+      "name": "Giants"
+    },
+    {
+      "sport": "NFL",
+      "name": "Jags"
+    },
+    {
+      "sport": "NFL",
+      "name": "Jaguars"
+    },
+    {
+      "sport": "NFL",
+      "name": "Jets"
+    },
+    {
+      "sport": "NFL",
+      "name": "Lions"
+    },
+    {
+      "sport": "NFL",
+      "name": "Los Angeles"
+    },
+    {
+      "sport": "NFL",
+      "name": "New York"
+    },
+    {
+      "sport": "NFL",
+      "name": "Niners"
+    },
+    {
+      "sport": "NFL",
+      "name": "Packers"
+    },
+    {
+      "sport": "NFL",
+      "name": "Panthers"
+    },
+    {
+      "sport": "NFL",
+      "name": "Patriots"
+    },
+    {
+      "sport": "NFL",
+      "name": "Raiders"
+    },
+    {
+      "sport": "NFL",
+      "name": "Rams"
+    },
+    {
+      "sport": "NFL",
+      "name": "Ravens"
+    },
+    {
+      "sport": "NFL",
+      "name": "Saints"
+    },
+    {
+      "sport": "NFL",
+      "name": "Seahawks"
+    },
+    {
+      "sport": "NFL",
+      "name": "Steelers"
+    },
+    {
+      "sport": "NFL",
+      "name": "Texans"
+    },
+    {
+      "sport": "NFL",
+      "name": "Titans"
+    },
+    {
+      "sport": "NFL",
+      "name": "Vikings"
+    },
+    {
+      "sport": "NHL",
+      "name": "Avalanche"
+    },
+    {
+      "sport": "NHL",
+      "name": "Blackhawks"
+    },
+    {
+      "sport": "NHL",
+      "name": "Blues"
+    },
+    {
+      "sport": "NHL",
+      "name": "Bruins"
+    },
+    {
+      "sport": "NHL",
+      "name": "Canadiens"
+    },
+    {
+      "sport": "NHL",
+      "name": "Canucks"
+    },
+    {
+      "sport": "NHL",
+      "name": "Capitals"
+    },
+    {
+      "sport": "NHL",
+      "name": "Devils"
+    },
+    {
+      "sport": "NHL",
+      "name": "Ducks"
+    },
+    {
+      "sport": "NHL",
+      "name": "Flames"
+    },
+    {
+      "sport": "NHL",
+      "name": "Flyers"
+    },
+    {
+      "sport": "NHL",
+      "name": "Hurricanes"
+    },
+    {
+      "sport": "NHL",
+      "name": "Islanders"
+    },
+    {
+      "sport": "NHL",
+      "name": "Jets"
+    },
+    {
+      "sport": "NHL",
+      "name": "Kings"
+    },
+    {
+      "sport": "NHL",
+      "name": "Kraken"
+    },
+    {
+      "sport": "NHL",
+      "name": "Lightning"
+    },
+    {
+      "sport": "NHL",
+      "name": "Mammoth"
+    },
+    {
+      "sport": "NHL",
+      "name": "New York"
+    },
+    {
+      "sport": "NHL",
+      "name": "Oilers"
+    },
+    {
+      "sport": "NHL",
+      "name": "Panthers"
+    },
+    {
+      "sport": "NHL",
+      "name": "Penguins"
+    },
+    {
+      "sport": "NHL",
+      "name": "Predators"
+    },
+    {
+      "sport": "NHL",
+      "name": "Rangers"
+    },
+    {
+      "sport": "NHL",
+      "name": "Sabres"
+    },
+    {
+      "sport": "NHL",
+      "name": "Senators"
+    },
+    {
+      "sport": "NHL",
+      "name": "Sharks"
+    },
+    {
+      "sport": "NHL",
+      "name": "Stars"
+    },
+    {
+      "sport": "NHL",
+      "name": "Wild"
+    }
+  ]
+}

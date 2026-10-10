@@ -10,6 +10,7 @@ const { scoreboardUrls } = require("./espn-scoreboard");
 const { fetchScoreboardJson } = require("../../../js/live-score");
 const { defaultKpis, CONTEST } = require("./circa-contest");
 const { resolveDoubleheader } = require("../../../js/live-score");
+const { resolveTeamId } = require("./omega-vnext/sports/team_identity");
 
 const FINAL = new Set(["win", "loss", "push"]);
 
@@ -36,6 +37,11 @@ function normalizeTeam(name) {
 }
 
 function teamsMatch(pickTeam, espnTeam, espnAbbr) {
+  // Both names resolved: the ESPN ids must match. Last-word stays only when
+  // at least one side has no id (contest nicks such as "Steelers").
+  const pickId = resolveTeamId("NFL", pickTeam);
+  const espnId = resolveTeamId("NFL", espnTeam);
+  if (pickId && espnId) return String(pickId) === String(espnId);
   const p = normalizeTeam(pickTeam);
   const e = normalizeTeam(espnTeam);
   if (!p || !e) return false;
@@ -156,7 +162,7 @@ function gradeAts(pick, game) {
   }
   if (game.state !== "post") return { result: "pending" };
 
-  if (/POSTPONED|CANCELL?ED/i.test(game.statusName || "") || (game.state === "post" && game.completed === false)) {
+  if (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(game.statusName || "") || (game.state === "post" && game.completed === false)) {
     return {
       result: "push",
       status: "post",

@@ -15,6 +15,7 @@ const path = require('path');
 const { normalizeTeamName } = require('../netlify/functions/lib/omega-vnext/sports/team_normalize');
 const id = require('../netlify/functions/lib/omega-vnext/sports/team_identity');
 const { IDENTITY_V2_FROM } = require('../netlify/functions/lib/omega-grading-rules');
+const explicitAliases = require('../netlify/functions/lib/omega-vnext/sports/data/football-explicit-aliases.json');
 
 const ROOT = path.join(__dirname, '..');
 const DATA = path.join(ROOT, 'netlify/functions/lib/omega-vnext/sports/data');
@@ -22,18 +23,28 @@ const OUT = path.join(ROOT, 'js/omega-team-identity.js');
 
 const SPORTS = ['NFL', 'NCAAF', 'NBA', 'MLB', 'NHL'];
 
-function lookupFor(file) {
+function lookupFor(file, sport) {
   const table = JSON.parse(fs.readFileSync(path.join(DATA, file), 'utf8'));
-  return table.lookup || {};
+  const lookup = Object.assign({}, table.lookup || {});
+  const raw = (explicitAliases && explicitAliases[sport]) || {};
+  const extra = Object.keys(raw).sort();
+  for (const name of extra) {
+    const idValue = raw[name];
+    const norm = normalizeTeamName(name);
+    if (!norm || idValue == null || idValue === '') continue;
+    if (lookup[norm]) continue;
+    lookup[norm] = String(idValue);
+  }
+  return lookup;
 }
 
 function renderClientSource() {
   const lookup = {
-    NFL: lookupFor('nfl-team-ids.json'),
-    NCAAF: lookupFor('ncaaf-team-ids.json'),
-    NBA: lookupFor('nba-team-ids.json'),
-    MLB: lookupFor('mlb-team-ids.json'),
-    NHL: lookupFor('nhl-team-ids.json'),
+    NFL: lookupFor('nfl-team-ids.json', 'NFL'),
+    NCAAF: lookupFor('ncaaf-team-ids.json', 'NCAAF'),
+    NBA: lookupFor('nba-team-ids.json', 'NBA'),
+    MLB: lookupFor('mlb-team-ids.json', 'MLB'),
+    NHL: lookupFor('nhl-team-ids.json', 'NHL'),
   };
   const normSrc = normalizeTeamName.toString();
   const sameSrc = id.sameTeam.toString();

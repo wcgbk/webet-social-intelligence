@@ -55,6 +55,7 @@ const {
   loadContestLines,
   nickOf: contestNick,
 } = require("./lib/circa-contest-lines");
+const { resolveTeamId } = require("./lib/omega-vnext/sports/team_identity");
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const STORE_NAME = CONTEST.storeName;
@@ -361,6 +362,9 @@ async function fetchNFLSpreadOdds() {
 }
 
 function teamsMatch(a, b) {
+  const idA = resolveTeamId("NFL", a);
+  const idB = resolveTeamId("NFL", b);
+  if (idA && idB) return String(idA) === String(idB);
   const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
   const last = (s) => norm(s).split(" ").pop();
   return norm(a) === norm(b) || last(a) === last(b);

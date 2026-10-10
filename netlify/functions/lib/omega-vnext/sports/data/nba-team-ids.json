@@ -5,9 +5,9 @@
     "oddsSport": "basketball_nba",
     "sport": "NBA",
     "teamCount": 30,
-    "lookupCount": 100,
+    "lookupCount": 99,
     "seasonLabel": "identity is stable across seasons",
-    "matching": "normalize (lowercase, strip accents, delete apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback. Los Angeles and LA are not keys."
+    "matching": "normalize (lowercase, strip accents, delete apostrophes, collapse punctuation) then exact lookup. No substring, last-word, or mascot fallback. Los Angeles, LA, and New York are not keys (Knicks and Nets)."
   },
   "teams": {
     "1": {
@@ -502,7 +502,6 @@
     "new york knicks": "18",
     "ny": "18",
     "ny knicks": "18",
-    "new york": "18",
     "oklahoma city thunder": "25",
     "okc": "25",
     "okc thunder": "25",

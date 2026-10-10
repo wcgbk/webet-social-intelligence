@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.21-omega-vnext-edge-card';
+const MODEL_VERSION = 'v12.3.22-omega-vnext-no-floors';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -184,11 +184,18 @@ const MLB_CALIBRATION = {
   shrinkK: { Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46 },
 };
 
-/** Gate floors — conservative v1. Empty OK. */
+/**
+ * Publish gates. minEV and minCoverProb are 0: a finite non-negative
+ * cover and a non-negative EV pass. A 48% coverProb floor and a 2.5–3%
+ * EV floor do not reject. minPredictedClvCents is null, so predicted CLV
+ * does not reject. Odds band, major-book liquidity, pregame, same ET day,
+ * and adverse steam stay. Generate-time placeability is logged in gates.js
+ * and does not reject.
+ */
 const GATES = {
-  minEV: { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 },
-  minCoverProb: { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 },
-  minPredictedClvCents: 0, // require non-negative predicted CLV family
+  minEV: { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, NHL: 0, default: 0 },
+  minCoverProb: { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0 },
+  minPredictedClvCents: null, // not a publish floor
   maxAmericanOdds: 300,
   minAmericanOdds: -300,
   requireMajorBook: true,
@@ -612,6 +619,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.22-omega-vnext-no-floors: Publish floors are off. minEV and minCoverProb are 0, so a positive edge at a major book is not rejected for a 3% EV floor or a 48% coverProb floor. minPredictedClvCents is null and does not reject. Generate-time placeability is logged and does not block. Verify still confirms the Hard Rock line and may drop only when Hard Rock and US majors both fail. Mode A calibration stays the hand-set shrink. The 0.42–0.58 band is legacy only. Mode B K_MIN 0.3 and CAL_POOL sample floors are fit constraints, not publish gates. Odds band, liquidity, pregame, same ET day, and adverse steam stay. Kelly and unit caps stay. Straights, parlay, and the exposure cap are unchanged from v12.3.21.',
   'v12.3.21-omega-vnext-edge-card: Straights are the top edges vs no-vig fair, including a second side of the same game. Score nudges only break an exact edge tie. The parlay is the best edges on distinct games and may overlap the straights. The only parlay conflict is two legs from the same game. Same-direction totals and same-conference NCAAF totals may share a ticket. The same-direction haircut still lowers joint probability and never raises it. PER_GAME_EXPOSURE_CAP_ENABLED is false, so the 1.50u same-game stake cap does not run. Gate floors, Kelly, unit caps, SHRINK_K, and calibration are unchanged. A gate reject is logged. It does not throw.',
   'v12.3.20-omega-vnext-edge-rank: Straight rank is calibrated edge. _steamScoreAdj, _pmScoreAdj, and the steamToward softSportMixBonus are added together and capped at ±0.002, so they only break ties. A 0.03 steam boost plus the 0.02 mix bonus no longer outranks a higher edge. Adverse-steam hard rejects are unchanged. The parlay is chosen from the full yes pool, including straight sides. Same-game legs, same-direction same-league totals, and same-conference NCAAF totals still cannot share a ticket. OMEGA_GAME_EXPOSURE defaults off. Set it on to restore the 1.50u same-game cap. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.19-omega-vnext-parlay-decorr: Parlay selection keeps one leg per game. It also refuses two same-direction totals in the same league, so three NFL overs cannot fill a ticket. NCAAF totals that share a conference are refused even when the sides differ. A missing conference does not invent a shared conference. Same-direction totals keep the 0.95/0.92 haircut. The joint probability used for EV stays at or below the independent product. Pearson ρ 0.08 only raised that joint, so OMEGA_PARLAY_CORR defaults off. Setting it on does not replace the haircut and cannot raise EV. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',

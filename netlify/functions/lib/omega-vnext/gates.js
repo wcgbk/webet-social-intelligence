@@ -139,9 +139,13 @@ function gateReason(c, opts = {}) {
   if (!Number.isFinite(c.odds)) return 'no-odds';
   if (c.odds < GATES.minAmericanOdds || c.odds > GATES.maxAmericanOdds) return 'odds-out-of-band';
   if (GATES.requireMajorBook && !c.liquid) return 'insufficient-liquidity';
-  if (!Number.isFinite(c.coverProb) || c.coverProb < minCP) return 'coverProb-floor';
-  if (!Number.isFinite(c.ev) || c.ev < minEV) return 'ev-floor';
-  if (typeof c.predictedClv === 'number' && c.predictedClv < GATES.minPredictedClvCents) {
+  // Floors are 0. A missing cover or EV still rejects. A negative EV
+  // still rejects. A 30% cover with a positive edge does not.
+  if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
+  if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
+  if (GATES.minPredictedClvCents != null
+    && typeof c.predictedClv === 'number'
+    && c.predictedClv < GATES.minPredictedClvCents) {
     return 'predictedClv-negative';
   }
   // Positive edge vs implied
@@ -153,9 +157,13 @@ function gateReason(c, opts = {}) {
     if (steamReason) return steamReason;
   }
 
-  // After quality gates: a strong edge that is not shoppable at US retail
-  // books is a soft-veto, not a published ticket. Empty card OK.
-  if (failsPlaceability(c)) return 'placeability-soft-veto';
+  // One US book, or a price the other majors do not offer, is logged.
+  // It does not block a positive edge. Verify still drops a published
+  // pick only when Hard Rock and the US majors both fail.
+  if (failsPlaceability(c)) {
+    const books = Array.isArray(c.placeableBooks) ? c.placeableBooks.length : 'na';
+    console.log(`[omega-vnext] placeability-logged ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} books=${books}`);
+  }
 
   return null;
 }

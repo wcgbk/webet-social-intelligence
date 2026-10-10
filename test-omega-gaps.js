@@ -42,7 +42,7 @@ function withEnv(name, value, fn) {
   }
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.ok(/v12\.3\.20-omega-vnext-edge-rank/.test(config.MODEL_NOTES));
 assert.ok(/OMEGA_PARLAY_CORR defaults off/.test(config.MODEL_NOTES));
 assert.ok(/1 − pPush/.test(config.MODEL_NOTES));

@@ -191,7 +191,7 @@ function wxRow(sport, away, home, commence, extra) {
 }
 
 async function main() {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+  assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
   assert.ok(/api\.weather\.gov/.test(config.MODEL_NOTES) && /0\.35/.test(config.MODEL_NOTES));
   assert.strictEqual(config.FB_WEATHER.k.NFL, 0.35);
   assert.strictEqual(config.FB_WEATHER.k.NCAAF, 0.35);

@@ -23,6 +23,7 @@ const CAL_MODE_DEFAULT = 'A';
  * lowest hand-set shrink already on the card (MLB moneyline). The
  * unconstrained minimizer is stored as kMle and may sit below 0.3.
  * The probability that is published never uses a K below 0.3.
+ * Mode A never calls clampK. K_MIN is a mode-B fit box, not a publish gate.
  */
 const K_POLICY = Object.freeze({
   min: 0.3,
@@ -40,6 +41,8 @@ const K_POLICY = Object.freeze({
  * Isotonic regression is eligible only at the larger floor, and only when
  * its train log-loss beats Platt by isoTrainMargin. That margin is the
  * cost of a flexible step map. It is not fit on the eval day.
+ * These sample floors choose which fit is eligible. They do not reject a
+ * candidate and they do not block a card.
  */
 const CAL_POOL = Object.freeze({
   minRows: 80,

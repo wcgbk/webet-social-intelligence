@@ -4,7 +4,7 @@ const assert = require('assert');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 const live = require('./netlify/functions/generate-picks-omega-background');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(live.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 
 const future = new Date(Date.now() + 864e5).toISOString();
 const mk = (sport, matchup, side, market, cp, ev) => ({
@@ -33,14 +33,24 @@ const pPrefer3 = optimizeParlay(strong2, []);
 assert.strictEqual(pPrefer3.length, 1);
 assert.strictEqual(pPrefer3[0].legs.length, 3);
 
-// A 3-leg whose combined EV is negative falls back to the best 2-leg.
-const onlyTwo = [
+// Three distinct games still publish a 3-leg when the haircut leaves
+// combined EV non-positive. The ticket is logged, not dropped to 2 legs.
+const thinThird = [
   mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
   mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
   mk('NCAAF', 'X @ Y', 'Y -1', 'Spread', 0.36, 0.02),
 ];
-const p2 = optimizeParlay(onlyTwo, []);
+const p2 = optimizeParlay(thinThird, []);
 assert.strictEqual(p2.length, 1);
-assert.strictEqual(p2[0].legs.length, 2);
+assert.strictEqual(p2[0].legs.length, 3);
+assert.ok(!(parseFloat(p2[0].ev) > 0), p2[0].ev);
+
+const twoGames = [
+  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
+  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
+];
+const pTwo = optimizeParlay(twoGames, []);
+assert.strictEqual(pTwo.length, 1);
+assert.strictEqual(pTwo[0].legs.length, 2);
 
 console.log('PASS test-fill3-parlay-2or3 (v12)', { legs: p[0].legs.length, type: p[0].type });

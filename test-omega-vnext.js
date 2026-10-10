@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -78,13 +78,14 @@ const mlbNoise = edge.attachEv(calibrate.calibrateCandidate({
 assert.strictEqual(mlbNoise.calMode, 'A');
 assert.strictEqual(mlbNoise.calibK, config.MLB_CALIBRATION.shrinkK.Moneyline);
 assert.strictEqual(mlbNoise.calMap, null);
-assert.ok(mlbNoise.ev < config.GATES.minEV.MLB, 'noise near the market stays under the EV gate');
+assert.ok(mlbNoise.ev < 0.03, 'noise near the market stays under a 3% EV scale');
+assert.ok(mlbNoise.ev > 0, 'hand-set shrink still leaves a tiny positive EV');
 const mlbReal = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.60, fair_sharp_p: 0.52, odds: -120,
 }));
 assert.strictEqual(mlbReal.calMode, 'A');
 assert.strictEqual(mlbReal.calLevel, 'handset');
-assert.ok(mlbReal.ev >= config.GATES.minEV.MLB, 'a real MLB moneyline disagreement clears minEV');
+assert.ok(mlbReal.ev >= 0.03, 'a real MLB moneyline disagreement clears a 3% EV scale');
 assert.ok(mlbReal.edgePct < 0.12, 'MLB moneyline shrink keeps a real disagreement under a double-digit edge');
 // isotonic must compress toward band — not inflate just-above-hi values
 assert.ok(calibrate.isotonicClip(0.60) <= 0.60, 'isotonic must not inflate at hi');
@@ -316,15 +317,14 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.ok(chalk[0].combinedOdds.startsWith('-'), chalk[0].combinedOdds);
 }
 
-// Wednesday MLB. Legacy (hand-set shrink + bandRetainClip): real starter /
-// total / park edges fill 3 straights + a 3-leg. A pick'em, a 0.25-run
-// moneyline, and a starter already priced to -190 stay out.
-// Default mode A drops the band and keeps the hand-set K, so those noise
-// games stay out and the card still fills. Mode B stays selectable. Its
-// ship fit sets MLB spread K to the product floor 0.3 (hand-set 0.62;
-// kMle 0), so the zero-quality Pirates +1.5 and the 0.25-run Marlins +1.5
-// can clear minEV. That fitted K is what emptied the 2026-10-10 and
-// 2026-10-11 dry runs.
+// Wednesday MLB. Legacy (hand-set shrink + bandRetainClip) and mode A
+// (hand-set shrink, no band) still fill 3 straights + a 3-leg from the
+// real starter / total / park edges. Publish floors are 0, so a pick'em
+// or a small disagreement with positive EV can sit in the yes pool. It
+// does not take a straight ahead of those real edges. Mode B stays
+// selectable. Its ship fit sets MLB spread K to the product floor 0.3
+// (hand-set 0.62; kMle 0). That fitted K is what emptied the 2026-10-10
+// and 2026-10-11 dry runs. K_MIN is a fit box, not a publish gate.
 {
   const kick = new Date(Date.now() + 30 * 3600 * 1000).toISOString();
   const cardDate = math.etCalendarDate(kick);
@@ -403,7 +403,6 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     parkFactors,
   });
   const realMatchups = new Set(slate.filter(g => g.tag === 'real').map(g => `${g.ev.away_team} @ ${g.ev.home_team}`));
-  const noiseMatchups = new Set(slate.filter(g => g.tag === 'noise').map(g => `${g.ev.away_team} @ ${g.ev.home_team}`));
   function scoreWednesday(mode) {
     const prev = process.env.OMEGA_CAL_MODE;
     if (mode == null) delete process.env.OMEGA_CAL_MODE;
@@ -430,15 +429,20 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     assert.strictEqual(scored.wedParlay[0].legs.length, 3, label);
     assert.strictEqual(parseFloat(scored.wedParlay[0].units), config.PARLAY_FIXED_UNITS, label);
   }
+  function assertRealStraights(scored, label) {
+    for (const s of scored.straights) {
+      assert.ok(realMatchups.has(s.matchup), `${label} straight is not a real edge: ${s.matchup} ${s.side}`);
+    }
+  }
   const legacyCard = scoreWednesday('legacy');
   assert.ok(legacyCard.yesPool.every(c => c.calMode === 'legacy'));
   assertFilled(legacyCard, 'legacy');
-  for (const m of legacyCard.yesGames) assert.ok(!noiseMatchups.has(m), `legacy noise game published: ${m}`);
+  assertRealStraights(legacyCard, 'legacy');
 
   const defaultCard = scoreWednesday(null);
   assert.ok(defaultCard.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
   assertFilled(defaultCard, 'mode A');
-  for (const m of defaultCard.yesGames) assert.ok(!noiseMatchups.has(m), `mode A noise game published: ${m}`);
+  assertRealStraights(defaultCard, 'mode A');
   const aSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
   assert.ok(aSpread, 'mode A publishes an MLB spread');
   assert.strictEqual(aSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
@@ -451,14 +455,16 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   }
   const pirates = noiseSpread(modeB, 'Pittsburgh Pirates @ Cincinnati Reds');
   const marlins = noiseSpread(modeB, 'Miami Marlins @ Philadelphia Phillies');
-  assert.ok(pirates, 'Pirates +1.5 clears at the MLB spread product floor');
+  assert.ok(pirates, 'Pirates +1.5 clears with positive EV at the MLB spread K floor');
   assert.strictEqual(pirates.calibK, 0.3);
   assert.strictEqual(pirates.calLevel, 'cell');
-  assert.ok(pirates.ev >= config.GATES.minEV.MLB);
-  assert.ok(marlins, 'Marlins +1.5 clears at the MLB spread product floor');
+  assert.ok(pirates.ev > 0);
+  assert.ok(marlins, 'Marlins +1.5 clears with positive EV at the MLB spread K floor');
   assert.strictEqual(marlins.calibK, 0.3);
   assert.strictEqual(marlins.calLevel, 'cell');
-  assert.ok(!modeB.yesGames.has('Texas Rangers @ Houston Astros'), 'priced -190 starter stays out under mode B');
+  assert.ok(modeB.straights.some(s => /Pirates/.test(s.matchup)), 'mode B K=0.3 can rank that spread onto the card');
+  const astros = [...modeB.yesPool].filter(c => c.matchup === 'Texas Rangers @ Houston Astros');
+  assert.ok(astros.every(c => c.edgePct > 0 && c.ev > 0), 'a -190 starter publishes only with a positive edge');
 }
 
 assert.deepStrictEqual(nba.project({}), []);
@@ -686,10 +692,14 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.ok(verify.formatCombinedAmerican(2.50).startsWith('+'));
   assert.ok(String(verify.formatCombinedAmerican(1.91)).startsWith('-'));
   assert.strictEqual(verify.sportCoverFloor('NFL'), config.GATES.minCoverProb.NFL);
-  assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0.48);
-  assert.strictEqual(verify.sportCoverFloor('MLB'), 0.48);
+  assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
+  assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
+  assert.strictEqual(verify.sportEvFloor('NFL'), 0);
+  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NFL', ev: 0.04, coverProb: 0.49 }), true);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), false);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), true);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), true);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0, coverProb: 0.55 }), false);
   assert.ok(!verifySrc.includes('alpha-config'));
   assert.ok(!verifySrc.includes('mlUnitCap'));
 

@@ -48,7 +48,7 @@ assert.strictEqual(cal.resolveCalMode(), 'A');
 assert.strictEqual(cal.resolveCalMode(''), 'A');
 assert.strictEqual(cal.resolveCalMode('legacy'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('0'), 'legacy');
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.ok(/shrink K is still hand-set/i.test(config.MODEL_NOTES));
 assert.ok(/Mode B stays selectable/.test(config.MODEL_NOTES));
 assert.ok(/Mode C stays selectable/.test(config.MODEL_NOTES));
@@ -143,13 +143,17 @@ const mlb = withEnv({ OMEGA_CAL_MODE: 'A' }, () => cal.calibrateCandidate({
 assert.ok(Math.abs(mlb.coverProb - (0.70 * 0.60 + 0.30 * 0.52)) < 1e-12);
 assert.strictEqual(mlb.calibK, 0.30);
 
-// Gates stay the published floors. This switch does not retune them.
+// Publish floors are 0. This switch does not retune shrink K.
 assert.deepStrictEqual(config.GATES.minEV, {
-  MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03,
+  MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, NHL: 0, default: 0,
 });
 assert.deepStrictEqual(config.GATES.minCoverProb, {
-  MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48,
+  MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0,
 });
+assert.strictEqual(config.GATES.minPredictedClvCents, null);
+assert.strictEqual(cal.CAL_MODE_DEFAULT, 'A');
+assert.strictEqual(cal.K_POLICY.min, 0.3);
+assert.ok(cal.CAL_POOL.minRows >= 80);
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
 assert.deepStrictEqual(config.MLB_CALIBRATION.shrinkK, {
   Total: 0.46, Spread: 0.62, Moneyline: 0.30, default: 0.46,

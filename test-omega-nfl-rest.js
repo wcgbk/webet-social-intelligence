@@ -22,7 +22,7 @@ const { buildHealthRecord } = require(path.join(root, 'health'));
 
 const FIXTURES = '/workspace/omega-replay-2w/inputs/_shared/rest-schedules';
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.strictEqual(config.REST_ADJ.NFL.cap, 1);
 assert.strictEqual(config.REST_ADJ.NCAAF.cap, 1);
 assert.strictEqual(config.REST_ADJ.NFL.totalCap, 0);

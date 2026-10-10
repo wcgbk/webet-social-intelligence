@@ -23,13 +23,13 @@ const shadow = require(path.join(root, 'nba_shadow'));
 const ids = require(path.join(root, 'sports/data/nba-team-ids.json'));
 const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
-assert.strictEqual(config.GATES.minEV.NBA, 0.03);
-assert.strictEqual(config.GATES.minCoverProb.NBA, undefined);
-assert.strictEqual(config.GATES.minCoverProb.default, 0.48);
+assert.strictEqual(config.GATES.minEV.NBA, 0);
+assert.strictEqual(config.GATES.minCoverProb.NBA, 0);
+assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.SPORT_SPREAD_STD.NBA, 12);
 assert.strictEqual(config.SPORT_TOTAL_STD.NBA, 18);
 assert.ok(config.HFA.NBA >= 2.0 && config.HFA.NBA <= 2.5);
@@ -521,7 +521,7 @@ function byMarket(rows, market, sideIncludes) {
   clearCalParamsCache();
   const dryB = await shadow.runNbaShadow({ ...board, dryRun: true });
   // Fitted K. NBA has no graded rows, so the ship fit is the global K=1.
-  // Books agree, coverProb is the sharp, and minEV keeps the card empty.
+  // Books agree and coverProb is the sharp, so the edge is not positive.
   assert.strictEqual(dryB.yesCount, 0, `mode B yes ${dryB.yesCount}`);
   assert.strictEqual(dryB.payload.picks.length, 0);
   assert.strictEqual(dryB.wrote, false);

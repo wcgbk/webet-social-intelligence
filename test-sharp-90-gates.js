@@ -11,7 +11,7 @@ const live = require('./netlify/functions/generate-picks-omega-background');
 const { applyGates } = require('./netlify/functions/lib/omega-vnext/gates');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(live.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.ok(fs.existsSync(path.join(__dirname, 'archive/generate-picks-omega-legacy-v11.js')));
 
 const future = new Date(Date.now() + 864e5).toISOString();
@@ -20,10 +20,11 @@ const yes = {
   odds: -110, coverProb: 0.56, ev: 0.05, predictedClv: 1, liquid: true,
   commenceTime: future, edgePct: 0.04,
 };
-const no = { ...yes, ev: 0.005, predictedClv: -2 };
+const no = { ...yes, ev: -0.01, edgePct: -0.01, predictedClv: -2 };
 const { yesPool, rejected } = applyGates([yes, no]);
 assert.strictEqual(yesPool.length, 1);
-assert.ok(rejected.length >= 1);
+assert.strictEqual(rejected.length, 1);
+assert.strictEqual(rejected[0].rejectReason, 'ev-floor');
 
 const pool = [
   yes,

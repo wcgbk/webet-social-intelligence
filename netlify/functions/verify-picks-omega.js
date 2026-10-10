@@ -313,19 +313,20 @@ const {
 } = require('./lib/omega-vnext/edge');
 const HR_BOOK_KEYS = new Set(["hardrockbet", "hardrockbet_oh", "hardrock"]);
 const HR_SPORT_KEYS = { MLB: "baseball_mlb", NBA: "basketball_nba", NHL: "icehockey_nhl", NFL: "americanfootball_nfl", NCAAF: "americanfootball_ncaaf" };
-function sportEvFloor(sport, defaultFloor = 0.03) {
-  if (sport === "NFL") return Math.max(defaultFloor, 0.025);
-  if (sport === "NCAAF") return Math.max(defaultFloor, 0.030);
+function sportEvFloor(sport, defaultFloor = 0) {
+  const map = (GATES && GATES.minEV) || {};
+  if (sport && map[sport] != null) return map[sport];
+  if (map.default != null) return map.default;
   return defaultFloor;
 }
 function sportCoverFloor(sport) {
   const map = (GATES && GATES.minCoverProb) || {};
-  if (map[sport] != null) return map[sport];
+  if (sport && map[sport] != null) return map[sport];
   if (map.default != null) return map.default;
-  return 0.48;
+  return 0;
 }
 function candidateClearsSportGates(c) {
-  if (!c || !(c.ev > sportEvFloor(c.sport, 0.03))) return false;
+  if (!c || !(c.ev > sportEvFloor(c.sport))) return false;
   const cp = typeof c.coverProb === "number" ? c.coverProb : parseFloat(c.coverProb) || 0;
   if (cp < sportCoverFloor(c.sport)) return false;
   return true;
@@ -979,6 +980,7 @@ exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
 exports.straightRefillAllowed = straightRefillAllowed;
 exports.resolveLockedParlay = resolveLockedParlay;
 exports.formatCombinedAmerican = formatCombinedAmerican;
+exports.sportEvFloor = sportEvFloor;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
 exports.updatePicksBlob = updatePicksBlob;

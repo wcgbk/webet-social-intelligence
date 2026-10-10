@@ -8,6 +8,10 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const { selectStraights, edgeRank, matchupKey } = require(path.join(root, 'select'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
+const { gateReason, applyGates } = require(path.join(root, 'gates'));
+const calibrate = require(path.join(root, 'calibrate'));
+const config = require(path.join(root, 'config'));
+const verify = require(path.join(__dirname, 'netlify/functions/verify-picks-omega'));
 
 function idOf(c) {
   return [c.matchup, c.market, c.side, c.line, c.book, c.odds].join('|');
@@ -64,6 +68,63 @@ assert.strictEqual(new Set(parlayGames).size, 3);
 const one = [row('A @ B', 'B -3', 'Spread', 0.02)];
 const tiny = selectStraights(one, 3);
 assert.strictEqual(tiny.length, 1, 'one candidate still publishes a straight');
+
+// A 30% cover with a real edge is not a floor reject, and it is a straight
+// when it outranks the other sides. Placeability and predicted CLV log only.
+const dog = row('Army Black Knights @ Navy Midshipmen', 'Army Black Knights ML', 'Moneyline', 0.04, {
+  coverProb: 0.30,
+  ev: 0.01,
+  odds: 220,
+  line: null,
+  placeable: false,
+  placeableBooks: ['fanatics'],
+  liquid: true,
+  predictedClv: -4,
+});
+assert.strictEqual(gateReason(dog), null);
+const dogGated = applyGates([dog]);
+assert.strictEqual(dogGated.rejected.length, 0);
+assert.strictEqual(dogGated.yesPool.length, 1);
+const lowCover = assertSpecCard([
+  row('A @ B', 'Over 41', 'Total', 0.02, { line: 41 }),
+  row('C @ D', 'D +3', 'Spread', 0.015, { line: 3 }),
+  dog,
+], '2026-10-10', 'low-cover');
+assert.ok(lowCover.straights.some(s => s.side === dog.side), '30% cover with the higher edge is a straight');
+assert.strictEqual(lowCover.parlay.length, 1);
+assert.strictEqual(new Set(lowCover.parlay[0].legs.map(l => l.matchup)).size, lowCover.parlay[0].legs.length);
+
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true })), 'ev-floor');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true })), 'coverProb-floor');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true })), 'nonpositive-edge');
+
+delete process.env.OMEGA_CAL_MODE;
+calibrate.clearCalParamsCache();
+const wide = calibrate.calibrateCandidate({
+  sport: 'NFL', market: 'Spread', modelRawP: 0.90, fair_sharp_p: 0.48,
+});
+const shrunk = calibrate.linearShrink(0.90, 0.48, config.SHRINK_K.Spread);
+const banded = calibrate.bandRetainClip(shrunk);
+assert.strictEqual(wide.calMode, 'A');
+assert.strictEqual(wide.calMap, null);
+assert.ok(Math.abs(wide.coverProb - shrunk) < 1e-12, 'mode A coverProb is the hand-set shrink');
+assert.ok(Math.abs(wide.coverProb - banded) > 1e-4, 'mode A does not apply the 0.42–0.58 band');
+assert.strictEqual(calibrate.CAL_MODE_DEFAULT, 'A');
+assert.strictEqual(calibrate.K_POLICY.min, 0.3);
+assert.ok(calibrate.CAL_POOL.minRows >= 80);
+
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.GATES.minCoverProb.default, 0);
+assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
+assert.strictEqual(config.GATES.minEV.NFL, 0);
+assert.strictEqual(config.GATES.minEV.NCAAF, 0);
+assert.strictEqual(config.GATES.minPredictedClvCents, null);
+assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, false);
+assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
+assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
+assert.strictEqual(verify.sportEvFloor('NFL'), 0);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), true);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'MLB', ev: -0.01, coverProb: 0.55 }), false);
 
 const snapPaths = [
   '/workspace/omega-replay-2w/out/live-1010/2026-10-10.json',

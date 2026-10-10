@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.strictEqual(config.PLACEABILITY.minMajorBooks, 2);
 assert.strictEqual(config.PLACEABILITY.maxImpliedWorsePp, 3);
 assert.strictEqual(config.PLACEABILITY.maxAmericanCentsWorse, 15);
@@ -130,9 +130,11 @@ const baseRaw = {
   assert.strictEqual(c.placeable, false);
   assert.strictEqual(c.bestPlaceable.book, 'draftkings');
   c = eligible(c);
-  assert.strictEqual(gates.gateReason(c), 'placeability-soft-veto');
-  const { rejected } = gates.applyGates([c]);
-  assert.strictEqual(rejected[0].rejectReason, 'placeability-soft-veto');
+  assert.strictEqual(c.placeable, false);
+  assert.strictEqual(gates.gateReason(c), null);
+  const { yesPool, rejected } = gates.applyGates([c]);
+  assert.strictEqual(rejected.length, 0);
+  assert.strictEqual(yesPool.length, 1);
 }
 
 // Published +130 only at Fanatics; DK/FD are a different price. Do not publish it.
@@ -155,7 +157,8 @@ const baseRaw = {
   assert.deepStrictEqual(c.placeableBooks, ['fanatics']);
   assert.strictEqual(c.placeable, false);
   c = eligible(c);
-  assert.strictEqual(gates.gateReason(c), 'placeability-soft-veto');
+  assert.strictEqual(c.placeable, false);
+  assert.strictEqual(gates.gateReason(c), null);
 }
 
 // Two US majors inside the juice ballpark pass and travel onto the pick object.

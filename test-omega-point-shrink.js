@@ -34,10 +34,10 @@ const {
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
-assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
-assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 });
+assert.deepStrictEqual(config.GATES.minEV, { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, NHL: 0, default: 0 });
+assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0 });
 assert.deepStrictEqual(config.POINT_SHRINK, {
   NFL: { total: 1, margin: 1 },
   NCAAF: { total: 1, margin: 1 },
@@ -290,7 +290,7 @@ function assertEdgesNeverGrow(cands, ev) {
   // Default mode A. Hand-set NFL total K stays 0.58 and the band is not
   // applied, so the gap still has edge versus the sharp. The flag does
   // not reject the row. Mode B stays selectable: the ship fit is K=1, so
-  // the same gap has no edge and stays under minEV.
+  // the same gap has no positive edge. Negative EV rejects before the edge check.
   delete process.env.OMEGA_CAL_MODE;
   clearCalParamsCache();
   try {
@@ -314,7 +314,9 @@ function assertEdgesNeverGrow(cands, ev) {
     assert.strictEqual(bRow.calLevel, 'cell');
     assert.strictEqual(bRow.gapFlag, true);
     assert.ok(Math.abs(bRow.coverProb - bRow.fair_sharp_p) < 1e-9);
-    assert.ok(bRow.ev < config.GATES.minEV.NFL);
+    assert.ok(!(bRow.edgePct > 0), 'mode B K=1 has no positive edge');
+    assert.ok(bRow.ev < 0, 'mode B K=1 is not +EV at this price');
+    assert.strictEqual(gateReason(bRow), 'ev-floor');
     assert.notStrictEqual(gateReason(bRow), 'model_line_gap_review');
     const bGated = applyGates([bRow]);
     assert.strictEqual(bGated.yesPool.length, 0);

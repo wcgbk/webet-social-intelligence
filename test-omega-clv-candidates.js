@@ -54,10 +54,10 @@ function baseDeps(extra) {
 }
 
 (async () => {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
-  assert.strictEqual(config.GATES.minEV.MLB, 0.03);
-  assert.strictEqual(config.GATES.minEV.NFL, 0.025);
-  assert.strictEqual(config.GATES.minCoverProb.MLB, 0.48);
+  assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+  assert.strictEqual(config.GATES.minEV.MLB, 0);
+  assert.strictEqual(config.GATES.minEV.NFL, 0);
+  assert.strictEqual(config.GATES.minCoverProb.MLB, 0);
   assert.strictEqual(config.KELLY_FRACTION, 0.25);
   assert.strictEqual(cand.CANDIDATE_SIDE_CAP, 20);
   assert.strictEqual(cand.LIVE_CREDITS, 9);
@@ -79,7 +79,7 @@ function baseDeps(extra) {
     {
       sport: 'MLB', matchup: 'A @ B', side: 'Over 8.5', rejectReason: 'ev-floor',
       market: 'Total', line: 8.5, odds: -110, fair_sharp_p: 0.51, coverProb: 0.53,
-      edgePct: 0.012, ev: 0.02, commenceTime: COMMENCE, predictedClv: 0.4,
+      edgePct: 0.012, ev: -0.01, commenceTime: COMMENCE, predictedClv: 0.4,
     },
     {
       sport: 'MLB', matchup: 'C @ D', side: 'C', rejectReason: 'insufficient-liquidity',
@@ -88,18 +88,20 @@ function baseDeps(extra) {
   ]);
   assert.strictEqual(sampled.rows[0].reason, 'ev-floor');
   assert.strictEqual(sampled.rows[0].edge, 0.012);
-  assert.strictEqual(sampled.rows[0].ev, 0.02);
+  assert.strictEqual(sampled.rows[0].ev, -0.01);
   assert.strictEqual(sampled.rows[0].fair_sharp_p, 0.51);
   assert.strictEqual(sampled.rows[0].commenceTime, COMMENCE);
   assert.strictEqual(sampled.rows[1].reason, 'insufficient-liquidity');
   assert.ok(cand.isNearMissRejection(sampled.rows[0]));
   assert.strictEqual(cand.isNearMissRejection(sampled.rows[1]), false);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'MLB', ev: 0.01 }), false);
-  assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: 0.47 }), true);
-  assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: 0.40 }), false);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: -0.01 }), true);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: 0.47 }), false);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: -0.02 }), false);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'nonpositive-edge', edge: -0.014 }), true);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'nonpositive-edge', edge: -0.02 }), false);
-  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: 0.012 }), true);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: -0.01 }), true);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: 0.012 }), false);
 
   // Cap: 15 yes-pool rows outrank near-misses; only 20 sides survive.
   const candidateTable = [];
@@ -119,7 +121,7 @@ function baseDeps(extra) {
   for (let i = 0; i < 10; i++) {
     rejections.push({
       sport: 'MLB', matchup: `Miss ${i} @ Opp`, side: `Under ${i}.5`, market: 'Total',
-      reason: 'ev-floor', odds: -110, edge: -0.001 * (i + 1), ev: 0.03 - 0.001 * (i + 1),
+      reason: 'ev-floor', odds: -110, edge: -0.001 * (i + 1), ev: -0.001 * (i + 1),
       coverProb: 0.50, fair_sharp_p: 0.50, commenceTime: COMMENCE, line: i + 0.5,
     });
   }

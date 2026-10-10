@@ -17,7 +17,7 @@ const config = require(path.join(root, 'config'));
 const epa = require(path.join(root, 'sports/epa'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.strictEqual(epa.sierraWeight(2, epa.SPORT_CFG.NFL), 0.2);
 assert.strictEqual(epa.sierraWeight(2, epa.SPORT_CFG.NCAAF), 0.2);
 assert.strictEqual(epa.SPORT_CFG.NFL.plays, 62);

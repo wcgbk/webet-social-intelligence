@@ -10,7 +10,7 @@ const math = require(path.join(root, 'odds_math'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
 assert.strictEqual(config.B_GRADE_UNIT_CAP, 0.5);
 assert.strictEqual(config.KELLY_FRACTION, 0.25);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -18,10 +18,10 @@ assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
 assert.strictEqual(config.QUALITY_GRADE.a, 0.035);
 assert.strictEqual(config.QUALITY_GRADE.aminus, 0.02);
-assert.strictEqual(config.GATES.minEV.MLB, 0.03);
-assert.strictEqual(config.GATES.minEV.NFL, 0.025);
-assert.strictEqual(config.GATES.minCoverProb.MLB, 0.48);
-assert.strictEqual(config.GATES.minCoverProb.NFL, 0.48);
+assert.strictEqual(config.GATES.minEV.MLB, 0);
+assert.strictEqual(config.GATES.minEV.NFL, 0);
+assert.strictEqual(config.GATES.minCoverProb.MLB, 0);
+assert.strictEqual(config.GATES.minCoverProb.NFL, 0);
 
 function kellyUnits(coverProb, unitCap) {
   const cap = unitCap == null ? config.MAX_STRAIGHT_UNITS_PER_PICK : unitCap;

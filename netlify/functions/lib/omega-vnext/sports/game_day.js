@@ -79,6 +79,9 @@ function lookupRest(teamName, restByTeam, sport, fallbackSeen) {
 function restDaysProxy(sport, restRow) {
   if (!restRow || !restRow.playedYesterday) return null;
   // Prior-day scoreboard only tells us "played yesterday" → rest ≈ 1 calendar day.
+  // REST-PROXY-EXTRA-DAYS-DEAD: this returns 1 or null. EXTRA_REST_DAYS is
+  // 2+ for every sport, so hfaAdjustment's extra-rest branch never fires on
+  // the proxy. That branch stays for a future schedule-fed restDays.
   return 1;
 }
 
@@ -280,6 +283,7 @@ function hfaAdjustment(sport, homeRestDays, awayRestDays) {
   // If only home is fresh (no prior-day play) and away is short → already covered.
   // Extra rest home: we only know "didn't play yesterday" so skip strong extra-rest
   // unless restDays explicitly large (future schedule ingest).
+  // Dead on the played-yesterday proxy (restDaysProxy is 1 or null; extra is 2+).
   if (homeRestDays != null && homeRestDays >= extra) adj += cfg.extraRest;
   if (awayRestDays != null && awayRestDays >= extra) adj -= cfg.extraRest * 0.5;
   return clamp(adj, -cfg.max, cfg.max);

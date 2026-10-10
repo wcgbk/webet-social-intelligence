@@ -572,13 +572,14 @@ function totalPointForBook(event, book) {
 }
 
 /**
- * Sharp no-vig total: the run line, not a probability.
+ * Median posted total point among sharp books. Not a de-vigged probability.
  * Pinnacle and Circa (circa, else circasports) at equal weight when both
  * post a total. One of them alone when the other is missing. Otherwise
  * the median of the other sharp books. No sharp total → null (that game
  * does not enter the slate mean).
+ * sharpNoVigTotal is the historical name. The math is unchanged.
  */
-function sharpNoVigTotal(event) {
+function sharpPostedTotal(event) {
   if (!event) return null;
   const pin = totalPointForBook(event, 'pinnacle');
   let circa = totalPointForBook(event, 'circa');
@@ -600,6 +601,8 @@ function sharpNoVigTotal(event) {
   pts.sort((a, b) => a - b);
   return pts[Math.floor(pts.length / 2)];
 }
+
+const sharpNoVigTotal = sharpPostedTotal;
 
 /**
  * Runs to subtract from every MLB modelTotal this generate.
@@ -680,6 +683,7 @@ module.exports = {
   MLB_TOTAL_RECENTER_MIN,
   mlbToggleOn,
   mlbTotalFlags,
+  sharpPostedTotal,
   sharpNoVigTotal,
   mlbTotalLevelShift,
   applyMlbTotalShift,

@@ -93,14 +93,31 @@ function simulate(from, through) {
   return runs;
 }
 
+function wallCounts(ymd) {
+  const counts = {};
+  const t0 = Date.parse(`${ymd}T03:00:00Z`);
+  for (let t = t0; t < t0 + 30 * 3600 * 1000; t += 60000) {
+    const parts = et.etParts(new Date(t));
+    if (parts.ymd !== ymd) continue;
+    counts[parts.et] = (counts[parts.et] || 0) + 1;
+  }
+  return counts;
+}
+
 function expectSlots(from, through) {
   const expected = {};
+  const walls = {};
+  for (const ymd of etDays(from, through)) walls[ymd] = wallCounts(ymd);
   for (const [name, spec] of Object.entries(et.ET_SCHEDULE)) {
     expected[name] = {};
     for (const ymd of etDays(from, through)) {
       const weekday = et.etParts(new Date(`${ymd}T16:00:00Z`)).weekday;
       if (Array.isArray(spec.days) && spec.days.indexOf(weekday) === -1) continue;
-      for (const slot of spec.etTimes) expected[name][`${ymd}|${slot}`] = 1;
+      for (const slot of spec.etTimes) {
+        const occur = walls[ymd][slot] || 0;
+        const n = spec.dstFold === 'both' ? occur : (occur > 0 ? 1 : 0);
+        if (n > 0) expected[name][`${ymd}|${slot}`] = n;
+      }
     }
   }
   return expected;
@@ -113,7 +130,7 @@ function assertWindow(from, through) {
     const got = runs[name];
     const want = expected[name];
     for (const key of Object.keys(want)) {
-      assert.strictEqual(got[key] || 0, 1, `${name} ${key} during ${from}..${through} ran ${got[key] || 0}`);
+      assert.strictEqual(got[key] || 0, want[key], `${name} ${key} during ${from}..${through} ran ${got[key] || 0} want ${want[key]}`);
     }
     for (const key of Object.keys(got)) {
       assert.ok(Object.prototype.hasOwnProperty.call(want, key), `${name} unexpected run ${key} during ${from}..${through}`);
@@ -129,6 +146,34 @@ function assertWindow(from, through) {
 
 assertWindow('2026-10-25', '2026-11-08');
 assertWindow('2027-03-07', '2027-03-21');
+
+assert.strictEqual(et.ET_SCHEDULE['regrade-circa'].etTimes.length, 24);
+assert.ok(et.ET_SCHEDULE['regrade-circa'].etTimes.indexOf('01:40') !== -1);
+assert.ok(et.ET_SCHEDULE['regrade-circa'].etTimes.indexOf('02:40') !== -1);
+assert.strictEqual(et.ET_SCHEDULE['regrade-circa'].dstFold, 'both');
+{
+  const fall = simulate('2026-11-01', '2026-11-01');
+  assert.strictEqual(fall['regrade-circa']['2026-11-01|01:40'], 2, 'fall-back 01:40 runs both copies');
+  assert.strictEqual(fall['regrade-circa']['2026-11-01|02:40'], 1);
+  assert.strictEqual(fall['capture-candidate-closes']['2026-11-01|01:00'], 1, 'closes keep the later fold only');
+  assert.strictEqual(fall['capture-candidate-closes']['2026-11-01|01:15'], 1);
+  assert.strictEqual(fall['capture-candidate-closes']['2026-11-01|01:30'], 1);
+  const springDay = simulate('2027-03-14', '2027-03-14');
+  assert.strictEqual(springDay['regrade-circa']['2027-03-14|02:40'] || 0, 0, 'spring-forward has no 02:40');
+  assert.strictEqual(springDay['regrade-circa']['2027-03-14|01:40'], 1);
+  assert.strictEqual(springDay['regrade-circa']['2027-03-14|03:40'], 1);
+}
+const earlyFold = et.etGuard('regrade-circa', schedulerEvent(), new Date('2026-11-01T05:40:00Z'));
+assert.strictEqual(earlyFold.run, true);
+assert.strictEqual(earlyFold.reason, 'dst-fold-both');
+assert.strictEqual(earlyFold.matched, '01:40');
+const laterFold = et.etGuard('regrade-circa', schedulerEvent(), new Date('2026-11-01T06:40:00Z'));
+assert.strictEqual(laterFold.run, true);
+assert.strictEqual(laterFold.reason, 'et-match');
+assert.strictEqual(laterFold.matched, '01:40');
+const earlyClose = et.etGuard('capture-candidate-closes', schedulerEvent(), new Date('2026-11-01T05:00:00Z'));
+assert.strictEqual(earlyClose.run, false);
+assert.strictEqual(earlyClose.reason, 'dst-fold');
 
 const sched = schedulerEvent('2026-10-07T13:30:00.000Z');
 const at0930 = new Date('2026-10-07T13:30:00Z');

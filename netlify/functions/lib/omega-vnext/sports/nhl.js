@@ -26,7 +26,7 @@
 const { clamp } = require('../odds_math');
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup, mapGamesSoft, LEAGUE_PPG,
+  formatMatchup, mapGamesSoft, LEAGUE_PPG, bindEspnGameByTeamAndTime,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { resolveTeamId, rowByIdentityOrFuzzy, logUnknownTeam } = require('./team_identity');
@@ -607,14 +607,7 @@ function buildMethods({ enginesOn, usedGameday }) {
 }
 
 function findEspnGame(ev, espnGames) {
-  const games = (espnGames && espnGames.games) || espnGames || [];
-  if (!ev || !games.length) return null;
-  const hid = resolveTeamId(SPORT, ev.home_team);
-  const aid = resolveTeamId(SPORT, ev.away_team);
-  if (!hid || !aid) return null;
-  return games.find((g) => {
-    return resolveTeamId(SPORT, g.homeTeam) === hid && resolveTeamId(SPORT, g.awayTeam) === aid;
-  }) || null;
+  return bindEspnGameByTeamAndTime(SPORT, ev, espnGames);
 }
 
 function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline) {

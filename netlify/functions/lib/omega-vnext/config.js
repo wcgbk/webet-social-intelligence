@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.14-omega-vnext-rest';
+const MODEL_VERSION = 'v12.3.15-omega-vnext-night';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -323,15 +323,12 @@ const QUALITY_GRADE = {
 };
 
 /**
- * Historical mix. v12.3.11 straight rank is qualityScore (calibrated edge vs
- * no-vig), not w_ev / w_clv / w_uncertainty. softSportMixBonus is still added.
- * The numbers stay so a silent retune of the old mix is still visible in tests.
+ * Straight rank is qualityScore (calibrated edge vs no-vig). The old
+ * w_ev / w_clv / w_uncertainty / corr_penalty mix was not read. Those
+ * constants are gone. softSportMixBonus is the steamToward nudge inside
+ * the initial sort only. It does not re-rank the three already chosen.
  */
 const SELECT_WEIGHTS = {
-  w_ev: 0.35,
-  w_clv: 0.45, // CLV-first
-  w_uncertainty: 0.20,
-  corr_penalty: 0.15,
   softSportMixBonus: 0.02,
 };
 
@@ -568,6 +565,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.15-omega-vnext-night: Saturday card correctness. MLB/NFL/NCAAF/NHL/NBA ESPN rows bind by resolved team id and nearest commence; two rows reject unless the nearest is within 75 minutes and at least 75 minutes clearer than the next (IDENTITY_CLEAR_MARGIN_MS). Doubleheader matchup keys include commence time (still one price per game, max 3 straights). Unused rank weights w_ev, w_clv, w_uncertainty, and corr_penalty are removed; rank stays qualityScore. The post-hoc softSportMixBonus write no longer reorders the chosen straights. NFL id-only fallback passes neutralSite. regrade-circa runs every ET hour at :40 including 01:40 and 02:40 (dstFold both). Played-yesterday rest proxy is documented as 1 day only. sharpPostedTotal is the posted sharp total point. NHL health copy says a snap that lacks goal columns is not a live 6.2 claim. Capture-health reports legacy clv-candidates-{date} row counts for today and yesterday (read only). No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.14-omega-vnext-rest: NFL/NCAAF rest days from ESPN weekly scoreboards (card week and the previous two). Short week, mini-bye, bye, and Monday-night into Sunday move the home margin by the team difference plus a small road-on-short-rest term. Hard cap ±1.0 pt. NCAAF midweek and bye are half the NFL size, same cap. Totals unchanged. The current kickoff is not a prior game (same team-id pair within 36h, and the prior kickoff must be an earlier ET date). A team that is not FBS is unknown, so the game adj is 0. Neutral site drops the road-short term. OMEGA_REST_ADJ=0 restores the played-yesterday proxy. No gate, Kelly, unit-cap, SHRINK_K, calibration, or parlay change.',
   `v12.3.13 omega-vnext: NHL projector ENABLED (WeBet 2026-09-30). Moneyline, puck line (Spread), and total come from per-game goals for/against plus HFA.NHL ${HFA.NHL} (FiveThirtyEight home ice is about 50 Elo, already this goal HFA). Season totals divide by games, counting OT losses when games is absent. Missing or unclean GF/GA stays on the 6.2 / HFA baseline. A winPct residual runs only on that unclean path. Shot efficiency runs only when both clubs have shots and savePct; a goalie residual runs only when both save rates are present. v1 does not require a goalie confirmation feed. Both residuals sit under ENGINE_SOFT.NHL HARD CAP ±${ENGINE_SOFT.NHL.maxAbsMarginAdj} goals margin / ±${ENGINE_SOFT.NHL.maxAbsTotalAdj} total (goalie alone ±${ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj} / ±${ENGINE_SOFT.NHL.goalieMaxAbsTotalAdj}) and soft-fail to 0. Game-day B2B uses SHORT_REST_DAYS.NHL = 1 with a goal-scale HFA_ADJ (max 0.10). Projections soft-clamp at |margin| 6 and total 12 and still emit a candidate. Blend matches MLB: ML 0.50 / spread 0.50 / total 0.45, no-vig Pinnacle/Circa. SPORTS_ENABLED.NHL = true. Plug-in only on existing select path with MLB/NFL/NCAAF. No Omega core routing change. FIT off. No TSP. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, SELECT_WEIGHTS, or isotonic change. FIT off. No TSP. NBA off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
   'Patch 2026-09-28 (v12.3.12 label kept): NFL/NCAAF QB out/doubtful is no longer a QA hard-fail. Known QB injuries are priced once, not cancelled and not double-counted: qbSoftAdjust moves the model injury-blind baseline (margin NFL 3.0 / NCAAF 3.5 for out, 0.75x doubtful; total NFL -1.5 / NCAAF -2.0) before the 0.50/0.45 blend against the current market line (which already embeds the injury). qbContinuityAdjust no longer treats out/doubtful as unhealthy — that would have piled a second penalty on the same known injury. Continuity only moves for questionable. Edge gates then decide. MLB SP scratch/change hard-fail unchanged.',

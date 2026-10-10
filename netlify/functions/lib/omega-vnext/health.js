@@ -548,6 +548,15 @@ function slateGamesForRest(snap, sport) {
   }));
 }
 
+/** True when this NHL snap cannot show real goal columns. */
+function nhlSnapLacksGoalColumns(snap, guards) {
+  const missing = guards && guards.schemaFields;
+  if (missing && (missing.indexOf('goalsFor') !== -1 || missing.indexOf('goalsAgainst') !== -1)) return true;
+  const rows = standingsRows(snap, 'NHL');
+  if (!rows.length) return true;
+  return rows.every((row) => !schemaFieldPresent(row, 'goalsFor') && !schemaFieldPresent(row, 'goalsAgainst'));
+}
+
 function buildHealthRecord(input) {
   const src = input || {};
   const snap = src.snap || {};
@@ -600,9 +609,21 @@ function buildHealthRecord(input) {
     if (stats.gpUnknown) alerts.push({ sport, code: 'gp_unknown', detail: `teams=${stats.gpUnknown}` });
     if (stats.rateScale) alerts.push({ sport, code: 'rate_scale', detail: `teams=${stats.rateScale}` });
     if (stats.nhlPointsAsGoals) alerts.push({ sport, code: 'nhl_points_as_goals', detail: `teams=${stats.nhlPointsAsGoals}` });
-    if (stats.baselineTeams) alerts.push({ sport, code: 'baseline_teams', detail: `teams=${stats.baselineTeams}` });
+    if (stats.baselineTeams) {
+      let detail = `teams=${stats.baselineTeams}`;
+      // Early NHL snaps have no goal columns. Baseline then is the 6.2
+      // fallback, not a measurement that every club is scoring 6.2.
+      if (sport === 'NHL' && nhlSnapLacksGoalColumns(snap, guards)) {
+        detail += '; snap lacks goal columns, not a live 6.2 claim';
+      }
+      alerts.push({ sport, code: 'baseline_teams', detail });
+    }
     for (const field of guards.schemaFields) {
-      alerts.push({ sport, code: `schema_missing:${field}`, detail: `field=${field}` });
+      let detail = `field=${field}`;
+      if (sport === 'NHL' && (field === 'goalsFor' || field === 'goalsAgainst')) {
+        detail += '; snap lacks goal columns';
+      }
+      alerts.push({ sport, code: `schema_missing:${field}`, detail });
     }
     const gapN = (src.candidates || []).reduce((n, c) => {
       if (!c || c.sport !== sport) return n;

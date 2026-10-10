@@ -10,7 +10,7 @@ const math = require(path.join(root, 'odds_math'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.14-omega-vnext-rest');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.15-omega-vnext-night');
 assert.strictEqual(config.B_GRADE_UNIT_CAP, 0.5);
 assert.strictEqual(config.KELLY_FRACTION, 0.25);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);

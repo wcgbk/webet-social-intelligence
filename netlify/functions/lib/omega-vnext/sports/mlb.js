@@ -8,20 +8,20 @@
  * Season rates are neutralized by each club's home park, then the venue factor is applied once.
  * The finished total then loses the 2026 environment gap (OMEGA_MLB_ROOTFIX)
  * and, when the slate has a sharp total on at least 3 games, the slate mean
- * of (model − sharp no-vig total) instead (OMEGA_MLB_TOTAL_RECENTER).
+ * of (model − posted sharp total) instead (OMEGA_MLB_TOTAL_RECENTER).
  * Both off leaves this total on the pre-correction number. Margin is not shifted.
  * assumedStarter stays tagged for QA hard-fail.
  */
 const { HFA, ENGINE_SOFT } = require('../config');
 const {
-  formatMatchup,
+  formatMatchup, bindEspnGameByTeamAndTime,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { rowByIdentityOrFuzzy } = require('./team_identity');
 const {
   resolvePark, resolveSpQuality, applySpPark,
   resolveBullpenQuality, applyBullpenAdj, mlbSpKnownStd, mlbStandingsEnv,
-  sharpNoVigTotal, mlbTotalLevelShift, mlbTotalFlags, applyMlbTotalShift,
+  sharpPostedTotal, mlbTotalLevelShift, mlbTotalFlags, applyMlbTotalShift,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
@@ -123,9 +123,16 @@ function deriveGame(event, standings, espnGame, ctx) {
   modelMargin = gd.modelMargin;
   modelTotal = gd.modelTotal;
   uncertainty = gd.uncertainty;
-  const weatherKey = `${away}|${home}`;
-  const weather = (ctx && ctx.weatherByGame && (ctx.weatherByGame[weatherKey] || ctx.weatherByGame[home]))
+  const nameKey = `${away}|${home}`;
+  const timedKey = commenceTime ? `${nameKey}|${commenceTime}` : null;
+  const wxMap = (ctx && ctx.weatherByGame) || {};
+  // Timed key, then the row this game bound, then a legacy name key.
+  // A doubleheader name key is dropped on collision so the second game
+  // cannot paint the first.
+  const weather = (timedKey && wxMap[timedKey])
     || (espnGame && espnGame.weather)
+    || wxMap[nameKey]
+    || wxMap[home]
     || null;
   const wx = applyWeatherTotalAdj(modelTotal, weather);
   modelTotal = wx.modelTotal;
@@ -238,15 +245,7 @@ function priceGame(derived, totalShift) {
 }
 
 function findEspnGame(ev, espnGames) {
-  if (!espnGames || !espnGames.length) return null;
-  const home = (ev.home_team || '').toLowerCase();
-  const away = (ev.away_team || '').toLowerCase();
-  return espnGames.find(g => {
-    const gh = (g.homeTeam || '').toLowerCase();
-    const ga = (g.awayTeam || '').toLowerCase();
-    return (gh.includes(home.split(' ').pop()) || home.includes(gh.split(' ').pop()))
-      && (ga.includes(away.split(' ').pop()) || away.includes(ga.split(' ').pop()));
-  }) || null;
+  return bindEspnGameByTeamAndTime(SPORT, ev, espnGames);
 }
 
 function softFail(ev, err) {
@@ -291,7 +290,7 @@ function project({ oddsEvents, standings, espnGames, mlbPitcherStats, parkFactor
   if (flags.rootfix || flags.recenter) {
     shift = mlbTotalLevelShift(prepared.map(p => ({
       total: p.derived.modelTotal,
-      sharp: sharpNoVigTotal(p.ev),
+      sharp: sharpPostedTotal(p.ev),
     })), flags);
   }
   const all = [];

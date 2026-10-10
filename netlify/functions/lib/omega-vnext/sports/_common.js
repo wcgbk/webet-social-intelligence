@@ -17,26 +17,104 @@ function espnCommenceIso(game) {
 }
 
 /**
+ * Same gap get-results-omega.js names IDENTITY_CLEAR_MARGIN_MS.
+ * Not imported from that grader: the model must not depend on it.
+ * Two ESPN rows for one club pair are a bind only when the nearest
+ * commence is within this window AND at least this much closer than
+ * the next row. A single row is returned even if the clock is far.
+ */
+const ESPN_ROW_CLEAR_MARGIN_MS = 75 * 60 * 1000;
+
+function espnRows(espnGames) {
+  if (!espnGames) return [];
+  if (Array.isArray(espnGames)) return espnGames;
+  if (Array.isArray(espnGames.games)) return espnGames.games;
+  return [];
+}
+
+function oddsCommenceMs(ev) {
+  const iso = ev && (ev.commence_time || ev.commenceTime);
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? t : NaN;
+}
+
+/** Resolved name wins. Else the competitor id already on the row. */
+function espnSideId(sport, game, side) {
+  if (!game) return null;
+  const name = side === 'home'
+    ? (game.homeTeam || game.home_team)
+    : (game.awayTeam || game.away_team);
+  const fromName = resolveTeamId(sport, name);
+  if (fromName) return String(fromName);
+  const raw = side === 'home'
+    ? (game.homeId != null ? game.homeId : game.home_id)
+    : (game.awayId != null ? game.awayId : game.away_id);
+  if (raw == null || raw === '') return null;
+  return String(raw);
+}
+
+function orderedIdHits(sport, ev, games) {
+  if (!ev) return [];
+  const hid = resolveTeamId(sport, ev.home_team || ev.homeTeam);
+  const aid = resolveTeamId(sport, ev.away_team || ev.awayTeam);
+  if (!hid || !aid || String(hid) === String(aid)) return [];
+  const hits = [];
+  for (const g of games || []) {
+    if (!g) continue;
+    const gh = espnSideId(sport, g, 'home');
+    const ga = espnSideId(sport, g, 'away');
+    if (gh === String(hid) && ga === String(aid)) hits.push(g);
+  }
+  return hits;
+}
+
+/**
+ * 0 hits → null. 1 hit → that row (no absolute clock cap).
+ * 2+ hits → nearest commence only when it is finite, within 75 minutes
+ * of the odds commence, and at least 75 minutes clearer than the next.
+ * Otherwise null. Do not fall back to a last-word or first-row guess.
+ */
+function disambiguateEspnRows(ev, hits) {
+  if (!hits || !hits.length) return null;
+  if (hits.length === 1) return hits[0];
+  const ct = oddsCommenceMs(ev);
+  const ranked = hits.map((g) => {
+    const iso = espnCommenceIso(g);
+    const gt = iso ? Date.parse(iso) : NaN;
+    const diff = Number.isFinite(ct) && Number.isFinite(gt) ? Math.abs(gt - ct) : Infinity;
+    return { g, diff };
+  }).sort((a, b) => a.diff - b.diff);
+  const best = ranked[0];
+  const second = ranked[1];
+  if (!(Number.isFinite(best.diff) && best.diff <= ESPN_ROW_CLEAR_MARGIN_MS)) return null;
+  if (!(second.diff - best.diff >= ESPN_ROW_CLEAR_MARGIN_MS)) return null;
+  return best.g;
+}
+
+/**
+ * Odds event → ESPN row by resolved team ids and nearest commence.
+ * No same-day requirement. No last-word match.
+ */
+function bindEspnGameByTeamAndTime(sport, ev, espnGames) {
+  return disambiguateEspnRows(ev, orderedIdHits(sport, ev, espnRows(espnGames)));
+}
+
+/**
  * Odds event → ESPN game by resolved team ids and the same America/New_York
  * calendar date. Exact alias lookup only (resolveTeamId). Missing id or
- * missing date is a miss. First hit wins. No fuzzy or last-word match.
+ * missing date is a miss. One same-date row is returned. Two or more
+ * same-date rows use disambiguateEspnRows. No fuzzy or last-word match.
  */
 function matchEspnGameByIdentity(sport, ev, espnGames) {
-  const games = (espnGames && espnGames.games) || espnGames || [];
+  const games = espnRows(espnGames);
   if (!ev || !games.length) return null;
-  const hid = resolveTeamId(sport, ev.home_team);
-  const aid = resolveTeamId(sport, ev.away_team);
-  if (!hid || !aid) return null;
-  const evDate = etCalendarDate(ev.commence_time);
+  const evDate = etCalendarDate(ev.commence_time || ev.commenceTime);
   if (!evDate) return null;
-  return games.find((g) => {
-    if (!g) return false;
-    const gh = resolveTeamId(sport, g.homeTeam || g.home_team);
-    const ga = resolveTeamId(sport, g.awayTeam || g.away_team);
-    if (gh !== hid || ga !== aid) return false;
+  const hits = orderedIdHits(sport, ev, games).filter((g) => {
     const gd = etCalendarDate(espnCommenceIso(g));
     return gd != null && gd === evDate;
-  }) || null;
+  });
+  return disambiguateEspnRows(ev, hits);
 }
 
 // MLB and NHL only. NFL/NCAAF identity is team_identity.js (exact ESPN id).
@@ -569,6 +647,9 @@ function pricedFromPointShrink(probAt, projRaw, projShrunk, line, anchor, weight
 
 module.exports = {
   formatMatchup,
+  ESPN_ROW_CLEAR_MARGIN_MS,
+  bindEspnGameByTeamAndTime,
+  disambiguateEspnRows,
   matchEspnGameByIdentity,
   fuzzyTeam,
   knownCount,

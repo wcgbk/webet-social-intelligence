@@ -13,7 +13,12 @@ const {
 const { footballAuditFields } = require('./sports/_common');
 
 function matchupKey(c) {
-  return String(c.matchup || `${c.awayTeam} @ ${c.homeTeam}`).toLowerCase().trim();
+  const name = String((c && (c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) || '').toLowerCase().trim();
+  const when = (c && (c.commenceTime || c.commence_time)) || '';
+  // Doubleheader halves are different games. An empty commence stays
+  // name-only so two undated legs of one matchup still conflict.
+  if (!when) return name;
+  return `${name}|${String(when)}`;
 }
 
 function clampPmScoreAdj(v) {
@@ -25,20 +30,20 @@ function clampPmScoreAdj(v) {
   return v;
 }
 
-function scoreCandidate(c, selectedSports) {
+function scoreCandidate(c) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
   // Same number the letter grade uses: calibrated edge vs no-vig sharp,
   // plus a small residual-CLV nudge. Raw EV is not the rank — a +180 dog
   // inflates EV without a better close. Steam and PM stay score-only.
+  // The old post-hoc softSportMixBonus write re-sorted the three already
+  // chosen straights. That write is gone. This steam nudge stays, because
+  // it is part of the sort that decides who is selected.
   const clvRaw = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   let s = qualityScore(c.edgePct, clvRaw, c.uncertainty);
   if (typeof c._steamScoreAdj === 'number') s += c._steamScoreAdj;
   s += clampPmScoreAdj(c._pmScoreAdj);
   if (c.steamToward && ev > 0) s += (w.softSportMixBonus || 0.02);
-  if (selectedSports && selectedSports.size && !selectedSports.has(c.sport)) {
-    s += w.softSportMixBonus;
-  }
   return s;
 }
 
@@ -51,16 +56,13 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
   const pool = [...(yesPool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
   const picked = [];
   const usedGames = new Set();
-  const sports = new Set();
 
   for (const c of pool) {
     if (picked.length >= maxN) break;
     const g = matchupKey(c);
     if (usedGames.has(g)) continue;
-    const scored = { ...c, _score: scoreCandidate(c, sports) };
-    picked.push(scored);
+    picked.push({ ...c, _score: scoreCandidate(c) });
     usedGames.add(g);
-    sports.add(c.sport);
   }
 
   picked.sort((a, b) => (b._score || 0) - (a._score || 0));
@@ -161,6 +163,10 @@ function toPickObject(c, opts = {}) {
     awayTeam: c.awayTeam,
     source: 'omega-vnext',
     p_model: c.p_model != null ? +Number(c.p_model).toFixed(4) : null,
+    p_cal: c.coverProb != null && Number.isFinite(Number(c.coverProb)) ? +Number(c.coverProb).toFixed(4) : null,
+    modelProjection: c.modelProjection != null && Number.isFinite(Number(c.modelProjection))
+      ? +Number(c.modelProjection).toFixed(2)
+      : null,
     fair_sharp_p: c.fair_sharp_p != null ? +Number(c.fair_sharp_p).toFixed(4) : null,
     predictedClv: c.predictedClv,
     modelVersion: opts.modelVersion,

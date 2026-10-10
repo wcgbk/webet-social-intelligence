@@ -52,4 +52,4 @@ Teams in the talent seed with no EPA row stay on the standings path. The overlay
 
 ## Unchanged (bans)
 
-`SHRINK_K`, `SELECT_WEIGHTS`, market blend weights for MLB/NFL/NCAAF, gates, Kelly, grades, unit caps, `PM_SOFT`, `FIT_ENABLED=false`, no TSP, NBA off. NHL is on the same select path as MLB/NFL/NCAAF.
+`SHRINK_K`, market blend weights for MLB/NFL/NCAAF, gates, Kelly, grades, unit caps, `PM_SOFT`, `FIT_ENABLED=false`, no TSP, NBA off. NHL is on the same select path as MLB/NFL/NCAAF. Unused rank weights (`w_ev`, `w_clv`, `w_uncertainty`, `corr_penalty`) were removed. Straight rank is still `qualityScore`. `SELECT_WEIGHTS.softSportMixBonus` is only the steam nudge in that sort. The post-hoc sport-mix write that re-sorted the three chosen straights is gone.

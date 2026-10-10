@@ -22,7 +22,7 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.14-omega-vnext-rest');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.15-omega-vnext-night');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
@@ -63,10 +63,6 @@ assert.deepStrictEqual(config.PM_SOFT, {
   venueCombine: 'average',
 });
 assert.deepStrictEqual(config.SELECT_WEIGHTS, {
-  w_ev: 0.35,
-  w_clv: 0.45,
-  w_uncertainty: 0.20,
-  corr_penalty: 0.15,
   softSportMixBonus: 0.02,
 });
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });

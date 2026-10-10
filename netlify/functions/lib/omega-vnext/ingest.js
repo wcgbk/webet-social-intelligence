@@ -699,6 +699,29 @@ function extractWeather(comp) {
   };
 }
 
+/**
+ * MLB weather keys. A commence-qualified key is always stored.
+ * The name-only key is kept for a single game and deleted when a second
+ * row for the same clubs collides, so a doubleheader cannot share weather.
+ */
+function indexMlbWeather(games) {
+  const weatherByGame = {};
+  const seenName = new Set();
+  for (const g of games || []) {
+    if (!g || !g.weather) continue;
+    const nameKey = `${g.awayTeam || ''}|${g.homeTeam || ''}`;
+    const iso = g.commenceTime || g.commence_time || '';
+    if (iso) weatherByGame[`${nameKey}|${iso}`] = g.weather;
+    if (seenName.has(nameKey)) {
+      delete weatherByGame[nameKey];
+    } else {
+      weatherByGame[nameKey] = g.weather;
+      seenName.add(nameKey);
+    }
+  }
+  return weatherByGame;
+}
+
 async function loadGameDayContext(dateISO, labels, espnBySport) {
   const gameDay = {
     restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
@@ -756,13 +779,7 @@ async function loadGameDayContext(dateISO, labels, espnBySport) {
   }
   // Weather from today's MLB ESPN board already fetched
   const mlbBoard = espnBySport && espnBySport.MLB;
-  for (const g of (mlbBoard && mlbBoard.games) || []) {
-    // weather may not be on our mapped games — leave empty unless present
-    if (g.weather) {
-      const key = `${g.awayTeam || ''}|${g.homeTeam || ''}`;
-      gameDay.weatherByGame[key] = g.weather;
-    }
-  }
+  Object.assign(gameDay.weatherByGame, indexMlbWeather((mlbBoard && mlbBoard.games) || []));
   return gameDay;
 }
 
@@ -941,6 +958,7 @@ module.exports = {
   loadParkFactors,
   loadSportEngines,
   loadGameDayContext,
+  indexMlbWeather,
   applyNhlStandingStats,
   oddsFailureRecord,
   applyFootballStandingExtras,

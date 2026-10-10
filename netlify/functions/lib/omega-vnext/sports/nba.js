@@ -39,6 +39,7 @@ const { clamp } = require('../odds_math');
 const { HFA, SPORT_SPREAD_STD, SPORT_TOTAL_STD } = require('../config');
 const {
   formatMatchup, gamesPlayed, explicitPointsPerGame, LEAGUE_PPG, mapGamesSoft,
+  bindEspnGameByTeamAndTime,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { applyGameDayAdjustments } = require('./game_day');
@@ -309,13 +310,7 @@ function nbaRestTable(gameDay) {
 }
 
 function findEspnGame(ev, espnGames) {
-  if (!ev || !espnGames || !espnGames.length) return null;
-  const hid = resolveTeamId(SPORT, ev.home_team);
-  const aid = resolveTeamId(SPORT, ev.away_team);
-  if (!hid || !aid) return null;
-  return espnGames.find((g) => {
-    return resolveTeamId(SPORT, g.homeTeam) === hid && resolveTeamId(SPORT, g.awayTeam) === aid;
-  }) || null;
+  return bindEspnGameByTeamAndTime(SPORT, ev, espnGames);
 }
 
 function eventIsPreseason(ev, espnGame, opts) {

@@ -85,8 +85,21 @@ function assertNeutralDelta(project, sport, hfa, home, away) {
   };
   const unmatched = project({ oddsEvents: [ev], standings: {}, efficiency: {}, espnGames: { games: [wrongDay] } });
   const baseline = project({ oddsEvents: [ev], standings: {}, efficiency: {} });
-  assert.deepStrictEqual(unmatched, baseline, `${sport} different ET date stays on today's HFA`);
-  assert.ok(!Object.prototype.hasOwnProperty.call(spreadOf(unmatched), 'diag'));
+  if (sport === 'NFL') {
+    const row = spreadOf(unmatched);
+    assert.strictEqual(row.gameDay.hfaBase, 0, 'NFL id-only fallback passes neutralSite');
+    assert.deepStrictEqual(row.diag, { neutralSite: true });
+    assert.strictEqual(row.modelProjection, +(spreadOf(baseline).modelProjection - hfa).toFixed(2));
+    const wrongDayOff = { ...wrongDay, neutralSite: false };
+    assert.deepStrictEqual(
+      project({ oddsEvents: [ev], standings: {}, efficiency: {}, espnGames: { games: [wrongDayOff] } }),
+      baseline,
+      'NFL id-only non-neutral keeps HFA'
+    );
+  } else {
+    assert.deepStrictEqual(unmatched, baseline, `${sport} different ET date stays on today's HFA`);
+    assert.ok(!Object.prototype.hasOwnProperty.call(spreadOf(unmatched), 'diag'));
+  }
 
   const notNeutral = {
     homeTeam: home,
@@ -125,11 +138,14 @@ function assertNeutralDelta(project, sport, hfa, home, away) {
 
   const noDate = synthEvent(home, away, null);
   const noDateBase = project({ oddsEvents: [noDate], standings: {}, efficiency: {} });
-  assert.deepStrictEqual(
-    project({ oddsEvents: [noDate], standings: {}, efficiency: {}, espnGames: { games: [espn] } }),
-    noDateBase,
-    `${sport} missing commence time is unmatched`
-  );
+  const noDateHit = project({ oddsEvents: [noDate], standings: {}, efficiency: {}, espnGames: { games: [espn] } });
+  if (sport === 'NFL') {
+    const row = spreadOf(noDateHit);
+    assert.strictEqual(row.gameDay.hfaBase, 0, 'NFL id match with no odds clock still passes neutralSite');
+    assert.deepStrictEqual(row.diag, { neutralSite: true });
+  } else {
+    assert.deepStrictEqual(noDateHit, noDateBase, `${sport} missing commence time is unmatched`);
+  }
 }
 
 assertNeutralDelta(nfl.project, 'NFL', config.HFA.NFL, 'Kansas City Chiefs', 'Buffalo Bills');

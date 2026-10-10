@@ -503,13 +503,13 @@ function gradeOne(pick, final) {
 }
 
 function matchFinal(pick, finals) {
-  const { resolveTeamId } = require('./sports/team_identity');
-  const hid = resolveTeamId('NBA', pick.homeTeam);
-  const aid = resolveTeamId('NBA', pick.awayTeam);
-  if (!hid || !aid) return null;
-  return (finals || []).find((g) => {
-    return resolveTeamId('NBA', g.homeTeam) === hid && resolveTeamId('NBA', g.awayTeam) === aid;
-  }) || null;
+  const { bindEspnGameByTeamAndTime } = require('./sports/_common');
+  if (!pick) return null;
+  return bindEspnGameByTeamAndTime('NBA', {
+    home_team: pick.homeTeam,
+    away_team: pick.awayTeam,
+    commence_time: pick.commenceTime,
+  }, finals);
 }
 
 /**
@@ -583,6 +583,7 @@ async function gradeNbaShadow(opts = {}) {
 module.exports = {
   runNbaShadow,
   gradeNbaShadow,
+  matchFinal,
   fetchNbaBoard,
   gradeOne,
   shadowKey,

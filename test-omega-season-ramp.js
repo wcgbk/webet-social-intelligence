@@ -17,7 +17,7 @@ const ingest = require(path.join(root, 'ingest'));
 const { gamesPlayed } = require(path.join(root, 'sports/_common'));
 const { clamp } = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.15-omega-vnext-night');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.16-omega-vnext-ncaaf-oa-wx');
 
 const nfl = epa.SPORT_CFG.NFL;
 const cfb = epa.SPORT_CFG.NCAAF;

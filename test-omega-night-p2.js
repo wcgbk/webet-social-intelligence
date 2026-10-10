@@ -9,8 +9,8 @@ const { buildHealthRecord } = require(path.join(root, 'health'));
 const healthFn = require(path.join(__dirname, 'netlify/functions/get-omega-capture-health'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.15-omega-vnext-night');
-assert.ok(String(config.MODEL_NOTES).includes('v12.3.15-omega-vnext-night'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.16-omega-vnext-ncaaf-oa-wx');
+assert.ok(String(config.MODEL_NOTES).includes('v12.3.16-omega-vnext-ncaaf-oa-wx'));
 assert.strictEqual(env.sharpPostedTotal, env.sharpNoVigTotal);
 
 const both = {

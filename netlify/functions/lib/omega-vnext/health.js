@@ -699,6 +699,8 @@ function buildHealthRecord(input) {
       yesPool: sideSplit(src.yesPool),
     },
     mlbPitchersEmpty,
+    // Private. Not copied onto compactHealth, so it stays off the public card.
+    shortfall: src.shortfall || null,
     oddsErrors: oddsErrors.map(e => ({
       sport: e.sport || null,
       status: e.status == null ? null : e.status,

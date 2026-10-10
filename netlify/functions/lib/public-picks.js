@@ -2,6 +2,7 @@
 // (candidateTable, modelProjections, thinkingText, rejections, gapReview,
 // Kelly internals). Those are unused on /omega /nfl /cfb cards and dominate
 // TTFB + parse time. gapReview is the private model-vs-line flag list.
+// shortfall is the private "fewer than 3 straights / no 3-leg" debug list.
 // Premium Sharp Depth still comes from get-picks-premium.
 //
 // CFB: pick/matchup stay full names (ESPN match keys). pickDisplay/matchupDisplay
@@ -27,6 +28,7 @@ const ROOT_DROP = [
   'teamIdentity',
   'gapReview',
   'health',
+  'shortfall',
 ];
 
 function pickPublic(p) {

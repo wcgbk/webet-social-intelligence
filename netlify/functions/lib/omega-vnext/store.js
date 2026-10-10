@@ -355,8 +355,8 @@ async function storeReplaySummary(runId, summary) {
   return key;
 }
 
-/** Ops-only capture-health snapshots — NEVER live picks / latest-date. */
-const OPS_KEY_RE = /^omega-ops\/capture-health(?:-latest|-\d{4}-\d{2}-\d{2})$/;
+/** Ops-only capture-health and late-news runs — NEVER live picks / latest-date. */
+const OPS_KEY_RE = /^omega-ops\/(?:capture-health(?:-latest|-\d{4}-\d{2}-\d{2})|late-news(?:-latest|-\d{4}-\d{2}-\d{2}))$/;
 
 function assertOpsKey(key) {
   const k = String(key || '');
@@ -397,6 +397,41 @@ async function storeCaptureHealthSnapshot(dateISO, snapshot) {
 
 async function readCaptureHealthLatest() {
   return readJson(assertOpsKey('omega-ops/capture-health-latest'));
+}
+
+/**
+ * Append one late-news ops run. Dated key plus late-news-latest.
+ * Caps the dated runs list at 48. Soft-fail at the call site.
+ */
+async function storeLateNewsOps(dateISO, run) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`omega-ops refused bad date: ${dateISO}`);
+  }
+  const datedKey = assertOpsKey(`omega-ops/late-news-${d}`);
+  const latestKey = assertOpsKey('omega-ops/late-news-latest');
+  let prev = null;
+  try {
+    prev = await readJson(datedKey);
+  } catch (e) {
+    prev = null;
+  }
+  const prior = Array.isArray(prev && prev.runs) ? prev.runs : [];
+  const runs = prior.slice(-47);
+  runs.push(run || {});
+  const payload = {
+    date: d,
+    opsOnly: true,
+    storedAt: new Date().toISOString(),
+    runs,
+  };
+  await storeJson(datedKey, payload);
+  try {
+    await storeJson(latestKey, payload);
+  } catch (e) {
+    console.error(`[omega-vnext/store] late-news latest: ${e.message}`);
+  }
+  return { dated: datedKey, latest: latestKey };
 }
 
 async function readCaptureHealthDate(dateISO) {
@@ -482,6 +517,7 @@ module.exports = {
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
+  storeLateNewsOps,
   readUnmatchedTeams,
   healthBlobKey, storeHealthRecord, readHealthRecord, readHealthLatest,
 };

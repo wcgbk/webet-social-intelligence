@@ -36,6 +36,25 @@ function quarterHourSlots(startHHMM, endHHMM) {
   return out;
 }
 
+/** Inclusive ET half-hours. end may be after midnight (next ET day). */
+function halfHourSlots(startHHMM, endHHMM) {
+  const toMin = (hhmm) => {
+    const [h, m] = String(hhmm).split(':').map(Number);
+    return h * 60 + m;
+  };
+  const start = toMin(startHHMM);
+  let end = toMin(endHHMM);
+  if (end < start) end += 1440;
+  const out = [];
+  for (let t = start; t <= end; t += 30) {
+    const m = t % 1440;
+    const hh = String(Math.floor(m / 60)).padStart(2, '0');
+    const mm = String(m % 60).padStart(2, '0');
+    out.push(`${hh}:${mm}`);
+  }
+  return out;
+}
+
 /** Every ET hour at one minute, 00 through 23. */
 function hourlyAt(minute) {
   const mm = String(minute).padStart(2, '0');
@@ -49,6 +68,11 @@ const ET_SCHEDULE = {
   'trigger-picks-alpha': { etTimes: ['09:00'] },
   'trigger-picks-omega': { etTimes: ['09:30'] },
   'verify-picks-omega': { etTimes: ['10:30'] },
+  // Every 30 min, 11:00–23:30 ET inclusive. Cron is the UTC union of EDT
+  // (UTC-4) and EST (UTC-5): "0,30 15-23,0-4 * * *". etGuard drops the copy
+  // that is outside this list (15:00 UTC is 11:00 EDT and 10:00 EST; 04:30 UTC
+  // is 00:30 EDT and 23:30 EST). No slot sits in the 01:00 fall-back hour.
+  'pregame-check-omega': { etTimes: halfHourSlots('11:00', '23:30') },
   'trigger-picks-nfl': { etTimes: ['09:05'] },
   // Current union cron, expressed as ET = UTC-4. The handler still no-ops
   // outside the real Thu/Fri/Sat/holiday PT windows.
@@ -442,6 +466,7 @@ module.exports = {
   morningCardIdempotency,
   idempotencySkipResponse,
   utcHoursForEt,
+  halfHourSlots,
   parseCron,
   cronMatches,
   activeTomlSchedules,

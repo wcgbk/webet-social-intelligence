@@ -628,6 +628,7 @@ module.exports = {
   restAuditFields,
   qbSoftAdjust,
   qbContinuityAdjust,
+  lookupQb,
   applyGameDayAdjustments,
   applyWeatherTotalAdj,
   applyNflWeatherTotalAdj,

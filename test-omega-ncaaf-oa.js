@@ -320,4 +320,53 @@ assert.strictEqual(PLAYS, 68);
   }
 }
 
+// Pace prior comes from the seed table's own dispersion, not from a slate.
+{
+  assert.strictEqual(epa.ncaafPacePriorGames({}), null);
+  assert.strictEqual(epa.ncaafPacePriorGames(null), null);
+  const centered = epa.centerSeed(require(path.join(root, 'sports/data/cfb-epa-seed.json')));
+  const k = epa.ncaafPacePriorGames(centered);
+  const paces = [];
+  for (const [key, row] of Object.entries(centered)) {
+    if (!key || key.startsWith('_') || !epa.isCleanEpa(row)) continue;
+    paces.push((Number(row.offEpa) - Number(row.defEpa)) * PLAYS);
+  }
+  assert.ok(paces.length >= 8);
+  const mean = paces.reduce((s, x) => s + x, 0) / paces.length;
+  const variance = paces.reduce((s, x) => s + (x - mean) ** 2, 0) / paces.length;
+  const expectK = Math.round((config.SPORT_TOTAL_STD.NCAAF ** 2) / variance);
+  assert.strictEqual(k, expectK);
+  assert.ok(k > epa.NCAAF_OA_PRIOR_GAMES, `pace K ${k} should exceed strength K`);
+}
+
+// Same scores. A larger pace prior pulls a high-total team in on pace and
+// leaves its strength, which still uses K = 2, much closer to the loose fit.
+{
+  const dates = ['2026-09-05', '2026-09-12', '2026-09-19', '2026-09-26'];
+  const base = [];
+  for (const d of dates) {
+    base.push(game('5', '12', 24, 24, { commence: `${d}T16:00:00Z` }));
+    base.push(game('12', '9', 24, 24, { commence: `${d}T19:00:00Z` }));
+    base.push(game('9', '5', 24, 24, { commence: `${d}T22:00:00Z` }));
+    base.push(game('2', '5', 45, 17, { commence: `${d}T23:00:00Z` }));
+  }
+  function side(k) {
+    const pack = epa.solveNcaafOpponentRatings([boardFrom(base)], {
+      asOf: '2026-10-10',
+      efficiency: {},
+      minGames: 1,
+      pacePriorGames: k,
+      iters: 30,
+    });
+    const fit = pack.byId['2'];
+    return { pace: fit.off - fit.def, str: fit.off + fit.def };
+  }
+  const loose = side(2);
+  const tight = side(14);
+  assert.ok(loose.pace > tight.pace, `pace ${loose.pace} -> ${tight.pace}`);
+  assert.ok(tight.pace > 0, tight.pace);
+  assert.ok(Math.abs(tight.str - loose.str) < (loose.pace - tight.pace),
+    `strength moved ${tight.str - loose.str} pace moved ${loose.pace - tight.pace}`);
+}
+
 console.log('test-omega-ncaaf-oa: ok');

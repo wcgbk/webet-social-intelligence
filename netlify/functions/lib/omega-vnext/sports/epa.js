@@ -11,7 +11,7 @@
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
-const { HFA, ENGINE_SOFT, centerDefaultEnabled } = require('../config');
+const { HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled } = require('../config');
 const { clamp } = require('../odds_math');
 const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
 const { resolveTeamId, modelRow, logUnknownTeam, isFbsTeamId, teamRecord, rowByIdentity } = require('./team_identity');
@@ -76,16 +76,21 @@ const SPORT_CFG = {
 /**
  * Opponent-adjusted NCAAF ratings from completed games.
  *
- * Margin noise is about 14 points. Between-team FBS strength (off + def)
- * is about 10 points: a typical power-conference side sits near 10 points
- * from the mean, and the bulk of FBS is inside that. Prior weight
- * K = 14^2 / 10^2 = 1.96, taken as 2 games. Chosen a priori, same shape
- * as the NHL GF/GA prior, not fit on a slate.
+ * Strength and pace are different quantities, so they do not share a
+ * prior. Margin noise is about 14 points and between-team FBS strength
+ * (off + def) is about 10: K_strength = 14^2 / 10^2 = 1.96, taken as 2.
+ * Pace (off − def) is much tighter. Its prior variance is the seed
+ * table's own pace dispersion, and one game's total is noisier than
+ * that dispersion (SPORT_TOTAL_STD.NCAAF). K_pace = totalStd^2 / paceVar,
+ * rounded, computed from the seed at solve time rather than stored as a
+ * second magic number. Same shape as the NHL GF/GA prior. Neither K is
+ * fit on a slate.
  *
  * The prior mean is the centered EPA seed in points (offEpa * plays,
  * defEpa * plays) when that school has a seed, otherwise 0 (average FBS).
- * Current-season weight is g / (g + K). Results replace the seed; they
- * do not get blended again on the way out.
+ * Current-season weight is g / (g + K) on strength and on pace separately,
+ * then off = (S + P) / 2 and def = (S − P) / 2. Results replace the seed;
+ * they do not get blended again on the way out.
  *
  * Totals use a symmetric model, so the center is the mean points of
  * FBS-vs-FBS games decided by at most NCAAF_OA_BLOWOUT_MARGIN (28, four
@@ -99,6 +104,28 @@ const SPORT_CFG = {
  * path is unchanged.
  */
 const NCAAF_OA_PRIOR_GAMES = 2;
+
+/**
+ * Games of pace shrinkage implied by the seed table. Null when the table
+ * has too few clean rows to estimate a prior variance — the solver then
+ * uses the strength prior, which is the old shared-K behavior.
+ * Pace variance is the population variance of (off − def) in points.
+ */
+function ncaafPacePriorGames(efficiency) {
+  const plays = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.plays) || 68;
+  const noise = Number(SPORT_TOTAL_STD && SPORT_TOTAL_STD.NCAAF);
+  const paces = [];
+  for (const row of teamRows(efficiency)) {
+    if (!isCleanEpa(row)) continue;
+    paces.push((Number(row.offEpa) - Number(row.defEpa)) * plays);
+  }
+  if (paces.length < 8 || !Number.isFinite(noise) || noise <= 0) return null;
+  const mean = paces.reduce((s, x) => s + x, 0) / paces.length;
+  const variance = paces.reduce((s, x) => s + (x - mean) ** 2, 0) / paces.length;
+  if (!(variance > 0)) return null;
+  const k = Math.round((noise * noise) / variance);
+  return Number.isFinite(k) && k >= 1 ? k : null;
+}
 const NCAAF_OA_BLOWOUT_MARGIN = 28;
 const NCAAF_OA_MIN_GAMES = 40;
 const NCAAF_OA_ITERS = 16;
@@ -687,6 +714,10 @@ function solveNcaafOpponentRatings(boards, opts = {}) {
   const minGames = Number.isFinite(Number(opts.minGames)) ? Number(opts.minGames) : NCAAF_OA_MIN_GAMES;
   const plays = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.plays) || 68;
   const efficiency = opts.efficiency && typeof opts.efficiency === 'object' ? opts.efficiency : {};
+  const paceEstimated = ncaafPacePriorGames(efficiency);
+  const paceK = Number.isFinite(Number(opts.pacePriorGames))
+    ? Number(opts.pacePriorGames)
+    : (paceEstimated != null ? paceEstimated : shrinkK);
   const games = ncaafCompletedGames(boards).filter((g) => Date.parse(g.commence) < asOf);
   const fbsGames = games.filter((g) => g.hFbs && g.aFbs);
   if (fbsGames.length < minGames) return null;
@@ -759,12 +790,19 @@ function solveNcaafOpponentRatings(boards, opts = {}) {
     let count = 0;
     for (const id of ids) {
       const g = n.get(id) || 0;
-      const w = shrinkK > 0 ? g / (g + shrinkK) : 1;
       const pr = prior.get(id);
       const po = pr ? pr.o : 0;
       const pd = pr ? pr.d : 0;
-      const o = g ? (offSum.get(id) / g) * w + (1 - w) * po : po;
-      const d = g ? (defSum.get(id) / g) * w + (1 - w) * pd : pd;
+      // Strength and pace shrink on their own priors. Equal K reproduces
+      // the old per-component shrink: off and def then move together.
+      const ws = shrinkK > 0 ? g / (g + shrinkK) : 1;
+      const wp = paceK > 0 ? g / (g + paceK) : 1;
+      const sHat = g ? (offSum.get(id) + defSum.get(id)) / g : (po + pd);
+      const pHat = g ? (offSum.get(id) - defSum.get(id)) / g : (po - pd);
+      const S = g ? ws * sHat + (1 - ws) * (po + pd) : (po + pd);
+      const P = g ? wp * pHat + (1 - wp) * (po - pd) : (po - pd);
+      const o = (S + P) / 2;
+      const d = (S - P) / 2;
       off.set(id, o);
       def.set(id, d);
       so += o;
@@ -822,6 +860,7 @@ function solveNcaafOpponentRatings(boards, opts = {}) {
     games: fbsGames.length,
     closeGames: close.length,
     priorGames: shrinkK,
+    pacePriorGames: paceK,
     blowoutMargin: blowout,
     hfa: hfaBase,
   };
@@ -1032,6 +1071,7 @@ module.exports = {
   footballProjection,
   fallbackUncertainty,
   NCAAF_OA_PRIOR_GAMES,
+  ncaafPacePriorGames,
   NCAAF_OA_BLOWOUT_MARGIN,
   NCAAF_OA_MIN_GAMES,
   NCAAF_OA_MARGIN_CAP,

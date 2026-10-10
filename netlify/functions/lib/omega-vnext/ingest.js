@@ -781,7 +781,7 @@ async function attachNcaafOa(efficiencyBySport, dateISO) {
     }
     table._oa = pack;
     console.log(
-      `[omega-vnext/ingest] NCAAF OA games=${pack.games} close=${pack.closeGames} league=${pack.leagueTotal.toFixed(2)} fcs=${pack.fcsStrength.toFixed(1)}`
+      `[omega-vnext/ingest] NCAAF OA games=${pack.games} close=${pack.closeGames} league=${pack.leagueTotal.toFixed(2)} fcs=${pack.fcsStrength.toFixed(1)} paceK=${pack.pacePriorGames}`
     );
   } catch (e) {
     console.error(`[omega-vnext/ingest] NCAAF OA soft-fail: ${e.message}`);

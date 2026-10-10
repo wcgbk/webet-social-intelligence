@@ -163,16 +163,9 @@ function shareConference(a, b) {
  * are NCAAF totals that share a conference (either side).
  */
 function legsConflict(a, b) {
+  // WeBet 10/10: only same-game legs conflict. Correlation pricing may still lower EV.
   if (!a || !b) return false;
-  if (matchupKey(a) === matchupKey(b)) return true;
-  const da = totalDirection(a);
-  const db = totalDirection(b);
-  if (!da || !db) return false;
-  const la = leagueKey(a);
-  const lb = leagueKey(b);
-  if (la && la === lb && da === db) return true;
-  if (la === 'NCAAF' && lb === 'NCAAF' && shareConference(a, b)) return true;
-  return false;
+  return matchupKey(a) === matchupKey(b);
 }
 
 function enumerateCombos(pool, size) {

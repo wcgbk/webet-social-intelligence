@@ -4,6 +4,7 @@ const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
   MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, PM_SOFT,
+  PER_GAME_EXPOSURE_CAP_ENABLED,
 } = require('./config');
 const {
   kellyToUnits, ratingToConfidence, formatAmerican,
@@ -35,6 +36,12 @@ function clampPmScoreAdj(v) {
 /** Steam, PM, and steamToward together. Tie-break only. Cannot outrank edge. */
 const SCORE_NUDGE_CAP = 0.002;
 
+/** Calibrated edge vs no-vig fair. Missing edge sorts last. */
+function edgeRank(c) {
+  const e = parseEdgeFraction(c && c.edgePct);
+  return Number.isFinite(e) ? e : -Infinity;
+}
+
 function scoreCandidate(c) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
@@ -56,31 +63,26 @@ function scoreCandidate(c) {
   return s + nudge;
 }
 
+/** Higher calibrated edge first. scoreCandidate breaks an exact tie only. */
+function compareByEdge(a, b) {
+  const d = edgeRank(b) - edgeRank(a);
+  if (Math.abs(d) > 1e-12) return d;
+  return scoreCandidate(b) - scoreCandidate(a);
+}
+
 /**
- * Greedy diversify: ≤1 per game, up to MAX_STRAIGHTS.
- * When the pool has at least maxN distinct games, the result length is maxN.
+ * Top edges, up to MAX_STRAIGHTS. No one-per-game skip.
+ * A second side of the same game is a straight when its edge is in the top N.
  * A shorter pool stays short. Never pads with leans.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
-  const pool = [...(yesPool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
-  const picked = [];
-  const usedGames = new Set();
-
-  for (const c of pool) {
-    if (picked.length >= maxN) break;
-    const g = matchupKey(c);
-    if (usedGames.has(g)) continue;
-    picked.push({ ...c, _score: scoreCandidate(c) });
-    usedGames.add(g);
-  }
-
-  picked.sort((a, b) => (b._score || 0) - (a._score || 0));
-  return picked;
+  const pool = [...(yesPool || [])].sort(compareByEdge);
+  return pool.slice(0, maxN).map(c => ({ ...c, _score: edgeRank(c) }));
 }
 
 /** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
 function orderedByScore(pool) {
-  return [...(pool || [])].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+  return [...(pool || [])].sort(compareByEdge);
 }
 
 function parseU(u) {
@@ -323,13 +325,14 @@ function isVoidPregame(p) {
 /**
  * Straight units plus the full parlay stake on the same game, capped at
  * GAME_EXPOSURE_CAP. The parlay is never cut. Steps are 0.25u, floor 0.25u.
- * OMEGA_GAME_EXPOSURE defaults off and leaves the stakes from the slate cap.
- * Any other value turns this cap on.
+ * PER_GAME_EXPOSURE_CAP_ENABLED is false, so this trim does not run.
+ * OMEGA_GAME_EXPOSURE cannot turn it on.
  * A void-pregame leg is not stake at risk, so it does not count. A
  * void-pregame straight is left unchanged. Late-news removes a dropped
  * straight before enforceOmegaDailyUnitCap reruns this on the surviving card.
  */
 function capSameGameExposure(picks, parlays) {
+  if (!PER_GAME_EXPOSURE_CAP_ENABLED) return picks;
   if (!gameExposureEnabled()) return picks;
   const onGame = new Map();
   for (const pl of parlays || []) {
@@ -362,6 +365,7 @@ function capSameGameExposure(picks, parlays) {
 }
 
 module.exports = {
+  edgeRank,
   scoreCandidate,
   selectStraights,
   orderedByScore,

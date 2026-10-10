@@ -17,7 +17,7 @@ const { applyGates, gateReason } = require(path.join(root, 'gates'));
 const id = require(path.join(root, 'sports/team_identity'));
 const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
 assert.ok(/every slate team string/.test(config.MODEL_NOTES));
 assert.ok(/OMEGA_TEAM_EXACT_ONLY=0/.test(config.MODEL_NOTES));
 assert.ok(/suspended final/.test(config.MODEL_NOTES));
@@ -363,7 +363,7 @@ function byMarket(cands, market) {
   assert.strictEqual(pub.picks[0].unknownTeam, undefined);
   assert.strictEqual(pub.picks[0].unknownNames, undefined);
   assert.strictEqual(pub.picks[0].pick, 'Ohio State Buckeyes -3.5');
-  assert.strictEqual(pub.model, 'v12.3.20-omega-vnext-edge-rank');
+  assert.strictEqual(pub.model, 'v12.3.21-omega-vnext-edge-card');
 
   const nflStraight = nfl.project({
     oddsEvents: [synth('Kansas City Chiefs', 'Buffalo Bills')],

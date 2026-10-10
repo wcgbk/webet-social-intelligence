@@ -48,7 +48,7 @@ assert.strictEqual(cal.resolveCalMode(), 'A');
 assert.strictEqual(cal.resolveCalMode(''), 'A');
 assert.strictEqual(cal.resolveCalMode('legacy'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('0'), 'legacy');
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
 assert.ok(/shrink K is still hand-set/i.test(config.MODEL_NOTES));
 assert.ok(/Mode B stays selectable/.test(config.MODEL_NOTES));
 assert.ok(/Mode C stays selectable/.test(config.MODEL_NOTES));

@@ -18,7 +18,7 @@ assert.strictEqual(rules.GRADING_RULES_V2_FROM, '2026-10-07');
 assert.strictEqual(rules.CLV_POINT_AWARE_FROM, '2026-10-09');
 assert.strictEqual(rules.clvPointAware('2026-10-08'), false);
 assert.strictEqual(rules.clvPointAware('2026-10-09'), true);
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
 assert.strictEqual(config.SPORT_TOTAL_STD.NFL, 10.5);
 assert.strictEqual(config.SPORT_SPREAD_STD.NFL, 13.5);
 

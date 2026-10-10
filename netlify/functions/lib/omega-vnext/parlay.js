@@ -158,14 +158,37 @@ function shareConference(a, b) {
 }
 
 /**
- * De-correlated parlay. Two legs conflict when they are the same game,
- * when they are same-direction totals in the same league, or when they
- * are NCAAF totals that share a conference (either side).
+ * Two legs conflict only when they are the same game.
+ * Same-direction totals and same-conference totals may share a ticket.
+ * The haircut in comboStats can still lower joint probability.
  */
 function legsConflict(a, b) {
-  // WeBet 10/10: only same-game legs conflict. Correlation pricing may still lower EV.
   if (!a || !b) return false;
   return matchupKey(a) === matchupKey(b);
+}
+
+function legEdge(c) {
+  const raw = c && (c.edgePct != null ? c.edgePct : c.ev);
+  const e = parseEdgeFraction(raw);
+  return Number.isFinite(e) ? e : -Infinity;
+}
+
+/** Best n legs by edge. A later leg is skipped only when it shares a game. */
+function bestEdgeLegs(pool, n) {
+  const sorted = [...(pool || [])].sort((a, b) => {
+    const d = legEdge(b) - legEdge(a);
+    if (Math.abs(d) > 1e-12) return d;
+    const evd = (b.ev || 0) - (a.ev || 0);
+    if (Math.abs(evd) > 1e-12) return evd;
+    return (b.coverProb || 0) - (a.coverProb || 0);
+  });
+  const legs = [];
+  for (const c of sorted) {
+    if (legs.length >= n) break;
+    if (legs.some(l => legsConflict(l, c))) continue;
+    legs.push(c);
+  }
+  return legs;
 }
 
 function enumerateCombos(pool, size) {
@@ -223,10 +246,10 @@ function preferHit(a, b) {
 }
 
 /**
- * Most likely to CONVERT (hit) among +EV cross-game parlays.
- * Rank is combined hit probability. EV is a tie-break only.
- * A clean 3-leg is published whenever one exists. A 2-leg is the fallback
- * when the pool has fewer than three clean legs.
+ * Best edges on distinct games. Overlap with straights is allowed.
+ * The only skip is a second leg from a game already on the ticket.
+ * A 3-leg is published whenever three games exist. A 2-leg is the fallback.
+ * Combined EV is logged when the haircut leaves it non-positive. The legs stay.
  */
 function optimizeParlay(yesPool, straights = [], opts = {}) {
   const cardDate = opts.cardDate || opts.dateISO || null;
@@ -243,39 +266,20 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       sport: c.sport,
       commenceTime: c.commenceTime || '',
     }))
-    // Prefer higher coverProb for hit-rate; keep +EV
-    .sort((a, b) => (b.coverProb - a.coverProb) || (b.ev - a.ev));
+    .sort((a, b) => legEdge(b) - legEdge(a) || (b.ev - a.ev));
 
-  // The gated +EV pool is small. Search every combo, not the top 24 by coverProb.
   const search = pool;
   if (search.length < 2) return [];
 
-  const scoreCombo = (legs) => {
-    const st = comboStats(legs);
-    if (st.ev <= 0) return null;
-    // Clean = one leg per game. A 3-leg must be three games.
-    if (st.uniqueGames !== legs.length) return null;
-    return { legs, ...st };
-  };
-
-  let best3 = null;
-  for (const legs of enumerateCombos(search, 3)) {
-    const s = scoreCombo(legs);
-    if (!s) continue;
-    if (preferHit(s, best3)) best3 = s;
+  let chosenLegs = bestEdgeLegs(search, 3);
+  if (chosenLegs.length < 3) chosenLegs = bestEdgeLegs(search, 2);
+  if (chosenLegs.length < 2) return [];
+  const st = comboStats(chosenLegs);
+  if (st.uniqueGames !== chosenLegs.length) return [];
+  if (!(st.ev > 0)) {
+    console.log(`[omega-vnext] parlay combined EV ${st.ev} is not positive; publishing best-edge legs`);
   }
-
-  let best2 = null;
-  if (!best3) {
-    for (const legs of enumerateCombos(search, 2)) {
-      const s = scoreCombo(legs);
-      if (!s) continue;
-      if (preferHit(s, best2)) best2 = s;
-    }
-  }
-
-  const chosen = best3 || best2;
-  if (!chosen) return [];
+  const chosen = { legs: chosenLegs, ...st };
 
   const independent = !parlayIsCardMirror(chosen.legs, straights);
 
@@ -348,5 +352,5 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
 
 module.exports = {
   optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
-  sameDirectionTotalFactor, correlatedTotalFactor, legsConflict,
+  sameDirectionTotalFactor, correlatedTotalFactor, legsConflict, bestEdgeLegs, legEdge,
 };

@@ -23,7 +23,7 @@ const ingest = require(path.join(root, 'ingest'));
 const parlay = require(path.join(root, 'parlay'));
 const { normCdf, evAtOdds } = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
 assert.deepStrictEqual(config.WEATHER_NFL, {
   windOnMph: 15,
   windBaseMph: 12,
@@ -276,7 +276,8 @@ function findSide(cands, market, re) {
   near(parlay.comboStats(spreadOnly).combinedProb, rawMixed, 1e-12);
 
   const ticket = parlay.optimizeParlay(overs, []);
-  assert.strictEqual(ticket.length, 0, 'three NFL overs are not a de-correlated parlay');
+  assert.strictEqual(ticket.length, 1, 'three NFL overs on distinct games are a parlay');
+  assert.strictEqual(ticket[0].legs.length, 3);
 
   // Raw all-over product beats every other trio. After the haircut it does not.
   const rivals = [
@@ -294,8 +295,9 @@ function findSide(cands, market, re) {
   assert.ok(rawHot > bestOther);
   const ranked = parlay.optimizeParlay(hotOvers.concat(rivals), []);
   assert.strictEqual(ranked.length, 1);
-  assert.ok(ranked[0].legs.filter(l => /^Over\b/.test(l.pick)).length <= 1, 'at most one same-league over');
-  assert.ok(ranked[0].legs.some(l => !/^Over\b/.test(l.pick)), 'the all-over ticket is not selected');
+  assert.strictEqual(ranked[0].legs.length, 3);
+  const rankedGames = ranked[0].legs.map(l => l.matchup);
+  assert.strictEqual(new Set(rankedGames).size, 3, 'parlay legs are distinct games');
   const overStats = parlay.comboStats(hotOvers);
   const otherStats = parlay.comboStats([hotOvers[0], hotOvers[1], rivals[0]]);
   assert.ok(overStats.combinedProb < otherStats.combinedProb);

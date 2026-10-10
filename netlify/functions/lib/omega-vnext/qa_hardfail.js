@@ -379,7 +379,6 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
   if (kept.length < maxN && yesPool && yesPool.length) {
     const remaining = yesPool.filter(c => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
-      if (usedGames.has(matchupKey(c))) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
       return true;
     });

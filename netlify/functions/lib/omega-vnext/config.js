@@ -1,11 +1,16 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.20-omega-vnext-edge-rank';
+const MODEL_VERSION = 'v12.3.21-omega-vnext-edge-card';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
+/**
+ * Same-game stake cap is off. capSameGameExposure does not trim.
+ * OMEGA_GAME_EXPOSURE cannot turn the 1.50u cap back on.
+ */
+const PER_GAME_EXPOSURE_CAP_ENABLED = false;
 /**
  * Unit structure (v12.0.9+):
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
@@ -607,6 +612,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.21-omega-vnext-edge-card: Straights are the top edges vs no-vig fair, including a second side of the same game. Score nudges only break an exact edge tie. The parlay is the best edges on distinct games and may overlap the straights. The only parlay conflict is two legs from the same game. Same-direction totals and same-conference NCAAF totals may share a ticket. The same-direction haircut still lowers joint probability and never raises it. PER_GAME_EXPOSURE_CAP_ENABLED is false, so the 1.50u same-game stake cap does not run. Gate floors, Kelly, unit caps, SHRINK_K, and calibration are unchanged. A gate reject is logged. It does not throw.',
   'v12.3.20-omega-vnext-edge-rank: Straight rank is calibrated edge. _steamScoreAdj, _pmScoreAdj, and the steamToward softSportMixBonus are added together and capped at ±0.002, so they only break ties. A 0.03 steam boost plus the 0.02 mix bonus no longer outranks a higher edge. Adverse-steam hard rejects are unchanged. The parlay is chosen from the full yes pool, including straight sides. Same-game legs, same-direction same-league totals, and same-conference NCAAF totals still cannot share a ticket. OMEGA_GAME_EXPOSURE defaults off. Set it on to restore the 1.50u same-game cap. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.19-omega-vnext-parlay-decorr: Parlay selection keeps one leg per game. It also refuses two same-direction totals in the same league, so three NFL overs cannot fill a ticket. NCAAF totals that share a conference are refused even when the sides differ. A missing conference does not invent a shared conference. Same-direction totals keep the 0.95/0.92 haircut. The joint probability used for EV stays at or below the independent product. Pearson ρ 0.08 only raised that joint, so OMEGA_PARLAY_CORR defaults off. Setting it on does not replace the haircut and cannot raise EV. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.18-omega-vnext-keys: NFL and NCAAF spreads use an empirical key-number margin distribution. NFL totals use the Sports Insights shape. NCAAF totals stay on the normal. OMEGA_KEY_MASS=0 restores nflKeyNumberCover and the plain normal. Stake EV and quarter-Kelly scale by (1 − pPush) after calibration. Mode A still shrinks the conditional coverProb toward the hand-set sharp anchor and does not apply the unfitted band. calibrateCandidate copies pPush and lateNews through. attachEv and toPickObject then apply the push factor to that mode-A coverProb. edgePct stays coverProb − fair_sharp and is not scaled. OMEGA_PUSH_EV=0 leaves evAtOdds and Kelly on the same calibrated coverProb. NHL moneylines, puck lines, and totals are priced from a 60-minute joint and then overtime. OMEGA_NHL_PERIOD=0 restores the full-game normal. Same-direction cross-game totals use Pearson ρ 0.08 inside the Fréchet bounds. OMEGA_PARLAY_CORR=0 restores the 0.95/0.92 haircut. Same-game straight units plus the full parlay stake are capped at 1.50u after the slate cap and the grade hierarchy. A void-pregame parlay leg is not exposure. A void-pregame straight is not trimmed by that cap. OMEGA_GAME_EXPOSURE=0 leaves the slate cap. Late-news still drops or flags only, then resolveLockedParlay and enforceOmegaDailyUnitCap rerun this exposure cap on the surviving card. Each card stores a private audit of model version, config hash, and input snapshot hash. The public payload drops audit, lateNews, and voidedPregame, and omits void-pregame picks and legs. OMEGA_CARD_AUDIT=0 omits the field. No gate floor, SHRINK_K, or cal-mode default change.',
@@ -666,6 +672,7 @@ module.exports = {
   UNIT_DOLLARS,
   KELLY_FRACTION,
   MAX_STRAIGHTS,
+  PER_GAME_EXPOSURE_CAP_ENABLED,
   STRAIGHT_UNIT_BUDGET,
   PARLAY_FIXED_UNITS,
   PARLAY_TOTAL_HAIRCUT,

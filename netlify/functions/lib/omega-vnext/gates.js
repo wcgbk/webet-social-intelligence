@@ -181,6 +181,11 @@ function applyGates(candidates, opts = {}) {
       rejected.push({ ...c, rejectReason: reason });
     } else yes.push(c);
   }
+  if (rejected.length) {
+    const counts = {};
+    for (const r of rejected) counts[r.rejectReason] = (counts[r.rejectReason] || 0) + 1;
+    console.log(`[omega-vnext] gate-rejects ${JSON.stringify(counts)} yes=${yes.length}`);
+  }
   return { yesPool: yes, rejected };
 }
 

@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.21-omega-vnext-edge-card');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -287,24 +287,24 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.strictEqual(card.length, 1);
   assert.strictEqual(card[0].legs.length, 3, '3 clean legs publish a 3-leg');
 
-  // Hit probability outranks a longshot with a much higher parlay EV.
+  // A higher edge beats a higher cover probability.
   const ranked = parlay.optimizeParlay([
-    row('A @ B', 0.58, 0.05),
-    row('C @ D', 0.57, 0.05),
-    row('E @ F', 0.56, 0.05),
-    { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800 },
+    { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
+    { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
+    { ...row('E @ F', 0.56, 0.05), edgePct: 0.02, side: 'ChalkE' },
+    { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800, edgePct: 0.09 },
   ], []);
   assert.strictEqual(ranked[0].legs.length, 3);
-  assert.ok(!ranked[0].legs.some(l => /Longshot/.test(l.pick)));
+  assert.ok(ranked[0].legs.some(l => /Longshot/.test(l.pick)));
 
-  // Same hit probability: the higher-EV leg wins the tie.
+  // Equal edge: the higher single-leg EV wins the tie.
   const tied = parlay.optimizeParlay([
     { ...row('A @ B', 0.56, 0.05), odds: -110, side: 'PriceA' },
     { ...row('C @ D', 0.56, 0.05), odds: -110, side: 'PriceC' },
     { ...row('E @ F', 0.56, 0.05), odds: -110, side: 'PriceE' },
     { ...row('G @ H', 0.56, 0.04), odds: 180, side: 'PlusPrice' },
   ], []);
-  assert.ok(tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'EV tie-break keeps the plus price');
+  assert.ok(!tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'lower EV loses an equal-edge tie');
 
   // Favorite combined price (decimal < 2) is a minus number, never a plus.
   const chalk = parlay.optimizeParlay([

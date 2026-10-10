@@ -482,10 +482,8 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
   picks = applyDailyCap(picks);
 
-  // Full yes pool, including the straight sides. yesPoolRemaining drops QA
-  // hard-fails only, but the parlay is allowed to overlap the straights.
-  // optimizeParlay still refuses same-game legs, same-direction same-league
-  // totals, and same-conference NCAAF totals. It does not drop straight games.
+  // Full yes pool, including the straight sides. The parlay may overlap
+  // them. The only parlay conflict is two legs from the same game.
   // Full yes pool (parlay may overlap straights) minus QA hard-fail sides.
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
   const poolForParlay = yesPool.filter(c => !hfKeys.has(`${c.matchup}|${c.side}`));

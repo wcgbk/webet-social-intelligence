@@ -154,15 +154,25 @@ function rowBoundId(sport, key, row) {
   return resolveTeamId(sport, key);
 }
 
-// NFL, NCAAF, and NHL model inputs do not fuzzy. MLB still does.
-const EXACT_MODEL_SPORTS = new Set(['NFL', 'NCAAF', 'CFB', 'NHL']);
+// Every pick-path sport is exact. Fuzzy runs only when a caller passes
+// allowFuzzy (the OMEGA_TEAM_EXACT_ONLY=0 football toggle).
+const EXACT_MODEL_SPORTS = new Set(['NFL', 'NCAAF', 'CFB', 'NHL', 'MLB', 'NBA']);
+
+// Shared within one league. A hit must stay unresolved. League scope is
+// what separates MLB Rangers from NHL Rangers, and NCAAF Miami from Miami (OH).
+const AMBIGUOUS_TOKENS = {
+  MLB: ['sox', 'chicago', 'los angeles', 'new york'],
+  NFL: ['chiefs', 'bills', 'los angeles', 'new york'],
+  NBA: ['lakers', 'clippers', 'celtics', 'trail blazers', 'blazers', 'heat', 'jazz', 'los angeles', 'la', 'new york'],
+  NHL: ['avalanche', 'stars', 'rangers', 'kings', 'new york'],
+  NCAAF: ['tigers', 'huskies', 'bulldogs', 'wildcats', 'eagles', 'bears', 'panthers'],
+};
 
 /**
  * Standings / park / quality row. Identity first: the row whose key resolves
- * to the same ESPN id. fuzzyTeam runs only when the name does not resolve,
- * or when a table key does not resolve, and only for sports outside
- * EXACT_MODEL_SPORTS (or opts.allowFuzzy). Those sports log a miss once
- * and return null.
+ * to the same ESPN id. fuzzyTeam runs only when opts.allowFuzzy is set
+ * (football with OMEGA_TEAM_EXACT_ONLY off). Every sport logs a miss and
+ * returns null otherwise. A resolved name never inherits another club.
  * Logs once per sport+name when `fallbackSeen` is a Set on opts (no module-level memory).
  */
 function rowByIdentityOrFuzzy(sport, table, teamName, opts) {
@@ -192,9 +202,8 @@ function rowByIdentityOrFuzzy(sport, table, teamName, opts) {
     const kind = EXACT_MODEL_SPORTS.has(sport) && !(opts && opts.allowFuzzy) ? 'miss' : 'fallback';
     console.warn(`[omega-team-identity] ${kind} sport=${sport} name=${label}`);
   }
-  // NFL/NCAAF/NHL stay exact. allowFuzzy is only the OMEGA_TEAM_EXACT_ONLY=0
-  // path: a resolved name still refuses a different resolved school, and
-  // fuzzy runs only when the name or a table key does not resolve.
+  // allowFuzzy is only the OMEGA_TEAM_EXACT_ONLY=0 path. A resolved name
+  // still refuses a different resolved school inside modelRow.
   if (EXACT_MODEL_SPORTS.has(sport) && !(opts && opts.allowFuzzy)) return null;
   return fuzzy(teamName, table);
 }
@@ -218,9 +227,10 @@ function logRefusedFuzzy(sport, name) {
  * is on (the default). A miss is null — the centered prior — never another
  * school's row. The toggle off restores the older fallback: fuzzyTeam runs
  * only when the name does not resolve, or a table key does not resolve.
- * rowByIdentityOrFuzzy itself still refuses that fuzzy for NFL/NCAAF/NHL,
- * so the off path passes allowFuzzy. Two resolved schools never share a
- * row. MLB/NHL callers keep rowByIdentityOrFuzzy. Grading does not use this.
+ * rowByIdentityOrFuzzy refuses fuzzy for every pick sport unless allowFuzzy
+ * is set, so the off path passes allowFuzzy. Two resolved schools never share
+ * a row. MLB, NBA, and NHL callers keep rowByIdentityOrFuzzy with fuzzy off.
+ * Grading does not use this.
  */
 function modelRow(sport, table, teamName, opts) {
   const football = sport === 'NFL' || sport === 'NCAAF';
@@ -339,6 +349,27 @@ function logUnknownTeam(sport, name) {
   console.warn(`[omega-team-identity] unknown_team sport=${sport} name=${name}`);
 }
 
+/**
+ * Names whose normalized form is a shared token in this league and that
+ * currently resolve. Empty when the guard holds. Does not log.
+ */
+function collectAmbiguous(sport, names) {
+  const bucket = sport === 'CFB' ? 'NCAAF' : sport;
+  const banned = new Set(AMBIGUOUS_TOKENS[bucket] || []);
+  const seen = new Set();
+  const out = [];
+  for (const name of names || []) {
+    if (name == null || name === '') continue;
+    const label = String(name);
+    const key = normalizeTeamName(label);
+    if (!key || !banned.has(key) || seen.has(label)) continue;
+    seen.add(label);
+    if (resolveTeamId(sport, label)) out.push(label);
+  }
+  out.sort();
+  return out;
+}
+
 /** Unique names that do not resolve, sorted. Does not log. */
 function collectUnresolved(sport, names) {
   const seen = new Set();
@@ -426,6 +457,8 @@ module.exports = {
   logUnknownTeam,
   listUnresolved,
   collectUnresolved,
+  collectAmbiguous,
+  AMBIGUOUS_TOKENS,
   buildUnmatchedReport,
   unmatchedBlobKey,
   persistUnmatchedReport,

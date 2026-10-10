@@ -75,7 +75,7 @@ function earlyPush(pick, game, opts) {
 function isPpdScore(pick, game, opts) {
   if (!game) return false;
   const name = game.statusName || '';
-  if (game.state === 'post' && (/POSTPONED|CANCELL?ED/i.test(name) || !game.completed)) return true;
+  if (game.state === 'post' && (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(name) || !game.completed)) return true;
   if (!rulesV2(dateOf(opts))) return false;
   if (isRescheduled(pick, game)) return true;
   if (isStaleUnstarted(pick, game, nowMs(opts))) return true;

@@ -4,7 +4,7 @@
 // A throw inside the builder must not escape attachGenerateHealth.
 
 const { SPORTS_ENABLED } = require('./config');
-const { collectUnresolved, resolveTeamId, rowByIdentity } = require('./sports/team_identity');
+const { collectUnresolved, collectAmbiguous, resolveTeamId, rowByIdentity } = require('./sports/team_identity');
 const { gamesPlayed, gamesPlayedInfo, explicitPointsPerGame, footballMarketGapReason } = require('./sports/_common');
 const { isCleanEpa } = require('./sports/epa');
 const nhl = require('./sports/nhl');
@@ -160,6 +160,8 @@ function namesFor(snap, sport) {
     if (g.awayTeam) names.push(g.awayTeam);
     if (g.home) names.push(g.home);
     if (g.away) names.push(g.away);
+    if (g.homeAbbr) names.push(g.homeAbbr);
+    if (g.awayAbbr) names.push(g.awayAbbr);
   }
   const table = snap && snap.standingsBySport && snap.standingsBySport[sport];
   if (table && typeof table === 'object' && !Array.isArray(table)) {
@@ -573,7 +575,9 @@ function buildHealthRecord(input) {
     const oddsN = oddsEvents(snap, sport).length;
     const raw = rawBySport[sport] || 0;
     const yes = yesBySport[sport] || 0;
-    const unresolved = collectUnresolved(sport, namesFor(snap, sport));
+    const sportNames = namesFor(snap, sport);
+    const unresolved = collectUnresolved(sport, sportNames);
+    const ambiguous = collectAmbiguous(sport, sportNames);
     const zeroCandidates = !!(enabled && (espnN > 0 || oddsN > 0) && raw === 0);
     const stats = statSanity(snap, sport);
     const guards = inputStatGuards(snap, sport);
@@ -596,12 +600,14 @@ function buildHealthRecord(input) {
       oddsEvents: oddsN,
       zeroCandidates,
       unresolved,
+      ambiguous,
       skippedUnresolved: (snap.unresolvedSkipped && snap.unresolvedSkipped[sport]) || 0,
       neutralSite: (snap.neutralSiteCounts && snap.neutralSiteCounts[sport]) || 0,
       stats,
     };
     if (zeroCandidates) alerts.push({ sport, code: 'zero_candidates', detail: `espn=${espnN} odds=${oddsN} raw=0` });
     if (unresolved.length) alerts.push({ sport, code: 'unresolved_names', detail: unresolved.slice(0, 8).join(', ') });
+    if (ambiguous.length) alerts.push({ sport, code: 'ambiguous_names', detail: ambiguous.slice(0, 8).join(', ') });
     if (stats.constantStat) alerts.push({ sport, code: 'constant_stat', detail: `value=${stats.constantValue} share=${stats.constantShare}` });
     if (stats.gpZeroPoints) alerts.push({ sport, code: 'gp_zero_points', detail: `teams=${stats.gpZeroPoints}` });
     if (stats.outOfBand) alerts.push({ sport, code: 'rate_out_of_band', detail: `teams=${stats.outOfBand}` });

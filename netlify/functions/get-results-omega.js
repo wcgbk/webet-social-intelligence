@@ -399,7 +399,7 @@ function gradePick(pick, game, opts) {
   // returned, so we grade them as a push. A push leg is dropped from a parlay and the ticket
   // reprices on the surviving legs (see gradeParlay). ESPN marks these state:'post' with
   // completed:false, so they must be caught BEFORE any score-based grading (0-0 → false "under").
-  if (/POSTPONED|CANCELL?ED/i.test(game.statusName) || (game.state === 'post' && !game.completed)) return 'push';
+  if (/POSTPONED|CANCELL?ED|SUSPENDED/i.test(game.statusName) || (game.state === 'post' && !game.completed)) return 'push';
   const pickStr = pickStrEarly;
   const betType = betTypeEarly;
   // First-Five-Innings picks settle on the first-5 score, NOT the full game.

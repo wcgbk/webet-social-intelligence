@@ -631,8 +631,22 @@ function card(picks, extra = {}) {
     assert.ok(/blockStraightRefill\s*=\s*true/.test(steamRegion));
     assert.ok(steamRegion.includes('runLateNews'));
     const indexSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
-    assert.ok(indexSrc.indexOf('stampCandidates(candidates, snap)') > indexSrc.indexOf('projectAll(snap'));
-    assert.ok(indexSrc.indexOf('calibrateAll(candidates)') > indexSrc.indexOf('stampCandidates(candidates, snap)'));
+    const genAt = indexSrc.indexOf('async function generateOmegaVnext');
+    assert.ok(genAt >= 0);
+    const genSrc = indexSrc.slice(genAt);
+    const projectAt = genSrc.indexOf('let candidates = projectAll(snap, dateISO)');
+    const stampAt = genSrc.indexOf('candidates = stampCandidates(candidates, snap)');
+    const calAt = genSrc.indexOf('candidates = calibrateAll(candidates, { cardDate: dateISO })');
+    assert.ok(projectAt >= 0, 'projectAll(snap, dateISO)');
+    assert.ok(stampAt > projectAt, 'stampCandidates after projectAll and before calibration');
+    assert.ok(calAt > stampAt, 'calibrateAll keeps cardDate cal-mode options after stampCandidates');
+    const config = require('./netlify/functions/lib/omega-vnext/config');
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
+    assert.ok(/late-news/.test(config.MODEL_NOTES));
+    assert.ok(/stamps lateNews/.test(config.MODEL_NOTES));
+    assert.ok(/pregame-check-omega/.test(config.MODEL_NOTES));
+    assert.ok(/Never add or swap/.test(config.MODEL_NOTES));
+    assert.ok(/every slate team string/.test(config.MODEL_NOTES));
 
     const hidden = publicPicksPayload({
       picks: [mlbPick({ status: 'void-pregame' }), mlbPick({ pick: 'Still live' })],

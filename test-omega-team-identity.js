@@ -18,6 +18,10 @@ const id = require(path.join(root, 'sports/team_identity'));
 const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
+assert.ok(/every slate team string/.test(config.MODEL_NOTES));
+assert.ok(/OMEGA_TEAM_EXACT_ONLY=0/.test(config.MODEL_NOTES));
+assert.ok(/suspended final/.test(config.MODEL_NOTES));
+assert.ok(/shared league token/.test(config.MODEL_NOTES));
 
 const seeds = ingest.loadEfficiencySeeds();
 const nflSeedFile = require(path.join(root, 'sports/data/nfl-epa-seed.json'));

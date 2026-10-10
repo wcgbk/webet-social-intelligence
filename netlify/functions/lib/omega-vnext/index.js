@@ -232,6 +232,8 @@ async function generateOmegaVnext(opts = {}) {
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
   console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
 
+  // Stamp generate-time lateNews before calibration. calibrateAll still
+  // takes { cardDate } for modes B and C and spreads lateNews through.
   let candidates = projectAll(snap, dateISO);
   candidates = stampCandidates(candidates, snap);
   const rawBySport = {};

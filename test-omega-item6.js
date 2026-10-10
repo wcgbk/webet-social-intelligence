@@ -23,7 +23,7 @@ const ingest = require(path.join(root, 'ingest'));
 const parlay = require(path.join(root, 'parlay'));
 const { normCdf, evAtOdds } = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
 assert.deepStrictEqual(config.WEATHER_NFL, {
   windOnMph: 15,
   windBaseMph: 12,

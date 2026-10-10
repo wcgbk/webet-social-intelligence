@@ -17,7 +17,7 @@ const { gamesPlayed, powerFromStandings, parseWinLossRecord } = require(path.joi
 const { gateReason, applyGates } = require(path.join(root, 'gates'));
 const { buildHealthRecord, rateOf } = require(path.join(root, 'health'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
 assert.deepStrictEqual(config.FB_MARKET_GAP, {
   NCAAF: { margin: 14, total: 17 },
   NFL: { margin: 10, total: 13 },

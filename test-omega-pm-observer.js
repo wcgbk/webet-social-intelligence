@@ -9,7 +9,7 @@ const pm = require(path.join(root, 'pm_observer'));
 const select = require(path.join(root, 'select'));
 const store = require(path.join(root, 'store'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
 assert.ok(/v12\.3\.6/.test(config.MODEL_NOTES));
 assert.ok(/soft feature/i.test(config.MODEL_NOTES));
 assert.ok(/hard cap/i.test(config.MODEL_NOTES));
@@ -253,19 +253,20 @@ const spread = pm.computePmFeatures({ ...ml, market: 'Spread', side: 'Yankees -1
 assert.strictEqual(spread._pmScoreAdj, 0);
 assert.strictEqual(spread.pmFeatures.reason, 'not-moneyline');
 
-// scoreCandidate adds _pmScoreAdj and does not let it change badge inputs.
+// scoreCandidate caps _pmScoreAdj with the other score-only nudges at ±0.002.
+// It does not change badge inputs.
 const scoreBase = {
   ev: 0.04, predictedClv: 1.2, uncertainty: 0.12, sport: 'MLB', _steamScoreAdj: 0,
 };
 const s0 = select.scoreCandidate(scoreBase);
 const sPos = select.scoreCandidate({ ...scoreBase, _pmScoreAdj: 0.012 });
 const sNeg = select.scoreCandidate({ ...scoreBase, _pmScoreAdj: -0.012 });
-assert.ok(Math.abs((sPos - s0) - 0.012) < 1e-12);
-assert.ok(Math.abs((sNeg - s0) - (-0.012)) < 1e-12);
+assert.ok(Math.abs((sPos - s0) - 0.002) < 1e-12);
+assert.ok(Math.abs((sNeg - s0) - (-0.002)) < 1e-12);
 const sHuge = select.scoreCandidate({ ...scoreBase, _pmScoreAdj: 5 });
 const sCold = select.scoreCandidate({ ...scoreBase, _pmScoreAdj: -5 });
-assert.ok(Math.abs((sHuge - s0) - config.PM_SOFT.maxAbsScoreAdj) < 1e-12);
-assert.ok(Math.abs((sCold - s0) - (-config.PM_SOFT.maxAbsScoreAdj)) < 1e-12);
+assert.ok(Math.abs((sHuge - s0) - 0.002) < 1e-12);
+assert.ok(Math.abs((sCold - s0) - (-0.002)) < 1e-12);
 const ranked = select.selectStraights([
   { ...scoreBase, matchup: 'A @ B', side: 'B', homeTeam: 'B', awayTeam: 'A', market: 'Moneyline', _pmScoreAdj: 0, coverProb: 0.55, odds: -110 },
   { ...scoreBase, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C', market: 'Moneyline', _pmScoreAdj: 0.02, coverProb: 0.55, odds: -110 },

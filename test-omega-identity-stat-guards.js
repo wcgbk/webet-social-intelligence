@@ -18,7 +18,7 @@ const nflIds = require(path.join(root, 'sports/data/nfl-team-ids.json'));
 const ncaafIds = require(path.join(root, 'sports/data/ncaaf-team-ids.json'));
 const nhlIds = require(path.join(root, 'sports/data/nhl-team-ids.json'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
 
 function synth(home, away, opts = {}) {
   const total = opts.total != null ? opts.total : 6;

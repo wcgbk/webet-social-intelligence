@@ -85,13 +85,15 @@ assert.strictEqual(comboStats([
   { ...leg(day, 0.04, 'Moneyline'), odds: -110, coverProb: 0.55 },
 ]).uniqueGames, 1);
 
-// Steam nudge stays in the initial sort. The removed post-hoc sport bonus
-// must not lift the second sport above a higher initial score.
-const nfl = { ...leg(day, 0.05, 'Total', 'NFL'), matchup: 'Buffalo Bills @ Kansas City Chiefs', steamToward: true, ev: 0.05 };
-const mlbLeg = { ...leg(night, 0.06, 'Total', 'MLB'), steamToward: false };
+// Score-only steam is a tie-break. A 1pp edge gap outranks steamToward.
+const nfl = { ...leg(day, 0.05, 'Total', 'NFL'), matchup: 'Buffalo Bills @ Kansas City Chiefs', steamToward: true, ev: 0.05, _steamScoreAdj: 0.03 };
+const mlbLeg = { ...leg(night, 0.06, 'Total', 'MLB'), steamToward: false, _steamScoreAdj: 0 };
 const ordered = selectStraights([mlbLeg, nfl]);
-assert.strictEqual(ordered[0].sport, 'NFL');
-assert.ok(scoreCandidate(nfl) > scoreCandidate(mlbLeg));
-assert.deepStrictEqual(ordered.map((p) => p.sport), ['NFL', 'MLB']);
+assert.strictEqual(ordered[0].sport, 'MLB');
+assert.ok(scoreCandidate(mlbLeg) > scoreCandidate(nfl));
+assert.deepStrictEqual(ordered.map((p) => p.sport), ['MLB', 'NFL']);
+const nflTie = { ...nfl, edgePct: 0.06, ev: 0.06 };
+assert.ok(scoreCandidate(nflTie) > scoreCandidate(mlbLeg));
+assert.ok(scoreCandidate(nflTie) - scoreCandidate(mlbLeg) <= 0.002 + 1e-12);
 
 console.log('PASS test-omega-matchup-key');

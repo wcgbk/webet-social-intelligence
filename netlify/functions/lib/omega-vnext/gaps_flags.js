@@ -27,8 +27,16 @@ function nhlPeriodEnabled() {
   return flagEnabled('OMEGA_NHL_PERIOD');
 }
 
+/**
+ * Default OFF. Unset, blank, 0, off, false, or no stays off.
+ * Any other value turns the same-game stake cap on.
+ */
 function gameExposureEnabled() {
-  return flagEnabled('OMEGA_GAME_EXPOSURE');
+  const v = process.env.OMEGA_GAME_EXPOSURE;
+  if (v == null) return false;
+  const s = String(v).trim().toLowerCase();
+  if (s === '' || s === '0' || s === 'off' || s === 'false' || s === 'no') return false;
+  return true;
 }
 
 /**

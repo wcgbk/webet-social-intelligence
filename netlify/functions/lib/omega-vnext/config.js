@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.19-omega-vnext-parlay-decorr';
+const MODEL_VERSION = 'v12.3.20-omega-vnext-edge-rank';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -337,7 +337,8 @@ const QUALITY_GRADE = {
  * Straight rank is qualityScore (calibrated edge vs no-vig). The old
  * w_ev / w_clv / w_uncertainty / corr_penalty mix was not read. Those
  * constants are gone. softSportMixBonus is the steamToward nudge inside
- * the initial sort only. It does not re-rank the three already chosen.
+ * the initial sort only. scoreCandidate caps it, with _steamScoreAdj and
+ * _pmScoreAdj, at ±0.002. It does not re-rank the three already chosen.
  */
 const SELECT_WEIGHTS = {
   softSportMixBonus: 0.02,
@@ -606,6 +607,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.20-omega-vnext-edge-rank: Straight rank is calibrated edge. _steamScoreAdj, _pmScoreAdj, and the steamToward softSportMixBonus are added together and capped at ±0.002, so they only break ties. A 0.03 steam boost plus the 0.02 mix bonus no longer outranks a higher edge. Adverse-steam hard rejects are unchanged. The parlay is chosen from the full yes pool, including straight sides. Same-game legs, same-direction same-league totals, and same-conference NCAAF totals still cannot share a ticket. OMEGA_GAME_EXPOSURE defaults off. Set it on to restore the 1.50u same-game cap. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.19-omega-vnext-parlay-decorr: Parlay selection keeps one leg per game. It also refuses two same-direction totals in the same league, so three NFL overs cannot fill a ticket. NCAAF totals that share a conference are refused even when the sides differ. A missing conference does not invent a shared conference. Same-direction totals keep the 0.95/0.92 haircut. The joint probability used for EV stays at or below the independent product. Pearson ρ 0.08 only raised that joint, so OMEGA_PARLAY_CORR defaults off. Setting it on does not replace the haircut and cannot raise EV. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.18-omega-vnext-keys: NFL and NCAAF spreads use an empirical key-number margin distribution. NFL totals use the Sports Insights shape. NCAAF totals stay on the normal. OMEGA_KEY_MASS=0 restores nflKeyNumberCover and the plain normal. Stake EV and quarter-Kelly scale by (1 − pPush) after calibration. Mode A still shrinks the conditional coverProb toward the hand-set sharp anchor and does not apply the unfitted band. calibrateCandidate copies pPush and lateNews through. attachEv and toPickObject then apply the push factor to that mode-A coverProb. edgePct stays coverProb − fair_sharp and is not scaled. OMEGA_PUSH_EV=0 leaves evAtOdds and Kelly on the same calibrated coverProb. NHL moneylines, puck lines, and totals are priced from a 60-minute joint and then overtime. OMEGA_NHL_PERIOD=0 restores the full-game normal. Same-direction cross-game totals use Pearson ρ 0.08 inside the Fréchet bounds. OMEGA_PARLAY_CORR=0 restores the 0.95/0.92 haircut. Same-game straight units plus the full parlay stake are capped at 1.50u after the slate cap and the grade hierarchy. A void-pregame parlay leg is not exposure. A void-pregame straight is not trimmed by that cap. OMEGA_GAME_EXPOSURE=0 leaves the slate cap. Late-news still drops or flags only, then resolveLockedParlay and enforceOmegaDailyUnitCap rerun this exposure cap on the surviving card. Each card stores a private audit of model version, config hash, and input snapshot hash. The public payload drops audit, lateNews, and voidedPregame, and omits void-pregame picks and legs. OMEGA_CARD_AUDIT=0 omits the field. No gate floor, SHRINK_K, or cal-mode default change.',
   'v12.3.17-omega-vnext-cal-a late-news: generate stamps lateNews after projectAll(snap, dateISO) and before calibrateAll(candidates, { cardDate }). The stamp records the generate-time MLB probable, NHL goalie (goalieEdge only when goalieResidual ran), and NFL/NCAAF QB tag. It does not change coverProb. Verify at 10:30 ET and pregame-check-omega every 30 minutes from 11:00 through 23:30 ET may void or flag a pick whose commence is inside 90 minutes. MLB drops on a stored probable change, postponement, or suspension. NHL flags a confirmed boxscore starter change and drops only when goalieEdge is true. NFL/NCAAF drops a newly out or IR quarterback and flags newly doubtful. Drop or flag only. Never add or swap a pick. No gate, floor, Kelly, unit-cap, or calibration change.',

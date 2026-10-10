@@ -32,21 +32,28 @@ function clampPmScoreAdj(v) {
   return v;
 }
 
+/** Steam, PM, and steamToward together. Tie-break only. Cannot outrank edge. */
+const SCORE_NUDGE_CAP = 0.002;
+
 function scoreCandidate(c) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
   // Same number the letter grade uses: calibrated edge vs no-vig sharp,
   // plus a small residual-CLV nudge. Raw EV is not the rank — a +180 dog
-  // inflates EV without a better close. Steam and PM stay score-only.
-  // The old post-hoc softSportMixBonus write re-sorted the three already
-  // chosen straights. That write is gone. This steam nudge stays, because
-  // it is part of the sort that decides who is selected.
+  // inflates EV without a better close.
+  // _steamScoreAdj, _pmScoreAdj, and the steamToward softSportMixBonus are
+  // score-only. Their sum is capped at ±SCORE_NUDGE_CAP so a 0.03 steam
+  // boost plus the 0.02 mix bonus cannot outrank a higher calibrated edge.
+  // Adverse-steam hard rejects stay in line_path and are not this cap.
   const clvRaw = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   let s = qualityScore(c.edgePct, clvRaw, c.uncertainty);
-  if (typeof c._steamScoreAdj === 'number') s += c._steamScoreAdj;
-  s += clampPmScoreAdj(c._pmScoreAdj);
-  if (c.steamToward && ev > 0) s += (w.softSportMixBonus || 0.02);
-  return s;
+  let nudge = 0;
+  if (typeof c._steamScoreAdj === 'number' && Number.isFinite(c._steamScoreAdj)) nudge += c._steamScoreAdj;
+  nudge += clampPmScoreAdj(c._pmScoreAdj);
+  if (c.steamToward && ev > 0) nudge += (w.softSportMixBonus || 0.02);
+  if (nudge > SCORE_NUDGE_CAP) nudge = SCORE_NUDGE_CAP;
+  else if (nudge < -SCORE_NUDGE_CAP) nudge = -SCORE_NUDGE_CAP;
+  return s + nudge;
 }
 
 /**
@@ -316,7 +323,8 @@ function isVoidPregame(p) {
 /**
  * Straight units plus the full parlay stake on the same game, capped at
  * GAME_EXPOSURE_CAP. The parlay is never cut. Steps are 0.25u, floor 0.25u.
- * OMEGA_GAME_EXPOSURE=0 leaves the stakes from the slate cap.
+ * OMEGA_GAME_EXPOSURE defaults off and leaves the stakes from the slate cap.
+ * Any other value turns this cap on.
  * A void-pregame leg is not stake at risk, so it does not count. A
  * void-pregame straight is left unchanged. Late-news removes a dropped
  * straight before enforceOmegaDailyUnitCap reruns this on the surviving card.

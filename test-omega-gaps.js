@@ -42,8 +42,8 @@ function withEnv(name, value, fn) {
   }
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.19-omega-vnext-parlay-decorr');
-assert.ok(/v12\.3\.19-omega-vnext-parlay-decorr/.test(config.MODEL_NOTES));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.20-omega-vnext-edge-rank');
+assert.ok(/v12\.3\.20-omega-vnext-edge-rank/.test(config.MODEL_NOTES));
 assert.ok(/OMEGA_PARLAY_CORR defaults off/.test(config.MODEL_NOTES));
 assert.ok(/1 − pPush/.test(config.MODEL_NOTES));
 assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
@@ -335,7 +335,8 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(stamped.awayConference, '8');
 }
 
-// Same-game exposure: straight + full parlay stake, cap 1.50u.
+// Same-game exposure: straight + full parlay stake, cap 1.50u when the flag is on.
+// OMEGA_GAME_EXPOSURE defaults off, so the slate stake is left alone.
 {
   const game = 'Buffalo Bills @ Kansas City Chiefs';
   const other = 'Dallas Cowboys @ Philadelphia Eagles';
@@ -348,12 +349,27 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       { pick: 'Over 44', matchup: game, commenceTime: '2026-10-11T17:00:00Z' },
     ],
   };
+  withEnv('OMEGA_GAME_EXPOSURE', null, () => {
+    assert.strictEqual(flags.gameExposureEnabled(), false);
+  });
   const capped = select.applyDailyUnitCap([straight, otherStraight], [ticket]);
   const by = Object.fromEntries(capped.picks.map(p => [p.pick, p]));
-  assert.strictEqual(by['KC -2.5'].units, '1u');
+  assert.strictEqual(by['KC -2.5'].units, '1.25u');
   assert.strictEqual(by['KC -2.5'].rating, 'aplus');
   assert.strictEqual(by['PHI -3'].units, '1.00u');
   assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
+  withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
+    assert.strictEqual(flags.gameExposureEnabled(), true);
+    const on = select.applyDailyUnitCap([
+      { ...straight },
+      { ...otherStraight },
+    ], [ticket]);
+    const onBy = Object.fromEntries(on.picks.map(p => [p.pick, p]));
+    assert.strictEqual(onBy['KC -2.5'].units, '1u');
+    assert.strictEqual(onBy['KC -2.5'].rating, 'aplus');
+    assert.strictEqual(onBy['PHI -3'].units, '1.00u');
+    assert.strictEqual(on.parlayLegs[0].units, '0.5u');
+  });
   withEnv('OMEGA_GAME_EXPOSURE', '0', () => {
     const off = select.applyDailyUnitCap([
       { ...straight },
@@ -492,6 +508,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
 }
 
 // A void-pregame parlay leg is not exposure. A live leg on that game still is.
+// The cap is off unless the flag is on, so this block turns it on.
 {
   const game = 'Buffalo Bills @ Kansas City Chiefs';
   const other = 'Dallas Cowboys @ Philadelphia Eagles';
@@ -506,23 +523,27 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       { pick: 'Over 44', matchup: other, commenceTime: '2026-10-11T20:00:00Z' },
     ],
   };
-  const kept = select.applyDailyUnitCap([{ ...straight }], [deadLeg]);
-  assert.strictEqual(kept.picks[0].units, '1.25u');
-  const voidStraight = { ...straight, status: 'void-pregame' };
-  const liveLeg = {
-    units: '0.5u',
-    legs: [
-      { pick: 'Over 47', matchup: game, commenceTime: '2026-10-11T17:00:00Z' },
-      { pick: 'Over 44', matchup: other, commenceTime: '2026-10-11T20:00:00Z' },
-    ],
-  };
-  const untouched = select.applyDailyUnitCap([voidStraight], [liveLeg]);
-  assert.strictEqual(untouched.picks[0].units, '1.25u');
-  assert.strictEqual(untouched.picks[0].status, 'void-pregame');
+  withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
+    const kept = select.applyDailyUnitCap([{ ...straight }], [deadLeg]);
+    assert.strictEqual(kept.picks[0].units, '1.25u');
+    const voidStraight = { ...straight, status: 'void-pregame' };
+    const liveLeg = {
+      units: '0.5u',
+      legs: [
+        { pick: 'Over 47', matchup: game, commenceTime: '2026-10-11T17:00:00Z' },
+        { pick: 'Over 44', matchup: other, commenceTime: '2026-10-11T20:00:00Z' },
+      ],
+    };
+    const untouched = select.applyDailyUnitCap([voidStraight], [liveLeg]);
+    assert.strictEqual(untouched.picks[0].units, '1.25u');
+    assert.strictEqual(untouched.picks[0].status, 'void-pregame');
+    const liveStraight = select.applyDailyUnitCap([{ ...straight }], [liveLeg]);
+    assert.strictEqual(liveStraight.picks[0].units, '1u');
+  });
 }
 
-// Late-news drop reruns exposure on the surviving card. The voided straight
-// is not exposure, and the remaining straight that shares a live leg is.
+// Late-news drop still reruns the unit cap. Exposure stays off by default,
+// so the surviving straight that shares a live leg keeps its slate stake.
 {
   const game = 'Buffalo Bills @ Kansas City Chiefs';
   const other = 'Dallas Cowboys @ Philadelphia Eagles';
@@ -558,11 +579,42 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(committed.resized, true);
   assert.strictEqual(card.picks.length, 1);
   assert.strictEqual(card.picks[0].pick, 'PHI -3');
-  assert.strictEqual(card.picks[0].units, '1u');
+  assert.strictEqual(card.picks[0].units, '1.25u');
   assert.strictEqual(card.voidedPregame[0].status, 'void-pregame');
   assert.strictEqual(card.voidedPregame[0].pick, 'KC -2.5');
   assert.strictEqual(card.parlayLegs.length, 1);
   assert.strictEqual(card.parlayLegs[0].units, '0.5u');
+  withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
+    const onCard = {
+      picks: [
+        {
+          pick: 'KC -2.5', matchup: game, units: '1.25u', rating: 'aplus', qualityGrade: 'aplus',
+          qualityScore: 0.06, commenceTime: '2026-10-11T21:00:00Z', sport: 'NFL',
+          lateNews: { qb: { loaded: true } },
+        },
+        {
+          pick: 'PHI -3', matchup: other, units: '1.25u', rating: 'aplus', qualityGrade: 'aplus',
+          qualityScore: 0.05, commenceTime: '2026-10-11T23:00:00Z', sport: 'NFL',
+        },
+      ],
+      parlayLegs: [{
+        type: '2-leg-parlay-optimized',
+        units: '0.5u',
+        legs: [
+          { pick: 'Over 47', matchup: other, odds: '-110', coverProb: '55%', commenceTime: '2026-10-11T23:00:00Z' },
+          { pick: 'Over 44', matchup: 'Green Bay Packers @ Chicago Bears', odds: '-110', coverProb: '55%', commenceTime: '2026-10-11T17:00:00Z' },
+        ],
+      }],
+    };
+    const onDropped = lateNews.applyCardActions(onCard, [{
+      index: 0, action: 'drop', code: 'qb-out', reason: 'Quarterback ruled out after the card was priced',
+    }], new Date('2026-10-11T20:00:00Z'));
+    lateNews.commitLateNewsCard(onCard, onDropped, {
+      resolveLockedParlay,
+      enforceCap: enforceOmegaDailyUnitCap,
+    });
+    assert.strictEqual(onCard.picks[0].units, '1u');
+  });
 }
 
 console.log('PASS test-omega-gaps');

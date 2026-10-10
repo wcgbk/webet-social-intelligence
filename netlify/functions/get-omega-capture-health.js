@@ -53,7 +53,10 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-exports.handler = async (event, context, deps) => {
+// Node 24 Lambda reads handler.length. A third parameter is the removed
+// callback signature (Runtime.CallbackHandlerDeprecated). Tests inject deps
+// through handleCaptureHealth; the runtime entry stays (event, context).
+async function handleCaptureHealth(event, context, deps) {
   if (event && event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
@@ -124,6 +127,9 @@ exports.handler = async (event, context, deps) => {
       body: JSON.stringify({ ok: false, error: e.message, snapshot: null }),
     };
   }
-};
+}
+
+exports.handleCaptureHealth = handleCaptureHealth;
+exports.handler = (event, context) => handleCaptureHealth(event, context);
 
 exports.legacyCandidateReport = legacyCandidateReport;

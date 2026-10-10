@@ -64,7 +64,8 @@ if (realBase) {
     'clv-candidates-2026-10-09': { candidates: [{ a: 1 }, { a: 2 }] },
     'clv-candidates-2026-10-08': null,
   };
-  const res = await healthFn.handler({ httpMethod: 'GET', queryStringParameters: {} }, {}, {
+  assert.ok(healthFn.handler.length <= 2);
+  const res = await healthFn.handleCaptureHealth({ httpMethod: 'GET', queryStringParameters: {} }, {}, {
     now,
     readCaptureHealthLatest: async () => ({ ok: true }),
     readJson: async () => null,

@@ -7,10 +7,12 @@ const { clamp } = require('./odds_math');
 
 /**
  * Unset OMEGA_CAL_MODE uses this.
+ * B fits K on the linear shrink, with no unfitted band. It had the lowest
+ * out-of-sample log-loss of A/B/C and still cleared the card floors.
  * 'legacy' is the hand-set shrink plus the unfitted 0.42–0.58 band.
- * A, B, or C is a construction-correct alternative. 'legacy' is always the rollback.
+ * A and C stay available. 'legacy' is the rollback.
  */
-const CAL_MODE_DEFAULT = 'legacy';
+const CAL_MODE_DEFAULT = 'B';
 
 /**
  * Mode B box on the linear shrink weight.

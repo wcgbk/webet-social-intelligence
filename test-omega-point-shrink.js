@@ -18,7 +18,12 @@ const cfb = require(path.join(root, 'sports/cfb'));
 const mlb = require(path.join(root, 'sports/mlb'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { applyGates, gateReason, buildGapReview } = require(path.join(root, 'gates'));
-const { calibrateCandidate, calibrateAll } = require(path.join(root, 'calibrate'));
+const { calibrateCandidate, calibrateAll, clearCalParamsCache } = require(path.join(root, 'calibrate'));
+// Gap-flag selection in this file is the legacy card: hand-set shrink plus
+// bandRetainClip. Default mode B fits NFL totals to K=1, which zeros the
+// edge versus the sharp and would make the flag-vs-selection checks vacuous.
+process.env.OMEGA_CAL_MODE = 'legacy';
+clearCalParamsCache();
 const { attachEv } = require(path.join(root, 'edge'));
 const { selectStraights, toPickObject } = require(path.join(root, 'select'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
@@ -28,7 +33,7 @@ const {
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.16-omega-vnext-ncaaf-oa-wx');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
 assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 });
@@ -279,6 +284,28 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.ok(midRow);
   assert.strictEqual(midRow.selected, true);
   assert.strictEqual(midRow.gap, 12.5);
+
+  // Default mode B. The ship fit for NFL totals is K=1, so this same gap
+  // has no edge versus the sharp and stays under minEV. The flag still
+  // does not reject the row.
+  delete process.env.OMEGA_CAL_MODE;
+  clearCalParamsCache();
+  try {
+    const bRow = attachEv(calibrateCandidate({ ...midOver, cardDate: '2026-10-10' }));
+    assert.strictEqual(bRow.calMode, 'B');
+    assert.strictEqual(bRow.calParamsSource, 'ship');
+    assert.strictEqual(bRow.calibK, 1);
+    assert.strictEqual(bRow.calLevel, 'cell');
+    assert.strictEqual(bRow.gapFlag, true);
+    assert.ok(Math.abs(bRow.coverProb - bRow.fair_sharp_p) < 1e-9);
+    assert.ok(bRow.ev < config.GATES.minEV.NFL);
+    assert.notStrictEqual(gateReason(bRow), 'model_line_gap_review');
+    const bGated = applyGates([bRow]);
+    assert.strictEqual(bGated.yesPool.length, 0);
+  } finally {
+    process.env.OMEGA_CAL_MODE = 'legacy';
+    clearCalParamsCache();
+  }
 }
 
 // 47 vs 42.5 stays under the NFL 8 block. λ=1 leaves the total, so the edge matches the unshrunk path.

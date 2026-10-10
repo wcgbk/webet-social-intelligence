@@ -109,5 +109,24 @@ A negative contrast is a lower score than the baseline. Lower log-loss and lower
 
 Production vs stored coverProb max abs 0 on 4160 rows.
 
-Replay volume (picks per day, zero-pick days) is not in this file. It comes from the replay harness with `OMEGA_CAL_MODE` set. The ship decision uses both.
+## Replay, current floors
+
+Harness `/workspace/omega-replay-2w`, dates 2026-09-22..2026-10-08 (17 days). Straights only. Base is `src/live-2e0a803` with no mode switch. A, B, and C are `src/cal4-6a8ab96` with `OMEGA_CAL_MODE` set. `OMEGA_CAL_MODE=legacy` on that same tree is the rollback.
+
+| mode | straights | per day | zero-pick days | zero dates |
+| --- | ---: | ---: | ---: | --- |
+| base | 30 | 1.765 | 5 | 09-28, 09-30, 10-05, 10-06, 10-07 |
+| A | 30 | 1.765 | 5 | 09-28, 09-30, 10-05, 10-06, 10-07 |
+| B | 27 | 1.588 | 4 | 09-28, 09-30, 10-01, 10-02 |
+| C | 44 | 2.588 | 0 | |
+
+A matched the base card on 15 of 17 days. On 10-01 the Blackhawks +1.5 unit moved from 0.5u to 1.25u. On 10-04 Over 46.5 was replaced by Detroit Lions ML -185. B changed 13 days. C changed 15 days. `OMEGA_CAL_MODE=legacy` on `src/cal4-6a8ab96` matched the base card on all 17 days (same 30 straights).
+
+## Ship
+
+All three beat production log-loss with a cluster-bootstrap interval that excludes 0. All three clear 1.5 straights per day and 5 zero-pick days. B has the lowest out-of-sample log-loss, so it is the default. `OMEGA_CAL_MODE=legacy` restores the hand-set shrink plus `bandRetainClip`. A card after 2026-10-08 reads `ship` in `omega-cal-mode.json`. A date in the window reads `byDate`, which was fit only on earlier dates.
+
+B minus market log-loss is +0.001132, 95% CI -0.001513..0.003964, so the interval overlaps 0. C minus market is +0.004713, 95% CI 0.000114..0.009624, entirely worse than the market. A minus market is +0.002321, 95% CI -0.001452..0.006371.
+
+On the full-window B table the product floor binds for MLB spread and MLB moneyline (`kMle` 0, applied K 0.3). That is not the log-loss minimizer. Most other cells fit K=1.
 

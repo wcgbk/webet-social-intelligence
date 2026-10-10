@@ -42,11 +42,25 @@ delete process.env.OMEGA_CAL_PARAMS_FILE;
 delete process.env.OMEGA_CAL_CARD_DATE;
 cal.clearCalParamsCache();
 
-assert.strictEqual(cal.CAL_MODE_DEFAULT, 'legacy');
-assert.strictEqual(cal.resolveCalMode(), 'legacy');
-assert.strictEqual(cal.resolveCalMode(''), 'legacy');
+assert.strictEqual(cal.CAL_MODE_DEFAULT, 'B');
+assert.strictEqual(cal.resolveCalMode(), 'B');
+assert.strictEqual(cal.resolveCalMode(''), 'B');
 assert.strictEqual(cal.resolveCalMode('legacy'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('0'), 'legacy');
+
+// Unset mode is B and, after the study window, uses the ship record.
+const shipped = cal.calibrateCandidate({
+  sport: 'NFL', market: 'Spread', modelRawP: 0.80, fair_sharp_p: 0.50, cardDate: '2026-10-10',
+});
+assert.strictEqual(shipped.calMode, 'B');
+assert.strictEqual(shipped.calParamsSource, 'ship');
+assert.strictEqual(shipped.calibK, 1);
+assert.ok(Math.abs(shipped.coverProb - 0.50) < 1e-12);
+const shippedMlb = cal.calibrateCandidate({
+  sport: 'MLB', market: 'Spread', modelRawP: 0.80, fair_sharp_p: 0.50, cardDate: '2026-10-10',
+});
+assert.strictEqual(shippedMlb.calibK, 0.3);
+assert.strictEqual(shippedMlb.calLevel, 'cell');
 assert.strictEqual(cal.resolveCalMode('nope'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('a'), 'A');
 assert.strictEqual(cal.resolveCalMode('B'), 'B');

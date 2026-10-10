@@ -2,10 +2,11 @@
 
 const {
   SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
-  ncaafGpFixEnabled, teamExactOnly,
+  ncaafGpFixEnabled, teamExactOnly, fbWeatherEnabled,
 } = require('./config');
 const { parseWinLossRecord } = require('./sports/_common');
 const { resolveTeamId } = require('./sports/team_identity');
+const { loadFootballWeather } = require('./sports/football_weather');
 const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
@@ -168,6 +169,30 @@ function espnScoreboardUrls(label, dateISO) {
   return [`${base}?dates=${dates}`];
 }
 
+function espnCompetitorId(side) {
+  const id = side && side.team && side.team.id;
+  if (id == null || id === '') return null;
+  return String(id);
+}
+
+/** ESPN competition venue. Id and name drive neutral-site stadium lookup. */
+function espnCompetitionVenue(comp) {
+  const venue = comp && comp.venue;
+  if (!venue || typeof venue !== 'object') return null;
+  const address = venue.address && typeof venue.address === 'object' ? venue.address : {};
+  const name = venue.fullName || venue.displayName || venue.name || null;
+  const id = venue.id != null && venue.id !== '' ? String(venue.id) : null;
+  if (!id && !name) return null;
+  return {
+    id,
+    name,
+    fullName: venue.fullName || null,
+    city: address.city || null,
+    state: address.state || null,
+    country: address.country || null,
+  };
+}
+
 function mapEspnEvent(ev) {
   if (!ev || typeof ev !== 'object') return null;
   const comp = (ev.competitions && ev.competitions[0]) || {};
@@ -186,6 +211,8 @@ function mapEspnEvent(ev) {
     awayTeam: (away.team && (away.team.displayName || away.team.name)) || '',
     homeAbbr: (home.team && home.team.abbreviation) || '',
     awayAbbr: (away.team && away.team.abbreviation) || '',
+    homeId: espnCompetitorId(home),
+    awayId: espnCompetitorId(away),
     homeScore: home.score != null ? Number(home.score) : null,
     awayScore: away.score != null ? Number(away.score) : null,
     homeProbable: homeProb,
@@ -193,6 +220,7 @@ function mapEspnEvent(ev) {
     weather: extractWeather(comp),
     indoor: !!(comp.venue && comp.venue.indoor === true),
     neutralSite: comp.neutralSite === true,
+    venue: espnCompetitionVenue(comp),
     ...scoreboardSeasonFields(ev),
   };
 }
@@ -881,7 +909,7 @@ function indexMlbWeather(games) {
   return weatherByGame;
 }
 
-async function loadGameDayContext(dateISO, labels, espnBySport) {
+async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
   const gameDay = {
     restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
     qbStatusBySport: { NFL: {}, NCAAF: {} },
@@ -939,6 +967,27 @@ async function loadGameDayContext(dateISO, labels, espnBySport) {
   // Weather from today's MLB ESPN board already fetched
   const mlbBoard = espnBySport && espnBySport.MLB;
   Object.assign(gameDay.weatherByGame, indexMlbWeather((mlbBoard && mlbBoard.games) || []));
+  if (footballLabels.length && fbWeatherEnabled()) {
+    try {
+      const boards = {};
+      for (const sport of footballLabels) {
+        if (espnBySport && espnBySport[sport]) boards[sport] = espnBySport[sport];
+      }
+      const wxOpts = { espnBySport: boards };
+      if (opts && opts.fetchImpl) wxOpts.fetchImpl = opts.fetchImpl;
+      if (opts && opts.now != null) wxOpts.now = opts.now;
+      if (opts && opts.budgetMs != null) wxOpts.budgetMs = opts.budgetMs;
+      if (opts && opts.callTimeoutMs != null) wxOpts.callTimeoutMs = opts.callTimeoutMs;
+      if (opts && Object.prototype.hasOwnProperty.call(opts, 'fixtureDir')) wxOpts.fixtureDir = opts.fixtureDir;
+      const fb = await loadFootballWeather(wxOpts);
+      Object.assign(gameDay.weatherByGame, (fb && fb.weatherByGame) || {});
+      if (fb && fb.meta) gameDay.fbWeatherMeta = fb.meta;
+      const calls = (fb && fb.meta && fb.meta.calls) || {};
+      console.log(`[omega-vnext/ingest] football weather points=${calls.points || 0} hourly=${calls.hourly || 0}`);
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] football weather soft-fail: ${e.message}`);
+    }
+  }
   return gameDay;
 }
 

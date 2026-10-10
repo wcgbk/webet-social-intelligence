@@ -6,8 +6,9 @@
  * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
  * Totals and margins shrink toward the sharp line in points before the
  * CDF. Calibrate shrink runs later on that probability.
- * Wind and cold from the free ESPN scoreboard adjust the total only
- * (WEATHER_NFL). A dome, or a game with no weather object, stays put.
+ * An NWS row on gameDay.weatherByGame adjusts the total only. When that
+ * row is missing or a soft-fail, the free ESPN scoreboard path
+ * (WEATHER_NFL) still runs. A dome, or a game with no weather, stays put.
  * The margin is not moved.
  */
 const {
@@ -17,6 +18,7 @@ const {
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
+const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const SPORT = 'NFL';
@@ -88,9 +90,18 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     engineSoft: env.engineSoft,
     gameDay: gd.gameDay,
   });
-  const wx = applyNflWeatherTotalAdj(gd.modelTotal, espnGame && espnGame.weather, {
-    indoor: !!(espnGame && espnGame.indoor === true),
+  const fb = footballTotalFromGameDay({
+    sport: SPORT,
+    modelTotal: gd.modelTotal,
+    gameDay,
+    event,
+    espnGame,
   });
+  const wx = fb.used
+    ? fb
+    : applyNflWeatherTotalAdj(gd.modelTotal, espnGame && espnGame.weather, {
+      indoor: !!(espnGame && espnGame.indoor === true),
+    });
   const modelMargin = stacked.modelMargin;
   const modelTotal = wx.modelTotal;
   const uncertainty = gd.uncertainty;
@@ -103,6 +114,14 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
       weatherNote: wx.weatherNote,
       weatherTotalAdj: wx.totalAdj,
       applied: true,
+    };
+  }
+  if (fb.used && fb.fbWeather) {
+    gameDayMeta = {
+      ...(gameDayMeta || {}),
+      fbWeather: fb.fbWeather,
+      weatherSource: fb.fbWeather.source,
+      weatherFetchedAt: fb.fbWeather.fetchedAt,
     };
   }
   const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);

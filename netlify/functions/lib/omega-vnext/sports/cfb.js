@@ -14,6 +14,7 @@ const {
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
+const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -78,11 +79,36 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     engineSoft: env.engineSoft,
     gameDay: gd.gameDay,
   });
+  const fb = footballTotalFromGameDay({
+    sport: SPORT,
+    modelTotal: gd.modelTotal,
+    gameDay,
+    event,
+    espnGame,
+  });
   const modelMargin = stacked.modelMargin;
-  const modelTotal = gd.modelTotal;
+  const modelTotal = fb.used ? fb.modelTotal : gd.modelTotal;
   const uncertainty = gd.uncertainty;
-  const methods = tagMethods(env.methods, gd.gameDay && gd.gameDay.applied, stacked.enginesOn);
-  const gameDayMeta = stacked.gameDay;
+  let gameDayApplied = !!(stacked.gameDay && stacked.gameDay.applied);
+  let gameDayMeta = stacked.gameDay;
+  if (fb.used && fb.applied) {
+    gameDayApplied = true;
+    gameDayMeta = {
+      ...(stacked.gameDay || {}),
+      weatherNote: fb.weatherNote,
+      weatherTotalAdj: fb.totalAdj,
+      applied: true,
+    };
+  }
+  if (fb.used && fb.fbWeather) {
+    gameDayMeta = {
+      ...(gameDayMeta || {}),
+      fbWeather: fb.fbWeather,
+      weatherSource: fb.fbWeather.source,
+      weatherFetchedAt: fb.fbWeather.fetchedAt,
+    };
+  }
+  const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
   const engineSoft = stacked.engineSoft;
   const pts = footballPointState(
     SPORT,

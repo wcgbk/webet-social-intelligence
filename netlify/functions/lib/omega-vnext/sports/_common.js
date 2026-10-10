@@ -655,6 +655,7 @@ function pricedFromPointShrink(probAt, projRaw, projShrunk, line, anchor, weight
 
 module.exports = {
   formatMatchup,
+  espnSideId,
   ESPN_ROW_CLEAR_MARGIN_MS,
   bindEspnGameByTeamAndTime,
   disambiguateEspnRows,

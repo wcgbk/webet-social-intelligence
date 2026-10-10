@@ -422,6 +422,31 @@ const WEATHER_NFL = {
 };
 
 /**
+ * Open-air NFL/NCAAF total nudge from api.weather.gov hourly wind, precip
+ * probability, and temperature. Spreads are not an input. Dome and
+ * retractable roofs (retractable assumed closed) adjust by 0.
+ * OMEGA_FB_WEATHER=0 skips the fetch and the adjustment.
+ *
+ * Wind is -k per mph above windBaseMph, then capped at windCap.
+ * k is the midpoint of the published ~0.3 to ~0.5 points per mph band.
+ * Precip and extreme cold are flat. The three together cannot pass totalCap.
+ */
+const FB_WEATHER = {
+  windBaseMph: 10,
+  k: { NFL: 0.35, NCAAF: 0.35 },
+  windCap: 4.0,
+  precipProbAt: 70,
+  precipAdj: 0.5,
+  coldBelowF: 20,
+  coldAdj: 0.5,
+  totalCap: 4.5,
+  horizonDays: 7,
+  budgetMs: 8000,
+  callTimeoutMs: 2500,
+  concurrency: 6,
+};
+
+/**
  * Empirical NFL final-margin mass at 3 and 7. Edge-path spreads use this
  * only for NFL. Half-points next to the number (±2.5/±3.5, ±6.5/±7.5)
  * move by the local excess of this mass over a normal bin, split across
@@ -544,6 +569,11 @@ function restAdjEnabled() {
   return flagEnabled('OMEGA_REST_ADJ');
 }
 
+/** Default on. OMEGA_FB_WEATHER=0 skips the NWS fetch and the total nudge. */
+function fbWeatherEnabled() {
+  return flagEnabled('OMEGA_FB_WEATHER');
+}
+
 function fbMarketGapLimits(sport) {
   const base = FB_MARKET_GAP[sport];
   if (!base) return null;
@@ -565,6 +595,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'Football weather (NWS): open-air NFL and NCAAF totals take api.weather.gov hourly wind, precip probability, and temperature at the home stadium, or at the ESPN competition venue when the game is neutral. Wind adj = -0.35 * max(0, sustained mph - 10), wind cap -4.0. The coefficient is the midpoint of the published band of about -0.3 to -0.5 points per mph above ~10 mph (NFL Analytics, 7,276 games 1999-2025: calm games averaged 44.7 points and games above 16 mph averaged 40.5; wind, not cold, is the scoring driver). Precip probability at or above 70% is -0.5. Temperature below 20F is -0.5. Combined cap -4.5. A dome or a retractable roof adjusts 0 (retractable is assumed closed; there is no roof-status feed). An unknown venue, or a venue outside NWS coverage (international), adjusts 0. Spreads are not moved. A game outside the 7-day hourly window, a fetch error, or a timeout soft-fails to no NWS adjustment. When an NWS observation is present it is the only football total weather adjustment; an NWS miss leaves the existing ESPN scoreboard wind path in place for NFL. OMEGA_FB_WEATHER=0 disables the fetch and the adjustment. Frozen replay has no NWS snap, so this adjustment is 0 and the card stays byte-identical. OMEGA_FB_WEATHER_FIXTURE_DIR reads fixtures instead of the network.',
   'v12.3.15-omega-vnext-night: Saturday card correctness. MLB/NFL/NCAAF/NHL/NBA ESPN rows bind by resolved team id and nearest commence; two rows reject unless the nearest is within 75 minutes and at least 75 minutes clearer than the next (IDENTITY_CLEAR_MARGIN_MS). Doubleheader matchup keys include commence time (still one price per game, max 3 straights). Unused rank weights w_ev, w_clv, w_uncertainty, and corr_penalty are removed; rank stays qualityScore. The post-hoc softSportMixBonus write no longer reorders the chosen straights. NFL id-only fallback passes neutralSite. regrade-circa runs every ET hour at :40 including 01:40 and 02:40 (dstFold both). Played-yesterday rest proxy is documented as 1 day only. sharpPostedTotal is the posted sharp total point. NHL health copy says a snap that lacks goal columns is not a live 6.2 claim. Capture-health reports legacy clv-candidates-{date} row counts for today and yesterday (read only). No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
   'v12.3.14-omega-vnext-rest: NFL/NCAAF rest days from ESPN weekly scoreboards (card week and the previous two). Short week, mini-bye, bye, and Monday-night into Sunday move the home margin by the team difference plus a small road-on-short-rest term. Hard cap ±1.0 pt. NCAAF midweek and bye are half the NFL size, same cap. Totals unchanged. The current kickoff is not a prior game (same team-id pair within 36h, and the prior kickoff must be an earlier ET date). A team that is not FBS is unknown, so the game adj is 0. Neutral site drops the road-short term. OMEGA_REST_ADJ=0 restores the played-yesterday proxy. No gate, Kelly, unit-cap, SHRINK_K, calibration, or parlay change.',
   `v12.3.13 omega-vnext: NHL projector ENABLED (WeBet 2026-09-30). Moneyline, puck line (Spread), and total come from per-game goals for/against plus HFA.NHL ${HFA.NHL} (FiveThirtyEight home ice is about 50 Elo, already this goal HFA). Season totals divide by games, counting OT losses when games is absent. Missing or unclean GF/GA stays on the 6.2 / HFA baseline. A winPct residual runs only on that unclean path. Shot efficiency runs only when both clubs have shots and savePct; a goalie residual runs only when both save rates are present. v1 does not require a goalie confirmation feed. Both residuals sit under ENGINE_SOFT.NHL HARD CAP ±${ENGINE_SOFT.NHL.maxAbsMarginAdj} goals margin / ±${ENGINE_SOFT.NHL.maxAbsTotalAdj} total (goalie alone ±${ENGINE_SOFT.NHL.goalieMaxAbsMarginAdj} / ±${ENGINE_SOFT.NHL.goalieMaxAbsTotalAdj}) and soft-fail to 0. Game-day B2B uses SHORT_REST_DAYS.NHL = 1 with a goal-scale HFA_ADJ (max 0.10). Projections soft-clamp at |margin| 6 and total 12 and still emit a candidate. Blend matches MLB: ML 0.50 / spread 0.50 / total 0.45, no-vig Pinnacle/Circa. SPORTS_ENABLED.NHL = true. Plug-in only on existing select path with MLB/NFL/NCAAF. No Omega core routing change. FIT off. No TSP. No gate, Kelly, unit-cap, global SHRINK_K, MLB_CALIBRATION, SELECT_WEIGHTS, or isotonic change. FIT off. No TSP. NBA off. DAILY_UNIT_CAP stays ${DAILY_UNIT_CAP}.`,
@@ -651,6 +682,8 @@ module.exports = {
   REST_ADJ,
   restAdjEnabled,
   WEATHER_NFL,
+  FB_WEATHER,
+  fbWeatherEnabled,
   NFL_KEY_NUMBERS,
   POINT_SHRINK,
   MODEL_LINE_GAP,

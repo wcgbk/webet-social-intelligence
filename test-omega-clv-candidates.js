@@ -54,7 +54,7 @@ function baseDeps(extra) {
 }
 
 (async () => {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
+  assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
   assert.strictEqual(config.GATES.minEV.MLB, 0.03);
   assert.strictEqual(config.GATES.minEV.NFL, 0.025);
   assert.strictEqual(config.GATES.minCoverProb.MLB, 0.48);

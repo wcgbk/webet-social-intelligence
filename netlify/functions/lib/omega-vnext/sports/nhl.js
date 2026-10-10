@@ -32,6 +32,8 @@ const {
 const { resolveTeamId, rowByIdentityOrFuzzy, logUnknownTeam } = require('./team_identity');
 const { applyGameDayAdjustments } = require('./game_day');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { nhlPeriodEnabled } = require('../gaps_flags');
+const { nhlMarketQuote } = require('../nhl_period');
 
 const SPORT = 'NHL';
 const LEAGUE_GPG = LEAGUE_PPG.NHL; // 3.1
@@ -81,6 +83,25 @@ const NHL_SOFT_MIN_GAMES = 5;
 const LG_SAVE = 0.905;
 const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
+
+/** 60-minute joint. Null keeps the legacy normal price and the old method string. */
+function periodQuote(args) {
+  if (!nhlPeriodEnabled()) return null;
+  try {
+    const q = nhlMarketQuote(args);
+    if (!q || !Number.isFinite(q.coverProb)) return null;
+    return q;
+  } catch (_) {
+    return null;
+  }
+}
+
+function periodMethod(base, on) {
+  if (!on) return base;
+  const s = String(base || '');
+  if (!s || s.includes('-60min')) return s;
+  return `${s}-60min`;
+}
 
 function capsOf(caps) {
   return caps || (ENGINE_SOFT && ENGINE_SOFT.NHL) || {
@@ -689,17 +710,22 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     });
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      const q = periodQuote({ modelMargin, modelTotal, market: 'ml', sideIsHome: isHome });
+      let p = q
+        ? q.coverProb
+        : (isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT));
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
-      out.push(enrichCandidateWithEdge(stamp({
+      const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
-        modelRawP: p, projMethod: methods.ml, uncertainty,
+        modelRawP: p, projMethod: periodMethod(methods.ml, !!q), uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      }), b, bundles));
+      });
+      if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
 
@@ -709,18 +735,23 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const line = b.point;
       if (line == null) continue;
       const isHome = b.side === home;
-      let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
+      const q = periodQuote({ modelMargin, modelTotal, market: 'spread', sideIsHome: isHome, line });
+      let pCover = q
+        ? q.coverProb
+        : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
       pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
-      out.push(enrichCandidateWithEdge(stamp({
+      const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
-        modelRawP: pCover, projMethod: methods.spread, uncertainty,
+        modelRawP: pCover, projMethod: periodMethod(methods.spread, !!q), uncertainty,
         consensusLine: line, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      }), b, bundles));
+      });
+      if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
 
@@ -729,17 +760,22 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
-      let p = totalCoverProb(modelTotal, line, b.side, SPORT);
+      const q = periodQuote({
+        modelMargin, modelTotal, market: 'total', line, side: b.side,
+      });
+      let p = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
-      out.push(enrichCandidateWithEdge(stamp({
+      const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${line}`, line,
-        modelRawP: p, projMethod: methods.total, uncertainty: uncertainty + 0.05,
+        modelRawP: p, projMethod: periodMethod(methods.total, !!q), uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
-      }), b, bundles));
+      });
+      if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
 

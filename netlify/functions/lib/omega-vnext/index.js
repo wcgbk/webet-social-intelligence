@@ -31,6 +31,7 @@ const cfb = require('./sports/cfb');
 const nba = require('./sports/nba');
 const nhl = require('./sports/nhl');
 const { footballAuditFields } = require('./sports/_common');
+const { buildCardAudit } = require('./audit_card');
 const { restAuditFields } = require('./sports/game_day');
 
 function todayET() {
@@ -642,6 +643,13 @@ async function generateOmegaVnext(opts = {}) {
     }), { noGames: slateCounts.total === 0 }));
     picksData.edgeSummary = picksData.noPlaysReason;
     picksData.insights = picksData.insights || '';
+  }
+
+  try {
+    const audit = buildCardAudit({ snap, modelVersion: MODEL_VERSION });
+    if (audit) picksData.audit = audit;
+  } catch (err) {
+    console.error(`[omega-vnext] card audit soft-fail: ${err && err.message}`);
   }
 
   // Health is diagnostic. A failure here must not change picks or skip the store.

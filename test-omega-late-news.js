@@ -641,7 +641,7 @@ function card(picks, extra = {}) {
     assert.ok(stampAt > projectAt, 'stampCandidates after projectAll and before calibration');
     assert.ok(calAt > stampAt, 'calibrateAll keeps cardDate cal-mode options after stampCandidates');
     const config = require('./netlify/functions/lib/omega-vnext/config');
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
     assert.ok(/late-news/.test(config.MODEL_NOTES));
     assert.ok(/stamps lateNews/.test(config.MODEL_NOTES));
     assert.ok(/pregame-check-omega/.test(config.MODEL_NOTES));

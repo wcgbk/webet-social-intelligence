@@ -6,11 +6,13 @@ const {
   MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, PM_SOFT,
 } = require('./config');
 const {
-  kellyFraction, kellyToUnits, ratingToConfidence, formatAmerican,
+  kellyToUnits, ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
 const { footballAuditFields } = require('./sports/_common');
+const { pushAwareKelly } = require('./push_ev');
+const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 
 function matchupKey(c) {
   const name = String((c && (c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) || '').toLowerCase().trim();
@@ -112,7 +114,7 @@ function applyBGradeUnitCap(pick) {
 }
 
 function toPickObject(c, opts = {}) {
-  const kFrac = kellyFraction(c.coverProb, c.odds, KELLY_FRACTION);
+  const kFrac = pushAwareKelly(c.coverProb, c.odds, KELLY_FRACTION, c && c.pPush);
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
   if (opts.drawdown) units = Math.max(0.25, units * 0.75);
@@ -294,8 +296,61 @@ function applyDailyUnitCap(picks, parlayLegs) {
 
   // Hierarchy trims can only lower a B. Re-apply so a lift cannot undo the cap.
   out = out.map(applyBGradeUnitCap);
+  // A parlay leg puts the whole ticket at risk on that game. Trim the straight
+  // after the hierarchy lift so the lift cannot put the game back over the cap.
+  out = capSameGameExposure(out, parlays);
   out = sortByGradeThenUnits(out);
   return { picks: out, parlayLegs: parlays };
+}
+
+function usableGameKey(c) {
+  const key = matchupKey(c);
+  if (!key || key === 'undefined @ undefined') return '';
+  return key;
+}
+
+function isVoidPregame(p) {
+  return !!(p && p.status === 'void-pregame');
+}
+
+/**
+ * Straight units plus the full parlay stake on the same game, capped at
+ * GAME_EXPOSURE_CAP. The parlay is never cut. Steps are 0.25u, floor 0.25u.
+ * OMEGA_GAME_EXPOSURE=0 leaves the stakes from the slate cap.
+ * A void-pregame leg is not stake at risk, so it does not count. A
+ * void-pregame straight is left unchanged. Late-news removes a dropped
+ * straight before enforceOmegaDailyUnitCap reruns this on the surviving card.
+ */
+function capSameGameExposure(picks, parlays) {
+  if (!gameExposureEnabled()) return picks;
+  const onGame = new Map();
+  for (const pl of parlays || []) {
+    const stake = parseU(pl.units);
+    if (!(stake > 0)) continue;
+    const seen = new Set();
+    for (const leg of pl.legs || []) {
+      if (isVoidPregame(leg)) continue;
+      const key = usableGameKey(leg);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      onGame.set(key, (onGame.get(key) || 0) + stake);
+    }
+  }
+  if (!onGame.size) return picks;
+  return (picks || []).map((p) => {
+    if (isVoidPregame(p)) return p;
+    const extra = onGame.get(usableGameKey(p)) || 0;
+    if (!(extra > 0)) return p;
+    const u = parseU(p.units);
+    const room = GAME_EXPOSURE_CAP - extra;
+    if (u <= room + 1e-9) return p;
+    let next = u;
+    while (next > room + 1e-9 && next > 0.25 + 1e-9) {
+      next = Math.max(0.25, Math.round((next - 0.25) * 4) / 4);
+    }
+    if (!(next < u - 1e-9)) return p;
+    return { ...p, units: fmtU(next) };
+  });
 }
 
 module.exports = {
@@ -305,6 +360,7 @@ module.exports = {
   toPickObject,
   applyDailyCap,
   applyDailyUnitCap,
+  capSameGameExposure,
   matchupKey,
   formatMoneylinePick,
   sortByGradeThenUnits,

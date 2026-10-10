@@ -3,6 +3,8 @@
 // Kelly internals). Those are unused on /omega /nfl /cfb cards and dominate
 // TTFB + parse time. gapReview is the private model-vs-line flag list.
 // shortfall is the private "fewer than 3 straights / no 3-leg" debug list.
+// lateNews, voidedPregame, and audit stay on the stored card. The public
+// payload drops all three, and it omits void-pregame picks and parlay legs.
 // Premium Sharp Depth still comes from get-picks-premium.
 //
 // CFB: pick/matchup stay full names (ESPN match keys). pickDisplay/matchupDisplay
@@ -31,6 +33,7 @@ const ROOT_DROP = [
   'shortfall',
   'voidedPregame',
   'lateNews',
+  'audit',
 ];
 
 function isVoidPregame(p) {

@@ -1,4 +1,6 @@
 'use strict';
+// Golden NHL probabilities are the normal CDF. The 60-minute joint is off.
+process.env.OMEGA_NHL_PERIOD = '0';
 /** NHL empirical-Bayes goal-rate shrink, with call-time variant toggles. No network. */
 const assert = require('assert');
 const path = require('path');

@@ -9,8 +9,8 @@
  */
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
-  spreadCoverProb, totalCoverProb, mlFromSpread,
-  sharpMarketLine, footballPointState, footballAudit, pricedFromPointShrink,
+  spreadDetail, totalDetail, mlDetail,
+  sharpMarketLine, footballPointState, footballAudit, pricedFootball,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
@@ -123,8 +123,12 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      const p = pricedFromPointShrink(
-        (proj) => (isHome ? mlFromSpread(proj, SPORT) : 1 - mlFromSpread(proj, SPORT)),
+      const priced = pricedFootball(
+        (proj) => {
+          const q = mlDetail(proj, SPORT);
+          if (isHome) return q;
+          return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
+        },
         pts.modelMarginRaw,
         pts.modelMarginShrunk,
         null,
@@ -133,12 +137,13 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Moneyline', side: b.side, line: null, modelRawP: p, projMethod: methods.ml, uncertainty,
+        market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Moneyline'),
       };
+      if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
       out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
@@ -147,8 +152,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     for (const b of bundles) {
       if (b.point == null) continue;
       const isHome = b.side === home;
-      const p = pricedFromPointShrink(
-        (proj, line) => spreadCoverProb(proj, line, SPORT),
+      const priced = pricedFootball(
+        (proj, line) => spreadDetail(proj, line, SPORT),
         isHome ? pts.modelMarginRaw : -pts.modelMarginRaw,
         isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
         b.point,
@@ -158,12 +163,13 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Spread', side: sideLabel, line: b.point, modelRawP: p, projMethod: methods.spread, uncertainty,
+        market: 'Spread', side: sideLabel, line: b.point, modelRawP: priced.p, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Spread'),
       };
+      if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
       out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }
@@ -171,8 +177,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     const bundles = collectMarketOutcomes(event, 'totals');
     for (const b of bundles) {
       if (b.point == null) continue;
-      const p = pricedFromPointShrink(
-        (proj, line) => totalCoverProb(proj, line, b.side, SPORT),
+      const priced = pricedFootball(
+        (proj, line) => totalDetail(proj, line, b.side, SPORT),
         pts.modelTotalRaw,
         pts.modelTotalShrunk,
         b.point,
@@ -181,13 +187,14 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: p,
+        market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p,
         projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Total'),
       };
+      if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
       out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
     }
   }

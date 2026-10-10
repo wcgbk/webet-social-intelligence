@@ -2,6 +2,7 @@
 // MLB golden below is the unshifted engine. Level correction is off here.
 process.env.OMEGA_MLB_ROOTFIX = '0';
 process.env.OMEGA_MLB_TOTAL_RECENTER = '0';
+process.env.OMEGA_NHL_PERIOD = '0';
 /**
  * NFL/NCAAF point-space shrink before the CDF (λ=1, no pull), and a private
  * model-vs-line review flag. The flag does not reject and does not change
@@ -33,7 +34,7 @@ const {
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.18-omega-vnext-keys');
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
 assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 });

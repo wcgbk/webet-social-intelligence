@@ -135,51 +135,85 @@ function scoreboardSeasonFields(ev) {
   };
 }
 
+/**
+ * Scoreboard URLs for one card date.
+ * NCAAF without a group collapses to the Top-25 board and hides the rest
+ * of the slate (rest, neutral site, weather). groups=90 is D1 (FBS+FCS).
+ * groups=80 is the FBS board. Merge both. Other leagues stay one URL.
+ */
+function espnScoreboardUrls(label, dateISO) {
+  const cfg = ESPN_LEAGUES[label];
+  if (!cfg) return [];
+  const dates = dateParamET(dateISO);
+  const base = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`;
+  if (!dates) return [base];
+  if (label === 'NCAAF') {
+    return [
+      `${base}?dates=${dates}&groups=90&limit=400`,
+      `${base}?dates=${dates}&groups=80&limit=400`,
+    ];
+  }
+  return [`${base}?dates=${dates}`];
+}
+
+function mapEspnEvent(ev) {
+  if (!ev || typeof ev !== 'object') return null;
+  const comp = (ev.competitions && ev.competitions[0]) || {};
+  const competitors = comp.competitors || [];
+  const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
+  const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+  const homeProb = extractProbable(home);
+  const awayProb = extractProbable(away);
+  return {
+    id: ev.id,
+    name: ev.name,
+    shortName: ev.shortName,
+    commenceTime: ev.date || comp.date,
+    status: (comp.status && comp.status.type && comp.status.type.state) || 'pre',
+    homeTeam: (home.team && (home.team.displayName || home.team.name)) || '',
+    awayTeam: (away.team && (away.team.displayName || away.team.name)) || '',
+    homeAbbr: (home.team && home.team.abbreviation) || '',
+    awayAbbr: (away.team && away.team.abbreviation) || '',
+    homeScore: home.score != null ? Number(home.score) : null,
+    awayScore: away.score != null ? Number(away.score) : null,
+    homeProbable: homeProb,
+    awayProbable: awayProb,
+    weather: extractWeather(comp),
+    indoor: !!(comp.venue && comp.venue.indoor === true),
+    neutralSite: comp.neutralSite === true,
+    ...scoreboardSeasonFields(ev),
+  };
+}
+
 async function fetchEspnScoreboard(label, dateISO) {
   const cfg = ESPN_LEAGUES[label];
   if (!cfg) return { league: label, games: [] };
-  const dates = dateParamET(dateISO);
-  let url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`;
-  if (dates) url += `?dates=${dates}`;
-  // CFB often needs groups; keep simple for v1
-  try {
-    const data = await fetchJson(url, 10000);
-    const games = (data.events || []).map(ev => {
-      const comp = (ev.competitions && ev.competitions[0]) || {};
-      const competitors = comp.competitors || [];
-      const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
-      const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
-      const homeProb = extractProbable(home);
-      const awayProb = extractProbable(away);
-      return {
-        id: ev.id,
-        name: ev.name,
-        shortName: ev.shortName,
-        commenceTime: ev.date || comp.date,
-        status: (comp.status && comp.status.type && comp.status.type.state) || 'pre',
-        homeTeam: (home.team && (home.team.displayName || home.team.name)) || '',
-        awayTeam: (away.team && (away.team.displayName || away.team.name)) || '',
-        homeAbbr: (home.team && home.team.abbreviation) || '',
-        awayAbbr: (away.team && away.team.abbreviation) || '',
-        homeScore: home.score != null ? Number(home.score) : null,
-        awayScore: away.score != null ? Number(away.score) : null,
-        homeProbable: homeProb,
-        awayProbable: awayProb,
-        weather: extractWeather(comp),
-        indoor: !!(comp.venue && comp.venue.indoor === true),
-        neutralSite: comp.neutralSite === true,
-        ...scoreboardSeasonFields(ev),
-      };
-    });
-    const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
-    if (sameDay.length !== games.length) {
-      console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
+  const urls = espnScoreboardUrls(label, dateISO);
+  const games = [];
+  const seen = new Set();
+  let ok = 0;
+  for (const url of urls) {
+    try {
+      const data = await fetchJson(url, 10000);
+      ok += 1;
+      for (const ev of (data && data.events) || []) {
+        const id = ev && ev.id != null && ev.id !== '' ? String(ev.id) : null;
+        if (id && seen.has(id)) continue;
+        const game = mapEspnEvent(ev);
+        if (!game) continue;
+        if (id) seen.add(id);
+        games.push(game);
+      }
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] ESPN ${label}: ${e.message}`);
     }
-    return { league: label, games: sameDay };
-  } catch (e) {
-    console.error(`[omega-vnext/ingest] ESPN ${label}: ${e.message}`);
-    return { league: label, games: [] };
   }
+  if (!ok) return { league: label, games: [] };
+  const sameDay = games.filter(g => !dateISO || !g.commenceTime || isSameEtDay(g.commenceTime, dateISO));
+  if (sameDay.length !== games.length) {
+    console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
+  }
+  return { league: label, games: sameDay };
 }
 
 /**
@@ -854,6 +888,8 @@ module.exports = {
   ingest,
   fetchOddsMultiSport,
   fetchEspnScoreboard,
+  espnScoreboardUrls,
+  mapEspnEvent,
   fetchEspnStandings,
   fetchMlbPitcherStats,
   loadEfficiencySeeds,

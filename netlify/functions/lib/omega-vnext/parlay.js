@@ -152,8 +152,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     // Prefer higher coverProb for hit-rate; keep +EV
     .sort((a, b) => (b.coverProb - a.coverProb) || (b.ev - a.ev));
 
-  // Cap search pool for runtime
-  const search = pool.slice(0, 24);
+  // The gated +EV pool is small. Search every combo, not the top 24 by coverProb.
+  const search = pool;
   if (search.length < 2) return [];
 
   const scoreCombo = (legs) => {

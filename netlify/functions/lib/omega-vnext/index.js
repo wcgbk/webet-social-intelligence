@@ -18,6 +18,7 @@ const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHe
 const { persistCandidateLedger } = require('./candidate_ledger');
 const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
 const { attachGenerateHealth } = require('./health');
+const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
@@ -578,6 +579,14 @@ async function generateOmegaVnext(opts = {}) {
     parlayLegs: empty ? [] : parlayLegs,
     // Private. publicPicksPayload drops this. Flag does not change the pool.
     gapReview: buildGapReview(candidates, picks, empty ? [] : parlayLegs),
+    // Private. Counts and the next 10 candidates when the card is short of
+    // 3 straights or a 3-leg. Does not add a pick. publicPicksPayload drops it.
+    shortfall: buildShortfall({
+      picks,
+      parlayLegs: empty ? [] : parlayLegs,
+      yesPool,
+      rejected,
+    }),
     sgps: [],
     claudeVerified: !!narr.claudeVerified,
     fallback: false,
@@ -636,6 +645,7 @@ async function generateOmegaVnext(opts = {}) {
       candidates: candidates.slice(),
       yesPool: yesPool.slice(),
       oddsErrors: (snap && snap.oddsErrors) || [],
+      shortfall: picksData.shortfall || null,
     });
   } catch (e) {
     console.warn(`[omega-health] attach soft-fail: ${e.message}`);

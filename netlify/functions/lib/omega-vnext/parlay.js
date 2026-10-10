@@ -2,12 +2,14 @@
 
 const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT } = require('./config');
 const {
-  americanToDecimal, decimalToAmerican, formatAmerican, kellyFraction, kellyToUnits,
+  americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
 const { footballAuditFields } = require('./sports/_common');
+const { pushAwareKelly } = require('./push_ev');
+const { parlayCorrEnabled, PARLAY_TOTAL_RHO } = require('./gaps_flags');
 
 function marketRank(m) {
   if (/total/i.test(m || '')) return 3;
@@ -28,8 +30,38 @@ function totalDirection(leg) {
 }
 
 /**
- * Factor in (0, 1] when every leg is a total on one side. Otherwise 1.
- * A configured factor above 1 is ignored so a probability cannot rise.
+ * Same-direction totals move together. Sequential Gaussian pair:
+ * P = pq + ρ√(p(1-p)q(1-q)), clamped to the Fréchet bounds.
+ * Returns joint / independence, which is above 1 when ρ > 0.
+ */
+function correlatedTotalFactor(probs) {
+  if (!Array.isArray(probs) || probs.length < 2) return 1;
+  for (const p of probs) {
+    if (!Number.isFinite(p) || p <= 0 || p >= 1) return 1;
+  }
+  let joint = probs[0];
+  let indep = probs[0];
+  for (let i = 1; i < probs.length; i++) {
+    const p = joint;
+    const q = probs[i];
+    const cov = PARLAY_TOTAL_RHO * Math.sqrt(Math.max(0, p * (1 - p) * q * (1 - q)));
+    let next = p * q + cov;
+    const lo = Math.max(0, p + q - 1);
+    const hi = Math.min(p, q);
+    if (next < lo) next = lo;
+    if (next > hi) next = hi;
+    joint = next;
+    indep *= q;
+  }
+  if (!(indep > 0) || !Number.isFinite(joint)) return 1;
+  return joint / indep;
+}
+
+/**
+ * Factor applied to the independent product when every leg is a total
+ * on one side. Otherwise 1.
+ * OMEGA_PARLAY_CORR on: positive correlation (factor can exceed 1).
+ * Off: PARLAY_TOTAL_HAIRCUT, which is at most 1 (2e0a803).
  */
 function sameDirectionTotalFactor(legs) {
   const list = Array.isArray(legs) ? legs : [];
@@ -41,6 +73,11 @@ function sameDirectionTotalFactor(legs) {
     sides.push(side);
   }
   if (!sides.every(s => s === sides[0])) return 1;
+  if (parlayCorrEnabled()) {
+    const factor = correlatedTotalFactor(list.map(l => Number(l.coverProb)));
+    if (!Number.isFinite(factor) || factor <= 0) return 1;
+    return factor;
+  }
   const table = PARLAY_TOTAL_HAIRCUT || {};
   const raw = Number(table[sides.length]);
   if (!Number.isFinite(raw) || raw > 1) return 1;
@@ -56,8 +93,14 @@ function comboStats(legs) {
     combinedProb *= l.coverProb;
   }
   const factor = sameDirectionTotalFactor(legs);
-  const haircutProb = combinedProb * factor;
-  if (Number.isFinite(haircutProb) && haircutProb <= combinedProb) combinedProb = haircutProb;
+  const adjusted = combinedProb * factor;
+  if (Number.isFinite(adjusted)) {
+    if (parlayCorrEnabled()) {
+      if (adjusted > 0) combinedProb = Math.min(0.999, adjusted);
+    } else if (adjusted <= combinedProb) {
+      combinedProb = adjusted;
+    }
+  }
   const ev = combinedProb * combinedDecimal - 1;
   const games = new Set(legs.map(matchupKey)).size;
   const sports = new Set(legs.map(l => l.sport)).size;
@@ -193,7 +236,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
 
   const legs = sortByGradeThenUnits(chosen.legs.map(l => {
     // Leg grade is edge-first quality, independent of the synthetic straight stake.
-    const kFrac = kellyFraction(l.coverProb, l.odds, KELLY_FRACTION);
+    const kFrac = pushAwareKelly(l.coverProb, l.odds, KELLY_FRACTION, l.pPush);
     const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25) || 0.25;
     const edgeFrac = parseEdgeFraction(l.edgePct != null ? l.edgePct : l.ev);
     const qualityClv = l.predictedResidualClv != null ? l.predictedResidualClv : l.predictedClv;
@@ -245,7 +288,9 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     uniqueSports: chosen.uniqueSports,
     independent,
     legMarkets: chosen.legs.map(l => l.market),
-    correlationNote: `CLV-first de-correlated — ${legs.length} legs / ${chosen.uniqueGames} games`,
+    correlationNote: (parlayCorrEnabled() && sameDirectionTotalFactor(chosen.legs) > 1 + 1e-12)
+      ? `same-direction totals ρ=${PARLAY_TOTAL_RHO} — ${legs.length} legs / ${chosen.uniqueGames} games`
+      : `CLV-first de-correlated — ${legs.length} legs / ${chosen.uniqueGames} games`,
     candidatesScanned: search.length,
     source: 'omega-vnext',
   }];

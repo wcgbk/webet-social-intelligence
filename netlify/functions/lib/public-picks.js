@@ -29,6 +29,7 @@ const ROOT_DROP = [
   'gapReview',
   'health',
   'shortfall',
+  'audit',
 ];
 
 function pickPublic(p) {

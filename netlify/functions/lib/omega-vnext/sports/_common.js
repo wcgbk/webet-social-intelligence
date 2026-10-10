@@ -6,6 +6,8 @@ const {
   NFL_KEY_NUMBERS, ncaafGpFixEnabled, ncaafShrinkK, fbGapGuardEnabled, fbMarketGapLimits,
 } = require('../config');
 const { resolveTeamId } = require('./team_identity');
+const { keyMassEnabled } = require('../gaps_flags');
+const { spreadQuote, totalQuote, mlQuote } = require('../key_mass');
 
 function formatMatchup(away, home) {
   return `${away} @ ${home}`;
@@ -411,30 +413,62 @@ function nflKeyNumberCover(modelMargin, line, std) {
 }
 
 /**
- * Spread cover approx via normal.
- * NFL half-points next to 3 and 7, and integer 3/7, use nflKeyNumberCover.
- * Optional 4th arg stdOverride (v12.3.7 MLB SP-known tighten).
+ * Spread cover. NFL/NCAAF use the keyed margin PMF when OMEGA_KEY_MASS is on.
+ * OFF keeps the 2e0a803 path: NFL 3/7 via nflKeyNumberCover, everything else
+ * a normal CDF. Optional 4th arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
-function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride) {
+function spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride) {
   const std = resolveSpreadStd(sport, stdOverride);
+  if ((sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled()
+      && Number.isFinite(modelSpreadHome) && Number.isFinite(marketLineHome)) {
+    const q = spreadQuote(modelSpreadHome, marketLineHome, sport, std);
+    if (q) return q;
+  }
   if (sport === 'NFL' && Number.isFinite(modelSpreadHome) && Number.isFinite(marketLineHome)) {
-    return nflKeyNumberCover(modelSpreadHome, marketLineHome, std).coverProb;
+    return nflKeyNumberCover(modelSpreadHome, marketLineHome, std);
   }
   const z = (modelSpreadHome + marketLineHome) / std;
-  return normCdf(z);
+  const p = normCdf(z);
+  return { coverProb: p, pWin: p, pPush: 0, pLoss: Math.max(0, 1 - p) };
+}
+
+function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride) {
+  return spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride).coverProb;
+}
+
+function totalDetail(modelTotal, marketTotal, side, sport) {
+  const std = SPORT_TOTAL_STD[sport] || 10;
+  if (sport === 'NFL' && keyMassEnabled()
+      && Number.isFinite(modelTotal) && Number.isFinite(marketTotal)) {
+    const q = totalQuote(modelTotal, marketTotal, side, sport, std);
+    if (q) return q;
+  }
+  const z = (modelTotal - marketTotal) / std;
+  const p = /over/i.test(side) ? normCdf(z) : normCdf(-z);
+  return { coverProb: p, pWin: p, pPush: 0, pLoss: Math.max(0, 1 - p) };
 }
 
 function totalCoverProb(modelTotal, marketTotal, side, sport) {
-  const std = SPORT_TOTAL_STD[sport] || 10;
-  const z = (modelTotal - marketTotal) / std;
-  if (/over/i.test(side)) return normCdf(z);
-  return normCdf(-z);
+  return totalDetail(modelTotal, marketTotal, side, sport).coverProb;
 }
 
-/** Optional 3rd arg stdOverride (v12.3.7 MLB SP-known tighten). */
-function mlFromSpread(modelSpreadHome, sport, stdOverride) {
+/**
+ * Moneyline from the home margin. The 0.05–0.95 clamp is the legacy bound.
+ * NFL ties push when the keyed PMF is on. NCAAF splits the tie.
+ * Optional 3rd arg stdOverride (v12.3.7 MLB SP-known tighten).
+ */
+function mlDetail(modelSpreadHome, sport, stdOverride) {
   const std = resolveSpreadStd(sport, stdOverride);
-  return clamp(normCdf(modelSpreadHome / std), 0.05, 0.95);
+  if ((sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled() && Number.isFinite(modelSpreadHome)) {
+    const q = mlQuote(modelSpreadHome, sport, std);
+    if (q) return { ...q, coverProb: clamp(q.coverProb, 0.05, 0.95) };
+  }
+  const p = clamp(normCdf(modelSpreadHome / std), 0.05, 0.95);
+  return { coverProb: p, pWin: p, pPush: 0, pLoss: Math.max(0, 1 - p) };
+}
+
+function mlFromSpread(modelSpreadHome, sport, stdOverride) {
+  return mlDetail(modelSpreadHome, sport, stdOverride).coverProb;
 }
 
 /** Mild market-anchored lean: blend model with market implied. */
@@ -653,6 +687,42 @@ function pricedFromPointShrink(probAt, projRaw, projShrunk, line, anchor, weight
   return pShrunk < pRaw ? pShrunk : pRaw;
 }
 
+/**
+ * Push mass from the same raw-vs-shrunk choice pricedFromPointShrink made.
+ * Strict less-than keeps the raw detail on a tie, matching that function.
+ */
+function footballPushMass(detailAt, projRaw, projShrunk, line, anchor, weight) {
+  if (typeof detailAt !== 'function') return 0;
+  const dRaw = detailAt(projRaw, line);
+  const dShr = detailAt(projShrunk, line);
+  const pRaw = blendWithMarket(dRaw && dRaw.coverProb, anchor, weight);
+  const pShr = blendWithMarket(dShr && dShr.coverProb, anchor, weight);
+  let useShrunk = false;
+  if (!Number.isFinite(pRaw)) useShrunk = true;
+  else if (!Number.isFinite(pShr)) useShrunk = false;
+  else useShrunk = pShr < pRaw;
+  const d = useShrunk ? dShr : dRaw;
+  const mass = d && Number(d.pPush);
+  return Number.isFinite(mass) && mass > 0 ? mass : 0;
+}
+
+/** Priced cover plus the push on that same projection. pPush is 0 under 0.001. */
+function pricedFootball(detailAt, projRaw, projShrunk, line, anchor, weight) {
+  const p = pricedFromPointShrink(
+    (proj, ln) => {
+      const d = detailAt(proj, ln);
+      return d && d.coverProb;
+    },
+    projRaw,
+    projShrunk,
+    line,
+    anchor,
+    weight,
+  );
+  const mass = footballPushMass(detailAt, projRaw, projShrunk, line, anchor, weight);
+  return { p, pPush: mass >= 0.001 ? mass : 0 };
+}
+
 module.exports = {
   formatMatchup,
   espnSideId,
@@ -672,9 +742,14 @@ module.exports = {
   footballMarketGapReason,
   resolveSpreadStd,
   nflKeyNumberCover,
+  spreadDetail,
   spreadCoverProb,
+  totalDetail,
   totalCoverProb,
+  mlDetail,
   mlFromSpread,
+  footballPushMass,
+  pricedFootball,
   blendWithMarket,
   mapGamesSoft,
   HFA,

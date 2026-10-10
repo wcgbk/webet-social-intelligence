@@ -1,4 +1,9 @@
 'use strict';
+// Legacy item-6 path. The keyed PMF, push-aware EV, and positive total
+// correlation are off here so these assertions stay on the 2e0a803 formulas.
+process.env.OMEGA_KEY_MASS = '0';
+process.env.OMEGA_PARLAY_CORR = '0';
+process.env.OMEGA_PUSH_EV = '0';
 /**
  * Omega item 6. Weather (6a), same-direction total parlay haircut (6b),
  * NFL 3/7 key-number mass (6c). No network on the formula cases.

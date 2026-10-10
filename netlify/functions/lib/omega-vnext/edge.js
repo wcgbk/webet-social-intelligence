@@ -5,6 +5,7 @@ const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
   noVigTwoWay, americanJuiceDelta,
 } = require('./odds_math');
+const { pushAwareEv } = require('./push_ev');
 
 function bookKey(b) {
   return String(b || '').toLowerCase();
@@ -442,10 +443,12 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
  *   coverProb - fair_sharp_p
  * Fallback when sharp fair missing: coverProb - vigged book implied.
  * NOT predictedClv cents, NOT raw coverProb, NOT full Kelly EV% (dogs inflate EV%).
- * `ev` remains true EV at posted odds for sizing/gates.
+ * `ev` is stake EV at posted odds. A push returns the stake, so when
+ * OMEGA_PUSH_EV is on, ev = (1 − pPush) × (coverProb × decimal − 1).
+ * edgePct stays coverProb − fair_sharp. Both of those are conditional.
  */
 function attachEv(c) {
-  const ev = evAtOdds(c.coverProb, c.odds);
+  const ev = pushAwareEv(c.coverProb, c.odds, c && c.pPush);
   const implied = americanToImplied(c.odds);
   const fair = (c.fair_sharp_p != null && Number.isFinite(c.fair_sharp_p))
     ? c.fair_sharp_p

@@ -14,6 +14,18 @@ const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
 
+/**
+ * Odds API odds URL. regions us,us2,eu and markets h2h,spreads,totals.
+ * No bookmakers filter — a filter would drop any US book not on the list.
+ */
+function buildOddsUrl(sportKey, apiKey, historicalSnapshot) {
+  const base = historicalSnapshot
+    ? `https://api.the-odds-api.com/v4/historical/sports/${sportKey}/odds`
+    : `https://api.the-odds-api.com/v4/sports/${sportKey}/odds`;
+  const date = historicalSnapshot ? `&date=${encodeURIComponent(historicalSnapshot)}` : '';
+  return `${base}?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}${date}`;
+}
+
 function enabledSportLabels(dateISO) {
   if (!dateISO) return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
   return sportsForCard(dateISO);
@@ -42,7 +54,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
       let url;
       if (opts.historicalSnapshot) {
         out.snapshotNote = `historical:${opts.historicalSnapshot}`;
-        url = `https://api.the-odds-api.com/v4/historical/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}&date=${encodeURIComponent(opts.historicalSnapshot)}`;
+        url = buildOddsUrl(key, apiKey, opts.historicalSnapshot);
       } else {
         const gate = await slateOddsGate({ sportKey: key, apiKey, dateISO });
         if (gate.skip) {
@@ -50,7 +62,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
           console.log(`[omega-vnext/ingest] ${label}: skip Odds API (${gate.reason}, events=${gate.events})`);
           continue;
         }
-        url = `https://api.the-odds-api.com/v4/sports/${key}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
+        url = buildOddsUrl(key, apiKey, null);
       }
       const data = await fetchJson(url, 15000);
       // historical endpoint wraps in { data: [...] }
@@ -707,8 +719,74 @@ async function fetchMlbPitcherStats(dateISO) {
  * deps is for tests — production calls the real loaders.
  */
 
+const fs = require('fs');
 const { prevEtDate, restMapFromScoreboard } = require('./sports/game_day');
-const { loadFootballRestSchedules, scheduleDir } = require('./sports/rest_schedule');
+const {
+  loadFootballRestSchedules, scheduleDir, weekFilePath, weeklyScoreboardUrl,
+  seasonYearFromDate, calendarOf, weekNumberForDate,
+} = require('./sports/rest_schedule');
+
+/**
+ * ESPN week boards with scores. The rest-day helper drops scores, so this
+ * reads the raw week file or the same week URL. A schedule dir never
+ * falls through to the network (replay stays offline). No dir fetches
+ * weeks 0..card week. Failure returns [] and the EPA path stays in place.
+ */
+async function loadNcaafScoreboards(dateISO) {
+  const dir = scheduleDir();
+  if (dir) {
+    const boards = [];
+    for (let w = 0; w <= 20; w += 1) {
+      const file = weekFilePath(dir, 'NCAAF', w);
+      if (!file || !fs.existsSync(file)) continue;
+      try {
+        boards.push(JSON.parse(fs.readFileSync(file, 'utf8')));
+      } catch (e) {
+        console.error(`[omega-vnext/ingest] NCAAF week ${w} unreadable: ${e.message}`);
+      }
+    }
+    return boards;
+  }
+  const year = seasonYearFromDate(dateISO, null);
+  if (year == null) return [];
+  const discovered = await fetchJson(weeklyScoreboardUrl('NCAAF', year, null), 12000);
+  const week = weekNumberForDate(calendarOf(discovered), dateISO);
+  const discoveredWeek = discovered && discovered.week && Number(discovered.week.number);
+  const last = Number.isInteger(week) ? week : (Number.isInteger(discoveredWeek) ? discoveredWeek : null);
+  if (last == null) return discovered ? [discovered] : [];
+  const weeks = [];
+  for (let w = 0; w <= last; w += 1) weeks.push(w);
+  const fetched = await Promise.all(weeks.map(async (w) => {
+    if (Number.isInteger(discoveredWeek) && w === discoveredWeek && discovered) return discovered;
+    try {
+      return await fetchJson(weeklyScoreboardUrl('NCAAF', year, w), 12000);
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] NCAAF scoreboard week ${w} failed: ${e.message}`);
+      return null;
+    }
+  }));
+  return fetched.filter(Boolean);
+}
+
+async function attachNcaafOa(efficiencyBySport, dateISO) {
+  const table = efficiencyBySport && efficiencyBySport.NCAAF;
+  if (!table || typeof table !== 'object') return;
+  try {
+    const { solveNcaafOpponentRatings } = require('./sports/epa');
+    const boards = await loadNcaafScoreboards(dateISO);
+    const pack = solveNcaafOpponentRatings(boards, { efficiency: table, asOf: dateISO });
+    if (!pack) {
+      console.log(`[omega-vnext/ingest] NCAAF OA withheld (schedule short or unreadable) date=${dateISO}`);
+      return;
+    }
+    table._oa = pack;
+    console.log(
+      `[omega-vnext/ingest] NCAAF OA games=${pack.games} close=${pack.closeGames} league=${pack.leagueTotal.toFixed(2)} fcs=${pack.fcsStrength.toFixed(1)}`
+    );
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] NCAAF OA soft-fail: ${e.message}`);
+  }
+}
 
 /** Soft QB out/doubtful/questionable map from ESPN injuries (football). */
 async function fetchFootballQbStatusMap(leagueSlug) {
@@ -955,6 +1033,7 @@ async function ingest(dateISO, opts = {}) {
         }
       }
     }
+    await attachNcaafOa(engines.efficiencyBySport, dateISO);
     console.log('[omega-vnext/ingest] FROZEN SNAP replay (no live odds/standings/injuries)');
     return {
       dateISO,
@@ -989,6 +1068,7 @@ async function ingest(dateISO, opts = {}) {
   } catch (e) {
     console.error(`[omega-vnext/ingest] gameDay soft-fail: ${e.message}`);
   }
+  await attachNcaafOa(engines.efficiencyBySport, dateISO);
 
   return {
     dateISO,
@@ -1011,6 +1091,9 @@ module.exports = {
   mergeTalentIntoEfficiency,
   ingest,
   fetchOddsMultiSport,
+  buildOddsUrl,
+  ODDS_REGIONS,
+  ODDS_MARKETS,
   fetchEspnScoreboard,
   espnScoreboardUrls,
   mapEspnEvent,

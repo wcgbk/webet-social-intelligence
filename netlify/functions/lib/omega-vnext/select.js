@@ -183,6 +183,7 @@ function toPickObject(c, opts = {}) {
     ...(c.bestPlaceable ? { bestPlaceable: c.bestPlaceable } : {}),
     ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
     ...footballAuditFields(c),
+    ...(c.lateNews ? { lateNews: c.lateNews } : {}),
   };
 }
 

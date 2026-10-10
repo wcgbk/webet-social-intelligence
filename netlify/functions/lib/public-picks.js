@@ -29,7 +29,13 @@ const ROOT_DROP = [
   'gapReview',
   'health',
   'shortfall',
+  'voidedPregame',
+  'lateNews',
 ];
+
+function isVoidPregame(p) {
+  return !!(p && p.status === 'void-pregame');
+}
 
 function pickPublic(p) {
   if (!p || typeof p !== 'object') return p;
@@ -51,7 +57,8 @@ function parlayPublic(parlayLegs) {
     for (const k of PARLAY_KEEP) {
       if (pl[k] !== undefined) out[k] = pl[k];
     }
-    out.legs = Array.isArray(pl.legs) ? pl.legs.map(pickPublic) : [];
+    const legs = Array.isArray(pl.legs) ? pl.legs.filter((leg) => !isVoidPregame(leg)) : [];
+    out.legs = legs.map(pickPublic);
     return out;
   });
 }
@@ -60,7 +67,9 @@ function publicPicksPayload(data) {
   if (!data || typeof data !== 'object') return data;
   const clone = { ...data };
   for (const k of ROOT_DROP) delete clone[k];
-  clone.picks = Array.isArray(data.picks) ? data.picks.map(pickPublic) : [];
+  clone.picks = Array.isArray(data.picks)
+    ? data.picks.filter((p) => !isVoidPregame(p)).map(pickPublic)
+    : [];
   clone.parlayLegs = parlayPublic(data.parlayLegs);
   clone.rejections = [];
   return clone;

@@ -222,6 +222,23 @@ assert.strictEqual(wed.matched, '13:15');
 assert.strictEqual(et.etGuard('self-optimize', sched, new Date('2026-11-01T10:00:00Z')).matched, '05:00');
 assert.strictEqual(et.etGuard('self-optimize', sched, new Date('2026-11-02T10:00:00Z')).reason, 'outside-et-weekday');
 
+const pregameSlots = et.ET_SCHEDULE['pregame-check-omega'].etTimes;
+assert.strictEqual(pregameSlots.length, 26);
+assert.strictEqual(pregameSlots[0], '11:00');
+assert.strictEqual(pregameSlots[pregameSlots.length - 1], '23:30');
+assert.ok(pregameSlots.indexOf('11:00') !== -1);
+assert.ok(pregameSlots.indexOf('23:30') !== -1);
+assert.ok(!pregameSlots.some((slot) => slot.endsWith(':40')));
+assert.ok(!pregameSlots.some((slot) => slot.endsWith(':15') || slot.endsWith(':45') || slot.endsWith(':10')));
+assert.strictEqual(et.etGuard('pregame-check-omega', sched, new Date('2026-10-10T15:00:00Z')).run, true);
+assert.strictEqual(et.etGuard('pregame-check-omega', sched, new Date('2026-10-10T15:00:00Z')).matched, '11:00');
+assert.strictEqual(et.etGuard('pregame-check-omega', sched, new Date('2026-10-10T14:30:00Z')).run, false);
+assert.strictEqual(et.etGuard('pregame-check-omega', sched, new Date('2026-10-11T03:30:00Z')).run, true);
+assert.strictEqual(et.etGuard('pregame-check-omega', sched, new Date('2026-10-11T03:30:00Z')).matched, '23:30');
+assert.strictEqual(et.etGuard('pregame-check-omega', sched, new Date('2026-10-11T03:41:00Z')).run, false);
+assert.ok(!pregameSlots.some((slot) => slot.endsWith(':40')));
+assert.strictEqual(et.rejectUnlessEtSlot('pregame-check-omega', sched, new Date('2026-10-10T14:30:00Z')).statusCode, 200);
+
 async function idempotency() {
   const now = new Date('2026-10-07T13:30:00Z');
   const event = schedulerEvent(now.toISOString());

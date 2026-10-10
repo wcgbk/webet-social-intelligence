@@ -23,6 +23,7 @@ const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
+const { stampCandidates } = require('./late_news');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -232,6 +233,7 @@ async function generateOmegaVnext(opts = {}) {
   console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
 
   let candidates = projectAll(snap, dateISO);
+  candidates = stampCandidates(candidates, snap);
   const rawBySport = {};
   for (const c of candidates) {
     const s = c && c.sport;

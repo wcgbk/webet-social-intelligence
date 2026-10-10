@@ -387,6 +387,7 @@ function v2GradeParts(pick, game, opts) {
 }
 
 function gradePick(pick, game, opts) {
+  if (pick && pick.status === 'void-pregame') return 'push';
   const pickStrEarly = (pick.pick || '').trim();
   const betTypeEarly = (pick.betType || '').toLowerCase();
   const isF5 = /\bf5\b|first 5|1st 5|first-5/i.test(pickStrEarly) || betTypeEarly.includes('f5') || /^f5\b/i.test(pickStrEarly);

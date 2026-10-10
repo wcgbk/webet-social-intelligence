@@ -11,6 +11,7 @@ const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
+const { parseFootballQbMap, fillNcaafQbMap } = require('./late_news');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -837,39 +838,30 @@ async function attachNcaafOa(efficiencyBySport, dateISO) {
   }
 }
 
-/** Soft QB out/doubtful/questionable map from ESPN injuries (football). */
-async function fetchFootballQbStatusMap(leagueSlug) {
-  const out = {};
+/**
+ * Soft QB out/doubtful/questionable map from ESPN injuries (football).
+ * NFL stays on the 8000ms league feed with no date filter. NCAAF drops
+ * injury rows older than ~400 days so a 2020 listing cannot tag a 2026 card.
+ * The return is still the map. Callers that need ok/calls use the result helper.
+ */
+async function fetchFootballQbStatusResult(leagueSlug, opts = {}) {
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/${leagueSlug}/injuries`;
     const data = await fetchJson(url, 8000);
-    const apply = (teamName, pos, status, athleteName) => {
-      if ((pos || '').toUpperCase() !== 'QB') return;
-      const st = String(status || '').toLowerCase();
-      if (!st) return;
-      if (!/(out|doubtful|questionable|injured reserve|\bir\b|ruled out)/i.test(st)) return;
-      const key = teamName;
-      // Prefer worse status if multiple
-      const rank = (s) => (/out|ruled out|ir|injured reserve/.test(s) ? 3 : /doubtful/.test(s) ? 2 : 1);
-      const prev = out[key];
-      if (prev && rank(String(prev.qbStatus)) >= rank(st)) return;
-      out[key] = { team: teamName, qbStatus: st, qbName: athleteName || null };
-    };
-    for (const team of (data.injuries || data.teams || [])) {
-      const teamName = team.displayName || (team.team && team.team.displayName) || '';
-      for (const inj of (team.injuries || team.athletes || [])) {
-        apply(
-          teamName,
-          (inj.athlete && inj.athlete.position && inj.athlete.position.abbreviation) || inj.position,
-          inj.status || inj.type,
-          (inj.athlete && inj.athlete.displayName) || inj.displayName
-        );
-      }
-    }
+    const map = parseFootballQbMap(data, {
+      maxAgeDays: leagueSlug === 'college-football' ? 400 : null,
+      cardDate: opts.dateISO || null,
+    });
+    return { map, ok: true };
   } catch (e) {
     console.log(`[omega-vnext/ingest] QB status ${leagueSlug} soft-fail: ${e.message}`);
+    return { map: {}, ok: false };
   }
-  return out;
+}
+
+async function fetchFootballQbStatusMap(leagueSlug, opts) {
+  const result = await fetchFootballQbStatusResult(leagueSlug, opts || {});
+  return result.map;
 }
 
 function extractWeather(comp) {
@@ -913,6 +905,10 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
   const gameDay = {
     restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
     qbStatusBySport: { NFL: {}, NCAAF: {} },
+    qbStatusMeta: {
+      NFL: { ok: true },
+      NCAAF: { ok: true, calls: 0, source: null },
+    },
     weatherByGame: {},
   };
   const prev = prevEtDate(dateISO);
@@ -931,14 +927,47 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
     }
   }
   try {
-    if (labels.includes('NFL')) gameDay.qbStatusBySport.NFL = await fetchFootballQbStatusMap('nfl');
+    if (labels.includes('NFL')) {
+      const nflQb = await fetchFootballQbStatusResult('nfl', { dateISO });
+      gameDay.qbStatusBySport.NFL = nflQb.map;
+      gameDay.qbStatusMeta.NFL = { ok: nflQb.ok };
+    }
   } catch (e) {
     console.error(`[omega-vnext/ingest] NFL QB soft-fail: ${e.message}`);
+    gameDay.qbStatusMeta.NFL = { ok: false };
   }
   try {
-    if (labels.includes('NCAAF')) gameDay.qbStatusBySport.NCAAF = await fetchFootballQbStatusMap('college-football');
+    if (labels.includes('NCAAF')) {
+      const cfbQb = await fetchFootballQbStatusResult('college-football', { dateISO });
+      let map = cfbQb.map;
+      let meta = { ok: cfbQb.ok, calls: 0, source: 'league' };
+      const games = (espnBySport && espnBySport.NCAAF && espnBySport.NCAAF.games) || [];
+      try {
+        const filled = await fillNcaafQbMap({
+          map,
+          games,
+          dateISO,
+          fetchImpl: opts && opts.fetchImpl,
+          maxCalls: 30,
+          timeoutMs: 4000,
+        });
+        if (filled && filled.ok && filled.map) map = filled.map;
+        meta = {
+          ok: !!(cfbQb.ok || (filled && filled.sawOk)),
+          calls: filled ? filled.calls : 0,
+          source: 'espn-ncaaf',
+        };
+      } catch (e) {
+        console.error(`[omega-vnext/ingest] NCAAF QB supplemental soft-fail: ${e.message}`);
+        meta = { ok: cfbQb.ok, calls: 0, source: 'league', error: e.message };
+      }
+      gameDay.qbStatusBySport.NCAAF = map;
+      gameDay.qbStatusMeta.NCAAF = meta;
+      console.log(`[omega-vnext/ingest] NCAAF QB teams=${Object.keys(map).length} calls=${meta.calls} ok=${meta.ok}`);
+    }
   } catch (e) {
     console.error(`[omega-vnext/ingest] CFB QB soft-fail: ${e.message}`);
+    gameDay.qbStatusMeta.NCAAF = { ok: false, calls: 0, source: null };
   }
   const footballLabels = labels.filter((l) => l === 'NFL' || l === 'NCAAF');
   if (footballLabels.length) {

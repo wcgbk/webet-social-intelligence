@@ -230,6 +230,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       ...(Array.isArray(l.placeableBooks) ? { placeableBooks: l.placeableBooks.slice() } : {}),
       ...(l.bestPlaceable ? { bestPlaceable: l.bestPlaceable } : {}),
       ...footballAuditFields(l),
+      ...(l.lateNews ? { lateNews: l.lateNews } : {}),
     };
   }));
 

@@ -11,6 +11,8 @@
 //
 // Verify may drop, flag, or resize inside the existing unit cap.
 // It does not add a straight and it does not rebuild a locked parlay.
+// Late-news (MLB starter, NHL goalie, NFL/NCAAF QB) uses the same rule:
+// drop or flag a published pick, never add or swap one.
 
 const SITE_ID = process.env.SITE_ID || "87d7bcd9-e95a-479c-bc44-6432a2ffc606";
 const DISCORD_CHANNEL = "1482660132222537808";
@@ -48,6 +50,8 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
+const lateNews = require('./lib/omega-vnext/late_news');
+const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
@@ -977,9 +981,12 @@ exports.resolveLockedParlay = resolveLockedParlay;
 exports.formatCombinedAmerican = formatCombinedAmerican;
 exports.sportCoverFloor = sportCoverFloor;
 exports.candidateClearsSportGates = candidateClearsSportGates;
+exports.updatePicksBlob = updatePicksBlob;
+exports.fetchBetaPicks = fetchBetaPicks;
+exports.enforceOmegaDailyUnitCap = enforceOmegaDailyUnitCap;
 
 // ── Handler ──
-const { rejectUnlessEtSlot } = require("./lib/et-schedule");
+const { rejectUnlessEtSlot, etParts } = require("./lib/et-schedule");
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
@@ -1032,6 +1039,7 @@ exports.handler = async (event) => {
     let blockParlayRefill = false;
     let placeabilityDropped = 0;
     let droppedSteam = 0;
+    let lateNewsReport = null;
     try {
       hrCheck = await runHardRockCheck(picksData);
       const decisions = (hrCheck.pickResults || []).map(r => (r && r.decision) || { drop: false });
@@ -1129,6 +1137,42 @@ exports.handler = async (event) => {
       }
     } catch (e) {
       console.log(`[verify-steam] drop pass skipped: ${e.message}`);
+    }
+
+    // Late-news re-check. Same 90-minute window as pregame-check-omega.
+    // Drop or flag only. A scratched starter, postponed game, goalie the
+    // model priced, or a newly out QB voids the pick. Never adds a side.
+    try {
+      const lateNow = new Date();
+      const late = await lateNews.runLateNews({
+        picksData,
+        dateISO: dateKey,
+        now: lateNow,
+        withinMin: 90,
+      });
+      lateNewsReport = late;
+      try {
+        const plan = lateNews.commitLateNewsCard(picksData, late, {
+          resolveLockedParlay,
+          enforceCap: enforceOmegaDailyUnitCap,
+        });
+        if (plan.blockStraightRefill) blockStraightRefill = true;
+        if (plan.write) await updatePicksBlob(dateKey, picksData);
+      } catch (e) {
+        console.log(`[verify-late-news] write soft-fail: ${e.message}`);
+      }
+      try {
+        await storeLateNewsOps(dateKey, lateNews.opsFromRun(late, {
+          date: dateKey,
+          functionName: 'verify-picks-omega',
+          et: etParts(lateNow).et,
+        }));
+      } catch (e) {
+        console.error(`[verify-late-news] ops soft-fail: ${e.message}`);
+      }
+    } catch (e) {
+      console.log(`[verify-late-news] soft-fail: ${e.message}`);
+      lateNewsReport = { dropped: 0, flagged: 0, checked: 0, httpCalls: 0, softFail: true, error: e.message };
     }
 
     // ── Step 3: Sharp handicapper review ──
@@ -1483,6 +1527,13 @@ Return ONLY valid JSON array:
       hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
       placeability: { dropped: placeabilityDropped, parlayCleared: blockParlayRefill },
       steamRecheck: steamCheck,
+      lateNews: lateNewsReport ? {
+        checked: lateNewsReport.checked || 0,
+        dropped: lateNewsReport.dropped || 0,
+        flagged: lateNewsReport.flagged || 0,
+        httpCalls: lateNewsReport.httpCalls || 0,
+        softFail: !!lateNewsReport.softFail,
+      } : { checked: 0, dropped: 0, flagged: 0, httpCalls: 0, softFail: false },
       sharpReview: sharpResult,
       summary: `${pickReports.length} picks checked | ${totalErrors} error(s) | ${totalWarnings} warning(s) | HardRock: ${hrCheck.summary.skipped ? "skipped" : `${hrCheck.summary.available}/${hrCheck.summary.checked} confirmed`} | Sharp: ${sharpResult.verdict}${sharpReplacements.length > 0 ? ` (${sharpReplacements.length} replaced)` : ''} | ${anyFixed ? `Auto-fixed ${allReplacements.length} pick(s)` : 'No fixes needed'}`,
       verifiedAt: new Date().toISOString(),

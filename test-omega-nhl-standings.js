@@ -8,7 +8,7 @@ const config = require(path.join(root, 'config'));
 const ingest = require(path.join(root, 'ingest'));
 const nhl = require(path.join(root, 'sports/nhl'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 assert.strictEqual(config.GATES.minEV.NHL, 0.03);
 assert.strictEqual(config.GATES.minCoverProb.default, 0.48);
 assert.strictEqual(nhl.NHL_MIN_GAMES, 2);

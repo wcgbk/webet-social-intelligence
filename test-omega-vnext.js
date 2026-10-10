@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -75,10 +75,15 @@ assert.ok(mlbMl > nflMl);
 const mlbNoise = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.53, fair_sharp_p: 0.52, odds: -110,
 }));
+assert.strictEqual(mlbNoise.calMode, 'A');
+assert.strictEqual(mlbNoise.calibK, config.MLB_CALIBRATION.shrinkK.Moneyline);
+assert.strictEqual(mlbNoise.calMap, null);
 assert.ok(mlbNoise.ev < config.GATES.minEV.MLB, 'noise near the market stays under the EV gate');
 const mlbReal = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.60, fair_sharp_p: 0.52, odds: -120,
 }));
+assert.strictEqual(mlbReal.calMode, 'A');
+assert.strictEqual(mlbReal.calLevel, 'handset');
 assert.ok(mlbReal.ev >= config.GATES.minEV.MLB, 'a real MLB moneyline disagreement clears minEV');
 assert.ok(mlbReal.edgePct < 0.12, 'MLB moneyline shrink keeps a real disagreement under a double-digit edge');
 // isotonic must compress toward band — not inflate just-above-hi values
@@ -314,10 +319,12 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 // Wednesday MLB. Legacy (hand-set shrink + bandRetainClip): real starter /
 // total / park edges fill 3 straights + a 3-leg. A pick'em, a 0.25-run
 // moneyline, and a starter already priced to -190 stay out.
-// Default mode B uses the ship fit. MLB spread K is the product floor 0.3
-// (the hand-set value is 0.62; kMle on this cell is 0), so the zero-quality
-// Pirates +1.5 and the 0.25-run Marlins +1.5 can clear minEV. The card
-// still fills 3 straights and a 3-leg.
+// Default mode A drops the band and keeps the hand-set K, so those noise
+// games stay out and the card still fills. Mode B stays selectable. Its
+// ship fit sets MLB spread K to the product floor 0.3 (hand-set 0.62;
+// kMle 0), so the zero-quality Pirates +1.5 and the 0.25-run Marlins +1.5
+// can clear minEV. That fitted K is what emptied the 2026-10-10 and
+// 2026-10-11 dry runs.
 {
   const kick = new Date(Date.now() + 30 * 3600 * 1000).toISOString();
   const cardDate = math.etCalendarDate(kick);
@@ -429,13 +436,21 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   for (const m of legacyCard.yesGames) assert.ok(!noiseMatchups.has(m), `legacy noise game published: ${m}`);
 
   const defaultCard = scoreWednesday(null);
-  assert.ok(defaultCard.yesPool.every(c => c.calMode === 'B' && c.calParamsSource === 'ship'));
-  assertFilled(defaultCard, 'mode B');
-  function noiseSpread(matchup) {
-    return defaultCard.yesPool.find(c => c.matchup === matchup && c.market === 'Spread' && /\+1\.5/.test(c.side));
+  assert.ok(defaultCard.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
+  assertFilled(defaultCard, 'mode A');
+  for (const m of defaultCard.yesGames) assert.ok(!noiseMatchups.has(m), `mode A noise game published: ${m}`);
+  const aSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
+  assert.ok(aSpread, 'mode A publishes an MLB spread');
+  assert.strictEqual(aSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
+
+  const modeB = scoreWednesday('B');
+  assert.ok(modeB.yesPool.every(c => c.calMode === 'B' && c.calParamsSource === 'ship'));
+  assertFilled(modeB, 'mode B');
+  function noiseSpread(card, matchup) {
+    return card.yesPool.find(c => c.matchup === matchup && c.market === 'Spread' && /\+1\.5/.test(c.side));
   }
-  const pirates = noiseSpread('Pittsburgh Pirates @ Cincinnati Reds');
-  const marlins = noiseSpread('Miami Marlins @ Philadelphia Phillies');
+  const pirates = noiseSpread(modeB, 'Pittsburgh Pirates @ Cincinnati Reds');
+  const marlins = noiseSpread(modeB, 'Miami Marlins @ Philadelphia Phillies');
   assert.ok(pirates, 'Pirates +1.5 clears at the MLB spread product floor');
   assert.strictEqual(pirates.calibK, 0.3);
   assert.strictEqual(pirates.calLevel, 'cell');
@@ -443,7 +458,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.ok(marlins, 'Marlins +1.5 clears at the MLB spread product floor');
   assert.strictEqual(marlins.calibK, 0.3);
   assert.strictEqual(marlins.calLevel, 'cell');
-  assert.ok(!defaultCard.yesGames.has('Texas Rangers @ Houston Astros'), 'priced -190 starter stays out under mode B');
+  assert.ok(!modeB.yesGames.has('Texas Rangers @ Houston Astros'), 'priced -190 starter stays out under mode B');
 }
 
 assert.deepStrictEqual(nba.project({}), []);

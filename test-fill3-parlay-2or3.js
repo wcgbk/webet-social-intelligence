@@ -4,7 +4,7 @@ const assert = require('assert');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 const live = require('./netlify/functions/generate-picks-omega-background');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(live.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 
 const future = new Date(Date.now() + 864e5).toISOString();
 const mk = (sport, matchup, side, market, cp, ev) => ({

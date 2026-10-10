@@ -20,8 +20,8 @@ const nhl = require(path.join(root, 'sports/nhl'));
 const { applyGates, gateReason, buildGapReview } = require(path.join(root, 'gates'));
 const { calibrateCandidate, calibrateAll, clearCalParamsCache } = require(path.join(root, 'calibrate'));
 // Gap-flag selection in this file is the legacy card: hand-set shrink plus
-// bandRetainClip. Default mode B fits NFL totals to K=1, which zeros the
-// edge versus the sharp and would make the flag-vs-selection checks vacuous.
+// bandRetainClip. Default mode A drops the band, so these checks pin
+// OMEGA_CAL_MODE=legacy. The unset-default block below checks mode A.
 process.env.OMEGA_CAL_MODE = 'legacy';
 clearCalParamsCache();
 const { attachEv } = require(path.join(root, 'edge'));
@@ -33,7 +33,7 @@ const {
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
 assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.025, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0.48, NFL: 0.48, NCAAF: 0.48, default: 0.48 });
@@ -285,12 +285,26 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.strictEqual(midRow.selected, true);
   assert.strictEqual(midRow.gap, 12.5);
 
-  // Default mode B. The ship fit for NFL totals is K=1, so this same gap
-  // has no edge versus the sharp and stays under minEV. The flag still
-  // does not reject the row.
+  // Default mode A. Hand-set NFL total K stays 0.58 and the band is not
+  // applied, so the gap still has edge versus the sharp. The flag does
+  // not reject the row. Mode B stays selectable: the ship fit is K=1, so
+  // the same gap has no edge and stays under minEV.
   delete process.env.OMEGA_CAL_MODE;
   clearCalParamsCache();
   try {
+    const aRow = attachEv(calibrateCandidate({ ...midOver, cardDate: '2026-10-10' }));
+    assert.strictEqual(aRow.calMode, 'A');
+    assert.strictEqual(aRow.calParamsSource, 'none');
+    assert.strictEqual(aRow.calibK, config.SHRINK_K.Total);
+    assert.strictEqual(aRow.calLevel, 'handset');
+    assert.strictEqual(aRow.calMap, null);
+    assert.strictEqual(aRow.gapFlag, true);
+    assert.ok(Math.abs(aRow.coverProb - aRow.fair_sharp_p) > 1e-6);
+    assert.ok(aRow.ev >= config.GATES.minEV.NFL);
+    assert.strictEqual(gateReason(aRow), null);
+
+    process.env.OMEGA_CAL_MODE = 'B';
+    clearCalParamsCache();
     const bRow = attachEv(calibrateCandidate({ ...midOver, cardDate: '2026-10-10' }));
     assert.strictEqual(bRow.calMode, 'B');
     assert.strictEqual(bRow.calParamsSource, 'ship');

@@ -13,7 +13,7 @@ const capture = require(path.join(root, 'capture_runner'));
 const narrate = require(path.join(root, 'narrate'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 
 const DATE = '2026-10-06';
 const SAME_DAY = '2026-10-06T16:00:00Z'; // noon ET

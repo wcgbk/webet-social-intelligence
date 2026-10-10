@@ -7,12 +7,13 @@ const { clamp } = require('./odds_math');
 
 /**
  * Unset OMEGA_CAL_MODE uses this.
- * B fits K on the linear shrink, with no unfitted band. It had the lowest
- * out-of-sample log-loss of A/B/C and still cleared the card floors.
- * 'legacy' is the hand-set shrink plus the unfitted 0.42–0.58 band.
- * A and C stay available. 'legacy' is the rollback.
+ * A drops the unfitted 0.42–0.58 band and keeps the hand-set shrink.
+ * It beats production log-loss out of sample and keeps 1.765 picks/day.
+ * B fits K and stays selectable. The 2026-10-10 and 2026-10-11 dry runs
+ * published 0 picks under that fitted K. C stays selectable.
+ * 'legacy' is the hand-set shrink plus the unfitted band, and the rollback.
  */
-const CAL_MODE_DEFAULT = 'B';
+const CAL_MODE_DEFAULT = 'A';
 
 /**
  * Mode B box on the linear shrink weight.

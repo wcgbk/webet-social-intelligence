@@ -17,7 +17,7 @@ const { applyGates, gateReason } = require(path.join(root, 'gates'));
 const id = require(path.join(root, 'sports/team_identity'));
 const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 
 const seeds = ingest.loadEfficiencySeeds();
 const nflSeedFile = require(path.join(root, 'sports/data/nfl-epa-seed.json'));
@@ -359,7 +359,7 @@ function byMarket(cands, market) {
   assert.strictEqual(pub.picks[0].unknownTeam, undefined);
   assert.strictEqual(pub.picks[0].unknownNames, undefined);
   assert.strictEqual(pub.picks[0].pick, 'Ohio State Buckeyes -3.5');
-  assert.strictEqual(pub.model, 'v12.3.17-omega-vnext-cal-b');
+  assert.strictEqual(pub.model, 'v12.3.17-omega-vnext-cal-a');
 
   const nflStraight = nfl.project({
     oddsEvents: [synth('Kansas City Chiefs', 'Buffalo Bills')],

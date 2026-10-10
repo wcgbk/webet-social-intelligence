@@ -23,7 +23,7 @@ const shadow = require(path.join(root, 'nba_shadow'));
 const ids = require(path.join(root, 'sports/data/nba-team-ids.json'));
 const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-b');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.17-omega-vnext-cal-a');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
@@ -214,12 +214,29 @@ function byMarket(rows, market, sideIncludes) {
 
   const calibrated = calibrateAll(rows);
   const tot = calibrated.find(c => c.market === 'Total');
-  // Default mode B. NBA has no graded rows in the study, so the cell takes
-  // the global fit. That fit is K=1 (the sharp), not the hand-set 0.58.
-  assert.strictEqual(tot.calMode, 'B');
-  assert.strictEqual(tot.calibK, 1);
-  assert.strictEqual(tot.calLevel, 'global');
+  // Default mode A. NBA totals keep the hand-set K. The ship file is unread.
+  assert.strictEqual(tot.calMode, 'A');
+  assert.strictEqual(tot.calibK, config.SHRINK_K.Total);
+  assert.strictEqual(tot.calLevel, 'handset');
+  assert.strictEqual(tot.calParamsSource, 'none');
+  assert.strictEqual(tot.calMap, null);
   assert.strictEqual(tot.sport, 'NBA');
+  const prevNba = process.env.OMEGA_CAL_MODE;
+  process.env.OMEGA_CAL_MODE = 'B';
+  clearCalParamsCache();
+  try {
+    // Mode B stays selectable. NBA has no graded rows, so the cell takes
+    // the global fit. That fit is K=1 (the sharp), not the hand-set 0.58.
+    const bTot = calibrateAll(rows, { cardDate: '2026-10-20' }).find(c => c.market === 'Total');
+    assert.strictEqual(bTot.calMode, 'B');
+    assert.strictEqual(bTot.calibK, 1);
+    assert.strictEqual(bTot.calLevel, 'global');
+    assert.strictEqual(bTot.calParamsSource, 'ship');
+  } finally {
+    if (prevNba == null) delete process.env.OMEGA_CAL_MODE;
+    else process.env.OMEGA_CAL_MODE = prevNba;
+    clearCalParamsCache();
+  }
 
   const b2b = nba.project({
     oddsEvents: [event('Boston Celtics', 'New York Knicks')],
@@ -490,14 +507,24 @@ function byMarket(rows, market, sideIncludes) {
   assert.strictEqual(dry.creditsEstimate, 0);
   assert.strictEqual(dry.key, 'omega-nba-shadow-2026-10-20');
   assert.ok(dry.candidateCount >= 6, `candidates ${dry.candidateCount}`);
-  // Default mode B. NBA has no graded rows, so the ship fit is the global
-  // K=1. This board's books agree, so coverProb is the sharp and minEV
-  // keeps the shadow card empty. The daily NBA flag stays off either way.
-  assert.strictEqual(dry.yesCount, 0, `yes ${dry.yesCount} rejected ${dry.rejectedCount}`);
-  assert.strictEqual(dry.payload.picks.length, 0);
+  // Default mode A keeps the hand-set shrink. This board's model and line
+  // disagree, so the shadow card is not empty. The daily NBA flag stays off.
+  assert.ok(dry.yesCount >= 1, `yes ${dry.yesCount} rejected ${dry.rejectedCount}`);
+  assert.ok(dry.payload.picks.length >= 1);
+  assert.ok(dry.payload.picks.every(p => p.shadowOnly === true));
   assert.strictEqual(dry.payload.shadowOnly, true);
   assert.strictEqual(dry.payload.sportsEnabledNba, false);
   assert.ok(dry.payload.selection.includes('not daily'));
+  assert.strictEqual(writes.length, 0);
+
+  process.env.OMEGA_CAL_MODE = 'B';
+  clearCalParamsCache();
+  const dryB = await shadow.runNbaShadow({ ...board, dryRun: true });
+  // Fitted K. NBA has no graded rows, so the ship fit is the global K=1.
+  // Books agree, coverProb is the sharp, and minEV keeps the card empty.
+  assert.strictEqual(dryB.yesCount, 0, `mode B yes ${dryB.yesCount}`);
+  assert.strictEqual(dryB.payload.picks.length, 0);
+  assert.strictEqual(dryB.wrote, false);
   assert.strictEqual(writes.length, 0);
 
   process.env.OMEGA_CAL_MODE = 'legacy';
@@ -797,8 +824,8 @@ function fixtureBoard() {
   try {
     const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
     const gradeHandler = require('./netlify/functions/trigger-omega-nba-shadow-grade').handler;
-    // Ship mode B: this fixture's books agree and NBA takes the global K=1,
-    // so the cron still writes a shadow doc and the pick list is empty.
+    // Default mode A: hand-set shrink, so this fixture still publishes
+    // shadow picks. The cron writes the doc. The daily NBA flag stays off.
     delete process.env.OMEGA_CAL_MODE;
     clearCalParamsCache();
     const shipWrites = [];
@@ -814,9 +841,30 @@ function fixtureBoard() {
     assert.strictEqual(shipBody.wrote, true);
     assert.strictEqual(shipBody.oddsCalls, 0);
     assert.strictEqual(shipWrites.length, 1);
-    assert.strictEqual(shipWrites[0].data.yesCount, 0);
-    assert.strictEqual(shipWrites[0].data.picks.length, 0);
+    assert.ok(shipWrites[0].data.yesCount >= 1);
+    assert.ok(shipWrites[0].data.picks.length >= 1);
     assert.strictEqual(shipWrites[0].data.shadowOnly, true);
+    assert.ok(shipWrites[0].data.picks.every((p) => p.shadowOnly === true));
+
+    // Mode B stays selectable and empties this card: NBA takes the global K=1.
+    process.env.OMEGA_CAL_MODE = 'B';
+    clearCalParamsCache();
+    const bWrites = [];
+    const bRes = await projectHandler(scheduleEvent(), {
+      now: PROJECT_AT,
+      nbaShadowTest: {
+        ...fixtureBoard(),
+        store: async (key, data) => { bWrites.push({ key, data }); },
+        read: async () => null,
+      },
+    });
+    const bBody = JSON.parse(bRes.body);
+    assert.strictEqual(bBody.wrote, true);
+    assert.strictEqual(bBody.oddsCalls, 0);
+    assert.strictEqual(bWrites.length, 1);
+    assert.strictEqual(bWrites[0].data.yesCount, 0);
+    assert.strictEqual(bWrites[0].data.picks.length, 0);
+    assert.strictEqual(bWrites[0].data.shadowOnly, true);
 
     // Legacy still publishes the model-vs-line disagreement, so the tag
     // and grader checks below have a non-empty shadow card.

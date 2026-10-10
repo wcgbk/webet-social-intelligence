@@ -369,4 +369,173 @@ assert.strictEqual(PLAYS, 68);
     `strength moved ${tight.str - loose.str} pace moved ${loose.pace - tight.pace}`);
 }
 
+const { LEAGUE_PPG, powerFromStandings } = require(path.join(root, 'sports/_common'));
+const { resolveTeamId } = require(path.join(root, 'sports/team_identity'));
+
+assert.strictEqual(epa.SPORT_CFG.NCAAF.leaguePpg * 2, epa.SPORT_CFG.NCAAF.baseTotal);
+assert.strictEqual(LEAGUE_PPG.NCAAF, epa.SPORT_CFG.NCAAF.leaguePpg);
+assert.strictEqual(epa.SPORT_CFG.NFL.baseTotal, 45);
+assert.strictEqual(epa.SPORT_CFG.NFL.leaguePpg, 22);
+
+// Short schedule still has a league center. The rating pack stays withheld.
+{
+  const boards = [boardFrom([
+    game('2', '5', 24, 20),
+    game('5', '12', 30, 27),
+  ])];
+  const center = epa.ncaafFbsLeagueTotal(boards, { asOf: '2026-10-10' });
+  assert.ok(center);
+  assert.strictEqual(center.games, 2);
+  assert.strictEqual(center.leagueTotal, (44 + 57) / 2);
+  assert.strictEqual(epa.solveNcaafOpponentRatings(boards, { asOf: '2026-10-10', efficiency: {} }), null);
+}
+
+function oldAbsTotal(homeSt, awaySt) {
+  const hPow = powerFromStandings(homeSt, 'NCAAF');
+  const aPow = powerFromStandings(awaySt, 'NCAAF');
+  return 52 + Math.abs(hPow + aPow) * 0.04;
+}
+
+// Two low-scoring teams. The old abs(net) term raised the total. The
+// league-centered pace term lowers it. Margin stays the point differential.
+{
+  const home = 'Ball State Cardinals';
+  const away = 'Northern Illinois Huskies';
+  const homeSt = { pf: 80, pa: 140, gamesPlayed: 5 };
+  const awaySt = { pf: 80, pa: 140, gamesPlayed: 5 };
+  const proj = epa.footballProjection({
+    sport: 'NCAAF', home, away,
+    standings: { [home]: homeSt, [away]: awaySt },
+    efficiency: {},
+    hfa: 2.6,
+  });
+  const hPow = powerFromStandings(homeSt, 'NCAAF');
+  const aPow = powerFromStandings(awaySt, 'NCAAF');
+  assert.strictEqual(proj.usedEpa, false);
+  assert.ok(Math.abs(proj.modelMargin - ((hPow - aPow) + 2.6)) < 1e-9);
+  assert.ok(proj.modelTotal < 52, proj.modelTotal);
+  assert.ok(proj.modelTotal < oldAbsTotal(homeSt, awaySt), proj.modelTotal);
+  assert.ok(proj.modelTotal > epa.SPORT_CFG.NCAAF.totalMin);
+}
+
+// Negative net with a high pace raises the total off the league center.
+{
+  const home = 'Ball State Cardinals';
+  const away = 'Northern Illinois Huskies';
+  const st = { pf: 150, pa: 170, gamesPlayed: 5 };
+  const proj = epa.footballProjection({
+    sport: 'NCAAF', home, away,
+    standings: { [home]: st, [away]: st },
+    efficiency: {},
+    hfa: 2.6,
+  });
+  assert.strictEqual(proj.usedEpa, false);
+  assert.ok(Math.abs(proj.modelMargin - 2.6) < 1e-9, proj.modelMargin);
+  assert.ok(proj.modelTotal > 52, proj.modelTotal);
+  assert.ok(proj.modelTotal > oldAbsTotal(st, st), proj.modelTotal);
+}
+
+// One EPA side. The other side is regressed, not dropped to raw differential.
+{
+  const home = 'Boise State Broncos';
+  const away = 'Western Michigan Broncos';
+  const awaySt = { pf: 50, pa: 150, gamesPlayed: 5 };
+  const hfa = 2.6;
+  const proj = epa.footballProjection({
+    sport: 'NCAAF', home, away,
+    standings: { [away]: awaySt },
+    efficiency: { [home]: { offEpa: 0.05, defEpa: 0.05 } },
+    hfa,
+  });
+  const plays = epa.SPORT_CFG.NCAAF.plays;
+  const g = 5;
+  const w = g / (g + epa.NCAAF_OA_PRIOR_GAMES);
+  const pfPg = 10;
+  const paPg = 30;
+  const S = w * (pfPg - paPg);
+  const P = w * (pfPg + paPg - 2 * epa.SPORT_CFG.NCAAF.leaguePpg);
+  const aOff = ((S + P) / 2) / plays;
+  const aDef = ((S - P) / 2) / plays;
+  const hOff = 0.05;
+  const hDef = 0.05;
+  const margin = ((hOff - aDef) - (aOff - hDef)) * plays + hfa;
+  const total = 52 + ((hOff - aDef) + (aOff - hDef)) * plays;
+  assert.strictEqual(proj.usedEpa, true);
+  assert.strictEqual(proj.methods.family, 'cfb-epa-v1');
+  assert.ok(Math.abs(proj.modelMargin - margin) < 1e-9, `${proj.modelMargin} vs ${margin}`);
+  assert.ok(Math.abs(proj.modelTotal - total) < 1e-9, `${proj.modelTotal} vs ${total}`);
+  const raw = powerFromStandings(null, 'NCAAF') - powerFromStandings(awaySt, 'NCAAF') + hfa;
+  assert.ok(Math.abs(proj.modelMargin - raw) > 1);
+}
+
+// A stored close-game mean replaces 52. The shared cfg is not mutated.
+{
+  const home = 'Auburn Tigers';
+  const away = 'UAB Blazers';
+  const proj = epa.footballProjection({
+    sport: 'NCAAF', home, away, standings: {},
+    efficiency: {
+      [home]: { offEpa: 0, defEpa: 0 },
+      [away]: { offEpa: 0, defEpa: 0 },
+      _leagueTotal: 51.4,
+    },
+  });
+  assert.ok(Math.abs(proj.modelTotal - 51.4) < 1e-9, proj.modelTotal);
+  assert.strictEqual(epa.SPORT_CFG.NCAAF.baseTotal, 52);
+  assert.strictEqual(epa.SPORT_CFG.NCAAF.leaguePpg, 26);
+  const flat = epa.footballProjection({
+    sport: 'NCAAF',
+    home: 'Not A Real University',
+    away: 'Also Not Real',
+    standings: {},
+    efficiency: { _leagueTotal: 51.4 },
+  });
+  assert.ok(Math.abs(flat.modelTotal - 51.4) < 1e-9, flat.modelTotal);
+  assert.strictEqual(epa.SPORT_CFG.NCAAF.baseTotal, 52);
+}
+
+// Opponent-adjusted pack wins over the one-sided EPA path.
+{
+  const home = 'Boise State Broncos';
+  const away = 'Western Michigan Broncos';
+  const homeId = resolveTeamId('NCAAF', home);
+  const awayId = resolveTeamId('NCAAF', away);
+  const proj = epa.footballProjection({
+    sport: 'NCAAF', home, away, standings: {},
+    efficiency: {
+      [home]: { offEpa: 0.2, defEpa: 0.2 },
+      _oa: {
+        byId: { [homeId]: { off: 4, def: 2 }, [awayId]: { off: -1, def: -1 } },
+        leagueTotal: 51,
+        games: 50,
+      },
+    },
+    hfa: 2.6,
+  });
+  assert.strictEqual(proj.methods.family, 'cfb-oa-v1');
+  assert.strictEqual(proj.usedEpa, false);
+  assert.ok(Math.abs(proj.modelMargin - ((4 + 2) - (-1 + -1) + 2.6)) < 1e-9);
+  assert.ok(Math.abs(proj.modelTotal - (51 + (4 - 2) + (-1 - -1))) < 1e-9);
+}
+
+// No ESPN id: the known side keeps standings power. Its EPA is not used.
+{
+  const home = 'Boise State Broncos';
+  const homeSt = { pf: 180, pa: 80, gamesPlayed: 5 };
+  const proj = epa.footballProjection({
+    sport: 'NCAAF',
+    home,
+    away: 'Not A Real University',
+    standings: { [home]: homeSt },
+    efficiency: { [home]: { offEpa: 0.1, defEpa: 0.1 } },
+    hfa: 2.6,
+  });
+  const homePow = powerFromStandings(homeSt, 'NCAAF');
+  assert.strictEqual(proj.unknownTeam, true);
+  assert.strictEqual(proj.usedEpa, false);
+  assert.ok(Math.abs(proj.modelMargin - (homePow + 2.6)) < 1e-9);
+  assert.ok(Math.abs(proj.modelTotal - 52) < 1e-9, proj.modelTotal);
+  assert.ok(Math.abs(proj.modelTotal - (52 + Math.abs(homePow) * 0.04)) > 0.1);
+}
+
 console.log('test-omega-ncaaf-oa: ok');

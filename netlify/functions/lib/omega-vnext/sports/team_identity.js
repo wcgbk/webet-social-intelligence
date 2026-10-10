@@ -7,6 +7,7 @@ const nflTable = require('./data/nfl-team-ids.json');
 const nbaTable = require('./data/nba-team-ids.json');
 const mlbTable = require('./data/mlb-team-ids.json');
 const nhlTable = require('./data/nhl-team-ids.json');
+const explicitAliases = require('./data/football-explicit-aliases.json');
 
 const TABLES = {
   NFL: nflTable,
@@ -27,9 +28,32 @@ function tableFor(sport) {
   return null;
 }
 
+const ALIAS_BY_SPORT = {};
+
 /**
- * Exact ESPN id. Normalized alias → id. Unknown names return null.
- * No substring, last-word, or mascot fallback.
+ * Explicit aliases, normalized once. A key already in the id lookup is
+ * ignored so this table cannot move a school that already resolves.
+ */
+function explicitAliasId(sport, key) {
+  const bucket = sport === 'CFB' ? 'NCAAF' : sport;
+  if (!ALIAS_BY_SPORT[bucket]) {
+    const built = {};
+    const raw = (explicitAliases && explicitAliases[bucket]) || {};
+    const table = tableFor(bucket);
+    for (const [name, id] of Object.entries(raw)) {
+      const norm = normalizeTeamName(name);
+      if (!norm || id == null || id === '') continue;
+      if (table && table.lookup && table.lookup[norm]) continue;
+      built[norm] = String(id);
+    }
+    ALIAS_BY_SPORT[bucket] = built;
+  }
+  return ALIAS_BY_SPORT[bucket][key] || null;
+}
+
+/**
+ * Exact ESPN id. Lookup first, then the explicit alias table.
+ * Unknown names return null. No substring, last-word, or mascot fallback.
  */
 function resolveTeamId(sport, name) {
   const table = tableFor(sport);
@@ -37,7 +61,8 @@ function resolveTeamId(sport, name) {
   const key = normalizeTeamName(name);
   if (!key) return null;
   const id = table.lookup[key];
-  return id ? String(id) : null;
+  if (id) return String(id);
+  return explicitAliasId(sport, key);
 }
 
 function teamRecord(sport, id) {
@@ -112,6 +137,21 @@ function isLookupRow(key, row) {
   if (!key || String(key).startsWith('_')) return false;
   if (row == null || typeof row !== 'object' || Array.isArray(row)) return false;
   return true;
+}
+
+/**
+ * ESPN id a table row belongs to. A stamped espnId wins, even when the
+ * key would resolve to a different school. A numeric key is an id when
+ * that id is in the team table. Otherwise the key is a name.
+ */
+function rowBoundId(sport, key, row) {
+  if (row && row.espnId != null && String(row.espnId) !== '') {
+    const stamped = String(row.espnId);
+    if (/^\d+$/.test(stamped)) return stamped;
+  }
+  const keyText = String(key);
+  if (/^\d+$/.test(keyText) && teamRecord(sport, keyText)) return keyText;
+  return resolveTeamId(sport, key);
 }
 
 // NFL, NCAAF, and NHL model inputs do not fuzzy. MLB still does.
@@ -191,8 +231,19 @@ function modelRow(sport, table, teamName, opts) {
   const id = resolveTeamId(sport, teamName);
   const row = id ? rowByIdentity(sport, table, teamName) : null;
   if (row) return row;
-  const fuzzy = lazyFuzzy(teamName, table);
-  if (fuzzy) logRefusedFuzzy(sport, teamName);
+  const { fuzzyTeamKey } = require('./_common');
+  const fuzzyKey = fuzzyTeamKey(teamName, table);
+  if (!fuzzyKey) return null;
+  const fuzzyRow = table[fuzzyKey];
+  if (!isLookupRow(fuzzyKey, fuzzyRow)) {
+    logRefusedFuzzy(sport, teamName);
+    return null;
+  }
+  const fuzzyId = resolveTeamId(sport, fuzzyKey);
+  // Both names are real schools. The mascot collision is not a miss.
+  if (id && fuzzyId && id !== fuzzyId) return null;
+  if (id && fuzzyId && id === fuzzyId) return fuzzyRow;
+  logRefusedFuzzy(sport, teamName);
   return null;
 }
 
@@ -206,10 +257,73 @@ function rowByIdentity(sport, table, teamName) {
   const id = resolveTeamId(sport, teamName);
   if (!id) return null;
   for (const [key, row] of Object.entries(table)) {
-    if (!key || key.startsWith('_') || row == null || typeof row !== 'object') continue;
-    if (resolveTeamId(sport, key) === id) return row;
+    if (!isLookupRow(key, row)) continue;
+    if (rowBoundId(sport, key, row) === id) return row;
   }
   return null;
+}
+
+/**
+ * FBS (or all 32 NFL) display names against one EPA or standings table.
+ * idMisses: the display name does not resolve to that ESPN id.
+ * rowMisses: a row is bound to the id and rowByIdentity does not return it.
+ * fuzzyCrossSchool: no exact row, and the mascot match is a different
+ * resolved school. Those are not resolution misses.
+ */
+function footballResolutionReport(sport, table) {
+  const idTable = tableFor(sport);
+  const idMisses = [];
+  const rowMisses = [];
+  const fuzzyCrossSchool = [];
+  const fuzzyStillLogged = [];
+  let teams = 0;
+  const src = (idTable && idTable.teams) || {};
+  for (const [espnId, rec] of Object.entries(src)) {
+    if (!rec || !rec.displayName) continue;
+    if (sport === 'NCAAF' && rec.division !== 'fbs') continue;
+    if (sport !== 'NCAAF' && sport !== 'NFL') continue;
+    teams += 1;
+    const want = String(espnId);
+    const resolved = resolveTeamId(sport, rec.displayName);
+    if (resolved !== want) {
+      idMisses.push({ displayName: rec.displayName, espnId: want, resolved: resolved || null });
+    }
+    let bound = false;
+    for (const [key, row] of Object.entries(table || {})) {
+      if (!isLookupRow(key, row)) continue;
+      if (rowBoundId(sport, key, row) === want) { bound = true; break; }
+    }
+    if (bound && !rowByIdentity(sport, table, rec.displayName)) {
+      rowMisses.push({ displayName: rec.displayName, espnId: want });
+    }
+  }
+  const { fuzzyTeamKey } = require('./_common');
+  for (const [espnId, rec] of Object.entries(src)) {
+    if (!rec || !rec.displayName) continue;
+    if (sport === 'NCAAF' && rec.division !== 'fbs') continue;
+    if (sport !== 'NCAAF' && sport !== 'NFL') continue;
+    if (rowByIdentity(sport, table, rec.displayName)) continue;
+    const key = fuzzyTeamKey(rec.displayName, table || {});
+    if (!key || !isLookupRow(key, (table || {})[key])) continue;
+    const queryId = resolveTeamId(sport, rec.displayName);
+    const fuzzyId = resolveTeamId(sport, key);
+    if (queryId && fuzzyId && queryId !== fuzzyId) {
+      fuzzyCrossSchool.push({
+        name: rec.displayName, fuzzyKey: key, queryId, fuzzyId, espnId: String(espnId),
+      });
+    } else if (!(queryId && fuzzyId && queryId === fuzzyId)) {
+      fuzzyStillLogged.push({ name: rec.displayName, fuzzyKey: key, espnId: String(espnId) });
+    }
+  }
+  return {
+    sport,
+    teams,
+    idMisses,
+    rowMisses,
+    unresolvedKeys: unresolvedKeys(sport, table),
+    fuzzyCrossSchool,
+    fuzzyStillLogged,
+  };
 }
 
 function unresolvedKeys(sport, table) {
@@ -308,6 +422,7 @@ module.exports = {
   rowByIdentityOrFuzzy,
   modelRow,
   unresolvedKeys,
+  footballResolutionReport,
   logUnknownTeam,
   listUnresolved,
   collectUnresolved,

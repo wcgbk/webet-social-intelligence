@@ -119,24 +119,32 @@ function matchEspnGameByIdentity(sport, ev, espnGames) {
 
 // MLB and NHL only. NFL/NCAAF identity is team_identity.js (exact ESPN id).
 // Do not send a football name through the substring or mascot branch.
-function fuzzyTeam(name, ratings) {
+function fuzzyTeamKey(name, ratings) {
   if (!name || !ratings) return null;
-  if (ratings[name]) return ratings[name];
-  const lower = name.toLowerCase();
+  if (ratings[name]) return name;
+  const lower = String(name).toLowerCase();
   for (const k of Object.keys(ratings)) {
-    if (k.toLowerCase() === lower) return ratings[k];
-    if (lower.includes(k.toLowerCase()) || k.toLowerCase().includes(lower)) return ratings[k];
+    if (k.toLowerCase() === lower) return k;
+    if (lower.includes(k.toLowerCase()) || k.toLowerCase().includes(lower)) return k;
   }
-  // last word (mascot) match
   const last = lower.split(' ').pop();
   for (const k of Object.keys(ratings)) {
-    if (k.toLowerCase().split(' ').pop() === last) return ratings[k];
+    if (k.toLowerCase().split(' ').pop() === last) return k;
   }
   return null;
 }
 
-/** League scoring per game. NFL/NCAAF no longer use this as a divide trigger. */
-const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 27.5, NBA: 114, NHL: 3.1 };
+function fuzzyTeam(name, ratings) {
+  const key = fuzzyTeamKey(name, ratings);
+  return key ? ratings[key] : null;
+}
+
+/**
+ * League scoring per game. NFL/NCAAF no longer use this as a divide trigger.
+ * NCAAF is 26 so two league games equal SPORT_CFG.NCAAF.baseTotal (52).
+ * A season close-game mean replaces both when the board has one.
+ */
+const LEAGUE_PPG = { MLB: 4.5, NFL: 22, NCAAF: 26, NBA: 114, NHL: 3.1 };
 
 /**
  * A count ESPN actually sent. null and '' are unknown.
@@ -652,6 +660,7 @@ module.exports = {
   disambiguateEspnRows,
   matchEspnGameByIdentity,
   fuzzyTeam,
+  fuzzyTeamKey,
   knownCount,
   parseWinLossRecord,
   gamesPlayed,

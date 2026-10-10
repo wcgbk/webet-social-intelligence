@@ -113,15 +113,18 @@ function byMarket(cands, market) {
     [home]: { pf: 30, pa: 40, wins: 1, losses: 2 },
     [away]: { pf: 120, pa: 40, wins: 3, losses: 0 },
   };
+  assert.strictEqual(epa.lookupEpa(home, seeds.NCAAF, 'NCAAF'), null);
+  assert.ok(epa.lookupEpa(away, seeds.NCAAF, 'NCAAF'));
   const proj = epa.footballProjection({
     sport: 'NCAAF', home, away, standings, efficiency: seeds.NCAAF,
   });
   assert.strictEqual(proj.unknownTeam, false);
-  assert.strictEqual(proj.usedEpa, false);
+  assert.strictEqual(proj.usedEpa, true);
+  assert.strictEqual(proj.methods.family, 'cfb-epa-v1');
   const hPow = powerFromStandings(standings[home], 'NCAAF');
   const aPow = powerFromStandings(standings[away], 'NCAAF');
   assert.ok(Math.abs(hPow - aPow) > 1);
-  assert.ok(Math.abs(proj.modelMargin - ((hPow - aPow) + config.HFA.NCAAF)) < 1e-9);
+  assert.ok(Math.abs(proj.modelMargin - ((hPow - aPow) + config.HFA.NCAAF)) > 0.5);
 }
 
 {

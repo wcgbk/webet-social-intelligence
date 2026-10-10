@@ -660,6 +660,23 @@ function mergeTalentIntoEfficiency(epaTable, talentTable, scale) {
   return out;
 }
 
+function stampSeedEspnId(sport, table) {
+  const out = {};
+  for (const [key, row] of Object.entries(table || {})) {
+    if (!row || typeof row !== 'object' || Array.isArray(row) || String(key).startsWith('_')) {
+      out[key] = row;
+      continue;
+    }
+    if (row.espnId != null && String(row.espnId) !== '') {
+      out[key] = row;
+      continue;
+    }
+    const espnId = resolveTeamId(sport, key);
+    out[key] = espnId ? { ...row, espnId } : row;
+  }
+  return out;
+}
+
 function loadEfficiencySeeds() {
   const nfl = require('./sports/data/nfl-epa-seed.json');
   const cfb = require('./sports/data/cfb-epa-seed.json');
@@ -673,8 +690,8 @@ function loadEfficiencySeeds() {
     console.error(`[omega-vnext/ingest] talent scale soft-fail: ${e.message}`);
   }
   return {
-    NFL: centerSeed(stripMeta(nfl)),
-    NCAAF: mergeTalentIntoEfficiency(centerSeed(stripMeta(cfb)), talent, scale),
+    NFL: stampSeedEspnId('NFL', centerSeed(stripMeta(nfl))),
+    NCAAF: stampSeedEspnId('NCAAF', mergeTalentIntoEfficiency(centerSeed(stripMeta(cfb)), talent, scale)),
   };
 }
 
@@ -772,11 +789,15 @@ async function attachNcaafOa(efficiencyBySport, dateISO) {
   const table = efficiencyBySport && efficiencyBySport.NCAAF;
   if (!table || typeof table !== 'object') return;
   try {
-    const { solveNcaafOpponentRatings } = require('./sports/epa');
+    const { solveNcaafOpponentRatings, ncaafFbsLeagueTotal } = require('./sports/epa');
     const boards = await loadNcaafScoreboards(dateISO);
+    const center = ncaafFbsLeagueTotal(boards, { asOf: dateISO });
+    if (center && Number.isFinite(center.leagueTotal)) table._leagueTotal = center.leagueTotal;
     const pack = solveNcaafOpponentRatings(boards, { efficiency: table, asOf: dateISO });
     if (!pack) {
-      console.log(`[omega-vnext/ingest] NCAAF OA withheld (schedule short or unreadable) date=${dateISO}`);
+      const leagueNote = center && Number.isFinite(center.leagueTotal) ? center.leagueTotal.toFixed(2) : 'none';
+      const gamesNote = center ? center.games : 0;
+      console.log(`[omega-vnext/ingest] NCAAF OA withheld (schedule short or unreadable) date=${dateISO} league=${leagueNote} games=${gamesNote}`);
       return;
     }
     table._oa = pack;

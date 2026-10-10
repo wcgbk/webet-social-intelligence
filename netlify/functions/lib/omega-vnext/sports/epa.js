@@ -54,7 +54,8 @@ const SPORT_CFG = {
   },
   NCAAF: {
     plays: 68,
-    leaguePpg: 27.5,
+    // 2 * leaguePpg === baseTotal. A close-game FBS mean replaces both.
+    leaguePpg: 26,
     baseTotal: 52,
     totalSlope: 0.04,
     epaUncertainty: 0.17,
@@ -100,8 +101,11 @@ const SPORT_CFG = {
  * def are fit from FBS-vs-non-FBS games, and those games also update the
  * FBS side. Dropping them left a 4-game team that scheduled a cupcake on
  * only 3 observations and shrunk it toward the prior.
- * Below NCAAF_OA_MIN_GAMES the pack is withheld and the EPA / standings
- * path is unchanged.
+ * Below NCAAF_OA_MIN_GAMES the pack is withheld. A side with a clean EPA
+ * seed keeps it. The other side, when both ESPN ids resolve, is a
+ * games-played regression toward 0 strength and league pace. One missing
+ * seed does not drop both teams onto raw point differential. The total
+ * center is this same close-game mean when the board has one.
  */
 const NCAAF_OA_PRIOR_GAMES = 2;
 
@@ -125,6 +129,11 @@ function ncaafPacePriorGames(efficiency) {
   if (!(variance > 0)) return null;
   const k = Math.round((noise * noise) / variance);
   return Number.isFinite(k) && k >= 1 ? k : null;
+}
+
+function ncaafPaceK(efficiency) {
+  const estimated = ncaafPacePriorGames(efficiency);
+  return estimated != null ? estimated : NCAAF_OA_PRIOR_GAMES;
 }
 const NCAAF_OA_BLOWOUT_MARGIN = 28;
 const NCAAF_OA_MIN_GAMES = 40;
@@ -704,13 +713,40 @@ function seedPointsForId(efficiency, id, plays) {
  * sample is too small or the date does not parse — caller keeps EPA /
  * standings. opts.minGames overrides the production floor for tests.
  */
-function solveNcaafOpponentRatings(boards, opts = {}) {
+function ncaafGameSample(boards, opts = {}) {
   const asOf = etMidnightMs(opts.asOf);
   if (asOf == null) return null;
+  const blowout = Number.isFinite(Number(opts.blowoutMargin)) ? Number(opts.blowoutMargin) : NCAAF_OA_BLOWOUT_MARGIN;
+  const games = ncaafCompletedGames(boards).filter((g) => Date.parse(g.commence) < asOf);
+  const fbsGames = games.filter((g) => g.hFbs && g.aFbs);
+  if (!fbsGames.length) return { games, fbsGames, close: [], leagueTotal: null, blowout };
+  const close = fbsGames.filter((g) => Math.abs(g.margin) <= blowout);
+  const baseRows = close.length ? close : fbsGames;
+  const leagueTotal = baseRows.reduce((s, g) => s + g.total, 0) / baseRows.length;
+  return { games, fbsGames, close, leagueTotal, blowout };
+}
+
+/**
+ * Close-game FBS-vs-FBS mean. Same games the opponent-adjusted pack
+ * centers on. Null when the date does not parse or the sample has no
+ * FBS game. A short schedule still returns the mean; the pack stays withheld.
+ */
+function ncaafFbsLeagueTotal(boards, opts = {}) {
+  const sample = ncaafGameSample(boards, opts);
+  if (!sample || !Number.isFinite(sample.leagueTotal)) return null;
+  return {
+    leagueTotal: sample.leagueTotal,
+    games: sample.fbsGames.length,
+    closeGames: sample.close.length,
+  };
+}
+
+function solveNcaafOpponentRatings(boards, opts = {}) {
+  const sample = ncaafGameSample(boards, opts);
+  if (!sample) return null;
   const hfaBase = Number.isFinite(Number(opts.hfa)) ? Number(opts.hfa) : (HFA.NCAAF || 0);
   const shrinkK = Number.isFinite(Number(opts.priorGames)) ? Number(opts.priorGames) : NCAAF_OA_PRIOR_GAMES;
   const iters = Number.isFinite(Number(opts.iters)) ? Number(opts.iters) : NCAAF_OA_ITERS;
-  const blowout = Number.isFinite(Number(opts.blowoutMargin)) ? Number(opts.blowoutMargin) : NCAAF_OA_BLOWOUT_MARGIN;
   const minGames = Number.isFinite(Number(opts.minGames)) ? Number(opts.minGames) : NCAAF_OA_MIN_GAMES;
   const plays = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.plays) || 68;
   const efficiency = opts.efficiency && typeof opts.efficiency === 'object' ? opts.efficiency : {};
@@ -718,12 +754,8 @@ function solveNcaafOpponentRatings(boards, opts = {}) {
   const paceK = Number.isFinite(Number(opts.pacePriorGames))
     ? Number(opts.pacePriorGames)
     : (paceEstimated != null ? paceEstimated : shrinkK);
-  const games = ncaafCompletedGames(boards).filter((g) => Date.parse(g.commence) < asOf);
-  const fbsGames = games.filter((g) => g.hFbs && g.aFbs);
-  if (fbsGames.length < minGames) return null;
-  const close = fbsGames.filter((g) => Math.abs(g.margin) <= blowout);
-  const baseRows = close.length ? close : fbsGames;
-  const leagueTotal = baseRows.reduce((s, g) => s + g.total, 0) / baseRows.length;
+  const { games, fbsGames, close, leagueTotal, blowout } = sample;
+  if (fbsGames.length < minGames || !Number.isFinite(leagueTotal)) return null;
   const league = leagueTotal / 2;
   const ids = new Set();
   for (const g of fbsGames) { ids.add(g.hid); ids.add(g.aid); }
@@ -920,11 +952,158 @@ function projectNcaafOpponentAdjusted({ homeId, awayId, efficiency, hfaPts, cfg 
 }
 
 /**
+ * Per-game points. Null rates when games are missing or a rate is outside
+ * the football band. The caller then keeps the zero prior.
+ */
+function footballRates(st) {
+  const g = gamesPlayed(st);
+  if (!st || g < 1) return { g: g || 0, pfPg: null, paPg: null };
+  const explicit = explicitPointsPerGame(st);
+  let pfPg;
+  let paPg;
+  if (explicit) {
+    pfPg = explicit.pfPg;
+    paPg = explicit.paPg;
+  } else {
+    const pf = Number(st.pf);
+    const pa = Number(st.pa);
+    if (!Number.isFinite(pf) || !Number.isFinite(pa)) return { g, pfPg: null, paPg: null };
+    pfPg = pf / g;
+    paPg = pa / g;
+  }
+  if (![pfPg, paPg].every((n) => Number.isFinite(n) && n >= FOOTBALL_PPG_MIN && n <= FOOTBALL_PPG_MAX)) {
+    return { g, pfPg: null, paPg: null };
+  }
+  return { g, pfPg, paPg };
+}
+
+/**
+ * Missing NCAAF EPA side. Strength prior is 0 and pace prior is league.
+ * Current-season weight is g/(g+K), strength K and pace K separate.
+ * Success and talent stay empty so they cannot invent a seed.
+ */
+function priorSideFromStandings(st, cfg, table) {
+  const rates = footballRates(st);
+  const kS = NCAAF_OA_PRIOR_GAMES;
+  const kP = ncaafPaceK(table);
+  const g = rates.g;
+  let S = 0;
+  let P = 0;
+  if (rates.pfPg != null) {
+    const wS = kS > 0 ? g / (g + kS) : 1;
+    const wP = kP > 0 ? g / (g + kP) : 1;
+    S = wS * (rates.pfPg - rates.paPg);
+    P = wP * (rates.pfPg + rates.paPg - 2 * cfg.leaguePpg);
+  }
+  const offPts = (S + P) / 2;
+  const defPts = (S - P) / 2;
+  return {
+    offEpa: offPts / cfg.plays,
+    defEpa: defPts / cfg.plays,
+    offSuccess: null,
+    defSuccess: null,
+    talent: null,
+    spPlus: null,
+    adjusted: false,
+  };
+}
+
+/**
+ * Both-missing NCAAF total. League center plus each side's games-played
+ * pace. A side with no usable rate contributes 0. Bad teams do not raise
+ * the total just by being bad.
+ */
+function ncaafRegressedTotal(homeSt, awaySt, cfg, table) {
+  const league = cfg.baseTotal;
+  const kP = ncaafPaceK(table);
+  const term = (st) => {
+    const rates = footballRates(st);
+    if (rates.pfPg == null) return 0;
+    const w = kP > 0 ? rates.g / (rates.g + kP) : 1;
+    return w * (rates.pfPg + rates.paPg - league);
+  };
+  return clamp(league + term(homeSt) + term(awaySt), cfg.totalMin, cfg.totalMax);
+}
+
+/**
+ * Copy of the NCAAF cfg centered on the close-game mean. The shared
+ * SPORT_CFG object is not mutated. No mean: the offline 52 / 26 pair.
+ */
+function ncaafCfgCentered(cfg, table) {
+  const packMean = table && table._oa && Number(table._oa.leagueTotal);
+  const stored = table && Number(table._leagueTotal);
+  const mean = Number.isFinite(packMean) ? packMean : (Number.isFinite(stored) ? stored : null);
+  if (mean == null) return cfg;
+  return Object.assign({}, cfg, { baseTotal: mean, leaguePpg: mean / 2 });
+}
+
+function projectFromEpaSides({ sport, cfg, hAdj, aAdj, hfaPts, unknownTeam, unknownNames }) {
+  const homeEdge = hAdj.offEpa - aAdj.defEpa;
+  const awayEdge = aAdj.offEpa - hAdj.defEpa;
+  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfaPts;
+  let modelTotal = cfg.baseTotal + (homeEdge + awayEdge) * cfg.plays + successTotalAdj(hAdj, aAdj);
+
+  const engineMeta = { used: false, success: null, talent: null };
+  let engineAdd = 0;
+  if (sport === 'NFL') {
+    const sm = successMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NFL);
+    engineAdd += sm.marginAdj;
+    engineMeta.success = sm;
+    if (sm.used) engineMeta.used = true;
+  }
+  if (sport === 'NCAAF') {
+    const tm = talentMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NCAAF);
+    engineAdd += tm.marginAdj;
+    engineMeta.talent = tm;
+    if (tm.used) engineMeta.used = true;
+  }
+
+  const cappedBase = clamp(baseMargin, -cfg.marginCap, cfg.marginCap);
+  let modelMargin = clamp(baseMargin + engineAdd, -cfg.marginCap, cfg.marginCap);
+  const appliedEngine = modelMargin - cappedBase;
+  const appliedScale = Math.abs(engineAdd) > 1e-12 ? appliedEngine / engineAdd : 1;
+  const safeScale = appliedScale < 0 ? 0 : appliedScale;
+  if (engineMeta.success) {
+    engineMeta.success = {
+      ...engineMeta.success,
+      appliedMarginAdj: engineMeta.success.marginAdj * safeScale,
+    };
+  }
+  if (engineMeta.talent) {
+    engineMeta.talent = {
+      ...engineMeta.talent,
+      appliedMarginAdj: engineMeta.talent.marginAdj * safeScale,
+    };
+  }
+  modelTotal = clamp(modelTotal, cfg.totalMin, cfg.totalMax);
+  const family = cfg.family;
+  let methods = {
+    ml: `${family}-ml`,
+    spread: `${family}-spread`,
+    total: `${family}-total`,
+    family,
+  };
+  methods = tagEngines(methods, engineMeta.used);
+  return {
+    modelMargin,
+    modelTotal,
+    uncertainty: cfg.epaUncertainty,
+    totalUncBump: cfg.totalUncBump,
+    methods,
+    usedEpa: true,
+    engineSoft: engineMeta,
+    unknownTeam,
+    unknownNames,
+  };
+}
+
+/**
  * Home margin and total. engine family is null on the standings path.
  */
 function footballProjection({ sport, home, away, standings, efficiency, hfa } = {}) {
-  const cfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
+  const baseCfg = SPORT_CFG[sport] || SPORT_CFG.NFL;
   const table = efficiency && typeof efficiency === 'object' ? efficiency : {};
+  const cfg = sport === 'NCAAF' ? ncaafCfgCentered(baseCfg, table) : baseCfg;
   const ratings = standings && typeof standings === 'object' ? standings : {};
   // Numeric hfa (including 0) overrides the sport constant. Neutral-site
   // callers pass 0. Omitted hfa keeps HFA[sport].
@@ -967,14 +1146,30 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
   const hPow = powerFromStandings(homeSt, sport);
   const aPow = powerFromStandings(awaySt, sport);
   const fallbackMargin = (hPow - aPow) + hfaPts;
-  const fallbackTotal = cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
   const homeEpa = homeId ? lookupEpa(home, table, sport) : null;
   const awayEpa = awayId ? lookupEpa(away, table, sport) : null;
 
+  // NCAAF only, and only when both clubs have an ESPN id. One clean seed
+  // plus a regressed prior. A missing id stays on the standings path.
+  if (sport === 'NCAAF' && homeId && awayId && (!!homeEpa !== !!awayEpa)) {
+    const hAdj = homeEpa
+      ? sierraAdjust(homeEpa, homeSt, cfg)
+      : priorSideFromStandings(homeSt, cfg, table);
+    const aAdj = awayEpa
+      ? sierraAdjust(awayEpa, awaySt, cfg)
+      : priorSideFromStandings(awaySt, cfg, table);
+    return projectFromEpaSides({
+      sport, cfg, hAdj, aAdj, hfaPts, unknownTeam, unknownNames,
+    });
+  }
+
   if (!homeEpa || !awayEpa) {
+    const modelTotal = sport === 'NCAAF'
+      ? ncaafRegressedTotal(homeSt, awaySt, cfg, table)
+      : cfg.baseTotal + Math.abs(hPow + aPow) * cfg.totalSlope;
     return {
       modelMargin: fallbackMargin,
-      modelTotal: fallbackTotal,
+      modelTotal,
       uncertainty: fallbackUncertainty(sport, homeSt, awaySt),
       totalUncBump: cfg.totalUncBump,
       methods: { ...cfg.fallback, family: null },
@@ -985,68 +1180,15 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
     };
   }
 
-  const hAdj = sierraAdjust(homeEpa, homeSt, cfg);
-  const aAdj = sierraAdjust(awayEpa, awaySt, cfg);
-  // (homeOff - awayDef) - (awayOff - homeDef), in points, plus HFA.
-  const homeEdge = hAdj.offEpa - aAdj.defEpa;
-  const awayEdge = aAdj.offEpa - hAdj.defEpa;
-  const baseMargin = (homeEdge - awayEdge) * cfg.plays + hfaPts;
-  let modelTotal = cfg.baseTotal + (homeEdge + awayEdge) * cfg.plays + successTotalAdj(hAdj, aAdj);
-
-  const engineMeta = { used: false, success: null, talent: null };
-  let engineAdd = 0;
-  if (sport === 'NFL') {
-    const sm = successMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NFL);
-    engineAdd += sm.marginAdj;
-    engineMeta.success = sm;
-    if (sm.used) engineMeta.used = true;
-  }
-  if (sport === 'NCAAF') {
-    const tm = talentMarginAdj(hAdj, aAdj, ENGINE_SOFT && ENGINE_SOFT.NCAAF);
-    engineAdd += tm.marginAdj;
-    engineMeta.talent = tm;
-    if (tm.used) engineMeta.used = true;
-  }
-
-  // Sport margin cap can eat the engine add when the base is already on the rail.
-  // appliedMarginAdj is the piece that actually remains inside modelMargin.
-  const cappedBase = clamp(baseMargin, -cfg.marginCap, cfg.marginCap);
-  let modelMargin = clamp(baseMargin + engineAdd, -cfg.marginCap, cfg.marginCap);
-  const appliedEngine = modelMargin - cappedBase;
-  const appliedScale = Math.abs(engineAdd) > 1e-12 ? appliedEngine / engineAdd : 1;
-  const safeScale = appliedScale < 0 ? 0 : appliedScale;
-  if (engineMeta.success) {
-    engineMeta.success = {
-      ...engineMeta.success,
-      appliedMarginAdj: engineMeta.success.marginAdj * safeScale,
-    };
-  }
-  if (engineMeta.talent) {
-    engineMeta.talent = {
-      ...engineMeta.talent,
-      appliedMarginAdj: engineMeta.talent.marginAdj * safeScale,
-    };
-  }
-  modelTotal = clamp(modelTotal, cfg.totalMin, cfg.totalMax);
-  const family = cfg.family;
-  let methods = {
-    ml: `${family}-ml`,
-    spread: `${family}-spread`,
-    total: `${family}-total`,
-    family,
-  };
-  methods = tagEngines(methods, engineMeta.used);
-  return {
-    modelMargin,
-    modelTotal,
-    uncertainty: cfg.epaUncertainty,
-    totalUncBump: cfg.totalUncBump,
-    methods,
-    usedEpa: true,
-    engineSoft: engineMeta,
+  return projectFromEpaSides({
+    sport,
+    cfg,
+    hAdj: sierraAdjust(homeEpa, homeSt, cfg),
+    aAdj: sierraAdjust(awayEpa, awaySt, cfg),
+    hfaPts,
     unknownTeam,
     unknownNames,
-  };
+  });
 }
 
 module.exports = {
@@ -1072,6 +1214,8 @@ module.exports = {
   fallbackUncertainty,
   NCAAF_OA_PRIOR_GAMES,
   ncaafPacePriorGames,
+  ncaafFbsLeagueTotal,
+  ncaafCfgCentered,
   NCAAF_OA_BLOWOUT_MARGIN,
   NCAAF_OA_MIN_GAMES,
   NCAAF_OA_MARGIN_CAP,

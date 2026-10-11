@@ -47,6 +47,7 @@ function configPayload() {
     nhlOtGoalsPerGame: OT_GOALS_PER_GAME,
     nhlOtGoalGivenTie: OT_GOAL_GIVEN_TIE,
     nhlLambdaFloor: LAMBDA_FLOOR,
+    nhlEmptyNet: config.NHL_EMPTY_NET,
   };
 }
 

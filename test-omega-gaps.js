@@ -151,7 +151,11 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(mlH.pPush, 0);
   assert.strictEqual(mlA.pPush, 0);
   assert.ok(mlH.pTie > 0.12 && mlH.pTie < 0.22, `reg tie ${mlH.pTie}`);
-  near(mlH.expectedTotal, 6.2, 0.05, 'OT goal is added back onto the model total');
+  withEnv('OMEGA_NHL_EMPTY_NET', '0', () => {
+    const plain = nhlPeriod.nhlMarketQuote({ modelMargin: 0.15, modelTotal: 6.2, market: 'ml', sideIsHome: true });
+    near(plain.expectedTotal, 6.2, 0.05, 'plain Poisson puts the OT goal back on the model total');
+    assert.ok(mlH.expectedTotal + 1e-9 >= plain.expectedTotal, 'empty-net does not cut the total');
+  });
 
   const fav = nhlPeriod.nhlMarketQuote({ modelMargin: 0.6, modelTotal: 6.2, market: 'ml', sideIsHome: true });
   const pl = nhlPeriod.nhlMarketQuote({ modelMargin: 0.6, modelTotal: 6.2, market: 'spread', sideIsHome: true, line: -1.5 });

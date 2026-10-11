@@ -9,7 +9,7 @@
  */
 
 const { narrateErrorShouldRetry } = require('./fetch_memo');
-const { xaiChat, resolveXaiKey, GROK_MODEL } = require('../xai-chat');
+const { xaiChat, resolveXaiKey } = require('../xai-chat');
 
 const NARRATIVE_MAX_TOKENS = 5800;
 
@@ -437,7 +437,6 @@ Argue for the picked side. Say WeBetAI. No em dashes.`;
   // already ran with tools off. Same prompt, same max tokens, 60s budget.
   const text = await xaiChat({
     apiKey,
-    model: GROK_MODEL,
     system: SYSTEM_PROMPT,
     user: userPrompt,
     maxTokens: NARRATIVE_MAX_TOKENS,

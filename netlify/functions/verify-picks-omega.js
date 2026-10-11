@@ -57,7 +57,7 @@ const { autoCorrectHardRock } = require('./lib/omega-vnext/hr_autocorrect');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
-const { xaiChat, resolveXaiKey, GROK_MODEL } = require('./lib/xai-chat');
+const { xaiChat, resolveXaiKey } = require('./lib/xai-chat');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -786,7 +786,6 @@ async function sharpReview(picks, dateFormatted) {
     // never hang QA on a rate-limited call — try/catch → skip
     const text = await xaiChat({
       apiKey: xaiKey,
-      model: GROK_MODEL,
       system: SHARP_REVIEW_SYSTEM,
       user: `Today's card (${dateFormatted}):\n\n${cardSummary}`,
       maxTokens: 1500,
@@ -881,7 +880,6 @@ async function backfillStraightNarratives(picks, uniqueNeeds) {
     // never hang QA on a rate-limited call — try/catch → template
     const text = await xaiChat({
       apiKey: resolveXaiKey(),
-      model: GROK_MODEL,
       system: STRAIGHT_NARRATIVE_SYSTEM,
       user: `Write narratives for these picks:\n${pickDescriptions}`,
       maxTokens: 1500,
@@ -936,7 +934,6 @@ async function backfillParlayLegNarratives(legs, uniqueLegNeeds) {
   try {
     const text = await xaiChat({
       apiKey: resolveXaiKey(),
-      model: GROK_MODEL,
       system: PARLAY_LEG_NARRATIVE_SYSTEM,
       user: `Write narratives for these parlay legs:\n${legDescriptions}`,
       maxTokens: 2000,

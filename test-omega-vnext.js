@@ -524,7 +524,9 @@ assert.strictEqual(typeof cfb.project, 'function');
 
 const narrate = require(path.join(root, 'narrate'));
 const narrateSrc = require('fs').readFileSync(path.join(root, 'narrate.js'), 'utf8');
-assert.ok(narrateSrc.includes('grok-4.20-0309-non-reasoning') || narrateSrc.includes('GROK_MODEL'), 'narrate must call Grok');
+const xaiChatSrc = require('fs').readFileSync(path.join(root, '../xai-chat.js'), 'utf8');
+assert.ok(narrateSrc.includes("require('../xai-chat')"), 'narrate must call Grok');
+assert.ok(/GROK_MODEL = 'grok-4\.3'/.test(xaiChatSrc), 'default narrate model is grok-4.3');
 assert.ok(narrateSrc.includes('api.x.ai/v1/chat/completions') || narrateSrc.includes("require('../xai-chat')"), 'narrate must use the xAI chat helper');
 assert.ok(!/anthropic|api\.anthropic\.com|claude-sonnet|claude-haiku/i.test(narrateSrc), 'narrate must not call Anthropic');
 assert.ok(!/claude/i.test(narrateSrc.replace(/claudeVerified/g, '')), 'published claudeVerified flag is the only claude token');

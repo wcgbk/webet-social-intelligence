@@ -6,7 +6,7 @@ const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
 
-const { xaiChat, GROK_MODEL, XAI_CHAT_URL, messageText } = require('./netlify/functions/lib/xai-chat');
+const { xaiChat, GROK_MODEL, GROK_FALLBACK_MODELS, resolveModelChain, XAI_CHAT_URL, messageText } = require('./netlify/functions/lib/xai-chat');
 const narrate = require('./netlify/functions/lib/omega-vnext/narrate');
 const memo = require('./netlify/functions/lib/omega-vnext/fetch_memo');
 const verify = require('./netlify/functions/verify-picks-omega');
@@ -16,7 +16,15 @@ const verifySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/verify
 const indexSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
 const helperSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/xai-chat.js'), 'utf8');
 
-assert.strictEqual(GROK_MODEL, 'grok-4.20-0309-non-reasoning');
+assert.strictEqual(GROK_MODEL, 'grok-4.3');
+assert.deepStrictEqual(GROK_FALLBACK_MODELS, [
+  'grok-4-1-fast-reasoning',
+  'grok-4-fast-non-reasoning',
+  'grok-4.20-0309-non-reasoning',
+]);
+assert.ok(helperSrc.includes('XAI_MODEL'));
+assert.ok(helperSrc.includes('XAI_FALLBACK_MODELS'));
+assert.ok(helperSrc.includes('status === 429'));
 assert.strictEqual(XAI_CHAT_URL, 'https://api.x.ai/v1/chat/completions');
 assert.ok(helperSrc.includes('XAI_API_KEY'));
 assert.ok(!/anthropic|claude|api\.anthropic\.com/i.test(helperSrc));
@@ -57,7 +65,12 @@ function longBlurb(label) {
 
 (async () => {
   const prev = process.env.XAI_API_KEY;
+  const prevModel = process.env.XAI_MODEL;
+  const prevFallback = process.env.XAI_FALLBACK_MODELS;
   delete process.env.XAI_API_KEY;
+  delete process.env.XAI_MODEL;
+  delete process.env.XAI_FALLBACK_MODELS;
+  assert.deepStrictEqual(resolveModelChain(), [GROK_MODEL, ...GROK_FALLBACK_MODELS]);
   const prevFetch = global.fetch;
   try {
     // ── helper request shape ──
@@ -95,6 +108,44 @@ function longBlurb(label) {
       await assert.rejects(() => xaiChat({ apiKey: 'test-xai', user: 'hi' }), /xAI HTTP 401/);
       assert.strictEqual(n, 1);
       assert.strictEqual(memo.narrateErrorShouldRetry(new Error('xAI HTTP 401: nope')), false);
+    }
+
+    {
+      process.env.XAI_MODEL = 'grok-4-fast-non-reasoning';
+      process.env.XAI_FALLBACK_MODELS = 'grok-4.3, grok-4-fast-non-reasoning';
+      assert.deepStrictEqual(resolveModelChain(), ['grok-4-fast-non-reasoning', 'grok-4.3']);
+      assert.deepStrictEqual(resolveModelChain('grok-4'), ['grok-4', 'grok-4.3', 'grok-4-fast-non-reasoning']);
+      process.env.XAI_FALLBACK_MODELS = '';
+      assert.deepStrictEqual(resolveModelChain(), ['grok-4-fast-non-reasoning']);
+      delete process.env.XAI_MODEL;
+      delete process.env.XAI_FALLBACK_MODELS;
+    }
+
+    {
+      const seen = [];
+      global.fetch = async (url, init) => {
+        const body = JSON.parse(init.body);
+        seen.push(body.model);
+        if (seen.length === 1) return grokErr(429, 'capacity');
+        return grokOk('{"ok":true}');
+      };
+      const text = await xaiChat({ apiKey: 'test-xai', user: 'hi', timeoutMs: 5000 });
+      assert.strictEqual(text, '{"ok":true}');
+      assert.deepStrictEqual(seen, [GROK_MODEL, GROK_FALLBACK_MODELS[0]]);
+    }
+
+    {
+      let n = 0;
+      global.fetch = async () => { n += 1; return grokErr(503, 'unavailable'); };
+      await assert.rejects(() => xaiChat({ apiKey: 'test-xai', user: 'hi', timeoutMs: 5000 }), /xAI HTTP 503/);
+      assert.strictEqual(n, 1 + GROK_FALLBACK_MODELS.length);
+    }
+
+    {
+      let n = 0;
+      global.fetch = async () => { n += 1; return grokErr(400, 'bad'); };
+      await assert.rejects(() => xaiChat({ apiKey: 'test-xai', user: 'hi' }), /xAI HTTP 400/);
+      assert.strictEqual(n, 1);
     }
 
     assert.strictEqual(messageText({ choices: [{ message: { content: [{ text: 'a' }, { text: 'b' }] } }] }), 'a\nb');
@@ -179,7 +230,40 @@ function longBlurb(label) {
       assert.ok(out.rejections[0].reason.includes('xAI HTTP 400'));
     }
 
-    // ── 500 retries once, then still publishes the locked side ──
+    // ── 429 on the primary model uses the next model and still verifies ──
+    {
+      const seen = [];
+      global.fetch = async (url, init) => {
+        const body = JSON.parse(init.body);
+        seen.push(body.model);
+        if (body.model === GROK_MODEL) return grokErr(429, 'capacity');
+        return grokOk(JSON.stringify({
+          picks: [{
+            idx: 0,
+            coreReasoning: longBlurb('Yankees ML'),
+            whatLoses: 'Boston wins the game outright and the moneyline loses.',
+            dataVerified: 'Locked number and price only on this pass.',
+            clvExpectation: 'WeBetAI expects the close to lean toward the Yankees.',
+            veto: false,
+            unitCut: null,
+          }],
+          parlayLegs: [],
+          edgeSummary: 'WeBetAI card thesis is the Yankees. The value sits on one price. Stakes stay disciplined. Read the blurb. Bet the locked side.',
+          insights: 'Today is baseball. Confirm the starter before lock. The card is a short list. Pass if a blurb does not convince you. Tomorrow is a new board.',
+        }));
+      };
+      const out = await narrate.narrateAndVerify({
+        picks: [{ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '-120', units: '1u' }],
+        parlayLegs: [],
+        dateFormatted: 'Sunday, October 11',
+        apiKey: 'test-xai',
+      });
+      assert.deepStrictEqual(seen, [GROK_MODEL, GROK_FALLBACK_MODELS[0]]);
+      assert.strictEqual(out.claudeVerified, true);
+      assert.ok(out.picks[0].coreReasoning.includes('Yankees ML'));
+    }
+
+    // ── 500 walks the chain, narrate retries that chain once, locked side stays ──
     {
       let n = 0;
       global.fetch = async () => { n += 1; return grokErr(500, 'unavailable'); };
@@ -189,7 +273,7 @@ function longBlurb(label) {
         dateFormatted: 'Sunday, October 11',
         apiKey: 'test-xai',
       });
-      assert.strictEqual(n, 2);
+      assert.strictEqual(n, resolveModelChain().length * 2);
       assert.strictEqual(out.claudeVerified, false);
       assert.strictEqual(out.picks.length, 1);
     }
@@ -301,11 +385,15 @@ function longBlurb(label) {
       assert.strictEqual(legs[0].coreReasoning, '');
     }
 
-    console.log('PASS test-omega-xai-narrate', { model: GROK_MODEL });
+    console.log('PASS test-omega-xai-narrate', { model: GROK_MODEL, fallbacks: GROK_FALLBACK_MODELS });
   } finally {
     global.fetch = prevFetch;
     if (prev == null) delete process.env.XAI_API_KEY;
     else process.env.XAI_API_KEY = prev;
+    if (prevModel == null) delete process.env.XAI_MODEL;
+    else process.env.XAI_MODEL = prevModel;
+    if (prevFallback == null) delete process.env.XAI_FALLBACK_MODELS;
+    else process.env.XAI_FALLBACK_MODELS = prevFallback;
   }
 })().catch((err) => {
   console.error(err);

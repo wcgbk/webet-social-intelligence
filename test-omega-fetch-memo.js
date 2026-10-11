@@ -11,6 +11,7 @@ const memo = require(path.join(root, 'fetch_memo'));
 const ingest = require(path.join(root, 'ingest'));
 const capture = require(path.join(root, 'capture_runner'));
 const narrate = require(path.join(root, 'narrate'));
+const { resolveModelChain } = require('./netlify/functions/lib/xai-chat');
 const config = require(path.join(root, 'config'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
@@ -430,7 +431,7 @@ function mlbEvent(id, commence) {
     const out = await narrate.narrateAndVerify({
       picks: [pick], parlayLegs: [], dateFormatted: 'October 6, 2026', apiKey: 'test-xai',
     });
-    assert.strictEqual(n, 2);
+    assert.strictEqual(n, resolveModelChain().length * 2);
     assert.strictEqual(out.picks[0].pick, 'Yankees');
     assert.strictEqual(out.picks[0].betType, 'Moneyline');
   });

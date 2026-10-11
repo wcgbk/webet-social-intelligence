@@ -634,6 +634,23 @@ function fbWeatherEnabled() {
   return flagEnabled('OMEGA_FB_WEATHER');
 }
 
+/**
+ * Empty-net end game on the NHL regulation joint. The object is the default.
+ * OMEGA_NHL_EMPTY_NET=0 (off/false/no) skips the late-game step and restores
+ * the plain Poisson joint. Any other set value turns the step on.
+ * Pull times are minutes left. rateLeaderEN60 is empty-net goals per 60 by
+ * the club that kept its goalie. rateTrailer6v5_60 is the extra attacker's
+ * goals per 60. Figures are published league rates, not fit on a replay.
+ * Citations live in nhl_period.js.
+ */
+const NHL_EMPTY_NET = Object.freeze({
+  enabled: true,
+  pullMinDown1: 2,
+  pullMinDown2: 3,
+  rateLeaderEN60: 18,
+  rateTrailer6v5_60: 7.2,
+});
+
 function fbMarketGapLimits(sport) {
   const base = FB_MARKET_GAP[sport];
   if (!base) return null;
@@ -758,6 +775,7 @@ module.exports = {
   HFA,
   NFL_ELO_WEIGHT,
   nflEloWeight,
+  NHL_EMPTY_NET,
   REST_ADJ,
   restAdjEnabled,
   WEATHER_NFL,

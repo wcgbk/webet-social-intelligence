@@ -1,6 +1,7 @@
 'use strict';
 // v12.3.24 spec: 10:30 ET price lock, Hard Rock review flag, 3% EV floor.
-// Leans stay in the lean pool and do not fill straights. +EV parlay with a
+// A short floor card fills from the lean pool. The 10/10 morning still
+// clears 3 floor straights, so leans do not replace them. +EV parlay with a
 // 45% cover on each leg. Replays the 2026-10-10 morning snapshot. No network.
 const assert = require('assert');
 const fs = require('fs');
@@ -99,11 +100,12 @@ assert.strictEqual(mixed.leanPool.length, 1);
 assert.strictEqual(mixed.leanPool[0].side, 'Thin +3');
 assert.strictEqual(mixed.leanPool[0].leanReason, 'edge-floor');
 assert.strictEqual(mixed.rejected.length, 0);
-assert.strictEqual(
-  selectStraights(mixed.yesPool, 3, mixed.leanPool).length,
-  1,
-  'short card publishes the floor straight and does not fill the lean',
-);
+{
+  const mixedCard = selectStraights(mixed.yesPool, 3, mixed.leanPool);
+  assert.strictEqual(mixedCard.length, 2, 'one floor straight plus the lean on the other game');
+  assert.deepStrictEqual(mixedCard.map(c => c.tier), ['floor', 'lean']);
+  assert.strictEqual(mixedCard[1].side, 'Thin +3');
+}
 
 const floorA = side({ edgePct: 0.05, ev: 0.06, side: 'Floor A' });
 const floorB = side({ edgePct: 0.04, ev: 0.05, side: 'Floor B', matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C' });
@@ -116,8 +118,9 @@ assert.strictEqual(leanGated.yesPool.length, 0);
 assert.strictEqual(leanGated.leanPool.length, 1);
 assert.strictEqual(leanGated.leanPool[0].leanReason, 'ev-floor');
 const filled = selectStraights([floorA, floorB], 3, [leanRow]);
-assert.strictEqual(filled.length, 2);
-assert.deepStrictEqual(filled.map(c => c.tier), ['floor', 'floor']);
+assert.strictEqual(filled.length, 3);
+assert.deepStrictEqual(filled.map(c => c.tier), ['floor', 'floor', 'lean']);
+assert.strictEqual(filled[2].side, 'Lean C');
 const leanPick = toPickObject({ ...leanRow, tier: 'lean' });
 assert.strictEqual(leanPick.tier, 'lean');
 assert.ok(parseFloat(leanPick.units) <= 0.5, leanPick.units);
@@ -127,7 +130,9 @@ const secondLean = side({
   matchup: 'G @ H', homeTeam: 'H', awayTeam: 'G',
 });
 const leansOnly = selectStraights([], 3, [leanRow, secondLean]);
-assert.strictEqual(leansOnly.length, 0);
+assert.strictEqual(leansOnly.length, 2);
+assert.deepStrictEqual(leansOnly.map(c => c.side), ['Lean C', 'Lean D']);
+assert.ok(leansOnly.every(c => c.tier === 'lean'));
 const edgeLean = applyGates([side({ edgePct: 0.01, ev: 0.05 })], asOf);
 assert.strictEqual(edgeLean.leanPool.length, 1);
 assert.strictEqual(edgeLean.leanPool[0].leanReason, 'edge-floor');
@@ -260,7 +265,12 @@ global.fetch = async (url) => {
     assert.ok(unknown.picks.some(p => /\+9\.5/.test(p.pick)));
 
     // ── 2026-10-10 morning yes pool under the new floor ──
-    const snapPath = '/workspace/omega-replay-2w/out/live-1010/2026-10-10.json';
+    const snapPaths = [
+      path.join(__dirname, 'test/fixtures/live-1010-2026-10-10.json'),
+      '/workspace/omega-replay-2w/out/live-1010/2026-10-10.json',
+    ];
+    const snapPath = snapPaths.find((p) => fs.existsSync(p));
+    assert.ok(snapPath, `missing 2026-10-10 candidate snapshot; tried ${snapPaths.join(', ')}`);
     const snap = JSON.parse(fs.readFileSync(snapPath, 'utf8'));
     const asOf1010 = { cardDate: '2026-10-10', asOfMs: Date.parse('2026-10-10T13:30:00Z') };
     const coerce = (c, fromYes) => ({

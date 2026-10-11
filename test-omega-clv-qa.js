@@ -12,7 +12,7 @@ const qa = require(path.join(root, 'qa_hardfail'));
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.ok(config.QA_HARDFAIL);
 assert.strictEqual(config.QA_HARDFAIL.staleOddsCents, 15);
-assert.strictEqual(config.LEAN_PAD, false);
+assert.strictEqual(config.LEAN_PAD, true);
 
 // ── CLV grade ──
 const g = grade.gradeNoVigClv(-110, -105, 1.0476);

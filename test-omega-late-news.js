@@ -93,14 +93,14 @@ function card(picks, extra = {}) {
       homeSp: { id: 333, name: 'Tanner Bibee' },
       awaySp: { id: 222, name: 'Drew Rasmussen' },
     });
-    assert.strictEqual(scratched.action, 'drop');
+    assert.strictEqual(scratched.action, 'reprice');
     assert.strictEqual(scratched.code, 'sp-changed');
 
     const helps = late.decideLateNews(mlbPick(), {
       homeSp: { id: 111, name: 'Sean Burke' },
       awaySp: { id: 444, name: 'A Different Arm' },
     });
-    assert.strictEqual(helps.action, 'drop', 'a change that would help the side still drops');
+    assert.strictEqual(helps.action, 'reprice', 'a change that would help the side still reprices');
     assert.strictEqual(helps.code, 'sp-changed');
 
     assert.strictEqual(late.decideLateNews(mlbPick(), {
@@ -144,7 +144,7 @@ function card(picks, extra = {}) {
       homeGoalie: { id: 9, name: 'Jeremy Swayman' },
       awayGoalie: { id: 2, name: 'J. Oettinger' },
     });
-    assert.strictEqual(dropGoalie.action, 'drop');
+    assert.strictEqual(dropGoalie.action, 'reprice');
     assert.strictEqual(dropGoalie.code, 'goalie-changed');
 
     assert.strictEqual(late.decideLateNews({
@@ -186,7 +186,7 @@ function card(picks, extra = {}) {
       homeQb: { qbStatus: 'out', qbName: 'Lamar Jackson' },
       awayQb: { qbStatus: null },
     });
-    assert.strictEqual(newlyOut.action, 'drop');
+    assert.strictEqual(newlyOut.action, 'reprice');
     assert.strictEqual(newlyOut.code, 'qb-out');
     assert.strictEqual(late.decideLateNews(qbPick('out', null), {
       qbLoaded: true,
@@ -276,11 +276,15 @@ function card(picks, extra = {}) {
       },
     });
     assert.strictEqual(calls, 1);
-    assert.strictEqual(scratchRun.dropped, 1);
+    assert.strictEqual(scratchRun.dropped, 0);
+    assert.strictEqual(scratchRun.repriced, 1);
     assert.strictEqual(scratchRun.httpCalls, 1);
-    assert.deepStrictEqual(scratchCard.picks.map((p) => p.pick), ['Outside']);
-    assert.strictEqual(scratchCard.voidedPregame[0].voidCode, 'sp-changed');
-    assert.ok(scratchCard.picks.length + scratchCard.voidedPregame.length === 2);
+    assert.deepStrictEqual(scratchCard.picks.map((p) => p.pick), ['Cleveland Guardians ML', 'Outside']);
+    const scratchKept = scratchCard.picks.find((p) => p.pick === 'Cleveland Guardians ML');
+    assert.strictEqual(scratchKept.newsReprice.code, 'sp-changed');
+    assert.strictEqual(scratchKept.odds, '-120');
+    assert.ok(!scratchCard.voidedPregame);
+    assert.strictEqual(scratchCard.picks.length, 2);
 
     const postCard = card([mlbPick()]);
     const postRun = await late.runLateNews({
@@ -438,9 +442,11 @@ function card(picks, extra = {}) {
         });
       },
     });
-    assert.strictEqual(edgeGoalieRun.dropped, 1);
-    assert.strictEqual(edgeGoalie.voidedPregame[0].voidCode, 'goalie-changed');
-    assert.strictEqual(edgeGoalie.picks.length, 0);
+    assert.strictEqual(edgeGoalieRun.dropped, 0);
+    assert.strictEqual(edgeGoalieRun.repriced, 1);
+    assert.ok(!edgeGoalie.voidedPregame);
+    assert.strictEqual(edgeGoalie.picks.length, 1);
+    assert.strictEqual(edgeGoalie.picks[0].newsReprice.code, 'goalie-changed');
 
     const qbCard = card([{
       sport: 'NFL',
@@ -468,8 +474,11 @@ function card(picks, extra = {}) {
         });
       },
     });
-    assert.strictEqual(qbRun.dropped, 1);
-    assert.strictEqual(qbCard.voidedPregame[0].voidCode, 'qb-out');
+    assert.strictEqual(qbRun.dropped, 0);
+    assert.strictEqual(qbRun.repriced, 1);
+    assert.ok(!qbCard.voidedPregame);
+    assert.strictEqual(qbCard.picks.length, 1);
+    assert.strictEqual(qbCard.picks[0].newsReprice.code, 'qb-out');
 
     const stale = late.parseFootballQbMap({
       injuries: [{
@@ -682,12 +691,9 @@ function card(picks, extra = {}) {
       now: NOW,
       dateKey: '2026-10-10',
       readCard: async () => ({ dateKey: '2026-10-10', data: liveCard }),
-      writeCard: async (_date, data) => {
+      writeCard: async () => {
         writes += 1;
-        assert.strictEqual(data.picks.length, 0);
-        assert.strictEqual(data.voidedPregame[0].status, 'void-pregame');
-        assert.ok(!data.picks.some((p) => p.pick === 'Added'));
-        return true;
+        throw new Error('published card must not be written');
       },
       recordOps: async (_date, run) => {
         opsRuns += 1;
@@ -695,14 +701,19 @@ function card(picks, extra = {}) {
         assert.strictEqual(run.withinMin, 90);
         assert.strictEqual(run.maxCalls, 30);
         assert.strictEqual(run.timeoutMs, 4000);
-        assert.ok(run.dropped >= 1);
+        assert.strictEqual(run.dropped, 0);
+        assert.strictEqual(run.frozen, true);
       },
-      fetchImpl: async () => json(mlbSchedule({ home: { id: 8, fullName: 'Tanner Bibee' } })),
+      fetchImpl: async () => { throw new Error('post-publish fetch is not a recheck'); },
     });
     const ranBody = JSON.parse(ran.body);
-    assert.strictEqual(ranBody.dropped, 1);
-    assert.strictEqual(ranBody.written, true);
-    assert.strictEqual(writes, 1);
+    assert.strictEqual(ranBody.dropped, 0);
+    assert.strictEqual(ranBody.written, false);
+    assert.strictEqual(ranBody.frozen, true);
+    assert.strictEqual(liveCard.picks.length, 1);
+    assert.strictEqual(liveCard.picks[0].pick, 'Cleveland Guardians ML');
+    assert.ok(!liveCard.voidedPregame);
+    assert.strictEqual(writes, 0);
     assert.strictEqual(opsRuns, 1);
 
     const evening = await pregame.handler(sched, {

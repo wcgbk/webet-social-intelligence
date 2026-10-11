@@ -25,7 +25,7 @@ assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
 assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
-assert.strictEqual(config.LEAN_PAD, false);
+assert.strictEqual(config.LEAN_PAD, true);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);
 assert.ok(Math.abs(math.evAtOdds(0.55, -110) - (0.55 * (100/110 + 1) - 1)) < 1e-9);
 

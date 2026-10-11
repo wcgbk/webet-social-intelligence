@@ -1,8 +1,9 @@
 'use strict';
 
-// Pregame late-news. Every 30 minutes from 11:00 through 23:30 ET.
-// For picks whose game starts within 90 minutes: MLB probable, NHL starter,
-// NFL/NCAAF QB. Drop or flag only. Never add or swap a pick. Never grade.
+// Schedule stays every 30 minutes from 11:00 through 23:30 ET.
+// The published card is final at 11:00. This function does not reprice,
+// drop, swap, or write picks. Grading and the kickoff close are the only
+// post-publish steps. An empty card still returns "No picks found".
 
 const { rejectUnlessEtSlot, etParts } = require('./lib/et-schedule');
 const lateNews = require('./lib/omega-vnext/late_news');
@@ -51,8 +52,9 @@ exports.handler = async (event, context) => {
   const parts = etParts(now);
   const dateKey = ctx.dateKey || parts.ymd;
   const readCard = ctx.readCard || fetchBetaPicks;
-  const writeCard = ctx.writeCard || updatePicksBlob;
-  const fetchImpl = ctx.fetchImpl;
+  // Accepted so a caller can still pass them. The published card is not written.
+  void (ctx.writeCard || updatePicksBlob);
+  void ctx.fetchImpl;
 
   try {
     const result = await readCard(dateKey);
@@ -67,27 +69,20 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const late = await lateNews.runLateNews({
-      picksData,
-      dateISO: dateKey,
-      now,
+    // Published card is final. Do not call runLateNews and do not writeCard.
+    const late = {
+      checked: picksData.picks.length,
+      dropped: 0,
+      flagged: 0,
+      repriced: 0,
+      httpCalls: 0,
+      actions: [],
+      checks: [],
+      errors: [],
       withinMin: 90,
-      fetchImpl,
-    });
-    let written = false;
-    try {
-      const plan = lateNews.commitLateNewsCard(picksData, late, {
-        resolveLockedParlay,
-        enforceCap: enforceOmegaDailyUnitCap,
-      });
-      if (plan.write) {
-        const wrote = await writeCard(dateKey, picksData);
-        written = wrote !== false;
-      }
-    } catch (e) {
-      console.error(`[pregame-check-omega] write soft-fail: ${e.message}`);
-      late.errors = (late.errors || []).concat(e.message);
-    }
+      frozen: true,
+      note: 'Published card is final. No post-publish reprice, swap, or card update.',
+    };
     await recordOps(dateKey, late, parts.et, ctx.recordOps);
     return {
       statusCode: 200,
@@ -95,11 +90,13 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({
         date: dateKey,
         checked: late.checked || 0,
-        dropped: late.dropped || 0,
-        flagged: late.flagged || 0,
-        httpCalls: late.httpCalls || 0,
-        written,
-        softFail: !!late.softFail,
+        dropped: 0,
+        flagged: 0,
+        repriced: 0,
+        httpCalls: 0,
+        written: false,
+        frozen: true,
+        summary: 'Published card is final',
       }),
     };
   } catch (e) {

@@ -316,6 +316,65 @@ function isFreshQbOut(qb) {
   return /\bout\b/.test(st);
 }
 
+function normQbName(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Named starter-vs-backup gaps. Not fit on CLV. A fresh Out uses this
+ * when the row has no starterValue/backupValue. Lamar Jackson (BAL @ ATL
+ * and any other Ravens game) is the worked example: larger than the
+ * generic 3.0 / −1.5 table, still inside the sport cap. The total moves.
+ * The total is not excluded.
+ */
+const NAMED_BACKUP_QB = Object.freeze({
+  'lamar jackson': { marginPts: 4.5, totalPts: -2.25 },
+});
+
+/**
+ * Points to move the margin (positive = starter is better than the backup)
+ * and the total (negative = fewer points). Fresh Out only.
+ * Explicit starterValue and backupValue win. A gap above 20 is Elo
+ * (25 Elo ≈ 1 point). Otherwise the numbers are already points.
+ */
+function backupQbDelta(qb, sport) {
+  if (!isFreshQbOut(qb)) return null;
+  const cfg = (QB_INJURY && QB_INJURY[sport]) || {
+    outMarginPts: 3.0, outTotalPts: -1.5, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0,
+  };
+  const capM = Math.abs(Number(cfg.maxAbsMarginAdj) || 5);
+  const capT = Math.abs(Number(cfg.maxAbsTotalAdj) || 3);
+  let marginPts = Number(cfg.outMarginPts);
+  let totalPts = Number(cfg.outTotalPts);
+  let source = 'table';
+  const starter = Number(qb.starterValue != null ? qb.starterValue : qb.qbValue);
+  const backup = Number(qb.backupValue != null ? qb.backupValue : qb.backupQbValue);
+  if (Number.isFinite(starter) && Number.isFinite(backup)) {
+    const gap = starter - backup;
+    const points = Math.abs(gap) > 20 ? gap / 25 : gap;
+    if (points > 0) {
+      marginPts = points;
+      totalPts = -Math.abs(points) * 0.5;
+      source = 'starter-backup';
+    }
+  } else {
+    const named = NAMED_BACKUP_QB[normQbName(qb.qbName || qb.name)];
+    if (named) {
+      marginPts = named.marginPts;
+      totalPts = named.totalPts;
+      source = 'named';
+    }
+  }
+  if (!Number.isFinite(marginPts) || marginPts < 0) marginPts = 0;
+  if (!Number.isFinite(totalPts) || totalPts > 0) totalPts = 0;
+  return {
+    marginPts: clamp(marginPts, 0, capM),
+    totalPts: clamp(totalPts, -capT, 0),
+    source,
+    qbName: qb.qbName || qb.name || null,
+  };
+}
+
 function qbSoftAdjust(sport, homeQb, awayQb) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
@@ -326,14 +385,24 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   let totalAdj = 0;
   let uncBump = 0;
   const notes = [];
+  const deltas = [];
   const apply = (qb, side) => {
     if (!qb) return;
     const st = String(qb.qbStatus || qb.status || '').toLowerCase();
     if (!st) return;
+    const fresh = isFreshQbOut(qb);
     const isOut = outStatuses.some(k => st.includes(k));
     const isQ = /questionable|q\b/.test(st);
-    if (isOut) {
-      // Known QB injury is priced into the projection, never a cancel (2026-09-28).
+    if (fresh) {
+      const delta = backupQbDelta(qb, sport);
+      marginAdj += (side === 'home' ? -1 : 1) * delta.marginPts;
+      totalAdj += delta.totalPts;
+      uncBump += 0.04;
+      deltas.push({ side, ...delta });
+      notes.push(`${side} QB ${qb.qbName || ''} backup-delta ${delta.source} (${st})`.trim());
+    } else if (isOut) {
+      // Doubtful and long-term tags stay on the table. A fresh Out uses
+      // backupQbDelta above and is not priced a second time here.
       const w = /doubtful/.test(st) ? cfg.doubtfulWeight : 1;
       marginAdj += (side === 'home' ? -1 : 1) * cfg.outMarginPts * w;
       totalAdj += cfg.outTotalPts * w;
@@ -351,6 +420,7 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
     totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
     uncBump,
     note: notes.length ? notes.join('; ') : null,
+    backupDeltas: deltas,
   };
 }
 
@@ -462,8 +532,9 @@ function applyGameDayAdjustments({
   const homeQb = lookupQb(home, qbByTeam, sport, fallbackSeen);
   const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
   const qb = qbSoftAdjust(sport, homeQb, awayQb);
-  // outTotalPts (NFL −1.5) still moves the projection. It is not a fitted
-  // backup scoring effect, so a fresh Out excludes totals at the gate.
+  // Fresh Out moves margin and total by the backup-QB delta. The total
+  // stays on the card. Edge and EV are recomputed downstream against the
+  // DraftKings price, and the floors are the only drop.
   const startingQbOut = isFreshQbOut(homeQb) || isFreshQbOut(awayQb);
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
@@ -487,9 +558,15 @@ function applyGameDayAdjustments({
     }
   }
 
-  // Non-QB personnel. QB is already in qbSoftAdjust. A cluster excludes
-  // the game later; the margin still carries only the capped assumption.
-  let personnelExclude = false;
+  // Non-QB personnel. QB points stay in the backup delta. A starter
+  // cluster is a probability haircut and a total-points haircut. It
+  // does not drop a side or the total. Depth outs never drop the game.
+  let personnelHomeExclude = false;
+  let personnelAwayExclude = false;
+  let personnelTotalExclude = false;
+  let personnelProbHaircut = 0;
+  let personnelHomeCluster = 0;
+  let personnelAwayCluster = 0;
   let personnelLogs = [];
   if ((sport === 'NFL' || sport === 'NCAAF') && personnelByTeam) {
     const game = { home, away };
@@ -498,13 +575,20 @@ function applyGameDayAdjustments({
     if (homeRows.length || awayRows.length) {
       const adj = conservativeNonQbAdj(homeRows, awayRows);
       if (Number.isFinite(adj.marginAdj) && Math.abs(adj.marginAdj) > 1e-9) margin += adj.marginAdj;
-      personnelExclude = !!adj.exclude;
+      if (Number.isFinite(adj.totalAdj) && Math.abs(adj.totalAdj) > 1e-9) total += adj.totalAdj;
+      personnelHomeExclude = false;
+      personnelAwayExclude = false;
+      personnelTotalExclude = false;
+      personnelProbHaircut = Number(adj.probHaircut) || 0;
+      personnelHomeCluster = Number(adj.homeCluster) || 0;
+      personnelAwayCluster = Number(adj.awayCluster) || 0;
+      if (Number(adj.uncertaintyBump) > 0) unc = Math.min(0.45, unc + Number(adj.uncertaintyBump));
       personnelLogs = adj.logs || [];
       for (const row of personnelLogs) {
         console.log(`[omega-vnext/personnel] ${sport} ${away || ''} @ ${home || ''} ${row.action} ${row.name || ''} ${row.position || ''} ${row.status || ''} pts=${row.points || 0}`);
       }
-      if (personnelExclude) {
-        console.log(`[omega-vnext/personnel] unquantified-injury-cluster ${sport} ${away || ''} @ ${home || ''} homeOuts=${adj.homeOuts} awayOuts=${adj.awayOuts}`);
+      if (personnelHomeExclude || personnelAwayExclude || personnelTotalExclude || personnelProbHaircut > 0) {
+        console.log(`[omega-vnext/personnel] injury-cluster ${sport} ${away || ''} @ ${home || ''} homeW=${personnelHomeCluster} awayW=${personnelAwayCluster} homeSide=${personnelHomeExclude} awaySide=${personnelAwayExclude} total=${personnelTotalExclude} haircut=${personnelProbHaircut}`);
       }
     }
   }
@@ -519,10 +603,11 @@ function applyGameDayAdjustments({
     qbNote: qb.note,
     qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
+    qbBackupDelta: (qb.backupDeltas && qb.backupDeltas.length) ? qb.backupDeltas : null,
     startingQbOut,
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
-    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used || !!(last5Meta && last5Meta.applied) || personnelLogs.some((row) => row.action === 'assumption-adj'),
+    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used || !!(last5Meta && last5Meta.applied) || personnelLogs.some((row) => row.action === 'assumption-adj') || personnelProbHaircut > 0 || personnelHomeExclude || personnelAwayExclude || personnelTotalExclude,
   };
   if (last5Meta && last5Meta.applied) {
     meta.last5 = {
@@ -532,9 +617,14 @@ function applyGameDayAdjustments({
     };
     meta.applied = true;
   }
-  if (personnelLogs.length) {
+  if (personnelLogs.length || personnelProbHaircut > 0 || personnelHomeExclude || personnelAwayExclude || personnelTotalExclude) {
     meta.personnelLogs = personnelLogs;
-    meta.personnelExclude = personnelExclude;
+    meta.personnelHomeExclude = personnelHomeExclude;
+    meta.personnelAwayExclude = personnelAwayExclude;
+    meta.personnelTotalExclude = personnelTotalExclude;
+    meta.personnelProbHaircut = personnelProbHaircut;
+    meta.homeCluster = personnelHomeCluster;
+    meta.awayCluster = personnelAwayCluster;
   }
   if (scheduleOn && restMeta) {
     meta.restDays = restMeta.restDays;
@@ -548,7 +638,11 @@ function applyGameDayAdjustments({
     modelTotal: total,
     uncertainty: unc,
     gameDay: meta,
-    personnelExclude,
+    personnelExclude: false,
+    personnelHomeExclude,
+    personnelAwayExclude,
+    personnelTotalExclude,
+    personnelProbHaircut,
     personnelLogs,
     last5: last5Meta,
     startingQbOut,
@@ -701,6 +795,8 @@ module.exports = {
   restAuditFields,
   isFreshQbOut,
   qbSoftAdjust,
+  backupQbDelta,
+  NAMED_BACKUP_QB,
   qbContinuityAdjust,
   lookupQb,
   applyGameDayAdjustments,

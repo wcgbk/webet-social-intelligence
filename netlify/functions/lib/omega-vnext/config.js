@@ -50,7 +50,7 @@ const MAX_STRAIGHT_UNITS_PER_PICK = 1.25;
  * The parlay ticket is not on this path (PARLAY_FIXED_UNITS, or thin-slate 0.25u).
  */
 const B_GRADE_UNIT_CAP = 0.5;
-const LEAN_PAD = false; // empty card OK — never force-fill
+const LEAN_PAD = true; // short of 3 floor straights: fill from the lean pool
 
 /** Same ET calendar day only — no weekend football on Tue/Wed cards. */
 const DAY_SCOPE_TZ = 'America/New_York';
@@ -197,7 +197,8 @@ const MLB_CALIBRATION = {
  * minCoverProb stays 0. There is no flat coverProb floor. A missing cover
  * or EV rejects. EV under 1.5% rejects. EV from 1.5% up to the 3% floor,
  * or a 3%+ EV whose edge misses the curve, is the lean tier (see
- * LEAN_MIN_EV). Leans do not fill a short straight card. minPredictedClvCents
+ * LEAN_MIN_EV). When LEAN_PAD is true and fewer than 3 straights clear
+ * the floor, those leans fill the open slots. minPredictedClvCents
  * is null. Odds band, major-book liquidity, pregame, same ET day, and
  * adverse steam stay. Generate-time placeability is logged and does not
  * reject.
@@ -215,7 +216,7 @@ const GATES = {
   rejectAdverseSteam: true,
 };
 
-/** Lean tier under the 3% floor. Diagnostic only. It does not fill straights or parlay legs. */
+/** Lean tier under the 3% floor. Fills a short straight card and may be a parlay leg. */
 const LEAN_MIN_EV = 0.015;
 const LEAN_MAX_UNITS = 0.5;
 /** Parlay legs only. Straights have no coverProb floor. */
@@ -223,8 +224,8 @@ const PARLAY_MIN_COVER = 0.45;
 
 /**
  * QA hard-fail thresholds (pre-publish / pre-verify-unlock).
- * Drop a hard-fail and refill from the floor tier. Leans do not fill an
- * open slot. A short card stays short.
+ * Drop a hard-fail and refill from the floor tier. When that refill is
+ * still short of 3 and LEAN_PAD is on, leans fill the open slots.
  */
 const QA_HARDFAIL = {
   staleOddsCents: 15, // juice-ladder cents vs lockSnapshot (not raw American subtraction)
@@ -383,7 +384,7 @@ const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2
  */
 const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 };
 /** HFA base; game_day.js applies soft rest/B2B deltas on top. */
-const HFA = { MLB: 0.12, NFL: 2.1, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
+const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 
 /**
  * Football rest, points on the home margin. Totals stay put (totalCap 0).

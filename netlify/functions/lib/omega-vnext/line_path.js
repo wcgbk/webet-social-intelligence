@@ -342,7 +342,8 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
   else if (steamAgainst) residualClvProxy = +(pred - Math.min(12, Math.abs(towardScore) * 5)).toFixed(2);
   else residualClvProxy = +pred.toFixed(2);
 
-  // vs sharp open→now (optional context)
+  // Sharp move since the stored open. Size and direction are a
+  // selection input at the 10:30 lock. They are not added to fair_sharp_p.
   let sharpLineMove = null;
   if (openGame.sharpConsensus && nowGame && nowGame.sharpConsensus) {
     if (/total/i.test(market)
@@ -355,6 +356,7 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
       sharpLineMove = +(nowGame.sharpConsensus.spreadHome - openGame.sharpConsensus.spreadHome).toFixed(3);
     }
   }
+  const sharpSteam = sharpSteamSinceOpen(openGame, nowGame, market);
 
   return {
     oddsMoveCents,
@@ -376,7 +378,81 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
       odds: nowPrint.odds,
     } : { line: nowLine, odds: nowOdds },
     sharpLineMove,
+    sharpMovePts: sharpSteam.sharpMovePts,
+    sharpMoveSize: sharpSteam.sharpMoveSize,
+    sharpMoveDir: sharpSteam.sharpMoveDir,
+    dkMovePts: sharpSteam.dkMovePts,
+    dkLagsSharp: sharpSteam.dkLagsSharp,
     missingOpen: false,
+  };
+}
+
+function consensusLine(game, market) {
+  if (!game || !game.sharpConsensus) return null;
+  if (/total/i.test(market)) return numberOrNull(game.sharpConsensus.total);
+  if (/spread|run line/i.test(market)) return numberOrNull(game.sharpConsensus.spreadHome);
+  return null;
+}
+
+function numberOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function dkBookRow(game) {
+  const books = game && game.books;
+  if (!books) return null;
+  return books.draftkings || books.draftkings_us || null;
+}
+
+function dkLine(game, market) {
+  const row = dkBookRow(game);
+  if (!row) return null;
+  if (/total/i.test(market)) return numberOrNull(row.total);
+  if (/spread|run line/i.test(market)) return numberOrNull(row.spreadHome);
+  return null;
+}
+
+/**
+ * Sharp line from the stored open to the 10:30 snapshot.
+ * dkLagsSharp is true when the sharp moved at least half a point and
+ * DraftKings has not moved as far in that same direction.
+ * Selection input only. Do not add this onto the fair price.
+ *
+ * The written spec sentence says steam is not monitored and is not an
+ * input. The user STEAM note overrides that sentence: open-to-10:30
+ * sharp-move size, direction, and the DraftKings-lag flag are a
+ * selection input only (inside the score cap, before lock). They are
+ * never added to the fair price.
+ */
+function sharpSteamSinceOpen(openGame, nowGame, market) {
+  const openSharp = consensusLine(openGame, market);
+  const nowSharp = consensusLine(nowGame, market);
+  const sharpMovePts = (openSharp != null && nowSharp != null)
+    ? +(nowSharp - openSharp).toFixed(3)
+    : null;
+  const openDk = dkLine(openGame, market);
+  const nowDk = dkLine(nowGame, market);
+  const dkMovePts = (openDk != null && nowDk != null)
+    ? +(nowDk - openDk).toFixed(3)
+    : null;
+  let dkLagsSharp = false;
+  if (sharpMovePts != null && Math.abs(sharpMovePts) + 1e-9 >= 0.5) {
+    const dk = dkMovePts == null ? 0 : dkMovePts;
+    const sameOrFlat = dk === 0 || Math.sign(dk) === Math.sign(sharpMovePts);
+    const behind = Math.abs(sharpMovePts) - Math.abs(dk);
+    dkLagsSharp = sameOrFlat && behind + 1e-9 >= 0.5;
+  }
+  let sharpMoveDir = 'flat';
+  if (sharpMovePts != null && Math.abs(sharpMovePts) >= 0.05) {
+    sharpMoveDir = sharpMovePts > 0 ? 'up' : 'down';
+  }
+  return {
+    sharpMovePts,
+    sharpMoveSize: sharpMovePts == null ? null : +Math.abs(sharpMovePts).toFixed(3),
+    sharpMoveDir,
+    dkMovePts,
+    dkLagsSharp,
   };
 }
 
@@ -418,6 +494,12 @@ function adverseSteamReason(move, { verify = false, market = null } = {}) {
  * Annotate candidates with open→now line-move features.
  * openPath: { polls: [...] } or a single snap { games }
  * nowSnap optional — else uses candidate odds as now.
+ *
+ * The written spec sentence says steam is not monitored and is not an
+ * input. The user STEAM note overrides that sentence: the open-to-10:30
+ * sharp-move size, direction, and DraftKings-lag flag copied onto the
+ * candidate here are a selection input only (inside the score cap,
+ * before lock). They are never added to the fair price.
  */
 function annotateLineMoves(candidates, openSnap, nowSnap) {
   const openGames = (openSnap && openSnap.games) || {};
@@ -442,6 +524,12 @@ function annotateLineMoves(candidates, openSnap, nowSnap) {
       predictedResidualClv: move.residualClvProxy,
       openPrint: move.openPrint,
       _steamScoreAdj: steamBoost - steamPenalty,
+      // Recorded for selection before 10:30. Not added to fair_sharp_p.
+      sharpMovePts: move.sharpMovePts != null ? move.sharpMovePts : null,
+      sharpMoveSize: move.sharpMoveSize != null ? move.sharpMoveSize : null,
+      sharpMoveDir: move.sharpMoveDir || 'flat',
+      dkMovePts: move.dkMovePts != null ? move.dkMovePts : null,
+      dkLagsSharp: move.dkLagsSharp === true,
     };
   });
 }
@@ -653,6 +741,7 @@ module.exports = {
   extractGameBooks,
   bestUsPrint,
   computeOpenToNowMove,
+  sharpSteamSinceOpen,
   adverseSteamReason,
   annotateLineMoves,
   earliestAndLatestPolls,

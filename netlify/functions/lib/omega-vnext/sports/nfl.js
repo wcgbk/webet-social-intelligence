@@ -18,7 +18,9 @@ const {
   nflSpreadExcludesGame,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
+const { blendNflRecency } = require('./nfl_recency');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
+const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
@@ -71,6 +73,18 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
   const neutral = !!(neutralGame && neutralGame.neutralSite === true);
   const hfaPts = neutral ? 0 : HFA.NFL;
   const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
+  // Last-5 residual is part of the team rating, before game-day and before
+  // the market blend. The older raw-margin blend in game_day is not also applied.
+  const recency = blendNflRecency({
+    modelMargin: env.modelMargin,
+    home,
+    away,
+    standings,
+    efficiency,
+    last5ByTeam: (gameDay && gameDay.last5ByTeam) || null,
+    commenceTime,
+  });
+  if (recency.applied) env.modelMargin = recency.modelMargin;
   const gd = applyGameDayAdjustments({
     sport: SPORT,
     modelMargin: env.modelMargin,
@@ -84,7 +98,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     commenceTime,
     restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NFL) || null,
     neutralSite: neutral,
-    last5ByTeam: (gameDay && gameDay.last5ByTeam) || null,
+    last5ByTeam: null,
     personnelByTeam: (gameDay && gameDay.personnelBySport) || null,
   });
   const stacked = applyEngineStack({
@@ -129,9 +143,10 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
   }
   const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
   function stampCardInputs(raw) {
-    if (gd.personnelExclude) raw.personnelExclude = true;
+    stampPersonnel(raw, gd);
     if (gd.startingQbOut) raw.startingQbOut = true;
     if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
+    if (recency.applied) raw.recencyLast5 = recency.stamp;
     if (nflSpreadExcludesGame(pts.modelMarginRaw, pts.marketMargin)) raw.nflGameProjectionGap = true;
     return raw;
   }

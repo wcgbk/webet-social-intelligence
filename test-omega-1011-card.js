@@ -46,7 +46,7 @@ function row(extra) {
 }
 
 (async () => {
-  // A. Straights and parlay legs are the 3% floor and minEdgeFor only.
+  // A. Floor tier stays at 3% and minEdgeFor. A lean on another game fills an open slot.
   const floor = row({ side: 'Over 43.5', market: 'Total', line: 43.5, ev: 0.063, edgePct: 0.046 });
   const minLean = row({
     side: 'Minnesota Vikings -2.5', ev: 0.025, edgePct: 0.037, odds: -105,
@@ -68,9 +68,10 @@ function row(extra) {
   assert.strictEqual(passesPublishFloor(minLean), false);
   assert.strictEqual(passesPublishFloor(kraken), false);
   const published = selectStraights([floor, minLean, kraken], 3, [minLean, kraken]);
-  assert.deepStrictEqual(published.map(c => c.side), ['Over 43.5']);
-  assert.ok(published.every(c => c.tier === 'floor'));
-  assert.strictEqual(straightCardLabel(published.length), 'short card: 1 floor straight');
+  assert.deepStrictEqual(published.map(c => c.side), ['Over 43.5', 'Seattle Kraken ML']);
+  assert.deepStrictEqual(published.map(c => c.tier), ['floor', 'lean']);
+  assert.ok(!published.some(c => c.side === 'Minnesota Vikings -2.5'), 'same game as the floor total');
+  assert.strictEqual(straightCardLabel(1), 'short card: 1 floor straight');
   assert.strictEqual(straightCardLabel(2), 'short card: 2 floor straights');
   assert.strictEqual(straightCardLabel(3), '3 floor straights');
   assert.strictEqual(straightCardLabel(0), 'no floor plays');
@@ -104,7 +105,7 @@ function row(extra) {
   assert.strictEqual(new Set(straightGames.map(c => c.matchup)).size, straightGames.length);
   assert.ok(!straightGames.some(c => c.side === 'Baltimore Ravens +3'));
 
-  // C. QB out moves the total, and a fresh Out excludes totals.
+  // C. QB out moves the total. A fresh Out does not exclude totals.
   const qbOut = gd.applyGameDayAdjustments({
     sport: 'NFL',
     modelMargin: 0,
@@ -116,7 +117,8 @@ function row(extra) {
     qbByTeam: { 'Baltimore Ravens': { qbStatus: 'out', qbName: 'Lamar Jackson' } },
   });
   assert.ok(qbOut.modelTotal < 52.28, `total moved: ${qbOut.modelTotal}`);
-  assert.ok(Math.abs((qbOut.gameDay.qbTotalAdj || 0) + 1.5) < 1e-9, qbOut.gameDay.qbTotalAdj);
+  assert.ok(Math.abs((qbOut.gameDay.qbTotalAdj || 0) + 2.25) < 1e-9, qbOut.gameDay.qbTotalAdj);
+  assert.ok(Math.abs((qbOut.gameDay.qbMarginAdj || 0) - 4.5) < 1e-9, qbOut.gameDay.qbMarginAdj);
   assert.strictEqual(qbOut.startingQbOut, true);
   const doubtful = gd.applyGameDayAdjustments({
     sport: 'NFL', modelMargin: 0, modelTotal: 45, uncertainty: 0.13,
@@ -136,7 +138,7 @@ function row(extra) {
     homeTeam: 'Atlanta Falcons', awayTeam: 'Baltimore Ravens',
     matchup: 'Baltimore Ravens @ Atlanta Falcons',
   }), { cardDate: CARD, asOfMs: EARLY });
-  assert.strictEqual(totalGate, 'starting-qb-out');
+  assert.strictEqual(totalGate, null);
   const spreadGate = gateReason(row({
     market: 'Spread', side: 'Baltimore Ravens +3', line: 3, startingQbOut: true,
     homeTeam: 'Atlanta Falcons', awayTeam: 'Baltimore Ravens',
@@ -171,7 +173,9 @@ function row(extra) {
     p.name === 'Jalen Davis' ? { ...p, status: 'out' } : p
   )), cin);
   assert.strictEqual(stillCluster.homeOuts, 5);
-  assert.strictEqual(stillCluster.exclude, true);
+  assert.strictEqual(stillCluster.exclude, false);
+  assert.strictEqual(stillCluster.homeSideExclude, false);
+  assert.strictEqual(stillCluster.totalExclude, false);
   const pup = conservativeNonQbAdj([{ name: 'PUP WR', position: 'WR', status: 'PUP' }], []);
   assert.strictEqual(pup.homeOuts, 0);
   assert.strictEqual(pup.exclude, false);

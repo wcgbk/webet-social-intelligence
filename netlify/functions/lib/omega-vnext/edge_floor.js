@@ -41,11 +41,11 @@ const { americanToImplied } = require('./odds_math');
  * minCoverProb stays 0. There is no flat cover floor. The floor tier also
  * needs calibrated stake EV >= 3% (coverProb times the decimal price, minus
  * 1). EV under 1.5% rejects. EV from 1.5% to 3%, or EV >= 3% that misses
- * this curve, is a lean. Leans stay in the lean pool for the diagnostic
- * count. They do not become published straights or parlay legs. If fewer
- * than 3 candidates pass both floors, the card publishes that shorter set
- * and labels it (straightCardLabel). It does not withhold the card and it
- * does not fill the open slots with sub-floor picks.
+ * this curve, is a lean. When fewer than 3 candidates clear the floor,
+ * those leans fill the open straight slots (EV >= 1.5%, positive edge,
+ * one per game, stake at most 0.5u) and may be parlay legs. The card
+ * still publishes when the lean pool cannot fill the rest
+ * (straightCardLabel). It does not withhold the card.
  */
 const EDGE_FLOOR = Object.freeze({
   atMinus110: 0.0175,

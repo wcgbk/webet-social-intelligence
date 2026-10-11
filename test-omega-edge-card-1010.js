@@ -137,6 +137,7 @@ assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, 
 assert.strictEqual(verify.candidateClearsSportGates({ sport: 'MLB', ev: -0.01, coverProb: 0.55 }), false);
 
 const snapPaths = [
+  path.join(__dirname, 'test/fixtures/live-1010-2026-10-10.json'),
   '/workspace/omega-replay-2w/out/live-1010/2026-10-10.json',
   path.join(__dirname, 'review-1010/candidates-1010.json'),
 ];

@@ -871,6 +871,7 @@ exports._test = {
   gradePick,
   gradeParlay,
   gradeDay,
+  gradeDayBody,
   aggregateDays,
   withLegCommenceTime,
   ncaafPickedSides,

@@ -34,7 +34,7 @@ A run before 10:30 ET prices the current board (`resolveGenerateOddsSnapshot` re
 
 ## 5. Sport modules
 
-- NFL: key-number mass at 3 and 7, QB out/doubtful, rest days, and wind stay on the existing modules. Those coefficients are not retuned here. `qbSoftAdjust` still moves the margin (NFL 3.0, doubtful × 0.75) and the total (NFL −1.5, cap 3.0). **ASSUMPTION:** −1.5 is not a fitted backup-QB scoring effect. A starting QB with a new game-status Out excludes every total (`starting-qb-out`). Doubtful and questionable totals stay. IR / PUP / season-ending is not a fresh Out. Spreads and moneylines stay.
+- NFL: key-number mass at 3 and 7, QB out/doubtful, rest days, and wind stay on the existing modules. Those coefficients are not retuned here. `qbSoftAdjust` moves the margin and the total. A fresh Out uses `backupQbDelta`: an explicit starter-vs-backup gap, else a named backup (Lamar Jackson 4.5 margin / −2.25 total), else the sport table (NFL 3.0 / −1.5, doubtful × 0.75, cap 5 / 3). **ASSUMPTION:** the table is not a fitted backup-QB scoring effect. The total stays on the card. A starting QB Out does not exclude totals, spreads, or moneylines. IR / PUP / season-ending is not a fresh Out. Doubtful and questionable stay on the table and do not exclude.
 - NCAAF: opponent-adjusted priors and the FBS/FCS split stay in `sports/epa.js` (`solveNcaafOpponentRatings`, `isFbsTeamId`).
 - NHL: a goalie with `confirmed === undefined` is still priced from the given save rate. `confirmed === false` prices the projected starter and a backup, then keeps the residual closer to zero. A missing starter save rate still returns none.
 
@@ -46,9 +46,9 @@ The floor pool is stake EV ≥ 3% (`GATES.minEV`) and edge vs the de-vigged shar
 
 Top 10 is the floor pool sorted by stake EV. An EV tie breaks on edge. One row per bet (matchup, start, market, side, line). One-per-game does not apply to the top 10. Two different bets from the same game both appear. A short floor pool publishes fewer than 10 rows. It is not padded with leans.
 
-Published straights are `selectStraights` on that same floor pool only: calibrated edge, one straight per game, up to three. `leanPool` is ignored. A candidate under 3% EV or under `minEdgeFor` is not a straight and not a parlay leg. If fewer than three pass, the card still publishes that shorter set. It never blocks and it never fills the open slots with sub-floor picks. `summary.cardLabel` and `selection.cardLabel` say `3 floor straights`, `short card: 2 floor straights`, `short card: 1 floor straight`, or `no floor plays`.
+Published straights are `selectStraights`: calibrated edge, one straight per game, up to three. When fewer than three clear the floor and `LEAN_PAD` is true, the open slots fill from `leanPool` sorted by stake EV. A lean needs EV at or above 1.5% and a positive edge. The stake caps at `LEAN_MAX_UNITS` (0.5u). One straight per game still applies. EV under 1.5% stays rejected. If the lean pool cannot fill the rest, the card still publishes the shorter set. It never blocks. `summary.cardLabel` and `selection.cardLabel` say `3 floor straights`, `short card: 2 floor straights`, `short card: 1 floor straight`, or `no floor plays` when every published straight is a floor play. A mixed card says how many of the three are leans.
 
-The parlay stays `optimizeParlay` on the floor pool (45% cover, positive combined EV, those straights when they qualify, otherwise the next floor edges on distinct games). A 2-leg is allowed. No positive floor parlay means no parlay. The straights still publish.
+The parlay stays `optimizeParlay` (45% cover, no same-game legs, positive combined EV). The published straights are the ticket when three of them qualify. Otherwise the builder prefers a floor leg over a lean on the same game, and a +EV lean may fill a leg. A 2-leg is allowed. No positive-EV parlay means no parlay. The straights still publish.
 
 ## 7. Live and in-play
 
@@ -69,8 +69,10 @@ The same window filters odds events (`filterEventsSameEtDay` keeps its name) and
 
 Non-QB personnel uses `personnel.js`. Quarterbacks are skipped here because `qbSoftAdjust` already prices them. Kickers, punters, and any position that is not in the priced set are logged and do not move the margin.
 
-**ASSUMPTION (non-QB):** one Out skill or offensive-line player is 0.20 points toward the opponent. Doubtful weighs 0.75. Questionable weighs 0.35. Inactives and deactivations count as Out. Each side is capped at 0.60 before the two sides are netted. Five or more full outs on one side sets `personnelExclude` and the gate reason `unquantified-injury-cluster`. The cluster is an exclusion, not a larger invented number.
+**ASSUMPTION (non-QB):** one Out skill or offensive-line player is 0.20 points toward the opponent. Doubtful weighs 0.75. Questionable weighs 0.35. Inactives and deactivations count as Out. Each side is capped at 0.60 before the two sides are netted. The cap is not raised for a longer list.
 
-Injured reserve, PUP, and season-ending are already in the market. They are logged as `logged-priced-in`. They do not move the margin and they do not count toward the cluster. Cincinnati @ Miami is a cluster only when a side still has five game-status outs after those long-term rows are dropped. Jalen Davis (CB, injured reserve) is not one of the five.
+**Starter cluster:** only Out or Doubtful players marked starter (or depth-chart order 1) count. Position weights put QB highest, then offensive line, edge, and corner. The weight is a probability haircut toward 0.5 and an uncertainty bump, including at or above `STARTER_CLUSTER.highThreshold` (4.5). Offensive starters also take points off the game total (`starterTotalPoints`, 0.12 per weight, cap 1.5). The gate does not drop a side or a total (`injuryClusterReason` is always null). Depth outs never blanket-exclude the game. A fresh starting-QB Out reprices the total and does not exclude it. A candidate leaves only when the repriced EV misses the floor.
+
+Injured reserve, PUP, and season-ending are already in the market. They are logged as `logged-priced-in`. They do not move the margin and they do not count toward the cluster. Cincinnati @ Miami depth outs are not a cluster. Jalen Davis (CB, injured reserve) is not an out.
 
 X text that does not match a quantified ESPN status is log-only.

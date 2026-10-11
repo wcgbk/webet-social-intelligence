@@ -69,6 +69,37 @@ function buildGapReview(candidates, picks, parlayLegs) {
   return rows;
 }
 
+function normTeamToken(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function tokenHit(side, team) {
+  if (!side || !team) return false;
+  return side === team || side.startsWith(`${team} `) || side.endsWith(` ${team}`) || side.includes(` ${team} `);
+}
+
+/** True when the side is that club, including a nickname on a full name. */
+function sideNamesTeam(side, team) {
+  const s = normTeamToken(side);
+  const t = normTeamToken(team);
+  if (!s || !t) return false;
+  if (tokenHit(s, t)) return true;
+  const words = t.split(' ').filter(Boolean);
+  if (words.length < 2) return false;
+  const nick = words[words.length - 1];
+  if (nick.length < 4) return false;
+  return tokenHit(s, nick);
+}
+
+/**
+ * Injuries never exclude a side or a total. The starter/position haircut
+ * reprices the probability. This stays exported so a caller can assert
+ * the gate is off. Flags on the candidate are ignored.
+ */
+function injuryClusterReason() {
+  return null;
+}
+
 /**
  * US retail placeability. Distinct from insufficient-liquidity (that gate
  * counts MAJOR_LIQUIDITY_BOOKS, including Pinnacle, with no juice test).
@@ -125,12 +156,10 @@ function gateReason(c, opts = {}) {
   const projGap = nflProjectionGap(c);
   if (projGap) return projGap;
 
-  // Five or more unquantified non-QB outs. Logged upstream. Not a lean.
-  if (c && c.personnelExclude) return 'unquantified-injury-cluster';
-
-  // Fresh starting-QB Out. Margin still takes QB_INJURY points. The −1.5
-  // total move is not a fitted backup scoring effect, so the total is out.
-  if (c && c.startingQbOut && /total/i.test(String(c.market || ''))) return 'starting-qb-out';
+  // News and injuries reprice. They do not exclude a side or a total.
+  // A starter cluster and a fresh QB Out stay in the pool. The EV and
+  // edge floors, applied to the repriced probability at the DraftKings
+  // price, are the only way that news removes a candidate.
 
   // Football model-vs-line gap. Only mode 'block' rejects, and that mode
   // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
@@ -251,12 +280,6 @@ function applyGates(candidates, opts = {}) {
     if (reason === 'nfl-projection-gap') {
       console.log(`[omega-vnext] nfl-projection-gap ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap} proj=${c.modelTotalRaw != null ? c.modelTotalRaw : c.modelProjection} market=${c.marketTotal != null ? c.marketTotal : c.marketLine}`);
     }
-    if (reason === 'unquantified-injury-cluster') {
-      console.log(`[omega-vnext] unquantified-injury-cluster ${c.sport || ''} ${c.matchup || ''}`);
-    }
-    if (reason === 'starting-qb-out') {
-      console.log(`[omega-vnext] starting-qb-out ${c.sport || ''} ${c.matchup || ''} ${c.side || ''}`);
-    }
     rejected.push({ ...c, rejectReason: reason });
   }
   if (rejected.length || lean.length) {
@@ -270,5 +293,5 @@ function applyGates(candidates, opts = {}) {
 module.exports = {
   applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS,
   isGapReviewMarket, buildGapReview, gapBlocksTicket, minEdgeFor,
-  nflProjectionGap, slateReason, liveInPlayReason,
+  nflProjectionGap, slateReason, liveInPlayReason, injuryClusterReason, sideNamesTeam,
 };

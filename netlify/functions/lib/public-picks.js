@@ -49,6 +49,8 @@ function pickPublic(p) {
   for (const k of PICK_KEEP) {
     if (p[k] !== undefined) out[k] = p[k];
   }
+  // Execution book (draftkings and the other US books). Empty stays off the card.
+  if (p.book != null && String(p.book).trim() !== '') out.book = String(p.book).trim();
   if (isCfbSport(out.sport)) {
     if (out.pick) out.pickDisplay = formatCfbPickDisplay(out.pick);
     if (out.matchup) out.matchupDisplay = formatCfbMatchupDisplay(out.matchup);

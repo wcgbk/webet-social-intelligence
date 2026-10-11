@@ -19,7 +19,7 @@
  * Schema: docs/agentics-dashboard-schema.json
  */
 
-const { getStore } = require('@netlify/blobs');
+const { getStore, connectLambda } = require('@netlify/blobs');
 
 const STORE = 'agentics';
 const KEY = 'omega-shadow/latest.json';
@@ -126,6 +126,7 @@ exports.handler = async (event) => {
   }
 
   try {
+    try { if (event && event.blobs) connectLambda(event); } catch (_) {}
     const raw = await readRaw();
     if (raw == null || String(raw).trim() === '') {
       return respond(200, emptyLedger({ reason: 'missing' }), CACHE);

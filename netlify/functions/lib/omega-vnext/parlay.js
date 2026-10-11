@@ -406,7 +406,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   const legs = sortByGradeThenUnits(chosen.legs.map(l => {
     // Leg grade is edge-first quality, independent of the synthetic straight stake.
     const kFrac = pushAwareKelly(l.coverProb, l.odds, KELLY_FRACTION, l.pPush);
-    const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25) || 0.25;
+    const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25);
     const edgeFrac = parseEdgeFraction(l.edgePct != null ? l.edgePct : l.ev);
     const qualityClv = l.predictedResidualClv != null ? l.predictedResidualClv : l.predictedClv;
     const legQuality = qualityScore(edgeFrac, qualityClv, l.uncertainty);

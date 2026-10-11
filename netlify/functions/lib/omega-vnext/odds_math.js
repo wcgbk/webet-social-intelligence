@@ -65,13 +65,12 @@ function kellyFraction(p, american, fraction = 0.25) {
   return full * fraction;
 }
 
-/** Convert Kelly fraction → display units (0.25u steps, min 0.25 when positive). */
+/** Quarter-Kelly fraction → units. ×50, nearest 0.5u, floor 0.5u when Kelly > 0. */
 function kellyToUnits(kellyFrac, unitCap = 2.0) {
   if (!kellyFrac || kellyFrac <= 0) return 0;
-  // Heuristic: 1% bankroll Kelly ≈ 1.0u at $150 unit / ~$15k roll feel
-  let u = kellyFrac * 100;
-  u = Math.round(u * 4) / 4; // 0.25 steps
-  u = Math.max(0.25, Math.min(unitCap, u));
+  let u = kellyFrac * 50;
+  u = Math.round(u * 2) / 2;
+  u = Math.max(0.5, Math.min(unitCap, u));
   return u;
 }
 

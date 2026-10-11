@@ -28,12 +28,14 @@ function kellyUnits(coverProb, unitCap) {
   return math.kellyToUnits(math.kellyFraction(coverProb, -110, config.KELLY_FRACTION), cap);
 }
 
-// Kelly itself is unchanged. The cap is a later step.
-assert.strictEqual(kellyUnits(0.5427), 1);
-assert.strictEqual(kellyUnits(0.55), 1.25);
+// Quarter-Kelly ×50, nearest 0.5u, floor 0.5u when Kelly > 0. The 1.25 cap is inside kellyToUnits.
+assert.strictEqual(kellyUnits(0.5427), 0.5);
+assert.strictEqual(kellyUnits(0.55), 0.5);
 assert.strictEqual(kellyUnits(0.533), 0.5);
-assert.strictEqual(kellyUnits(0.527), 0.25);
-assert.strictEqual(kellyUnits(0.55, 2), 1.5);
+assert.strictEqual(kellyUnits(0.527), 0.5);
+assert.strictEqual(kellyUnits(0.52), 0);
+assert.strictEqual(kellyUnits(0.58), 1.25);
+assert.strictEqual(kellyUnits(0.58, 2), 1.5);
 assert.strictEqual(math.qualityToRating(0.015, 0, 0.12), 'b');
 assert.strictEqual(math.qualityToRating(0.008, 0, 0.12), 'b');
 assert.strictEqual(math.qualityToRating(0.02, 0, 0.12), 'aminus');
@@ -71,16 +73,15 @@ function stake(pick) {
   return parseFloat(pick.units);
 }
 
-// Motivating case: 0.8% edge → B, 3.6% EV → Kelly 1u, published 0.5u.
+// 0.8% edge → B. Quarter-Kelly ×50 at this price is already 0.5u, so the B cap does not cut further.
 {
   const pick = select.toPickObject(candidate({}), { modelVersion: config.MODEL_VERSION });
   assert.strictEqual(pick.rating, 'b');
   assert.strictEqual(pick.qualityGrade, 'b');
   assert.strictEqual(pick.edgePct, '0.8%');
   assert.strictEqual(pick.ev, '3.6%');
-  assert.strictEqual(kellyUnits(0.5427), 1);
+  assert.strictEqual(kellyUnits(0.5427), 0.5);
   assert.strictEqual(pick.units, '0.5u');
-  assert.ok(stake(pick) < 1);
   assert.strictEqual(pick.modelVersion, config.MODEL_VERSION);
 }
 
@@ -88,15 +89,15 @@ function stake(pick) {
 {
   const pick = select.toPickObject(candidate({
     matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C',
-    coverProb: 0.55, ev: 0.05, edgePct: 0.015,
+    coverProb: 0.58, ev: 0.05, edgePct: 0.015,
   }));
   assert.strictEqual(pick.rating, 'b');
   assert.strictEqual(math.qualityToRating(0.015, 0, 0.12), 'b');
-  assert.strictEqual(kellyUnits(0.55), 1.25);
+  assert.strictEqual(kellyUnits(0.58), 1.25);
   assert.strictEqual(pick.units, '0.5u');
 }
 
-// A B already at 0.5u stays 0.5u. A smaller Kelly stake is not raised.
+// A B already at 0.5u stays 0.5u. A smaller positive Kelly floors at 0.5u. The B cap does not raise it.
 {
   const atCap = select.toPickObject(candidate({ coverProb: 0.533, ev: 0.018, edgePct: 0.008 }));
   assert.strictEqual(atCap.rating, 'b');
@@ -105,8 +106,8 @@ function stake(pick) {
 
   const under = select.toPickObject(candidate({ coverProb: 0.527, ev: 0.006, edgePct: 0.008 }));
   assert.strictEqual(under.rating, 'b');
-  assert.strictEqual(kellyUnits(0.527), 0.25);
-  assert.strictEqual(under.units, '0.25u');
+  assert.strictEqual(kellyUnits(0.527), 0.5);
+  assert.strictEqual(under.units, '0.5u');
   assert.ok(stake(under) <= stake(atCap));
 }
 
@@ -114,15 +115,15 @@ function stake(pick) {
 {
   const amin = select.toPickObject(candidate({
     matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E', side: 'F -1.5', market: 'Spread',
-    coverProb: 0.55, ev: 0.05, edgePct: 0.025,
+    coverProb: 0.58, ev: 0.05, edgePct: 0.025,
   }));
   assert.strictEqual(amin.rating, 'aminus');
   assert.strictEqual(amin.qualityGrade, 'aminus');
-  assert.strictEqual(kellyUnits(0.55), 1.25);
+  assert.strictEqual(kellyUnits(0.58), 1.25);
   assert.strictEqual(amin.units, '1.25u');
 
   const floor = select.toPickObject(candidate({
-    coverProb: 0.55, ev: 0.05, edgePct: 0.02,
+    coverProb: 0.58, ev: 0.05, edgePct: 0.02,
   }));
   assert.strictEqual(floor.rating, 'aminus');
   assert.strictEqual(floor.units, '1.25u');
@@ -132,22 +133,26 @@ function stake(pick) {
 {
   const aplus = select.toPickObject(candidate({
     matchup: 'G @ H', homeTeam: 'H', awayTeam: 'G', side: 'H -1.5', market: 'Spread',
-    coverProb: 0.55, ev: 0.05, edgePct: 0.053,
+    coverProb: 0.58, ev: 0.05, edgePct: 0.053,
   }), { perPickCap: 2 });
   assert.strictEqual(aplus.rating, 'aplus');
   assert.strictEqual(aplus.qualityGrade, 'aplus');
-  assert.strictEqual(kellyUnits(0.55, 2), 1.5);
+  assert.strictEqual(kellyUnits(0.58, 2), 1.5);
   assert.strictEqual(aplus.units, '1.5u');
 }
 
-// Drawdown still runs before the cap. It does not shrink an A-.
+// Drawdown is ×0.75 with a 0.5u floor, and it runs before the B cap. It does not B-cap an A-.
 {
-  const bDraw = select.toPickObject(candidate({ coverProb: 0.55, ev: 0.05, edgePct: 0.008 }), { drawdown: true });
+  const bDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.008 }), { drawdown: true });
   assert.strictEqual(bDraw.rating, 'b');
   assert.strictEqual(bDraw.units, '0.5u');
-  const aDraw = select.toPickObject(candidate({ coverProb: 0.55, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
+  const aDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(aDraw.rating, 'aminus');
   assert.strictEqual(aDraw.units, '0.9375u');
+  const floored = select.toPickObject(candidate({ coverProb: 0.55, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
+  assert.strictEqual(kellyUnits(0.55), 0.5);
+  assert.strictEqual(floored.rating, 'aminus');
+  assert.strictEqual(floored.units, '0.5u');
 }
 
 // Card-level cap: B stakes above 0.5u drop; A+ / A- and the parlay ticket do not.
@@ -192,18 +197,19 @@ function stake(pick) {
 // Parlay ticket stays the fixed 0.5u when every leg is a B that Kelly would stake 1.25u.
 {
   // 1.8% clears minEdgeFor at −110 and stays grade B (under the 2% A− line).
+  // coverProb 0.58 is the quarter-Kelly ×50 stake that still hits the 1.25u leg cap.
   const pool = [
     candidate({
-      side: 'Over 7.5', market: 'Total', coverProb: 0.55, ev: 0.05, edgePct: 0.018,
+      side: 'Over 7.5', market: 'Total', coverProb: 0.58, ev: 0.05, edgePct: 0.018,
       commenceTime: '2026-09-22T23:05:00Z',
     }),
     candidate({
       matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C', side: 'D -1.5', market: 'Spread',
-      coverProb: 0.55, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:10:00Z',
+      coverProb: 0.58, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:10:00Z',
     }),
     candidate({
       matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E', side: 'F ML', market: 'Moneyline',
-      coverProb: 0.55, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:15:00Z',
+      coverProb: 0.58, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:15:00Z',
     }),
   ];
   const tickets = parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' });

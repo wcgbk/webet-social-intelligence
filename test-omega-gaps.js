@@ -464,7 +464,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     const raw = {
       sport: 'NFL',
       market: 'Spread',
-      modelRawP: 0.614,
+      modelRawP: 0.707,
       fair_sharp_p: 0.52,
       odds: -110,
       pPush: 0.2,

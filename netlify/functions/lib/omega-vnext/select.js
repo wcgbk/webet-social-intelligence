@@ -256,7 +256,7 @@ function toPickObject(c, opts = {}) {
   const kFrac = pushAwareKelly(c.coverProb, c.odds, KELLY_FRACTION, c && c.pPush);
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
-  if (opts.drawdown) units = Math.max(0.25, units * 0.75);
+  if (opts.drawdown) units = Math.max(0.5, units * 0.75);
 
   // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
   // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.

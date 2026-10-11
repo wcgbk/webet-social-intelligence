@@ -786,8 +786,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         engineSoft,
       });
       if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
-      const edged = enrichCandidateWithEdge(raw, b, bundles);
-      if (edged) out.push(edged);
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
 
@@ -813,8 +812,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         engineSoft,
       });
       if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
-      const edged = enrichCandidateWithEdge(raw, b, bundles);
-      if (edged) out.push(edged);
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
 
@@ -838,8 +836,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         engineSoft,
       });
       if (q && q.pPush >= 0.001) raw.pPush = q.pPush;
-      const edged = enrichCandidateWithEdge(raw, b, bundles);
-      if (edged) out.push(edged);
+      out.push(enrichCandidateWithEdge(raw, b, bundles));
     }
   }
 

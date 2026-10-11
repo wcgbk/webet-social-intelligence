@@ -413,7 +413,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
-      const edged = enrichCandidateWithEdge({
+      out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Moneyline',
         side: b.side,
@@ -424,8 +424,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
         uncertainty,
         consensusLine: null,
         modelProjection: +modelMargin.toFixed(2),
-      }, b, bundles);
-      if (edged) out.push(edged);
+      }, b, bundles));
     }
   }
 
@@ -438,7 +437,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
       pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
-      const edged = enrichCandidateWithEdge({
+      out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Spread',
         side: sideLabel,
@@ -449,8 +448,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
         uncertainty,
         consensusLine: line,
         modelProjection: +modelMargin.toFixed(2),
-      }, b, bundles);
-      if (edged) out.push(edged);
+      }, b, bundles));
     }
   }
 
@@ -462,7 +460,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       const over = /over/i.test(b.side);
       let p = totalCoverProb(modelTotal, line, b.side, SPORT);
       p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
-      const edged = enrichCandidateWithEdge({
+      out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Total',
         side: `${b.side} ${line}`,
@@ -473,8 +471,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
         uncertainty: uncertainty + 0.05,
         consensusLine: line,
         modelProjection: +modelTotal.toFixed(2),
-      }, b, bundles);
-      if (edged) out.push(edged);
+      }, b, bundles));
     }
   }
 

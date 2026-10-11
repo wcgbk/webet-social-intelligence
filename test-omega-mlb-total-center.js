@@ -11,6 +11,8 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const mlb = require(path.join(root, 'sports/mlb'));
 const env = require(path.join(root, 'sports/mlb_env'));
+const { totalCoverProb, blendWithMarket } = require(path.join(root, 'sports/_common'));
+const { noVigPinnacleCircaImplied, collectMarketOutcomes } = require(path.join(root, 'edge'));
 
 const PRIOR = env.MLB_TOTAL_PRIOR_OFFSET;
 assert.strictEqual(PRIOR, 1.185);
@@ -248,22 +250,28 @@ function rawTotal(homePf, homePa, awayPf, awayPa) {
   assert.strictEqual(on[1].modelProjection, priced);
   assert.notStrictEqual(priced, +env.applyMlbTotalShift(8.6, twoGameMean).toFixed(2));
 
-  // No paired sharp book: posted total stays null and the game is skipped.
+  // One game, no sharp book: still the prior (n<3), and the over is priced
+  // from the shifted total.
   const lone = event('Los Angeles Dodgers', 'San Francisco Giants', 8.5, ['draftkings', 'fanduel']);
   assert.strictEqual(env.sharpNoVigTotal(lone), null);
-  const logs = [];
-  const origLog = console.log;
-  console.log = (...args) => { logs.push(args.join(' ')); };
-  let skipped;
-  try {
-    skipped = withFlags('1', '1', () => mlb.project({
-      oddsEvents: [lone], standings: {}, parkFactors: {}, mlbPitcherStats: {}, espnGames: [],
-    }));
-  } finally {
-    console.log = origLog;
-  }
-  assert.strictEqual(skipped.length, 0);
-  assert.ok(logs.some((line) => line.includes('reason=no-paired-sharp')), logs.join('\n'));
+  const loneOn = withFlags('1', '1', () => mlb.project({
+    oddsEvents: [lone], standings: {}, parkFactors: {}, mlbPitcherStats: {}, espnGames: [],
+  }));
+  const over = loneOn.find(c => c.market === 'Total' && /^Over/.test(c.side));
+  assert.strictEqual(over.modelProjection, priced);
+  const bundles = collectMarketOutcomes(lone, 'totals');
+  const anchor = noVigPinnacleCircaImplied(bundles, bundles.find(b => b.side === 'Over'));
+  const p = blendWithMarket(totalCoverProb(env.applyMlbTotalShift(8.6, PRIOR), 8.5, 'Over', 'MLB'), anchor, 0.45);
+  assert.ok(Math.abs(over.modelRawP - p) < 1e-9);
+
+  const loneOff = withFlags('0', '0', () => mlb.project({
+    oddsEvents: [lone], standings: {}, parkFactors: {}, mlbPitcherStats: {}, espnGames: [],
+  }));
+  const overOff = loneOff.find(c => c.market === 'Total' && /^Over/.test(c.side));
+  assert.strictEqual(overOff.modelProjection, 8.6);
+  const pOff = blendWithMarket(totalCoverProb(8.6, 8.5, 'Over', 'MLB'), anchor, 0.45);
+  assert.ok(Math.abs(overOff.modelRawP - pOff) < 1e-9);
+  assert.ok(Math.abs(over.modelRawP - overOff.modelRawP) > 1e-4);
 }
 
 // Default (env unset) is on, and a 1-game slate takes the prior.

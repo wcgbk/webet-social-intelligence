@@ -187,7 +187,7 @@ function priceGame(derived, totalShift) {
         gameDay: gameDayMeta,
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
-      if (raw) out.push(raw);
+      out.push(raw);
     }
   }
 
@@ -215,7 +215,7 @@ function priceGame(derived, totalShift) {
         gameDay: gameDayMeta,
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
-      if (raw) out.push(raw);
+      out.push(raw);
     }
   }
 
@@ -237,7 +237,7 @@ function priceGame(derived, totalShift) {
         gameDay: gameDayMeta,
       };
       raw = enrichCandidateWithEdge(raw, b, bundles);
-      if (raw) out.push(raw);
+      out.push(raw);
     }
   }
 

@@ -23,11 +23,11 @@ const shadow = require(path.join(root, 'nba_shadow'));
 const ids = require(path.join(root, 'sports/data/nba-team-ids.json'));
 const seed = require(path.join(root, 'sports/data/nba-net-rating-seed.json'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
-assert.strictEqual(config.GATES.minEV.NBA, 0);
+assert.strictEqual(config.GATES.minEV.NBA, 0.03);
 assert.strictEqual(config.GATES.minCoverProb.NBA, 0);
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.SPORT_SPREAD_STD.NBA, 12);

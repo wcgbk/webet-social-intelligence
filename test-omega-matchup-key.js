@@ -1,5 +1,5 @@
 'use strict';
-// Doubleheader halves are distinct games. Straights are the top edges, including a second market of one game.
+// Doubleheader halves are distinct games. The default card keeps one straight per game.
 const assert = require('assert');
 const path = require('path');
 
@@ -59,22 +59,25 @@ const picked = selectStraights([
 assert.strictEqual(picked.length, 3, 'max 3 straights');
 const keys = picked.map(matchupKey);
 assert.ok(keys.some((k) => k.endsWith(day)));
-assert.ok(picked.some((p) => p.market === 'Moneyline'), 'higher-edge second market of the day game is a straight');
+assert.ok(keys.some((k) => k.endsWith(night)), 'the night half is a different game');
+assert.ok(!picked.some((p) => p.market === 'Moneyline'), 'the day game does not take a second straight');
 assert.ok(!picked.some((p) => p.edgePct === 0.05), 'a lower edge stays off the card');
 
 const onlyHalves = selectStraights([
   leg(day, 0.04, 'Total'),
   leg(day, 0.03, 'Spread'),
-  leg(night, 0.02, 'Total'),
+  leg(night, 0.035, 'Total'),
 ]);
-assert.strictEqual(onlyHalves.length, 3);
-assert.ok(onlyHalves.some((p) => p.market === 'Spread'));
+assert.strictEqual(onlyHalves.length, 2);
+assert.ok(onlyHalves.some((p) => p.market === 'Total' && String(p.commenceTime) === day));
+assert.ok(!onlyHalves.some((p) => p.market === 'Spread'));
+assert.ok(onlyHalves.some((p) => String(p.commenceTime) === night));
 
 const undated = selectStraights([
   { ...leg('', 0.05, 'Total'), commenceTime: '' },
   { ...leg('', 0.04, 'Moneyline'), commenceTime: '' },
 ]);
-assert.strictEqual(undated.length, 2);
+assert.strictEqual(undated.length, 1);
 assert.strictEqual(undated[0].market, 'Total');
 
 assert.strictEqual(comboStats([

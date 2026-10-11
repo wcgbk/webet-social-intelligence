@@ -2,6 +2,7 @@
 
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
+  PARLAY_MIN_COVER,
 } = require('./config');
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
@@ -9,7 +10,10 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
+const { applyExecutionBook, top10Rows, excludedGames } = require('./selection_pass');
+const { fetchXNews } = require('./x_news');
+const { replayNoWrite } = require('./no_write');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -20,10 +24,11 @@ const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_
 const { attachGenerateHealth } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
-const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
+const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
+const { resolveGenerateOddsSnapshot } = require('./price_lock');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -216,22 +221,41 @@ async function generateOmegaVnext(opts = {}) {
   const dateFormatted = formatDateLong(dateISO);
   const force = !!opts.force;
   const simMode = !!opts.simMode;
-  const dryRun = !!opts.dryRun;
+  const dryRun = !!opts.dryRun || replayNoWrite();
   const shadow = !!opts.shadow;
   const skipNarrate = !!opts.skipNarrate;
   const now = new Date();
   // Historical replay has no morning snap series. Do not retry live Odds into
   // the line-path store and do not hard-fail the eval day.
+  // replayLike stays on the explicit flag. The 10:30 price lock is an odds
+  // URL only, so a late live generate still uses Date.now() for pregame,
+  // still runs PM, and still writes the ledger unless OMEGA_REPLAY_NO_WRITE.
   const replayLike = !!(opts.historicalSnapshot || opts.replay);
+  const nowMs = now.getTime();
+  const oddsSnapshot = resolveGenerateOddsSnapshot(dateISO, { ...opts, nowMs });
 
-  console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow}`);
+  console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow} oddsSnapshot=${oddsSnapshot || 'live'} replay=${replayLike}`);
 
   const fetched = await ingest(dateISO, {
-    historicalSnapshot: opts.historicalSnapshot,
+    historicalSnapshot: oddsSnapshot,
   });
   const snap = applyUnresolvedSkip(fetched);
+  const servedSnapshot = (snap && snap.oddsSnapshotTimestamp) || null;
+  console.log(`[omega-vnext] odds snapshot requested=${oddsSnapshot || 'live'} served=${servedSnapshot || 'unknown'}`);
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
   console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
+
+  // X injury/roster hook. No token → documented stub, no fetch. The card
+  // stores mode and count only. Tweet text is logged, never priced.
+  let xNewsMeta = { mode: 'stub', count: 0 };
+  try {
+    const xNews = await fetchXNews({ dateISO });
+    xNewsMeta = { mode: xNews.mode || 'stub', count: Number(xNews.count) || 0 };
+    console.log(`[omega-vnext] x-news mode=${xNewsMeta.mode} count=${xNewsMeta.count}`);
+  } catch (e) {
+    xNewsMeta = { mode: 'error', count: 0 };
+    console.error(`[omega-vnext] x-news soft-fail: ${e.message}`);
+  }
 
   // Stamp generate-time lateNews before calibration. calibrateAll still
   // takes { cardDate } for modes B and C and spreads lateNews through.
@@ -282,7 +306,8 @@ async function generateOmegaVnext(opts = {}) {
     missingDue: dueMissing,
     usableSnapCount: captureHealth.usableSnapCount,
   });
-  if (retrySlot) {
+  // dryRun is no-save: do not write a live line snap while pricing the card.
+  if (retrySlot && !dryRun) {
     retriedCapture = true;
     try {
       const cap = await runOmegaLineCapture({ force: true, dateISO, now, etSlot: retrySlot });
@@ -332,6 +357,20 @@ async function generateOmegaVnext(opts = {}) {
     };
   }
 
+  // Missing 0600/0730/0900/0915 slots are a warning. Retry already ran.
+  // The card always publishes. Zero usable snaps do not hard-fail.
+  if (captureHealth.hardFail) {
+    console.warn(JSON.stringify({
+      event: 'captureHealthWarning',
+      code: 'CAPTURE_HEALTH',
+      date: dateISO,
+      note: 'missing morning capture slots do not block the card',
+      missingSlotsET: captureHealth.missingSlotsET,
+      usableSnapCount: captureHealth.usableSnapCount,
+    }));
+    captureHealth = warnCaptureHealth(captureHealth, dateISO);
+  }
+
   if (linePathMeta.earliest) {
     candidates = annotateLineMoves(candidates, linePathMeta.earliest, linePathMeta.latest || linePathMeta.earliest);
     const withOpen = candidates.filter(c => c.openPrint).length;
@@ -347,19 +386,12 @@ async function generateOmegaVnext(opts = {}) {
   else console.log(JSON.stringify(healthLog));
 
   // Ops-only signal: persist snapshot + optional HTTP callback. Does NOT change hardFail policy.
-  if (!replayLike && !shadow) {
+  if (!replayLike && !shadow && !dryRun) {
     try {
       await emitCaptureHealthOps(dateISO, captureHealth, { shadow: !!shadow });
     } catch (e) {
       console.warn(JSON.stringify({ event: 'captureHealthOpsSoftFail', date: dateISO, error: e.message }));
     }
-  }
-
-  if (captureHealth.hardFail) {
-    const err = new Error(captureHealth.reason || `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`);
-    err.code = 'CAPTURE_HEALTH';
-    err.captureHealth = captureHealth;
-    throw err;
   }
 
   // Kalshi/Polymarket soft features BEFORE gates so yesPool carries _pmScoreAdj
@@ -444,6 +476,16 @@ async function generateOmegaVnext(opts = {}) {
   const placeableAnnotated = candidates.filter(c => Array.isArray(c.placeableBooks)).length;
   console.log(`[omega-vnext] placeability annotated=${placeableAnnotated}/${candidates.length}`);
 
+  // DraftKings execution price. No DK line drops the candidate. The next
+  // DK-priced side stays in the pool (backfill). Synthetic rows with no
+  // bookPrices ladder are unchanged. EV is recomputed at the DK price.
+  const execution = applyExecutionBook(candidates);
+  candidates = execution.candidates;
+  const dkExcluded = execution.excluded || [];
+  if (dkExcluded.length) {
+    console.log(`[omega-vnext] no-draftkings-line excluded=${dkExcluded.length}`);
+  }
+
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   const gateOpts = { cardDate: dateISO };
@@ -451,12 +493,12 @@ async function generateOmegaVnext(opts = {}) {
     const asOfMs = Date.parse(opts.historicalSnapshot);
     if (Number.isFinite(asOfMs)) gateOpts.asOfMs = asOfMs;
   }
-  const { yesPool, rejected } = applyGates(candidates, gateOpts);
+  const { yesPool, leanPool = [], rejected } = applyGates(candidates, gateOpts);
   if (gateOpts.asOfMs != null) {
     console.log(`[omega-vnext] pregame asOf=${new Date(gateOpts.asOfMs).toISOString()}`);
   }
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
-  console.log(`[omega-vnext] yesPool=${yesPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
+  console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
 
   const selected = selectStraights(yesPool, MAX_STRAIGHTS);
 
@@ -482,11 +524,13 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
   picks = applyDailyCap(picks);
 
-  // Full yes pool, including the straight sides. The parlay may overlap
-  // them. The only parlay conflict is two legs from the same game.
-  // Full yes pool (parlay may overlap straights) minus QA hard-fail sides.
+  // Floor only. A lean does not become a parlay leg. When the published
+  // straights are distinct games, each cover is >= 45%, and combined EV
+  // is positive, the parlay is those straights. Otherwise the best
+  // positive-EV floor edges on distinct games, then a 2-leg.
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
-  const poolForParlay = yesPool.filter(c => !hfKeys.has(`${c.matchup}|${c.side}`));
+  const poolForParlay = yesPool.filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`));
+  const parlayEligible = poolForParlay.filter(c => Number(c.coverProb) >= PARLAY_MIN_COVER && c.ev > 0 && Number.isFinite(c.odds)).length;
   let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
 
   let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
@@ -495,7 +539,7 @@ async function generateOmegaVnext(opts = {}) {
       picks,
       parlayLegs,
       dateFormatted,
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey: process.env.XAI_API_KEY,
     });
     picks = narr.picks;
     parlayLegs = narr.parlayLegs || parlayLegs;
@@ -506,7 +550,7 @@ async function generateOmegaVnext(opts = {}) {
       parlayLegs = await narrateParlayLegsOnly({
         parlayLegs,
         dateFormatted,
-        apiKey: process.env.ANTHROPIC_API_KEY,
+        apiKey: process.env.XAI_API_KEY,
         straightPicks: picks,
       });
     }
@@ -558,6 +602,8 @@ async function generateOmegaVnext(opts = {}) {
     projMethod: c.projMethod,
     placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
     bestPlaceable: c.bestPlaceable || null,
+    book: c.book || null,
+    hrFlags: c.hrFlags || null,
     ...footballAuditFields(c),
     ...restAuditFields(c),
     selected: picks.some(p => {
@@ -588,6 +634,7 @@ async function generateOmegaVnext(opts = {}) {
       sportsCovered,
       modelVersion: MODEL_VERSION,
       qaHardFails: hardFails.length,
+      cardLabel: straightCardLabel(picks.length),
     },
     generatedAt: now.toISOString(),
     parlayLegs: empty ? [] : parlayLegs,
@@ -615,10 +662,36 @@ async function generateOmegaVnext(opts = {}) {
         ? linePathMeta.path.polls.length : 0,
     },
     captureHealth: captureHealth || null,
+    priceLock: {
+      requested: oddsSnapshot || null,
+      servedAt: servedSnapshot,
+      note: (snap && snap.snapshotNote) || null,
+      replay: replayLike,
+    },
+    gateCounts: {
+      yes: yesPool.length,
+      floor: yesPool.length,
+      lean: leanPool.length,
+      rejected: rejected.length,
+      edgeFloor: rejected.filter((r) => r && r.rejectReason === 'edge-floor').length,
+      parlayEligible,
+    },
     pmSoft: pmSoftMeta,
     teamIdentity: {
       unmatched: unmatchedReport.bySport,
       unmatchedCount: unmatchedReport.count,
+    },
+    // Private. publicPicksPayload drops selection. Top 10 is EV rank on the
+    // floor pool. Straights above stay edge-ranked.
+    selection: {
+      snapshotTime: servedSnapshot || oddsSnapshot || null,
+      cardLabel: straightCardLabel(picks.length),
+      top10: top10Rows(yesPool, 10),
+      excludedGames: excludedGames([
+        ...dkExcluded.map((c) => ({ ...c, rejectReason: c.excludeReason || 'no-draftkings-line' })),
+        ...rejected,
+      ]),
+      xNews: xNewsMeta,
     },
     meta: {
       captureHealth: captureHealth || null,

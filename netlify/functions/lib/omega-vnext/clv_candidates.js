@@ -27,6 +27,7 @@ const { parseEdgeFraction, qualityScore, formatMoneylinePick } = require('./odds
 const { candidateSideSeed } = require('./clv_log');
 const { closingNoVigFromRaw, clvFromNoVig, americanToImplied } = require('./clv_grade');
 const { hasTrueClosingCapture } = require('./fetch_memo');
+const { replayNoWrite, logBlocked } = require('./no_write');
 
 /** Yes-pool unselected + near-misses, after the quality sort. */
 const CANDIDATE_SIDE_CAP = 20;
@@ -580,6 +581,10 @@ async function restGetCandidate(key, opts) {
 }
 
 async function writeCandidateBlob(key, payload, opts) {
+  if (replayNoWrite()) {
+    logBlocked(`writeCandidateBlob ${key}`);
+    return { via: 'skipped', noWrite: true };
+  }
   if (opts.store && typeof opts.store.setJSON === 'function') {
     try {
       await opts.store.setJSON(key, payload);
@@ -801,6 +806,7 @@ module.exports = {
   captureCandidateCloses,
   booksSnapToEvent,
   candidateBlobKey,
+  writeCandidateBlob,
   snapshotKey,
   sportKeyFor,
   extraCreditCap,

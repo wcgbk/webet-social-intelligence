@@ -11,7 +11,9 @@ const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
-const { parseFootballQbMap, fillNcaafQbMap } = require('./late_news');
+const { parseFootballQbMap, parseFootballPersonnel, fillNcaafQbMap } = require('./late_news');
+const { inSlate } = require('./selection_pass');
+const { last5ByTeamFromSchedule } = require('./last5');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -45,6 +47,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
   const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live', oddsErrors: [] };
   if (!apiKey) {
     console.log('[omega-vnext/ingest] No ODDS_API_KEY — skipping odds');
+    if (!out.oddsSnapshotTimestamp) out.oddsSnapshotTimestamp = out.fetchedAt;
     return out;
   }
 
@@ -67,7 +70,11 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
         url = buildOddsUrl(key, apiKey, null);
       }
       const data = await fetchJson(url, 15000);
-      // historical endpoint wraps in { data: [...] }
+      // historical endpoint wraps in { timestamp, data: [...] }. timestamp is
+      // the snapshot the API actually served (at or before the requested 10:30).
+      if (data && !Array.isArray(data) && data.timestamp && !out.oddsSnapshotTimestamp) {
+        out.oddsSnapshotTimestamp = data.timestamp;
+      }
       const rawEvents = Array.isArray(data) ? data : (data && data.data) || [];
       const events = filterEventsSameEtDay(rawEvents, dateISO);
       out.bySport[label] = events;
@@ -79,6 +86,8 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
       out.oddsErrors.push(oddsFailureRecord(label, e));
     }
   }
+  // Live board has no historical wrapper. The fetch time is the snapshot.
+  if (!out.oddsSnapshotTimestamp) out.oddsSnapshotTimestamp = out.fetchedAt;
   return out;
 }
 
@@ -102,18 +111,21 @@ function dateParamET(dateISO) {
   return String(dateISO || '').replace(/-/g, '');
 }
 
-/** Keep only events whose commence_time falls on cardDateISO (ET calendar day). */
+/**
+ * Keep events inside the selection slate for cardDateISO.
+ * Name kept for callers. Window is 11:15 ET through 6:00 ET the next day.
+ */
 function filterEventsSameEtDay(events, dateISO) {
   if (!dateISO) return events || [];
   const kept = [];
   let dropped = 0;
   for (const ev of events || []) {
-    const t = ev.commence_time || ev.commenceTime || ev.date;
-    if (t && isSameEtDay(t, dateISO)) kept.push(ev);
+    const t = ev && (ev.commence_time || ev.commenceTime || ev.date);
+    if (t && inSlate(ev, dateISO)) kept.push(ev);
     else dropped += 1;
   }
   if (dropped) {
-    console.log(`[omega-vnext/ingest] day-scope drop ${dropped} event(s) not on ${dateISO} ET`);
+    console.log(`[omega-vnext/ingest] slate drop ${dropped} event(s) outside ${dateISO} 11:15 ET–06:00 ET next day`);
   }
   return kept;
 }
@@ -886,14 +898,19 @@ async function fetchFootballQbStatusResult(leagueSlug, opts = {}) {
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/${leagueSlug}/injuries`;
     const data = await fetchJson(url, 8000);
-    const map = parseFootballQbMap(data, {
+    const parsedOpts = {
       maxAgeDays: leagueSlug === 'college-football' ? 400 : null,
       cardDate: opts.dateISO || null,
+    };
+    const map = parseFootballQbMap(data, parsedOpts);
+    const personnel = parseFootballPersonnel(data, {
+      ...parsedOpts,
+      sport: leagueSlug === 'college-football' ? 'NCAAF' : 'NFL',
     });
-    return { map, ok: true };
+    return { map, personnel, ok: true };
   } catch (e) {
     console.log(`[omega-vnext/ingest] QB status ${leagueSlug} soft-fail: ${e.message}`);
-    return { map: {}, ok: false };
+    return { map: {}, personnel: {}, ok: false };
   }
 }
 
@@ -943,6 +960,7 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
   const gameDay = {
     restByTeam: { MLB: {}, NFL: {}, NCAAF: {}, NHL: {}, NBA: {} },
     qbStatusBySport: { NFL: {}, NCAAF: {} },
+    personnelBySport: { NFL: {}, NCAAF: {} },
     qbStatusMeta: {
       NFL: { ok: true },
       NCAAF: { ok: true, calls: 0, source: null },
@@ -968,6 +986,7 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
     if (labels.includes('NFL')) {
       const nflQb = await fetchFootballQbStatusResult('nfl', { dateISO });
       gameDay.qbStatusBySport.NFL = nflQb.map;
+      gameDay.personnelBySport.NFL = nflQb.personnel || {};
       gameDay.qbStatusMeta.NFL = { ok: nflQb.ok };
     }
   } catch (e) {
@@ -1000,6 +1019,7 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
         meta = { ok: cfbQb.ok, calls: 0, source: 'league', error: e.message };
       }
       gameDay.qbStatusBySport.NCAAF = map;
+      gameDay.personnelBySport.NCAAF = cfbQb.personnel || {};
       gameDay.qbStatusMeta.NCAAF = meta;
       console.log(`[omega-vnext/ingest] NCAAF QB teams=${Object.keys(map).length} calls=${meta.calls} ok=${meta.ok}`);
     }
@@ -1029,6 +1049,12 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
           error: e.message,
         };
       }
+    }
+    try {
+      gameDay.last5ByTeam = last5ByTeamFromSchedule(gameDay.restSchedule);
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] last5 soft-fail: ${e.message}`);
+      gameDay.last5ByTeam = {};
     }
   }
   // Weather from today's MLB ESPN board already fetched
@@ -1218,6 +1244,7 @@ async function ingest(dateISO, opts = {}) {
     gameDay,
     fetchedAt: odds.fetchedAt,
     snapshotNote: odds.snapshotNote,
+    oddsSnapshotTimestamp: odds.oddsSnapshotTimestamp || null,
     oddsErrors: odds.oddsErrors || [],
   };
 }

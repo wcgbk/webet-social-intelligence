@@ -11,7 +11,7 @@ const gates = require(path.join(root, 'gates'));
 const select = require(path.join(root, 'select'));
 const math = require(path.join(root, 'odds_math'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.ok(config.LINE_MOVE.captureSlotsET.includes('0915'));
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsET, ['0600', '0730', '0900', '0915']);
 assert.deepStrictEqual(config.LINE_MOVE.captureSlotsUtcEDT, ['1000', '1130', '1300', '1315']);
@@ -242,7 +242,8 @@ const nowSnap = {
 // Pregame gate compares commenceTime to Date.now(). Keep the kickoff ahead
 // of the clock and pass that ET date as cardDate so the steam assertion
 // is what fails the candidate, not a started game.
-const kickoff = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+const { sampleInSlateKick } = require('./netlify/functions/lib/omega-vnext/selection_pass');
+const kickoff = sampleInSlateKick();
 const cardDay = math.etCalendarDate(kickoff);
 const cands = linePath.annotateLineMoves([
   {

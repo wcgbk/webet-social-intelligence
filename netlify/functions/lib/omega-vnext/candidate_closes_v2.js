@@ -28,6 +28,7 @@ const { collectMarketOutcomes, oppositeBundle } = require('./edge');
 const { americanToImplied, noVigTwoWay, americanCentsDiff } = require('./odds_math');
 const { etParts } = require('../et-schedule');
 const { rowKey, sportKeyFor, candidateLedgerKey } = require('./candidate_ledger');
+const { replayNoWrite, logBlocked } = require('./no_write');
 
 /** Odds API bookmaker keys. circasports is Circa's key. ≤10 → 1 region. */
 const SHARP_CLOSE_BOOKS = ['pinnacle', 'circasports', 'lowvig', 'betonlineag', 'bookmaker'];
@@ -429,6 +430,10 @@ async function readWithFallback(key, deps) {
 }
 
 async function writeWithFallback(key, data, deps) {
+  if (replayNoWrite()) {
+    logBlocked(`writeWithFallback ${key}`);
+    return { via: 'skipped', noWrite: true };
+  }
   const getter = deps.getStore || defaultGetStore;
   try {
     const store = await getter();
@@ -459,6 +464,10 @@ async function readBlob(key, deps) {
 }
 
 async function writeBlob(key, data, deps) {
+  if (replayNoWrite()) {
+    logBlocked(`writeBlob ${key}`);
+    return { via: 'skipped', noWrite: true };
+  }
   if (deps && typeof deps.writeJson === 'function') return deps.writeJson(key, data);
   return writeWithFallback(key, data, deps || {});
 }
@@ -761,6 +770,7 @@ module.exports = {
   gradeCandidateResults,
   readWithFallback,
   writeWithFallback,
+  writeBlob,
   marketKeyOf,
   outcomeName,
 };

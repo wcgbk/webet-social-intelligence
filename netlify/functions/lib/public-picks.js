@@ -34,6 +34,9 @@ const ROOT_DROP = [
   'voidedPregame',
   'lateNews',
   'audit',
+  'gateCounts',
+  'hardRockCorrections',
+  'selection',
 ];
 
 function isVoidPregame(p) {

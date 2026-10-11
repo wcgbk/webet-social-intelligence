@@ -10,7 +10,7 @@ const math = require(path.join(root, 'odds_math'));
 const select = require(path.join(root, 'select'));
 const parlay = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.strictEqual(config.B_GRADE_UNIT_CAP, 0.5);
 assert.strictEqual(config.KELLY_FRACTION, 0.25);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -18,8 +18,8 @@ assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
 assert.strictEqual(config.QUALITY_GRADE.a, 0.035);
 assert.strictEqual(config.QUALITY_GRADE.aminus, 0.02);
-assert.strictEqual(config.GATES.minEV.MLB, 0);
-assert.strictEqual(config.GATES.minEV.NFL, 0);
+assert.strictEqual(config.GATES.minEV.MLB, 0.03);
+assert.strictEqual(config.GATES.minEV.NFL, 0.03);
 assert.strictEqual(config.GATES.minCoverProb.MLB, 0);
 assert.strictEqual(config.GATES.minCoverProb.NFL, 0);
 
@@ -191,18 +191,19 @@ function stake(pick) {
 
 // Parlay ticket stays the fixed 0.5u when every leg is a B that Kelly would stake 1.25u.
 {
+  // 1.8% clears minEdgeFor at −110 and stays grade B (under the 2% A− line).
   const pool = [
     candidate({
-      side: 'Over 7.5', market: 'Total', coverProb: 0.55, ev: 0.05, edgePct: 0.008,
+      side: 'Over 7.5', market: 'Total', coverProb: 0.55, ev: 0.05, edgePct: 0.018,
       commenceTime: '2026-09-22T23:05:00Z',
     }),
     candidate({
       matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C', side: 'D -1.5', market: 'Spread',
-      coverProb: 0.55, ev: 0.05, edgePct: 0.008, commenceTime: '2026-09-22T23:10:00Z',
+      coverProb: 0.55, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:10:00Z',
     }),
     candidate({
       matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E', side: 'F ML', market: 'Moneyline',
-      coverProb: 0.55, ev: 0.05, edgePct: 0.009, commenceTime: '2026-09-22T23:15:00Z',
+      coverProb: 0.55, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:15:00Z',
     }),
   ];
   const tickets = parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' });
@@ -219,6 +220,78 @@ function stake(pick) {
     assert.strictEqual(straight.rating, 'b');
     assert.strictEqual(straight.units, '0.5u');
   }
+}
+
+// 10/12 Bills @ Rams. The +3.5 lean is grade A at the 0.5u lean cap.
+// The ML is A- at 0.75u. The grade lift used to raise the lean to 0.75u.
+{
+  const capped = select.applyDailyUnitCap([
+    {
+      pick: 'Buffalo Bills +3.5',
+      matchup: 'Buffalo Bills @ Los Angeles Rams',
+      rating: 'a',
+      qualityGrade: 'a',
+      tier: 'lean',
+      units: '0.5u',
+      edgePct: '3.8%',
+      qualityScore: 0.038,
+    },
+    {
+      pick: 'Buffalo Bills ML',
+      matchup: 'Buffalo Bills @ Los Angeles Rams',
+      rating: 'aminus',
+      qualityGrade: 'aminus',
+      tier: 'floor',
+      units: '0.75u',
+      edgePct: '3.2%',
+      qualityScore: 0.032,
+    },
+  ], null);
+  const byPick = Object.fromEntries(capped.picks.map(p => [p.pick, p]));
+  assert.strictEqual(byPick['Buffalo Bills +3.5'].units, '0.5u');
+  assert.strictEqual(byPick['Buffalo Bills +3.5'].tier, 'lean');
+  assert.strictEqual(byPick['Buffalo Bills +3.5'].rating, 'a');
+  assert.strictEqual(byPick['Buffalo Bills ML'].units, '0.75u');
+  assert.strictEqual(byPick['Buffalo Bills ML'].rating, 'aminus');
+
+  const arrivedHigh = select.applyDailyUnitCap([
+    {
+      pick: 'Buffalo Bills +3.5',
+      matchup: 'Buffalo Bills @ Los Angeles Rams',
+      rating: 'a',
+      qualityGrade: 'a',
+      tier: 'lean',
+      units: '0.75u',
+      edgePct: '3.8%',
+      qualityScore: 0.038,
+    },
+  ], null);
+  assert.strictEqual(arrivedHigh.picks[0].units, '0.5u');
+  assert.strictEqual(arrivedHigh.picks[0].tier, 'lean');
+
+  const floorLift = select.applyDailyUnitCap([
+    {
+      pick: 'Floor A',
+      rating: 'a',
+      qualityGrade: 'a',
+      tier: 'floor',
+      units: '0.5u',
+      edgePct: '3.8%',
+      qualityScore: 0.038,
+    },
+    {
+      pick: 'Floor A-',
+      rating: 'aminus',
+      qualityGrade: 'aminus',
+      tier: 'floor',
+      units: '0.75u',
+      edgePct: '3.2%',
+      qualityScore: 0.032,
+    },
+  ], null);
+  const floors = Object.fromEntries(floorLift.picks.map(p => [p.pick, p]));
+  assert.strictEqual(floors['Floor A'].units, '0.75u');
+  assert.strictEqual(floors['Floor A-'].units, '0.75u');
 }
 
 console.log('PASS test-omega-b-unit-cap', {

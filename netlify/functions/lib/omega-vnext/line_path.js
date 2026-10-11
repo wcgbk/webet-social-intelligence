@@ -10,6 +10,7 @@ const {
 } = require('./config');
 const { americanToImplied } = require('./odds_math');
 const { americanCentsWorse } = require('./edge');
+const { replayNoWrite, logBlocked } = require('./no_write');
 
 function gameKey(away, home) {
   return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
@@ -76,6 +77,10 @@ async function readJsonBlob(path) {
 }
 
 async function writeJsonBlob(path, data) {
+  if (replayNoWrite()) {
+    logBlocked(`writeJsonBlob ${path}`);
+    return false;
+  }
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
@@ -556,6 +561,25 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
 }
 
 /**
+ * Missing morning slots, including zero usable snaps, do not block the card.
+ * assessCaptureHealth still reports hardFail when nothing usable was stored.
+ * Generate turns that into a warning and publishes.
+ */
+function warnCaptureHealth(health, dateISO) {
+  if (!health || health.hardFail !== true) return health;
+  const warning = health.warning
+    || health.reason
+    || `CAPTURE_HEALTH: missing morning snaps for ${dateISO}; card still publishes`;
+  return {
+    ...health,
+    hardFail: false,
+    reason: null,
+    ok: false,
+    warning,
+  };
+}
+
+/**
  * Load line path for date; return { path, earliest, latest }.
  */
 async function loadLinePath(dateISO) {
@@ -637,6 +661,7 @@ module.exports = {
   missingDueSlots,
   canonicalRetrySlot,
   assessCaptureHealth,
+  warnCaptureHealth,
   loadLinePath,
   storeLinePoll,
   readJsonBlob,

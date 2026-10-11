@@ -16,6 +16,7 @@
 const { SPORTS_ENABLED, MODEL_VERSION } = require('./config');
 const { sportsForCard } = require('./season_calendar');
 const { storeReplayCard, storeReplaySummary, assertReplayKey, readJson, readPicks } = require('./store');
+const { replayNoWrite } = require('./no_write');
 const { gradeNoVigClv, attachRealizedAliases, summarizeBySportMarket } = require('./clv_grade');
 const { americanToDecimal } = require('./odds_math');
 
@@ -441,7 +442,7 @@ async function runReplayDay(opts = {}) {
   }
 
   let key = null;
-  if (!dryRun) {
+  if (!dryRun && !replayNoWrite()) {
     key = await storeReplayCard(runId, dateISO, {
       ...card,
       historicalSnapshot,
@@ -528,7 +529,7 @@ async function runReplayRange(opts = {}) {
   };
   const summary = summarizeReplay(run);
   let summaryKey = null;
-  if (!dryRun) {
+  if (!dryRun && !replayNoWrite()) {
     try {
       summaryKey = await storeReplaySummary(runId, { ...summary, days });
     } catch (e) {

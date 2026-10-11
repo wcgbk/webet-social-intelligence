@@ -15,6 +15,8 @@
 const { clamp, etCalendarDate } = require('../odds_math');
 const { rowByIdentity, rowByIdentityOrFuzzy, modelRow, resolveTeamId, isFbsTeamId } = require('./team_identity');
 const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, WEATHER_NFL, REST_ADJ, restAdjEnabled } = require('../config');
+const { shrinkLast5IntoRating, lookupLast5 } = require('../last5');
+const { conservativeNonQbAdj, rowsForTeam } = require('../personnel');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -301,6 +303,19 @@ function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
   return null;
 }
 
+/**
+ * New game-status Out. Doubtful and questionable stay on the point table.
+ * IR / PUP / season-ending is already in the market and is not a fresh out.
+ */
+function isFreshQbOut(qb) {
+  if (!qb) return false;
+  const st = String(qb.qbStatus || qb.status || '').toLowerCase();
+  if (!st) return false;
+  if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
+  if (/doubtful|questionable/.test(st)) return false;
+  return /\bout\b/.test(st);
+}
+
 function qbSoftAdjust(sport, homeQb, awayQb) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
@@ -404,6 +419,8 @@ function applyGameDayAdjustments({
   commenceTime,
   restSchedule,
   neutralSite,
+  last5ByTeam,
+  personnelByTeam,
 } = {}) {
   let margin = Number(modelMargin);
   let total = Number(modelTotal);
@@ -445,6 +462,9 @@ function applyGameDayAdjustments({
   const homeQb = lookupQb(home, qbByTeam, sport, fallbackSeen);
   const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
   const qb = qbSoftAdjust(sport, homeQb, awayQb);
+  // outTotalPts (NFL −1.5) still moves the projection. It is not a fitted
+  // backup scoring effect, so a fresh Out excludes totals at the gate.
+  const startingQbOut = isFreshQbOut(homeQb) || isFreshQbOut(awayQb);
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);
@@ -453,6 +473,42 @@ function applyGameDayAdjustments({
   margin += cont.marginAdj;
 
   const restAdj = restMeta ? restMeta.restAdj : 0;
+
+  // Last-5 is inside the rating, before market blend and before the caller
+  // hands this margin to applyEngineStack. Missing games leave margin as-is.
+  let last5Meta = null;
+  if ((sport === 'NFL' || sport === 'NCAAF') && last5ByTeam) {
+    const homeRec = lookupLast5(sport, home, last5ByTeam, commenceTime);
+    const awayRec = lookupLast5(sport, away, last5ByTeam, commenceTime);
+    const shrunk = shrinkLast5IntoRating(margin, homeRec, awayRec);
+    if (shrunk.applied) {
+      margin = shrunk.margin;
+      last5Meta = shrunk;
+    }
+  }
+
+  // Non-QB personnel. QB is already in qbSoftAdjust. A cluster excludes
+  // the game later; the margin still carries only the capped assumption.
+  let personnelExclude = false;
+  let personnelLogs = [];
+  if ((sport === 'NFL' || sport === 'NCAAF') && personnelByTeam) {
+    const game = { home, away };
+    const homeRows = rowsForTeam(personnelByTeam, sport, home, game);
+    const awayRows = rowsForTeam(personnelByTeam, sport, away, game);
+    if (homeRows.length || awayRows.length) {
+      const adj = conservativeNonQbAdj(homeRows, awayRows);
+      if (Number.isFinite(adj.marginAdj) && Math.abs(adj.marginAdj) > 1e-9) margin += adj.marginAdj;
+      personnelExclude = !!adj.exclude;
+      personnelLogs = adj.logs || [];
+      for (const row of personnelLogs) {
+        console.log(`[omega-vnext/personnel] ${sport} ${away || ''} @ ${home || ''} ${row.action} ${row.name || ''} ${row.position || ''} ${row.status || ''} pts=${row.points || 0}`);
+      }
+      if (personnelExclude) {
+        console.log(`[omega-vnext/personnel] unquantified-injury-cluster ${sport} ${away || ''} @ ${home || ''} homeOuts=${adj.homeOuts} awayOuts=${adj.awayOuts}`);
+      }
+    }
+  }
+
   const meta = {
     restHome: scheduleOn && restMeta ? restMeta.restDays.home : homeDays,
     restAway: scheduleOn && restMeta ? restMeta.restDays.away : awayDays,
@@ -463,10 +519,23 @@ function applyGameDayAdjustments({
     qbNote: qb.note,
     qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
+    startingQbOut,
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
-    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used,
+    applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used || !!(last5Meta && last5Meta.applied) || personnelLogs.some((row) => row.action === 'assumption-adj'),
   };
+  if (last5Meta && last5Meta.applied) {
+    meta.last5 = {
+      delta: +last5Meta.delta.toFixed(3),
+      w: +last5Meta.w.toFixed(4),
+      note: last5Meta.note,
+    };
+    meta.applied = true;
+  }
+  if (personnelLogs.length) {
+    meta.personnelLogs = personnelLogs;
+    meta.personnelExclude = personnelExclude;
+  }
   if (scheduleOn && restMeta) {
     meta.restDays = restMeta.restDays;
     meta.restCategory = restMeta.restCategory;
@@ -479,6 +548,10 @@ function applyGameDayAdjustments({
     modelTotal: total,
     uncertainty: unc,
     gameDay: meta,
+    personnelExclude,
+    personnelLogs,
+    last5: last5Meta,
+    startingQbOut,
   };
 }
 
@@ -626,6 +699,7 @@ module.exports = {
   restCoverageCounts,
   stampRestAudit,
   restAuditFields,
+  isFreshQbOut,
   qbSoftAdjust,
   qbContinuityAdjust,
   lookupQb,

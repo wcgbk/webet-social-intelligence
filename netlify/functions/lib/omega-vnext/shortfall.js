@@ -8,6 +8,7 @@
  */
 
 const { GATES, MAX_STRAIGHTS } = require('./config');
+const { minEdgeFor } = require('./edge_floor');
 
 const NEXT_BEST_CAP = 10;
 const STRAIGHTS_TARGET = MAX_STRAIGHTS;
@@ -61,6 +62,7 @@ function requiredFloor(row, gate) {
   if (reason === 'ev-floor') return sportFloor(GATES.minEV, sport);
   if (reason === 'coverProb-floor') return sportFloor(GATES.minCoverProb, sport);
   if (reason === 'nonpositive-edge') return 0;
+  if (reason === 'edge-floor') return minEdgeFor(row && row.odds, row && row.uncertainty);
   if (reason === 'predictedClv-negative') return Number(GATES.minPredictedClvCents);
   if (reason === 'odds-out-of-band') {
     const price = finite(row && row.odds);

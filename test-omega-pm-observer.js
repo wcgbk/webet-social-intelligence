@@ -9,7 +9,7 @@ const pm = require(path.join(root, 'pm_observer'));
 const select = require(path.join(root, 'select'));
 const store = require(path.join(root, 'store'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.ok(/v12\.3\.6/.test(config.MODEL_NOTES));
 assert.ok(/soft feature/i.test(config.MODEL_NOTES));
 assert.ok(/hard cap/i.test(config.MODEL_NOTES));
@@ -268,8 +268,8 @@ const sCold = select.scoreCandidate({ ...scoreBase, _pmScoreAdj: -5 });
 assert.ok(Math.abs((sHuge - s0) - 0.002) < 1e-12);
 assert.ok(Math.abs((sCold - s0) - (-0.002)) < 1e-12);
 const ranked = select.selectStraights([
-  { ...scoreBase, matchup: 'A @ B', side: 'B', homeTeam: 'B', awayTeam: 'A', market: 'Moneyline', _pmScoreAdj: 0, coverProb: 0.55, odds: -110 },
-  { ...scoreBase, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C', market: 'Moneyline', _pmScoreAdj: 0.02, coverProb: 0.55, odds: -110 },
+  { ...scoreBase, matchup: 'A @ B', side: 'B', homeTeam: 'B', awayTeam: 'A', market: 'Moneyline', edgePct: 0.03, _pmScoreAdj: 0, coverProb: 0.55, odds: -110 },
+  { ...scoreBase, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C', market: 'Moneyline', edgePct: 0.03, _pmScoreAdj: 0.02, coverProb: 0.55, odds: -110 },
 ], 1);
 assert.strictEqual(ranked[0].matchup, 'C @ D');
 

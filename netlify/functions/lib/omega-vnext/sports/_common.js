@@ -485,7 +485,13 @@ function mapGamesSoft(events, projectGame) {
   for (const ev of events || []) {
     try {
       const rows = projectGame(ev);
-      if (Array.isArray(rows) && rows.length) all.push(...rows);
+      if (Array.isArray(rows) && rows.length) {
+        const live = !!(ev && (ev.in_play || ev.inPlay || ev.live));
+        for (const row of rows) {
+          if (row && live) row.inPlay = true;
+          all.push(row);
+        }
+      }
     } catch (err) {
       const home = ev && ev.home_team;
       const away = ev && ev.away_team;
@@ -614,6 +620,17 @@ const FOOTBALL_AUDIT_KEYS = [
  * moneylines use the margin cap. Missing market numbers do not reject.
  * OMEGA_FB_GAP_GUARD=0 restores the old "flag only" path.
  */
+/**
+ * NFL game drop. The projected spread is more than 10 points off the sharp
+ * no-vig spread. Exactly 10 stays. Missing numbers do not exclude.
+ */
+function nflSpreadExcludesGame(modelMarginRaw, marketMargin) {
+  const model = Number(modelMarginRaw);
+  const market = Number(marketMargin);
+  if (!Number.isFinite(model) || !Number.isFinite(market)) return false;
+  return Math.abs(model - market) > 10 + 1e-9;
+}
+
 function footballMarketGapReason(c) {
   if (!fbGapGuardEnabled()) return null;
   if (!c || (c.sport !== 'NFL' && c.sport !== 'NCAAF')) return null;
@@ -741,6 +758,7 @@ module.exports = {
   LEAGUE_PPG,
   powerFromStandings,
   footballMarketGapReason,
+  nflSpreadExcludesGame,
   resolveSpreadStd,
   nflKeyNumberCover,
   spreadDetail,

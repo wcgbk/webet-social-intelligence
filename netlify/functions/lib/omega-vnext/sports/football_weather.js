@@ -706,6 +706,7 @@ module.exports = {
   parseWindMph,
   averageHours,
   footballWeatherAdjustment,
+  roofClosed,
   resolveFootballVenue,
   loadFootballWeather,
   lookupFootballWeather,

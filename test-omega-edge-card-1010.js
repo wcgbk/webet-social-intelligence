@@ -1,6 +1,7 @@
 'use strict';
-// Spec: top edges are the straights, parlay legs are distinct games, a card
-// with candidates is not empty. Also runs on the 2026-10-10 yes pool when present.
+// Spec: top edges are the straights, one per game. A higher edge on a game
+// already taken is not a second straight. Parlay legs are distinct games.
+// A card with candidates is not empty. Also runs on the 2026-10-10 yes pool.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -25,10 +26,14 @@ function assertSpecCard(pool, cardDate, label) {
   if (!straights.length) return { straights, parlay: [] };
   const minEdge = Math.min(...straights.map(edgeRank));
   const straightIds = new Set(straights.map(idOf));
+  const usedGames = new Set(straights.map(matchupKey));
   for (const c of pool) {
-    if (edgeRank(c) > minEdge + 1e-9) {
-      assert.ok(straightIds.has(idOf(c)), `${label}: higher edge is not a straight ${c.side} ${c.matchup} ${c.edgePct}`);
-    }
+    if (!(edgeRank(c) > minEdge + 1e-9)) continue;
+    if (straightIds.has(idOf(c))) continue;
+    assert.ok(
+      config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c)),
+      `${label}: higher edge on an open game is not a straight ${c.side} ${c.matchup} ${c.edgePct}`,
+    );
   }
   const parlay = optimizeParlay(pool, straights, { cardDate });
   if (parlay.length) {
@@ -58,8 +63,10 @@ const sameGame = [
 ];
 const synthetic = assertSpecCard(sameGame, '2026-10-10', 'synthetic');
 assert.strictEqual(synthetic.straights.length, 3);
-assert.ok(synthetic.straights.some(s => s.line === 39.5), '5.34% same-game total must be a straight');
-assert.ok(!synthetic.straights.some(s => /UMass/.test(s.side)), '3.87% stays behind the top three edges');
+assert.ok(synthetic.straights.some(s => s.line === 38.5), 'the higher same-game total is the straight');
+assert.ok(!synthetic.straights.some(s => s.line === 39.5), 'the same game does not take a second straight');
+assert.ok(synthetic.straights.some(s => /UMass/.test(s.side)), 'the next distinct game fills the open slot');
+assert.strictEqual(new Set(synthetic.straights.map(matchupKey)).size, 3);
 assert.strictEqual(synthetic.parlay.length, 1);
 assert.strictEqual(synthetic.parlay[0].legs.length, 3);
 const parlayGames = synthetic.parlay[0].legs.map(l => l.matchup);
@@ -73,7 +80,7 @@ assert.strictEqual(tiny.length, 1, 'one candidate still publishes a straight');
 // when it outranks the other sides. Placeability and predicted CLV log only.
 const dog = row('Army Black Knights @ Navy Midshipmen', 'Army Black Knights ML', 'Moneyline', 0.04, {
   coverProb: 0.30,
-  ev: 0.01,
+  ev: 0.04,
   odds: 220,
   line: null,
   placeable: false,
@@ -81,8 +88,9 @@ const dog = row('Army Black Knights @ Navy Midshipmen', 'Army Black Knights ML',
   liquid: true,
   predictedClv: -4,
 });
-assert.strictEqual(gateReason(dog), null);
-const dogGated = applyGates([dog]);
+const lockAsOf = { cardDate: '2026-10-10', asOfMs: Date.parse('2026-10-10T13:30:00Z') };
+assert.strictEqual(gateReason(dog, lockAsOf), null);
+const dogGated = applyGates([dog], lockAsOf);
 assert.strictEqual(dogGated.rejected.length, 0);
 assert.strictEqual(dogGated.yesPool.length, 1);
 const lowCover = assertSpecCard([
@@ -91,12 +99,13 @@ const lowCover = assertSpecCard([
   dog,
 ], '2026-10-10', 'low-cover');
 assert.ok(lowCover.straights.some(s => s.side === dog.side), '30% cover with the higher edge is a straight');
-assert.strictEqual(lowCover.parlay.length, 1);
-assert.strictEqual(new Set(lowCover.parlay[0].legs.map(l => l.matchup)).size, lowCover.parlay[0].legs.length);
+// 1.5% edge misses minEdgeFor. The 30% cover misses the parlay cover minimum. No parlay.
+assert.strictEqual(lowCover.parlay.length, 0);
+assert.ok(!lowCover.straights.some(s => s.edgePct === 0.015));
 
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true })), 'ev-floor');
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true })), 'coverProb-floor');
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true })), 'nonpositive-edge');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true }), lockAsOf), 'ev-floor');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true }), lockAsOf), 'coverProb-floor');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), 'nonpositive-edge');
 
 delete process.env.OMEGA_CAL_MODE;
 calibrate.clearCalParamsCache();
@@ -113,17 +122,18 @@ assert.strictEqual(calibrate.CAL_MODE_DEFAULT, 'A');
 assert.strictEqual(calibrate.K_POLICY.min, 0.3);
 assert.ok(calibrate.CAL_POOL.minRows >= 80);
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
-assert.strictEqual(config.GATES.minEV.NFL, 0);
-assert.strictEqual(config.GATES.minEV.NCAAF, 0);
+assert.strictEqual(config.GATES.minEV.NFL, 0.03);
+assert.strictEqual(config.GATES.minEV.NCAAF, 0.03);
 assert.strictEqual(config.GATES.minPredictedClvCents, null);
 assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, false);
 assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
 assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-assert.strictEqual(verify.sportEvFloor('NFL'), 0);
-assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), true);
+assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), false);
 assert.strictEqual(verify.candidateClearsSportGates({ sport: 'MLB', ev: -0.01, coverProb: 0.55 }), false);
 
 const snapPaths = [

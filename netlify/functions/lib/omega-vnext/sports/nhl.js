@@ -521,24 +521,81 @@ function goalieOf(espnGame, side) {
   return null;
 }
 
+function goalieRates(cfg) {
+  const c = cfg || {};
+  return {
+    perM: Number.isFinite(Number(c.goalieMarginPerSave)) ? Number(c.goalieMarginPerSave) : 8,
+    perT: Number.isFinite(Number(c.goalieTotalPerSave)) ? Number(c.goalieTotalPerSave) : 6,
+    capM: Number.isFinite(Number(c.goalieMaxAbsMarginAdj)) ? Number(c.goalieMaxAbsMarginAdj) : 0.12,
+    capT: Number.isFinite(Number(c.goalieMaxAbsTotalAdj)) ? Number(c.goalieMaxAbsTotalAdj) : 0.10,
+  };
+}
+
+function goalieScenario(hs, asv, cfg) {
+  if (hs == null || asv == null) return null;
+  if (hs < 0.85 || hs > 0.95 || asv < 0.85 || asv > 0.95) return null;
+  const { perM, perT, capM, capT } = goalieRates(cfg);
+  // Better home save → fewer away goals. Both above-average saves trim the total.
+  const rawM = (hs - asv) * perM;
+  const rawT = -((hs - LG_SAVE) + (asv - LG_SAVE)) * perT;
+  return capPiece(rawM, rawT, capM, capT);
+}
+
+/**
+ * ASSUMPTION: an unconfirmed starter with no backup save rate uses a backup
+ * 0.010 worse than the projected starter. Both scenarios are priced. The
+ * residual closer to zero is kept. A missing starter save rate still returns
+ * none. confirmed === undefined is not this path and keeps the single rate.
+ */
+const UNCONFIRMED_BACKUP_SAVE_HAIRCUT = 0.010;
+
+function saveRateOf(g) {
+  if (!g) return null;
+  return asUnitRate(g.savePct != null ? g.savePct : g.svPct, 'save');
+}
+
+function backupSave(g, starter) {
+  if (!g) return null;
+  const explicit = g.backupSavePct != null ? g.backupSavePct : g.backupSvPct;
+  if (explicit != null && explicit !== '') {
+    const r = asUnitRate(explicit, 'save');
+    if (r != null) return r;
+  }
+  if (starter == null) return null;
+  return starter - UNCONFIRMED_BACKUP_SAVE_HAIRCUT;
+}
+
+function priceUnconfirmedGoalies(hg, ag, cfg) {
+  const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
+  const hs = saveRateOf(hg);
+  const asv = saveRateOf(ag);
+  if (hs == null || asv == null) return none;
+  const homeRates = hg && hg.confirmed === false ? [hs, backupSave(hg, hs)] : [hs];
+  const awayRates = ag && ag.confirmed === false ? [asv, backupSave(ag, asv)] : [asv];
+  const scenarios = [];
+  for (const h of homeRates) {
+    for (const a of awayRates) {
+      const piece = goalieScenario(h, a, cfg);
+      if (piece) scenarios.push(piece);
+    }
+  }
+  if (!scenarios.length) return none;
+  scenarios.sort((a, b) => (
+    (Math.abs(a.marginAdj) + Math.abs(a.totalAdj)) - (Math.abs(b.marginAdj) + Math.abs(b.totalAdj))
+  ));
+  const chosen = scenarios[0];
+  const used = Math.abs(chosen.marginAdj) > 1e-9 || Math.abs(chosen.totalAdj) > 1e-9;
+  return { ...chosen, used, unconfirmed: true, scenarios: scenarios.length };
+}
+
 function goalieResidual(espnGame, cfg) {
   const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
   const hg = goalieOf(espnGame, 'home');
   const ag = goalieOf(espnGame, 'away');
   if (!hg || !ag) return none;
-  if (hg.confirmed === false || ag.confirmed === false) return none;
-  const hs = asUnitRate(hg.savePct != null ? hg.savePct : hg.svPct, 'save');
-  const asv = asUnitRate(ag.savePct != null ? ag.savePct : ag.svPct, 'save');
-  if (hs == null || asv == null) return none;
-  if (hs < 0.85 || hs > 0.95 || asv < 0.85 || asv > 0.95) return none;
-  const perM = Number.isFinite(Number(cfg.goalieMarginPerSave)) ? Number(cfg.goalieMarginPerSave) : 8;
-  const perT = Number.isFinite(Number(cfg.goalieTotalPerSave)) ? Number(cfg.goalieTotalPerSave) : 6;
-  const capM = Number.isFinite(Number(cfg.goalieMaxAbsMarginAdj)) ? Number(cfg.goalieMaxAbsMarginAdj) : 0.12;
-  const capT = Number.isFinite(Number(cfg.goalieMaxAbsTotalAdj)) ? Number(cfg.goalieMaxAbsTotalAdj) : 0.10;
-  // Better home save → fewer away goals. Both above-average saves trim the total.
-  const rawM = (hs - asv) * perM;
-  const rawT = -((hs - LG_SAVE) + (asv - LG_SAVE)) * perT;
-  const piece = capPiece(rawM, rawT, capM, capT);
+  if (hg.confirmed === false || ag.confirmed === false) return priceUnconfirmedGoalies(hg, ag, cfg);
+  const piece = goalieScenario(saveRateOf(hg), saveRateOf(ag), cfg);
+  if (!piece) return none;
   const used = Math.abs(piece.marginAdj) > 1e-9 || Math.abs(piece.totalAdj) > 1e-9;
   return { ...piece, used };
 }
@@ -820,4 +877,7 @@ module.exports = {
   NHL_MARGIN_CAP,
   NHL_TOTAL_MIN,
   NHL_TOTAL_MAX,
+  goalieResidual,
+  priceUnconfirmedGoalies,
+  UNCONFIRMED_BACKUP_SAVE_HAIRCUT,
 };

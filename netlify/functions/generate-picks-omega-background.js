@@ -6,7 +6,7 @@
  *
  * Store: edge-picks-omega → /omega
  * Product: up to 3 straights + 1 optimized parlay; empty OK; no lean force-fill;
- * no self-opt mutation. Claude = verifier/narrator only.
+ * no self-opt mutation. Grok = verifier/narrator only.
  */
 const { generateOmegaVnext, MODEL_VERSION } = require('./lib/omega-vnext');
 

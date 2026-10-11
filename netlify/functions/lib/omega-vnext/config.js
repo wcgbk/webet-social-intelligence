@@ -1,11 +1,17 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.22-omega-vnext-no-floors';
+const MODEL_VERSION = 'v12.3.24-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
+/**
+ * The straight card keeps one side per game. The next-best edge on a
+ * different game fills an open slot. Default true. Set false only to
+ * publish two sides of one game when both edges are in the top N.
+ */
+const ONE_STRAIGHT_PER_GAME = true;
 /**
  * Same-game stake cap is off. capSameGameExposure does not trim.
  * OMEGA_GAME_EXPOSURE cannot turn the 1.50u cap back on.
@@ -185,15 +191,19 @@ const MLB_CALIBRATION = {
 };
 
 /**
- * Publish gates. minEV and minCoverProb are 0: a finite non-negative
- * cover and a non-negative EV pass. A 48% coverProb floor and a 2.5–3%
- * EV floor do not reject. minPredictedClvCents is null, so predicted CLV
- * does not reject. Odds band, major-book liquidity, pregame, same ET day,
- * and adverse steam stay. Generate-time placeability is logged in gates.js
- * and does not reject.
+ * Publish gates. Floor tier: calibrated stake EV >= 3% and edge vs the
+ * de-vigged sharp at or above the odds-scaled curve in edge_floor.js
+ * (1.75% at −110, higher for plus-money and for uncertainty above 0.15).
+ * minCoverProb stays 0. There is no flat coverProb floor. A missing cover
+ * or EV rejects. EV under 1.5% rejects. EV from 1.5% up to the 3% floor,
+ * or a 3%+ EV whose edge misses the curve, is the lean tier (see
+ * LEAN_MIN_EV). Leans do not fill a short straight card. minPredictedClvCents
+ * is null. Odds band, major-book liquidity, pregame, same ET day, and
+ * adverse steam stay. Generate-time placeability is logged and does not
+ * reject.
  */
 const GATES = {
-  minEV: { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, NHL: 0, default: 0 },
+  minEV: { MLB: 0.03, NFL: 0.03, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 },
   minCoverProb: { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0 },
   minPredictedClvCents: null, // not a publish floor
   maxAmericanOdds: 300,
@@ -205,9 +215,16 @@ const GATES = {
   rejectAdverseSteam: true,
 };
 
+/** Lean tier under the 3% floor. Diagnostic only. It does not fill straights or parlay legs. */
+const LEAN_MIN_EV = 0.015;
+const LEAN_MAX_UNITS = 0.5;
+/** Parlay legs only. Straights have no coverProb floor. */
+const PARLAY_MIN_COVER = 0.45;
+
 /**
  * QA hard-fail thresholds (pre-publish / pre-verify-unlock).
- * Drop pick + try next diversified YES; else leave slot empty — NO lean force-fill.
+ * Drop a hard-fail and refill from the floor tier. Leans do not fill an
+ * open slot. A short card stays short.
  */
 const QA_HARDFAIL = {
   staleOddsCents: 15, // juice-ladder cents vs lockSnapshot (not raw American subtraction)
@@ -619,6 +636,8 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.24-omega-vnext-price-lock: Live generate prices the 9:30 AM ET historical snapshot and does not refetch the live board when the run is late. Verify auto-corrects a material Hard Rock line or price. Floor tier is calibrated stake EV >= 3% and edge vs the de-vigged sharp at or above the odds-scaled curve (1.75% at -110, plus 0.05 per implied point of plus-money distance from -110, plus 0.04 per uncertainty point above 0.15, cap 6%). No flat coverProb floor. A short straight card fills from the 1.5% EV lean tier, labeled lean, max 0.5u. The grade-lift cannot raise a lean above 0.5u. ONE_STRAIGHT_PER_GAME defaults true, so straights keep one side per game and the next distinct game fills. Set it false to publish two sides of one game. Parlay legs need coverProb >= 45%. When the three published straights are on distinct games, each clears that cover, and their combined EV is positive, the parlay is those straights. Otherwise the best positive-EV 3-leg by edge, then the best 2-leg, or no parlay. Quarter-Kelly, 1.25u, 0.5u parlay, and 4u daily stay.',
+  'v12.3.23-omega-vnext-price-lock: Live generate prices the 9:30 AM ET historical snapshot (any major US book) and does not refetch the live board when the run is late. Verify auto-corrects a material Hard Rock line or price: reprice at Hard Rock, keep the pick when the edge still clears the odds-scaled floor, otherwise take the next Hard Rock-confirmed candidate, and rebuild the parlay. The card still publishes. minEV and minCoverProb stay 0. The edge floor is 1.75% at -110 plus 0.05 per implied point of plus-money distance from -110 plus 0.04 per uncertainty point above 0.15, capped at 6%. No flat coverProb floor.',
   'v12.3.22-omega-vnext-no-floors: Publish floors are off. minEV and minCoverProb are 0, so a positive edge at a major book is not rejected for a 3% EV floor or a 48% coverProb floor. minPredictedClvCents is null and does not reject. Generate-time placeability is logged and does not block. Verify still confirms the Hard Rock line and may drop only when Hard Rock and US majors both fail. Mode A calibration stays the hand-set shrink. The 0.42–0.58 band is legacy only. Mode B K_MIN 0.3 and CAL_POOL sample floors are fit constraints, not publish gates. Odds band, liquidity, pregame, same ET day, and adverse steam stay. Kelly and unit caps stay. Straights, parlay, and the exposure cap are unchanged from v12.3.21.',
   'v12.3.21-omega-vnext-edge-card: Straights are the top edges vs no-vig fair, including a second side of the same game. Score nudges only break an exact edge tie. The parlay is the best edges on distinct games and may overlap the straights. The only parlay conflict is two legs from the same game. Same-direction totals and same-conference NCAAF totals may share a ticket. The same-direction haircut still lowers joint probability and never raises it. PER_GAME_EXPOSURE_CAP_ENABLED is false, so the 1.50u same-game stake cap does not run. Gate floors, Kelly, unit caps, SHRINK_K, and calibration are unchanged. A gate reject is logged. It does not throw.',
   'v12.3.20-omega-vnext-edge-rank: Straight rank is calibrated edge. _steamScoreAdj, _pmScoreAdj, and the steamToward softSportMixBonus are added together and capped at ±0.002, so they only break ties. A 0.03 steam boost plus the 0.02 mix bonus no longer outranks a higher edge. Adverse-steam hard rejects are unchanged. The parlay is chosen from the full yes pool, including straight sides. Same-game legs, same-direction same-league totals, and same-conference NCAAF totals still cannot share a ticket. OMEGA_GAME_EXPOSURE defaults off. Set it on to restore the 1.50u same-game cap. No gate, floor, Kelly, unit-cap, SHRINK_K, or calibration change.',
@@ -642,7 +661,7 @@ const MODEL_NOTES = [
   `v12.3.6 omega-vnext: Kalshi/Polymarket soft features inside generate, before selectStraights. Moneyline only, clean 1:1 map. Venue combine is the average of available mapped venues. pmVsBookGap = PM implied minus fair_sharp_p (else American-implied). pmMove = current PM implied minus the morning open snap (omega-pm-observer/{date}-open) when that snap exists, averaged per venue present on both sides; omitted otherwise. Score-only _pmScoreAdj = clamp(scoreWeightVsBook*pmVsBookGap + scoreWeightMove*pmMove, ±maxAbsScoreAdj) with weights ${PM_SOFT.scoreWeightVsBook} / ${PM_SOFT.scoreWeightMove} and HARD CAP ±${PM_SOFT.maxAbsScoreAdj} so PM cannot dominate the US sportsbook CLV spine. Does not change coverProb, edgePct, gates, Kelly, grades, shrink, or unit caps. Soft-fail to _pmScoreAdj 0 if PM APIs are down or unmapped; generate continues. Historical replay skips live PM (no as-of snap). Observer audit omega-pm-observer/{date} retained (10:15 ET) plus 8:30 ET open snap; the observer logging path still never mutates locked picks. No TSP. No FIT.`,
   'v12.3.5 omega-vnext: scored historical replay joins real CLV/ROI from clv-{date} / picks-{date} settles (null + scoreReason when closes absent); capture-health ops snapshot at omega-ops/* + optional OMEGA_OPS_WEBHOOK_URL. No gate, weight, Kelly, engine, shrink, or live pick-math changes.',
   'v12.3.4 omega-vnext: historical replay pregame gate uses the snapshot asOf (historicalSnapshot) instead of Date.now(), so past slates are not rejected as in-progress-or-started. Live path unchanged when asOf is unset. 5-minute grace kept. No weight, Kelly, or engine changes.',
-  'v12.3.3 omega-vnext: narrate-only ESPN copy. Straights 4-6 sentences, parlay legs 3-5, Daily Edge and insights 3-5. Locked-row context (edge band, steam hint, price compass) reaches Claude and is translated into plain English, not raw EV/CLV/Kelly. Fallback blurbs use the same desk voice. No gate, weight, Kelly, engine, or TSP changes.',
+  'v12.3.3 omega-vnext: narrate-only ESPN copy. Straights 4-6 sentences, parlay legs 3-5, Daily Edge and insights 3-5. Locked-row context (edge band, steam hint, price compass) reaches the narrator and is translated into plain English, not raw EV/CLV/Kelly. Fallback blurbs use the same desk voice. No gate, weight, Kelly, engine, or TSP changes.',
   'v12.3.2 omega-vnext: verify adverse steam drops set blockStraightRefill so TARGET_PICKS backfill cannot undo the steam gate (empty/short card OK). Verify replace/backfill grades use toPickObject / qualityToRating (edge), not units.',
   'v12.3.1 omega-vnext: 9:15 ET line snap + capture health gate; feed warm 9:00; shadow dry-run 9:05 (isolated omega-shadow/*); TSP live hold lifted (observer /live-ai only — zero Omega hard dep).',
   'v12.3.0 omega-vnext: game-day rest/B2B + soft QB status (ESPN injuries) + MLB weather total adj on top of EPA/SP/park seeds. Soft fallback if feeds fail; empty card OK; no lean force-fill. Market blend + calibrate shrink unchanged. No NBA/NHL.',
@@ -654,10 +673,10 @@ const MODEL_NOTES = [
   'v12.0.8 omega-vnext: DAILY_UNIT_CAP max 4.0u (not a fill target); parlay leg rating badges; Daily Lock titles + summary UX.',
   'v12.0.7 omega-vnext: fix isotonic soft-cap (was inflating ~hi); stronger shrink so Edge badge stays honest vs sharp fair.',
   'v12.0.6 omega-vnext: daily unit cap 5.0u incl. parlay; ML pick labels; Edge badge = model edge after shrink vs no-vig sharp; stronger shrink; Daily Lock Parlay UX.',
-  'v12.0.5 omega-vnext: ensure whatLoses/dataVerified/clvExpectation after Claude narrate + verify.',
-  'v12.0.4 omega-vnext: Claude sonnet-4-6 narrate (match verify) + whatLoses/dataVerified/clvExpectation + verify parlay-leg writeups.',
-  'v12.0.3 omega-vnext: Claude narrate retries without web_search on tool failure.',
-  'v12.0.2 omega-vnext: journalistic Claude narratives + full parlay-leg pick cards.',
+  'v12.0.5 omega-vnext: ensure whatLoses/dataVerified/clvExpectation after narrator pass + verify.',
+  'v12.0.4 omega-vnext: journalistic narrate (match verify) + whatLoses/dataVerified/clvExpectation + verify parlay-leg writeups.',
+  'v12.0.3 omega-vnext: narrate retries without web_search on tool failure.',
+  'v12.0.2 omega-vnext: journalistic narratives + full parlay-leg pick cards.',
   'v12.0.1 omega-vnext: CLV-first composer + realized close-grade loop + QA hard-fails.',
   'v1 projections: sport power/market-hybrid (MLB Pythag/Elo-lite; NFL/CFB normal-spread; NBA/NHL disabled).',
   'Calibration: shrink p_model toward no-vig sharp with market K; isotonic clip soft-caps extremes (no 15% fake edges).',
@@ -680,6 +699,7 @@ module.exports = {
   UNIT_DOLLARS,
   KELLY_FRACTION,
   MAX_STRAIGHTS,
+  ONE_STRAIGHT_PER_GAME,
   PER_GAME_EXPOSURE_CAP_ENABLED,
   STRAIGHT_UNIT_BUDGET,
   PARLAY_FIXED_UNITS,
@@ -706,6 +726,9 @@ module.exports = {
   SHRINK_K,
   MLB_CALIBRATION,
   GATES,
+  LEAN_MIN_EV,
+  LEAN_MAX_UNITS,
+  PARLAY_MIN_COVER,
   QA_HARDFAIL,
   QB_INJURY,
   QUALITY_GRADE,

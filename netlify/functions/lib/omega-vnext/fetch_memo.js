@@ -162,7 +162,7 @@ function hasTrueClosingCapture(prev) {
 /** Identical narrate retries cannot succeed on a rejected request. 429/5xx/parse still retry. */
 function narrateErrorShouldRetry(err) {
   const msg = String((err && err.message) || '');
-  if (/Anthropic HTTP (400|401|403)\b/.test(msg)) return false;
+  if (/xAI HTTP (400|401|403)\b/.test(msg)) return false;
   return true;
 }
 

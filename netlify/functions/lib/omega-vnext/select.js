@@ -1,16 +1,18 @@
 'use strict';
 
+const config = require('./config');
 const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
-  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, PM_SOFT,
+  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
-} = require('./config');
+} = config;
 const {
   kellyToUnits, ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
+const { minEdgeFor } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
@@ -70,14 +72,66 @@ function compareByEdge(a, b) {
   return scoreCandidate(b) - scoreCandidate(a);
 }
 
+function publishMinEv(c) {
+  const table = (config.GATES && config.GATES.minEV) || {};
+  const sport = c && c.sport;
+  const n = sport && table[sport] != null ? Number(table[sport]) : Number(table.default);
+  return Number.isFinite(n) ? n : 0.03;
+}
+
 /**
- * Top edges, up to MAX_STRAIGHTS. No one-per-game skip.
- * A second side of the same game is a straight when its edge is in the top N.
- * A shorter pool stays short. Never pads with leans.
+ * Published straights and parlay legs. Stake EV at the sport floor (3%)
+ * and edge at or above minEdgeFor. A lean (1.5%–3%, or a 3% EV that misses
+ * the edge curve) does not pass. Missing edge does not pass.
  */
-function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
-  const pool = [...(yesPool || [])].sort(compareByEdge);
-  return pool.slice(0, maxN).map(c => ({ ...c, _score: edgeRank(c) }));
+function passesPublishFloor(c) {
+  const ev = Number(c && c.ev);
+  const minEV = publishMinEv(c);
+  if (!(ev + 1e-12 >= minEV)) return false;
+  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+  if (!Number.isFinite(edge) || !(edge > 0)) return false;
+  const need = minEdgeFor(c && c.odds, c && c.uncertainty);
+  return edge + 1e-12 >= need;
+}
+
+/**
+ * Label for a card that publishes only floor straights.
+ * Fewer than 3 is a short card. Zero is still a published card.
+ */
+function straightCardLabel(count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return 'no floor plays';
+  if (n === 1) return 'short card: 1 floor straight';
+  if (n < 3) return `short card: ${n} floor straights`;
+  return '3 floor straights';
+}
+
+/**
+ * Top floor edges, up to MAX_STRAIGHTS.
+ * ONE_STRAIGHT_PER_GAME is read at call time and defaults true. A game
+ * already taken is skipped and the next distinct game fills the slot.
+ * Set the flag false and a second side of the same game is a straight
+ * when its edge is in the top N.
+ * leanPool is ignored. A short floor tier stays short. Sub-floor leans
+ * are not straights. The card still publishes (see straightCardLabel).
+ */
+function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
+  void leanPool;
+  const onePer = config.ONE_STRAIGHT_PER_GAME === true;
+  const usedGames = new Set();
+  const floor = [];
+  for (const c of [...(yesPool || [])].sort(compareByEdge)) {
+    if (floor.length >= maxN) break;
+    if (!passesPublishFloor(c)) continue;
+    if (onePer && usedGames.has(matchupKey(c))) continue;
+    floor.push({
+      ...c,
+      tier: 'floor',
+      _score: edgeRank(c),
+    });
+    if (onePer) usedGames.add(matchupKey(c));
+  }
+  return floor;
 }
 
 /** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
@@ -122,6 +176,19 @@ function applyBGradeUnitCap(pick) {
   return { ...pick, units: fmtU(next) };
 }
 
+function isLeanPick(p) {
+  return !!(p && p.tier === 'lean');
+}
+
+/** Lean stake is at most LEAN_MAX_UNITS. A floor pick is unchanged. */
+function applyLeanUnitCap(pick) {
+  if (!isLeanPick(pick)) return pick;
+  const u = parseU(pick.units);
+  const cap = Number(LEAN_MAX_UNITS);
+  if (!Number.isFinite(cap) || !(u > cap)) return pick;
+  return { ...pick, units: fmtU(cap) };
+}
+
 function toPickObject(c, opts = {}) {
   const kFrac = pushAwareKelly(c.coverProb, c.odds, KELLY_FRACTION, c && c.pPush);
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
@@ -138,6 +205,8 @@ function toPickObject(c, opts = {}) {
   // Kelly (and drawdown) already ran. Grade stays the edge letter.
   // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
   units = capBGradeStake(units, rating);
+  const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
+  if (tier === 'lean' && units > LEAN_MAX_UNITS) units = LEAN_MAX_UNITS;
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -181,8 +250,9 @@ function toPickObject(c, opts = {}) {
     fair_sharp_p: c.fair_sharp_p != null ? +Number(c.fair_sharp_p).toFixed(4) : null,
     predictedClv: c.predictedClv,
     modelVersion: opts.modelVersion,
-    book: c.book,
+    book: c.book || c.executionBook || null,
     line: c.line != null ? c.line : null,
+    tier,
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,
     steamToward: !!c.steamToward,
@@ -195,6 +265,7 @@ function toPickObject(c, opts = {}) {
     ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
     ...footballAuditFields(c),
     ...(c.lateNews ? { lateNews: c.lateNews } : {}),
+    ...(c.hrFlags && c.hrFlags.length ? { hrFlags: c.hrFlags } : {}),
   };
 }
 
@@ -212,12 +283,14 @@ function applyDailyCap(picks) {
  * - Total ≤ DAILY_UNIT_CAP (4.0u)
  * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
  * Grade B straights are capped at B_GRADE_UNIT_CAP before that trim.
- * The cap only lowers. Preserve quality grades; align grade/stake hierarchy
- * without lifting a B back over the cap; never force-fill to max.
+ * A lean is capped at LEAN_MAX_UNITS (0.5u) before that trim. The grade
+ * hierarchy may lift a floor stake. It does not lift a lean, and it does
+ * not trim a floor stake down to the lean. Preserve quality grades.
+ * Never force-fill to max.
  * Parlay tickets stay PARLAY_FIXED_UNITS and are not B-capped.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
-  let out = (picks || []).map(p => applyBGradeUnitCap({ ...p }));
+  let out = (picks || []).map(p => applyLeanUnitCap(applyBGradeUnitCap({ ...p })));
   let parlays = Array.isArray(parlayLegs)
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
@@ -288,6 +361,9 @@ function applyDailyUnitCap(picks, parlayLegs) {
       if (hiUnits >= loUnits) continue;
       // A B is already at or under the post-Kelly cap. Do not lift it.
       if (isGradeB(hi.rating || hi.qualityGrade)) continue;
+      // A lean stays at or under 0.5u. Do not lift it, and do not trim the
+      // lower-grade floor down to the lean.
+      if (isLeanPick(hi)) continue;
 
       const headroom = Math.max(0, finalStraightBudget - straightTotal);
       const lift = Math.floor(Math.min(loUnits - hiUnits, headroom, Math.max(0, MAX_STRAIGHT_UNITS_PER_PICK - hiUnits)) * 4 + 1e-9) / 4;
@@ -308,6 +384,7 @@ function applyDailyUnitCap(picks, parlayLegs) {
   // A parlay leg puts the whole ticket at risk on that game. Trim the straight
   // after the hierarchy lift so the lift cannot put the game back over the cap.
   out = capSameGameExposure(out, parlays);
+  out = out.map(applyLeanUnitCap);
   out = sortByGradeThenUnits(out);
   return { picks: out, parlayLegs: parlays };
 }
@@ -367,6 +444,8 @@ function capSameGameExposure(picks, parlays) {
 module.exports = {
   edgeRank,
   scoreCandidate,
+  passesPublishFloor,
+  straightCardLabel,
   selectStraights,
   orderedByScore,
   toPickObject,

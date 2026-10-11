@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -225,7 +225,8 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   // Kickoff must still be pregame. A fixed Sep 22 night tip is already
   // behind Date.now() once that evening passes, so use a few hours ahead
   // and the ET date of that tip. Off-days stay later in the week.
-  const tueKick = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
+  const tueKick = sampleInSlateKick();
   const tue = math.etCalendarDate(tueKick);
   const offSat = new Date(Date.now() + 4 * 864e5).toISOString();
   const offSun = new Date(Date.now() + 5 * 864e5).toISOString();
@@ -237,7 +238,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   const gated = gates.applyGates(mixed, { cardDate: tue });
   assert.strictEqual(gated.yesPool.length, 1, 'only Tue MLB should pass');
   assert.strictEqual(gated.yesPool[0].sport, 'MLB');
-  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day'));
+  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day' || r.rejectReason === 'future-date'));
 
   // ingest filter helper — same dynamic card date as the gate case above.
   // A fixed Sep 22 kickoff is the wrong ET day once now+3h crosses midnight.
@@ -288,7 +289,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.strictEqual(card.length, 1);
   assert.strictEqual(card[0].legs.length, 3, '3 clean legs publish a 3-leg');
 
-  // A higher edge beats a higher cover probability.
+  // Cover under 45% is not a parlay leg, even at a higher edge.
   const ranked = parlay.optimizeParlay([
     { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
     { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
@@ -296,16 +297,26 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800, edgePct: 0.09 },
   ], []);
   assert.strictEqual(ranked[0].legs.length, 3);
-  assert.ok(ranked[0].legs.some(l => /Longshot/.test(l.pick)));
+  assert.ok(!ranked[0].legs.some(l => /Longshot/.test(l.pick)));
 
-  // Equal edge: the higher single-leg EV wins the tie.
+  // Among legs at or above 45% cover, a higher edge beats a higher cover.
+  const dog = parlay.optimizeParlay([
+    { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
+    { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
+    { ...row('E @ F', 0.56, 0.05), edgePct: 0.02, side: 'ChalkE' },
+    { ...row('G @ H', 0.46, 0.08), side: 'Dog', odds: 150, edgePct: 0.05 },
+  ], []);
+  assert.strictEqual(dog[0].legs.length, 3);
+  assert.ok(dog[0].legs.some(l => /Dog/.test(l.pick)));
+
+  // Equal edge: the higher combined parlay EV wins the tie.
   const tied = parlay.optimizeParlay([
     { ...row('A @ B', 0.56, 0.05), odds: -110, side: 'PriceA' },
     { ...row('C @ D', 0.56, 0.05), odds: -110, side: 'PriceC' },
     { ...row('E @ F', 0.56, 0.05), odds: -110, side: 'PriceE' },
     { ...row('G @ H', 0.56, 0.04), odds: 180, side: 'PlusPrice' },
   ], []);
-  assert.ok(!tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'lower EV loses an equal-edge tie');
+  assert.ok(tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'plus price raises combined EV when edges tie');
 
   // Favorite combined price (decimal < 2) is a minus number, never a plus.
   const chalk = parlay.optimizeParlay([
@@ -326,7 +337,8 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 // (hand-set 0.62; kMle 0). That fitted K is what emptied the 2026-10-10
 // and 2026-10-11 dry runs. K_MIN is a fit box, not a publish gate.
 {
-  const kick = new Date(Date.now() + 30 * 3600 * 1000).toISOString();
+  const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
+  const kick = sampleInSlateKick(Date.now() + 24 * 3600 * 1000);
   const cardDate = math.etCalendarDate(kick);
   function sharpish(base) {
     return {
@@ -514,18 +526,22 @@ assert.strictEqual(typeof cfb.project, 'function');
 
 const narrate = require(path.join(root, 'narrate'));
 const narrateSrc = require('fs').readFileSync(path.join(root, 'narrate.js'), 'utf8');
-assert.ok(narrateSrc.includes("claude-sonnet-4-6"), 'narrate must use claude-sonnet-4-6');
-assert.ok(!narrateSrc.includes("claude-sonnet-4-20250514"), 'old sonnet date-id must be gone');
+const xaiChatSrc = require('fs').readFileSync(path.join(root, '../xai-chat.js'), 'utf8');
+assert.ok(narrateSrc.includes("require('../xai-chat')"), 'narrate must call Grok');
+assert.ok(/GROK_MODEL = 'grok-4\.3'/.test(xaiChatSrc), 'default narrate model is grok-4.3');
+assert.ok(narrateSrc.includes('api.x.ai/v1/chat/completions') || narrateSrc.includes("require('../xai-chat')"), 'narrate must use the xAI chat helper');
+assert.ok(!/anthropic|api\.anthropic\.com|claude-sonnet|claude-haiku/i.test(narrateSrc), 'narrate must not call Anthropic');
+assert.ok(!/claude/i.test(narrateSrc.replace(/claudeVerified/g, '')), 'published claudeVerified flag is the only claude token');
 assert.ok(/4–6 sentence journalistic blurbs/.test(narrateSrc), 'header states 4-6 sentence blurbs');
 assert.ok(/4-6 sentence/.test(narrateSrc), 'prompt asks for 4-6 sentence straights');
 assert.ok(/3-5 sentence/.test(narrateSrc), 'prompt asks for 3-5 sentence legs and sections');
 assert.ok(!/2-4 sentence/.test(narrateSrc), 'stubby 2-4 sentence parlay rule must be gone');
 assert.ok(!/1-2 sentence/.test(narrateSrc), 'thin 1-2 sentence edge/insights rule must be gone');
 assert.ok(/NARRATIVE_MAX_TOKENS = 5800/.test(narrateSrc), 'max_tokens raised into 5500-6000');
-assert.ok(/max_tokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
-assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Claude');
+assert.ok(/maxTokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
+assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Grok');
 assert.ok(narrateSrc.includes('JSON.stringify(lockedLegs || [], null, 2)'));
-assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callClaudeOnce must not strip context');
+assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callGrokOnce must not strip context');
 assert.ok(/ESPN/.test(narrateSrc) && /handicap/i.test(narrateSrc));
 assert.ok(/No em dashes/.test(narrateSrc));
 
@@ -587,7 +603,7 @@ assert.strictEqual(row.edgeBand, 'solid');
 assert.strictEqual(row.rating, 'A');
 assert.strictEqual(row.grade, 'A');
 assert.ok(/toward/i.test(row.steamHint));
-assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Claude');
+assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Grok');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: '5.0%' }), 'strong');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: 0.05 }), 'strong');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: '3.5%' }), 'solid');
@@ -694,11 +710,12 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(verify.sportCoverFloor('NFL'), config.GATES.minCoverProb.NFL);
   assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
   assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-  assert.strictEqual(verify.sportEvFloor('NFL'), 0);
-  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0);
+  assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);
+  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0.03);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NFL', ev: 0.04, coverProb: 0.49 }), true);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), true);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), true);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), false);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0, coverProb: 0.55 }), false);
   assert.ok(!verifySrc.includes('alpha-config'));
   assert.ok(!verifySrc.includes('mlUnitCap'));
@@ -726,10 +743,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
 }
 
 (async () => {
-  const prevA = process.env.ANTHROPIC_API_KEY;
-  const prevB = process.env.ANTHROPIC_KEY;
+  const prevA = process.env.XAI_API_KEY;
+  const prevB = process.env.ANTHROPIC_API_KEY;
+  delete process.env.XAI_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
-  delete process.env.ANTHROPIC_KEY;
   try {
     const empty = await narrate.narrateAndVerify({
       picks: [], parlayLegs: [], dateFormatted: 'Tuesday, September 22',
@@ -766,10 +783,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
     assert.ok(/Yankees ML/.test(leg.whatLoses));
     assert.ok(/starter|quarterback|weather/i.test(out.insights));
   } finally {
-    if (prevA == null) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = prevA;
-    if (prevB == null) delete process.env.ANTHROPIC_KEY;
-    else process.env.ANTHROPIC_KEY = prevB;
+    if (prevA == null) delete process.env.XAI_API_KEY;
+    else process.env.XAI_API_KEY = prevA;
+    if (prevB == null) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevB;
   }
 
   console.log('PASS test-omega-vnext', {

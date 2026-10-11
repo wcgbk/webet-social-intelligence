@@ -2,7 +2,7 @@
 
 /**
  * Omega QA hard-fails — drop pick before publish unlock; try next diversified YES.
- * NO lean force-fill. Claude remains verifier/narrator only.
+ * NO lean force-fill. Grok remains verifier/narrator only.
  *
  * Checks:
  *  - MLB: starting pitcher scratched/changed vs assumed SP
@@ -10,9 +10,10 @@
  *  - Odds stale vs lockSnapshot / market gone at major books
  */
 
+const config = require('./config');
 const {
   QA_HARDFAIL, MAJOR_LIQUIDITY_BOOKS, MAX_STRAIGHTS, ESPN_LEAGUES,
-} = require('./config');
+} = config;
 const { americanJuiceDelta } = require('./odds_math');
 const { matchupKey, selectStraights, toPickObject } = require('./select');
 const { adverseSteamReason } = require('./line_path');
@@ -339,10 +340,12 @@ async function loadQaContext(dateISO, sportsNeeded = []) {
 }
 
 /**
- * Apply hard-fails to selected picks; refill from yesPool when possible.
+ * Apply hard-fails to selected picks; refill from the floor yesPool only.
+ * leanPool is ignored. A short card stays short.
  * @returns {{ picks, hardFails, yesPoolRemaining }}
  */
-function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion } = {}) {
+function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool } = {}) {
+  void leanPool;
   const fails = [];
   const kept = [];
   const usedGames = new Set();
@@ -380,6 +383,7 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     const remaining = yesPool.filter(c => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
+      if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
       return true;
     });
     // Re-select from remaining, skipping hard-fails

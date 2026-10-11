@@ -127,6 +127,7 @@ function espnEvent(id, away, home, iso) {
       odds: 100,
       coverProb: cover,
       ev,
+      edgePct: 0.03,
       commenceTime: '2026-10-04T17:00:00Z',
     };
   }

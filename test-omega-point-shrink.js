@@ -34,9 +34,9 @@ const {
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
-assert.deepStrictEqual(config.GATES.minEV, { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, NHL: 0, default: 0 });
+assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.03, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0 });
 assert.deepStrictEqual(config.POINT_SHRINK, {
   NFL: { total: 1, margin: 1 },
@@ -182,8 +182,9 @@ function assertEdgesNeverGrow(cands, ev) {
 
 // 54 vs 38.5 NFL total: gap 15.5 is flagged, and the market-gap guard rejects
 // it (NFL total cap 13). λ=1 does not pull the total. The flag itself still
-// does not change the score. A flagged gap under that cap (12.5) still
-// prices, and clearing gapFlag does not change selection or the parlay.
+// does not change the score. A gap above 10 and still inside that cap (12.5)
+// is nfl-projection-gap. A flagged gap at or under 10 (9.5) still prices,
+// and clearing gapFlag does not change selection or the parlay.
 {
   const home = 'Miami Dolphins';
   const away = 'Minnesota Vikings';
@@ -241,18 +242,41 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.strictEqual(review.filter(r => r.line === 38.5 && r.gap === 15.5).length, 4);
   assertEdgesNeverGrow(cands, ev);
 
-  // 51 vs 38.5 is flagged (NFL flag starts at 8) and still inside the cap.
-  const midHome = 'Los Angeles Chargers';
-  const midAway = 'Las Vegas Raiders';
+  // 51 vs 38.5 is inside the total cap (13) and above the 10-point
+  // projection cap. Selection excludes it as a data problem.
+  const wideHome = 'Los Angeles Chargers';
+  const wideAway = 'Las Vegas Raiders';
+  const wideEv = event(wideHome, wideAway, 38.5, -3);
+  const wideHome2 = 'Seattle Seahawks';
+  const wideAway2 = 'San Francisco 49ers';
+  const wideEv2 = event(wideHome2, wideAway2, 38.5, -3);
+  const wide1 = projectFootball('NFL', wideEv, 6);
+  const wide2 = projectFootball('NFL', wideEv2, 6);
+  const wideOver = findSide(wide1, 'Total', /^Over/);
+  assert.strictEqual(wideOver.modelTotalRaw, 51);
+  assert.strictEqual(wideOver.modelLineGap, 12.5);
+  assert.strictEqual(wideOver.gapFlag, true);
+  for (const c of wide1) assertPickNeutral(c, wideEv);
+  for (const c of wide2) assertPickNeutral(c, wideEv2);
+  const wideGated = applyGates(scoreAll([...wide1, ...wide2]));
+  assert.ok(!wideGated.yesPool.some(c => c.modelLineGap === 12.5));
+  const wideRejected = wideGated.rejected.find(c => c.side === wideOver.side && c.matchup === wideOver.matchup);
+  assert.ok(wideRejected, '12.5-point NFL total gap was not rejected');
+  assert.strictEqual(wideRejected.rejectReason, 'nfl-projection-gap');
+
+  // 48 vs 38.5 is flagged (NFL flag starts at 8) and at or under the
+  // 10-point projection cap, so it still prices.
+  const midHome = 'Philadelphia Eagles';
+  const midAway = 'Dallas Cowboys';
   const midEv = event(midHome, midAway, 38.5, -3);
-  const midHome2 = 'Seattle Seahawks';
-  const midAway2 = 'San Francisco 49ers';
+  const midHome2 = 'Baltimore Ravens';
+  const midAway2 = 'Cincinnati Bengals';
   const midEv2 = event(midHome2, midAway2, 38.5, -3);
-  const mid1 = projectFootball('NFL', midEv, 6);
-  const mid2 = projectFootball('NFL', midEv2, 6);
+  const mid1 = projectFootball('NFL', midEv, 3);
+  const mid2 = projectFootball('NFL', midEv2, 3);
   const midOver = findSide(mid1, 'Total', /^Over/);
-  assert.strictEqual(midOver.modelTotalRaw, 51);
-  assert.strictEqual(midOver.modelLineGap, 12.5);
+  assert.strictEqual(midOver.modelTotalRaw, 48);
+  assert.strictEqual(midOver.modelLineGap, 9.5);
   assert.strictEqual(midOver.gapFlag, true);
   for (const c of mid1) assertPickNeutral(c, midEv);
   for (const c of mid2) assertPickNeutral(c, midEv2);
@@ -277,7 +301,7 @@ function assertEdgesNeverGrow(cands, ev) {
   if (tickets.length) assert.ok(flaggedLegs.length >= 1, 'flagged total did not compete for the parlay'); else assert.strictEqual(ticketsClear.length, 0);
   for (const leg of flaggedLegs) {
     assert.strictEqual(leg.gapFlag, true);
-    assert.strictEqual(leg.modelLineGap, 12.5);
+    assert.strictEqual(leg.modelLineGap, 9.5);
     for (const k of FOOTBALL_AUDIT_KEYS) assert.notStrictEqual(leg[k], undefined, k);
   }
   const midPicks = selectStraights(midGated.yesPool, 3).map(c => toPickObject(c, { modelVersion: config.MODEL_VERSION }));
@@ -285,7 +309,7 @@ function assertEdgesNeverGrow(cands, ev) {
   const midRow = midReview.find(r => r.side === midOver.side && r.matchup === midOver.matchup);
   assert.ok(midRow);
   assert.strictEqual(midRow.selected, true);
-  assert.strictEqual(midRow.gap, 12.5);
+  assert.strictEqual(midRow.gap, 9.5);
 
   // Default mode A. Hand-set NFL total K stays 0.58 and the band is not
   // applied, so the gap still has edge versus the sharp. The flag does

@@ -48,7 +48,7 @@ assert.strictEqual(cal.resolveCalMode(), 'A');
 assert.strictEqual(cal.resolveCalMode(''), 'A');
 assert.strictEqual(cal.resolveCalMode('legacy'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('0'), 'legacy');
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.ok(/shrink K is still hand-set/i.test(config.MODEL_NOTES));
 assert.ok(/Mode B stays selectable/.test(config.MODEL_NOTES));
 assert.ok(/Mode C stays selectable/.test(config.MODEL_NOTES));
@@ -143,9 +143,9 @@ const mlb = withEnv({ OMEGA_CAL_MODE: 'A' }, () => cal.calibrateCandidate({
 assert.ok(Math.abs(mlb.coverProb - (0.70 * 0.60 + 0.30 * 0.52)) < 1e-12);
 assert.strictEqual(mlb.calibK, 0.30);
 
-// Publish floors are 0. This switch does not retune shrink K.
+// Stake EV floor is 3%. This switch does not retune shrink K.
 assert.deepStrictEqual(config.GATES.minEV, {
-  MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, NHL: 0, default: 0,
+  MLB: 0.03, NFL: 0.03, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03,
 });
 assert.deepStrictEqual(config.GATES.minCoverProb, {
   MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0,

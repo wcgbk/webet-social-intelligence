@@ -30,6 +30,7 @@ exports.handler = async (event) => {
       force,
       simMode: shadow ? false : !!(body.simMode || body.sim),
       historicalSnapshot: body.historicalSnapshot,
+      includeEarly: body.includeEarly || qs.includeEarly || '',
       dryRun: !!body.dryRun,
       shadow,
       skipNarrate,

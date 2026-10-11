@@ -113,6 +113,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
   function stampCardInputs(raw) {
     if (gd.personnelExclude) raw.personnelExclude = true;
+    if (gd.startingQbOut) raw.startingQbOut = true;
     if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
     return raw;
   }

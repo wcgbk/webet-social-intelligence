@@ -99,8 +99,9 @@ const lowCover = assertSpecCard([
   dog,
 ], '2026-10-10', 'low-cover');
 assert.ok(lowCover.straights.some(s => s.side === dog.side), '30% cover with the higher edge is a straight');
-assert.strictEqual(lowCover.parlay.length, 1);
-assert.strictEqual(new Set(lowCover.parlay[0].legs.map(l => l.matchup)).size, lowCover.parlay[0].legs.length);
+// 1.5% edge misses minEdgeFor. The 30% cover misses the parlay cover minimum. No parlay.
+assert.strictEqual(lowCover.parlay.length, 0);
+assert.ok(!lowCover.straights.some(s => s.edgePct === 0.015));
 
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true }), lockAsOf), 'ev-floor');
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true }), lockAsOf), 'coverProb-floor');

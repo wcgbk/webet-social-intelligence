@@ -561,6 +561,25 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
 }
 
 /**
+ * Missing morning slots, including zero usable snaps, do not block the card.
+ * assessCaptureHealth still reports hardFail when nothing usable was stored.
+ * Generate turns that into a warning and publishes.
+ */
+function warnCaptureHealth(health, dateISO) {
+  if (!health || health.hardFail !== true) return health;
+  const warning = health.warning
+    || health.reason
+    || `CAPTURE_HEALTH: missing morning snaps for ${dateISO}; card still publishes`;
+  return {
+    ...health,
+    hardFail: false,
+    reason: null,
+    ok: false,
+    warning,
+  };
+}
+
+/**
  * Load line path for date; return { path, earliest, latest }.
  */
 async function loadLinePath(dateISO) {
@@ -642,6 +661,7 @@ module.exports = {
   missingDueSlots,
   canonicalRetrySlot,
   assessCaptureHealth,
+  warnCaptureHealth,
   loadLinePath,
   storeLinePoll,
   readJsonBlob,

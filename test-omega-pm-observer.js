@@ -268,8 +268,8 @@ const sCold = select.scoreCandidate({ ...scoreBase, _pmScoreAdj: -5 });
 assert.ok(Math.abs((sHuge - s0) - 0.002) < 1e-12);
 assert.ok(Math.abs((sCold - s0) - (-0.002)) < 1e-12);
 const ranked = select.selectStraights([
-  { ...scoreBase, matchup: 'A @ B', side: 'B', homeTeam: 'B', awayTeam: 'A', market: 'Moneyline', _pmScoreAdj: 0, coverProb: 0.55, odds: -110 },
-  { ...scoreBase, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C', market: 'Moneyline', _pmScoreAdj: 0.02, coverProb: 0.55, odds: -110 },
+  { ...scoreBase, matchup: 'A @ B', side: 'B', homeTeam: 'B', awayTeam: 'A', market: 'Moneyline', edgePct: 0.03, _pmScoreAdj: 0, coverProb: 0.55, odds: -110 },
+  { ...scoreBase, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C', market: 'Moneyline', edgePct: 0.03, _pmScoreAdj: 0.02, coverProb: 0.55, odds: -110 },
 ], 1);
 assert.strictEqual(ranked[0].matchup, 'C @ D');
 

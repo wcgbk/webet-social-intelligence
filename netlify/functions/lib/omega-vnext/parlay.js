@@ -6,8 +6,8 @@ const {
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
-const { matchupKey } = require('./select');
-const { inSlate } = require('./selection_pass');
+const { matchupKey, passesPublishFloor } = require('./select');
+const { inSlate, oneOffBypassesEarlyWindow } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { parlayCorrEnabled, PARLAY_TOTAL_RHO } = require('./gaps_flags');
@@ -342,9 +342,10 @@ function bestPositiveCombo(pool, size) {
 function optimizeParlay(yesPool, straights = [], opts = {}) {
   const cardDate = opts.cardDate || opts.dateISO || null;
   const pool = (yesPool || [])
+    .filter(c => passesPublishFloor(c))
     .filter(c => Number.isFinite(c.coverProb) && c.coverProb >= PARLAY_MIN_COVER)
     .filter(c => Number.isFinite(c.odds) && c.ev > 0)
-    .filter(c => !cardDate || (c.commenceTime && inSlate(c.commenceTime, cardDate)))
+    .filter(c => !cardDate || inSlate(c, cardDate) || oneOffBypassesEarlyWindow(c, cardDate, opts))
     .map(c => ({
       ...c,
       side: c.side,

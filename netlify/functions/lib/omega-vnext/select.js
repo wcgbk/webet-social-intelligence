@@ -12,6 +12,7 @@ const {
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
+const { minEdgeFor } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
@@ -71,8 +72,38 @@ function compareByEdge(a, b) {
   return scoreCandidate(b) - scoreCandidate(a);
 }
 
-function straightId(c) {
-  return [c && c.matchup, c && c.market, c && c.side, c && c.line, c && c.book].join('|');
+function publishMinEv(c) {
+  const table = (config.GATES && config.GATES.minEV) || {};
+  const sport = c && c.sport;
+  const n = sport && table[sport] != null ? Number(table[sport]) : Number(table.default);
+  return Number.isFinite(n) ? n : 0.03;
+}
+
+/**
+ * Published straights and parlay legs. Stake EV at the sport floor (3%)
+ * and edge at or above minEdgeFor. A lean (1.5%–3%, or a 3% EV that misses
+ * the edge curve) does not pass. Missing edge does not pass.
+ */
+function passesPublishFloor(c) {
+  const ev = Number(c && c.ev);
+  const minEV = publishMinEv(c);
+  if (!(ev + 1e-12 >= minEV)) return false;
+  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+  if (!Number.isFinite(edge) || !(edge > 0)) return false;
+  const need = minEdgeFor(c && c.odds, c && c.uncertainty);
+  return edge + 1e-12 >= need;
+}
+
+/**
+ * Label for a card that publishes only floor straights.
+ * Fewer than 3 is a short card. Zero is still a published card.
+ */
+function straightCardLabel(count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return 'no floor plays';
+  if (n === 1) return 'short card: 1 floor straight';
+  if (n < 3) return `short card: ${n} floor straights`;
+  return '3 floor straights';
 }
 
 /**
@@ -81,36 +112,26 @@ function straightId(c) {
  * already taken is skipped and the next distinct game fills the slot.
  * Set the flag false and a second side of the same game is a straight
  * when its edge is in the top N.
- * When the floor tier is short, fill the open slots from leanPool (best
- * edge first). Those rows stay tier lean. The same game rule applies.
- * A shorter pool stays short.
+ * leanPool is ignored. A short floor tier stays short. Sub-floor leans
+ * are not straights. The card still publishes (see straightCardLabel).
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
+  void leanPool;
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
   const usedGames = new Set();
   const floor = [];
   for (const c of [...(yesPool || [])].sort(compareByEdge)) {
     if (floor.length >= maxN) break;
+    if (!passesPublishFloor(c)) continue;
     if (onePer && usedGames.has(matchupKey(c))) continue;
     floor.push({
       ...c,
-      tier: c && c.tier === 'lean' ? 'lean' : 'floor',
+      tier: 'floor',
       _score: edgeRank(c),
     });
     if (onePer) usedGames.add(matchupKey(c));
   }
-  if (!Array.isArray(leanPool) || floor.length >= maxN) return floor;
-  const used = new Set(floor.map(straightId));
-  const fill = [];
-  for (const c of [...leanPool].sort(compareByEdge)) {
-    if (fill.length >= maxN - floor.length) break;
-    if (used.has(straightId(c))) continue;
-    if (onePer && usedGames.has(matchupKey(c))) continue;
-    used.add(straightId(c));
-    if (onePer) usedGames.add(matchupKey(c));
-    fill.push({ ...c, tier: 'lean', _score: edgeRank(c) });
-  }
-  return floor.concat(fill);
+  return floor;
 }
 
 /** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
@@ -423,6 +444,8 @@ function capSameGameExposure(picks, parlays) {
 module.exports = {
   edgeRank,
   scoreCandidate,
+  passesPublishFloor,
+  straightCardLabel,
   selectStraights,
   orderedByScore,
   toPickObject,

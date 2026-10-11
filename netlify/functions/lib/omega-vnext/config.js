@@ -215,7 +215,7 @@ const GATES = {
   rejectAdverseSteam: true,
 };
 
-/** Lean fill under the 3% floor. Stake cap is below the 1.25u straight max. */
+/** Lean tier under the 3% floor. Diagnostic only. It does not fill straights or parlay legs. */
 const LEAN_MIN_EV = 0.015;
 const LEAN_MAX_UNITS = 0.5;
 /** Parlay legs only. Straights have no coverProb floor. */

@@ -12,7 +12,7 @@ const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
 const { parseFootballQbMap, parseFootballPersonnel, fillNcaafQbMap } = require('./late_news');
-const { inSlate } = require('./selection_pass');
+const { inCardSlate } = require('./selection_pass');
 const { last5ByTeamFromSchedule } = require('./last5');
 
 const ODDS_REGIONS = 'us,us2,eu';
@@ -47,6 +47,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
   const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live', oddsErrors: [] };
   if (!apiKey) {
     console.log('[omega-vnext/ingest] No ODDS_API_KEY — skipping odds');
+    if (!out.oddsSnapshotTimestamp) out.oddsSnapshotTimestamp = out.fetchedAt;
     return out;
   }
 
@@ -75,7 +76,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
         out.oddsSnapshotTimestamp = data.timestamp;
       }
       const rawEvents = Array.isArray(data) ? data : (data && data.data) || [];
-      const events = filterEventsSameEtDay(rawEvents, dateISO);
+      const events = filterEventsSameEtDay(rawEvents, dateISO, opts);
       out.bySport[label] = events;
       const remaining = null; // header not available via fetch easily
       console.log(`[omega-vnext/ingest] ${label}: ${events.length}/${rawEvents.length} events (same-ET-day ${dateISO || 'n/a'})`);
@@ -85,6 +86,8 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
       out.oddsErrors.push(oddsFailureRecord(label, e));
     }
   }
+  // Live board has no historical wrapper. The fetch time is the snapshot.
+  if (!out.oddsSnapshotTimestamp) out.oddsSnapshotTimestamp = out.fetchedAt;
   return out;
 }
 
@@ -112,13 +115,13 @@ function dateParamET(dateISO) {
  * Keep events inside the selection slate for cardDateISO.
  * Name kept for callers. Window is 11:15 ET through 6:00 ET the next day.
  */
-function filterEventsSameEtDay(events, dateISO) {
+function filterEventsSameEtDay(events, dateISO, opts) {
   if (!dateISO) return events || [];
   const kept = [];
   let dropped = 0;
   for (const ev of events || []) {
-    const t = ev.commence_time || ev.commenceTime || ev.date;
-    if (t && inSlate(t, dateISO)) kept.push(ev);
+    const t = ev && (ev.commence_time || ev.commenceTime || ev.date);
+    if (t && inCardSlate(ev, dateISO, opts)) kept.push(ev);
     else dropped += 1;
   }
   if (dropped) {

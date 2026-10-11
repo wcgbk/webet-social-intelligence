@@ -191,18 +191,19 @@ function stake(pick) {
 
 // Parlay ticket stays the fixed 0.5u when every leg is a B that Kelly would stake 1.25u.
 {
+  // 1.8% clears minEdgeFor at −110 and stays grade B (under the 2% A− line).
   const pool = [
     candidate({
-      side: 'Over 7.5', market: 'Total', coverProb: 0.55, ev: 0.05, edgePct: 0.008,
+      side: 'Over 7.5', market: 'Total', coverProb: 0.55, ev: 0.05, edgePct: 0.018,
       commenceTime: '2026-09-22T23:05:00Z',
     }),
     candidate({
       matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C', side: 'D -1.5', market: 'Spread',
-      coverProb: 0.55, ev: 0.05, edgePct: 0.008, commenceTime: '2026-09-22T23:10:00Z',
+      coverProb: 0.55, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:10:00Z',
     }),
     candidate({
       matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E', side: 'F ML', market: 'Moneyline',
-      coverProb: 0.55, ev: 0.05, edgePct: 0.009, commenceTime: '2026-09-22T23:15:00Z',
+      coverProb: 0.55, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:15:00Z',
     }),
   ];
   const tickets = parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' });

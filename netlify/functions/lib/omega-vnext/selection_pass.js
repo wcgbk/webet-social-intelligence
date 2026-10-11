@@ -2,14 +2,14 @@
 
 /**
  * Selection pass. DraftKings is the execution book. Hard Rock flags only.
- * Ranking for the top 10 is stake EV. The published 3 straights stay on
- * selectStraights (calibrated edge, one game each, lean fill). See
- * SELECTION_RULES.md.
+ * Ranking for the top 10 is stake EV, one row per bet. One-per-game applies
+ * to straights only, not to the top 10. Straights are the floor tier only.
+ * See SELECTION_RULES.md.
  *
  * This module must not require gates, parlay, ingest, or hr_autocorrect.
  */
 
-const { etLocalToUtcISO } = require('./price_lock');
+const { etLocalToUtcISO, priceLockTimestamp } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { minEdgeFor } = require('./edge_floor');
 const { formatAmerican, etCalendarDate, parseEdgeFraction } = require('./odds_math');
@@ -63,17 +63,98 @@ function inSlate(commence, cardDate) {
  * not-same-et-day: every other outside window (earlier dates).
  * missing-commenceTime: no parseable start. Verify does not drop on this.
  */
-function slateReason(c, cardDate) {
+function slateReason(c, cardDate, opts) {
   if (!cardDate) return null;
   const ms = commenceMs(c);
   if (ms == null) return 'missing-commenceTime';
   const bounds = slateBounds(cardDate);
   if (!bounds) return null;
   if (ms >= bounds.startMs && ms < bounds.endMs) return null;
+  if (oneOffBypassesEarlyWindow(c, cardDate, opts)) return null;
   const et = etCalendarDate(new Date(ms).toISOString());
   if (et === String(cardDate) && ms < bounds.startMs) return 'starts-before-1115-et';
   if (ms >= bounds.endMs) return 'future-date';
   return 'not-same-et-day';
+}
+
+/** One card date. The London waiver does not exist on any other day. */
+const ONEOFF_CARD_DATE = '2026-10-11';
+
+function oneOffIncludeFlag(opts) {
+  if (opts && opts.includeEarly != null && String(opts.includeEarly).trim() !== '') {
+    return String(opts.includeEarly).trim();
+  }
+  return String(process.env.OMEGA_ONEOFF_INCLUDE_EVENT || '').trim();
+}
+
+function oneOffNowMs(opts) {
+  if (opts && Number.isFinite(Number(opts.nowMs))) return Number(opts.nowMs);
+  if (opts && Number.isFinite(Number(opts.asOfMs))) return Number(opts.asOfMs);
+  return Date.now();
+}
+
+function oneOffRequestedMs(opts) {
+  if (!opts) return null;
+  const raw = opts.oddsSnapshot != null && opts.oddsSnapshot !== ''
+    ? opts.oddsSnapshot
+    : opts.historicalSnapshot;
+  if (raw == null || raw === '') return null;
+  const n = Date.parse(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function rowTeamBlob(row) {
+  if (!row || typeof row === 'string' || typeof row === 'number') return '';
+  return [
+    row.home_team, row.away_team, row.homeTeam, row.awayTeam, row.matchup, row.id, row.eventId,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function isLondonPhiJax(row) {
+  const blob = rowTeamBlob(row);
+  const phi = /philadelphia/.test(blob) && /eagle/.test(blob);
+  const jax = /jacksonville/.test(blob) && /jaguar/.test(blob);
+  return phi && jax;
+}
+
+/**
+ * The flag is an event id or a team match for the 9:30 AM ET London game
+ * only. A different event id does not open any other early game.
+ */
+function flagMatchesLondon(flag, row) {
+  const f = String(flag || '').trim().toLowerCase();
+  if (!f || !isLondonPhiJax(row)) return false;
+  const id = String((row && (row.id || row.eventId || row.event_id)) || '').trim().toLowerCase();
+  if (id && f === id) return true;
+  if (/^[a-f0-9]{16,}$/i.test(f)) return false;
+  return /eagle|philadelphia|\bphi\b|jaguar|jacksonville|\bjax\b/.test(f);
+}
+
+/**
+ * 2026-10-11 only. Default off. An early run (before 10:30 ET) may keep the
+ * London Eagles @ Jaguars game inside the card. The 10:30 final snapshot
+ * keeps the 11:15 exclusion. A started or live game is not waived.
+ */
+function oneOffBypassesEarlyWindow(row, cardDate, opts) {
+  if (String(cardDate) !== ONEOFF_CARD_DATE) return false;
+  const flag = oneOffIncludeFlag(opts);
+  if (!flag) return false;
+  const lockMs = Date.parse(priceLockTimestamp(ONEOFF_CARD_DATE));
+  if (!Number.isFinite(lockMs)) return false;
+  const requested = oneOffRequestedMs(opts);
+  if (requested != null && requested >= lockMs) return false;
+  const nowMs = oneOffNowMs(opts);
+  if (!(nowMs < lockMs)) return false;
+  if (liveInPlayReason(row)) return false;
+  if (!flagMatchesLondon(flag, row)) return false;
+  const ms = commenceMs(row);
+  if (ms == null || !(ms > nowMs)) return false;
+  return true;
+}
+
+function inCardSlate(row, cardDate, opts) {
+  if (inSlate(row, cardDate)) return true;
+  return oneOffBypassesEarlyWindow(row, cardDate, opts);
 }
 
 function quoteFromPrices(prices, book) {
@@ -248,7 +329,11 @@ function edgeOf(c) {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
-/** Floor pool only. EV desc, edge breaks a tie. One row per bet. */
+/**
+ * Floor pool only. EV desc, edge breaks a tie. One row per bet.
+ * One-per-game is not applied here. Two bets from the same game both stay
+ * when they are different sides. Straights enforce one game in selectStraights.
+ */
 function selectTop10(pool, n) {
   const limit = n == null ? 10 : n;
   const sorted = [...(pool || [])].sort((a, b) => {
@@ -314,7 +399,7 @@ function excludedGames(rows) {
  * Missing or unparseable commence does not drop.
  * Drop a live/in-play flag, a start more than 5 minutes ago, or a slate miss.
  */
-function verifyStartReason(pick, nowMs, cardDate) {
+function verifyStartReason(pick, nowMs, cardDate, opts) {
   if (!pick) return null;
   const live = liveInPlayReason(pick);
   if (live) return live;
@@ -323,7 +408,7 @@ function verifyStartReason(pick, nowMs, cardDate) {
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   if (t < now - PREGAME_GRACE_MS) return 'live-in-play';
   if (cardDate) {
-    const reason = slateReason(pick, cardDate);
+    const reason = slateReason(pick, cardDate, { ...(opts || {}), nowMs: now });
     if (reason && reason !== 'missing-commenceTime') return reason;
   }
   return null;
@@ -355,11 +440,16 @@ function verifySchedule(picksData, nowMs) {
   const card = picksData || {};
   const cardDate = card.date || null;
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const slateOpts = {
+    includeEarly: card.includeEarly,
+    nowMs: now,
+    oddsSnapshot: card.priceLock && card.priceLock.requested,
+  };
   const dropped = [];
   const picks = [];
   let changed = false;
   for (const p of card.picks || []) {
-    const reason = verifyStartReason(p, now, cardDate);
+    const reason = verifyStartReason(p, now, cardDate, slateOpts);
     if (reason) {
       dropped.push({ pick: p.pick || p.side, matchup: p.matchup, reason });
       changed = true;
@@ -379,8 +469,8 @@ function verifySchedule(picksData, nowMs) {
     if (!(ev >= 0.03) || !(edge > 0) || !Number.isFinite(odds)) continue;
     const need = minEdgeFor(odds, c.uncertainty);
     if (edge + 1e-12 < need) continue;
-    if (verifyStartReason(c, now, cardDate)) continue;
-    if (cardDate && !inSlate(c.commenceTime, cardDate)) continue;
+    if (verifyStartReason(c, now, cardDate, slateOpts)) continue;
+    if (cardDate && !inCardSlate(c, cardDate, slateOpts)) continue;
     const pick = toPickObject({
       ...c,
       odds,
@@ -397,7 +487,7 @@ function verifySchedule(picksData, nowMs) {
   if (Array.isArray(card.parlayLegs)) {
     for (const pl of card.parlayLegs) {
       if (!pl || !Array.isArray(pl.legs)) continue;
-      const next = pl.legs.filter((leg) => !verifyStartReason(leg, now, cardDate));
+      const next = pl.legs.filter((leg) => !verifyStartReason(leg, now, cardDate, slateOpts));
       if (next.length !== pl.legs.length) {
         pl.legs = next;
         changed = true;
@@ -508,7 +598,10 @@ module.exports = {
   addDays,
   slateBounds,
   inSlate,
+  inCardSlate,
   slateReason,
+  oneOffIncludeFlag,
+  oneOffBypassesEarlyWindow,
   priceAtDraftKings,
   applyExecutionBook,
   hardRockReviewFlag,

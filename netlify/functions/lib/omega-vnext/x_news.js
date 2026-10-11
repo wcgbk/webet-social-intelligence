@@ -16,9 +16,15 @@
  */
 
 function tokenFrom(env) {
-  const src = env || process.env;
-  const raw = (src && (src.X_BEARER_TOKEN || src.TWITTER_BEARER_TOKEN)) || '';
-  return String(raw).trim();
+  // An explicit env object is the test injection. It does not fall through
+  // to the process, so `{}` stays a stub. Generate omits env and reads the
+  // Netlify runtime env here, at call time, not at module load.
+  if (env && typeof env === 'object') {
+    const injected = env.X_BEARER_TOKEN || env.TWITTER_BEARER_TOKEN || '';
+    return String(injected).trim();
+  }
+  const live = process.env.X_BEARER_TOKEN || process.env.TWITTER_BEARER_TOKEN || '';
+  return String(live).trim();
 }
 
 function classifyXItems(items) {

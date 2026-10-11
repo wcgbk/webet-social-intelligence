@@ -128,6 +128,10 @@ function gateReason(c, opts = {}) {
   // Five or more unquantified non-QB outs. Logged upstream. Not a lean.
   if (c && c.personnelExclude) return 'unquantified-injury-cluster';
 
+  // Fresh starting-QB Out. Margin still takes QB_INJURY points. The −1.5
+  // total move is not a fitted backup scoring effect, so the total is out.
+  if (c && c.startingQbOut && /total/i.test(String(c.market || ''))) return 'starting-qb-out';
+
   // Football model-vs-line gap. Only mode 'block' rejects, and that mode
   // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
   // candidate on the same score and the same gates. Moneyline is not a
@@ -153,7 +157,7 @@ function gateReason(c, opts = {}) {
   // Earlier the same morning is starts-before-1115-et. At or after 6:00
   // next day is future-date. Other dates stay not-same-et-day.
   if (GATES.sameEtDayOnly && cardDate) {
-    const slate = slateReason(c, cardDate);
+    const slate = slateReason(c, cardDate, opts);
     if (slate) return slate;
   }
   if (!Number.isFinite(c.odds)) return 'no-odds';
@@ -249,6 +253,9 @@ function applyGates(candidates, opts = {}) {
     }
     if (reason === 'unquantified-injury-cluster') {
       console.log(`[omega-vnext] unquantified-injury-cluster ${c.sport || ''} ${c.matchup || ''}`);
+    }
+    if (reason === 'starting-qb-out') {
+      console.log(`[omega-vnext] starting-qb-out ${c.sport || ''} ${c.matchup || ''} ${c.side || ''}`);
     }
     rejected.push({ ...c, rejectReason: reason });
   }

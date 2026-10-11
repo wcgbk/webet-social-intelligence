@@ -303,6 +303,19 @@ function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
   return null;
 }
 
+/**
+ * New game-status Out. Doubtful and questionable stay on the point table.
+ * IR / PUP / season-ending is already in the market and is not a fresh out.
+ */
+function isFreshQbOut(qb) {
+  if (!qb) return false;
+  const st = String(qb.qbStatus || qb.status || '').toLowerCase();
+  if (!st) return false;
+  if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
+  if (/doubtful|questionable/.test(st)) return false;
+  return /\bout\b/.test(st);
+}
+
 function qbSoftAdjust(sport, homeQb, awayQb) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
@@ -449,6 +462,9 @@ function applyGameDayAdjustments({
   const homeQb = lookupQb(home, qbByTeam, sport, fallbackSeen);
   const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
   const qb = qbSoftAdjust(sport, homeQb, awayQb);
+  // outTotalPts (NFL −1.5) still moves the projection. It is not a fitted
+  // backup scoring effect, so a fresh Out excludes totals at the gate.
+  const startingQbOut = isFreshQbOut(homeQb) || isFreshQbOut(awayQb);
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);
@@ -502,6 +518,7 @@ function applyGameDayAdjustments({
     qbNote: qb.note,
     qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
+    startingQbOut,
     qbContinuity: cont.used ? { marginAdj: cont.marginAdj, note: cont.note } : null,
     weatherNote: null,
     applied: Math.abs(hfaAdj) > 0.001 || Math.abs(restAdj) > 0.001 || Math.abs(qb.marginAdj) > 0.001 || Math.abs(qb.totalAdj || 0) > 0.001 || qb.uncBump > 0 || cont.used || !!(last5Meta && last5Meta.applied) || personnelLogs.some((row) => row.action === 'assumption-adj'),
@@ -533,6 +550,7 @@ function applyGameDayAdjustments({
     personnelExclude,
     personnelLogs,
     last5: last5Meta,
+    startingQbOut,
   };
 }
 
@@ -680,6 +698,7 @@ module.exports = {
   restCoverageCounts,
   stampRestAudit,
   restAuditFields,
+  isFreshQbOut,
   qbSoftAdjust,
   qbContinuityAdjust,
   lookupQb,

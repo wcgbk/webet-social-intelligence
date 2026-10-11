@@ -66,7 +66,7 @@ assert.ok(!picked.some((p) => p.edgePct === 0.05), 'a lower edge stays off the c
 const onlyHalves = selectStraights([
   leg(day, 0.04, 'Total'),
   leg(day, 0.03, 'Spread'),
-  leg(night, 0.02, 'Total'),
+  leg(night, 0.035, 'Total'),
 ]);
 assert.strictEqual(onlyHalves.length, 2);
 assert.ok(onlyHalves.some((p) => p.market === 'Total' && String(p.commenceTime) === day));

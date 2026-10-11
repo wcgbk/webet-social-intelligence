@@ -6,7 +6,9 @@
  *
  * Sets OMEGA_REPLAY_NO_WRITE=1 before the pipeline loads. That flag blocks
  * blob and store writes even if a caller forgot dryRun. ODDS_API_KEY is
- * read from the environment by ingest. This script never prints env values.
+ * read from the environment by ingest. x_news.js reads X_BEARER_TOKEN or
+ * TWITTER_BEARER_TOKEN from this process at call time. This script never
+ * prints env values or the token. It reports xNews mode on stderr.
  *
  *   OMEGA_REPLAY_NO_WRITE=1 ODDS_API_KEY=... node tools/omega-dryrun-selection.js
  *   node tools/omega-dryrun-selection.js --date 2026-10-11
@@ -57,6 +59,9 @@ function redact(text) {
     parlay: (card && card.parlayLegs) || [],
     xNews: sel.xNews || null,
   };
+  const mode = out.xNews && out.xNews.mode;
+  const count = out.xNews && out.xNews.count;
+  console.error(`[omega-dryrun] xNews mode=${mode || 'unknown'} count=${count == null ? 0 : count}`);
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 })().catch((err) => {
   console.error(redact(err && err.message ? err.message : err));

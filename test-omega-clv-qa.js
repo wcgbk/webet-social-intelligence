@@ -214,19 +214,19 @@ assert.strictEqual(enriched[0].line, -3);
   const yesPool = [
     {
       sport: 'NFL', matchup: 'A @ B', side: 'B -3', market: 'Spread', odds: -110,
-      coverProb: 0.56, ev: 0.05, predictedClv: 2.5, liquid: true, uncertainty: 0.1,
+      coverProb: 0.56, ev: 0.05, edgePct: 0.03, predictedClv: 2.5, liquid: true, uncertainty: 0.1,
       commenceTime: now, homeTeam: 'B', awayTeam: 'A', book: 'dk',
       lockSnapshot: { odds: -110, line: -3, book: 'dk', capturedAt: now },
     },
     {
       sport: 'MLB', matchup: 'C @ D', side: 'Under 8.5', market: 'Total', odds: -105,
-      coverProb: 0.55, ev: 0.045, predictedClv: 1.2, liquid: true, uncertainty: 0.12,
+      coverProb: 0.55, ev: 0.045, edgePct: 0.03, predictedClv: 1.2, liquid: true, uncertainty: 0.12,
       commenceTime: now, homeTeam: 'D', awayTeam: 'C', book: 'dk', line: 8.5,
       lockSnapshot: { odds: -105, line: 8.5, book: 'dk', capturedAt: now },
     },
     {
       sport: 'NCAAF', matchup: 'E @ F', side: 'F -7', market: 'Spread', odds: -110,
-      coverProb: 0.54, ev: 0.04, predictedClv: 0.8, liquid: true, uncertainty: 0.2,
+      coverProb: 0.54, ev: 0.04, edgePct: 0.03, predictedClv: 0.8, liquid: true, uncertainty: 0.2,
       commenceTime: now, homeTeam: 'F', awayTeam: 'E', book: 'dk',
       lockSnapshot: { odds: -110, line: -7, book: 'dk', capturedAt: now },
     },

@@ -22,8 +22,10 @@ Spreads and moneylines already reject past `FB_MARKET_GAP.NFL.margin` (10) with 
 
 ## 4. Inputs at 10:30 AM ET
 
+A run before 10:30 ET prices the current board (`resolveGenerateOddsSnapshot` returns null). The log line `odds snapshot requested=live served=...` is the time the odds feed actually returned. The 10:30 final run requests `priceLockTimestamp` (10:30 ET). Missing morning capture slots `0600`, `0730`, `0900`, and `0915` are a `captureHealthWarning`. They do not throw and they do not withhold the card. One capture retry still runs when a due slot is empty.
+
 - ESPN football injuries for any player: Out, Doubtful, Questionable, deactivations, and transactions, parsed from the injuries payload the QB map already downloads (`parseFootballPersonnel`). No second HTTP call.
-- X recent search when `X_BEARER_TOKEN` or `TWITTER_BEARER_TOKEN` is set. The token is a Bearer header only. It is never logged and never stored on the card. The card keeps `{ mode, count }`.
+- X recent search when `X_BEARER_TOKEN` or `TWITTER_BEARER_TOKEN` is set. `x_news.js` reads those names from the process environment at call time (Netlify injects them). A test may pass an `env` object instead. The token is a Bearer header only. It is never logged and never stored on the card. The card and the dry run keep `{ mode, count }`.
 - No token: `x_news.js` is a stub (`mode: "stub"`). It does not fetch. **ASSUMPTION:** an X post is not a priced coefficient. Unmatched text is logged and does not move a number.
 - Weather (wind, precip, roof) and stadium / neutral site stay on the existing football weather and HFA paths. A dome or a closed retractable roof adjusts 0. Neutral site zeroes HFA.
 - Last 5 completed margins are shrunk inside the pre-market rating (`last5.js`), before `applyEngineStack` and before the market blend. They are not added after the edge.
@@ -32,7 +34,7 @@ Spreads and moneylines already reject past `FB_MARKET_GAP.NFL.margin` (10) with 
 
 ## 5. Sport modules
 
-- NFL: key-number mass at 3 and 7, QB out/doubtful, rest days, and wind stay on the existing modules. Those coefficients are not retuned here.
+- NFL: key-number mass at 3 and 7, QB out/doubtful, rest days, and wind stay on the existing modules. Those coefficients are not retuned here. `qbSoftAdjust` still moves the margin (NFL 3.0, doubtful × 0.75) and the total (NFL −1.5, cap 3.0). **ASSUMPTION:** −1.5 is not a fitted backup-QB scoring effect. A starting QB with a new game-status Out excludes every total (`starting-qb-out`). Doubtful and questionable totals stay. IR / PUP / season-ending is not a fresh Out. Spreads and moneylines stay.
 - NCAAF: opponent-adjusted priors and the FBS/FCS split stay in `sports/epa.js` (`solveNcaafOpponentRatings`, `isFbsTeamId`).
 - NHL: a goalie with `confirmed === undefined` is still priced from the given save rate. `confirmed === false` prices the projected starter and a backup, then keeps the residual closer to zero. A missing starter save rate still returns none.
 
@@ -40,11 +42,13 @@ Spreads and moneylines already reject past `FB_MARKET_GAP.NFL.margin` (10) with 
 
 ## 6. Rank, floors, top 10, three straights, parlay
 
-The floor pool is stake EV ≥ 3% (`GATES.minEV`) and edge vs the de-vigged sharp at or above `minEdgeFor` in `edge_floor.js` (1.75% at −110, +0.05 per implied point of plus-money distance from −110, +0.04 per uncertainty point above 0.15, cap 6%). That curve is wired in `gateReason`. It is not retuned. Leans stay at 1.5% EV and 0.5u. Floors are not lowered to fill the card.
+The floor pool is stake EV ≥ 3% (`GATES.minEV`) and edge vs the de-vigged sharp at or above `minEdgeFor` in `edge_floor.js` (1.75% at −110, +0.05 per implied point of plus-money distance from −110, +0.04 per uncertainty point above 0.15, cap 6%). That curve is wired in `gateReason`. It is not retuned. Leans stay at 1.5% EV and 0.5u in the lean pool. Floors are not lowered to fill the card.
 
-Top 10 is the floor pool sorted by stake EV. An EV tie breaks on edge. One row per bet (matchup, start, market, side, line).
+Top 10 is the floor pool sorted by stake EV. An EV tie breaks on edge. One row per bet (matchup, start, market, side, line). One-per-game does not apply to the top 10. Two different bets from the same game both appear. A short floor pool publishes fewer than 10 rows. It is not padded with leans.
 
-The published three straights stay `selectStraights`: calibrated edge, one straight per game, lean fill when the floor tier is short. The parlay stays `optimizeParlay` (45% cover, positive combined EV, those three straights when they qualify, otherwise the next positive-EV distinct games).
+Published straights are `selectStraights` on that same floor pool only: calibrated edge, one straight per game, up to three. `leanPool` is ignored. A candidate under 3% EV or under `minEdgeFor` is not a straight and not a parlay leg. If fewer than three pass, the card still publishes that shorter set. It never blocks and it never fills the open slots with sub-floor picks. `summary.cardLabel` and `selection.cardLabel` say `3 floor straights`, `short card: 2 floor straights`, `short card: 1 floor straight`, or `no floor plays`.
+
+The parlay stays `optimizeParlay` on the floor pool (45% cover, positive combined EV, those straights when they qualify, otherwise the next floor edges on distinct games). A 2-leg is allowed. No positive floor parlay means no parlay. The straights still publish.
 
 ## 7. Live and in-play
 
@@ -53,6 +57,8 @@ The published three straights stay `selectStraights`: calibrated edge, one strai
 ## 8. Slate window
 
 Eligible commence times are `>= 11:15:00 ET` on the card date and `< 06:00:00 ET` the next calendar day. Reasons:
+
+One-off, default off, date `2026-10-11` only. `OMEGA_ONEOFF_INCLUDE_EVENT` or the request field `includeEarly` may name the London Philadelphia Eagles @ Jacksonville Jaguars game by event id or by a team match (`Eagles`, `Jaguars`). An early run, before the 10:30 ET snapshot, then keeps that single game even though it starts at 9:30 AM ET. The 10:30 final run keeps `starts-before-1115-et`. A started or live game is still rejected. Any other early game stays out.
 
 - `starts-before-1115-et` — same ET date, before 11:15
 - `future-date` — at or after 06:00 ET the next day
@@ -65,6 +71,8 @@ The same window filters odds events (`filterEventsSameEtDay` keeps its name) and
 
 Non-QB personnel uses `personnel.js`. Quarterbacks are skipped here because `qbSoftAdjust` already prices them. Kickers, punters, and any position that is not in the priced set are logged and do not move the margin.
 
-**ASSUMPTION (non-QB):** one Out skill or offensive-line player is 0.20 points toward the opponent. Doubtful weighs 0.75. Questionable weighs 0.35. Each side is capped at 0.60 before the two sides are netted. Five or more full outs on one side sets `personnelExclude` and the gate reason `unquantified-injury-cluster`. The cluster is an exclusion, not a larger invented number.
+**ASSUMPTION (non-QB):** one Out skill or offensive-line player is 0.20 points toward the opponent. Doubtful weighs 0.75. Questionable weighs 0.35. Inactives and deactivations count as Out. Each side is capped at 0.60 before the two sides are netted. Five or more full outs on one side sets `personnelExclude` and the gate reason `unquantified-injury-cluster`. The cluster is an exclusion, not a larger invented number.
+
+Injured reserve, PUP, and season-ending are already in the market. They are logged as `logged-priced-in`. They do not move the margin and they do not count toward the cluster. Cincinnati @ Miami is a cluster only when a side still has five game-status outs after those long-term rows are dropped. Jalen Davis (CB, injured reserve) is not one of the five.
 
 X text that does not match a quantified ESPN status is log-only.

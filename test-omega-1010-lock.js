@@ -1,7 +1,7 @@
 'use strict';
-// v12.3.24 spec: 10:30 ET price lock, Hard Rock review flag, 3% EV floor,
-// 1.5% lean fill, +EV parlay with a 45% cover on each leg.
-// Replays the 2026-10-10 morning snapshot. No network.
+// v12.3.24 spec: 10:30 ET price lock, Hard Rock review flag, 3% EV floor.
+// Leans stay in the lean pool and do not fill straights. +EV parlay with a
+// 45% cover on each leg. Replays the 2026-10-10 morning snapshot. No network.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -101,8 +101,8 @@ assert.strictEqual(mixed.leanPool[0].leanReason, 'edge-floor');
 assert.strictEqual(mixed.rejected.length, 0);
 assert.strictEqual(
   selectStraights(mixed.yesPool, 3, mixed.leanPool).length,
-  2,
-  'best available still publishes',
+  1,
+  'short card publishes the floor straight and does not fill the lean',
 );
 
 const floorA = side({ edgePct: 0.05, ev: 0.06, side: 'Floor A' });
@@ -116,9 +116,9 @@ assert.strictEqual(leanGated.yesPool.length, 0);
 assert.strictEqual(leanGated.leanPool.length, 1);
 assert.strictEqual(leanGated.leanPool[0].leanReason, 'ev-floor');
 const filled = selectStraights([floorA, floorB], 3, [leanRow]);
-assert.strictEqual(filled.length, 3);
-assert.deepStrictEqual(filled.map(c => c.tier), ['floor', 'floor', 'lean']);
-const leanPick = toPickObject(filled[2]);
+assert.strictEqual(filled.length, 2);
+assert.deepStrictEqual(filled.map(c => c.tier), ['floor', 'floor']);
+const leanPick = toPickObject({ ...leanRow, tier: 'lean' });
 assert.strictEqual(leanPick.tier, 'lean');
 assert.ok(parseFloat(leanPick.units) <= 0.5, leanPick.units);
 assert.strictEqual(selectStraights([floorA], 3, []).length, 1);
@@ -127,8 +127,7 @@ const secondLean = side({
   matchup: 'G @ H', homeTeam: 'H', awayTeam: 'G',
 });
 const leansOnly = selectStraights([], 3, [leanRow, secondLean]);
-assert.strictEqual(leansOnly.length, 2);
-assert.ok(leansOnly.every(c => c.tier === 'lean'));
+assert.strictEqual(leansOnly.length, 0);
 const edgeLean = applyGates([side({ edgePct: 0.01, ev: 0.05 })], asOf);
 assert.strictEqual(edgeLean.leanPool.length, 1);
 assert.strictEqual(edgeLean.leanPool[0].leanReason, 'edge-floor');
@@ -160,10 +159,11 @@ assert.ok(parseFloat(fallback[0].ev) > 0, fallback[0].ev);
 
 // ── Generate wires the lock without flipping replayLike ──
 const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
-assert.ok(indexSrc.includes('resolveGenerateOddsSnapshot(dateISO, opts)'));
+assert.ok(indexSrc.includes('resolveGenerateOddsSnapshot(dateISO, { ...opts, nowMs })'));
 assert.ok(indexSrc.includes('historicalSnapshot: oddsSnapshot'));
 assert.ok(indexSrc.includes('const replayLike = !!(opts.historicalSnapshot || opts.replay)'));
-assert.ok(indexSrc.includes('if (dryRun && captureHealth.hardFail)'));
+assert.ok(indexSrc.includes('warnCaptureHealth(captureHealth, dateISO)'));
+assert.ok(!indexSrc.includes("err.code = 'CAPTURE_HEALTH'"));
 const verifySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/verify-picks-omega.js'), 'utf8');
 assert.ok(verifySrc.includes('reviewHardRock(picksData, sportGames)'));
 assert.ok(!verifySrc.includes('autoCorrectHardRock(picksData, sportGames)'));

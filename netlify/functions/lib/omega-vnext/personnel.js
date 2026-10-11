@@ -12,6 +12,11 @@
  * Questionable weighs 0.35. Each side is capped at 0.60 points before the
  * two sides are netted. Five or more non-QB outs on one side is a cluster:
  * the game is excluded instead of inventing a larger number.
+ *
+ * Long-term IR, PUP, and season-ending designations are already in the
+ * market. They do not move the margin and they do not count toward the
+ * cluster. Only a new game-status Out, Doubtful, Questionable, inactive,
+ * or deactivation is priced.
  */
 const NON_QB_ASSUMPTION = Object.freeze({
   outPoints: 0.20,
@@ -46,9 +51,16 @@ function isSpecialist(pos) {
     || p === 'punter' || p === 'kicker' || p === 'long snapper';
 }
 
+/** IR / PUP / season-ending. Already priced. Not a game-status out. */
+function isLongTermRosterStatus(status) {
+  const s = String(status || '').toLowerCase();
+  return /injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(s);
+}
+
 function statusWeight(status) {
   const s = String(status || '').toLowerCase();
-  if (/out|ruled out|injured reserve|\bir\b|deactivat/.test(s)) return 1;
+  if (isLongTermRosterStatus(s)) return 0;
+  if (/inactive|deactivat|ruled out|\bout\b/.test(s)) return 1;
   if (/doubtful/.test(s)) return NON_QB_ASSUMPTION.doubtfulWeight;
   if (/questionable/.test(s)) return NON_QB_ASSUMPTION.questionableWeight;
   return 0;
@@ -83,6 +95,10 @@ function sidePoints(rows, side) {
     const position = r.position || '';
     const name = r.name || null;
     if (isQbPosition(position)) continue;
+    if (isLongTermRosterStatus(status)) {
+      logs.push({ side, name, position, status, action: 'logged-priced-in', points: 0 });
+      continue;
+    }
     const weight = statusWeight(status);
     if (!weight) {
       logs.push({ side, name, position, status, action: 'logged-unquantified', points: 0 });
@@ -131,6 +147,7 @@ module.exports = {
   conservativeNonQbAdj,
   rowsForTeam,
   statusWeight,
+  isLongTermRosterStatus,
   isQbPosition,
   isSpecialist,
 };

@@ -110,10 +110,11 @@ function names(card) {
 // Fallback: three distinct straights whose combined EV is not positive
 // (same-direction total haircut). The search publishes the +EV 2-leg.
 {
+  // Stake EV clears the 3% floor. The same-direction haircut is what makes the 3-leg combo non-positive.
   const cover = 0.538;
-  const s1 = row('A @ B', 'Under 41.5', 0.06, cover, 0.027);
-  const s2 = row('C @ D', 'Under 48.5', 0.05, cover, 0.027);
-  const s3 = row('E @ F', 'Under 44', 0.04, cover, 0.027);
+  const s1 = row('A @ B', 'Under 41.5', 0.06, cover, 0.04);
+  const s2 = row('C @ D', 'Under 48.5', 0.05, cover, 0.04);
+  const s3 = row('E @ F', 'Under 44', 0.04, cover, 0.04);
   const straights = [s1, s2, s3].map(c => straightPick(c));
   const card = optimizeParlay([s1, s2, s3], straights, { cardDate: DAY });
   assert.strictEqual(card.length, 1);

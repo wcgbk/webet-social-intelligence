@@ -11,11 +11,13 @@
  * not race generate; they are steam history, not the price.
  *
  * Selection uses every input available at 10:30 AM America/New_York.
- * A live card always requests that historical odds snapshot. DraftKings is
- * the execution book (selection_pass). A later generate must not refetch
- * the live board. An explicit historicalSnapshot (replay) is left alone.
- * The publish cron stays on its existing schedule. This timestamp is the
- * odds snapshot, not the cron.
+ * A run at or after 10:30 ET requests that historical odds snapshot.
+ * A run before 10:30 ET uses the current board. It must not ask the odds
+ * API for a timestamp that has not happened yet. The served time is logged
+ * after the fetch. DraftKings is the execution book (selection_pass).
+ * An explicit historicalSnapshot (replay) is left alone. The publish cron
+ * stays on its existing schedule. This timestamp is the odds snapshot,
+ * not the cron.
  */
 
 function tzOffsetMs(date, timeZone) {
@@ -63,13 +65,17 @@ function priceLockTimestamp(dateISO) {
 
 /**
  * Odds `date=` the generator prices from.
- * Replay (`opts.historicalSnapshot`) wins. Otherwise the 10:30 ET lock.
- * Null only when the date is not a card day; ingest then stays on the live URL.
+ * Replay (`opts.historicalSnapshot`) wins. At or after 10:30 ET, the lock.
+ * Before 10:30 ET, null: ingest uses the live URL and records the served time.
+ * Null also when the date is not a card day.
  */
 function resolveGenerateOddsSnapshot(dateISO, opts = {}) {
   if (opts && opts.historicalSnapshot) return opts.historicalSnapshot;
   if (!dateISO || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO))) return null;
-  return priceLockTimestamp(dateISO);
+  const lock = priceLockTimestamp(dateISO);
+  const nowMs = opts.nowMs != null ? Number(opts.nowMs) : Date.now();
+  if (Number.isFinite(nowMs) && nowMs < Date.parse(lock)) return null;
+  return lock;
 }
 
 module.exports = {

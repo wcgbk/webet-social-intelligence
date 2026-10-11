@@ -10,10 +10,10 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
-const { applyExecutionBook, top10Rows, excludedGames } = require('./selection_pass');
+const { applyExecutionBook, top10Rows, excludedGames, oneOffIncludeFlag } = require('./selection_pass');
 const { fetchXNews } = require('./x_news');
 const { replayNoWrite } = require('./no_write');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -24,7 +24,7 @@ const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_
 const { attachGenerateHealth } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
-const { loadLinePath, annotateLineMoves, assessCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
+const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
 const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
@@ -231,14 +231,21 @@ async function generateOmegaVnext(opts = {}) {
   // URL only, so a late live generate still uses Date.now() for pregame,
   // still runs PM, and still writes the ledger unless OMEGA_REPLAY_NO_WRITE.
   const replayLike = !!(opts.historicalSnapshot || opts.replay);
-  const oddsSnapshot = resolveGenerateOddsSnapshot(dateISO, opts);
+  const nowMs = now.getTime();
+  const includeEarly = oneOffIncludeFlag(opts);
+  const oddsSnapshot = resolveGenerateOddsSnapshot(dateISO, { ...opts, nowMs });
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow} oddsSnapshot=${oddsSnapshot || 'live'} replay=${replayLike}`);
 
   const fetched = await ingest(dateISO, {
     historicalSnapshot: oddsSnapshot,
+    includeEarly,
+    nowMs,
+    oddsSnapshot,
   });
   const snap = applyUnresolvedSkip(fetched);
+  const servedSnapshot = (snap && snap.oddsSnapshotTimestamp) || null;
+  console.log(`[omega-vnext] odds snapshot requested=${oddsSnapshot || 'live'} served=${servedSnapshot || 'unknown'}`);
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
   console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
 
@@ -354,16 +361,18 @@ async function generateOmegaVnext(opts = {}) {
     };
   }
 
-  // A no-save preview must not write a morning snap and must not withhold
-  // the priced card. Live generate still hard-fails on zero usable snaps.
-  if (dryRun && captureHealth.hardFail) {
-    captureHealth = {
-      ...captureHealth,
-      hardFail: false,
-      reason: null,
-      ok: false,
-      warning: `CAPTURE_HEALTH: dryRun continues without morning snaps for ${dateISO} (no-save; live generate still hard-fails)`,
-    };
+  // Missing 0600/0730/0900/0915 slots are a warning. Retry already ran.
+  // The card always publishes. Zero usable snaps do not hard-fail.
+  if (captureHealth.hardFail) {
+    console.warn(JSON.stringify({
+      event: 'captureHealthWarning',
+      code: 'CAPTURE_HEALTH',
+      date: dateISO,
+      note: 'missing morning capture slots do not block the card',
+      missingSlotsET: captureHealth.missingSlotsET,
+      usableSnapCount: captureHealth.usableSnapCount,
+    }));
+    captureHealth = warnCaptureHealth(captureHealth, dateISO);
   }
 
   if (linePathMeta.earliest) {
@@ -387,13 +396,6 @@ async function generateOmegaVnext(opts = {}) {
     } catch (e) {
       console.warn(JSON.stringify({ event: 'captureHealthOpsSoftFail', date: dateISO, error: e.message }));
     }
-  }
-
-  if (captureHealth.hardFail) {
-    const err = new Error(captureHealth.reason || `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`);
-    err.code = 'CAPTURE_HEALTH';
-    err.captureHealth = captureHealth;
-    throw err;
   }
 
   // Kalshi/Polymarket soft features BEFORE gates so yesPool carries _pmScoreAdj
@@ -490,7 +492,7 @@ async function generateOmegaVnext(opts = {}) {
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
-  const gateOpts = { cardDate: dateISO };
+  const gateOpts = { cardDate: dateISO, includeEarly, nowMs, oddsSnapshot };
   if (replayLike) {
     const asOfMs = Date.parse(opts.historicalSnapshot);
     if (Number.isFinite(asOfMs)) gateOpts.asOfMs = asOfMs;
@@ -502,7 +504,7 @@ async function generateOmegaVnext(opts = {}) {
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
   console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
 
-  const selected = selectStraights(yesPool, MAX_STRAIGHTS, leanPool);
+  const selected = selectStraights(yesPool, MAX_STRAIGHTS);
 
   // QA hard-fails before narrate/store — drop + refill; empty OK
   let qaCtx = {};
@@ -517,7 +519,6 @@ async function generateOmegaVnext(opts = {}) {
   const qa = applyHardFails(selected, yesPool, qaCtx, {
     maxN: MAX_STRAIGHTS,
     modelVersion: MODEL_VERSION,
-    leanPool,
   });
   let picks = qa.picks;
   const hardFails = qa.hardFails || [];
@@ -527,14 +528,14 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
   picks = applyDailyCap(picks);
 
-  // Floor plus lean, minus QA hard-fail sides. When the three published
+  // Floor only. A lean does not become a parlay leg. When the published
   // straights are distinct games, each cover is >= 45%, and combined EV
   // is positive, the parlay is those straights. Otherwise the best
-  // positive-EV edges on distinct games, then a 2-leg.
+  // positive-EV floor edges on distinct games, then a 2-leg.
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
-  const poolForParlay = yesPool.concat(leanPool).filter(c => !hfKeys.has(`${c.matchup}|${c.side}`));
+  const poolForParlay = yesPool.filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`));
   const parlayEligible = poolForParlay.filter(c => Number(c.coverProb) >= PARLAY_MIN_COVER && c.ev > 0 && Number.isFinite(c.odds)).length;
-  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
+  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO, includeEarly, nowMs, oddsSnapshot });
 
   let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
   if (!skipNarrate) {
@@ -549,7 +550,7 @@ async function generateOmegaVnext(opts = {}) {
     if (narr.rejections && narr.rejections.length) {
       const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
       const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
-      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
+      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO, includeEarly, nowMs, oddsSnapshot });
       parlayLegs = await narrateParlayLegsOnly({
         parlayLegs,
         dateFormatted,
@@ -637,6 +638,7 @@ async function generateOmegaVnext(opts = {}) {
       sportsCovered,
       modelVersion: MODEL_VERSION,
       qaHardFails: hardFails.length,
+      cardLabel: straightCardLabel(picks.length),
     },
     generatedAt: now.toISOString(),
     parlayLegs: empty ? [] : parlayLegs,
@@ -666,10 +668,11 @@ async function generateOmegaVnext(opts = {}) {
     captureHealth: captureHealth || null,
     priceLock: {
       requested: oddsSnapshot || null,
-      servedAt: (snap && snap.oddsSnapshotTimestamp) || null,
+      servedAt: servedSnapshot,
       note: (snap && snap.snapshotNote) || null,
       replay: replayLike,
     },
+    includeEarly: includeEarly || null,
     gateCounts: {
       yes: yesPool.length,
       floor: yesPool.length,
@@ -686,7 +689,8 @@ async function generateOmegaVnext(opts = {}) {
     // Private. publicPicksPayload drops selection. Top 10 is EV rank on the
     // floor pool. Straights above stay edge-ranked.
     selection: {
-      snapshotTime: oddsSnapshot || null,
+      snapshotTime: servedSnapshot || oddsSnapshot || null,
+      cardLabel: straightCardLabel(picks.length),
       top10: top10Rows(yesPool, 10),
       excludedGames: excludedGames([
         ...dkExcluded.map((c) => ({ ...c, rejectReason: c.excludeReason || 'no-draftkings-line' })),

@@ -617,7 +617,8 @@ function blendedNflMargin(base, home, away) {
   const totalAnchor = edgeMod.noVigPinnacleCircaImplied(totalBundles, totalBundles.find(b => b.side === 'Over'));
   const pinSpread = oddsMath.noVigTwoWay(-110, -110).p1;
   const circaSpread = oddsMath.noVigTwoWay(-108, -112).p1;
-  assert.ok(Math.abs(spreadAnchor - (pinSpread + circaSpread) / 2) < 1e-9, 'Pinnacle and Circa share the anchor equally');
+  assert.ok(Math.abs(spreadAnchor - pinSpread) < 1e-9, 'Pinnacle paired no-vig is the anchor');
+  assert.ok(Math.abs(spreadAnchor - circaSpread) > 1e-6);
   const dkSpread = oddsMath.americanToImplied(-105);
   assert.ok(Math.abs(spreadAnchor - dkSpread) > 0.005);
   const pSpread = common.spreadCoverProb(config.HFA.MLB, -1.5, 'MLB');
@@ -627,8 +628,7 @@ function blendedNflMargin(base, home, away) {
   assert.ok(Math.abs(total.modelRawP - common.blendWithMarket(pTotal, totalAnchor, 0.45)) < 1e-9);
   const pMl = common.mlFromSpread(config.HFA.MLB, 'MLB');
   const pinMl = oddsMath.noVigTwoWay(-130, 110).p1;
-  const circaMl = oddsMath.noVigTwoWay(-128, 108).p1;
-  const mlAnchor = (pinMl + circaMl) / 2;
+  const mlAnchor = pinMl;
   assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, mlAnchor, 0.5)) < 1e-9);
   assert.ok(Math.abs(ml.modelRawP - common.blendWithMarket(pMl, oddsMath.americanToImplied(-130), 0.5)) > 1e-3, 'ML anchor is no-vig, not the vigged Pinnacle price');
 
@@ -646,6 +646,8 @@ function blendedNflMargin(base, home, away) {
   ];
   const paired = edgeMod.sharpFairForSide(splitPin, 'Home', -1.5);
   assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Circa pair when Pinnacle is one-sided');
+  const circaAnchor = edgeMod.noVigPinnacleCircaImplied(splitPin, splitPin[0]);
+  assert.ok(Math.abs(circaAnchor - 0.5) < 1e-9, 'Circa is the anchor when Pinnacle has no two-way price');
 }
 
 // Season run totals must not saturate the moneyline, and a starter still moves it.

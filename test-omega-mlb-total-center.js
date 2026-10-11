@@ -73,7 +73,7 @@ function mean(xs) {
   return xs.reduce((s, x) => s + x, 0) / xs.length;
 }
 
-// Sharp line: Pinnacle and Circa averaged. Other sharp books only if both are missing.
+// Sharp line: Pinnacle point first, else Circa, else the median of other sharp books.
 {
   const pinOnly = event('Los Angeles Dodgers', 'San Francisco Giants', 8.5);
   assert.strictEqual(env.sharpNoVigTotal(pinOnly), 8.5);
@@ -86,7 +86,7 @@ function mean(xs) {
       { key: 'draftkings', markets: [{ key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 6 }] }] },
     ],
   };
-  assert.strictEqual(env.sharpNoVigTotal(both), 8.5);
+  assert.strictEqual(env.sharpNoVigTotal(both), 8);
   const bookOnly = {
     home_team: 'A',
     away_team: 'B',

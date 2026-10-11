@@ -21,8 +21,8 @@ const both = {
     { key: 'circa', markets: [{ key: 'totals', outcomes: [{ name: 'Over', point: 9, price: -105 }, { name: 'Under', point: 9, price: -115 }] }] },
   ],
 };
-assert.strictEqual(env.sharpPostedTotal(both), 8.5);
-assert.strictEqual(env.sharpNoVigTotal(both), 8.5);
+assert.strictEqual(env.sharpPostedTotal(both), 8);
+assert.strictEqual(env.sharpNoVigTotal(both), 8);
 
 function snap(standings, events) {
   const ev = events || [{ home_team: 'Boston Bruins', away_team: 'Buffalo Sabres', commence_time: '2026-10-10T23:00:00Z' }];

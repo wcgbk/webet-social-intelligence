@@ -572,21 +572,19 @@ function totalPointForBook(event, book) {
 }
 
 /**
- * Median posted total point among sharp books. Not a de-vigged probability.
- * Pinnacle and Circa (circa, else circasports) at equal weight when both
- * post a total. One of them alone when the other is missing. Otherwise
- * the median of the other sharp books. No sharp total → null (that game
- * does not enter the slate mean).
- * sharpNoVigTotal is the historical name. The math is unchanged.
+ * Posted total point. Not a de-vigged probability.
+ * Pinnacle's point when it posts one. Circa (circa, else circasports) only
+ * when Pinnacle does not. Otherwise the median of the other sharp books.
+ * No sharp total → null (that game does not enter the slate mean).
+ * sharpNoVigTotal is the historical name.
  */
 function sharpPostedTotal(event) {
   if (!event) return null;
   const pin = totalPointForBook(event, 'pinnacle');
+  if (Number.isFinite(pin)) return pin;
   let circa = totalPointForBook(event, 'circa');
   if (circa == null) circa = totalPointForBook(event, 'circasports');
-  const anchored = [pin, circa].filter(v => Number.isFinite(v));
-  if (anchored.length === 2) return (anchored[0] + anchored[1]) / 2;
-  if (anchored.length === 1) return anchored[0];
+  if (Number.isFinite(circa)) return circa;
   const sharpSet = new Set((SHARP_BOOKS || []).map(b => String(b).toLowerCase()));
   const pts = [];
   const seen = new Set();

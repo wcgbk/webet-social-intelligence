@@ -331,17 +331,18 @@ function noVigForBook(sideBundles, target, book) {
 }
 
 /**
- * Spread/total market anchor: no-vig Pinnacle and Circa at equal weight.
- * One book alone is used when the other has no two-way price.
- * Missing both falls back to the existing sharp no-vig pair (still not prices[0]).
+ * Spread/total/ML market anchor: Pinnacle's paired no-vig when that book
+ * posts both sides. Circa (circa, else circasports) only when Pinnacle has
+ * no two-way price. Missing both falls back to sharpFairForSide.
  */
 function noVigPinnacleCircaImplied(sideBundles, target) {
   if (!target) return null;
   const pin = noVigForBook(sideBundles, target, 'pinnacle');
+  if (pin != null && Number.isFinite(pin)) return pin;
   const circa = noVigForBook(sideBundles, target, 'circa');
-  const circaAlt = circa != null ? circa : noVigForBook(sideBundles, target, 'circasports');
-  const parts = [pin, circaAlt].filter(v => v != null && Number.isFinite(v));
-  if (parts.length) return parts.reduce((s, v) => s + v, 0) / parts.length;
+  if (circa != null && Number.isFinite(circa)) return circa;
+  const circaAlt = noVigForBook(sideBundles, target, 'circasports');
+  if (circaAlt != null && Number.isFinite(circaAlt)) return circaAlt;
   return sharpFairForSide(sideBundles, target.side, target.point);
 }
 

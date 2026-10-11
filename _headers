@@ -6,6 +6,8 @@
 # Pick pages fetch live scores client-side; HTML can cache briefly.
 /daily-omega/*
   Cache-Control: public, max-age=120, must-revalidate
+/agentics/*
+  Cache-Control: public, max-age=120, must-revalidate
 /nfl/*
   Cache-Control: public, max-age=120, must-revalidate
 /cfb/*

@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    if (document.cookie.split(';').some(function (c) { return c.trim().indexOf('ga_exclude=') === 0; })) {
+      window['ga-disable-G-848D47V084'] = true;
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WeBetAI - Social Intelligence | Agentics</title>
+  <meta name="description" content="Shadow and paper Omega positions matched to Polymarket. Record, P/L, ROI, drawdown limits, and closing-line value. Display only." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/agentics" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Agentics" />
+  <meta property="og:description" content="Shadow and paper Omega positions matched to Polymarket. Record, P/L, ROI, drawdown limits, and closing-line value. Display only." />
+  <meta property="og:image" content="https://webetsocial.com/edge-og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Agentics" />
+  <meta name="twitter:description" content="Shadow and paper Omega positions matched to Polymarket. Record, P/L, ROI, drawdown limits, and closing-line value. Display only." />
+  <meta name="twitter:image" content="https://webetsocial.com/edge-og-image.png" />
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.0.1/400.css" />
+
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --green-light: #e8f5e9;
+      --green-border: #a5d6a7;
+      --red: #c0392b;
+      --red-light: #fdecea;
+      --amber: #b9770a;
+      --amber-light: #fdf3e3;
+      --amber-border: #f0d9a8;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+      --bar-track: #e8ebef;
+      --sans: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      --mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: .5rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      width: 100%;
+      min-width: 0;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); min-width: 0; }
+    .logo-text { font-size: 1rem; font-weight: 700; white-space: nowrap; }
+    .header-badge {
+      font-size: .6875rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .6rem; white-space: nowrap; flex-shrink: 0;
+    }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; min-width: 0; margin-left: .25rem; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link:hover { background: var(--teal-border); }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .header-auth { margin-left: auto; display: inline-flex; align-items: center; flex-shrink: 0; }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; flex-shrink: 0; }
+    .mobile-dropdown {
+      display: none; position: absolute; top: 100%; right: 0;
+      background: var(--white); border: 1px solid var(--border-lt); border-top: none;
+      border-radius: 0 0 .75rem .75rem; box-shadow: 0 8px 24px rgba(0,0,0,.1);
+      padding: .5rem; z-index: 101; min-width: 180px;
+    }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover, .mobile-dropdown a.active { background: var(--teal-light); }
+    @media (max-width: 800px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; margin-left: .25rem; }
+      .header-auth { margin-left: auto; }
+    }
+    @media (max-width: 480px) {
+      .header { padding: .75rem; gap: .375rem; }
+      .header-badge { font-size: .625rem; padding: .15rem .45rem; }
+    }
+
+    .main { max-width: 920px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .page-title { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; color: var(--olive); }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); line-height: 1.5; margin: .35rem 0 .75rem; max-width: 42rem; }
+    .meta-line { color: var(--txt-l); font-size: .75rem; margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: .2rem .85rem; }
+    .meta-line b { color: var(--txt-m); font-weight: 600; }
+
+    .notice {
+      background: var(--amber-light);
+      border: 1px solid var(--amber-border);
+      color: #7a5406;
+      border-radius: .75rem;
+      padding: .7rem .85rem;
+      font-size: .8125rem;
+      line-height: 1.45;
+      margin-bottom: .9rem;
+    }
+    .notice.error { background: var(--red-light); border-color: #f5b7b1; color: var(--red); }
+
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: 0 0 1rem; }
+    .kpi {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .7rem .5rem; text-align: center;
+    }
+    .kpi .l { font-size: .625rem; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); font-weight: 700; }
+    .kpi .n { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; color: var(--olive); margin-top: .15rem; font-variant-numeric: tabular-nums; }
+    .kpi .n.pos { color: var(--green); }
+    .kpi .n.neg { color: var(--red); }
+    .kpi .s { font-size: .625rem; color: var(--txt-l); margin-top: .15rem; }
+
+    .section { margin: 0 0 1.25rem; min-width: 0; }
+    .section-label {
+      font-size: .6875rem; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--txt-l); margin: 0 0 .45rem .1rem;
+    }
+    .panel {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: .9rem 1rem;
+    }
+    .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-bottom: .75rem; }
+    .panel-title { font-size: .9375rem; font-weight: 700; color: var(--olive); }
+    .panel-note { font-size: .75rem; color: var(--txt-m); line-height: 1.4; }
+
+    .limit-row { display: grid; grid-template-columns: 4.5rem 1fr auto; gap: .6rem; align-items: center; margin-top: .55rem; }
+    .limit-row .name { font-size: .75rem; font-weight: 600; color: var(--txt-m); }
+    .limit-row .val { font-family: var(--mono); font-size: .75rem; font-weight: 600; color: var(--olive); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .limit-row .val.over { color: var(--red); }
+    .bar { height: 8px; background: var(--bar-track); border-radius: 99px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; width: 0; background: var(--teal); border-radius: 99px; }
+    .bar.over > span { background: var(--red); }
+    .pill {
+      display: inline-flex; align-items: center;
+      font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      border-radius: 9999px; padding: .15rem .5rem;
+      background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border);
+    }
+    .pill.warn { background: var(--red-light); color: var(--red); border-color: #f5b7b1; }
+    .pill.muted { background: var(--off-white); color: var(--txt-m); border-color: var(--border-lt); }
+
+    .gate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem 1.25rem; }
+    .gate-k { font-size: .75rem; font-weight: 600; color: var(--txt-m); margin-bottom: .3rem; display: flex; justify-content: space-between; gap: .5rem; }
+    .gate-k b { font-family: var(--mono); color: var(--olive); font-variant-numeric: tabular-nums; }
+
+    .clv-hero { font-family: var(--mono); font-size: 1.35rem; font-weight: 700; color: var(--olive); font-variant-numeric: tabular-nums; }
+    .clv-hero.pos { color: var(--green); }
+    .clv-hero.neg { color: var(--red); }
+    .clv-sub { font-size: .75rem; color: var(--txt-m); margin-top: .15rem; }
+
+    .pick-list { display: flex; flex-direction: column; gap: .5rem; }
+    .pick-card { background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; padding: .9rem 1rem; }
+    .pick-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .45rem; }
+    .sport-tag {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 6px; padding: .15rem .45rem; text-transform: uppercase;
+    }
+    .matchup { font-size: 1rem; font-weight: 700; color: var(--olive); line-height: 1.3; }
+    .pick-name { font-size: .9375rem; font-weight: 600; margin-top: .15rem; }
+    .market { font-size: .8125rem; color: var(--txt-m); margin-top: .2rem; line-height: 1.4; }
+    .market a { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .market a:hover { text-decoration: underline; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: .45rem; margin-top: .7rem; }
+    .metrics div { background: var(--off-white); border-radius: .55rem; padding: .4rem .45rem; }
+    .metrics dt { font-size: .5625rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-l); }
+    .metrics dd { font-family: var(--mono); font-size: .875rem; font-weight: 600; margin-top: .1rem; font-variant-numeric: tabular-nums; }
+    .metrics dd.pos { color: var(--green); }
+    .metrics dd.neg { color: var(--red); }
+
+    .badge {
+      font-size: .625rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      border-radius: 6px; padding: .15rem .4rem; border: 1px solid var(--border-lt); color: var(--txt-m); background: var(--off-white);
+    }
+    .badge-shadow { color: var(--amber); background: var(--amber-light); border-color: var(--amber-border); }
+    .badge-paper { color: var(--teal); background: var(--teal-light); border-color: var(--teal-border); }
+    .res { font-size: .6875rem; font-weight: 700; border-radius: 6px; padding: .1rem .4rem; }
+    .res-win { color: var(--green); background: var(--green-light); }
+    .res-loss { color: var(--red); background: var(--red-light); }
+    .res-push { color: var(--amber); background: var(--amber-light); }
+    .res-open, .res-void { color: var(--txt-m); background: var(--off-white); }
+
+    .scroll-hint { display: none; font-size: .6875rem; color: var(--txt-l); margin: 0 0 .35rem; }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; background: var(--white); border: 1px solid var(--border-lt); border-radius: .875rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .8125rem; min-width: 760px; }
+    table.compact { min-width: 0; }
+    .panel .table-wrap { border: none; border-radius: .55rem; }
+    caption { caption-side: bottom; text-align: left; padding: .55rem .75rem; font-size: .6875rem; color: var(--txt-l); }
+    th {
+      text-align: left; font-size: .625rem; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--txt-l); font-weight: 700; padding: .7rem .7rem; border-bottom: 1px solid var(--border-lt);
+      white-space: nowrap; background: var(--off-white);
+    }
+    td { padding: .6rem .7rem; border-bottom: 1px solid var(--border-lt); vertical-align: top; }
+    td:first-child { white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    .num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.num { font-family: var(--mono); font-weight: 500; }
+    td.pos { color: var(--green); }
+    td.neg { color: var(--red); }
+    .market-cell { min-width: 10rem; }
+    .market-cell .sport { display: block; font-size: .625rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--teal); }
+    .empty-copy { font-size: .8125rem; color: var(--txt-m); padding: .35rem .1rem; }
+
+    .foot { margin-top: 1.25rem; font-size: .75rem; color: var(--txt-l); line-height: 1.5; }
+
+    @media (max-width: 720px) {
+      .scroll-hint { display: block; }
+      .kpis { grid-template-columns: 1fr; }
+      .gate-grid, .metrics { grid-template-columns: 1fr 1fr; }
+      .limit-row { grid-template-columns: 4.2rem 1fr auto; gap: .4rem; }
+      .main { padding: 1rem .75rem 2.5rem; }
+      .panel, .pick-card { padding: .8rem .75rem; }
+    }
+    @media (max-width: 420px) {
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .kpi .n { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div style="height:3px;background:linear-gradient(90deg,#004C54,#00b5b9,#004C54);position:fixed;top:0;left:0;right:0;z-index:200;"></div>
+  <header class="header" style="position:sticky;top:3px;">
+    <a href="/" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px;height:28px;flex-shrink:0;" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+      <span class="header-badge">Agentics</span>
+    </a>
+    <nav class="header-nav" aria-label="Pages">
+      <a href="/agentics" class="header-link active" aria-current="page">Agentics</a>
+      <a href="/daily-omega" class="header-link">Daily Edge Picks</a>
+      <a href="/percentile" class="header-link">Track Record</a>
+    </nav>
+    <span id="wb-auth-slot" class="header-auth"></span>
+    <button class="mobile-menu-btn" type="button" aria-label="Menu" aria-expanded="false" id="menuBtn">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/agentics" class="active">Agentics</a>
+      <a href="/daily-omega">Daily Edge Picks</a>
+      <a href="/percentile">Track Record</a>
+    </div>
+  </header>
+
+  <main class="main" id="dashboard">
+    <h1 class="page-title">Agentics</h1>
+    <p class="page-sub">Shadow and paper Omega positions matched to Polymarket. Display only. This page does not place orders and does not change Omega picks.</p>
+    <p class="notice" id="notice" role="status">Loading ledger…</p>
+    <p class="meta-line" id="meta" hidden></p>
+
+    <section class="kpis" aria-label="Record, P/L, and ROI">
+      <div class="kpi"><div class="l">Record</div><div class="n" id="kpi-record">—</div><div class="s">Wins–losses–pushes</div></div>
+      <div class="kpi"><div class="l">P/L</div><div class="n" id="kpi-pl">—</div><div class="s">After fees</div></div>
+      <div class="kpi"><div class="l">ROI</div><div class="n" id="kpi-roi">—</div><div class="s">On settled stake</div></div>
+    </section>
+
+    <section class="section" aria-labelledby="dd-heading">
+      <h2 class="section-label" id="dd-heading">Max drawdown</h2>
+      <div class="panel">
+        <div class="panel-head">
+          <p class="panel-title">Against 5% daily, 7.5% weekly, and 12% total limits</p>
+          <span class="pill muted" id="dd-pill">—</span>
+        </div>
+        <div class="limit-row">
+          <span class="name">Daily</span>
+          <div class="bar" id="bar-daily" role="img" aria-label="Daily drawdown"><span id="bar-daily-fill"></span></div>
+          <span class="val" id="dd-daily">—</span>
+        </div>
+        <div class="limit-row">
+          <span class="name">Weekly</span>
+          <div class="bar" id="bar-weekly" role="img" aria-label="Weekly drawdown"><span id="bar-weekly-fill"></span></div>
+          <span class="val" id="dd-weekly">—</span>
+        </div>
+        <div class="limit-row">
+          <span class="name">Total</span>
+          <div class="bar" id="bar-total" role="img" aria-label="Total drawdown"><span id="bar-total-fill"></span></div>
+          <span class="val" id="dd-total">—</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="gate-heading">
+      <h2 class="section-label" id="gate-heading">14-day / 20-trade gate</h2>
+      <div class="panel">
+        <div class="panel-head">
+          <p class="panel-title" id="gate-started">Days and trades toward the review gate</p>
+          <span class="pill muted" id="gate-pill">—</span>
+        </div>
+        <div class="gate-grid">
+          <div>
+            <div class="gate-k"><span>Days</span><b id="gate-days">—</b></div>
+            <div class="bar" id="bar-days" role="img" aria-label="Days toward the 14-day gate"><span id="bar-days-fill"></span></div>
+          </div>
+          <div>
+            <div class="gate-k"><span>Trades</span><b id="gate-trades">—</b></div>
+            <div class="bar" id="bar-trades" role="img" aria-label="Trades toward the 20-trade gate"><span id="bar-trades-fill"></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="clv-heading">
+      <h2 class="section-label" id="clv-heading">Daily CLV vs Polymarket close</h2>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="clv-hero" id="clv-hero">—</div>
+            <p class="clv-sub" id="clv-sub">Average closing-line value versus the Polymarket close</p>
+          </div>
+        </div>
+        <div id="clv-table"></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="today-heading">
+      <h2 class="section-label" id="today-heading">Today's matched Omega picks</h2>
+      <div id="today-picks" class="pick-list"></div>
+    </section>
+
+    <section class="section" aria-labelledby="ledger-heading">
+      <h2 class="section-label" id="ledger-heading">Running ledger</h2>
+      <p class="scroll-hint">Swipe the table to see price, fee, stake, status, and P/L.</p>
+      <div id="ledger"></div>
+    </section>
+
+    <p class="foot">Display only. Each row is a shadow or paper position. Price is the Polymarket price in cents. P/L is after fees. CLV compares the entry price with the Polymarket close.</p>
+  </main>
+
+  <noscript><p style="max-width:920px;margin:1rem auto;padding:0 1rem;font-family:system-ui,sans-serif;">Enable JavaScript to load the Agentics ledger.</p></noscript>
+  <script src="/nav.js" defer></script>
+  <script>
+(function () {
+  var DAY_LIMIT = 14;
+  var TRADE_LIMIT = 20;
+  var DD_DAILY = 5;
+  var DD_WEEKLY = 7.5;
+  var DD_TOTAL = 12;
+  var ENDPOINT = '/.netlify/functions/agentics-ledger';
+
+  function num(v) {
+    if (v == null || v === '') return null;
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function trimNum(v) {
+    var text = Math.abs(v).toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
+    return text;
+  }
+  function usd(n, signed) {
+    var v = num(n);
+    if (v == null) return '—';
+    var body = '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (v < 0) return '−' + body;
+    if (signed && v > 0) return '+' + body;
+    return body;
+  }
+  function pct(n, signed) {
+    var v = num(n);
+    if (v == null) return '—';
+    var body = trimNum(v) + '%';
+    if (!signed || v === 0) return body;
+    return (v > 0 ? '+' : '−') + body;
+  }
+  function cents(prob) {
+    var v = num(prob);
+    if (v == null) return '—';
+    var p = v > 1.5 ? v / 100 : v;
+    var text = (p * 100).toFixed(1).replace(/\.0$/, '');
+    return text + '¢';
+  }
+  function clvText(n) {
+    var v = num(n);
+    if (v == null) return '—';
+    var text = Math.abs(v).toFixed(1).replace(/\.0$/, '');
+    if (v > 0) return '+' + text + '¢';
+    if (v < 0) return '−' + text + '¢';
+    return text + '¢';
+  }
+  function signClass(n) {
+    var v = num(n);
+    if (v == null || v === 0) return '';
+    return v > 0 ? 'pos' : 'neg';
+  }
+  function formatYmd(ymd) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+    if (!m) return ymd ? String(ymd) : '—';
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[Number(m[2]) - 1] + ' ' + Number(m[3]) + ', ' + m[1];
+  }
+  function formatAsOf(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+      }).format(d);
+    } catch (e) {
+      return String(iso);
+    }
+  }
+  function safeUrl(url) {
+    if (!url) return '';
+    try {
+      var u = new URL(String(url));
+      var host = u.hostname.toLowerCase();
+      var polymarket = host === 'polymarket.com' || host.endsWith('.polymarket.com');
+      if (u.protocol !== 'https:' || !polymarket) return '';
+      return u.href;
+    } catch (e) {
+      return '';
+    }
+  }
+  function statusBadge(status) {
+    var s = String(status || '').toLowerCase();
+    if (s === 'shadow' || s === 'paper') return '<span class="badge badge-' + s + '">' + esc(s) + '</span>';
+    if (!s) return '—';
+    return '<span class="badge">' + esc(s) + '</span>';
+  }
+  function resultBadge(result) {
+    var s = String(result || 'open').toLowerCase();
+    var labels = { win: 'Win', loss: 'Loss', push: 'Push', open: 'Open', void: 'Void' };
+    var cls = labels[s] ? s : 'open';
+    return '<span class="res res-' + cls + '">' + esc(labels[s] || s) + '</span>';
+  }
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+  function setHtml(id, html) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+  function fillBar(barId, fillId, value, limit, flagOver) {
+    var v = num(value);
+    var lim = num(limit);
+    var pctWidth = 0;
+    var over = false;
+    if (v != null && lim != null && lim > 0) {
+      over = v > lim;
+      pctWidth = Math.max(0, Math.min(100, (v / lim) * 100));
+    }
+    var bar = document.getElementById(barId);
+    var fill = document.getElementById(fillId);
+    if (bar) bar.classList.toggle('over', !!flagOver && over);
+    if (fill) fill.style.width = pctWidth.toFixed(1) + '%';
+    return over;
+  }
+
+  function modeLabel(doc) {
+    var set = {};
+    function add(s) {
+      s = String(s || '').toLowerCase();
+      if (s === 'shadow' || s === 'paper') set[s] = true;
+    }
+    add(doc && doc.mode);
+    var picks = (doc && doc.today && doc.today.picks) || [];
+    var rows = (doc && doc.ledger) || [];
+    picks.forEach(function (p) { add(p && p.status); });
+    rows.forEach(function (p) { add(p && p.status); });
+    if (set.shadow && set.paper) return 'Shadow and paper';
+    if (set.shadow) return 'Shadow';
+    if (set.paper) return 'Paper';
+    return '—';
+  }
+
+  function marketHtml(row) {
+    var name = row && row.market ? String(row.market) : '—';
+    var href = safeUrl(row && row.marketUrl);
+    var inner = href
+      ? '<a href="' + esc(href) + '" rel="noopener noreferrer">Polymarket · ' + esc(name) + '</a>'
+      : 'Polymarket · ' + esc(name);
+    var sport = row && row.sport ? '<span class="sport">' + esc(row.sport) + '</span>' : '';
+    return sport + inner;
+  }
+
+  function renderPick(row) {
+    var href = safeUrl(row.marketUrl);
+    var market = href
+      ? '<a href="' + esc(href) + '" rel="noopener noreferrer">' + esc(row.market || '—') + '</a>'
+      : esc(row.market || '—');
+    return '<article class="pick-card">' +
+      '<div class="pick-top"><span class="sport-tag">' + esc(row.sport || 'Omega') + '</span>' + statusBadge(row.status) + '</div>' +
+      '<h3 class="matchup">' + esc(row.matchup || '—') + '</h3>' +
+      '<p class="pick-name">' + esc(row.pick || '—') + '</p>' +
+      '<p class="market">Polymarket · ' + market + '</p>' +
+      '<dl class="metrics">' +
+        '<div><dt>Price</dt><dd>' + esc(cents(row.price)) + '</dd></div>' +
+        '<div><dt>Fee</dt><dd>' + esc(usd(row.fee, false)) + '</dd></div>' +
+        '<div><dt>Stake</dt><dd>' + esc(usd(row.stake, false)) + '</dd></div>' +
+        '<div><dt>CLV</dt><dd class="' + signClass(row.clvCents) + '">' + esc(clvText(row.clvCents)) + '</dd></div>' +
+      '</dl></article>';
+  }
+
+  function render(doc) {
+    doc = doc && typeof doc === 'object' ? doc : {};
+    var summary = doc.summary || {};
+    var dd = doc.drawdown || {};
+    var gate = doc.gate || {};
+    var clv = doc.clv || {};
+    var notice = document.getElementById('notice');
+    var message = '';
+    var isError = doc.ok === false;
+    if (isError) message = doc.error ? String(doc.error) : 'The ledger could not be read.';
+    else if (doc.empty) message = 'No ledger published yet. Record, drawdown, and the 14-day / 20-trade gate stay at zero until a snapshot is published.';
+    else if (doc.sample) message = 'Sample ledger. These figures illustrate the display. They are not a live record.';
+    if (notice) {
+      notice.hidden = !message;
+      notice.textContent = message;
+      notice.classList.toggle('error', isError);
+    }
+
+    var meta = document.getElementById('meta');
+    if (meta) {
+      var bits = [];
+      bits.push('<span>As of <b>' + esc(formatAsOf(doc.asOf)) + '</b></span>');
+      if (doc.etDate) bits.push('<span>ET date <b>' + esc(formatYmd(doc.etDate)) + '</b></span>');
+      bits.push('<span>Status <b>' + esc(modeLabel(doc)) + '</b></span>');
+      if (num(doc.bankroll) != null) bits.push('<span>Reference bankroll <b>' + esc(usd(doc.bankroll, false)) + '</b></span>');
+      meta.innerHTML = bits.join('');
+      meta.hidden = false;
+    }
+
+    var record = summary.record || ((num(summary.wins) == null) ? '—' : (summary.wins || 0) + '-' + (summary.losses || 0) + '-' + (summary.pushes || 0));
+    setText('kpi-record', String(record));
+    var plEl = document.getElementById('kpi-pl');
+    var roiEl = document.getElementById('kpi-roi');
+    if (plEl) {
+      plEl.textContent = usd(summary.pl, true);
+      plEl.className = 'n ' + signClass(summary.pl);
+    }
+    if (roiEl) {
+      roiEl.textContent = pct(summary.roiPct, true);
+      roiEl.className = 'n ' + signClass(summary.roiPct);
+    }
+
+    var dailyOver = fillBar('bar-daily', 'bar-daily-fill', dd.dailyPct, DD_DAILY, true);
+    var weeklyOver = fillBar('bar-weekly', 'bar-weekly-fill', dd.weeklyPct, DD_WEEKLY, true);
+    var totalOver = fillBar('bar-total', 'bar-total-fill', dd.totalPct, DD_TOTAL, true);
+    setText('dd-daily', pct(dd.dailyPct, false) + ' / ' + pct(DD_DAILY, false));
+    setText('dd-weekly', pct(dd.weeklyPct, false) + ' / ' + pct(DD_WEEKLY, false));
+    setText('dd-total', pct(dd.totalPct, false) + ' / ' + pct(DD_TOTAL, false));
+    document.getElementById('dd-daily').classList.toggle('over', dailyOver);
+    document.getElementById('dd-weekly').classList.toggle('over', weeklyOver);
+    document.getElementById('dd-total').classList.toggle('over', totalOver);
+    var known = num(dd.dailyPct) != null && num(dd.weeklyPct) != null && num(dd.totalPct) != null;
+    var pill = document.getElementById('dd-pill');
+    if (pill) {
+      var outside = known && (dailyOver || weeklyOver || totalOver);
+      pill.textContent = !known ? '—' : (outside ? 'Outside limits' : 'Inside limits');
+      pill.className = 'pill' + (!known ? ' muted' : (outside ? ' warn' : ''));
+    }
+
+    var days = num(gate.daysElapsed);
+    var trades = num(gate.trades);
+    setText('gate-days', (days == null ? '—' : String(days)) + ' / ' + DAY_LIMIT);
+    setText('gate-trades', (trades == null ? '—' : String(trades)) + ' / ' + TRADE_LIMIT);
+    fillBar('bar-days', 'bar-days-fill', days == null ? 0 : days, DAY_LIMIT, false);
+    fillBar('bar-trades', 'bar-trades-fill', trades == null ? 0 : trades, TRADE_LIMIT, false);
+    var gatePill = document.getElementById('gate-pill');
+    var met = days != null && trades != null && days >= DAY_LIMIT && trades >= TRADE_LIMIT;
+    if (gatePill) {
+      gatePill.textContent = (days == null && trades == null) ? '—' : (met ? 'Gate met' : 'In progress');
+      gatePill.className = 'pill' + ((days == null && trades == null) ? ' muted' : '');
+    }
+    var started = document.getElementById('gate-started');
+    if (started) {
+      started.textContent = gate.startedOn
+        ? 'Started ' + formatYmd(gate.startedOn)
+        : 'Days and trades toward the review gate';
+    }
+
+    var hero = document.getElementById('clv-hero');
+    if (hero) {
+      hero.textContent = clvText(clv.avgClvCents);
+      hero.className = 'clv-hero ' + signClass(clv.avgClvCents);
+    }
+    var clvSub = document.getElementById('clv-sub');
+    if (clvSub) {
+      if (clv.date) {
+        var n = num(clv.n);
+        clvSub.textContent = formatYmd(clv.date) + (n == null ? '' : ' · ' + n + (n === 1 ? ' position' : ' positions'));
+      } else {
+        clvSub.textContent = 'No Polymarket close recorded yet';
+      }
+    }
+    var daysRows = Array.isArray(clv.byDay) ? clv.byDay : [];
+    if (!daysRows.length) {
+      setHtml('clv-table', '<p class="empty-copy">No daily CLV versus the Polymarket close yet.</p>');
+    } else {
+      var clvBody = daysRows.map(function (row) {
+        return '<tr><td>' + esc(formatYmd(row.date)) + '</td><td class="num">' + esc(row.n == null ? '—' : String(row.n)) + '</td><td class="num ' + signClass(row.avgClvCents) + '">' + esc(clvText(row.avgClvCents)) + '</td></tr>';
+      }).join('');
+      setHtml('clv-table', '<div class="table-wrap"><table class="compact"><caption>Daily closing-line value versus the Polymarket close.</caption><thead><tr><th>Date</th><th class="num">Positions</th><th class="num">Avg CLV</th></tr></thead><tbody>' + clvBody + '</tbody></table></div>');
+    }
+
+    var picks = (doc.today && Array.isArray(doc.today.picks)) ? doc.today.picks.filter(function (p) { return p && p.matched !== false; }) : [];
+    if (!picks.length) {
+      setHtml('today-picks', '<p class="empty-copy">No matched Omega picks for this date.</p>');
+    } else {
+      setHtml('today-picks', picks.map(renderPick).join(''));
+    }
+
+    var ledger = Array.isArray(doc.ledger) ? doc.ledger : [];
+    if (!ledger.length) {
+      setHtml('ledger', '<p class="empty-copy">The running ledger is empty.</p>');
+    } else {
+      var body = ledger.map(function (row) {
+        return '<tr>' +
+          '<td>' + esc(formatYmd(row.date)) + '</td>' +
+          '<td class="market-cell">' + marketHtml(row) + '</td>' +
+          '<td>' + esc(row.pick || '—') + '</td>' +
+          '<td class="num">' + esc(cents(row.price)) + '</td>' +
+          '<td class="num">' + esc(usd(row.fee, false)) + '</td>' +
+          '<td class="num">' + esc(usd(row.stake, false)) + '</td>' +
+          '<td>' + statusBadge(row.status) + '</td>' +
+          '<td>' + resultBadge(row.result) + '</td>' +
+          '<td class="num ' + signClass(row.pl) + '">' + esc(usd(row.pl, true)) + '</td>' +
+          '<td class="num ' + signClass(row.clvCents) + '">' + esc(clvText(row.clvCents)) + '</td>' +
+          '</tr>';
+      }).join('');
+      setHtml('ledger', '<div class="table-wrap"><table><caption>Running ledger of shadow and paper positions, newest first.</caption><thead><tr>' +
+        '<th>Date</th><th>Polymarket market</th><th>Pick</th><th class="num">Price</th><th class="num">Fee</th><th class="num">Stake</th><th>Status</th><th>Result</th><th class="num">P/L</th><th class="num">CLV</th>' +
+        '</tr></thead><tbody>' + body + '</tbody></table></div>');
+    }
+  }
+
+  function boot() {
+    var btn = document.getElementById('menuBtn');
+    var menu = document.getElementById('mobileDropdown');
+    if (btn && menu) {
+      btn.addEventListener('click', function () {
+        var open = menu.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+    fetch(ENDPOINT, { headers: { 'Accept': 'application/json' } })
+      .then(function (res) {
+        if (!res.ok && res.status !== 200) throw new Error('Ledger request failed (' + res.status + ')');
+        return res.json();
+      })
+      .then(render)
+      .catch(function (err) {
+        render({ ok: false, error: err && err.message ? err.message : 'The ledger could not be loaded.' });
+      });
+  }
+
+  window.AgenticsPage = { render: render, endpoint: ENDPOINT };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+  </script>
+</body>
+</html>

@@ -14,6 +14,7 @@ const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
 const { parseFootballQbMap, parseFootballPersonnel, fillNcaafQbMap } = require('./late_news');
 const { inSlate } = require('./selection_pass');
 const { last5ByTeamFromSchedule } = require('./last5');
+const { prepareNflElo } = require('./sports/nfl_elo');
 const {
   fetchDepthCharts, slateTeamIds, starterFeedStamp, freezeDepthFallback,
 } = require('./sports/depth_chart');
@@ -1192,6 +1193,22 @@ async function loadSportEngines(dateISO, deps) {
   return { efficiencyBySport, parkFactors, mlbPitcherStats, engineMeta };
 }
 
+async function attachNflElo(gameDay, dateISO) {
+  if (!gameDay || typeof gameDay !== 'object') return;
+  try {
+    const pack = await prepareNflElo(dateISO);
+    gameDay.nflElo = {
+      source: pack.source,
+      cardDate: pack.cardDate,
+      applied: pack.applied,
+      ratings: pack.ratings,
+    };
+    console.log(`[omega-vnext/ingest] nfl-elo source=${pack.source} applied=${pack.applied}`);
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] nfl elo soft-fail: ${e.message}`);
+  }
+}
+
 async function ingest(dateISO, opts = {}) {
   if (process.env.OMEGA_FROZEN_SNAP) {
     const frozen = require(process.env.OMEGA_FROZEN_SNAP);
@@ -1227,6 +1244,7 @@ async function ingest(dateISO, opts = {}) {
     }
     await attachNcaafOa(engines.efficiencyBySport, dateISO);
     gameDay = freezeDepthFallback(gameDay, frozen.gameDay);
+    await attachNflElo(gameDay, dateISO);
     console.log('[omega-vnext/ingest] FROZEN SNAP replay (no live odds/standings/injuries)');
     return {
       dateISO,
@@ -1274,6 +1292,7 @@ async function ingest(dateISO, opts = {}) {
       console.error(`[omega-vnext/ingest] NCAAF tempo soft-fail: ${e.message}`);
     }
   }
+  await attachNflElo(gameDay, dateISO);
 
   return {
     dateISO,

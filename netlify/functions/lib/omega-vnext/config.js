@@ -584,6 +584,24 @@ function envNumber(name, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * Weight of the NFL Elo margin inside the projected home margin.
+ * modelMargin = (1 - w) * existing + w * eloMargin.
+ * Read at call time so a replay can set OMEGA_NFL_ELO_WEIGHT.
+ * 0 leaves the existing margin unchanged. Clamped to [0, 1].
+ * Default 0.5 is the 2026-09-26..10-10 replay pick: lowest NFL
+ * KL(model||close) and model log-loss among 0, 0.15, 0.3, and 0.5.
+ * That weight passed compare against core-base.
+ */
+const NFL_ELO_WEIGHT = 0.5;
+
+function nflEloWeight() {
+  const w = envNumber('OMEGA_NFL_ELO_WEIGHT', NFL_ELO_WEIGHT);
+  if (w < 0) return 0;
+  if (w > 1) return 1;
+  return w;
+}
+
 function ncaafGpFixEnabled() {
   return flagEnabled('OMEGA_NCAAF_GP_FIX');
 }
@@ -615,6 +633,23 @@ function restAdjEnabled() {
 function fbWeatherEnabled() {
   return flagEnabled('OMEGA_FB_WEATHER');
 }
+
+/**
+ * Empty-net end game on the NHL regulation joint. The object is the default.
+ * OMEGA_NHL_EMPTY_NET=0 (off/false/no) skips the late-game step and restores
+ * the plain Poisson joint. Any other set value turns the step on.
+ * Pull times are minutes left. rateLeaderEN60 is empty-net goals per 60 by
+ * the club that kept its goalie. rateTrailer6v5_60 is the extra attacker's
+ * goals per 60. Figures are published league rates, not fit on a replay.
+ * Citations live in nhl_period.js.
+ */
+const NHL_EMPTY_NET = Object.freeze({
+  enabled: true,
+  pullMinDown1: 2,
+  pullMinDown2: 3,
+  rateLeaderEN60: 18,
+  rateTrailer6v5_60: 7.2,
+});
 
 function fbMarketGapLimits(sport) {
   const base = FB_MARKET_GAP[sport];
@@ -738,6 +773,9 @@ module.exports = {
   SPORT_SPREAD_STD,
   SPORT_TOTAL_STD,
   HFA,
+  NFL_ELO_WEIGHT,
+  nflEloWeight,
+  NHL_EMPTY_NET,
   REST_ADJ,
   restAdjEnabled,
   WEATHER_NFL,

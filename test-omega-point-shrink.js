@@ -380,7 +380,11 @@ function assertEdgesNeverGrow(cands, ev) {
 {
   const home = 'Green Bay Packers';
   const away = 'Tampa Bay Buccaneers';
-  const ev = event(home, away, 45, -2.0);
+  // Empty standings put the pre-Elo margin on HFA. The line is set to that
+  // margin after the Elo blend so shrink still sees model equal to market.
+  const probe = projectFootball('NFL', event(home, away, 45, -2.0), 0);
+  const probeSpread = probe.find((c) => c.market === 'Spread' && c.side.startsWith(home));
+  const ev = event(home, away, 45, -probeSpread.modelMarginRaw);
   const cands = projectFootball('NFL', ev, 0);
   const over = findSide(cands, 'Total', /^Over/);
   const under = findSide(cands, 'Total', /^Under/);
@@ -395,7 +399,7 @@ function assertEdgesNeverGrow(cands, ev) {
   }
   const homeSpread = cands.find(c => c.market === 'Spread' && c.side.startsWith(home));
   assert.ok(homeSpread);
-  assert.strictEqual(homeSpread.marketLine, -2.0);
+  assert.strictEqual(homeSpread.marketLine, -probeSpread.modelMarginRaw);
   const marketMargin = -homeSpread.marketLine;
   assert.ok(Math.abs(homeSpread.modelMarginRaw - marketMargin) < 1e-9);
   assert.strictEqual(homeSpread.modelMarginShrunk, homeSpread.modelMarginRaw);
@@ -446,12 +450,17 @@ function assertEdgesNeverGrow(cands, ev) {
 {
   const home = 'Baltimore Ravens';
   const away = 'Cincinnati Bengals';
-  const ev = event(home, away, 45, -10.5);
+  // The line sits 8.5 points off the Elo-blended margin so the NFL 8 flag
+  // still trips. The threshold itself is unchanged.
+  const probe = projectFootball('NFL', event(home, away, 45, -10.5), 0);
+  const rawMargin = probe.find((c) => c.market === 'Spread' && c.side.startsWith(home)).modelMarginRaw;
+  const homeSpreadPoint = -(rawMargin + 8.5);
+  const ev = event(home, away, 45, homeSpreadPoint);
   const cands = projectFootball('NFL', ev, 0);
   const spread = cands.filter(c => c.market === 'Spread');
   assert.strictEqual(spread.length, 2);
   for (const c of spread) {
-    assert.strictEqual(c.marketLine, -10.5);
+    assert.strictEqual(c.marketLine, homeSpreadPoint);
     assert.strictEqual(c.modelLineGap, round4(c.modelMarginRaw - (-c.marketLine)));
     assert.ok(Math.abs(c.modelLineGap) >= 8);
     assert.strictEqual(c.gapFlag, true);

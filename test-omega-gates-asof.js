@@ -9,6 +9,16 @@ const fs = require('fs');
 const path = require('path');
 const { gateReason, applyGates, resolvePregameAsOfMs, PREGAME_GRACE_MS } = require('./netlify/functions/lib/omega-vnext/gates');
 
+// Omitted asOf reads Date.now(). Freeze that clock after the 2026-09-15 slate
+// so the live-path checks do not depend on the wall clock. Restored on exit.
+const FROZEN_NOW_MS = Date.parse('2026-09-16T16:00:00Z');
+const realDateNow = Date.now;
+Date.now = () => FROZEN_NOW_MS;
+function restoreClock() {
+  Date.now = realDateNow;
+}
+process.on('exit', restoreClock);
+
 const GRACE = 5 * 60 * 1000;
 assert.strictEqual(PREGAME_GRACE_MS, GRACE, 'pregame grace stays 5 minutes');
 
@@ -194,4 +204,5 @@ assert.ok(Date.parse(beforeSnapshot) < asOfMs - GRACE, 'started candidate is bef
   assert.ok(!/pregameOnly/.test(qa) && !/pregameOnly/.test(sel));
 }
 
+restoreClock();
 console.log('PASS test-omega-gates-asof (historical asOf pregame vs live Date.now())');

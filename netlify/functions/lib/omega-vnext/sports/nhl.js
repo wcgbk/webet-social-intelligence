@@ -84,7 +84,11 @@ const LG_SAVE = 0.905;
 const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
 
-/** 60-minute joint. Null keeps the legacy normal price and the old method string. */
+/**
+ * 60-minute joint. The empty-net end game, when NHL_EMPTY_NET is on, is
+ * inside this quote, so the moneyline, puck line, and total share one
+ * distribution. Null keeps the legacy normal price and the old method string.
+ */
 function periodQuote(args) {
   if (!nhlPeriodEnabled()) return null;
   try {

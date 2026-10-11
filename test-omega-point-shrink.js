@@ -31,6 +31,7 @@ const { optimizeParlay } = require(path.join(root, 'parlay'));
 const { publicPicksPayload } = require('./netlify/functions/lib/public-picks');
 const {
   blendWithMarket, totalCoverProb, spreadCoverProb, mlFromSpread, FOOTBALL_AUDIT_KEYS,
+  totalDetail, spreadDetail, mlDetail,
 } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
@@ -42,6 +43,7 @@ assert.deepStrictEqual(config.POINT_SHRINK, {
   NFL: { total: 1, margin: 1 },
   NCAAF: { total: 1, margin: 1 },
 });
+assert.deepStrictEqual(config.NCAAF_FCS, { stdMult: 1.25, pointLambda: 0.5 });
 assert.deepStrictEqual(config.MODEL_LINE_GAP, { NFL: 8, NCAAF: 10, mode: 'flag' });
 assert.ok(/block' failed the 2026-10-06 replay gate/.test(
   fs.readFileSync(path.join(root, 'config.js'), 'utf8'),
@@ -457,6 +459,66 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.notStrictEqual(gateReason(closeOver), 'model_line_gap_review');
   assert.ok(!buildGapReview(close).some(r => r.side === closeOver.side));
   assertPickNeutral(closeOver, event(home, away, 42.1, -3));
+}
+
+// FCS (either side isFbsTeamId false): std ×1.25 and point lambda 0.5.
+// OMEGA_NCAAF_FCS=0 leaves the FBS path. Both FBS sides stay on λ = 1.
+{
+  const home = 'Alabama Crimson Tide';
+  const away = 'Cal Poly Mustangs';
+  const ev = event(home, away, 42, -7.5);
+  const cands = projectFootball('NCAAF', ev, 0);
+  assert.ok(cands.length > 0);
+  assert.ok(cands.every((c) => c.fcsGame === true));
+  const lam = config.NCAAF_FCS.pointLambda;
+  const over = findSide(cands, 'Total', /^Over/);
+  assert.strictEqual(over.modelTotalShrunk, round4(42 + lam * (over.modelTotalRaw - 42)));
+  assert.notStrictEqual(over.modelTotalShrunk, over.modelTotalRaw);
+  const spread = cands.find((c) => c.market === 'Spread' && c.side.startsWith(home));
+  const marketMargin = round4(-spread.marketLine);
+  assert.strictEqual(
+    spread.modelMarginShrunk,
+    round4(marketMargin + lam * (spread.modelMarginRaw - marketMargin)),
+  );
+  const totalStd = config.SPORT_TOTAL_STD.NCAAF * config.NCAAF_FCS.stdMult;
+  const spreadStd = config.SPORT_SPREAD_STD.NCAAF * config.NCAAF_FCS.stdMult;
+  const bundles = collectMarketOutcomes(ev, 'totals');
+  const anchor = noVigPinnacleCircaImplied(bundles, bundles.find((b) => b.side === 'Over'));
+  const priceAt = (proj) => blendWithMarket(
+    totalDetail(proj, over.line, 'Over', 'NCAAF', totalStd).coverProb,
+    anchor,
+    0.4,
+  );
+  const expectP = Math.min(priceAt(over.modelTotalRaw), priceAt(over.modelTotalShrunk));
+  assert.ok(Math.abs(over.modelRawP - expectP) < 1e-9, `${over.modelRawP} vs ${expectP}`);
+  assert.ok(totalDetail(55, 48, 'Over', 'NCAAF', totalStd).coverProb
+    < totalDetail(55, 48, 'Over', 'NCAAF').coverProb);
+  assert.ok(spreadDetail(6, -3, 'NCAAF', spreadStd).coverProb
+    < spreadDetail(6, -3, 'NCAAF').coverProb);
+  assert.ok(mlDetail(6, 'NCAAF', spreadStd).coverProb < mlDetail(6, 'NCAAF').coverProb);
+
+  const fbs = projectFootball('NCAAF', event('Ohio State Buckeyes', 'Iowa Hawkeyes', 42, -7.5), 0);
+  assert.ok(fbs.every((c) => c.fcsGame !== true));
+  const fbsOver = findSide(fbs, 'Total', /^Over/);
+  assert.strictEqual(fbsOver.modelTotalShrunk, fbsOver.modelTotalRaw);
+
+  const unknown = projectFootball('NCAAF', event(home, 'Not A Real College', 48, -3), 0);
+  assert.ok(unknown.length > 0 && unknown.every((c) => c.fcsGame === true));
+
+  const saved = process.env.OMEGA_NCAAF_FCS;
+  process.env.OMEGA_NCAAF_FCS = '0';
+  let disabled;
+  try {
+    disabled = projectFootball('NCAAF', ev, 0);
+  } finally {
+    if (saved == null) delete process.env.OMEGA_NCAAF_FCS;
+    else process.env.OMEGA_NCAAF_FCS = saved;
+  }
+  assert.ok(disabled.every((c) => c.fcsGame !== true));
+  const overOff = findSide(disabled, 'Total', /^Over/);
+  assert.strictEqual(overOff.modelTotalShrunk, overOff.modelTotalRaw);
+  const spreadOff = disabled.find((c) => c.market === 'Spread' && c.side.startsWith(home));
+  assert.strictEqual(spreadOff.modelMarginShrunk, spreadOff.modelMarginRaw);
 }
 
 // Spread threshold uses margin versus −homeSpread. NFL 8 flags the spread, not the moneyline.

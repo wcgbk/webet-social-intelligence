@@ -19,10 +19,24 @@ const { footballProjection, applyEngineStack, blendNcaafTempo } = require('./epa
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA } = require('../config');
+const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD } = require('../config');
+const { resolveTeamId, isFbsTeamId } = require('./team_identity');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
 const SPORT = 'NCAAF';
+
+/** Unset is on. OMEGA_NCAAF_FCS=0 disables the FCS std and point pull. */
+function ncaafFcsOn() {
+  const raw = process.env.OMEGA_NCAAF_FCS;
+  if (raw == null) return true;
+  return String(raw).trim() !== '0';
+}
+
+/** Either side not FBS. A missing id is not FBS. Disabled env returns false. */
+function isFcsGame(home, away) {
+  if (!ncaafFcsOn()) return false;
+  return !isFbsTeamId(resolveTeamId(SPORT, home)) || !isFbsTeamId(resolveTeamId(SPORT, away));
+}
 
 function withIdentity(raw, env) {
   if (env && env.unknownTeam) {
@@ -130,12 +144,16 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     return raw;
   }
   const engineSoft = stacked.engineSoft;
+  const fcs = isFcsGame(home, away);
+  const spreadStd = fcs ? SPORT_SPREAD_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
+  const totalStd = fcs ? SPORT_TOTAL_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
   const pts = footballPointState(
     SPORT,
     modelTotal,
     modelMargin,
     sharpMarketLine(event, 'total'),
     sharpMarketLine(event, 'spreadHome'),
+    fcs ? NCAAF_FCS.pointLambda : undefined,
   );
   const out = [];
 
@@ -145,7 +163,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       const isHome = b.side === home;
       const priced = pricedFootball(
         (proj) => {
-          const q = mlDetail(proj, SPORT);
+          const q = mlDetail(proj, SPORT, spreadStd);
           if (isHome) return q;
           return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
         },
@@ -164,6 +182,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         ...footballAudit(pts, 'Moneyline'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
+      if (fcs) raw.fcsGame = true;
       const edged = enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles);
       if (edged) out.push(edged);
     }
@@ -174,7 +193,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       if (b.point == null) continue;
       const isHome = b.side === home;
       const priced = pricedFootball(
-        (proj, line) => spreadDetail(proj, line, SPORT),
+        (proj, line) => spreadDetail(proj, line, SPORT, spreadStd),
         isHome ? pts.modelMarginRaw : -pts.modelMarginRaw,
         isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
         b.point,
@@ -191,6 +210,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         ...footballAudit(pts, 'Spread'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
+      if (fcs) raw.fcsGame = true;
       const edged = enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles);
       if (edged) out.push(edged);
     }
@@ -200,7 +220,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     for (const b of bundles) {
       if (b.point == null) continue;
       const priced = pricedFootball(
-        (proj, line) => totalDetail(proj, line, b.side, SPORT),
+        (proj, line) => totalDetail(proj, line, b.side, SPORT, totalStd),
         pts.modelTotalRaw,
         pts.modelTotalShrunk,
         b.point,
@@ -227,6 +247,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         };
       }
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
+      if (fcs) raw.fcsGame = true;
       const edged = enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles);
       if (edged) out.push(edged);
     }

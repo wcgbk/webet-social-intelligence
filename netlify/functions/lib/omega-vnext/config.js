@@ -523,6 +523,14 @@ const POINT_SHRINK = {
 };
 
 /**
+ * NCAAF game with either side not FBS (isFbsTeamId false).
+ * Spread, total, and moneyline std are multiplied by stdMult.
+ * Point-space pull is pointLambda: projected = line + λ·(model − line).
+ * OMEGA_NCAAF_FCS=0 disables the flag, the std multiply, and this lambda.
+ */
+const NCAAF_FCS = { stdMult: 1.25, pointLambda: 0.5 };
+
+/**
  * Raw |model − line| at or above this many points is a private review
  * flag. Totals compare the model total to the market total. Spreads
  * compare the model margin to −homeSpread (the market-implied home margin).
@@ -786,6 +794,7 @@ module.exports = {
   fbWeatherEnabled,
   NFL_KEY_NUMBERS,
   POINT_SHRINK,
+  NCAAF_FCS,
   MODEL_LINE_GAP,
   FB_MARKET_GAP,
   flagEnabled,

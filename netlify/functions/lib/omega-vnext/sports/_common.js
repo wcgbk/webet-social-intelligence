@@ -436,8 +436,10 @@ function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride) {
   return spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride).coverProb;
 }
 
-function totalDetail(modelTotal, marketTotal, side, sport) {
-  const std = SPORT_TOTAL_STD[sport] || 10;
+function totalDetail(modelTotal, marketTotal, side, sport, stdOverride) {
+  const std = (Number.isFinite(stdOverride) && stdOverride > 0)
+    ? stdOverride
+    : (SPORT_TOTAL_STD[sport] || 10);
   if (sport === 'NFL' && keyMassEnabled()
       && Number.isFinite(modelTotal) && Number.isFinite(marketTotal)) {
     const q = totalQuote(modelTotal, marketTotal, side, sport, std);
@@ -584,8 +586,10 @@ function sharpMarketLine(event, kind) {
  * shrunk numbers are what the CDF sees. Stored audit fields are these
  * same rounded points.
  */
-function footballPointState(sport, modelTotal, modelMargin, marketTotal, marketSpreadHome) {
+function footballPointState(sport, modelTotal, modelMargin, marketTotal, marketSpreadHome, lambdaOverride) {
   const spec = (POINT_SHRINK && POINT_SHRINK[sport]) || {};
+  const totalLam = Number.isFinite(Number(lambdaOverride)) ? Number(lambdaOverride) : spec.total;
+  const marginLam = Number.isFinite(Number(lambdaOverride)) ? Number(lambdaOverride) : spec.margin;
   const totalRaw = round4(modelTotal);
   const marginRaw = round4(modelMargin);
   const totalLine = Number.isFinite(marketTotal) ? round4(marketTotal) : null;
@@ -593,10 +597,10 @@ function footballPointState(sport, modelTotal, modelMargin, marketTotal, marketS
   const marketMargin = spreadHome == null ? null : round4(-spreadHome);
   const totalShrunk = totalLine == null || totalRaw == null
     ? totalRaw
-    : round4(shrinkTowardMarketLine(totalRaw, totalLine, spec.total));
+    : round4(shrinkTowardMarketLine(totalRaw, totalLine, totalLam));
   const marginShrunk = marketMargin == null || marginRaw == null
     ? marginRaw
-    : round4(shrinkTowardMarketLine(marginRaw, marketMargin, spec.margin));
+    : round4(shrinkTowardMarketLine(marginRaw, marketMargin, marginLam));
   return {
     sport,
     modelTotalRaw: totalRaw,

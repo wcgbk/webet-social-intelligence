@@ -1,41 +1,51 @@
 'use strict';
 
 /**
- * Late-news re-checks. Drop or flag only. Never add or swap a pick.
+ * Late-news re-checks before the 11:00 publish. Reprice or flag. Never add
+ * or swap a pick. A starter, goalie, or quarterback change moves the
+ * probability and the stake EV is recomputed at the posted (DraftKings)
+ * price. The pick stays when that EV still clears the publish floor or the
+ * lean floor. It drops only when the repriced EV misses both, with code
+ * ev-floor. A missing cover or price cannot show an EV miss, so the pick
+ * stays. Postponed and suspended still void. Doubtful is a flag.
  *
- * MLB: drop a total or side when a stored probable the model used is not the
- * live probable (id match, then samePlayerName). Flag code is sp-changed on
- * the void. A missing or TBD live probable is not a change. An empty name is
- * not a change. Postponed (detailedState /postponed/ or codes D/DR) or
- * suspended (U/US/SU or /suspended/) drops. Mere Delayed, including code DI,
- * does not. Lineups posted are recorded on the ops run and do not themselves
- * drop or flag. A change still drops when it would help the side.
+ * MLB: reprice a total or side when a stored probable the model used is not
+ * the live probable (id match, then samePlayerName). Code stays sp-changed.
+ * A missing or TBD live probable is not a change. An empty name is not a
+ * change. Postponed (detailedState /postponed/ or codes D/DR) or suspended
+ * (U/US/SU or /suspended/) drops. Mere Delayed, including code DI, does not.
+ * Lineups posted are recorded on the ops run and do not themselves reprice
+ * or flag. A change still reprices when it would help the side.
  *
  * NHL: a confirmed starter is boxscore playerByGameStats goalies[] with
  * starter:true. Season-leader goalieComparison is not a confirmation. Flag
- * goalie-changed when a stored goalie is not that starter. Drop only when
- * lateNews.nhl.goalieEdge is true, meaning goalieResidual ran at generate
- * (both confirmed save rates were priced). Unconfirmed or missing starter,
- * or no stored name, is no action.
+ * goalie-changed when a stored goalie is not that starter and goalie quality
+ * was not in the edge. Reprice when lateNews.nhl.goalieEdge is true, meaning
+ * goalieResidual ran at generate (both confirmed save rates were priced).
+ * Unconfirmed or missing starter, or no stored name, is no action.
  *
- * NFL/NCAAF QB: newly out / IR / ruled-out versus the generate-time tag drops
- * (qb-out). Newly doubtful flags only (qb-doubtful). Questionable, an
+ * NFL/NCAAF QB: newly out / ruled-out versus the generate-time tag reprices
+ * (code qb-out) using backupQbDelta (named Lamar Jackson, else the sport
+ * table). Newly doubtful flags only (qb-doubtful). Questionable, an
  * improvement, and an already-priced out or doubtful are no action. Both
  * teams, including totals. loaded === false or a failed fetch is no action.
- * NCAAF uses the same drop/flag rules. Model points stay the documented
+ * NCAAF uses the same reprice/flag rules. Model points stay the documented
  * QB_INJURY.NCAAF table (outMarginPts 3.5, outTotalPts -2.0, doubtfulWeight
  * 0.75). That table is not half of NFL (3.0 / -1.5). Half-weight is the
  * NCAAF rest rule (Tue/Wed/Thu ≤5 days and bye ≥13), not a second scale on
  * QB points. Filling the map activates the existing qbSoftAdjust.
  *
  * Window: commence is strictly in the future and within 90 minutes. Graded
- * picks and games already started are left alone. Forward-only.
+ * picks and games already started are left alone. Forward-only. The
+ * published card is not rewritten after 11:00 (pregame-check-omega).
  */
 
 const { samePlayerName } = require('../player-name');
 const { bindEspnGameByTeamAndTime } = require('./sports/_common');
 const { resolveTeamId } = require('./sports/team_identity');
-const { lookupQb } = require('./sports/game_day');
+const { lookupQb, backupQbDelta } = require('./sports/game_day');
+const { attachEv } = require('./edge');
+const { passesPublishFloor, passesLeanFill } = require('./select');
 
 const MAX_CALLS = 30;
 const TIMEOUT_MS = 4000;
@@ -43,14 +53,22 @@ const WITHIN_MIN = 90;
 const NCAAF_INJURY_MAX_AGE_DAYS = 400;
 
 const RULES = Object.freeze({
-  mlb: 'Drop a total or side when a stored SP id/name the model used is not the live probable. Void code sp-changed. Missing live probable is not a change. Postponed or suspended drops. Lineups posted are recorded and do not drop.',
-  nhl: 'Flag when a stored goalie is not the confirmed boxscore starter. Drop only when lateNews.nhl.goalieEdge is true (goalieResidual ran). Unconfirmed or missing starter is no action. Season-leader goalieComparison is not a confirmation.',
-  qb: 'Newly out/IR/ruled-out versus the generate-time tag drops (qb-out). Newly doubtful flags only (qb-doubtful). Questionable and already-priced out/doubtful are no action. NCAAF uses the same drop/flag rules. Model points stay QB_INJURY.NCAAF (3.5 / -2.0), the documented table, not half of NFL.',
+  mlb: 'Reprice a total or side when a stored SP id/name the model used is not the live probable. Code sp-changed. Drop only when the repriced EV misses the floor (ev-floor). Missing live probable is not a change. Postponed or suspended drops. Lineups posted are recorded and do not reprice.',
+  nhl: 'Flag when a stored goalie is not the confirmed boxscore starter and goalie quality was not priced. Reprice when lateNews.nhl.goalieEdge is true (goalieResidual ran). Drop only when the repriced EV misses the floor. Unconfirmed or missing starter is no action. Season-leader goalieComparison is not a confirmation.',
+  qb: 'Newly out/ruled-out versus the generate-time tag reprices (qb-out) at backupQbDelta. Drop only when the repriced EV misses the floor (ev-floor). Newly doubtful flags only (qb-doubtful). Questionable and already-priced out/doubtful are no action. NCAAF uses the same reprice/flag rules. Model points stay QB_INJURY.NCAAF (3.5 / -2.0), the documented table, not half of NFL.',
   neverAdd: true,
   withinMin: WITHIN_MIN,
   maxCalls: MAX_CALLS,
   timeoutMs: TIMEOUT_MS,
 });
+
+/** Cover shift per point of backup-QB (or total) movement. Caps keep a
+ *  single news item from wiping a price that still clears the floor. */
+const SIDE_SHIFT_PER_PT = 0.015;
+const TOTAL_SHIFT_PER_PT = 0.015;
+const SIDE_SHIFT_CAP = 0.12;
+const TOTAL_SHIFT_CAP = 0.08;
+const UNPRICED_STARTER_SHIFT = 0.02;
 
 const MLB_SCHEDULE = 'https://statsapi.mlb.com/api/v1/schedule';
 const NHL_ORIGIN = 'https://api-web.nhle.com/v1';
@@ -66,6 +84,10 @@ function dropDecision(code, reason) {
 
 function flagDecision(code, reason) {
   return { action: 'flag', code, reason };
+}
+
+function repriceDecision(code, reason, extra) {
+  return { action: 'reprice', code, reason, ...(extra || {}) };
 }
 
 function normName(value) {
@@ -187,6 +209,147 @@ function qbDelta(storedSide, liveSide) {
   return 'none';
 }
 
+function coverFraction(pick) {
+  const raw = pick && (pick.coverProb != null ? pick.coverProb : pick.winProbability);
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'string' && raw.trim().endsWith('%')) {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n / 100 : null;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  if (n > 1 && n <= 100) return n / 100;
+  return n;
+}
+
+function americanOdds(pick) {
+  const raw = pick && pick.odds;
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw !== 0 ? raw : null;
+  const n = parseInt(String(raw).replace(/[^\d+-]/g, ''), 10);
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+function pickIsTotal(pick) {
+  const market = String((pick && (pick.betType || pick.market)) || '').toLowerCase();
+  const side = String((pick && (pick.pick || pick.side)) || '');
+  return market === 'total' || /^(over|under)\b/i.test(side);
+}
+
+function pickIsOver(pick) {
+  return /^over\b/i.test(String((pick && (pick.pick || pick.side)) || ''));
+}
+
+function namesTeam(side, team) {
+  const s = String(side || '').toLowerCase();
+  const t = String(team || '').toLowerCase().trim();
+  if (!s || !t) return false;
+  if (s.includes(t)) return true;
+  const nick = t.split(' ').filter(Boolean).pop();
+  if (nick && nick.length > 3) {
+    const re = new RegExp(`\\b${nick.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+    if (re.test(s)) return true;
+  }
+  return false;
+}
+
+function clampCover(p) {
+  return Math.min(0.92, Math.max(0.08, p));
+}
+
+function fairOf(pick) {
+  if (pick && pick.fair_sharp_p != null && Number.isFinite(Number(pick.fair_sharp_p))) return Number(pick.fair_sharp_p);
+  if (pick && pick.sharpFairP != null && Number.isFinite(Number(pick.sharpFairP))) return Number(pick.sharpFairP);
+  return null;
+}
+
+/**
+ * Turn a reprice decision into a keep-with-patch or an ev-floor drop.
+ * The DraftKings (posted) American price does not change. Missing cover
+ * or odds cannot show a floor miss, so the ticket stays.
+ */
+function finalizeNewsReprice(pick, decision) {
+  if (!decision || decision.action !== 'reprice') return decision;
+  const cover = coverFraction(pick);
+  const odds = americanOdds(pick);
+  if (cover == null || odds == null) {
+    return { ...decision, patch: {} };
+  }
+  let nextCover = cover;
+  const marginPts = Number(decision.marginPts);
+  const totalPts = Number(decision.totalPts);
+  if (pickIsTotal(pick) && Number.isFinite(totalPts) && totalPts !== 0) {
+    const mag = Math.min(TOTAL_SHIFT_CAP, Math.abs(totalPts) * TOTAL_SHIFT_PER_PT);
+    const dir = pickIsOver(pick) ? 1 : -1;
+    nextCover = clampCover(nextCover + dir * Math.sign(totalPts) * mag);
+  } else if (!pickIsTotal(pick) && Number.isFinite(marginPts) && marginPts > 0 && decision.injuredTeam) {
+    const mag = Math.min(SIDE_SHIFT_CAP, marginPts * SIDE_SHIFT_PER_PT);
+    const side = String((pick && (pick.pick || pick.side)) || '');
+    const onInjured = namesTeam(side, decision.injuredTeam);
+    const onOther = decision.otherTeam ? namesTeam(side, decision.otherTeam) : false;
+    if (onInjured && !onOther) nextCover = clampCover(nextCover - mag);
+    else if (onOther && !onInjured) nextCover = clampCover(nextCover + mag);
+    else nextCover = clampCover(nextCover > 0.5 ? nextCover - mag : nextCover + mag);
+  } else {
+    const mag = UNPRICED_STARTER_SHIFT;
+    if (nextCover > 0.5) nextCover = clampCover(nextCover - mag);
+    else if (nextCover < 0.5) nextCover = clampCover(nextCover + mag);
+  }
+  const fair = fairOf(pick);
+  const priced = attachEv({
+    ...pick,
+    coverProb: nextCover,
+    odds,
+    fair_sharp_p: fair != null ? fair : pick.fair_sharp_p,
+  });
+  if (passesPublishFloor(priced) || passesLeanFill(priced)) {
+    return {
+      ...decision,
+      patch: {
+        coverProb: priced.coverProb,
+        ev: priced.ev,
+        edgePct: priced.edgePct,
+        edgePctDisplay: priced.edgePctDisplay,
+      },
+    };
+  }
+  return {
+    action: 'drop',
+    code: 'ev-floor',
+    reason: `Repriced ${decision.code} misses the EV floor`,
+    from: decision.code,
+  };
+}
+
+function qbOutBits(pick, live, sport) {
+  const qb = pick.lateNews && pick.lateNews.qb;
+  const home = qbDelta(qb.home, live.homeQb);
+  const away = qbDelta(qb.away, live.awayQb);
+  const bits = [];
+  if (home === 'out') {
+    bits.push({
+      side: 'home',
+      team: pick.homeTeam,
+      qb: { ...(live.homeQb || {}), qbStatus: 'out' },
+    });
+  }
+  if (away === 'out') {
+    bits.push({
+      side: 'away',
+      team: pick.awayTeam,
+      qb: { ...(live.awayQb || {}), qbStatus: 'out' },
+    });
+  }
+  let marginPts = 0;
+  let totalPts = 0;
+  for (const bit of bits) {
+    const delta = backupQbDelta(bit.qb, sport);
+    marginPts += delta ? delta.marginPts : 3;
+    totalPts += delta ? delta.totalPts : -1.5;
+  }
+  return { bits, marginPts, totalPts, home, away };
+}
+
 function decideLateNews(pick, live) {
   if (!pick || !live) return noneDecision();
   const sport = String(pick.sport || '').toUpperCase();
@@ -200,7 +363,7 @@ function decideLateNews(pick, live) {
   if (sport === 'MLB') {
     const stored = pick.lateNews && pick.lateNews.mlb;
     if (stored && (pitcherChanged(stored.homeSp, live.homeSp) || pitcherChanged(stored.awaySp, live.awaySp))) {
-      return dropDecision('sp-changed', 'Probable starter changed from the pitcher the model used');
+      return repriceDecision('sp-changed', 'Probable starter changed from the pitcher the model used');
     }
   }
   if (sport === 'NHL') {
@@ -209,7 +372,7 @@ function decideLateNews(pick, live) {
       || goalieChanged(stored && stored.away, live.awayGoalie, live.goalieConfirmed);
     if (changed) {
       if (stored && stored.goalieEdge) {
-        return dropDecision('goalie-changed', 'Confirmed starter changed and the model priced goalie quality');
+        return repriceDecision('goalie-changed', 'Confirmed starter changed and the model priced goalie quality');
       }
       return flagDecision('goalie-changed', 'Confirmed starter changed; goalie quality was not in the edge');
     }
@@ -217,12 +380,18 @@ function decideLateNews(pick, live) {
   if (sport === 'NFL' || sport === 'NCAAF') {
     const qb = pick.lateNews && pick.lateNews.qb;
     if (!qb || qb.loaded === false || live.qbLoaded === false) return noneDecision();
-    const home = qbDelta(qb.home, live.homeQb);
-    const away = qbDelta(qb.away, live.awayQb);
-    if (home === 'out' || away === 'out') {
-      return dropDecision('qb-out', 'Quarterback ruled out after the card was priced');
+    const priced = qbOutBits(pick, live, sport);
+    if (priced.bits.length) {
+      const one = priced.bits.length === 1 ? priced.bits[0] : null;
+      return repriceDecision('qb-out', 'Quarterback ruled out after the card was priced', {
+        injuredSide: one ? one.side : 'both',
+        injuredTeam: one ? one.team : null,
+        otherTeam: one ? (one.side === 'home' ? pick.awayTeam : pick.homeTeam) : null,
+        marginPts: priced.marginPts,
+        totalPts: priced.totalPts,
+      });
     }
-    if (home === 'doubtful' || away === 'doubtful') {
+    if (priced.home === 'doubtful' || priced.away === 'doubtful') {
       return flagDecision('qb-doubtful', 'Quarterback listed doubtful after the card was priced');
     }
   }
@@ -235,9 +404,11 @@ function pickIdentity(pick) {
 }
 
 /**
- * Move drops to voidedPregame and stamp flags. Does not resize the parlay
- * or the unit cap (the caller does, so this module does not require verify).
- * Refuses a card whose kept picks are not a subset of the picks it was given.
+ * Move explicit drops to voidedPregame, stamp flags, and write a reprice
+ * patch onto the same ticket. Does not resize the parlay or the unit cap
+ * (the caller does, so this module does not require verify). Refuses a
+ * card whose kept picks are not a subset of the picks it was given.
+ * A reprice keeps the posted odds, so the ticket identity does not change.
  */
 function applyCardActions(picksData, decisions, now) {
   const picks = Array.isArray(picksData && picksData.picks) ? picksData.picks : [];
@@ -253,13 +424,14 @@ function applyCardActions(picksData, decisions, now) {
   const actions = [];
   let dropped = 0;
   let flagged = 0;
+  let repriced = 0;
   const before = new Set(picks.map(pickIdentity));
 
   for (let i = 0; i < picks.length; i += 1) {
     const pick = picks[i];
     const decision = byIndex.get(i);
     const action = decision && decision.action;
-    if (!decision || (action !== 'drop' && action !== 'flag') || isSettled(pick) || pick.status === 'void-pregame') {
+    if (!decision || (action !== 'drop' && action !== 'flag' && action !== 'reprice') || isSettled(pick) || pick.status === 'void-pregame') {
       next.push(pick);
       continue;
     }
@@ -275,6 +447,25 @@ function applyCardActions(picksData, decisions, now) {
       removed.push(pick.pick);
       dropped += 1;
       actions.push({ action: 'drop', code: decision.code, pick: pick.pick, reason: decision.reason || null });
+      continue;
+    }
+    if (action === 'reprice') {
+      const patch = decision.patch && typeof decision.patch === 'object' ? decision.patch : {};
+      next.push({
+        ...pick,
+        ...patch,
+        odds: pick.odds,
+        newsReprice: {
+          code: decision.code,
+          reason: decision.reason || null,
+          at: when,
+          kept: true,
+          marginPts: decision.marginPts != null ? decision.marginPts : null,
+          totalPts: decision.totalPts != null ? decision.totalPts : null,
+        },
+      });
+      repriced += 1;
+      actions.push({ action: 'reprice', code: decision.code, pick: pick.pick, reason: decision.reason || null });
       continue;
     }
     const flags = Array.isArray(pick.lateFlags) ? pick.lateFlags.slice() : [];
@@ -295,12 +486,12 @@ function applyCardActions(picksData, decisions, now) {
   for (const id of afterIds) {
     if (!before.has(id)) throw new Error('[late-news] refused: add');
   }
-  if (dropped === 0 && flagged === 0) {
-    return { dropped: 0, flagged: 0, removed: [], actions: [] };
+  if (dropped === 0 && flagged === 0 && repriced === 0) {
+    return { dropped: 0, flagged: 0, repriced: 0, removed: [], actions: [] };
   }
   picksData.picks = next;
-  picksData.voidedPregame = existingVoid.concat(addedVoid);
-  return { dropped, flagged, removed, actions };
+  if (addedVoid.length) picksData.voidedPregame = existingVoid.concat(addedVoid);
+  return { dropped, flagged, repriced, removed, actions };
 }
 
 function commitLateNewsCard(picksData, late, deps) {
@@ -321,7 +512,9 @@ function commitLateNewsCard(picksData, late, deps) {
     picksData.blockStraightRefill = true;
     return { write: true, resized: true, blockStraightRefill: true };
   }
-  if (late.flagged > 0) return { write: true, resized: false, blockStraightRefill: false };
+  // A reprice keeps the same legs. Persist the new EV before publish.
+  // Do not rebuild the parlay.
+  if (late.repriced > 0 || late.flagged > 0) return { write: true, resized: false, blockStraightRefill: false };
   return { write: false, resized: false, blockStraightRefill: false };
 }
 
@@ -423,6 +616,25 @@ function positionText(inj) {
   if (pos && typeof pos === 'object') return pos.abbreviation || pos.name || '';
   if (typeof pos === 'string') return pos;
   return '';
+}
+
+/** Explicit starter bit or depth-chart order 1. A missing flag stays depth. */
+function starterFromInjury(inj) {
+  if (!inj || typeof inj !== 'object') return false;
+  const athlete = inj.athlete && typeof inj.athlete === 'object' ? inj.athlete : null;
+  const bits = [inj.starter, inj.isStarter, athlete && athlete.starter, athlete && athlete.isStarter];
+  for (const bit of bits) {
+    if (bit === true || bit === 'true') return true;
+    if (bit === false || bit === 'false') return false;
+  }
+  const depth = inj.depthChartOrder != null ? inj.depthChartOrder
+    : (inj.depth != null ? inj.depth
+      : (athlete && (athlete.depthChartOrder != null ? athlete.depthChartOrder : athlete.depth)));
+  if (depth != null && depth !== '' && Number(depth) === 1) return true;
+  const role = `${inj.role || ''} ${inj.designation || ''}`.toLowerCase();
+  if (/\b(backup|reserve|non-?starter)\b/.test(role)) return false;
+  if (/\b(starter|starting|first[- ]team)\b/.test(role)) return true;
+  return false;
 }
 
 function athleteName(inj) {
@@ -572,12 +784,14 @@ function parseFootballPersonnel(data, opts = {}) {
     const name = athleteName(inj) || nameFromDescription(description);
     if (!name) return;
     const gameTeamIds = gameTeamIdsFromText(`${description} ${inj.matchup || ''} ${inj.game || ''}`, sport);
+    const starter = starterFromInjury(inj);
     if (!out[team]) out[team] = { team, players: [] };
     out[team].players.push({
       name,
       position: positionText(inj),
       status,
       kind,
+      ...(starter ? { starter: true } : {}),
       ...(gameTeamIds ? { gameTeamIds } : {}),
     });
   };
@@ -1053,6 +1267,7 @@ function emptyRun(extra) {
   return {
     dropped: 0,
     flagged: 0,
+    repriced: 0,
     removed: [],
     actions: [],
     checks: [],
@@ -1086,7 +1301,7 @@ async function runLateNews({ picksData, now, fetchImpl, withinMin = WITHIN_MIN, 
     const checks = [];
     for (const row of inWindow) {
       const ctx = live.forPick(row.pick) || { matched: false };
-      const decision = decideLateNews(row.pick, ctx);
+      const decision = finalizeNewsReprice(row.pick, decideLateNews(row.pick, ctx));
       decisions.push({ index: row.index, ...decision });
       checks.push(checkRow(row.pick, ctx, decision));
     }
@@ -1124,6 +1339,8 @@ function opsFromRun(late, meta) {
     checked: src.checked || 0,
     dropped: src.dropped || 0,
     flagged: src.flagged || 0,
+    repriced: src.repriced || 0,
+    frozen: !!src.frozen,
     errors: src.errors || [],
     exhausted: !!src.exhausted,
     actions: src.actions || [],
@@ -1140,6 +1357,7 @@ module.exports = {
   stampCandidate,
   stampCandidates,
   decideLateNews,
+  finalizeNewsReprice,
   pickInWindow,
   applyCardActions,
   commitLateNewsCard,

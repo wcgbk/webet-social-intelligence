@@ -1,6 +1,6 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV } = require('./config');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
@@ -309,15 +309,41 @@ function preferredStraightCombo(search, straights) {
   return { legs: rows, ...st };
 }
 
+function isFloorLeg(c) {
+  return !!(c && c.tier !== 'lean' && passesPublishFloor(c));
+}
+
+/** Same game: a floor straight beats a lean. Then higher edge, then EV. */
+function betterParlayLeg(c, prev) {
+  if (!prev) return true;
+  const cFloor = isFloorLeg(c);
+  const pFloor = isFloorLeg(prev);
+  if (cFloor !== pFloor) return cFloor;
+  if (legEdge(c) > legEdge(prev) + 1e-12) return true;
+  if (legEdge(prev) > legEdge(c) + 1e-12) return false;
+  return (c.ev || 0) > (prev.ev || 0);
+}
+
+/**
+ * A floor row, or a lean with stake EV at or above LEAN_MIN_EV and a
+ * positive edge. Structural rejects are not leans.
+ */
+function passesParlayCandidate(c) {
+  if (passesPublishFloor(c)) return true;
+  if (!c || c.tier !== 'lean') return false;
+  const ev = Number(c.ev);
+  if (!(ev + 1e-12 >= LEAN_MIN_EV)) return false;
+  const edge = parseEdgeFraction(c.edgePct != null ? c.edgePct : c.edge);
+  return Number.isFinite(edge) && edge > 0;
+}
+
 /** Best side per game, then the best-edge combo whose combined EV is positive. */
 function bestPositiveCombo(pool, size) {
   const byGame = new Map();
   for (const c of pool || []) {
     const key = matchupKey(c);
     const prev = byGame.get(key);
-    if (!prev || legEdge(c) > legEdge(prev) + 1e-12 || (Math.abs(legEdge(c) - legEdge(prev)) <= 1e-12 && (c.ev || 0) > (prev.ev || 0))) {
-      byGame.set(key, c);
-    }
+    if (betterParlayLeg(c, prev)) byGame.set(key, c);
   }
   const games = [...byGame.values()];
   if (games.length < size) return null;
@@ -333,8 +359,9 @@ function bestPositiveCombo(pool, size) {
 /**
  * When the three published straights are on distinct games, each cover
  * is >= 45%, and their combined EV is positive, the parlay is those
- * straights. Otherwise the best edges on distinct games. Overlap with
- * the straights is allowed on that path. Each leg needs coverProb >= 45%.
+ * straights. Otherwise the best edges on distinct games, preferring a
+ * floor leg over a lean on the same game. A +EV lean may be a leg.
+ * No two legs share a game. Each leg needs coverProb >= 45%.
  * The ticket's combined EV must be > 0. A positive-EV 3-leg wins.
  * Otherwise the best positive-EV 2-leg. If neither exists, there is no
  * parlay. Straights still publish.
@@ -342,7 +369,7 @@ function bestPositiveCombo(pool, size) {
 function optimizeParlay(yesPool, straights = [], opts = {}) {
   const cardDate = opts.cardDate || opts.dateISO || null;
   const pool = (yesPool || [])
-    .filter(c => passesPublishFloor(c))
+    .filter(passesParlayCandidate)
     .filter(c => Number.isFinite(c.coverProb) && c.coverProb >= PARLAY_MIN_COVER)
     .filter(c => Number.isFinite(c.odds) && c.ev > 0)
     .filter(c => !cardDate || inSlate(c, cardDate))
@@ -442,4 +469,5 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
 module.exports = {
   optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
   sameDirectionTotalFactor, correlatedTotalFactor, legsConflict, bestEdgeLegs, legEdge,
+  passesParlayCandidate,
 };

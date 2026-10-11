@@ -4,7 +4,7 @@ const config = require('./config');
 const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
-  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, PM_SOFT,
+  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EV, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = config;
 const {
@@ -60,6 +60,9 @@ function scoreCandidate(c) {
   if (typeof c._steamScoreAdj === 'number' && Number.isFinite(c._steamScoreAdj)) nudge += c._steamScoreAdj;
   nudge += clampPmScoreAdj(c._pmScoreAdj);
   if (c.steamToward && ev > 0) nudge += (w.softSportMixBonus || 0.02);
+  // DK lagging the sharp line is a pre-lock selection input. It stays
+  // inside the nudge cap and is not added to fair_sharp_p or EV.
+  if (c.dkLagsSharp === true && ev > 0) nudge += 0.001;
   if (nudge > SCORE_NUDGE_CAP) nudge = SCORE_NUDGE_CAP;
   else if (nudge < -SCORE_NUDGE_CAP) nudge = -SCORE_NUDGE_CAP;
   return s + nudge;
@@ -95,15 +98,56 @@ function passesPublishFloor(c) {
 }
 
 /**
- * Label for a card that publishes only floor straights.
- * Fewer than 3 is a short card. Zero is still a published card.
+ * Label for the published straight card.
+ * A number keeps the floor-count strings. An array of picks notes leans
+ * when LEAN_PAD filled open slots.
  */
 function straightCardLabel(count) {
-  const n = Number(count) || 0;
+  let n;
+  let leans = 0;
+  if (Array.isArray(count)) {
+    n = count.length;
+    leans = count.filter((p) => p && p.tier === 'lean').length;
+  } else {
+    n = Number(count) || 0;
+  }
   if (n <= 0) return 'no floor plays';
+  if (leans > 0) {
+    const floors = n - leans;
+    if (floors <= 0) return n === 1 ? 'short card: 1 lean' : `short card: ${n} leans`;
+    return `${n} straights (${floors} floor, ${leans} lean)`;
+  }
   if (n === 1) return 'short card: 1 floor straight';
   if (n < 3) return `short card: ${n} floor straights`;
   return '3 floor straights';
+}
+
+function finiteEv(c) {
+  const n = Number(c && c.ev);
+  return Number.isFinite(n) ? n : -Infinity;
+}
+
+/** Higher stake EV first. Edge breaks a tie. */
+function compareByEv(a, b) {
+  const d = finiteEv(b) - finiteEv(a);
+  if (Math.abs(d) > 1e-12) return d;
+  return compareByEdge(a, b);
+}
+
+function sideKey(c) {
+  return `${matchupKey(c)}||${c && c.side}`;
+}
+
+/**
+ * Lean fill. Stake EV at or above LEAN_MIN_EV (1.5%) and a positive edge.
+ * LEAN_PAD false leaves the slot empty.
+ */
+function passesLeanFill(c) {
+  if (config.LEAN_PAD !== true) return false;
+  const ev = Number(c && c.ev);
+  if (!(ev + 1e-12 >= LEAN_MIN_EV)) return false;
+  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+  return Number.isFinite(edge) && edge > 0;
 }
 
 /**
@@ -112,26 +156,45 @@ function straightCardLabel(count) {
  * already taken is skipped and the next distinct game fills the slot.
  * Set the flag false and a second side of the same game is a straight
  * when its edge is in the top N.
- * leanPool is ignored. A short floor tier stays short. Sub-floor leans
- * are not straights. The card still publishes (see straightCardLabel).
+ * When fewer than maxN clear the floor and LEAN_PAD is true, the open
+ * slots fill from leanPool sorted by EV. One straight per game still
+ * applies. A lean is tier 'lean' so the stake caps at LEAN_MAX_UNITS.
+ * The card still publishes when the lean pool cannot fill the rest.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
-  void leanPool;
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
   const usedGames = new Set();
+  const usedSides = new Set();
   const floor = [];
   for (const c of [...(yesPool || [])].sort(compareByEdge)) {
     if (floor.length >= maxN) break;
     if (!passesPublishFloor(c)) continue;
+    if (usedSides.has(sideKey(c))) continue;
     if (onePer && usedGames.has(matchupKey(c))) continue;
     floor.push({
       ...c,
       tier: 'floor',
       _score: edgeRank(c),
     });
+    usedSides.add(sideKey(c));
     if (onePer) usedGames.add(matchupKey(c));
   }
-  return floor;
+  if (config.LEAN_PAD !== true || floor.length >= maxN) return floor;
+  const leans = [];
+  for (const c of [...(leanPool || [])].sort(compareByEv)) {
+    if (floor.length + leans.length >= maxN) break;
+    if (!passesLeanFill(c)) continue;
+    if (usedSides.has(sideKey(c))) continue;
+    if (onePer && usedGames.has(matchupKey(c))) continue;
+    leans.push({
+      ...c,
+      tier: 'lean',
+      _score: finiteEv(c),
+    });
+    usedSides.add(sideKey(c));
+    if (onePer) usedGames.add(matchupKey(c));
+  }
+  return floor.concat(leans);
 }
 
 /** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
@@ -445,6 +508,7 @@ module.exports = {
   edgeRank,
   scoreCandidate,
   passesPublishFloor,
+  passesLeanFill,
   straightCardLabel,
   selectStraights,
   orderedByScore,

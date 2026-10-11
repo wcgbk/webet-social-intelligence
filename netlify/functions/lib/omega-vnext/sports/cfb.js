@@ -14,6 +14,7 @@ const {
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
+const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
@@ -112,7 +113,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
   }
   const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
   function stampCardInputs(raw) {
-    if (gd.personnelExclude) raw.personnelExclude = true;
+    stampPersonnel(raw, gd);
     if (gd.startingQbOut) raw.startingQbOut = true;
     if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
     return raw;

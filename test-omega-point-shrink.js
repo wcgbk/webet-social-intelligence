@@ -380,7 +380,7 @@ function assertEdgesNeverGrow(cands, ev) {
 {
   const home = 'Green Bay Packers';
   const away = 'Tampa Bay Buccaneers';
-  const ev = event(home, away, 45, -2.1);
+  const ev = event(home, away, 45, -2.0);
   const cands = projectFootball('NFL', ev, 0);
   const over = findSide(cands, 'Total', /^Over/);
   const under = findSide(cands, 'Total', /^Under/);
@@ -395,7 +395,7 @@ function assertEdgesNeverGrow(cands, ev) {
   }
   const homeSpread = cands.find(c => c.market === 'Spread' && c.side.startsWith(home));
   assert.ok(homeSpread);
-  assert.strictEqual(homeSpread.marketLine, -2.1);
+  assert.strictEqual(homeSpread.marketLine, -2.0);
   const marketMargin = -homeSpread.marketLine;
   assert.ok(Math.abs(homeSpread.modelMarginRaw - marketMargin) < 1e-9);
   assert.strictEqual(homeSpread.modelMarginShrunk, homeSpread.modelMarginRaw);

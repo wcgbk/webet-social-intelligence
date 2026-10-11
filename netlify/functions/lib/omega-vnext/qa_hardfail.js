@@ -2,7 +2,8 @@
 
 /**
  * Omega QA hard-fails — drop pick before publish unlock; try next diversified YES.
- * NO lean force-fill. Grok remains verifier/narrator only.
+ * When the floor refill is still short of maxN and LEAN_PAD is on, the open
+ * slots fill from the lean pool. Grok remains verifier/narrator only.
  *
  * Checks:
  *  - MLB: starting pitcher scratched/changed vs assumed SP
@@ -340,12 +341,11 @@ async function loadQaContext(dateISO, sportsNeeded = []) {
 }
 
 /**
- * Apply hard-fails to selected picks; refill from the floor yesPool only.
- * leanPool is ignored. A short card stays short.
+ * Apply hard-fails to selected picks. Refill from the floor yesPool, then
+ * from leanPool when LEAN_PAD is on and the card is still short of maxN.
  * @returns {{ picks, hardFails, yesPoolRemaining }}
  */
 function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool } = {}) {
-  void leanPool;
   const fails = [];
   const kept = [];
   const usedGames = new Set();
@@ -378,16 +378,21 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     usedGames.add(matchupKey(c));
   }
 
-  // Refill from remaining yes pool (diversified)
-  if (kept.length < maxN && yesPool && yesPool.length) {
-    const remaining = yesPool.filter(c => {
+  // Refill from the remaining floor, then leans when the card is still short.
+  if (kept.length < maxN && ((yesPool && yesPool.length) || (leanPool && leanPool.length))) {
+    const remaining = (yesPool || []).filter(c => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
       if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
       return true;
     });
-    // Re-select from remaining, skipping hard-fails
-    const sorted = selectStraights(remaining, maxN - kept.length);
+    const leanRemaining = (config.LEAN_PAD === true ? (leanPool || []) : []).filter(c => {
+      if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
+      if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
+      if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
+      return true;
+    });
+    const sorted = selectStraights(remaining, maxN - kept.length, leanRemaining);
     for (const c of sorted) {
       if (kept.length >= maxN) break;
       const reason = checkOne(c);

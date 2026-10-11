@@ -55,8 +55,9 @@ try {
 
   const short = [floor[0], floor[1]];
   const filled = selectStraights(short, 3, leans);
-  assert.deepStrictEqual(filled.map(c => c.side), ['Under 41.5']);
-  assert.ok(filled.every(c => c.tier === 'floor'));
+  assert.deepStrictEqual(filled.map(c => c.side), ['Under 41.5', 'Under 45']);
+  assert.deepStrictEqual(filled.map(c => c.tier), ['floor', 'lean']);
+  assert.ok(!filled.some(c => c.side === 'Broncos +3'), 'same game as the floor straight');
 
   const qaOn = applyHardFails([floor[0]], floor, {}, { maxN: 3 });
   assert.strictEqual(qaOn.picks.length, 3);
@@ -70,8 +71,8 @@ try {
   assert.deepStrictEqual(off.map(c => c.side), ['Under 41.5', 'Under 42', 'Over 54.5']);
 
   const offFill = selectStraights(short, 3, leans);
-  assert.deepStrictEqual(offFill.map(c => c.side), ['Under 41.5', 'Under 42']);
-  assert.ok(offFill.every(c => c.tier === 'floor'));
+  assert.deepStrictEqual(offFill.map(c => c.side), ['Under 41.5', 'Under 42', 'Broncos +3']);
+  assert.strictEqual(offFill[2].tier, 'lean');
 
   const qaOff = applyHardFails([floor[0]], floor, {}, { maxN: 3 });
   assert.strictEqual(qaOff.picks.length, 3);

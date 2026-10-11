@@ -22,7 +22,7 @@ assert.ok(!config.US_BOOK_PRIORITY.includes('pinnacle'), 'placeability is US ret
 assert.ok(!config.US_BOOK_PRIORITY.includes('barstool'));
 assert.ok(!config.US_BOOK_PRIORITY.includes('wynnbet'));
 assert.ok(!config.US_BOOK_PRIORITY.includes('superbook'));
-assert.strictEqual(config.LEAN_PAD, false);
+assert.strictEqual(config.LEAN_PAD, true);
 assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);

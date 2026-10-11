@@ -49,8 +49,13 @@ function generatingPayload(dateKey) {
   return emptyPayload(dateKey, "Today's card is generating. Check back by 11:00am ET.");
 }
 
-function stripPremium(picksData) {
+function publicCard(picksData) {
+  // publicPicksPayload keeps book on each straight and parlay leg.
   return publicPicksPayload(picksData);
+}
+
+function stripPremium(picksData) {
+  return publicCard(picksData);
 }
 
 function truthyParam(v) {
@@ -193,6 +198,7 @@ exports.handler = async (event) => {
 };
 
 // Exported for unit tests (resolver pure helpers live in lib/omega-live-date).
+module.exports.publicCard = publicCard;
 module.exports.todayET = todayET;
 module.exports.tomorrowET = tomorrowET;
 module.exports.hasRealPicks = hasRealPicks;

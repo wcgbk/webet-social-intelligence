@@ -2,7 +2,7 @@
 
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
-  PARLAY_MIN_COVER,
+  PARLAY_MIN_COVER, LEAN_PAD, LEAN_MIN_EV,
 } = require('./config');
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
@@ -29,6 +29,7 @@ const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot } = require('./price_lock');
+const { parseEdgeFraction } = require('./odds_math');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -488,10 +489,14 @@ async function generateOmegaVnext(opts = {}) {
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
+  // pregameAsOfMs is a clock only. It does not flip replayLike or the odds URL.
   const gateOpts = { cardDate: dateISO };
   if (replayLike) {
     const asOfMs = Date.parse(opts.historicalSnapshot);
     if (Number.isFinite(asOfMs)) gateOpts.asOfMs = asOfMs;
+  }
+  if (Number.isFinite(Number(opts.pregameAsOfMs))) {
+    gateOpts.asOfMs = Number(opts.pregameAsOfMs);
   }
   const { yesPool, leanPool = [], rejected } = applyGates(candidates, gateOpts);
   if (gateOpts.asOfMs != null) {
@@ -500,7 +505,7 @@ async function generateOmegaVnext(opts = {}) {
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
   console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
 
-  const selected = selectStraights(yesPool, MAX_STRAIGHTS);
+  const selected = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null);
 
   // QA hard-fails before narrate/store — drop + refill; empty OK
   let qaCtx = {};
@@ -515,6 +520,7 @@ async function generateOmegaVnext(opts = {}) {
   const qa = applyHardFails(selected, yesPool, qaCtx, {
     maxN: MAX_STRAIGHTS,
     modelVersion: MODEL_VERSION,
+    leanPool: LEAN_PAD ? leanPool : null,
   });
   let picks = qa.picks;
   const hardFails = qa.hardFails || [];
@@ -524,12 +530,19 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
   picks = applyDailyCap(picks);
 
-  // Floor only. A lean does not become a parlay leg. When the published
-  // straights are distinct games, each cover is >= 45%, and combined EV
-  // is positive, the parlay is those straights. Otherwise the best
-  // positive-EV floor edges on distinct games, then a 2-leg.
+  // Published straights first. A +EV lean may be a leg when the straight
+  // card does not already make the parlay. No same-game legs. Combined
+  // EV must be positive.
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
-  const poolForParlay = yesPool.filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`));
+  const leanLegs = (LEAN_PAD ? leanPool : []).filter((c) => {
+    const ev = Number(c && c.ev);
+    const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+    return c && c.tier === 'lean' && ev + 1e-12 >= LEAN_MIN_EV && Number.isFinite(edge) && edge > 0
+      && !hfKeys.has(`${c.matchup}|${c.side}`);
+  });
+  const poolForParlay = yesPool
+    .filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`))
+    .concat(leanLegs);
   const parlayEligible = poolForParlay.filter(c => Number(c.coverProb) >= PARLAY_MIN_COVER && c.ev > 0 && Number.isFinite(c.odds)).length;
   let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
 
@@ -634,7 +647,7 @@ async function generateOmegaVnext(opts = {}) {
       sportsCovered,
       modelVersion: MODEL_VERSION,
       qaHardFails: hardFails.length,
-      cardLabel: straightCardLabel(picks.length),
+      cardLabel: straightCardLabel(picks),
     },
     generatedAt: now.toISOString(),
     parlayLegs: empty ? [] : parlayLegs,
@@ -685,7 +698,7 @@ async function generateOmegaVnext(opts = {}) {
     // floor pool. Straights above stay edge-ranked.
     selection: {
       snapshotTime: servedSnapshot || oddsSnapshot || null,
-      cardLabel: straightCardLabel(picks.length),
+      cardLabel: straightCardLabel(picks),
       top10: top10Rows(yesPool, 10),
       excludedGames: excludedGames([
         ...dkExcluded.map((c) => ({ ...c, rejectReason: c.excludeReason || 'no-draftkings-line' })),

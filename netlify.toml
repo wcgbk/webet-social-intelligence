@@ -44,7 +44,7 @@
 
 [functions."pregame-check-omega"]
   schedule = "0,30 15-23,0-4 * * *"
-  # Late-news re-check every 30 min, 11:00–23:30 ET. Drop or flag only.
+  # Schedule stays 11:00–23:30 ET. The handler does not rewrite the card.
   # UTC union covers EDT and EST. etGuard keeps the listed ET slots. Avoid :40.
 
 [functions."self-optimize-omega"]

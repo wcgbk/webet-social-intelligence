@@ -11,7 +11,7 @@ const mlb = require(path.join(root, 'sports/mlb'));
 
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.ok(/game-day rest\/B2B/i.test(config.MODEL_NOTES) || /game-day/.test(config.MODEL_NOTES));
-assert.strictEqual(config.LEAN_PAD, false);
+assert.strictEqual(config.LEAN_PAD, true);
 
 assert.strictEqual(gd.prevEtDate('2026-09-22'), '2026-09-21');
 assert.strictEqual(gd.prevEtDate('2026-03-01'), '2026-02-28');

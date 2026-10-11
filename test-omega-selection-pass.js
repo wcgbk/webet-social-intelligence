@@ -6,7 +6,7 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const { priceLockTimestamp } = require(path.join(root, 'price_lock'));
 const { etLocalToUtcISO } = require(path.join(root, 'price_lock'));
-const { gateReason } = require(path.join(root, 'gates'));
+const { gateReason, injuryClusterReason } = require(path.join(root, 'gates'));
 const { minEdgeFor } = require(path.join(root, 'edge_floor'));
 const { selectStraights } = require(path.join(root, 'select'));
 const { NFL_KEY_NUMBERS } = require(path.join(root, 'config'));
@@ -460,13 +460,28 @@ function base(extra) {
   assert.strictEqual(card.parlayLegs[0].legs.length, 0);
 }
 
-// ── 9. Unquantifiable cluster is an exclusion, not a bigger number ──
+// ── 9. Depth outs and a starter cluster reprice. They do not exclude. ──
 {
-  const outs = [1, 2, 3, 4, 5].map((i) => ({ name: `WR${i}`, position: 'WR', status: 'out' }));
+  const outs = [1, 2, 3, 4, 5].map((i) => ({ name: `WR${i}`, position: 'WR', status: 'out', starter: true }));
   const cluster = conservativeNonQbAdj(outs, []);
-  assert.strictEqual(cluster.exclude, true);
+  assert.strictEqual(cluster.exclude, false);
+  assert.strictEqual(cluster.homeSideExclude, false);
+  assert.strictEqual(cluster.totalExclude, false);
+  assert.ok(cluster.probHaircut > 0, 'starter cluster still haircuts probability');
+  assert.ok(cluster.totalAdj < 0, 'offensive starters take points off the total');
   assert.ok(cluster.marginAdj >= -NON_QB_ASSUMPTION.cap - 1e-9);
-  assert.strictEqual(gateReason(base({ personnelExclude: true }), { cardDate: CARD }), 'unquantified-injury-cluster');
+  const asOf = { cardDate: CARD, asOfMs: Date.parse('2026-10-11T13:30:00Z') };
+  assert.strictEqual(gateReason(base({ personnelExclude: true }), asOf), null);
+  const heavy = base({
+    personnelHomeExclude: true,
+    personnelTotalExclude: true,
+    homeTeam: 'B',
+    awayTeam: 'A',
+  });
+  assert.strictEqual(gateReason({ ...heavy, market: 'Total', side: 'Over 44', line: 44 }, asOf), null);
+  assert.strictEqual(gateReason({ ...heavy, market: 'Spread', side: 'B -3' }, asOf), null);
+  assert.strictEqual(gateReason({ ...heavy, market: 'Spread', side: 'A +3', line: 3 }, asOf), null);
+  assert.strictEqual(injuryClusterReason(heavy), null);
   const q = conservativeNonQbAdj([{ name: 'Slot', position: 'WR', status: 'questionable' }], []);
   assert.ok(Math.abs(q.marginAdj + NON_QB_ASSUMPTION.outPoints * NON_QB_ASSUMPTION.questionableWeight) < 1e-6);
   assert.strictEqual(q.exclude, false);

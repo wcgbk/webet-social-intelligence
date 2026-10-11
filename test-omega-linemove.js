@@ -24,7 +24,8 @@ assert.ok(config.LINE_MOVE.rejectSteamAgainstCents === 18);
 assert.ok(config.LINE_MOVE.verifyAdverseCents === 20);
 assert.ok(config.GATES.rejectAdverseSteam === true);
 assert.ok(config.SHRINK_K.Spread >= 0.68);
-assert.ok(config.HFA.NFL >= 2.1);
+assert.strictEqual(config.HFA.NFL, 2.0);
+assert.ok(config.HFA.NFL >= 1.5 && config.HFA.NFL <= 2);
 
 // Day-scope still intact
 assert.ok(math.isSameEtDay('2026-09-22T23:05:00Z', '2026-09-22'));
@@ -312,7 +313,7 @@ assert.ok(scoreWith > scorePlain, `steam boost ${scoreWith} vs ${scorePlain}`);
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
-assert.strictEqual(config.LEAN_PAD, false);
+assert.strictEqual(config.LEAN_PAD, true);
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 
 // earliest/latest poll helper

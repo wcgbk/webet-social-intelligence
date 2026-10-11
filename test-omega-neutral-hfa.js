@@ -19,7 +19,8 @@ const { projectAll } = require(path.join(root, 'index'));
 const { toPickObject } = require(path.join(root, 'select'));
 const { pickPublic } = require(path.join(__dirname, 'netlify/functions/lib/public-picks'));
 
-assert.strictEqual(config.HFA.NFL, 2.1);
+assert.strictEqual(config.HFA.NFL, 2.0);
+assert.ok(config.HFA.NFL >= 1.5 && config.HFA.NFL <= 2);
 assert.strictEqual(config.HFA.NCAAF, 2.6);
 assert.strictEqual(config.HFA.MLB, 0.12);
 

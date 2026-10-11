@@ -1300,13 +1300,14 @@ exports.handler = async (event) => {
       console.log(`[verify-hardrock] Check failed (non-fatal, card unchanged): ${e.message}`);
     }
 
-    // ── Step 1.6: Open→pick steam recheck (hard-fail / replace; empty OK) ──
+    // ── Step 1.6: Steam is a pre-10:30 selection input only ──
+    // sharpSteamSinceOpen records size and direction, and dkLagsSharp, on
+    // the generate path. Verify does not recheck steam and does not drop
+    // or reprice a pick for steam. Nothing on the card moves for steam
+    // after the 10:30 lock. runOmegaSteamRecheck is not called.
     let steamCheck = { checked: 0, failed: 0, reasons: [] };
-    try {
-      steamCheck = await runOmegaSteamRecheck(picksData, pickReports);
-      totalErrors += steamCheck.failed;
-    } catch (e) {
-      console.log(`[verify-steam] Check failed (non-fatal): ${e.message}`);
+    if (steamDropBlocksStraightRefill(droppedSteam, steamCheck.failed)) {
+      blockStraightRefill = true;
     }
 
     // ── Step 2: Auto-fix critical issues ──
@@ -1317,52 +1318,11 @@ exports.handler = async (event) => {
       await updatePicksBlob(dateKey, picksData);
     }
 
-    // Steam hard-fails still on card after autofix → drop (empty OK; no TARGET_PICKS refill)
-    try {
-      const { adverseSteamReason } = require('./lib/omega-vnext/line_path');
-      const kept = [];
-      droppedSteam = 0;
-      for (const pick of picksData.picks) {
-        const r = pick.lineMove ? adverseSteamReason(pick.lineMove, { verify: true }) : null;
-        if (r) {
-          console.log(`[verify-steam] dropping ${pick.pick}: ${r}`);
-          picksData.rejections = picksData.rejections || [];
-          picksData.rejections.unshift({
-            matchup: pick.matchup, side: pick.pick,
-            reason: `QA_HARDFAIL: ${r}`, hardFail: true,
-          });
-          droppedSteam++;
-          continue;
-        }
-        kept.push(pick);
-      }
-      // Adverse steam must not be undone by TARGET_PICKS backfill (same flag as placeability).
-      if (steamDropBlocksStraightRefill(droppedSteam, steamCheck.failed)) {
-        blockStraightRefill = true;
-      }
-      if (droppedSteam > 0) {
-        picksData.picks = kept;
-        if (kept.length === 0) {
-          picksData.parlayLegs = [];
-          Object.assign(picksData, require('./lib/no-plays').noPlaysFields(
-            "The line moved against today's candidates after they were priced, so Omega is passing."));
-          picksData.edgeSummary = picksData.noPlaysReason;
-        }
-        if (picksData.summary) {
-          picksData.summary.totalStraightBets = kept.length;
-          picksData.summary.totalPicks = kept.length;
-        }
-        enforceOmegaDailyUnitCap(picksData);
-        await updatePicksBlob(dateKey, picksData);
-        console.log(`[verify-steam] dropped ${droppedSteam} adverse-steam pick(s); remaining=${kept.length}`);
-      }
-    } catch (e) {
-      console.log(`[verify-steam] drop pass skipped: ${e.message}`);
-    }
-
-    // Late-news re-check. Same 90-minute window as pregame-check-omega.
-    // Drop or flag only. A scratched starter, postponed game, goalie the
-    // model priced, or a newly out QB voids the pick. Never adds a side.
+    // Pre-publish news reprice. Same 90-minute window. A scratched starter,
+    // a priced goalie change, or a newly out QB reprices at the posted
+    // DraftKings number and stays when the new EV clears the floor. It
+    // drops only on ev-floor. Postponed and suspended still void. This
+    // verify slot is 10:30 ET, before the 11:00 publish. Never adds a side.
     try {
       const lateNow = new Date();
       const late = await lateNews.runLateNews({

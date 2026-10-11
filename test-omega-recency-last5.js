@@ -5,7 +5,9 @@ const assert = require('assert');
 const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
+const config = require(path.join(root, 'config'));
 const nfl = require(path.join(root, 'sports/nfl'));
+const { eloMargin } = require(path.join(root, 'sports/nfl_elo'));
 const {
   RECENCY_GAMES,
   RECENCY_FULL_WEIGHT,
@@ -166,7 +168,14 @@ const rawOnly = spreadOf(nfl.project({
 }));
 assert.strictEqual(rawOnly.modelProjection, bare.modelProjection);
 assert.ok(rawOnly.recencyLast5 == null);
-assert.strictEqual(bare.modelProjection, 2);
+function shownMargin(base) {
+  const w = config.nflEloWeight();
+  const blended = w > 0
+    ? (1 - w) * base + w * eloMargin(homeName, awayName, false)
+    : base;
+  return +blended.toFixed(2);
+}
+assert.strictEqual(bare.modelProjection, shownMargin(2));
 
 const efficiency = {
   [homeName]: { offEpa: 0.10, defEpa: 0.04 },
@@ -176,7 +185,7 @@ const plays = 62;
 const homeRating = (0.10 + 0.04) * plays;
 const baseMargin = ((0.10 - 0.00) - (0.00 - 0.04)) * plays + 2.0;
 const ratedBare = spreadOf(nfl.project({ oddsEvents: [ev], standings: {}, efficiency }));
-assert.strictEqual(ratedBare.modelProjection, +baseMargin.toFixed(2));
+assert.strictEqual(ratedBare.modelProjection, shownMargin(baseMargin));
 assert.ok(ratedBare.recencyLast5 == null);
 
 const hotGames = [0, 1, 2, 3, 4].map((i) => ({
@@ -204,7 +213,7 @@ const ratedCard = spreadOf(nfl.project({
   efficiency,
   gameDay: { last5ByTeam: { NFL: { [homeId]: hotGames } } },
 }));
-assert.strictEqual(ratedCard.modelProjection, +(baseMargin + 1).toFixed(2));
+assert.strictEqual(ratedCard.modelProjection, shownMargin(baseMargin + 1));
 assert.ok(Math.abs(ratedCard.modelProjection - ratedBare.modelProjection) <= 1);
 assert.ok(ratedCard.recencyLast5);
 assert.strictEqual(ratedCard.recencyLast5.homeN, 5);

@@ -514,7 +514,9 @@ function base(extra) {
   assert.strictEqual(replayNoWrite(), true);
   if (prev == null) delete process.env.OMEGA_REPLAY_NO_WRITE;
   else process.env.OMEGA_REPLAY_NO_WRITE = prev;
-  assert.strictEqual(replayNoWrite(), false);
+  // Restoring the prior value restores that guard. The test harness always
+  // starts children with OMEGA_REPLAY_NO_WRITE=1, so "off" is not assumed.
+  assert.strictEqual(replayNoWrite(), replayNoWrite({ OMEGA_REPLAY_NO_WRITE: prev }));
 }
 
 console.log('test-omega-selection-pass: ok');

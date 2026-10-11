@@ -104,6 +104,11 @@ function oddsUrls(calls) {
 }
 
 (async () => {
+  // Harness children start with OMEGA_REPLAY_NO_WRITE=1. This file asserts
+  // rows landed in an injected store, not a Netlify blob. Clear the flag
+  // for that in-memory writer only.
+  const prevNoWrite = process.env.OMEGA_REPLAY_NO_WRITE;
+  delete process.env.OMEGA_REPLAY_NO_WRITE;
   assert.strictEqual(v2.CREDITS_PER_CALL, 3);
   assert.strictEqual(v2.DEFAULT_CREDIT_CAP, 90);
   assert.ok(v2.SHARP_CLOSE_BOOKS.length <= 10);
@@ -727,6 +732,8 @@ function oddsUrls(calls) {
   assert.ok(healthSrc.includes('opsOnly'));
   assert.ok(healthSrc.includes('candidateCloses'));
 
+  if (prevNoWrite == null) delete process.env.OMEGA_REPLAY_NO_WRITE;
+  else process.env.OMEGA_REPLAY_NO_WRITE = prevNoWrite;
   console.log('test-omega-candidate-closes-v2: ok');
 })().catch((err) => {
   console.error(err);

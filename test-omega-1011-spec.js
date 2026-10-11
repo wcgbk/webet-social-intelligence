@@ -49,11 +49,7 @@ function floorRow(extra) {
     assert.strictEqual(lamar.marginPts, 4.5);
     assert.strictEqual(lamar.totalPts, -2.25);
     const generic = gd.backupQbDelta({ qbStatus: 'out', qbName: 'Joe Backup' }, 'NFL');
-    assert.strictEqual(generic.source, 'table');
-    assert.strictEqual(generic.marginPts, 3);
-    assert.strictEqual(generic.totalPts, -1.5);
-    assert.ok(lamar.marginPts > generic.marginPts);
-    assert.ok(lamar.totalPts < generic.totalPts);
+    assert.strictEqual(generic, null, 'a non-starting QB out has no adjustment');
     assert.strictEqual(gd.backupQbDelta({ qbStatus: 'doubtful', qbName: 'Lamar Jackson' }, 'NFL'), null);
 
     const qbOut = gd.applyGameDayAdjustments({

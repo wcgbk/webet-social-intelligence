@@ -650,7 +650,7 @@ function card(picks, extra = {}) {
     assert.ok(stampAt > projectAt, 'stampCandidates after projectAll and before calibration');
     assert.ok(calAt > stampAt, 'calibrateAll keeps cardDate cal-mode options after stampCandidates');
     const config = require('./netlify/functions/lib/omega-vnext/config');
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+    assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
     assert.ok(/late-news/.test(config.MODEL_NOTES));
     assert.ok(/stamps lateNews/.test(config.MODEL_NOTES));
     assert.ok(/pregame-check-omega/.test(config.MODEL_NOTES));

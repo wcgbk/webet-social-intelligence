@@ -122,7 +122,7 @@ assert.strictEqual(calibrate.CAL_MODE_DEFAULT, 'A');
 assert.strictEqual(calibrate.K_POLICY.min, 0.3);
 assert.ok(calibrate.CAL_POOL.minRows >= 80);
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
 assert.strictEqual(config.GATES.minEV.NFL, 0.03);

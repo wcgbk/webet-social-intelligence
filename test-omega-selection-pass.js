@@ -33,6 +33,9 @@ const {
 
 const CARD = '2026-10-11';
 const IN_SLATE = '2026-10-11T20:00:00Z'; // 16:00 ET
+// gateReason uses Date.now() when asOfMs is omitted. Freeze the pregame
+// clock before this kickoff so the 5-minute grace does not depend on the wall clock.
+const GATE = { cardDate: CARD, asOfMs: Date.parse('2026-10-11T13:30:00Z') };
 
 async function main() {
 
@@ -100,7 +103,7 @@ function base(extra) {
   assert.strictEqual(hardRockReviewFlag({ sport: 'NFL', line: -2.5, hardRock: { point: -2, american: -110 } }), null);
   assert.strictEqual(hardRockReviewFlag({ sport: 'NFL', line: -3, hardRock: null }), null);
   const flagged = base({ line: -2.5, hardRock: { point: -3, american: -115 }, hrFlags: null });
-  assert.strictEqual(gateReason({ ...flagged, hrFlags: cross3.flags }, { cardDate: CARD }), null);
+  assert.strictEqual(gateReason({ ...flagged, hrFlags: cross3.flags }, GATE), null);
 
   const card = {
     picks: [base({
@@ -139,23 +142,23 @@ function base(extra) {
     modelTotalRaw: 55, marketTotal: 44, modelLineGap: 11,
   });
   assert.strictEqual(nflProjectionGap(total), 'nfl-projection-gap');
-  assert.strictEqual(gateReason(total, { cardDate: CARD }), 'nfl-projection-gap');
+  assert.strictEqual(gateReason(total, GATE), 'nfl-projection-gap');
   const exact = base({
     market: 'Total', side: 'Over 44', line: 44,
     modelTotalRaw: 54, marketTotal: 44, modelLineGap: 10,
   });
   assert.strictEqual(nflProjectionGap(exact), null);
-  assert.strictEqual(gateReason(exact, { cardDate: CARD }), null);
+  assert.strictEqual(gateReason(exact, GATE), null);
   const spread = base({
     market: 'Spread', modelMarginRaw: 14, marketMargin: 3, modelLineGap: 11,
   });
-  assert.strictEqual(gateReason(spread, { cardDate: CARD }), 'model_market_gap');
+  assert.strictEqual(gateReason(spread, GATE), 'model_market_gap');
   const cfbTotal = base({
     sport: 'NCAAF', market: 'Total', side: 'Over 50',
     modelTotalRaw: 61, marketTotal: 50, modelLineGap: 11,
   });
   assert.strictEqual(nflProjectionGap(cfbTotal), null);
-  assert.notStrictEqual(gateReason(cfbTotal, { cardDate: CARD }), 'nfl-projection-gap');
+  assert.notStrictEqual(gateReason(cfbTotal, GATE), 'nfl-projection-gap');
   // The spread is more than 10 off, so the total on that game drops too.
   const sibling = base({
     market: 'Total', side: 'Over 44', line: 44,
@@ -163,7 +166,7 @@ function base(extra) {
     nflGameProjectionGap: true,
   });
   assert.strictEqual(nflProjectionGap(sibling), 'nfl-projection-gap');
-  assert.strictEqual(gateReason(sibling, { cardDate: CARD }), 'nfl-projection-gap');
+  assert.strictEqual(gateReason(sibling, GATE), 'nfl-projection-gap');
   assert.strictEqual(nflSpreadExcludesGame(14, 3), true);
   assert.strictEqual(nflSpreadExcludesGame(13, 3), false);
   assert.strictEqual(nflSpreadExcludesGame(null, 3), false);
@@ -383,9 +386,9 @@ function base(extra) {
     sport: 'MLB', market: 'Moneyline', side: 'A ML', odds: 300,
     edgePct: 0.02, ev: 0.05, coverProb: 0.30, uncertainty: 0.1,
   });
-  assert.strictEqual(gateReason(longshot, { cardDate: CARD }), 'edge-floor');
+  assert.strictEqual(gateReason(longshot, GATE), 'edge-floor');
   const underEv = base({ ev: 0.02, edgePct: 0.04, coverProb: 0.53 });
-  assert.strictEqual(gateReason(underEv, { cardDate: CARD }), 'ev-floor');
+  assert.strictEqual(gateReason(underEv, GATE), 'ev-floor');
 
   const lowEvHighEdge = base({ matchup: 'A @ B', side: 'B -3', ev: 0.04, edgePct: 0.08, line: -3 });
   const highEvLowEdge = base({ matchup: 'C @ D', side: 'D +3', ev: 0.09, edgePct: 0.03, line: 3, homeTeam: 'D', awayTeam: 'C' });
@@ -426,8 +429,8 @@ function base(extra) {
   const six = etLocalToUtcISO('2026-10-12', 6, 0);
   assert.strictEqual(slateReason({ commenceTime: six }, CARD), 'future-date');
   assert.strictEqual(slateReason({ commenceTime: '2026-10-10T20:00:00Z' }, CARD), 'not-same-et-day');
-  assert.strictEqual(gateReason(base({ inPlay: true }), { cardDate: CARD }), 'live-in-play');
-  assert.strictEqual(gateReason(base({ priceState: 'in-play' }), { cardDate: CARD }), 'live-in-play');
+  assert.strictEqual(gateReason(base({ inPlay: true }), GATE), 'live-in-play');
+  assert.strictEqual(gateReason(base({ priceState: 'in-play' }), GATE), 'live-in-play');
 
   const kick = sampleInSlateKick(Date.parse('2026-10-11T03:00:00Z'));
   assert.ok(inSlate(kick, require(path.join(root, 'odds_math')).etCalendarDate(kick)));

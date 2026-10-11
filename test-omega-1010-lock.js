@@ -34,7 +34,10 @@ function curve(american, uncertainty) {
 // ── Price lock clock ──
 assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T14:30:00Z');
 assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T15:30:00Z');
-assert.strictEqual(resolveGenerateOddsSnapshot('2026-10-10', {}), '2026-10-10T14:30:00Z');
+assert.strictEqual(
+  resolveGenerateOddsSnapshot('2026-10-10', { nowMs: Date.parse('2026-10-10T16:00:00Z') }),
+  '2026-10-10T14:30:00Z',
+);
 assert.strictEqual(
   resolveGenerateOddsSnapshot('2026-10-10', { historicalSnapshot: '2026-10-10T13:00:00Z' }),
   '2026-10-10T13:00:00Z',

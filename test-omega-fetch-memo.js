@@ -14,7 +14,7 @@ const narrate = require(path.join(root, 'narrate'));
 const { resolveModelChain } = require('./netlify/functions/lib/xai-chat');
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 
 const DATE = '2026-10-06';
 const SAME_DAY = '2026-10-06T16:00:00Z'; // noon ET

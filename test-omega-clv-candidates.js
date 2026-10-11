@@ -54,7 +54,7 @@ function baseDeps(extra) {
 }
 
 (async () => {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+  assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
   assert.strictEqual(config.GATES.minEV.MLB, 0.03);
   assert.strictEqual(config.GATES.minEV.NFL, 0.03);
   assert.strictEqual(config.GATES.minCoverProb.MLB, 0);

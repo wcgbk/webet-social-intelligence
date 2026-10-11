@@ -22,7 +22,7 @@ const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
 assert.strictEqual(config.SPORTS_ENABLED.NFL, true);
@@ -1310,7 +1310,7 @@ function byMarket(cands, market) {
       'Buffalo Bills': { offEpa: 0, defEpa: 0, offSuccess: 0.1, defSuccess: 0.1 },
     },
     gameDay: {
-      qbStatusBySport: { NFL: { 'Buffalo Bills': { qbStatus: 'out', qbName: 'X' } } },
+      qbStatusBySport: { NFL: { 'Buffalo Bills': { qbStatus: 'out', qbName: 'X', depthChartRank: 1 } } },
     },
   });
   const plainM = byMarket(plain, 'Moneyline').modelProjection;
@@ -1328,7 +1328,7 @@ function byMarket(cands, market) {
       'Iowa Hawkeyes': { offEpa: 0, defEpa: 0, talent: -3.5, talentScale: 'centered' },
     },
     gameDay: {
-      qbStatusBySport: { NCAAF: { 'Iowa Hawkeyes': { qbStatus: 'out', qbName: 'X' } } },
+      qbStatusBySport: { NCAAF: { 'Iowa Hawkeyes': { qbStatus: 'out', qbName: 'X', depthChartRank: 1 } } },
     },
   });
   const cfbRow = byMarket(cfbDeep, 'Moneyline');

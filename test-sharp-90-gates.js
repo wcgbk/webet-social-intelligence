@@ -10,8 +10,9 @@ const path = require('path');
 const live = require('./netlify/functions/generate-picks-omega-background');
 const { applyGates } = require('./netlify/functions/lib/omega-vnext/gates');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
+const { MODEL_VERSION } = require('./netlify/functions/lib/omega-vnext/config');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.strictEqual(live.MODEL_VERSION, MODEL_VERSION);
 assert.ok(fs.existsSync(path.join(__dirname, 'archive/generate-picks-omega-legacy-v11.js')));
 
 const future = new Date(Date.now() + 864e5).toISOString();

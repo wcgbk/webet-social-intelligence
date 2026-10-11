@@ -3,8 +3,9 @@
 const assert = require('assert');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 const live = require('./netlify/functions/generate-picks-omega-background');
+const { MODEL_VERSION } = require('./netlify/functions/lib/omega-vnext/config');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.strictEqual(live.MODEL_VERSION, MODEL_VERSION);
 
 const future = new Date(Date.now() + 864e5).toISOString();
 const mk = (sport, matchup, side, market, cp, ev) => ({

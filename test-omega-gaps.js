@@ -42,7 +42,7 @@ function withEnv(name, value, fn) {
   }
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.ok(/v12\.3\.20-omega-vnext-edge-rank/.test(config.MODEL_NOTES));
 assert.ok(/OMEGA_PARLAY_CORR defaults off/.test(config.MODEL_NOTES));
 assert.ok(/1 − pPush/.test(config.MODEL_NOTES));

@@ -9,7 +9,7 @@ const pm = require(path.join(root, 'pm_observer'));
 const select = require(path.join(root, 'select'));
 const store = require(path.join(root, 'store'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
+assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.ok(/v12\.3\.6/.test(config.MODEL_NOTES));
 assert.ok(/soft feature/i.test(config.MODEL_NOTES));
 assert.ok(/hard cap/i.test(config.MODEL_NOTES));

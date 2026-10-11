@@ -11,7 +11,7 @@
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
-const { HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled } = require('../config');
+const { HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled, envNumber } = require('../config');
 const { clamp } = require('../odds_math');
 const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
 const { resolveTeamId, modelRow, logUnknownTeam, isFbsTeamId, teamRecord, rowByIdentity } = require('./team_identity');
@@ -1191,6 +1191,394 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
   });
 }
 
+/**
+ * NCAAF tempo total. Market stays the line the CDF already shrinks toward
+ * (POINT_SHRINK is not touched). This layer only replaces part of the
+ * model total, and only when a weight and a pregame table are both present.
+ *
+ * Pace and efficiency are separate. Bill Connelly's SP+ prices efficiency
+ * and then scales scoring for pace. For 2023 he cut scoring projections
+ * about 5% for the new clock before the games started
+ * (https://x.com/ESPN_BillC/status/1691897412770541605).
+ * NCAA national coordinator Steve Shaw estimated the 2023 first-down clock
+ * (runs on the ready-for-play, except the last two minutes of each half)
+ * would remove 7 or 8 plays from a game that had been averaging about 180
+ * snaps (The Athletic, 25 Aug 2023,
+ * https://www.nytimes.com/athletic/4805119/2023/08/25/college-football-clock-rule-changes/;
+ * ESPN, 28 Feb 2023,
+ * https://www.espn.com/college-football/story/_/id/35754068/).
+ * Early 2023 measurement was smaller: about six fewer combined snaps through
+ * week 3 (The Athletic, 21 Sep 2023,
+ * https://www.nytimes.com/athletic/4884655/2023/09/21/college-football-clock-rules-game-time-data/)
+ * and 67.3 offensive plays per team versus 68.7 in 2022 (Chris Hummer,
+ * 14 Sep 2023, https://x.com/chris_hummer/status/1702334664005042607).
+ * The prior mean is 67 offensive plays per team, the post-2023 rate, not
+ * the pre-2023 rate. SPORT_CFG.NCAAF.plays (68) is the same neighborhood.
+ * When the table itself has a broad plays sample, that sample mean is the
+ * shrink target, because it is the clock actually in force this season.
+ *
+ * Observed plays per game already include the team's run/pass mix under
+ * that clock. Incompletions still stop the clock; the new rule stops it
+ * less often after a first down. A second run/pass multiplier on top of
+ * observed plays would count the mix twice, so there is none.
+ *
+ * Points per play is team points divided by offensive plays. The matchup
+ * rate is the average of the offense's PPP and the points the opposing
+ * defense allows per play. Connelly separates success rate from explosiveness;
+ * both show up here only through the points-per-play result. CollegeFootballData
+ * publishes offense.ppa, plays, and drives
+ * (https://api.collegefootballdata.com/ docs, stats/season/advanced). That
+ * feed is not on the lock path. The lock path is the ESPN team statistics
+ * endpoint, which carries totalOffensivePlays and totalPoints for the team
+ * and for the opponent:
+ * https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/{id}/statistics
+ *
+ * Season-to-date rates shrink to the FBS mean with weight g/(g+K). K is 4
+ * for an FBS side (half weight at four games — this replay window is mostly
+ * three to six games). K is not fit on a slate. An FCS side, or a side with
+ * no games, uses K=24, a full season, so the FBS mean is the prior and a
+ * short FCS sample cannot set the total. That wide prior is the uncertainty
+ * treatment. It does not change the edge floor, the Kelly fraction, or
+ * POINT_SHRINK.
+ *
+ * Expected plays for an offense are the average of its own plays per game
+ * and the plays the opposing defense faces. Home points are those plays
+ * times the matchup PPP. The total is the sum of the two offenses. A table
+ * with points per game and no play counts is the points-per-game proxy:
+ * every team is given the mean plays, the plays cancel, and the total is
+ * the shrunk points matchup (off + opponent points allowed) / 2 for each side.
+ *
+ * Replay sweep, 2026-09-26..10-10. No positive weight beat w=0, so the
+ * default stays off. OMEGA_NCAAF_TEMPO_WEIGHT can enable the blend.
+ * KL(model||close) was flat across the three weights.
+ *
+ *   w      NCAAF all-candidate log-loss    NCAAF totals log-loss
+ *   0      0.5995                           0.6898
+ *   0.25   0.6005                           0.6938
+ *   0.5    0.6010                           0.6961
+ */
+const NCAAF_TEMPO_WEIGHT = 0;
+const NCAAF_TEMPO_K_FBS = 4;
+const NCAAF_TEMPO_K_FCS = 24;
+const NCAAF_TEMPO_MEAN_PLAYS = 67;
+const NCAAF_TEMPO_PPG_MIN = 6;
+const NCAAF_TEMPO_PPG_MAX = 55;
+const NCAAF_TEMPO_PLAYS_MIN = 45;
+const NCAAF_TEMPO_PLAYS_MAX = 95;
+const NCAAF_TEMPO_PPP_MIN = 0.08;
+const NCAAF_TEMPO_PPP_MAX = 1.05;
+const NCAAF_TEMPO_MEAN_MIN_PPG = 8;
+const NCAAF_TEMPO_MEAN_MIN_PLAYS = 20;
+const NCAAF_TEMPO_PROXY_NOTE = 'Points per game stand in for pace. Offensive plays were not on the cached scoreboard, so every team uses the FBS mean plays and points per play is points per game over that mean. The mean plays cancel.';
+
+function ncaafTempoWeight() {
+  const w = envNumber('OMEGA_NCAAF_TEMPO_WEIGHT', NCAAF_TEMPO_WEIGHT);
+  if (!Number.isFinite(w) || w <= 0) return 0;
+  if (w > 1) return 1;
+  return w;
+}
+
+/** Live ESPN team statistics. Weight 0 and a frozen snap do not fetch. */
+function ncaafTempoMayFetch() {
+  return ncaafTempoWeight() > 0 && !process.env.OMEGA_FROZEN_SNAP;
+}
+
+function finiteIn(n, lo, hi) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x < lo || x > hi) return null;
+  return x;
+}
+
+function shrinkToward(obs, mean, games, k) {
+  if (!Number.isFinite(mean)) return null;
+  if (!Number.isFinite(obs)) return mean;
+  const g = Number.isFinite(games) && games > 0 ? games : 0;
+  const kk = Number.isFinite(k) && k > 0 ? k : 0;
+  if (g <= 0) return mean;
+  const w = kk > 0 ? g / (g + kk) : 1;
+  return w * obs + (1 - w) * mean;
+}
+
+function meanOf(vals) {
+  if (!vals.length) return null;
+  return vals.reduce((s, x) => s + x, 0) / vals.length;
+}
+
+function confirmedFcs(key, row) {
+  const stamped = row && row.espnId != null && String(row.espnId) !== '' ? String(row.espnId) : null;
+  const id = stamped || resolveTeamId('NCAAF', key);
+  return !!(id && !isFbsTeamId(id));
+}
+
+/**
+ * ESPN site team statistics body → one offense/defense rate row.
+ * Offense categories live on results.stats.categories. Opponent categories
+ * are results.opponent itself (a list, not a categories wrapper).
+ * totalOffensivePlays and totalPoints are copied onto several categories;
+ * the first finite value wins. Null when plays or points are missing.
+ */
+function parseEspnNcaafTeamStatistics(body, espnId) {
+  const results = body && body.results;
+  if (!results || typeof results !== 'object') return null;
+  const offCats = results.stats && results.stats.categories;
+  const opp = results.opponent;
+  const defCats = Array.isArray(opp) ? opp : (opp && opp.categories);
+  const off = statIndex(offCats);
+  const def = statIndex(defCats);
+  const games = finiteIn(off.teamGamesPlayed, 1, 25)
+    || finiteIn(off.gamesPlayed, 1, 25)
+    || finiteIn(def.teamGamesPlayed, 1, 25);
+  const playsTot = finiteIn(off.totalOffensivePlays, 1, 2500);
+  const points = finiteIn(off.totalPoints, 0, 1500);
+  const facedTot = finiteIn(def.totalOffensivePlays, 1, 2500);
+  const allowed = finiteIn(def.totalPoints, 0, 1500);
+  if (games == null || playsTot == null || points == null) return null;
+  const plays = playsTot / games;
+  const offPpp = points / playsTot;
+  if (finiteIn(plays, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) == null) return null;
+  if (finiteIn(offPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX) == null) return null;
+  const team = body.team || {};
+  const id = espnId != null && String(espnId) !== ''
+    ? String(espnId)
+    : (team.id != null ? String(team.id) : null);
+  let playsFaced = null;
+  let defPpp = null;
+  if (facedTot != null) {
+    const facedRate = facedTot / games;
+    if (finiteIn(facedRate, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) != null) {
+      playsFaced = facedRate;
+      if (allowed != null) {
+        const rate = allowed / facedTot;
+        if (finiteIn(rate, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX) != null) defPpp = rate;
+      }
+    }
+  }
+  return {
+    espnId: id,
+    name: team.displayName || team.name || null,
+    games,
+    plays,
+    playsFaced,
+    offPpp,
+    defPpp,
+    offPpg: points / games,
+    defPpg: allowed != null ? allowed / games : null,
+    passAttempts: Number.isFinite(Number(off.passingAttempts)) ? Number(off.passingAttempts) : null,
+    rushAttempts: Number.isFinite(Number(off.rushingAttempts)) ? Number(off.rushingAttempts) : null,
+  };
+}
+
+function statIndex(categories) {
+  const out = {};
+  for (const cat of categories || []) {
+    for (const s of (cat && cat.stats) || []) {
+      if (!s || !s.name || Object.prototype.hasOwnProperty.call(out, s.name)) continue;
+      const v = Number(s.value);
+      if (Number.isFinite(v)) out[s.name] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * Season-to-date points per game. pf/pa are season sums unless the row
+ * already carries an explicit per-game pair. No play counts: plays stay null.
+ */
+function tempoTableFromStandings(ratings) {
+  const byName = {};
+  let skipped = 0;
+  const src = ratings && typeof ratings === 'object' ? ratings : {};
+  for (const [name, row] of Object.entries(src)) {
+    if (!name || String(name).startsWith('_')) continue;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const g = gamesPlayed(row);
+    const explicit = explicitPointsPerGame(row);
+    let offPpg = null;
+    let defPpg = null;
+    if (explicit) {
+      offPpg = explicit.pfPg;
+      defPpg = explicit.paPg;
+    } else if (g >= 1) {
+      const pf = Number(row.pf);
+      const pa = Number(row.pa);
+      if (Number.isFinite(pf) && Number.isFinite(pa)) {
+        offPpg = pf / g;
+        defPpg = pa / g;
+      }
+    }
+    if (!(g >= 1)
+      || finiteIn(offPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX) == null
+      || finiteIn(defPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX) == null) {
+      skipped += 1;
+      continue;
+    }
+    byName[name] = {
+      games: g,
+      offPpg,
+      defPpg,
+      plays: null,
+      playsFaced: null,
+      offPpp: null,
+      defPpp: null,
+    };
+  }
+  return {
+    source: 'ppg-proxy',
+    proxy: 'ppg',
+    note: NCAAF_TEMPO_PROXY_NOTE,
+    teams: Object.keys(byName).length,
+    skipped,
+    byName,
+  };
+}
+
+function tempoMeans(table) {
+  const stated = table && table.means;
+  if (stated && Number.isFinite(Number(stated.plays)) && Number(stated.plays) > 0
+    && Number.isFinite(Number(stated.offPpp)) && Number.isFinite(Number(stated.defPpp))) {
+    const plays = Number(stated.plays);
+    return {
+      plays,
+      offPpp: Number(stated.offPpp),
+      defPpp: Number(stated.defPpp),
+      offPpg: Number.isFinite(Number(stated.offPpg)) ? Number(stated.offPpg) : Number(stated.offPpp) * plays,
+      defPpg: Number.isFinite(Number(stated.defPpg)) ? Number(stated.defPpg) : Number(stated.defPpp) * plays,
+    };
+  }
+  const byName = table && table.byName;
+  const offPpgs = [];
+  const defPpgs = [];
+  const plays = [];
+  const offPpps = [];
+  const defPpps = [];
+  if (byName && typeof byName === 'object') {
+    for (const [key, row] of Object.entries(byName)) {
+      if (!row || typeof row !== 'object' || confirmedFcs(key, row)) continue;
+      const og = finiteIn(row.offPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX);
+      const dg = finiteIn(row.defPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX);
+      if (og != null) offPpgs.push(og);
+      if (dg != null) defPpgs.push(dg);
+      const p = finiteIn(row.plays, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX);
+      if (p != null) plays.push(p);
+      const op = finiteIn(row.offPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
+      const dp = finiteIn(row.defPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
+      if (op != null) offPpps.push(op);
+      if (dp != null) defPpps.push(dp);
+    }
+  }
+  const meanPlays = plays.length >= NCAAF_TEMPO_MEAN_MIN_PLAYS ? meanOf(plays) : NCAAF_TEMPO_MEAN_PLAYS;
+  const fallbackPpg = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.leaguePpg) || 26;
+  const meanOffPpg = offPpgs.length >= NCAAF_TEMPO_MEAN_MIN_PPG ? meanOf(offPpgs) : fallbackPpg;
+  const meanDefPpg = defPpgs.length >= NCAAF_TEMPO_MEAN_MIN_PPG ? meanOf(defPpgs) : fallbackPpg;
+  const meanOffPpp = offPpps.length >= NCAAF_TEMPO_MEAN_MIN_PPG
+    ? meanOf(offPpps)
+    : meanOffPpg / meanPlays;
+  const meanDefPpp = defPpps.length >= NCAAF_TEMPO_MEAN_MIN_PPG
+    ? meanOf(defPpps)
+    : meanDefPpg / meanPlays;
+  return {
+    plays: meanPlays,
+    offPpp: meanOffPpp,
+    defPpp: meanDefPpp,
+    offPpg: meanOffPpg,
+    defPpg: meanDefPpg,
+  };
+}
+
+function observedPpp(row, meanPlays, which) {
+  const direct = finiteIn(which === 'off' ? row.offPpp : row.defPpp, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
+  if (direct != null) return direct;
+  const ppg = finiteIn(which === 'off' ? row.offPpg : row.defPpg, NCAAF_TEMPO_PPG_MIN, NCAAF_TEMPO_PPG_MAX);
+  if (ppg == null || !(meanPlays > 0)) return null;
+  return finiteIn(ppg / meanPlays, NCAAF_TEMPO_PPP_MIN, NCAAF_TEMPO_PPP_MAX);
+}
+
+function tempoSide(name, table, means) {
+  const byName = table && table.byName;
+  const row = byName ? rowByIdentity('NCAAF', byName, name) : null;
+  const id = resolveTeamId('NCAAF', name);
+  const fcs = !!(id && !isFbsTeamId(id));
+  const k = fcs ? NCAAF_TEMPO_K_FCS : NCAAF_TEMPO_K_FBS;
+  const g = row ? Number(row.games) : 0;
+  const games = Number.isFinite(g) && g > 0 ? g : 0;
+  const offObs = row ? observedPpp(row, means.plays, 'off') : null;
+  const defObs = row ? observedPpp(row, means.plays, 'def') : null;
+  const playsObs = row ? finiteIn(row.plays, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) : null;
+  const facedObs = row ? finiteIn(row.playsFaced, NCAAF_TEMPO_PLAYS_MIN, NCAAF_TEMPO_PLAYS_MAX) : null;
+  return {
+    fcs,
+    games,
+    offPpp: shrinkToward(offObs, means.offPpp, games, k),
+    defPpp: shrinkToward(defObs, means.defPpp, games, k),
+    plays: shrinkToward(playsObs, means.plays, games, k),
+    playsFaced: shrinkToward(facedObs, means.plays, games, k),
+  };
+}
+
+/**
+ * Plays x points per play for each offense against the opposing defense.
+ * Null when the table has no rows. FCS and missing sides sit on the FBS mean.
+ */
+function ncaafTempoTotal({ home, away, table } = {}) {
+  const byName = table && table.byName;
+  if (!byName || typeof byName !== 'object' || !Object.keys(byName).length) return null;
+  const means = tempoMeans(table);
+  if (!means || ![means.plays, means.offPpp, means.defPpp].every((n) => Number.isFinite(n) && n > 0)) {
+    return null;
+  }
+  const H = tempoSide(home, table, means);
+  const A = tempoSide(away, table, means);
+  const expHome = (H.plays + A.playsFaced) / 2;
+  const expAway = (A.plays + H.playsFaced) / 2;
+  const pppHome = (H.offPpp + A.defPpp) / 2;
+  const pppAway = (A.offPpp + H.defPpp) / 2;
+  if (![expHome, expAway, pppHome, pppAway].every((n) => Number.isFinite(n) && n > 0)) return null;
+  const raw = expHome * pppHome + expAway * pppAway;
+  const cfg = SPORT_CFG.NCAAF;
+  return {
+    total: clamp(raw, cfg.totalMin, cfg.totalMax),
+    raw,
+    expPlaysHome: expHome,
+    expPlaysAway: expAway,
+    combinedPlays: expHome + expAway,
+    pppHome,
+    pppAway,
+    fcs: H.fcs || A.fcs,
+    proxy: table.proxy || null,
+    source: table.source || null,
+  };
+}
+
+/**
+ * Blend the tempo total into the existing total. Weight 0, a missing
+ * table, or a non-finite tempo total returns the existing number unchanged.
+ * OMEGA_FROZEN_SNAP does not fetch here. The caller passes the snap table
+ * or passes nothing, which is the weight-0 total.
+ */
+function blendNcaafTempo({ modelTotal, home, away, gameDay } = {}) {
+  const kept = Number(modelTotal);
+  const base = Number.isFinite(kept) ? kept : modelTotal;
+  const weight = ncaafTempoWeight();
+  if (!(weight > 0) || !Number.isFinite(kept)) {
+    return { modelTotal: base, applied: false, weight: 0 };
+  }
+  const tempo = ncaafTempoTotal({ home, away, table: gameDay && gameDay.ncaafTempo });
+  if (!tempo || !Number.isFinite(tempo.total)) {
+    return { modelTotal: base, applied: false, weight: 0 };
+  }
+  return {
+    modelTotal: (1 - weight) * kept + weight * tempo.total,
+    applied: true,
+    weight,
+    tempoTotal: tempo.total,
+    proxy: tempo.proxy,
+    source: tempo.source,
+    fcs: tempo.fcs === true,
+    combinedPlays: tempo.combinedPlays,
+    detail: tempo,
+  };
+}
+
 module.exports = {
   SIERRA_W_GP2,
   SIERRA_W_CAP,
@@ -1223,4 +1611,15 @@ module.exports = {
   ncaafCompletedGames,
   solveNcaafOpponentRatings,
   projectNcaafOpponentAdjusted,
+  NCAAF_TEMPO_WEIGHT,
+  NCAAF_TEMPO_K_FBS,
+  NCAAF_TEMPO_K_FCS,
+  NCAAF_TEMPO_MEAN_PLAYS,
+  NCAAF_TEMPO_PROXY_NOTE,
+  ncaafTempoWeight,
+  ncaafTempoMayFetch,
+  parseEspnNcaafTeamStatistics,
+  tempoTableFromStandings,
+  ncaafTempoTotal,
+  blendNcaafTempo,
 };

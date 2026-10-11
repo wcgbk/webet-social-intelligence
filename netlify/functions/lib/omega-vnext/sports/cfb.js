@@ -6,13 +6,16 @@
  * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
  * Totals and margins shrink toward the sharp line in points before the
  * CDF. Calibrate shrink runs later on that probability.
+ * A tempo total (plays x points per play) blends into the total only when
+ * OMEGA_NCAAF_TEMPO_WEIGHT is above 0 and a pregame table is already in hand.
+ * Wind still adjusts that blended total on the existing football weather path.
  */
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
   spreadDetail, totalDetail, mlDetail,
   sharpMarketLine, footballPointState, footballAudit, pricedFootball,
 } = require('./_common');
-const { footballProjection, applyEngineStack } = require('./epa');
+const { footballProjection, applyEngineStack, blendNcaafTempo } = require('./epa');
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
@@ -83,15 +86,22 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     engineSoft: env.engineSoft,
     gameDay: gd.gameDay,
   });
+  const tempo = blendNcaafTempo({
+    modelTotal: gd.modelTotal,
+    home,
+    away,
+    gameDay,
+  });
   const fb = footballTotalFromGameDay({
     sport: SPORT,
-    modelTotal: gd.modelTotal,
+    modelTotal: tempo.modelTotal,
     gameDay,
     event,
     espnGame,
   });
   const modelMargin = stacked.modelMargin;
-  const modelTotal = fb.used ? fb.modelTotal : gd.modelTotal;
+  // Weather off keeps the tempo blend. Weight 0 leaves tempo.modelTotal equal to the pre-blend total.
+  const modelTotal = fb.used ? fb.modelTotal : tempo.modelTotal;
   const uncertainty = gd.uncertainty;
   let gameDayApplied = !!(stacked.gameDay && stacked.gameDay.applied);
   let gameDayMeta = stacked.gameDay;
@@ -198,12 +208,22 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p,
-        projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
+        projMethod: tempo.applied ? `${methods.total}-tempo` : methods.total,
+        uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Total'),
       };
+      if (tempo.applied) {
+        raw.ncaafTempo = {
+          weight: tempo.weight,
+          tempoTotal: +Number(tempo.tempoTotal).toFixed(2),
+          proxy: tempo.proxy,
+          source: tempo.source,
+          fcs: tempo.fcs === true,
+        };
+      }
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
       out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
     }

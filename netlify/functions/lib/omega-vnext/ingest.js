@@ -5,7 +5,7 @@ const {
   ncaafGpFixEnabled, teamExactOnly, fbWeatherEnabled,
 } = require('./config');
 const { parseWinLossRecord } = require('./sports/_common');
-const { resolveTeamId } = require('./sports/team_identity');
+const { resolveTeamId, teamRecord } = require('./sports/team_identity');
 const { loadFootballWeather } = require('./sports/football_weather');
 const { sportsForCard } = require('./season_calendar');
 const { isSameEtDay, etCalendarDate } = require('./odds_math');
@@ -1262,6 +1262,18 @@ async function ingest(dateISO, opts = {}) {
     console.error(`[omega-vnext/ingest] gameDay soft-fail: ${e.message}`);
   }
   await attachNcaafOa(engines.efficiencyBySport, dateISO);
+  if (labels.includes('NCAAF')) {
+    try {
+      const tempo = await loadNcaafTempo({
+        standings: standingsBySport.NCAAF || {},
+        espnGames: (espnBySport.NCAAF && espnBySport.NCAAF.games) || [],
+        oddsEvents: (odds.bySport && odds.bySport.NCAAF) || [],
+      });
+      if (tempo && tempo.byName && Object.keys(tempo.byName).length) gameDay.ncaafTempo = tempo;
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] NCAAF tempo soft-fail: ${e.message}`);
+    }
+  }
 
   return {
     dateISO,
@@ -1277,6 +1289,104 @@ async function ingest(dateISO, opts = {}) {
     oddsSnapshotTimestamp: odds.oddsSnapshotTimestamp || null,
     oddsErrors: odds.oddsErrors || [],
   };
+}
+
+const NCAAF_TEMPO_STAT_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams';
+const NCAAF_TEMPO_FETCH_LIMIT = 6;
+
+function ncaafTempoSlateIds(espnGames, oddsEvents) {
+  const ids = [];
+  const seen = new Set();
+  const push = (id) => {
+    if (id == null || id === '') return;
+    const s = String(id).trim();
+    if (!/^\d+$/.test(s) || seen.has(s)) return;
+    seen.add(s);
+    ids.push(s);
+  };
+  for (const g of espnGames || []) {
+    if (!g || typeof g !== 'object') continue;
+    push(g.homeId || g.homeTeamId);
+    push(g.awayId || g.awayTeamId);
+  }
+  for (const ev of oddsEvents || []) {
+    if (!ev || typeof ev !== 'object') continue;
+    push(resolveTeamId('NCAAF', ev.home_team || ev.homeTeam));
+    push(resolveTeamId('NCAAF', ev.away_team || ev.awayTeam));
+  }
+  return ids;
+}
+
+async function mapPool(items, limit, fn) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const n = Math.max(1, Math.min(limit, items.length));
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor;
+      cursor += 1;
+      out[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return out;
+}
+
+/**
+ * Pregame tempo table for the live card. Weight 0 does nothing.
+ * A frozen snap does not fetch: the caller keeps the table already on
+ * the snap, or blends nothing (the existing total).
+ * Standings fill a points-per-game proxy for every school. ESPN team
+ * statistics overlay plays and points per play for slate ids when the
+ * body has totalOffensivePlays. A failed call leaves that school on the proxy.
+ */
+async function loadNcaafTempo(opts = {}) {
+  const { ncaafTempoMayFetch, tempoTableFromStandings, parseEspnNcaafTeamStatistics } = require('./sports/epa');
+  if (!ncaafTempoMayFetch()) return null;
+  const table = tempoTableFromStandings(opts.standings || {});
+  const ids = Array.isArray(opts.teamIds) && opts.teamIds.length
+    ? opts.teamIds.map((id) => String(id))
+    : ncaafTempoSlateIds(opts.espnGames, opts.oddsEvents);
+  const fetchImpl = opts.fetchImpl;
+  let overlaid = 0;
+  if (ids.length) {
+    const { memoFetchJson } = require('./fetch_memo');
+    const rows = await mapPool(ids, NCAAF_TEMPO_FETCH_LIMIT, async (id) => {
+      const url = `${NCAAF_TEMPO_STAT_URL}/${encodeURIComponent(id)}/statistics`;
+      try {
+        const body = fetchImpl ? await fetchImpl(url) : await memoFetchJson(url, 8000);
+        return parseEspnNcaafTeamStatistics(body, id);
+      } catch (e) {
+        return null;
+      }
+    });
+    for (const parsed of rows) {
+      if (!parsed) continue;
+      const rec = parsed.espnId ? teamRecord('NCAAF', parsed.espnId) : null;
+      const key = (rec && rec.displayName) || parsed.name;
+      if (!key) continue;
+      const prev = table.byName[key] || {};
+      table.byName[key] = {
+        games: parsed.games || prev.games || null,
+        offPpg: Number.isFinite(parsed.offPpg) ? parsed.offPpg : (prev.offPpg != null ? prev.offPpg : null),
+        defPpg: Number.isFinite(parsed.defPpg) ? parsed.defPpg : (prev.defPpg != null ? prev.defPpg : null),
+        plays: parsed.plays,
+        playsFaced: parsed.playsFaced,
+        offPpp: parsed.offPpp,
+        defPpp: parsed.defPpp,
+        espnId: parsed.espnId,
+      };
+      overlaid += 1;
+    }
+  }
+  table.teams = Object.keys(table.byName).length;
+  if (!table.teams) return null;
+  if (overlaid) {
+    table.source = 'espn-team-statistics';
+    table.proxy = overlaid === table.teams ? null : 'mixed';
+    table.espnTeams = overlaid;
+  }
+  return table;
 }
 
 module.exports = {
@@ -1314,4 +1424,5 @@ module.exports = {
   filterEventsSameEtDay,
   etCalendarDate,
   isSameEtDay,
+  loadNcaafTempo,
 };

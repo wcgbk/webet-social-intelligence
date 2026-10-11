@@ -25,6 +25,8 @@ const { resolveTeamId } = require('./team_identity');
 const { espnSideId } = require('./_common');
 
 const STADIUMS = require('../data/football-stadiums.json');
+const { resolveFetch } = require('../audit_log');
+
 const USER_AGENT = 'omega-vnext/football-weather (https://webet.ai)';
 const POINTS_ORIGIN = 'https://api.weather.gov/points/';
 const PAST_GRACE_MS = 6 * 60 * 60 * 1000;
@@ -338,7 +340,7 @@ async function fetchJson(url, timeoutMs, fetchImpl) {
   const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
   const abortTimer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
   try {
-    const resp = await withTimeout(fetchImpl(url, {
+    const resp = await withTimeout(resolveFetch(fetchImpl)(url, {
       signal: ctrl ? ctrl.signal : undefined,
       headers: {
         'User-Agent': USER_AGENT,

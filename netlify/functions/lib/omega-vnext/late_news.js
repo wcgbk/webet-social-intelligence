@@ -46,6 +46,7 @@ const { resolveTeamId } = require('./sports/team_identity');
 const { lookupQb, backupQbDelta } = require('./sports/game_day');
 const { attachEv } = require('./edge');
 const { passesPublishFloor, passesLeanFill } = require('./select');
+const { resolveFetch } = require('./audit_log');
 
 const MAX_CALLS = 30;
 const TIMEOUT_MS = 4000;
@@ -851,7 +852,7 @@ async function budgetedJson(url, budget, fetchImpl) {
   budget.calls += 1;
   const fetchFn = fetchImpl || defaultFetch;
   try {
-    const resp = await fetchFn(url, { signal: AbortSignal.timeout(budget.timeoutMs) });
+    const resp = await resolveFetch(fetchFn)(url, { signal: AbortSignal.timeout(budget.timeoutMs) });
     if (!resp || resp.ok === false) {
       budget.errors.push(`HTTP ${resp && resp.status != null ? resp.status : 'fail'} ${url.split('?')[0]}`);
       return { ok: false };

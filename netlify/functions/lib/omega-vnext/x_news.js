@@ -15,6 +15,8 @@
  * priced source. A tweet that does not match a quantified status stays a log.
  */
 
+const { resolveFetch } = require('./audit_log');
+
 function tokenFrom(env) {
   // An explicit env object is the test injection. It does not fall through
   // to the process, so `{}` stays a stub. Generate omits env and reads the
@@ -59,7 +61,7 @@ async function fetchXNews({ dateISO, query, env, fetchImpl } = {}) {
   const doFetch = fetchImpl || fetch;
   let resp;
   try {
-    resp = await doFetch(url, { headers: { Authorization: `Bearer ${tok}` } });
+    resp = await resolveFetch(doFetch, { provider: 'x-api' })(url, { headers: { Authorization: `Bearer ${tok}` } });
   } catch (e) {
     return { mode: 'http-error', count: 0, items: [], logs: [], dateISO: dateISO || null };
   }

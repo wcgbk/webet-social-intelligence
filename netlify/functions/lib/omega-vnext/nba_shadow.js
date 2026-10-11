@@ -37,6 +37,7 @@ const { calibrateAll } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates } = require('./gates');
 const { slateOddsGate } = require('./fetch_memo');
+const { resolveFetch } = require('./audit_log');
 const { fetchEspnScoreboard, fetchEspnStandings, filterEventsSameEtDay } = require('./ingest');
 const { americanToDecimal } = require('./odds_math');
 const { prevEtDate, restMapFromScoreboard } = require('./sports/game_day');
@@ -162,7 +163,7 @@ async function fetchNbaBoard(dateISO, deps = {}) {
   const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}`;
   out.oddsCalls = 1;
   try {
-    const resp = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
+    const resp = await resolveFetch(fetchImpl)(url, { signal: AbortSignal.timeout(15000) });
     if (!resp.ok) throw new Error(`odds HTTP ${resp.status}`);
     const data = await resp.json();
     const raw = Array.isArray(data) ? data : ((data && data.data) || []);

@@ -16,6 +16,7 @@
 
 const { AsyncLocalStorage } = require('async_hooks');
 const { isSameEtDay } = require('./odds_math');
+const { resolveFetch } = require('./audit_log');
 
 const als = new AsyncLocalStorage();
 
@@ -59,7 +60,7 @@ async function memoFetchJson(url, timeoutMs = 12000, fetchImpl = fetch) {
   const store = als.getStore();
   const key = String(url);
   if (store && store.json.has(key)) return cloneJson(store.json.get(key));
-  const resp = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const resp = await resolveFetch(fetchImpl)(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!resp.ok) {
     const err = new Error(`HTTP ${resp.status} for ${key.split('?')[0]}`);
     err.status = resp.status;

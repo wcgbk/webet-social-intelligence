@@ -2,6 +2,7 @@
 
 const { SITE_ID, BLOB_STORE } = require('./config');
 const { replayNoWrite, logBlocked } = require('./no_write');
+const { resolveFetch, auditBlobCall } = require('./audit_log');
 
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
@@ -12,7 +13,7 @@ async function blobFetch(path, { method = 'GET', body } = {}) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   };
   if (body != null) opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-  const resp = await fetch(url, opts);
+  const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, opts);
   return resp;
 }
 
@@ -20,7 +21,7 @@ async function readPicks(dateISO) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await store.get(`picks-${dateISO}`, { type: 'json' });
+    return await auditBlobCall('GET', `picks-${dateISO}`, () => store.get(`picks-${dateISO}`, { type: 'json' }));
   } catch (_) {
     try {
       const resp = await blobFetch(`picks-${dateISO}`);
@@ -103,18 +104,18 @@ async function storePicks(dateISO, picksData, opts = {}) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await store.setJSON(pickKey, payload);
+    await auditBlobCall('PUT', pickKey, () => store.setJSON(pickKey, payload));
     if (target.touchLatestDate) {
-      await store.set('latest-date', dateISO);
+      await auditBlobCall('PUT', 'latest-date', () => store.set('latest-date', dateISO));
     }
     if (target.touchPicksDates) {
       try {
-        let dates = await store.get('picks-dates', { type: 'json' });
+        let dates = await auditBlobCall('GET', 'picks-dates', () => store.get('picks-dates', { type: 'json' }));
         if (!Array.isArray(dates)) dates = [];
         if (!dates.includes(dateISO)) {
           dates.push(dateISO);
           dates.sort();
-          await store.setJSON('picks-dates', dates);
+          await auditBlobCall('PUT', 'picks-dates', () => store.setJSON('picks-dates', dates));
         }
       } catch (e) {
         console.error(`[omega-vnext/store] picks-dates: ${e.message}`);
@@ -163,7 +164,7 @@ async function storeJson(key, data) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await store.setJSON(key, data);
+    await auditBlobCall('PUT', key, () => store.setJSON(key, data));
     console.log(`[omega-vnext/store] wrote ${key}`);
     return true;
   } catch (sdkErr) {
@@ -179,7 +180,7 @@ async function readJson(key) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await store.get(key, { type: 'json' });
+    return await auditBlobCall('GET', key, () => store.get(key, { type: 'json' }));
   } catch (_) {
     try {
       const resp = await blobFetch(key);
@@ -478,7 +479,7 @@ async function readBlobStrict(key) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await store.get(key, { type: 'json' });
+    return await auditBlobCall('GET', key, () => store.get(key, { type: 'json' }));
   } catch (sdkErr) {
     let resp;
     try {

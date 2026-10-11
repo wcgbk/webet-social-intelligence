@@ -28,6 +28,7 @@ const { candidateSideSeed } = require('./clv_log');
 const { closingNoVigFromRaw, clvFromNoVig, americanToImplied } = require('./clv_grade');
 const { hasTrueClosingCapture } = require('./fetch_memo');
 const { replayNoWrite, logBlocked } = require('./no_write');
+const { resolveFetch, auditBlobCall } = require('./audit_log');
 
 /** Yes-pool unselected + near-misses, after the quality sort. */
 const CANDIDATE_SIDE_CAP = 20;
@@ -561,7 +562,7 @@ async function restCandidate(key, { method = 'GET', body, fetchImpl, token, site
   const auth = token != null ? token : process.env.NETLIFY_AUTH_TOKEN;
   if (!auth) throw new Error('NETLIFY_AUTH_TOKEN missing');
   const doFetch = fetchImpl || fetch;
-  const resp = await doFetch(blobRestUrl(key, siteId), {
+  const resp = await resolveFetch(doFetch, { kind: 'blob', provider: 'netlify-blobs' })(blobRestUrl(key, siteId), {
     method,
     headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' },
     body: body == null ? undefined : JSON.stringify(body),
@@ -587,7 +588,7 @@ async function writeCandidateBlob(key, payload, opts) {
   }
   if (opts.store && typeof opts.store.setJSON === 'function') {
     try {
-      await opts.store.setJSON(key, payload);
+      await auditBlobCall('PUT', key, () => opts.store.setJSON(key, payload));
       return { via: 'sdk' };
     } catch (e) {
       console.error(`[track-clv] candidate setJSON ${key} failed: ${e.message} — REST fallback`);
@@ -618,7 +619,7 @@ async function captureCandidateCloses(opts = {}) {
   const existingKey = `${CANDIDATE_BLOB_PREFIX}${dateISO}`;
   if (existing === undefined && opts.store && typeof opts.store.get === 'function') {
     try {
-      existing = await opts.store.get(existingKey, { type: 'json' });
+      existing = await auditBlobCall('GET', existingKey, () => opts.store.get(existingKey, { type: 'json' }));
     } catch (e) {
       console.error(`[track-clv] candidate get ${existingKey} failed: ${e.message} — REST fallback`);
       existing = await restGetCandidate(existingKey, opts);

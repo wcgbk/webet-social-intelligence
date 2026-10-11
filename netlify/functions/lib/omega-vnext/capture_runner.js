@@ -21,6 +21,7 @@ const { isSameEtDay } = require('./odds_math');
 const {
   slateOddsGate, isFreshReusableSnap, snapCoversSports, FRESH_SNAP_MS, runWithFetchMemo,
 } = require('./fetch_memo');
+const { resolveFetch } = require('./audit_log');
 
 const CAPTURE_BOOKMAKERS = [
   ...US_BOOK_PRIORITY,
@@ -48,11 +49,11 @@ async function fetchSportOdds(sportKey, apiKey, fetchImpl = fetch) {
   const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds`
     + `?regions=us,us2,eu&markets=h2h,spreads,totals&oddsFormat=american`
     + `&bookmakers=${encodeURIComponent(books)}&apiKey=${apiKey}`;
-  const resp = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
+  const resp = await resolveFetch(fetchImpl)(url, { signal: AbortSignal.timeout(20000) });
   if (!resp.ok) {
     const url2 = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds`
       + `?regions=us,us2,eu&markets=h2h,spreads,totals&oddsFormat=american&apiKey=${apiKey}`;
-    const resp2 = await fetchImpl(url2, { signal: AbortSignal.timeout(20000) });
+    const resp2 = await resolveFetch(fetchImpl)(url2, { signal: AbortSignal.timeout(20000) });
     if (!resp2.ok) throw new Error(`Odds ${sportKey} HTTP ${resp.status}/${resp2.status}`);
     return resp2.json();
   }

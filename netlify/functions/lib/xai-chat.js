@@ -15,6 +15,8 @@
  * so a slow primary cannot stack another full wait onto verify.
  */
 
+const { currentAudit } = require('./omega-vnext/audit_log');
+
 const XAI_CHAT_URL = 'https://api.x.ai/v1/chat/completions';
 
 const GROK_MODEL = 'grok-4.3';
@@ -74,31 +76,122 @@ function statusShouldFallback(err) {
   return status === 429 || (status >= 500 && status <= 599);
 }
 
-async function xaiChatOnce({ key, model, system, user, maxTokens, timeoutMs }) {
+function usageTokens(data) {
+  const u = data && data.usage;
+  if (!u || typeof u !== 'object') return null;
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const prompt = num(u.prompt_tokens);
+  const completion = num(u.completion_tokens);
+  const total = num(u.total_tokens);
+  if (prompt == null && completion == null && total == null) return null;
+  return { prompt, completion, total };
+}
+
+function responseBytes(resp) {
+  if (!resp || !resp.headers || typeof resp.headers.get !== 'function') return null;
+  const n = Number(resp.headers.get('content-length'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function hideSecret(message, secret) {
+  if (message == null) return null;
+  let s = String(message);
+  if (secret && String(secret).length >= 8) s = s.split(String(secret)).join('REDACTED');
+  return s;
+}
+
+async function xaiChatOnce({ key, model, system, user, maxTokens, timeoutMs, attempt, auditLog }) {
   const messages = [];
   if (system) messages.push({ role: 'system', content: system });
   messages.push({ role: 'user', content: user });
   const body = { model, messages };
   if (maxTokens != null) body.max_tokens = maxTokens;
 
-  const resp = await fetch(XAI_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const started = Date.now();
+  const log = auditLog || currentAudit();
+  let recorded = false;
+  function recordModel(extra) {
+    if (recorded || !log) return;
+    recorded = true;
+    const row = {
+      kind: 'model',
+      provider: 'xai',
+      method: 'POST',
+      url: XAI_CHAT_URL,
+      model,
+      attempt: attempt == null ? 0 : attempt,
+      ms: Date.now() - started,
+      ...extra,
+    };
+    if (row.error) row.error = hideSecret(row.error, key);
+    try { log.record(row); }
+    catch (err) { console.error(`[omega-audit] model record soft-fail: ${err && err.message}`); }
+  }
+
+  let resp;
+  try {
+    resp = await fetch(XAI_CHAT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    recordModel({
+      status: err && err.status != null ? err.status : null,
+      bytes: null,
+      ok: false,
+      modelAnswered: null,
+      tokens: null,
+      error: (err && err.message) || 'xAI chat failed',
+    });
+    throw err;
+  }
+  const bytes = responseBytes(resp);
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
     const err = new Error(`xAI HTTP ${resp.status}${errText ? `: ${errText.slice(0, 180)}` : ''}`);
     err.status = resp.status;
+    recordModel({
+      status: resp.status,
+      bytes,
+      ok: false,
+      modelAnswered: null,
+      tokens: null,
+      error: err.message,
+    });
     throw err;
   }
   const data = await resp.json();
   const text = messageText(data);
-  if (!text) throw new Error('no text in xAI response');
+  const answered = data && data.model ? String(data.model) : model;
+  const tokens = usageTokens(data);
+  if (!text) {
+    const err = new Error('no text in xAI response');
+    recordModel({
+      status: resp.status,
+      bytes,
+      ok: false,
+      modelAnswered: answered,
+      tokens,
+      error: err.message,
+    });
+    throw err;
+  }
+  recordModel({
+    status: resp.status,
+    bytes,
+    ok: true,
+    modelAnswered: answered,
+    tokens,
+    error: null,
+  });
   return text;
 }
 
@@ -110,9 +203,10 @@ async function xaiChatOnce({ key, model, system, user, maxTokens, timeoutMs }) {
  * @param {string} opts.user
  * @param {number} [opts.maxTokens]
  * @param {number} [opts.timeoutMs] budget for the whole model chain
+ * @param {object} [opts.auditLog] per-run log; otherwise the current-run context
  * @returns {Promise<string>}
  */
-async function xaiChat({ apiKey, model, system, user, maxTokens, timeoutMs } = {}) {
+async function xaiChat({ apiKey, model, system, user, maxTokens, timeoutMs, auditLog } = {}) {
   const key = apiKey || resolveXaiKey();
   if (!key) {
     const err = new Error('xAI HTTP 401: missing XAI_API_KEY');
@@ -134,6 +228,8 @@ async function xaiChat({ apiKey, model, system, user, maxTokens, timeoutMs } = {
         user,
         maxTokens,
         timeoutMs: Math.max(1, remaining),
+        attempt: i,
+        auditLog,
       });
       console.log(`[xai-chat] ok model=${chain[i]}`);
       return text;

@@ -58,6 +58,14 @@ const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
 const { xaiChat, resolveXaiKey } = require('./lib/xai-chat');
+const {
+  createAuditLog, runWithAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId, currentAudit,
+} = require('./lib/omega-vnext/audit_log');
+const { replayNoWrite } = require('./lib/omega-vnext/no_write');
+
+function auditFetch(url, init) {
+  return resolveFetch(fetch)(url, init);
+}
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -556,7 +564,7 @@ async function runHardRockCheck(picksData) {
     if (!key) continue;
     sportsAttempted++;
     try {
-      const resp = await fetch(
+      const resp = await auditFetch(
         `https://api.the-odds-api.com/v4/sports/${key}/odds?markets=h2h,spreads,totals&oddsFormat=american&bookmakers=${bookmakers}&apiKey=${apiKey}`,
         { signal: AbortSignal.timeout(12000) }
       );
@@ -596,7 +604,7 @@ async function runHardRockCheck(picksData) {
         try {
           // All US books, not HR-scoped: HR's F5 prices aren't in the feed, so the
           // majors-fallback needs the full field to confirm placeability.
-          const resp = await fetch(
+          const resp = await auditFetch(
             `https://api.the-odds-api.com/v4/sports/${HR_SPORT_KEYS[pick.sport]}/events/${game.id}/odds?regions=us,us2&markets=h2h_1st_5_innings,spreads_1st_5_innings,totals_1st_5_innings&oddsFormat=american&apiKey=${apiKey}`,
             { signal: AbortSignal.timeout(12000) }
           );
@@ -1033,6 +1041,8 @@ async function autoFixPicks(picksData, pickReports) {
 // ── Write updated picks back to blob ──
 async function updatePicksBlob(dateKey, picksData) {
   try { enforceOmegaDailyUnitCap(picksData); } catch (e) { console.error('[verify] unit cap', e.message); }
+  try { attachAuditSummary(picksData, currentAudit()); }
+  catch (e) { console.error(`[omega-audit] verify card summary soft-fail: ${e && e.message}`); }
   picksData.verifiedAt = new Date().toISOString();
   // verified is set by the caller (final pass) based on whether the FINAL card is genuinely clean.
   // Do NOT force true here — a red-flagged pick that couldn't be resolved must not be stamped "verified".
@@ -1043,7 +1053,7 @@ async function updatePicksBlob(dateKey, picksData) {
 
   try {
     const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/picks-${dateKey}`;
-    const resp = await fetch(url, {
+    const resp = await auditFetch(url, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(picksData),
@@ -1113,7 +1123,7 @@ async function postToDiscord(report, sharpResult) {
   if (msg.length > 1950) msg = msg.slice(0, 1950) + '...';
 
   try {
-    const resp = await fetch(`https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages`, {
+    const resp = await auditFetch(`https://discord.com/api/v10/channels/${DISCORD_CHANNEL}/messages`, {
       method: "POST",
       headers: { "Authorization": `Bot ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ content: msg }),
@@ -1135,14 +1145,14 @@ async function fetchBetaPicks(dateKey) {
 
   if (!dateKey) {
     try {
-      const resp = await fetch(`${baseUrl}/latest-date`, { headers });
+      const resp = await auditFetch(`${baseUrl}/latest-date`, { headers });
       if (resp.ok) dateKey = (await resp.text()).trim().replace(/"/g, '');
     } catch (e) { console.error("[verify] latest-date fetch failed:", e.message); }
   }
   if (!dateKey) return null;
 
   try {
-    const resp = await fetch(`${baseUrl}/picks-${dateKey}`, { headers });
+    const resp = await auditFetch(`${baseUrl}/picks-${dateKey}`, { headers });
     if (resp.ok) return { dateKey, data: await resp.json() };
   } catch (e) { console.error("[verify] picks fetch failed:", e.message); }
   return null;
@@ -1153,7 +1163,7 @@ async function storeReport(dateKey, report) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) return;
   try {
-    await fetch(
+    await auditFetch(
       `https://api.netlify.com/api/v1/blobs/${SITE_ID}/edge-picks-omega/verification-${dateKey}`,
       { method: "PUT", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(report) }
     );
@@ -1182,6 +1192,34 @@ exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
   const etSkip = rejectUnlessEtSlot("verify-picks-omega", event);
   if (etSkip) return etSkip;
+
+  if (!event._omegaAuditBound) {
+    const params = event.queryStringParameters || {};
+    let dateKey = params.date || null;
+    if (!dateKey) {
+      dateKey = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    }
+    const auditLog = createAuditLog({
+      runId: makeRunId(),
+      date: dateKey,
+      fn: 'verify-picks-omega',
+    });
+    const bound = Object.assign({}, event, {
+      _omegaAuditBound: true,
+      queryStringParameters: Object.assign({}, params, { date: dateKey }),
+    });
+    return runWithAudit(auditLog, async () => {
+      try {
+        return await exports.handler(bound);
+      } finally {
+        try {
+          await persistAuditLog(auditLog, { dryRun: replayNoWrite() });
+        } catch (err) {
+          console.error(`[omega-audit] verify persist soft-fail: ${err && err.message}`);
+        }
+      }
+    });
+  }
 
   try {
     const params = event.queryStringParameters || {};

@@ -11,6 +11,7 @@ const {
 const { americanToImplied } = require('./odds_math');
 const { americanCentsWorse } = require('./edge');
 const { replayNoWrite, logBlocked } = require('./no_write');
+const { resolveFetch, auditBlobCall } = require('./audit_log');
 
 function gameKey(away, home) {
   return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
@@ -57,14 +58,14 @@ async function blobFetch(path, { method = 'GET', body } = {}) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   };
   if (body != null) opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-  return fetch(url, opts);
+  return resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, opts);
 }
 
 async function readJsonBlob(path) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    return await store.get(path, { type: 'json' });
+    return await auditBlobCall('GET', path, () => store.get(path, { type: 'json' }));
   } catch (_) {
     try {
       const resp = await blobFetch(path);
@@ -84,7 +85,7 @@ async function writeJsonBlob(path, data) {
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);
-    await store.setJSON(path, data);
+    await auditBlobCall('PUT', path, () => store.setJSON(path, data));
     return true;
   } catch (sdkErr) {
     const resp = await blobFetch(path, { method: 'PUT', body: data });

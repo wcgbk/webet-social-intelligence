@@ -29,6 +29,7 @@ const { americanToImplied, noVigTwoWay, americanCentsDiff } = require('./odds_ma
 const { etParts } = require('../et-schedule');
 const { rowKey, sportKeyFor, candidateLedgerKey } = require('./candidate_ledger');
 const { replayNoWrite, logBlocked } = require('./no_write');
+const { resolveFetch, auditBlobCall } = require('./audit_log');
 
 /** Odds API bookmaker keys. circasports is Circa's key. ≤10 → 1 region. */
 const SHARP_CLOSE_BOOKS = ['pinnacle', 'circasports', 'lowvig', 'betonlineag', 'bookmaker'];
@@ -398,7 +399,7 @@ async function restCall(key, { method, body, fetchImpl, token, siteId } = {}) {
   const auth = token != null ? token : process.env.NETLIFY_AUTH_TOKEN;
   if (!auth) throw new Error('NETLIFY_AUTH_TOKEN missing');
   const doFetch = fetchImpl || fetch;
-  return doFetch(blobRestUrl(key, siteId), {
+  return resolveFetch(doFetch, { kind: 'blob', provider: 'netlify-blobs' })(blobRestUrl(key, siteId), {
     method: method || 'GET',
     headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' },
     body: body == null ? undefined : JSON.stringify(body),
@@ -415,7 +416,7 @@ async function readWithFallback(key, deps) {
   try {
     const store = await getter();
     if (!store || typeof store.get !== 'function') throw new Error('getStore returned no get');
-    return await store.get(key, { type: 'json' });
+    return await auditBlobCall('GET', key, () => store.get(key, { type: 'json' }));
   } catch (e) {
     console.error(`[candidate-closes] get ${key} failed: ${e.message} — REST fallback`);
     try {
@@ -438,7 +439,7 @@ async function writeWithFallback(key, data, deps) {
   try {
     const store = await getter();
     if (!store || typeof store.setJSON !== 'function') throw new Error('getStore returned no setJSON');
-    await store.setJSON(key, data);
+    await auditBlobCall('PUT', key, () => store.setJSON(key, data));
     return { via: 'sdk' };
   } catch (e) {
     console.error(`[candidate-closes] SDK setJSON ${key}: ${e.message} — REST fallback`);
@@ -473,7 +474,7 @@ async function writeBlob(key, data, deps) {
 }
 
 async function fetchJson(fetchImpl, url) {
-  const resp = await fetchImpl(url, { signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined });
+  const resp = await resolveFetch(fetchImpl)(url, { signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined });
   if (!resp || !resp.ok) {
     const status = resp ? resp.status : 'no-response';
     throw new Error(`HTTP ${status}`);

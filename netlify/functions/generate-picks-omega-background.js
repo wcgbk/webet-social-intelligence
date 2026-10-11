@@ -33,6 +33,7 @@ exports.handler = async (event) => {
       dryRun: !!body.dryRun,
       shadow,
       skipNarrate,
+      auditFn: 'generate-picks-omega',
     };
 
     const result = await generateOmegaVnext(opts);

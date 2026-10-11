@@ -18,6 +18,7 @@
 
 const { PM_SOFT } = require('./config');
 const { americanToImplied } = require('./odds_math');
+const { resolveFetch } = require('./audit_log');
 
 const POLY_GAMMA = 'https://gamma-api.polymarket.com';
 const KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2';
@@ -229,7 +230,7 @@ function mapKalshiMoneyline(candidate, kalshiMarkets) {
 }
 
 async function fetchJson(url, { timeoutMs = 12000 } = {}) {
-  const resp = await fetch(url, {
+  const resp = await resolveFetch(fetch)(url, {
     headers: { Accept: 'application/json', 'User-Agent': 'WeBetOmegaPmObserver/1.0' },
     signal: AbortSignal.timeout(timeoutMs),
   });

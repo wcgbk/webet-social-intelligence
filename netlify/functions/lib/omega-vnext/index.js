@@ -13,6 +13,9 @@ const { applyGates, buildGapReview } = require('./gates');
 const { applyExecutionBook, top10Rows, excludedGames } = require('./selection_pass');
 const { fetchXNews } = require('./x_news');
 const { replayNoWrite } = require('./no_write');
+const {
+  createAuditLog, runWithAudit, currentAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId,
+} = require('./audit_log');
 const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
@@ -192,7 +195,7 @@ async function emitCaptureHealthOps(dateISO, captureHealth, meta = {}) {
   const url = process.env.OMEGA_OPS_WEBHOOK_URL || process.env.OMEGA_CAPTURE_HEALTH_WEBHOOK_URL;
   if (url) {
     try {
-      const resp = await fetch(url, {
+      const resp = await resolveFetch(fetch)(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(snapshot),
@@ -218,6 +221,22 @@ async function generateOmegaVnext(opts = {}) {
   if (!opts._fetchMemo) {
     return runWithFetchMemo(() => generateOmegaVnext({ ...opts, _fetchMemo: true }));
   }
+  if (!opts._auditBound) {
+    const dateForAudit = opts.date || todayET();
+    const auditLog = opts.auditLog || createAuditLog({
+      runId: opts.runId || makeRunId(),
+      date: dateForAudit,
+      fn: opts.auditFn || 'generate-picks-omega',
+    });
+    return runWithAudit(auditLog, () => generateOmegaVnext({
+      ...opts,
+      date: opts.date || dateForAudit,
+      _auditBound: true,
+      auditLog,
+    }));
+  }
+  const auditLog = opts.auditLog || currentAudit();
+  try {
   const dateISO = opts.date || todayET();
   const dateFormatted = formatDateLong(dateISO);
   const force = !!opts.force;
@@ -741,6 +760,8 @@ async function generateOmegaVnext(opts = {}) {
   } catch (err) {
     console.error(`[omega-vnext] card audit soft-fail: ${err && err.message}`);
   }
+  try { attachAuditSummary(picksData, auditLog); }
+  catch (err) { console.error(`[omega-audit] card summary soft-fail: ${err && err.message}`); }
 
   // Health is diagnostic. A failure here must not change picks or skip the store.
   let healthRecord = null;
@@ -893,8 +914,19 @@ async function generateOmegaVnext(opts = {}) {
     console.error(`[omega-vnext] candidate ledger soft-fail: ${e.message}`);
   }
 
+  try { attachAuditSummary(picksData, auditLog); }
+  catch (err) { console.error(`[omega-audit] card summary soft-fail: ${err && err.message}`); }
   console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length} hardFails=${hardFails.length}`);
   return picksData;
+  } finally {
+    if (auditLog) {
+      try {
+        await persistAuditLog(auditLog, { dryRun: !!opts.dryRun || replayNoWrite() });
+      } catch (err) {
+        console.error(`[omega-audit] persist soft-fail: ${err && err.message}`);
+      }
+    }
+  }
 }
 
 /**

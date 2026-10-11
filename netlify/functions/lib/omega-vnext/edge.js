@@ -2,7 +2,7 @@
 
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
 const {
-  americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
+  americanToImplied, evAtOdds, formatAmerican, formatEdgePct,
   noVigTwoWay, americanJuiceDelta,
 } = require('./odds_math');
 const { pushAwareEv } = require('./push_ev');
@@ -347,14 +347,10 @@ function noVigPinnacleCircaImplied(sideBundles, target) {
 }
 
 /**
- * Build sharp no-vig fair p for a two-way market given all side bundles.
- */
-/**
  * No-vig fair for one side.
- * Prefer a paired same-book price (Pinnacle, then Circa, then the other
- * sharp books). Mixing Pinnacle on one side with a different book's number
- * on the other is not a de-vig. The mixed sharpConsensus path remains only
- * when no book posts both sides.
+ * A single sharp book (SHARP_BOOKS order) must post both sides.
+ * A mixed-book pair is not de-vigged. A one-sided price is not returned
+ * as a vigged implied. No paired sharp book → null.
  */
 function sharpFairForSide(sideBundles, targetSide, targetPoint) {
   const target = sideBundles.find(s => s.side === targetSide && (targetPoint == null || s.point === targetPoint));
@@ -364,23 +360,7 @@ function sharpFairForSide(sideBundles, targetSide, targetPoint) {
     const paired = noVigForBook(sideBundles, target, book);
     if (paired != null) return paired;
   }
-
-  const opposite = oppositeBundle(sideBundles, target);
-  if (!opposite) {
-    const imp = americanToImplied(sharpConsensusAmerican(target.prices));
-    return imp;
-  }
-
-  const a1 = sharpConsensusAmerican(target.prices);
-  const a2 = sharpConsensusAmerican(opposite.prices);
-  if (a1 == null || a2 == null) return americanToImplied(a1);
-  const outcomes = [
-    { side: 't', american: a1 },
-    { side: 'o', american: a2 },
-  ];
-  const dv = deVigMarket(outcomes);
-  const row = dv.find(r => r.side === 't');
-  return row ? row.fairP : null;
+  return null;
 }
 
 /**
@@ -437,9 +417,16 @@ function hardRockQuote(allBundles, side, point) {
 }
 
 function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
+  const fairSharp = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
+  if (fairSharp == null) {
+    const sport = raw && raw.sport;
+    const market = raw && raw.market;
+    const side = (raw && raw.side) || sideBundle.side;
+    console.log(`[omega-vnext] skip candidate reason=no-paired-sharp sport=${sport || ''} market=${market || ''} side=${side || ''}`);
+    return null;
+  }
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
-  const fairSharp = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
   const odds = bestUs ? bestUs.american : sharpAm;
   const book = bestUs ? bestUs.book : 'consensus';
   const liquid = hasMajorLiquidity(sideBundle.prices);

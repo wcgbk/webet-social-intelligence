@@ -648,6 +648,45 @@ function blendedNflMargin(base, home, away) {
   assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Circa pair when Pinnacle is one-sided');
   const circaAnchor = edgeMod.noVigPinnacleCircaImplied(splitPin, splitPin[0]);
   assert.ok(Math.abs(circaAnchor - 0.5) < 1e-9, 'Circa is the anchor when Pinnacle has no two-way price');
+
+  const mixed = [
+    { side: 'Home', point: -3, prices: [{ book: 'pinnacle', american: -150 }, { book: 'draftkings', american: -110 }] },
+    { side: 'Away', point: 3, prices: [{ book: 'circa', american: -110 }, { book: 'draftkings', american: -110 }] },
+  ];
+  assert.strictEqual(edgeMod.sharpFairForSide(mixed, 'Home', -3), null, 'mixed books are not de-vigged');
+  const oneSided = [
+    { side: 'Over', point: 8.5, prices: [{ book: 'pinnacle', american: -115 }, { book: 'draftkings', american: -110 }] },
+  ];
+  assert.strictEqual(edgeMod.sharpFairForSide(oneSided, 'Over', 8.5), null, 'a one-sided price is not a vigged fair');
+
+  const unpaired = {
+    home_team: 'Los Angeles Dodgers',
+    away_team: 'San Francisco Giants',
+    commence_time: '2026-09-24T23:10:00Z',
+    bookmakers: [
+      { key: 'pinnacle', markets: [{ key: 'h2h', outcomes: [{ name: 'Los Angeles Dodgers', price: -140 }] }] },
+      { key: 'draftkings', markets: [{ key: 'h2h', outcomes: [{ name: 'San Francisco Giants', price: 120 }] }] },
+    ],
+  };
+  const pairedEv = synthEvent('New York Yankees', 'Boston Red Sox', { total: 8.5, spread: -1.5 });
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...args) => { logs.push(args.join(' ')); };
+  let slate;
+  try {
+    slate = mlb.project({
+      oddsEvents: [unpaired, pairedEv],
+      standings: {},
+      parkFactors: {},
+      mlbPitcherStats: {},
+      espnGames: [],
+    });
+  } finally {
+    console.log = origLog;
+  }
+  assert.ok(logs.some((line) => line.includes('reason=no-paired-sharp')), logs.join('\n'));
+  assert.ok(!slate.some((c) => c.homeTeam === 'Los Angeles Dodgers'), 'unpaired game is skipped');
+  assert.ok(slate.some((c) => c.homeTeam === 'New York Yankees'), 'paired game still prices');
 }
 
 // Season run totals must not saturate the moneyline, and a starter still moves it.

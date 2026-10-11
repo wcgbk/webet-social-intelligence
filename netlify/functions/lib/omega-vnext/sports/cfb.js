@@ -164,7 +164,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         ...footballAudit(pts, 'Moneyline'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
+      const edged = enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles);
+      if (edged) out.push(edged);
     }
   }
   {
@@ -190,7 +191,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         ...footballAudit(pts, 'Spread'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
+      const edged = enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles);
+      if (edged) out.push(edged);
     }
   }
   {
@@ -225,7 +227,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         };
       }
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
+      const edged = enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles);
+      if (edged) out.push(edged);
     }
   }
   const conf = conferenceStamp(espnGame);

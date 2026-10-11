@@ -102,6 +102,8 @@ const ET_SCHEDULE = {
   'trigger-clv': { etTimes: ['03:00', '13:00', '19:00'] },
   'capture-omega-lines': { etTimes: ['06:00', '07:30'] },
   'capture-omega-lines-late': { etTimes: ['09:00', '09:15'] },
+  // 13:15 UTC = 9:15 ET (EDT), 14:15 UTC = 9:15 ET (EST). Before the 9:30 card.
+  'recal-report-omega': { etTimes: ['09:15'] },
   'warm-omega-feeds': { etTimes: ['09:00'] },
   'trigger-omega-shadow': { etTimes: ['09:05'] },
   'trigger-omega-nba-shadow': { etTimes: ['17:30'] },

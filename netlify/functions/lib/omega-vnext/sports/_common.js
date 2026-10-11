@@ -286,9 +286,11 @@ function applyNcaafShrink(raw, g) {
 
 /**
  * NCAAF points per game versus an even team (0 = centered).
- * gp known: (pf − pa) / gp. An explicit per-game pair is used only when
- * gp >= 2, matching the NFL rule. gp unknown: 0, never the season sum.
- * OMEGA_NCAAF_SHRINK_K > 0 multiplies that rate by gp/(gp+K). Default K is 0.
+ * gp known: (pf − pa) / gp. pa === 0 with gp >= 1 is that rate (a shutout).
+ * Only a missing or non-finite pf or pa falls back. An explicit per-game
+ * pair is used only when gp >= 2, matching the NFL rule. gp unknown: 0,
+ * never the season sum. OMEGA_NCAAF_SHRINK_K > 0 multiplies that rate by
+ * gp/(gp+K). Default K is 0.
  */
 function ncaafPower(st) {
   if (!st) return 0;
@@ -296,7 +298,7 @@ function ncaafPower(st) {
   const explicit = explicitPointsPerGame(st);
   const pf = Number(st.pf);
   const pa = Number(st.pa);
-  const hasDiff = Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0;
+  const hasDiff = st.pf != null && st.pa != null && Number.isFinite(pf) && Number.isFinite(pa);
   if (g >= 2 && explicit) return applyNcaafShrink(explicit.pfPg - explicit.paPg, g);
   if (hasDiff) {
     if (g >= 1) return applyNcaafShrink((pf - pa) / g, g);
@@ -316,16 +318,20 @@ function ncaafPower(st) {
  * 0 when games are unknown). The toggle off keeps this same NFL formula
  * for NCAAF, which is why a null loss used to publish the season sum.
  * Without a sport, the raw pf − pa is kept.
- * MLB, NHL, and NBA do not call this. Their branch still uses the 1.8×
- * league-ppg split so that latent path stays put.
+ * Football treats pa === 0 as a real diff: gp >= 1 is (pf − pa) / gp
+ * (NFL still returns the raw diff when gp < 2, which equals pf/gp at gp 1).
+ * Only a missing or non-finite pf or pa falls back. MLB, NHL, and NBA do
+ * not call this. Their branch still requires pa !== 0 so that latent path
+ * stays put.
  */
 function powerFromStandings(st, sport) {
   if (!st) return 0;
   if (sport === 'NCAAF' && ncaafGpFixEnabled()) return ncaafPower(st);
   const pf = Number(st.pf);
   const pa = Number(st.pa);
-  const hasDiff = Number.isFinite(pf) && Number.isFinite(pa) && pa !== 0;
   const football = sport === 'NFL' || sport === 'NCAAF';
+  const pointsPresent = st.pf != null && st.pa != null && Number.isFinite(pf) && Number.isFinite(pa);
+  const hasDiff = pointsPresent && (football || pa !== 0);
   if (football) {
     const g = gamesPlayed(st);
     const explicit = explicitPointsPerGame(st);

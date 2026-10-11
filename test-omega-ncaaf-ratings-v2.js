@@ -119,6 +119,21 @@ function overallStat(displayValue) {
   assert.strictEqual(powerFromStandings(msu, 'NCAAF'), -8);
 }
 
+// A shutout is points allowed. pa === 0 with gp >= 1 is pf/gp, not a fallback.
+{
+  const shutout = { pf: 120, pa: 0, wins: 4, losses: 0, record: '4-0' };
+  assert.strictEqual(gamesPlayed(shutout), 4);
+  assert.strictEqual(powerFromStandings(shutout, 'NCAAF'), 30);
+  const nfl = { pf: 80, pa: 0, wins: 2, losses: 0, games: 2 };
+  assert.strictEqual(powerFromStandings(nfl, 'NFL'), 40);
+  const one = { pf: 30, pa: 0, wins: 1, losses: 0, games: 1 };
+  assert.strictEqual(powerFromStandings(one, 'NFL'), 30);
+  const missing = { pf: 120, wins: 4, losses: 0, record: '4-0' };
+  assert.strictEqual(powerFromStandings(missing, 'NCAAF'), 0);
+  const bad = { pf: 120, pa: 'x', wins: 4, losses: 0, record: '4-0' };
+  assert.strictEqual(powerFromStandings(bad, 'NCAAF'), 0);
+}
+
 // Health uses that same count, so a sane replay-shape table is in band.
 {
   const troy = { pf: 140, pa: 120, wins: 3, losses: null, ties: null, games: null, record: '3-2' };

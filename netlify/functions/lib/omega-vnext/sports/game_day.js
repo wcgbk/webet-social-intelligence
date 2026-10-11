@@ -307,24 +307,60 @@ function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
  * New game-status Out. Doubtful and questionable stay on the point table.
  * IR / PUP / season-ending is already in the market and is not a fresh out.
  */
-// v12.3.25: only the team's starting QB counts as out. ESPN depth QB1 when the
-// row carries it; otherwise this named-starter list. Injured backups (e.g.
-// Aidan O'Connell LV, Behren Morton NE) have no effect.
+// Starting QB only. The daily ESPN depth chart wins when that team has a
+// row: the injured player must be QB1 (athlete id, else normalized name).
+// A backup listed QB2 does not move the number, even if the injury row
+// claims depth 1. With no chart for the team, an injury-row depth of 1
+// (or an explicit starter bit) still counts, and NAMED_STARTING_QB is the
+// last fallback. Injured backups have no effect.
 const NAMED_STARTING_QB = Object.freeze({
   'lamar jackson': 'BAL',
 });
 
-function isStartingQb(qb) {
+function depthFeedEntry(sport, teamName, depthByTeam) {
+  if (!depthByTeam || typeof depthByTeam !== 'object' || Array.isArray(depthByTeam)) return null;
+  const table = depthByTeam.map && typeof depthByTeam.map === 'object' && !Array.isArray(depthByTeam.map)
+    ? depthByTeam.map
+    : depthByTeam;
+  if (!table || typeof table !== 'object' || Array.isArray(table)) return null;
+  const id = resolveTeamId(sport, teamName);
+  if (id && table[String(id)] && table[String(id)].qb1) return table[String(id)];
+  const want = normTeamKey(teamName);
+  for (const row of Object.values(table)) {
+    if (!row || typeof row !== 'object' || !row.qb1 || !row.qb1.name) continue;
+    if (id && row.teamId != null && String(row.teamId) === String(id)) return row;
+    if (row.displayName && normTeamKey(row.displayName) === want) return row;
+    if (row.abbr && want && normTeamKey(row.abbr) === want) return row;
+  }
+  return null;
+}
+
+/** Feed QB1. Athlete id decides when both sides have one. Otherwise the name. */
+function playerIsFeedQb1(qb, entry) {
+  const qb1 = entry && entry.qb1;
+  if (!qb || !qb1) return false;
+  const rawId = qb.athleteId != null && qb.athleteId !== '' ? qb.athleteId
+    : (qb.id != null && qb.id !== '' ? qb.id : null);
+  if (rawId != null && qb1.athleteId != null && String(qb1.athleteId) !== '') {
+    return String(rawId) === String(qb1.athleteId);
+  }
+  const name = normQbName(qb.qbName || qb.name);
+  const want = normQbName(qb1.name);
+  return !!(name && want && name === want);
+}
+
+function isStartingQb(qb, feedEntry) {
   if (!qb) return false;
+  if (feedEntry && feedEntry.qb1) return playerIsFeedQb1(qb, feedEntry);
   const depth = qb.depthChartRank != null ? qb.depthChartRank : (qb.depthRank != null ? qb.depthRank : qb.depth);
   if (depth != null && Number.isFinite(Number(depth))) return Number(depth) === 1;
   if (qb.isStarter === true || qb.qb1 === true) return true;
   return Object.prototype.hasOwnProperty.call(NAMED_STARTING_QB, normQbName(qb.qbName || qb.name));
 }
 
-function isFreshQbOut(qb) {
+function isFreshQbOut(qb, feedEntry) {
   if (!qb) return false;
-  if (!isStartingQb(qb)) return false;
+  if (!isStartingQb(qb, feedEntry)) return false;
   const st = String(qb.qbStatus || qb.status || '').toLowerCase();
   if (!st) return false;
   if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
@@ -353,8 +389,8 @@ const NAMED_BACKUP_QB = Object.freeze({
  * Explicit starterValue and backupValue win. A gap above 20 is Elo
  * (25 Elo ≈ 1 point). Otherwise the numbers are already points.
  */
-function backupQbDelta(qb, sport) {
-  if (!isFreshQbOut(qb)) return null;
+function backupQbDelta(qb, sport, feedEntry) {
+  if (!isFreshQbOut(qb, feedEntry)) return null;
   const cfg = (QB_INJURY && QB_INJURY[sport]) || {
     outMarginPts: 3.0, outTotalPts: -1.5, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0,
   };
@@ -391,7 +427,7 @@ function backupQbDelta(qb, sport) {
   };
 }
 
-function qbSoftAdjust(sport, homeQb, awayQb) {
+function qbSoftAdjust(sport, homeQb, awayQb, feed) {
   if (sport !== 'NFL' && sport !== 'NCAAF') {
     return { marginAdj: 0, totalAdj: 0, uncBump: 0, note: null };
   }
@@ -402,16 +438,18 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   let uncBump = 0;
   const notes = [];
   const deltas = [];
-  const apply = (qb, side) => {
+  const homeEntry = feed && (feed.home || feed.homeEntry) || null;
+  const awayEntry = feed && (feed.away || feed.awayEntry) || null;
+  const apply = (qb, side, entry) => {
     if (!qb) return;
-    if (!isStartingQb(qb)) return;
+    if (!isStartingQb(qb, entry)) return;
     const st = String(qb.qbStatus || qb.status || '').toLowerCase();
     if (!st) return;
-    const fresh = isFreshQbOut(qb);
+    const fresh = isFreshQbOut(qb, entry);
     const isOut = outStatuses.some(k => st.includes(k));
     const isQ = /questionable|q\b/.test(st);
     if (fresh) {
-      const delta = backupQbDelta(qb, sport);
+      const delta = backupQbDelta(qb, sport, entry);
       marginAdj += (side === 'home' ? -1 : 1) * delta.marginPts;
       totalAdj += delta.totalPts;
       uncBump += 0.04;
@@ -430,8 +468,8 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
       notes.push(`${side} QB questionable${qb.qbName ? ` (${qb.qbName})` : ''}`);
     }
   };
-  apply(homeQb, 'home');
-  apply(awayQb, 'away');
+  apply(homeQb, 'home', homeEntry);
+  apply(awayQb, 'away', awayEntry);
   return {
     marginAdj: clamp(marginAdj, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
     totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
@@ -508,6 +546,7 @@ function applyGameDayAdjustments({
   neutralSite,
   last5ByTeam,
   personnelByTeam,
+  depthByTeam,
 } = {}) {
   let margin = Number(modelMargin);
   let total = Number(modelTotal);
@@ -548,11 +587,13 @@ function applyGameDayAdjustments({
 
   const homeQb = lookupQb(home, qbByTeam, sport, fallbackSeen);
   const awayQb = lookupQb(away, qbByTeam, sport, fallbackSeen);
-  const qb = qbSoftAdjust(sport, homeQb, awayQb);
+  const homeEntry = depthFeedEntry(sport, home, depthByTeam);
+  const awayEntry = depthFeedEntry(sport, away, depthByTeam);
+  const qb = qbSoftAdjust(sport, homeQb, awayQb, { home: homeEntry, away: awayEntry });
   // Fresh Out moves margin and total by the backup-QB delta. The total
   // stays on the card. Edge and EV are recomputed downstream against the
   // DraftKings price, and the floors are the only drop.
-  const startingQbOut = isFreshQbOut(homeQb) || isFreshQbOut(awayQb);
+  const startingQbOut = isFreshQbOut(homeQb, homeEntry) || isFreshQbOut(awayQb, awayEntry);
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);

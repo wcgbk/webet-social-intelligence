@@ -39,6 +39,7 @@ const nhl = require('./sports/nhl');
 const { footballAuditFields } = require('./sports/_common');
 const { buildCardAudit } = require('./audit_card');
 const { restAuditFields } = require('./sports/game_day');
+const { cardStarterFeed } = require('./sports/depth_chart');
 
 function todayET() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -705,6 +706,7 @@ async function generateOmegaVnext(opts = {}) {
         ...rejected,
       ]),
       xNews: xNewsMeta,
+      starterFeed: cardStarterFeed(snap),
     },
     meta: {
       captureHealth: captureHealth || null,

@@ -100,6 +100,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     neutralSite: neutral,
     last5ByTeam: null,
     personnelByTeam: (gameDay && gameDay.personnelBySport) || null,
+    depthByTeam: (gameDay && gameDay.depthCharts && gameDay.depthCharts.NFL) || null,
   });
   const stacked = applyEngineStack({
     sport: SPORT,

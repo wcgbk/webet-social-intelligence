@@ -644,6 +644,13 @@ function athleteName(inj) {
   return athlete.displayName || athlete.fullName || null;
 }
 
+function athleteIdOf(inj) {
+  const athlete = inj && inj.athlete && typeof inj.athlete === 'object' ? inj.athlete : null;
+  const id = athlete && athlete.id != null && athlete.id !== '' ? athlete.id : null;
+  if (id == null) return null;
+  return String(id);
+}
+
 function injuryDate(inj) {
   if (!inj || typeof inj !== 'object') return null;
   return inj.date || inj.injuryDate || inj.startDate || (inj.details && inj.details.date) || null;
@@ -821,7 +828,10 @@ function parseFootballQbMap(data, opts = {}) {
     if (!injuryIsCurrent(injuryDate(inj), opts.cardDate, opts.maxAgeDays)) return;
     const prev = out[team];
     if (prev && qbRank(prev.qbStatus) >= qbRank(st)) return;
-    out[team] = { team, qbStatus: st, qbName: athleteName(inj) };
+    const row = { team, qbStatus: st, qbName: athleteName(inj) };
+    const athleteId = athleteIdOf(inj);
+    if (athleteId) row.athleteId = athleteId;
+    out[team] = row;
   };
   for (const block of blocks) {
     for (const row of block.rows || []) {

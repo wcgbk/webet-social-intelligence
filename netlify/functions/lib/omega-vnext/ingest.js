@@ -15,6 +15,9 @@ const { parseFootballQbMap, parseFootballPersonnel, fillNcaafQbMap } = require('
 const { inSlate } = require('./selection_pass');
 const { last5ByTeamFromSchedule } = require('./last5');
 const { prepareNflElo } = require('./sports/nfl_elo');
+const {
+  fetchDepthCharts, slateTeamIds, starterFeedStamp, freezeDepthFallback,
+} = require('./sports/depth_chart');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -1082,7 +1085,33 @@ async function loadGameDayContext(dateISO, labels, espnBySport, opts) {
       console.error(`[omega-vnext/ingest] football weather soft-fail: ${e.message}`);
     }
   }
+  await attachDepthCharts(gameDay, dateISO, labels, espnBySport, opts);
   return gameDay;
+}
+
+/**
+ * Slate-only ESPN depth charts. A failure leaves an empty map and the
+ * named-starter fallback. Never throws into the rest of game day.
+ */
+async function attachDepthCharts(gameDay, dateISO, labels, espnBySport, opts) {
+  const packs = {};
+  try {
+    for (const sport of ['NFL', 'NCAAF']) {
+      if (!labels || !labels.includes(sport)) continue;
+      const games = espnBySport && espnBySport[sport] && espnBySport[sport].games;
+      const teamIds = slateTeamIds(sport, games);
+      packs[sport] = await fetchDepthCharts({
+        sport,
+        teamIds,
+        fetchImpl: opts && opts.fetchImpl,
+        date: dateISO,
+      });
+    }
+  } catch (e) {
+    console.error(`[omega-vnext/ingest] depth chart soft-fail: ${e && e.message}`);
+  }
+  gameDay.depthCharts = packs;
+  gameDay.starterFeed = starterFeedStamp(packs);
 }
 
 /**
@@ -1214,6 +1243,7 @@ async function ingest(dateISO, opts = {}) {
       }
     }
     await attachNcaafOa(engines.efficiencyBySport, dateISO);
+    gameDay = freezeDepthFallback(gameDay, frozen.gameDay);
     await attachNflElo(gameDay, dateISO);
     console.log('[omega-vnext/ingest] FROZEN SNAP replay (no live odds/standings/injuries)');
     return {

@@ -9,8 +9,10 @@
  * the de-vigged fair at that number, then the odds-scaled floor. If it
  * still clears, the pick stays at the Hard Rock number. If it does not,
  * the next candidate confirmed at Hard Rock replaces it. The parlay is
- * rebuilt: straights stay the top edges, and the parlay is the best edges
- * on distinct games. Every change is logged. The card is not withheld.
+ * rebuilt from the corrected straights when those three are distinct
+ * games with cover >= 45% and positive combined EV. Otherwise it is the
+ * best positive-EV edges on distinct games. Every change is logged.
+ * The card is not withheld.
  */
 
 const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, GATES, LEAN_MIN_EV, LEAN_MAX_UNITS } = require('./config');

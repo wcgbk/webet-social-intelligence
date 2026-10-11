@@ -10,9 +10,10 @@
  *  - Odds stale vs lockSnapshot / market gone at major books
  */
 
+const config = require('./config');
 const {
   QA_HARDFAIL, MAJOR_LIQUIDITY_BOOKS, MAX_STRAIGHTS, ESPN_LEAGUES,
-} = require('./config');
+} = config;
 const { americanJuiceDelta } = require('./odds_math');
 const { matchupKey, selectStraights, toPickObject } = require('./select');
 const { adverseSteamReason } = require('./line_path');
@@ -380,6 +381,7 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     const remaining = yesPool.filter(c => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
+      if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
       return true;
     });
     // Re-select from remaining, skipping hard-fails
@@ -408,6 +410,7 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     const remainingLeans = leanPool.filter(c => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
+      if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
       return true;
     });
     const sorted = selectStraights(remainingLeans, maxN - kept.length);

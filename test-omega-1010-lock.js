@@ -283,9 +283,11 @@ global.fetch = async (url) => {
     assert.ok(straights.every(s => s.tier === 'floor'));
     const labels = straights.map(s => `${s.side} @ ${s.line}`);
     assert.ok(straights.some(s => /Over 38\.5/.test(s.side) && s.line === 38.5), labels.join(' | '));
-    assert.ok(straights.some(s => /Over 39\.5/.test(s.side) && s.line === 39.5), labels.join(' | '));
+    assert.ok(!straights.some(s => /Over 39\.5/.test(s.side) && s.line === 39.5), labels.join(' | '));
+    assert.strictEqual(new Set(straights.map(s => s.matchup)).size, 3, labels.join(' | '));
     // +9 bovada (edge 4.26%) outranks +8.5 draftkings (edge 4.1%). The morning
     // file had vetoed +9 for placeability; that check logs and does not reject.
+    // Over 39.5 is the same game as Over 38.5, so it does not take a second straight.
     assert.ok(straights.some(s => /Sacramento State/.test(s.side) && s.line === 9), labels.join(' | '));
     assert.strictEqual(gated.yesPool.length, 15);
     assert.strictEqual(gated.leanPool.length, 18);

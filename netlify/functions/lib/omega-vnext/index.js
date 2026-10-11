@@ -502,9 +502,10 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
   picks = applyDailyCap(picks);
 
-  // Full yes pool, including the straight sides. The parlay may overlap
-  // them. The only parlay conflict is two legs from the same game.
-  // Full yes pool (parlay may overlap straights) minus QA hard-fail sides.
+  // Floor plus lean, minus QA hard-fail sides. When the three published
+  // straights are distinct games, each cover is >= 45%, and combined EV
+  // is positive, the parlay is those straights. Otherwise the best
+  // positive-EV edges on distinct games, then a 2-leg.
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
   const poolForParlay = yesPool.concat(leanPool).filter(c => !hfKeys.has(`${c.matchup}|${c.side}`));
   const parlayEligible = poolForParlay.filter(c => Number(c.coverProb) >= PARLAY_MIN_COVER && c.ev > 0 && Number.isFinite(c.odds)).length;

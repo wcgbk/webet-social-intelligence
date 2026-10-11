@@ -1,6 +1,7 @@
 'use strict';
-// Spec: top edges are the straights, parlay legs are distinct games, a card
-// with candidates is not empty. Also runs on the 2026-10-10 yes pool when present.
+// Spec: top edges are the straights, one per game. A higher edge on a game
+// already taken is not a second straight. Parlay legs are distinct games.
+// A card with candidates is not empty. Also runs on the 2026-10-10 yes pool.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -25,10 +26,14 @@ function assertSpecCard(pool, cardDate, label) {
   if (!straights.length) return { straights, parlay: [] };
   const minEdge = Math.min(...straights.map(edgeRank));
   const straightIds = new Set(straights.map(idOf));
+  const usedGames = new Set(straights.map(matchupKey));
   for (const c of pool) {
-    if (edgeRank(c) > minEdge + 1e-9) {
-      assert.ok(straightIds.has(idOf(c)), `${label}: higher edge is not a straight ${c.side} ${c.matchup} ${c.edgePct}`);
-    }
+    if (!(edgeRank(c) > minEdge + 1e-9)) continue;
+    if (straightIds.has(idOf(c))) continue;
+    assert.ok(
+      config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c)),
+      `${label}: higher edge on an open game is not a straight ${c.side} ${c.matchup} ${c.edgePct}`,
+    );
   }
   const parlay = optimizeParlay(pool, straights, { cardDate });
   if (parlay.length) {
@@ -58,8 +63,10 @@ const sameGame = [
 ];
 const synthetic = assertSpecCard(sameGame, '2026-10-10', 'synthetic');
 assert.strictEqual(synthetic.straights.length, 3);
-assert.ok(synthetic.straights.some(s => s.line === 39.5), '5.34% same-game total must be a straight');
-assert.ok(!synthetic.straights.some(s => /UMass/.test(s.side)), '3.87% stays behind the top three edges');
+assert.ok(synthetic.straights.some(s => s.line === 38.5), 'the higher same-game total is the straight');
+assert.ok(!synthetic.straights.some(s => s.line === 39.5), 'the same game does not take a second straight');
+assert.ok(synthetic.straights.some(s => /UMass/.test(s.side)), 'the next distinct game fills the open slot');
+assert.strictEqual(new Set(synthetic.straights.map(matchupKey)).size, 3);
 assert.strictEqual(synthetic.parlay.length, 1);
 assert.strictEqual(synthetic.parlay[0].legs.length, 3);
 const parlayGames = synthetic.parlay[0].legs.map(l => l.matchup);

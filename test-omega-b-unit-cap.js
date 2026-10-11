@@ -221,6 +221,78 @@ function stake(pick) {
   }
 }
 
+// 10/12 Bills @ Rams. The +3.5 lean is grade A at the 0.5u lean cap.
+// The ML is A- at 0.75u. The grade lift used to raise the lean to 0.75u.
+{
+  const capped = select.applyDailyUnitCap([
+    {
+      pick: 'Buffalo Bills +3.5',
+      matchup: 'Buffalo Bills @ Los Angeles Rams',
+      rating: 'a',
+      qualityGrade: 'a',
+      tier: 'lean',
+      units: '0.5u',
+      edgePct: '3.8%',
+      qualityScore: 0.038,
+    },
+    {
+      pick: 'Buffalo Bills ML',
+      matchup: 'Buffalo Bills @ Los Angeles Rams',
+      rating: 'aminus',
+      qualityGrade: 'aminus',
+      tier: 'floor',
+      units: '0.75u',
+      edgePct: '3.2%',
+      qualityScore: 0.032,
+    },
+  ], null);
+  const byPick = Object.fromEntries(capped.picks.map(p => [p.pick, p]));
+  assert.strictEqual(byPick['Buffalo Bills +3.5'].units, '0.5u');
+  assert.strictEqual(byPick['Buffalo Bills +3.5'].tier, 'lean');
+  assert.strictEqual(byPick['Buffalo Bills +3.5'].rating, 'a');
+  assert.strictEqual(byPick['Buffalo Bills ML'].units, '0.75u');
+  assert.strictEqual(byPick['Buffalo Bills ML'].rating, 'aminus');
+
+  const arrivedHigh = select.applyDailyUnitCap([
+    {
+      pick: 'Buffalo Bills +3.5',
+      matchup: 'Buffalo Bills @ Los Angeles Rams',
+      rating: 'a',
+      qualityGrade: 'a',
+      tier: 'lean',
+      units: '0.75u',
+      edgePct: '3.8%',
+      qualityScore: 0.038,
+    },
+  ], null);
+  assert.strictEqual(arrivedHigh.picks[0].units, '0.5u');
+  assert.strictEqual(arrivedHigh.picks[0].tier, 'lean');
+
+  const floorLift = select.applyDailyUnitCap([
+    {
+      pick: 'Floor A',
+      rating: 'a',
+      qualityGrade: 'a',
+      tier: 'floor',
+      units: '0.5u',
+      edgePct: '3.8%',
+      qualityScore: 0.038,
+    },
+    {
+      pick: 'Floor A-',
+      rating: 'aminus',
+      qualityGrade: 'aminus',
+      tier: 'floor',
+      units: '0.75u',
+      edgePct: '3.2%',
+      qualityScore: 0.032,
+    },
+  ], null);
+  const floors = Object.fromEntries(floorLift.picks.map(p => [p.pick, p]));
+  assert.strictEqual(floors['Floor A'].units, '0.75u');
+  assert.strictEqual(floors['Floor A-'].units, '0.75u');
+}
+
 console.log('PASS test-omega-b-unit-cap', {
   B_GRADE_UNIT_CAP: config.B_GRADE_UNIT_CAP,
   where: 'select.toPickObject after qualityToRating; select.applyDailyUnitCap before budget trim',

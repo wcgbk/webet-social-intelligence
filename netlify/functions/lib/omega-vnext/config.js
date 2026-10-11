@@ -7,6 +7,12 @@ const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
 const MAX_STRAIGHTS = 3;
 /**
+ * The straight card keeps one side per game. The next-best edge on a
+ * different game fills an open slot. Default true. Set false only to
+ * publish two sides of one game when both edges are in the top N.
+ */
+const ONE_STRAIGHT_PER_GAME = true;
+/**
  * Same-game stake cap is off. capSameGameExposure does not trim.
  * OMEGA_GAME_EXPOSURE cannot turn the 1.50u cap back on.
  */
@@ -630,7 +636,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
-  'v12.3.24-omega-vnext-price-lock: Live generate prices the 9:30 AM ET historical snapshot and does not refetch the live board when the run is late. Verify auto-corrects a material Hard Rock line or price. Floor tier is calibrated stake EV >= 3% and edge vs the de-vigged sharp at or above the odds-scaled curve (1.75% at -110, plus 0.05 per implied point of plus-money distance from -110, plus 0.04 per uncertainty point above 0.15, cap 6%). No flat coverProb floor. A short straight card fills from the 1.5% EV lean tier, labeled lean, max 0.5u. Parlay legs need coverProb >= 45% and the ticket EV must be positive; otherwise the best 2-leg, or no parlay. Quarter-Kelly, 1.25u, 0.5u parlay, and 4u daily stay.',
+  'v12.3.24-omega-vnext-price-lock: Live generate prices the 9:30 AM ET historical snapshot and does not refetch the live board when the run is late. Verify auto-corrects a material Hard Rock line or price. Floor tier is calibrated stake EV >= 3% and edge vs the de-vigged sharp at or above the odds-scaled curve (1.75% at -110, plus 0.05 per implied point of plus-money distance from -110, plus 0.04 per uncertainty point above 0.15, cap 6%). No flat coverProb floor. A short straight card fills from the 1.5% EV lean tier, labeled lean, max 0.5u. The grade-lift cannot raise a lean above 0.5u. ONE_STRAIGHT_PER_GAME defaults true, so straights keep one side per game and the next distinct game fills. Set it false to publish two sides of one game. Parlay legs need coverProb >= 45%. When the three published straights are on distinct games, each clears that cover, and their combined EV is positive, the parlay is those straights. Otherwise the best positive-EV 3-leg by edge, then the best 2-leg, or no parlay. Quarter-Kelly, 1.25u, 0.5u parlay, and 4u daily stay.',
   'v12.3.23-omega-vnext-price-lock: Live generate prices the 9:30 AM ET historical snapshot (any major US book) and does not refetch the live board when the run is late. Verify auto-corrects a material Hard Rock line or price: reprice at Hard Rock, keep the pick when the edge still clears the odds-scaled floor, otherwise take the next Hard Rock-confirmed candidate, and rebuild the parlay. The card still publishes. minEV and minCoverProb stay 0. The edge floor is 1.75% at -110 plus 0.05 per implied point of plus-money distance from -110 plus 0.04 per uncertainty point above 0.15, capped at 6%. No flat coverProb floor.',
   'v12.3.22-omega-vnext-no-floors: Publish floors are off. minEV and minCoverProb are 0, so a positive edge at a major book is not rejected for a 3% EV floor or a 48% coverProb floor. minPredictedClvCents is null and does not reject. Generate-time placeability is logged and does not block. Verify still confirms the Hard Rock line and may drop only when Hard Rock and US majors both fail. Mode A calibration stays the hand-set shrink. The 0.42–0.58 band is legacy only. Mode B K_MIN 0.3 and CAL_POOL sample floors are fit constraints, not publish gates. Odds band, liquidity, pregame, same ET day, and adverse steam stay. Kelly and unit caps stay. Straights, parlay, and the exposure cap are unchanged from v12.3.21.',
   'v12.3.21-omega-vnext-edge-card: Straights are the top edges vs no-vig fair, including a second side of the same game. Score nudges only break an exact edge tie. The parlay is the best edges on distinct games and may overlap the straights. The only parlay conflict is two legs from the same game. Same-direction totals and same-conference NCAAF totals may share a ticket. The same-direction haircut still lowers joint probability and never raises it. PER_GAME_EXPOSURE_CAP_ENABLED is false, so the 1.50u same-game stake cap does not run. Gate floors, Kelly, unit caps, SHRINK_K, and calibration are unchanged. A gate reject is logged. It does not throw.',
@@ -693,6 +699,7 @@ module.exports = {
   UNIT_DOLLARS,
   KELLY_FRACTION,
   MAX_STRAIGHTS,
+  ONE_STRAIGHT_PER_GAME,
   PER_GAME_EXPOSURE_CAP_ENABLED,
   STRAIGHT_UNIT_BUDGET,
   PARLAY_FIXED_UNITS,

@@ -256,6 +256,58 @@ function betterEdgeTuple(aLegs, aEv, bLegs, bEv) {
   return aEv > bEv + 1e-12;
 }
 
+function straightBook(straight) {
+  return String(straight && straight.book || '').trim().toLowerCase();
+}
+
+function lineClose(a, b) {
+  if (a == null || b == null || a === '' || b === '') return false;
+  const na = Number(a);
+  const nb = Number(b);
+  return Number.isFinite(na) && Number.isFinite(nb) && Math.abs(na - nb) < 0.051;
+}
+
+/**
+ * The published straights, when they are three distinct games already in
+ * the filtered pool, each cover is >= 45%, and comboStats EV is positive.
+ * Otherwise null and the edge search runs.
+ */
+function preferredStraightCombo(search, straights) {
+  if (!Array.isArray(straights) || straights.length !== 3) return null;
+  const used = new Set();
+  const rows = [];
+  for (const straight of straights) {
+    const hits = [];
+    for (let i = 0; i < search.length; i++) {
+      if (used.has(i)) continue;
+      if (!parlayIsCardMirror([search[i]], [straight])) continue;
+      hits.push(i);
+    }
+    if (!hits.length) return null;
+    const book = straightBook(straight);
+    const line = straight.line;
+    let pick = hits[0];
+    let bestScore = -1;
+    for (const i of hits) {
+      const row = search[i];
+      let score = 0;
+      if (book && String(row.book || '').trim().toLowerCase() === book) score += 2;
+      if (lineClose(row.line, line)) score += 1;
+      if (score > bestScore) {
+        bestScore = score;
+        pick = i;
+      }
+    }
+    used.add(pick);
+    rows.push(search[pick]);
+  }
+  if (new Set(rows.map(matchupKey)).size !== 3) return null;
+  if (rows.some(r => !(Number.isFinite(r.coverProb) && r.coverProb >= PARLAY_MIN_COVER))) return null;
+  const st = comboStats(rows);
+  if (!(st.ev > 0) || st.uniqueGames !== 3) return null;
+  return { legs: rows, ...st };
+}
+
 /** Best side per game, then the best-edge combo whose combined EV is positive. */
 function bestPositiveCombo(pool, size) {
   const byGame = new Map();
@@ -278,10 +330,13 @@ function bestPositiveCombo(pool, size) {
 }
 
 /**
- * Best edges on distinct games. Overlap with straights is allowed.
- * Each leg needs coverProb >= 45%. The ticket's combined EV must be > 0.
- * A positive-EV 3-leg wins. Otherwise the best positive-EV 2-leg.
- * If neither exists, there is no parlay. Straights still publish.
+ * When the three published straights are on distinct games, each cover
+ * is >= 45%, and their combined EV is positive, the parlay is those
+ * straights. Otherwise the best edges on distinct games. Overlap with
+ * the straights is allowed on that path. Each leg needs coverProb >= 45%.
+ * The ticket's combined EV must be > 0. A positive-EV 3-leg wins.
+ * Otherwise the best positive-EV 2-leg. If neither exists, there is no
+ * parlay. Straights still publish.
  */
 function optimizeParlay(yesPool, straights = [], opts = {}) {
   const cardDate = opts.cardDate || opts.dateISO || null;
@@ -302,9 +357,10 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     .sort((a, b) => legEdge(b) - legEdge(a) || (b.ev - a.ev));
 
   const search = pool;
-  if (search.length < 2) return [];
+  const preferred = preferredStraightCombo(search, straights);
+  if (!preferred && search.length < 2) return [];
 
-  const chosen = bestPositiveCombo(search, 3) || bestPositiveCombo(search, 2);
+  const chosen = preferred || bestPositiveCombo(search, 3) || bestPositiveCombo(search, 2);
   if (!chosen) {
     console.log('[omega-vnext] parlay none — no positive-EV 3-leg or 2-leg with cover >= 45%');
     return [];
@@ -350,6 +406,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       awayTeam: l.awayTeam,
       p_model: l.p_model,
       fair_sharp_p: l.fair_sharp_p,
+      book: l.book || null,
+      line: l.line != null ? l.line : null,
       predictedClv: l.predictedClv,
       predictedResidualClv: l.predictedResidualClv != null ? l.predictedResidualClv : null,
       uncertainty: l.uncertainty,

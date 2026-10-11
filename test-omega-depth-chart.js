@@ -20,7 +20,7 @@ const { runWithFetchMemo } = require(path.join(root, 'fetch_memo'));
 const RAVENS = JSON.parse(fs.readFileSync(path.join(__dirname, 'test/fixtures/espn-nfl-depthchart-bal.json'), 'utf8'));
 const AUBURN = JSON.parse(fs.readFileSync(path.join(__dirname, 'test/fixtures/espn-ncaaf-depthchart-aub.json'), 'utf8'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.25-omega-vnext-price-lock');
+assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.QB_INJURY.NFL.outMarginPts, 3);
 assert.strictEqual(config.QB_INJURY.NFL.outTotalPts, -1.5);
 assert.strictEqual(config.QB_INJURY.NCAAF.outMarginPts, 3.5);

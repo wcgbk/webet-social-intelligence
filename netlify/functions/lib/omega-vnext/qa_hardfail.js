@@ -2,7 +2,7 @@
 
 /**
  * Omega QA hard-fails — drop pick before publish unlock; try next diversified YES.
- * NO lean force-fill. Claude remains verifier/narrator only.
+ * NO lean force-fill. Grok remains verifier/narrator only.
  *
  * Checks:
  *  - MLB: starting pitcher scratched/changed vs assumed SP

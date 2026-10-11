@@ -517,7 +517,7 @@ async function generateOmegaVnext(opts = {}) {
       picks,
       parlayLegs,
       dateFormatted,
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey: process.env.XAI_API_KEY,
     });
     picks = narr.picks;
     parlayLegs = narr.parlayLegs || parlayLegs;
@@ -528,7 +528,7 @@ async function generateOmegaVnext(opts = {}) {
       parlayLegs = await narrateParlayLegsOnly({
         parlayLegs,
         dateFormatted,
-        apiKey: process.env.ANTHROPIC_API_KEY,
+        apiKey: process.env.XAI_API_KEY,
         straightPicks: picks,
       });
     }

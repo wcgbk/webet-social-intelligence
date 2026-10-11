@@ -34,6 +34,7 @@ async function withFetch(impl, fn) {
     ODDS_API_KEY: process.env.ODDS_API_KEY,
     NETLIFY_AUTH_TOKEN: process.env.NETLIFY_AUTH_TOKEN,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    XAI_API_KEY: process.env.XAI_API_KEY,
   };
   global.fetch = impl;
   try {
@@ -111,12 +112,12 @@ function mlbEvent(id, commence) {
   assert.strictEqual(memo.skipAlphaLiveOdds('soccer_uefa_europa_conference_league', {}), true);
   assert.strictEqual(memo.skipAlphaLiveOdds('soccer_epl', { historical: true }), false);
   assert.strictEqual(memo.skipAlphaLiveOdds('baseball_mlb', {}), false);
-  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('Anthropic HTTP 400: bad')), false);
-  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('Anthropic HTTP 401')), false);
-  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('Anthropic HTTP 403')), false);
-  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('Anthropic HTTP 500')), true);
-  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('Anthropic HTTP 429')), true);
-  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('no JSON in Claude response')), true);
+  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('xAI HTTP 400: bad')), false);
+  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('xAI HTTP 401')), false);
+  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('xAI HTTP 403')), false);
+  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('xAI HTTP 500')), true);
+  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('xAI HTTP 429')), true);
+  assert.strictEqual(memo.narrateErrorShouldRetry(new Error('no JSON in Grok response')), true);
 
   assert.strictEqual(memo.hasTrueClosingCapture({ clv: 0.01, captureMinsToCommence: 0, captureScore: 0 }), true);
   assert.strictEqual(memo.hasTrueClosingCapture({ clv: 0, captureMinsToCommence: 0, captureScore: 0 }), true);
@@ -413,7 +414,7 @@ function mlbEvent(id, commence) {
       return jsonResponse('bad request', 400);
     };
     const out = await narrate.narrateAndVerify({
-      picks: [pick], parlayLegs: [], dateFormatted: 'October 6, 2026', apiKey: 'test-anthropic',
+      picks: [pick], parlayLegs: [], dateFormatted: 'October 6, 2026', apiKey: 'test-xai',
     });
     assert.strictEqual(n, 1);
     assert.strictEqual(out.picks[0].pick, 'Yankees');
@@ -427,7 +428,7 @@ function mlbEvent(id, commence) {
       return jsonResponse('unavailable', 500);
     };
     const out = await narrate.narrateAndVerify({
-      picks: [pick], parlayLegs: [], dateFormatted: 'October 6, 2026', apiKey: 'test-anthropic',
+      picks: [pick], parlayLegs: [], dateFormatted: 'October 6, 2026', apiKey: 'test-xai',
     });
     assert.strictEqual(n, 2);
     assert.strictEqual(out.picks[0].pick, 'Yankees');

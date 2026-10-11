@@ -4,7 +4,7 @@
 // Runs at 10:30am ET daily. For each pick on today's beta card:
 // 1. MATH CHECKS: Recompute EV, Kelly, grade. Flag mismatches.
 // 2. NARRATIVE CHECKS: Verify reasoning mentions correct team, correct length, whatLoses present.
-// 3. SHARP REVIEW: Call Claude as an elite Vegas handicapper to review the full card.
+// 3. SHARP REVIEW: Call Grok as an elite Vegas handicapper to review the full card.
 // 4. AUTO-FIX: If a pick fails critical checks (negative EV, math broken), drop it.
 //    Do not invent a replacement straight. Empty stays empty.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
@@ -57,6 +57,7 @@ const { autoCorrectHardRock } = require('./lib/omega-vnext/hr_autocorrect');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
+const { xaiChat, resolveXaiKey, GROK_MODEL } = require('./lib/xai-chat');
 
 /** Favorite (decimal < 2) stays a minus price. Plus only when decimal >= 2. */
 function formatCombinedAmerican(combinedDecimal) {
@@ -742,29 +743,8 @@ async function runOmegaSteamRecheck(picksData, pickReports) {
   return out;
 }
 
-// ── Sharp Handicapper Review (Claude) ──
-async function sharpReview(picks, dateFormatted) {
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_API_KEY) return { verdict: "skip", analysis: "No API key for sharp review" };
-
-  const cardSummary = picks.map((p, i) =>
-    `${i + 1}. [${p.rating}] ${p.pick} ${p.odds} | ${p.units} | ${p.sport} | Cover: ${p.winProbability} | EV: ${p.ev}\n   Reasoning: ${(p.coreReasoning || '').slice(0, 200)}\n   What loses: ${p.whatLoses || 'N/A'}`
-  ).join('\n\n');
-
-  try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → skip
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-        "anthropic-beta": "prompt-caching-2024-07-31",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1500,
-        system: [{ type: "text", text: `You are an elite Las Vegas handicapper with 25 years of experience. You've worked for professional betting syndicates and have a lifetime ROI of +8% on over 50,000 bets. You review betting cards for red flags that pure math can't catch.
+// ── Sharp Handicapper Review (Grok) ──
+const SHARP_REVIEW_SYSTEM = `You are an elite Las Vegas handicapper with 25 years of experience. You've worked for professional betting syndicates and have a lifetime ROI of +8% on over 50,000 bets. You review betting cards for red flags that pure math can't catch.
 
 Your job: Review today's 3-pick card and flag anything that concerns you. Think about:
 - Trap games (teams with nothing to play for, scheduling spots, look-ahead games)
@@ -788,21 +768,206 @@ Return ONLY valid JSON:
 "concerns" = minor situational worries but still playable.
 "red_flag" = at least one pick has a significant problem that math wouldn't catch.
 
-Be honest and direct. Don't flag things just to flag them. Only raise genuine concerns.`, cache_control: { type: "ephemeral" } }],
-        messages: [{ role: "user", content: `Today's card (${dateFormatted}):\n\n${cardSummary}` }],
-      }),
-    });
+Be honest and direct. Don't flag things just to flag them. Only raise genuine concerns.`;
 
-    if (resp.ok) {
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || "";
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) return JSON.parse(jsonMatch[0]);
-    }
+function isXaiHttpError(err) {
+  return /xAI HTTP \d+/.test(String((err && err.message) || ''));
+}
+
+async function sharpReview(picks, dateFormatted) {
+  const xaiKey = resolveXaiKey();
+  if (!xaiKey) return { verdict: "skip", analysis: "No API key for sharp review" };
+
+  const cardSummary = picks.map((p, i) =>
+    `${i + 1}. [${p.rating}] ${p.pick} ${p.odds} | ${p.units} | ${p.sport} | Cover: ${p.winProbability} | EV: ${p.ev}\n   Reasoning: ${(p.coreReasoning || '').slice(0, 200)}\n   What loses: ${p.whatLoses || 'N/A'}`
+  ).join('\n\n');
+
+  try {
+    // never hang QA on a rate-limited call — try/catch → skip
+    const text = await xaiChat({
+      apiKey: xaiKey,
+      model: GROK_MODEL,
+      system: SHARP_REVIEW_SYSTEM,
+      user: `Today's card (${dateFormatted}):\n\n${cardSummary}`,
+      maxTokens: 1500,
+      timeoutMs: 25000,
+    });
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
   } catch (e) {
-    console.log(`[verify-sharp] Claude review failed: ${e.message}`);
+    console.log(`[verify-sharp] Grok review failed: ${e.message}`);
   }
   return { verdict: "skip", analysis: "Sharp review unavailable" };
+}
+
+const STRAIGHT_NARRATIVE_SYSTEM = `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+- Be 2-3 sentences max
+- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
+- Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
+- Always say "WeBetAI" not "the model"
+
+Also write:
+- "whatLoses": one sentence describing the specific scenario that beats this pick
+- "dataVerified": brief note that the edge is model-grounded (no invented injuries/stats)
+- "clvExpectation": one sentence on expected closing-line movement
+
+Return ONLY valid JSON array:
+[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`;
+
+const PARLAY_LEG_NARRATIVE_SYSTEM = `You write concise sports betting pick narratives for WeBetAI parlay legs. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
+- Be 2-4 sentences
+- Explain in GENERAL terms why WeBetAI favors the side named in the leg
+- Frame the value as the model's projection diverging from this market price
+- State NO specific player names, records, scores, venues, or injuries you were not explicitly given
+- Never use technical jargon; never restate projections/lines/numbers (shown separately)
+- Always say "WeBetAI" not "the model"
+
+Also write whatLoses, dataVerified, and clvExpectation (one sentence each).
+
+Return ONLY valid JSON array:
+[{ "legIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`;
+
+function applyNarrativeTemplate(rows, indices) {
+  let finalFixCount = 0;
+  for (const i of indices) {
+    const p = rows[i];
+    if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces')) {
+      const isTotal = /over|under/i.test(p.pick);
+      const isML = /\bML\b/i.test(p.pick);
+      p.coreReasoning = isTotal
+        ? `WeBetAI projects ${p.modelEdge || 'a statistical edge'} on this total. Recent scoring trends and pace data support this direction, with the projection diverging from the consensus line.`
+        : isML
+        ? `WeBetAI gives this team a win probability above the market's implied odds at ${p.odds}. The Elo rating differential and recent form support value at these odds.`
+        : `WeBetAI projects ${p.modelEdge || 'a spread edge'} on this matchup. Efficiency metrics and recent form diverge from the consensus line, creating positive expected value.`;
+      finalFixCount++;
+    }
+    if (!p.whatLoses || p.whatLoses.length < 15) {
+      p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+    }
+  }
+  return finalFixCount;
+}
+
+function applyParlayLegTemplate(legs, indices) {
+  let finalFixCount = 0;
+  for (const i of indices) {
+    const leg = legs[i];
+    if (!leg.coreReasoning || leg.coreReasoning.length < 80) {
+      const isTotal = /over|under/i.test(leg.pick || '');
+      leg.coreReasoning = isTotal
+        ? `WeBetAI likes this total as a parlay leg — scoring trends and pace support the direction at the posted number.`
+        : `WeBetAI likes this side as a parlay leg — form and matchup factors diverge from the market price enough to include it on the slip.`;
+      finalFixCount++;
+    }
+    if (!leg.whatLoses || leg.whatLoses.length < 15) {
+      leg.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
+    }
+  }
+  return finalFixCount;
+}
+
+/** HTTP failures log and leave the short copy. Network/parse failures use the template. Card still publishes. */
+async function backfillStraightNarratives(picks, uniqueNeeds) {
+  let finalFixCount = 0;
+  if (!uniqueNeeds || uniqueNeeds.length === 0 || !resolveXaiKey()) return finalFixCount;
+  console.log(`[verify-final] Writing narratives for ${uniqueNeeds.length} pick(s) via Grok`);
+  const pickDescriptions = uniqueNeeds.map(i => {
+    const p = picks[i];
+    return `Pick ${i + 1}: ${p.pick} ${p.odds} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`;
+  }).join('\n');
+  try {
+    // never hang QA on a rate-limited call — try/catch → template
+    const text = await xaiChat({
+      apiKey: resolveXaiKey(),
+      model: GROK_MODEL,
+      system: STRAIGHT_NARRATIVE_SYSTEM,
+      user: `Write narratives for these picks:\n${pickDescriptions}`,
+      maxTokens: 1500,
+      timeoutMs: 25000,
+    });
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const narratives = JSON.parse(jsonMatch[0]);
+      for (const n of narratives) {
+        const idx = (n.pickIndex || 1) - 1;
+        if (idx >= 0 && idx < picks.length) {
+          if (n.coreReasoning && n.coreReasoning.length > 30) {
+            picks[idx].coreReasoning = n.coreReasoning;
+            finalFixCount++;
+            console.log(`[verify-final] Wrote narrative for pick ${idx + 1}: "${picks[idx].pick}"`);
+          }
+          if (n.whatLoses && n.whatLoses.length > 10) {
+            picks[idx].whatLoses = n.whatLoses;
+          }
+          if (n.dataVerified && n.dataVerified.length > 5) {
+            picks[idx].dataVerified = n.dataVerified;
+          }
+          if (n.clvExpectation && n.clvExpectation.length > 5) {
+            picks[idx].clvExpectation = n.clvExpectation;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    if (isXaiHttpError(e) || /no text in xAI response/.test(e.message)) {
+      console.log(`[verify-final] ${e.message}`);
+    } else {
+      console.log(`[verify-final] Grok narrative write failed: ${e.message}`);
+      finalFixCount += applyNarrativeTemplate(picks, uniqueNeeds);
+    }
+  }
+  return finalFixCount;
+}
+
+async function backfillParlayLegNarratives(legs, uniqueLegNeeds) {
+  let finalFixCount = 0;
+  if (!uniqueLegNeeds || uniqueLegNeeds.length === 0) return finalFixCount;
+  if (!resolveXaiKey()) {
+    console.log(`[verify-final] Skipping parlay-leg Grok write — no XAI_API_KEY`);
+    return finalFixCount;
+  }
+  console.log(`[verify-final] Writing parlay-leg narratives for ${uniqueLegNeeds.length} leg(s) via Grok`);
+  const legDescriptions = uniqueLegNeeds.map(i => {
+    const leg = legs[i];
+    return `Leg ${i + 1}: ${leg.pick} ${leg.odds || ''} | ${leg.sport || ''} ${leg.betType || ''} | ${leg.matchup || ''} | Cover: ${leg.coverProb || ''} | EV: ${leg.ev || ''}`;
+  }).join('\n');
+  try {
+    const text = await xaiChat({
+      apiKey: resolveXaiKey(),
+      model: GROK_MODEL,
+      system: PARLAY_LEG_NARRATIVE_SYSTEM,
+      user: `Write narratives for these parlay legs:\n${legDescriptions}`,
+      maxTokens: 2000,
+      timeoutMs: 25000,
+    });
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const narratives = JSON.parse(jsonMatch[0]);
+      for (const n of narratives) {
+        const idx = (n.legIndex || 1) - 1;
+        if (idx >= 0 && idx < legs.length) {
+          if (n.coreReasoning && n.coreReasoning.length > 30) {
+            legs[idx].coreReasoning = n.coreReasoning;
+            finalFixCount++;
+            console.log(`[verify-final] Wrote parlay-leg narrative for leg ${idx + 1}: "${legs[idx].pick}"`);
+          }
+          if (n.whatLoses && n.whatLoses.length > 10) legs[idx].whatLoses = n.whatLoses;
+          if (n.dataVerified && n.dataVerified.length > 5) legs[idx].dataVerified = n.dataVerified;
+          if (n.clvExpectation && n.clvExpectation.length > 5) legs[idx].clvExpectation = n.clvExpectation;
+        }
+      }
+    }
+  } catch (e) {
+    if (isXaiHttpError(e) || /no text in xAI response/.test(e.message)) {
+      console.log(`[verify-final] parlay-leg ${e.message}`);
+    } else {
+      console.log(`[verify-final] Grok parlay-leg narrative write failed: ${e.message}`);
+      finalFixCount += applyParlayLegTemplate(legs, uniqueLegNeeds);
+    }
+  }
+  return finalFixCount;
 }
 
 // ── Auto-Fix: drop a critical pick. Do not invent a replacement straight. ──
@@ -1002,6 +1167,9 @@ exports.candidateClearsSportGates = candidateClearsSportGates;
 exports.updatePicksBlob = updatePicksBlob;
 exports.fetchBetaPicks = fetchBetaPicks;
 exports.enforceOmegaDailyUnitCap = enforceOmegaDailyUnitCap;
+exports.sharpReview = sharpReview;
+exports.backfillStraightNarratives = backfillStraightNarratives;
+exports.backfillParlayLegNarratives = backfillParlayLegNarratives;
 
 // ── Handler ──
 const { rejectUnlessEtSlot, etParts } = require("./lib/et-schedule");
@@ -1296,99 +1464,10 @@ exports.handler = async (event) => {
       }
       const uniqueNeeds = [...new Set(needsNarrative)];
 
-      // Call Claude to write proper narratives for picks that need them
-      if (uniqueNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
-        console.log(`[verify-final] Writing narratives for ${uniqueNeeds.length} pick(s) via Claude`);
-        const pickDescriptions = uniqueNeeds.map(i => {
-          const p = picksData.picks[i];
-          return `Pick ${i + 1}: ${p.pick} ${p.odds} | ${p.sport} ${p.betType || ''} | ${p.matchup} | Cover: ${p.winProbability} | EV: ${p.ev} | ${p.modelEdge || ''}`;
-        }).join('\n');
+      // Grok writes narratives for picks that need them. Failure keeps the card.
+      finalFixCount += await backfillStraightNarratives(picksData.picks, uniqueNeeds);
 
-        try {
-          const resp = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            signal: AbortSignal.timeout(25000), // never hang QA on a rate-limited call — try/catch → template
-            headers: {
-              "x-api-key": process.env.ANTHROPIC_API_KEY,
-              "anthropic-version": "2023-06-01",
-              "content-type": "application/json",
-              "anthropic-beta": "prompt-caching-2024-07-31",
-            },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-6",
-              max_tokens: 1500,
-              system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
-- Be 2-3 sentences max
-- Explain in GENERAL terms why WeBetAI's model favors the side named in the pick (team / Over-Under / line)
-- Frame the value as the model's projection diverging from this market price
-- State NO specific player names, records, scores, venues, or injuries you were not explicitly given — if unsure, stay general
-- Never use technical jargon (no ORtg, DRtg, DVOA, ATS); never restate projections, lines, or numbers (shown separately)
-- Always say "WeBetAI" not "the model"
-
-Also write:
-- "whatLoses": one sentence describing the specific scenario that beats this pick
-- "dataVerified": brief note that the edge is model-grounded (no invented injuries/stats)
-- "clvExpectation": one sentence on expected closing-line movement
-
-Return ONLY valid JSON array:
-[{ "pickIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
-              messages: [{ role: "user", content: `Write narratives for these picks:\n${pickDescriptions}` }],
-            }),
-          });
-
-          if (resp.ok) {
-            const data = await resp.json();
-            const text = data.content?.[0]?.text || "";
-            const jsonMatch = text.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-              const narratives = JSON.parse(jsonMatch[0]);
-              for (const n of narratives) {
-                const idx = (n.pickIndex || 1) - 1;
-                if (idx >= 0 && idx < picksData.picks.length) {
-                  if (n.coreReasoning && n.coreReasoning.length > 30) {
-                    picksData.picks[idx].coreReasoning = n.coreReasoning;
-                    finalFixCount++;
-                    console.log(`[verify-final] Wrote narrative for pick ${idx + 1}: "${picksData.picks[idx].pick}"`);
-                  }
-                  if (n.whatLoses && n.whatLoses.length > 10) {
-                    picksData.picks[idx].whatLoses = n.whatLoses;
-                  }
-                  if (n.dataVerified && n.dataVerified.length > 5) {
-                    picksData.picks[idx].dataVerified = n.dataVerified;
-                  }
-                  if (n.clvExpectation && n.clvExpectation.length > 5) {
-                    picksData.picks[idx].clvExpectation = n.clvExpectation;
-                  }
-                }
-              }
-            }
-          } else {
-            const errBody = await resp.text().catch(() => '');
-            console.log(`[verify-final] Anthropic HTTP ${resp.status}${errBody ? ': ' + errBody.slice(0, 180) : ''}`);
-          }
-        } catch (e) {
-          console.log(`[verify-final] Claude narrative write failed: ${e.message}`);
-          // Fallback: use template narratives
-          for (const i of uniqueNeeds) {
-            const p = picksData.picks[i];
-            if (!p.coreReasoning || p.coreReasoning.length < 80 || p.coreReasoning.includes('replaces')) {
-              const isTotal = /over|under/i.test(p.pick);
-              const isML = /\bML\b/i.test(p.pick);
-              p.coreReasoning = isTotal
-                ? `WeBetAI projects ${p.modelEdge || 'a statistical edge'} on this total. Recent scoring trends and pace data support this direction, with the projection diverging from the consensus line.`
-                : isML
-                ? `WeBetAI gives this team a win probability above the market's implied odds at ${p.odds}. The Elo rating differential and recent form support value at these odds.`
-                : `WeBetAI projects ${p.modelEdge || 'a spread edge'} on this matchup. Efficiency metrics and recent form diverge from the consensus line, creating positive expected value.`;
-              finalFixCount++;
-            }
-            if (!p.whatLoses || p.whatLoses.length < 15) {
-              p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
-            }
-          }
-        }
-      }
-
-      // Ensure UI fields always present after narrative pass (Claude may omit optional keys)
+      // Ensure UI fields always present after narrative pass (Grok may omit optional keys)
       for (const p of picksData.picks) {
         if (!p.whatLoses || p.whatLoses.trim().length < 15) {
           p.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
@@ -1440,7 +1519,7 @@ Return ONLY valid JSON array:
 
       // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──
       // Straights get writeups above; parlay legs often differ from the straight card and were
-      // previously left with empty/fallback blurbs. Mirror the straight Claude pass per-leg.
+      // previously left with empty/fallback blurbs. Mirror the straight Grok pass per-leg.
       {
         const plRoot = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || null;
         const legs = (plRoot && Array.isArray(plRoot.legs)) ? plRoot.legs : [];
@@ -1463,83 +1542,7 @@ Return ONLY valid JSON array:
           }
         }
         const uniqueLegNeeds = [...new Set(needsLeg)];
-        if (uniqueLegNeeds.length > 0 && process.env.ANTHROPIC_API_KEY) {
-          console.log(`[verify-final] Writing parlay-leg narratives for ${uniqueLegNeeds.length} leg(s) via Claude`);
-          const legDescriptions = uniqueLegNeeds.map(i => {
-            const leg = legs[i];
-            return `Leg ${i + 1}: ${leg.pick} ${leg.odds || ''} | ${leg.sport || ''} ${leg.betType || ''} | ${leg.matchup || ''} | Cover: ${leg.coverProb || ''} | EV: ${leg.ev || ''}`;
-          }).join('\n');
-          try {
-            const resp = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              signal: AbortSignal.timeout(25000),
-              headers: {
-                "x-api-key": process.env.ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-                "anthropic-beta": "prompt-caching-2024-07-31",
-              },
-              body: JSON.stringify({
-                model: "claude-sonnet-4-6",
-                max_tokens: 2000,
-                system: [{ type: "text", text: `You write concise sports betting pick narratives for WeBetAI parlay legs. You have NO live data, so you must NOT invent specific facts (player names, stats, records, injuries, venues, weather). Each narrative should:
-- Be 2-4 sentences
-- Explain in GENERAL terms why WeBetAI favors the side named in the leg
-- Frame the value as the model's projection diverging from this market price
-- State NO specific player names, records, scores, venues, or injuries you were not explicitly given
-- Never use technical jargon; never restate projections/lines/numbers (shown separately)
-- Always say "WeBetAI" not "the model"
-
-Also write whatLoses, dataVerified, and clvExpectation (one sentence each).
-
-Return ONLY valid JSON array:
-[{ "legIndex": 1, "coreReasoning": "...", "whatLoses": "...", "dataVerified": "...", "clvExpectation": "..." }, ...]`, cache_control: { type: "ephemeral" } }],
-                messages: [{ role: "user", content: `Write narratives for these parlay legs:\n${legDescriptions}` }],
-              }),
-            });
-            if (resp.ok) {
-              const data = await resp.json();
-              const textOut = data.content?.[0]?.text || "";
-              const jsonMatch = textOut.match(/\[[\s\S]*\]/);
-              if (jsonMatch) {
-                const narratives = JSON.parse(jsonMatch[0]);
-                for (const n of narratives) {
-                  const idx = (n.legIndex || 1) - 1;
-                  if (idx >= 0 && idx < legs.length) {
-                    if (n.coreReasoning && n.coreReasoning.length > 30) {
-                      legs[idx].coreReasoning = n.coreReasoning;
-                      finalFixCount++;
-                      console.log(`[verify-final] Wrote parlay-leg narrative for leg ${idx + 1}: "${legs[idx].pick}"`);
-                    }
-                    if (n.whatLoses && n.whatLoses.length > 10) legs[idx].whatLoses = n.whatLoses;
-                    if (n.dataVerified && n.dataVerified.length > 5) legs[idx].dataVerified = n.dataVerified;
-                    if (n.clvExpectation && n.clvExpectation.length > 5) legs[idx].clvExpectation = n.clvExpectation;
-                  }
-                }
-              }
-            } else {
-              const errBody = await resp.text().catch(() => '');
-              console.log(`[verify-final] Anthropic parlay-leg HTTP ${resp.status}${errBody ? ': ' + errBody.slice(0, 180) : ''}`);
-            }
-          } catch (e) {
-            console.log(`[verify-final] Claude parlay-leg narrative write failed: ${e.message}`);
-            for (const i of uniqueLegNeeds) {
-              const leg = legs[i];
-              if (!leg.coreReasoning || leg.coreReasoning.length < 80) {
-                const isTotal = /over|under/i.test(leg.pick || '');
-                leg.coreReasoning = isTotal
-                  ? `WeBetAI likes this total as a parlay leg — scoring trends and pace support the direction at the posted number.`
-                  : `WeBetAI likes this side as a parlay leg — form and matchup factors diverge from the market price enough to include it on the slip.`;
-                finalFixCount++;
-              }
-              if (!leg.whatLoses || leg.whatLoses.length < 15) {
-                leg.whatLoses = "The opposite outcome materializes, or late line movement eliminates the edge.";
-              }
-            }
-          }
-        } else if (uniqueLegNeeds.length > 0) {
-          console.log(`[verify-final] Skipping parlay-leg Claude write — no ANTHROPIC_API_KEY`);
-        }
+        finalFixCount += await backfillParlayLegNarratives(legs, uniqueLegNeeds);
       }
 
       // Ensure parlay legs carry whatLoses for Optimized Parlay cards
@@ -1560,7 +1563,7 @@ Return ONLY valid JSON array:
       }
 
       // QA_HARDFAIL soft: generator already dropped SP/QB/stale; verify does not force-fill leans.
-      // Claude remains narrator/verifier only — structural hard-fails live in omega-vnext/qa_hardfail.js.
+      // Grok remains narrator/verifier only — structural hard-fails live in omega-vnext/qa_hardfail.js.
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
       picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
 

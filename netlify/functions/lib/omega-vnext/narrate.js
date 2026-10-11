@@ -1,23 +1,17 @@
 'use strict';
 
 /**
- * Claude as VERIFIER + NARRATOR only. Cannot invent sides.
+ * Grok as VERIFIER + NARRATOR only. Cannot invent sides.
  * May reject on news; unit cuts ≤50% allowed.
  * Narratives: ESPN-style 4–6 sentence journalistic blurbs (not math templates).
  * Voice: feature-desk matchup storytelling plus a sharp handicapper's price logic.
+ * A failed xAI call keeps the locked card (sports-desk fallback). It never blocks publish.
  */
 
 const { narrateErrorShouldRetry } = require('./fetch_memo');
+const { xaiChat, resolveXaiKey, GROK_MODEL } = require('../xai-chat');
 
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const NARRATIVE_MAX_TOKENS = 5800;
-
-function resolveAnthropicKey(explicit) {
-  return explicit
-    || process.env.ANTHROPIC_API_KEY
-    || process.env.ANTHROPIC_KEY
-    || '';
-}
 
 /** Percent or fraction → 0–1 rate. "4.2%" and 0.042 both work. */
 function parseContextRate(v) {
@@ -95,7 +89,7 @@ function joinSentences(parts) {
 }
 
 /**
- * Sports-desk fallback when Claude is unavailable.
+ * Sports-desk fallback when Grok is unavailable.
  * 5 sentences, argues for the side, no gate jargon.
  */
 function buildFallbackNarrative(p) {
@@ -283,7 +277,7 @@ function buildCardFallbackCopy({ picks, dateFormatted } = {}) {
   };
 }
 
-/** Concrete what-loses / closing-line / verification lines when Claude omits them. */
+/** Concrete what-loses / closing-line / verification lines when Grok omits them. */
 function ensureExtraFields(p) {
   const next = { ...p };
   const pick = next.pick || next.side || 'this side';
@@ -326,7 +320,7 @@ function ensureExtraFields(p) {
 }
 
 /**
- * Context for Claude. Sport, price, grade, and soft hints are translatable.
+ * Context for Grok. Sport, price, grade, and soft hints are translatable.
  * _contextEv / _contextCover are a compass only. Do not strip them before the call.
  */
 function lockedRow(p, i, kind) {
@@ -424,7 +418,7 @@ OUTPUT: Return ONLY valid JSON (no markdown fences):
   "insights": "3-5 sentences. Sport mix, what to watch, how the card is built. Plain English."
 }`;
 
-async function callClaudeOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted, useWebSearch }) {
+async function callGrokOnce({ apiKey, lockedStraights, lockedLegs, dateFormatted }) {
   // Send the full locked row, including _contextEv, _contextCover, edgeBand, and steamHint.
   const userPrompt = `Date: ${dateFormatted}
 
@@ -439,38 +433,19 @@ Straights need 4-6 sentence coreReasoning. Parlay legs need 3-5 sentences. edgeS
 Fields named edgeBand, steamHint, _contextEv, and _contextCover are a compass for plain-English value talk. Do not print EV, cover probability, CLV cents, Kelly, or those raw context numbers.
 Argue for the picked side. Say WeBetAI. No em dashes.`;
 
-  const body = {
-    model: CLAUDE_MODEL,
-    max_tokens: NARRATIVE_MAX_TOKENS,
+  // No web search. The previous tool path was flaky on Netlify and both attempts
+  // already ran with tools off. Same prompt, same max tokens, 60s budget.
+  const text = await xaiChat({
+    apiKey,
+    model: GROK_MODEL,
     system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userPrompt }],
-  };
-  if (useWebSearch) {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
-  }
-
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(useWebSearch ? 120000 : 60000),
+    user: userPrompt,
+    maxTokens: NARRATIVE_MAX_TOKENS,
+    timeoutMs: 60000,
   });
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`Anthropic HTTP ${resp.status}${errText ? `: ${errText.slice(0, 180)}` : ''}`);
-  }
-  const data = await resp.json();
-  const text = (data.content || [])
-    .filter(c => c.type === 'text' || c.text)
-    .map(c => c.text || '')
-    .join('\n');
   const jsonStart = text.indexOf('{');
   const jsonEnd = text.lastIndexOf('}');
-  if (jsonStart < 0 || jsonEnd < 0) throw new Error('no JSON in Claude response');
+  if (jsonStart < 0 || jsonEnd < 0) throw new Error('no JSON in Grok response');
   return JSON.parse(text.slice(jsonStart, jsonEnd + 1));
 }
 
@@ -479,19 +454,19 @@ Argue for the picked side. Say WeBetAI. No em dashes.`;
  * A 400/401/403 is the same request failing twice — do not spend the second call.
  * The fallback card keeps the locked sides either way.
  */
-async function callClaude(opts) {
+async function callGrok(opts) {
   try {
-    return await callClaudeOnce({ ...opts, useWebSearch: false });
+    return await callGrokOnce(opts);
   } catch (e) {
     if (!narrateErrorShouldRetry(e)) {
-      console.error(`[omega-vnext/narrate] Anthropic call failed (${e.message}) — not retrying a rejected request`);
+      console.error(`[omega-vnext/narrate] Grok call failed (${e.message}) — not retrying a rejected request`);
       throw e;
     }
-    console.error(`[omega-vnext/narrate] Anthropic no-tools call failed (${e.message}) — retrying once without tools`);
+    console.error(`[omega-vnext/narrate] Grok no-tools call failed (${e.message}) — retrying once without tools`);
     try {
-      return await callClaudeOnce({ ...opts, useWebSearch: false });
+      return await callGrokOnce(opts);
     } catch (e2) {
-      console.error(`[omega-vnext/narrate] Anthropic retry failed: ${e2.message}`);
+      console.error(`[omega-vnext/narrate] Grok retry failed: ${e2.message}`);
       throw e2;
     }
   }
@@ -510,7 +485,7 @@ function applyStraightRows(templated, parsed) {
       rejections.push({
         matchup: base.matchup,
         side: base.pick,
-        reason: row.coreReasoning || 'Claude news veto',
+        reason: row.coreReasoning || 'news veto',
       });
       continue;
     }
@@ -574,7 +549,7 @@ function decorateParlays(parlayLegs) {
  * @returns {{ picks, parlayLegs, edgeSummary, insights, claudeVerified, rejections }}
  */
 async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
-  const key = resolveAnthropicKey(apiKey);
+  const key = resolveXaiKey(apiKey);
 
   if (!picks || !picks.length) {
     const copy = buildCardFallbackCopy({ picks: [], dateFormatted });
@@ -603,7 +578,7 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
   const templateInsights = fallbackCopy.insights;
 
   if (!key) {
-    console.error('[omega-vnext/narrate] ANTHROPIC_API_KEY missing — using sports-desk fallbacks');
+    console.error('[omega-vnext/narrate] XAI_API_KEY missing — using sports-desk fallbacks');
     return {
       picks: templated.map(ensureExtraFields),
       parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, flatLegs, legOwners)),
@@ -617,7 +592,7 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
   try {
     const lockedStraights = templated.map((p, i) => lockedRow(p, i, 'straight'));
     const lockedLegs = flatLegs.map((p, i) => lockedRow(p, i, 'parlay'));
-    const parsed = await callClaude({
+    const parsed = await callGrok({
       apiKey: key,
       lockedStraights,
       lockedLegs,
@@ -656,7 +631,7 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
       edgeSummary: templateSummary,
       insights: templateInsights,
       claudeVerified: false,
-      rejections: [{ matchup: 'Claude', side: 'verifier', reason: `Narrate failed: ${e.message}` }],
+      rejections: [{ matchup: 'narrator', side: 'verifier', reason: `Narrate failed: ${e.message}` }],
     };
   }
 }
@@ -677,7 +652,7 @@ function mergeLegsBack(parlayLegs, flatLegs, legOwners) {
 
 /** Re-narrate only parlay legs (after veto-driven re-optimize). Same prompt, row, and token path. */
 async function narrateParlayLegsOnly({ parlayLegs, dateFormatted, apiKey, straightPicks }) {
-  const key = resolveAnthropicKey(apiKey);
+  const key = resolveXaiKey(apiKey);
   if (!parlayLegs || !parlayLegs.length) return parlayLegs || [];
 
   const flatLegs = [];
@@ -697,7 +672,7 @@ async function narrateParlayLegsOnly({ parlayLegs, dateFormatted, apiKey, straig
   if (!key) return mergeLegsBack(parlayLegs, flatLegs.map(ensureExtraFields), legOwners);
 
   try {
-    const parsed = await callClaude({
+    const parsed = await callGrok({
       apiKey: key,
       lockedStraights: [],
       lockedLegs: flatLegs.map((p, i) => lockedRow(p, i, 'parlay')),
@@ -722,5 +697,5 @@ module.exports = {
   lockedRow,
   edgeBandFrom,
   steamHintFrom,
-  resolveAnthropicKey,
+  resolveXaiKey,
 };

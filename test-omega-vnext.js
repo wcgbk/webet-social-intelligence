@@ -524,18 +524,20 @@ assert.strictEqual(typeof cfb.project, 'function');
 
 const narrate = require(path.join(root, 'narrate'));
 const narrateSrc = require('fs').readFileSync(path.join(root, 'narrate.js'), 'utf8');
-assert.ok(narrateSrc.includes("claude-sonnet-4-6"), 'narrate must use claude-sonnet-4-6');
-assert.ok(!narrateSrc.includes("claude-sonnet-4-20250514"), 'old sonnet date-id must be gone');
+assert.ok(narrateSrc.includes('grok-4.20-0309-non-reasoning') || narrateSrc.includes('GROK_MODEL'), 'narrate must call Grok');
+assert.ok(narrateSrc.includes('api.x.ai/v1/chat/completions') || narrateSrc.includes("require('../xai-chat')"), 'narrate must use the xAI chat helper');
+assert.ok(!/anthropic|api\.anthropic\.com|claude-sonnet|claude-haiku/i.test(narrateSrc), 'narrate must not call Anthropic');
+assert.ok(!/claude/i.test(narrateSrc.replace(/claudeVerified/g, '')), 'published claudeVerified flag is the only claude token');
 assert.ok(/4–6 sentence journalistic blurbs/.test(narrateSrc), 'header states 4-6 sentence blurbs');
 assert.ok(/4-6 sentence/.test(narrateSrc), 'prompt asks for 4-6 sentence straights');
 assert.ok(/3-5 sentence/.test(narrateSrc), 'prompt asks for 3-5 sentence legs and sections');
 assert.ok(!/2-4 sentence/.test(narrateSrc), 'stubby 2-4 sentence parlay rule must be gone');
 assert.ok(!/1-2 sentence/.test(narrateSrc), 'thin 1-2 sentence edge/insights rule must be gone');
 assert.ok(/NARRATIVE_MAX_TOKENS = 5800/.test(narrateSrc), 'max_tokens raised into 5500-6000');
-assert.ok(/max_tokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
-assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Claude');
+assert.ok(/maxTokens: NARRATIVE_MAX_TOKENS/.test(narrateSrc));
+assert.ok(narrateSrc.includes('JSON.stringify(lockedStraights || [], null, 2)'), 'context fields must reach Grok');
 assert.ok(narrateSrc.includes('JSON.stringify(lockedLegs || [], null, 2)'));
-assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callClaudeOnce must not strip context');
+assert.ok(!narrateSrc.includes('_contextEv, _contextCover, ...r'), 'callGrokOnce must not strip context');
 assert.ok(/ESPN/.test(narrateSrc) && /handicap/i.test(narrateSrc));
 assert.ok(/No em dashes/.test(narrateSrc));
 
@@ -597,7 +599,7 @@ assert.strictEqual(row.edgeBand, 'solid');
 assert.strictEqual(row.rating, 'A');
 assert.strictEqual(row.grade, 'A');
 assert.ok(/toward/i.test(row.steamHint));
-assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Claude');
+assert.ok(!('lineMove' in row), 'raw line-move cents must not be sent to Grok');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: '5.0%' }), 'strong');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: 0.05 }), 'strong');
 assert.strictEqual(narrate.edgeBandFrom({ edgePct: '3.5%' }), 'solid');
@@ -737,10 +739,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
 }
 
 (async () => {
-  const prevA = process.env.ANTHROPIC_API_KEY;
-  const prevB = process.env.ANTHROPIC_KEY;
+  const prevA = process.env.XAI_API_KEY;
+  const prevB = process.env.ANTHROPIC_API_KEY;
+  delete process.env.XAI_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
-  delete process.env.ANTHROPIC_KEY;
   try {
     const empty = await narrate.narrateAndVerify({
       picks: [], parlayLegs: [], dateFormatted: 'Tuesday, September 22',
@@ -777,10 +779,10 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
     assert.ok(/Yankees ML/.test(leg.whatLoses));
     assert.ok(/starter|quarterback|weather/i.test(out.insights));
   } finally {
-    if (prevA == null) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = prevA;
-    if (prevB == null) delete process.env.ANTHROPIC_KEY;
-    else process.env.ANTHROPIC_KEY = prevB;
+    if (prevA == null) delete process.env.XAI_API_KEY;
+    else process.env.XAI_API_KEY = prevA;
+    if (prevB == null) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevB;
   }
 
   console.log('PASS test-omega-vnext', {

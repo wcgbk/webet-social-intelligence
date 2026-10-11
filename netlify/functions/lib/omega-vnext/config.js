@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.27-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.28-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -681,6 +681,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.28-omega-vnext-price-lock: E1 default calibration is hand-set shrink plus bandRetainClip (OMEGA_CAL_MODE=A is the no-band rollback). E2 quarter-Kelly units are x50, nearest 0.5u, floor 0.5u when Kelly > 0, drawdown x0.75 floored at 0.5u. E3 a football shutout pa === 0 with gp >= 1 is pf/gp. E4 NCAAF non-FBS games set fcsGame, widen spread/total/ML std by 1.25, and pull to the line at lambda 0.5 (OMEGA_NCAAF_FCS=0 disables). E5 sharpFairForSide is null unless one sharp book posts both sides, and that candidate is skipped as no-paired-sharp. E6 the market anchor is Pinnacle, else Circa, else the existing sharp fair; posted MLB totals follow that order, then the median of the other sharp books.',
   'v12.3.27-omega-vnext-price-lock: NFL Elo blend default weight is 0.8 (OMEGA_NFL_ELO_WEIGHT still overrides). Replay 2026-09-26..10-10, NFL all candidates vs Pinnacle close: w0.5 LL 0.6965 KL 0.0089; w0.65 0.6898/0.0086; w0.8 0.6843/0.0085; w1.0 0.6709/0.0090. 0.8 chosen for lowest KL. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.26-omega-vnext-price-lock: Per-run audit log of API and model calls (omega-audit/<date>/<runId>, card.audit summary). Observe-only recal-report-omega at 9:15 ET scores per-sport CLV, log-loss, Brier, KL, and fitted shrink K on 7/14/28-day windows and writes omega-recal-report only. ESPN depth-chart QB1 is the starter feed for NFL; NCAAF falls back. NFL Elo uses K 20, the FiveThirtyEight margin-of-victory multiplier, one-third regression to 1505, and a 2:1 DraftKings win-total blend, attached at weight 0.5. Replay NFL log-loss .7153 to .6965 and KL .0127 to .0089. NHL empty-net end-game Markov: NHL log-loss .6850 to .6790 and KL .0059 to .0045. NCAAF tempo totals are present and off (weight 0); the replay sweep worsened log-loss. npm test runs in parallel with a network guard, a golden card, and invariant tests. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.25-omega-vnext-price-lock: A QB status adjustment applies only to the team\'s starting QB (ESPN depth QB1 when present, else the named-starter list, Lamar Jackson BAL). Injured backups have no effect. Parlay legs copy the capped straights\' units.',

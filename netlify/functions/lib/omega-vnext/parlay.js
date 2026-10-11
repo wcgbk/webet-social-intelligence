@@ -4,9 +4,10 @@ const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COV
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
-  isSameEtDay, parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
+  parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
 const { matchupKey } = require('./select');
+const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { parlayCorrEnabled, PARLAY_TOTAL_RHO } = require('./gaps_flags');
@@ -343,7 +344,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   const pool = (yesPool || [])
     .filter(c => Number.isFinite(c.coverProb) && c.coverProb >= PARLAY_MIN_COVER)
     .filter(c => Number.isFinite(c.odds) && c.ev > 0)
-    .filter(c => !cardDate || (c.commenceTime && isSameEtDay(c.commenceTime, cardDate)))
+    .filter(c => !cardDate || (c.commenceTime && inSlate(c.commenceTime, cardDate)))
     .map(c => ({
       ...c,
       side: c.side,

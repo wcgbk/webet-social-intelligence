@@ -36,6 +36,7 @@ const ROOT_DROP = [
   'audit',
   'gateCounts',
   'hardRockCorrections',
+  'selection',
 ];
 
 function isVoidPregame(p) {

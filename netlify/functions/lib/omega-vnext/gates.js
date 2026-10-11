@@ -2,9 +2,10 @@
 
 const { GATES, LEAN_MIN_EV, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
 const { minEdgeFor } = require('./edge_floor');
-const { isSameEtDay, formatMoneylinePick } = require('./odds_math');
+const { formatMoneylinePick } = require('./odds_math');
 const { adverseSteamReason } = require('./line_path');
 const { footballMarketGapReason } = require('./sports/_common');
+const { slateReason, nflProjectionGap, liveInPlayReason } = require('./selection_pass');
 
 function sportFloor(map, sport) {
   return map[sport] != null ? map[sport] : map.default;
@@ -118,17 +119,27 @@ function gateReason(c, opts = {}) {
   const marketGap = footballMarketGapReason(c);
   if (marketGap) return marketGap;
 
+  // NFL totals whose |projection − sharp| is above 10 and still inside the
+  // wider FB_MARKET_GAP total cap. Spreads above 10 already returned
+  // model_market_gap. Exactly 10 stays eligible.
+  const projGap = nflProjectionGap(c);
+  if (projGap) return projGap;
+
+  // Five or more unquantified non-QB outs. Logged upstream. Not a lean.
+  if (c && c.personnelExclude) return 'unquantified-injury-cluster';
+
   // Football model-vs-line gap. Only mode 'block' rejects, and that mode
   // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
   // candidate on the same score and the same gates. Moneyline is not a
   // point market. MLB/NHL never set the flag.
   if (gapBlocksTicket(c)) return 'model_line_gap_review';
 
-  // Same ET calendar day only — reject weekend football on Tue/Wed cards, etc.
-  if (GATES.sameEtDayOnly && cardDate) {
-    if (!c.commenceTime) return 'missing-commenceTime';
-    if (!isSameEtDay(c.commenceTime, cardDate)) return 'not-same-et-day';
-  }
+  // Live/in-play and a start already past the pregame clock are rejected
+  // before the slate window. A game that has tipped keeps
+  // in-progress-or-started (or live-in-play) even when that tip was also
+  // before 11:15 ET.
+  const live = liveInPlayReason(c);
+  if (live) return live;
 
   if (GATES.pregameOnly && c.commenceTime) {
     const t = Date.parse(c.commenceTime);
@@ -136,6 +147,14 @@ function gateReason(c, opts = {}) {
     if (Number.isFinite(t) && t < asOfMs - PREGAME_GRACE_MS) {
       return 'in-progress-or-started';
     }
+  }
+
+  // Slate: 11:15 ET on the card date through 6:00 ET the next day.
+  // Earlier the same morning is starts-before-1115-et. At or after 6:00
+  // next day is future-date. Other dates stay not-same-et-day.
+  if (GATES.sameEtDayOnly && cardDate) {
+    const slate = slateReason(c, cardDate);
+    if (slate) return slate;
   }
   if (!Number.isFinite(c.odds)) return 'no-odds';
   if (c.odds < GATES.minAmericanOdds || c.odds > GATES.maxAmericanOdds) return 'odds-out-of-band';
@@ -225,6 +244,12 @@ function applyGates(candidates, opts = {}) {
     if (reason === 'model_market_gap') {
       console.log(`[omega-vnext] model_market_gap ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap}`);
     }
+    if (reason === 'nfl-projection-gap') {
+      console.log(`[omega-vnext] nfl-projection-gap ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap} proj=${c.modelTotalRaw != null ? c.modelTotalRaw : c.modelProjection} market=${c.marketTotal != null ? c.marketTotal : c.marketLine}`);
+    }
+    if (reason === 'unquantified-injury-cluster') {
+      console.log(`[omega-vnext] unquantified-injury-cluster ${c.sport || ''} ${c.matchup || ''}`);
+    }
     rejected.push({ ...c, rejectReason: reason });
   }
   if (rejected.length || lean.length) {
@@ -238,4 +263,5 @@ function applyGates(candidates, opts = {}) {
 module.exports = {
   applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS,
   isGapReviewMarket, buildGapReview, gapBlocksTicket, minEdgeFor,
+  nflProjectionGap, slateReason, liveInPlayReason,
 };

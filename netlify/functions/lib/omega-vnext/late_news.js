@@ -491,6 +491,45 @@ function blocksFromList(list, parent) {
   return blocks;
 }
 
+/**
+ * Any-player injury, deactivation, or transaction rows from the same ESPN
+ * injuries payload the QB map already reads. QB rows are included so the
+ * caller can skip them. They are not a second QB price.
+ */
+function parseFootballPersonnel(data, opts = {}) {
+  const out = {};
+  if (!data || typeof data !== 'object') return out;
+  const parent = parentTeamName(data);
+  const lists = [data.injuries, data.teams, data.items, data.athletes].filter(Array.isArray);
+  const blocks = [];
+  for (const list of lists) blocks.push(...blocksFromList(list, parent));
+  const consider = (teamName, inj) => {
+    const team = String(teamName || '').trim();
+    if (!team || !inj || typeof inj !== 'object') return;
+    if (!injuryIsCurrent(injuryDate(inj), opts.cardDate, opts.maxAgeDays)) return;
+    const st = String(statusText(inj.status != null ? inj.status : (inj.type != null ? inj.type : inj.injuryStatus))).toLowerCase();
+    if (!st) return;
+    let kind = null;
+    if (/deactivat/.test(st)) kind = 'deactivation';
+    else if (/transaction/.test(st)) kind = 'transaction';
+    else if (/(out|doubtful|questionable|injured reserve|\bir\b|ruled out)/i.test(st)) kind = 'injury';
+    if (!kind) return;
+    if (!out[team]) out[team] = { team, players: [] };
+    out[team].players.push({
+      name: athleteName(inj),
+      position: positionText(inj),
+      status: st,
+      kind,
+    });
+  };
+  for (const block of blocks) {
+    for (const row of block.rows || []) {
+      consider(teamOfRow(row, block.teamName), row);
+    }
+  }
+  return out;
+}
+
 function parseFootballQbMap(data, opts = {}) {
   const out = {};
   if (!data || typeof data !== 'object') return out;
@@ -1046,6 +1085,7 @@ module.exports = {
   applyCardActions,
   commitLateNewsCard,
   parseFootballQbMap,
+  parseFootballPersonnel,
   fillNcaafQbMap,
   loadLiveContext,
   runLateNews,

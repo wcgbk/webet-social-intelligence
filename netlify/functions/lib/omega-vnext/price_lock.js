@@ -1,19 +1,21 @@
 'use strict';
 
 /**
- * 9:30 AM ET price lock.
+ * 10:30 AM ET price lock.
  *
  * The 2026-10-10 card was generated at 15:55Z (11:55 AM ET). Live generate
  * called the Odds API current board because no snapshot time was passed, so
  * the published lines were the late board (Over 40.5, Sacramento State +9.5,
- * UMass +6.5) instead of the 9:30 AM ET snapshot (Over 38.5 / 39.5,
+ * UMass +6.5) instead of the morning snapshot (Over 38.5 / 39.5,
  * Sacramento State +8.5). The morning capture slots stop at 9:15 so they do
- * not race the 9:30 generate; they are steam history, not the price.
+ * not race generate; they are steam history, not the price.
  *
- * A live card always requests the historical odds snapshot at 9:30 AM
- * America/New_York on the card date. Any major US book in that snapshot can
- * price a side. A later generate must not refetch the live board.
- * An explicit historicalSnapshot (replay) is left alone.
+ * Selection uses every input available at 10:30 AM America/New_York.
+ * A live card always requests that historical odds snapshot. DraftKings is
+ * the execution book (selection_pass). A later generate must not refetch
+ * the live board. An explicit historicalSnapshot (replay) is left alone.
+ * The publish cron stays on its existing schedule. This timestamp is the
+ * odds snapshot, not the cron.
  */
 
 function tzOffsetMs(date, timeZone) {
@@ -56,12 +58,12 @@ function etLocalToUtcISO(dateISO, hour, minute) {
 }
 
 function priceLockTimestamp(dateISO) {
-  return etLocalToUtcISO(dateISO, 9, 30);
+  return etLocalToUtcISO(dateISO, 10, 30);
 }
 
 /**
  * Odds `date=` the generator prices from.
- * Replay (`opts.historicalSnapshot`) wins. Otherwise the 9:30 ET lock.
+ * Replay (`opts.historicalSnapshot`) wins. Otherwise the 10:30 ET lock.
  * Null only when the date is not a card day; ingest then stays on the live URL.
  */
 function resolveGenerateOddsSnapshot(dateISO, opts = {}) {

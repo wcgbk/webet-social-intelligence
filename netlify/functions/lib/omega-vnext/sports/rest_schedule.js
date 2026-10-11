@@ -182,6 +182,18 @@ function isSkippedStatus(ev, comp) {
  * opponentId is the other competitor so the current game (same pair) can
  * be excluded from rest.
  */
+function completedMargin(comp, competitor, competitors) {
+  const st = (comp && comp.status && comp.status.type) || {};
+  const name = `${st.name || ''} ${st.state || ''} ${st.description || ''}`;
+  const done = st.completed === true || /post|status_final|\bfinal\b/i.test(name);
+  if (!done) return null;
+  const mine = Number(competitor && competitor.score);
+  const opp = (competitors || []).find((other) => other !== competitor);
+  const theirs = Number(opp && opp.score);
+  if (!Number.isFinite(mine) || !Number.isFinite(theirs)) return null;
+  return mine - theirs;
+}
+
 function gamesFromBoard(board, weekNum) {
   const out = [];
   for (const ev of (board && board.events) || []) {
@@ -203,12 +215,15 @@ function gamesFromBoard(board, weekNum) {
       if (id == null || id === '') continue;
       const teamId = String(id);
       const opponentId = ids.find((other) => other !== teamId) || null;
-      out.push({
+      const row = {
         teamId,
         opponentId,
         commence,
         week: weekNum,
-      });
+      };
+      const margin = completedMargin(comp, c, competitors);
+      if (margin != null) row.margin = margin;
+      out.push(row);
     }
   }
   return out;

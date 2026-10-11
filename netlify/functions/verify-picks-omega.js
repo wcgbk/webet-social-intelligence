@@ -53,7 +53,7 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
-const { autoCorrectHardRock } = require('./lib/omega-vnext/hr_autocorrect');
+const { reviewHardRock, verifySchedule } = require('./lib/omega-vnext/selection_pass');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
@@ -566,16 +566,23 @@ async function runHardRockCheck(picksData) {
   }
   if (sportsAttempted > 0 && !anySportOk) summary.apiDown = true;
 
-  // Reprice a material Hard Rock gap before the per-pick warning loop, so
-  // "majors still show the published number" cannot keep a stale line.
-  // Feed down leaves the card. Unknown games stay inside auto-correct.
+  // Hard Rock is a review-only verifier. A gap is flagged and the DraftKings
+  // price is left alone. Start times are re-checked here; a live or
+  // out-of-slate straight is dropped and the next DK candidate can fill.
   let corrections = [];
   let changed = false;
   if (!summary.apiDown) {
-    const corrected = autoCorrectHardRock(picksData, sportGames);
-    corrections = corrected.log || [];
-    changed = !!corrected.changed;
-    if (changed) summary.autoCorrected = corrections.length;
+    const reviewed = reviewHardRock(picksData, sportGames);
+    corrections = reviewed.flags || [];
+    summary.hardRockFlags = corrections.length;
+    if (summary.hardRockFlags) {
+      console.log(`[verify-hardrock] review-only flags=${summary.hardRockFlags} (DK price unchanged)`);
+    }
+  }
+  const schedule = verifySchedule(picksData, Date.now());
+  if (schedule.changed) {
+    changed = true;
+    summary.scheduleDrops = schedule.dropped || [];
   }
 
   const f5Cache = {};

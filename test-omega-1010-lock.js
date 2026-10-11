@@ -1,5 +1,5 @@
 'use strict';
-// v12.3.24 spec: 9:30 ET price lock, Hard Rock auto-correct, 3% EV floor,
+// v12.3.24 spec: 10:30 ET price lock, Hard Rock review flag, 3% EV floor,
 // 1.5% lean fill, +EV parlay with a 45% cover on each leg.
 // Replays the 2026-10-10 morning snapshot. No network.
 const assert = require('assert');
@@ -31,9 +31,9 @@ function curve(american, uncertainty) {
 }
 
 // ── Price lock clock ──
-assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T13:30:00Z');
-assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T14:30:00Z');
-assert.strictEqual(resolveGenerateOddsSnapshot('2026-10-10', {}), '2026-10-10T13:30:00Z');
+assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T14:30:00Z');
+assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T15:30:00Z');
+assert.strictEqual(resolveGenerateOddsSnapshot('2026-10-10', {}), '2026-10-10T14:30:00Z');
 assert.strictEqual(
   resolveGenerateOddsSnapshot('2026-10-10', { historicalSnapshot: '2026-10-10T13:00:00Z' }),
   '2026-10-10T13:00:00Z',
@@ -165,7 +165,9 @@ assert.ok(indexSrc.includes('historicalSnapshot: oddsSnapshot'));
 assert.ok(indexSrc.includes('const replayLike = !!(opts.historicalSnapshot || opts.replay)'));
 assert.ok(indexSrc.includes('if (dryRun && captureHealth.hardFail)'));
 const verifySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/verify-picks-omega.js'), 'utf8');
-assert.ok(verifySrc.includes('autoCorrectHardRock(picksData, sportGames)'));
+assert.ok(verifySrc.includes('reviewHardRock(picksData, sportGames)'));
+assert.ok(!verifySrc.includes('autoCorrectHardRock(picksData, sportGames)'));
+assert.ok(verifySrc.includes('verifySchedule('));
 assert.ok(verifySrc.includes('if (hrCheck.changed)'));
 
 // ── Historical URL is the morning board. Live URL is the late board. ──
@@ -200,8 +202,8 @@ global.fetch = async (url) => {
   if (u.includes('/events')) {
     return jsonResp([{ commence_time: '2026-10-10T19:30:00Z', home_team: 'Oklahoma Sooners', away_team: 'Texas Longhorns' }]);
   }
-  if (u.includes('/historical/') && u.includes('date=2026-10-10T13%3A30%3A00Z')) {
-    return jsonResp({ timestamp: '2026-10-10T13:30:00Z', data: [board(38.5, 8.5)] });
+  if (u.includes('/historical/') && u.includes('date=2026-10-10T14%3A30%3A00Z')) {
+    return jsonResp({ timestamp: '2026-10-10T14:30:00Z', data: [board(38.5, 8.5)] });
   }
   if (u.includes('/v4/sports/') && u.includes('/odds') && !u.includes('/historical/')) {
     return jsonResp([board(40.5, 9.5)]);
@@ -215,8 +217,8 @@ global.fetch = async (url) => {
     assert.ok(morningText.includes('38.5'), 'morning board missing 38.5');
     assert.ok(morningText.includes('8.5'), 'morning board missing +8.5');
     assert.ok(!morningText.includes('40.5'), 'morning board included the late total');
-    assert.strictEqual(morning.oddsSnapshotTimestamp, '2026-10-10T13:30:00Z');
-    assert.ok(seen.some(u => u.includes('/historical/') && u.includes('date=2026-10-10T13%3A30%3A00Z')));
+    assert.strictEqual(morning.oddsSnapshotTimestamp, '2026-10-10T14:30:00Z');
+    assert.ok(seen.some(u => u.includes('/historical/') && u.includes('date=2026-10-10T14%3A30%3A00Z')));
     const histCount = seen.length;
     const live = await fetchOddsMultiSport('2026-10-10');
     const liveText = JSON.stringify(live.bySport.NCAAF || []);

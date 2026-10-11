@@ -10,6 +10,9 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
+const { applyExecutionBook, top10Rows, excludedGames } = require('./selection_pass');
+const { fetchXNews } = require('./x_news');
+const { replayNoWrite } = require('./no_write');
 const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
@@ -218,15 +221,15 @@ async function generateOmegaVnext(opts = {}) {
   const dateFormatted = formatDateLong(dateISO);
   const force = !!opts.force;
   const simMode = !!opts.simMode;
-  const dryRun = !!opts.dryRun;
+  const dryRun = !!opts.dryRun || replayNoWrite();
   const shadow = !!opts.shadow;
   const skipNarrate = !!opts.skipNarrate;
   const now = new Date();
   // Historical replay has no morning snap series. Do not retry live Odds into
   // the line-path store and do not hard-fail the eval day.
-  // replayLike stays on the explicit flag. The 9:30 price lock is an odds
+  // replayLike stays on the explicit flag. The 10:30 price lock is an odds
   // URL only, so a late live generate still uses Date.now() for pregame,
-  // still runs PM, and still writes the ledger.
+  // still runs PM, and still writes the ledger unless OMEGA_REPLAY_NO_WRITE.
   const replayLike = !!(opts.historicalSnapshot || opts.replay);
   const oddsSnapshot = resolveGenerateOddsSnapshot(dateISO, opts);
 
@@ -238,6 +241,18 @@ async function generateOmegaVnext(opts = {}) {
   const snap = applyUnresolvedSkip(fetched);
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
   console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
+
+  // X injury/roster hook. No token → documented stub, no fetch. The card
+  // stores mode and count only. Tweet text is logged, never priced.
+  let xNewsMeta = { mode: 'stub', count: 0 };
+  try {
+    const xNews = await fetchXNews({ dateISO });
+    xNewsMeta = { mode: xNews.mode || 'stub', count: Number(xNews.count) || 0 };
+    console.log(`[omega-vnext] x-news mode=${xNewsMeta.mode} count=${xNewsMeta.count}`);
+  } catch (e) {
+    xNewsMeta = { mode: 'error', count: 0 };
+    console.error(`[omega-vnext] x-news soft-fail: ${e.message}`);
+  }
 
   // Stamp generate-time lateNews before calibration. calibrateAll still
   // takes { cardDate } for modes B and C and spreads lateNews through.
@@ -463,6 +478,16 @@ async function generateOmegaVnext(opts = {}) {
   const placeableAnnotated = candidates.filter(c => Array.isArray(c.placeableBooks)).length;
   console.log(`[omega-vnext] placeability annotated=${placeableAnnotated}/${candidates.length}`);
 
+  // DraftKings execution price. No DK line drops the candidate. The next
+  // DK-priced side stays in the pool (backfill). Synthetic rows with no
+  // bookPrices ladder are unchanged. EV is recomputed at the DK price.
+  const execution = applyExecutionBook(candidates);
+  candidates = execution.candidates;
+  const dkExcluded = execution.excluded || [];
+  if (dkExcluded.length) {
+    console.log(`[omega-vnext] no-draftkings-line excluded=${dkExcluded.length}`);
+  }
+
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   const gateOpts = { cardDate: dateISO };
@@ -580,6 +605,8 @@ async function generateOmegaVnext(opts = {}) {
     projMethod: c.projMethod,
     placeableBooks: Array.isArray(c.placeableBooks) ? c.placeableBooks : null,
     bestPlaceable: c.bestPlaceable || null,
+    book: c.book || null,
+    hrFlags: c.hrFlags || null,
     ...footballAuditFields(c),
     ...restAuditFields(c),
     selected: picks.some(p => {
@@ -655,6 +682,17 @@ async function generateOmegaVnext(opts = {}) {
     teamIdentity: {
       unmatched: unmatchedReport.bySport,
       unmatchedCount: unmatchedReport.count,
+    },
+    // Private. publicPicksPayload drops selection. Top 10 is EV rank on the
+    // floor pool. Straights above stay edge-ranked.
+    selection: {
+      snapshotTime: oddsSnapshot || null,
+      top10: top10Rows(yesPool, 10),
+      excludedGames: excludedGames([
+        ...dkExcluded.map((c) => ({ ...c, rejectReason: c.excludeReason || 'no-draftkings-line' })),
+        ...rejected,
+      ]),
+      xNews: xNewsMeta,
     },
     meta: {
       captureHealth: captureHealth || null,

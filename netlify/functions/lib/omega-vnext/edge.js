@@ -405,6 +405,36 @@ function predictedClvCents(bestUsAmerican, sharpAmerican, pModel, fairSharpP) {
   return +((0.55 * priceClv + 0.45 * modelClv)).toFixed(2);
 }
 
+const DK_EXEC_BOOK = 'draftkings';
+
+/** Hard Rock quote for this side. Prefer the point closest to the candidate. */
+function hardRockQuote(allBundles, side, point) {
+  let best = null;
+  const target = point != null && point !== '' ? Number(point) : null;
+  for (const b of allBundles || []) {
+    if (!b || b.side !== side) continue;
+    for (const p of b.prices || []) {
+      if (canonicalizeBook(p.book) !== 'hardrockbet') continue;
+      const american = Number(p.american);
+      if (!Number.isFinite(american)) continue;
+      const pt = b.point != null ? Number(b.point) : null;
+      const row = { book: 'hardrockbet', american, point: Number.isFinite(pt) ? pt : null };
+      if (!best) {
+        best = row;
+        continue;
+      }
+      const dNew = target == null || row.point == null
+        ? (row.point == null && target == null ? 0 : 99)
+        : Math.abs(row.point - target);
+      const dOld = target == null || best.point == null
+        ? (best.point == null && target == null ? 0 : 99)
+        : Math.abs(best.point - target);
+      if (dNew < dOld - 1e-9 || (Math.abs(dNew - dOld) < 1e-9 && american > best.american)) best = row;
+    }
+  }
+  return best;
+}
+
 function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
@@ -418,6 +448,15 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     ? evAtOdds(raw.coverProb, odds)
     : (odds != null && Number.isFinite(raw.modelRawP) ? evAtOdds(raw.modelRawP, odds) : null);
 
+  const bookPrices = (sideBundle.prices || []).map((p) => ({
+    book: canonicalizeBook(p.book),
+    american: Number(p.american),
+    point: sideBundle.point != null ? sideBundle.point : null,
+  })).filter((p) => Number.isFinite(p.american));
+  const dkRaw = bestPrice(bookPrices, [DK_EXEC_BOOK]);
+  const dkQuote = dkRaw
+    ? { book: DK_EXEC_BOOK, american: dkRaw.american, point: sideBundle.point != null ? sideBundle.point : null }
+    : null;
   return {
     ...raw,
     odds,
@@ -433,6 +472,11 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     placeableBooks: place.placeableBooks,
     bestPlaceable: place.bestPlaceable,
     placeable: place.placeable,
+    // Ladder for the selection pass. The chosen odds stay the best US price
+    // until applyExecutionBook reprices at DraftKings.
+    bookPrices,
+    dkQuote,
+    hardRock: hardRockQuote(allBundles, sideBundle.side, sideBundle.point),
   };
 }
 
@@ -483,5 +527,6 @@ module.exports = {
   predictedClvCents,
   enrichCandidateWithEdge,
   attachEv,
+  canonicalizeBook,
   PLACEABILITY_VETO_REASON,
 };

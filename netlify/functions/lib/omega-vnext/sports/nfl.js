@@ -83,6 +83,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     commenceTime,
     restSchedule: (gameDay && gameDay.restSchedule && gameDay.restSchedule.NFL) || null,
     neutralSite: neutral,
+    last5ByTeam: (gameDay && gameDay.last5ByTeam) || null,
+    personnelByTeam: (gameDay && gameDay.personnelBySport) || null,
   });
   const stacked = applyEngineStack({
     sport: SPORT,
@@ -125,6 +127,11 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     };
   }
   const methods = tagMethods(env.methods, gameDayApplied, stacked.enginesOn);
+  function stampCardInputs(raw) {
+    if (gd.personnelExclude) raw.personnelExclude = true;
+    if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
+    return raw;
+  }
   const engineSoft = stacked.engineSoft;
   const pts = footballPointState(
     SPORT,
@@ -160,7 +167,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         ...footballAudit(pts, 'Moneyline'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
     }
   }
   {
@@ -186,7 +193,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         ...footballAudit(pts, 'Spread'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
     }
   }
   {
@@ -211,7 +218,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         ...footballAudit(pts, 'Total'),
       };
       if (priced.pPush >= 0.001) raw.pPush = priced.pPush;
-      out.push(enrichCandidateWithEdge(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral), b, bundles));
+      out.push(enrichCandidateWithEdge(stampCardInputs(stampNeutral(stampRestAudit(withIdentity(raw, env), gameDayMeta), neutral)), b, bundles));
     }
   }
   return out;

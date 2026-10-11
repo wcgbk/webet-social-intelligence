@@ -242,7 +242,8 @@ const nowSnap = {
 // Pregame gate compares commenceTime to Date.now(). Keep the kickoff ahead
 // of the clock and pass that ET date as cardDate so the steam assertion
 // is what fails the candidate, not a started game.
-const kickoff = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+const { sampleInSlateKick } = require('./netlify/functions/lib/omega-vnext/selection_pass');
+const kickoff = sampleInSlateKick();
 const cardDay = math.etCalendarDate(kickoff);
 const cands = linePath.annotateLineMoves([
   {

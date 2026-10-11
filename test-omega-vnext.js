@@ -225,7 +225,8 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   // Kickoff must still be pregame. A fixed Sep 22 night tip is already
   // behind Date.now() once that evening passes, so use a few hours ahead
   // and the ET date of that tip. Off-days stay later in the week.
-  const tueKick = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
+  const tueKick = sampleInSlateKick();
   const tue = math.etCalendarDate(tueKick);
   const offSat = new Date(Date.now() + 4 * 864e5).toISOString();
   const offSun = new Date(Date.now() + 5 * 864e5).toISOString();
@@ -237,7 +238,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   const gated = gates.applyGates(mixed, { cardDate: tue });
   assert.strictEqual(gated.yesPool.length, 1, 'only Tue MLB should pass');
   assert.strictEqual(gated.yesPool[0].sport, 'MLB');
-  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day'));
+  assert.ok(gated.rejected.some(r => r.rejectReason === 'not-same-et-day' || r.rejectReason === 'future-date'));
 
   // ingest filter helper — same dynamic card date as the gate case above.
   // A fixed Sep 22 kickoff is the wrong ET day once now+3h crosses midnight.
@@ -336,7 +337,8 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 // (hand-set 0.62; kMle 0). That fitted K is what emptied the 2026-10-10
 // and 2026-10-11 dry runs. K_MIN is a fit box, not a publish gate.
 {
-  const kick = new Date(Date.now() + 30 * 3600 * 1000).toISOString();
+  const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
+  const kick = sampleInSlateKick(Date.now() + 24 * 3600 * 1000);
   const cardDate = math.etCalendarDate(kick);
   function sharpish(base) {
     return {

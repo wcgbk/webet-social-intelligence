@@ -485,7 +485,13 @@ function mapGamesSoft(events, projectGame) {
   for (const ev of events || []) {
     try {
       const rows = projectGame(ev);
-      if (Array.isArray(rows) && rows.length) all.push(...rows);
+      if (Array.isArray(rows) && rows.length) {
+        const live = !!(ev && (ev.in_play || ev.inPlay || ev.live));
+        for (const row of rows) {
+          if (row && live) row.inPlay = true;
+          all.push(row);
+        }
+      }
     } catch (err) {
       const home = ev && ev.home_team;
       const away = ev && ev.away_team;

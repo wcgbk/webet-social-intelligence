@@ -1,6 +1,7 @@
 'use strict';
 
 const { SITE_ID, BLOB_STORE } = require('./config');
+const { replayNoWrite, logBlocked } = require('./no_write');
 
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
@@ -74,6 +75,10 @@ function shadowPayload(dateISO, picksData, key) {
 }
 
 async function storePicks(dateISO, picksData, opts = {}) {
+  if (replayNoWrite()) {
+    logBlocked('storePicks');
+    return false;
+  }
   const force = !!opts.force;
   // A shadow-marked payload must not fall through onto live keys.
   const shadow = opts.shadow === true || !!(picksData && picksData.shadow === true);
@@ -151,6 +156,10 @@ async function storeShadowPicks(dateISO, picksData) {
 
 
 async function storeJson(key, data) {
+  if (replayNoWrite()) {
+    logBlocked(`storeJson ${key}`);
+    return false;
+  }
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);

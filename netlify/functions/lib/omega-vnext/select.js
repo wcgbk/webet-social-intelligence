@@ -244,6 +244,7 @@ function toPickObject(c, opts = {}) {
     ...(c.pmFeatures && typeof c.pmFeatures === 'object' ? { pmFeatures: { ...c.pmFeatures } } : {}),
     ...footballAuditFields(c),
     ...(c.lateNews ? { lateNews: c.lateNews } : {}),
+    ...(c.hrFlags && c.hrFlags.length ? { hrFlags: c.hrFlags } : {}),
   };
 }
 

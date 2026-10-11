@@ -10,6 +10,7 @@ const {
 } = require('./config');
 const { americanToImplied } = require('./odds_math');
 const { americanCentsWorse } = require('./edge');
+const { replayNoWrite, logBlocked } = require('./no_write');
 
 function gameKey(away, home) {
   return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
@@ -76,6 +77,10 @@ async function readJsonBlob(path) {
 }
 
 async function writeJsonBlob(path, data) {
+  if (replayNoWrite()) {
+    logBlocked(`writeJsonBlob ${path}`);
+    return false;
+  }
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(BLOB_STORE);

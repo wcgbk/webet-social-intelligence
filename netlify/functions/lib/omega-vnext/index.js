@@ -10,7 +10,7 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
-const { applyExecutionBook, top10Rows, excludedGames, oneOffIncludeFlag } = require('./selection_pass');
+const { applyExecutionBook, top10Rows, excludedGames } = require('./selection_pass');
 const { fetchXNews } = require('./x_news');
 const { replayNoWrite } = require('./no_write');
 const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel } = require('./select');
@@ -232,16 +232,12 @@ async function generateOmegaVnext(opts = {}) {
   // still runs PM, and still writes the ledger unless OMEGA_REPLAY_NO_WRITE.
   const replayLike = !!(opts.historicalSnapshot || opts.replay);
   const nowMs = now.getTime();
-  const includeEarly = oneOffIncludeFlag(opts);
   const oddsSnapshot = resolveGenerateOddsSnapshot(dateISO, { ...opts, nowMs });
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow} oddsSnapshot=${oddsSnapshot || 'live'} replay=${replayLike}`);
 
   const fetched = await ingest(dateISO, {
     historicalSnapshot: oddsSnapshot,
-    includeEarly,
-    nowMs,
-    oddsSnapshot,
   });
   const snap = applyUnresolvedSkip(fetched);
   const servedSnapshot = (snap && snap.oddsSnapshotTimestamp) || null;
@@ -492,7 +488,7 @@ async function generateOmegaVnext(opts = {}) {
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
-  const gateOpts = { cardDate: dateISO, includeEarly, nowMs, oddsSnapshot };
+  const gateOpts = { cardDate: dateISO };
   if (replayLike) {
     const asOfMs = Date.parse(opts.historicalSnapshot);
     if (Number.isFinite(asOfMs)) gateOpts.asOfMs = asOfMs;
@@ -535,7 +531,7 @@ async function generateOmegaVnext(opts = {}) {
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
   const poolForParlay = yesPool.filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`));
   const parlayEligible = poolForParlay.filter(c => Number(c.coverProb) >= PARLAY_MIN_COVER && c.ev > 0 && Number.isFinite(c.odds)).length;
-  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO, includeEarly, nowMs, oddsSnapshot });
+  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
 
   let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
   if (!skipNarrate) {
@@ -550,7 +546,7 @@ async function generateOmegaVnext(opts = {}) {
     if (narr.rejections && narr.rejections.length) {
       const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
       const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
-      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO, includeEarly, nowMs, oddsSnapshot });
+      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
       parlayLegs = await narrateParlayLegsOnly({
         parlayLegs,
         dateFormatted,
@@ -672,7 +668,6 @@ async function generateOmegaVnext(opts = {}) {
       note: (snap && snap.snapshotNote) || null,
       replay: replayLike,
     },
-    includeEarly: includeEarly || null,
     gateCounts: {
       yes: yesPool.length,
       floor: yesPool.length,

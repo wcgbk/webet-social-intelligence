@@ -15,6 +15,7 @@ const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity, bindEspnGameByTeamAndTime,
   spreadDetail, totalDetail, mlDetail,
   sharpMarketLine, footballPointState, footballAudit, pricedFootball,
+  nflSpreadExcludesGame,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
@@ -131,6 +132,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     if (gd.personnelExclude) raw.personnelExclude = true;
     if (gd.startingQbOut) raw.startingQbOut = true;
     if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
+    if (nflSpreadExcludesGame(pts.modelMarginRaw, pts.marketMargin)) raw.nflGameProjectionGap = true;
     return raw;
   }
   const engineSoft = stacked.engineSoft;

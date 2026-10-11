@@ -7,7 +7,7 @@ const {
   parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
 const { matchupKey, passesPublishFloor } = require('./select');
-const { inSlate, oneOffBypassesEarlyWindow } = require('./selection_pass');
+const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { parlayCorrEnabled, PARLAY_TOTAL_RHO } = require('./gaps_flags');
@@ -345,7 +345,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     .filter(c => passesPublishFloor(c))
     .filter(c => Number.isFinite(c.coverProb) && c.coverProb >= PARLAY_MIN_COVER)
     .filter(c => Number.isFinite(c.odds) && c.ev > 0)
-    .filter(c => !cardDate || inSlate(c, cardDate) || oneOffBypassesEarlyWindow(c, cardDate, opts))
+    .filter(c => !cardDate || inSlate(c, cardDate))
     .map(c => ({
       ...c,
       side: c.side,

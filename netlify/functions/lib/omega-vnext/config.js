@@ -197,7 +197,7 @@ const MLB_CALIBRATION = {
  * minCoverProb stays 0. There is no flat coverProb floor. A missing cover
  * or EV rejects. EV under 1.5% rejects. EV from 1.5% up to the 3% floor,
  * or a 3%+ EV whose edge misses the curve, is the lean tier (see
- * LEAN_MIN_EV) and can fill a short straight card. minPredictedClvCents
+ * LEAN_MIN_EV). Leans do not fill a short straight card. minPredictedClvCents
  * is null. Odds band, major-book liquidity, pregame, same ET day, and
  * adverse steam stay. Generate-time placeability is logged and does not
  * reject.
@@ -223,8 +223,8 @@ const PARLAY_MIN_COVER = 0.45;
 
 /**
  * QA hard-fail thresholds (pre-publish / pre-verify-unlock).
- * Drop a hard-fail and refill from the floor tier first. Leans fill only
- * when the floor tier leaves a slot open. They are not a force-fill of a full card.
+ * Drop a hard-fail and refill from the floor tier. Leans do not fill an
+ * open slot. A short card stays short.
  */
 const QA_HARDFAIL = {
   staleOddsCents: 15, // juice-ladder cents vs lockSnapshot (not raw American subtraction)

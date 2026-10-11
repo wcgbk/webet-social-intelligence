@@ -34,6 +34,7 @@
 
 const { samePlayerName } = require('../player-name');
 const { bindEspnGameByTeamAndTime } = require('./sports/_common');
+const { resolveTeamId } = require('./sports/team_identity');
 const { lookupQb } = require('./sports/game_day');
 
 const MAX_CALLS = 30;
@@ -491,35 +492,93 @@ function blocksFromList(list, parent) {
   return blocks;
 }
 
+function personnelSport(opts) {
+  const s = String((opts && opts.sport) || 'NFL').toUpperCase();
+  return s === 'NCAAF' || s === 'CFB' ? 'NCAAF' : 'NFL';
+}
+
+/**
+ * Both clubs named in a note, such as "DET@ARI" or "DET at ARI".
+ * A single club is not a game scope. Unresolved tokens are ignored.
+ */
+function gameTeamIdsFromText(text, sport) {
+  const s = String(text || '');
+  const patterns = [
+    /\b([A-Za-z]{2,4})\s*@\s*([A-Za-z]{2,4})\b/g,
+    /\b([A-Za-z]{2,4})\s+(?:at|vs\.?|versus)\s+([A-Za-z]{2,4})\b/gi,
+  ];
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let match;
+    while ((match = re.exec(s))) {
+      const a = resolveTeamId(sport, match[1]);
+      const b = resolveTeamId(sport, match[2]);
+      if (a && b && String(a) !== String(b)) return [String(a), String(b)];
+    }
+  }
+  return null;
+}
+
+/** Player name left after status words and a matchup token are removed. */
+function nameFromDescription(text) {
+  if (!text) return null;
+  let s = String(text);
+  s = s.replace(/\b(inactive|deactivated|deactivation|out|doubtful|questionable|transaction|traded|waived|released|retired|retirement|ruled)\b/ig, ' ');
+  s = s.replace(/\b[A-Za-z]{2,4}\s*@\s*[A-Za-z]{2,4}\b/g, ' ');
+  s = s.replace(/\b[A-Za-z]{2,4}\s+(?:at|vs\.?|versus)\s+[A-Za-z]{2,4}\b/gi, ' ');
+  s = s.replace(/[^A-Za-z.'\-\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (s.length < 3) return null;
+  return s;
+}
+
+function personnelKind(status, description) {
+  const blob = `${status || ''} ${description || ''}`.toLowerCase();
+  if (/deactivat|\binactive\b/.test(blob)) return 'deactivation';
+  if (/\btransaction\b|\btraded\b|\bwaived\b|\breleased\b|\bretired\b|\bretirement\b/.test(blob)) return 'transaction';
+  if (/(out|doubtful|questionable|injured reserve|\bir\b|ruled out)/i.test(blob)) return 'injury';
+  return null;
+}
+
 /**
  * Any-player injury, deactivation, or transaction rows from the same ESPN
  * injuries payload the QB map already reads. QB rows are included so the
- * caller can skip them. They are not a second QB price.
+ * caller can skip them. They are not a second QB price. Inactive counts
+ * as a deactivation. A note that names both clubs is scoped to that game.
  */
 function parseFootballPersonnel(data, opts = {}) {
   const out = {};
   if (!data || typeof data !== 'object') return out;
+  const sport = personnelSport(opts);
   const parent = parentTeamName(data);
-  const lists = [data.injuries, data.teams, data.items, data.athletes].filter(Array.isArray);
+  const lists = [
+    data.injuries, data.teams, data.items, data.athletes,
+    data.transactions, data.deactivations,
+  ].filter(Array.isArray);
   const blocks = [];
   for (const list of lists) blocks.push(...blocksFromList(list, parent));
   const consider = (teamName, inj) => {
     const team = String(teamName || '').trim();
     if (!team || !inj || typeof inj !== 'object') return;
     if (!injuryIsCurrent(injuryDate(inj), opts.cardDate, opts.maxAgeDays)) return;
-    const st = String(statusText(inj.status != null ? inj.status : (inj.type != null ? inj.type : inj.injuryStatus))).toLowerCase();
-    if (!st) return;
-    let kind = null;
-    if (/deactivat/.test(st)) kind = 'deactivation';
-    else if (/transaction/.test(st)) kind = 'transaction';
-    else if (/(out|doubtful|questionable|injured reserve|\bir\b|ruled out)/i.test(st)) kind = 'injury';
+    const description = inj.description || inj.note || inj.shortText || inj.longText || '';
+    const rawStatus = statusText(inj.status != null ? inj.status : (inj.type != null ? inj.type : inj.injuryStatus));
+    const kind = personnelKind(rawStatus, description);
     if (!kind) return;
+    const blob = `${rawStatus} ${description}`.toLowerCase();
+    let status = String(rawStatus || '').toLowerCase();
+    if (/\binactive\b/.test(blob)) status = 'inactive';
+    else if (/deactivat/.test(blob) && !status) status = 'deactivated';
+    else if (!status) status = kind;
+    const name = athleteName(inj) || nameFromDescription(description);
+    if (!name) return;
+    const gameTeamIds = gameTeamIdsFromText(`${description} ${inj.matchup || ''} ${inj.game || ''}`, sport);
     if (!out[team]) out[team] = { team, players: [] };
     out[team].players.push({
-      name: athleteName(inj),
+      name,
       position: positionText(inj),
-      status: st,
+      status,
       kind,
+      ...(gameTeamIds ? { gameTeamIds } : {}),
     });
   };
   for (const block of blocks) {

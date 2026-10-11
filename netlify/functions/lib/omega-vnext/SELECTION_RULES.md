@@ -16,15 +16,15 @@ Flag when `|DK line − HR line| >= 1.0`, or in the NFL when the gap is 0.5 and 
 
 ## 3. NFL projection gap
 
-`|model − sharp| > 10` excludes the side as a data problem and is logged.
+`|model spread − sharp spread| > 10` excludes the game as a data problem and is logged. Every market on that game drops. A total whose own gap is above 10 and still inside the wider total cap also drops, even when the spread gap is inside 10.
 
-Spreads and moneylines already reject past `FB_MARKET_GAP.NFL.margin` (10) with reason `model_market_gap`. NFL totals use that object's total cap of 13, so a total gap above 10 and at or under 13 is a separate reason, `nfl-projection-gap`. Exactly 10 is allowed. `FB_MARKET_GAP` itself is unchanged. NCAAF caps are unchanged.
+Spreads and moneylines already reject past `FB_MARKET_GAP.NFL.margin` (10) with reason `model_market_gap`. The game stamp and a total gap above 10 use `nfl-projection-gap`. Exactly 10 is allowed. `FB_MARKET_GAP` itself is unchanged. NCAAF caps are unchanged.
 
 ## 4. Inputs at 10:30 AM ET
 
 A run before 10:30 ET prices the current board (`resolveGenerateOddsSnapshot` returns null). The log line `odds snapshot requested=live served=...` is the time the odds feed actually returned. The 10:30 final run requests `priceLockTimestamp` (10:30 ET). Missing morning capture slots `0600`, `0730`, `0900`, and `0915` are a `captureHealthWarning`. They do not throw and they do not withhold the card. One capture retry still runs when a due slot is empty.
 
-- ESPN football injuries for any player: Out, Doubtful, Questionable, deactivations, and transactions, parsed from the injuries payload the QB map already downloads (`parseFootballPersonnel`). No second HTTP call.
+- ESPN football injuries for any player: Out, Doubtful, Questionable, Inactive, deactivations, and transactions, parsed from the injuries payload the QB map already downloads (`parseFootballPersonnel`). No second HTTP call. A row that names both clubs (for example Marvin Harrison Jr. inactive, DET@ARI) applies only to that game. A team-level designation applies to that club's games.
 - X recent search when `X_BEARER_TOKEN` or `TWITTER_BEARER_TOKEN` is set. `x_news.js` reads those names from the process environment at call time (Netlify injects them). A test may pass an `env` object instead. The token is a Bearer header only. It is never logged and never stored on the card. The card and the dry run keep `{ mode, count }`.
 - No token: `x_news.js` is a stub (`mode: "stub"`). It does not fetch. **ASSUMPTION:** an X post is not a priced coefficient. Unmatched text is logged and does not move a number.
 - Weather (wind, precip, roof) and stadium / neutral site stay on the existing football weather and HFA paths. A dome or a closed retractable roof adjusts 0. Neutral site zeroes HFA.
@@ -56,9 +56,7 @@ The parlay stays `optimizeParlay` on the floor pool (45% cover, positive combine
 
 ## 8. Slate window
 
-Eligible commence times are `>= 11:15:00 ET` on the card date and `< 06:00:00 ET` the next calendar day. Reasons:
-
-One-off, default off, date `2026-10-11` only. `OMEGA_ONEOFF_INCLUDE_EVENT` or the request field `includeEarly` may name the London Philadelphia Eagles @ Jacksonville Jaguars game by event id or by a team match (`Eagles`, `Jaguars`). An early run, before the 10:30 ET snapshot, then keeps that single game even though it starts at 9:30 AM ET. The 10:30 final run keeps `starts-before-1115-et`. A started or live game is still rejected. Any other early game stays out.
+Eligible commence times are `>= 11:15:00 ET` on the card date and `< 06:00:00 ET` the next calendar day. Publish is 11:00 ET, so a start before publish + 15 minutes is out. There is no per-game waiver. The 9:30 AM ET London Eagles at Jaguars game is excluded by this window.
 
 - `starts-before-1115-et` — same ET date, before 11:15
 - `future-date` — at or after 06:00 ET the next day

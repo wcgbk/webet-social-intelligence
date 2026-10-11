@@ -18,6 +18,8 @@
  * cluster. Only a new game-status Out, Doubtful, Questionable, inactive,
  * or deactivation is priced.
  */
+const { resolveTeamId } = require('./sports/team_identity');
+
 const NON_QB_ASSUMPTION = Object.freeze({
   outPoints: 0.20,
   doubtfulWeight: 0.75,
@@ -70,7 +72,23 @@ function isOutStatus(status) {
   return statusWeight(status) === 1;
 }
 
-function rowsForTeam(personnelBySport, sport, teamName) {
+/**
+ * A row with gameTeamIds applies only when both ids are this game.
+ * A row without that list is team-wide. A scoped row with no game context
+ * does not apply.
+ */
+function rowAppliesToGame(row, game, sport) {
+  const ids = row && row.gameTeamIds;
+  if (!Array.isArray(ids) || !ids.length) return true;
+  if (!game || !game.home || !game.away) return false;
+  const homeId = resolveTeamId(sport, game.home);
+  const awayId = resolveTeamId(sport, game.away);
+  if (!homeId || !awayId) return false;
+  const sides = new Set([String(homeId), String(awayId)]);
+  return ids.every((id) => sides.has(String(id)));
+}
+
+function rowsForTeam(personnelBySport, sport, teamName, game) {
   if (!personnelBySport || !teamName) return [];
   const sportTable = personnelBySport[sport] && typeof personnelBySport[sport] === 'object'
     ? personnelBySport[sport]
@@ -79,10 +97,10 @@ function rowsForTeam(personnelBySport, sport, teamName) {
   const direct = sportTable[teamName];
   const row = direct || Object.keys(sportTable).map((k) => [k, sportTable[k]]).find(([k]) => normName(k) === normName(teamName));
   const bag = direct || (row && row[1]);
-  if (!bag) return [];
-  if (Array.isArray(bag)) return bag;
-  if (Array.isArray(bag.players)) return bag.players;
-  return [];
+  let rows = [];
+  if (Array.isArray(bag)) rows = bag;
+  else if (bag && Array.isArray(bag.players)) rows = bag.players;
+  return rows.filter((player) => rowAppliesToGame(player, game, sport));
 }
 
 function sidePoints(rows, side) {
@@ -146,6 +164,7 @@ module.exports = {
   NON_QB_ASSUMPTION,
   conservativeNonQbAdj,
   rowsForTeam,
+  rowAppliesToGame,
   statusWeight,
   isLongTermRosterStatus,
   isQbPosition,

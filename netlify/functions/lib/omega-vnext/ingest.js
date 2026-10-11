@@ -12,7 +12,7 @@ const { isSameEtDay, etCalendarDate } = require('./odds_math');
 const { buildPitcherIndex, emptyPitcherIndex, mlbSeasonFromDate } = require('./sports/mlb_env');
 const { memoFetchJson, memoValue, slateOddsGate } = require('./fetch_memo');
 const { parseFootballQbMap, parseFootballPersonnel, fillNcaafQbMap } = require('./late_news');
-const { inCardSlate } = require('./selection_pass');
+const { inSlate } = require('./selection_pass');
 const { last5ByTeamFromSchedule } = require('./last5');
 
 const ODDS_REGIONS = 'us,us2,eu';
@@ -76,7 +76,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
         out.oddsSnapshotTimestamp = data.timestamp;
       }
       const rawEvents = Array.isArray(data) ? data : (data && data.data) || [];
-      const events = filterEventsSameEtDay(rawEvents, dateISO, opts);
+      const events = filterEventsSameEtDay(rawEvents, dateISO);
       out.bySport[label] = events;
       const remaining = null; // header not available via fetch easily
       console.log(`[omega-vnext/ingest] ${label}: ${events.length}/${rawEvents.length} events (same-ET-day ${dateISO || 'n/a'})`);
@@ -115,13 +115,13 @@ function dateParamET(dateISO) {
  * Keep events inside the selection slate for cardDateISO.
  * Name kept for callers. Window is 11:15 ET through 6:00 ET the next day.
  */
-function filterEventsSameEtDay(events, dateISO, opts) {
+function filterEventsSameEtDay(events, dateISO) {
   if (!dateISO) return events || [];
   const kept = [];
   let dropped = 0;
   for (const ev of events || []) {
     const t = ev && (ev.commence_time || ev.commenceTime || ev.date);
-    if (t && inCardSlate(ev, dateISO, opts)) kept.push(ev);
+    if (t && inSlate(ev, dateISO)) kept.push(ev);
     else dropped += 1;
   }
   if (dropped) {
@@ -903,7 +903,10 @@ async function fetchFootballQbStatusResult(leagueSlug, opts = {}) {
       cardDate: opts.dateISO || null,
     };
     const map = parseFootballQbMap(data, parsedOpts);
-    const personnel = parseFootballPersonnel(data, parsedOpts);
+    const personnel = parseFootballPersonnel(data, {
+      ...parsedOpts,
+      sport: leagueSlug === 'college-football' ? 'NCAAF' : 'NFL',
+    });
     return { map, personnel, ok: true };
   } catch (e) {
     console.log(`[omega-vnext/ingest] QB status ${leagueSlug} soft-fail: ${e.message}`);

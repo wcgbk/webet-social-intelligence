@@ -9,7 +9,7 @@
  * This module must not require gates, parlay, ingest, or hr_autocorrect.
  */
 
-const { etLocalToUtcISO, priceLockTimestamp } = require('./price_lock');
+const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { minEdgeFor } = require('./edge_floor');
 const { formatAmerican, etCalendarDate, parseEdgeFraction } = require('./odds_math');
@@ -70,91 +70,11 @@ function slateReason(c, cardDate, opts) {
   const bounds = slateBounds(cardDate);
   if (!bounds) return null;
   if (ms >= bounds.startMs && ms < bounds.endMs) return null;
-  if (oneOffBypassesEarlyWindow(c, cardDate, opts)) return null;
+  void opts;
   const et = etCalendarDate(new Date(ms).toISOString());
   if (et === String(cardDate) && ms < bounds.startMs) return 'starts-before-1115-et';
   if (ms >= bounds.endMs) return 'future-date';
   return 'not-same-et-day';
-}
-
-/** One card date. The London waiver does not exist on any other day. */
-const ONEOFF_CARD_DATE = '2026-10-11';
-
-function oneOffIncludeFlag(opts) {
-  if (opts && opts.includeEarly != null && String(opts.includeEarly).trim() !== '') {
-    return String(opts.includeEarly).trim();
-  }
-  return String(process.env.OMEGA_ONEOFF_INCLUDE_EVENT || '').trim();
-}
-
-function oneOffNowMs(opts) {
-  if (opts && Number.isFinite(Number(opts.nowMs))) return Number(opts.nowMs);
-  if (opts && Number.isFinite(Number(opts.asOfMs))) return Number(opts.asOfMs);
-  return Date.now();
-}
-
-function oneOffRequestedMs(opts) {
-  if (!opts) return null;
-  const raw = opts.oddsSnapshot != null && opts.oddsSnapshot !== ''
-    ? opts.oddsSnapshot
-    : opts.historicalSnapshot;
-  if (raw == null || raw === '') return null;
-  const n = Date.parse(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
-function rowTeamBlob(row) {
-  if (!row || typeof row === 'string' || typeof row === 'number') return '';
-  return [
-    row.home_team, row.away_team, row.homeTeam, row.awayTeam, row.matchup, row.id, row.eventId,
-  ].filter(Boolean).join(' ').toLowerCase();
-}
-
-function isLondonPhiJax(row) {
-  const blob = rowTeamBlob(row);
-  const phi = /philadelphia/.test(blob) && /eagle/.test(blob);
-  const jax = /jacksonville/.test(blob) && /jaguar/.test(blob);
-  return phi && jax;
-}
-
-/**
- * The flag is an event id or a team match for the 9:30 AM ET London game
- * only. A different event id does not open any other early game.
- */
-function flagMatchesLondon(flag, row) {
-  const f = String(flag || '').trim().toLowerCase();
-  if (!f || !isLondonPhiJax(row)) return false;
-  const id = String((row && (row.id || row.eventId || row.event_id)) || '').trim().toLowerCase();
-  if (id && f === id) return true;
-  if (/^[a-f0-9]{16,}$/i.test(f)) return false;
-  return /eagle|philadelphia|\bphi\b|jaguar|jacksonville|\bjax\b/.test(f);
-}
-
-/**
- * 2026-10-11 only. Default off. An early run (before 10:30 ET) may keep the
- * London Eagles @ Jaguars game inside the card. The 10:30 final snapshot
- * keeps the 11:15 exclusion. A started or live game is not waived.
- */
-function oneOffBypassesEarlyWindow(row, cardDate, opts) {
-  if (String(cardDate) !== ONEOFF_CARD_DATE) return false;
-  const flag = oneOffIncludeFlag(opts);
-  if (!flag) return false;
-  const lockMs = Date.parse(priceLockTimestamp(ONEOFF_CARD_DATE));
-  if (!Number.isFinite(lockMs)) return false;
-  const requested = oneOffRequestedMs(opts);
-  if (requested != null && requested >= lockMs) return false;
-  const nowMs = oneOffNowMs(opts);
-  if (!(nowMs < lockMs)) return false;
-  if (liveInPlayReason(row)) return false;
-  if (!flagMatchesLondon(flag, row)) return false;
-  const ms = commenceMs(row);
-  if (ms == null || !(ms > nowMs)) return false;
-  return true;
-}
-
-function inCardSlate(row, cardDate, opts) {
-  if (inSlate(row, cardDate)) return true;
-  return oneOffBypassesEarlyWindow(row, cardDate, opts);
 }
 
 function quoteFromPrices(prices, book) {
@@ -278,12 +198,15 @@ function stampHr(c) {
 
 /**
  * NFL |projection − sharp| > 10. Spreads and moneylines already reject past
- * FB_MARKET_GAP.NFL.margin (10) as model_market_gap. This catches NFL totals
- * whose gap is above 10 and still inside the wider total cap (13).
- * Exactly 10 is allowed. Other sports return null.
+ * FB_MARKET_GAP.NFL.margin (10) as model_market_gap. A game whose spread
+ * projection is more than 10 off is stamped nflGameProjectionGap and every
+ * remaining market, including a total inside its own cap, drops here.
+ * This also catches NFL totals whose own gap is above 10 and still inside
+ * the wider total cap (13). Exactly 10 is allowed. Other sports return null.
  */
 function nflProjectionGap(c) {
   if (!c || c.sport !== 'NFL') return null;
+  if (c.nflGameProjectionGap === true) return 'nfl-projection-gap';
   if (!/total/i.test(String(c.market || ''))) return null;
   let gap = null;
   if (c.modelTotalRaw != null && c.marketTotal != null
@@ -359,6 +282,7 @@ function top10Row(c) {
     side: c && c.side,
     dkLine: c && c.line != null ? c.line : null,
     dkPrice: c && c.odds != null ? c.odds : null,
+    book: (c && (c.book || c.executionBook)) || null,
     edge: c && (c.edgePct != null ? c.edgePct : c.edge),
     winProb: c && c.coverProb != null ? c.coverProb : null,
     ev: c && c.ev != null ? c.ev : null,
@@ -440,11 +364,7 @@ function verifySchedule(picksData, nowMs) {
   const card = picksData || {};
   const cardDate = card.date || null;
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
-  const slateOpts = {
-    includeEarly: card.includeEarly,
-    nowMs: now,
-    oddsSnapshot: card.priceLock && card.priceLock.requested,
-  };
+  const slateOpts = { nowMs: now };
   const dropped = [];
   const picks = [];
   let changed = false;
@@ -470,7 +390,7 @@ function verifySchedule(picksData, nowMs) {
     const need = minEdgeFor(odds, c.uncertainty);
     if (edge + 1e-12 < need) continue;
     if (verifyStartReason(c, now, cardDate, slateOpts)) continue;
-    if (cardDate && !inCardSlate(c, cardDate, slateOpts)) continue;
+    if (cardDate && !inSlate(c, cardDate)) continue;
     const pick = toPickObject({
       ...c,
       odds,
@@ -598,10 +518,7 @@ module.exports = {
   addDays,
   slateBounds,
   inSlate,
-  inCardSlate,
   slateReason,
-  oneOffIncludeFlag,
-  oneOffBypassesEarlyWindow,
   priceAtDraftKings,
   applyExecutionBook,
   hardRockReviewFlag,

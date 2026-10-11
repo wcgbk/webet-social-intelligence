@@ -492,8 +492,9 @@ function applyGameDayAdjustments({
   let personnelExclude = false;
   let personnelLogs = [];
   if ((sport === 'NFL' || sport === 'NCAAF') && personnelByTeam) {
-    const homeRows = rowsForTeam(personnelByTeam, sport, home);
-    const awayRows = rowsForTeam(personnelByTeam, sport, away);
+    const game = { home, away };
+    const homeRows = rowsForTeam(personnelByTeam, sport, home, game);
+    const awayRows = rowsForTeam(personnelByTeam, sport, away, game);
     if (homeRows.length || awayRows.length) {
       const adj = conservativeNonQbAdj(homeRows, awayRows);
       if (Number.isFinite(adj.marginAdj) && Math.abs(adj.marginAdj) > 1e-9) margin += adj.marginAdj;

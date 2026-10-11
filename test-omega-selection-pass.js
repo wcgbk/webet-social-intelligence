@@ -13,6 +13,8 @@ const { NFL_KEY_NUMBERS } = require(path.join(root, 'config'));
 const { applyGameDayAdjustments } = require(path.join(root, 'sports/game_day'));
 const { roofClosed, footballWeatherAdjustment } = require(path.join(root, 'sports/football_weather'));
 const { resolveTeamId, isFbsTeamId } = require(path.join(root, 'sports/team_identity'));
+const { nflSpreadExcludesGame } = require(path.join(root, 'sports/_common'));
+const nfl = require(path.join(root, 'sports/nfl'));
 const { solveNcaafOpponentRatings } = require(path.join(root, 'sports/epa'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { parseFootballPersonnel } = require(path.join(root, 'late_news'));
@@ -20,7 +22,7 @@ const {
   LAST5_K, LAST5_CAP, shrinkLast5IntoRating, lookupLast5,
 } = require(path.join(root, 'last5'));
 const {
-  NON_QB_ASSUMPTION, conservativeNonQbAdj,
+  NON_QB_ASSUMPTION, conservativeNonQbAdj, rowsForTeam,
 } = require(path.join(root, 'personnel'));
 const { fetchXNews, tokenFrom } = require(path.join(root, 'x_news'));
 const {
@@ -50,6 +52,7 @@ function base(extra) {
     commenceTime: IN_SLATE,
     homeTeam: 'B',
     awayTeam: 'A',
+    book: 'draftkings',
     ...extra,
   };
 }
@@ -153,6 +156,46 @@ function base(extra) {
   });
   assert.strictEqual(nflProjectionGap(cfbTotal), null);
   assert.notStrictEqual(gateReason(cfbTotal, { cardDate: CARD }), 'nfl-projection-gap');
+  // The spread is more than 10 off, so the total on that game drops too.
+  const sibling = base({
+    market: 'Total', side: 'Over 44', line: 44,
+    modelTotalRaw: 45, marketTotal: 44, modelLineGap: 1,
+    nflGameProjectionGap: true,
+  });
+  assert.strictEqual(nflProjectionGap(sibling), 'nfl-projection-gap');
+  assert.strictEqual(gateReason(sibling, { cardDate: CARD }), 'nfl-projection-gap');
+  assert.strictEqual(nflSpreadExcludesGame(14, 3), true);
+  assert.strictEqual(nflSpreadExcludesGame(13, 3), false);
+  assert.strictEqual(nflSpreadExcludesGame(null, 3), false);
+  const blown = nfl.project({
+    oddsEvents: [{
+      home_team: 'Kansas City Chiefs',
+      away_team: 'Buffalo Bills',
+      commence_time: IN_SLATE,
+      bookmakers: ['pinnacle', 'draftkings'].map((key) => ({
+        key,
+        markets: [
+          { key: 'h2h', outcomes: [{ name: 'Kansas City Chiefs', price: -110 }, { name: 'Buffalo Bills', price: -110 }] },
+          { key: 'spreads', outcomes: [
+            { name: 'Kansas City Chiefs', price: -110, point: -1 },
+            { name: 'Buffalo Bills', price: -110, point: 1 },
+          ] },
+          { key: 'totals', outcomes: [
+            { name: 'Over', price: -110, point: 45 },
+            { name: 'Under', price: -110, point: 45 },
+          ] },
+        ],
+      })),
+    }],
+    standings: {
+      'Kansas City Chiefs': { wins: 8, losses: 0, pf: 400, pa: 40, games: 8 },
+      'Buffalo Bills': { wins: 0, losses: 8, pf: 40, pa: 400, games: 8 },
+    },
+    efficiency: {},
+    gameDay: {},
+  });
+  assert.ok(blown.some((c) => c.market === 'Total' && c.nflGameProjectionGap === true), 'spread gap stamps the total');
+  assert.ok(blown.filter((c) => c.market === 'Spread').every((c) => c.nflGameProjectionGap === true));
 }
 
 // ── 4. 10:30 ET lock, ESPN personnel, X hook, weather, last-5 inside the rating ──
@@ -172,6 +215,55 @@ function base(extra) {
     }],
   });
   assert.strictEqual(parsed['Buffalo Bills'].players.length, 3);
+
+  const mhj = parseFootballPersonnel({
+    injuries: [{
+      team: { displayName: 'Arizona Cardinals', abbreviation: 'ARI' },
+      injuries: [
+        { athlete: { displayName: 'James Conner', position: { abbreviation: 'RB' } }, status: 'Questionable' },
+      ],
+    }],
+    transactions: [{
+      team: { displayName: 'Arizona Cardinals', abbreviation: 'ARI' },
+      athlete: { displayName: 'Marvin Harrison Jr.', position: { abbreviation: 'WR' } },
+      status: 'Inactive',
+      type: 'transaction',
+      description: 'Marvin Harrison Jr. inactive DET@ARI',
+    }, {
+      team: { displayName: 'Arizona Cardinals' },
+      description: 'A traded tackle deactivated',
+      athlete: { displayName: 'Bench Tackle', position: { abbreviation: 'OT' } },
+      status: 'Deactivated',
+    }],
+  }, { sport: 'NFL' });
+  const ari = mhj['Arizona Cardinals'].players;
+  const harrison = ari.find((p) => /harrison/i.test(p.name));
+  assert.ok(harrison, 'Marvin Harrison Jr. is ingested');
+  assert.strictEqual(harrison.status, 'inactive');
+  assert.strictEqual(harrison.position, 'WR');
+  assert.ok(Array.isArray(harrison.gameTeamIds) && harrison.gameTeamIds.length === 2);
+  const table = { NFL: mhj };
+  const lionsGame = { home: 'Arizona Cardinals', away: 'Detroit Lions' };
+  const otherGame = { home: 'Arizona Cardinals', away: 'Philadelphia Eagles' };
+  const onCard = rowsForTeam(table, 'NFL', 'Arizona Cardinals', lionsGame);
+  const offCard = rowsForTeam(table, 'NFL', 'Arizona Cardinals', otherGame);
+  assert.ok(onCard.some((p) => /harrison/i.test(p.name)));
+  assert.ok(!offCard.some((p) => /harrison/i.test(p.name)));
+  assert.ok(onCard.some((p) => p.name === 'Bench Tackle'));
+  assert.ok(offCard.some((p) => p.name === 'James Conner'));
+  const priced = conservativeNonQbAdj(onCard, []);
+  assert.ok(priced.logs.some((row) => row.name === 'Marvin Harrison Jr.' && row.action === 'assumption-adj' && row.points > 0));
+  const lionsAdj = applyGameDayAdjustments({
+    sport: 'NFL', modelMargin: 0, modelTotal: 45, uncertainty: 0.13,
+    home: 'Arizona Cardinals', away: 'Detroit Lions',
+    personnelByTeam: table,
+  });
+  const eaglesAdj = applyGameDayAdjustments({
+    sport: 'NFL', modelMargin: 0, modelTotal: 45, uncertainty: 0.13,
+    home: 'Arizona Cardinals', away: 'Philadelphia Eagles',
+    personnelByTeam: table,
+  });
+  assert.ok(lionsAdj.modelMargin < eaglesAdj.modelMargin, `${lionsAdj.modelMargin} vs ${eaglesAdj.modelMargin}`);
 
   const homeOnly = conservativeNonQbAdj(parsed['Buffalo Bills'].players, []);
   assert.ok(Math.abs(homeOnly.marginAdj + NON_QB_ASSUMPTION.outPoints) < 1e-9, homeOnly.marginAdj);
@@ -305,6 +397,7 @@ function base(extra) {
   const rows = top10Rows([lowEvHighEdge, highEvLowEdge], 10);
   assert.strictEqual(rows[0].game, 'C @ D');
   assert.strictEqual(rows[0].dkPrice, -110);
+  assert.strictEqual(rows[0].book, 'draftkings');
   assert.ok('hrFlags' in rows[0]);
 
   const same = [

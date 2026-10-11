@@ -1,14 +1,14 @@
 'use strict';
-// 2026-10-11 card defects: floor-only straights, top-10 bet rows, QB-out
-// totals, long-term IR, X token at runtime, capture warning, London one-off,
-// and the pre-10:30 odds snapshot. No network.
+// 2026-10-11 card rules: floor-only straights, top-10 bet rows, QB-out
+// totals, long-term IR, X token at runtime, capture warning, no London
+// waiver, and the pre-10:30 odds snapshot. No network.
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const { passesPublishFloor, straightCardLabel, selectStraights } = require(path.join(root, 'select'));
-const { selectTop10, oneOffBypassesEarlyWindow, slateReason } = require(path.join(root, 'selection_pass'));
+const { selectTop10, slateReason } = require(path.join(root, 'selection_pass'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
 const { gateReason } = require(path.join(root, 'gates'));
 const { conservativeNonQbAdj, isLongTermRosterStatus } = require(path.join(root, 'personnel'));
@@ -224,7 +224,8 @@ function row(extra) {
   assert.ok(!indexSrc.includes("err.code = 'CAPTURE_HEALTH'"));
   assert.ok(!/throw err;\s*$/m.test(indexSrc.slice(indexSrc.indexOf('captureHealthWarning'), indexSrc.indexOf('Kalshi/Polymarket'))));
 
-  // G. London Eagles @ Jaguars, 2026-10-11, early run only.
+  // G. London Eagles @ Jaguars starts at 9:30 ET. The generic window excludes
+  // it. No event id, team name, or env flag puts it back on the card.
   assert.strictEqual(LONDON_KICK, '2026-10-11T13:30:00Z');
   const london = {
     id: 'london-phi-jax',
@@ -244,25 +245,19 @@ function row(extra) {
     commenceTime: LONDON_KICK,
   });
   const earlyOpts = { cardDate: CARD, includeEarly: 'Eagles', nowMs: EARLY, asOfMs: EARLY };
-  assert.strictEqual(gateReason(londonCand, earlyOpts), null);
-  assert.strictEqual(oneOffBypassesEarlyWindow(london, CARD, { includeEarly: 'Jaguars', nowMs: EARLY }), true);
-  assert.strictEqual(oneOffBypassesEarlyWindow(london, CARD, { includeEarly: 'london-phi-jax', nowMs: EARLY }), true);
-  assert.strictEqual(oneOffBypassesEarlyWindow(london, CARD, { nowMs: EARLY }), false);
-  assert.strictEqual(gateReason(londonCand, { cardDate: CARD, nowMs: EARLY, asOfMs: EARLY }), 'starts-before-1115-et');
-  // 10:30 ET is after the 9:30 kick, so the started block wins. The one-off is also off at the lock.
-  assert.strictEqual(oneOffBypassesEarlyWindow(london, CARD, {
-    includeEarly: 'Eagles', nowMs: LOCK, oddsSnapshot: priceLockTimestamp(CARD),
-  }), false);
+  assert.strictEqual(slateReason(londonCand, CARD, earlyOpts), 'starts-before-1115-et');
+  assert.strictEqual(gateReason(londonCand, earlyOpts), 'starts-before-1115-et');
   assert.strictEqual(gateReason(londonCand, {
-    cardDate: CARD, includeEarly: 'Eagles', nowMs: LOCK, asOfMs: LOCK,
-    oddsSnapshot: priceLockTimestamp(CARD),
-  }), 'in-progress-or-started');
-  assert.strictEqual(oneOffBypassesEarlyWindow(london, CARD, {
-    includeEarly: 'Eagles', nowMs: EARLY, oddsSnapshot: priceLockTimestamp(CARD),
-  }), false);
+    cardDate: CARD, includeEarly: 'london-phi-jax', nowMs: EARLY, asOfMs: EARLY,
+  }), 'starts-before-1115-et');
+  const prevFlag = process.env.OMEGA_ONEOFF_INCLUDE_EVENT;
+  process.env.OMEGA_ONEOFF_INCLUDE_EVENT = 'Jacksonville Jaguars';
+  assert.strictEqual(gateReason(londonCand, { cardDate: CARD, nowMs: EARLY, asOfMs: EARLY }), 'starts-before-1115-et');
+  if (prevFlag == null) delete process.env.OMEGA_ONEOFF_INCLUDE_EVENT;
+  else process.env.OMEGA_ONEOFF_INCLUDE_EVENT = prevFlag;
   const afterKick = Date.parse('2026-10-11T13:40:00Z');
   assert.strictEqual(gateReason(londonCand, {
-    cardDate: CARD, includeEarly: 'Eagles', nowMs: afterKick, asOfMs: afterKick,
+    cardDate: CARD, nowMs: afterKick, asOfMs: afterKick,
   }), 'in-progress-or-started');
   assert.strictEqual(gateReason({ ...londonCand, inPlay: true }, earlyOpts), 'live-in-play');
   const otherEarly = row({
@@ -279,12 +274,11 @@ function row(extra) {
     { id: 'mia-buf', home_team: 'Buffalo Bills', away_team: 'Miami Dolphins', commence_time: etLocalToUtcISO(CARD, 9, 0) },
     { id: 'noon', home_team: 'Green Bay Packers', away_team: 'Chicago Bears', commence_time: KICK },
   ], CARD, { includeEarly: 'Philadelphia Eagles', nowMs: EARLY });
-  assert.deepStrictEqual(kept.map(e => e.id).sort(), ['london-phi-jax', 'noon']);
-  const prevFlag = process.env.OMEGA_ONEOFF_INCLUDE_EVENT;
-  process.env.OMEGA_ONEOFF_INCLUDE_EVENT = 'Jacksonville Jaguars';
-  assert.strictEqual(oneOffBypassesEarlyWindow(london, CARD, { nowMs: EARLY }), true);
-  if (prevFlag == null) delete process.env.OMEGA_ONEOFF_INCLUDE_EVENT;
-  else process.env.OMEGA_ONEOFF_INCLUDE_EVENT = prevFlag;
+  assert.deepStrictEqual(kept.map(e => e.id), ['noon']);
+  const passSrc = fs.readFileSync(path.join(root, 'selection_pass.js'), 'utf8');
+  assert.ok(!passSrc.includes('oneOffBypassesEarlyWindow'));
+  assert.ok(!passSrc.includes('OMEGA_ONEOFF_INCLUDE_EVENT'));
+  assert.ok(!indexSrc.includes('includeEarly'));
 
   // H. Before 10:30 ET the snapshot is live. The final run uses 10:30.
   assert.strictEqual(resolveGenerateOddsSnapshot(CARD, { nowMs: Date.parse('2026-10-11T08:45:00Z') }), null);

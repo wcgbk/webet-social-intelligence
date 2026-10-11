@@ -250,7 +250,7 @@ function toPickObject(c, opts = {}) {
     fair_sharp_p: c.fair_sharp_p != null ? +Number(c.fair_sharp_p).toFixed(4) : null,
     predictedClv: c.predictedClv,
     modelVersion: opts.modelVersion,
-    book: c.book,
+    book: c.book || c.executionBook || null,
     line: c.line != null ? c.line : null,
     tier,
     projMethod: c.projMethod || '',

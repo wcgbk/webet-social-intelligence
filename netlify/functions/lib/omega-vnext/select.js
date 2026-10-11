@@ -3,7 +3,7 @@
 const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
-  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, PM_SOFT,
+  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = require('./config');
 const {
@@ -70,14 +70,29 @@ function compareByEdge(a, b) {
   return scoreCandidate(b) - scoreCandidate(a);
 }
 
+function straightId(c) {
+  return [c && c.matchup, c && c.market, c && c.side, c && c.line, c && c.book].join('|');
+}
+
 /**
- * Top edges, up to MAX_STRAIGHTS. No one-per-game skip.
+ * Top floor edges, up to MAX_STRAIGHTS. No one-per-game skip.
  * A second side of the same game is a straight when its edge is in the top N.
- * A shorter pool stays short. Never pads with leans.
+ * When the floor tier is short, fill the open slots from leanPool (best
+ * edge first). Those rows stay tier lean. A shorter pool stays short.
  */
-function selectStraights(yesPool, maxN = MAX_STRAIGHTS) {
-  const pool = [...(yesPool || [])].sort(compareByEdge);
-  return pool.slice(0, maxN).map(c => ({ ...c, _score: edgeRank(c) }));
+function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
+  const floor = [...(yesPool || [])].sort(compareByEdge).slice(0, maxN).map(c => ({
+    ...c,
+    tier: c && c.tier === 'lean' ? 'lean' : 'floor',
+    _score: edgeRank(c),
+  }));
+  if (!Array.isArray(leanPool) || floor.length >= maxN) return floor;
+  const used = new Set(floor.map(straightId));
+  const fill = [...leanPool].sort(compareByEdge)
+    .filter(c => !used.has(straightId(c)))
+    .slice(0, maxN - floor.length)
+    .map(c => ({ ...c, tier: 'lean', _score: edgeRank(c) }));
+  return floor.concat(fill);
 }
 
 /** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
@@ -138,6 +153,8 @@ function toPickObject(c, opts = {}) {
   // Kelly (and drawdown) already ran. Grade stays the edge letter.
   // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
   units = capBGradeStake(units, rating);
+  const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
+  if (tier === 'lean' && units > LEAN_MAX_UNITS) units = LEAN_MAX_UNITS;
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -183,6 +200,7 @@ function toPickObject(c, opts = {}) {
     modelVersion: opts.modelVersion,
     book: c.book,
     line: c.line != null ? c.line : null,
+    tier,
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,
     steamToward: !!c.steamToward,

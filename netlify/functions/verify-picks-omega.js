@@ -10,7 +10,10 @@
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
 // Verify may drop, flag, or resize inside the existing unit cap.
-// It does not add a straight and it does not rebuild a locked parlay.
+// It does not invent a straight to fill a short card.
+// A material Hard Rock line or price is the exception: that pick is
+// repriced at Hard Rock, or replaced by the next Hard Rock candidate,
+// and the parlay is rebuilt from the corrected card. Every change is logged.
 // Late-news (MLB starter, NHL goalie, NFL/NCAAF QB) uses the same rule:
 // drop or flag a published pick, never add or swap one.
 
@@ -50,6 +53,7 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
+const { autoCorrectHardRock } = require('./lib/omega-vnext/hr_autocorrect');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
@@ -326,7 +330,7 @@ function sportCoverFloor(sport) {
   return 0;
 }
 function candidateClearsSportGates(c) {
-  if (!c || !(c.ev > sportEvFloor(c.sport))) return false;
+  if (!c || !(c.ev > 0) || !(c.ev + 1e-12 >= sportEvFloor(c.sport))) return false;
   const cp = typeof c.coverProb === "number" ? c.coverProb : parseFloat(c.coverProb) || 0;
   if (cp < sportCoverFloor(c.sport)) return false;
   return true;
@@ -531,7 +535,7 @@ async function runHardRockCheck(picksData) {
         warnings: [decision.warning], errors: [], notes: [], decision,
       });
     }
-    return { summary, pickResults, parlayFindings, legDecisions };
+    return { summary, pickResults, parlayFindings, legDecisions, corrections: [], changed: false };
   }
 
   // Main-lines fetch: Hard Rock only when every pick already carries placeableBooks.
@@ -560,6 +564,18 @@ async function runHardRockCheck(picksData) {
     } catch (e) { sportGames[sport] = null; }
   }
   if (sportsAttempted > 0 && !anySportOk) summary.apiDown = true;
+
+  // Reprice a material Hard Rock gap before the per-pick warning loop, so
+  // "majors still show the published number" cannot keep a stale line.
+  // Feed down leaves the card. Unknown games stay inside auto-correct.
+  let corrections = [];
+  let changed = false;
+  if (!summary.apiDown) {
+    const corrected = autoCorrectHardRock(picksData, sportGames);
+    corrections = corrected.log || [];
+    changed = !!corrected.changed;
+    if (changed) summary.autoCorrected = corrections.length;
+  }
 
   const f5Cache = {};
   async function gameForPick(pick) {
@@ -660,7 +676,7 @@ async function runHardRockCheck(picksData) {
   }
   summary.errors += parlayFindings.filter(f => f.level === "error").length;
   summary.warnings += parlayFindings.filter(f => f.level === "warning").length;
-  return { summary, pickResults, parlayFindings, legDecisions };
+  return { summary, pickResults, parlayFindings, legDecisions, corrections, changed };
 }
 
 // ── Open→pick steam recheck (Omega v12.1 line-move) ──
@@ -1036,7 +1052,7 @@ exports.handler = async (event) => {
     // Drop a pick only when Hard Rock and majors coverage both fail. Odds API down
     // warns and leaves the card. Do not mark critical — auto-fix must not invent a
     // replacement side. Empty card OK.
-    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [], legDecisions: [] };
+    let hrCheck = { summary: { skipped: true }, pickResults: [], parlayFindings: [], legDecisions: [], corrections: [], changed: false };
     let blockStraightRefill = false;
     let blockParlayRefill = false;
     let placeabilityDropped = 0;
@@ -1044,6 +1060,37 @@ exports.handler = async (event) => {
     let lateNewsReport = null;
     try {
       hrCheck = await runHardRockCheck(picksData);
+      if (hrCheck.changed) {
+        // Reports were built on the pre-correct card. Rebuild them on the
+        // Hard Rock numbers so a stale critical error cannot drop the new side.
+        totalWarnings = 0;
+        totalErrors = 0;
+        pickReports.length = 0;
+        for (const pick of picksData.picks) {
+          const math = runMathChecks(pick);
+          const narrative = runNarrativeChecks(pick);
+          const allWarnings = [...math.warnings, ...narrative.warnings];
+          const allErrors = [...math.errors, ...narrative.errors];
+          const severity = math.severity === "critical" || narrative.severity === "critical" ? "critical" : allWarnings.length > 0 ? "warning" : "clean";
+          totalWarnings += allWarnings.length;
+          totalErrors += allErrors.length;
+          pickReports.push({ pick: `${pick.pick} ${pick.odds}`, sport: pick.sport, severity, mathSeverity: math.severity, mathChecks: math.checks, narrativeChecks: narrative.checks, warnings: allWarnings, errors: allErrors });
+        }
+        for (const row of (hrCheck.corrections || [])) {
+          console.log(`[verify-hardrock] card ${row.action}: ${row.from || ''} → ${row.to || 'dropped'} (${row.reason || ''})`);
+          const idx = row.to ? picksData.picks.findIndex(p => p.pick === row.to) : -1;
+          if (idx >= 0 && pickReports[idx]) {
+            pickReports[idx].warnings.push(`Hard Rock auto-correct ${row.action}: ${row.from} → ${row.to} (${row.reason || ''})`);
+            totalWarnings++;
+            if (pickReports[idx].severity === "clean") pickReports[idx].severity = "warning";
+          }
+        }
+        try {
+          await updatePicksBlob(dateKey, picksData);
+        } catch (e) {
+          console.log(`[verify-hardrock] auto-correct blob write soft-fail: ${e.message}`);
+        }
+      }
       const decisions = (hrCheck.pickResults || []).map(r => (r && r.decision) || { drop: false });
       const legDecisions = hrCheck.legDecisions || [];
       for (let i = 0; i < pickReports.length; i++) {
@@ -1193,7 +1240,14 @@ exports.handler = async (event) => {
     }
 
     // Merge all replacements
-    const allReplacements = [...(fixResult.replacements || []), ...sharpReplacements];
+    const hrReplacements = (hrCheck.corrections || [])
+      .filter(c => c && (c.action === 'repriced' || c.action === 'replaced' || c.action === 'dropped'))
+      .map(c => ({
+        removed: c.from && c.from !== c.to ? c.from : null,
+        added: c.to || null,
+        removedReason: `hardrock-autocorrect:${c.action}`,
+      }));
+    const allReplacements = [...(fixResult.replacements || []), ...sharpReplacements, ...hrReplacements];
 
     // ── Step 3c: FINAL PASS — re-verify the locked card. Do not rebuild the parlay. ──
     // After drops, the published card must stay the one generate locked:
@@ -1526,7 +1580,7 @@ Return ONLY valid JSON array:
       totalErrors,
       sharpRedFlags: sharpReplacements.length,
       picks: pickReports,
-      hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings },
+      hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings, corrections: hrCheck.corrections || [] },
       placeability: { dropped: placeabilityDropped, parlayCleared: blockParlayRefill },
       steamRecheck: steamCheck,
       lateNews: lateNewsReport ? {

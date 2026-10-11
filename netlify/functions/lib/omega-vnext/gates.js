@@ -1,6 +1,7 @@
 'use strict';
 
-const { GATES, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
+const { GATES, LEAN_MIN_EV, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
+const { minEdgeFor } = require('./edge_floor');
 const { isSameEtDay, formatMoneylinePick } = require('./odds_math');
 const { adverseSteamReason } = require('./line_path');
 const { footballMarketGapReason } = require('./sports/_common');
@@ -139,8 +140,10 @@ function gateReason(c, opts = {}) {
   if (!Number.isFinite(c.odds)) return 'no-odds';
   if (c.odds < GATES.minAmericanOdds || c.odds > GATES.maxAmericanOdds) return 'odds-out-of-band';
   if (GATES.requireMajorBook && !c.liquid) return 'insufficient-liquidity';
-  // Floors are 0. A missing cover or EV still rejects. A negative EV
-  // still rejects. A 30% cover with a positive edge does not.
+  // minCoverProb stays 0. A missing cover still rejects. There is no flat
+  // coverProb floor, so a 30% cover is not rejected for the cover itself.
+  // minEV is 3%. EV under that returns ev-floor. applyGates promotes
+  // 1.5%–3% EV (and a 3%+ EV that misses the edge curve) into the lean tier.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
   if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
   if (GATES.minPredictedClvCents != null
@@ -148,8 +151,14 @@ function gateReason(c, opts = {}) {
     && c.predictedClv < GATES.minPredictedClvCents) {
     return 'predictedClv-negative';
   }
-  // Positive edge vs implied
+  // Edge vs the de-vigged sharp. Non-positive still rejects. A positive
+  // edge under the odds-scaled floor rejects as edge-floor. A missing
+  // edge is not a number, so it is not this gate (cover/EV already ran).
   if (Number.isFinite(c.edgePct) && c.edgePct <= 0) return 'nonpositive-edge';
+  if (Number.isFinite(c.edgePct)) {
+    const need = minEdgeFor(c.odds, c.uncertainty);
+    if (c.edgePct + 1e-12 < need) return 'edge-floor';
+  }
 
   // Open→now adverse steam (when line-move annotated)
   if (GATES.rejectAdverseSteam && c.lineMove) {
@@ -174,30 +183,59 @@ function gateReason(c, opts = {}) {
  * Pass opts.asOfMs or opts.asOf to judge pregame against a snapshot instant
  * (historical replay). Omit both for live Date.now() semantics.
  */
+function finiteEdge(c) {
+  const raw = c && c.edgePct;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw > 1 ? raw / 100 : raw;
+  if (raw == null || raw === '') return null;
+  const n = parseFloat(String(raw).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  return Math.abs(n) > 1 ? n / 100 : n;
+}
+
+/**
+ * A floor miss can still be a lean. Needs a positive edge vs the sharp and
+ * stake EV at or above LEAN_MIN_EV. Structural rejects stay rejects.
+ */
+function asLean(c, reason) {
+  if (reason !== 'ev-floor' && reason !== 'edge-floor') return null;
+  const ev = Number(c && c.ev);
+  const edge = finiteEdge(c);
+  if (!(ev >= LEAN_MIN_EV) || !(edge > 0)) return null;
+  return { ...c, tier: 'lean', leanReason: reason };
+}
+
 function applyGates(candidates, opts = {}) {
   const yes = [];
+  const lean = [];
   const rejected = [];
   for (const c of candidates || []) {
     const reason = gateReason(c, opts);
-    if (reason) {
-      if (reason === 'model_line_gap_review') {
-        console.log(`[omega-vnext] model_line_gap_review ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap} line=${c.marketLine}`);
-      }
-      if (reason === 'model_market_gap') {
-        console.log(`[omega-vnext] model_market_gap ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap}`);
-      }
-      rejected.push({ ...c, rejectReason: reason });
-    } else yes.push(c);
+    if (!reason) {
+      yes.push({ ...c, tier: 'floor' });
+      continue;
+    }
+    const leanRow = asLean(c, reason);
+    if (leanRow) {
+      lean.push(leanRow);
+      continue;
+    }
+    if (reason === 'model_line_gap_review') {
+      console.log(`[omega-vnext] model_line_gap_review ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap} line=${c.marketLine}`);
+    }
+    if (reason === 'model_market_gap') {
+      console.log(`[omega-vnext] model_market_gap ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} gap=${c.modelLineGap}`);
+    }
+    rejected.push({ ...c, rejectReason: reason });
   }
-  if (rejected.length) {
+  if (rejected.length || lean.length) {
     const counts = {};
     for (const r of rejected) counts[r.rejectReason] = (counts[r.rejectReason] || 0) + 1;
-    console.log(`[omega-vnext] gate-rejects ${JSON.stringify(counts)} yes=${yes.length}`);
+    console.log(`[omega-vnext] gate-rejects ${JSON.stringify(counts)} yes=${yes.length} lean=${lean.length}`);
   }
-  return { yesPool: yes, rejected };
+  return { yesPool: yes, leanPool: lean, rejected };
 }
 
 module.exports = {
   applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS,
-  isGapReviewMarket, buildGapReview, gapBlocksTicket,
+  isGapReviewMarket, buildGapReview, gapBlocksTicket, minEdgeFor,
 };

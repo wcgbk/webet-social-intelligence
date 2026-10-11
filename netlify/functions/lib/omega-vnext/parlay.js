@@ -1,6 +1,6 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER } = require('./config');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
@@ -245,16 +245,49 @@ function preferHit(a, b) {
   return a.ev > b.ev + 1e-12;
 }
 
+function betterEdgeTuple(aLegs, aEv, bLegs, bEv) {
+  const ea = aLegs.map(legEdge).sort((x, y) => y - x);
+  const eb = bLegs.map(legEdge).sort((x, y) => y - x);
+  const n = Math.max(ea.length, eb.length);
+  for (let i = 0; i < n; i++) {
+    const d = (ea[i] == null ? -Infinity : ea[i]) - (eb[i] == null ? -Infinity : eb[i]);
+    if (Math.abs(d) > 1e-12) return d > 0;
+  }
+  return aEv > bEv + 1e-12;
+}
+
+/** Best side per game, then the best-edge combo whose combined EV is positive. */
+function bestPositiveCombo(pool, size) {
+  const byGame = new Map();
+  for (const c of pool || []) {
+    const key = matchupKey(c);
+    const prev = byGame.get(key);
+    if (!prev || legEdge(c) > legEdge(prev) + 1e-12 || (Math.abs(legEdge(c) - legEdge(prev)) <= 1e-12 && (c.ev || 0) > (prev.ev || 0))) {
+      byGame.set(key, c);
+    }
+  }
+  const games = [...byGame.values()];
+  if (games.length < size) return null;
+  let best = null;
+  for (const legs of enumerateCombos(games, size)) {
+    const st = comboStats(legs);
+    if (st.uniqueGames !== legs.length || !(st.ev > 0)) continue;
+    if (!best || betterEdgeTuple(legs, st.ev, best.legs, best.ev)) best = { legs, ...st };
+  }
+  return best;
+}
+
 /**
  * Best edges on distinct games. Overlap with straights is allowed.
- * The only skip is a second leg from a game already on the ticket.
- * A 3-leg is published whenever three games exist. A 2-leg is the fallback.
- * Combined EV is logged when the haircut leaves it non-positive. The legs stay.
+ * Each leg needs coverProb >= 45%. The ticket's combined EV must be > 0.
+ * A positive-EV 3-leg wins. Otherwise the best positive-EV 2-leg.
+ * If neither exists, there is no parlay. Straights still publish.
  */
 function optimizeParlay(yesPool, straights = [], opts = {}) {
   const cardDate = opts.cardDate || opts.dateISO || null;
   const pool = (yesPool || [])
-    .filter(c => Number.isFinite(c.coverProb) && Number.isFinite(c.odds) && c.ev > 0)
+    .filter(c => Number.isFinite(c.coverProb) && c.coverProb >= PARLAY_MIN_COVER)
+    .filter(c => Number.isFinite(c.odds) && c.ev > 0)
     .filter(c => !cardDate || (c.commenceTime && isSameEtDay(c.commenceTime, cardDate)))
     .map(c => ({
       ...c,
@@ -271,15 +304,11 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   const search = pool;
   if (search.length < 2) return [];
 
-  let chosenLegs = bestEdgeLegs(search, 3);
-  if (chosenLegs.length < 3) chosenLegs = bestEdgeLegs(search, 2);
-  if (chosenLegs.length < 2) return [];
-  const st = comboStats(chosenLegs);
-  if (st.uniqueGames !== chosenLegs.length) return [];
-  if (!(st.ev > 0)) {
-    console.log(`[omega-vnext] parlay combined EV ${st.ev} is not positive; publishing best-edge legs`);
+  const chosen = bestPositiveCombo(search, 3) || bestPositiveCombo(search, 2);
+  if (!chosen) {
+    console.log('[omega-vnext] parlay none — no positive-EV 3-leg or 2-leg with cover >= 45%');
+    return [];
   }
-  const chosen = { legs: chosenLegs, ...st };
 
   const independent = !parlayIsCardMirror(chosen.legs, straights);
 

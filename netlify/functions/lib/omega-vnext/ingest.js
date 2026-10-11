@@ -67,7 +67,11 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
         url = buildOddsUrl(key, apiKey, null);
       }
       const data = await fetchJson(url, 15000);
-      // historical endpoint wraps in { data: [...] }
+      // historical endpoint wraps in { timestamp, data: [...] }. timestamp is
+      // the snapshot the API actually served (at or before the requested 9:30).
+      if (data && !Array.isArray(data) && data.timestamp && !out.oddsSnapshotTimestamp) {
+        out.oddsSnapshotTimestamp = data.timestamp;
+      }
       const rawEvents = Array.isArray(data) ? data : (data && data.data) || [];
       const events = filterEventsSameEtDay(rawEvents, dateISO);
       out.bySport[label] = events;
@@ -1218,6 +1222,7 @@ async function ingest(dateISO, opts = {}) {
     gameDay,
     fetchedAt: odds.fetchedAt,
     snapshotNote: odds.snapshotNote,
+    oddsSnapshotTimestamp: odds.oddsSnapshotTimestamp || null,
     oddsErrors: odds.oddsErrors || [],
   };
 }

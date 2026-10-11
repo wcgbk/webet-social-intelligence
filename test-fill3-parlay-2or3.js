@@ -4,7 +4,7 @@ const assert = require('assert');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 const live = require('./netlify/functions/generate-picks-omega-background');
 
-assert.strictEqual(live.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(live.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 
 const future = new Date(Date.now() + 864e5).toISOString();
 const mk = (sport, matchup, side, market, cp, ev) => ({
@@ -33,8 +33,8 @@ const pPrefer3 = optimizeParlay(strong2, []);
 assert.strictEqual(pPrefer3.length, 1);
 assert.strictEqual(pPrefer3[0].legs.length, 3);
 
-// Three distinct games still publish a 3-leg when the haircut leaves
-// combined EV non-positive. The ticket is logged, not dropped to 2 legs.
+// A third leg under 45% cover is not parlay-eligible. The +EV 2-leg remains.
+// A 3-leg whose combined EV is not positive falls back to that 2-leg.
 const thinThird = [
   mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
   mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
@@ -42,8 +42,23 @@ const thinThird = [
 ];
 const p2 = optimizeParlay(thinThird, []);
 assert.strictEqual(p2.length, 1);
-assert.strictEqual(p2[0].legs.length, 3);
-assert.ok(!(parseFloat(p2[0].ev) > 0), p2[0].ev);
+assert.strictEqual(p2[0].legs.length, 2);
+assert.ok(parseFloat(p2[0].ev) > 0, p2[0].ev);
+const negThree = [
+  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.55, 0.04),
+  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.55, 0.04),
+  mk('NCAAF', 'X @ Y', 'Y -1', 'Spread', 0.46, 0.02),
+];
+const pNeg = optimizeParlay(negThree, []);
+assert.strictEqual(pNeg.length, 1);
+assert.strictEqual(pNeg[0].legs.length, 2);
+assert.ok(parseFloat(pNeg[0].ev) > 0, pNeg[0].ev);
+const underCover = [
+  mk('NFL', 'A @ B', 'B ML', 'Moneyline', 0.40, 0.08),
+  mk('MLB', 'C @ D', 'D ML', 'Moneyline', 0.42, 0.07),
+  mk('NCAAF', 'E @ F', 'F ML', 'Moneyline', 0.44, 0.06),
+];
+assert.strictEqual(optimizeParlay(underCover, []).length, 0);
 
 const twoGames = [
   mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),

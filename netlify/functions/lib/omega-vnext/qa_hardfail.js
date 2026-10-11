@@ -342,7 +342,7 @@ async function loadQaContext(dateISO, sportsNeeded = []) {
  * Apply hard-fails to selected picks; refill from yesPool when possible.
  * @returns {{ picks, hardFails, yesPoolRemaining }}
  */
-function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion } = {}) {
+function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool } = {}) {
   const fails = [];
   const kept = [];
   const usedGames = new Set();
@@ -399,6 +399,29 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
         continue;
       }
       kept.push(c);
+      usedGames.add(matchupKey(c));
+    }
+  }
+
+  // Floor refill stays first. Leans fill only the slots the floor did not.
+  if (kept.length < maxN && Array.isArray(leanPool) && leanPool.length) {
+    const remainingLeans = leanPool.filter(c => {
+      if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
+      if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
+      return true;
+    });
+    const sorted = selectStraights(remainingLeans, maxN - kept.length);
+    for (const c of sorted) {
+      if (kept.length >= maxN) break;
+      const reason = checkOne(c);
+      if (reason) {
+        fails.push({
+          matchup: c.matchup, side: c.side, sport: c.sport, reason, hardFail: true,
+        });
+        rejectedKeys.add(`${matchupKey(c)}||${c.side}`);
+        continue;
+      }
+      kept.push({ ...c, tier: 'lean' });
       usedGames.add(matchupKey(c));
     }
   }

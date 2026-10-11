@@ -73,7 +73,7 @@ assert.strictEqual(tiny.length, 1, 'one candidate still publishes a straight');
 // when it outranks the other sides. Placeability and predicted CLV log only.
 const dog = row('Army Black Knights @ Navy Midshipmen', 'Army Black Knights ML', 'Moneyline', 0.04, {
   coverProb: 0.30,
-  ev: 0.01,
+  ev: 0.04,
   odds: 220,
   line: null,
   placeable: false,
@@ -81,8 +81,9 @@ const dog = row('Army Black Knights @ Navy Midshipmen', 'Army Black Knights ML',
   liquid: true,
   predictedClv: -4,
 });
-assert.strictEqual(gateReason(dog), null);
-const dogGated = applyGates([dog]);
+const lockAsOf = { cardDate: '2026-10-10', asOfMs: Date.parse('2026-10-10T13:30:00Z') };
+assert.strictEqual(gateReason(dog, lockAsOf), null);
+const dogGated = applyGates([dog], lockAsOf);
 assert.strictEqual(dogGated.rejected.length, 0);
 assert.strictEqual(dogGated.yesPool.length, 1);
 const lowCover = assertSpecCard([
@@ -94,9 +95,9 @@ assert.ok(lowCover.straights.some(s => s.side === dog.side), '30% cover with the
 assert.strictEqual(lowCover.parlay.length, 1);
 assert.strictEqual(new Set(lowCover.parlay[0].legs.map(l => l.matchup)).size, lowCover.parlay[0].legs.length);
 
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true })), 'ev-floor');
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true })), 'coverProb-floor');
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true })), 'nonpositive-edge');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true }), lockAsOf), 'ev-floor');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true }), lockAsOf), 'coverProb-floor');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), 'nonpositive-edge');
 
 delete process.env.OMEGA_CAL_MODE;
 calibrate.clearCalParamsCache();
@@ -113,17 +114,18 @@ assert.strictEqual(calibrate.CAL_MODE_DEFAULT, 'A');
 assert.strictEqual(calibrate.K_POLICY.min, 0.3);
 assert.ok(calibrate.CAL_POOL.minRows >= 80);
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
-assert.strictEqual(config.GATES.minEV.NFL, 0);
-assert.strictEqual(config.GATES.minEV.NCAAF, 0);
+assert.strictEqual(config.GATES.minEV.NFL, 0.03);
+assert.strictEqual(config.GATES.minEV.NCAAF, 0.03);
 assert.strictEqual(config.GATES.minPredictedClvCents, null);
 assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, false);
 assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
 assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-assert.strictEqual(verify.sportEvFloor('NFL'), 0);
-assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), true);
+assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), false);
 assert.strictEqual(verify.candidateClearsSportGates({ sport: 'MLB', ev: -0.01, coverProb: 0.55 }), false);
 
 const snapPaths = [

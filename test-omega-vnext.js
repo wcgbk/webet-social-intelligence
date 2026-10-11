@@ -19,7 +19,7 @@ const nba = require(path.join(root, 'sports/nba'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.22-omega-vnext-no-floors');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.24-omega-vnext-price-lock');
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
@@ -288,7 +288,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.strictEqual(card.length, 1);
   assert.strictEqual(card[0].legs.length, 3, '3 clean legs publish a 3-leg');
 
-  // A higher edge beats a higher cover probability.
+  // Cover under 45% is not a parlay leg, even at a higher edge.
   const ranked = parlay.optimizeParlay([
     { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
     { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
@@ -296,16 +296,26 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800, edgePct: 0.09 },
   ], []);
   assert.strictEqual(ranked[0].legs.length, 3);
-  assert.ok(ranked[0].legs.some(l => /Longshot/.test(l.pick)));
+  assert.ok(!ranked[0].legs.some(l => /Longshot/.test(l.pick)));
 
-  // Equal edge: the higher single-leg EV wins the tie.
+  // Among legs at or above 45% cover, a higher edge beats a higher cover.
+  const dog = parlay.optimizeParlay([
+    { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
+    { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
+    { ...row('E @ F', 0.56, 0.05), edgePct: 0.02, side: 'ChalkE' },
+    { ...row('G @ H', 0.46, 0.08), side: 'Dog', odds: 150, edgePct: 0.05 },
+  ], []);
+  assert.strictEqual(dog[0].legs.length, 3);
+  assert.ok(dog[0].legs.some(l => /Dog/.test(l.pick)));
+
+  // Equal edge: the higher combined parlay EV wins the tie.
   const tied = parlay.optimizeParlay([
     { ...row('A @ B', 0.56, 0.05), odds: -110, side: 'PriceA' },
     { ...row('C @ D', 0.56, 0.05), odds: -110, side: 'PriceC' },
     { ...row('E @ F', 0.56, 0.05), odds: -110, side: 'PriceE' },
     { ...row('G @ H', 0.56, 0.04), odds: 180, side: 'PlusPrice' },
   ], []);
-  assert.ok(!tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'lower EV loses an equal-edge tie');
+  assert.ok(tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'plus price raises combined EV when edges tie');
 
   // Favorite combined price (decimal < 2) is a minus number, never a plus.
   const chalk = parlay.optimizeParlay([
@@ -694,11 +704,12 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(verify.sportCoverFloor('NFL'), config.GATES.minCoverProb.NFL);
   assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
   assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-  assert.strictEqual(verify.sportEvFloor('NFL'), 0);
-  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0);
+  assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);
+  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0.03);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NFL', ev: 0.04, coverProb: 0.49 }), true);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), true);
-  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), true);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);
+  assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), false);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0, coverProb: 0.55 }), false);
   assert.ok(!verifySrc.includes('alpha-config'));
   assert.ok(!verifySrc.includes('mlUnitCap'));

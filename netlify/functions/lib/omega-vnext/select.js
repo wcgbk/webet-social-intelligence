@@ -449,6 +449,15 @@ function applyDailyUnitCap(picks, parlayLegs) {
   out = capSameGameExposure(out, parlays);
   out = out.map(applyLeanUnitCap);
   out = sortByGradeThenUnits(out);
+  // v12.3.25: parlay legs copy the capped straights' units.
+  const legKey = (x) => [x.game || x.matchup || '', x.pick || x.selection || '', x.market || ''].join('|');
+  const capped = new Map(out.map(p => [legKey(p), p.units]));
+  for (const pl of parlays) {
+    for (const leg of pl.legs || []) {
+      const u = capped.get(legKey(leg));
+      if (u != null) leg.units = u;
+    }
+  }
   return { picks: out, parlayLegs: parlays };
 }
 

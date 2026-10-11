@@ -307,8 +307,24 @@ function lookupQb(teamName, qbByTeam, sport, fallbackSeen) {
  * New game-status Out. Doubtful and questionable stay on the point table.
  * IR / PUP / season-ending is already in the market and is not a fresh out.
  */
+// v12.3.25: only the team's starting QB counts as out. ESPN depth QB1 when the
+// row carries it; otherwise this named-starter list. Injured backups (e.g.
+// Aidan O'Connell LV, Behren Morton NE) have no effect.
+const NAMED_STARTING_QB = Object.freeze({
+  'lamar jackson': 'BAL',
+});
+
+function isStartingQb(qb) {
+  if (!qb) return false;
+  const depth = qb.depthChartRank != null ? qb.depthChartRank : (qb.depthRank != null ? qb.depthRank : qb.depth);
+  if (depth != null && Number.isFinite(Number(depth))) return Number(depth) === 1;
+  if (qb.isStarter === true || qb.qb1 === true) return true;
+  return Object.prototype.hasOwnProperty.call(NAMED_STARTING_QB, normQbName(qb.qbName || qb.name));
+}
+
 function isFreshQbOut(qb) {
   if (!qb) return false;
+  if (!isStartingQb(qb)) return false;
   const st = String(qb.qbStatus || qb.status || '').toLowerCase();
   if (!st) return false;
   if (/injured reserve|\bir\b|\bpup\b|physically unable|season-ending|season ending/.test(st)) return false;
@@ -388,6 +404,7 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   const deltas = [];
   const apply = (qb, side) => {
     if (!qb) return;
+    if (!isStartingQb(qb)) return;
     const st = String(qb.qbStatus || qb.status || '').toLowerCase();
     if (!st) return;
     const fresh = isFreshQbOut(qb);
@@ -794,6 +811,7 @@ module.exports = {
   stampRestAudit,
   restAuditFields,
   isFreshQbOut,
+  isStartingQb,
   qbSoftAdjust,
   backupQbDelta,
   NAMED_BACKUP_QB,

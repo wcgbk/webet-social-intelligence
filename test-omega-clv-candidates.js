@@ -54,6 +54,11 @@ function baseDeps(extra) {
 }
 
 (async () => {
+  // Harness children start with OMEGA_REPLAY_NO_WRITE=1. This file asserts
+  // rows landed in an injected store, not a Netlify blob. Clear the flag
+  // for that in-memory writer only.
+  const prevNoWrite = process.env.OMEGA_REPLAY_NO_WRITE;
+  delete process.env.OMEGA_REPLAY_NO_WRITE;
   assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
   assert.strictEqual(config.GATES.minEV.MLB, 0.03);
   assert.strictEqual(config.GATES.minEV.NFL, 0.03);
@@ -359,6 +364,8 @@ function baseDeps(extra) {
   assert.ok(!candSrc.includes('selectStraights'));
   assert.ok(!candSrc.includes("setJSON(`clv-"));
 
+  if (prevNoWrite == null) delete process.env.OMEGA_REPLAY_NO_WRITE;
+  else process.env.OMEGA_REPLAY_NO_WRITE = prevNoWrite;
   console.log('test-omega-clv-candidates: ok');
 })().catch((err) => {
   console.error(err);

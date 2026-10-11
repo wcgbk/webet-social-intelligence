@@ -75,16 +75,16 @@ assert.ok(mlbMl > nflMl);
 const mlbNoise = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.53, fair_sharp_p: 0.52, odds: -110,
 }));
-assert.strictEqual(mlbNoise.calMode, 'A');
+assert.strictEqual(mlbNoise.calMode, 'legacy');
 assert.strictEqual(mlbNoise.calibK, config.MLB_CALIBRATION.shrinkK.Moneyline);
-assert.strictEqual(mlbNoise.calMap, null);
+assert.strictEqual(mlbNoise.calMap, 'bandRetainClip');
 assert.ok(mlbNoise.ev < 0.03, 'noise near the market stays under a 3% EV scale');
 assert.ok(mlbNoise.ev > 0, 'hand-set shrink still leaves a tiny positive EV');
 const mlbReal = edge.attachEv(calibrate.calibrateCandidate({
   sport: 'MLB', market: 'Moneyline', modelRawP: 0.60, fair_sharp_p: 0.52, odds: -120,
 }));
-assert.strictEqual(mlbReal.calMode, 'A');
-assert.strictEqual(mlbReal.calLevel, 'handset');
+assert.strictEqual(mlbReal.calMode, 'legacy');
+assert.strictEqual(mlbReal.calLevel, 'band');
 assert.ok(mlbReal.ev >= 0.03, 'a real MLB moneyline disagreement clears a 3% EV scale');
 assert.ok(mlbReal.edgePct < 0.12, 'MLB moneyline shrink keeps a real disagreement under a double-digit edge');
 // isotonic must compress toward band — not inflate just-above-hi values
@@ -328,14 +328,15 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.ok(chalk[0].combinedOdds.startsWith('-'), chalk[0].combinedOdds);
 }
 
-// Wednesday MLB. Legacy (hand-set shrink + bandRetainClip) and mode A
-// (hand-set shrink, no band) still fill 3 straights + a 3-leg from the
-// real starter / total / park edges. Publish floors are 0, so a pick'em
-// or a small disagreement with positive EV can sit in the yes pool. It
-// does not take a straight ahead of those real edges. Mode B stays
-// selectable. Its ship fit sets MLB spread K to the product floor 0.3
-// (hand-set 0.62; kMle 0). That fitted K is what emptied the 2026-10-10
-// and 2026-10-11 dry runs. K_MIN is a fit box, not a publish gate.
+// Wednesday MLB. Unset default and OMEGA_CAL_MODE=legacy are the hand-set
+// shrink plus bandRetainClip. OMEGA_CAL_MODE=A is the no-band rollback.
+// Both still fill 3 straights + a 3-leg from the real starter / total /
+// park edges. Publish floors are 0, so a pick'em or a small disagreement
+// with positive EV can sit in the yes pool. It does not take a straight
+// ahead of those real edges. Mode B stays selectable. Its ship fit sets
+// MLB spread K to the product floor 0.3 (hand-set 0.62; kMle 0). That
+// fitted K is what emptied the 2026-10-10 and 2026-10-11 dry runs.
+// K_MIN is a fit box, not a publish gate.
 {
   const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
   const kick = sampleInSlateKick(Date.now() + 24 * 3600 * 1000);
@@ -452,10 +453,18 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assertRealStraights(legacyCard, 'legacy');
 
   const defaultCard = scoreWednesday(null);
-  assert.ok(defaultCard.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
-  assertFilled(defaultCard, 'mode A');
-  assertRealStraights(defaultCard, 'mode A');
-  const aSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
+  assert.ok(defaultCard.yesPool.every(c => c.calMode === 'legacy' && c.calParamsSource === 'none' && c.calMap === 'bandRetainClip' && c.calLevel === 'band'));
+  assertFilled(defaultCard, 'default');
+  assertRealStraights(defaultCard, 'default');
+  const defSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
+  assert.ok(defSpread, 'default publishes an MLB spread');
+  assert.strictEqual(defSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
+
+  const modeA = scoreWednesday('A');
+  assert.ok(modeA.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
+  assertFilled(modeA, 'mode A');
+  assertRealStraights(modeA, 'mode A');
+  const aSpread = modeA.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
   assert.ok(aSpread, 'mode A publishes an MLB spread');
   assert.strictEqual(aSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
 

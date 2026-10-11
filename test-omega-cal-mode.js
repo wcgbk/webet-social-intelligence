@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * OMEGA_CAL_MODE. Unset is A: hand-set shrink, no unfitted band.
- * Legacy is the hand-set shrink plus the unfitted band (exact rollback).
+ * OMEGA_CAL_MODE. Unset is legacy: hand-set shrink plus bandRetainClip.
+ * OMEGA_CAL_MODE=A is the rollback: the same hand-set shrink, no band.
  * B fits K in [0.3, 1]. C fits Platt or isotonic on the shrunk probability.
  * Gates are not part of the switch.
  */
@@ -43,9 +43,9 @@ delete process.env.OMEGA_CAL_PARAMS_FILE;
 delete process.env.OMEGA_CAL_CARD_DATE;
 cal.clearCalParamsCache();
 
-assert.strictEqual(cal.CAL_MODE_DEFAULT, 'A');
-assert.strictEqual(cal.resolveCalMode(), 'A');
-assert.strictEqual(cal.resolveCalMode(''), 'A');
+assert.strictEqual(cal.CAL_MODE_DEFAULT, 'legacy');
+assert.strictEqual(cal.resolveCalMode(), 'legacy');
+assert.strictEqual(cal.resolveCalMode(''), 'legacy');
 assert.strictEqual(cal.resolveCalMode('legacy'), 'legacy');
 assert.strictEqual(cal.resolveCalMode('0'), 'legacy');
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
@@ -62,24 +62,27 @@ assert.ok(/-0\.012840/.test(config.MODEL_NOTES));
 assert.ok(/-0\.017171\.\.-0\.008556/.test(config.MODEL_NOTES));
 assert.ok(/1\.765\/day/.test(config.MODEL_NOTES));
 
-// Unset mode is A: hand-set shrink, no band, and it does not read the ship file.
+// Unset mode is legacy: hand-set shrink, then bandRetainClip. It does not read the ship file.
 const unset = cal.calibrateCandidate({
   sport: 'NFL', market: 'Spread', modelRawP: 0.80, fair_sharp_p: 0.50, cardDate: '2026-10-10',
 });
-assert.strictEqual(unset.calMode, 'A');
+assert.strictEqual(unset.calMode, 'legacy');
 assert.strictEqual(unset.calParamsSource, 'none');
 assert.strictEqual(unset.calibK, 0.68);
-assert.strictEqual(unset.calLevel, 'handset');
-assert.strictEqual(unset.calMap, null);
-assert.ok(Math.abs(unset.coverProb - ((1 - 0.68) * 0.80 + 0.68 * 0.50)) < 1e-12);
+assert.strictEqual(unset.calLevel, 'band');
+assert.strictEqual(unset.calMap, 'bandRetainClip');
+const unsetShrunk = (1 - 0.68) * 0.80 + 0.68 * 0.50;
+assert.ok(Math.abs(unset.coverProb - cal.bandRetainClip(unsetShrunk)) < 1e-12);
 const unsetMlb = cal.calibrateCandidate({
   sport: 'MLB', market: 'Spread', modelRawP: 0.80, fair_sharp_p: 0.50, cardDate: '2026-10-10',
 });
-assert.strictEqual(unsetMlb.calMode, 'A');
+assert.strictEqual(unsetMlb.calMode, 'legacy');
 assert.strictEqual(unsetMlb.calibK, 0.62);
-assert.strictEqual(unsetMlb.calLevel, 'handset');
+assert.strictEqual(unsetMlb.calLevel, 'band');
+assert.strictEqual(unsetMlb.calMap, 'bandRetainClip');
 assert.strictEqual(unsetMlb.calParamsSource, 'none');
-assert.ok(Math.abs(unsetMlb.coverProb - ((1 - 0.62) * 0.80 + 0.62 * 0.50)) < 1e-12);
+const unsetMlbShrunk = (1 - 0.62) * 0.80 + 0.62 * 0.50;
+assert.ok(Math.abs(unsetMlb.coverProb - cal.bandRetainClip(unsetMlbShrunk)) < 1e-12);
 
 // Mode B still reads the ship record after the study window.
 const modeBShip = withEnv({ OMEGA_CAL_MODE: 'B' }, () => cal.calibrateCandidate({
@@ -151,7 +154,7 @@ assert.deepStrictEqual(config.GATES.minCoverProb, {
   MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0,
 });
 assert.strictEqual(config.GATES.minPredictedClvCents, null);
-assert.strictEqual(cal.CAL_MODE_DEFAULT, 'A');
+assert.strictEqual(cal.CAL_MODE_DEFAULT, 'legacy');
 assert.strictEqual(cal.K_POLICY.min, 0.3);
 assert.ok(cal.CAL_POOL.minRows >= 80);
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });

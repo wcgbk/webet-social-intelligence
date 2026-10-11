@@ -21,8 +21,8 @@ const nhl = require(path.join(root, 'sports/nhl'));
 const { applyGates, gateReason, buildGapReview } = require(path.join(root, 'gates'));
 const { calibrateCandidate, calibrateAll, clearCalParamsCache } = require(path.join(root, 'calibrate'));
 // Gap-flag selection in this file is the legacy card: hand-set shrink plus
-// bandRetainClip. Default mode A drops the band, so these checks pin
-// OMEGA_CAL_MODE=legacy. The unset-default block below checks mode A.
+// bandRetainClip. Unset OMEGA_CAL_MODE is that path. The block below also
+// checks OMEGA_CAL_MODE=A, the no-band rollback.
 process.env.OMEGA_CAL_MODE = 'legacy';
 clearCalParamsCache();
 const { attachEv } = require(path.join(root, 'edge'));
@@ -311,20 +311,33 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.strictEqual(midRow.selected, true);
   assert.strictEqual(midRow.gap, 9.5);
 
-  // Default mode A. Hand-set NFL total K stays 0.58 and the band is not
-  // applied, so the gap still has edge versus the sharp. The flag does
-  // not reject the row. Mode B stays selectable: the ship fit is K=1, so
-  // the same gap has no positive edge. Negative EV rejects before the edge check.
+  // Unset default is hand-set shrink plus bandRetainClip. NFL total K stays
+  // 0.58. The band keeps the gap's edge versus the sharp, and the flag does
+  // not reject the row. OMEGA_CAL_MODE=A is the no-band rollback and still
+  // prices the gap. Mode B stays selectable: the ship fit is K=1, so the
+  // same gap has no positive edge. Negative EV rejects before the edge check.
   delete process.env.OMEGA_CAL_MODE;
   clearCalParamsCache();
   try {
+    const defRow = attachEv(calibrateCandidate({ ...midOver, cardDate: '2026-10-10' }));
+    assert.strictEqual(defRow.calMode, 'legacy');
+    assert.strictEqual(defRow.calParamsSource, 'none');
+    assert.strictEqual(defRow.calibK, config.SHRINK_K.Total);
+    assert.strictEqual(defRow.calLevel, 'band');
+    assert.strictEqual(defRow.calMap, 'bandRetainClip');
+    assert.strictEqual(defRow.gapFlag, true);
+    assert.ok(Math.abs(defRow.coverProb - defRow.fair_sharp_p) > 1e-6);
+    assert.ok(defRow.ev >= config.GATES.minEV.NFL);
+    assert.strictEqual(gateReason(defRow), null);
+
+    process.env.OMEGA_CAL_MODE = 'A';
+    clearCalParamsCache();
     const aRow = attachEv(calibrateCandidate({ ...midOver, cardDate: '2026-10-10' }));
     assert.strictEqual(aRow.calMode, 'A');
     assert.strictEqual(aRow.calParamsSource, 'none');
     assert.strictEqual(aRow.calibK, config.SHRINK_K.Total);
     assert.strictEqual(aRow.calLevel, 'handset');
     assert.strictEqual(aRow.calMap, null);
-    assert.strictEqual(aRow.gapFlag, true);
     assert.ok(Math.abs(aRow.coverProb - aRow.fair_sharp_p) > 1e-6);
     assert.ok(aRow.ev >= config.GATES.minEV.NFL);
     assert.strictEqual(gateReason(aRow), null);

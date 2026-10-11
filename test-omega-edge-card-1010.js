@@ -107,18 +107,35 @@ assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, 
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true }), lockAsOf), 'coverProb-floor');
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), 'nonpositive-edge');
 
+const savedCalMode = process.env.OMEGA_CAL_MODE;
 delete process.env.OMEGA_CAL_MODE;
 calibrate.clearCalParamsCache();
-const wide = calibrate.calibrateCandidate({
-  sport: 'NFL', market: 'Spread', modelRawP: 0.90, fair_sharp_p: 0.48,
-});
-const shrunk = calibrate.linearShrink(0.90, 0.48, config.SHRINK_K.Spread);
-const banded = calibrate.bandRetainClip(shrunk);
-assert.strictEqual(wide.calMode, 'A');
-assert.strictEqual(wide.calMap, null);
-assert.ok(Math.abs(wide.coverProb - shrunk) < 1e-12, 'mode A coverProb is the hand-set shrink');
-assert.ok(Math.abs(wide.coverProb - banded) > 1e-4, 'mode A does not apply the 0.42–0.58 band');
-assert.strictEqual(calibrate.CAL_MODE_DEFAULT, 'A');
+try {
+  const wide = calibrate.calibrateCandidate({
+    sport: 'NFL', market: 'Spread', modelRawP: 0.90, fair_sharp_p: 0.48,
+  });
+  const shrunk = calibrate.linearShrink(0.90, 0.48, config.SHRINK_K.Spread);
+  const banded = calibrate.bandRetainClip(shrunk);
+  assert.strictEqual(wide.calMode, 'legacy');
+  assert.strictEqual(wide.calMap, 'bandRetainClip');
+  assert.ok(Math.abs(wide.coverProb - banded) < 1e-12, 'default coverProb is hand-set shrink plus bandRetainClip');
+  assert.ok(Math.abs(wide.coverProb - shrunk) > 1e-4, 'default applies the 0.42–0.58 band');
+  assert.strictEqual(calibrate.CAL_MODE_DEFAULT, 'legacy');
+
+  process.env.OMEGA_CAL_MODE = 'A';
+  calibrate.clearCalParamsCache();
+  const rollback = calibrate.calibrateCandidate({
+    sport: 'NFL', market: 'Spread', modelRawP: 0.90, fair_sharp_p: 0.48,
+  });
+  assert.strictEqual(rollback.calMode, 'A');
+  assert.strictEqual(rollback.calMap, null);
+  assert.ok(Math.abs(rollback.coverProb - shrunk) < 1e-12, 'mode A coverProb is the hand-set shrink');
+  assert.ok(Math.abs(rollback.coverProb - banded) > 1e-4, 'mode A does not apply the 0.42–0.58 band');
+} finally {
+  if (savedCalMode == null) delete process.env.OMEGA_CAL_MODE;
+  else process.env.OMEGA_CAL_MODE = savedCalMode;
+  calibrate.clearCalParamsCache();
+}
 assert.strictEqual(calibrate.K_POLICY.min, 0.3);
 assert.ok(calibrate.CAL_POOL.minRows >= 80);
 

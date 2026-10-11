@@ -10,6 +10,10 @@
  * row is missing or a soft-fail, the free ESPN scoreboard path
  * (WEATHER_NFL) still runs. A dome, or a game with no weather, stays put.
  * The margin is not moved.
+ * After rest, QB, and the engine stack, the home margin is blended with
+ * Elo: (1 - w) * existing + w * eloMargin. w is NFL_ELO_WEIGHT
+ * (OMEGA_NFL_ELO_WEIGHT). w = 0 leaves the margin unchanged. The total
+ * is not blended. Point shrink toward the market is unchanged.
  */
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity, bindEspnGameByTeamAndTime,
@@ -19,10 +23,11 @@ const {
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
 const { blendNflRecency } = require('./nfl_recency');
+const { eloMargin } = require('./nfl_elo');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA } = require('../config');
+const { HFA, nflEloWeight } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const SPORT = 'NFL';
 
@@ -119,7 +124,14 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     : applyNflWeatherTotalAdj(gd.modelTotal, espnGame && espnGame.weather, {
       indoor: !!(espnGame && espnGame.indoor === true),
     });
-  const modelMargin = stacked.modelMargin;
+  const eloPack = gameDay && gameDay.nflElo;
+  const eloW = nflEloWeight();
+  let eloPts = null;
+  let modelMargin = stacked.modelMargin;
+  if (eloW > 0 && Number.isFinite(modelMargin)) {
+    eloPts = eloMargin(home, away, neutral, eloPack && eloPack.ratings);
+    if (Number.isFinite(eloPts)) modelMargin = (1 - eloW) * modelMargin + eloW * eloPts;
+  }
   const modelTotal = wx.modelTotal;
   const uncertainty = gd.uncertainty;
   let gameDayApplied = !!(stacked.gameDay && stacked.gameDay.applied);
@@ -147,6 +159,9 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     if (gd.startingQbOut) raw.startingQbOut = true;
     if (gd.last5 && gd.last5.applied) raw.last5 = gd.gameDay && gd.gameDay.last5;
     if (recency.applied) raw.recencyLast5 = recency.stamp;
+    if (eloW > 0 && Number.isFinite(eloPts)) {
+      raw.nflElo = { w: eloW, margin: +eloPts.toFixed(3) };
+    }
     if (nflSpreadExcludesGame(pts.modelMarginRaw, pts.marketMargin)) raw.nflGameProjectionGap = true;
     return raw;
   }

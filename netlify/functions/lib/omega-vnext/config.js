@@ -584,6 +584,24 @@ function envNumber(name, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * Weight of the NFL Elo margin inside the projected home margin.
+ * modelMargin = (1 - w) * existing + w * eloMargin.
+ * Read at call time so a replay can set OMEGA_NFL_ELO_WEIGHT.
+ * 0 leaves the existing margin unchanged. Clamped to [0, 1].
+ * Default 0.5 is the 2026-09-26..10-10 replay pick: lowest NFL
+ * KL(model||close) and model log-loss among 0, 0.15, 0.3, and 0.5.
+ * That weight passed compare against core-base.
+ */
+const NFL_ELO_WEIGHT = 0.5;
+
+function nflEloWeight() {
+  const w = envNumber('OMEGA_NFL_ELO_WEIGHT', NFL_ELO_WEIGHT);
+  if (w < 0) return 0;
+  if (w > 1) return 1;
+  return w;
+}
+
 function ncaafGpFixEnabled() {
   return flagEnabled('OMEGA_NCAAF_GP_FIX');
 }
@@ -738,6 +756,8 @@ module.exports = {
   SPORT_SPREAD_STD,
   SPORT_TOTAL_STD,
   HFA,
+  NFL_ELO_WEIGHT,
+  nflEloWeight,
   REST_ADJ,
   restAdjEnabled,
   WEATHER_NFL,

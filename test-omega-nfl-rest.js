@@ -381,7 +381,9 @@ function projectAt(restSchedule) {
   assert.strictEqual(spread.restAdj, 0.35);
   const plainSpread = plain.find((c) => c.market === 'Spread');
   assert.strictEqual(plainSpread.restAdj, undefined);
-  assert.ok(Math.abs(spread.modelProjection - plainSpread.modelProjection - 0.35) < 1e-9);
+  // Rest is inside the pre-Elo margin, so the printed move scales by (1 - w).
+  const restMove = (1 - config.nflEloWeight()) * spread.restAdj;
+  assert.ok(Math.abs(spread.modelProjection - plainSpread.modelProjection - restMove) < 0.011);
   const tot = withRest.find((c) => c.market === 'Total');
   const plainTot = plain.find((c) => c.market === 'Total');
   assert.strictEqual(tot.modelProjection, plainTot.modelProjection);

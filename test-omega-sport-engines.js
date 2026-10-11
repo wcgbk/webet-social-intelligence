@@ -18,6 +18,7 @@ const nhl = require(path.join(root, 'sports/nhl'));
 const epa = require(path.join(root, 'sports/epa'));
 const env = require(path.join(root, 'sports/mlb_env'));
 const { powerFromStandings } = require(path.join(root, 'sports/_common'));
+const { eloMargin } = require(path.join(root, 'sports/nfl_elo'));
 const calibrate = require(path.join(root, 'calibrate'));
 const { projectAll } = require(path.join(root, 'index'));
 const ingest = require(path.join(root, 'ingest'));
@@ -117,6 +118,13 @@ function byMarket(cands, market) {
   const row = cands.find(c => c.market === market);
   assert.ok(row, `missing ${market}`);
   return row;
+}
+
+/** Home margin after the Elo blend. w = 0 is the pre-Elo number. */
+function blendedNflMargin(base, home, away) {
+  const w = config.nflEloWeight();
+  if (!(w > 0)) return base;
+  return (1 - w) * base + w * eloMargin(home, away, false);
 }
 
 // ── NFL / CFB formula ──
@@ -246,7 +254,10 @@ function byMarket(cands, market) {
   for (const c of missing) assert.ok(/nfl-normal-|nfl-total-baseline/.test(c.projMethod), c.projMethod);
   const hPow = powerFromStandings(standings[home], 'NFL');
   const aPow = powerFromStandings(standings[away], 'NFL');
-  assert.strictEqual(byMarket(missing, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NFL).toFixed(2));
+  assert.strictEqual(
+    byMarket(missing, 'Spread').modelProjection,
+    +blendedNflMargin((hPow - aPow) + config.HFA.NFL, home, away).toFixed(2),
+  );
   assert.strictEqual(byMarket(missing, 'Total').modelProjection, +(45 + Math.abs(hPow + aPow) * 0.05).toFixed(2));
   assert.strictEqual(byMarket(missing, 'Moneyline').uncertainty, 0.16);
   assert.strictEqual(byMarket(missing, 'Moneyline').projMethod, 'nfl-normal-ml');
@@ -698,7 +709,10 @@ function byMarket(cands, market) {
   });
   const hPow = powerFromStandings({ pf: 360, pa: 240, wins: 12, losses: 4 }, 'NFL');
   const aPow = powerFromStandings({ pf: 280, pa: 300, wins: 8, losses: 8 }, 'NFL');
-  assert.strictEqual(byMarket(seasonFb, 'Spread').modelProjection, +((hPow - aPow) + config.HFA.NFL).toFixed(2));
+  assert.strictEqual(
+    byMarket(seasonFb, 'Spread').modelProjection,
+    +blendedNflMargin((hPow - aPow) + config.HFA.NFL, chiefs, bills).toFixed(2),
+  );
   assert.ok(Math.abs(byMarket(seasonFb, 'Spread').modelProjection) < 20);
 }
 
@@ -1318,7 +1332,9 @@ function byMarket(cands, market) {
   const deepM = deepRow.modelProjection;
   assert.ok(Math.abs(deepRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-9);
   // QB out is priced once (qbSoftAdjust); continuity adds nothing for an out QB.
-  assert.ok(Math.abs((deepM - plainM) - (config.QB_INJURY.NFL.outMarginPts + deepRow.engineSoft.stacked.sum)) < 0.02);
+  // Elo blends that whole margin, so the printed move scales by (1 - w).
+  const stackMove = config.QB_INJURY.NFL.outMarginPts + deepRow.engineSoft.stacked.sum;
+  assert.ok(Math.abs((deepM - plainM) - (1 - config.nflEloWeight()) * stackMove) < 0.02);
 
   const cfbDeep = cfb.project({
     oddsEvents: [synthEvent('Ohio State Buckeyes', 'Iowa Hawkeyes', { total: 51.5, spread: -6.5 })],

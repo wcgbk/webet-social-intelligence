@@ -214,12 +214,12 @@ function byMarket(rows, market, sideIncludes) {
 
   const calibrated = calibrateAll(rows);
   const tot = calibrated.find(c => c.market === 'Total');
-  // Unset default is hand-set shrink plus bandRetainClip. The ship file is unread.
-  assert.strictEqual(tot.calMode, 'legacy');
+  // Default mode A. NBA totals keep the hand-set K. The ship file is unread.
+  assert.strictEqual(tot.calMode, 'A');
   assert.strictEqual(tot.calibK, config.SHRINK_K.Total);
-  assert.strictEqual(tot.calLevel, 'band');
+  assert.strictEqual(tot.calLevel, 'handset');
   assert.strictEqual(tot.calParamsSource, 'none');
-  assert.strictEqual(tot.calMap, 'bandRetainClip');
+  assert.strictEqual(tot.calMap, null);
   assert.strictEqual(tot.sport, 'NBA');
   const prevNba = process.env.OMEGA_CAL_MODE;
   process.env.OMEGA_CAL_MODE = 'B';
@@ -507,8 +507,8 @@ function byMarket(rows, market, sideIncludes) {
   assert.strictEqual(dry.creditsEstimate, 0);
   assert.strictEqual(dry.key, 'omega-nba-shadow-2026-10-20');
   assert.ok(dry.candidateCount >= 6, `candidates ${dry.candidateCount}`);
-  // Unset default keeps the hand-set shrink plus the band. This board's model
-  // and line disagree, so the shadow card is not empty. The daily NBA flag stays off.
+  // Default mode A keeps the hand-set shrink. This board's model and line
+  // disagree, so the shadow card is not empty. The daily NBA flag stays off.
   assert.ok(dry.yesCount >= 1, `yes ${dry.yesCount} rejected ${dry.rejectedCount}`);
   assert.ok(dry.payload.picks.length >= 1);
   assert.ok(dry.payload.picks.every(p => p.shadowOnly === true));
@@ -824,8 +824,8 @@ function fixtureBoard() {
   try {
     const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
     const gradeHandler = require('./netlify/functions/trigger-omega-nba-shadow-grade').handler;
-    // Unset default is hand-set shrink plus the band, so this fixture still
-    // publishes shadow picks. The cron writes the doc. The daily NBA flag stays off.
+    // Default mode A: hand-set shrink, so this fixture still publishes
+    // shadow picks. The cron writes the doc. The daily NBA flag stays off.
     delete process.env.OMEGA_CAL_MODE;
     clearCalParamsCache();
     const shipWrites = [];

@@ -457,8 +457,8 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   });
 }
 
-// Default calibration is hand-set shrink plus bandRetainClip. Push mass still
-// scales that calibrated EV and Kelly. lateNews is copied through onto the pick.
+// Mode A shrinks coverProb. Push mass still scales that calibrated EV and Kelly.
+// lateNews is copied through calibration onto the published pick.
 {
   withEnv('OMEGA_CAL_MODE', null, () => {
     const raw = {
@@ -478,14 +478,13 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       uncertainty: 0.18,
     };
     const row = cal.calibrateCandidate(raw);
-    assert.strictEqual(row.calMode, 'legacy');
-    assert.strictEqual(row.calMap, 'bandRetainClip');
+    assert.strictEqual(row.calMode, 'A');
     assert.strictEqual(row.pPush, 0.2);
     assert.strictEqual(row.lateNews.qb.loaded, true);
-    assert.ok(Math.abs(row.coverProb - raw.modelRawP) > 1e-4, 'default calibration moves coverProb');
+    assert.ok(Math.abs(row.coverProb - raw.modelRawP) > 1e-4, 'mode A moves coverProb');
     const attached = edge.attachEv(row);
     const naive = evAtOdds(row.coverProb, -110);
-    near(attached.ev, +(naive * 0.8).toFixed(4), 1e-12, 'default EV keeps push mass');
+    near(attached.ev, +(naive * 0.8).toFixed(4), 1e-12, 'mode A EV keeps push mass');
     near(attached.edgePct, +(row.coverProb - 0.52).toFixed(4), 1e-12, 'edge stays conditional');
     const pick = select.toPickObject(attached, { modelVersion: config.MODEL_VERSION });
     assert.strictEqual(pick.lateNews.qb.loaded, true);
@@ -502,7 +501,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     assert.strictEqual(pick.units, `${scaledUnits}u`);
     withEnv('OMEGA_PUSH_EV', '0', () => {
       const off = edge.attachEv(row);
-      near(off.ev, +naive.toFixed(4), 1e-12, 'push off leaves calibrated EV');
+      near(off.ev, +naive.toFixed(4), 1e-12, 'push off leaves mode A EV');
       const offPick = select.toPickObject(off, { modelVersion: config.MODEL_VERSION });
       assert.strictEqual(offPick.units, `${rawUnits}u`);
       assert.strictEqual(offPick.lateNews.qb.loaded, true);

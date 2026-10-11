@@ -7,13 +7,13 @@ const { clamp } = require('./odds_math');
 
 /**
  * Unset OMEGA_CAL_MODE uses this.
- * Default is the hand-set shrink plus bandRetainClip: outside 0.42–0.58,
- * keep 0.25 of the excess. That is the existing 'legacy' path.
- * OMEGA_CAL_MODE=A is the rollback: the same hand-set shrink with no band.
+ * A drops the unfitted 0.42–0.58 band and keeps the hand-set shrink.
+ * It beats production log-loss out of sample and keeps 1.765 picks/day.
  * B fits K and stays selectable. The 2026-10-10 and 2026-10-11 dry runs
  * published 0 picks under that fitted K. C stays selectable.
+ * 'legacy' is the hand-set shrink plus the unfitted band, and the rollback.
  */
-const CAL_MODE_DEFAULT = 'legacy';
+const CAL_MODE_DEFAULT = 'A';
 
 /**
  * Mode B box on the linear shrink weight.

@@ -31,6 +31,7 @@ const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth,
 const { applyDkLag } = require('./dk_lag');
 const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
+const { runWithSnapshotClock } = require('./odds_snapshot_cache');
 const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
@@ -224,7 +225,10 @@ async function emitCaptureHealthOps(dateISO, captureHealth, meta = {}) {
 
 async function generateOmegaVnext(opts = {}) {
   if (!opts._fetchMemo) {
-    return runWithFetchMemo(() => generateOmegaVnext({ ...opts, _fetchMemo: true }));
+    const run = () => runWithFetchMemo(() => generateOmegaVnext({ ...opts, _fetchMemo: true }));
+    const clock = Number(opts.pregameAsOfMs);
+    if (Number.isFinite(clock)) return runWithSnapshotClock(clock, run);
+    return run();
   }
   if (!opts._auditBound) {
     const dateForAudit = opts.date || todayET();

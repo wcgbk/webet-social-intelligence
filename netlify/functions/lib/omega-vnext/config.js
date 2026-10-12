@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.38-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.39-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -827,6 +827,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.39-omega-vnext-price-lock: Odds API responses are stored once per sport, snapshot, markets, regions, and bookmakers. Repeat dry runs and replays reuse that snapshot. A cache hit does not spend credits. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.38-omega-vnext-price-lock: NHL moneyline market blend BLEND.ml 0.50->0.10. Replay NHL LL 0.6861->0.6775. Spread stays 0.50 and total stays 0.45. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.37-omega-vnext-price-lock: NCAAF market blend uses NCAAF_MODEL_WEIGHT ml 0.10, spread 0.10, total 0.10. Replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.36-omega-vnext-price-lock: NBA stays off the daily card unless OMEGA_NBA=1. Off produces zero NBA candidates and the rest of the card is unchanged. On, NBA uses sports/nba.js and the net-rating seed, the Pinnacle no-vig anchor, DraftKings execution, and the same gates. Aliases: LA Rams, LA Chargers, NY Giants, NY Jets, UL Lafayette, Sixers, Portland Trailblazers. London Lions stays unmapped. No floor, lean-fill, Kelly, shrink, or unit-cap change.',

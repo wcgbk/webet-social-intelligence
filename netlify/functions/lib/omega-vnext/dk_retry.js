@@ -130,7 +130,8 @@ function defaultSleep(ms) {
 }
 
 async function defaultFetchJson(url) {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
+  const { cachedFetch } = require('./odds_snapshot_cache');
+  const res = await cachedFetch(fetch, url, { headers: { accept: 'application/json' } });
   const text = await res.text();
   let body = null;
   try { body = text ? JSON.parse(text) : null; } catch (e) { body = null; }

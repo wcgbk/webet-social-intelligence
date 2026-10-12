@@ -75,6 +75,8 @@ function timeoutMs() {
 
 function childEnv() {
   const env = { ...process.env, OMEGA_REPLAY_NO_WRITE: '1' };
+  delete env.ODDS_SNAPSHOT_CACHE_DIR;
+  delete env.ODDS_SNAPSHOT_CACHE_BLOBS;
   for (const key of STRIP_EXACT) delete env[key];
   for (const key of Object.keys(env)) {
     if (/NETLIFY/i.test(key) && /TOKEN|SECRET|KEY/i.test(key)) delete env[key];

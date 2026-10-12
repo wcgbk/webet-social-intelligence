@@ -30,6 +30,7 @@ const { etParts } = require('../et-schedule');
 const { rowKey, sportKeyFor, candidateLedgerKey } = require('./candidate_ledger');
 const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
+const { oddsSnapshotSavedCredits } = require('./odds_snapshot_cache');
 
 /** Odds API bookmaker keys. circasports is Circa's key. ≤10 → 1 region. */
 const SHARP_CLOSE_BOOKS = ['pinnacle', 'circasports', 'lowvig', 'betonlineag', 'bookmaker'];
@@ -587,11 +588,17 @@ async function captureCandidateClosesV2(opts = {}) {
       continue;
     }
     try {
-      const games = await fetchJson(fetchImpl, sharpOddsUrl(sportKey, apiKey));
+      const oddsUrl = sharpOddsUrl(sportKey, apiKey);
+      const games = await fetchJson(fetchImpl, oddsUrl);
       oddsCache.set(sportKey, Array.isArray(games) ? games : []);
-      usedNow += CREDITS_PER_CALL;
-      runCredits += CREDITS_PER_CALL;
-      calls.push({ sportKey, action: 'odds', credits: CREDITS_PER_CALL });
+      // A snapshot hit did not call the Odds API, so it does not spend the cap.
+      if (oddsSnapshotSavedCredits(oddsUrl).hit) {
+        calls.push({ sportKey, action: 'odds-cache', credits: 0 });
+      } else {
+        usedNow += CREDITS_PER_CALL;
+        runCredits += CREDITS_PER_CALL;
+        calls.push({ sportKey, action: 'odds', credits: CREDITS_PER_CALL });
+      }
     } catch (e) {
       oddsCache.set(sportKey, null);
       calls.push({ sportKey, action: 'odds-error', credits: 0, error: e.message });

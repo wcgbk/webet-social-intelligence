@@ -52,6 +52,9 @@ function cloneJson(value) {
 
 /**
  * One successful JSON body per exact URL per run. Failures are not cached.
+ * Odds API calls also pass through the snapshot cache inside resolveFetch.
+ * That cache is off unless ODDS_SNAPSHOT_CACHE_DIR or Netlify blobs are on,
+ * so an identical URL still hits this memo first.
  * @param {string} url
  * @param {number} [timeoutMs]
  * @param {typeof fetch} [fetchImpl]

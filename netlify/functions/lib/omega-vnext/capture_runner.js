@@ -22,6 +22,7 @@ const {
   slateOddsGate, isFreshReusableSnap, snapCoversSports, FRESH_SNAP_MS, runWithFetchMemo,
 } = require('./fetch_memo');
 const { resolveFetch } = require('./audit_log');
+const { runWithSnapshotClock } = require('./odds_snapshot_cache');
 
 const CAPTURE_BOOKMAKERS = [
   ...US_BOOK_PRIORITY,
@@ -65,7 +66,10 @@ async function fetchSportOdds(sportKey, apiKey, fetchImpl = fetch) {
  * Does not invent games or backfill a missing 0600/0730/0900/0915 label.
  */
 async function runOmegaLineCapture(opts = {}) {
-  return runWithFetchMemo(() => runOmegaLineCaptureInner(opts));
+  const now = opts.now instanceof Date ? opts.now : new Date();
+  const explicit = Number(opts.pregameAsOfMs);
+  const ms = Number.isFinite(explicit) ? explicit : now.getTime();
+  return runWithSnapshotClock(ms, () => runWithFetchMemo(() => runOmegaLineCaptureInner(opts)));
 }
 
 async function runOmegaLineCaptureInner(opts = {}) {

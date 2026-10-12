@@ -175,6 +175,25 @@ function createAuditLog({ runId, date, fn } = {}) {
   const name = fn || null;
   const list = [];
   let seq = 0;
+  const oddsCache = { hits: 0, misses: 0, creditsSaved: 0 };
+
+  function noteOddsCache(info) {
+    const src = info && typeof info === 'object' ? info : {};
+    if (src.hit) {
+      oddsCache.hits += 1;
+      const n = Number(src.credits);
+      if (Number.isFinite(n) && n > 0) oddsCache.creditsSaved += n;
+    } else {
+      oddsCache.misses += 1;
+    }
+  }
+
+  function safeNoteOddsCache(info) {
+    try { noteOddsCache(info); }
+    catch (err) {
+      console.error(`[omega-audit] odds cache soft-fail: ${err && err.message}`);
+    }
+  }
 
   function record(entry) {
     const src = entry && typeof entry === 'object' ? entry : {};
@@ -305,13 +324,21 @@ function createAuditLog({ runId, date, fn } = {}) {
         });
       }
     }
-    return {
+    const out = {
       runId: id,
       count: list.length,
       byProvider,
       models,
       errors,
     };
+    if (oddsCache.hits || oddsCache.misses) {
+      out.oddsSnapshotCache = {
+        hits: oddsCache.hits,
+        misses: oddsCache.misses,
+        creditsSaved: oddsCache.creditsSaved,
+      };
+    }
+    return out;
   }
 
   return {
@@ -319,6 +346,7 @@ function createAuditLog({ runId, date, fn } = {}) {
     date: day,
     fn: name,
     record: safeRecord,
+    noteOddsCache: safeNoteOddsCache,
     wrapFetch,
     entries() { return list.slice(); },
     summary,
@@ -328,8 +356,19 @@ function createAuditLog({ runId, date, fn } = {}) {
 function resolveFetch(fetchImpl, meta) {
   const impl = typeof fetchImpl === 'function' ? fetchImpl : fetch;
   const log = als.getStore();
-  if (!log || typeof log.wrapFetch !== 'function') return impl;
-  return log.wrapFetch(impl, meta);
+  const base = (log && typeof log.wrapFetch === 'function') ? log.wrapFetch(impl, meta) : impl;
+  let out = base;
+  try {
+    const cache = require('./odds_snapshot_cache');
+    if (cache && typeof cache.enabled === 'function' && cache.enabled() && typeof cache.wrap === 'function') {
+      out = cache.wrap(base);
+    }
+  } catch (err) {
+    console.error(`[odds-snapshot-cache] wrap soft-fail: ${err && err.message}`);
+    out = base;
+  }
+  if (!log) return out === impl ? impl : out;
+  return out;
 }
 
 /**

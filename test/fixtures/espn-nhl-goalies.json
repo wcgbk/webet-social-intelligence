@@ -1,0 +1,93 @@
+{
+  "scoreboard": {
+    "events": [
+      {
+        "id": "401700001",
+        "date": "2026-10-12T23:30:00Z",
+        "name": "Florida Panthers at New York Rangers",
+        "shortName": "FLA @ NYR",
+        "season": { "type": 2, "slug": "regular-season" },
+        "competitions": [
+          {
+            "date": "2026-10-12T23:30:00Z",
+            "status": { "type": { "state": "pre" } },
+            "competitors": [
+              {
+                "homeAway": "home",
+                "team": { "displayName": "New York Rangers", "abbreviation": "NYR" }
+              },
+              {
+                "homeAway": "away",
+                "team": { "displayName": "Florida Panthers", "abbreviation": "FLA" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "header": {
+      "id": "401700001",
+      "competitions": [
+        {
+          "competitors": [
+            {
+              "homeAway": "home",
+              "team": { "displayName": "New York Rangers" },
+              "probables": [
+                {
+                  "athlete": {
+                    "id": "1",
+                    "displayName": "Igor Shesterkin",
+                    "position": { "abbreviation": "G" }
+                  },
+                  "statistics": [
+                    { "name": "savePct", "value": ".920" },
+                    { "name": "gsax", "value": "12.4" }
+                  ]
+                }
+              ]
+            },
+            {
+              "homeAway": "away",
+              "team": { "displayName": "Florida Panthers" },
+              "probables": [
+                {
+                  "starter": true,
+                  "athlete": { "id": "2", "displayName": "Sergei Bobrovsky" },
+                  "savePct": 0.91
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "topGames": {
+    "homeAway": "home",
+    "team": { "displayName": "New York Rangers" },
+    "roster": [
+      {
+        "athlete": {
+          "id": "9",
+          "displayName": "Jonathan Quick",
+          "position": { "abbreviation": "G" }
+        },
+        "games": 12,
+        "savePct": 0.9
+      },
+      {
+        "athlete": {
+          "id": "1",
+          "displayName": "Igor Shesterkin",
+          "position": { "abbreviation": "G" }
+        },
+        "games": 48,
+        "savePct": 0.918,
+        "GSAx": 9.5
+      }
+    ]
+  }
+}

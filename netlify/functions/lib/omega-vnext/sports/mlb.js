@@ -254,15 +254,28 @@ function softFail(ev, err) {
   console.error(`[omega-vnext] project soft-fail ${away || '?'} @ ${home || '?'}: ${err && err.message}`);
 }
 
+function starterSide(p) {
+  if (!p || !p.name) return null;
+  return {
+    name: p.name,
+    id: p.id != null ? p.id : null,
+    spConfirmed: p.spConfirmed === true || p.confirmed === true,
+  };
+}
+
 function tagStarters(cands, eg) {
   if (!eg || !(eg.homeProbable || eg.awayProbable)) return;
+  const home = starterSide(eg.homeProbable);
+  const away = starterSide(eg.awayProbable);
+  const bothConfirmed = !!(home && home.spConfirmed) && !!(away && away.spConfirmed);
   for (const c of cands) {
+    c.spConfirmed = bothConfirmed;
     if (/moneyline|spread/i.test(c.market || '')) {
-      c.assumedStarter = eg.homeProbable
-        ? { name: eg.homeProbable.name, teamSide: 'home', id: eg.homeProbable.id }
-        : (eg.awayProbable ? { name: eg.awayProbable.name, teamSide: 'away', id: eg.awayProbable.id } : null);
+      c.assumedStarter = home
+        ? { name: home.name, teamSide: 'home', id: home.id, spConfirmed: home.spConfirmed }
+        : (away ? { name: away.name, teamSide: 'away', id: away.id, spConfirmed: away.spConfirmed } : null);
       c.probablePitcher = c.assumedStarter;
-      c.startersKnown = !!(eg.homeProbable && eg.awayProbable);
+      c.startersKnown = !!(home && away);
     }
   }
 }

@@ -1,0 +1,68 @@
+{
+  "header": {
+    "id": "401800001",
+    "season": { "year": 2026, "type": 3, "slug": "postseason" },
+    "competitions": [
+      {
+        "competitors": [
+          {
+            "homeAway": "home",
+            "team": { "displayName": "Los Angeles Dodgers", "abbreviation": "LAD" },
+            "probables": [
+              { "athlete": { "id": "11", "displayName": "Yoshinobu Yamamoto" } }
+            ]
+          },
+          {
+            "homeAway": "away",
+            "team": { "displayName": "Milwaukee Brewers", "abbreviation": "MIL" },
+            "probables": [
+              { "athlete": { "id": "22", "displayName": "Freddy Peralta" } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "boxscore": {
+    "players": [
+      {
+        "homeAway": "home",
+        "team": { "displayName": "Los Angeles Dodgers" },
+        "statistics": [
+          {
+            "type": "pitching",
+            "athletes": [
+              {
+                "starter": true,
+                "athlete": {
+                  "id": "99",
+                  "displayName": "Blake Snell",
+                  "position": { "abbreviation": "P" }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "homeAway": "away",
+        "team": { "displayName": "Milwaukee Brewers" },
+        "statistics": [
+          {
+            "type": "pitching",
+            "athletes": [
+              {
+                "starter": true,
+                "athlete": {
+                  "id": "88",
+                  "displayName": "Tobias Myers",
+                  "position": { "abbreviation": "SP" }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

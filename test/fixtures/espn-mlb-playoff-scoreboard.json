@@ -1,0 +1,27 @@
+{
+  "events": [
+    {
+      "id": "401800001",
+      "date": "2026-10-12T23:00:00Z",
+      "name": "Milwaukee Brewers at Los Angeles Dodgers",
+      "shortName": "MIL @ LAD",
+      "season": { "year": 2026, "type": 3, "slug": "postseason" },
+      "competitions": [
+        {
+          "date": "2026-10-12T23:00:00Z",
+          "status": { "type": { "state": "pre" } },
+          "competitors": [
+            {
+              "homeAway": "home",
+              "team": { "id": "19", "displayName": "Los Angeles Dodgers", "abbreviation": "LAD" }
+            },
+            {
+              "homeAway": "away",
+              "team": { "id": "8", "displayName": "Milwaukee Brewers", "abbreviation": "MIL" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

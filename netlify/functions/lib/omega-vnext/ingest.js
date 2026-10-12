@@ -18,6 +18,9 @@ const { prepareNflElo } = require('./sports/nfl_elo');
 const {
   fetchDepthCharts, slateTeamIds, starterFeedStamp, freezeDepthFallback,
 } = require('./sports/depth_chart');
+const {
+  choosePitcher, chooseGoalie, applySummaryStarters, needsStarterSummary,
+} = require('./starters');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -137,15 +140,7 @@ function filterEventsSameEtDay(events, dateISO) {
 
 
 function extractProbable(competitor) {
-  if (!competitor) return null;
-  const probs = competitor.probables || competitor.probablePitchers || [];
-  if (Array.isArray(probs) && probs.length) {
-    const p = probs[0];
-    const name = (p.athlete && (p.athlete.displayName || p.athlete.fullName)) || p.displayName || p.name || null;
-    if (name) return { name, id: (p.athlete && p.athlete.id) || p.id || null };
-  }
-  // Some scoreboards nest under competitor.athletes / roster hints — skip if absent
-  return null;
+  return choosePitcher(competitor);
 }
 
 /**
@@ -242,22 +237,32 @@ function eventConference(comp, ev, homeConf, awayConf) {
     || conferenceToken(groups.abbreviation || groups.shortName || groups.name);
 }
 
-function mapEspnEvent(ev) {
+function mapEspnEvent(ev, sportLabel) {
   if (!ev || typeof ev !== 'object') return null;
-  const comp = (ev.competitions && ev.competitions[0]) || {};
+  const summary = ev.header && ev.header.competitions ? ev : null;
+  const event = summary
+    ? {
+      ...ev.header,
+      id: ev.header.id || ev.id,
+      competitions: ev.header.competitions,
+      season: ev.header.season || ev.season,
+    }
+    : ev;
+  const comp = (event.competitions && event.competitions[0]) || {};
   const competitors = comp.competitors || [];
   const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
   const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+  const label = String(sportLabel || '').toUpperCase();
   const homeProb = extractProbable(home);
   const awayProb = extractProbable(away);
   const homeConference = competitorConference(home);
   const awayConference = competitorConference(away);
-  const conference = eventConference(comp, ev, homeConference, awayConference);
-  return {
-    id: ev.id,
-    name: ev.name,
-    shortName: ev.shortName,
-    commenceTime: ev.date || comp.date,
+  const conference = eventConference(comp, event, homeConference, awayConference);
+  const game = {
+    id: event.id != null ? event.id : ev.id,
+    name: event.name || ev.name,
+    shortName: event.shortName || ev.shortName,
+    commenceTime: event.date || ev.date || comp.date,
     status: (comp.status && comp.status.type && comp.status.type.state) || 'pre',
     homeTeam: (home.team && (home.team.displayName || home.team.name)) || '',
     awayTeam: (away.team && (away.team.displayName || away.team.name)) || '',
@@ -269,6 +274,10 @@ function mapEspnEvent(ev) {
     awayScore: away.score != null ? Number(away.score) : null,
     homeProbable: homeProb,
     awayProbable: awayProb,
+    ...(label === 'NHL' ? {
+      homeGoalie: chooseGoalie(home),
+      awayGoalie: chooseGoalie(away),
+    } : {}),
     weather: extractWeather(comp),
     indoor: !!(comp.venue && comp.venue.indoor === true),
     neutralSite: comp.neutralSite === true,
@@ -276,8 +285,30 @@ function mapEspnEvent(ev) {
     ...(homeConference ? { homeConference } : {}),
     ...(awayConference ? { awayConference } : {}),
     ...(conference ? { conference } : {}),
-    ...scoreboardSeasonFields(ev),
+    ...scoreboardSeasonFields(event),
   };
+  if (summary) applySummaryStarters(label || 'MLB', game, ev);
+  return game;
+}
+
+/**
+ * Playoff scoreboards often omit probables. The summary header and the
+ * boxscore starter fill them. NHL summaries fill a missing goalie. A
+ * regular-season board does not take this extra fetch.
+ */
+async function fillStarterSummaries(label, games) {
+  const cfg = ESPN_LEAGUES[label];
+  if (!cfg || !Array.isArray(games)) return;
+  for (const game of games) {
+    if (!needsStarterSummary(label, game)) continue;
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/summary?event=${encodeURIComponent(game.id)}`;
+    try {
+      const summary = await fetchJson(url, 10000);
+      applySummaryStarters(label, game, summary);
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] ESPN ${label} summary ${game.id}: ${e.message}`);
+    }
+  }
 }
 
 /**
@@ -320,7 +351,7 @@ async function fetchEspnScoreboard(label, dateISO) {
       for (const ev of (data && data.events) || []) {
         const id = ev && ev.id != null && ev.id !== '' ? String(ev.id) : null;
         if (id && seen.has(id)) continue;
-        const game = mapEspnEvent(ev);
+        const game = mapEspnEvent(ev, label);
         if (!game) continue;
         if (id) seen.add(id);
         games.push(game);
@@ -337,6 +368,7 @@ async function fetchEspnScoreboard(label, dateISO) {
   if (sameDay.length !== games.length) {
     console.log(`[omega-vnext/ingest] ESPN ${label}: day-scope ${sameDay.length}/${games.length} on ${dateISO}`);
   }
+  await fillStarterSummaries(label, sameDay);
   return {
     league: label,
     games: sameDay,

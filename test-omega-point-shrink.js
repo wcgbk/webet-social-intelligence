@@ -103,7 +103,7 @@ function findSide(cands, market, re) {
 }
 
 function weightFor(c) {
-  if (c.sport === 'NFL') return c.market === 'Total' ? 0.45 : 0.5;
+  if (c.sport === 'NFL') return c.market === 'Total' ? config.NFL_TOTAL_MODEL_WEIGHT : 0.5;
   if (c.sport === 'NCAAF') return c.market === 'Total' ? 0.4 : 0.45;
   throw new Error(`unexpected sport ${c.sport}`);
 }
@@ -267,7 +267,8 @@ function assertEdgesNeverGrow(cands, ev) {
   assert.strictEqual(wideRejected.rejectReason, 'nfl-projection-gap');
 
   // 48 vs 38.5 is flagged (NFL flag starts at 8) and at or under the
-  // 10-point projection cap, so it still prices.
+  // 10-point projection cap, so the gap rule does not reject it.
+  // NFL_TOTAL_MODEL_WEIGHT 0.10 leaves this -110 total under the EV floor.
   const midHome = 'Philadelphia Eagles';
   const midAway = 'Dallas Cowboys';
   const midEv = event(midHome, midAway, 38.5, -3);
@@ -285,14 +286,19 @@ function assertEdgesNeverGrow(cands, ev) {
   const midSlate = scoreAll([...mid1, ...mid2]);
   const midGated = applyGates(midSlate);
   const midScored = midGated.yesPool.find(c => c.side === midOver.side && c.matchup === midOver.matchup);
-  assert.ok(midScored, '12.5-point NFL total gap was rejected');
-  assert.strictEqual(midScored.gapFlag, true);
-  assert.strictEqual(gateReason(midScored), null);
+  assert.strictEqual(midScored, undefined);
+  const midRejected = midGated.rejected.find(c => c.side === midOver.side && c.matchup === midOver.matchup);
+  assert.ok(midRejected, '9.5-point NFL total was not gated');
+  assert.strictEqual(midRejected.rejectReason, 'ev-floor');
+  assert.notStrictEqual(midRejected.rejectReason, 'nfl-projection-gap');
+  assert.strictEqual(midRejected.gapFlag, true);
+  assert.strictEqual(gateReason(midRejected), 'ev-floor');
+  assert.strictEqual(gateReason({ ...midRejected, gapFlag: false }), 'ev-floor');
   const midCleared = midGated.yesPool.map(c => ({ ...c, gapFlag: false }));
   const picked = selectStraights(midGated.yesPool, 3).map(c => `${c.matchup}|${c.side}`);
   const pickedClear = selectStraights(midCleared, 3).map(c => `${c.matchup}|${c.side}`);
   assert.deepStrictEqual(picked, pickedClear);
-  assert.ok(picked.some(s => s.endsWith(`|${midOver.side}`)));
+  assert.ok(!picked.some(s => s.endsWith(`|${midOver.side}`)));
 
   const tickets = optimizeParlay(midGated.yesPool, [], {});
   const ticketsClear = optimizeParlay(midCleared, [], {});
@@ -310,12 +316,13 @@ function assertEdgesNeverGrow(cands, ev) {
   const midReview = buildGapReview(midSlate, midPicks, tickets);
   const midRow = midReview.find(r => r.side === midOver.side && r.matchup === midOver.matchup);
   assert.ok(midRow);
-  assert.strictEqual(midRow.selected, true);
+  assert.strictEqual(midRow.selected, false);
   assert.strictEqual(midRow.gap, 9.5);
 
   // Default mode A. Hand-set NFL total K stays 0.58 and the band is not
   // applied, so the gap still has edge versus the sharp. The flag does
-  // not reject the row. Mode B stays selectable: the ship fit is K=1, so
+  // not reject the row. Stake EV is under the floor at this weight.
+  // Mode B stays selectable: the ship fit is K=1, so
   // the same gap has no positive edge. Negative EV rejects before the edge check.
   delete process.env.OMEGA_CAL_MODE;
   clearCalParamsCache();
@@ -328,8 +335,9 @@ function assertEdgesNeverGrow(cands, ev) {
     assert.strictEqual(aRow.calMap, null);
     assert.strictEqual(aRow.gapFlag, true);
     assert.ok(Math.abs(aRow.coverProb - aRow.fair_sharp_p) > 1e-6);
-    assert.ok(aRow.ev >= config.GATES.minEV.NFL);
-    assert.strictEqual(gateReason(aRow), null);
+    assert.ok(aRow.ev < config.GATES.minEV.NFL);
+    assert.strictEqual(gateReason(aRow), 'ev-floor');
+    assert.notStrictEqual(gateReason(aRow), 'nfl-projection-gap');
 
     process.env.OMEGA_CAL_MODE = 'B';
     clearCalParamsCache();

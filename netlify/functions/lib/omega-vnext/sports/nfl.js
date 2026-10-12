@@ -27,7 +27,7 @@ const { eloMargin } = require('./nfl_elo');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA, nflEloWeight } = require('../config');
+const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT } = require('../config');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const SPORT = 'NFL';
 
@@ -240,7 +240,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         pts.modelTotalShrunk,
         b.point,
         noVigPinnacleCircaImplied(bundles, b),
-        0.45,
+        NFL_TOTAL_MODEL_WEIGHT,
       );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,

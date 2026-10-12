@@ -389,7 +389,7 @@ function findSide(cands, market, re) {
   assert.strictEqual(cfb25.modelMarginRaw, cfb35.modelMarginRaw);
   assert.strictEqual(cfb25.modelMarginRaw, cfb3.modelMarginRaw);
   const cm = cfb25.modelMarginRaw;
-  const cfbBlend = (p) => common.blendWithMarket(p, anchor, 0.45);
+  const cfbBlend = (p) => common.blendWithMarket(p, anchor, config.NCAAF_MODEL_WEIGHT.spread);
   near(cfb25.modelRawP, cfbBlend(normal(cm, -2.5, cfbStd)), 1e-9);
   near(cfb35.modelRawP, cfbBlend(normal(cm, -3.5, cfbStd)), 1e-9);
   near(cfb3.modelRawP, cfbBlend(normal(cm, -3, cfbStd)), 1e-9);

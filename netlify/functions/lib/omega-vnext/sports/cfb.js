@@ -19,7 +19,7 @@ const { footballProjection, applyEngineStack, blendNcaafTempo } = require('./epa
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD } = require('../config');
+const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD, NCAAF_MODEL_WEIGHT } = require('../config');
 const { resolveTeamId, isFbsTeamId } = require('./team_identity');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -171,7 +171,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         pts.modelMarginShrunk,
         null,
         noVigPinnacleCircaImplied(bundles, b),
-        0.45,
+        NCAAF_MODEL_WEIGHT.ml,
       );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
@@ -197,7 +197,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
         b.point,
         noVigPinnacleCircaImplied(bundles, b),
-        0.45,
+        NCAAF_MODEL_WEIGHT.spread,
       );
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
@@ -223,7 +223,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         pts.modelTotalShrunk,
         b.point,
         noVigPinnacleCircaImplied(bundles, b),
-        0.4,
+        NCAAF_MODEL_WEIGHT.total,
       );
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,

@@ -104,7 +104,7 @@ function findSide(cands, market, re) {
 
 function weightFor(c) {
   if (c.sport === 'NFL') return c.market === 'Total' ? config.NFL_TOTAL_MODEL_WEIGHT : 0.5;
-  if (c.sport === 'NCAAF') return c.market === 'Total' ? 0.4 : 0.45;
+  if (c.sport === 'NCAAF') return config.NCAAF_MODEL_WEIGHT[c.market === 'Total' ? 'total' : c.market === 'Spread' ? 'spread' : 'ml'];
   throw new Error(`unexpected sport ${c.sport}`);
 }
 
@@ -482,7 +482,7 @@ function assertEdgesNeverGrow(cands, ev) {
   const priceAt = (proj) => blendWithMarket(
     totalDetail(proj, over.line, 'Over', 'NCAAF', totalStd).coverProb,
     anchor,
-    0.4,
+    config.NCAAF_MODEL_WEIGHT.total,
   );
   const expectP = Math.min(priceAt(over.modelTotalRaw), priceAt(over.modelTotalShrunk));
   assert.ok(Math.abs(over.modelRawP - expectP) < 1e-9, `${over.modelRawP} vs ${expectP}`);

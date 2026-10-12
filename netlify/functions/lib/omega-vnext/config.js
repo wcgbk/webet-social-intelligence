@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.36-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.37-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -654,6 +654,9 @@ function envNumber(name, fallback) {
 /** replay 9/22-10/10 showed the NFL total projection has no predictive slope vs finals; w 0.45->0.10 cut NFL log-loss vs close 0.6755->0.6703 */
 const NFL_TOTAL_MODEL_WEIGHT = 0.10;
 
+/** replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008 */
+const NCAAF_MODEL_WEIGHT = { ml: 0.10, spread: 0.10, total: 0.10 };
+
 /**
  * Weight of the NFL Elo margin inside the projected home margin.
  * modelMargin = (1 - w) * existing + w * eloMargin.
@@ -824,6 +827,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.37-omega-vnext-price-lock: NCAAF market blend uses NCAAF_MODEL_WEIGHT ml 0.10, spread 0.10, total 0.10. Replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.36-omega-vnext-price-lock: NBA stays off the daily card unless OMEGA_NBA=1. Off produces zero NBA candidates and the rest of the card is unchanged. On, NBA uses sports/nba.js and the net-rating seed, the Pinnacle no-vig anchor, DraftKings execution, and the same gates. Aliases: LA Rams, LA Chargers, NY Giants, NY Jets, UL Lafayette, Sixers, Portland Trailblazers. London Lions stays unmapped. No floor, lean-fill, Kelly, shrink, or unit-cap change.',
   'v12.3.35-omega-vnext-price-lock: Public /clv and /tracking pages only. /clv shows the running closing-line total (Alpha Jun 20–Oct 7 and Omega from Sep 5, one row per graded close, written at 9:15 ET). /tracking shows one daily Edge and Omega row for engineering percentiles, track-record KPIs, and closing-line totals, with the change from the previous day. No model change. No price, lean-fill, floor, Kelly, shrink, or unit-cap change.',
   'v12.3.34-omega-vnext-price-lock: NFL total market blend uses NFL_TOTAL_MODEL_WEIGHT 0.10. Replay 9/22-10/10 showed the NFL total projection has no predictive slope vs finals; w 0.45->0.10 cut NFL log-loss vs close 0.6755->0.6703. ML and spread stay 0.50. NCAAF and POINT_SHRINK unchanged. No floor, Kelly, shrink, or unit-cap change.',
@@ -941,6 +945,7 @@ module.exports = {
   SPORT_TOTAL_STD,
   HFA,
   NFL_TOTAL_MODEL_WEIGHT,
+  NCAAF_MODEL_WEIGHT,
   NFL_ELO_WEIGHT,
   nflEloWeight,
   priorW,

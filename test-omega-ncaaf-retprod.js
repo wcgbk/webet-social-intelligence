@@ -13,7 +13,7 @@ const epa = require(path.join(root, 'sports/epa'));
 const table = require(path.join(root, 'sports/data/cfb-returning-production-2026.json'));
 const { resolveTeamId, teamRecord } = require(path.join(root, 'sports/team_identity'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.36-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.37-omega-vnext-price-lock');
 assert.ok(config.MODEL_NOTES.includes('v12.3.29-omega-vnext-price-lock: NCAAF returning production'));
 assert.ok(/OMEGA_NCAAF_RETPROD=0/.test(config.MODEL_NOTES));
 

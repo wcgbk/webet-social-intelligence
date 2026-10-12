@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.34-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.35-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -812,6 +812,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.35-omega-vnext-price-lock: Public /clv and /tracking pages only. /clv shows the running closing-line total (Alpha Jun 20–Oct 7 and Omega from Sep 5, one row per graded close, written at 9:15 ET). /tracking shows one daily Edge and Omega row for engineering percentiles, track-record KPIs, and closing-line totals, with the change from the previous day. No model change. No price, lean-fill, floor, Kelly, shrink, or unit-cap change.',
   'v12.3.34-omega-vnext-price-lock: NFL total market blend uses NFL_TOTAL_MODEL_WEIGHT 0.10. Replay 9/22-10/10 showed the NFL total projection has no predictive slope vs finals; w 0.45->0.10 cut NFL log-loss vs close 0.6755->0.6703. ML and spread stay 0.50. NCAAF and POINT_SHRINK unchanged. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.33-omega-vnext-price-lock: 10:30 pricing uses the ESPN probable or confirmed MLB starter, including the playoff summary when the scoreboard omits it (spConfirmed false when only the probable is posted), and the ESPN starting goalie on the existing save% term (top-games goalie with goalieConfirmed false when ESPN has no starter; a missing save rate stays 0). A lock snapshot missing a DraftKings spread or total retries that one event every 2 minutes for up to 10 minutes, then prices only the moneyline. Each retry is an audit_log row. OMEGA_DK_RETRY=0 disables it, and dryRun/replay skip unless OMEGA_DK_RETRY_TEST=1. Before publish, a straight or parlay leg whose model fair line is more than 12pp from Pinnacle paired no-vig, or whose spread/total point gap exceeds NFL 7, NCAAF 10, NHL 1.5, or MLB 2, sets dataReviewFlag with those numbers and logs it. Flag only. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.32-omega-vnext-price-lock: DraftKings lags Pinnacle. marketEv = one-book no-vig (Pinnacle, else Circa, no mixed books) times the DraftKings decimal minus 1 at the 10:30 lock. lagEdge = marketEv when that no-vig moved at least +1.0pp toward the side from the morning snap (omega-line-snap 06:00..09:15) or the opener and DraftKings implied moved less than half of that move (DK_LAG.maxDkFollowRatio 0.5). OMEGA_DK_LAG=0 disables. A lag side adds lagEdge to the ranking edge and publishes coverProb = max(model coverProb, the anchor no-vig), so stake EV is never based on a probability above the fresh fair unless the model was already higher. Floors, caps, Kelly, full-card and parlay rules are unchanged. Offline eval 2026-09-26..10-10: n lag 1, avg CLV +0.003029, beat close 100.0%, all-candidate LL off 0.635988 on 0.635988 (n=1082). No floor, Kelly, shrink, or unit-cap change.',

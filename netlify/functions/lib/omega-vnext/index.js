@@ -2,7 +2,7 @@
 
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
-  PARLAY_MIN_COVER, LEAN_PAD,
+  PARLAY_MIN_COVER, LEAN_PAD, nbaModuleEnabled,
 } = require('./config');
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
@@ -68,13 +68,14 @@ function cardDateOf(snap, dateISO) {
   return null;
 }
 
-/** Sports the card prices. No card date keeps the SPORTS_ENABLED kill switch (tests, callers without a date). */
+/** Sports the card prices. No card date keeps the SPORTS_ENABLED kill switch (tests, callers without a date). OMEGA_NBA=1 adds NBA on that path. */
 function sportsOnCard(snap, dateISO) {
   const date = cardDateOf(snap, dateISO);
   if (!date) {
     const sports = ['MLB', 'NFL', 'NCAAF', 'NHL'];
     if (SPORTS_ENABLED.NBA) sports.push('NBA');
-    return sports.filter((s) => SPORTS_ENABLED[s]);
+    else if (nbaModuleEnabled()) sports.push('NBA');
+    return sports.filter((s) => SPORTS_ENABLED[s] || (s === 'NBA' && nbaModuleEnabled()));
   }
   return sportsForCard(date);
 }
@@ -127,8 +128,9 @@ function projectAll(snap, dateISO) {
       espnGames: snap.espnBySport && snap.espnBySport.NCAAF,
     }));
   }
-  // Real board only when the card date (or, with no date, SPORTS_ENABLED.NBA) says so.
-  // Preseason candidates are still dropped. NBA_CARD_LIVE stays false.
+  // Real board only when the card date (or, with no date, SPORTS_ENABLED.NBA
+  // or OMEGA_NBA=1) says so. Off produces nothing here. Preseason candidates
+  // are still dropped. NBA_CARD_LIVE stays false.
   if (on.has('NBA')) {
     raw.push(...nba.project({
       oddsEvents: snap.oddsBySport.NBA || [],

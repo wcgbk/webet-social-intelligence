@@ -2,7 +2,7 @@
 
 const {
   SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
-  ncaafGpFixEnabled, teamExactOnly, fbWeatherEnabled,
+  ncaafGpFixEnabled, teamExactOnly, fbWeatherEnabled, nbaModuleEnabled,
 } = require('./config');
 const { parseWinLossRecord } = require('./sports/_common');
 const { resolveTeamId, teamRecord } = require('./sports/team_identity');
@@ -38,7 +38,11 @@ function buildOddsUrl(sportKey, apiKey, historicalSnapshot) {
 }
 
 function enabledSportLabels(dateISO) {
-  if (!dateISO) return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+  if (!dateISO) {
+    const sports = Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+    if (nbaModuleEnabled() && sports.indexOf('NBA') === -1) sports.push('NBA');
+    return sports;
+  }
   return sportsForCard(dateISO);
 }
 

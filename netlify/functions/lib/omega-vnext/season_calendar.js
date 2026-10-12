@@ -9,8 +9,8 @@
  * so a replay of a past date behaves as it did on that date.
  *
  * phase.eligible is whether that phase is a card phase. NBA still needs
- * the explicit live flag (NBA_CARD_LIVE or OMEGA_NBA_LIVE=1). Preseason
- * is never card-eligible, including NBA with the flag on.
+ * the explicit live flag (NBA_CARD_LIVE, OMEGA_NBA=1, or OMEGA_NBA_LIVE=1).
+ * Preseason is never card-eligible, including NBA with the flag on.
  *
  * Neutral-site home-field advantage is not a calendar flag. NFL and NCAAF
  * projections use HFA 0 when a matched ESPN game has neutralSite true
@@ -21,7 +21,7 @@
  * stale calendar cannot silently empty the card.
  */
 
-const { SPORTS_ENABLED, NBA_CARD_LIVE } = require('./config');
+const { SPORTS_ENABLED, NBA_CARD_LIVE, nbaModuleEnabled } = require('./config');
 
 const PHASES = ['preseason', 'regular', 'conf_champ', 'bowls', 'playin', 'postseason', 'offseason'];
 
@@ -195,7 +195,7 @@ const SEASONS = {
       start: '2026-10-02',
       end: '2026-10-19',
       eligible: false,
-      note: 'NBA preseason. Never card-eligible, even if OMEGA_NBA_LIVE=1 or NBA_CARD_LIVE is turned on. Shadow job is unchanged.',
+      note: 'NBA preseason. Never card-eligible, even if OMEGA_NBA=1, OMEGA_NBA_LIVE=1, or NBA_CARD_LIVE is turned on. Shadow job is unchanged.',
       source: NBA_SOURCE,
     },
     {
@@ -241,6 +241,7 @@ function isYmd(value) {
 
 function nbaLive(env) {
   const e = env || {};
+  if (nbaModuleEnabled(e)) return true;
   if (e.OMEGA_NBA_LIVE === '1') return true;
   if (NBA_CARD_LIVE === true) return true;
   return false;

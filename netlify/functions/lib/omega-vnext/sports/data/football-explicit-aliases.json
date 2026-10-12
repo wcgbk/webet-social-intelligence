@@ -1,5 +1,10 @@
 {
-  "NFL": {},
+  "NFL": {
+    "LA Rams": "14",
+    "LA Chargers": "24",
+    "NY Giants": "19",
+    "NY Jets": "20"
+  },
   "NCAAF": {
     "Texas AM": "245",
     "Texas AM Aggies": "245",
@@ -38,7 +43,8 @@
     "AFA": "2005",
     "NH": "2441",
     "ALB": "399",
-    "WES": "2698"
+    "WES": "2698",
+    "UL Lafayette": "309"
   },
   "MLB": {
     "Yankees": "10",
@@ -89,5 +95,8 @@
     "NY Rangers": "13",
     "NY Islanders": "12"
   },
-  "NBA": {}
+  "NBA": {
+    "Sixers": "20",
+    "Portland Trailblazers": "22"
+  }
 }

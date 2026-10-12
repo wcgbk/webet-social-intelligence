@@ -13,7 +13,7 @@
  * Default dryRun=true. Hard cap MAX_DAYS=14.
  */
 
-const { SPORTS_ENABLED, MODEL_VERSION } = require('./config');
+const { SPORTS_ENABLED, MODEL_VERSION, nbaModuleEnabled } = require('./config');
 const { sportsForCard } = require('./season_calendar');
 const { storeReplayCard, storeReplaySummary, assertReplayKey, readJson, readPicks } = require('./store');
 const { replayNoWrite } = require('./no_write');
@@ -24,7 +24,11 @@ const DEFAULT_MAX_DAYS = 7;
 const HARD_MAX_DAYS = 14;
 
 function enabledSports(dateISO) {
-  if (!dateISO) return Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+  if (!dateISO) {
+    const sports = Object.keys(SPORTS_ENABLED).filter(s => SPORTS_ENABLED[s]);
+    if (nbaModuleEnabled() && sports.indexOf('NBA') === -1) sports.push('NBA');
+    return sports;
+  }
   return sportsForCard(dateISO);
 }
 

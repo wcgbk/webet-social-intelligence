@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.28-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.29-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -530,6 +530,33 @@ const POINT_SHRINK = {
 const NCAAF_FCS = { stdMult: 1.25, pointLambda: 0.5 };
 
 /**
+ * Weight on the NCAAF preseason/seed prior inside the opponent-adjusted blend.
+ * Low returning production regresses that prior-year rating toward the mean.
+ * Multiplier = clamp(base + slope * (overallRet - center), min, max)
+ * = clamp(0.6 + 0.8 * (overallRet - 0.5), 0.4, 1.0).
+ * It scales the seed term only. The games-played weight g/(g+K) stays put,
+ * so in-season results take over as games are played.
+ * OMEGA_NCAAF_RETPROD=0 disables (multiplier 1). A missing rate is 1.
+ */
+const NCAAF_RET_PROD = Object.freeze({
+  base: 0.6,
+  slope: 0.8,
+  center: 0.5,
+  min: 0.4,
+  max: 1.0,
+});
+
+function ncaafRetProdMultiplier(overallRet) {
+  if (!flagEnabled('OMEGA_NCAAF_RETPROD')) return 1;
+  const r = Number(overallRet);
+  if (!Number.isFinite(r)) return 1;
+  const raw = NCAAF_RET_PROD.base + NCAAF_RET_PROD.slope * (r - NCAAF_RET_PROD.center);
+  if (raw < NCAAF_RET_PROD.min) return NCAAF_RET_PROD.min;
+  if (raw > NCAAF_RET_PROD.max) return NCAAF_RET_PROD.max;
+  return raw;
+}
+
+/**
  * Raw |model − line| at or above this many points is a private review
  * flag. Totals compare the model total to the market total. Spreads
  * compare the model margin to −homeSpread (the market-implied home margin).
@@ -680,6 +707,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.29-omega-vnext-price-lock: NCAAF returning production, including transfers (Connelly/ESPN 2026), scales the opponent-adjusted seed prior. The priorWeight multiplier is clamp(0.6 + 0.8*(overallRet-0.5), 0.4, 1.0), so a low returning-production roster regresses the prior-year rating toward the mean. Games-played shrink is unchanged and in-season results take over as games are played. A missing team uses multiplier 1. OMEGA_NCAAF_RETPROD=0 disables. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.28-omega-vnext-price-lock: E2 quarter-Kelly units are x50, nearest 0.5u, floor 0.5u when Kelly > 0, drawdown x0.75 floored at 0.5u. E3 a football shutout pa === 0 with gp >= 1 is pf/gp. E4 NCAAF non-FBS games set fcsGame, widen spread/total/ML std by 1.25, and pull to the line at lambda 0.5 (OMEGA_NCAAF_FCS=0 disables). E6 the market anchor is Pinnacle, else Circa, else the existing sharp fair; posted MLB totals follow that order, then the median of the other sharp books. E1 and E5 were tested and dropped. E1 set the unset default to the 0.42–0.58 bandRetainClip; with publish cover floors off, the band lifted dog probabilities toward 0.42 and the 10/11 dry run picked +215/+205/+180 dogs at 14–24% EV. E5 dropped unpaired rows and NHL log-loss vs close worsened +0.0013.',
   'v12.3.27-omega-vnext-price-lock: NFL Elo blend default weight is 0.8 (OMEGA_NFL_ELO_WEIGHT still overrides). Replay 2026-09-26..10-10, NFL all candidates vs Pinnacle close: w0.5 LL 0.6965 KL 0.0089; w0.65 0.6898/0.0086; w0.8 0.6843/0.0085; w1.0 0.6709/0.0090. 0.8 chosen for lowest KL. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.26-omega-vnext-price-lock: Per-run audit log of API and model calls (omega-audit/<date>/<runId>, card.audit summary). Observe-only recal-report-omega at 9:15 ET scores per-sport CLV, log-loss, Brier, KL, and fitted shrink K on 7/14/28-day windows and writes omega-recal-report only. ESPN depth-chart QB1 is the starter feed for NFL; NCAAF falls back. NFL Elo uses K 20, the FiveThirtyEight margin-of-victory multiplier, one-third regression to 1505, and a 2:1 DraftKings win-total blend, attached at weight 0.5. Replay NFL log-loss .7153 to .6965 and KL .0127 to .0089. NHL empty-net end-game Markov: NHL log-loss .6850 to .6790 and KL .0059 to .0045. NCAAF tempo totals are present and off (weight 0); the replay sweep worsened log-loss. npm test runs in parallel with a network guard, a golden card, and invariant tests. No floor, Kelly, shrink, or unit-cap change.',
@@ -795,6 +823,8 @@ module.exports = {
   NFL_KEY_NUMBERS,
   POINT_SHRINK,
   NCAAF_FCS,
+  NCAAF_RET_PROD,
+  ncaafRetProdMultiplier,
   MODEL_LINE_GAP,
   FB_MARKET_GAP,
   flagEnabled,

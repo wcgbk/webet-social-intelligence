@@ -11,10 +11,50 @@
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
-const { HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled, envNumber } = require('../config');
+const { HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled, envNumber, ncaafRetProdMultiplier } = require('../config');
 const { clamp } = require('../odds_math');
 const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
 const { resolveTeamId, modelRow, logUnknownTeam, isFbsTeamId, teamRecord, rowByIdentity } = require('./team_identity');
+const returningProductionFile = require('./data/cfb-returning-production-2026.json');
+
+/**
+ * ESPN-id rows from the 2026 returning-production table. A key that does
+ * not resolve, or a rate outside 0-1, is logged and dropped. Lookup then
+ * fail-softs to multiplier 1.
+ */
+function loadReturningProduction(file) {
+  const out = {};
+  const src = file && typeof file === 'object' ? file : {};
+  for (const [key, row] of Object.entries(src)) {
+    if (!key || String(key).startsWith('_')) continue;
+    const id = String(key);
+    const rec = teamRecord('NCAAF', id);
+    const resolved = rec && rec.displayName ? resolveTeamId('NCAAF', rec.displayName) : null;
+    if (!rec || resolved !== id) {
+      console.warn(`[omega-ncaaf] returning production id ${id} did not resolve`);
+      continue;
+    }
+    const offRet = Number(row && row.offRet);
+    const defRet = Number(row && row.defRet);
+    const overallRet = Number(row && row.overallRet);
+    if (![offRet, defRet, overallRet].every((n) => n >= 0 && n <= 1)) {
+      console.warn(`[omega-ncaaf] returning production id ${id} has a rate outside 0-1`);
+      continue;
+    }
+    out[id] = { offRet, defRet, overallRet };
+  }
+  return out;
+}
+
+const NCAAF_RETURNING_PROD = loadReturningProduction(returningProductionFile);
+
+/** Seed-prior multiplier for one ESPN id. Missing team, bad rate, or the disable switch is 1. */
+function ncaafRetProdPriorMultiplier(teamId) {
+  if (teamId == null || teamId === '') return 1;
+  const row = NCAAF_RETURNING_PROD[String(teamId)];
+  if (!row) return 1;
+  return ncaafRetProdMultiplier(row.overallRet);
+}
 
 /**
  * Sierra weight on current points/game. Prior seed weight is 1 − w.
@@ -89,9 +129,11 @@ const SPORT_CFG = {
  *
  * The prior mean is the centered EPA seed in points (offEpa * plays,
  * defEpa * plays) when that school has a seed, otherwise 0 (average FBS).
- * Current-season weight is g / (g + K) on strength and on pace separately,
- * then off = (S + P) / 2 and def = (S − P) / 2. Results replace the seed;
- * they do not get blended again on the way out.
+ * Returning production multiplies that seed only (NCAAF_RET_PROD). A team
+ * with no row keeps multiplier 1. Current-season weight is still g / (g + K)
+ * on strength and on pace separately, then off = (S + P) / 2 and
+ * def = (S − P) / 2. Results replace the seed; they do not get blended
+ * again on the way out.
  *
  * Totals use a symmetric model, so the center is the mean points of
  * FBS-vs-FBS games decided by at most NCAAF_OA_BLOWOUT_MARGIN (28, four
@@ -823,8 +865,10 @@ function solveNcaafOpponentRatings(boards, opts = {}) {
     for (const id of ids) {
       const g = n.get(id) || 0;
       const pr = prior.get(id);
-      const po = pr ? pr.o : 0;
-      const pd = pr ? pr.d : 0;
+      // Seed/prior only. g/(g+K) below is the existing games-played shrink.
+      const m = pr ? ncaafRetProdPriorMultiplier(id) : 1;
+      const po = pr ? pr.o * m : 0;
+      const pd = pr ? pr.d * m : 0;
       // Strength and pace shrink on their own priors. Equal K reproduces
       // the old per-component shrink: off and def then move together.
       const ws = shrinkK > 0 ? g / (g + shrinkK) : 1;
@@ -1610,6 +1654,7 @@ module.exports = {
   etMidnightMs,
   ncaafCompletedGames,
   solveNcaafOpponentRatings,
+  ncaafRetProdPriorMultiplier,
   projectNcaafOpponentAdjusted,
   NCAAF_TEMPO_WEIGHT,
   NCAAF_TEMPO_K_FBS,

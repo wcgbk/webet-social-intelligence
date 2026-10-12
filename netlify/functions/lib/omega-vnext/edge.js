@@ -282,8 +282,12 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
   if (kept.length === 0) {
     data.parlayLegs = [];
     parlayCleared = true;
-    Object.assign(data, require('../no-plays').noPlaysFields(
-      "Today's candidates are no longer offered at a playable price at the major books, so Omega is passing."));
+    const { shouldPublishNoPlays } = require('./select');
+    const leanRows = [].concat(data.leanPool || []);
+    if (shouldPublishNoPlays(kept, leanRows)) {
+      Object.assign(data, require('../no-plays').noPlaysFields(
+        "Today's candidates are no longer offered at a playable price at the major books, so Omega is passing."));
+    }
   }
   if (data.summary) {
     const straightU = kept.reduce((s, p) => s + parseUnitsLoose(p.units), 0);

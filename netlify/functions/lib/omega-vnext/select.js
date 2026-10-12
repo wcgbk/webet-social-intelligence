@@ -4,7 +4,8 @@ const config = require('./config');
 const {
   SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
-  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EV, PM_SOFT,
+  MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EDGE,
+  LEAN_PARLAY_UNITS, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = config;
 const {
@@ -83,9 +84,8 @@ function publishMinEv(c) {
 }
 
 /**
- * Published straights and parlay legs. Stake EV at the sport floor (3%)
- * and edge at or above minEdgeFor. A lean (1.5%–3%, or a 3% EV that misses
- * the edge curve) does not pass. Missing edge does not pass.
+ * Published floor straights. Stake EV at the sport floor (3%) and edge
+ * at or above minEdgeFor. A lean does not pass. Missing edge does not pass.
  */
 function passesPublishFloor(c) {
   const ev = Number(c && c.ev);
@@ -138,16 +138,51 @@ function sideKey(c) {
   return `${matchupKey(c)}||${c && c.side}`;
 }
 
+/** DraftKings posts this side. A synthetic fixture with no ladder stays eligible. */
+function hasDraftKingsLine(c) {
+  if (!c) return false;
+  if (Array.isArray(c.bookPrices)) {
+    return c.bookPrices.some((p) => {
+      const book = String((p && (p.book || p.key)) || '').trim().toLowerCase();
+      return book === 'draftkings' || book === 'draftkings_us';
+    });
+  }
+  const book = String((c.book || c.executionBook) || '').trim().toLowerCase();
+  if (!book) return true;
+  return book === 'draftkings' || book === 'draftkings_us';
+}
+
+/** Live and in-play are not pregame. A missing clock is not a start. */
+function isPregameRow(c) {
+  if (!c) return false;
+  if (c.inPlay === true || c.live === true || c.in_play === true) return false;
+  const st = String(c.priceState || c.marketStatus || '').trim().toLowerCase();
+  return st !== 'live' && st !== 'in-play' && st !== 'inplay';
+}
+
 /**
- * Lean fill. Stake EV at or above LEAN_MIN_EV (1.5%) and a positive edge.
- * LEAN_PAD false leaves the slot empty.
+ * Lean fill. Stake EV > 0 after vig, edge >= LEAN_MIN_EDGE vs the no-vig
+ * sharp, a DraftKings line, and pregame. LEAN_PAD false leaves the slot empty.
  */
+function qualifiesAsLean(c) {
+  const ev = Number(c && c.ev);
+  if (!(ev > 0)) return false;
+  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+  if (!Number.isFinite(edge) || edge + 1e-12 < LEAN_MIN_EDGE) return false;
+  if (!hasDraftKingsLine(c)) return false;
+  if (!isPregameRow(c)) return false;
+  return true;
+}
+
 function passesLeanFill(c) {
   if (config.LEAN_PAD !== true) return false;
-  const ev = Number(c && c.ev);
-  if (!(ev + 1e-12 >= LEAN_MIN_EV)) return false;
-  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
-  return Number.isFinite(edge) && edge > 0;
+  return qualifiesAsLean(c);
+}
+
+/** Empty card may say No Qualifying Plays only when no publishable lean remains. */
+function shouldPublishNoPlays(picks, leanPool) {
+  if (Array.isArray(picks) && picks.length > 0) return false;
+  return !(leanPool || []).some((c) => qualifiesAsLean(c));
 }
 
 /**
@@ -158,8 +193,9 @@ function passesLeanFill(c) {
  * when its edge is in the top N.
  * When fewer than maxN clear the floor and LEAN_PAD is true, the open
  * slots fill from leanPool sorted by EV. One straight per game still
- * applies. A lean is tier 'lean' so the stake caps at LEAN_MAX_UNITS.
- * The card still publishes when the lean pool cannot fill the rest.
+ * applies, and a game that already holds a straight is skipped. A lean
+ * is tier 'lean' and the stake is flat LEAN_MAX_UNITS. The card still
+ * publishes when the lean pool cannot fill the rest.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
@@ -269,7 +305,9 @@ function toPickObject(c, opts = {}) {
   // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
   units = capBGradeStake(units, rating);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
-  if (tier === 'lean' && units > LEAN_MAX_UNITS) units = LEAN_MAX_UNITS;
+  // Flat lean stake. Kelly and the grade cap do not move it. The daily
+  // cap may trim later. It must not raise the lean above this.
+  if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
   const evStr = formatEdgePct(c.ev) || edgePctStr;
 
   const isML = /moneyline/i.test(c.market || '');
@@ -358,8 +396,16 @@ function applyDailyUnitCap(picks, parlayLegs) {
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
 
-  // Lock published parlays to fixed 0.5u
+  // Floor-day parlays stay 0.5u. A lean-day ticket is already 0.25u.
+  // Never raise it.
   for (const pl of parlays) {
+    if (pl && pl.leanDay === true) {
+      const u = parseU(pl.units);
+      const cap = Number(LEAN_PARLAY_UNITS);
+      const next = Number.isFinite(u) && u > 0 && u < cap ? u : cap;
+      pl.units = fmtU(next);
+      continue;
+    }
     pl.units = fmtU(PARLAY_FIXED_UNITS);
   }
 
@@ -517,7 +563,9 @@ module.exports = {
   edgeRank,
   scoreCandidate,
   passesPublishFloor,
+  qualifiesAsLean,
   passesLeanFill,
+  shouldPublishNoPlays,
   straightCardLabel,
   selectStraights,
   orderedByScore,

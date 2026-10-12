@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.30-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.31-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -195,10 +195,10 @@ const MLB_CALIBRATION = {
  * de-vigged sharp at or above the odds-scaled curve in edge_floor.js
  * (1.75% at −110, higher for plus-money and for uncertainty above 0.15).
  * minCoverProb stays 0. There is no flat coverProb floor. A missing cover
- * or EV rejects. EV under 1.5% rejects. EV from 1.5% up to the 3% floor,
- * or a 3%+ EV whose edge misses the curve, is the lean tier (see
- * LEAN_MIN_EV). When LEAN_PAD is true and fewer than 3 straights clear
- * the floor, those leans fill the open slots. minPredictedClvCents
+ * or EV rejects. Non-positive EV rejects. A miss of the 3% floor or the
+ * edge curve can still be a lean fill when EV > 0 and edge >= LEAN_MIN_EDGE.
+ * When LEAN_PAD is true and fewer than 3 straights clear the floor, those
+ * leans fill the open slots. minPredictedClvCents
  * is null. Odds band, major-book liquidity, pregame, same ET day, and
  * adverse steam stay. Generate-time placeability is logged and does not
  * reject.
@@ -216,9 +216,17 @@ const GATES = {
   rejectAdverseSteam: true,
 };
 
-/** Lean tier under the 3% floor. Fills a short straight card and may be a parlay leg. */
+/**
+ * Lean fill under the 3% floor. A fill needs stake EV > 0 after vig and
+ * edge >= LEAN_MIN_EDGE vs the no-vig sharp. LEAN_MIN_EV remains the legacy
+ * parlay-pool bar (EV >= 1.5% and a positive edge) so a non-lean card's
+ * parlay search does not move. Stake is flat LEAN_MAX_UNITS. A lean-day
+ * parlay is LEAN_PARLAY_UNITS.
+ */
 const LEAN_MIN_EV = 0.015;
+const LEAN_MIN_EDGE = 0.015;
 const LEAN_MAX_UNITS = 0.5;
+const LEAN_PARLAY_UNITS = 0.25;
 /** Parlay legs only. Straights have no coverProb floor. */
 const PARLAY_MIN_COVER = 0.45;
 
@@ -789,6 +797,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.31-omega-vnext-price-lock: When fewer than 3 straights clear the floor, open slots fill from leans with stake EV > 0 after vig, edge >= 1.5% vs the no-vig sharp, a DraftKings line, and a pregame board. One pick per game. Games that already hold a straight are skipped. Leans rank by EV and stake flat 0.5u. The daily cap does not raise a lean. On a card that includes a lean, the parlay is the top 3 card picks on distinct games when their combined EV is positive, sized 0.25u. Otherwise it is the best positive-EV distinct-game 3-leg from the eligible pool, also 0.25u. A publishable positive-EV lean is not a No Qualifying Plays card. Floors, calibration, and the market anchor are unchanged.',
   'v12.3.30-omega-vnext-price-lock: prior weight is priorW(gp)=K/(K+gp). Replay 2026-09-26..10-10 (15 dates), all candidates vs Pinnacle close, model log-loss. NFL was preseason-deviation weight 1: K0.5 0.6756, K1 0.6736, K2 0.6753, K3 0.6760, K4 0.6799, K6 0.6807, K8 0.6812, K12 0.6829. Chosen NFL_PRIOR_K=1. NCAAF was strength 2 and pace ~14; one K now covers both: K0.5 0.5948, K1 0.5964, K2 0.5964, K3 0.5995, K4 0.6018, K6 0.6055, K8 0.6070, K12 0.6093. Chosen NCAAF_PRIOR_K=0.5. NHL was 34: K0.5 0.6877, K1 0.6863, K2 0.6833, K3 0.6824, K4 0.6806, K6 0.6790, K8 0.6801, K12 0.6796. Chosen NHL_PRIOR_K=6. Outcome rows moved with K (NFL 118-124, NCAAF 414-421, NHL 326-331). Every grid K, and the joint K=1/0.5/6 run, kept 2026-10-04 and 2026-10-10 at 3 straights plus a 3-leg parlay. MLB unchanged (no closes, no games-played prior). No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.29-omega-vnext-price-lock: NCAAF returning production, including transfers (Connelly/ESPN 2026), scales the opponent-adjusted seed prior. The priorWeight multiplier is clamp(0.6 + 0.8*(overallRet-0.5), 0.4, 1.0), so a low returning-production roster regresses the prior-year rating toward the mean. Games-played shrink is unchanged and in-season results take over as games are played. A missing team uses multiplier 1. OMEGA_NCAAF_RETPROD=0 disables. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.28-omega-vnext-price-lock: E2 quarter-Kelly units are x50, nearest 0.5u, floor 0.5u when Kelly > 0, drawdown x0.75 floored at 0.5u. E3 a football shutout pa === 0 with gp >= 1 is pf/gp. E4 NCAAF non-FBS games set fcsGame, widen spread/total/ML std by 1.25, and pull to the line at lambda 0.5 (OMEGA_NCAAF_FCS=0 disables). E6 the market anchor is Pinnacle, else Circa, else the existing sharp fair; posted MLB totals follow that order, then the median of the other sharp books. E1 and E5 were tested and dropped. E1 set the unset default to the 0.42–0.58 bandRetainClip; with publish cover floors off, the band lifted dog probabilities toward 0.42 and the 10/11 dry run picked +215/+205/+180 dogs at 14–24% EV. E5 dropped unpaired rows and NHL log-loss vs close worsened +0.0013.',
@@ -886,7 +895,9 @@ module.exports = {
   MLB_CALIBRATION,
   GATES,
   LEAN_MIN_EV,
+  LEAN_MIN_EDGE,
   LEAN_MAX_UNITS,
+  LEAN_PARLAY_UNITS,
   PARLAY_MIN_COVER,
   QA_HARDFAIL,
   QB_INJURY,

@@ -3,6 +3,7 @@
 const { GATES, LEAN_MIN_EV, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
 const { minEdgeFor } = require('./edge_floor');
 const { formatMoneylinePick } = require('./odds_math');
+const { qualifiesAsLean } = require('./select');
 const { adverseSteamReason } = require('./line_path');
 const { footballMarketGapReason } = require('./sports/_common');
 const { slateReason, nflProjectionGap, liveInPlayReason } = require('./selection_pass');
@@ -245,14 +246,18 @@ function finiteEdge(c) {
 }
 
 /**
- * A floor miss can still be a lean. Needs a positive edge vs the sharp and
- * stake EV at or above LEAN_MIN_EV. Structural rejects stay rejects.
+ * A floor miss can still be a lean. Fill rows need qualifiesAsLean
+ * (EV > 0, edge >= 1.5%, DraftKings, pregame). A legacy row with stake
+ * EV >= LEAN_MIN_EV and a positive edge stays in the pool so a non-lean
+ * parlay search does not move. It does not fill a straight slot.
+ * Structural rejects stay rejects.
  */
 function asLean(c, reason) {
   if (reason !== 'ev-floor' && reason !== 'edge-floor') return null;
   const ev = Number(c && c.ev);
   const edge = finiteEdge(c);
-  if (!(ev >= LEAN_MIN_EV) || !(edge > 0)) return null;
+  const legacy = ev >= LEAN_MIN_EV && edge > 0;
+  if (!legacy && !qualifiesAsLean(c)) return null;
   return { ...c, tier: 'lean', leanReason: reason };
 }
 

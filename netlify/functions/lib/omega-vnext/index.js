@@ -2,7 +2,7 @@
 
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
-  PARLAY_MIN_COVER, LEAN_PAD, LEAN_MIN_EV,
+  PARLAY_MIN_COVER, LEAN_PAD,
 } = require('./config');
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
@@ -16,7 +16,7 @@ const { replayNoWrite } = require('./no_write');
 const {
   createAuditLog, runWithAudit, currentAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId,
 } = require('./audit_log');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel, qualifiesAsLean, shouldPublishNoPlays } = require('./select');
 const { optimizeParlay } = require('./parlay');
 const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -32,7 +32,7 @@ const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot } = require('./price_lock');
-const { parseEdgeFraction } = require('./odds_math');
+
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -555,10 +555,7 @@ async function generateOmegaVnext(opts = {}) {
   // EV must be positive.
   const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
   const leanLegs = (LEAN_PAD ? leanPool : []).filter((c) => {
-    const ev = Number(c && c.ev);
-    const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
-    return c && c.tier === 'lean' && ev + 1e-12 >= LEAN_MIN_EV && Number.isFinite(edge) && edge > 0
-      && !hfKeys.has(`${c.matchup}|${c.side}`);
+    return c && c.tier === 'lean' && !hfKeys.has(`${c.matchup}|${c.side}`);
   });
   const poolForParlay = yesPool
     .filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`))
@@ -601,6 +598,28 @@ async function generateOmegaVnext(opts = {}) {
     parlayLegs = capped.parlayLegs;
   }
   picks = sortByGradeThenUnits(picks);
+
+  // A positive-EV lean that still qualifies is the card. Do not fall through
+  // to "No Qualifying Plays" while one is publishable.
+  let openLeans = [];
+  if (picks.length === 0 && LEAN_PAD) {
+    const blocked = new Set([
+      ...(hardFails || []).map((h) => `${h.matchup}|${h.side || h.pick}`),
+      ...((narr && narr.rejections) || []).map((r) => `${r.matchup}|${r.side || r.pick}`),
+    ]);
+    openLeans = (leanPool || []).filter((c) => qualifiesAsLean(c) && !blocked.has(`${c.matchup}|${c.side}`));
+    if (openLeans.length) {
+      const rescued = selectStraights([], MAX_STRAIGHTS, openLeans);
+      if (rescued.length) {
+        picks = rescued.map((c) => toPickObject(c, { modelVersion: MODEL_VERSION }));
+        parlayLegs = optimizeParlay(yesPool.concat(openLeans), picks, { cardDate: dateISO });
+        const recap = applyDailyUnitCap(picks, parlayLegs);
+        picks = sortByGradeThenUnits(recap.picks);
+        parlayLegs = recap.parlayLegs;
+        console.log(`[omega-vnext] lean rescue picks=${picks.length}`);
+      }
+    }
+  }
 
   const parlayUnits = (parlayLegs || []).reduce((s, pl) => s + (parseFloat(pl.units) || 0), 0);
   const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0) + parlayUnits;
@@ -739,8 +758,9 @@ async function generateOmegaVnext(opts = {}) {
     picksData.storeKey = `omega-shadow/picks-${dateISO}`;
     picksData.meta.storeKey = picksData.storeKey;
   }
-  if (empty) {
+  if (empty && shouldPublishNoPlays(picks, openLeans)) {
     // "No Qualifying Plays Today" card (lib/no-plays). Only a COMPLETED run gets here.
+    // A publishable positive-EV lean never takes this branch.
     const slateCounts = slateCountsFor(snap, dateISO);
     if (!shadow && !dryRun && slateCounts.odds === 0 && slateCounts.espn > 0) {
       // Games on ESPN but no odds for any sport = feed failure, not a pass. Write nothing so
@@ -754,6 +774,8 @@ async function generateOmegaVnext(opts = {}) {
     }), { noGames: slateCounts.total === 0 }));
     picksData.edgeSummary = picksData.noPlaysReason;
     picksData.insights = picksData.insights || '';
+  } else if (empty) {
+    console.error('[omega-vnext] positive-EV lean exists — not publishing No Qualifying Plays');
   }
 
   try {

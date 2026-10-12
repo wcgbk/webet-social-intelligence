@@ -105,9 +105,9 @@ assert.strictEqual(mixed.leanPool[0].leanReason, 'edge-floor');
 assert.strictEqual(mixed.rejected.length, 0);
 {
   const mixedCard = selectStraights(mixed.yesPool, 3, mixed.leanPool);
-  assert.strictEqual(mixedCard.length, 2, 'one floor straight plus the lean on the other game');
-  assert.deepStrictEqual(mixedCard.map(c => c.tier), ['floor', 'lean']);
-  assert.strictEqual(mixedCard[1].side, 'Thin +3');
+  assert.strictEqual(mixedCard.length, 1, 'edge under 1.5% stays in the lean pool and does not fill a slot');
+  assert.deepStrictEqual(mixedCard.map(c => c.tier), ['floor']);
+  assert.strictEqual(mixedCard[0].side, 'Fat +3');
 }
 
 const floorA = side({ edgePct: 0.05, ev: 0.06, side: 'Floor A' });
@@ -140,8 +140,9 @@ const edgeLean = applyGates([side({ edgePct: 0.01, ev: 0.05 })], asOf);
 assert.strictEqual(edgeLean.leanPool.length, 1);
 assert.strictEqual(edgeLean.leanPool[0].leanReason, 'edge-floor');
 const belowLean = applyGates([side({ edgePct: 0.02, ev: 0.01 })], asOf);
-assert.strictEqual(belowLean.leanPool.length, 0);
-assert.strictEqual(belowLean.rejected[0].rejectReason, 'ev-floor');
+assert.strictEqual(belowLean.leanPool.length, 1);
+assert.strictEqual(belowLean.leanPool[0].leanReason, 'ev-floor');
+assert.strictEqual(belowLean.rejected.length, 0);
 
 function leg(matchup, cover, ev, edge) {
   const [away, home] = matchup.split(' @ ');

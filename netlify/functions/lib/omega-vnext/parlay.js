@@ -1,12 +1,12 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_PARLAY_UNITS } = require('./config');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
 } = require('./odds_math');
-const { matchupKey, passesPublishFloor } = require('./select');
+const { matchupKey, passesPublishFloor, qualifiesAsLean } = require('./select');
 const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
@@ -337,6 +337,111 @@ function passesParlayCandidate(c) {
   return Number.isFinite(edge) && edge > 0;
 }
 
+function isLeanCard(straights) {
+  return Array.isArray(straights) && straights.some((s) => s && s.tier === 'lean');
+}
+
+function numericOdds(value) {
+  if (typeof value === 'number' && Number.isFinite(value) && value !== 0) return value;
+  if (value == null || value === '') return null;
+  const n = parseFloat(String(value).replace(/[^0-9.+-]/g, ''));
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+function numericProb(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value > 1 ? value / 100 : value;
+  if (value == null || value === '') return null;
+  const text = String(value).trim();
+  const n = parseFloat(text.replace('%', ''));
+  if (!Number.isFinite(n)) return null;
+  return text.includes('%') || Math.abs(n) > 1 ? n / 100 : n;
+}
+
+/** Card pick or candidate, with numeric odds and cover for comboStats. */
+function legFromRow(row) {
+  if (!row) return null;
+  const odds = numericOdds(row.odds);
+  const coverProb = numericProb(row.coverProb);
+  if (!Number.isFinite(odds) || !Number.isFinite(coverProb)) return null;
+  const evRaw = numericProb(row.ev);
+  const edgeRaw = numericProb(row.edgePct != null ? row.edgePct : row.edge);
+  const dec = americanToDecimal(odds);
+  const ev = Number.isFinite(evRaw) ? evRaw : (Number.isFinite(dec) ? coverProb * dec - 1 : 0);
+  return {
+    ...row,
+    side: row.side || row.pick,
+    market: row.market || row.betType,
+    odds,
+    coverProb,
+    ev: Number.isFinite(ev) ? ev : 0,
+    edgePct: Number.isFinite(edgeRaw) ? edgeRaw : row.edgePct,
+    matchup: row.matchup || `${row.awayTeam} @ ${row.homeTeam}`,
+  };
+}
+
+/**
+ * Top 3 published card picks on distinct games. Combined EV must be > 0.
+ * Cover floor is not reapplied: these picks are already on the card.
+ * A formatted pick is priced from the numeric pool row when one matches.
+ */
+function topCardCombo(straights, pool) {
+  if (!Array.isArray(straights)) return null;
+  const rows = [];
+  const seen = new Set();
+  for (const straight of straights) {
+    if (rows.length >= 3) break;
+    const key = matchupKey(straight);
+    if (!key || seen.has(key)) continue;
+    let source = straight;
+    const cover = straight && straight.coverProb;
+    const alreadyNumeric = typeof cover === 'number' && Number.isFinite(cover) && Number.isFinite(numericOdds(straight.odds));
+    if (!alreadyNumeric) {
+      const hit = (pool || []).find((row) => parlayIsCardMirror([row], [straight]));
+      if (hit) source = hit;
+    }
+    const leg = legFromRow(source);
+    if (!leg) return null;
+    seen.add(key);
+    rows.push(leg);
+  }
+  if (rows.length !== 3) return null;
+  const st = comboStats(rows);
+  if (!(st.ev > 0) || st.uniqueGames !== 3) return null;
+  return { legs: rows, ...st };
+}
+
+/** Floors plus publishable leans. Cover >= 45%, positive stake EV, in the slate. */
+function eligibleLeanParlayPool(pool, cardDate) {
+  const out = [];
+  for (const c of pool || []) {
+    if (!c) continue;
+    if (!(passesPublishFloor(c) || qualifiesAsLean(c))) continue;
+    const cover = numericProb(c.coverProb);
+    const odds = numericOdds(c.odds);
+    const ev = numericProb(c.ev);
+    if (!(Number.isFinite(cover) && cover >= PARLAY_MIN_COVER)) continue;
+    if (!Number.isFinite(odds) || !(Number.isFinite(ev) && ev > 0)) continue;
+    if (cardDate && !inSlate(c, cardDate)) continue;
+    out.push({ ...c, odds, coverProb: cover, ev });
+  }
+  return out;
+}
+
+/** Highest combined EV among distinct-game n-leg tickets. Edge breaks a tie. */
+function bestEvCombo(pool, size) {
+  const games = pool || [];
+  if (games.length < size) return null;
+  let best = null;
+  for (const legs of enumerateCombos(games, size)) {
+    const st = comboStats(legs);
+    if (st.uniqueGames !== legs.length || !(st.ev > 0)) continue;
+    const betterEv = !best || st.ev > best.ev + 1e-12;
+    const tied = best && Math.abs(st.ev - best.ev) <= 1e-12 && betterEdgeTuple(legs, st.ev, best.legs, best.ev);
+    if (betterEv || tied) best = { legs, ...st };
+  }
+  return best;
+}
+
 /** Best side per game, then the best-edge combo whose combined EV is positive. */
 function bestPositiveCombo(pool, size) {
   const byGame = new Map();
@@ -357,6 +462,11 @@ function bestPositiveCombo(pool, size) {
 }
 
 /**
+ * On a card that includes a lean, the parlay is the top 3 card picks on
+ * distinct games when their combined EV is positive, sized
+ * LEAN_PARLAY_UNITS. If that combo's EV is not positive, it is the best
+ * positive-EV distinct-game 3-leg from the eligible pool, also
+ * LEAN_PARLAY_UNITS. Otherwise the floor-day rule below runs at 0.5u.
  * When the three published straights are on distinct games, each cover
  * is >= 45%, and their combined EV is positive, the parlay is those
  * straights. Otherwise the best edges on distinct games, preferring a
@@ -386,10 +496,26 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     .sort((a, b) => legEdge(b) - legEdge(a) || (b.ev - a.ev));
 
   const search = pool;
-  const preferred = preferredStraightCombo(search, straights);
-  if (!preferred && search.length < 2) return [];
-
-  const chosen = preferred || bestPositiveCombo(search, 3) || bestPositiveCombo(search, 2);
+  let chosen = null;
+  let leanStake = false;
+  if (isLeanCard(straights)) {
+    const cardCombo = topCardCombo(straights, yesPool);
+    if (cardCombo) {
+      chosen = cardCombo;
+      leanStake = true;
+    } else {
+      const best3 = bestEvCombo(eligibleLeanParlayPool(yesPool, cardDate), 3);
+      if (best3) {
+        chosen = best3;
+        leanStake = true;
+      }
+    }
+  }
+  if (!chosen) {
+    const preferred = preferredStraightCombo(search, straights);
+    if (!preferred && search.length < 2) return [];
+    chosen = preferred || bestPositiveCombo(search, 3) || bestPositiveCombo(search, 2);
+  }
   if (!chosen) {
     console.log('[omega-vnext] parlay none — no positive-EV 3-leg or 2-leg with cover >= 45%');
     return [];
@@ -398,6 +524,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   const independent = !parlayIsCardMirror(chosen.legs, straights);
 
   // v12.0.9: published parlay always fixed PARLAY_FIXED_UNITS (0.5u)
+  // A lean-day ticket overrides this with LEAN_PARLAY_UNITS below.
   const stake = PARLAY_FIXED_UNITS;
 
   const combinedAmerican = decimalToAmerican(chosen.combinedDecimal);
@@ -451,7 +578,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   return [{
     type: `${legs.length}-leg-parlay-${independent ? 'optimized' : 'straight'}`,
     legs,
-    units: `${stake}u`,
+    units: leanStake ? `${LEAN_PARLAY_UNITS}u` : `${stake}u`,
+    ...(leanStake ? { leanDay: true } : {}),
     combinedOdds,
     combinedDecimal: +chosen.combinedDecimal.toFixed(2),
     combinedProb: `${(chosen.combinedProb * 100).toFixed(1)}%`,

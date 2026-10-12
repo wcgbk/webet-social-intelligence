@@ -9,7 +9,7 @@
  *   - never put two parlay legs on the same game
  *   - never publish a negative-EV straight or a negative-EV ticket
  *   - keep straight units inside the per-pick, B-grade, lean, 3.5u, and 4.0u caps
- *   - keep a published parlay at 0.5u
+ *   - keep a floor-day parlay at 0.5u and a lean-day parlay at 0.25u
  *   - return the same card for the same input
  */
 
@@ -95,7 +95,8 @@ function assertCard(card, label) {
     const ev = parsePct(pickRow.ev);
     assert.ok(Number.isFinite(ev) && ev > 0, `${label} negative straight EV ${pickRow.pick} ${pickRow.ev}`);
     if (pickRow.tier === 'lean') {
-      assert.ok(ev + 1e-6 >= config.LEAN_MIN_EV * 100, `${label} lean ${pickRow.ev}`);
+      assert.ok(ev > 0, `${label} lean ${pickRow.ev}`);
+      assert.ok(parsePct(pickRow.edgePct) + 1e-6 >= config.LEAN_MIN_EDGE * 100, `${label} lean edge ${pickRow.edgePct}`);
       assert.ok(parseU(pickRow.units) <= config.LEAN_MAX_UNITS + 1e-9, `${label} lean units ${pickRow.units}`);
     } else {
       assert.ok(ev + 1e-6 >= config.GATES.minEV.default * 100, `${label} floor ${pickRow.ev}`);
@@ -115,7 +116,8 @@ function assertCard(card, label) {
   let parlayUnits = 0;
   for (const ticket of tickets) {
     parlayUnits += parseU(ticket.units);
-    assert.strictEqual(parseU(ticket.units), config.PARLAY_FIXED_UNITS, `${label} parlay units ${ticket.units}`);
+    const parlayUnitsExpected = ticket.leanDay === true ? config.LEAN_PARLAY_UNITS : config.PARLAY_FIXED_UNITS;
+    assert.strictEqual(parseU(ticket.units), parlayUnitsExpected, `${label} parlay units ${ticket.units}`);
     assert.ok(parsePct(ticket.ev) > 0, `${label} ticket EV ${ticket.ev}`);
     const legs = ticket.legs || [];
     assert.ok(legs.length >= 2 && legs.length <= 3, `${label} leg count ${legs.length}`);
@@ -219,7 +221,7 @@ function fixedPools() {
         row(b, 'Packers -3', { market: 'Spread', line: -3, ev: -0.01, edgePct: -0.01, coverProb: 0.52 }),
         row(c, 'Jets ML', { market: 'Moneyline', line: null, ev: 0.005, edgePct: 0.02, coverProb: 0.55 }),
       ],
-      expectStraights: 0,
+      expectStraights: 1,
       expectParlay: 0,
     },
     {

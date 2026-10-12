@@ -1,0 +1,45 @@
+{
+  "spread": {
+    "sport": "NFL",
+    "market": "Spread",
+    "homeTeam": "Buffalo Bills",
+    "awayTeam": "Miami Dolphins",
+    "side": "Buffalo Bills -3",
+    "matchup": "Miami Dolphins @ Buffalo Bills",
+    "modelProjection": 10.5,
+    "coverProb": 0.62,
+    "odds": -110,
+    "ev": 0.08,
+    "edgePct": 0.06,
+    "commenceTime": "2026-10-12T17:00:00Z"
+  },
+  "home": {
+    "side": "Buffalo Bills",
+    "point": -3,
+    "prices": [
+      { "book": "pinnacle", "american": -120 },
+      { "book": "draftkings", "american": -110 }
+    ]
+  },
+  "away": {
+    "side": "Miami Dolphins",
+    "point": 3,
+    "prices": [
+      { "book": "pinnacle", "american": 100 },
+      { "book": "draftkings", "american": -110 }
+    ]
+  },
+  "boundaries": [
+    { "sport": "NFL", "market": "Spread", "modelProjection": 10, "pinnaclePoint": -3, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": false },
+    { "sport": "NFL", "market": "Spread", "modelProjection": 10.5, "pinnaclePoint": -3, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": true },
+    { "sport": "NCAAF", "market": "Spread", "modelProjection": 13, "pinnaclePoint": -3, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": false },
+    { "sport": "NCAAF", "market": "Spread", "modelProjection": 13.5, "pinnaclePoint": -3, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": true },
+    { "sport": "NHL", "market": "Total", "modelProjection": 6.5, "pinnaclePoint": 5, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": false },
+    { "sport": "NHL", "market": "Total", "modelProjection": 6.6, "pinnaclePoint": 5, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": true },
+    { "sport": "MLB", "market": "Total", "modelProjection": 9, "pinnaclePoint": 7, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": false },
+    { "sport": "MLB", "market": "Total", "modelProjection": 9.5, "pinnaclePoint": 7, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": true },
+    { "sport": "NBA", "market": "Spread", "modelProjection": 20, "pinnaclePoint": -3, "coverProb": 0.5, "pinnacleNoVig": 0.5, "flag": false },
+    { "sport": "NFL", "market": "Moneyline", "modelProjection": 3, "coverProb": 0.62, "pinnacleNoVig": 0.5, "flag": false },
+    { "sport": "NFL", "market": "Moneyline", "modelProjection": 3, "coverProb": 0.63, "pinnacleNoVig": 0.5, "flag": true }
+  ]
+}

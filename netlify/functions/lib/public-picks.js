@@ -16,6 +16,7 @@ const PICK_KEEP = [
   'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
   'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
+  'dataReviewFlag',
 ];
 
 const PARLAY_KEEP = [

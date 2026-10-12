@@ -34,6 +34,7 @@ const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
+const { logReviewFlags } = require('./pinnacle_flag');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -693,6 +694,7 @@ async function generateOmegaVnext(opts = {}) {
   const rejectionCounts = rejectionLog.rejectionCounts;
 
   const empty = picks.length === 0;
+  logReviewFlags(picks, empty ? [] : (parlayLegs || []));
   const picksData = {
     date: dateISO,
     dateFormatted,

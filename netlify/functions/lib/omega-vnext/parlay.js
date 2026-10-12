@@ -11,6 +11,7 @@ const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { parlayCorrEnabled, PARLAY_TOTAL_RHO } = require('./gaps_flags');
+const { reviewFlag } = require('./pinnacle_flag');
 
 function marketRank(m) {
   if (/total/i.test(m || '')) return 3;
@@ -532,6 +533,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
 
   const legs = sortByGradeThenUnits(chosen.legs.map(l => {
     // Leg grade is edge-first quality, independent of the synthetic straight stake.
+    const dataReviewFlag = reviewFlag(l);
     const kFrac = pushAwareKelly(l.coverProb, l.odds, KELLY_FRACTION, l.pPush);
     const legUnits = kellyToUnits(Math.max(kFrac, 0), 1.25);
     const edgeFrac = parseEdgeFraction(l.edgePct != null ? l.edgePct : l.ev);
@@ -572,6 +574,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       ...(l.bestPlaceable ? { bestPlaceable: l.bestPlaceable } : {}),
       ...footballAuditFields(l),
       ...(l.lateNews ? { lateNews: l.lateNews } : {}),
+      ...(dataReviewFlag ? { dataReviewFlag } : {}),
     };
   }));
 

@@ -453,6 +453,25 @@ function hardRockQuote(allBundles, side, point) {
   return best;
 }
 
+function bundleHasPinnacle(bundle) {
+  return ((bundle && bundle.prices) || []).some((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
+}
+
+/** Pinnacle's home spread, or Pinnacle's total. Moneyline has no point. */
+function pinnaclePointOf(raw, allBundles) {
+  const market = String((raw && raw.market) || '');
+  if (/total/i.test(market)) {
+    const row = (allBundles || []).find((b) => b && b.point != null && bundleHasPinnacle(b));
+    return row ? Number(row.point) : null;
+  }
+  if (/spread/i.test(market)) {
+    const home = raw && raw.homeTeam;
+    const row = (allBundles || []).find((b) => b && b.side === home && b.point != null && bundleHasPinnacle(b));
+    return row ? Number(row.point) : null;
+  }
+  return null;
+}
+
 function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
@@ -476,6 +495,8 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const dkQuote = dkRaw
     ? { book: DK_EXEC_BOOK, american: dkRaw.american, point: sideBundle.point != null ? sideBundle.point : null }
     : null;
+  const pinnacleNoVig = noVigForBook(allBundles, sideBundle, 'pinnacle');
+  const pinnaclePoint = pinnaclePointOf(raw, allBundles);
   return {
     ...raw,
     odds,
@@ -498,6 +519,8 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     bookPrices,
     dkQuote,
     hardRock: hardRockQuote(allBundles, sideBundle.side, sideBundle.point),
+    ...(pinnacleNoVig != null && Number.isFinite(pinnacleNoVig) ? { pinnacleNoVig } : {}),
+    ...(pinnaclePoint != null && Number.isFinite(pinnaclePoint) ? { pinnaclePoint } : {}),
   };
 }
 

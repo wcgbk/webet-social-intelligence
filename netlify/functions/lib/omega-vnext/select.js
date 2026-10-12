@@ -17,6 +17,7 @@ const { minEdgeFor } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
+const { reviewFlag } = require('./pinnacle_flag');
 
 function matchupKey(c) {
   const name = String((c && (c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) || '').toLowerCase().trim();
@@ -309,6 +310,7 @@ function toPickObject(c, opts = {}) {
   // cap may trim later. It must not raise the lean above this.
   if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
   const evStr = formatEdgePct(c.ev) || edgePctStr;
+  const dataReviewFlag = reviewFlag(c);
 
   const isML = /moneyline/i.test(c.market || '');
   const pickLabel = formatMoneylinePick(c.side, c.market);
@@ -367,6 +369,7 @@ function toPickObject(c, opts = {}) {
     ...footballAuditFields(c),
     ...(c.lateNews ? { lateNews: c.lateNews } : {}),
     ...(c.hrFlags && c.hrFlags.length ? { hrFlags: c.hrFlags } : {}),
+    ...(dataReviewFlag ? { dataReviewFlag } : {}),
   };
 }
 

@@ -208,6 +208,9 @@ function createAuditLog({ runId, date, fn } = {}) {
     // URL was redacted above. Scrub any leftover secret value that survived in the URL or error.
     row.url = scrubText(row.url, secrets);
     if (row.error) row.error = scrubText(row.error, secrets);
+    if (src.note != null && src.note !== '') {
+      row.note = scrubText(String(src.note), secrets).slice(0, 400);
+    }
     list.push(row);
     return row;
   }

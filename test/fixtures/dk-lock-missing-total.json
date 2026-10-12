@@ -1,0 +1,96 @@
+{
+  "NFL": [
+    {
+      "id": "nfl-complete",
+      "home_team": "Buffalo Bills",
+      "away_team": "Miami Dolphins",
+      "bookmakers": [
+        {
+          "key": "draftkings",
+          "markets": [
+            {
+              "key": "h2h",
+              "outcomes": [
+                { "name": "Buffalo Bills", "price": -150 },
+                { "name": "Miami Dolphins", "price": 130 }
+              ]
+            },
+            {
+              "key": "spreads",
+              "outcomes": [
+                { "name": "Buffalo Bills", "price": -110, "point": -3.5 },
+                { "name": "Miami Dolphins", "price": -110, "point": 3.5 }
+              ]
+            },
+            {
+              "key": "totals",
+              "outcomes": [
+                { "name": "Over", "price": -110, "point": 47.5 },
+                { "name": "Under", "price": -110, "point": 47.5 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "nfl-missing-total",
+      "home_team": "Kansas City Chiefs",
+      "away_team": "Baltimore Ravens",
+      "bookmakers": [
+        {
+          "key": "draftkings",
+          "markets": [
+            {
+              "key": "h2h",
+              "outcomes": [
+                { "name": "Kansas City Chiefs", "price": -120 },
+                { "name": "Baltimore Ravens", "price": 100 }
+              ]
+            },
+            {
+              "key": "spreads",
+              "outcomes": [
+                { "name": "Kansas City Chiefs", "price": -110, "point": -2.5 },
+                { "name": "Baltimore Ravens", "price": -110, "point": 2.5 }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "pinnacle",
+          "markets": [
+            {
+              "key": "spreads",
+              "outcomes": [
+                { "name": "Kansas City Chiefs", "price": -105, "point": -2.5 },
+                { "name": "Baltimore Ravens", "price": -105, "point": 2.5 }
+              ]
+            },
+            {
+              "key": "totals",
+              "outcomes": [
+                { "name": "Over", "price": -110, "point": 46 },
+                { "name": "Under", "price": -110, "point": 46 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "MLB": [
+    {
+      "home_team": "Los Angeles Dodgers",
+      "away_team": "Milwaukee Brewers",
+      "bookmakers": [
+        {
+          "key": "draftkings",
+          "markets": [
+            { "key": "h2h", "outcomes": [{ "name": "Los Angeles Dodgers", "price": -140 }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

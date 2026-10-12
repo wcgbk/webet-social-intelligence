@@ -33,7 +33,7 @@ const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot } = require('./price_lock');
-
+const { retryMissingDraftKings } = require('./dk_retry');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -265,6 +265,17 @@ async function generateOmegaVnext(opts = {}) {
   const servedSnapshot = (snap && snap.oddsSnapshotTimestamp) || null;
   console.log(`[omega-vnext] odds snapshot requested=${oddsSnapshot || 'live'} served=${servedSnapshot || 'unknown'}`);
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
+  if (snap && snap.oddsBySport && oddsSnapshot) {
+    try {
+      snap.oddsBySport = await retryMissingDraftKings(snap.oddsBySport, {
+        dryRun,
+        replay: replayLike,
+        apiKey: process.env.ODDS_API_KEY,
+      });
+    } catch (e) {
+      console.error(`[omega-vnext] dk-retry soft-fail: ${e.message}`);
+    }
+  }
   console.log(formatSkipLog(snap.unresolvedSkipped, snap.neutralSiteCounts));
 
   // X injury/roster hook. No token → documented stub, no fetch. The card

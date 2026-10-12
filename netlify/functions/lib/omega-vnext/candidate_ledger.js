@@ -129,6 +129,9 @@ function ledgerRow(source, { reason, published, generatedAt, oddsBySport }) {
     p_model: numOrNull(source && source.p_model),
     coverProb: numOrNull(source && source.coverProb),
     ev: numOrNull(source && source.ev),
+    lagEdge: numOrNull(source && source.lagEdge),
+    pinMove: numOrNull(source && source.pinMove),
+    dkMove: numOrNull(source && source.dkMove),
     reason: reason || 'yes',
     published: !!published,
     generatedAt: generatedAt || null,
@@ -163,6 +166,7 @@ function buildCandidateLedger(opts = {}) {
     }));
   };
   for (const row of opts.yesPool || []) add(row, 'yes');
+  for (const row of opts.leanPool || []) add(row, 'lean');
   for (const row of opts.rejected || []) {
     add(row, row.rejectReason || row.reason || 'reject');
   }

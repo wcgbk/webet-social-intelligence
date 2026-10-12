@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.31-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.32-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -159,6 +159,18 @@ const LINE_MOVE = {
   /** Verify (10:30): harder adverse thresholds — drop, do not refill. Empty OK. */
   verifyAdverseCents: 20,
   verifyAdversePts: { Spread: 1.5, Total: 1.5 },
+};
+
+/**
+ * DraftKings lags the one-book no-vig (Pinnacle, else Circa).
+ * minPinMovePp is the Pinnacle no-vig move toward the side, in percentage
+ * points, from the morning snap or the opener to the 10:30 lock.
+ * maxDkFollowRatio: DraftKings implied must move less than this fraction
+ * of pinMove. OMEGA_DK_LAG=0 disables the rank and coverProb use.
+ */
+const DK_LAG = {
+  minPinMovePp: 1.0,
+  maxDkFollowRatio: 0.5,
 };
 
 /** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.1: slightly stronger.
@@ -797,6 +809,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.32-omega-vnext-price-lock: DraftKings lags Pinnacle. marketEv = one-book no-vig (Pinnacle, else Circa, no mixed books) times the DraftKings decimal minus 1 at the 10:30 lock. lagEdge = marketEv when that no-vig moved at least +1.0pp toward the side from the morning snap (omega-line-snap 06:00..09:15) or the opener and DraftKings implied moved less than half of that move (DK_LAG.maxDkFollowRatio 0.5). OMEGA_DK_LAG=0 disables. A lag side adds lagEdge to the ranking edge and publishes coverProb = max(model coverProb, the anchor no-vig), so stake EV is never based on a probability above the fresh fair unless the model was already higher. Floors, caps, Kelly, full-card and parlay rules are unchanged. Offline eval 2026-09-26..10-10: n lag 1, avg CLV +0.003029, beat close 100.0%, all-candidate LL off 0.635988 on 0.635988 (n=1082). No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.31-omega-vnext-price-lock: When fewer than 3 straights clear the floor, open slots fill from leans with stake EV > 0 after vig, edge >= 1.5% vs the no-vig sharp, a DraftKings line, and a pregame board. One pick per game. Games that already hold a straight are skipped. Leans rank by EV and stake flat 0.5u. The daily cap does not raise a lean. On a card that includes a lean, the parlay is the top 3 card picks on distinct games when their combined EV is positive, sized 0.25u. Otherwise it is the best positive-EV distinct-game 3-leg from the eligible pool, also 0.25u. A publishable positive-EV lean is not a No Qualifying Plays card. Floors, calibration, and the market anchor are unchanged.',
   'v12.3.30-omega-vnext-price-lock: prior weight is priorW(gp)=K/(K+gp). Replay 2026-09-26..10-10 (15 dates), all candidates vs Pinnacle close, model log-loss. NFL was preseason-deviation weight 1: K0.5 0.6756, K1 0.6736, K2 0.6753, K3 0.6760, K4 0.6799, K6 0.6807, K8 0.6812, K12 0.6829. Chosen NFL_PRIOR_K=1. NCAAF was strength 2 and pace ~14; one K now covers both: K0.5 0.5948, K1 0.5964, K2 0.5964, K3 0.5995, K4 0.6018, K6 0.6055, K8 0.6070, K12 0.6093. Chosen NCAAF_PRIOR_K=0.5. NHL was 34: K0.5 0.6877, K1 0.6863, K2 0.6833, K3 0.6824, K4 0.6806, K6 0.6790, K8 0.6801, K12 0.6796. Chosen NHL_PRIOR_K=6. Outcome rows moved with K (NFL 118-124, NCAAF 414-421, NHL 326-331). Every grid K, and the joint K=1/0.5/6 run, kept 2026-10-04 and 2026-10-10 at 3 straights plus a 3-leg parlay. MLB unchanged (no closes, no games-played prior). No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.29-omega-vnext-price-lock: NCAAF returning production, including transfers (Connelly/ESPN 2026), scales the opponent-adjusted seed prior. The priorWeight multiplier is clamp(0.6 + 0.8*(overallRet-0.5), 0.4, 1.0), so a low returning-production roster regresses the prior-year rating toward the mean. Games-played shrink is unchanged and in-season results take over as games are played. A missing team uses multiplier 1. OMEGA_NCAAF_RETPROD=0 disables. No floor, Kelly, shrink, or unit-cap change.',
@@ -889,6 +902,7 @@ module.exports = {
   PLACEABILITY,
   MAJOR_LIQUIDITY_BOOKS,
   LINE_MOVE,
+  DK_LAG,
   PM_SOFT,
   ENGINE_SOFT,
   SHRINK_K,

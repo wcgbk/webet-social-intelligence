@@ -28,6 +28,7 @@ const { attachGenerateHealth } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
+const { applyDkLag } = require('./dk_lag');
 const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { stampCandidates } = require('./late_news');
@@ -507,6 +508,15 @@ async function generateOmegaVnext(opts = {}) {
     console.log(`[omega-vnext] no-draftkings-line excluded=${dkExcluded.length}`);
   }
 
+  // Stale DraftKings vs the 10:30 one-book no-vig. Ranking edge and cover
+  // only. Floors, caps, Kelly, and the lean fill run on the stamped row.
+  candidates = applyDkLag(candidates, {
+    linePath: linePathMeta && linePathMeta.path,
+    opener: linePathMeta && linePathMeta.earliest,
+  });
+  const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
+  console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
+
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   // pregameAsOfMs is a clock only. It does not flip replayLike or the odds URL.
@@ -656,6 +666,9 @@ async function generateOmegaVnext(opts = {}) {
     bestPlaceable: c.bestPlaceable || null,
     book: c.book || null,
     hrFlags: c.hrFlags || null,
+    lagEdge: c.lagEdge != null ? c.lagEdge : null,
+    pinMove: c.pinMove != null ? c.pinMove : null,
+    dkMove: c.dkMove != null ? c.dkMove : null,
     ...footballAuditFields(c),
     ...restAuditFields(c),
     selected: picks.some(p => {
@@ -920,6 +933,7 @@ async function generateOmegaVnext(opts = {}) {
       dateISO,
       generatedAt: picksData.generatedAt,
       yesPool,
+      leanPool,
       rejected,
       picks: picksData.picks,
       parlayLegs: picksData.parlayLegs,

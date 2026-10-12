@@ -335,18 +335,31 @@ function noVigForBook(sideBundles, target, book) {
 }
 
 /**
+ * One-book no-vig. Pinnacle when that book posts both sides. Circa
+ * (circa, else circasports) only when Pinnacle has no two-way price.
+ * Null when neither book has a pair. Does not mix books and does not
+ * fall through to sharpFairForSide.
+ */
+function pairedSharpNoVig(sideBundles, target) {
+  if (!target) return null;
+  const pin = noVigForBook(sideBundles, target, 'pinnacle');
+  if (pin != null && Number.isFinite(pin)) return { p: pin, book: 'pinnacle' };
+  const circa = noVigForBook(sideBundles, target, 'circa');
+  if (circa != null && Number.isFinite(circa)) return { p: circa, book: 'circa' };
+  const circaAlt = noVigForBook(sideBundles, target, 'circasports');
+  if (circaAlt != null && Number.isFinite(circaAlt)) return { p: circaAlt, book: 'circasports' };
+  return null;
+}
+
+/**
  * Spread/total/ML market anchor: Pinnacle's paired no-vig when that book
  * posts both sides. Circa (circa, else circasports) only when Pinnacle has
  * no two-way price. Missing both falls back to sharpFairForSide.
  */
 function noVigPinnacleCircaImplied(sideBundles, target) {
+  const paired = pairedSharpNoVig(sideBundles, target);
+  if (paired) return paired.p;
   if (!target) return null;
-  const pin = noVigForBook(sideBundles, target, 'pinnacle');
-  if (pin != null && Number.isFinite(pin)) return pin;
-  const circa = noVigForBook(sideBundles, target, 'circa');
-  if (circa != null && Number.isFinite(circa)) return circa;
-  const circaAlt = noVigForBook(sideBundles, target, 'circasports');
-  if (circaAlt != null && Number.isFinite(circaAlt)) return circaAlt;
   return sharpFairForSide(sideBundles, target.side, target.point);
 }
 
@@ -444,6 +457,7 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const bestUs = bestPrice(sideBundle.prices, US_BOOKS) || bestPrice(sideBundle.prices, null);
   const sharpAm = sharpConsensusAmerican(sideBundle.prices);
   const fairSharp = sharpFairForSide(allBundles, sideBundle.side, sideBundle.point);
+  const anchor = pairedSharpNoVig(allBundles, sideBundle);
   const odds = bestUs ? bestUs.american : sharpAm;
   const book = bestUs ? bestUs.book : 'consensus';
   const liquid = hasMajorLiquidity(sideBundle.prices);
@@ -470,6 +484,8 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     sharpAmerican: sharpAm,
     fair_sharp_p: fairSharp,
     sharpFairP: fairSharp,
+    pinnacleNoVigP: anchor ? +anchor.p.toFixed(6) : null,
+    sharpAnchorBook: anchor ? anchor.book : null,
     predictedClv: predClv,
     liquid,
     majorBookCount: new Set((sideBundle.prices || []).map(p => p.book)
@@ -527,6 +543,7 @@ module.exports = {
   verifyPlaceabilityDecision,
   applyPlaceabilityDrops,
   sharpFairForSide,
+  pairedSharpNoVig,
   noVigPinnacleCircaImplied,
   oppositeBundle,
   predictedClvCents,

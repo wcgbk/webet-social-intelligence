@@ -104,6 +104,8 @@ const ET_SCHEDULE = {
   'capture-omega-lines-late': { etTimes: ['09:00', '09:15'] },
   // 13:15 UTC = 9:15 ET (EDT), 14:15 UTC = 9:15 ET (EST). Before the 9:30 card.
   'recal-report-omega': { etTimes: ['09:15'] },
+  // Same 09:15 ET slot. Display-only running CLV total. Does not price or select.
+  'report-clv-omega': { etTimes: ['09:15'] },
   'warm-omega-feeds': { etTimes: ['09:00'] },
   'trigger-omega-shadow': { etTimes: ['09:05'] },
   'trigger-omega-nba-shadow': { etTimes: ['17:30'] },

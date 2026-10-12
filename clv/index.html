@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    if (document.cookie.split(';').some(function (c) { return c.trim().indexOf('ga_exclude=') === 0; })) {
+      window['ga-disable-G-848D47V084'] = true;
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Closing Line Value</title>
+  <meta name="description" content="Running closing-line value for Alpha and Omega. Average CLV in percentage points, share of bets that beat the close, and the Omega targets." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/clv" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Closing Line Value" />
+  <meta property="og:description" content="All closing-line value collected to date. Updated daily at 9:15am ET." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Closing Line Value" />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh; min-height: 100dvh;
+    }
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .header-link:hover { background: var(--teal-border); }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown {
+      display: none; position: absolute; top: 100%; right: 0; background: var(--white);
+      border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 180px;
+    }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+    .main { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .page-title { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-bottom: .125rem; }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1rem; line-height: 1.5; }
+    .updated { font-size: .75rem; color: var(--teal); font-weight: 600; margin-bottom: 1rem; }
+    .summary-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; margin-bottom: 1.25rem; }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .75rem; text-align: center;
+    }
+    .summary-label {
+      font-size: .625rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .summary-value { font-size: 1.5rem; font-weight: 700; color: var(--teal); margin-top: .125rem; }
+    .summary-value.pos { color: var(--green); }
+    .summary-value.neg { color: #c0392b; }
+    .card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .card-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+    th {
+      font-size: .625rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .04em;
+      text-align: left; padding: .35rem .3rem; border-bottom: 1px solid var(--border-lt);
+    }
+    td { padding: .4rem .3rem; border-bottom: 1px solid var(--off-white); }
+    td.num, th.num { text-align: right; }
+    tr:last-child td { border-bottom: none; }
+    .pos { color: var(--green); font-weight: 600; }
+    .neg { color: #c0392b; font-weight: 600; }
+    .badge {
+      display: inline-block; margin-left: .35rem; font-size: .625rem; font-weight: 700;
+      color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: 9999px; padding: .05rem .35rem; vertical-align: middle;
+    }
+    .target { font-size: .8125rem; line-height: 1.45; margin-bottom: .75rem; }
+    .target:last-child { margin-bottom: 0; }
+    .target b { color: var(--olive); }
+    .met { color: var(--green); font-weight: 700; }
+    .miss { color: #c0392b; font-weight: 700; }
+    .note { font-size: .75rem; color: var(--txt-m); line-height: 1.5; }
+    .stats-loading { text-align: center; padding: 1.5rem; color: var(--txt-l); font-size: .8125rem; }
+    @media (max-width: 480px) {
+      .summary-row { grid-template-columns: 1fr; }
+      .summary-value { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header" style="position:relative;">
+    <a href="/" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/edge" class="header-link">Edge Picks</a>
+      <a href="/percentile" class="header-link">Scorecard</a>
+      <a href="/clv" class="header-link active" aria-current="page">Closing line</a>
+      <a href="/credits" class="header-link">Credits</a>
+    </nav>
+    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
+    <button class="mobile-menu-btn" type="button" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/edge">Edge Picks</a>
+      <a href="/percentile">Scorecard</a>
+      <a href="/clv">Closing line</a>
+      <a href="/credits">Credits</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <h1 class="page-title">Closing line value</h1>
+    <p class="page-sub">Every graded close collected so far, as a running total. Alpha picks from June 20 through October 7, 2026, Omega picks from September 5, 2026, and each new Omega candidate close after that. The total updates daily at 9:15am ET. A positive number means the no-vig close moved toward the side.</p>
+    <p class="updated" id="updated">Loading the latest total…</p>
+
+    <div id="report"><div class="stats-loading">Loading closing-line totals…</div></div>
+
+    <div class="card">
+      <p class="note">This page only reports. It does not change a price, a probability, or which bets are published. Alpha rows, and any Omega day that was stored only as a family average, keep that average and that beat rate, with the price left blank. A later ticket for the same day replaces the average so the bet is counted once. A group with fewer than 50 closes is marked n&lt;50.</p>
+    </div>
+  </main>
+  <script src="/nav.js" defer></script>
+  <script>
+    function signed(value) {
+      if (value == null || !isFinite(value)) return '—';
+      var n = Math.round(value * 100) / 100;
+      var text = Math.abs(n).toFixed(2);
+      if (n > 0) return '+' + text;
+      if (n < 0) return '-' + text;
+      return '0.00';
+    }
+    function pct(value) {
+      if (value == null || !isFinite(value)) return '—';
+      return (Math.round(value * 10) / 10).toFixed(1) + '%';
+    }
+    function tone(value) {
+      if (value == null || !isFinite(value) || value === 0) return '';
+      return value > 0 ? 'pos' : 'neg';
+    }
+    function sample(block) {
+      return block && block.sampleLabel ? '<span class="badge">n&lt;50</span>' : '';
+    }
+    function row(name, block) {
+      return '<tr><td>' + name + sample(block) + '</td>'
+        + '<td class="num">' + block.n + '</td>'
+        + '<td class="num ' + tone(block.avgClvPp) + '">' + signed(block.avgClvPp) + '</td>'
+        + '<td class="num">' + pct(block.beatClosePct) + '</td></tr>';
+    }
+    function mark(flag) {
+      if (flag === true) return '<span class="met">met</span>';
+      if (flag === false) return '<span class="miss">not met</span>';
+      return '—';
+    }
+    function render(report) {
+      var overall = report.totals.overall;
+      var models = report.totals.byModel;
+      var sports = report.totals.bySport || [];
+      var targets = report.omegaTargets;
+      document.getElementById('updated').textContent = 'Updated ' + (report.updatedAtEt || '—');
+      var html = '';
+      html += '<div class="summary-row">'
+        + '<div class="summary-card"><div class="summary-label">Avg CLV</div><div class="summary-value ' + tone(overall.avgClvPp) + '">' + signed(overall.avgClvPp) + '<span style="font-size:.75rem;font-weight:500;color:#5f6b7a;"> pp</span></div></div>'
+        + '<div class="summary-card"><div class="summary-label">Beat the close</div><div class="summary-value">' + pct(overall.beatClosePct) + '</div></div>'
+        + '<div class="summary-card"><div class="summary-label">Closes</div><div class="summary-value">' + overall.n + sample(overall) + '</div></div>'
+        + '</div>';
+      html += '<div class="card"><div class="card-title">By model</div><table><thead><tr><th>Model</th><th class="num">n</th><th class="num">Avg CLV (pp)</th><th class="num">Beat close</th></tr></thead><tbody>'
+        + row('Alpha', models.Alpha) + row('Omega', models.Omega) + '</tbody></table></div>';
+      html += '<div class="card"><div class="card-title">By sport</div><table><thead><tr><th>Sport</th><th class="num">n</th><th class="num">Avg CLV (pp)</th><th class="num">Beat close</th></tr></thead><tbody>';
+      for (var i = 0; i < sports.length; i += 1) html += row(sports[i].sport, sports[i]);
+      html += '</tbody></table></div>';
+      html += '<div class="card"><div class="card-title">Omega targets</div>';
+      html += '<p class="target"><b>All Omega closes</b> vs 0 pp. '
+        + 'Avg ' + signed(targets.allCandidates.avgClvPp) + ' pp (' + mark(targets.allCandidates.meetsAvg) + ')'
+        + sample(targets.allCandidates) + '. n=' + targets.allCandidates.n + '.</p>';
+      html += '<p class="target"><b>Published Omega picks</b> vs +1.0 pp and 55% beating the close. '
+        + 'Avg ' + signed(targets.publishedPicks.avgClvPp) + ' pp (' + mark(targets.publishedPicks.meetsAvg) + '), '
+        + 'beat ' + pct(targets.publishedPicks.beatClosePct) + ' (' + mark(targets.publishedPicks.meetsBeat) + ')'
+        + sample(targets.publishedPicks) + '. n=' + targets.publishedPicks.n + '.</p>';
+      html += '</div>';
+      document.getElementById('report').innerHTML = html;
+    }
+    function loadReport() {
+      return fetch('/api/get-clv-report', { headers: { 'Accept': 'application/json' } })
+        .then(function (res) {
+          if (!res.ok) throw new Error('report status ' + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          if (!data || !data.totals) throw new Error('report shape');
+          return data;
+        })
+        .catch(function () {
+          return fetch('/clv/report.json').then(function (res) {
+            if (!res.ok) throw new Error('snapshot missing');
+            return res.json();
+          });
+        });
+    }
+    loadReport().then(render).catch(function () {
+      document.getElementById('updated').textContent = 'The closing-line total is not available right now.';
+      document.getElementById('report').innerHTML = '<div class="card"><p class="note">The report endpoint and the saved snapshot both failed to load.</p></div>';
+    });
+    if (window.self !== window.top) document.documentElement.classList.add('in-iframe');
+  </script>
+</body>
+</html>

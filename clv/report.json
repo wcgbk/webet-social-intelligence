@@ -1,0 +1,117 @@
+{
+  "schema": "omega-clv-report-v1",
+  "observerOnly": true,
+  "applied": false,
+  "displayOnly": true,
+  "asOf": "2026-10-10",
+  "generatedAt": "2026-10-12T04:41:47.462Z",
+  "updatedAtEt": "Oct 12, 2026, 12:41 AM ET",
+  "window": {
+    "alphaFrom": "2026-06-20",
+    "alphaTo": "2026-10-07",
+    "omegaFrom": "2026-09-05"
+  },
+  "totals": {
+    "overall": {
+      "n": 373,
+      "avgClvPp": 0.18,
+      "beatClosePct": 44.2,
+      "smallSample": false,
+      "sampleLabel": null
+    },
+    "byModel": {
+      "Alpha": {
+        "n": 278,
+        "avgClvPp": 0.18,
+        "beatClosePct": 44.2,
+        "smallSample": false,
+        "sampleLabel": null
+      },
+      "Omega": {
+        "n": 95,
+        "avgClvPp": 0.17,
+        "beatClosePct": 44.2,
+        "smallSample": false,
+        "sampleLabel": null
+      }
+    },
+    "bySport": [
+      {
+        "sport": "Alpha (sport not on file)",
+        "n": 278,
+        "avgClvPp": 0.18,
+        "beatClosePct": 44.2,
+        "smallSample": false,
+        "sampleLabel": null
+      },
+      {
+        "sport": "MLB",
+        "n": 60,
+        "avgClvPp": 0.07,
+        "beatClosePct": 38.3,
+        "smallSample": false,
+        "sampleLabel": null
+      },
+      {
+        "sport": "NCAAF",
+        "n": 19,
+        "avgClvPp": 0.74,
+        "beatClosePct": 63.2,
+        "smallSample": true,
+        "sampleLabel": "n<50"
+      },
+      {
+        "sport": "NFL",
+        "n": 11,
+        "avgClvPp": -0.23,
+        "beatClosePct": 45.5,
+        "smallSample": true,
+        "sampleLabel": "n<50"
+      },
+      {
+        "sport": "Omega (sport not on file)",
+        "n": 3,
+        "avgClvPp": 0.56,
+        "beatClosePct": 33.3,
+        "smallSample": true,
+        "sampleLabel": "n<50"
+      },
+      {
+        "sport": "NHL",
+        "n": 2,
+        "avgClvPp": -0.26,
+        "beatClosePct": 50,
+        "smallSample": true,
+        "sampleLabel": "n<50"
+      }
+    ]
+  },
+  "omegaTargets": {
+    "allCandidates": {
+      "n": 95,
+      "avgClvPp": 0.17,
+      "beatClosePct": 44.2,
+      "smallSample": false,
+      "sampleLabel": null,
+      "targetAvgClvPp": 0,
+      "targetBeatClosePct": null,
+      "avgGapPp": 0.17,
+      "meetsAvg": true,
+      "meetsBeat": null
+    },
+    "publishedPicks": {
+      "n": 95,
+      "avgClvPp": 0.17,
+      "beatClosePct": 44.2,
+      "smallSample": false,
+      "sampleLabel": null,
+      "targetAvgClvPp": 1,
+      "targetBeatClosePct": 55,
+      "avgGapPp": -0.83,
+      "meetsAvg": false,
+      "meetsBeat": false
+    }
+  },
+  "n": 373,
+  "source": "seed"
+}

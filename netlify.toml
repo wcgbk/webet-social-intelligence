@@ -270,6 +270,22 @@
   # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the report and writes nothing.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
+[functions."report-clv-omega"]
+  schedule = "15 13,14 * * *"
+  # 13:15 UTC = 9:15am ET (EDT). 14:15 UTC = 9:15am ET (EST).
+  # etGuard keeps 09:15 ET only. Display only.
+  # Merges data/clv-ledger-seed.json with clv-*, clv-candidates-*,
+  # clv-candidates-v2/*, and omega-candidates/* over the last 45 ET days.
+  # Writes omega-clv-report/{date} and omega-clv-report/latest.
+  # Does not change a live price, probability, floor, stake, or selection.
+  # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the report and writes nothing.
+  included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
+
+[functions."get-clv-report"]
+  # Public read of omega-clv-report/latest. No auth token.
+  # Falls back to the seeded total when the blob is missing. Writes nothing.
+  included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
+
 [functions."capture-candidate-closes"]
   # Sharp close for every gate-evaluated Omega candidate. Private blobs only:
   # reads omega-candidates/{date}, writes clv-candidates-v2/{date}.

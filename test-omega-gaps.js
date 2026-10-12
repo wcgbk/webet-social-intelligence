@@ -196,7 +196,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     const off = nhl.project({ oddsEvents: [ev], standings: {} });
     const offMl = off.find(c => c.market === 'Moneyline' && c.side === home);
     assert.ok(!/-60min/.test(offMl.projMethod), offMl.projMethod);
-    const legacy = common.blendWithMarket(common.mlFromSpread(offMl.modelProjection, 'NHL'), ml.fair_sharp_p, 0.5);
+    const legacy = common.blendWithMarket(common.mlFromSpread(offMl.modelProjection, 'NHL'), ml.fair_sharp_p, nhl.BLEND.ml);
     near(offMl.modelRawP, legacy, 1e-9, 'NHL OFF is the normal moneyline');
     assert.ok(Math.abs(ml.modelRawP - offMl.modelRawP) > 1e-4, '60-minute ML moves the price');
   });

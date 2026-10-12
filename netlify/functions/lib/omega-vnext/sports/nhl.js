@@ -83,7 +83,8 @@ const NHL_MIN_GAMES = 2;
 const NHL_SOFT_MIN_GAMES = 5;
 const LG_SAVE = 0.905;
 const LG_SHOOT = 0.10;
-const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
+/** replay NHL LL 0.6861->0.6775 */
+const BLEND = { ml: 0.10, spread: 0.50, total: 0.45 };
 
 /**
  * 60-minute joint. The empty-net end game, when NHL_EMPTY_NET is on, is
@@ -860,6 +861,7 @@ function project({ oddsEvents, standings, gameDay, espnGames } = {}) {
 module.exports = {
   project,
   SPORT,
+  BLEND,
   nhlStandingsEnv,
   applyNhlEngineSoft,
   teamGpg,

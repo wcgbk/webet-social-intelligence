@@ -354,8 +354,8 @@ function slim(rows) {
 }
 
 const mainNhlFixture = [
-  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.5570836841060929, modelProjection: 0.45, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
-  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.44291631589390723, modelProjection: 0.45, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.5456115678351351, modelProjection: 0.45, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.45438843216486496, modelProjection: 0.45, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
   { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4186213384597734, modelProjection: 0.45, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
   { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5813786615402265, modelProjection: 0.45, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
   { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.4999999325447795, modelProjection: 6, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
@@ -379,8 +379,8 @@ withEnv({ OMEGA_NHL_SHRINK_MODE: 'off' }, () => {
   assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
 });
 const allNhlFixture = [
-  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.5551010996193075, modelProjection: 0.42, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
-  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.4448989003806926, modelProjection: 0.42, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.545215050937778, modelProjection: 0.42, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.45478494906222205, modelProjection: 0.42, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
   { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4167820520407106, modelProjection: 0.42, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
   { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5832179479592894, modelProjection: 0.42, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
   { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.5016977632851576, modelProjection: 6.02, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },

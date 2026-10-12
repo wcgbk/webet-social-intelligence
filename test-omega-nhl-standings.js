@@ -12,7 +12,7 @@ assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.GATES.minEV.NHL, 0.03);
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(nhl.NHL_MIN_GAMES, 2);
-assert.strictEqual(nhl.NHL_GPG_PRIOR_GAMES, 34);
+assert.strictEqual(nhl.NHL_GPG_PRIOR_GAMES, config.NHL_PRIOR_K);
 const K = nhl.NHL_GPG_PRIOR_GAMES;
 function shrunkSum(sum, gp) {
   return (sum + K * 3.1) / (gp + K);

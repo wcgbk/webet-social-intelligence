@@ -7,11 +7,12 @@ const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const nhl = require(path.join(root, 'sports/nhl'));
+const config = require(path.join(root, 'config'));
 const { buildHealthRecord } = require(path.join(root, 'health'));
 
 const K = nhl.NHL_GPG_PRIOR_GAMES;
 const LG = 3.1;
-assert.strictEqual(K, 34, 'prior games stay at the a-priori Poisson/talent value');
+assert.strictEqual(K, config.NHL_PRIOR_K, 'prior games track NHL_PRIOR_K');
 assert.strictEqual(nhl.NHL_GPG_IMPLAUSIBLE, 10);
 assert.strictEqual(nhl.NHL_GPG_FLOOR, 1.5);
 assert.strictEqual(nhl.NHL_GPG_CAP, 5.2);
@@ -207,7 +208,7 @@ withEnv({ OMEGA_NHL_SHRINK_MODE: 'all' }, () => {
   assert.strictEqual(got.gp, 5);
   assert.ok(Math.abs(got.gfRaw - 16 / 5) < 1e-9);
   assert.ok(Math.abs(got.shrinkWeight - K / (5 + K)) < 1e-9);
-  assert.ok(Math.abs(got.gf - (16 + 34 * 3.1) / 39) < 1e-9);
+  assert.ok(Math.abs(got.gf - (16 + K * LG) / (5 + K)) < 1e-9);
   const fewer = nhl.teamGpg({ pf: 10, pa: 12, games: 8, nhlSeasonGoals: true });
   const more = nhl.teamGpg({ pf: 22, pa: 12, games: 8, nhlSeasonGoals: true });
   assert.ok(more.gf > fewer.gf);
@@ -378,12 +379,12 @@ withEnv({ OMEGA_NHL_SHRINK_MODE: 'off' }, () => {
   assert.deepStrictEqual(slim(projectInBand()), mainNhlFixture);
 });
 const allNhlFixture = [
-  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.5489950969657369, modelProjection: 0.35, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
-  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.4510049030342632, modelProjection: 0.35, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
-  { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4111867145429522, modelProjection: 0.35, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
-  { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5888132854570478, modelProjection: 0.35, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
-  { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.5068838798182105, modelProjection: 6.07, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
-  { sport: 'NHL', market: 'Total', side: 'Under 6', line: 6, modelRawP: 0.4931161201817895, modelProjection: 6.07, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Colorado Avalanche', line: null, modelRawP: 0.5551010996193075, modelProjection: 0.42, fair_sharp_p: 0.5427435387673957, odds: -125, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Moneyline', side: 'Dallas Stars', line: null, modelRawP: 0.4448989003806926, modelProjection: 0.42, fair_sharp_p: 0.4572564612326044, odds: 105, projMethod: 'nhl-standings-hfa' },
+  { sport: 'NHL', market: 'Spread', side: 'Colorado Avalanche -1.5', line: -1.5, modelRawP: 0.4167820520407106, modelProjection: 0.42, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
+  { sport: 'NHL', market: 'Spread', side: 'Dallas Stars +1.5', line: 1.5, modelRawP: 0.5832179479592894, modelProjection: 0.42, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-normal-pl' },
+  { sport: 'NHL', market: 'Total', side: 'Over 6', line: 6, modelRawP: 0.5016977632851576, modelProjection: 6.02, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
+  { sport: 'NHL', market: 'Total', side: 'Under 6', line: 6, modelRawP: 0.4983022367148424, modelProjection: 6.02, fair_sharp_p: 0.5, odds: -110, projMethod: 'nhl-total-baseline' },
 ];
 withEnv({ OMEGA_NHL_SHRINK_MODE: 'all' }, () => {
   assert.deepStrictEqual(slim(projectInBand()), allNhlFixture);

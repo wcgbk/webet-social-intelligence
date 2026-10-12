@@ -449,11 +449,13 @@ function oldAbsTotal(homeSt, awaySt) {
   });
   const plays = epa.SPORT_CFG.NCAAF.plays;
   const g = 5;
-  const w = g / (g + epa.NCAAF_OA_PRIOR_GAMES);
+  const ks = epa.ncaafShrinkKs({ [home]: { offEpa: 0.05, defEpa: 0.05 } });
+  const wS = ks.strength > 0 ? g / (g + ks.strength) : 1;
+  const wP = ks.pace > 0 ? g / (g + ks.pace) : 1;
   const pfPg = 10;
   const paPg = 30;
-  const S = w * (pfPg - paPg);
-  const P = w * (pfPg + paPg - 2 * epa.SPORT_CFG.NCAAF.leaguePpg);
+  const S = wS * (pfPg - paPg);
+  const P = wP * (pfPg + paPg - 2 * epa.SPORT_CFG.NCAAF.leaguePpg);
   const aOff = ((S + P) / 2) / plays;
   const aDef = ((S - P) / 2) / plays;
   const hOff = 0.05;

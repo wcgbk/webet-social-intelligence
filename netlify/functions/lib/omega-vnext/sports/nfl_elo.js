@@ -13,13 +13,15 @@
  * The shipped prior is end-of-2025, regressed 1/3 of the way to 1505,
  * then blended 2:1 toward the win-total Elo. This module applies 2026
  * finals strictly before the card's ET date on top of that prior.
+ * A finite NFL prior K shrinks only that preseason deviation from 1505.
+ * The Elo shift from games stays whole. Null K leaves the walk unchanged.
  * OMEGA_FROZEN_SNAP never hits the network. A missing frozen board
  * leaves every club on the prior.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { HFA } = require('../config');
+const { HFA, priorW, sportPriorK } = require('../config');
 const { memoFetchJson, memoValue } = require('../fetch_memo');
 const { etCalendarDate } = require('../odds_math');
 const { resolveTeamId } = require('./team_identity');
@@ -235,6 +237,42 @@ function ratingsAfterGames(games, start) {
   return ratings;
 }
 
+function gamesPlayedById(games) {
+  const counts = new Map();
+  for (const game of games || []) {
+    if (!game || !isNflId(game.homeId) || !isNflId(game.awayId)) continue;
+    const homeId = String(game.homeId);
+    const awayId = String(game.awayId);
+    counts.set(homeId, (counts.get(homeId) || 0) + 1);
+    counts.set(awayId, (counts.get(awayId) || 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Shrink only the preseason deviation from MEAN_ELO.
+ * rating = MEAN + priorW(g, k) * (prior - MEAN) + (walked - prior).
+ * k null or non-finite is the legacy intercept (deviation weight 1).
+ */
+function applyNflPriorDecay(prior, walked, games, k) {
+  const base = Object.assign({}, walked || {});
+  if (k == null || !Number.isFinite(Number(k))) return base;
+  const counts = gamesPlayedById(games);
+  const ids = new Set([
+    ...Object.keys(prior || {}),
+    ...Object.keys(base),
+  ]);
+  const out = {};
+  for (const id of ids) {
+    const p = prior && Number.isFinite(Number(prior[id])) ? Number(prior[id]) : MEAN_ELO;
+    const walkedElo = Number.isFinite(Number(base[id])) ? Number(base[id]) : p;
+    const g = counts.get(String(id)) || 0;
+    const w = priorW(g, k);
+    out[id] = MEAN_ELO + w * (p - MEAN_ELO) + (walkedElo - p);
+  }
+  return out;
+}
+
 function gamesBeforeCard(games, cardDate) {
   const card = String(cardDate || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(card)) return [];
@@ -316,7 +354,9 @@ async function fetchSeasonBoards(year, fetchImpl) {
 
 function finishPack(cardDate, games, source) {
   const appliedGames = gamesBeforeCard(games, cardDate);
-  const ratings = ratingsAfterGames(appliedGames);
+  const prior = priorRatings();
+  const walked = ratingsAfterGames(appliedGames, prior);
+  const ratings = applyNflPriorDecay(prior, walked, appliedGames, sportPriorK('NFL'));
   const pack = {
     cardDate: cardDate || null,
     source,
@@ -403,6 +443,7 @@ module.exports = {
   loadPrior,
   priorRatings,
   ratingsAfterGames,
+  applyNflPriorDecay,
   gamesBeforeCard,
   readWeekDir,
   fetchSeasonBoards,

@@ -11,7 +11,10 @@
  * NFL/NCAAF maxAbsMarginAdj is a stack cap (those signals + QB continuity).
  */
 
-const { HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled, envNumber, ncaafRetProdMultiplier } = require('../config');
+const {
+  HFA, ENGINE_SOFT, SPORT_TOTAL_STD, centerDefaultEnabled, envNumber, ncaafRetProdMultiplier,
+  ncaafPriorK, ncaafPaceFollowsPrior,
+} = require('../config');
 const { clamp } = require('../odds_math');
 const { powerFromStandings, gamesPlayed, explicitPointsPerGame } = require('./_common');
 const { resolveTeamId, modelRow, logUnknownTeam, isFbsTeamId, teamRecord, rowByIdentity } = require('./team_identity');
@@ -176,6 +179,21 @@ function ncaafPacePriorGames(efficiency) {
 function ncaafPaceK(efficiency) {
   const estimated = ncaafPacePriorGames(efficiency);
   return estimated != null ? estimated : NCAAF_OA_PRIOR_GAMES;
+}
+
+/**
+ * Strength and pace prior games for the EPA seed.
+ * opts are not applied here. solveNcaafOpponentRatings still honors
+ * priorGames and pacePriorGames.
+ * Unset env keeps strength at NCAAF_PRIOR_K and pace at the variance
+ * estimate. OMEGA_NCAAF_PRIOR_K, or NCAAF_PACE_FOLLOWS_PRIOR, uses one K
+ * for both: priorW(gp) = K/(K+gp) on the seed.
+ */
+function ncaafShrinkKs(efficiency) {
+  const strength = ncaafPriorK();
+  if (ncaafPaceFollowsPrior()) return { strength, pace: strength };
+  const estimated = ncaafPacePriorGames(efficiency);
+  return { strength, pace: estimated != null ? estimated : strength };
 }
 const NCAAF_OA_BLOWOUT_MARGIN = 28;
 const NCAAF_OA_MIN_GAMES = 40;
@@ -787,15 +805,17 @@ function solveNcaafOpponentRatings(boards, opts = {}) {
   const sample = ncaafGameSample(boards, opts);
   if (!sample) return null;
   const hfaBase = Number.isFinite(Number(opts.hfa)) ? Number(opts.hfa) : (HFA.NCAAF || 0);
-  const shrinkK = Number.isFinite(Number(opts.priorGames)) ? Number(opts.priorGames) : NCAAF_OA_PRIOR_GAMES;
+  const efficiency = opts.efficiency && typeof opts.efficiency === 'object' ? opts.efficiency : {};
+  const ks = ncaafShrinkKs(efficiency);
+  const shrinkK = Number.isFinite(Number(opts.priorGames)) ? Number(opts.priorGames) : ks.strength;
   const iters = Number.isFinite(Number(opts.iters)) ? Number(opts.iters) : NCAAF_OA_ITERS;
   const minGames = Number.isFinite(Number(opts.minGames)) ? Number(opts.minGames) : NCAAF_OA_MIN_GAMES;
   const plays = (SPORT_CFG.NCAAF && SPORT_CFG.NCAAF.plays) || 68;
-  const efficiency = opts.efficiency && typeof opts.efficiency === 'object' ? opts.efficiency : {};
   const paceEstimated = ncaafPacePriorGames(efficiency);
-  const paceK = Number.isFinite(Number(opts.pacePriorGames))
-    ? Number(opts.pacePriorGames)
-    : (paceEstimated != null ? paceEstimated : shrinkK);
+  let paceK;
+  if (Number.isFinite(Number(opts.pacePriorGames))) paceK = Number(opts.pacePriorGames);
+  else if (ncaafPaceFollowsPrior()) paceK = shrinkK;
+  else paceK = paceEstimated != null ? paceEstimated : shrinkK;
   const { games, fbsGames, close, leagueTotal, blowout } = sample;
   if (fbsGames.length < minGames || !Number.isFinite(leagueTotal)) return null;
   const league = leagueTotal / 2;
@@ -1028,8 +1048,9 @@ function footballRates(st) {
  */
 function priorSideFromStandings(st, cfg, table) {
   const rates = footballRates(st);
-  const kS = NCAAF_OA_PRIOR_GAMES;
-  const kP = ncaafPaceK(table);
+  const ks = ncaafShrinkKs(table);
+  const kS = ks.strength;
+  const kP = ks.pace;
   const g = rates.g;
   let S = 0;
   let P = 0;
@@ -1059,7 +1080,7 @@ function priorSideFromStandings(st, cfg, table) {
  */
 function ncaafRegressedTotal(homeSt, awaySt, cfg, table) {
   const league = cfg.baseTotal;
-  const kP = ncaafPaceK(table);
+  const kP = ncaafShrinkKs(table).pace;
   const term = (st) => {
     const rates = footballRates(st);
     if (rates.pfPg == null) return 0;
@@ -1646,6 +1667,7 @@ module.exports = {
   fallbackUncertainty,
   NCAAF_OA_PRIOR_GAMES,
   ncaafPacePriorGames,
+  ncaafShrinkKs,
   ncaafFbsLeagueTotal,
   ncaafCfgCentered,
   NCAAF_OA_BLOWOUT_MARGIN,

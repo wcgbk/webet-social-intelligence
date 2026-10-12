@@ -221,7 +221,18 @@ close(elo.winTotalEloRaw(10.5), 1588.310376970833, 1e-9);
   assert.strictEqual(withWeeks.source, 'frozen-weeks');
   assert.strictEqual(withWeeks.fetched, false);
   assert.strictEqual(withWeeks.applied, 1);
-  assert.ok(withWeeks.ratings[homeId] > baseHome);
+  const weekGames = elo.gamesFromEspnBoard(JSON.parse(fs.readFileSync(path.join(dir, 'nfl-w1.json'), 'utf8')));
+  const applied = elo.gamesBeforeCard(weekGames, '2026-09-20');
+  const priorMap = elo.priorRatings();
+  const walked = elo.ratingsAfterGames(applied, priorMap);
+  assert.ok(walked[homeId] > priorMap[homeId], 'a win still raises the Elo walk');
+  const priorK = config.sportPriorK('NFL');
+  const expectedHome = (priorK == null || !Number.isFinite(Number(priorK)))
+    ? walked[homeId]
+    : elo.MEAN_ELO
+      + config.priorW(1, priorK) * (priorMap[homeId] - elo.MEAN_ELO)
+      + (walked[homeId] - priorMap[homeId]);
+  close(withWeeks.ratings[homeId], expectedHome);
 
   const sameDay = await elo.prepareNflElo('2026-09-14', { fetchImpl });
   assert.strictEqual(fetches, 0);

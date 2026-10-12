@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.29-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.30-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -637,6 +637,88 @@ function nflEloWeight() {
   return w;
 }
 
+/**
+ * Games-played weight on a preseason or last-season prior.
+ * priorW(gp) = K / (K + gp). Current-season weight is gp / (K + gp).
+ * gp <= 0 keeps the prior (weight 1). K <= 0 drops it (weight 0).
+ */
+function priorW(gp, k) {
+  const g = Number(gp);
+  const kk = Number(k);
+  if (!Number.isFinite(g) || g <= 0) return 1;
+  if (!Number.isFinite(kk) || kk <= 0) return 0;
+  return kk / (kk + g);
+}
+
+/**
+ * A set OMEGA_<SPORT>_PRIOR_K. Null when unset or not a finite K >= 0.
+ * "0" and "off" are a real K of 0 (no prior weight), read at call time.
+ */
+function readPriorEnv(name) {
+  const v = process.env[name];
+  if (v == null || String(v).trim() === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (s === '0' || s === 'off') return 0;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+/**
+ * Preseason-prior strength, in games. priorW(gp) = K/(K+gp).
+ *
+ * NFL shrinks only the preseason Elo deviation from 1505. The in-season
+ * Elo shift stays whole. The old form was K = infinity (deviation weight 1).
+ * Replay 2026-09-26..10-10 chose 1.
+ *
+ * NCAAF uses one K for opponent-adjusted strength and pace. The old split
+ * was strength 2 and a pace variance near 14. Replay chose 0.5.
+ * NCAAF_PACE_FOLLOWS_PRIOR keeps that one-K default. An explicit
+ * pacePriorGames argument still wins.
+ *
+ * NHL is the league-mean GF/GA shrink. The a-priori Poisson K was 34.
+ * Replay chose 6. OMEGA_NHL_SHRINK_K still overrides when
+ * OMEGA_NHL_PRIOR_K is unset.
+ *
+ * MLB has no games-played prior (season rates pass through; the total
+ * offset is not a function of gp). No Pinnacle closes in the replay
+ * window, so MLB_PRIOR_K is not set.
+ */
+const NFL_PRIOR_K = 1;
+const NCAAF_PRIOR_K = 0.5;
+const NHL_PRIOR_K = 6;
+const NCAAF_PACE_FOLLOWS_PRIOR = true;
+
+function sportPriorK(sport) {
+  const key = String(sport || '').toUpperCase();
+  const fromEnv = readPriorEnv(`OMEGA_${key}_PRIOR_K`);
+  if (fromEnv != null) return fromEnv;
+  if (key === 'NHL') {
+    const shrink = readPriorEnv('OMEGA_NHL_SHRINK_K');
+    if (shrink != null) return shrink;
+    return NHL_PRIOR_K;
+  }
+  if (key === 'NFL') return NFL_PRIOR_K;
+  if (key === 'NCAAF') return NCAAF_PRIOR_K;
+  return null;
+}
+
+function ncaafPriorK() {
+  const k = sportPriorK('NCAAF');
+  return k > 0 ? k : 0;
+}
+
+function nhlPriorK() {
+  const k = sportPriorK('NHL');
+  return k > 0 ? k : 0;
+}
+
+/** True when the NCAAF pace prior uses the same K as strength. */
+function ncaafPaceFollowsPrior() {
+  if (NCAAF_PACE_FOLLOWS_PRIOR) return true;
+  return readPriorEnv('OMEGA_NCAAF_PRIOR_K') != null;
+}
+
 function ncaafGpFixEnabled() {
   return flagEnabled('OMEGA_NCAAF_GP_FIX');
 }
@@ -707,6 +789,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.30-omega-vnext-price-lock: prior weight is priorW(gp)=K/(K+gp). Replay 2026-09-26..10-10 (15 dates), all candidates vs Pinnacle close, model log-loss. NFL was preseason-deviation weight 1: K0.5 0.6756, K1 0.6736, K2 0.6753, K3 0.6760, K4 0.6799, K6 0.6807, K8 0.6812, K12 0.6829. Chosen NFL_PRIOR_K=1. NCAAF was strength 2 and pace ~14; one K now covers both: K0.5 0.5948, K1 0.5964, K2 0.5964, K3 0.5995, K4 0.6018, K6 0.6055, K8 0.6070, K12 0.6093. Chosen NCAAF_PRIOR_K=0.5. NHL was 34: K0.5 0.6877, K1 0.6863, K2 0.6833, K3 0.6824, K4 0.6806, K6 0.6790, K8 0.6801, K12 0.6796. Chosen NHL_PRIOR_K=6. Outcome rows moved with K (NFL 118-124, NCAAF 414-421, NHL 326-331). Every grid K, and the joint K=1/0.5/6 run, kept 2026-10-04 and 2026-10-10 at 3 straights plus a 3-leg parlay. MLB unchanged (no closes, no games-played prior). No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.29-omega-vnext-price-lock: NCAAF returning production, including transfers (Connelly/ESPN 2026), scales the opponent-adjusted seed prior. The priorWeight multiplier is clamp(0.6 + 0.8*(overallRet-0.5), 0.4, 1.0), so a low returning-production roster regresses the prior-year rating toward the mean. Games-played shrink is unchanged and in-season results take over as games are played. A missing team uses multiplier 1. OMEGA_NCAAF_RETPROD=0 disables. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.28-omega-vnext-price-lock: E2 quarter-Kelly units are x50, nearest 0.5u, floor 0.5u when Kelly > 0, drawdown x0.75 floored at 0.5u. E3 a football shutout pa === 0 with gp >= 1 is pf/gp. E4 NCAAF non-FBS games set fcsGame, widen spread/total/ML std by 1.25, and pull to the line at lambda 0.5 (OMEGA_NCAAF_FCS=0 disables). E6 the market anchor is Pinnacle, else Circa, else the existing sharp fair; posted MLB totals follow that order, then the median of the other sharp books. E1 and E5 were tested and dropped. E1 set the unset default to the 0.42–0.58 bandRetainClip; with publish cover floors off, the band lifted dog probabilities toward 0.42 and the 10/11 dry run picked +215/+205/+180 dogs at 14–24% EV. E5 dropped unpaired rows and NHL log-loss vs close worsened +0.0013.',
   'v12.3.27-omega-vnext-price-lock: NFL Elo blend default weight is 0.8 (OMEGA_NFL_ELO_WEIGHT still overrides). Replay 2026-09-26..10-10, NFL all candidates vs Pinnacle close: w0.5 LL 0.6965 KL 0.0089; w0.65 0.6898/0.0086; w0.8 0.6843/0.0085; w1.0 0.6709/0.0090. 0.8 chosen for lowest KL. No floor, Kelly, shrink, or unit-cap change.',
@@ -814,6 +897,16 @@ module.exports = {
   HFA,
   NFL_ELO_WEIGHT,
   nflEloWeight,
+  priorW,
+  readPriorEnv,
+  NFL_PRIOR_K,
+  NCAAF_PRIOR_K,
+  NHL_PRIOR_K,
+  NCAAF_PACE_FOLLOWS_PRIOR,
+  sportPriorK,
+  ncaafPriorK,
+  nhlPriorK,
+  ncaafPaceFollowsPrior,
   NHL_EMPTY_NET,
   REST_ADJ,
   restAdjEnabled,

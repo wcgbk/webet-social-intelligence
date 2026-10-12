@@ -24,7 +24,7 @@
  * anyway.
  */
 const { clamp } = require('../odds_math');
-const { HFA, ENGINE_SOFT } = require('../config');
+const { HFA, ENGINE_SOFT, NHL_PRIOR_K, nhlPriorK } = require('../config');
 const {
   formatMatchup, mapGamesSoft, LEAGUE_PPG, bindEspnGameByTeamAndTime,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
@@ -54,11 +54,12 @@ const NHL_GPG_IMPLAUSIBLE = 10;
  * Per-game goals are roughly Poisson, so sampling variance ≈ LEAGUE_GPG (3.1).
  * Between-team true-talent SD is about 0.30 goals/game.
  * K = variance / talentSD^2 = 3.1 / 0.30^2 ≈ 34.4, taken as 34.
- * Chosen a priori, not fit on a replay.
+ * The shipped default is NHL_PRIOR_K (config). priorW(gp) = K/(K+gp).
  * gf_hat = (GF_sum + K * LEAGUE_GPG) / (gp + K), same for GA, then clamped
- * to [NHL_GPG_FLOOR, NHL_GPG_CAP]. OMEGA_NHL_SHRINK_K overrides K at call
- * time (0 or "off" = no shrink; under 'oob' that K applies only to a club
- * the band would have nulled; under 'all' it applies to every club).
+ * to [NHL_GPG_FLOOR, NHL_GPG_CAP]. OMEGA_NHL_PRIOR_K overrides K at call
+ * time. OMEGA_NHL_SHRINK_K still overrides when PRIOR_K is unset.
+ * 0 or "off" is no shrink. Under 'oob' that K applies only to a club
+ * the band would have nulled; under 'all' it applies to every club.
  *
  * OMEGA_NHL_SHRINK_MODE, read at call time:
  *   'all' (default) — shrink every club to the league mean. WeBet order
@@ -68,7 +69,7 @@ const NHL_GPG_IMPLAUSIBLE = 10;
  *     [floor, cap]. In-band clubs keep the raw rate.
  *   'off' or "0" — exact pre-shrink behavior (out-of-band → null / 6.2).
  */
-const NHL_GPG_PRIOR_GAMES = 34;
+const NHL_GPG_PRIOR_GAMES = NHL_PRIOR_K;
 /**
  * Season-sum GF/GA is eligible once games played reach this.
  * A sum is pf/pa above ~1.8× league gpg, or ingest's nhlSeasonGoals flag
@@ -217,14 +218,7 @@ function shrinkSettings() {
   let mode = 'all';
   if (modeText === '0' || modeText === 'off') mode = 'off';
   else if (modeText === 'oob' || modeText === 'all') mode = modeText;
-  const kText = envToggle('OMEGA_NHL_SHRINK_K');
-  let k = NHL_GPG_PRIOR_GAMES;
-  if (kText === '0' || kText === 'off') k = 0;
-  else if (kText != null) {
-    const n = Number(kText);
-    if (Number.isFinite(n) && n >= 0) k = n;
-  }
-  return { mode, k };
+  return { mode, k: nhlPriorK() };
 }
 
 function noneGpg(baseline) {

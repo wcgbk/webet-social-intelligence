@@ -1,0 +1,55 @@
+{
+  "schema": "tracking-kpi-seed-v1",
+  "asOf": "2026-10-12",
+  "note": "Frozen snapshot of GET /api/get-results-omega?range=all on 2026-10-12. Edge is the all-versions cumulative and straight blocks the track-record page renders. Omega is omegaOnly. The daily job does not read this file; it calls get-results-omega.",
+  "cachedAt": 1791781642887,
+  "scope": {
+    "label": "All model versions",
+    "from": "2026-03-19",
+    "omegaStart": "2026-09-22",
+    "legacyThrough": "2026-09-21"
+  },
+  "cumulative": {
+    "wins": 289,
+    "losses": 247,
+    "pushes": 18,
+    "pending": 0,
+    "accuracy": "53.9%",
+    "roi": "15.3%",
+    "totalWagered": 82704,
+    "totalProfit": 12624
+  },
+  "straight": {
+    "wins": 289,
+    "losses": 247,
+    "accuracy": "53.9%",
+    "totalWagered": 68306,
+    "totalProfit": 6052
+  },
+  "omegaOnly": {
+    "cumulative": {
+      "wins": 27,
+      "losses": 23,
+      "pushes": 0,
+      "pending": 0,
+      "accuracy": "54.0%",
+      "roi": "3.1%",
+      "totalWagered": 9955,
+      "totalProfit": 304
+    },
+    "straight": {
+      "wins": 27,
+      "losses": 23,
+      "accuracy": "54.0%",
+      "totalWagered": 8605,
+      "totalProfit": 500
+    },
+    "parlay": {
+      "wins": 3,
+      "losses": 15,
+      "accuracy": "16.7%",
+      "totalWagered": 1350,
+      "totalProfit": -196
+    }
+  }
+}

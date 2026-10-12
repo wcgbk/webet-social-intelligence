@@ -75,6 +75,9 @@
 /api/admin-list-users  /.netlify/functions/admin-list-users  200
 /api/get-omega-clv-report /.netlify/functions/get-omega-clv-report 200
 /api/get-clv-report /.netlify/functions/get-clv-report 200
+/tracking              /tracking/index.html                      200
+/tracking/             /tracking/index.html                      200
+/api/get-tracking      /.netlify/functions/get-tracking          200
 
 /betty-guide   /betty-guide/index.html  200
 /betty-guide/  /betty-guide/index.html  200

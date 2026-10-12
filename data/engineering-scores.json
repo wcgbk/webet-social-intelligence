@@ -1,0 +1,21 @@
+{
+  "schema": "engineering-scores-v1",
+  "note": "Manual elite-desk percentiles, the same four lenses as /percentile: Processes, Architecture, Math, Overall. Not a live results rank and not computed from ROI. The daily tracking job copies the latest entry on or before the report date, separately for Edge (all versions) and Omega.",
+  "entries": [
+    {
+      "date": "2026-10-12",
+      "edge": {
+        "processes": 87,
+        "architecture": 86,
+        "math": 86,
+        "overall": 86
+      },
+      "omega": {
+        "processes": 87,
+        "architecture": 86,
+        "math": 86,
+        "overall": 86
+      }
+    }
+  ]
+}

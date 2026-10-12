@@ -106,6 +106,9 @@ const ET_SCHEDULE = {
   'recal-report-omega': { etTimes: ['09:15'] },
   // Same 09:15 ET slot. Display-only running CLV total. Does not price or select.
   'report-clv-omega': { etTimes: ['09:15'] },
+  // Same 09:15 ET slot, after closes and finals, before the 10:30 selection.
+  // Display-only daily progress table. Does not price or select.
+  'report-tracking-omega': { etTimes: ['09:15'] },
   'warm-omega-feeds': { etTimes: ['09:00'] },
   'trigger-omega-shadow': { etTimes: ['09:05'] },
   'trigger-omega-nba-shadow': { etTimes: ['17:30'] },

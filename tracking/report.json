@@ -1,0 +1,149 @@
+{
+  "schema": "omega-tracking-v1",
+  "observerOnly": true,
+  "displayOnly": true,
+  "applied": false,
+  "asOf": "2026-10-12",
+  "generatedAt": "2026-10-12T13:15:00.000Z",
+  "updatedAtEt": "Oct 12, 2026, 9:15 AM ET",
+  "dollarPerUnit": 150,
+  "clvPercentileScale": [
+    {
+      "avgClvPp": -2,
+      "percentile": 20
+    },
+    {
+      "avgClvPp": -1,
+      "percentile": 35
+    },
+    {
+      "avgClvPp": 0,
+      "percentile": 50
+    },
+    {
+      "avgClvPp": 1,
+      "percentile": 75
+    },
+    {
+      "avgClvPp": 2,
+      "percentile": 85
+    },
+    {
+      "avgClvPp": 3,
+      "percentile": 95
+    }
+  ],
+  "rows": [
+    {
+      "date": "2026-10-12",
+      "edge": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": false
+        },
+        "kpi": {
+          "wins": 289,
+          "losses": 247,
+          "pushes": 18,
+          "record": "289-247-18",
+          "accuracyPct": 53.9,
+          "accuracy": "53.9%",
+          "roiPct": 15.3,
+          "roi": "15.3%",
+          "profitDollars": 12624,
+          "profitUnits": 84.16,
+          "pending": 0
+        },
+        "clv": {
+          "n": 373,
+          "avgClvPp": 0.18,
+          "beatClosePct": 44.2,
+          "percentile": 54.5,
+          "smallSample": false
+        }
+      },
+      "omega": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": false
+        },
+        "kpi": {
+          "wins": 27,
+          "losses": 23,
+          "pushes": 0,
+          "record": "27-23-0",
+          "accuracyPct": 54,
+          "accuracy": "54.0%",
+          "roiPct": 3.1,
+          "roi": "3.1%",
+          "profitDollars": 304,
+          "profitUnits": 2.03,
+          "pending": 0
+        },
+        "clv": {
+          "n": 95,
+          "avgClvPp": 0.17,
+          "beatClosePct": 44.2,
+          "percentile": 54.3,
+          "smallSample": false
+        }
+      },
+      "delta": {
+        "from": null,
+        "edge": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        },
+        "omega": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        }
+      }
+    }
+  ],
+  "source": "seed"
+}

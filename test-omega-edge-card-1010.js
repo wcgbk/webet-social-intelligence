@@ -128,7 +128,7 @@ assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
 assert.strictEqual(config.GATES.minEV.NFL, 0.03);
 assert.strictEqual(config.GATES.minEV.NCAAF, 0.03);
 assert.strictEqual(config.GATES.minPredictedClvCents, null);
-assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, false);
+assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, true);
 assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
 assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
 assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);

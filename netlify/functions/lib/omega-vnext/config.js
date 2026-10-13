@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.57-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.58-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -13,10 +13,11 @@ const MAX_STRAIGHTS = 3;
  */
 const ONE_STRAIGHT_PER_GAME = true;
 /**
- * Same-game stake cap is off. capSameGameExposure does not trim.
- * OMEGA_GAME_EXPOSURE cannot turn the 1.50u cap back on.
+ * Same-game stake cap. Straight units plus the parlay stake on that game
+ * stay at or under 1.75u. The parlay is not cut. Leans are not trimmed.
+ * OMEGA_GAME_EXPOSURE=0 turns the trim off.
  */
-const PER_GAME_EXPOSURE_CAP_ENABLED = false;
+const PER_GAME_EXPOSURE_CAP_ENABLED = true;
 /**
  * Unit structure (v12.0.9+):
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
@@ -863,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.58-omega-vnext-price-lock: Same-game exposure is on. A main straight plus the parlay stake on that game stays at or under 1.75u. The parlay is not cut. Leans are not trimmed. The trim floor is 0.5u. OMEGA_GAME_EXPOSURE=0 turns it off.',
   'v12.3.57-omega-vnext-price-lock: A main stake is capped at 0.5u when cover probability is under 0.42, and at 1.0u when it is under 0.50. The cap is sizing only. Leans stay flat 0.5u.',
   'v12.3.56-omega-vnext-price-lock: Two-way de-vig uses the power method when either American price is past -250 or +210. Inside that band the split stays proportional. Fair probabilities still sum to one.',
   'v12.3.55-omega-vnext-price-lock: After three graded losses in a row, a main stake uses quarter-Kelly times 0.75 and then drops 0.5u, with a 0.5u floor, until a win. Leans stay 0.5u. Missing grades leave the cut off.',

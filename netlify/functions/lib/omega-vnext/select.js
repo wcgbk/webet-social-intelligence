@@ -600,9 +600,8 @@ function isVoidPregame(p) {
 
 /**
  * Straight units plus the full parlay stake on the same game, capped at
- * GAME_EXPOSURE_CAP. The parlay is never cut. Steps are 0.25u, floor 0.25u.
- * PER_GAME_EXPOSURE_CAP_ENABLED is false, so this trim does not run.
- * OMEGA_GAME_EXPOSURE cannot turn it on.
+ * GAME_EXPOSURE_CAP (1.75u). The parlay is never cut. Steps are 0.25u,
+ * floor 0.5u. A lean is not trimmed. OMEGA_GAME_EXPOSURE=0 turns this off.
  * A void-pregame leg is not stake at risk, so it does not count. A
  * void-pregame straight is left unchanged. Late-news removes a dropped
  * straight before enforceOmegaDailyUnitCap reruns this on the surviving card.
@@ -625,15 +624,15 @@ function capSameGameExposure(picks, parlays) {
   }
   if (!onGame.size) return picks;
   return (picks || []).map((p) => {
-    if (isVoidPregame(p)) return p;
+    if (isVoidPregame(p) || isLeanPick(p)) return p;
     const extra = onGame.get(usableGameKey(p)) || 0;
     if (!(extra > 0)) return p;
     const u = parseU(p.units);
     const room = GAME_EXPOSURE_CAP - extra;
     if (u <= room + 1e-9) return p;
     let next = u;
-    while (next > room + 1e-9 && next > 0.25 + 1e-9) {
-      next = Math.max(0.25, Math.round((next - 0.25) * 4) / 4);
+    while (next > room + 1e-9 && next > 0.5 + 1e-9) {
+      next = Math.max(0.5, Math.round((next - 0.25) * 4) / 4);
     }
     if (!(next < u - 1e-9)) return p;
     return { ...p, units: fmtU(next) };

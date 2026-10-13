@@ -28,15 +28,11 @@ function nhlPeriodEnabled() {
 }
 
 /**
- * Default OFF. Unset, blank, 0, off, false, or no stays off.
- * Any other value turns the same-game stake cap on.
+ * Default ON. Unset or blank stays on. 0, off, false, or no turns it off.
+ * The cap is straight stake plus parlay stake, 1.75u. The parlay is not cut.
  */
 function gameExposureEnabled() {
-  const v = process.env.OMEGA_GAME_EXPOSURE;
-  if (v == null) return false;
-  const s = String(v).trim().toLowerCase();
-  if (s === '' || s === '0' || s === 'off' || s === 'false' || s === 'no') return false;
-  return true;
+  return flagEnabled('OMEGA_GAME_EXPOSURE');
 }
 
 /**
@@ -65,9 +61,9 @@ function auditCardEnabled() {
 /**
  * Straight units plus the full parlay stake on that game.
  * The parlay dies if the leg dies, so the 0.5u ticket is exposed on every leg.
- * 1.50u sits above the 1.25u per-straight cap and below 1.25+0.5.
+ * 1.75u is a 1.25u straight plus the 0.5u parlay. A larger straight is trimmed.
  */
-const GAME_EXPOSURE_CAP = 1.5;
+const GAME_EXPOSURE_CAP = 1.75;
 
 /**
  * Pearson prior for same-direction cross-game totals.

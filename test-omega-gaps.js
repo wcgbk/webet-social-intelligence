@@ -337,8 +337,8 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(stamped.awayConference, '8');
 }
 
-// Same-game exposure: straight + full parlay stake, cap 1.50u when the flag is on.
-// OMEGA_GAME_EXPOSURE defaults off, so the slate stake is left alone.
+// Same-game exposure: straight + full parlay stake, cap 1.75u. Default on.
+// 1.25u + 0.5u is the cap, so a normal card is not cut. OMEGA_GAME_EXPOSURE=0 turns it off.
 {
   const game = 'Buffalo Bills @ Kansas City Chiefs';
   const other = 'Dallas Cowboys @ Philadelphia Eagles';
@@ -352,7 +352,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     ],
   };
   withEnv('OMEGA_GAME_EXPOSURE', null, () => {
-    assert.strictEqual(flags.gameExposureEnabled(), false);
+    assert.strictEqual(flags.gameExposureEnabled(), true);
   });
   const capped = select.applyDailyUnitCap([straight, otherStraight], [ticket]);
   const by = Object.fromEntries(capped.picks.map(p => [p.pick, p]));
@@ -367,7 +367,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       { ...otherStraight },
     ], [ticket]);
     const onBy = Object.fromEntries(on.picks.map(p => [p.pick, p]));
-    assert.strictEqual(onBy['KC -2.5'].units, '1.25u', 'per-game exposure cap stays off');
+    assert.strictEqual(onBy['KC -2.5'].units, '1.25u', '1.25u plus 0.5u equals the 1.75u cap');
     assert.strictEqual(onBy['KC -2.5'].rating, 'aplus');
     assert.strictEqual(onBy['PHI -3'].units, '1.00u');
     assert.strictEqual(on.parlayLegs[0].units, '0.5u');
@@ -540,12 +540,12 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     assert.strictEqual(untouched.picks[0].units, '1.25u');
     assert.strictEqual(untouched.picks[0].status, 'void-pregame');
     const liveStraight = select.applyDailyUnitCap([{ ...straight }], [liveLeg]);
-    assert.strictEqual(liveStraight.picks[0].units, '1.25u', 'exposure cap stays off');
+    assert.strictEqual(liveStraight.picks[0].units, '1.25u', '1.25u plus 0.5u equals the 1.75u cap');
   });
 }
 
-// Late-news drop still reruns the unit cap. Exposure stays off by default,
-// so the surviving straight that shares a live leg keeps its slate stake.
+// Late-news drop still reruns the unit cap. 1.25u plus the 0.5u parlay
+// is the 1.75u cap, so the surviving straight keeps its stake.
 {
   const game = 'Buffalo Bills @ Kansas City Chiefs';
   const other = 'Dallas Cowboys @ Philadelphia Eagles';
@@ -615,7 +615,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       resolveLockedParlay,
       enforceCap: enforceOmegaDailyUnitCap,
     });
-    assert.strictEqual(onCard.picks[0].units, '1.25u', 'exposure cap stays off after late news');
+    assert.strictEqual(onCard.picks[0].units, '1.25u', '1.25u plus 0.5u equals the 1.75u cap');
   });
 }
 

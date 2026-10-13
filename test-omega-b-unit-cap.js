@@ -141,18 +141,33 @@ function stake(pick) {
   assert.strictEqual(aplus.units, '1.5u');
 }
 
-// Drawdown is ×0.75 with a 0.5u floor, and it runs before the B cap. It does not B-cap an A-.
+// Drawdown multiplies quarter-Kelly by 0.75, then subtracts 0.5u (floor 0.5u). Mains only.
 {
   const bDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.008 }), { drawdown: true });
   assert.strictEqual(bDraw.rating, 'b');
   assert.strictEqual(bDraw.units, '0.5u');
   const aDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(aDraw.rating, 'aminus');
-  assert.strictEqual(aDraw.units, '0.9375u');
+  assert.strictEqual(aDraw.units, '0.5u');
+  const cut = select.toPickObject(candidate({
+    coverProb: 0.60, ev: 0.05, edgePct: 0.04,
+  }), { drawdown: true, perPickCap: 3.5 });
+  assert.strictEqual(cut.units, '1u');
   const floored = select.toPickObject(candidate({ coverProb: 0.55, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(kellyUnits(0.55), 0.5);
   assert.strictEqual(floored.rating, 'aminus');
   assert.strictEqual(floored.units, '0.5u');
+  const lean = select.toPickObject(candidate({
+    coverProb: 0.70, ev: 0.02, edgePct: 0.02, tier: 'lean',
+  }), { drawdown: true, perPickCap: 3.5 });
+  assert.strictEqual(lean.tier, 'lean');
+  assert.strictEqual(lean.units, '0.5u');
+  assert.strictEqual(select.drawdownActive(null), false);
+  assert.strictEqual(select.drawdownActive([]), false);
+  assert.strictEqual(select.drawdownActive(['loss', 'loss']), false);
+  assert.strictEqual(select.drawdownActive(['win', 'loss', 'loss', 'loss']), true);
+  assert.strictEqual(select.drawdownActive(['loss', 'loss', 'loss', 'win']), false);
+  assert.strictEqual(select.drawdownActive(['loss', 'push', 'loss', 'loss']), true);
 }
 
 // Card-level cap: B stakes above 0.5u drop; A+ / A- and the parlay ticket do not.

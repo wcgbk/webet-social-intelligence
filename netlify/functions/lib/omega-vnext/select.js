@@ -328,11 +328,37 @@ function applyLeanUnitCap(pick) {
   return { ...pick, units: fmtU(cap) };
 }
 
+/**
+ * True after three graded losses in a row, until a win. A push is skipped.
+ * Missing grades are not a streak. The caller treats a read failure as off.
+ */
+function drawdownActive(results) {
+  if (!Array.isArray(results) || !results.length) return false;
+  let losses = 0;
+  for (let i = results.length - 1; i >= 0; i -= 1) {
+    const row = results[i];
+    const raw = typeof row === 'string' ? row : (row && (row.result || row.outcome));
+    const text = String(raw || '').trim().toLowerCase();
+    if (!text || text === 'push' || text === 'void' || text === 'pending') continue;
+    if (text === 'loss' || text === 'l') {
+      losses += 1;
+      if (losses >= 3) return true;
+      continue;
+    }
+    if (text === 'win' || text === 'w') return false;
+    return false;
+  }
+  return false;
+}
+
 function toPickObject(c, opts = {}) {
-  const kFrac = pushAwareKelly(c.coverProb, c.odds, KELLY_FRACTION, c && c.pPush);
+  const lean = c && c.tier === 'lean';
+  const drawdown = !!(opts && opts.drawdown) && !lean;
+  const fraction = drawdown ? KELLY_FRACTION * 0.75 : KELLY_FRACTION;
+  const kFrac = pushAwareKelly(c.coverProb, c.odds, fraction, c && c.pPush);
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
-  if (opts.drawdown) units = Math.max(0.5, units * 0.75);
+  if (drawdown) units = Math.max(0.5, units - 0.5);
 
   // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
   // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.
@@ -608,6 +634,7 @@ module.exports = {
   EDGE_EV_BAND,
   scoreCandidate,
   passesPublishFloor,
+  drawdownActive,
   qualifiesAsLean,
   passesLeanFill,
   shouldPublishNoPlays,

@@ -345,7 +345,7 @@ async function loadQaContext(dateISO, sportsNeeded = []) {
  * from leanPool when LEAN_PAD is on and the card is still short of maxN.
  * @returns {{ picks, hardFails, yesPoolRemaining }}
  */
-function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool } = {}) {
+function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool, drawdown } = {}) {
   const fails = [];
   const kept = [];
   const usedGames = new Set();
@@ -413,7 +413,7 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
   }
 
   const picks = kept.map(c => {
-    const obj = toPickObject(c, { modelVersion });
+    const obj = toPickObject(c, { modelVersion, drawdown: !!drawdown && c.tier !== 'lean' });
     // preserve lock snapshot seed from candidate odds
     obj.lockSnapshot = c.lockSnapshot || {
       odds: obj.odds,

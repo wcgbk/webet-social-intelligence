@@ -16,7 +16,7 @@ const { replayNoWrite } = require('./no_write');
 const {
   createAuditLog, runWithAudit, currentAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId,
 } = require('./audit_log');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, shouldPublishNoPlays } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, shouldPublishNoPlays, drawdownActive } = require('./select');
 const { parlayFromStraights } = require('./parlay');
 const { narrateAndVerify } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -231,6 +231,29 @@ function tenAmSnapshotCoversChecks(snap) {
   if (!names.length) return false;
   if (Array.isArray(snap.oddsErrors) && snap.oddsErrors.length) return false;
   return names.every((name) => Array.isArray(bySport[name]));
+}
+
+/**
+ * Recent win/loss rows for the drawdown rule. An injected list or reader
+ * wins. A live run reads stored cards. A dry run, a replay, or a failed
+ * read leaves grades missing so the stake cut stays off.
+ */
+async function gradedResultsForDrawdown(opts, dryRun, replayLike) {
+  if (Array.isArray(opts.gradedResults)) return opts.gradedResults;
+  if (typeof opts.readGradedResults === 'function') return opts.readGradedResults();
+  if (dryRun || replayLike || opts.loadDrawdown === false) return null;
+  const { readJson } = require('./store');
+  const dates = await readJson('picks-dates');
+  if (!Array.isArray(dates) || !dates.length) return null;
+  const out = [];
+  for (const date of dates.slice(-8)) {
+    const card = await readJson(`picks-${date}`);
+    for (const pick of (card && card.picks) || []) {
+      const result = pick && pick.result;
+      if (result === 'win' || result === 'loss' || result === 'push') out.push(result);
+    }
+  }
+  return out.length ? out : null;
 }
 
 async function generateOmegaVnext(opts = {}) {
@@ -562,10 +585,19 @@ async function generateOmegaVnext(opts = {}) {
     console.error(`[omega-vnext] QA context load failed (continuing): ${e.message}`);
   }
 
+  let drawdown = false;
+  try {
+    const grades = await gradedResultsForDrawdown(opts, dryRun, replayLike);
+    drawdown = drawdownActive(grades);
+  } catch (err) {
+    console.error(`[omega-vnext] drawdown soft-fail: ${err && err.message}`);
+    drawdown = false;
+  }
   const qa = applyHardFails(selected, yesPool, qaCtx, {
     maxN: MAX_STRAIGHTS,
     modelVersion: MODEL_VERSION,
     leanPool: LEAN_PAD ? leanPool : null,
+    drawdown,
   });
   let picks = qa.picks;
   const hardFails = qa.hardFails || [];

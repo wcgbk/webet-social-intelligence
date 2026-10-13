@@ -5,8 +5,8 @@ const ledger = require('./netlify/functions/lib/clv-ledger');
 const oddsMaster = require('./netlify/functions/lib/omega-vnext/odds_master');
 const config = require('./netlify/functions/lib/omega-vnext/config');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.53-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.53-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.55-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.55-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.LEAN_MIN_EV, 0.015);
 

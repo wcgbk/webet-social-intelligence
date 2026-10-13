@@ -196,6 +196,14 @@ function cents(prob) {
   return +(prob * 100).toFixed(2);
 }
 
+/** clv / clvCents / beatClose alias the raw clvProb. Null when the fair is missing. */
+function clvAliases(clvProb) {
+  if (clvProb == null || !Number.isFinite(clvProb)) {
+    return { clv: null, clvCents: null, beatClose: null };
+  }
+  return { clv: clvProb, clvCents: cents(clvProb), beatClose: clvProb > 0 };
+}
+
 function stampClose(row, close, nowIso) {
   const frozen = row && row.fair_sharp_p_at_generate != null ? Number(row.fair_sharp_p_at_generate) : null;
   const fair = Number.isFinite(frozen) ? frozen : (row && row.fair_sharp_p != null ? Number(row.fair_sharp_p) : null);
@@ -212,6 +220,7 @@ function stampClose(row, close, nowIso) {
     pointAdjusted: !!close.pointAdjusted,
     clvProb,
     clvProbCents: cents(clvProb),
+    ...clvAliases(clvProb),
     clvVsOffered,
     clvVsOfferedCents: cents(clvVsOffered),
     clvAmericanCents: close.pointAdjusted ? null : americanCentsDiff(row && row.odds, close.sideOdds),
@@ -221,7 +230,8 @@ function stampClose(row, close, nowIso) {
 
 const CLOSE_FIELDS = [
   'closeAt', 'closeBook', 'closeLine', 'closeOddsPair', 'closeNoVig', 'pointAdjusted',
-  'clvProb', 'clvProbCents', 'clvVsOffered', 'clvVsOfferedCents', 'clvAmericanCents',
+  'clvProb', 'clvProbCents', 'clv', 'clvCents', 'beatClose',
+  'clvVsOffered', 'clvVsOfferedCents', 'clvAmericanCents',
   'fair_sharp_p_at_generate', 'result', 'gradedAt',
 ];
 
@@ -281,6 +291,7 @@ function overlayClose(prev, stamped) {
     pointAdjusted: stamped.pointAdjusted,
     clvProb,
     clvProbCents: cents(clvProb),
+    ...clvAliases(clvProb),
     clvVsOffered,
     clvVsOfferedCents: cents(clvVsOffered),
     clvAmericanCents: stamped.pointAdjusted ? null : stamped.clvAmericanCents,
@@ -752,6 +763,103 @@ function asGradePick(row, dateISO) {
   };
 }
 
+function finiteClv(row) {
+  return !!(row && row.clv != null && Number.isFinite(Number(row.clv)));
+}
+
+function closeFromStoredRow(row) {
+  if (!hasClose(row)) return null;
+  const pair = row.closeOddsPair || {};
+  return {
+    book: row.closeBook || 'pinnacle',
+    line: row.closeLine == null ? null : row.closeLine,
+    sideOdds: pair.side,
+    oppOdds: pair.opp,
+    closeNoVig: Number(row.closeNoVig),
+    pointAdjusted: !!row.pointAdjusted,
+  };
+}
+
+/**
+ * 3:00 ET CLV for one slate date. Reads omega-candidates and the stored
+ * Pinnacle close (odds-master). Writes only clv-candidates-v2/{date}.
+ * No Odds API, no /events, no result grade. A row that already has a
+ * close and a finite clv is left as it is. dryRun and OMEGA_REPLAY_NO_WRITE
+ * write nothing.
+ */
+async function gradeStoredClosesForDate(dateISO, opts = {}) {
+  const date = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, wrote: false, graded: 0, date, reason: 'bad-date' };
+  }
+  const now = opts.now instanceof Date ? opts.now : new Date(opts.now || Date.now());
+  const nowIso = now.toISOString();
+  const deps = opts;
+  const noWrite = !!opts.dryRun || replayNoWrite(opts.env) || replayNoWrite();
+  let ledger = null;
+  let existing = null;
+  try {
+    ledger = await readBlob(candidateLedgerKey(date), deps);
+  } catch (err) {
+    console.error(`[candidate-closes] 3:00 ledger ${date} soft-fail: ${err && err.message}`);
+  }
+  try {
+    existing = await readBlob(candidateCloseKey(date), deps);
+  } catch (err) {
+    console.error(`[candidate-closes] 3:00 close blob ${date} soft-fail: ${err && err.message}`);
+  }
+  const rows = mergeCandidates(ledgerCandidates(existing), ledgerCandidates(ledger));
+  if (!rows.length) return { ok: true, wrote: false, graded: 0, date, reason: 'no-candidates' };
+
+  const masterOpts = opts.oddsMasterOpts || {};
+  let graded = 0;
+  const candidates = [];
+  for (const row of rows) {
+    if (!row) continue;
+    if (hasClose(row) && finiteClv(row)) {
+      candidates.push(row);
+      continue;
+    }
+    let stamped = null;
+    try {
+      const hit = await oddsMaster.readCloseEvent({
+        sport: row.sport,
+        eventId: row.eventId || row.event_id,
+        homeTeam: row.homeTeam,
+        awayTeam: row.awayTeam,
+        commenceTime: row.commenceTime,
+      }, masterOpts);
+      const close = hit && hit.event ? devigCandidate(hit.event, row) : null;
+      if (close) stamped = stampClose(row, close, hit.snapshotAt || nowIso);
+    } catch (err) {
+      console.error(`[candidate-closes] 3:00 grade ${row.matchup || ''} soft-fail: ${err && err.message}`);
+    }
+    if (!stamped) {
+      const stored = closeFromStoredRow(row);
+      if (stored) stamped = stampClose(row, stored, row.closeAt || nowIso);
+    }
+    const out = stamped ? overlayClose(row, stamped) : row;
+    if (!finiteClv(row) && finiteClv(out)) graded += 1;
+    candidates.push(out);
+  }
+  if (!graded || noWrite) {
+    return { ok: true, wrote: false, graded, date, reason: noWrite ? 'no-write' : 'unchanged' };
+  }
+  const payload = {
+    date,
+    schema: CLOSE_SCHEMA,
+    private: true,
+    updatedAt: nowIso,
+    clvComputedAt: nowIso,
+    note: '3:00 ET CLV from stored historical closes. No Odds API pull. Not a KPI. Not joined into clv-{date}.',
+    credits: existing && existing.credits ? existing.credits : { byEtDay: {} },
+    coverage: coverageBySportMarket(candidates),
+    candidates,
+  };
+  await writeBlob(candidateCloseKey(date), payload, deps);
+  return { ok: true, wrote: true, graded, date };
+}
+
 /**
  * Fill final results from ESPN onto a private close blob. No Odds API.
  * Rows that already have a non-pending result are left alone. A missing
@@ -824,6 +932,7 @@ module.exports = {
   eventsAllowSkip,
   findEvent,
   captureCandidateClosesV2,
+  gradeStoredClosesForDate,
   gradeCandidateResults,
   readWithFallback,
   writeWithFallback,

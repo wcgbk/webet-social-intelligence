@@ -36,6 +36,7 @@ const {
   isPreviousEtDay, historicalCreditsPerPull, earlyReuseMs, dateKey: masterDateKey,
   readMasterKey, readIndex,
 } = require('./odds_master');
+const { gradeStoredClosesForDate } = require('./candidate_closes_v2');
 
 const CAPTURE_BOOKMAKERS = [
   ...US_BOOK_PRIORITY,
@@ -467,6 +468,9 @@ async function recordTape(entry, storeOpts) {
  * The 10:00 check reuses a same-sport snapshot younger than 5 minutes.
  * The 3:00 check stores that same live pull as the baseline and, when no
  * open exists, as the open. It then pulls yesterday's pregame closes.
+ * CLV for yesterday is graded from those stored quotes after the pull.
+ * The grade does not call the Odds API and still runs when the credit
+ * floor stopped the pull. The floor itself is unchanged.
  * Priced pulls stop below the credit floor. Never the published card.
  */
 async function runPinnacleLineCapture(opts = {}) {
@@ -564,6 +568,8 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     closesRejected: 0,
     baselines: 0,
     opensFilled: 0,
+    clvGraded: null,
+    clvWrote: false,
     requestsRemaining: knownRequestsRemainingValue(),
     stoppedForCredits: false,
   };
@@ -799,6 +805,28 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     await captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, apiKey, fetchImpl);
   }
 
+  if (mode === 'check' && etSlot === '0300') {
+    try {
+      const gradeOpts = {
+        now,
+        dryRun: !!opts.dryRun,
+        env: opts.env,
+        oddsMasterOpts: masterOptsFrom(storeOpts),
+      };
+      // An injected read/write is the test double for the same blob store.
+      // Production leaves both unset and the grade uses the edge-picks store.
+      if (typeof storeOpts.read === 'function') gradeOpts.readJson = storeOpts.read;
+      if (typeof storeOpts.write === 'function') gradeOpts.writeJson = storeOpts.write;
+      const graded = await gradeStoredClosesForDate(shiftYmd(dateISO, -1), gradeOpts);
+      state.clvGraded = graded && graded.graded || 0;
+      state.clvWrote = !!(graded && graded.wrote);
+    } catch (err) {
+      console.error(`[pinnacle-line-move] 3:00 CLV grade soft-fail: ${err && err.message}`);
+      state.clvGraded = 0;
+      state.clvWrote = false;
+    }
+  }
+
   const body = {
     ok: true,
     mode,
@@ -823,6 +851,8 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     closesStored: state.closesStored,
     closesSkipped: state.closesSkipped,
     closesRejected: state.closesRejected,
+    clvGraded: state.clvGraded,
+    clvWrote: state.clvWrote,
     baselines: state.baselines,
     opensFilled: state.opensFilled,
   };

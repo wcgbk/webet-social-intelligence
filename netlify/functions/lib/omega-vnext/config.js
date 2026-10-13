@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.44-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.45-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -861,6 +861,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.45-omega-vnext-price-lock: The 3:00 ET check grades yesterday\'s CLV from stored historical closes. Entry is the 10:00 fair. Close is the stored Pinnacle no-vig. clv, clvCents, and beatClose are written on clv-candidates-v2 for that date only. No Odds API pull. The grade still runs when the 49,000 credit floor stopped further pulls. The floor itself is unchanged.',
   'v12.3.44-omega-vnext-price-lock: Odds API pulls are 3:00 and 10:00 ET only. 9:00 and 10:30 Pinnacle checks are gone. Morning line snaps, the hourly opener, kickoff closes, the 9:05 shadow generate, and the live NBA shadow pull do not call the Odds API. track-clv-omega does not pull. Hard Rock and the parlay are reviewed from the 10:00 snapshot and pull only when that snapshot does not cover them. The 49,000 credit floor is unchanged.',
   'v12.3.43-omega-vnext-price-lock: Hybrid rank. Edge is the primary key for the top 10, the straights, and the re-rank. When two candidates are within 0.2 percentage points of edge, higher stake EV wins. When the floor does not fill three straights, positive-EV leans fill the open slots, sorted by EV. Probability does not gate or rank.',
   'v12.3.42-omega-vnext-price-lock: Daily card timeline. Final pricing is the 10:00 ET snapshot. Top 10 candidates are ranked by edge, one per game. News already on those rows is the 10:15-10:30 input; the same edge rank is the re-ranked list. QA at 10:30 checks DraftKings on that snapshot and Hard Rock coverage of the top 10 and the three parlay legs. A parlay leg with no Hard Rock price is a backend bug-log entry, silent on the page, and is swapped for the next edge-ranked candidate that has a Hard Rock price or noted. QA does not block publish. The parlay is those three straights. The optimizer is not used. The public card waits until 11:00 ET.',

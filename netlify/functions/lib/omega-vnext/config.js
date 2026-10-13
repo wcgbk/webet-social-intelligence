@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.50-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.51-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -255,10 +255,11 @@ const MLB_CALIBRATION = {
  * de-vigged sharp at or above the odds-scaled curve in edge_floor.js
  * (1.75% at −110, higher for plus-money and for uncertainty above 0.15).
  * minCoverProb stays 0. There is no flat coverProb floor. A missing cover
- * or EV rejects. Non-positive EV rejects. A miss of the 3% floor or the
+ * or EV rejects. Non-positive EV rejects. A miss of the 3% EV floor or the
  * edge curve can still be a lean fill when EV > 0 and edge >= LEAN_MIN_EDGE.
- * When LEAN_PAD is true and fewer than 3 straights clear the floor, those
- * leans fill the open slots. minPredictedClvCents
+ * The edge curve is at least 3% (edge_floor.js). A miss is not a published
+ * lean. When fewer than 3 straights clear, the card publishes the shorter
+ * set and does not fill with a sub-3% edge. minPredictedClvCents
  * is null. Odds band, major-book liquidity, pregame, same ET day, and
  * adverse steam stay. Generate-time placeability is logged and does not
  * reject.
@@ -277,11 +278,10 @@ const GATES = {
 };
 
 /**
- * Lean fill under the 3% floor. A fill needs stake EV > 0 after vig and
- * edge >= LEAN_MIN_EDGE vs the no-vig sharp. LEAN_MIN_EV remains the legacy
- * parlay-pool bar (EV >= 1.5% and a positive edge) so a non-lean card's
- * parlay search does not move. Stake is flat LEAN_MAX_UNITS. A lean-day
- * parlay is LEAN_PARLAY_UNITS.
+ * Lean fill under the 3% main floor. A fill needs stake EV > 0 after vig and
+ * edge >= LEAN_MIN_EDGE (1.5%) vs the no-vig sharp. LEAN_MIN_EV remains the
+ * legacy parlay-pool bar. Stake is flat LEAN_MAX_UNITS. A lean-day parlay
+ * is LEAN_PARLAY_UNITS. These numbers are the live lean tier.
  */
 const LEAN_MIN_EV = 0.015;
 const LEAN_MIN_EDGE = 0.015;
@@ -863,6 +863,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.51-omega-vnext-price-lock: A main pick needs edge of at least 3% versus the de-vigged sharp, and the odds-scaled curve can ask for more up to 6%. Stake EV stays at 3%. A sub-3% edge is not a main. The lean tier is unchanged: positive EV, edge at least 1.5%, DraftKings, one per game, filled only after the mains, flat 0.5u.',
   'v12.3.50-omega-vnext-price-lock: The steam gate and the rank nudge read the latest Pinnacle/DraftKings check against the 3:00 baseline (else the open). Suspended 06:00/07:30/09:00/09:15 snaps are a fallback only when that log has no snapshot. The 15-minute dense-check window is unchanged; a named 03:00 to 10:00 step still steams. Fair price, floors, Kelly, and unit caps are unchanged.',
   'v12.3.49-omega-vnext-price-lock: One straight per game treats vs, at, and @ as the same matchup, in either team order. The game key is the sorted team names. A doubleheader stays two games. An undated key has no commence suffix.',
   'v12.3.48-omega-vnext-price-lock: The 49,000 credit stop applies to backfill and extra pulls only. It does not stop the 3:00 or 10:00 checks, yesterday\'s closes, or the card. Open and other extra pulls still stop below 49,000.',

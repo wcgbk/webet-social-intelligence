@@ -38,14 +38,11 @@ const { americanToImplied } = require('./odds_math');
  * the floor. The 6% cap stops a thin longshot with a stale uncertainty from
  * demanding an edge the −300..+300 band cannot pay.
  *
- * minCoverProb stays 0. There is no flat cover floor. The floor tier also
- * needs calibrated stake EV >= 3% (coverProb times the decimal price, minus
- * 1). EV under 1.5% rejects. EV from 1.5% to 3%, or EV >= 3% that misses
- * this curve, is a lean. When fewer than 3 candidates clear the floor,
- * those leans fill the open straight slots (EV >= 1.5%, positive edge,
- * one per game, stake at most 0.5u) and may be parlay legs. The card
- * still publishes when the lean pool cannot fill the rest
- * (straightCardLabel). It does not withhold the card.
+ * minCoverProb stays 0. There is no flat cover floor. A published pick
+ * also needs calibrated stake EV at the sport floor and edge >= 3%
+ * (MAIN_EDGE_FLOOR). The odds-scaled curve still raises that 3% when
+ * plus-money or uncertainty asks for more. A row under 3% edge does not
+ * publish, including as a lean. A thin slate publishes the rows that clear.
  */
 const EDGE_FLOOR = Object.freeze({
   atMinus110: 0.0175,
@@ -55,6 +52,9 @@ const EDGE_FLOOR = Object.freeze({
   uncertaintyPerUnit: 0.04,
   max: 0.06,
 });
+
+/** Hard edge floor for every published straight and parlay leg. */
+const MAIN_EDGE_FLOOR = 0.03;
 
 function minEdgeFor(odds, uncertainty) {
   const anchor = americanToImplied(EDGE_FLOOR.anchorAmerican);
@@ -68,10 +68,12 @@ function minEdgeFor(odds, uncertainty) {
     floor += EDGE_FLOOR.uncertaintyPerUnit * Math.max(0, unc - EDGE_FLOOR.uncertaintyBaseline);
   }
   if (floor > EDGE_FLOOR.max) floor = EDGE_FLOOR.max;
+  if (floor < MAIN_EDGE_FLOOR) floor = MAIN_EDGE_FLOOR;
   return +floor.toFixed(6);
 }
 
 module.exports = {
   EDGE_FLOOR,
+  MAIN_EDGE_FLOOR,
   minEdgeFor,
 };

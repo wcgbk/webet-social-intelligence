@@ -194,10 +194,10 @@ function stake(pick) {
   assert.strictEqual(upper.picks[0].rating, 'B');
 }
 
-// Parlay ticket stays the fixed 0.5u when every leg is a B that Kelly would stake 1.25u.
+// A 1.8% edge is grade B and under the 3% main floor. It is not a main
+// straight and it is not a main parlay leg. The B cap still sizes a
+// formatted B object at 0.5u. A main parlay of 3% edges keeps the 0.5u ticket.
 {
-  // 1.8% clears minEdgeFor at −110 and stays grade B (under the 2% A− line).
-  // coverProb 0.58 is the quarter-Kelly ×50 stake that still hits the 1.25u leg cap.
   const pool = [
     candidate({
       side: 'Over 7.5', market: 'Total', coverProb: 0.58, ev: 0.05, edgePct: 0.018,
@@ -212,20 +212,33 @@ function stake(pick) {
       coverProb: 0.58, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:15:00Z',
     }),
   ];
-  const tickets = parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' });
-  assert.strictEqual(tickets.length, 1);
-  assert.strictEqual(tickets[0].units, `${config.PARLAY_FIXED_UNITS}u`);
-  assert.strictEqual(parseFloat(tickets[0].units), 0.5);
-  assert.ok(tickets[0].legs.length >= 2);
-  for (const leg of tickets[0].legs) {
-    assert.strictEqual(leg.rating, 'b');
-    assert.strictEqual(leg.units, '1.25u');
-  }
+  assert.ok(pool.every((c) => select.passesPublishFloor(c) === false));
+  assert.strictEqual(select.selectStraights(pool, 3).length, 0);
+  assert.strictEqual(parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' }).length, 0);
   const sameLegsAsStraights = pool.map(c => select.toPickObject(c));
   for (const straight of sameLegsAsStraights) {
     assert.strictEqual(straight.rating, 'b');
     assert.strictEqual(straight.units, '0.5u');
   }
+  const mains = [
+    candidate({
+      side: 'Over 8.5', market: 'Total', coverProb: 0.58, ev: 0.05, edgePct: 0.03,
+      commenceTime: '2026-09-22T23:05:00Z',
+    }),
+    candidate({
+      matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C', side: 'D -1.5', market: 'Spread',
+      coverProb: 0.58, ev: 0.05, edgePct: 0.031, commenceTime: '2026-09-22T23:10:00Z',
+    }),
+    candidate({
+      matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E', side: 'F ML', market: 'Moneyline',
+      coverProb: 0.58, ev: 0.05, edgePct: 0.032, commenceTime: '2026-09-22T23:15:00Z',
+    }),
+  ];
+  const tickets = parlay.optimizeParlay(mains, [], { cardDate: '2026-09-22' });
+  assert.strictEqual(tickets.length, 1);
+  assert.strictEqual(tickets[0].units, `${config.PARLAY_FIXED_UNITS}u`);
+  assert.strictEqual(parseFloat(tickets[0].units), 0.5);
+  assert.strictEqual(tickets[0].legs.length, 3);
 }
 
 // 10/12 Bills @ Rams. The +3.5 lean is grade A at the 0.5u lean cap.

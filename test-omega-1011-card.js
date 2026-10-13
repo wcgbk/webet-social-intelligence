@@ -82,7 +82,7 @@ function row(extra) {
   assert.ok(parlay[0].legs.every(l => parseFloat(l.ev) >= 3));
   assert.ok(!parlay[0].legs.some(l => /Vikings -2\.5|Kraken/.test(l.pick)));
 
-  // B. Top 10 is one bet, ranked by EV. One-per-game is straights only.
+  // B. Top 10 is one candidate per game, ranked by edge. A second market on that game is not a second row.
   const over = row({
     matchup: 'Baltimore Ravens @ Atlanta Falcons',
     side: 'Over 43.5', market: 'Total', line: 43.5, ev: 0.0625, edgePct: 0.045,
@@ -96,10 +96,10 @@ function row(extra) {
   const other = row({
     matchup: 'C @ D', side: 'D +3', ev: 0.05, edgePct: 0.02, homeTeam: 'D', awayTeam: 'C',
   });
-  // Same bet at a lower EV is one candidate, not a second top-10 row. Same game, different bet stays.
+  // Same bet at a lower EV is one candidate. The higher-edge total takes the game.
   const top = selectTop10([spread, over, other, { ...over, ev: 0.01 }], 10);
-  assert.deepStrictEqual(top.map(c => c.side), ['Over 43.5', 'D +3', 'Baltimore Ravens +3']);
-  assert.strictEqual(top.filter(c => c.matchup.includes('Baltimore')).length, 2);
+  assert.deepStrictEqual(top.map(c => c.side), ['Over 43.5', 'D +3']);
+  assert.strictEqual(top.filter(c => c.matchup.includes('Baltimore')).length, 1);
   assert.ok(top.filter(c => c.side === 'Over 43.5').every(c => c.ev === 0.0625));
   const straightGames = selectStraights([over, spread, other], 3);
   assert.strictEqual(new Set(straightGames.map(c => c.matchup)).size, straightGames.length);

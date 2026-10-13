@@ -172,7 +172,7 @@ if (parlays.length) {
     {
       side: 'Los Angeles Dodgers', market: 'Moneyline', odds: -115, coverProb: 0.55, ev: 0.035,
       matchup: 'San Diego Padres @ Los Angeles Dodgers', sport: 'MLB', commenceTime: '2026-09-23T23:10:00Z',
-      homeTeam: 'Los Angeles Dodgers', awayTeam: 'San Diego Padres', edgePct: 0.028,
+      homeTeam: 'Los Angeles Dodgers', awayTeam: 'San Diego Padres', edgePct: 0.03,
     },
   ];
   const mirrorStraights = mirrorPool.map(c => ({
@@ -291,9 +291,9 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 
   // Cover under 45% is not a parlay leg, even at a higher edge.
   const ranked = parlay.optimizeParlay([
-    { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
-    { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
-    { ...row('E @ F', 0.56, 0.05), edgePct: 0.02, side: 'ChalkE' },
+    { ...row('A @ B', 0.58, 0.05), edgePct: 0.03, side: 'ChalkA' },
+    { ...row('C @ D', 0.57, 0.05), edgePct: 0.03, side: 'ChalkC' },
+    { ...row('E @ F', 0.56, 0.05), edgePct: 0.03, side: 'ChalkE' },
     { ...row('G @ H', 0.30, 0.20), side: 'Longshot', odds: 800, edgePct: 0.09 },
   ], []);
   assert.strictEqual(ranked[0].legs.length, 3);
@@ -301,9 +301,9 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 
   // Among legs at or above 45% cover, a higher edge beats a higher cover.
   const dog = parlay.optimizeParlay([
-    { ...row('A @ B', 0.58, 0.05), edgePct: 0.02, side: 'ChalkA' },
-    { ...row('C @ D', 0.57, 0.05), edgePct: 0.02, side: 'ChalkC' },
-    { ...row('E @ F', 0.56, 0.05), edgePct: 0.02, side: 'ChalkE' },
+    { ...row('A @ B', 0.58, 0.05), edgePct: 0.03, side: 'ChalkA' },
+    { ...row('C @ D', 0.57, 0.05), edgePct: 0.03, side: 'ChalkC' },
+    { ...row('E @ F', 0.56, 0.05), edgePct: 0.03, side: 'ChalkE' },
     { ...row('G @ H', 0.46, 0.08), side: 'Dog', odds: 150, edgePct: 0.05 },
   ], []);
   assert.strictEqual(dog[0].legs.length, 3);

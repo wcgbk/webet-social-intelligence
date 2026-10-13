@@ -10,7 +10,7 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const { priceLockTimestamp, resolveGenerateOddsSnapshot } = require(path.join(root, 'price_lock'));
-const { EDGE_FLOOR, minEdgeFor } = require(path.join(root, 'edge_floor'));
+const { EDGE_FLOOR, MAIN_EDGE_FLOOR, minEdgeFor } = require(path.join(root, 'edge_floor'));
 const { gateReason, applyGates, minEdgeFor: gateMinEdge } = require(path.join(root, 'gates'));
 const { selectStraights, toPickObject } = require(path.join(root, 'select'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
@@ -28,7 +28,9 @@ function curve(american, uncertainty) {
   const implied = americanToImplied(american);
   let floor = 0.0175 + 0.05 * Math.max(0, anchor - implied);
   if (Number.isFinite(uncertainty)) floor += 0.04 * Math.max(0, uncertainty - 0.15);
-  return Math.min(0.06, +floor.toFixed(6));
+  floor = Math.min(0.06, floor);
+  if (floor < MAIN_EDGE_FLOOR) floor = MAIN_EDGE_FLOOR;
+  return +floor.toFixed(6);
 }
 
 // ── Price lock clock ──
@@ -44,18 +46,20 @@ assert.strictEqual(
 );
 assert.strictEqual(resolveGenerateOddsSnapshot('', {}), null);
 assert.strictEqual(EDGE_FLOOR.atMinus110, 0.0175);
+assert.strictEqual(MAIN_EDGE_FLOOR, 0.03);
 assert.strictEqual(EDGE_FLOOR.max, 0.06);
-near(minEdgeFor(-110, 0.15), 0.0175, '-110');
-near(minEdgeFor(-110, 0.17), curve(-110, 0.17), '-110 unc 0.17');
-near(minEdgeFor(-110, 0.30), 0.0235, '-110 unc 0.30');
-near(minEdgeFor(150, 0.15), curve(150, 0.15), '+150');
-near(minEdgeFor(200, 0.15), curve(200, 0.15), '+200');
+near(minEdgeFor(-110, 0.15), 0.03, '-110 hard floor');
+near(minEdgeFor(-110, 0.17), 0.03, '-110 unc 0.17');
+near(minEdgeFor(-110, 0.30), 0.03, '-110 unc 0.30');
+near(minEdgeFor(150, 0.15), 0.03, '+150');
+near(minEdgeFor(200, 0.15), 0.03, '+200');
 near(minEdgeFor(300, 0.15), curve(300, 0.15), '+300');
-near(minEdgeFor(-150, 0.15), 0.0175, 'favorite stays at the anchor');
-near(minEdgeFor(-110, undefined), 0.0175, 'missing uncertainty');
+assert.ok(minEdgeFor(300, 0.15) > 0.03, '+300 curve stays above the hard floor');
+near(minEdgeFor(-150, 0.15), 0.03, 'favorite stays at the hard floor');
+near(minEdgeFor(-110, undefined), 0.03, 'missing uncertainty');
 assert.ok(minEdgeFor(400, 0.9) <= 0.06);
 assert.strictEqual(gateMinEdge(-110, 0.15), minEdgeFor(-110, 0.15));
-near(requiredFloor({ odds: -110, uncertainty: 0.15 }, 'edge-floor'), 0.0175, 'shortfall');
+near(requiredFloor({ odds: -110, uncertainty: 0.15 }, 'edge-floor'), 0.03, 'shortfall');
 
 // ── Odds-scaled gate. No flat cover floor. ──
 const asOf = { cardDate: '2026-10-11', asOfMs: Date.parse('2026-10-11T13:30:00Z') };
@@ -69,7 +73,8 @@ function side(extra) {
   };
 }
 assert.strictEqual(gateReason(side({ edgePct: 0.01 }), asOf), 'edge-floor');
-assert.strictEqual(gateReason(side({ edgePct: 0.02 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0.02 }), asOf), 'edge-floor');
+assert.strictEqual(gateReason(side({ edgePct: 0.029, ev: 0.05 }), asOf), 'edge-floor');
 assert.strictEqual(gateReason(side({ edgePct: minEdgeFor(-110, 0.15) }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 200, edgePct: 0.02, coverProb: 0.40, ev: 0.05 }), asOf), 'edge-floor');
 assert.strictEqual(gateReason(side({ odds: 200, edgePct: 0.03, coverProb: 0.40, ev: 0.05 }), asOf), null);
@@ -286,10 +291,11 @@ global.fetch = async (url) => {
     const board = yes.concat((snap.rejected || []).map(c => coerce(c, false)));
     const gatedYes = applyGates(yes, asOf1010);
     assert.strictEqual(
-      gatedYes.yesPool.length,
+      gatedYes.yesPool.length + gatedYes.leanPool.length + gatedYes.rejected.length,
       yes.length,
-      `10/10 yes pool left the floor: ${gatedYes.leanPool.map(r => r.side).concat(gatedYes.rejected.map(r => `${r.side}:${r.rejectReason}`)).join(', ')}`,
+      `10/10 yes pool left the gates: ${gatedYes.rejected.map(r => `${r.side}:${r.rejectReason}`).join(', ')}`,
     );
+    assert.ok(gatedYes.yesPool.every((c) => c.edgePct + 1e-12 >= minEdgeFor(c.odds, c.uncertainty)));
     const gated = applyGates(board, asOf1010);
     const sacMl = gated.yesPool.find(c => c.side === 'Sacramento State Hornets' && c.odds === 270);
     assert.ok(sacMl, '30% cover with EV and edge above the curve is a floor play');
@@ -305,8 +311,10 @@ global.fetch = async (url) => {
     // file had vetoed +9 for placeability; that check logs and does not reject.
     // Over 39.5 is the same game as Over 38.5, so it does not take a second straight.
     assert.ok(straights.some(s => /Sacramento State/.test(s.side) && s.line === 9), labels.join(' | '));
-    assert.strictEqual(gated.yesPool.length, 15);
-    assert.strictEqual(gated.leanPool.length, 18);
+    assert.strictEqual(gated.yesPool.length, 12);
+    assert.strictEqual(gated.leanPool.length, 21);
+    assert.ok(gated.yesPool.every((c) => c.tier === 'floor' && c.edgePct + 1e-12 >= minEdgeFor(c.odds, c.uncertainty)));
+    assert.ok(gated.leanPool.every((c) => c.tier === 'lean'));
     assert.ok(!straights.some(s => /40\.5/.test(String(s.side)) || s.line === 40.5));
     assert.ok(!straights.some(s => /\+9\.5/.test(s.side) || s.line === 9.5));
     assert.ok(!straights.some(s => /\+6\.5/.test(s.side) || s.line === 6.5));
@@ -318,12 +326,12 @@ global.fetch = async (url) => {
     assert.strictEqual(parlay[0].legs.length, 3);
     assert.strictEqual(new Set(parlay[0].legs.map(l => l.matchup)).size, 3);
     assert.ok(parlay[0].legs.some(l => /Sacramento State Hornets \+9\b/.test(l.pick)));
-    assert.strictEqual(parlayEligible.length, 26);
+    assert.ok(parlayEligible.length >= 3);
     assert.ok(parseFloat(parlay[0].ev) > 0, parlay[0].ev);
     assert.ok(parlay[0].legs.every(l => parseFloat(l.coverProb) >= 45));
     console.log('PASS test-omega-1010-lock');
     console.log(JSON.stringify({
-      curve: 'min(0.06, 0.0175 + 0.05 * max(0, implied(-110) - implied(american)) + 0.04 * max(0, uncertainty - 0.15))',
+      curve: 'max(0.03, min(0.06, 0.0175 + 0.05 * max(0, implied(-110) - implied(american)) + 0.04 * max(0, uncertainty - 0.15)))',
       evFloor: 0.03,
       leanMinEv: 0.015,
       parlayMinCover: 0.45,

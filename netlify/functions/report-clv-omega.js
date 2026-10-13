@@ -79,21 +79,50 @@ async function safeRead(read, key) {
   }
 }
 
+/**
+ * Reads run in parallel (bounded). 45 days x 5 sequential REST reads took
+ * longer than the 30s scheduled-function limit, so the 09:15 job timed out
+ * before writing. Row order is the same as the old sequential loop.
+ */
+const LIVE_READ_CONCURRENCY = 16;
+
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  }
+  const n = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: n }, worker));
+  return out;
+}
+
 async function loadLiveRows(asOf, read, lookbackDays) {
   const dates = ledger.liveDates(asOf, lookbackDays);
+  const KEYS = (date) => [
+    `clv-${date}`,
+    `clv-candidates-v2/${date}`,
+    `clv-candidates-${date}`,
+    `omega-candidates/${date}`,
+  ];
+  const tasks = [];
+  for (const date of dates) {
+    tasks.push({ date, key: `picks-${date}` });
+    for (const key of KEYS(date)) tasks.push({ date, key });
+  }
+  const blobs = await mapLimit(tasks, LIVE_READ_CONCURRENCY, (t) => safeRead(read, t.key));
+  const byKey = new Map();
+  tasks.forEach((t, i) => byKey.set(t.key, blobs[i]));
   const rows = [];
   for (const date of dates) {
-    const picksMeta = await safeRead(read, `picks-${date}`);
+    const picksMeta = byKey.get(`picks-${date}`);
     const modelVersion = picksMeta && (picksMeta.model || picksMeta.modelVersion) || null;
     const opts = { source: 'omega', date, modelVersion };
-    const keys = [
-      `clv-${date}`,
-      `clv-candidates-v2/${date}`,
-      `clv-candidates-${date}`,
-      `omega-candidates/${date}`,
-    ];
-    for (const key of keys) {
-      const blob = await safeRead(read, key);
+    for (const key of KEYS(date)) {
+      const blob = byKey.get(key);
       if (!blob) continue;
       rows.push(...ledger.rowsFromBlob(key, blob, opts));
     }

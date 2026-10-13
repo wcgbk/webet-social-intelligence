@@ -8,7 +8,6 @@
  */
 
 const path = require('path');
-const { BLOB_STORE } = require('./lib/omega-vnext/config');
 const tracking = require('./lib/tracking-report');
 const SEED = require('../../tracking/report.json');
 
@@ -37,10 +36,12 @@ function seedIndex() {
   };
 }
 
+// SDK first, then the REST blob API. report-tracking-omega writes through
+// store.storeJson, which lands in the REST namespace when the SDK has no
+// blobs context (v1 handlers). The SDK-only read never saw that index.
 async function readIndexFromStore() {
-  const { getStore } = await import('@netlify/blobs');
-  const store = getStore(BLOB_STORE);
-  return store.get(tracking.INDEX_KEY, { type: 'json' });
+  const store = require('./lib/omega-vnext/store');
+  return store.readJson(tracking.INDEX_KEY);
 }
 
 async function handle(event, deps) {

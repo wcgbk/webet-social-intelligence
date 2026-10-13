@@ -78,6 +78,7 @@
 /tracking              /tracking/index.html                      200
 /tracking/             /tracking/index.html                      200
 /api/get-tracking      /.netlify/functions/get-tracking          200
+/tracking/report.json  /.netlify/functions/get-tracking          200!
 
 /betty-guide   /betty-guide/index.html  200
 /betty-guide/  /betty-guide/index.html  200

@@ -4,8 +4,8 @@ const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
 const { noVigTwoWay, deVigMarket, americanToImplied } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.66-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.66-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.67-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.67-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 
 function proportional(a1, a2) {
@@ -47,5 +47,23 @@ const inside = deVigMarket([
 ]);
 assert.strictEqual(inside[0].fairP, 0.5);
 assert.strictEqual(inside[1].fairP, 0.5);
+
+// +182 / +218 is past +210, but the raw implieds sum to less than 1.
+// Power with k >= 1 cannot lift that pair to 1. Proportional is the fair split.
+const under = noVigTwoWay(182, 218);
+const underWant = proportional(182, 218);
+assert.strictEqual(under.method, undefined);
+assert.ok(Math.abs(under.p1 + under.p2 - 1) < 1e-9);
+assert.strictEqual(under.p1, underWant.p1);
+assert.strictEqual(under.p2, underWant.p2);
+assert.ok(Math.abs(under.p1 - 0.53) < 1e-12);
+
+const underMarket = deVigMarket([
+  { side: 'home', american: 182 },
+  { side: 'away', american: 218 },
+]);
+assert.strictEqual(underMarket[0].fairP, under.p1);
+assert.strictEqual(underMarket[1].fairP, under.p2);
+assert.ok(Math.abs(underMarket[0].fairP + underMarket[1].fairP - 1) < 1e-9);
 
 console.log('test-omega-power-devig ok');

@@ -26,7 +26,11 @@ function formatAmerican(american) {
   return a > 0 ? `+${a}` : `${a}`;
 }
 
-/** Power de-vig only past −250 or +210. The band stays proportional. */
+/**
+ * Power de-vig only past −250 or +210, and only when the raw implieds
+ * sum to more than 1. Inside the band, and when a plus-money pair already
+ * sums to less than 1, the split is proportional. Fair probabilities sum to 1.
+ */
 function lopsidedAmerican(a1, a2) {
   return [a1, a2].some((a) => {
     const n = Number(a);
@@ -34,24 +38,34 @@ function lopsidedAmerican(a1, a2) {
   });
 }
 
-/** k such that i1^k + i2^k = 1. Used when the pair is outside the band. */
+/**
+ * k such that i1^k + i2^k = 1. Used when the pair is outside the band
+ * and the raw implieds already sum to more than 1. k stays at least 1:
+ * raising k shrinks probabilities that are under 1. A pair that already
+ * sums to less than 1 has no such k, and the caller uses proportional.
+ */
 function powerFair(i1, i2) {
+  const raw = i1 + i2;
+  if (!(raw > 1)) return null;
   let lo = 1;
   let hi = 1;
-  let sumHi = i1 + i2;
+  let sumHi = raw;
   while (sumHi > 1 && hi < 32) {
     hi *= 2;
     sumHi = Math.pow(i1, hi) + Math.pow(i2, hi);
   }
   if (!(sumHi <= 1)) return null;
-  for (let n = 0; n < 50; n += 1) {
+  for (let n = 0; n < 60; n += 1) {
     const mid = (lo + hi) / 2;
     const sum = Math.pow(i1, mid) + Math.pow(i2, mid);
     if (sum > 1) lo = mid;
     else hi = mid;
   }
   const k = (lo + hi) / 2;
-  return { p1: Math.pow(i1, k), p2: Math.pow(i2, k), k };
+  const p1 = Math.pow(i1, k);
+  const p2 = Math.pow(i2, k);
+  if (!(Math.abs(p1 + p2 - 1) < 1e-8)) return null;
+  return { p1, p2, k };
 }
 
 /** Two-way no-vig probabilities from a pair of American prices. */
@@ -61,11 +75,10 @@ function noVigTwoWay(a1, a2) {
   if (i1 == null || i2 == null) return null;
   const s = i1 + i2;
   if (s <= 0) return null;
-  if (!lopsidedAmerican(a1, a2)) {
-    return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
-  }
+  const proportional = { p1: i1 / s, p2: i2 / s, vig: s - 1 };
+  if (!lopsidedAmerican(a1, a2) || !(s > 1)) return proportional;
   const powered = powerFair(i1, i2);
-  if (!powered) return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
+  if (!powered) return proportional;
   return { p1: powered.p1, p2: powered.p2, vig: s - 1, method: 'power' };
 }
 

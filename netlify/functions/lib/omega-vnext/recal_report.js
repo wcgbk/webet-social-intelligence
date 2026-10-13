@@ -602,6 +602,103 @@ function recommendOne(prepared, asOf) {
   };
 }
 
+function rowWindMph(row) {
+  if (!row || typeof row !== 'object') return null;
+  if (row.windMph != null && row.windMph !== '') return finite(row.windMph);
+  const weather = row.weather && typeof row.weather === 'object' ? row.weather : null;
+  if (weather && weather.windMph != null && weather.windMph !== '') return finite(weather.windMph);
+  const fb = row.fbWeather && typeof row.fbWeather === 'object' ? row.fbWeather : null;
+  if (fb && fb.windMph != null && fb.windMph !== '') return finite(fb.windMph);
+  return null;
+}
+
+function windBandName(mph) {
+  if (mph == null) return null;
+  if (mph < 15) return 'under-15';
+  if (mph < 25) return '15-to-25';
+  return '25-plus';
+}
+
+function rowIsPush(row) {
+  if (!row) return false;
+  if (row.push === true) return true;
+  const text = String(row.result != null ? row.result : row.outcome || '').toLowerCase();
+  return text === 'push';
+}
+
+function keyMargin(value) {
+  const n = finite(value);
+  if (n == null) return null;
+  const abs = Math.abs(n);
+  if (Math.abs(abs - 3) < 1e-9) return 3;
+  if (Math.abs(abs - 7) < 1e-9) return 7;
+  return null;
+}
+
+function clvOfRaw(row) {
+  const direct = finite(row && row.clv);
+  if (direct != null) return Math.abs(direct) <= 1.5 ? direct : direct / 100;
+  const pp = finite(row && row.clvPp);
+  if (pp != null) return pp / 100;
+  const close = finite(row && (row.pClose != null ? row.pClose : row.closeNoVig));
+  const entry = finite(row && row.entryImplied);
+  const implied = entry != null ? entry : americanToImplied(row && (row.odds != null ? row.odds : row.entryOdds));
+  if (close == null || implied == null) return null;
+  return close - implied;
+}
+
+/**
+ * NFL report splits. Totals with a stored wind are grouped into bands.
+ * Spread pushes on a 3 or a 7 are counted separately. This does not
+ * change a price, a probability, or a stake.
+ */
+function nflCalibrationSplits(rows) {
+  const bands = { 'under-15': [], '15-to-25': [], '25-plus': [] };
+  let spreadPushes = 0;
+  let margin3 = 0;
+  let margin7 = 0;
+  for (const row of rows || []) {
+    if (!row || canonicalSport(row.sport) !== 'NFL') continue;
+    const market = canonicalMarket(row.market || row.betType);
+    if (market === 'Total') {
+      const band = windBandName(rowWindMph(row));
+      if (band) bands[band].push(row);
+    }
+    if (market === 'Spread' && rowIsPush(row)) {
+      spreadPushes += 1;
+      const line = finite(row.line != null ? row.line : (row.marketLine != null ? row.marketLine : row.point));
+      const margin = finite(row.margin != null ? row.margin : row.finalMargin);
+      const key = keyMargin(line) || keyMargin(margin);
+      if (key === 3) margin3 += 1;
+      else if (key === 7) margin7 += 1;
+    }
+  }
+  function pack(group) {
+    const vals = [];
+    for (const row of group) {
+      const clv = clvOfRaw(row);
+      if (clv != null) vals.push(clv);
+    }
+    const beats = vals.filter((n) => n > 0).length;
+    return {
+      n: group.length,
+      nClv: vals.length,
+      meanClv: mean(vals),
+      pctBeatingClose: vals.length ? (100 * beats) / vals.length : null,
+    };
+  }
+  return {
+    displayOnly: true,
+    applied: false,
+    totalsByWind: {
+      'under-15': pack(bands['under-15']),
+      '15-to-25': pack(bands['15-to-25']),
+      '25-plus': pack(bands['25-plus']),
+    },
+    keyNumberPushes: { spreadPushes, margin3, margin7 },
+  };
+}
+
 function buildRecalReport(input) {
   const src = input || {};
   const asOf = canonicalDate(src.asOf);
@@ -635,6 +732,7 @@ function buildRecalReport(input) {
   }
   const driftFlags = collectDriftFlags(sports);
   const recommendation = recommendOne(prepared, asOf);
+  const nflSplits = nflCalibrationSplits(joined);
   return {
     schema: SCHEMA,
     observerOnly: true,
@@ -646,6 +744,7 @@ function buildRecalReport(input) {
     sports,
     driftFlags,
     recommendation,
+    nflSplits,
     sources: {
       ledger: 'omega-candidates/{date}',
       closes: 'clv-candidates-v2/{date}',
@@ -689,4 +788,5 @@ module.exports = {
   buildRecalReport,
   collectDriftFlags,
   recommendOne,
+  nflCalibrationSplits,
 };

@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.63-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.64-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.64-omega-vnext-price-lock: NFL calibration report splits totals by wind band and counts spread pushes on margins 3 and 7. Display only. No price change.',
   'v12.3.63-omega-vnext-price-lock: NCAAF tempo weight default is 0.25. A name-matched altitude term is added on top of flat HFA, 0 at a neutral site, capped at 1 point. A frozen snap does not fetch the tempo table.',
   'v12.3.62-omega-vnext-price-lock: NHL goalie residual adds GSAx when both clubs already carry the number, inside the existing goalie cap. A missing side adds 0. Team xG and special teams are not priced.',
   'v12.3.61-omega-vnext-price-lock: Weekly calibration review runs Sunday 06:15 ET, outside the card window. It reports drift and one shrink recommendation and does not apply it. FIT stays off. self-optimize-omega stays paused.',

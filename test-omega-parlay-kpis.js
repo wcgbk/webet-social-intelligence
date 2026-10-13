@@ -175,6 +175,70 @@ function mlbPick(selection) {
   const cardAfter = JSON.parse(fs.readFileSync(path.join(noneDir, 'card.json'), 'utf8'));
   assert.deepStrictEqual(cardAfter.parlayLegs, []);
 
+  // Published 2026-10-13 ticket: units 0.25u, no leanDay, no public tier.
+  // A stale results row at 0.5u / $75 recomputes to 0.25u / $37.50.
+  // Straight units stay 0.5u. The stored row is not mutated.
+  const nhlLeg = (pick, matchup, odds, betType, rating) => ({
+    sport: 'NHL', matchup, pick, odds, units: '0.5u', rating, betType,
+    commenceTime: '2026-10-14T02:40:00Z',
+  });
+  const oilers = nhlLeg('Over 6.5', 'Edmonton Oilers @ Los Angeles Kings', '+105', 'Total', 'aminus');
+  const canucks = nhlLeg('Over 6.5', 'Vancouver Canucks @ New York Islanders', '+114', 'Total', 'aminus');
+  const rangers = nhlLeg('New York Rangers +1.5', 'Tampa Bay Lightning @ New York Rangers', '-185', 'Spread', 'b');
+  const card1013 = {
+    date: '2026-10-13',
+    picks: [oilers, canucks, rangers],
+    parlayLegs: [{
+      type: '3-leg-parlay-straight',
+      units: '0.25u',
+      combinedOdds: '+576',
+      ev: '3.3%',
+      legs: [oilers, canucks, rangers],
+    }],
+  };
+  assert.ok(card1013.picks.every((p) => p.tier == null));
+  assert.strictEqual(card1013.parlayLegs[0].leanDay, undefined);
+  const graded1013 = await results.gradeDay('2026-10-13', card1013, { games: [] });
+  const par1013 = graded1013.picks.find((p) => p.sport === 'PARLAY');
+  assert.strictEqual(par1013.units, '0.25u');
+  assert.strictEqual(graded1013.parlayRisk, 37.5);
+  assert.strictEqual(graded1013.parlayProfit, 0);
+  assert.strictEqual(graded1013.parlayResult, 'pending');
+  assert.notStrictEqual(graded1013.parlayRisk, 75);
+  assert.ok(graded1013.picks.filter((p) => p.sport !== 'PARLAY').every((p) => p.units === '0.5u'));
+
+  const stale1013 = {
+    date: '2026-10-13',
+    wagered: 0,
+    profit: 0,
+    parlayResult: 'pending',
+    parlayProfit: 0,
+    parlayRisk: 75,
+    picks: [
+      { sport: 'NHL', pick: oilers.pick, matchup: oilers.matchup, odds: '+105', units: '0.5u', result: 'pending', profit: 0 },
+      { sport: 'NHL', pick: canucks.pick, matchup: canucks.matchup, odds: '+114', units: '0.5u', result: 'pending', profit: 0 },
+      { sport: 'NHL', pick: rangers.pick, matchup: rangers.matchup, odds: '-185', units: '0.5u', result: 'pending', profit: 0 },
+      { sport: 'PARLAY', pick: '3-Team Parlay (Optimized)', units: '0.5u', result: 'pending', profit: 0 },
+    ],
+  };
+  const otherDay = {
+    date: '2026-10-11',
+    parlayResult: 'loss',
+    parlayRisk: 75,
+    parlayProfit: -75,
+    picks: [{ sport: 'PARLAY', units: '0.5u', result: 'loss', profit: -75 }],
+  };
+  const fixed1013 = results.recomputeParlayFields(stale1013, card1013);
+  assert.strictEqual(stale1013.parlayRisk, 75);
+  assert.strictEqual(stale1013.picks.find((p) => p.sport === 'PARLAY').units, '0.5u');
+  assert.strictEqual(fixed1013.parlayRisk, 37.5);
+  assert.strictEqual(fixed1013.parlayProfit, 0);
+  assert.strictEqual(fixed1013.picks.find((p) => p.sport === 'PARLAY').units, '0.25u');
+  assert.strictEqual(fixed1013.wagered, 0);
+  assert.ok(fixed1013.picks.filter((p) => p.sport !== 'PARLAY').every((p) => p.units === '0.5u' && p.result === 'pending'));
+  assert.strictEqual(otherDay.parlayRisk, 75);
+  assert.strictEqual(otherDay.picks[0].units, '0.5u');
+
   console.log('PASS test-omega-parlay-kpis');
 })().catch((err) => {
   console.error(err);

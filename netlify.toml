@@ -327,6 +327,18 @@
   # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the table and writes nothing.
   included_files = ["data/engineering-scores.json", "data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/tracking-report.js", "netlify/functions/lib/kpi-cache.js"]
 
+[functions."sync-supabase"]
+  schedule = "25 13,14 * * *"
+  # 13:25 UTC = 9:25am ET (EDT). 14:25 UTC = 9:25am ET (EST).
+  # etGuard keeps 09:25 ET only, after report-clv-omega and report-tracking-omega.
+  # Posts yesterday's opener, 10:00 ET snapshot, and 3:00 ET close, plus the
+  # graded Omega card and that day's CLV ledger. Ignore-duplicates.
+  # Does not call the Odds API. Does not write the card or picks blobs.
+  # Manual invoke requires admin auth. Scheduler invocations are allowed.
+  # ?dryRun=1 builds rows and does not call Supabase. ?date=YYYY-MM-DD.
+  # There is no 10:30 lock capture. Odds API pulls stay 3:00 and 10:00 ET.
+  included_files = ["netlify/functions/lib/omega-vnext/**", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/omega-grading-rules.js", "js/live-score.js"]
+
 [functions."report-calibration-omega"]
   schedule = "15 10,11 * * 0"
   # Sunday 06:15 ET. 10:15 UTC = 6:15am EDT. 11:15 UTC = 6:15am EST.

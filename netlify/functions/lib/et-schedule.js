@@ -118,6 +118,9 @@ const ET_SCHEDULE = {
   // Same 09:15 ET slot, after closes and finals, before the 10:30 selection.
   // Display-only daily progress table. Does not price or select.
   'report-tracking-omega': { etTimes: ['09:15'] },
+  // 13:25 UTC = 9:25 ET (EDT), 14:25 UTC = 9:25 ET (EST). After the 09:15
+  // CLV and tracking reports. One run per ET day. No Odds API pull.
+  'sync-supabase': { etTimes: ['09:25'] },
   // Sunday 06:15 ET. Outside the card window. Report only. FIT stays off.
   // Cron "15 10,11 * * 0" is 10:15 UTC (EDT) and 11:15 UTC (EST).
   'report-calibration-omega': { etTimes: ['06:15'], days: [0] },

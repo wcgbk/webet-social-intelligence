@@ -38,7 +38,7 @@ function names(list) {
   return new Set((list || []).map((item) => item.matchup || item.side));
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.46-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.47-omega-vnext-price-lock');
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.LEAN_MAX_UNITS, 0.5);
 assert.strictEqual(config.LEAN_PARLAY_UNITS, 0.25);

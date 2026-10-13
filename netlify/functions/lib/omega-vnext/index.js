@@ -10,7 +10,7 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
-const { applyExecutionBook, top10Rows, excludedGames, selectTop10, ensureParlayPlaceable, hasHardRockPrice } = require('./selection_pass');
+const { applyExecutionBook, top10Rows, recordRankedList, excludedGames, selectTop10, ensureParlayPlaceable, hasHardRockPrice } = require('./selection_pass');
 const { fetchXNews } = require('./x_news');
 const { replayNoWrite } = require('./no_write');
 const {
@@ -750,7 +750,7 @@ async function generateOmegaVnext(opts = {}) {
       onePerGame: true,
       window: '10:00-10:15',
       rerankWindow: '10:15-10:30',
-      top10: top10Rows(top10Candidates, 10),
+      top10: recordRankedList(picks, top10Rows(top10Candidates, 10)),
       snapshotCoversHardRock: snapshotCoversQa,
       snapshotCoversParlay: snapshotCoversQa,
       hrCoverage: top10Candidates.map((c) => ({

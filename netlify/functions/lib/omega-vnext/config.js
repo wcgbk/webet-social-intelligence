@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.46-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.47-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -861,6 +861,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.47-omega-vnext-price-lock: At 10:30 the card\'s top 3 are compared to the re-ranked list on game, side, and edge. A mismatch rebuilds that order and the parlay. The bug log entry stays off the page.',
   'v12.3.46-omega-vnext-price-lock: The published card shows the three straights with their write-ups, then one parlay section at the bottom. That section is a short summary, the combined odds, and the three legs. It does not repeat each leg\'s write-up.',
   'v12.3.45-omega-vnext-price-lock: The 3:00 ET check grades yesterday\'s CLV from stored historical closes. Entry is the 10:00 fair. Close is the stored Pinnacle no-vig. clv, clvCents, and beatClose are written on clv-candidates-v2 for that date only. No Odds API pull. The grade still runs when the 49,000 credit floor stopped further pulls. The floor itself is unchanged.',
   'v12.3.44-omega-vnext-price-lock: Odds API pulls are 3:00 and 10:00 ET only. 9:00 and 10:30 Pinnacle checks are gone. Morning line snaps, the hourly opener, kickoff closes, the 9:05 shadow generate, and the live NBA shadow pull do not call the Odds API. track-clv-omega does not pull. Hard Rock and the parlay are reviewed from the 10:00 snapshot and pull only when that snapshot does not cover them. The 49,000 credit floor is unchanged.',

@@ -53,7 +53,8 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
-const { reviewHardRock, verifySchedule } = require('./lib/omega-vnext/selection_pass');
+const { reviewHardRock, verifySchedule, applySilentSortCheck } = require('./lib/omega-vnext/selection_pass');
+const { parlayFromStraights } = require('./lib/omega-vnext/parlay');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
@@ -1603,6 +1604,26 @@ exports.handler = async (event) => {
       // Grok remains narrator/verifier only — structural hard-fails live in omega-vnext/qa_hardfail.js.
       // verified ONLY if the final card is genuinely clean: at least 1 pick and none still failing math
       picksData.verified = picksData.picks.length > 0 && picksData.picks.every(p => !p._verifyFlag);
+
+      // Sort check: card top 3 vs the re-ranked list. Silent on the page.
+      // A mismatch rebuilds the top 3 and the parlay and writes bugLog only.
+      {
+        const sortCheck = applySilentSortCheck(picksData);
+        if (sortCheck.entry) {
+          if (!Array.isArray(picksData.bugLog)) picksData.bugLog = [];
+          picksData.bugLog.push(sortCheck.entry);
+        }
+        if (sortCheck.changed) {
+          picksData.picks = sortCheck.picks;
+          const prevTicket = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || {};
+          const rebuilt = parlayFromStraights(picksData.picks, {
+            hrPlaceabilityNote: prevTicket.hrPlaceabilityNote,
+          });
+          if (rebuilt.length) picksData.parlayLegs = rebuilt;
+          enforceOmegaDailyUnitCap(picksData);
+          console.log(`[verify-sort] silent auto-correct differed=${sortCheck.entry.differed.length}`);
+        }
+      }
 
       // Write the final clean card
       await updatePicksBlob(dateKey, picksData);

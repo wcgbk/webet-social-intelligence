@@ -351,6 +351,165 @@ function top10Rows(pool, n) {
   return selectTop10(pool, n).map(top10Row);
 }
 
+function normText(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Same game when the matchup uses "vs", "at", or "@", in either team order. */
+function gameTeams(s) {
+  const text = normText(s).replace(/\./g, '');
+  const parts = text.split(/\s+(?:@|vs|at)\s+/);
+  if (parts.length < 2) return text;
+  return [parts[0], parts.slice(1).join(' ')].map((t) => t.trim()).filter(Boolean).sort().join('|');
+}
+
+function normSide(s) {
+  return normText(s).replace(/\s+ml$/, '').trim();
+}
+
+function rowGame(row) {
+  return (row && (row.game || row.matchup)) || '';
+}
+
+function rowSide(row) {
+  return (row && (row.side || row.pick)) || '';
+}
+
+function pickSide(p) {
+  return (p && (p.pick || p.side)) || '';
+}
+
+function betId(game, side) {
+  return `${gameTeams(game)}|${normSide(side)}`;
+}
+
+function pickBetId(p) {
+  return betId(p && p.matchup, pickSide(p));
+}
+
+function rowBetId(row) {
+  return betId(rowGame(row), rowSide(row));
+}
+
+function edgeOf(row) {
+  if (!row) return null;
+  return parseEdgeFraction(row.edgePct != null ? row.edgePct : row.edge);
+}
+
+/** Display rounding is 0.1 percentage points. A larger gap is a real difference. */
+const EDGE_MATCH_EPS = 0.00051;
+
+function sameEdgeValue(a, b) {
+  const ea = edgeOf(a);
+  const eb = edgeOf(b);
+  if (ea == null || eb == null) return ea == null && eb == null;
+  return Math.abs(ea - eb) <= EDGE_MATCH_EPS;
+}
+
+function slotSnap(row, kind) {
+  if (!row) return null;
+  if (kind === 'card') {
+    return { game: row.matchup || null, side: pickSide(row) || null, edge: row.edgePct != null ? row.edgePct : (row.edge != null ? row.edge : null) };
+  }
+  return { game: rowGame(row) || null, side: rowSide(row) || null, edge: row.edge != null ? row.edge : (row.edgePct != null ? row.edgePct : null) };
+}
+
+/**
+ * The re-ranked list of record. Final straights, in edge order, are marked
+ * selected and lead the list. The rest of the 10:00 top 10 follows.
+ */
+function recordRankedList(picks, poolTop10) {
+  const pool = Array.isArray(poolTop10) ? poolTop10 : [];
+  const indexOf = (p) => {
+    const id = pickBetId(p);
+    const i = pool.findIndex((row) => row && rowBetId(row) === id);
+    return i === -1 ? null : i;
+  };
+  const head = (picks || []).filter(Boolean).slice().sort((a, b) => {
+    const ia = indexOf(a);
+    const ib = indexOf(b);
+    if (ia != null && ib != null && ia !== ib) return ia - ib;
+    const ea = edgeOf(a);
+    const eb = edgeOf(b);
+    return (eb == null ? -Infinity : eb) - (ea == null ? -Infinity : ea);
+  }).map((p) => ({ ...top10Row({
+    matchup: p.matchup,
+    side: p.side || p.pick,
+    line: p.line,
+    odds: p.odds,
+    book: p.book,
+    edgePct: p.edgePct != null ? p.edgePct : p.edge,
+    coverProb: p.coverProb,
+    ev: p.ev,
+    hrFlags: p.hrFlags,
+    sport: p.sport,
+    market: p.betType || p.market,
+    commenceTime: p.commenceTime,
+  }), selected: true }));
+  const seen = new Set(head.map(rowBetId));
+  const rest = pool.filter((row) => row && !seen.has(rowBetId(row)));
+  return head.concat(rest).slice(0, 10);
+}
+
+/**
+ * 10:30 sort check. The card's top 3 must match the selected re-ranked rows
+ * on game, side, and edge. A mismatch rebuilds that order from the list.
+ * The bug entry is for the backend log only.
+ */
+function applySilentSortCheck(picksData) {
+  const data = picksData || {};
+  const ranked = data.selection && Array.isArray(data.selection.top10) ? data.selection.top10 : [];
+  const selected = ranked.filter((row) => row && row.selected);
+  const expected = (selected.length ? selected : ranked).filter(Boolean).slice(0, 3);
+  const picks = Array.isArray(data.picks) ? data.picks.slice() : [];
+  if (!expected.length || !picks.length) return { changed: false };
+  const card = picks.slice(0, 3);
+  const differed = [];
+  const n = Math.max(card.length, expected.length);
+  for (let i = 0; i < n; i += 1) {
+    const pick = card[i];
+    const row = expected[i];
+    const same = pick && row && pickBetId(pick) === rowBetId(row) && sameEdgeValue(pick, row);
+    if (same) continue;
+    differed.push({ index: i, card: slotSnap(pick, 'card'), ranked: slotSnap(row, 'ranked') });
+  }
+  if (!differed.length) return { changed: false };
+
+  const corrected = [];
+  const table = Array.isArray(data.candidateTable) ? data.candidateTable : [];
+  for (let i = 0; i < expected.length; i += 1) {
+    const row = expected[i];
+    const existing = picks.find((p) => p && pickBetId(p) === rowBetId(row));
+    if (existing) {
+      corrected.push(existing);
+      continue;
+    }
+    const fromTable = table.find((c) => c && betId(c.matchup, c.side || c.pick) === rowBetId(row));
+    if (fromTable) {
+      corrected.push(toPickObject({
+        ...fromTable,
+        edgePct: fromTable.edgePct != null ? fromTable.edgePct : fromTable.edge,
+        market: fromTable.market || fromTable.betType,
+        side: fromTable.side || fromTable.pick,
+      }, { modelVersion: data.model }));
+      continue;
+    }
+    if (card[i]) corrected.push(card[i]);
+  }
+  if (!corrected.length) return { changed: false };
+  const unchanged = corrected.length === card.length && corrected.every((p, i) => p === card[i]);
+  const entry = {
+    at: new Date().toISOString(),
+    kind: 'sort-check',
+    silent: true,
+    date: data.date || null,
+    original: card.map((p) => slotSnap(p, 'card')),
+    corrected: corrected.map((p) => slotSnap(p, 'card')),
+    differed,
+  };
+  return { changed: !unchanged, picks: unchanged ? picks : corrected, entry };
+}
+
 function excludedGames(rows) {
   const by = new Map();
   for (const r of rows || []) {
@@ -584,6 +743,8 @@ module.exports = {
   ensureParlayPlaceable,
   top10Row,
   top10Rows,
+  recordRankedList,
+  applySilentSortCheck,
   excludedGames,
   verifyStartReason,
   verifySchedule,

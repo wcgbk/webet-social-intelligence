@@ -515,10 +515,10 @@ function mlbStandingsEnv(homeSt, awaySt, opts) {
 /**
  * Fixed prior for (model total − sharp no-vig total), in runs.
  * Frozen snaps 2026-09-22..2026-10-08, one row per MLB game with a sharp
- * total (Pinnacle when Circa is absent; else the other sharp books).
+ * total (Pinnacle, else the other sharp books).
  * n=106, mean of (finished model total − sharp total) +1.185, SD 0.833,
  * SE 0.081. Pitcher lines are the season StatsAPI pull the generator
- * already makes (gameType=R), not a refit. Circa posted no totals here.
+ * already makes (gameType=R), not a refit. That window's sharp totals were Pinnacle.
  *
  * Where the +1.185 comes from, on all 113 priced games (means):
  *   standings run environment                              8.895
@@ -573,18 +573,14 @@ function totalPointForBook(event, book) {
 
 /**
  * Posted total point. Not a de-vigged probability.
- * Pinnacle's point when it posts one. Circa (circa, else circasports) only
- * when Pinnacle does not. Otherwise the median of the other sharp books.
- * No sharp total → null (that game does not enter the slate mean).
+ * Pinnacle's point when it posts one. Otherwise the median of the other
+ * sharp books. No sharp total → null (that game does not enter the slate mean).
  * sharpNoVigTotal is the historical name.
  */
 function sharpPostedTotal(event) {
   if (!event) return null;
   const pin = totalPointForBook(event, 'pinnacle');
   if (Number.isFinite(pin)) return pin;
-  let circa = totalPointForBook(event, 'circa');
-  if (circa == null) circa = totalPointForBook(event, 'circasports');
-  if (Number.isFinite(circa)) return circa;
   const sharpSet = new Set((SHARP_BOOKS || []).map(b => String(b).toLowerCase()));
   const pts = [];
   const seen = new Set();

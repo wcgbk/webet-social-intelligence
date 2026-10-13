@@ -319,7 +319,7 @@ function synthNhl(home, away) {
     home_team: home,
     away_team: away,
     commence_time: '2026-10-06T23:10:00Z',
-    bookmakers: ['pinnacle', 'circa', 'draftkings', 'fanduel'].map((key) => ({
+    bookmakers: ['pinnacle', 'altbook', 'draftkings', 'fanduel'].map((key) => ({
       key,
       markets: [
         { key: 'h2h', outcomes: [

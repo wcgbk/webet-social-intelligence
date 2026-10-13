@@ -46,7 +46,7 @@ assert.strictEqual(edge.withinPlaceableJuice(130, 200), false);
 {
   const onlySharp = edge.assessPlaceability([
     { book: 'pinnacle', american: -110 },
-    { book: 'circa', american: -110 },
+    { book: 'bookmaker', american: -110 },
     { book: 'bovada', american: -110 },
   ], -110, null);
   assert.deepStrictEqual(onlySharp.placeableBooks, []);

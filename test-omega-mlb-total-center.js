@@ -12,7 +12,7 @@ const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const mlb = require(path.join(root, 'sports/mlb'));
 const env = require(path.join(root, 'sports/mlb_env'));
 const { totalCoverProb, blendWithMarket } = require(path.join(root, 'sports/_common'));
-const { noVigPinnacleCircaImplied, collectMarketOutcomes } = require(path.join(root, 'edge'));
+const { noVigPinnacleImplied, collectMarketOutcomes } = require(path.join(root, 'edge'));
 
 const PRIOR = env.MLB_TOTAL_PRIOR_OFFSET;
 assert.strictEqual(PRIOR, 1.185);
@@ -73,7 +73,7 @@ function mean(xs) {
   return xs.reduce((s, x) => s + x, 0) / xs.length;
 }
 
-// Sharp line: Pinnacle point first, else Circa, else the median of other sharp books.
+// Sharp line: Pinnacle point first, else the median of the other sharp books.
 {
   const pinOnly = event('Los Angeles Dodgers', 'San Francisco Giants', 8.5);
   assert.strictEqual(env.sharpNoVigTotal(pinOnly), 8.5);
@@ -82,7 +82,7 @@ function mean(xs) {
     away_team: 'B',
     bookmakers: [
       { key: 'pinnacle', markets: [{ key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 8 }] }] },
-      { key: 'circa', markets: [{ key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 9 }] }] },
+      { key: 'altbook', markets: [{ key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 9 }] }] },
       { key: 'draftkings', markets: [{ key: 'totals', outcomes: [{ name: 'Over', price: -110, point: 6 }] }] },
     ],
   };
@@ -260,7 +260,7 @@ function rawTotal(homePf, homePa, awayPf, awayPa) {
   const over = loneOn.find(c => c.market === 'Total' && /^Over/.test(c.side));
   assert.strictEqual(over.modelProjection, priced);
   const bundles = collectMarketOutcomes(lone, 'totals');
-  const anchor = noVigPinnacleCircaImplied(bundles, bundles.find(b => b.side === 'Over'));
+  const anchor = noVigPinnacleImplied(bundles, bundles.find(b => b.side === 'Over'));
   const p = blendWithMarket(totalCoverProb(env.applyMlbTotalShift(8.6, PRIOR), 8.5, 'Over', 'MLB'), anchor, 0.45);
   assert.ok(Math.abs(over.modelRawP - p) < 1e-9);
 

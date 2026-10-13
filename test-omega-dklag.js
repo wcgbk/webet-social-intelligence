@@ -233,25 +233,25 @@ function prices(book, american) {
   assert.ok(usedOpener.pinMove > 0.1);
   assert.strictEqual(usedOpener.lagEdge, null);
 
-  const circaOnly = poll('0300', {
+  const otherOnly = poll('0300', {
     awayTeam: 'Dallas Cowboys',
     homeTeam: 'Philadelphia Eagles',
     books: {
-      circa: { mlHome: 182, mlAway: 218 },
+      bookmaker: { mlHome: 182, mlAway: 218 },
       draftkings: { mlHome: -110, mlAway: -110 },
     },
   });
-  const [noBorrow] = dk.applyDkLag([side()], { polls: [circaOnly], opener: null, enabled: true });
+  const [noBorrow] = dk.applyDkLag([side()], { polls: [otherOnly], opener: null, enabled: true });
   assert.strictEqual(noBorrow.pinMove, null);
   assert.strictEqual(noBorrow.lagEdge, null);
 
-  const [circaAnchor] = dk.applyDkLag([side({ sharpAnchorBook: 'circa' })], {
-    polls: [circaOnly],
+  const [stillPinnacle] = dk.applyDkLag([side({ sharpAnchorBook: 'pinnacle' })], {
+    polls: [otherOnly],
     opener: null,
     enabled: true,
   });
-  close(circaAnchor.pinMove, 0.02);
-  close(circaAnchor.lagEdge, 0.05);
+  assert.strictEqual(stillPinnacle.pinMove, null);
+  assert.strictEqual(stillPinnacle.lagEdge, null);
 
   const [superseded] = dk.applyDkLag([side({
     movementAdjusted: true,
@@ -268,7 +268,7 @@ function prices(book, american) {
 
 {
   const home = { side: 'Home Team', point: null, prices: prices('pinnacle', -110) };
-  const awayMixed = { side: 'Away Team', point: null, prices: prices('circa', -110) };
+  const awayMixed = { side: 'Away Team', point: null, prices: prices('bookmaker', -110) };
   assert.strictEqual(edge.pairedSharpNoVig([home, awayMixed], home), null);
 
   const awayPin = { side: 'Away Team', point: null, prices: prices('pinnacle', -110) };
@@ -276,11 +276,9 @@ function prices(book, american) {
   assert.strictEqual(paired.book, 'pinnacle');
   close(paired.p, 0.5);
 
-  const circaHome = { side: 'Home Team', point: null, prices: prices('circa', -110) };
-  const circaAway = { side: 'Away Team', point: null, prices: prices('circa', -110) };
-  const circa = edge.pairedSharpNoVig([circaHome, circaAway], circaHome);
-  assert.strictEqual(circa.book, 'circa');
-  close(circa.p, 0.5);
+  const altHome = { side: 'Home Team', point: null, prices: prices('bookmaker', -110) };
+  const altAway = { side: 'Away Team', point: null, prices: prices('bookmaker', -110) };
+  assert.strictEqual(edge.pairedSharpNoVig([altHome, altAway], altHome), null);
 
   const oneSide = {
     home_team: 'Home Team',
@@ -309,7 +307,7 @@ function prices(book, american) {
         }],
       },
       {
-        key: 'circa',
+        key: 'bookmaker',
         markets: [{
           key: 'totals',
           outcomes: [
@@ -324,14 +322,12 @@ function prices(book, american) {
   assert.strictEqual(atLine.book, 'pinnacle');
   assert.ok(atLine.p > 0.5);
   assert.strictEqual(dk.lockAnchor(both, 'total', 'over', 44), null);
-  const circaEvent = {
+  const otherEvent = {
     home_team: 'Home Team',
     away_team: 'Away Team',
-    bookmakers: both.bookmakers.filter((b) => b.key === 'circa'),
+    bookmakers: both.bookmakers.filter((b) => b.key === 'bookmaker'),
   };
-  const circaLock = dk.lockAnchor(circaEvent, 'total', 'over', 45.5);
-  assert.strictEqual(circaLock.book, 'circa');
-  close(circaLock.p, 0.5);
+  assert.strictEqual(dk.lockAnchor(otherEvent, 'total', 'over', 45.5), null);
 }
 
 {

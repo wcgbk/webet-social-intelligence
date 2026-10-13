@@ -559,15 +559,13 @@ function bookPoint(event, book, kind) {
 }
 
 /**
- * Market total or home spread. Pinnacle, else Circa, else the median of
- * the other sharp books, else the median of every book that posts the number.
+ * Market total or home spread. Pinnacle, else the median of the other
+ * sharp books, else the median of every book that posts the number.
  */
 function sharpMarketLine(event, kind) {
   if (!event) return null;
-  for (const book of ['pinnacle', 'circa', 'circasports']) {
-    const p = bookPoint(event, book, kind);
-    if (Number.isFinite(p)) return p;
-  }
+  const pin = bookPoint(event, 'pinnacle', kind);
+  if (Number.isFinite(pin)) return pin;
   const sharpSet = new Set((SHARP_BOOKS || []).map(b => String(b).toLowerCase()));
   const sharp = [];
   const all = [];

@@ -31,9 +31,11 @@ assert.ok(g2.clvCents > 0);
 
 const track = require('./netlify/functions/track-clv-omega')._test;
 const sharpOrder = track.SHARP_BOOKS;
-assert.strictEqual(sharpOrder[0], 'pinnacle');
-assert.ok(sharpOrder.indexOf('circa') > 0 && sharpOrder.indexOf('circa') < sharpOrder.indexOf('betfair_ex_eu'));
-assert.ok(sharpOrder.indexOf('bookmaker') < sharpOrder.indexOf('matchbook'));
+assert.deepStrictEqual(sharpOrder, [
+  'pinnacle',
+  'bookmaker', 'betonlineag', 'lowvig',
+  'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook',
+]);
 const closeGame = {
   home_team: 'Los Angeles Dodgers',
   away_team: 'San Francisco Giants',
@@ -47,8 +49,8 @@ const closeGame = {
       ] }],
     },
     {
-      key: 'circa',
-      title: 'Circa Sports',
+      key: 'bookmaker',
+      title: 'Bookmaker',
       markets: [{ key: 'h2h', outcomes: [
         { name: 'Los Angeles Dodgers', price: -125 },
         { name: 'San Francisco Giants', price: 105 },
@@ -59,7 +61,7 @@ const closeGame = {
 const closePick = { pick: 'Los Angeles Dodgers ML', betType: 'Moneyline', sport: 'MLB' };
 const close = track.extractClose(closeGame, track.pickSideInfo(closePick), closePick);
 assert.strictEqual(close.sideOdds, -125);
-assert.ok(/circa/i.test(close.anchorBook));
+assert.ok(/bookmaker/i.test(close.anchorBook));
 
 const aliases = grade.attachRealizedAliases({
   clv: 0.0123,

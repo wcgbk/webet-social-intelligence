@@ -2,7 +2,7 @@
 /**
  * NBA projection — shadow only while SPORTS_ENABLED.NBA is false.
  * Moneyline, spread, and total. Blend matches MLB/NHL (0.50 / 0.50 / 0.45)
- * on no-vig Pinnacle/Circa. Calibrate and the shared gates run later.
+ * on no-vig Pinnacle. Calibrate and the shared gates run later.
  * This module does not read SPORTS_ENABLED. projectAll is the daily gate
  * and does not pass allowPreseason, so a preseason board cannot join the card.
  *
@@ -44,7 +44,7 @@ const {
 } = require('./_common');
 const { applyGameDayAdjustments } = require('./game_day');
 const { resolveTeamId, rowByIdentity, logUnknownTeam } = require('./team_identity');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 
 const SPORT = 'NBA';
 const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
@@ -412,7 +412,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
     for (const b of bundles) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
+      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.ml);
       out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Moneyline',
@@ -435,7 +435,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       if (line == null) continue;
       const isHome = b.side === home;
       let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
-      pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
+      pCover = blendWithMarket(pCover, noVigPinnacleImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       out.push(enrichCandidateWithEdge({
         ...base,
@@ -459,7 +459,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       if (line == null) continue;
       const over = /over/i.test(b.side);
       let p = totalCoverProb(modelTotal, line, b.side, SPORT);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
+      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.total);
       out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Total',

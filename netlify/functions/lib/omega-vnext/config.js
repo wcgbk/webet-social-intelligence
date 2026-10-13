@@ -111,7 +111,7 @@ const ESPN_LEAGUES = {
   NHL: { sport: 'hockey', league: 'nhl', label: 'NHL' },
 };
 
-const SHARP_BOOKS = ['pinnacle', 'circa', 'circasports', 'bookmaker', 'betonlineag', 'lowvig'];
+const SHARP_BOOKS = ['pinnacle', 'bookmaker', 'betonlineag', 'lowvig'];
 
 /**
  * Major US retail books — priority order for open prints / best-price /
@@ -216,7 +216,7 @@ const PINNACLE_LINE_MOVE = {
 };
 
 /**
- * DraftKings lags the one-book no-vig (Pinnacle, else Circa).
+ * DraftKings lags the one-book no-vig (Pinnacle).
  * minPinMovePp is the Pinnacle no-vig move toward the side, in percentage
  * points, from the 3:00 baseline or the stored opener to the candidate price.
  * maxDkFollowRatio: DraftKings implied must move less than this fraction
@@ -919,7 +919,8 @@ const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
   'v12.3.72-omega-vnext-price-lock: Every parlay publishes only when combined EV is positive, on a lean day and on a floor day. The probability is the same adjusted cover that sets straight edge and stake EV. A straight ticket that misses is rebuilt from the next-best positive-EV legs on distinct games. A Hard Rock offer on that row is the leg price, and a leg Hard Rock does not offer is swapped. No positive-EV 3-leg is marked no qualifying parlay. Straights still publish. A main still needs 3% edge and the 3% stake-EV floor. A lean still needs 1.5% edge and stake EV above 0.',
-  'v12.3.71-omega-vnext-price-lock: Line movement uses only the 3:00 and 10:00 ET snapshots (plus a stored opener). Retired 6:00/7:30/9:00/9:15 snaps are ignored and a missing 3:00 or 10:00 is logged, not filled from stale data. Pinnacle (Circa at equal weight when both ends are already stored) moves the blend weight toward the sharp side before edge, EV, and grade. The shift is capped at ±1.5 probability points and is 0 when the model already matches the sharp. A Pinnacle probability move of 2.0pp against the side, or 18 cents or 1.0 point against on the Pinnacle print, drops the candidate. There is no 10:30 steam recheck. Grade is the calibrated edge versus the Pinnacle no-vig. Stake EV is at DraftKings. Both are labeled and share the adjusted probability. Floors, lean tier, Kelly, and unit caps are unchanged.',
+  'v12.3.72-omega-vnext-price-lock: The unused sharp book key is off the request list and the sharp priority. Sharp books are Pinnacle, then Bookmaker, BetOnline, and LowVig. The public card omits the read-time tier field. The Edge card does not show a Lean or Main tag. Lean selection, the 1.5% edge and positive-EV rule, 0.5u lean sizing, and 0.25u parlay sizing are unchanged.',
+  'v12.3.71-omega-vnext-price-lock: Line movement uses only the 3:00 and 10:00 ET snapshots (plus a stored opener). Retired 6:00/7:30/9:00/9:15 snaps are ignored and a missing 3:00 or 10:00 is logged, not filled from stale data. Pinnacle (an optional second sharp book at equal weight when both ends are already stored) moves the blend weight toward the sharp side before edge, EV, and grade. The shift is capped at ±1.5 probability points and is 0 when the model already matches the sharp. A Pinnacle probability move of 2.0pp against the side, or 18 cents or 1.0 point against on the Pinnacle print, drops the candidate. There is no 10:30 steam recheck. Grade is the calibrated edge versus the Pinnacle no-vig. Stake EV is at the displayed US price. Both are labeled and share the adjusted probability. Floors, lean tier, Kelly, and unit caps are unchanged.',
   'v12.3.71-omega-vnext-price-lock: Daily Supabase sync at 09:25 ET posts yesterday\'s opener, the 10:00 ET snapshot, and the 3:00 ET close, plus the graded Omega card and that day\'s CLV ledger. Duplicate posts are ignored. No Odds API pull. No 10:30 lock capture exists; Odds API pulls stay 3:00 and 10:00 ET.',
   'v12.3.70-omega-vnext-price-lock: A lean-day parlay publishes only when combined EV is positive, at 0.25u. Public picks carry tier main or lean. The 6:00, 7:30, 9:00, and 9:15 ET morning snaps stay retired. Odds API pulls remain 3:00 and 10:00 ET. Results grade a parlay at the card stake and omit the row when the card has no parlay.',
   'v12.3.69-omega-vnext-price-lock: The 3:00 and 10:00 ET DraftKings call also requests Hard Rock (bookmakers=draftkings,hardrockbet, one call, 3 credits). DraftKings quotes and pricing are unchanged. Hard Rock stays review-only.',
@@ -1012,14 +1013,14 @@ const MODEL_NOTES = [
   'v1 projections: sport power/market-hybrid (MLB Pythag/Elo-lite; NFL/CFB normal-spread; NBA/NHL disabled).',
   'Calibration: shrink p_model toward no-vig sharp with market K; isotonic clip soft-caps extremes (no 15% fake edges).',
   'Edge badge (edgePct): calibrated model edge after shrink = coverProb - no-vig sharp fair (fallback: vs book implied). Not predictedClv cents, not raw coverProb, not dog-inflated EV%.',
-  'Predicted CLV is a proxy; residual CLV uses open→now steam; realized no-vig CLV graded by track-clv-omega (Pinnacle/Circa/Bookmaker).',
+  'Predicted CLV is a proxy; residual CLV uses open→now steam; realized no-vig CLV graded by track-clv-omega (Pinnacle/Bookmaker).',
   'Weekly CLV report is OBSERVER ONLY — no auto-steer. openPrint+lockSnapshot populate open→close path.',
   'QA hard-fails drop scratched SP (MLB), stale odds, and adverse open→pick steam before publish. NFL/NCAAF QB out/doubtful is a soft projection adjustment only (game_day.js), never a hard-fail (2026-09-28).',
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
   'Day-scope: every straight + parlay leg commenceTime must fall on the card ET date (America/New_York).',
   'Unit structure: straights ≤3.5u + fixed 0.5u parlay = max 4.0u; may be under; never force-fill.',
   'Live card (get-picks-omega): newest store date with real picks ≤ tomorrowET; sticky prior-day when empty/missing; ?date= sticky unless forceEmpty.',
-  'US books prioritized: DK/FD/BetMGM/Caesars/ESPN BET/Hard Rock/BetRivers/Fanatics; sharp refs Pinnacle/Circa/Bookmaker for CLV context.',
+  'US books prioritized: DK/FD/BetMGM/Caesars/ESPN BET/Hard Rock/BetRivers/Fanatics; sharp refs Pinnacle/Bookmaker for CLV context.',
 ].join(' ');
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';

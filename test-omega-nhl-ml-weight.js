@@ -11,7 +11,7 @@ const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const nhl = require(path.join(root, 'sports/nhl'));
 const { blendWithMarket, totalCoverProb, spreadCoverProb, mlFromSpread } = require(path.join(root, 'sports/_common'));
-const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
+const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.deepStrictEqual(nhl.BLEND, { ml: 0.10, spread: 0.50, total: 0.45 });
 assert.strictEqual(config.MODEL_VERSION, 'v12.3.72-omega-vnext-price-lock');
@@ -43,7 +43,7 @@ const ev = {
   home_team: home,
   away_team: away,
   commence_time: '2026-10-06T23:10:00Z',
-  bookmakers: ['pinnacle', 'circa', 'draftkings', 'fanduel'].map(book),
+  bookmakers: ['pinnacle', 'altbook', 'draftkings', 'fanduel'].map(book),
 };
 
 const rows = nhl.project({ oddsEvents: [ev], standings: {} });
@@ -60,7 +60,7 @@ function anchorFor(c) {
   const wantSide = c.market === 'Total' ? 'Over' : home;
   const bundle = bundles.find((b) => b.side === wantSide && (c.market === 'Moneyline' || b.point === c.line));
   assert.ok(bundle, `${c.market} bundle`);
-  return noVigPinnacleCircaImplied(bundles, bundle);
+  return noVigPinnacleImplied(bundles, bundle);
 }
 
 function priced(c, weight) {

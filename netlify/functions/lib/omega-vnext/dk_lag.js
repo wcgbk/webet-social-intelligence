@@ -6,8 +6,7 @@
  * A fitted market-anchor weight is 0 in every sport, so the model adds
  * nothing beyond the close. The edge that is real is a stale DraftKings
  * price against a fresher one-book no-vig: Pinnacle when that book posts
- * both sides, otherwise Circa (circa, else circasports). Mixed books are
- * not a de-vig.
+ * both sides. Mixed books are not a de-vig.
  *
  * At the candidate's DraftKings price:
  *   marketEv = pinnacleNoVigP × DraftKings decimal − 1
@@ -18,7 +17,7 @@
  * stored opener. Retired 06:00..09:15 snaps are not a baseline. The lock
  * price is the candidate's current DraftKings
  * number (the latest snapshot). lagEdge equals marketEv only when Pinnacle
- * (or Circa) moved at least DK_LAG.minPinMovePp toward the side, DraftKings implied moved
+ * moved at least DK_LAG.minPinMovePp toward the side, DraftKings implied moved
  * less than DK_LAG.maxDkFollowRatio of that move, and marketEv > 0.
  * OMEGA_DK_LAG=0 records the moves and does not change cover or rank.
  *
@@ -134,7 +133,6 @@ function slotOf(poll) {
 function anchorKeys(book) {
   const b = String(book || '').toLowerCase();
   if (b === 'pinnacle') return ['pinnacle'];
-  if (b === 'circa' || b === 'circasports') return ['circa', 'circasports'];
   return b ? [b] : [];
 }
 
@@ -181,9 +179,8 @@ function baselinePolls(polls, opener) {
 }
 
 /**
- * First baseline poll that has the same anchor book (Circa aliases match
- * each other; Pinnacle does not borrow Circa). DraftKings implied is read
- * off that same poll.
+ * First baseline poll that has the anchor book. Pinnacle does not borrow
+ * another book. DraftKings implied is read off that same poll.
  */
 function baselineQuotes(polls, opener, away, home, anchorBook, market, role) {
   const keys = anchorKeys(anchorBook);
@@ -326,13 +323,11 @@ function rowFromOutcomes(outcomes, event, market, role, line) {
   return { mlHome, mlAway };
 }
 
-/** Pinnacle pair at this line, else Circa. A different number is not a pair. */
+/** Pinnacle pair at this line. A different number is not a pair. */
 function lockAnchor(event, market, role, line) {
-  for (const book of ['pinnacle', 'circa', 'circasports']) {
-    const q = quoteEventSide(event, book, market, role, line);
-    if (q && Number.isFinite(q.noVig)) {
-      return { p: q.noVig, book, implied: q.implied, american: q.american };
-    }
+  const q = quoteEventSide(event, 'pinnacle', market, role, line);
+  if (q && Number.isFinite(q.noVig)) {
+    return { p: q.noVig, book: 'pinnacle', implied: q.implied, american: q.american };
   }
   return null;
 }

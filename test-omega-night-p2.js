@@ -18,7 +18,7 @@ assert.strictEqual(env.sharpPostedTotal, env.sharpNoVigTotal);
 const both = {
   bookmakers: [
     { key: 'pinnacle', markets: [{ key: 'totals', outcomes: [{ name: 'Over', point: 8, price: -110 }, { name: 'Under', point: 8, price: -110 }] }] },
-    { key: 'circa', markets: [{ key: 'totals', outcomes: [{ name: 'Over', point: 9, price: -105 }, { name: 'Under', point: 9, price: -115 }] }] },
+    { key: 'altbook', markets: [{ key: 'totals', outcomes: [{ name: 'Over', point: 9, price: -105 }, { name: 'Under', point: 9, price: -115 }] }] },
   ],
 };
 assert.strictEqual(env.sharpPostedTotal(both), 8);

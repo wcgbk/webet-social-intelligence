@@ -45,25 +45,6 @@ function isVoidPregame(p) {
   return !!(p && p.status === 'void-pregame');
 }
 
-/**
- * Public tier. Internal cards say floor or lean. A stored card with no
- * tier is derived here and is not written back.
- * Lean is a lean-tier fill (tier, thinSlate, isLean, lean, dataVerified,
- * or a rating/confidence of lean). A 0.5u stake alone is not a lean:
- * cover-cap and B-grade mains are also 0.5u.
- */
-function publicTier(p) {
-  if (!p || typeof p !== 'object') return 'main';
-  const raw = String(p.tier || '').trim().toLowerCase();
-  if (raw === 'lean') return 'lean';
-  if (raw === 'floor' || raw === 'main') return 'main';
-  if (p.thinSlate === true || p.isLean === true || p.lean === true) return 'lean';
-  if (String(p.dataVerified || '').trim().toLowerCase() === 'lean-tier') return 'lean';
-  if (String(p.rating || '').trim().toLowerCase() === 'lean') return 'lean';
-  if (String(p.confidence || '').trim().toLowerCase() === 'lean') return 'lean';
-  return 'main';
-}
-
 function pickPublic(p) {
   if (!p || typeof p !== 'object') return p;
   const out = {};
@@ -71,8 +52,8 @@ function pickPublic(p) {
     if (p[k] !== undefined) out[k] = p[k];
   }
   // Execution book (draftkings and the other US books). Empty stays off the card.
+  // tier is a stored selection field. The public card does not copy it.
   if (p.book != null && String(p.book).trim() !== '') out.book = String(p.book).trim();
-  out.tier = publicTier(p);
   if (isCfbSport(out.sport)) {
     if (out.pick) out.pickDisplay = formatCfbPickDisplay(out.pick);
     if (out.matchup) out.matchupDisplay = formatCfbMatchupDisplay(out.matchup);
@@ -105,4 +86,4 @@ function publicPicksPayload(data) {
   return clone;
 }
 
-module.exports = { publicPicksPayload, pickPublic, publicTier };
+module.exports = { publicPicksPayload, pickPublic };

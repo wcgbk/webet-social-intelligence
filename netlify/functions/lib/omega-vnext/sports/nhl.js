@@ -2,7 +2,7 @@
 /**
  * NHL projection — standings GF/GA + HFA, then optional soft residuals.
  * Moneyline, puck line (market Spread), and total. Blend matches MLB
- * (0.50 / 0.50 / 0.45) on no-vig Pinnacle/Circa. Calibrate runs later.
+ * (0.50 / 0.50 / 0.45) on no-vig Pinnacle. Calibrate runs later.
  *
  * SPORTS_ENABLED.NHL enabled 2026-09-30 (WeBet voice order). This module does not
  * read that flag: projectAll is the gate. A direct project() call still
@@ -31,7 +31,7 @@ const {
 } = require('./_common');
 const { resolveTeamId, rowByIdentityOrFuzzy, logUnknownTeam } = require('./team_identity');
 const { applyGameDayAdjustments } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 const { nhlPeriodEnabled } = require('../gaps_flags');
 const { nhlMarketQuote } = require('../nhl_period');
 
@@ -818,7 +818,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       let p = q
         ? q.coverProb
         : (isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT));
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.ml);
+      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.ml);
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
@@ -843,7 +843,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       let pCover = q
         ? q.coverProb
         : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
-      pCover = blendWithMarket(pCover, noVigPinnacleCircaImplied(bundles, b), BLEND.spread);
+      pCover = blendWithMarket(pCover, noVigPinnacleImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
@@ -868,7 +868,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
         modelMargin, modelTotal, market: 'total', line, side: b.side,
       });
       let p = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), BLEND.total);
+      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.total);
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,

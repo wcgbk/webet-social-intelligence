@@ -350,20 +350,13 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
         spA: base.spA < 0 ? base.spA + 4 : base.spA - 4,
         ov: -108, un: -108,
       },
-      circa: {
-        mlH: base.mlH, mlA: base.mlA,
-        spH: base.spH < 0 ? base.spH + 2 : base.spH - 2,
-        spA: base.spA < 0 ? base.spA + 2 : base.spA - 2,
-        ov: -112, un: -104,
-      },
     };
   }
   function mlbEvent(home, away, lines) {
     const soft = lines;
     const pin = lines.pin || soft;
-    const circa = lines.circa || pin;
     const marketsFor = (book) => {
-      const L = book === 'pinnacle' ? pin : book === 'circa' ? circa : soft;
+      const L = book === 'pinnacle' ? pin : soft;
       return [
         { key: 'h2h', outcomes: [{ name: home, price: L.mlH }, { name: away, price: L.mlA }] },
         { key: 'spreads', outcomes: [
@@ -380,7 +373,7 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
       home_team: home,
       away_team: away,
       commence_time: kick,
-      bookmakers: ['draftkings', 'fanduel', 'betmgm', 'pinnacle', 'circa'].map(key => ({ key, markets: marketsFor(key) })),
+      bookmakers: ['draftkings', 'fanduel', 'betmgm', 'pinnacle'].map(key => ({ key, markets: marketsFor(key) })),
     };
   }
   const slate = [

@@ -71,6 +71,9 @@ const ET_SCHEDULE = {
   // 15:15 UTC (EST). Prices stay the 10:00 snapshot. No Odds API pull.
   'rerank-picks-omega': { etTimes: ['10:15'] },
   'verify-picks-omega': { etTimes: ['10:30'] },
+  // 11:00 ET card post. Cron "0 15,16 * * *" is 15:00 UTC (EDT) and 16:00 UTC (EST).
+  // Posts only when OMEGA_X_AUTOPOST is the string true. The flag stays unset here.
+  'post-card-omega': { etTimes: ['11:00'] },
   // Every 30 min, 11:00–23:30 ET inclusive. Cron is the UTC union of EDT
   // (UTC-4) and EST (UTC-5): "0,30 15-23,0-4 * * *". etGuard drops the copy
   // that is outside this list (15:00 UTC is 11:00 EDT and 10:00 EST; 04:30 UTC

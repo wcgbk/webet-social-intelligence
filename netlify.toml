@@ -49,6 +49,13 @@
   # Hard Rock and the parlay use the 10:00 snapshot. A pull happens only when
   # that snapshot does not cover them. Placeability advisory; must not invent sides.
 
+[functions."post-card-omega"]
+  schedule = "0 15,16 * * *"
+  # 11:00 ET (15:00 UTC EDT, 16:00 UTC EST). Posts only when OMEGA_X_AUTOPOST is
+  # the string true. Copy that contains Alpha or Omega is rejected. The flag
+  # is unset, so this job does not post. It does not pull odds or rewrite the card.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."pregame-check-omega"]
   schedule = "0,30 15-23,0-4 * * *"
   # Schedule stays 11:00–23:30 ET. The handler does not rewrite the card.

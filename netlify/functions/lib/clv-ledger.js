@@ -533,6 +533,35 @@ function liveDates(asOf, lookbackDays) {
   return eachDate(from, asOf);
 }
 
+/**
+ * Per-pick, per-candidate, and per-sport CLV from rows already graded
+ * onto stored closes. Display only. Does not grade and does not write.
+ */
+function clvKpis(rows) {
+  const list = Array.isArray(rows) ? rows.filter((row) => row && typeof row === 'object') : [];
+  const picks = list.filter((row) => row.kind === 'pick');
+  const candidates = list.filter((row) => row.kind !== 'pick');
+  const sportMap = new Map();
+  for (const row of list) {
+    const sport = sportLabel(row);
+    if (!sportMap.has(sport)) sportMap.set(sport, []);
+    sportMap.get(sport).push(row);
+  }
+  const bySport = [...sportMap.entries()]
+    .map(([sport, sportRows]) => ({
+      sport,
+      picks: bucket(sportRows.filter((row) => row.kind === 'pick')),
+      candidates: bucket(sportRows.filter((row) => row.kind !== 'pick')),
+    }))
+    .sort((a, b) => ((b.picks.n + b.candidates.n) - (a.picks.n + a.candidates.n)) || a.sport.localeCompare(b.sport));
+  return {
+    displayOnly: true,
+    picks: bucket(picks),
+    candidates: bucket(candidates),
+    bySport,
+  };
+}
+
 function buildReport(opts) {
   const src = opts || {};
   const rows = mergeRows(src.rows || []);
@@ -581,6 +610,7 @@ function buildReport(opts) {
         targetBeatClosePct: PICK_BEAT_TARGET_PCT,
       }),
     },
+    clvKpis: clvKpis(omega),
     n: rows.length,
     source: src.source || null,
   };
@@ -614,6 +644,17 @@ function formatTotalsTable(report) {
   for (const sport of report.totals.bySport) add(sport.sport, sport);
   add('Omega all closes (target avg ≥ 0 pp)', report.omegaTargets.allCandidates);
   add('Omega published picks (target avg ≥ +1.0 pp, beat ≥ 55%)', report.omegaTargets.publishedPicks);
+  if (report.clvKpis && report.clvKpis.picks && report.clvKpis.candidates) {
+    lines.push('');
+    lines.push('| Stored-close slice | n | Avg CLV (pp) | Beat close | Sample |');
+    lines.push('| --- | ---: | ---: | ---: | --- |');
+    add('Published picks', report.clvKpis.picks);
+    add('Candidates', report.clvKpis.candidates);
+    for (const sport of report.clvKpis.bySport || []) {
+      add(`${sport.sport} picks`, sport.picks);
+      add(`${sport.sport} candidates`, sport.candidates);
+    }
+  }
   return lines.join('\n');
 }
 
@@ -643,6 +684,7 @@ module.exports = {
   blobKind,
   mergeRows,
   bucket,
+  clvKpis,
   buildReport,
   formatTotalsTable,
   signedPp,

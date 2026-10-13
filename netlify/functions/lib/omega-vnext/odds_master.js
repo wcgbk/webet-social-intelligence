@@ -664,6 +664,33 @@ function groupByCommence(games) {
   return [...map.values()].sort((a, b) => (a.commenceTime < b.commenceTime ? -1 : a.commenceTime > b.commenceTime ? 1 : 0));
 }
 
+/**
+ * CLV KPIs from a clv-candidates-v2 blob already on disk.
+ * Read-only. Does not grade closes and does not write.
+ */
+function clvKpisFromCandidateBlob(blob, opts) {
+  const ledger = require('../clv-ledger');
+  const kpis = ledger.clvKpis(ledger.rowsFromCandidateBlob(blob, opts));
+  kpis.source = 'clv-candidates-v2';
+  kpis.readOnly = true;
+  return kpis;
+}
+
+/**
+ * Read clv-candidates-v2/{date} and return per-pick, per-candidate, and
+ * per-sport CLV. Pass opts.readJson to avoid a store read. Never writes.
+ */
+async function clvKpisForDate(dateISO, opts = {}) {
+  const read = opts && typeof opts.readJson === 'function' ? opts.readJson : readEdgeBlob;
+  let blob = null;
+  try {
+    blob = await read(`clv-candidates-v2/${dateISO}`);
+  } catch (_) {
+    blob = null;
+  }
+  return clvKpisFromCandidateBlob(blob, { date: dateISO });
+}
+
 function sportKeyForLabel(sport) {
   if (!sport) return null;
   if (sport === 'CFB') return ODDS_SPORT_KEYS.NCAAF || null;
@@ -696,6 +723,8 @@ module.exports = {
   readCloseEvent,
   closeAlreadyStored,
   externalCloseRows,
+  clvKpisFromCandidateBlob,
+  clvKpisForDate,
   storeHistoricalCloses,
   storeCloseFromOddsEvent,
   groupByCommence,

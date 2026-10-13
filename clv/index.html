@@ -237,6 +237,19 @@
         + 'beat ' + pct(targets.publishedPicks.beatClosePct) + ' (' + mark(targets.publishedPicks.meetsBeat) + ')'
         + sample(targets.publishedPicks) + '. n=' + targets.publishedPicks.n + '.</p>';
       html += '</div>';
+      var kpis = report.clvKpis;
+      if (kpis && kpis.picks && kpis.candidates) {
+        html += '<div class="card"><div class="card-title">Stored closes: picks and candidates</div>';
+        html += '<table><thead><tr><th>Slice</th><th class="num">n</th><th class="num">Avg CLV (pp)</th><th class="num">Beat close</th></tr></thead><tbody>';
+        html += row('Published picks', kpis.picks);
+        html += row('Candidates', kpis.candidates);
+        var slices = kpis.bySport || [];
+        for (var k = 0; k < slices.length; k += 1) {
+          html += row(slices[k].sport + ' picks', slices[k].picks);
+          html += row(slices[k].sport + ' candidates', slices[k].candidates);
+        }
+        html += '</tbody></table><p class="note">Read from stored 3:00 closes. Display only.</p></div>';
+      }
       document.getElementById('report').innerHTML = html;
     }
     function loadReport() {

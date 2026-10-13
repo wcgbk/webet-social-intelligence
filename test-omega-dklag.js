@@ -62,7 +62,7 @@ function prices(book, american) {
 }
 
 {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.51-omega-vnext-price-lock');
+  assert.strictEqual(config.MODEL_VERSION, 'v12.3.52-omega-vnext-price-lock');
   assert.strictEqual(config.DK_LAG.minPinMovePp, 1.0);
   assert.strictEqual(config.DK_LAG.maxDkFollowRatio, 0.5);
   assert.ok(/OMEGA_DK_LAG=0/.test(config.MODEL_NOTES));

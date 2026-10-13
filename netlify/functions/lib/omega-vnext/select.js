@@ -19,11 +19,38 @@ const { pushAwareKelly } = require('./push_ev');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 const { reviewFlag } = require('./pinnacle_flag');
 
+function cleanTeam(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * One game whether the matchup says "vs", "vs.", "at", or "@", and
+ * whichever team is listed first. Event id is not part of the key: a row
+ * that has one must still match a row that only has the team names.
+ */
+function canonicalGameName(c) {
+  const row = c || {};
+  const fromParts = (left, right) => [cleanTeam(left), cleanTeam(right)].filter(Boolean).sort().join(' @ ');
+  const splitTeams = (raw) => {
+    const parts = cleanTeam(raw).split(/\s+(?:@|vs\.?|at)\s+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length < 2) return '';
+    return fromParts(parts[0], parts.slice(1).join(' '));
+  };
+  const fromMatchup = splitTeams(row.matchup);
+  if (fromMatchup) return fromMatchup;
+  const home = cleanTeam(row.homeTeam);
+  const away = cleanTeam(row.awayTeam);
+  if (home && away && home !== 'undefined' && away !== 'undefined') return fromParts(away, home);
+  const built = cleanTeam(`${row.awayTeam} @ ${row.homeTeam}`);
+  return splitTeams(built) || built || cleanTeam(row.matchup);
+}
+
 function matchupKey(c) {
-  const name = String((c && (c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) || '').toLowerCase().trim();
+  const name = canonicalGameName(c);
   const when = (c && (c.commenceTime || c.commence_time)) || '';
   // Doubleheader halves are different games. An empty commence stays
-  // name-only so two undated legs of one matchup still conflict.
+  // name-only so two undated legs of one matchup still conflict, and the
+  // undated key has no "|" suffix.
   if (!when) return name;
   return `${name}|${String(when)}`;
 }

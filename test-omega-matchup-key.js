@@ -30,6 +30,31 @@ assert.strictEqual(
   matchupKey({ matchup: name, market: 'Spread' })
 );
 assert.ok(!matchupKey({ matchup: name }).includes('|'));
+assert.strictEqual(
+  matchupKey({ matchup: name, commenceTime: day }),
+  `baltimore orioles @ new york yankees|${day}`
+);
+assert.strictEqual(matchupKey({ matchup: name }), 'baltimore orioles @ new york yankees');
+assert.strictEqual(
+  matchupKey({ matchup: 'New York Yankees vs Baltimore Orioles', commenceTime: day }),
+  matchupKey({ matchup: name, commenceTime: day })
+);
+assert.strictEqual(
+  matchupKey({ matchup: 'New York Yankees vs. Baltimore Orioles' }),
+  'baltimore orioles @ new york yankees'
+);
+assert.strictEqual(
+  matchupKey({ matchup: 'Baltimore Orioles at New York Yankees' }),
+  'baltimore orioles @ new york yankees'
+);
+assert.strictEqual(
+  matchupKey({ matchup: name, eventId: 'evt-1', commenceTime: day }),
+  matchupKey({ matchup: 'New York Yankees vs Baltimore Orioles', commenceTime: day })
+);
+assert.strictEqual(
+  matchupKey({ homeTeam: 'New York Yankees', awayTeam: 'Baltimore Orioles', commenceTime: day }),
+  matchupKey({ matchup: 'New York Yankees at Baltimore Orioles', commenceTime: day })
+);
 
 function leg(commence, edge, market, sport) {
   return {
@@ -79,6 +104,13 @@ const undated = selectStraights([
 ]);
 assert.strictEqual(undated.length, 1);
 assert.strictEqual(undated[0].market, 'Total');
+
+const crossed = selectStraights([
+  { ...leg(day, 0.09, 'Total'), matchup: 'Baltimore Orioles @ New York Yankees' },
+  { ...leg(day, 0.08, 'Moneyline'), matchup: 'New York Yankees vs Baltimore Orioles' },
+]);
+assert.strictEqual(crossed.length, 1);
+assert.strictEqual(crossed[0].market, 'Total');
 
 assert.strictEqual(comboStats([
   { ...leg(day, 0.04), odds: -110, coverProb: 0.55 },

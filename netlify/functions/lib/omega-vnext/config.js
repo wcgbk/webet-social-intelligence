@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.48-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.49-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -862,6 +862,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.49-omega-vnext-price-lock: One straight per game treats vs, at, and @ as the same matchup, in either team order. The game key is the sorted team names. A doubleheader stays two games. An undated key has no commence suffix.',
   'v12.3.48-omega-vnext-price-lock: The 49,000 credit stop applies to backfill and extra pulls only. It does not stop the 3:00 or 10:00 checks, yesterday\'s closes, or the card. Open and other extra pulls still stop below 49,000.',
   'v12.3.47-omega-vnext-price-lock: At 10:30 the card\'s top 3 are compared to the re-ranked list on game, side, and edge. A mismatch rebuilds that order and the parlay. The bug log entry stays off the page.',
   'v12.3.46-omega-vnext-price-lock: The published card shows the three straights with their write-ups, then one parlay section at the bottom. That section is a short summary, the combined odds, and the three legs. It does not repeat each leg\'s write-up.',

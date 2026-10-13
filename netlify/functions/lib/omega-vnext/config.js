@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.52-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.53-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -863,6 +863,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.53-omega-vnext-price-lock: At 10:15 ET the card is re-ranked after fresh injury and starter news. A postponed game or a main under the 3% edge floor is replaced from the 10:00 priced pool. If ESPN fails, or the clock is after 10:30 ET, the 10:00 card stays. No Odds API pull.',
   'v12.3.52-omega-vnext-price-lock: The desk CLV report splits stored 3:00 closes into published picks, other candidates, and the same split per sport. odds-master reads clv-candidates-v2 for those KPIs only. Nothing is graded and nothing is written.',
   'v12.3.51-omega-vnext-price-lock: A main pick needs edge of at least 3% versus the de-vigged sharp, and the odds-scaled curve can ask for more up to 6%. Stake EV stays at 3%. A sub-3% edge is not a main. The lean tier is unchanged: positive EV, edge at least 1.5%, DraftKings, one per game, filled only after the mains, flat 0.5u.',
   'v12.3.50-omega-vnext-price-lock: The steam gate and the rank nudge read the latest Pinnacle/DraftKings check against the 3:00 baseline (else the open). Suspended 06:00/07:30/09:00/09:15 snaps are a fallback only when that log has no snapshot. The 15-minute dense-check window is unchanged; a named 03:00 to 10:00 step still steams. Fair price, floors, Kelly, and unit caps are unchanged.',

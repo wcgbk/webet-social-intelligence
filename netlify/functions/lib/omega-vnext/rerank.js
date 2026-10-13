@@ -1,0 +1,284 @@
+'use strict';
+
+/**
+ * 10:15 ET news re-rank.
+ * Uses the prices already on the 10:00 card. Does not call the Odds API.
+ * A postponed game or a main that falls under the 3% edge floor is replaced
+ * from that priced pool. ESPN failure, or a clock after 10:30 ET, keeps the
+ * 10:00 card (last known good). Leans stay on the lean rules.
+ */
+
+const { etParts } = require('../et-schedule');
+const { runLateNews } = require('./late_news');
+const {
+  selectStraights,
+  passesPublishFloor,
+  passesLeanFill,
+  toPickObject,
+  straightCardLabel,
+  matchupKey,
+} = require('./select');
+const { parlayFromStraights } = require('./parlay');
+const { parseEdgeFraction } = require('./odds_math');
+const { recordRankedList, top10Rows } = require('./selection_pass');
+
+const RERANK_WITHIN_MIN = 20 * 60;
+const CUTOFF_MIN = 10 * 60 + 30;
+
+function pastRerankCutoff(now) {
+  const when = now instanceof Date ? now : new Date(now || Date.now());
+  if (Number.isNaN(when.getTime())) return true;
+  const parts = etParts(when);
+  return parts.hour * 60 + parts.minute > CUTOFF_MIN;
+}
+
+function guardFetch(fetchImpl) {
+  const base = fetchImpl || global.fetch;
+  return async function rerankFetch(url, opts) {
+    const text = String(url && url.url ? url.url : url || '');
+    if (/the-odds-api\.com/i.test(text)) {
+      throw new Error('rerank refused an Odds API pull');
+    }
+    if (typeof base !== 'function') {
+      throw new Error('rerank has no news fetch');
+    }
+    return base(url, opts);
+  };
+}
+
+function sideOf(row) {
+  return String((row && (row.side || row.pick)) || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function betSame(a, b) {
+  if (!a || !b) return false;
+  return matchupKey(a) === matchupKey(b) && sideOf(a) === sideOf(b);
+}
+
+function numEv(row) {
+  if (!row) return null;
+  if (row.evRaw != null && Number.isFinite(Number(row.evRaw))) return Number(row.evRaw);
+  if (typeof row.ev === 'number' && Number.isFinite(row.ev)) return row.ev;
+  if (typeof row.ev === 'string' && row.ev.trim().endsWith('%')) {
+    const n = parseFloat(row.ev);
+    return Number.isFinite(n) ? n / 100 : null;
+  }
+  const n = Number(row.ev);
+  return Number.isFinite(n) ? n : null;
+}
+
+function numEdge(row) {
+  if (!row) return null;
+  return parseEdgeFraction(row.edgePct != null ? row.edgePct : row.edge);
+}
+
+function numCover(row) {
+  if (!row || row.coverProb == null || row.coverProb === '') return null;
+  if (typeof row.coverProb === 'string' && row.coverProb.trim().endsWith('%')) {
+    const n = parseFloat(row.coverProb);
+    return Number.isFinite(n) ? n / 100 : null;
+  }
+  const n = Number(row.coverProb);
+  if (!Number.isFinite(n)) return null;
+  return n > 1 && n <= 100 ? n / 100 : n;
+}
+
+function asCandidate(row) {
+  if (!row) return null;
+  const edge = numEdge(row);
+  const ev = numEv(row);
+  const cover = numCover(row);
+  const odds = typeof row.odds === 'number' ? row.odds : row.odds;
+  return {
+    ...row,
+    side: row.side || row.pick,
+    market: row.market || row.betType,
+    edgePct: edge,
+    ev,
+    coverProb: cover != null ? cover : row.coverProb,
+    odds,
+    tier: row.tier === 'lean' ? 'lean' : 'floor',
+  };
+}
+
+function poolFromCard(card, extra) {
+  const rows = [];
+  const pushAll = (list) => {
+    for (const row of list || []) {
+      const c = asCandidate(row);
+      if (!c || !c.side || !(c.matchup || (c.homeTeam && c.awayTeam))) continue;
+      if (!rows.some((prev) => betSame(prev, c))) rows.push(c);
+    }
+  };
+  pushAll(extra);
+  pushAll(card && card.candidateTable);
+  pushAll(card && card.selection && card.selection.top10);
+  pushAll(card && card.picks);
+  return rows;
+}
+
+function newsFailed(news) {
+  if (!news || news.softFail) return true;
+  const errors = Array.isArray(news.errors) ? news.errors : [];
+  if (!errors.length) return false;
+  const checks = Array.isArray(news.checks) ? news.checks : [];
+  if (!checks.length) return true;
+  return checks.every((row) => !row || !row.matched);
+}
+
+function edgeMoved(before, after) {
+  const a = numEdge(before);
+  const b = numEdge(after);
+  if (a == null && b == null) return false;
+  if (a == null || b == null) return true;
+  return Math.abs(a - b) > 1e-6;
+}
+
+function keepOriginal(original, reason, extra) {
+  return {
+    card: original,
+    changed: false,
+    lastKnownGood: true,
+    reason,
+    oddsApi: false,
+    ...extra,
+  };
+}
+
+/**
+ * @param {object} opts
+ * @param {object} opts.card 10:00 card. Not mutated.
+ * @param {Date|string|number} [opts.now]
+ * @param {Function} [opts.fetchImpl]
+ * @param {Function} [opts.runNews] test double. Defaults to runLateNews.
+ * @param {Array} [opts.pool] extra priced rows from the 10:00 candidate ledger.
+ */
+async function rerankCard(opts = {}) {
+  const original = opts.card;
+  if (!original || !Array.isArray(original.picks)) {
+    return { card: original || null, changed: false, lastKnownGood: true, reason: 'no-card', oddsApi: false };
+  }
+  const now = opts.now instanceof Date ? opts.now : new Date(opts.now || Date.now());
+  if (pastRerankCutoff(now)) {
+    return keepOriginal(original, 'after-1030');
+  }
+  const working = JSON.parse(JSON.stringify(original));
+  const runNews = opts.runNews || runLateNews;
+  let news;
+  try {
+    news = await runNews({
+      picksData: working,
+      now,
+      fetchImpl: guardFetch(opts.fetchImpl),
+      withinMin: RERANK_WITHIN_MIN,
+      dateISO: original.date || null,
+    });
+  } catch (e) {
+    return keepOriginal(original, 'news-failed', {
+      error: e && e.message ? e.message : 'news failed',
+    });
+  }
+  if (newsFailed(news)) {
+    return keepOriginal(original, 'news-failed', {
+      errors: (news && news.errors) || [],
+    });
+  }
+
+  const voidKeys = new Set();
+  for (const row of working.voidedPregame || []) {
+    if (row) voidKeys.add(matchupKey(row));
+  }
+  const survivors = (working.picks || []).map(asCandidate).filter(Boolean);
+  const pool = poolFromCard(working, opts.pool).map((row) => {
+    const hit = survivors.find((p) => betSame(p, row));
+    if (!hit) return row;
+    return {
+      ...row,
+      edgePct: hit.edgePct != null ? hit.edgePct : row.edgePct,
+      ev: hit.ev != null ? hit.ev : row.ev,
+      coverProb: hit.coverProb != null ? hit.coverProb : row.coverProb,
+      tier: hit.tier || row.tier,
+    };
+  }).filter((row) => row && !voidKeys.has(matchupKey(row)));
+
+  const floor = [];
+  const leans = [];
+  const seen = new Set();
+  for (const row of pool) {
+    const id = `${matchupKey(row)}|${sideOf(row)}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (passesPublishFloor(row)) floor.push({ ...row, tier: 'floor' });
+    else if (passesLeanFill(row)) leans.push({ ...row, tier: 'lean' });
+  }
+  const selected = selectStraights(floor, 3, leans);
+  const sameList = selected.length === original.picks.length
+    && selected.every((row, i) => betSame(original.picks[i], row));
+  const moved = (working.picks || []).some((row) => {
+    const prev = (original.picks || []).find((p) => betSame(p, row));
+    return prev && edgeMoved(prev, row);
+  });
+  if (sameList && !moved && !(news && news.dropped)) {
+    return {
+      card: original,
+      changed: false,
+      lastKnownGood: false,
+      reason: 'unchanged',
+      oddsApi: false,
+      dropped: 0,
+    };
+  }
+
+  const nextPicks = selected.map((row) => {
+    const prev = (working.picks || []).find((p) => betSame(p, row));
+    const prior = (original.picks || []).find((p) => betSame(p, row));
+    if (prev && prior && !edgeMoved(prior, prev) && (prev.tier || 'floor') === (row.tier || 'floor')) {
+      return prev;
+    }
+    const built = toPickObject({
+      ...row,
+      side: row.side || row.pick,
+      market: row.market || row.betType,
+      edgePct: numEdge(row),
+      ev: numEv(row),
+      coverProb: numCover(row),
+      tier: row.tier || 'floor',
+    }, { modelVersion: original.model || original.modelVersion });
+    if (prev && prev.coreReasoning) built.coreReasoning = prev.coreReasoning;
+    return built;
+  });
+  const parlayLegs = parlayFromStraights(nextPicks);
+  working.picks = nextPicks;
+  working.parlayLegs = parlayLegs;
+  working.selection = working.selection && typeof working.selection === 'object' ? working.selection : {};
+  working.selection.window = '10:00-10:15';
+  working.selection.rerankWindow = '10:15-10:30';
+  working.selection.rankedBy = 'edge';
+  working.selection.onePerGame = true;
+  working.selection.top10 = recordRankedList(nextPicks, top10Rows(floor, 10));
+  working.selection.rerankedAt = now.toISOString();
+  working.selection.rerankReason = news && news.dropped ? 'news-drop' : 'news-reprice';
+  working.selection.cardLabel = straightCardLabel(nextPicks);
+  working.selection.oddsApi = false;
+  if (working.summary && typeof working.summary === 'object') {
+    working.summary.totalPicks = nextPicks.length;
+    working.summary.totalStraightBets = nextPicks.length;
+  }
+  return {
+    card: working,
+    changed: true,
+    lastKnownGood: false,
+    reason: working.selection.rerankReason,
+    oddsApi: false,
+    dropped: (news && news.dropped) || 0,
+    picks: nextPicks.length,
+    parlayLegs: parlayLegs.length ? (parlayLegs[0].legs || []).length : 0,
+  };
+}
+
+module.exports = {
+  RERANK_WITHIN_MIN,
+  pastRerankCutoff,
+  rerankCard,
+  newsFailed,
+};

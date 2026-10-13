@@ -756,8 +756,8 @@ async function generateOmegaVnext(opts = {}) {
       unmatchedCount: unmatchedReport.count,
     },
     // Private. publicPicksPayload drops selection. Top 10 is the 10:00
-    // edge rank, one game each. The same order is the 10:15-10:30 re-rank
-    // because news is already stamped on these rows.
+    // edge rank, one game each. rerank-picks-omega at 10:15 refreshes news
+    // and may replace a main from this priced pool. It does not pull odds.
     selection: {
       snapshotTime: servedSnapshot || oddsSnapshot || null,
       cardLabel: straightCardLabel(picks),

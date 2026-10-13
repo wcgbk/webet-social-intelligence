@@ -67,6 +67,9 @@ function hourlyAt(minute) {
 const ET_SCHEDULE = {
   'trigger-picks-alpha': { etTimes: ['09:00'] },
   'trigger-picks-omega': { etTimes: ['10:00'] },
+  // 10:15 ET news re-rank. Cron "15 14,15 * * *" is 14:15 UTC (EDT) and
+  // 15:15 UTC (EST). Prices stay the 10:00 snapshot. No Odds API pull.
+  'rerank-picks-omega': { etTimes: ['10:15'] },
   'verify-picks-omega': { etTimes: ['10:30'] },
   // Every 30 min, 11:00–23:30 ET inclusive. Cron is the UTC union of EDT
   // (UTC-4) and EST (UTC-5): "0,30 15-23,0-4 * * *". etGuard drops the copy

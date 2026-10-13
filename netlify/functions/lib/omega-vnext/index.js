@@ -29,6 +29,7 @@ const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
+const { applyLineMoveProb } = require('./line_move_prob');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
 const { stampCandidates } = require('./late_news');
@@ -356,11 +357,11 @@ async function generateOmegaVnext(opts = {}) {
   candidates = calibrateAll(candidates, { cardDate: dateISO }).map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
 
-  // Open→pick line move. The steam gate uses the latest Pinnacle/DraftKings
-  // check (10:00 when that print exists) against the 3:00 baseline.
-  // Retired 06:00/07:30/09:00/09:15 snaps are a fallback only when no
-  // 3:00/10:00 snapshot is stored. They do not outrank the latest snapshot
-  // and capture health does not require them.
+  // Open→pick line move. The steam gate uses the 10:00 Pinnacle print
+  // against the 3:00 baseline. A stored opener is the baseline only when
+  // the 3:00 capture is absent. Retired 06:00/07:30/09:00/09:15 snaps are
+  // ignored. A missing 3:00 or 10:00 is logged and is not filled from a
+  // stale morning snap. Capture health does not require those retired slots.
   // Does not invent snaps, does not pull the Odds API, and does not force-fill leans.
   let morningPath = { path: null, earliest: null, latest: null };
   try {
@@ -539,8 +540,17 @@ async function generateOmegaVnext(opts = {}) {
     console.log(`[omega-vnext] no-draftkings-line excluded=${dkExcluded.length}`);
   }
 
-  // Stale DraftKings vs the 10:00 one-book no-vig. Ranking edge and cover
-  // only. Floors, caps, Kelly, and the lean fill run on the stamped row.
+  // Blend-weight shift from the 3:00 and 10:00 captures. One adjusted
+  // probability feeds edge, stake EV, and the letter grade. A missing
+  // slot logs and adjusts 0. DraftKings lag does not stack on top.
+  candidates = applyLineMoveProb(candidates, linePathMeta);
+  const moved = candidates.filter((c) => c && Number(c.movementAdj) !== 0).length;
+  const droppedMove = candidates.filter((c) => c && c.movementDrop).length;
+  console.log(`[omega-vnext] line-move-prob adjusted=${moved} drop=${droppedMove}/${candidates.length}`);
+
+  // Stale DraftKings vs the 10:00 one-book no-vig. When movement already
+  // adjusted the row, this stamps features and does not rewrite edge.
+  // Floors, caps, Kelly, and the lean fill run on the stamped row.
   candidates = applyDkLag(candidates, {
     linePath: linePathMeta && linePathMeta.path,
     opener: linePathMeta && linePathMeta.earliest,

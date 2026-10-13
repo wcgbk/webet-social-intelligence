@@ -11,14 +11,16 @@
  * exists, otherwise from the open. Steam needs the same direction at
  * Pinnacle and DraftKings.
  *
- * Selection reads that same pair. linePathForSelection turns the latest
+ * Selection reads that same pair. linePathForSelection turns the 10:00
  * check and the 3:00 baseline (else the open) into line-path polls.
- * The steam gate and the rank nudge use those polls, not the suspended
- * 06:00/07:30/09:00/09:15 snaps. The fair price is not rewritten here.
+ * A doc with no 10:00 snapshot does not pretend the last check is the
+ * close. Retired 06:00/07:30/09:00/09:15 snaps are not a fallback.
+ * The fair price is not rewritten here.
  * applyLineMoveContext still only copies the audit summary.
  */
 
 const { PINNACLE_LINE_MOVE, STEAM_WINDOW_MIN, SITE_ID } = require('./config');
+const { shapeOfficialLinePath } = require('./line_path');
 const { noVigTwoWay, americanJuiceDelta, isSameEtDay } = require('./odds_math');
 const { priceLockTimestamp } = require('./price_lock');
 const { replayNoWrite, logBlocked } = require('./no_write');
@@ -720,12 +722,26 @@ function rowFromSideQuotes(quotes) {
   return row;
 }
 
+function storedBookRow(obs, names) {
+  for (const name of names) {
+    const row = rowFromSideQuotes(bookQuotes(obs, name));
+    if (Object.keys(row).length) return { name, row };
+  }
+  return null;
+}
+
 function gameFromObservation(eventDoc, obs) {
   const pin = rowFromSideQuotes(bookQuotes(obs, 'pinnacle'));
   const dk = rowFromSideQuotes(bookQuotes(obs, 'draftkings'));
   const books = {};
   if (Object.keys(pin).length) books.pinnacle = pin;
   if (Object.keys(dk).length) books.draftkings = dk;
+  // Circa and Hard Rock are copied only when the stored observation
+  // already has them. This does not add an Odds API bookmaker.
+  const circa = storedBookRow(obs, ['circa', 'circasports']);
+  const hardRock = storedBookRow(obs, ['hardrockbet', 'hardrock']);
+  if (circa) books[circa.name] = circa.row;
+  if (hardRock) books[hardRock.name] = hardRock.row;
   if (!Object.keys(books).length) return null;
   const away = eventDoc.awayTeam;
   const home = eventDoc.homeTeam;
@@ -757,9 +773,9 @@ function pollFromSlot(slot, at, games) {
 }
 
 /**
- * Latest check vs the 3:00 baseline (else the open), as line-path polls.
- * The latest poll is the snapshot selection must use. A doc with no
- * visible quotes returns empty polls so the caller can keep another path.
+ * 10:00 check vs the 3:00 baseline (else the open), as line-path polls.
+ * latest is slot 1000 only. A 0300-only doc does not become the close.
+ * A stored open is included when present and is not a substitute for 1000.
  */
 function selectionPollsFromDoc(doc, opts = {}) {
   const empty = { earliest: null, latest: null, path: null };
@@ -767,43 +783,44 @@ function selectionPollsFromDoc(doc, opts = {}) {
   if (!events.length) return empty;
   const dateISO = (opts && opts.dateISO) || (doc && doc.date) || null;
   const endMs = cutoffMs(dateISO, opts && opts.cutoffIso);
-  const baselineGames = {};
-  const latestGames = {};
-  let baselineAt = null;
-  let latestAt = null;
-  let baselineSlot = null;
-  let latestSlot = null;
+  const buckets = {
+    open: { games: {}, at: null },
+    '0300': { games: {}, at: null },
+    '1000': { games: {}, at: null },
+  };
   for (const eventDoc of events) {
     const obs = visibleObservations(eventDoc, endMs);
     if (!obs.length) continue;
-    const baselineObs = obs.find((row) => row.slot === '0300') || obs.find((row) => row.slot === 'open') || null;
-    const latestObs = obs[obs.length - 1];
     const away = eventDoc.awayTeam;
     const home = eventDoc.homeTeam;
-    if (!away || !home || !latestObs) continue;
+    if (!away || !home) continue;
     const key = `${String(away).trim()} @ ${String(home).trim()}`.toLowerCase();
-    const latestGame = gameFromObservation(eventDoc, latestObs);
-    if (!latestGame) continue;
-    latestGames[key] = latestGame;
-    if (!latestSlot || latestObs.slot === '1000') {
-      latestSlot = latestObs.slot;
-      latestAt = latestObs.at || latestAt;
-    }
-    if (!baselineObs) continue;
-    const baseGame = gameFromObservation(eventDoc, baselineObs);
-    if (!baseGame) continue;
-    baselineGames[key] = baseGame;
-    if (!baselineSlot || baselineObs.slot === '0300') {
-      baselineSlot = baselineObs.slot;
-      baselineAt = baselineObs.at || baselineAt;
+    for (const slot of ['open', '0300', '1000']) {
+      const row = obs.find((item) => item.slot === slot);
+      if (!row) continue;
+      const game = gameFromObservation(eventDoc, row);
+      if (!game) continue;
+      buckets[slot].games[key] = game;
+      if (!buckets[slot].at) buckets[slot].at = row.at || null;
     }
   }
-  if (!Object.keys(latestGames).length) return empty;
-  const latest = pollFromSlot(latestSlot, latestAt, latestGames);
-  const earliest = Object.keys(baselineGames).length
-    ? pollFromSlot(baselineSlot, baselineAt, baselineGames)
-    : latest;
-  const polls = earliest === latest ? [latest] : [earliest, latest];
+  const polls = [];
+  let earliest = null;
+  let latest = null;
+  if (Object.keys(buckets.open.games).length) {
+    polls.push(pollFromSlot('open', buckets.open.at, buckets.open.games));
+  }
+  if (Object.keys(buckets['0300'].games).length) {
+    earliest = pollFromSlot('0300', buckets['0300'].at, buckets['0300'].games);
+    polls.push(earliest);
+  } else if (polls.length && polls[0].hhmm === 'open') {
+    earliest = polls[0];
+  }
+  if (Object.keys(buckets['1000'].games).length) {
+    latest = pollFromSlot('1000', buckets['1000'].at, buckets['1000'].games);
+    polls.push(latest);
+  }
+  if (!polls.length) return empty;
   return {
     earliest,
     latest,
@@ -812,18 +829,51 @@ function selectionPollsFromDoc(doc, opts = {}) {
 }
 
 /**
- * Selection line path. A pinnacle doc with a latest snapshot wins over
- * the suspended morning snaps. No latest snapshot keeps the morning path.
+ * Selection line path. A 10:00 snapshot wins. Retired morning snaps are
+ * ignored and logged. They are not the line-move input.
  */
 function linePathForSelection(morningMeta, doc, opts = {}) {
+  const dateISO = opts && opts.dateISO;
   const pin = selectionPollsFromDoc(doc, opts);
-  if (pin && pin.latest && pin.latest.gameCount > 0) {
+  if (pin && pin.latest && pin.latest.gameCount > 0 && String(pin.latest.hhmm || pin.latest.slot) === '1000') {
     return { ...pin, source: 'pinnacle-latest' };
   }
-  if (morningMeta && (morningMeta.latest || morningMeta.earliest)) {
-    return { ...morningMeta, source: morningMeta.source || 'morning-line-path' };
+  const morningPolls = (morningMeta && morningMeta.path && morningMeta.path.polls) || [];
+  const shaped = shapeOfficialLinePath(morningPolls, dateISO);
+  const earliest = (pin && pin.earliest) || shaped.earliest || null;
+  if (shaped.latest && shaped.latest.gameCount !== 0) {
+    const polls = [];
+    if (earliest && earliest !== shaped.latest) polls.push(earliest);
+    polls.push(shaped.latest);
+    const pathPolls = (shaped.path && shaped.path.polls) || polls;
+    return {
+      path: { date: dateISO || null, polls: pathPolls, source: 'pull-0300-1000' },
+      earliest,
+      latest: shaped.latest,
+      source: 'pull-0300-1000',
+    };
   }
-  return morningMeta || { path: null, earliest: null, latest: null, source: null };
+  const retired = morningPolls.some((poll) => {
+    const slot = String((poll && (poll.hhmm || poll.slot)) || '');
+    return slot === '0600' || slot === '0730' || slot === '0900' || slot === '0915';
+  });
+  if (retired || (morningMeta && (morningMeta.latest || morningMeta.earliest))) {
+    console.warn(JSON.stringify({
+      event: 'line-move-snapshot-missing',
+      source: 'missing-0300-1000',
+      date: dateISO || null,
+      missing: shaped.missingSlots,
+      ignoredRetiredSlots: ['0600', '0730', '0900', '0915'],
+      note: 'refusing retired morning snapshots; line-move needs 0300 and 1000',
+    }));
+  }
+  return {
+    path: (pin && pin.path) || shaped.path || null,
+    earliest,
+    latest: null,
+    source: 'missing-0300-1000',
+    missingSlots: shaped.missingSlots,
+  };
 }
 
 function writeBlocked(opts) {

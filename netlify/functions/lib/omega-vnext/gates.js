@@ -214,7 +214,10 @@ function gateReason(c, opts = {}) {
     if (c.edgePct + 1e-12 < need) return 'edge-floor';
   }
 
-  // Open→now adverse steam (when line-move annotated)
+  // Pinnacle (else Circa) 3:00→10:00 probability moved against this side.
+  if (c.movementDrop) return c.movementDropReason || 'sharp_prob_against';
+
+  // Open→now adverse steam on the Pinnacle print (when line-move annotated)
   if (GATES.rejectAdverseSteam && c.lineMove) {
     const steamReason = adverseSteamReason(c.lineMove, { verify: false });
     if (steamReason) return steamReason;

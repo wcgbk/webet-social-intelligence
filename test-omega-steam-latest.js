@@ -70,7 +70,7 @@ function doc(dkNow) {
         slot: '1000',
         at: at10,
         books: {
-          pinnacle: quotes('pinnacle', { ...base, homePoint: -3.5, awayPoint: 3.5 }, at10),
+          pinnacle: quotes('pinnacle', dkNow, at10),
           draftkings: quotes('draftkings', dkNow, at10),
         },
       },
@@ -121,8 +121,8 @@ assert.strictEqual(chosen.latest.hhmm, '1000');
 assert.notStrictEqual(chosen.latest.hhmm, '0915');
 
 const kept = linePathForSelection(morning, null, { dateISO: DATE });
-assert.strictEqual(kept.source, 'morning-line-path');
-assert.strictEqual(kept.latest.hhmm, '0915');
+assert.strictEqual(kept.source, 'missing-0300-1000');
+assert.strictEqual(kept.latest, null);
 
 const baseFirst = baselinePolls(
   [{ hhmm: '0600', games: { a: 1 } }, { hhmm: '0300', games: { b: 1 } }, { hhmm: '1000', games: { c: 1 } }],
@@ -132,6 +132,6 @@ assert.deepStrictEqual(baseFirst.map((p) => p.hhmm), ['0300']);
 assert.ok(BASELINE_SLOTS.includes('0300'));
 
 const legacy = baselinePolls([{ hhmm: '0600', games: { a: 1 } }, { hhmm: '0915', games: { a: 1 } }], null);
-assert.deepStrictEqual(legacy.map((p) => p.hhmm), ['0600', '0915']);
+assert.deepStrictEqual(legacy.map((p) => p.hhmm), []);
 
 console.log('test-omega-steam-latest: ok');

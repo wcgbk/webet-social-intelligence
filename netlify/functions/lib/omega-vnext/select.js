@@ -2,7 +2,7 @@
 
 const config = require('./config');
 const {
-  SELECT_WEIGHTS, MAX_STRAIGHTS, KELLY_FRACTION,
+  MAX_STRAIGHTS, KELLY_FRACTION,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
   MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EDGE,
   LEAN_PARLAY_UNITS, PM_SOFT,
@@ -64,7 +64,7 @@ function clampPmScoreAdj(v) {
   return v;
 }
 
-/** Steam, PM, and steamToward together. Tie-break only. Cannot outrank edge. */
+/** PM tie-break only. Line movement is applied to cover probability earlier. */
 const SCORE_NUDGE_CAP = 0.002;
 
 /** Calibrated edge vs no-vig fair. Missing edge sorts last. */
@@ -74,45 +74,29 @@ function edgeRank(c) {
 }
 
 /**
- * Same capped nudge scoreCandidate adds (steam, PM, steamToward, DK lag).
- * compareByEdge reads it only after edge and stake EV are already tied.
- * It is not part of the letter grade.
+ * PM only, inside ±SCORE_NUDGE_CAP. Steam and DK-lag flags do not nudge
+ * the score. Movement already changed cover probability, edge, and EV.
+ * compareByEdge reads this only after edge and stake EV are already tied.
  */
 function selectionNudge(c) {
   if (!c || typeof c !== 'object') return 0;
-  const w = SELECT_WEIGHTS;
-  const ev = c.ev || 0;
-  let nudge = 0;
-  if (typeof c._steamScoreAdj === 'number' && Number.isFinite(c._steamScoreAdj)) nudge += c._steamScoreAdj;
-  nudge += clampPmScoreAdj(c._pmScoreAdj);
-  if (c.steamToward && ev > 0) nudge += (w.softSportMixBonus || 0.02);
-  // DK lagging the sharp line is a pre-lock selection input. It stays
-  // inside the nudge cap and is not added to fair_sharp_p or EV.
-  if (c.dkLagsSharp === true && ev > 0) nudge += 0.001;
+  let nudge = clampPmScoreAdj(c._pmScoreAdj);
   if (nudge > SCORE_NUDGE_CAP) nudge = SCORE_NUDGE_CAP;
   else if (nudge < -SCORE_NUDGE_CAP) nudge = -SCORE_NUDGE_CAP;
   return nudge;
 }
 
 function scoreCandidate(c) {
-  const w = SELECT_WEIGHTS;
-  const ev = c.ev || 0;
   // Same number the letter grade uses: calibrated edge vs no-vig sharp,
   // plus a small residual-CLV nudge. Raw EV is not the rank — a +180 dog
   // inflates EV without a better close.
-  // _steamScoreAdj, _pmScoreAdj, and the steamToward softSportMixBonus are
-  // score-only. Their sum is capped at ±SCORE_NUDGE_CAP so a 0.03 steam
-  // boost plus the 0.02 mix bonus cannot outrank a higher calibrated edge.
-  // Adverse-steam hard rejects stay in line_path and are not this cap.
+  // Line movement is not a score bump. It adjusts cover probability before
+  // this function runs. _pmScoreAdj stays inside ±SCORE_NUDGE_CAP so it
+  // cannot outrank a higher calibrated edge. Adverse sharp moves drop in
+  // the gate. They are not this cap.
   const clvRaw = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   let s = qualityScore(c.edgePct, clvRaw, c.uncertainty);
-  let nudge = 0;
-  if (typeof c._steamScoreAdj === 'number' && Number.isFinite(c._steamScoreAdj)) nudge += c._steamScoreAdj;
-  nudge += clampPmScoreAdj(c._pmScoreAdj);
-  if (c.steamToward && ev > 0) nudge += (w.softSportMixBonus || 0.02);
-  // DK lagging the sharp line is a pre-lock selection input. It stays
-  // inside the nudge cap and is not added to fair_sharp_p or EV.
-  if (c.dkLagsSharp === true && ev > 0) nudge += 0.001;
+  let nudge = clampPmScoreAdj(c._pmScoreAdj);
   if (nudge > SCORE_NUDGE_CAP) nudge = SCORE_NUDGE_CAP;
   else if (nudge < -SCORE_NUDGE_CAP) nudge = -SCORE_NUDGE_CAP;
   return s + nudge;
@@ -126,10 +110,10 @@ const EDGE_EV_BAND = 0.002;
  * wins. Probability is not a key.
  *
  * The only ranking difference from the edge-then-EV sort is this exact
- * edge and stake-EV tie: the capped score nudge (PM, steam, DK lag) breaks
- * it. scoreCandidate itself is unchanged, so the nudge cannot outrank a
- * higher edge or, inside the band, a higher EV. qualityScore stays out of
- * the tie so CLV and uncertainty do not reorder an edge tie.
+ * edge and stake-EV tie: the capped PM nudge breaks it. Movement is already
+ * inside the edge and the stake EV. The nudge cannot outrank a higher edge
+ * or, inside the band, a higher EV. qualityScore stays out of the tie so
+ * CLV and uncertainty do not reorder an edge tie.
  */
 function compareByEdge(a, b) {
   const ea = edgeRank(a);
@@ -419,7 +403,9 @@ function toPickObject(c, opts = {}) {
   // Flat lean stake. Kelly and the grade cap do not move it. The daily
   // cap may trim later. It must not raise the lean above this.
   if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
-  const evStr = formatEdgePct(c.ev) || edgePctStr;
+  const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
+  const evNum = Number.isFinite(evParsed) ? evParsed : null;
+  const evStr = evNum == null ? null : formatEdgePct(evNum);
   const dataReviewFlag = reviewFlag(c);
 
   const isML = /moneyline/i.test(c.market || '');
@@ -442,7 +428,10 @@ function toPickObject(c, opts = {}) {
     confidence: ratingToConfidence(rating),
     units: `${units}u`,
     ev: evStr,
-    evRaw: c.ev != null ? c.ev : edgeFrac,
+    evRaw: Number.isFinite(evNum) ? evNum : null,
+    edgeBasis: 'calibrated-edge-vs-pinnacle-no-vig',
+    evBasis: 'stake-ev-at-draftkings',
+    gradeBasis: 'calibrated-edge-vs-pinnacle-no-vig',
     edgePct: edgePctStr,
     coverProb: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
     winProbability: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
@@ -470,6 +459,15 @@ function toPickObject(c, opts = {}) {
     uncertainty: c.uncertainty,
     steamToward: !!c.steamToward,
     steamAgainst: !!c.steamAgainst,
+    ...(c.movementAdjusted ? {
+      movement: {
+        adj: c.movementAdj != null ? c.movementAdj : 0,
+        deltaP: c.movementDeltaP != null ? c.movementDeltaP : null,
+        drop: !!c.movementDrop,
+        missing: c.movementMissing || null,
+        snapshots: c.movementSnapshots || null,
+      },
+    } : {}),
     predictedResidualClv: c.predictedResidualClv != null ? c.predictedResidualClv : null,
     openPrint: c.openPrint || null,
     lineMove: c.lineMove || null,

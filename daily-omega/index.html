@@ -1849,8 +1849,11 @@
       timeChip = '';
     }
 
-    const edgeBadgeHTML = (p.edgePct || p.ev)
-      ? `<span class="edge-badge" title="Calibrated model edge after shrink vs no-vig sharp (not CLV cents)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct || p.ev)}</span>`
+    const edgeBadgeHTML = p.edgePct
+      ? `<span class="edge-badge" title="Letter grade uses this calibrated edge versus the Pinnacle no-vig. It is not DraftKings stake EV."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct)}</span>`
+      : '';
+    const evBadgeHTML = (p.ev != null && p.ev !== '')
+      ? `<span class="edge-badge" title="Stake EV at the DraftKings price. The letter grade uses the calibrated edge versus the Pinnacle no-vig.">EV ${esc(p.ev)}</span>`
       : '';
 
     const ratingHTML = badge && label
@@ -1883,7 +1886,7 @@
         </div>
         ${scorebar}
         <div class="pick-line">
-          <span class="pick-name">${esc(displayPick(p.pick, p.sport, p.betType))}${deltaChip}${probChip}${edgeBadgeHTML ? `<span class="edge-inline-mobile">${edgeBadgeHTML}</span>` : ''}</span>
+          <span class="pick-name">${esc(displayPick(p.pick, p.sport, p.betType))}${deltaChip}${probChip}${(edgeBadgeHTML || evBadgeHTML) ? `<span class="edge-inline-mobile">${edgeBadgeHTML}${evBadgeHTML}</span>` : ''}</span>
           <span class="pick-odds">${esc(p.odds || '')}</span>
         </div>
         <div class="pick-divider"></div>
@@ -1892,7 +1895,7 @@
           <div class="pick-units">${footerLeft}</div>
           <div class="pick-footer-right">
             ${liveResultHTML}
-            ${edgeBadgeHTML || ''}
+            ${edgeBadgeHTML || ''}${evBadgeHTML || ''}
           </div>
         </div>
         ${opts.depthSlot ? '<div class="wb-depth-slot"></div>' : ''}

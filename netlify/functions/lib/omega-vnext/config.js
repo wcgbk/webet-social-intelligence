@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.70-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.71-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -169,9 +169,14 @@ const LINE_MOVE = {
   scorePenaltySteamAgainst: 0.04,
   boostSteamTowardCents: 8,
   boostSteamTowardPts: 0.5,
-  /** Verify (10:30): harder adverse thresholds — drop, do not refill. Empty OK. */
+  /**
+   * Retired 10:30 recheck thresholds. Kept so older readers still see 20 cents
+   * and 1.5 points. adverseSteamReason({ verify: true }) does not apply them.
+   * There is no 10:30 pull.
+   */
   verifyAdverseCents: 20,
   verifyAdversePts: { Spread: 1.5, Total: 1.5 },
+  verifyRecheck: false,
 };
 
 /**
@@ -182,9 +187,9 @@ const LINE_MOVE = {
 const STEAM_WINDOW_MIN = 15;
 
 /**
- * Pinnacle no-vig line log. The latest check (10:00 when present) versus
- * the 3:00 baseline feeds the steam gate and the rank nudge. It does not
- * rewrite the fair price, an EV formula, a floor, Kelly, or a cap.
+ * Pinnacle no-vig line log. The 10:00 check versus the 3:00 baseline feeds
+ * the steam gate. Movement trust is a blend-weight shift in line_move_prob.
+ * It does not rewrite the 10:00 fair, a floor, Kelly, or a cap.
  * Opens are the first price in the 3:00 ET pull. Checks at 3:00 and 10:00 ET:
  * one Pinnacle call and one DraftKings call per sport. The 3:00 check also
  * pulls yesterday's pregame closes (historical, 10× live = historicalCreditsPerPull).
@@ -213,13 +218,62 @@ const PINNACLE_LINE_MOVE = {
 /**
  * DraftKings lags the one-book no-vig (Pinnacle, else Circa).
  * minPinMovePp is the Pinnacle no-vig move toward the side, in percentage
- * points, from the morning snap or the opener to the 10:30 lock.
+ * points, from the 3:00 baseline or the stored opener to the candidate price.
  * maxDkFollowRatio: DraftKings implied must move less than this fraction
  * of pinMove. OMEGA_DK_LAG=0 disables the rank and coverProb use.
  */
 const DK_LAG = {
   minPinMovePp: 1.0,
   maxDkFollowRatio: 0.5,
+};
+
+/**
+ * Pinnacle-led movement shifts shrink weight K before edge, stake EV, and
+ * the letter grade. It does not add Δp on top of the 10:00 no-vig.
+ *
+ * info = clamp((|Δp| − noise) / (scale − noise), 0, 1)
+ * extra = weight(sport, market) × info
+ *   × hardRockOppositionDamp when Hard Rock's 3:00→10:00 sign opposes Pinnacle
+ *   + dkLagWeight(sport) when Pinnacle moved toward the side and DraftKings
+ *     followed less than half of that move
+ * K_eff = min(maxK, K + (1 − K) × extra) when K < maxK, else K
+ * adj = clamp((K_eff − K) × (p_sharp − p_model), ±maxAbsProbAdj)
+ * p_adj = clamp(coverProb + adj, probClamp)
+ *
+ * Δp is the side's no-vig probability change from 3:00 to 10:00. Spreads and
+ * totals convert the point move with the key-number cover of the fixed bet
+ * line, then add the juice skew. Open→3:00 adds openWeight to the magnitude
+ * only when it agrees in sign with 3:00→10:00. Circa is averaged at
+ * circaWeight when both ends are already stored. A missing 3:00 or 10:00
+ * adjusts 0. A leader-book 3:00→10:00 move of adverseDropProb or worse drops
+ * the side. OMEGA_LINE_MOVE_PROB=0 skips the adjustment.
+ */
+const LINE_MOVE_PROB = {
+  noise: 0.005,
+  scale: 0.030,
+  maxK: 0.90,
+  maxAbsProbAdj: 0.015,
+  openWeight: 0.25,
+  adverseDropProb: 0.020,
+  circaWeight: 0.5,
+  hardRockOppositionDamp: 0.5,
+  probClamp: [0.02, 0.98],
+  weights: {
+    NFL: { Moneyline: 0.35, Spread: 0.45, Total: 0.40 },
+    NCAAF: { Moneyline: 0.20, Spread: 0.25, Total: 0.20 },
+    NHL: { Moneyline: 0.15, Spread: 0.25, Total: 0.20 },
+    MLB: { Moneyline: 0.15, Spread: 0.20, Total: 0.20 },
+    NBA: { Moneyline: 0.15, Spread: 0.20, Total: 0.20 },
+    default: { Moneyline: 0.20, Spread: 0.25, Total: 0.20 },
+  },
+  dkLagWeight: {
+    NFL: 0.15,
+    NCAAF: 0.10,
+    NHL: 0.08,
+    MLB: 0.08,
+    NBA: 0.08,
+    default: 0.10,
+  },
 };
 
 /** Shrinkage toward no-vig sharp (higher K = more trust in market). v12.1: slightly stronger.
@@ -864,6 +918,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.71-omega-vnext-price-lock: Line movement uses only the 3:00 and 10:00 ET snapshots (plus a stored opener). Retired 6:00/7:30/9:00/9:15 snaps are ignored and a missing 3:00 or 10:00 is logged, not filled from stale data. Pinnacle (Circa at equal weight when both ends are already stored) moves the blend weight toward the sharp side before edge, EV, and grade. The shift is capped at ±1.5 probability points and is 0 when the model already matches the sharp. A Pinnacle probability move of 2.0pp against the side, or 18 cents or 1.0 point against on the Pinnacle print, drops the candidate. There is no 10:30 steam recheck. Grade is the calibrated edge versus the Pinnacle no-vig. Stake EV is at DraftKings. Both are labeled and share the adjusted probability. Floors, lean tier, Kelly, and unit caps are unchanged.',
   'v12.3.70-omega-vnext-price-lock: A lean-day parlay publishes only when combined EV is positive, at 0.25u. Public picks carry tier main or lean. The 6:00, 7:30, 9:00, and 9:15 ET morning snaps stay retired. Odds API pulls remain 3:00 and 10:00 ET. Results grade a parlay at the card stake and omit the row when the card has no parlay.',
   'v12.3.69-omega-vnext-price-lock: The 3:00 and 10:00 ET DraftKings call also requests Hard Rock (bookmakers=draftkings,hardrockbet, one call, 3 credits). DraftKings quotes and pricing are unchanged. Hard Rock stays review-only.',
   'v12.3.68-omega-vnext-price-lock: The 2026-10-10 golden card records the cover-probability stake cap. A main under 0.42 cover is 0.5u. The cap is unchanged. Leans stay flat 0.5u.',
@@ -999,6 +1054,7 @@ module.exports = {
   STEAM_WINDOW_MIN,
   PINNACLE_LINE_MOVE,
   DK_LAG,
+  LINE_MOVE_PROB,
   PM_SOFT,
   ENGINE_SOFT,
   SHRINK_K,

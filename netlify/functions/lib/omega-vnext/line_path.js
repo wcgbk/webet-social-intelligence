@@ -200,20 +200,15 @@ function extractGameBooks(event, { usBooks = US_BOOKS, sharpBooks = SHARP_BOOKS 
 }
 
 /**
- * Best US book print for a candidate side (priority order).
+ * First book in `ordered` that posts this side.
+ * Spread/total/ML matching is the same for a US print and a sharp print.
  */
-function bestUsPrint(gameSnap, candidate) {
+function sidePrint(gameSnap, candidate, ordered) {
   if (!gameSnap || !gameSnap.books) return null;
   const market = String(candidate.market || candidate.betType || '');
   const side = String(candidate.side || candidate.pick || '');
   const home = gameSnap.homeTeam;
   const away = gameSnap.awayTeam;
-  const priority = (US_BOOK_PRIORITY || US_BOOKS).map(bookKey);
-
-  const ordered = [
-    ...priority.filter(k => gameSnap.books[k]),
-    ...Object.keys(gameSnap.books).filter(k => !priority.includes(k) && US_BOOKS.map(bookKey).includes(k)),
-  ];
 
   for (const bk of ordered) {
     const row = gameSnap.books[bk];
@@ -257,6 +252,29 @@ function bestUsPrint(gameSnap, candidate) {
   return null;
 }
 
+/**
+ * Best US book print for a candidate side (priority order).
+ * openPrint for CLV stays on this print. Toward/against does not.
+ */
+function bestUsPrint(gameSnap, candidate) {
+  if (!gameSnap || !gameSnap.books) return null;
+  const priority = (US_BOOK_PRIORITY || US_BOOKS).map(bookKey);
+  const ordered = [
+    ...priority.filter(k => gameSnap.books[k]),
+    ...Object.keys(gameSnap.books).filter(k => !priority.includes(k) && US_BOOKS.map(bookKey).includes(k)),
+  ];
+  return sidePrint(gameSnap, candidate, ordered);
+}
+
+/**
+ * Pinnacle, else Circa. A US-only move does not set steam toward/against.
+ */
+function sharpPrint(gameSnap, candidate) {
+  if (!gameSnap || !gameSnap.books) return null;
+  const ordered = ['pinnacle', 'circa', 'circasports'].filter((key) => gameSnap.books[key]);
+  return sidePrint(gameSnap, candidate, ordered);
+}
+
 function normToken(name) {
   const parts = String(name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/);
   return parts[parts.length - 1] || '';
@@ -292,23 +310,26 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
 
   const openPrint = bestUsPrint(openGame, candidate);
   const nowPrint = nowGame ? bestUsPrint(nowGame, candidate) : null;
-  // Fallback now from candidate posted odds/line
-  const nowOdds = nowPrint && nowPrint.odds != null
-    ? nowPrint.odds
-    : (typeof candidate.odds === 'number' ? candidate.odds : null);
-  const nowLine = nowPrint && nowPrint.line != null
-    ? nowPrint.line
-    : (candidate.line != null ? Number(candidate.line) : null);
+  // US print is the CLV open only. Toward/against and the 18c/1pt gate
+  // read Pinnacle (else Circa). A DraftKings-only move does not count.
+  const sharpOpen = sharpPrint(openGame, candidate);
+  const sharpNow = nowGame ? sharpPrint(nowGame, candidate) : null;
+
+  let usOddsMoveCents = null;
+  if (openPrint && openPrint.odds != null && nowPrint && nowPrint.odds != null) {
+    const usWorse = americanCentsWorse(openPrint.odds, nowPrint.odds);
+    usOddsMoveCents = usWorse == null ? null : +(-usWorse).toFixed(2);
+  }
 
   let oddsMoveCents = null;
-  if (openPrint && openPrint.odds != null && nowOdds != null) {
-    const worseForBettor = americanCentsWorse(openPrint.odds, nowOdds);
+  if (sharpOpen && sharpOpen.odds != null && sharpNow && sharpNow.odds != null) {
+    const worseForBettor = americanCentsWorse(sharpOpen.odds, sharpNow.odds);
     oddsMoveCents = worseForBettor == null ? null : +(-worseForBettor).toFixed(2);
   }
 
   let lineMovePts = null;
-  if (openPrint && openPrint.line != null && nowLine != null) {
-    lineMovePts = +(nowLine - openPrint.line).toFixed(3);
+  if (sharpOpen && sharpOpen.line != null && sharpNow && sharpNow.line != null) {
+    lineMovePts = +(sharpNow.line - sharpOpen.line).toFixed(3);
   }
 
   // Direction: for the bettor, longer odds = toward; for points, more favorable line = toward
@@ -362,11 +383,13 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
   return {
     oddsMoveCents,
     lineMovePts,
+    usOddsMoveCents,
     steamToward,
     steamAgainst,
     towardScore: +towardScore.toFixed(4),
     residualClvProxy,
     _market: market,
+    missingSharp: !sharpOpen || !sharpNow,
     openPrint: openPrint ? {
       book: openPrint.book,
       line: openPrint.line,
@@ -377,7 +400,9 @@ function computeOpenToNowMove(candidate, openGame, nowGame) {
       book: nowPrint.book,
       line: nowPrint.line,
       odds: nowPrint.odds,
-    } : { line: nowLine, odds: nowOdds },
+    } : null,
+    sharpOpen: sharpOpen ? { book: sharpOpen.book, line: sharpOpen.line, odds: sharpOpen.odds } : null,
+    sharpNow: sharpNow ? { book: sharpNow.book, line: sharpNow.line, odds: sharpNow.odds } : null,
     sharpLineMove,
     sharpMovePts: sharpSteam.sharpMovePts,
     sharpMoveSize: sharpSteam.sharpMoveSize,
@@ -462,15 +487,14 @@ function sharpSteamSinceOpen(openGame, nowGame, market) {
  */
 function adverseSteamReason(move, { verify = false, market = null } = {}) {
   const cfg = LINE_MOVE || {};
+  // No 10:30 pull. verifyAdverseCents / verifyAdversePts stay in config
+  // and are not applied. Generate still uses 18 cents and 1.0 point.
+  if (verify) return null;
   if (!move || move.missingOpen) return null;
   if (!move.steamAgainst) return null;
 
-  const centsThresh = verify
-    ? (cfg.verifyAdverseCents != null ? cfg.verifyAdverseCents : 20)
-    : (cfg.rejectSteamAgainstCents != null ? cfg.rejectSteamAgainstCents : 18);
-  const ptsMap = verify
-    ? (cfg.verifyAdversePts || { Spread: 1.5, Total: 1.5 })
-    : (cfg.rejectSteamAgainstPts || { Spread: 1.0, Total: 1.0 });
+  const centsThresh = cfg.rejectSteamAgainstCents != null ? cfg.rejectSteamAgainstCents : 18;
+  const ptsMap = cfg.rejectSteamAgainstPts || { Spread: 1.0, Total: 1.0 };
 
   // Odds shortened against pick (negative move = worse American for bettor)
   if (move.oddsMoveCents != null && move.oddsMoveCents <= -centsThresh) {
@@ -496,11 +520,10 @@ function adverseSteamReason(move, { verify = false, market = null } = {}) {
  * openPath: { polls: [...] } or a single snap { games }
  * nowSnap optional — else uses candidate odds as now.
  *
- * The written spec sentence says steam is not monitored and is not an
- * input. The user STEAM note overrides that sentence: the open-to-10:30
- * sharp-move size, direction, and DraftKings-lag flag copied onto the
- * candidate here are a selection input only (inside the score cap,
- * before lock). They are never added to the fair price.
+ * Toward and against come from the Pinnacle print (else Circa), not the
+ * best US price. The probability adjustment in line_move_prob is what
+ * changes cover, edge, and EV. These flags are not a score bump and they
+ * are never added to the fair price. There is no 10:30 recheck.
  */
 function annotateLineMoves(candidates, openSnap, nowSnap) {
   const openGames = (openSnap && openSnap.games) || {};
@@ -533,6 +556,45 @@ function annotateLineMoves(candidates, openSnap, nowSnap) {
       dkLagsSharp: move.dkLagsSharp === true,
     };
   });
+}
+
+const OFFICIAL_MOVE_SLOTS = new Set(['0300', '1000', 'open']);
+
+function moveSlotLabel(poll) {
+  if (!poll) return '';
+  const raw = poll.hhmm != null && poll.hhmm !== '' ? poll.hhmm : poll.slot;
+  if (raw == null || raw === '') return '';
+  const text = String(raw);
+  if (text === 'open') return 'open';
+  return text.padStart(4, '0');
+}
+
+/**
+ * Line-move polls are 0300, 1000, and a stored open. Retired morning
+ * slots are dropped. latest is the 1000 poll only. earliest is 0300,
+ * else the stored open. Open does not stand in for a missing 0300 or
+ * 1000 as a move endpoint (missingSlots says so).
+ */
+function shapeOfficialLinePath(polls, dateISO) {
+  const by = {};
+  for (const poll of polls || []) {
+    const slot = moveSlotLabel(poll);
+    if (!OFFICIAL_MOVE_SLOTS.has(slot) || !poll) continue;
+    if (!by[slot]) by[slot] = poll;
+  }
+  const ordered = ['open', '0300', '1000'].map((slot) => by[slot]).filter(Boolean);
+  const earliest = by['0300'] || by.open || null;
+  const latest = by['1000'] || null;
+  const missingSlots = [];
+  if (!by['0300']) missingSlots.push('0300');
+  if (!by['1000']) missingSlots.push('1000');
+  return {
+    path: ordered.length ? { date: dateISO || null, polls: ordered } : null,
+    earliest,
+    latest,
+    missingSlots,
+    source: latest ? 'pull-0300-1000' : 'missing-0300-1000',
+  };
 }
 
 function earliestAndLatestPolls(pathDoc) {
@@ -791,26 +853,31 @@ function warnCaptureHealth(health, dateISO) {
  */
 async function loadLinePath(dateISO) {
   const path = await readJsonBlob(pathBlobKey(dateISO));
-  if (path && Array.isArray(path.polls) && path.polls.length) {
-    const { earliest, latest } = earliestAndLatestPolls(path);
-    return { path, earliest, latest };
+  const fromPath = path && Array.isArray(path.polls) ? path.polls : [];
+  const retired = fromPath.filter((poll) => {
+    const slot = moveSlotLabel(poll);
+    return slot && !OFFICIAL_MOVE_SLOTS.has(slot);
+  });
+  let shaped = shapeOfficialLinePath(fromPath, dateISO);
+  if (!shaped.latest && !shaped.earliest) {
+    const found = [];
+    for (const hhmm of ['open', '0300', '1000']) {
+      const snap = await readJsonBlob(snapBlobKey(dateISO, hhmm));
+      if (snap && snap.games) found.push({ hhmm, slot: snap.slot || hhmm, ...snap, games: snap.games });
+    }
+    if (found.length) shaped = shapeOfficialLinePath(found, dateISO);
   }
-  // Fallback: try common morning snap keys (6:00 / 7:30 / 9:00 / 9:15 ET).
-  const slots = (LINE_MOVE.captureSlotsET && LINE_MOVE.captureSlotsET.length)
-    ? LINE_MOVE.captureSlotsET.slice()
-    : ['0600', '0730', '0900', '0915'];
-  const found = [];
-  for (const hhmm of slots) {
-    const snap = await readJsonBlob(snapBlobKey(dateISO, hhmm));
-    if (snap && snap.games) found.push({ hhmm, ...snap, games: snap.games });
+  if (shaped.missingSlots.length || retired.length) {
+    console.warn(JSON.stringify({
+      event: 'line-move-snapshot-missing',
+      date: dateISO,
+      missing: shaped.missingSlots,
+      ignoredRetiredSlots: retired.map(moveSlotLabel),
+      source: shaped.source,
+      note: 'line-move reads 0300 and 1000 only; retired morning snaps are not a fallback',
+    }));
   }
-  if (!found.length) return { path: null, earliest: null, latest: null };
-  found.sort((a, b) => String(a.hhmm).localeCompare(String(b.hhmm)));
-  return {
-    path: { date: dateISO, polls: found },
-    earliest: found[0],
-    latest: found[found.length - 1],
-  };
+  return shaped;
 }
 
 /**
@@ -859,11 +926,15 @@ module.exports = {
   pathBlobKey,
   extractGameBooks,
   bestUsPrint,
+  sharpPrint,
+  sidePrint,
   computeOpenToNowMove,
   sharpSteamSinceOpen,
   adverseSteamReason,
   annotateLineMoves,
   earliestAndLatestPolls,
+  shapeOfficialLinePath,
+  moveSlotLabel,
   pollGameCount,
   isUsablePoll,
   missingDueSlots,

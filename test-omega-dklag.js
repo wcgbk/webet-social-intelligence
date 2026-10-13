@@ -62,7 +62,7 @@ function prices(book, american) {
 }
 
 {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.70-omega-vnext-price-lock');
+  assert.strictEqual(config.MODEL_VERSION, 'v12.3.71-omega-vnext-price-lock');
   assert.strictEqual(config.DK_LAG.minPinMovePp, 1.0);
   assert.strictEqual(config.DK_LAG.maxDkFollowRatio, 0.5);
   assert.ok(/OMEGA_DK_LAG=0/.test(config.MODEL_NOTES));
@@ -161,7 +161,7 @@ function prices(book, american) {
 }
 
 {
-  const morning = poll('0600', mlGame(182, 218, -110, -110));
+  const morning = poll('0300', mlGame(182, 218, -110, -110));
   const base = morning.games['dallas cowboys @ philadelphia eagles'];
   const pinBase = dk.probsFromRow(base.books.pinnacle, 'ML', 'home');
   close(pinBase.noVig, 0.53);
@@ -201,7 +201,7 @@ function prices(book, american) {
   close(disabled.pinMove, 0.02);
   assert.ok(disabled.marketEv > 0);
 
-  const follow = poll('0600', mlGame(182, 218, 100, 100));
+  const follow = poll('0300', mlGame(182, 218, 100, 100));
   const [chased] = dk.applyDkLag([side()], { polls: [follow], opener: null, enabled: true });
   assert.strictEqual(chased.lagEdge, null);
   close(chased.coverProb, 0.50);
@@ -211,9 +211,14 @@ function prices(book, american) {
 {
   const morning = poll('0600', mlGame(182, 218, -110, -110));
   const opener = poll('0500', mlGame(150, -180, 150, -180));
-  const [usedMorning] = dk.applyDkLag([side()], { polls: [morning], opener, enabled: true });
-  close(usedMorning.pinMove, 0.02);
-  assert.ok(usedMorning.lagEdge > 0);
+  const [ignoredMorning] = dk.applyDkLag([side()], { polls: [morning], opener, enabled: true });
+  assert.ok(Math.abs(ignoredMorning.pinMove - 0.02) > 0.05, '0600 is not the baseline');
+  assert.ok(ignoredMorning.pinMove > 0.1, 'stored opener is the baseline when 0300 is absent');
+
+  const at3 = poll('0300', mlGame(182, 218, -110, -110));
+  const [used3] = dk.applyDkLag([side()], { polls: [at3, morning], opener, enabled: true });
+  close(used3.pinMove, 0.02);
+  assert.ok(used3.lagEdge > 0);
 
   const emptyMorning = poll('0600', {
     awayTeam: 'Dallas Cowboys',
@@ -228,7 +233,7 @@ function prices(book, american) {
   assert.ok(usedOpener.pinMove > 0.1);
   assert.strictEqual(usedOpener.lagEdge, null);
 
-  const circaOnly = poll('0730', {
+  const circaOnly = poll('0300', {
     awayTeam: 'Dallas Cowboys',
     homeTeam: 'Philadelphia Eagles',
     books: {
@@ -247,6 +252,18 @@ function prices(book, american) {
   });
   close(circaAnchor.pinMove, 0.02);
   close(circaAnchor.lagEdge, 0.05);
+
+  const [superseded] = dk.applyDkLag([side({
+    movementAdjusted: true,
+    coverProb: 0.50,
+    edgePct: 0.04,
+    ev: 0.01,
+  })], { polls: [at3], opener: null, enabled: true });
+  close(superseded.coverProb, 0.50);
+  close(superseded.edgePct, 0.04);
+  close(superseded.ev, 0.01);
+  assert.strictEqual(superseded.lagEdge, null);
+  assert.strictEqual(superseded.movementSupersedesDkLag, true);
 }
 
 {

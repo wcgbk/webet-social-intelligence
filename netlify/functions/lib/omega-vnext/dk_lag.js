@@ -9,14 +9,14 @@
  * both sides, otherwise Circa (circa, else circasports). Mixed books are
  * not a de-vig.
  *
- * At the 10:30 lock:
+ * At the candidate's DraftKings price:
  *   marketEv = pinnacleNoVigP × DraftKings decimal − 1
  *   pinMove  = lock no-vig − baseline no-vig for this side
  *   dkMove   = lock DraftKings implied − baseline DraftKings implied
  *
  * The baseline is the 3:00 check when that poll is on the path, else the
- * open. The suspended 06:00..09:15 snaps are the baseline only when neither
- * of those is present. The lock price is the candidate's current DraftKings
+ * stored opener. Retired 06:00..09:15 snaps are not a baseline. The lock
+ * price is the candidate's current DraftKings
  * number (the latest snapshot). lagEdge equals marketEv only when Pinnacle
  * (or Circa) moved at least DK_LAG.minPinMovePp toward the side, DraftKings implied moved
  * less than DK_LAG.maxDkFollowRatio of that move, and marketEv > 0.
@@ -164,8 +164,9 @@ function findGame(games, away, home) {
 }
 
 /**
- * 3:00 first, then the open. Morning 06:00..09:15 is used only when the
- * path has neither, so an old morning snap cannot beat the latest log.
+ * 3:00 first, then the stored open. Retired 06:00..09:15 polls are ignored.
+ * When neither 3:00 nor open is on the path, the explicit opener is the
+ * baseline. A missing opener contributes nothing.
  */
 function baselinePolls(polls, opener) {
   const list = (polls || []).filter((p) => p && p.games);
@@ -175,13 +176,8 @@ function baselinePolls(polls, opener) {
     .slice()
     .sort((a, b) => (rank[slotOf(a)] != null ? rank[slotOf(a)] : 9) - (rank[slotOf(b)] != null ? rank[slotOf(b)] : 9));
   if (fresh.length) return fresh;
-  const morning = list
-    .filter((p) => MORNING_SLOTS.includes(slotOf(p)))
-    .slice()
-    .sort((a, b) => slotOf(a).localeCompare(slotOf(b)));
-  const seen = new Set(morning.map(slotOf));
-  if (opener && opener.games && !seen.has(slotOf(opener))) morning.push(opener);
-  return morning;
+  if (opener && opener.games) return [opener];
+  return [];
 }
 
 /**
@@ -409,6 +405,18 @@ function dkLagFeatures(c, opts) {
 function applyOne(c, opts) {
   if (!c) return c;
   const features = dkLagFeatures(c, opts);
+  // The probability path already moved cover, edge, and EV. Record the
+  // lag features and do not add lagEdge on top of that probability.
+  if (c.movementAdjusted) {
+    return {
+      ...c,
+      lagEdge: null,
+      pinMove: features.pinMove,
+      dkMove: features.dkMove,
+      marketEv: features.marketEv,
+      movementSupersedesDkLag: true,
+    };
+  }
   const stamped = {
     lagEdge: features.lagEdge,
     pinMove: features.pinMove,

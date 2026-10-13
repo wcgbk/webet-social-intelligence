@@ -83,24 +83,24 @@ assert.ok(extracted.usConsensus.spreadHome === -3);
 assert.ok(extracted.sharpConsensus.spreadHome === -2.5);
 
 // --- Move math: steam toward dog (line moves from +3 to +4) ---
+function withPin(row) {
+  return { draftkings: row, pinnacle: { ...row } };
+}
+const openRow = {
+  spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+  total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
+};
 const openGame = {
   ...extracted,
-  books: {
-    draftkings: {
-      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
-    },
-  },
+  books: withPin(openRow),
   capturedAt: '2026-09-22T10:00:00Z',
 };
 const nowToward = {
   ...extracted,
-  books: {
-    draftkings: {
-      spreadHome: -4, spreadHomeOdds: -110, spreadAway: 4, spreadAwayOdds: -110,
-      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -165, mlAway: 145,
-    },
-  },
+  books: withPin({
+    spreadHome: -4, spreadHomeOdds: -110, spreadAway: 4, spreadAwayOdds: -110,
+    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -165, mlAway: 145,
+  }),
 };
 
 const billsSpread = {
@@ -117,6 +117,17 @@ assert.ok(moveToward.steamToward, 'Bills getting more points = steam toward');
 assert.ok(!moveToward.steamAgainst);
 assert.ok(moveToward.openPrint && moveToward.openPrint.book === 'draftkings');
 assert.ok(moveToward.lineMovePts === 1 || moveToward.lineMovePts === 1.0);
+const usOnly = linePath.computeOpenToNowMove(billsSpread, {
+  ...extracted,
+  books: { draftkings: openRow },
+}, {
+  ...extracted,
+  books: { draftkings: nowToward.books.draftkings },
+});
+assert.strictEqual(usOnly.steamToward, false, 'a US-only move does not set steam toward');
+assert.strictEqual(usOnly.steamAgainst, false);
+assert.strictEqual(usOnly.oddsMoveCents, null);
+assert.ok(usOnly.usOddsMoveCents != null);
 
 // --- Move math: steam against (odds shorten on ML dog) ---
 const billsMl = {
@@ -129,12 +140,10 @@ const billsMl = {
 };
 const nowAgainstMl = {
   ...extracted,
-  books: {
-    draftkings: {
-      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -180, mlAway: 105,
-    },
-  },
+  books: withPin({
+    spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -180, mlAway: 105,
+  }),
 };
 const moveAgainst = linePath.computeOpenToNowMove(billsMl, openGame, nowAgainstMl);
 assert.ok(moveAgainst.steamAgainst, 'ML shortened 130→105 = steam against');
@@ -143,21 +152,17 @@ assert.ok(moveAgainst.oddsMoveCents === -25);
 // Crossing +100/-100 is about 10 cents, not 210. Must not false-reject.
 const crossOpen = {
   ...extracted,
-  books: {
-    draftkings: {
-      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -115, mlAway: 105,
-    },
-  },
+  books: withPin({
+    spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -115, mlAway: 105,
+  }),
 };
 const crossNow = {
   ...extracted,
-  books: {
-    draftkings: {
-      spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
-      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -105, mlAway: -105,
-    },
-  },
+  books: withPin({
+    spreadHome: -3, spreadHomeOdds: -110, spreadAway: 3, spreadAwayOdds: -110,
+    total: 47.5, overOdds: -110, underOdds: -110, mlHome: -105, mlAway: -105,
+  }),
 };
 const crossMove = linePath.computeOpenToNowMove(billsMl, crossOpen, crossNow);
 assert.strictEqual(crossMove.oddsMoveCents, -10);
@@ -191,7 +196,7 @@ const genReject = linePath.adverseSteamReason(moveAgainst, { verify: false });
 assert.ok(genReject && /steam_against_odds/.test(genReject), 'generate should reject -25c');
 
 const verifyReject = linePath.adverseSteamReason(moveAgainst, { verify: true });
-assert.ok(verifyReject && /steam_against_odds/.test(verifyReject), 'verify should reject -25c');
+assert.strictEqual(verifyReject, null, 'there is no 10:30 verify recheck');
 
 // Just under generate threshold (-18): -17 should NOT reject at generate
 const mild = {
@@ -203,9 +208,10 @@ const mild = {
   missingOpen: false,
 };
 assert.strictEqual(linePath.adverseSteamReason(mild, { verify: false }), null);
-// But -20 should reject at verify
+// Retired 20-cent verify threshold is not applied.
 const atVerify = { ...mild, oddsMoveCents: -20 };
-assert.ok(linePath.adverseSteamReason(atVerify, { verify: true }));
+assert.strictEqual(linePath.adverseSteamReason(atVerify, { verify: true }), null);
+assert.strictEqual(config.LINE_MOVE.verifyRecheck, false);
 
 // Spread adverse pts at generate threshold (1.0)
 const spreadAgainst = linePath.computeOpenToNowMove(
@@ -213,12 +219,10 @@ const spreadAgainst = linePath.computeOpenToNowMove(
   openGame,
   {
     ...extracted,
-    books: {
-      draftkings: {
-        spreadHome: -2, spreadHomeOdds: -110, spreadAway: 2, spreadAwayOdds: -110,
-        total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
-      },
-    },
+    books: withPin({
+      spreadHome: -2, spreadHomeOdds: -110, spreadAway: 2, spreadAwayOdds: -110,
+      total: 47.5, overOdds: -110, underOdds: -110, mlHome: -150, mlAway: 130,
+    }),
   }
 );
 assert.ok(spreadAgainst.steamAgainst, 'dog points cut 3→2 = against');
@@ -304,10 +308,11 @@ const scoreWith = select.scoreCandidate(towardCands[0]);
 const scorePlain = select.scoreCandidate({
   ...towardCands[0],
   steamToward: false,
+  steamAgainst: false,
+  dkLagsSharp: false,
   _steamScoreAdj: 0,
-  predictedResidualClv: towardCands[0].predictedClv,
 });
-assert.ok(scoreWith > scorePlain, `steam boost ${scoreWith} vs ${scorePlain}`);
+assert.strictEqual(scoreWith, scorePlain, `steam flags do not change the score ${scoreWith} vs ${scorePlain}`);
 
 // Unit structure unchanged
 assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);

@@ -213,7 +213,7 @@ function floorRow(extra) {
     const plain = { edgePct: 0.04, ev: 0.05, fair_sharp_p: fair, odds: -110, uncertainty: 0.12 };
     const laggedScore = scoreCandidate({ ...plain, dkLagsSharp: true });
     const plainScore = scoreCandidate({ ...plain, dkLagsSharp: false });
-    assert.ok(laggedScore > plainScore, 'DK lag is a selection nudge before the lock');
+    assert.strictEqual(laggedScore, plainScore, 'DK lag flag alone does not change the score');
     assert.strictEqual(plain.fair_sharp_p, fair);
 
     const verifySrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/verify-picks-omega.js'), 'utf8');

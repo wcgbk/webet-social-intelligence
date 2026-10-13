@@ -8,7 +8,7 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const select = require(path.join(root, 'select'));
 const { qualityScore } = require(path.join(root, 'odds_math'));
-const { SELECT_WEIGHTS, PM_SOFT } = require(path.join(root, 'config'));
+const { PM_SOFT } = require(path.join(root, 'config'));
 
 function clampPmScoreAdj(v) {
   if (typeof v !== 'number' || !Number.isFinite(v)) return 0;
@@ -23,15 +23,9 @@ const SCORE_NUDGE_CAP = 0.002;
 
 // HEAD scoreCandidate. Do not "simplify" this into selectionNudge.
 function scoreCandidateHead(c) {
-  const w = SELECT_WEIGHTS;
-  const ev = c.ev || 0;
   const clvRaw = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
   let s = qualityScore(c.edgePct, clvRaw, c.uncertainty);
-  let nudge = 0;
-  if (typeof c._steamScoreAdj === 'number' && Number.isFinite(c._steamScoreAdj)) nudge += c._steamScoreAdj;
-  nudge += clampPmScoreAdj(c._pmScoreAdj);
-  if (c.steamToward && ev > 0) nudge += (w.softSportMixBonus || 0.02);
-  if (c.dkLagsSharp === true && ev > 0) nudge += 0.001;
+  let nudge = clampPmScoreAdj(c._pmScoreAdj);
   if (nudge > SCORE_NUDGE_CAP) nudge = SCORE_NUDGE_CAP;
   else if (nudge < -SCORE_NUDGE_CAP) nudge = -SCORE_NUDGE_CAP;
   return s + nudge;

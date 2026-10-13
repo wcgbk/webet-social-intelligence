@@ -449,7 +449,7 @@ function autoCorrectHardRock(picksData, sportGames) {
 
   let nextParlay = data.parlayLegs;
   if (log.length) {
-    nextParlay = parlayFromStraights(built.map((b) => b.cand)) || [];
+    nextParlay = parlayFromStraights(built.map((b) => b.cand), { pool }) || [];
   }
 
   data.picks = built.map((b) => b.pick);

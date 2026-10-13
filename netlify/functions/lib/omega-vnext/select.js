@@ -509,8 +509,12 @@ function applyDailyUnitCap(picks, parlayLegs) {
     : [];
 
   // Floor-day parlays stay 0.5u. A lean-day ticket is already 0.25u.
-  // Never raise it.
+  // Never raise it. A "no qualifying parlay" marker is not a stake.
   for (const pl of parlays) {
+    if (pl && (pl.qualifying === false || pl.status === 'no qualifying parlay' || pl.type === 'no-qualifying-parlay')) {
+      pl.units = null;
+      continue;
+    }
     if (pl && pl.leanDay === true) {
       const u = parseU(pl.units);
       const cap = Number(LEAN_PARLAY_UNITS);

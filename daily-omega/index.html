@@ -1994,12 +1994,25 @@
     }
 
     const dollarPerUnit = 150;
-    // The parlay is the top 3 straights. Use the published legs, or those three cards when the blob omitted them.
-    const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0 && data.parlayLegs[0].legs && data.parlayLegs[0].legs.length)
-      ? data.parlayLegs[0] : null;
-    const parlaySource = (apiParlay && apiParlay.legs && apiParlay.legs.length)
+    // A published +EV ticket is the only parlay. An explicit empty list or a
+    // "no qualifying parlay" marker is not filled from the straights.
+    const rawParlayList = Array.isArray(data.parlayLegs) ? data.parlayLegs : null;
+    const rawParlay = rawParlayList && rawParlayList[0] ? rawParlayList[0] : null;
+    const noQualifyingParlay = !!(rawParlay && (
+      rawParlay.qualifying === false
+      || rawParlay.status === 'no qualifying parlay'
+      || rawParlay.type === 'no-qualifying-parlay'
+    ));
+    const apiParlay = (!noQualifyingParlay && rawParlay && rawParlay.legs && rawParlay.legs.length)
+      ? rawParlay : null;
+    const parlayEvNum = apiParlay && apiParlay.ev != null && apiParlay.ev !== ''
+      ? parseFloat(String(apiParlay.ev).replace('%', ''))
+      : null;
+    const parlayEvFails = !!(apiParlay && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
+    const parlaySource = (apiParlay && !parlayEvFails)
       ? apiParlay.legs
-      : (picks.length >= 3 ? picks.slice(0, 3) : null);
+      : (!rawParlayList && picks.length >= 3 ? picks.slice(0, 3) : null);
+    const showNoQualifying = noQualifyingParlay || parlayEvFails || (!!(rawParlayList) && !parlaySource && picks.length > 0);
 
     let parlayUnits = 0.5;
     if (apiParlay && apiParlay.units) parlayUnits = parseFloat(apiParlay.units) || 0.5;
@@ -2120,6 +2133,15 @@
     const summaryTotalWin = totalStraightWin + (parlaySource ? parlayWin : 0);
     html += sectionSummaryHTML('Bet Slip — Summary', combinedSummaryRows, summaryTotalUnits, summaryTotalRisk, summaryTotalWin);
     html += `</div>`;
+
+    if (showNoQualifying && !(parlaySource && parlaySource.length)) {
+      html += `<div class="parlay-section">
+        <div class="parlay-title">Parlay</div>
+        <div class="parlay-header">
+          <span class="parlay-name">no qualifying parlay</span>
+        </div>
+      </div>`;
+    }
 
     // One parlay section at the bottom. Compact legs only — each leg's write-up stays on its straight card.
     if (parlaySource && parlaySource.length) {
@@ -2292,7 +2314,18 @@
       return { status: st, risk, winAmt };
     });
     const api = (picksData.parlayLegs && picksData.parlayLegs[0]) || null;
-    const rawLegs = api && api.legs && api.legs.length >= 2 ? api.legs : null;
+    const parlayRejected = !!(api && (
+      api.qualifying === false
+      || api.status === 'no qualifying parlay'
+      || api.type === 'no-qualifying-parlay'
+    ));
+    const parlayEvNum = api && api.ev != null && api.ev !== ''
+      ? parseFloat(String(api.ev).replace('%', ''))
+      : null;
+    const parlayEvFails = !!(api && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
+    const rawLegs = (!parlayRejected && !parlayEvFails && api && api.legs && api.legs.length >= 2)
+      ? api.legs
+      : null;
     let parlay = null;
     if (rawLegs) {
       let parlayUnits = 0.5;

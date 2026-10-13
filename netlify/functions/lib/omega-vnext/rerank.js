@@ -247,7 +247,7 @@ async function rerankCard(opts = {}) {
     if (prev && prev.coreReasoning) built.coreReasoning = prev.coreReasoning;
     return built;
   });
-  const parlayLegs = parlayFromStraights(nextPicks);
+  const parlayLegs = parlayFromStraights(nextPicks, { pool });
   working.picks = nextPicks;
   working.parlayLegs = parlayLegs;
   working.selection = working.selection && typeof working.selection === 'object' ? working.selection : {};

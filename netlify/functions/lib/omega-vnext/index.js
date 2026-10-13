@@ -624,10 +624,14 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u).
   picks = applyDailyCap(picks);
 
-  // The parlay is these straights. Narration may write prose. It does not
-  // pick different legs.
+  // Every parlay must be +EV on the unified adjusted cover. The three
+  // straights are the ticket when that holds. Otherwise the next-best
+  // +EV legs from distinct games are tried, with Hard Rock placeability
+  // when the row has a book ladder. No ticket is a negative-EV parlay.
+  const parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : []);
   const straightParlay = (rows, note) => parlayFromStraights(rows, {
     hrPlaceabilityNote: note || placement.note,
+    pool: parlayPool,
   });
   let parlayLegs = straightParlay(picks);
 

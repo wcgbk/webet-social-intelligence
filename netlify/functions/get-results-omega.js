@@ -505,6 +505,9 @@ function cardParlayTicket(picksData) {
   if (!Array.isArray(legs) || legs.length === 0) return null;
   const ticket = legs[0];
   if (!ticket || typeof ticket !== 'object') return null;
+  if (ticket.qualifying === false || ticket.status === 'no qualifying parlay' || ticket.type === 'no-qualifying-parlay') {
+    return null;
+  }
   const ticketLegs = Array.isArray(ticket.legs) ? ticket.legs.filter(Boolean) : [];
   if (ticketLegs.length < 2) return null;
   return { ...ticket, legs: ticketLegs };

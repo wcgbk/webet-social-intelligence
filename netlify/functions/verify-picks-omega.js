@@ -1618,6 +1618,7 @@ exports.handler = async (event) => {
           const prevTicket = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || {};
           const rebuilt = parlayFromStraights(picksData.picks, {
             hrPlaceabilityNote: prevTicket.hrPlaceabilityNote,
+            pool: picksData.candidateTable,
           });
           if (rebuilt.length) picksData.parlayLegs = rebuilt;
           enforceOmegaDailyUnitCap(picksData);

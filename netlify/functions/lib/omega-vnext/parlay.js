@@ -1,6 +1,6 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_PARLAY_UNITS } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_MIN_EDGE, LEAN_PARLAY_UNITS } = require('./config');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
@@ -648,59 +648,310 @@ function publishLeg(leg) {
   };
 }
 
+const NO_QUALIFYING_PARLAY = 'no qualifying parlay';
+
+function isNoQualifyingParlay(ticket) {
+  if (!ticket || typeof ticket !== 'object') return false;
+  return ticket.qualifying === false
+    || ticket.status === NO_QUALIFYING_PARLAY
+    || ticket.type === 'no-qualifying-parlay';
+}
+
 /**
- * Published parlay. The three straights, in edge order, combined.
- * No pool search, no cover floor, no leg substitution.
- * Fewer than three, or a straight with no finite price, is no ticket.
- * A lean among the three sizes the ticket at LEAN_PARLAY_UNITS and
- * publishes only when the legs are distinct games and combined EV > 0.
- * A floor-day ticket keeps its stake with no EV gate.
+ * Adjusted cover used for edge and stake EV. A candidate still holds that
+ * cover as a fraction. A published pick stores it on p_cal and rounds the
+ * display string, so the display string is not the probability.
  */
-function parlayFromStraights(straights, opts = {}) {
-  const rows = (straights || []).filter(Boolean).slice(0, 3);
-  if (rows.length < 3) return [];
-  const priced = rows.map((leg) => ({
-    leg,
-    american: numericAmerican(leg.odds != null ? leg.odds : leg.oddsStr),
-  }));
-  if (priced.some((row) => row.american == null)) return [];
-  const forStats = priced.map(({ leg, american }) => ({
-    ...leg,
-    odds: american,
-    coverProb: coverFraction(leg.coverProb != null ? leg.coverProb : leg.p_cal),
-  }));
-  const stats = comboStats(forStats);
-  if (!Number.isFinite(stats.combinedDecimal) || !(stats.combinedDecimal > 1)) return [];
-  const leanStake = rows.some((leg) => leg && leg.tier === 'lean');
-  if (leanStake) {
-    if (!(stats.uniqueGames >= rows.length)) return [];
-    if (!(stats.ev > 0)) return [];
+function unifiedCoverProb(row) {
+  if (!row) return null;
+  const raw = row.coverProb;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0 && raw <= 1) return raw;
+  const calibrated = Number(row.p_cal);
+  if (Number.isFinite(calibrated) && calibrated > 0 && calibrated <= 1) return calibrated;
+  const parsed = numericProb(raw != null ? raw : row.winProbability);
+  if (parsed != null && parsed > 0 && parsed <= 1) return parsed;
+  return null;
+}
+
+function edgeFractionOf(row, prob) {
+  const parsed = parseEdgeFraction(row && (row.edgePct != null ? row.edgePct : row.edge));
+  if (Number.isFinite(parsed)) return parsed;
+  const fair = Number(row && (row.fair_sharp_p != null ? row.fair_sharp_p : row.sharpFairP));
+  if (Number.isFinite(prob) && Number.isFinite(fair)) return prob - fair;
+  return null;
+}
+
+function hardRockQuoteOf(row) {
+  if (!row) return null;
+  const direct = row.hardRock;
+  if (direct && Number.isFinite(Number(direct.american)) && Number(direct.american) !== 0) {
+    return {
+      american: Number(direct.american),
+      point: direct.point != null && direct.point !== '' ? Number(direct.point) : null,
+    };
   }
-  const combinedAmerican = decimalToAmerican(stats.combinedDecimal);
-  const units = leanStake ? LEAN_PARLAY_UNITS : PARLAY_FIXED_UNITS;
-  const ticket = {
-    type: '3-leg-parlay-straight',
-    legs: rows.map(publishLeg),
-    units: `${units}u`,
-    ...(leanStake ? { leanDay: true } : {}),
-    combinedOdds: combinedAmerican == null ? '' : formatAmerican(combinedAmerican),
-    combinedDecimal: +stats.combinedDecimal.toFixed(2),
-    combinedProb: Number.isFinite(stats.combinedProb) ? `${(stats.combinedProb * 100).toFixed(1)}%` : '',
-    ev: Number.isFinite(stats.ev) ? `${(stats.ev * 100).toFixed(1)}%` : '',
-    uniqueGames: stats.uniqueGames,
-    uniqueSports: stats.uniqueSports,
-    independent: false,
-    legMarkets: rows.map((leg) => leg.market || leg.betType || null),
-    correlationNote: `Top 3 straights by edge — 3 legs / ${stats.uniqueGames} games`,
-    candidatesScanned: rows.length,
+  const prices = Array.isArray(row.bookPrices) ? row.bookPrices : null;
+  if (!prices) return null;
+  const hit = prices.find((p) => /hardrock/i.test(String((p && (p.book || p.key)) || '')));
+  if (!hit) return null;
+  const american = Number(hit.american != null ? hit.american : hit.price);
+  if (!Number.isFinite(american) || american === 0) return null;
+  return {
+    american,
+    point: hit.point != null && hit.point !== '' ? Number(hit.point) : null,
+  };
+}
+
+/** True when this row carried a book ladder or an explicit Hard Rock flag. */
+function hardRockChecked(row) {
+  if (!row) return false;
+  if (row.hardRockPriced === true || row.hardRockPriced === false) return true;
+  if (row.hardRock && typeof row.hardRock === 'object') return true;
+  return Array.isArray(row.bookPrices) && row.bookPrices.length > 0;
+}
+
+function sameHardRockLine(row, quote) {
+  if (!quote || quote.point == null || !Number.isFinite(Number(quote.point))) return true;
+  const line = row && row.line != null && row.line !== '' ? Number(row.line) : null;
+  if (line == null || !Number.isFinite(line)) return true;
+  return Math.abs(Number(quote.point) - line) <= 0.5 + 1e-9;
+}
+
+/**
+ * One parlay leg at the unified adjusted probability.
+ * Stake EV is cover × decimal − 1 at the price the ticket uses.
+ * A row with Hard Rock data must be offered there on the same line.
+ * A different Hard Rock price is the ticket price when that EV stays positive.
+ * A fixture with no Hard Rock fields keeps its displayed price.
+ * Returns null when edge is under the lean floor or EV is not positive.
+ */
+function priceParlayLeg(row) {
+  if (!row) return null;
+  const prob = unifiedCoverProb(row);
+  if (!Number.isFinite(prob)) return null;
+  const edge = edgeFractionOf(row, prob);
+  const displayed = numericOdds(row.odds != null ? row.odds : row.oddsStr);
+  let odds = displayed;
+  let hardRockRepriced = false;
+  if (hardRockChecked(row)) {
+    const quote = hardRockQuoteOf(row);
+    if (!quote || !sameHardRockLine(row, quote)) return null;
+    if (displayed == null || quote.american !== displayed) {
+      odds = quote.american;
+      hardRockRepriced = true;
+    }
+  }
+  if (!Number.isFinite(odds)) return null;
+  const dec = americanToDecimal(odds);
+  if (!Number.isFinite(dec) || !(dec > 1)) return null;
+  const ev = prob * dec - 1;
+  if (!(ev > 0)) return null;
+  if (!Number.isFinite(edge) || edge + 1e-12 < LEAN_MIN_EDGE) return null;
+  return {
+    ...row,
+    side: row.side || row.pick,
+    market: row.market || row.betType,
+    odds,
+    coverProb: prob,
+    p_cal: prob,
+    ev,
+    edgePct: edge,
+    hardRockRepriced,
+    probBasis: 'unified-adjusted-cover',
+  };
+}
+
+function parlaySideId(row) {
+  const side = String((row && (row.side || row.pick)) || '').trim().toLowerCase();
+  const market = String((row && (row.market || row.betType)) || '').trim().toLowerCase();
+  return `${matchupKey(row)}|${market}|${side}`;
+}
+
+function rankParlayLegs(rows) {
+  return (rows || []).slice().sort((a, b) => {
+    const d = (b.edgePct || 0) - (a.edgePct || 0);
+    if (Math.abs(d) > 1e-12) return d;
+    return (b.ev || 0) - (a.ev || 0);
+  });
+}
+
+function ticketIfPositive(legs) {
+  if (!Array.isArray(legs) || legs.length !== 3) return null;
+  if (new Set(legs.map(matchupKey)).size !== 3) return null;
+  const stats = comboStats(legs);
+  if (!(stats.ev > 0) || stats.uniqueGames !== 3) return null;
+  if (!Number.isFinite(stats.combinedDecimal) || !(stats.combinedDecimal > 1)) return null;
+  return { legs, ...stats };
+}
+
+function straightSource(straight, pool) {
+  const hit = (pool || []).find((row) => row && parlayIsCardMirror([row], [straight]));
+  if (!hit) return straight;
+  return {
+    ...hit,
+    tier: straight.tier || hit.tier || 'floor',
+    pick: straight.pick || hit.side,
+    coreReasoning: straight.coreReasoning || hit.coreReasoning || '',
+  };
+}
+
+/**
+ * Top three straights when each leg is +EV on the unified cover and the
+ * ticket is +EV. Otherwise the next-best +EV legs from distinct games,
+ * keeping as many of those straights as the ticket allows.
+ */
+function selectGatedParlay(straights, pool) {
+  const originals = (straights || []).filter(Boolean).slice(0, 3);
+  const pricedStraights = [];
+  const seenStraight = new Set();
+  for (const straight of originals) {
+    const priced = priceParlayLeg(straightSource(straight, pool));
+    if (!priced) continue;
+    const id = parlaySideId(priced);
+    if (seenStraight.has(id)) continue;
+    seenStraight.add(id);
+    pricedStraights.push(priced);
+  }
+  const direct = originals.length === 3 && pricedStraights.length === 3
+    ? ticketIfPositive(pricedStraights)
+    : null;
+  if (direct) {
+    return {
+      ...direct,
+      corrected: pricedStraights.some((leg) => leg.hardRockRepriced),
+      scanned: originals.length,
+    };
+  }
+
+  const seen = new Set(pricedStraights.map(parlaySideId));
+  const pricedPool = pricedStraights.slice();
+  for (const row of pool || []) {
+    const priced = priceParlayLeg(row);
+    if (!priced) continue;
+    const id = parlaySideId(priced);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    pricedPool.push(priced);
+  }
+  const ranked = rankParlayLegs(pricedPool).slice(0, 15);
+  const straightIds = new Set(pricedStraights.map(parlaySideId));
+  let best = null;
+  for (const combo of enumerateCombos(ranked, 3)) {
+    const ticket = ticketIfPositive(combo);
+    if (!ticket) continue;
+    const keep = combo.filter((leg) => straightIds.has(parlaySideId(leg))).length;
+    const rankSum = combo.reduce((sum, leg) => sum + ranked.indexOf(leg), 0);
+    const betterKeep = !best || keep > best.keep;
+    const sameKeep = best && keep === best.keep && rankSum < best.rankSum;
+    if (betterKeep || sameKeep) best = { ...ticket, keep, rankSum };
+  }
+  if (!best) return null;
+  return {
+    ...best,
+    corrected: true,
+    scanned: ranked.length,
+  };
+}
+
+function noQualifyingParlay(reason) {
+  const why = reason || 'no positive-EV 3-leg from distinct games';
+  console.log(`[omega-vnext] parlay none — no qualifying parlay (${why})`);
+  return {
+    type: 'no-qualifying-parlay',
+    status: NO_QUALIFYING_PARLAY,
+    label: NO_QUALIFYING_PARLAY,
+    qualifying: false,
+    legs: [],
+    units: null,
+    ev: null,
+    evRaw: null,
+    combinedOdds: '',
+    combinedProb: null,
+    combinedProbRaw: null,
+    reason: why,
     source: 'omega-vnext',
   };
+}
+
+function publishGatedLeg(leg) {
+  const base = { ...leg };
+  // publishLeg returns a pick object unchanged. Price from the candidate
+  // fields so the card leg does not carry the book ladder.
+  delete base.pick;
+  delete base.bookPrices;
+  delete base.hardRock;
+  const published = publishLeg(base);
+  published.odds = formatAmerican(leg.odds);
+  published.coverProb = `${(leg.coverProb * 100).toFixed(1)}%`;
+  published.p_cal = +Number(leg.coverProb).toFixed(6);
+  published.ev = `${(leg.ev * 100).toFixed(1)}%`;
+  published.evRaw = +Number(leg.ev).toFixed(6);
+  published.edgePct = formatEdgePct(leg.edgePct) || published.edgePct;
+  published.probBasis = 'unified-adjusted-cover';
+  if (leg.hardRockRepriced) published.hardRockRepriced = true;
+  if (leg.tier) published.tier = leg.tier;
+  return published;
+}
+
+/**
+ * Published parlay. Every day, lean or floor, the ticket must be +EV.
+ * Probability is the unified adjusted cover, the same number as straight
+ * edge and stake EV. The three straights are the ticket when that holds.
+ * Otherwise the next-best +EV legs from distinct games are tried. A Hard
+ * Rock offer on the row is the price, or the leg is swapped when Hard Rock
+ * does not offer it. No +EV 3-leg publishes as "no qualifying parlay".
+ * Straights are not removed. A negative-EV ticket is never returned.
+ */
+function parlayFromStraights(straights, opts = {}) {
+  const rows = (straights || []).filter(Boolean);
+  const pool = (opts && opts.pool) || [];
+  if (!rows.length && !(pool && pool.length)) return [];
+  const chosen = selectGatedParlay(rows, pool);
+  if (!chosen) {
+    return [noQualifyingParlay('no positive-EV 3-leg from distinct games')];
+  }
+  const leanStake = rows.some((leg) => leg && leg.tier === 'lean')
+    || chosen.legs.some((leg) => leg && leg.tier === 'lean');
+  const combinedAmerican = decimalToAmerican(chosen.combinedDecimal);
+  const units = leanStake ? LEAN_PARLAY_UNITS : PARLAY_FIXED_UNITS;
+  const mirrored = parlayIsCardMirror(chosen.legs, rows);
+  const ticket = {
+    type: mirrored && !chosen.corrected ? '3-leg-parlay-straight' : '3-leg-parlay-corrected',
+    legs: chosen.legs.map(publishGatedLeg),
+    units: `${units}u`,
+    ...(leanStake ? { leanDay: true } : {}),
+    qualifying: true,
+    combinedOdds: combinedAmerican == null ? '' : formatAmerican(combinedAmerican),
+    combinedDecimal: +chosen.combinedDecimal.toFixed(2),
+    combinedProb: Number.isFinite(chosen.combinedProb) ? `${(chosen.combinedProb * 100).toFixed(1)}%` : '',
+    combinedProbRaw: Number.isFinite(chosen.combinedProb) ? chosen.combinedProb : null,
+    ev: Number.isFinite(chosen.ev) ? `${(chosen.ev * 100).toFixed(1)}%` : '',
+    evRaw: Number.isFinite(chosen.ev) ? chosen.ev : null,
+    uniqueGames: chosen.uniqueGames,
+    uniqueSports: chosen.uniqueSports,
+    independent: !mirrored,
+    legMarkets: chosen.legs.map((leg) => leg.market || leg.betType || null),
+    correlationNote: chosen.corrected
+      ? `Next-best +EV legs — 3 legs / ${chosen.uniqueGames} games`
+      : `Top 3 straights by edge — 3 legs / ${chosen.uniqueGames} games`,
+    candidatesScanned: chosen.scanned,
+    autoCorrected: !!chosen.corrected,
+    probBasis: 'unified-adjusted-cover',
+    evBasis: 'combined-prob-times-decimal-minus-1',
+    source: 'omega-vnext',
+  };
+  if (!(chosen.ev > 0)) return [noQualifyingParlay('combined EV was not positive')];
   if (opts && opts.hrPlaceabilityNote) ticket.hrPlaceabilityNote = opts.hrPlaceabilityNote;
+  if (chosen.corrected) {
+    const names = chosen.legs.map((leg) => leg.side || leg.pick).join(' | ');
+    console.log(`[omega-vnext] parlay auto-correct ev=${ticket.ev} legs=${names}`);
+  }
   return [ticket];
 }
 
 module.exports = {
   optimizeParlay, parlayFromStraights, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
   sameDirectionTotalFactor, correlatedTotalFactor, legsConflict, bestEdgeLegs, legEdge,
-  passesParlayCandidate,
+  passesParlayCandidate, isNoQualifyingParlay, unifiedCoverProb, priceParlayLeg,
+  NO_QUALIFYING_PARLAY,
 };

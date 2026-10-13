@@ -156,8 +156,8 @@ function priceKeys(store, eventId) {
   cache.resetKnownRequestsRemainingForTests();
   cache.clearMemoryForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.47-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.47-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.48-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.48-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('v12.3.40-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('No historical odds call.'));
     assert.strictEqual(config.PINNACLE_LINE_MOVE.historicalCreditsPerPull, 30);
@@ -506,10 +506,10 @@ function priceKeys(store, eventId) {
       yesterdayGames: [gameRow('h1', YDAY), gameRow('h2', YDAY_LATE)],
     }));
     assert.strictEqual(oddsCalls(floorFetch.calls).length, 2);
-    assert.strictEqual(histCalls(floorFetch.calls).length, 1);
-    assert.strictEqual(floor.stoppedForCredits, true);
-    assert.strictEqual(floor.historicalPulls, 1);
-    assert.strictEqual(floor.requestsRemaining, 48999);
+    assert.strictEqual(histCalls(floorFetch.calls).length, 2);
+    assert.strictEqual(floor.stoppedForCredits, false);
+    assert.strictEqual(floor.historicalPulls, 2);
+    assert.strictEqual(floor.requestsRemaining, 50000);
 
     const dryStore = memoryStore();
     const dryFetch = makeFetch((u) => {

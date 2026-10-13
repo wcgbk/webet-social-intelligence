@@ -406,7 +406,8 @@ async function listYesterdayGames(dateISO, storeOpts, opts) {
 /**
  * Yesterday's pregame Pinnacle closes. One historical pull per sport per
  * shared commence_time. Games already closed are not pulled. Today's 3:00
- * lines are not fetched here.
+ * lines are not fetched here. This is part of the 3:00 check, so the
+ * 49,000 credit floor does not stop it.
  */
 async function captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, apiKey, fetchImpl) {
   const masterOpts = masterOptsFrom(storeOpts);
@@ -425,20 +426,13 @@ async function captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, ap
   }
   const groups = groupByCommence(pending);
   for (const group of groups) {
-    const known = knownRequestsRemainingValue();
-    if (state.stoppedForCredits || creditFloorReached(known, floor)) {
-      state.stoppedForCredits = true;
-      state.requestsRemaining = known != null ? known : state.requestsRemaining;
-      console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before close ${group.sport}`);
-      break;
-    }
     let pulled = null;
     try {
       pulled = await fetchHistoricalOdds(group.sportKey, apiKey, group.commenceTime, fetchImpl);
-      rememberPull(state, pulled, group.sport, 'pinnacle-close', floor);
+      rememberPull(state, pulled, group.sport, 'pinnacle-close', floor, false);
       if (!pulled.cacheHit) state.historicalPulls += 1;
     } catch (err) {
-      rememberError(state, err, group.sport, 'pinnacle-close', floor);
+      rememberError(state, err, group.sport, 'pinnacle-close', floor, false);
       continue;
     }
     const saved = await storeHistoricalCloses(group, pulled, masterOpts);
@@ -447,7 +441,6 @@ async function captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, ap
     if (saved.reason === 'snapshot-after-commence') {
       console.log(`[pinnacle-line-move] reject historical snapshot after commence sport=${group.sport} commence=${group.commenceTime} snapshot=${pulled.snapshotAt}`);
     }
-    if (state.stoppedForCredits) break;
   }
 }
 
@@ -469,9 +462,9 @@ async function recordTape(entry, storeOpts) {
  * The 3:00 check stores that same live pull as the baseline and, when no
  * open exists, as the open. It then pulls yesterday's pregame closes.
  * CLV for yesterday is graded from those stored quotes after the pull.
- * The grade does not call the Odds API and still runs when the credit
- * floor stopped the pull. The floor itself is unchanged.
- * Priced pulls stop below the credit floor. Never the published card.
+ * The grade does not call the Odds API.
+ * The 49,000 credit floor stops open, backfill, and extra pulls only.
+ * It does not stop a 3:00 or 10:00 check, yesterday's closes, or the card.
  */
 async function runPinnacleLineCapture(opts = {}) {
   const now = opts.now instanceof Date ? opts.now : new Date();
@@ -492,7 +485,7 @@ function noteLiveRemaining(state, remaining, cacheHit) {
   state.requestsRemaining = remaining;
 }
 
-function rememberPull(state, pulled, label, book, floor) {
+function rememberPull(state, pulled, label, book, floor, enforceFloor) {
   state.pulls += 1;
   const remaining = pulled && pulled.requestsRemaining != null ? pulled.requestsRemaining : null;
   const cacheHit = !!(pulled && pulled.cacheHit);
@@ -500,18 +493,18 @@ function rememberPull(state, pulled, label, book, floor) {
   noteLiveRemaining(state, remaining, cacheHit);
   if (remaining != null && state.requestsRemaining == null) state.requestsRemaining = remaining;
   console.log(`[pinnacle-line-move] x-requests-remaining=${remaining == null ? 'null' : remaining} sport=${label} book=${book} cacheHit=${cacheHit ? 1 : 0}`);
-  if (!cacheHit && creditFloorReached(remaining, floor)) {
+  if (enforceFloor && !cacheHit && creditFloorReached(remaining, floor)) {
     state.stoppedForCredits = true;
     console.log(`[pinnacle-line-move] x-requests-remaining=${remaining} credit floor stop after ${label} ${book}`);
   }
 }
 
-function rememberError(state, err, label, book, floor) {
+function rememberError(state, err, label, book, floor, enforceFloor) {
   state.pulls += 1;
   const remaining = err && err.requestsRemaining != null ? err.requestsRemaining : null;
   noteLiveRemaining(state, remaining, !!(err && err.cacheHit));
   console.log(`[pinnacle-line-move] x-requests-remaining=${remaining == null ? 'null' : remaining} sport=${label} book=${book} error=${err && err.message}`);
-  if (!(err && err.cacheHit) && creditFloorReached(remaining, floor)) {
+  if (enforceFloor && !(err && err.cacheHit) && creditFloorReached(remaining, floor)) {
     state.stoppedForCredits = true;
     console.log(`[pinnacle-line-move] x-requests-remaining=${remaining} credit floor stop after ${label} ${book}`);
   }
@@ -547,6 +540,8 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     };
   }
   const floor = opts.creditFloor != null ? Number(opts.creditFloor) : PINNACLE_LINE_MOVE.creditFloor;
+  // 3:00 and 10:00 checks, including an injected floor, always pull.
+  const enforceFloor = mode !== 'check';
   const labels = pinnacleLabels(dateISO, opts);
   const fetchImpl = opts.fetchImpl || fetch;
   const fetchEvents = opts.fetchEvents || ((sportKey, key) => fetchSportEvents(sportKey, key, fetchImpl));
@@ -627,7 +622,7 @@ async function runPinnacleLineCaptureInner(opts = {}) {
         continue;
       }
       const known = knownRequestsRemainingValue();
-      if (state.stoppedForCredits || creditFloorReached(known, floor)) {
+      if (enforceFloor && (state.stoppedForCredits || creditFloorReached(known, floor))) {
         state.stoppedForCredits = true;
         state.requestsRemaining = known != null ? known : state.requestsRemaining;
         console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before ${label} pinnacle`);
@@ -637,9 +632,9 @@ async function runPinnacleLineCaptureInner(opts = {}) {
       let pulled = null;
       try {
         pulled = await fetchOdds(sportKey, apiKey, 'pinnacle');
-        rememberPull(state, pulled, label, 'pinnacle', floor);
+        rememberPull(state, pulled, label, 'pinnacle', floor, enforceFloor);
       } catch (err) {
-        rememberError(state, err, label, 'pinnacle', floor);
+        rememberError(state, err, label, 'pinnacle', floor, enforceFloor);
         sportsHit.push(`${label}:err`);
         continue;
       }
@@ -665,7 +660,7 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     }
 
     const known = knownRequestsRemainingValue();
-    if (state.stoppedForCredits || creditFloorReached(known, floor)) {
+    if (enforceFloor && (state.stoppedForCredits || creditFloorReached(known, floor))) {
       state.stoppedForCredits = true;
       state.requestsRemaining = known != null ? known : state.requestsRemaining;
       console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before ${label}`);
@@ -677,19 +672,19 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     const now = opts.now instanceof Date ? opts.now : new Date();
     try {
       pin = await pullCheckBook(sportKey, apiKey, 'pinnacle', fetchOdds, etSlot, now);
-      rememberPull(state, pin, label, 'pinnacle', floor);
+      rememberPull(state, pin, label, 'pinnacle', floor, enforceFloor);
     } catch (err) {
-      rememberError(state, err, label, 'pinnacle', floor);
+      rememberError(state, err, label, 'pinnacle', floor, enforceFloor);
       sportsHit.push(`${label}:err`);
-      if (state.stoppedForCredits) break;
+      if (enforceFloor && state.stoppedForCredits) break;
       continue;
     }
-    if (!state.stoppedForCredits) {
+    if (!enforceFloor || !state.stoppedForCredits) {
       try {
         dk = await pullCheckBook(sportKey, apiKey, 'draftkings', fetchOdds, etSlot, now);
-        rememberPull(state, dk, label, 'draftkings', floor);
+        rememberPull(state, dk, label, 'draftkings', floor, enforceFloor);
       } catch (err) {
-        rememberError(state, err, label, 'draftkings', floor);
+        rememberError(state, err, label, 'draftkings', floor, enforceFloor);
       }
     }
     const pinQuotes = quotesByEvent(quotesFromEvents(pin ? pin.events : [], label, { at: capturedAt, dateISO, book: 'pinnacle' }, 'pinnacle'));
@@ -798,10 +793,10 @@ async function runPinnacleLineCaptureInner(opts = {}) {
       }
     }
     sportsHit.push(`${label}:${ids.size}`);
-    if (state.stoppedForCredits) break;
+    if (enforceFloor && state.stoppedForCredits) break;
   }
 
-  if (mode === 'check' && etSlot === '0300' && !state.stoppedForCredits) {
+  if (mode === 'check' && etSlot === '0300') {
     await captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, apiKey, fetchImpl);
   }
 

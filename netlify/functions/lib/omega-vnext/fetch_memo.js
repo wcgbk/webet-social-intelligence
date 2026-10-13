@@ -170,7 +170,7 @@ function narrateErrorShouldRetry(err) {
   return true;
 }
 
-/** Odds API credit floor for the Pinnacle line-move capture. Stop when remaining is below this. */
+/** 49,000 credit floor for backfill and extra Odds API pulls. 3:00 and 10:00 checks do not use it. */
 const PINNACLE_CREDIT_FLOOR = 49000;
 
 function responseHeader(resp, name) {

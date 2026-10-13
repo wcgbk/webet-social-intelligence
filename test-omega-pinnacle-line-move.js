@@ -158,8 +158,8 @@ function scheduler(now) {
 (async () => {
   cache.resetKnownRequestsRemainingForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.47-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.47-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.48-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.48-omega-vnext-price-lock:'));
     assert.strictEqual(config.STEAM_WINDOW_MIN, 15);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.creditFloor, 49000);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.steamProbPts, 3);
@@ -477,10 +477,11 @@ function scheduler(now) {
         now: new Date('2026-10-12T07:00:00Z'),
         fetchImpl: floorFetch,
       }));
-      assert.strictEqual(stopped.pulls, 1);
-      assert.strictEqual(stopped.stoppedForCredits, true);
-      assert.strictEqual(oddsCalls(floorFetch.calls).length, 1);
-      assert.ok(floorLogs.some((line) => line.includes('x-requests-remaining=48999') && line.includes('credit floor stop')));
+      assert.strictEqual(stopped.pulls, 4);
+      assert.strictEqual(stopped.stoppedForCredits, false);
+      assert.strictEqual(oddsCalls(floorFetch.calls).length, 4);
+      assert.ok(floorLogs.some((line) => line.includes('x-requests-remaining=48999')));
+      assert.ok(!floorLogs.some((line) => line.includes('credit floor stop')));
 
       cache.resetKnownRequestsRemainingForTests();
       const okFetch = makeFetch((u) => {
@@ -497,6 +498,7 @@ function scheduler(now) {
       assert.strictEqual(allowed.stoppedForCredits, false);
       assert.strictEqual(allowed.pulls, 4);
 
+      cache.clearMemoryForTests();
       cache.noteKnownRequestsRemaining(48999);
       const blockedFetch = makeFetch(() => ({ body: [boardEvent('evX', 'pinnacle')], remaining: 50000 }));
       const blocked = await runPinnacleLineCapture(runnerOpts(memoryStore(), {
@@ -506,9 +508,9 @@ function scheduler(now) {
         now: new Date('2026-10-12T14:00:00Z'),
         fetchImpl: blockedFetch,
       }));
-      assert.strictEqual(blocked.pulls, 0);
-      assert.strictEqual(blockedFetch.calls.length, 0);
-      assert.strictEqual(blocked.stoppedForCredits, true);
+      assert.strictEqual(blocked.pulls, 4);
+      assert.strictEqual(oddsCalls(blockedFetch.calls).length, 4);
+      assert.strictEqual(blocked.stoppedForCredits, false);
 
       cache.resetKnownRequestsRemainingForTests();
       cache.noteKnownRequestsRemaining(48999);

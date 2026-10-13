@@ -11,7 +11,8 @@
  * Live Odds API: regions=eu, one call per book per sport. The 3:00 check
  * also requests yesterday's pregame historical closes. The 10:00 check
  * reuses a same-sport snapshot younger than 5 minutes.
- * Skips a priced pull when x-requests-remaining is below 49000.
+ * The 49,000 credit stop does not apply to this 3:00 or 10:00 pull.
+ * It applies to backfill and extra pulls only.
  * ?dryRun=1 and OMEGA_REPLAY_NO_WRITE write nothing.
  */
 

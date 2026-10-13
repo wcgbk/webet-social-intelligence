@@ -268,7 +268,8 @@
   # 3:00 also pulls yesterday's pregame historical closes (30 credits per
   # shared commence_time) and stores the opener when none is stored.
   # Writes omega-pinnacle-line-moves and odds-master. Never the card.
-  # Skips a priced pull when x-requests-remaining < 49000. dryRun writes nothing.
+  # The 49,000 credit stop does not apply to this 3:00 or 10:00 pull.
+  # dryRun writes nothing.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pinnacle-open"]

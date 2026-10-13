@@ -320,6 +320,15 @@
   # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the table and writes nothing.
   included_files = ["data/engineering-scores.json", "data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/tracking-report.js", "netlify/functions/lib/kpi-cache.js"]
 
+[functions."report-calibration-omega"]
+  schedule = "15 10,11 * * 0"
+  # Sunday 06:15 ET. 10:15 UTC = 6:15am EDT. 11:15 UTC = 6:15am EST.
+  # etGuard keeps Sunday 06:15 ET only, outside the card window.
+  # Weekly calibration review. Report only. FIT stays off. Shrink is not applied.
+  # self-optimize-omega stays paused. Does not change a price, a stake, or a pick.
+  # OMEGA_REPLAY_NO_WRITE=1 or ?dryRun=1 returns the report and writes nothing.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."get-tracking"]
   # Public read of omega-tracking/index. No auth token.
   # Falls back to tracking/report.json when the blob is missing. Writes nothing.

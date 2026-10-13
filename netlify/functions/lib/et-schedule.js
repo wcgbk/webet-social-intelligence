@@ -115,6 +115,9 @@ const ET_SCHEDULE = {
   // Same 09:15 ET slot, after closes and finals, before the 10:30 selection.
   // Display-only daily progress table. Does not price or select.
   'report-tracking-omega': { etTimes: ['09:15'] },
+  // Sunday 06:15 ET. Outside the card window. Report only. FIT stays off.
+  // Cron "15 10,11 * * 0" is 10:15 UTC (EDT) and 11:15 UTC (EST).
+  'report-calibration-omega': { etTimes: ['06:15'], days: [0] },
   'warm-omega-feeds': { etTimes: ['09:00'] },
   'trigger-omega-shadow': { etTimes: ['09:05'] },
   'trigger-omega-nba-shadow': { etTimes: ['17:30'] },

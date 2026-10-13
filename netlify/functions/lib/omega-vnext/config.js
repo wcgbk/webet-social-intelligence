@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.60-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.61-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.61-omega-vnext-price-lock: Weekly calibration review runs Sunday 06:15 ET, outside the card window. It reports drift and one shrink recommendation and does not apply it. FIT stays off. self-optimize-omega stays paused.',
   'v12.3.60-omega-vnext-price-lock: Results views on the tracking page: win rate versus the break-even rate at the price paid, parlay hit rate versus the product of the straight prices, CLV by price band and market, and log-loss and Brier per sport. Display only. No price, stake, or selection change.',
   'v12.3.59-omega-vnext-price-lock: confirm-starters-mlb logs a would-be Omega scratch and does not rewrite or kill edge-picks-omega. Alpha still updates its card.',
   'v12.3.58-omega-vnext-price-lock: Same-game exposure is on. A main straight plus the parlay stake on that game stays at or under 1.75u. The parlay is not cut. Leans are not trimmed. The trim floor is 0.5u. OMEGA_GAME_EXPOSURE=0 turns it off.',

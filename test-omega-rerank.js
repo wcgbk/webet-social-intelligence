@@ -9,8 +9,8 @@ const { passesPublishFloor } = require('./netlify/functions/lib/omega-vnext/sele
 const { runRerank } = require('./netlify/functions/rerank-picks-omega');
 const et = require('./netlify/functions/lib/et-schedule');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.61-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.61-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.62-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.62-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.LEAN_MIN_EV, 0.015);
 assert.deepStrictEqual(et.ET_SCHEDULE['rerank-picks-omega'].etTimes, ['10:15']);

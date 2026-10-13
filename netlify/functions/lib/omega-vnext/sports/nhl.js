@@ -587,16 +587,64 @@ function priceUnconfirmedGoalies(hg, ag, cfg) {
   return { ...chosen, used, unconfirmed: true, scenarios: scenarios.length };
 }
 
+/**
+ * GSAx as a per-game rate. A number larger than 1.5 is a season sum and is
+ * divided by games, or by 40 when the sample size was not stored. One missing
+ * side is not a rate.
+ */
+function gsaxPerGame(g) {
+  if (!g || g.gsax == null || g.gsax === '') return null;
+  const n = Number(g.gsax);
+  if (!Number.isFinite(n)) return null;
+  if (Math.abs(n) > 1.5) {
+    const games = Number(g.games);
+    const gp = Number.isFinite(games) && games >= 1 ? games : 40;
+    return n / gp;
+  }
+  return n;
+}
+
+/**
+ * Add GSAx only when both clubs already carry the number. The save-percentage
+ * piece and this piece share the existing goalie cap. Otherwise the addition
+ * is 0. Team xG and special teams are not priced here.
+ */
+function applyGsax(piece, hg, ag, cfg) {
+  const base = piece || { marginAdj: 0, totalAdj: 0, used: false, capped: false };
+  const home = gsaxPerGame(hg);
+  const away = gsaxPerGame(ag);
+  if (home == null || away == null) return { ...base, gsax: 0 };
+  const { capM, capT } = goalieRates(cfg);
+  const rawM = base.marginAdj + (home - away);
+  const rawT = base.totalAdj - ((home + away) * 0.5);
+  const capped = capPiece(rawM, rawT, capM, capT);
+  const used = Math.abs(capped.marginAdj) > 1e-9 || Math.abs(capped.totalAdj) > 1e-9;
+  return {
+    ...capped,
+    used,
+    gsax: home - away,
+    unconfirmed: base.unconfirmed,
+    scenarios: base.scenarios,
+  };
+}
+
 function goalieResidual(espnGame, cfg) {
-  const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
+  const none = { marginAdj: 0, totalAdj: 0, used: false, capped: false, gsax: 0 };
   const hg = goalieOf(espnGame, 'home');
   const ag = goalieOf(espnGame, 'away');
   if (!hg || !ag) return none;
-  if (hg.confirmed === false || ag.confirmed === false) return priceUnconfirmedGoalies(hg, ag, cfg);
-  const piece = goalieScenario(saveRateOf(hg), saveRateOf(ag), cfg);
-  if (!piece) return none;
-  const used = Math.abs(piece.marginAdj) > 1e-9 || Math.abs(piece.totalAdj) > 1e-9;
-  return { ...piece, used };
+  let piece;
+  if (hg.confirmed === false || ag.confirmed === false) {
+    piece = priceUnconfirmedGoalies(hg, ag, cfg);
+  } else {
+    const scenario = goalieScenario(saveRateOf(hg), saveRateOf(ag), cfg);
+    if (!scenario) piece = { marginAdj: 0, totalAdj: 0, used: false, capped: false };
+    else {
+      const used = Math.abs(scenario.marginAdj) > 1e-9 || Math.abs(scenario.totalAdj) > 1e-9;
+      piece = { ...scenario, used };
+    }
+  }
+  return applyGsax(piece, hg, ag, cfg);
 }
 
 function winPctResidual(homeSt, awaySt, cfg) {

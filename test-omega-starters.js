@@ -278,9 +278,11 @@ function oddsEvent(home, away) {
     homeGoalie: { name: 'Igor Shesterkin', confirmed: false, goalieConfirmed: false, gsax: 12.4 },
     awayGoalie: { name: 'Sergei Bobrovsky', confirmed: true, goalieConfirmed: true, gsax: 4 },
   });
-  assert.strictEqual(missingRate.used, false);
-  assert.strictEqual(missingRate.marginAdj, 0);
-  assert.strictEqual(missingRate.totalAdj, 0);
+  // Both clubs carry a season GSAx and no save rate. The term is inside the goalie cap.
+  assert.strictEqual(missingRate.used, true);
+  assert.ok(missingRate.marginAdj > 0);
+  assert.ok(Math.abs(missingRate.marginAdj) <= 0.12 + 1e-9);
+  assert.ok(Math.abs(missingRate.totalAdj) <= 0.10 + 1e-9);
 
   const seenNhl = [];
   const prevNhl = global.fetch;

@@ -15,8 +15,8 @@ const { createAuditLog, runWithAudit } = require(path.join(root, 'audit_log'));
 const { memoFetchJson, runWithFetchMemo, FRESH_SNAP_MS } = require(path.join(root, 'fetch_memo'));
 const config = require(path.join(root, 'config'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.61-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.61-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.62-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.62-omega-vnext-price-lock:'));
 assert.strictEqual(FRESH_SNAP_MS, 10 * 60 * 1000);
 assert.strictEqual(cache.BLOB_STORE, 'odds-snapshots');
 

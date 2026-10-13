@@ -50,7 +50,7 @@ async function pendingPayload(sport, dateISO, basePayload) {
   const cfg = SPORTS[sport];
   const slate = await todaysSlate(sport, dateISO);
   if (!slate || slate.length === 0) return null;
-  const late = etMinutesNow() > 10 * 60 + 30; // past 10:30 ET and still no card
+  const late = etMinutesNow() > 11 * 60; // past 11:00 ET and still no card
   const msg = late
     ? `Today's ${cfg.label} card is running late. It normally posts by about ${cfg.readyBy}.`
     : `Today's ${cfg.label} card is generated at ${cfg.cron} and posts by about ${cfg.readyBy}.`;

@@ -202,7 +202,7 @@ async function runOmegaLineCaptureInner(opts = {}) {
 /**
  * Live board. regions=eu, one bookmaker, h2h/spreads/totals.
  * Repo live cost is regions × markets (see clv_candidates): 1 × 3 = 3 credits.
- * /events is 0. A check is Pinnacle + DraftKings = 6 credits per sport.
+ * /events is 0. A check is one call, bookmakers=pinnacle,draftkings,hardrockbet.
  * Yesterday's closes use pinnacleHistoricalUrl. That is 10× live: 30 credits
  * per sport per shared commence_time. The 3:00 today board is this live URL
  * only — the baseline is that same response, not a second pull.
@@ -221,8 +221,12 @@ function pinnacleOddsUrl(sportKey, apiKey) {
   return bookOddsUrl(sportKey, apiKey, PINNACLE_LINE_MOVE.bookmakers);
 }
 
+/**
+ * Deprecated. The 3:00 and 10:00 check is one combined call. This returns
+ * that same URL so a leftover caller does not add a second request.
+ */
 function draftkingsOddsUrl(sportKey, apiKey) {
-  return bookOddsUrl(sportKey, apiKey, PINNACLE_LINE_MOVE.secondaryBookmakers);
+  return bookOddsUrl(sportKey, apiKey, PINNACLE_LINE_MOVE.checkBookmakers);
 }
 
 /** Free event list. apiKey only. No markets, regions, bookmakers, or date. */
@@ -457,7 +461,8 @@ async function recordTape(entry, storeOpts) {
  * Open watcher or a 3:00 / 10:00 check. The hourly opener is not scheduled.
  * 9:00 and 10:30 are not check slots.
  * Opens poll /events (0 credits) and pull Pinnacle once per sport that has a
- * new event id. Checks pull Pinnacle and DraftKings, one call per sport.
+ * new event id. Checks pull Pinnacle, DraftKings, and Hard Rock in one call
+ * per sport.
  * The 10:00 check reuses a same-sport snapshot younger than 5 minutes.
  * The 3:00 check stores that same live pull as the baseline and, when no
  * open exists, as the open. It then pulls yesterday's pregame closes.
@@ -474,7 +479,7 @@ async function runPinnacleLineCapture(opts = {}) {
 }
 
 function bookmakerFor(book) {
-  if (book === 'draftkings') return PINNACLE_LINE_MOVE.secondaryBookmakers;
+  if (book === 'check' || book === 'draftkings') return PINNACLE_LINE_MOVE.checkBookmakers;
   return PINNACLE_LINE_MOVE.bookmakers;
 }
 
@@ -667,33 +672,26 @@ async function runPinnacleLineCaptureInner(opts = {}) {
       sportsHit.push(`${label}:held`);
       break;
     }
-    let pin = null;
-    let dk = null;
+    let board = null;
     const now = opts.now instanceof Date ? opts.now : new Date();
     try {
-      pin = await pullCheckBook(sportKey, apiKey, 'pinnacle', fetchOdds, etSlot, now);
-      rememberPull(state, pin, label, 'pinnacle', floor, enforceFloor);
+      board = await pullCheckBook(sportKey, apiKey, 'check', fetchOdds, etSlot, now);
+      rememberPull(state, board, label, 'check', floor, enforceFloor);
     } catch (err) {
-      rememberError(state, err, label, 'pinnacle', floor, enforceFloor);
+      rememberError(state, err, label, 'check', floor, enforceFloor);
       sportsHit.push(`${label}:err`);
       if (enforceFloor && state.stoppedForCredits) break;
       continue;
     }
-    if (!enforceFloor || !state.stoppedForCredits) {
-      try {
-        dk = await pullCheckBook(sportKey, apiKey, 'draftkings', fetchOdds, etSlot, now);
-        rememberPull(state, dk, label, 'draftkings', floor, enforceFloor);
-      } catch (err) {
-        rememberError(state, err, label, 'draftkings', floor, enforceFloor);
-      }
-    }
-    const pinQuotes = quotesByEvent(quotesFromEvents(pin ? pin.events : [], label, { at: capturedAt, dateISO, book: 'pinnacle' }, 'pinnacle'));
-    const dkQuotes = quotesByEvent(quotesFromEvents(dk ? dk.events : [], label, { at: capturedAt, dateISO, book: 'draftkings' }, 'draftkings'));
+    const events = board && Array.isArray(board.events) ? board.events : [];
+    const pinQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'pinnacle' }, 'pinnacle'));
+    const dkQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'draftkings' }, 'draftkings'));
+    const hrQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'hardrockbet' }, 'hardrockbet'));
     const meta = new Map();
-    for (const event of [].concat((pin && pin.events) || [], (dk && dk.events) || [])) {
+    for (const event of events) {
       if (event && event.id != null) meta.set(String(event.id), event);
     }
-    const ids = new Set([...pinQuotes.keys(), ...dkQuotes.keys()]);
+    const ids = new Set([...pinQuotes.keys(), ...dkQuotes.keys(), ...hrQuotes.keys()]);
     for (const id of ids) {
       const event = meta.get(id) || {};
       const commenceTime = event.commence_time || null;
@@ -701,6 +699,7 @@ async function runPinnacleLineCaptureInner(opts = {}) {
       const awayTeam = event.away_team || null;
       const pinQ = pinQuotes.get(id) || {};
       const dkQ = dkQuotes.get(id) || {};
+      const hrQ = hrQuotes.get(id) || {};
       if (etSlot === '0300' && Object.keys(pinQ).length) {
         const prev = await readLineMoveKey(eventKey(label, id), storeOpts);
         if (!prev || !prev.open) {
@@ -757,6 +756,7 @@ async function runPinnacleLineCaptureInner(opts = {}) {
         books: {
           pinnacle: pinQ,
           draftkings: dkQ,
+          hardrockbet: hrQ,
         },
         requestsRemaining: state.requestsRemaining,
       }, storeOpts);
@@ -782,6 +782,15 @@ async function runPinnacleLineCaptureInner(opts = {}) {
             quotes: dkQ,
           }, storeOpts);
         }
+        if (Object.keys(hrQ).length) {
+          await recordTape({
+            ...tapeMeta,
+            book: 'hardrockbet',
+            role: 'baseline-0300',
+            timestamp: capturedAt,
+            quotes: hrQ,
+          }, storeOpts);
+        }
       } else if (stored.wrote) {
         const tapeMeta = { sport: label, eventId: id, homeTeam, awayTeam, commenceTime, source: 'live' };
         if (Object.keys(pinQ).length) {
@@ -789,6 +798,9 @@ async function runPinnacleLineCaptureInner(opts = {}) {
         }
         if (Object.keys(dkQ).length) {
           await recordTape({ ...tapeMeta, book: 'draftkings', role: `check-${etSlot}`, timestamp: capturedAt, quotes: dkQ }, storeOpts);
+        }
+        if (Object.keys(hrQ).length) {
+          await recordTape({ ...tapeMeta, book: 'hardrockbet', role: `check-${etSlot}`, timestamp: capturedAt, quotes: hrQ }, storeOpts);
         }
       }
     }

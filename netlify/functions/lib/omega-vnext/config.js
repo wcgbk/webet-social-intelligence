@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.72-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.73-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -151,9 +151,10 @@ const MAJOR_LIQUIDITY_BOOKS = [
 
 /**
  * Open→pick line-move / steam gates (US books + sharp refs).
- * Morning polls: 6:00, 7:30, 9:00, 9:15 ET.
- * 6:00/7:30 on capture-omega-lines; 9:00/9:15 on capture-omega-lines-late.
- * 9:30 capture removed so it does not race trigger-picks-omega.
+ * The live schedule is the 3:00 and 10:00 ET snapshots. The 6:00, 7:30,
+ * 9:00, and 9:15 ET morning polls are retired and are not a fallback.
+ * There is no 10:30 Odds API pull. 10:30 is a draft and placeability check
+ * on the saved 10:00 prices. 11:00 is the only finalization.
  */
 const LINE_MOVE = {
   /** Morning capture slots (ET HHMM). */
@@ -190,18 +191,27 @@ const STEAM_WINDOW_MIN = 15;
  * Pinnacle no-vig line log. The 10:00 check versus the 3:00 baseline feeds
  * the steam gate. Movement trust is a blend-weight shift in line_move_prob.
  * It does not rewrite the 10:00 fair, a floor, Kelly, or a cap.
- * Opens are the first price in the 3:00 ET pull. Checks at 3:00 and 10:00 ET:
- * one Pinnacle call and one DraftKings call per sport. The 3:00 check also
- * pulls yesterday's pregame closes (historical, 10× live = historicalCreditsPerPull).
- * The 10:00 check reuses a same-sport snapshot younger than earlyReuseMs.
- * 9:00, 10:30, the hourly opener, and kickoff closes are not pulled.
+ * Opens are the first price in the 3:00 ET pull (Pinnacle only). Checks at
+ * 3:00 and 10:00 ET are one live call per sport:
+ * bookmakers=pinnacle,draftkings,hardrockbet. That is 3 credits, not 6.
+ * The 3:00 check also pulls yesterday's pregame closes (historical, Pinnacle
+ * only, 10× live = historicalCreditsPerPull). The 10:00 check reuses a
+ * same-sport snapshot younger than earlyReuseMs. 9:00, 10:30, the hourly
+ * opener, and kickoff closes are not pulled.
  * creditFloor stops backfill and extra pulls only. It does not stop the
  * 3:00 or 10:00 checks, yesterday's closes, or the card.
  */
 const PINNACLE_LINE_MOVE = {
   creditFloor: 49000,
   regions: 'eu',
+  /** Opens and historical closes. Pinnacle only. */
   bookmakers: 'pinnacle',
+  /**
+   * One 3:00 / 10:00 check call. Hard Rock is on this request, not a second pull.
+   * secondaryBookmakers is the deprecated two-call DraftKings string. The check
+   * does not request it.
+   */
+  checkBookmakers: 'pinnacle,draftkings,hardrockbet',
   secondaryBookmakers: 'draftkings,hardrockbet',
   markets: 'h2h,spreads,totals',
   /** Consecutive-check no-vig move, in probability points, both books. */
@@ -243,10 +253,13 @@ const DK_LAG = {
  * Δp is the side's no-vig probability change from 3:00 to 10:00. Spreads and
  * totals convert the point move with the key-number cover of the fixed bet
  * line, then add the juice skew. Open→3:00 adds openWeight to the magnitude
- * only when it agrees in sign with 3:00→10:00. Circa is averaged at
- * circaWeight when both ends are already stored. A missing 3:00 or 10:00
- * adjusts 0. A leader-book 3:00→10:00 move of adverseDropProb or worse drops
- * the side. OMEGA_LINE_MOVE_PROB=0 skips the adjustment.
+ * only when it agrees in sign with 3:00→10:00. An optional second sharp
+ * book in extraSharpBooks is averaged at extraSharpWeight when both ends
+ * are already stored. The list is empty, so a stored Circa quote is not a
+ * leader and does not move K. circaWeight remains as the deprecated alias
+ * of that weight. A missing 3:00 or 10:00 adjusts 0. A Pinnacle
+ * 3:00→10:00 move of adverseDropProb or worse drops the side.
+ * OMEGA_LINE_MOVE_PROB=0 skips the adjustment.
  */
 const LINE_MOVE_PROB = {
   noise: 0.005,
@@ -255,6 +268,10 @@ const LINE_MOVE_PROB = {
   maxAbsProbAdj: 0.015,
   openWeight: 0.25,
   adverseDropProb: 0.020,
+  /** Empty: stored Circa (or any other book) is not blended. Opt in by name. */
+  extraSharpBooks: [],
+  extraSharpWeight: 0.5,
+  /** Deprecated alias of extraSharpWeight. Not a Circa request. */
   circaWeight: 0.5,
   hardRockOppositionDamp: 0.5,
   probClamp: [0.02, 0.98],
@@ -917,7 +934,18 @@ function fbMarketGapLimits(sport) {
 
 const CLV_KPI_FLOOR = '2026-09-22';
 
+/**
+ * One 10:00 ET generator request. Names Hard Rock. Does not add a second call.
+ * Credits stay regions × markets. The list is the books the card already reads.
+ */
+const GENERATOR_BOOKMAKERS = [
+  'pinnacle', 'draftkings', 'hardrockbet',
+  'fanduel', 'betmgm', 'caesars', 'williamhill_us', 'espnbet', 'betrivers', 'fanatics',
+  'bookmaker', 'betonlineag', 'lowvig',
+].join(',');
+
 const MODEL_NOTES = [
+  'v12.3.73-omega-vnext-price-lock: The 10:00 ET pull is the last Odds API pull and sets final prices. It ranks the top 10 by edge and leaves the card a draft. 10:15 re-ranks that top 10 after news, weather, injury, depth-chart, team-form, and stadium inputs. 10:30 drafts the top 3 and the parlay, then checks Hard Rock placeability at the displayed best US price (Hard Rock or DraftKings, never Pinnacle). A straight that fails is flagged. A parlay that fails is re-priced at the Hard Rock price or a leg is swapped for the next positive-EV distinct-game Hard Rock candidate. The re-price keeps positive edge versus the Pinnacle no-vig and positive EV on each leg and the ticket. The check does not block publish and does not pull odds. 10:45 writes context and summaries. 11:00 is the only finalization. The 3:00 and 10:00 checks are one call, bookmakers=pinnacle,draftkings,hardrockbet. The generator request names hardrockbet in one bookmakers parameter. Stake EV uses the displayed US price. DraftKings is still required. The optional sharp-book slot stays empty. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.72-omega-vnext-price-lock: Every parlay publishes only when combined EV is positive, on a lean day and on a floor day. The probability is the same adjusted cover that sets straight edge and stake EV. A straight ticket that misses is rebuilt from the next-best positive-EV legs on distinct games. A Hard Rock offer on that row is the leg price, and a leg Hard Rock does not offer is swapped. No positive-EV 3-leg is marked no qualifying parlay. Straights still publish. A main still needs 3% edge and the 3% stake-EV floor. A lean still needs 1.5% edge and stake EV above 0.',
   'v12.3.72-omega-vnext-price-lock: The unused sharp book key is off the request list and the sharp priority. Sharp books are Pinnacle, then Bookmaker, BetOnline, and LowVig. The public card omits the read-time tier field. The Edge card does not show a Lean or Main tag. Lean selection, the 1.5% edge and positive-EV rule, 0.5u lean sizing, and 0.25u parlay sizing are unchanged.',
   'v12.3.71-omega-vnext-price-lock: Line movement uses only the 3:00 and 10:00 ET snapshots (plus a stored opener). Retired 6:00/7:30/9:00/9:15 snaps are ignored and a missing 3:00 or 10:00 is logged, not filled from stale data. Pinnacle (an optional second sharp book at equal weight when both ends are already stored) moves the blend weight toward the sharp side before edge, EV, and grade. The shift is capped at ±1.5 probability points and is 0 when the model already matches the sharp. A Pinnacle probability move of 2.0pp against the side, or 18 cents or 1.0 point against on the Pinnacle print, drops the candidate. There is no 10:30 steam recheck. Grade is the calibrated edge versus the Pinnacle no-vig. Stake EV is at the displayed US price. Both are labeled and share the adjusted probability. Floors, lean tier, Kelly, and unit caps are unchanged.',
@@ -1056,6 +1084,7 @@ module.exports = {
   LINE_MOVE,
   STEAM_WINDOW_MIN,
   PINNACLE_LINE_MOVE,
+  GENERATOR_BOOKMAKERS,
   DK_LAG,
   LINE_MOVE_PROB,
   PM_SOFT,

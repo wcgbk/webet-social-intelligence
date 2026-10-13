@@ -19,7 +19,7 @@
  * applyLineMoveContext still only copies the audit summary.
  */
 
-const { PINNACLE_LINE_MOVE, STEAM_WINDOW_MIN, SITE_ID } = require('./config');
+const { PINNACLE_LINE_MOVE, STEAM_WINDOW_MIN, SITE_ID, LINE_MOVE_PROB } = require('./config');
 const { shapeOfficialLinePath } = require('./line_path');
 const { noVigTwoWay, americanJuiceDelta, isSameEtDay } = require('./odds_math');
 const { priceLockTimestamp } = require('./price_lock');
@@ -31,7 +31,7 @@ const SCHEMA = 'omega-pinnacle-line-moves-v1';
 const PINNACLE_SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL'];
 const CHECK_SLOTS = ['0300', '1000'];
 const SLOT_ORDER = ['open', '0300', '1000'];
-const CHECK_BOOKS = ['pinnacle', 'draftkings'];
+const CHECK_BOOKS = ['pinnacle', 'draftkings', 'hardrockbet'];
 const LOCK_GRACE_MS = 15 * 60 * 1000;
 
 function roundTo(value, digits) {
@@ -736,12 +736,16 @@ function gameFromObservation(eventDoc, obs) {
   const books = {};
   if (Object.keys(pin).length) books.pinnacle = pin;
   if (Object.keys(dk).length) books.draftkings = dk;
-  // Circa and Hard Rock are copied only when the stored observation
-  // already has them. This does not add an Odds API bookmaker.
-  const circa = storedBookRow(obs, ['circa', 'circasports']);
+  // Hard Rock is copied when the stored observation already has it.
+  // Optional sharp books come from config and default to none, so a stored
+  // Circa quote is not a movement leader. This does not add an Odds API call.
   const hardRock = storedBookRow(obs, ['hardrockbet', 'hardrock']);
-  if (circa) books[circa.name] = circa.row;
   if (hardRock) books[hardRock.name] = hardRock.row;
+  const extras = Array.isArray(LINE_MOVE_PROB.extraSharpBooks) ? LINE_MOVE_PROB.extraSharpBooks : [];
+  for (const name of extras) {
+    const row = storedBookRow(obs, [String(name || '').toLowerCase()]);
+    if (row && !books[row.name]) books[row.name] = row.row;
+  }
   if (!Object.keys(books).length) return null;
   const away = eventDoc.awayTeam;
   const home = eventDoc.homeTeam;
@@ -1073,6 +1077,7 @@ async function storeCheck(sport, eventId, check, opts = {}) {
     books: {
       pinnacle: (check.books && check.books.pinnacle) || {},
       draftkings: (check.books && check.books.draftkings) || {},
+      hardrockbet: (check.books && check.books.hardrockbet) || {},
     },
     requestsRemaining: check.requestsRemaining == null ? null : check.requestsRemaining,
   };

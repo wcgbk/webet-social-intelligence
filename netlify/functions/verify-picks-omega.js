@@ -389,15 +389,11 @@ function hrFindOutcome(market, pick, marketKey) {
   return { outcome, pubPoint };
 }
 
-// Hard Rock DOES offer F5 on-app (branded "First 5 Innings") but its F5 prices don't flow
-// through The Odds API (verified 0/15 MLB events on 2026-08-22 while 14 other books quote
-// them — a feed-coverage gap, NOT a Hard Rock product gap; Ben-corrected 2026-08-22).
-// When HR is absent from an F5 event, confirm placeability against the other major US
-// books instead: >=3 majors quoting the same bet with a ballpark median = placeable
-// (informational note to spot-check the HR app); <3 majors or off-ballpark median = flag.
+// Deprecated F5 majors fallback. The 10:30 check uses the saved 10:00 quotes
+// and does not call this helper. Backup books are Pinnacle, Hard Rock, and
+// DraftKings. FanDuel, BetMGM, Caesars, and the rest are off this list.
 const HR_MAJOR_BOOKS = new Set([
-  "draftkings", "fanduel", "betmgm", "caesars", "williamhill_us",
-  "espnbet", "betrivers", "fanatics", "hardrockbet", "hardrockbet_oh",
+  "pinnacle", "hardrockbet", "hardrock", "draftkings",
 ]);
 function hrMajorsFallback(pick, game) {
   const out = { available: false, hrOdds: null, hrPoint: null, warnings: [], errors: [], notes: [] };
@@ -534,6 +530,82 @@ function snapshotAlreadyCoversQa(picksData) {
 }
 
 async function runHardRockCheck(picksData) {
+  // Saved 10:00 quotes only. No Odds API pull. Straights are flagged.
+  // decision.drop stays false so a miss never removes a straight.
+  const sportGames = {};
+  const reviewed = reviewHardRock(picksData, sportGames);
+  let drafted = { changed: false, card: picksData, verdict: reviewed.verdict, lines: reviewed.lines, corrections: [] };
+  try {
+    const timeline = require('./lib/omega-vnext/timeline');
+    drafted = timeline.draftAndCheckHardRock(picksData, { sportGames });
+    if (drafted && drafted.card) {
+      picksData.picks = drafted.card.picks;
+      picksData.parlayLegs = drafted.card.parlayLegs;
+      picksData.hardRockCheck = drafted.card.hardRockCheck;
+      picksData.timelineStep = drafted.card.timelineStep;
+      picksData.cardStatus = drafted.card.cardStatus;
+      picksData.finalized = false;
+      picksData.selection = drafted.card.selection;
+      picksData.bugLog = drafted.card.bugLog;
+    }
+  } catch (err) {
+    console.log(`[verify-hardrock] draft check soft-fail: ${err && err.message}`);
+  }
+  const lines = (drafted && drafted.lines) || reviewed.lines || [];
+  const summary = {
+    book: "Hard Rock Bet",
+    checked: (picksData.picks || []).length,
+    available: lines.filter((row) => row && row.placeable && row.kind === "straight").length,
+    warnings: lines.filter((row) => row && row.placeable === false).length,
+    errors: 0,
+    skipped: false,
+    apiDown: false,
+    verdict: (drafted && drafted.verdict) || reviewed.verdict || "FAIL",
+    blocksPublish: false,
+    reason: "saved 10:00 quotes",
+  };
+  const pickResults = (picksData.picks || []).map((pick, i) => {
+    const line = lines.find((row) => row && row.kind === "straight" && row.index === i) || {};
+    const placeable = !!line.placeable;
+    return {
+      available: placeable,
+      hrOdds: line.hardRockAmerican != null ? line.hardRockAmerican : null,
+      hrPoint: line.line != null ? line.line : null,
+      warnings: placeable ? [] : ["Hard Rock does not post the displayed price"],
+      errors: [],
+      notes: [],
+      decision: { drop: false },
+    };
+  });
+  const parlayFindings = [];
+  const legDecisions = lines.filter((row) => row && row.kind === "parlay").map((row) => {
+    if (!row.placeable) {
+      parlayFindings.push({ level: "warning", note: `Parlay leg "${row.pick}" is not at the displayed price on Hard Rock` });
+    }
+    return { drop: false, pick: row.pick, matchup: row.matchup, placeable: !!row.placeable };
+  });
+  return {
+    summary,
+    pickResults,
+    parlayFindings,
+    legDecisions,
+    corrections: (drafted && drafted.corrections) || [],
+    changed: !!(drafted && drafted.changed),
+  };
+}
+
+async function runHardRockCheckLegacyFetch(picksData) {
+  // Deprecated. Not called. The 10:30 path is runHardRockCheck and does not
+  // pull odds. The old fetch body stays below so it is not deleted.
+  void picksData;
+  return {
+    summary: { skipped: true, apiDown: false, reason: 'deprecated' },
+    pickResults: [],
+    parlayFindings: [],
+    legDecisions: [],
+    corrections: [],
+    changed: false,
+  };
   if (snapshotAlreadyCoversQa(picksData)) {
     const schedule = verifySchedule(picksData, Date.now());
     return {

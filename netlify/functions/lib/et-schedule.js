@@ -71,8 +71,12 @@ const ET_SCHEDULE = {
   // 15:15 UTC (EST). Prices stay the 10:00 snapshot. No Odds API pull.
   'rerank-picks-omega': { etTimes: ['10:15'] },
   'verify-picks-omega': { etTimes: ['10:30'] },
-  // 11:00 ET card post. Cron "0 15,16 * * *" is 15:00 UTC (EDT) and 16:00 UTC (EST).
-  // Posts only when OMEGA_X_AUTOPOST is the string true. The flag stays unset here.
+  // 10:45 ET written context. Cron "45 14,15 * * *" is 14:45 UTC (EDT) and
+  // 15:45 UTC (EST). No Odds API pull. Does not finalize.
+  'narrate-card-omega': { etTimes: ['10:45'] },
+  // 11:00 ET is the only finalization. Cron "0 15,16 * * *" is 15:00 UTC (EDT)
+  // and 16:00 UTC (EST). Posts only when OMEGA_X_AUTOPOST is the string true.
+  // The flag stays unset here.
   'post-card-omega': { etTimes: ['11:00'] },
   // Every 30 min, 11:00–23:30 ET inclusive. Cron is the UTC union of EDT
   // (UTC-4) and EST (UTC-5): "0,30 15-23,0-4 * * *". etGuard drops the copy
@@ -106,7 +110,7 @@ const ET_SCHEDULE = {
   'trigger-picks-cfb': { etTimes: ['09:10'] },
   'confirm-starters-mlb': { etTimes: ['13:30'] },
   'trigger-clv': { etTimes: ['03:00', '13:00', '19:00'] },
-  // Pinnacle + DraftKings line checks. 3:00 and 10:00 ET only.
+  // One Pinnacle + DraftKings + Hard Rock check call. 3:00 and 10:00 ET only.
   // Cron "0 7,8,14,15 * * *" is the UTC union of EDT (UTC-4) and EST (UTC-5).
   // etGuard drops 04:00 and 11:00. 9:00 and 10:30 are not scheduled.
   // Morning line snaps, the hourly opener, and kickoff closes are suspended.

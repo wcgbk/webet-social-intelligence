@@ -21,6 +21,8 @@ const {
 const { parlayFromStraights } = require('./parlay');
 const { parseEdgeFraction } = require('./odds_math');
 const { recordRankedList, top10Rows } = require('./selection_pass');
+const { compareByEdge } = require('./select');
+const { CONTEXT_INPUTS } = require('./timeline');
 
 const RERANK_WITHIN_MIN = 20 * 60;
 const CUTOFF_MIN = 10 * 60 + 30;
@@ -184,6 +186,10 @@ async function rerankCard(opts = {}) {
     });
   }
 
+  if (original.timelineStep === '10:00' || (original.selection && original.selection.stage === 'top10')) {
+    return rerankTop10(original, working, news, now);
+  }
+
   const voidKeys = new Set();
   for (const row of working.voidedPregame || []) {
     if (row) voidKeys.add(matchupKey(row));
@@ -273,6 +279,66 @@ async function rerankCard(opts = {}) {
     dropped: (news && news.dropped) || 0,
     picks: nextPicks.length,
     parlayLegs: parlayLegs.length ? (parlayLegs[0].legs || []).length : 0,
+  };
+}
+
+function rowId(row) {
+  return `${matchupKey(row)}|${sideOf(row)}`;
+}
+
+/**
+ * 10:15 on a 10:00 draft. Re-order the top 10. Do not cut the card to 3.
+ * The new top 3 are marked selected so the 10:30 sort check can rebuild.
+ * Prices stay the 10:00 snapshot.
+ */
+function rerankTop10(original, working, news, now) {
+  const voidKeys = new Set();
+  for (const row of working.voidedPregame || []) {
+    if (row) voidKeys.add(matchupKey(row));
+  }
+  const top = JSON.parse(JSON.stringify((original.selection && original.selection.top10) || []));
+  for (const row of top) {
+    const hit = (working.picks || []).find((pick) => betSame(pick, row));
+    if (!hit || !edgeMoved(
+      (original.picks || []).find((pick) => betSame(pick, row)) || row,
+      hit,
+    )) continue;
+    if (hit.edgePct != null) row.edgePct = hit.edgePct;
+    if (hit.edge != null) row.edge = hit.edge;
+    if (hit.ev != null) row.ev = hit.ev;
+    if (hit.coverProb != null) row.coverProb = hit.coverProb;
+  }
+  const kept = top.filter((row) => row && !voidKeys.has(matchupKey(row)));
+  kept.sort((a, b) => compareByEdge(
+    { edgePct: numEdge(a), ev: numEv(a) },
+    { edgePct: numEdge(b), ev: numEv(b) },
+  ));
+  kept.forEach((row, i) => { row.selected = i < 3; });
+  const before = ((original.selection && original.selection.top10) || []).map(rowId).join('|');
+  const after = kept.map(rowId).join('|');
+  working.selection = working.selection && typeof working.selection === 'object' ? working.selection : {};
+  working.selection.top10 = kept;
+  working.selection.contextInputs = CONTEXT_INPUTS.slice();
+  working.selection.stage = 'reranked';
+  working.selection.window = '10:00-10:15';
+  working.selection.rerankWindow = '10:15-10:30';
+  working.selection.rankedBy = 'edge';
+  working.selection.onePerGame = true;
+  working.selection.rerankedAt = now.toISOString();
+  working.selection.rerankReason = news && news.dropped ? 'news-drop' : (before === after ? 'context' : 're-rank');
+  working.selection.oddsApi = false;
+  working.timelineStep = '10:15';
+  working.cardStatus = 'draft';
+  working.finalized = false;
+  const changed = before !== after || original.timelineStep !== '10:15';
+  return {
+    card: working,
+    changed,
+    lastKnownGood: false,
+    reason: working.selection.rerankReason,
+    oddsApi: false,
+    dropped: (news && news.dropped) || 0,
+    picks: (working.picks || []).length,
   };
 }
 

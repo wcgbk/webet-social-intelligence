@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES,
+  SPORTS_ENABLED, ODDS_SPORT_KEYS, ESPN_LEAGUES, GENERATOR_BOOKMAKERS,
   ncaafGpFixEnabled, teamExactOnly, fbWeatherEnabled, nbaModuleEnabled,
 } = require('./config');
 const { parseWinLossRecord } = require('./sports/_common');
@@ -27,14 +27,17 @@ const ODDS_MARKETS = 'h2h,spreads,totals';
 
 /**
  * Odds API odds URL. regions us,us2,eu and markets h2h,spreads,totals.
- * No bookmakers filter — a filter would drop any US book not on the list.
+ * One bookmakers parameter. It names Hard Rock and the books the card
+ * already reads. It does not add a second request. Credits stay
+ * regions × markets.
  */
 function buildOddsUrl(sportKey, apiKey, historicalSnapshot) {
   const base = historicalSnapshot
     ? `https://api.the-odds-api.com/v4/historical/sports/${sportKey}/odds`
     : `https://api.the-odds-api.com/v4/sports/${sportKey}/odds`;
   const date = historicalSnapshot ? `&date=${encodeURIComponent(historicalSnapshot)}` : '';
-  return `${base}?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american&apiKey=${apiKey}${date}`;
+  const books = `&bookmakers=${encodeURIComponent(GENERATOR_BOOKMAKERS)}`;
+  return `${base}?regions=${ODDS_REGIONS}&markets=${ODDS_MARKETS}&oddsFormat=american${books}&apiKey=${apiKey}${date}`;
 }
 
 function enabledSportLabels(dateISO) {

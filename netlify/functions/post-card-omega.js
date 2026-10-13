@@ -6,6 +6,9 @@
  * Posts only when OMEGA_X_AUTOPOST is exactly the string "true".
  * Copy that contains the words Alpha or Omega is rejected and not sent.
  * dryRun and OMEGA_REPLAY_NO_WRITE do not post. The flag is unset in this repo.
+ * 11:00 is the only finalization. A card in hand is marked final even when
+ * the post flag is off. The store is not read unless this is a production
+ * call (no explicit env) or the caller passed a card.
  */
 
 const crypto = require('crypto');
@@ -136,19 +139,65 @@ async function handle(event, now, deps) {
   const skip = rejectUnlessEtSlot('post-card-omega', event, when);
   if (skip) return skip;
   const src = deps || {};
-  const env = src.env || process.env;
+  const explicitEnv = deps != null && Object.prototype.hasOwnProperty.call(deps, 'env');
+  const env = explicitEnv ? src.env : process.env;
+  const date = etParts(when).ymd;
+  const dry = src.dryRun != null ? !!src.dryRun : wantsDryRun(event);
+  let card = src.card || null;
+  if (!card && typeof src.readCard === 'function') {
+    try { card = await src.readCard(date); } catch (_) { card = null; }
+  }
+  // A test that passes env must not touch the store. Production (deps null)
+  // reads the card. readPicks swallows a missing token.
+  if (!card && !explicitEnv) {
+    try {
+      const { readPicks } = require('./lib/omega-vnext/store');
+      card = await readPicks(date);
+    } catch (_) { card = null; }
+  }
+  let wrote = false;
+  if (card) {
+    const { finalizeCard } = require('./lib/omega-vnext/timeline');
+    const fin = finalizeCard(card, when);
+    card = fin.card;
+    if (fin.changed && !dry && !replayNoWrite(env)) {
+      if (typeof src.writeCard === 'function') {
+        await src.writeCard(date, card);
+        wrote = true;
+      } else if (!explicitEnv) {
+        try {
+          const { storePicks } = require('./lib/omega-vnext/store');
+          await storePicks(date, card, { force: true });
+          wrote = true;
+        } catch (_) { wrote = false; }
+      }
+    }
+  }
   if (!autopostEnabled(env)) {
-    return json(200, { ok: true, posted: false, wrote: false, reason: 'flag-off', date: etParts(when).ymd });
+    return json(200, {
+      ok: true,
+      posted: false,
+      wrote,
+      reason: 'flag-off',
+      date,
+      finalized: !!(card && card.finalized),
+    });
   }
   const result = await runPost({
     env,
     copy: src.copy,
-    card: src.card,
-    dryRun: src.dryRun != null ? !!src.dryRun : wantsDryRun(event),
+    card,
+    dryRun: dry,
     send: src.send,
     fetchImpl: src.fetchImpl,
   });
-  return json(200, { ok: true, date: etParts(when).ymd, ...result });
+  return json(200, {
+    ok: true,
+    date,
+    ...result,
+    wrote: wrote || !!(result && result.wrote),
+    finalized: !!(card && card.finalized),
+  });
 }
 
 exports.handler = (event) => handle(event, new Date(), null);

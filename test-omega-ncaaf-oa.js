@@ -261,19 +261,22 @@ function boardFrom(games, commence) {
   assert.ok(!ok.byId['2'] || ok.games === played.filter((g) => isFbsTeamId(g.hid) && isFbsTeamId(g.aid)).length);
 }
 
-// Live 9:30 odds request: US + US2 + EU, three markets, no bookmaker filter.
+// Live odds request: US + US2 + EU, three markets, one bookmakers param.
 {
   const url = ingest.buildOddsUrl(config.ODDS_SPORT_KEYS.NHL, 'test-key', null);
   assert.ok(url.startsWith('https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds?'));
   assert.ok(url.includes('regions=us,us2,eu'));
   assert.ok(url.includes('markets=h2h,spreads,totals'));
-  assert.ok(!/bookmakers=/.test(url));
+  const books = new URL(url).searchParams.get('bookmakers');
+  assert.ok(books && books.includes('hardrockbet'));
+  assert.strictEqual((books.match(/hardrockbet/g) || []).length, 1);
+  assert.ok(books.includes('pinnacle') && books.includes('draftkings'));
   assert.strictEqual(ingest.ODDS_REGIONS, 'us,us2,eu');
   assert.strictEqual(ingest.ODDS_MARKETS, 'h2h,spreads,totals');
   const historical = ingest.buildOddsUrl('icehockey_nhl', 'test-key', '2026-10-10T13:30:00Z');
   assert.ok(historical.includes('/historical/sports/icehockey_nhl/odds?'));
   assert.ok(historical.includes('date=2026-10-10T13%3A30%3A00Z'));
-  assert.ok(!/bookmakers=/.test(historical));
+  assert.ok(new URL(historical).searchParams.get('bookmakers').includes('hardrockbet'));
 }
 
 // Plays constant still converts a seed the way the solver documents.

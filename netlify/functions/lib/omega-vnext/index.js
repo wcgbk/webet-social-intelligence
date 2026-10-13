@@ -1056,6 +1056,11 @@ async function generateOmegaVnext(opts = {}) {
   try { attachAuditSummary(picksData, auditLog); }
   catch (err) { console.error(`[omega-audit] card summary soft-fail: ${err && err.message}`); }
   console.log(`[omega-vnext] DONE picks=${picks.length} parlay=${(picksData.parlayLegs || []).length} hardFails=${hardFails.length}`);
+  picksData.cardStatus = 'draft';
+  picksData.finalized = false;
+  picksData.timelineStep = '10:00';
+  if (!picksData.selection || typeof picksData.selection !== 'object') picksData.selection = {};
+  picksData.selection.stage = picksData.selection.stage || 'top10';
   return picksData;
   } finally {
     if (auditLog) {

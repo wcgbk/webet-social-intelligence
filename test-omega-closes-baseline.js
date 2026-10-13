@@ -131,8 +131,19 @@ function gameRow(eventId, commenceTime) {
 }
 
 function liveBoard(u) {
-  const book = u.searchParams.get('bookmakers') || 'pinnacle';
-  return { body: [boardEvent('evToday', book)], remaining: 50000 };
+  const raw = u.searchParams.get('bookmakers') || 'pinnacle';
+  const names = String(raw).split(',').map((name) => name.trim()).filter(Boolean);
+  const parts = (names.length ? names : ['pinnacle']).map((book) => boardEvent('evToday', book));
+  return {
+    body: [{
+      id: 'evToday',
+      commence_time: parts[0].commence_time,
+      home_team: HOME,
+      away_team: AWAY,
+      bookmakers: parts.flatMap((row) => row.bookmakers),
+    }],
+    remaining: 50000,
+  };
 }
 
 function histPayload(ids, commence, timestamp) {
@@ -156,8 +167,8 @@ function priceKeys(store, eventId) {
   cache.resetKnownRequestsRemainingForTests();
   cache.clearMemoryForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.72-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.72-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.73-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('v12.3.40-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('No historical odds call.'));
     assert.strictEqual(config.PINNACLE_LINE_MOVE.historicalCreditsPerPull, 30);
@@ -288,7 +299,7 @@ function priceKeys(store, eventId) {
     assert.strictEqual(sharedOut.closesStored, 2);
     assert.strictEqual(sharedOut.historicalPulls, 1);
     assert.strictEqual(sharedOut.historicalCreditsPerPull, 30);
-    assert.strictEqual(oddsCalls(shared.calls).length, 2);
+    assert.strictEqual(oddsCalls(shared.calls).length, 1);
 
     const seeded = memoryStore();
     const seedQuotes = quoteMap('evSkip', { home: -125, away: 105 }, YDAY, YDAY);
@@ -317,7 +328,7 @@ function priceKeys(store, eventId) {
     assert.strictEqual(histCalls(skipFetch.calls).length, 0);
     assert.strictEqual(skipped.closesSkipped, 1);
     assert.strictEqual(skipped.historicalPulls, 0);
-    assert.strictEqual(oddsCalls(skipFetch.calls).length, 2);
+    assert.strictEqual(oddsCalls(skipFetch.calls).length, 1);
 
     const candFetch = makeFetch((u) => {
       if (u.pathname.includes('/historical/')) throw new Error('candidate close was re-pulled');
@@ -342,7 +353,7 @@ function priceKeys(store, eventId) {
     const freshStore = memoryStore();
     const freshFetch = makeFetch((u) => liveBoard(u));
     const fresh = await runPinnacleLineCapture(runnerOpts(freshStore, { fetchImpl: freshFetch }));
-    assert.strictEqual(oddsCalls(freshFetch.calls).length, 2);
+    assert.strictEqual(oddsCalls(freshFetch.calls).length, 1);
     assert.strictEqual(histCalls(freshFetch.calls).length, 0);
     assert.strictEqual(fresh.opensFilled, 1);
     assert.strictEqual(fresh.baselines, 1);
@@ -368,7 +379,7 @@ function priceKeys(store, eventId) {
     }, { read: priorStore.read, write: priorStore.write, env: { OMEGA_REPLAY_NO_WRITE: '0' } });
     const priorFetch = makeFetch((u) => liveBoard(u));
     const prior = await runPinnacleLineCapture(runnerOpts(priorStore, { fetchImpl: priorFetch }));
-    assert.strictEqual(oddsCalls(priorFetch.calls).length, 2);
+    assert.strictEqual(oddsCalls(priorFetch.calls).length, 1);
     assert.strictEqual(histCalls(priorFetch.calls).length, 0);
     assert.strictEqual(prior.opensFilled, 0);
     assert.strictEqual(prior.baselines, 1);
@@ -380,22 +391,22 @@ function priceKeys(store, eventId) {
     cache.clearMemoryForTests();
     cache.resetKnownRequestsRemainingForTests();
     const now10 = new Date(AT10);
-    const earlyBody = [boardEvent('ev10', 'pinnacle', { home: -140, away: 120 })];
-    const earlyDk = [boardEvent('ev10', 'draftkings', { home: -135, away: 115 })];
+    const earlyPin = boardEvent('ev10', 'pinnacle', { home: -140, away: 120 });
+    const earlyDk = boardEvent('ev10', 'draftkings', { home: -135, away: 115 });
+    const earlyHr = boardEvent('ev10', 'hardrockbet', { home: -135, away: 115 });
+    const earlyBody = [{
+      id: 'ev10',
+      commence_time: earlyPin.commence_time,
+      home_team: HOME,
+      away_team: AWAY,
+      bookmakers: earlyPin.bookmakers.concat(earlyDk.bookmakers, earlyHr.bookmakers),
+    }];
     cache.rememberLivePull({
       sport: 'americanfootball_nfl',
       markets: 'h2h,spreads,totals',
       regions: 'eu',
-      bookmakers: 'pinnacle',
+      bookmakers: 'pinnacle,draftkings,hardrockbet',
       body: earlyBody,
-      fetchedAt: new Date(now10.getTime() - 2 * 60 * 1000).toISOString(),
-    });
-    cache.rememberLivePull({
-      sport: 'americanfootball_nfl',
-      markets: 'h2h,spreads,totals',
-      regions: 'eu',
-      bookmakers: 'draftkings,hardrockbet',
-      body: earlyDk,
       fetchedAt: new Date(now10.getTime() - 2 * 60 * 1000).toISOString(),
     });
     const reuseFetch = makeFetch(() => { throw new Error('10:00 reused a pull younger than 5 minutes'); });
@@ -405,7 +416,7 @@ function priceKeys(store, eventId) {
       fetchImpl: reuseFetch,
     }));
     assert.strictEqual(reuseFetch.calls.length, 0);
-    assert.strictEqual(reused.cacheHits, 2);
+    assert.strictEqual(reused.cacheHits, 1);
     assert.ok(reused.wrote);
 
     cache.clearMemoryForTests();
@@ -413,16 +424,8 @@ function priceKeys(store, eventId) {
       sport: 'americanfootball_nfl',
       markets: 'h2h,spreads,totals',
       regions: 'eu',
-      bookmakers: 'pinnacle',
+      bookmakers: 'pinnacle,draftkings,hardrockbet',
       body: earlyBody,
-      fetchedAt: new Date(now10.getTime() - 6 * 60 * 1000).toISOString(),
-    });
-    cache.rememberLivePull({
-      sport: 'americanfootball_nfl',
-      markets: 'h2h,spreads,totals',
-      regions: 'eu',
-      bookmakers: 'draftkings,hardrockbet',
-      body: earlyDk,
       fetchedAt: new Date(now10.getTime() - 6 * 60 * 1000).toISOString(),
     });
     const staleFetch = makeFetch((u) => liveBoard(u));
@@ -431,7 +434,7 @@ function priceKeys(store, eventId) {
       now: now10,
       fetchImpl: staleFetch,
     }));
-    assert.strictEqual(oddsCalls(staleFetch.calls).length, 2);
+    assert.strictEqual(oddsCalls(staleFetch.calls).length, 1);
     assert.strictEqual(histCalls(staleFetch.calls).length, 0);
 
     const openQuotes = quoteMap('evDir', { home: -110, away: -110 }, '2026-10-12T02:00:00Z');
@@ -499,13 +502,13 @@ function priceKeys(store, eventId) {
         const n = histCalls(floorFetch.calls).length;
         return { body: histPayload(['h' + n], date, date), remaining: n === 1 ? 48999 : 50000 };
       }
-      return { body: [boardEvent('evFloor', u.searchParams.get('bookmakers') || 'pinnacle')], remaining: 50000 };
+      return liveBoard(u);
     });
     const floor = await runPinnacleLineCapture(runnerOpts(memoryStore(), {
       fetchImpl: floorFetch,
       yesterdayGames: [gameRow('h1', YDAY), gameRow('h2', YDAY_LATE)],
     }));
-    assert.strictEqual(oddsCalls(floorFetch.calls).length, 2);
+    assert.strictEqual(oddsCalls(floorFetch.calls).length, 1);
     assert.strictEqual(histCalls(floorFetch.calls).length, 2);
     assert.strictEqual(floor.stoppedForCredits, false);
     assert.strictEqual(floor.historicalPulls, 2);

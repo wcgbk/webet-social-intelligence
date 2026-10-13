@@ -229,8 +229,8 @@ function runsOnDay(startIso, minutes) {
 
 (async () => {
   assert.strictEqual(sync.handler.length, 2);
-  assert.strictEqual(MODEL_VERSION, 'v12.3.72-omega-vnext-price-lock');
-  assert.ok(String(MODEL_NOTES).startsWith('v12.3.72-omega-vnext-price-lock:'));
+  assert.strictEqual(MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
+  assert.ok(String(MODEL_NOTES).startsWith('v12.3.73-omega-vnext-price-lock:'));
   assert.ok(!/placeholder/i.test(String(MODEL_NOTES)));
   assert.ok(/10:30/.test(lib.LOCK_NOTE));
   assert.ok(/10:00/.test(lib.LOCK_NOTE));

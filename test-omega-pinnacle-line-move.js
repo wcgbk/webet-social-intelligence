@@ -29,6 +29,17 @@ const DAY = '2026-10-12T20:00:00Z';
 const NEXT = '2026-10-13T20:00:00Z';
 const DATE = '2026-10-12';
 
+function mergedEvent(id, specs, commence = DAY) {
+  const parts = Object.keys(specs).map((book) => boardEvent(id, book, specs[book], commence));
+  return {
+    id,
+    commence_time: parts[0].commence_time,
+    home_team: HOME,
+    away_team: AWAY,
+    bookmakers: parts.flatMap((row) => row.bookmakers),
+  };
+}
+
 function boardEvent(id, book, prices, commence = DAY) {
   const src = prices || {};
   const home = src.home != null ? src.home : -110;
@@ -158,13 +169,15 @@ function scheduler(now) {
 (async () => {
   cache.resetKnownRequestsRemainingForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.72-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.72-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.73-omega-vnext-price-lock:'));
     assert.strictEqual(config.STEAM_WINDOW_MIN, 15);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.creditFloor, 49000);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.steamProbPts, 3);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.steamLinePoints, 0.5);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.windowMinutes, 15);
+    assert.strictEqual(config.PINNACLE_LINE_MOVE.bookmakers, 'pinnacle');
+    assert.strictEqual(config.PINNACLE_LINE_MOVE.checkBookmakers, 'pinnacle,draftkings,hardrockbet');
     assert.strictEqual(config.PINNACLE_LINE_MOVE.secondaryBookmakers, 'draftkings,hardrockbet');
     assert.strictEqual(memo.PINNACLE_CREDIT_FLOOR, 49000);
     assert.deepStrictEqual(CHECK_SLOTS, ['0300', '1000']);
@@ -184,7 +197,7 @@ function scheduler(now) {
     assert.strictEqual(pinUrl.searchParams.get('date'), null);
     assert.ok(!pinUrl.href.includes('historical'));
     const dkUrl = new URL(draftkingsOddsUrl('americanfootball_nfl', 'test-key-1234'));
-    assert.strictEqual(dkUrl.searchParams.get('bookmakers'), 'draftkings,hardrockbet');
+    assert.strictEqual(dkUrl.searchParams.get('bookmakers'), 'pinnacle,draftkings,hardrockbet');
     assert.strictEqual(dkUrl.searchParams.get('regions'), 'eu');
     assert.strictEqual(dkUrl.searchParams.get('date'), null);
 
@@ -287,17 +300,24 @@ function scheduler(now) {
         };
       }
       if (phase === '0300') {
-        if (book === 'pinnacle') {
-          return {
-            body: [boardEvent('ev1', 'pinnacle', { home: -120, away: 100, homePoint: -3.5, awayPoint: 3.5 })],
-            remaining: 50000,
-          };
-        }
-        return { body: [boardEvent('ev1', 'draftkings')], remaining: 50000 };
+        return {
+          body: [mergedEvent('ev1', {
+            pinnacle: { home: -120, away: 100, homePoint: -3.5, awayPoint: 3.5 },
+            draftkings: {},
+            hardrockbet: {},
+          })],
+          remaining: 50000,
+        };
       }
       const jumped = { home: -150, away: 130, homePoint: -3.5, awayPoint: 3.5 };
-      const responseBook = String(book).includes('draftkings') ? 'draftkings' : book;
-      return { body: [boardEvent('ev1', responseBook, jumped)], remaining: 50000 };
+      return {
+        body: [mergedEvent('ev1', {
+          pinnacle: jumped,
+          draftkings: jumped,
+          hardrockbet: jumped,
+        })],
+        remaining: 50000,
+      };
     });
 
     const first = await runPinnacleLineCapture(runnerOpts(store, { mode: 'open', fetchImpl }));
@@ -341,9 +361,9 @@ function scheduler(now) {
       now: new Date('2026-10-12T07:00:00Z'),
       fetchImpl,
     }));
-    assert.strictEqual(at3.pulls, 2);
-    const books3 = oddsCalls(fetchImpl.calls).slice(-2).map((u) => u.searchParams.get('bookmakers')).sort();
-    assert.deepStrictEqual(books3, ['draftkings,hardrockbet', 'pinnacle']);
+    assert.strictEqual(at3.pulls, 1);
+    const books3 = oddsCalls(fetchImpl.calls).slice(-1).map((u) => u.searchParams.get('bookmakers'));
+    assert.deepStrictEqual(books3, ['pinnacle,draftkings,hardrockbet']);
     assert.ok(fetchImpl.calls.every((u) => u.searchParams.get('date') == null && !u.href.includes('historical')));
     const after3 = store.blobs.get(eventKey('NFL', 'ev1'));
     const logged = sideMove(after3, 'Spread', 'home', 'pinnacle');
@@ -478,9 +498,9 @@ function scheduler(now) {
         now: new Date('2026-10-12T07:00:00Z'),
         fetchImpl: floorFetch,
       }));
-      assert.strictEqual(stopped.pulls, 4);
+      assert.strictEqual(stopped.pulls, 2);
       assert.strictEqual(stopped.stoppedForCredits, false);
-      assert.strictEqual(oddsCalls(floorFetch.calls).length, 4);
+      assert.strictEqual(oddsCalls(floorFetch.calls).length, 2);
       assert.ok(floorLogs.some((line) => line.includes('x-requests-remaining=48999')));
       assert.ok(!floorLogs.some((line) => line.includes('credit floor stop')));
 
@@ -497,7 +517,7 @@ function scheduler(now) {
         fetchImpl: okFetch,
       }));
       assert.strictEqual(allowed.stoppedForCredits, false);
-      assert.strictEqual(allowed.pulls, 4);
+      assert.strictEqual(allowed.pulls, 2);
 
       cache.clearMemoryForTests();
       cache.noteKnownRequestsRemaining(48999);
@@ -509,8 +529,8 @@ function scheduler(now) {
         now: new Date('2026-10-12T14:00:00Z'),
         fetchImpl: blockedFetch,
       }));
-      assert.strictEqual(blocked.pulls, 4);
-      assert.strictEqual(oddsCalls(blockedFetch.calls).length, 4);
+      assert.strictEqual(blocked.pulls, 2);
+      assert.strictEqual(oddsCalls(blockedFetch.calls).length, 2);
       assert.strictEqual(blocked.stoppedForCredits, false);
 
       cache.resetKnownRequestsRemainingForTests();
@@ -563,12 +583,12 @@ function scheduler(now) {
         fetchImpl: cacheFetch,
       };
       const cold = await runPinnacleLineCapture(runnerOpts(cacheStore, opts));
-      assert.strictEqual(cold.pulls, 2);
-      assert.strictEqual(cacheFetch.calls.length, 2);
+      assert.strictEqual(cold.pulls, 1);
+      assert.strictEqual(cacheFetch.calls.length, 1);
       cache.clearMemoryForTests();
       const warm = await runPinnacleLineCapture(runnerOpts(cacheStore, opts));
-      assert.strictEqual(cacheFetch.calls.length, 2);
-      assert.ok(warm.cacheHits >= 2);
+      assert.strictEqual(cacheFetch.calls.length, 1);
+      assert.ok(warm.cacheHits >= 1);
     } finally {
       if (prevCache == null) delete process.env.ODDS_SNAPSHOT_CACHE_DIR;
       else process.env.ODDS_SNAPSHOT_CACHE_DIR = prevCache;
@@ -643,13 +663,13 @@ function scheduler(now) {
     assert.strictEqual(edt3.body.etSlot, '0300');
     assert.strictEqual(edt3.body.mode, 'check');
     assert.strictEqual(eventCalls(edt3.calls).length, 0);
-    assert.strictEqual(oddsCalls(edt3.calls).length, 2);
+    assert.strictEqual(oddsCalls(edt3.calls).length, 1);
     const edt9 = await slotBody('2026-10-12T13:00:00Z', 'capture-omega-pinnacle-lines');
     assert.strictEqual(edt9.body.skipped, 'et-guard');
     assert.strictEqual(edt9.calls.length, 0);
     const edt10 = await slotBody('2026-10-12T14:00:00Z', 'capture-omega-pinnacle-lines');
     assert.strictEqual(edt10.body.etSlot, '1000');
-    assert.strictEqual(oddsCalls(edt10.calls).length, 2);
+    assert.strictEqual(oddsCalls(edt10.calls).length, 1);
     const edt1030 = await slotBody('2026-10-12T14:30:00Z', 'capture-omega-pinnacle-lines');
     assert.strictEqual(edt1030.body.skipped, 'et-guard');
     assert.strictEqual(edt1030.calls.length, 0);

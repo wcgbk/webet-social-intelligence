@@ -132,7 +132,9 @@ function base(extra) {
   assert.strictEqual(reviewed.changed, false);
   assert.strictEqual(card.picks[0].odds, before);
   assert.strictEqual(card.picks[0].line, -2.5);
-  assert.ok(card.picks[0].hrFlags.some((f) => f.type === 'nfl-key-cross'));
+  assert.strictEqual(card.picks[0].hrPlaceable, false);
+  assert.strictEqual(reviewed.verdict, 'FAIL');
+  assert.ok(card.picks[0].hrFlags.some((f) => f.type === 'not-placeable-at-displayed-price'));
 }
 
 // ── 3. NFL |projection − sharp| > 10, log path via the gate reason ──

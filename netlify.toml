@@ -29,8 +29,8 @@
 
 [functions."trigger-picks-omega"]
   schedule = "0 14,15 * * *"
-  # OMEGA vNext — 10:00am ET (14:00 UTC EDT, 15:00 UTC EST). Data finalization
-  # on the 10:00 snapshot. Verify 10:30am ET. Public card at 11:00am ET.
+  # OMEGA vNext — 10:00am ET (14:00 UTC EDT, 15:00 UTC EST). Last Odds API pull.
+  # Ranks the top 10 and leaves the card a draft. 11:00am ET finalizes.
   # Writes edge-picks-omega → /omega.
   # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
 
@@ -45,15 +45,21 @@
 
 [functions."verify-picks-omega"]
   schedule = "30 14,15 * * *"
-  # Omega QA — 10:30am ET (14:30 UTC EDT). Target: publish unlock by 11:00am ET.
-  # Hard Rock and the parlay use the 10:00 snapshot. A pull happens only when
-  # that snapshot does not cover them. Placeability advisory; must not invent sides.
+  # Omega draft + Hard Rock check — 10:30am ET (14:30 UTC EDT, 15:30 UTC EST).
+  # Uses the saved 10:00 snapshot. No Odds API pull. Straights are flagged.
+  # A failed parlay is re-priced or swapped. The check does not block publish.
+
+[functions."narrate-card-omega"]
+  schedule = "45 14,15 * * *"
+  # 10:45 ET (14:45 UTC EDT, 15:45 UTC EST). Written context and summaries.
+  # No Odds API pull. Does not finalize and does not post.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."post-card-omega"]
   schedule = "0 15,16 * * *"
-  # 11:00 ET (15:00 UTC EDT, 16:00 UTC EST). Posts only when OMEGA_X_AUTOPOST is
-  # the string true. Copy that contains Alpha or Omega is rejected. The flag
-  # is unset, so this job does not post. It does not pull odds or rewrite the card.
+  # 11:00 ET (15:00 UTC EDT, 16:00 UTC EST). The only finalization. Posts only
+  # when OMEGA_X_AUTOPOST is the string true. Copy that contains Alpha or Omega
+  # is rejected. The flag is unset, so this job does not post. It does not pull odds.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."pregame-check-omega"]
@@ -271,12 +277,13 @@
 
 [functions."capture-omega-pinnacle-lines"]
   schedule = "0 7,8,14,15 * * *"
-  # Pinnacle + DraftKings checks at 3:00 and 10:00 ET only.
+  # Pinnacle + DraftKings + Hard Rock checks at 3:00 and 10:00 ET only.
   # UTC union of EDT (UTC-4) and EST (UTC-5).
   #   07:00 UTC = 3:00 EDT, 08:00 UTC = 3:00 EST
   #   14:00 UTC = 10:00 EDT, 15:00 UTC = 10:00 EST
   # etGuard drops 04:00 EDT and 11:00 EDT. 9:00 and 10:30 are not in this cron.
-  # One live odds call per book per sport. regions=eu.
+  # One live odds call per sport: bookmakers=pinnacle,draftkings,hardrockbet.
+  # regions=eu. Opens and historical closes stay pinnacle-only.
   # 3:00 also pulls yesterday's pregame historical closes (30 credits per
   # shared commence_time) and stores the opener when none is stored.
   # Writes omega-pinnacle-line-moves and odds-master. Never the card.

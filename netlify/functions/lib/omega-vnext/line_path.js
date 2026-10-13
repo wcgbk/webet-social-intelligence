@@ -267,11 +267,12 @@ function bestUsPrint(gameSnap, candidate) {
 }
 
 /**
- * Pinnacle, else Circa. A US-only move does not set steam toward/against.
+ * Pinnacle only. A US-only move does not set steam toward/against.
+ * A stored Circa print is not the sharp anchor.
  */
 function sharpPrint(gameSnap, candidate) {
   if (!gameSnap || !gameSnap.books) return null;
-  const ordered = ['pinnacle', 'circa', 'circasports'].filter((key) => gameSnap.books[key]);
+  const ordered = ['pinnacle'].filter((key) => gameSnap.books[key]);
   return sidePrint(gameSnap, candidate, ordered);
 }
 

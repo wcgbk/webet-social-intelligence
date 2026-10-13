@@ -13,7 +13,7 @@
 const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { minEdgeFor } = require('./edge_floor');
-const { formatAmerican, etCalendarDate, parseEdgeFraction } = require('./odds_math');
+const { formatAmerican, etCalendarDate, parseEdgeFraction, americanToDecimal } = require('./odds_math');
 const { toPickObject, matchupKey, compareByEdge } = require('./select');
 
 const DK_BOOK = 'draftkings';
@@ -141,7 +141,7 @@ function applyExecutionBook(candidates) {
       excluded.push({ ...c, excludeReason: 'no-draftkings-line' });
       continue;
     }
-    kept.push(stampHr(priced));
+    kept.push(stampHr(applyBestUsDisplay(priced)));
   }
   return { candidates: kept, excluded };
 }
@@ -182,6 +182,67 @@ function hardRockReviewFlag(c) {
   }
   if (!flags.length) return null;
   return { flagged: true, flags, book: HR_BOOK, neverReject: true };
+}
+
+function samePoint(a, b) {
+  const an = a == null || a === '' ? null : Number(a);
+  const bn = b == null || b === '' ? null : Number(b);
+  const aOk = an != null && Number.isFinite(an);
+  const bOk = bn != null && Number.isFinite(bn);
+  if (!aOk && !bOk) return true;
+  if (!aOk || !bOk) return false;
+  return Math.abs(an - bn) < 1e-6;
+}
+
+/**
+ * Displayed price is the better American decimal of Hard Rock and DraftKings
+ * on the DraftKings line. A tie stays on DraftKings. Pinnacle is never the
+ * displayed price. DraftKings remains executionBook. Stake EV uses this price.
+ */
+function applyBestUsDisplay(priced) {
+  const dkAmerican = Number(priced && priced.odds);
+  const dkLine = priced && priced.line != null && priced.line !== '' ? Number(priced.line) : null;
+  const line = Number.isFinite(dkLine) ? dkLine : null;
+  let chosen = { book: DK_BOOK, american: dkAmerican };
+  let bestDec = americanToDecimal(dkAmerican);
+  for (const hr of matchingHrQuotes(priced, line)) {
+    const dec = americanToDecimal(hr.american);
+    if (Number.isFinite(dec) && Number.isFinite(bestDec) && dec > bestDec + 1e-12) {
+      bestDec = dec;
+      chosen = hr;
+    }
+  }
+  return attachEv({
+    ...priced,
+    odds: chosen.american,
+    oddsStr: formatAmerican(chosen.american),
+    book: chosen.book,
+    priceBook: chosen.book,
+    displayBook: chosen.book,
+    executionBook: DK_BOOK,
+    evBasis: 'stake-ev-at-best-us-price',
+  });
+}
+
+function matchingHrQuotes(c, line) {
+  const rows = [];
+  const push = (american, point) => {
+    const price = Number(american);
+    if (!Number.isFinite(price)) return;
+    const pt = point != null && point !== '' ? Number(point) : null;
+    if (!samePoint(Number.isFinite(pt) ? pt : null, line)) return;
+    rows.push({ book: HR_BOOK, american: price, point: Number.isFinite(pt) ? pt : null });
+  };
+  if (Array.isArray(c && c.bookPrices)) {
+    for (const p of c.bookPrices) {
+      if (!p || canonicalizeBook(p.book || p.key) !== HR_BOOK) continue;
+      push(p.american != null ? p.american : p.price, p.point);
+    }
+  }
+  if (c && c.hardRock && typeof c.hardRock === 'object') {
+    push(c.hardRock.american != null ? c.hardRock.american : c.hardRock.price, c.hardRock.point);
+  }
+  return rows;
 }
 
 function stampHr(c) {
@@ -679,34 +740,90 @@ function hrQuoteForPick(pick, game) {
   };
 }
 
+function displayedAmerican(pick) {
+  return asAmerican(pick && pick.odds);
+}
+
 /**
- * Flag Hard Rock gaps on the published card. Does not change pick, book,
- * odds, line, or parlay. changed is always false.
+ * Placeable when Hard Rock posts the same market side, the same line, and
+ * the displayed American price. The displayed book is Hard Rock or
+ * DraftKings. Pinnacle never counts. Does not change odds, line, or book.
+ * changed is always false. A miss is a flag, not a drop.
  */
 function reviewHardRock(picksData, sportGames) {
   const flags = [];
-  const apply = (pick) => {
+  const lines = [];
+  const apply = (pick, kind, index) => {
     if (!pick) return;
-    const games = sportGames && sportGames[pick.sport];
-    const list = Array.isArray(games) ? games : [];
-    const game = matchHrGame(list, pick.matchup);
-    const hr = hrQuoteForPick(pick, game);
-    if (!hr) return;
-    const line = pick.line != null ? Number(pick.line) : null;
-    const flag = hardRockReviewFlag({
-      sport: pick.sport,
-      line: Number.isFinite(line) ? line : pick.line,
-      hardRock: hr,
+    const row = placeableAtDisplayed(pick, sportGames);
+    pick.hrPlaceable = row.placeable;
+    if (!row.placeable) {
+      pick.hrFlags = [{
+        type: 'not-placeable-at-displayed-price',
+        displayed: row.displayed,
+        hardRock: row.hardRockAmerican,
+        line: pick.line != null ? pick.line : null,
+      }];
+      flags.push({ matchup: pick.matchup, pick: pick.pick || pick.side, flags: pick.hrFlags });
+    }
+    lines.push({
+      kind,
+      index,
+      matchup: pick.matchup || null,
+      pick: pick.pick || pick.side || null,
+      book: pick.book || pick.priceBook || null,
+      displayed: row.displayed,
+      line: pick.line != null ? pick.line : null,
+      hardRockAmerican: row.hardRockAmerican,
+      placeable: row.placeable,
     });
-    if (!flag) return;
-    pick.hrFlags = flag.flags;
-    flags.push({ matchup: pick.matchup, pick: pick.pick || pick.side, flags: flag.flags });
   };
-  for (const p of (picksData && picksData.picks) || []) apply(p);
-  for (const pl of (picksData && picksData.parlayLegs) || []) {
-    for (const leg of (pl && pl.legs) || []) apply(leg);
+  const picks = (picksData && picksData.picks) || [];
+  picks.forEach((pick, index) => apply(pick, 'straight', index));
+  const tickets = (picksData && picksData.parlayLegs) || [];
+  tickets.forEach((pl) => {
+    if (pl && pl.qualifying === false) return;
+    ((pl && pl.legs) || []).forEach((leg, index) => apply(leg, 'parlay', index));
+  });
+  const considered = lines.filter((row) => row && row.kind === 'straight').concat(
+    lines.filter((row) => row && row.kind === 'parlay'),
+  );
+  const verdict = picks.length && considered.every((row) => row.placeable) ? 'PASS' : 'FAIL';
+  return { changed: false, flags, lines, verdict, log: flags };
+}
+
+function placeableAtDisplayed(pick, sportGames) {
+  const displayed = displayedAmerican(pick);
+  const line = pick && pick.line != null && pick.line !== '' ? Number(pick.line) : null;
+  const book = canonicalizeBook((pick && (pick.priceBook || pick.book)) || '');
+  const fromBoard = hrQuoteMatching(pick, sportGames, line);
+  const fromSaved = matchingHrQuotes(pick, Number.isFinite(line) ? line : null)
+    .find((row) => row.american === displayed) || matchingHrQuotes(pick, Number.isFinite(line) ? line : null)[0] || null;
+  const hr = fromBoard || fromSaved;
+  if (book === HR_BOOK && displayed != null && !hr) {
+    return { placeable: true, displayed, hardRockAmerican: displayed };
   }
-  return { changed: false, flags, log: flags };
+  if (!hr || displayed == null) {
+    return { placeable: false, displayed, hardRockAmerican: hr ? hr.american : null };
+  }
+  if (!samePoint(hr.point, Number.isFinite(line) ? line : null)) {
+    return { placeable: false, displayed, hardRockAmerican: hr.american };
+  }
+  return {
+    placeable: hr.american === displayed,
+    displayed,
+    hardRockAmerican: hr.american,
+  };
+}
+
+function hrQuoteMatching(pick, sportGames, line) {
+  const games = sportGames && pick && sportGames[pick.sport];
+  const list = Array.isArray(games) ? games : [];
+  const game = matchHrGame(list, pick && pick.matchup);
+  const hr = hrQuoteForPick(pick, game);
+  if (!hr || !Number.isFinite(hr.american)) return null;
+  if (!samePoint(hr.point, Number.isFinite(line) ? line : null)) return null;
+  return hr;
 }
 
 /**
@@ -734,8 +851,10 @@ module.exports = {
   slateReason,
   priceAtDraftKings,
   applyExecutionBook,
+  applyBestUsDisplay,
   hardRockReviewFlag,
   reviewHardRock,
+  placeableAtDisplayed,
   nflProjectionGap,
   liveInPlayReason,
   selectTop10,

@@ -14,10 +14,10 @@
  * A missing 3:00 or 10:00 logs and contributes 0. It is not filled from a
  * stale morning snap or from the opener.
  *
- * Circa is an equal-weight partner when both ends are already stored. This
- * module does not request Circa. Hard Rock only dampens the weight when it
- * opposes Pinnacle. DraftKings lag adds a small extra weight when Pinnacle
- * moved toward the side and DraftKings did not follow.
+ * extraSharpBooks is an optional second sharp book, off by default. A stored
+ * Circa quote is ignored unless that list names it. Hard Rock only dampens
+ * the weight when it opposes Pinnacle. DraftKings lag adds a small extra
+ * weight when Pinnacle moved toward the side and DraftKings did not follow.
  *
  * OMEGA_LINE_MOVE_PROB=0 leaves cover, edge, and EV untouched.
  */
@@ -265,26 +265,27 @@ function adjustCandidate(candidate, meta, cfg) {
   }
 
   const pin = bookDelta(game3, game10, gameOpen, candidate, ['pinnacle']);
-  const circa = bookDelta(game3, game10, gameOpen, candidate, ['circa', 'circasports']);
+  const extraNames = extraSharpNames(config);
+  const extraSharp = extraNames.length
+    ? bookDelta(game3, game10, gameOpen, candidate, extraNames)
+    : null;
   const hardRock = bookDelta(game3, game10, gameOpen, candidate, ['hardrockbet', 'hardrock']);
   const dk = bookDelta(game3, game10, gameOpen, candidate, ['draftkings']);
+  const sharpWeight = extraSharpWeightOf(config);
 
   let signed = null;
   let magnitude = null;
-  let circaUsed = false;
-  if (pin && circa) {
-    signed = 0.5 * pin.d310 + 0.5 * circa.d310;
+  let extraUsed = false;
+  if (pin && extraSharp) {
+    const w = clamp(sharpWeight, 0, 1);
+    signed = (1 - w) * pin.d310 + w * extraSharp.d310;
     const magPin = magnitudeOf(pin, config.openWeight);
-    const magCirca = magnitudeOf(circa, config.openWeight);
-    magnitude = 0.5 * magPin + 0.5 * magCirca;
-    circaUsed = true;
+    const magExtra = magnitudeOf(extraSharp, config.openWeight);
+    magnitude = (1 - w) * magPin + w * magExtra;
+    extraUsed = true;
   } else if (pin) {
     signed = pin.d310;
     magnitude = magnitudeOf(pin, config.openWeight);
-  } else if (circa) {
-    signed = circa.d310;
-    magnitude = magnitudeOf(circa, config.openWeight);
-    circaUsed = true;
   }
 
   const noise = Number(config.noise);
@@ -296,7 +297,6 @@ function adjustCandidate(candidate, meta, cfg) {
   }
 
   let damp = 1;
-  const pinSigned = pin ? pin.d310 : (circa ? circa.d310 : null);
   if (hardRock && pin && Number.isFinite(hardRock.d310) && Number.isFinite(pin.d310)
     && Math.sign(hardRock.d310) !== 0
     && Math.sign(pin.d310) !== 0
@@ -340,7 +340,7 @@ function adjustCandidate(candidate, meta, cfg) {
   const pAdj = pBase == null ? null : clamp(pBase + adj, lo, hi);
 
   const dropCut = Number(config.adverseDropProb);
-  const leader = pin || circa;
+  const leader = pin;
   const drop = !!(leader && Number.isFinite(leader.d310) && leader.d310 <= -dropCut);
   const dropReason = drop
     ? `sharp_prob_against: ${leader.d310.toFixed(4)} (threshold ${dropCut})`
@@ -354,7 +354,7 @@ function adjustCandidate(candidate, meta, cfg) {
     adj: +adj.toFixed(6),
     K: Number.isFinite(K) ? +K.toFixed(4) : null,
     Keff: Number.isFinite(Keff) ? +Keff.toFixed(4) : null,
-    circaUsed,
+    extraSharp: extraUsed,
     dkLag,
     drop,
   }));
@@ -367,17 +367,29 @@ function adjustCandidate(candidate, meta, cfg) {
     movementInfo: +info.toFixed(6),
     movementK: Number.isFinite(K) ? +K.toFixed(6) : null,
     movementKEff: Number.isFinite(Keff) ? +Keff.toFixed(6) : null,
-    movementCirca: circaUsed,
+    movementCirca: false,
+    movementExtraSharp: extraUsed,
     movementDkLag: dkLag,
     movementDrop: drop,
     movementDropReason: dropReason,
     movementMissing: null,
-    movementSnapshots: { ...snapLog.slots, circa: circaUsed },
+    movementSnapshots: { ...snapLog.slots, extraSharp: extraUsed },
     fair_sharp_p: candidate.fair_sharp_p,
     p_model: candidate.p_model,
   };
   if (pAdj != null) next.coverProb = pAdj;
   return attachEv(next);
+}
+
+function extraSharpNames(config) {
+  const named = config && Array.isArray(config.extraSharpBooks) ? config.extraSharpBooks : [];
+  return named.map((name) => String(name || '').toLowerCase()).filter(Boolean);
+}
+
+function extraSharpWeightOf(config) {
+  const raw = config && (config.extraSharpWeight != null ? config.extraSharpWeight : config.circaWeight);
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0.5;
 }
 
 function applyLineMoveProb(candidates, meta, opts) {

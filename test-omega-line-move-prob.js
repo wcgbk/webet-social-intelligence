@@ -140,19 +140,43 @@ try {
 
   const disagree = ml({ coverProb: 0.55, p_model: 0.40, fair_sharp_p: 0.55, calibK: 0.50 });
   const pinOnly = adjustCandidate(disagree, pair({ pinnacle: PIN_FLAT }, { pinnacle: PIN_LONG }));
-  const withCirca = adjustCandidate(disagree, pair(
+  const circaIgnored = adjustCandidate(disagree, pair(
     { pinnacle: PIN_FLAT, circa: PIN_FLAT },
     { pinnacle: PIN_LONG, circa: PIN_FLAT },
   ));
-  assert.strictEqual(withCirca.movementCirca, true);
-  assert.ok(Math.abs(withCirca.movementAdj) < Math.abs(pinOnly.movementAdj) - 1e-4);
+  assert.strictEqual(circaIgnored.movementCirca, false);
+  assert.strictEqual(circaIgnored.movementExtraSharp, false);
+  close(circaIgnored.movementAdj, pinOnly.movementAdj, 1e-6);
+
+  const blendCfg = JSON.parse(JSON.stringify(config.LINE_MOVE_PROB));
+  blendCfg.extraSharpBooks = ['bookmaker'];
+  const withBook = adjustCandidate(disagree, pair(
+    { pinnacle: PIN_FLAT, bookmaker: PIN_FLAT },
+    { pinnacle: PIN_LONG, bookmaker: PIN_FLAT },
+  ), blendCfg);
+  assert.strictEqual(withBook.movementExtraSharp, true);
+  assert.strictEqual(withBook.movementCirca, false);
+  assert.ok(Math.abs(withBook.movementAdj) < Math.abs(pinOnly.movementAdj) - 1e-4);
 
   const oneEnd = adjustCandidate(disagree, pair(
-    { pinnacle: PIN_FLAT, circa: PIN_FLAT },
+    { pinnacle: PIN_FLAT, bookmaker: PIN_FLAT },
     { pinnacle: PIN_LONG },
-  ));
+  ), blendCfg);
+  assert.strictEqual(oneEnd.movementExtraSharp, false);
   assert.strictEqual(oneEnd.movementCirca, false);
   close(oneEnd.movementAdj, pinOnly.movementAdj, 1e-6);
+
+  const circaOnly = adjustCandidate(ml({
+    p_model: 0.55,
+    fair_sharp_p: 0.55,
+    coverProb: 0.55,
+  }), pair(
+    { pinnacle: PIN_FLAT, circa: PIN_LONG },
+    { pinnacle: PIN_FLAT, circa: PIN_FLAT },
+  ));
+  assert.strictEqual(circaOnly.movementDrop, false);
+  assert.strictEqual(circaOnly.movementExtraSharp, false);
+  assert.strictEqual(circaOnly.movementCirca, false);
 
   const opposed = adjustCandidate(disagree, pair(
     { pinnacle: PIN_FLAT, hardrockbet: PIN_LONG },
@@ -259,7 +283,7 @@ try {
 
   const pick = toPickObject(moved);
   assert.strictEqual(pick.edgeBasis, 'calibrated-edge-vs-pinnacle-no-vig');
-  assert.strictEqual(pick.evBasis, 'stake-ev-at-draftkings');
+  assert.strictEqual(pick.evBasis, 'stake-ev-at-best-us-price');
   assert.strictEqual(pick.gradeBasis, pick.edgeBasis);
   assert.ok(/%$/.test(pick.edgePct));
   assert.ok(/%$/.test(pick.ev));

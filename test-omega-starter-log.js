@@ -4,8 +4,8 @@ const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
 const starters = require('./netlify/functions/confirm-starters-mlb');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.67-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.67-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.68-omega-vnext-price-lock:'));
 assert.strictEqual(starters.omegaCardIsLogOnly('edge-picks-omega'), true);
 assert.strictEqual(starters.omegaCardIsLogOnly('edge-picks-alpha'), false);
 

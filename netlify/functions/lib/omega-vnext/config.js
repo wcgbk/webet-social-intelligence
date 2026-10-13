@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.67-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.68-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.68-omega-vnext-price-lock: The 2026-10-10 golden card records the cover-probability stake cap. A main under 0.42 cover is 0.5u. The cap is unchanged. Leans stay flat 0.5u.',
   'v12.3.67-omega-vnext-price-lock: Power de-vig still runs past -250 or +210 when the raw implieds sum to more than 1. When they sum to less than 1, the fair prices are the proportional split and they sum to 1. Leans, floors, and Kelly are unchanged.',
   'v12.3.66-omega-vnext-price-lock: Main stake EV is 1.5x from +151 to +200 and 2x from +201 to +300. The base stays 3%. A miss can still be a lean. Odds outside -300/+300 stay ineligible.',
   'v12.3.65-omega-vnext-price-lock: 11:00 ET card post runs only when OMEGA_X_AUTOPOST is the string true. Copy containing the words Alpha or Omega is rejected. The flag stays unset.',

@@ -4,8 +4,8 @@ const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
 const { noVigTwoWay, deVigMarket, americanToImplied } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.67-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.67-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.68-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 
 function proportional(a1, a2) {

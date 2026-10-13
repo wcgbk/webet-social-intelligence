@@ -19,8 +19,8 @@ const config = require(path.join(root, 'config'));
 const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'test/fixtures/pinnacle-sanity.json'), 'utf8'));
 
 (async () => {
-  assert.strictEqual(config.MODEL_VERSION, 'v12.3.67-omega-vnext-price-lock');
-  assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.67-omega-vnext-price-lock:'));
+  assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
+  assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.68-omega-vnext-price-lock:'));
 
   const enriched = enrichCandidateWithEdge(fixture.spread, fixture.home, [fixture.home, fixture.away]);
   const expectedNv = noVigTwoWay(-120, 100);

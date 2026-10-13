@@ -5,8 +5,8 @@ const config = require('./netlify/functions/lib/omega-vnext/config');
 const flags = require('./netlify/functions/lib/omega-vnext/gaps_flags');
 const select = require('./netlify/functions/lib/omega-vnext/select');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.67-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.67-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.68-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, true);
 assert.strictEqual(flags.GAME_EXPOSURE_CAP, 1.75);

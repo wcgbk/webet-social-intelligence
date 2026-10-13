@@ -21,8 +21,8 @@ const { applyGates } = require(path.join(root, 'gates'));
 const { selectStraights, toPickObject, applyDailyUnitCap } = require(path.join(root, 'select'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.56-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.56-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.57-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.57-omega-vnext-price-lock:'));
 assert.ok(/OMEGA_NBA=1/.test(config.MODEL_NOTES));
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.NBA_CARD_LIVE, false);

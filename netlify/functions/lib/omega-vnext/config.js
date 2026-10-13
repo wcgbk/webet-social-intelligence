@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.56-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.57-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -863,6 +863,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.57-omega-vnext-price-lock: A main stake is capped at 0.5u when cover probability is under 0.42, and at 1.0u when it is under 0.50. The cap is sizing only. Leans stay flat 0.5u.',
   'v12.3.56-omega-vnext-price-lock: Two-way de-vig uses the power method when either American price is past -250 or +210. Inside that band the split stays proportional. Fair probabilities still sum to one.',
   'v12.3.55-omega-vnext-price-lock: After three graded losses in a row, a main stake uses quarter-Kelly times 0.75 and then drops 0.5u, with a 0.5u floor, until a win. Leans stay 0.5u. Missing grades leave the cut off.',
   'v12.3.54-omega-vnext-price-lock: Two-way de-vig uses the power method when either American price is past -250 or +210. Prices inside that band stay proportional. The fair prices still sum to one. Leans, floors, and Kelly are unchanged.',

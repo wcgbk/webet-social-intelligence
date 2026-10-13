@@ -351,6 +351,16 @@ function drawdownActive(results) {
   return false;
 }
 
+/** Stake cap from cover probability. Under 0.42 → 0.5u. Under 0.50 → 1.0u. */
+function coverStakeCap(units, coverProb) {
+  const n = Number(coverProb);
+  if (!Number.isFinite(n) || !Number.isFinite(units)) return units;
+  const prob = n > 1 && n <= 100 ? n / 100 : n;
+  if (prob < 0.42) return Math.min(units, 0.5);
+  if (prob < 0.50) return Math.min(units, 1);
+  return units;
+}
+
 function toPickObject(c, opts = {}) {
   const lean = c && c.tier === 'lean';
   const drawdown = !!(opts && opts.drawdown) && !lean;
@@ -368,6 +378,8 @@ function toPickObject(c, opts = {}) {
   const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, c.uncertainty);
   // Kelly (and drawdown) already ran. Grade stays the edge letter.
+  // Cover caps are sizing only. They do not reject the pick. Leans stay flat.
+  if (!lean) units = coverStakeCap(units, c.coverProb);
   // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
   units = capBGradeStake(units, rating);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';

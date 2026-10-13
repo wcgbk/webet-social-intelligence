@@ -298,11 +298,13 @@ assertBoth(mlbPick('Boston Red Sox ML', 'moneyline'), cxlGame, preWhen, 'push', 
 // ── 4. All-push parlay is not wagered from the gate forward ──
 async function twoPushDay(dateISO) {
   const game = mlbGame(3, 3, 9, 9);
+  const legs = [
+    mlbPick('Boston Red Sox ML', 'moneyline'),
+    mlbPick('New York Yankees ML', 'moneyline'),
+  ];
   const picksData = {
-    picks: [
-      mlbPick('Boston Red Sox ML', 'moneyline'),
-      mlbPick('New York Yankees ML', 'moneyline'),
-    ],
+    picks: legs,
+    parlayLegs: [{ units: '0.5u', legs }],
   };
   return results.gradeDay(dateISO, picksData, { games: [game] });
 }

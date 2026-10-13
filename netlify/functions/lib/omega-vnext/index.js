@@ -1,7 +1,7 @@
 'use strict';
 
 const {
-  MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
+  MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, PM_SOFT,
   LEAN_PAD, nbaModuleEnabled,
 } = require('./config');
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
@@ -27,7 +27,7 @@ const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_
 const { attachGenerateHealth } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
-const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth } = require('./line_path');
+const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
@@ -358,8 +358,9 @@ async function generateOmegaVnext(opts = {}) {
 
   // Open→pick line move. The steam gate uses the latest Pinnacle/DraftKings
   // check (10:00 when that print exists) against the 3:00 baseline.
-  // Suspended 06:00/07:30/09:00/09:15 snaps are only a fallback, and only
-  // for capture-health warnings. They do not outrank the latest snapshot.
+  // Retired 06:00/07:30/09:00/09:15 snaps are a fallback only when no
+  // 3:00/10:00 snapshot is stored. They do not outrank the latest snapshot
+  // and capture health does not require them.
   // Does not invent snaps, does not pull the Odds API, and does not force-fill leans.
   let morningPath = { path: null, earliest: null, latest: null };
   try {
@@ -383,10 +384,16 @@ async function generateOmegaVnext(opts = {}) {
   }
   let linePathMeta = linePathForSelection(morningPath, lineMoveDocForSelection, { dateISO });
 
-  const requiredSlotsET = (LINE_MOVE && LINE_MOVE.captureSlotsET) || ['0600', '0730', '0900', '0915'];
-  let captureHealth = assessCaptureHealth(dateISO, morningPath, { requiredSlotsET });
-  // Morning 0600/0730/0900/0915 snaps are suspended. Do not pull the Odds API
-  // to fill them. A missing slot stays a warning and does not block the card.
+  // Capture health requires the 3:00 and 10:00 ET pulls written by
+  // capture-omega-pinnacle-lines (checks 0300/1000, or odds-master
+  // baseline-0300 / check-0300 / check-1000). Retired 0600/0730/0900/0915
+  // snaps are not required. Their absence does not warn. A missing 0300
+  // or 1000 warns and does not block the card. Do not pull the Odds API
+  // to fill a slot.
+  let captureHealth = assessPullCaptureHealth(dateISO, {
+    pinnacleDoc: lineMoveDocForSelection,
+    linePath: linePathMeta,
+  });
 
   if (replayLike) {
     const complete = captureHealth.usableSnapCount > 0 && captureHealth.missingSlotsET.length === 0;
@@ -403,14 +410,14 @@ async function generateOmegaVnext(opts = {}) {
     };
   }
 
-  // Missing 0600/0730/0900/0915 slots are a warning. They are not re-pulled.
-  // The card always publishes. Zero usable snaps do not hard-fail.
+  // A missing 3:00 or 10:00 pull is a warning. It is not re-pulled.
+  // The card always publishes. Zero usable pulls do not hard-fail.
   if (captureHealth.hardFail) {
     console.warn(JSON.stringify({
       event: 'captureHealthWarning',
       code: 'CAPTURE_HEALTH',
       date: dateISO,
-      note: 'missing morning capture slots do not block the card',
+      note: 'missing 3:00/10:00 pulls do not block the card',
       missingSlotsET: captureHealth.missingSlotsET,
       usableSnapCount: captureHealth.usableSnapCount,
     }));

@@ -320,14 +320,14 @@ function cardGeneratedOnEtDate(card, dateET) {
 }
 
 /**
- * ET wall minutes of the morning Omega slot minus the guard tolerance.
- * The morning slot minus TOLERANCE_MIN. A card written at or after that
- * minute is this morning's run (or a later same-day write). Earlier
- * same-day cards are overnight or pre-window and must still be rebuilt.
+ * ET wall minutes of the 09:30 card window minus the guard tolerance.
+ * A card written at or after 09:20 ET is this morning's run (or a later
+ * same-day write). Earlier same-day cards are overnight or pre-window
+ * and must still be rebuilt. The 10:00 ET cron is a different job and
+ * is not this cutoff.
  */
 function morningCardCutoffMin() {
-  const slot = ET_SCHEDULE['trigger-picks-omega'].etTimes[0];
-  return minutesOf(slot) - TOLERANCE_MIN;
+  return minutesOf('09:30') - TOLERANCE_MIN;
 }
 
 function cardFromMorningRun(card, dateET) {
@@ -339,10 +339,10 @@ function cardFromMorningRun(card, dateET) {
 /**
  * Scheduler-only morning idempotency for the Omega card.
  * Skip only when generatedAt falls on today's ET date and the ET wall
- * time is at/after the morning slot minus TOLERANCE_MIN: this morning's run
- * already wrote the card. An earlier same-day card does not skip. The
- * 10:00 invoke still force-rebuilds it. A read error does not skip; the
- * ET guard alone is the double-run protection. Manual/HTTP never reads.
+ * time is at/after 09:20 ET (09:30 minus TOLERANCE_MIN): this morning's run
+ * already wrote the card. An earlier same-day card does not skip. A read
+ * error does not skip; the ET guard alone is the double-run protection.
+ * Manual/HTTP never reads.
  */
 async function morningCardIdempotency(event, now, readCard) {
   const guard = etGuard('trigger-picks-omega', event, now);

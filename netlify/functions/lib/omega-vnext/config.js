@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.69-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.70-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.70-omega-vnext-price-lock: A lean-day parlay publishes only when combined EV is positive, at 0.25u. Public picks carry tier main or lean. The 6:00, 7:30, 9:00, and 9:15 ET morning snaps stay retired. Odds API pulls remain 3:00 and 10:00 ET. Results grade a parlay at the card stake and omit the row when the card has no parlay.',
   'v12.3.69-omega-vnext-price-lock: The 3:00 and 10:00 ET DraftKings call also requests Hard Rock (bookmakers=draftkings,hardrockbet, one call, 3 credits). DraftKings quotes and pricing are unchanged. Hard Rock stays review-only.',
   'v12.3.68-omega-vnext-price-lock: The 2026-10-10 golden card records the cover-probability stake cap. A main under 0.42 cover is 0.5u. The cap is unchanged. Leans stay flat 0.5u.',
   'v12.3.67-omega-vnext-price-lock: Power de-vig still runs past -250 or +210 when the raw implieds sum to more than 1. When they sum to less than 1, the fair prices are the proportional split and they sum to 1. Leans, floors, and Kelly are unchanged.',

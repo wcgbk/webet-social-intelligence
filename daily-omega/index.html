@@ -119,6 +119,7 @@
       border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
     }
     .pick-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .625rem; }
+    .pick-grade-cluster { display: inline-flex; align-items: center; gap: .35rem; }
     .sport-tag {
       font-size: .6875rem; font-weight: 600; color: var(--teal);
       background: var(--teal-light); border: 1px solid var(--teal-border);
@@ -1857,6 +1858,9 @@
       : (opts.parlayOnly
           ? `<span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">PARLAY LEG</span>`
           : '');
+    const leanBadgeHTML = p && p.tier === 'lean'
+      ? '<span class="rating-badge badge-lean">Lean</span>'
+      : '';
 
     const showStake = opts.showStake !== false && p.units && !opts.parlayOnly;
     const unitsNum = parseFloat(p.units) || 0;
@@ -1871,7 +1875,7 @@
     const card = `<div class="pick-card" data-wb-pick="${esc(p.pick)}"${borderStyle}>
         <div class="pick-header" style="margin-bottom:.25rem;">
           <span class="sport-tag">${esc(p.sport || '')}</span>
-          ${ratingHTML}
+          <span class="pick-grade-cluster">${ratingHTML}${leanBadgeHTML}</span>
         </div>
         <div class="pick-matchup-row">
           <div class="pick-matchup">${esc(shortMatchup(p.matchup, p.sport))}</div>

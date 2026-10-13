@@ -650,9 +650,11 @@ function publishLeg(leg) {
 
 /**
  * Published parlay. The three straights, in edge order, combined.
- * No pool search, no cover floor, no EV gate, no leg substitution.
+ * No pool search, no cover floor, no leg substitution.
  * Fewer than three, or a straight with no finite price, is no ticket.
- * A lean among the three sizes the ticket at LEAN_PARLAY_UNITS.
+ * A lean among the three sizes the ticket at LEAN_PARLAY_UNITS and
+ * publishes only when the legs are distinct games and combined EV > 0.
+ * A floor-day ticket keeps its stake with no EV gate.
  */
 function parlayFromStraights(straights, opts = {}) {
   const rows = (straights || []).filter(Boolean).slice(0, 3);
@@ -669,8 +671,12 @@ function parlayFromStraights(straights, opts = {}) {
   }));
   const stats = comboStats(forStats);
   if (!Number.isFinite(stats.combinedDecimal) || !(stats.combinedDecimal > 1)) return [];
-  const combinedAmerican = decimalToAmerican(stats.combinedDecimal);
   const leanStake = rows.some((leg) => leg && leg.tier === 'lean');
+  if (leanStake) {
+    if (!(stats.uniqueGames >= rows.length)) return [];
+    if (!(stats.ev > 0)) return [];
+  }
+  const combinedAmerican = decimalToAmerican(stats.combinedDecimal);
   const units = leanStake ? LEAN_PARLAY_UNITS : PARLAY_FIXED_UNITS;
   const ticket = {
     type: '3-leg-parlay-straight',

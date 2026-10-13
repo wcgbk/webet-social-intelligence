@@ -156,8 +156,8 @@ function priceKeys(store, eventId) {
   cache.resetKnownRequestsRemainingForTests();
   cache.clearMemoryForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.68-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.70-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.70-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('v12.3.40-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('No historical odds call.'));
     assert.strictEqual(config.PINNACLE_LINE_MOVE.historicalCreditsPerPull, 30);
@@ -394,7 +394,7 @@ function priceKeys(store, eventId) {
       sport: 'americanfootball_nfl',
       markets: 'h2h,spreads,totals',
       regions: 'eu',
-      bookmakers: 'draftkings',
+      bookmakers: 'draftkings,hardrockbet',
       body: earlyDk,
       fetchedAt: new Date(now10.getTime() - 2 * 60 * 1000).toISOString(),
     });
@@ -421,7 +421,7 @@ function priceKeys(store, eventId) {
       sport: 'americanfootball_nfl',
       markets: 'h2h,spreads,totals',
       regions: 'eu',
-      bookmakers: 'draftkings',
+      bookmakers: 'draftkings,hardrockbet',
       body: earlyDk,
       fetchedAt: new Date(now10.getTime() - 6 * 60 * 1000).toISOString(),
     });

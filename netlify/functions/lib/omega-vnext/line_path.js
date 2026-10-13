@@ -630,10 +630,13 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
   let warning = null;
   let reason = null;
   if (hardFail) {
-    reason = `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`;
+    reason = opts.pullSlots
+      ? `CAPTURE_HEALTH: zero usable 3:00/10:00 pulls for ${dateISO} after retry`
+      : `CAPTURE_HEALTH: zero usable morning line snaps for ${dateISO} after retry`;
     warning = reason;
   } else if (missing.length) {
-    warning = `CAPTURE_HEALTH: missing required morning snaps ${missing.join(',')} for ${dateISO} (present ${present.join(',') || 'none'}; usable=${usableSnapCount})`;
+    const noun = opts.pullSlots ? '3:00/10:00 pulls' : 'morning snaps';
+    warning = `CAPTURE_HEALTH: missing required ${noun} ${missing.join(',')} for ${dateISO} (present ${present.join(',') || 'none'}; usable=${usableSnapCount})`;
   }
   return {
     ok: !hardFail && missing.length === 0,
@@ -647,6 +650,121 @@ function assessCaptureHealth(dateISO, linePathMeta, opts = {}) {
     hardFail,
     reason,
   };
+}
+
+/** Odds API pulls capture-omega-pinnacle-lines actually schedules. */
+const PULL_SLOTS_ET = ['0300', '1000'];
+
+/** Retired morning line snaps. Absence does not warn and does not count. */
+const RETIRED_MORNING_SLOTS_ET = ['0600', '0730', '0900', '0915'];
+
+function bookHasQuote(books) {
+  if (!books || typeof books !== 'object') return false;
+  for (const quotes of Object.values(books)) {
+    if (quotes && typeof quotes === 'object' && Object.keys(quotes).length > 0) return true;
+  }
+  return false;
+}
+
+function slotFromOddsRole(role) {
+  const text = String(role || '');
+  if (text === 'baseline-0300' || text === 'check-0300') return '0300';
+  if (text === 'check-1000') return '1000';
+  return null;
+}
+
+function notePinnaclePulls(doc, present) {
+  if (!doc) return;
+  const events = Array.isArray(doc) ? doc : (Array.isArray(doc.events) ? doc.events : [doc]);
+  for (const eventDoc of events) {
+    const checks = eventDoc && eventDoc.checks;
+    if (!Array.isArray(checks)) continue;
+    for (const check of checks) {
+      const slot = check && String(check.slot || '');
+      if ((slot === '0300' || slot === '1000') && bookHasQuote(check.books)) present.add(slot);
+    }
+  }
+}
+
+function noteOddsMasterPulls(index, present) {
+  if (!index || typeof index !== 'object' || Array.isArray(index)) return;
+  if (index.baseline0300) present.add('0300');
+  const checks = index.checks;
+  if (checks && typeof checks === 'object' && !Array.isArray(checks)) {
+    if (checks['0300']) present.add('0300');
+    if (checks['1000']) present.add('1000');
+  }
+  const prices = index.prices;
+  if (!prices || typeof prices !== 'object') return;
+  for (const row of Object.values(prices)) {
+    if (!row || typeof row !== 'object') continue;
+    const roles = [];
+    if (row.role) roles.push(row.role);
+    if (Array.isArray(row.roles)) roles.push(...row.roles);
+    for (const role of roles) {
+      const slot = slotFromOddsRole(role);
+      if (slot) present.add(slot);
+    }
+  }
+}
+
+function noteLinePathPulls(linePath, present) {
+  const polls = linePath && linePath.path && Array.isArray(linePath.path.polls)
+    ? linePath.path.polls
+    : (linePath && Array.isArray(linePath.polls) ? linePath.polls : null);
+  if (!polls) return;
+  for (const poll of polls) {
+    if (!isUsablePoll(poll)) continue;
+    for (const label of [poll.hhmm, poll.slot]) {
+      const slot = String(label || '');
+      if (slot === '0300' || slot === '1000') present.add(slot);
+    }
+  }
+}
+
+/**
+ * Slots present in the 3:00 / 10:00 capture.
+ * A pinnacle line-move check (slot 0300 or 1000 with quotes), the same
+ * slots on a line-path poll, or the odds-master equivalents
+ * (baseline-0300, check-0300, check-1000, or checks['0300'/'1000']).
+ * Retired 0600/0730/0900/0915 polls are ignored.
+ */
+function presentPullSlots(sources) {
+  const present = new Set();
+  const src = sources && typeof sources === 'object' ? sources : {};
+  notePinnaclePulls(src.pinnacleDoc || src.lineMoveDoc, present);
+  noteLinePathPulls(src.linePath || src.linePathMeta, present);
+  if (src.path || Array.isArray(src.polls)) noteLinePathPulls(src, present);
+  const master = src.oddsMaster != null ? src.oddsMaster : src.oddsMasterIndexes;
+  const rows = Array.isArray(master) ? master : (master ? [master] : []);
+  for (const row of rows) {
+    if (row && Array.isArray(row.events) && !row.prices && !row.baseline0300 && !row.checks) {
+      for (const eventIndex of row.events) noteOddsMasterPulls(eventIndex, present);
+    } else {
+      noteOddsMasterPulls(row, present);
+    }
+  }
+  return present;
+}
+
+/**
+ * Capture health for the live Odds API pulls. Required slots are 0300 and
+ * 1000. Missing retired morning slots do not warn.
+ */
+function assessPullCaptureHealth(dateISO, sources, opts = {}) {
+  const present = presentPullSlots(sources);
+  const polls = PULL_SLOTS_ET.filter((slot) => present.has(slot)).map((slot) => ({
+    hhmm: slot,
+    slot,
+    gameCount: 1,
+    games: { pull: true },
+  }));
+  return assessCaptureHealth(dateISO, { path: { polls } }, {
+    retriedCapture: opts.retriedCapture,
+    retryOk: opts.retryOk,
+    requiredSlotsET: PULL_SLOTS_ET.slice(),
+    pullSlots: true,
+  });
 }
 
 /**
@@ -751,6 +869,10 @@ module.exports = {
   missingDueSlots,
   canonicalRetrySlot,
   assessCaptureHealth,
+  assessPullCaptureHealth,
+  presentPullSlots,
+  PULL_SLOTS_ET,
+  RETIRED_MORNING_SLOTS_ET,
   warnCaptureHealth,
   loadLinePath,
   storeLinePoll,

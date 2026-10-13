@@ -488,6 +488,59 @@ function calcParlayWinnings(risk, legsOdds) {
 // keeps an already-whole amount whole (avoids 75 -> 76 on float dust).
 function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
 
+/** Dollar amounts stay at cents. 0.25u is 37.50, not the next whole dollar. */
+function dollars(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.round(x * 100) / 100;
+}
+
+/**
+ * The published ticket, or null when the card has no parlay.
+ * A missing list, an empty list, or a ticket with fewer than 2 legs
+ * is no parlay. Straights are not turned into a ticket.
+ */
+function cardParlayTicket(picksData) {
+  const legs = picksData && picksData.parlayLegs;
+  if (!Array.isArray(legs) || legs.length === 0) return null;
+  const ticket = legs[0];
+  if (!ticket || typeof ticket !== 'object') return null;
+  const ticketLegs = Array.isArray(ticket.legs) ? ticket.legs.filter(Boolean) : [];
+  if (ticketLegs.length < 2) return null;
+  return { ...ticket, legs: ticketLegs };
+}
+
+/** Card units, then leanDay 0.25u, else 0.5u when the ticket omits a stake. */
+function parlayUnitsFromTicket(ticket) {
+  if (!ticket || typeof ticket !== 'object') return 0.5;
+  const raw = ticket.units != null && String(ticket.units).trim() !== ''
+    ? ticket.units
+    : (ticket.stake != null && String(ticket.stake).trim() !== '' ? ticket.stake : null);
+  if (raw != null) {
+    const n = parseFloat(String(raw).replace(/[^0-9.]/g, ''));
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  if (ticket.leanDay === true) return 0.25;
+  return 0.5;
+}
+
+function parlayWasCounted(day) {
+  if (!day || !day.parlayResult || day.parlayResult === 'skip' || day.parlayResult === 'pending') return false;
+  if (omegaGradingRules.rulesV2(day.date) && day.parlayResult === 'push') return false;
+  return true;
+}
+
+function matchStraightResult(leg, straights) {
+  const list = straights || [];
+  const pick = leg && leg.pick;
+  const matchup = leg && leg.matchup;
+  const sport = leg && leg.sport;
+  return list.find((row) => row && row.sport !== 'PARLAY' && pick && row.pick === pick && (!matchup || row.matchup === matchup))
+    || list.find((row) => row && row.sport !== 'PARLAY' && pick && row.pick === pick)
+    || list.find((row) => row && row.sport !== 'PARLAY' && matchup && row.matchup === matchup && (!sport || row.sport === sport))
+    || null;
+}
+
 function gradeParlay(pickResults, parlayRisk) {
   // v10.4.3: parlays can now be 2-leg (totals-first construction drops -CLV ML legs), so grade
   // any ticket with >=2 legs. Historical 3-leg tickets are unaffected.
@@ -532,12 +585,12 @@ async function gradeDayBody(dateISO, picksData, opts) {
   const picks = (picksData.picks || []).slice(0, 3);
   if (picks.length === 0) return null;
 
-  const apiParlay = (picksData.parlayLegs && picksData.parlayLegs.length > 0) ? picksData.parlayLegs[0] : null;
-  const optimizedLegs = (apiParlay && apiParlay.legs) ? apiParlay.legs : null;
+  const ticket = cardParlayTicket(picksData);
+  const ticketLegs = ticket ? ticket.legs : null;
 
   const sports = [...new Set([
     ...picks.map(p => p.sport),
-    ...(optimizedLegs ? optimizedLegs.map(l => l.sport) : []),
+    ...(ticketLegs ? ticketLegs.map(l => l.sport) : []),
   ].filter(Boolean))];
 
   // opts.games may be the board, a promise (tests yield between dates), or
@@ -594,31 +647,40 @@ async function gradeDayBody(dateISO, picksData, opts) {
     gradedPicks.push({ sport: pick.sport, matchup: pick.matchup, pick: pick.pick, odds: pick.odds, units: pick.units, rating: pick.rating, result, profit: Math.round(profit), score: scoreStr });
   }
 
-  let parlayInput;
-  if (optimizedLegs) {
-    parlayInput = optimizedLegs.map(leg => {
+  let parlayResult = { result: 'skip', profit: 0 };
+  let parlayRisk = 0;
+  let parlayUnits = 0;
+  if (ticket) {
+    const parlayInput = ticketLegs.map(leg => {
       const eleg = withLegCommenceTime(leg, picks);
       const sportGames = scoresByGames.filter(g => g._sport === eleg.sport);
       const game = findGameForDate(eleg, sportGames, dateISO);
       return { result: gradePick(eleg, game, gradeOpts), odds: eleg.odds || '-110' };
     });
-  } else {
-    parlayInput = gradedPicks.map(gp => ({ result: gp.result, odds: gp.odds || '-110' }));
-  }
-  // Parlay stake drops to 0.25u whenever a lean pick is on the card, else 0.5u.
-  const anyLean = picks.some(p => p.thinSlate);
-  const parlayUnits = anyLean ? 0.25 : 0.5;
-  const parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
-  const parlayResult = gradeParlay(parlayInput, parlayRisk);
-  // From GRADING_RULES_V2_FROM, an all-push parlay returns the stake (same as a straight push).
-  const parlayPushFree = omegaGradingRules.rulesV2(dateISO) && parlayResult.result === 'push';
-  if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip' && !parlayPushFree) {
-    dayWagered += parlayRisk;
-    dayProfit += parlayResult.profit;
-  }
-  if (parlayResult.result !== 'skip') {
-    const parlayLegsSource = optimizedLegs || picks;
-    gradedPicks.push({ sport: 'PARLAY', matchup: parlayLegsSource.map(p => (p.pick || '').split(/\s/)[0]).join(' / '), pick: `${parlayInput.length}-Team Parlay${optimizedLegs ? ' (Optimized)' : ''}`, odds: '', units: `${parlayUnits}u`, rating: 'P', result: parlayResult.result, profit: parlayResult.profit, score: null });
+    parlayUnits = parlayUnitsFromTicket(ticket);
+    parlayRisk = dollars(parlayUnits * dollarPerUnit);
+    parlayResult = gradeParlay(parlayInput, parlayRisk);
+    // From GRADING_RULES_V2_FROM, an all-push parlay returns the stake (same as a straight push).
+    const parlayPushFree = omegaGradingRules.rulesV2(dateISO) && parlayResult.result === 'push';
+    if (parlayResult.result !== 'pending' && parlayResult.result !== 'skip' && !parlayPushFree) {
+      dayWagered += parlayRisk;
+      dayProfit += parlayResult.profit;
+    }
+    if (parlayResult.result !== 'skip') {
+      gradedPicks.push({
+        sport: 'PARLAY',
+        matchup: ticketLegs.map(p => (p.pick || '').split(/\s/)[0]).join(' / '),
+        pick: `${parlayInput.length}-Team Parlay (Optimized)`,
+        odds: '',
+        units: `${parlayUnits}u`,
+        rating: 'P',
+        result: parlayResult.result,
+        profit: parlayResult.profit,
+        score: null,
+      });
+    } else {
+      parlayRisk = 0;
+    }
   }
 
   const decided = dayWins + dayLosses;
@@ -630,10 +692,68 @@ async function gradeDayBody(dateISO, picksData, opts) {
     picks: gradedPicks,
     wins: dayWins, losses: dayLosses, pushes: dayPushes, pending: dayPending,
     accuracy: decided > 0 ? ((dayWins / decided) * 100).toFixed(0) : '0',
-    wagered: Math.round(dayWagered), profit: Math.round(dayProfit),
+    wagered: dollars(dayWagered), profit: dollars(dayProfit),
     roi: dayWagered > 0 ? ((dayProfit / dayWagered) * 100).toFixed(1) : '--',
     parlayResult: parlayResult.result, parlayProfit: parlayResult.profit, parlayRisk,
   };
+}
+
+/**
+ * Rebuild one stored results day from the card's own parlay ticket.
+ * Straight results already on the day are reused. The input day and card
+ * are not mutated. A card with no parlay drops the parlay row.
+ */
+function recomputeParlayFields(day, card) {
+  const next = JSON.parse(JSON.stringify(day || {}));
+  const oldRisk = Number(day && day.parlayRisk) || 0;
+  const oldProfit = Number(day && day.parlayProfit) || 0;
+  if (parlayWasCounted(day)) {
+    next.wagered = dollars((Number(day.wagered) || 0) - oldRisk);
+    next.profit = dollars((Number(day.profit) || 0) - oldProfit);
+  }
+  const straights = (next.picks || []).filter((row) => !row || row.sport !== 'PARLAY');
+  next.picks = straights;
+  const ticket = cardParlayTicket(card);
+  if (!ticket) {
+    next.parlayResult = 'skip';
+    next.parlayProfit = 0;
+    next.parlayRisk = 0;
+    next.roi = next.wagered > 0 ? ((next.profit / next.wagered) * 100).toFixed(1) : '--';
+    return next;
+  }
+  const units = parlayUnitsFromTicket(ticket);
+  const risk = dollars(units * 150);
+  const legResults = ticket.legs.map((leg) => {
+    const hit = matchStraightResult(leg, straights);
+    return {
+      result: hit && hit.result ? hit.result : 'pending',
+      odds: (hit && hit.odds) || (leg && leg.odds) || '-110',
+    };
+  });
+  const graded = gradeParlay(legResults, risk);
+  const pushFree = omegaGradingRules.rulesV2(next.date) && graded.result === 'push';
+  if (graded.result !== 'pending' && graded.result !== 'skip' && !pushFree) {
+    next.wagered = dollars((Number(next.wagered) || 0) + risk);
+    next.profit = dollars((Number(next.profit) || 0) + (Number(graded.profit) || 0));
+  }
+  next.parlayResult = graded.result;
+  next.parlayProfit = graded.result === 'skip' ? 0 : graded.profit;
+  next.parlayRisk = graded.result === 'skip' ? 0 : risk;
+  if (graded.result !== 'skip') {
+    next.picks = straights.concat([{
+      sport: 'PARLAY',
+      matchup: ticket.legs.map((p) => (p.pick || '').split(/\s/)[0]).join(' / '),
+      pick: `${ticket.legs.length}-Team Parlay (Optimized)`,
+      odds: '',
+      units: `${units}u`,
+      rating: 'P',
+      result: graded.result,
+      profit: graded.profit,
+      score: null,
+    }]);
+  }
+  next.roi = next.wagered > 0 ? ((next.profit / next.wagered) * 100).toFixed(1) : '--';
+  return next;
 }
 
 // ── All-versions KPI helpers (2026-09-26) ──
@@ -878,6 +998,10 @@ exports._test = {
   teamsMatch,
   calcWinnings,
   wholeUp,
+  dollars,
+  cardParlayTicket,
+  parlayUnitsFromTicket,
+  recomputeParlayFields,
   GRADING_RULES_V2_FROM: omegaGradingRules.GRADING_RULES_V2_FROM,
   IDENTITY_V2_FROM: omegaGradingRules.IDENTITY_V2_FROM,
 };

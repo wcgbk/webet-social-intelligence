@@ -7,7 +7,7 @@
 // with picks when today is missing or empty — never blank the page at midnight.
 // Optional: ?date=YYYY-MM-DD (sticky to prior day with picks unless ?forceEmpty=1).
 
-const { publicPicksPayload } = require('./lib/public-picks');
+const { publicPicksPayload, publicTier } = require('./lib/public-picks');
 const {
   todayET,
   tomorrowET,
@@ -67,8 +67,17 @@ function cardIsUnpublished(picksData, now = new Date()) {
 }
 
 function publicCard(picksData) {
-  // publicPicksPayload keeps book on each straight and parlay leg.
-  return publicPicksPayload(picksData);
+  // publicPicksPayload copies picks and parlay legs. tier is applied on
+  // the copy. A stored card that lacks tier is derived here and is not
+  // written back. floor and main both read as main. Lean flags read as lean.
+  const payload = publicPicksPayload(picksData);
+  if (!payload || typeof payload !== 'object') return payload;
+  if (Array.isArray(payload.picks)) {
+    payload.picks = payload.picks.map((p) => (
+      p && typeof p === 'object' ? { ...p, tier: publicTier(p) } : p
+    ));
+  }
+  return payload;
 }
 
 function stripPremium(picksData) {

@@ -10,13 +10,22 @@
  * A naked POST is 403 and spends 0 credits. SPORTS_ENABLED.NBA stays false.
  * Writes omega-nba-shadow-{ET date} only. Does not write the daily card.
  */
-const { handleShadow } = require('./omega-nba-shadow');
+const { handleShadow, mayFetchOrWrite } = require('./omega-nba-shadow');
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
 exports.handler = (event, context) => {
   const now = (context && context.now instanceof Date) ? context.now : new Date();
   const etSkip = rejectUnlessEtSlot('trigger-omega-nba-shadow', event, now);
   if (etSkip) return etSkip;
+  // Auth before the Odds API window skip. A naked POST is not a schedule
+  // event. trustSchedule is not enough without the scheduler body. The
+  // public handler uses the same mayFetchOrWrite check.
+  if (!mayFetchOrWrite(event, { trustSchedule: true })) {
+    return handleShadow(event, context, {
+      mode: 'project',
+      trustSchedule: true,
+    });
+  }
   // A live cron would pull NBA odds at 17:30 ET. Fixture tests pass
   // nbaShadowTest and already spend 0 credits. Production does not fetch.
   if (!(context && context.nbaShadowTest)) {

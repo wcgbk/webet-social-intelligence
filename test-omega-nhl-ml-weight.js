@@ -14,7 +14,7 @@ const { blendWithMarket, totalCoverProb, spreadCoverProb, mlFromSpread } = requi
 const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
 
 assert.deepStrictEqual(nhl.BLEND, { ml: 0.10, spread: 0.50, total: 0.45 });
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.70-omega-vnext-price-lock');
 
 const home = 'Colorado Avalanche';
 const away = 'Dallas Stars';

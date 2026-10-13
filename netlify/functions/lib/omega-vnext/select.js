@@ -73,6 +73,27 @@ function edgeRank(c) {
   return Number.isFinite(e) ? e : -Infinity;
 }
 
+/**
+ * Same capped nudge scoreCandidate adds (steam, PM, steamToward, DK lag).
+ * compareByEdge reads it only after edge and stake EV are already tied.
+ * It is not part of the letter grade.
+ */
+function selectionNudge(c) {
+  if (!c || typeof c !== 'object') return 0;
+  const w = SELECT_WEIGHTS;
+  const ev = c.ev || 0;
+  let nudge = 0;
+  if (typeof c._steamScoreAdj === 'number' && Number.isFinite(c._steamScoreAdj)) nudge += c._steamScoreAdj;
+  nudge += clampPmScoreAdj(c._pmScoreAdj);
+  if (c.steamToward && ev > 0) nudge += (w.softSportMixBonus || 0.02);
+  // DK lagging the sharp line is a pre-lock selection input. It stays
+  // inside the nudge cap and is not added to fair_sharp_p or EV.
+  if (c.dkLagsSharp === true && ev > 0) nudge += 0.001;
+  if (nudge > SCORE_NUDGE_CAP) nudge = SCORE_NUDGE_CAP;
+  else if (nudge < -SCORE_NUDGE_CAP) nudge = -SCORE_NUDGE_CAP;
+  return nudge;
+}
+
 function scoreCandidate(c) {
   const w = SELECT_WEIGHTS;
   const ev = c.ev || 0;
@@ -102,17 +123,28 @@ const EDGE_EV_BAND = 0.002;
 
 /**
  * Edge is the primary key. Within 0.2 percentage points, higher stake EV
- * wins. Probability is not a key. An exact edge and EV tie keeps sort order.
+ * wins. Probability is not a key.
+ *
+ * The only ranking difference from the edge-then-EV sort is this exact
+ * edge and stake-EV tie: the capped score nudge (PM, steam, DK lag) breaks
+ * it. scoreCandidate itself is unchanged, so the nudge cannot outrank a
+ * higher edge or, inside the band, a higher EV. qualityScore stays out of
+ * the tie so CLV and uncertainty do not reorder an edge tie.
  */
 function compareByEdge(a, b) {
   const ea = edgeRank(a);
   const eb = edgeRank(b);
-  if (Number.isFinite(ea) && Number.isFinite(eb) && Math.abs(ea - eb) <= EDGE_EV_BAND) {
+  const bothEdges = Number.isFinite(ea) && Number.isFinite(eb);
+  if (bothEdges && Math.abs(ea - eb) <= EDGE_EV_BAND) {
     const evd = finiteEv(b) - finiteEv(a);
     if (Math.abs(evd) > 1e-12) return evd;
   }
   const d = eb - ea;
   if (Math.abs(d) > 1e-12) return d;
+  if (bothEdges) {
+    const nd = selectionNudge(b) - selectionNudge(a);
+    if (Math.abs(nd) > 1e-12) return nd;
+  }
   return 0;
 }
 

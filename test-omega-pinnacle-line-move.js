@@ -158,14 +158,14 @@ function scheduler(now) {
 (async () => {
   cache.resetKnownRequestsRemainingForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.68-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.68-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.70-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.70-omega-vnext-price-lock:'));
     assert.strictEqual(config.STEAM_WINDOW_MIN, 15);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.creditFloor, 49000);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.steamProbPts, 3);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.steamLinePoints, 0.5);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.windowMinutes, 15);
-    assert.strictEqual(config.PINNACLE_LINE_MOVE.secondaryBookmakers, 'draftkings');
+    assert.strictEqual(config.PINNACLE_LINE_MOVE.secondaryBookmakers, 'draftkings,hardrockbet');
     assert.strictEqual(memo.PINNACLE_CREDIT_FLOOR, 49000);
     assert.deepStrictEqual(CHECK_SLOTS, ['0300', '1000']);
 
@@ -184,7 +184,7 @@ function scheduler(now) {
     assert.strictEqual(pinUrl.searchParams.get('date'), null);
     assert.ok(!pinUrl.href.includes('historical'));
     const dkUrl = new URL(draftkingsOddsUrl('americanfootball_nfl', 'test-key-1234'));
-    assert.strictEqual(dkUrl.searchParams.get('bookmakers'), 'draftkings');
+    assert.strictEqual(dkUrl.searchParams.get('bookmakers'), 'draftkings,hardrockbet');
     assert.strictEqual(dkUrl.searchParams.get('regions'), 'eu');
     assert.strictEqual(dkUrl.searchParams.get('date'), null);
 
@@ -296,7 +296,8 @@ function scheduler(now) {
         return { body: [boardEvent('ev1', 'draftkings')], remaining: 50000 };
       }
       const jumped = { home: -150, away: 130, homePoint: -3.5, awayPoint: 3.5 };
-      return { body: [boardEvent('ev1', book, jumped)], remaining: 50000 };
+      const responseBook = String(book).includes('draftkings') ? 'draftkings' : book;
+      return { body: [boardEvent('ev1', responseBook, jumped)], remaining: 50000 };
     });
 
     const first = await runPinnacleLineCapture(runnerOpts(store, { mode: 'open', fetchImpl }));
@@ -342,7 +343,7 @@ function scheduler(now) {
     }));
     assert.strictEqual(at3.pulls, 2);
     const books3 = oddsCalls(fetchImpl.calls).slice(-2).map((u) => u.searchParams.get('bookmakers')).sort();
-    assert.deepStrictEqual(books3, ['draftkings', 'pinnacle']);
+    assert.deepStrictEqual(books3, ['draftkings,hardrockbet', 'pinnacle']);
     assert.ok(fetchImpl.calls.every((u) => u.searchParams.get('date') == null && !u.href.includes('historical')));
     const after3 = store.blobs.get(eventKey('NFL', 'ev1'));
     const logged = sideMove(after3, 'Spread', 'home', 'pinnacle');

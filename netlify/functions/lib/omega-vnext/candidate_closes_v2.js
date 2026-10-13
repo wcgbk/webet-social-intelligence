@@ -31,6 +31,7 @@ const { rowKey, sportKeyFor, candidateLedgerKey } = require('./candidate_ledger'
 const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
 const { oddsSnapshotSavedCredits } = require('./odds_snapshot_cache');
+const oddsMaster = require('./odds_master');
 
 /** Odds API bookmaker keys. circasports is Circa's key. ≤10 → 1 region. */
 const SHARP_CLOSE_BOOKS = ['pinnacle', 'circasports', 'lowvig', 'betonlineag', 'bookmaker'];
@@ -540,6 +541,38 @@ async function captureCandidateClosesV2(opts = {}) {
     }
   }
 
+  const masterStamps = [];
+  const masterOpts = opts.oddsMasterOpts || {};
+  for (const [sportKey, dueRows] of [...dueBySport.entries()]) {
+    const keep = [];
+    for (const row of dueRows) {
+      let hit = null;
+      try {
+        hit = await oddsMaster.readCloseEvent({
+          sport: row.sport,
+          eventId: row.eventId || row.event_id,
+          homeTeam: row.homeTeam,
+          awayTeam: row.awayTeam,
+          commenceTime: row.commenceTime,
+        }, masterOpts);
+      } catch (err) {
+        console.error(`[candidate-closes] odds-master read soft-fail: ${err.message}`);
+      }
+      const close = hit && hit.event ? devigCandidate(hit.event, row) : null;
+      if (!close) {
+        keep.push(row);
+        continue;
+      }
+      masterStamps.push({
+        date: row._date,
+        key: rowKey(row),
+        stamped: stampClose(row, close, hit.snapshotAt || nowIso),
+      });
+    }
+    if (keep.length) dueBySport.set(sportKey, keep);
+    else dueBySport.delete(sportKey);
+  }
+
   const fetchImpl = opts.fetchImpl || fetch;
   const apiKey = opts.apiKey != null ? opts.apiKey : process.env.ODDS_API_KEY;
   const oddsCache = opts.oddsCache instanceof Map ? opts.oddsCache : new Map();
@@ -618,10 +651,26 @@ async function captureCandidateClosesV2(opts = {}) {
         const stamped = stampClose(row, close, nowIso);
         if (!updatesByDate[row._date]) updatesByDate[row._date] = [];
         updatesByDate[row._date].push({ key: rowKey(row), stamped });
+        if (oddsMaster.snapshotAtOrBefore(nowIso, row.commenceTime)) {
+          try {
+            await oddsMaster.storeCloseFromOddsEvent(event, {
+              sport: row.sport,
+              snapshotAt: nowIso,
+              requestedAt: row.commenceTime,
+              source: 'candidate-close',
+            }, masterOpts);
+          } catch (err) {
+            console.error(`[candidate-closes] odds-master write soft-fail: ${err.message}`);
+          }
+        }
       } catch (e) {
         console.error(`[candidate-closes] de-vig ${sportKey} ${row.matchup || ''} failed: ${e.message}`);
       }
     }
+  }
+  for (const stamp of masterStamps) {
+    if (!updatesByDate[stamp.date]) updatesByDate[stamp.date] = [];
+    updatesByDate[stamp.date].push({ key: stamp.key, stamped: stamp.stamped });
   }
 
   let creditDate = null;

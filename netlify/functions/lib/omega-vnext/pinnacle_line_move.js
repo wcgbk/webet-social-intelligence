@@ -4,10 +4,13 @@
  * Pinnacle / DraftKings line log. Context for the 10:30 ET card only.
  *
  * The open is one Pinnacle print, stored once at sport/eventId, and never
- * rewritten. Checks at 03:00, 09:00, and 10:30 ET append. Moves are the
- * change between consecutive observations (open → 3:00 → 9:00 → 10:30).
- * Steam needs the same direction at Pinnacle and DraftKings. This module
- * does not price, rank, gate, or write the published card.
+ * rewritten. Checks at 03:00, 09:00, 10:00, and 10:30 ET append. Moves are
+ * the change between consecutive observations
+ * (open → 3:00 → 9:00 → 10:00 → 10:30).
+ * Direction on the card context is from the 3:00 baseline when that print
+ * exists, otherwise from the open. Steam needs the same direction at
+ * Pinnacle and DraftKings. This module does not price, rank, gate, or write
+ * the published card.
  */
 
 const { PINNACLE_LINE_MOVE, STEAM_WINDOW_MIN, SITE_ID } = require('./config');
@@ -19,8 +22,8 @@ const { resolveFetch, auditBlobCall } = require('./audit_log');
 const LINE_MOVE_STORE = 'omega-pinnacle-line-moves';
 const SCHEMA = 'omega-pinnacle-line-moves-v1';
 const PINNACLE_SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL'];
-const CHECK_SLOTS = ['0300', '0900', '1030'];
-const SLOT_ORDER = ['open', '0300', '0900', '1030'];
+const CHECK_SLOTS = ['0300', '0900', '1000', '1030'];
+const SLOT_ORDER = ['open', '0300', '0900', '1000', '1030'];
 const CHECK_BOOKS = ['pinnacle', 'draftkings'];
 const LOCK_GRACE_MS = 15 * 60 * 1000;
 
@@ -327,7 +330,7 @@ function steamPairAllowed(fromSlot, toSlot, fromAt, toAt, windowMinutes) {
  * Prob: |no-vig| >= steamProbPts on both, same sign.
  * Line: spread or total |point| >= steamLinePoints on both, same sign.
  * Either predicate is enough. One book, or opposite signs, is not steam.
- * windowMinutes is always stored. A gap that is not a  open/3:00/9:00/10:30
+ * windowMinutes is always stored. A gap that is not an open/3:00/9:00/10:00/10:30
  * step must also be <= windowMinutes (the later dense-check rule).
  */
 function confirmSteam(pinMove, dkMove, opts = {}) {
@@ -550,8 +553,9 @@ function marketsIn(obsList) {
 }
 
 /**
- * Per game/market through the 10:30 ET lock: open, latest, net direction,
- * total Pinnacle move, move count, and steam rows (each carries windowMinutes).
+ * Per game/market through the 10:30 ET lock: open, 3:00 baseline, latest,
+ * net direction from that baseline (else the open), total Pinnacle move,
+ * move count, and steam rows (each carries windowMinutes).
  */
 function summarizeEvent(eventDoc, endMs) {
   const obs = visibleObservations(eventDoc, endMs);
@@ -561,11 +565,16 @@ function summarizeEvent(eventDoc, endMs) {
   for (const group of marketsIn(obs)) {
     const market = group.market;
     const openObs = obs.find((row) => row.slot === 'open') || null;
+    const baselineObs = obs.find((row) => row.slot === '0300') || null;
+    const directionObs = baselineObs || openObs;
     const latest = obs.length ? obs[obs.length - 1] : null;
     const openSides = openObs ? sidesFromQuotes(bookQuotes(openObs, 'pinnacle'), market) : {};
+    const baselineSides = baselineObs ? sidesFromQuotes(bookQuotes(baselineObs, 'pinnacle'), market) : {};
+    const directionSides = directionObs ? sidesFromQuotes(bookQuotes(directionObs, 'pinnacle'), market) : {};
     const latestSides = latest ? sidesFromQuotes(bookQuotes(latest, 'pinnacle'), market) : {};
     const dkObs = [...obs].reverse().find((row) => Object.values(bookQuotes(row, 'draftkings')).some((q) => q && q.market === market));
-    const direction = netDirection(openSides, latestSides, market);
+    const direction = netDirection(directionSides, latestSides, market);
+    const directionFrom = baselineObs ? 'baseline-0300' : (openObs ? 'open' : null);
     const ref = referenceSide(market, direction);
     const marketMoves = moves.filter((m) => m.market === market);
     const marketSteams = steams.filter((s) => s.market === market);
@@ -576,13 +585,15 @@ function summarizeEvent(eventDoc, endMs) {
       homeTeam: eventDoc.homeTeam || group.homeTeam || null,
       awayTeam: eventDoc.awayTeam || group.awayTeam || null,
       open: openObs ? { at: openObs.at, book: 'pinnacle', sides: openSides } : null,
+      baseline: baselineObs ? { at: baselineObs.at, slot: '0300', book: 'pinnacle', sides: baselineSides } : null,
+      directionFrom,
       latest: latest ? { at: latest.at, slot: latest.slot, sides: latestSides } : null,
       draftkings: dkObs ? { at: dkObs.at, slot: dkObs.slot, sides: sidesFromQuotes(bookQuotes(dkObs, 'draftkings'), market) } : null,
       netDirection: direction,
       totalMove: {
-        cents: centsBetween(openSides[ref] && openSides[ref].price, latestSides[ref] && latestSides[ref].price),
-        probPts: probPtsBetween(openSides[ref] && openSides[ref].noVig, latestSides[ref] && latestSides[ref].noVig),
-        pointChange: pointBetween(openSides[ref] && openSides[ref].line, latestSides[ref] && latestSides[ref].line),
+        cents: centsBetween(directionSides[ref] && directionSides[ref].price, latestSides[ref] && latestSides[ref].price),
+        probPts: probPtsBetween(directionSides[ref] && directionSides[ref].noVig, latestSides[ref] && latestSides[ref].noVig),
+        pointChange: pointBetween(directionSides[ref] && directionSides[ref].line, latestSides[ref] && latestSides[ref].line),
       },
       moveCount: marketMoves.length,
       steam: marketSteams.length > 0,

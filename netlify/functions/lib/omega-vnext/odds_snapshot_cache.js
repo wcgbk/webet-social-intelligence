@@ -452,17 +452,34 @@ async function materialize(resp, key, secrets) {
   return synthetic(record, false);
 }
 
+function stripCacheInit(init) {
+  if (!init || !Object.prototype.hasOwnProperty.call(init, 'oddsSnapshotMaxAgeMs')) return init;
+  const next = { ...init };
+  delete next.oddsSnapshotMaxAgeMs;
+  return next;
+}
+
+function hitIsFresh(hit, maxAgeMs) {
+  if (!Number.isFinite(maxAgeMs)) return true;
+  const at = Date.parse(hit && hit.fetchedAt);
+  if (!Number.isFinite(at)) return false;
+  const age = clockMs() - at;
+  return age >= 0 && age < maxAgeMs;
+}
+
 async function cachedFetch(fetchImpl, url, init) {
   const impl = typeof fetchImpl === 'function' ? fetchImpl : fetch;
-  if (!enabled() || !isGet(init) || !isOddsUrl(url)) return impl(url, init);
+  const maxAgeMs = init && Number(init.oddsSnapshotMaxAgeMs);
+  const netInit = stripCacheInit(init);
+  if (!enabled() || !isGet(init) || !isOddsUrl(url)) return impl(url, netInit);
   let key;
   try { key = parseUrl(url); }
-  catch (_) { return impl(url, init); }
+  catch (_) { return impl(url, netInit); }
   const secrets = secretValues(url);
   if (shouldRead(key)) {
     try {
       const hit = await readRecord(key);
-      if (hit) {
+      if (hit && hitIsFresh(hit, maxAgeMs)) {
         const credits = creditCost(hit.headers);
         rememberLookup(key, { hit: true, credits });
         auditNote({ hit: true, credits, url });
@@ -474,7 +491,7 @@ async function cachedFetch(fetchImpl, url, init) {
   }
   let resp;
   try {
-    resp = await impl(url, init);
+    resp = await impl(url, netInit);
   } catch (err) {
     rememberLookup(key, { hit: false, credits: 0 });
     auditNote({ hit: false, credits: 0, url });
@@ -506,6 +523,85 @@ function clearMemoryForTests() {
   lookedUp.clear();
 }
 
+function liveBucket(snapshot) {
+  const t = Date.parse(snapshot);
+  if (!Number.isFinite(t)) return false;
+  const width = freshSnapMs();
+  return t === Math.floor(t / width) * width;
+}
+
+/**
+ * Same sport + markets + regions + bookmakers, fetched strictly younger than
+ * maxAgeMs. Looks across the current and previous live buckets so a pull that
+ * crossed the 10-minute cache boundary is still reused. Historical date=
+ * snapshots are not live pulls.
+ */
+async function findFreshSportPull(query = {}) {
+  const nowMs = Number.isFinite(Number(query.nowMs)) ? Number(query.nowMs) : clockMs();
+  const maxAgeMs = Number.isFinite(Number(query.maxAgeMs)) ? Number(query.maxAgeMs) : 5 * 60 * 1000;
+  const want = {
+    sport: query.sport || '',
+    markets: query.markets || '',
+    regions: query.regions || '',
+    bookmakers: query.bookmakers || '',
+  };
+  let best = null;
+  const consider = (record) => {
+    if (!record || !record.key || !record.fetchedAt || record.body == null) return;
+    if (record.key.eventId) return;
+    if (record.key.sport !== want.sport) return;
+    if (want.markets && record.key.markets !== want.markets) return;
+    if (want.regions && record.key.regions !== want.regions) return;
+    if (want.bookmakers && record.key.bookmakers !== want.bookmakers) return;
+    if (!liveBucket(record.key.snapshot)) return;
+    const at = Date.parse(record.fetchedAt);
+    if (!Number.isFinite(at)) return;
+    const age = nowMs - at;
+    if (age < 0 || age >= maxAgeMs) return;
+    if (!best || age < best.ageMs) best = { record, ageMs: age };
+  };
+  for (const record of memory.values()) consider(record);
+  const snapshots = [snapshotBucket(nowMs), snapshotBucket(nowMs - freshSnapMs())];
+  for (const snapshot of snapshots) {
+    const key = canonicalKey({ ...want, snapshot, eventId: '' });
+    const id = hashKey(key);
+    if (memory.has(id)) continue;
+    try {
+      const rec = await readRecord(key);
+      consider(rec);
+    } catch (_) { /* a missing bucket is a miss */ }
+  }
+  if (!best) return null;
+  return {
+    body: cloneJson(best.record.body),
+    fetchedAt: best.record.fetchedAt,
+    ageMs: best.ageMs,
+    headers: best.record.headers || {},
+  };
+}
+
+/** Test and in-process seed. Same record shape the cache writes after a live pull. */
+function rememberLivePull(input = {}) {
+  const fetchedAt = input.fetchedAt || new Date().toISOString();
+  const at = Date.parse(fetchedAt);
+  const key = canonicalKey({
+    sport: input.sport || '',
+    snapshot: snapshotBucket(Number.isFinite(at) ? at : Date.now()),
+    markets: input.markets || '',
+    regions: input.regions || '',
+    bookmakers: input.bookmakers || '',
+    eventId: '',
+  });
+  const record = {
+    key,
+    body: input.body,
+    headers: input.headers || {},
+    fetchedAt,
+  };
+  memory.set(hashKey(key), record);
+  return record;
+}
+
 module.exports = {
   enabled,
   wrap,
@@ -514,6 +610,8 @@ module.exports = {
   snapshotBucket,
   oddsSnapshotSavedCredits,
   clearMemoryForTests,
+  findFreshSportPull,
+  rememberLivePull,
   noteKnownRequestsRemaining,
   knownRequestsRemainingValue,
   resetKnownRequestsRemainingForTests,

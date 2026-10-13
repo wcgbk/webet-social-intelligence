@@ -262,14 +262,17 @@
 
 [functions."capture-omega-pinnacle-lines"]
   schedule = "0,30 7,8,13,14,15 * * *"
-  # Pinnacle + DraftKings checks at 3:00, 9:00, and 10:30 ET.
-  # UTC union of EDT (UTC-4) and EST (UTC-5):
+  # Pinnacle + DraftKings checks at 3:00, 9:00, 10:00, and 10:30 ET.
+  # UTC union of EDT (UTC-4) and EST (UTC-5). The cron expression is unchanged.
   #   07:00 UTC = 3:00 EDT, 08:00 UTC = 3:00 EST
   #   13:00 UTC = 9:00 EDT, 14:00 UTC = 9:00 EST
+  #   14:00 UTC = 10:00 EDT, 15:00 UTC = 10:00 EST
   #   14:30 UTC = 10:30 EDT, 15:30 UTC = 10:30 EST
-  # etGuard drops the extra minutes in this union.
+  # etGuard keeps 10:00 and drops the other extra minutes in this union.
   # One live odds call per book per sport. regions=eu.
-  # Writes omega-pinnacle-line-moves sport/eventId keys only. Never the card.
+  # 3:00 also pulls yesterday's pregame historical closes (30 credits per
+  # shared commence_time). Writes omega-pinnacle-line-moves and odds-master.
+  # Never the card.
   # Skips a priced pull when x-requests-remaining < 49000. dryRun writes nothing.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 

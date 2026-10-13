@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.40-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.41-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -174,19 +174,21 @@ const LINE_MOVE = {
 };
 
 /**
- * Minutes recorded on every steam row. Scheduled 3:00 / 9:00 / 10:30 checks
- * are farther apart than this. A later denser series steams only when the
- * gap also fits in this window.
+ * Minutes recorded on every steam row. Scheduled 3:00 / 9:00 / 10:00 / 10:30
+ * checks are farther apart than this. A later denser series steams only when
+ * the gap also fits in this window.
  */
 const STEAM_WINDOW_MIN = 15;
 
 /**
- * Pinnacle no-vig line log. Context for the 10:30 snapshot only.
+ * Pinnacle no-vig line log. Context for the card only.
  * It does not feed a price, an EV, a gate, a rank, a floor, Kelly, or a cap.
  * Opens: free /events poll, then one regions=eu Pinnacle call per sport that
- * has a new event id. Checks at 3:00, 9:00, and 10:30 ET: one Pinnacle call
- * and one DraftKings call per sport. Stop priced pulls when
- * x-requests-remaining is below creditFloor.
+ * has a new event id. Checks at 3:00, 9:00, 10:00, and 10:30 ET: one Pinnacle
+ * call and one DraftKings call per sport. The 3:00 check also pulls yesterday's
+ * pregame closes (historical, 10× live = historicalCreditsPerPull). The 10:00
+ * check reuses a same-sport snapshot younger than earlyReuseMs. Stop priced
+ * pulls when x-requests-remaining is below creditFloor.
  */
 const PINNACLE_LINE_MOVE = {
   creditFloor: 49000,
@@ -199,6 +201,10 @@ const PINNACLE_LINE_MOVE = {
   /** Consecutive-check spread or total point move, both books, same sign. */
   steamLinePoints: 0.5,
   windowMinutes: STEAM_WINDOW_MIN,
+  /** 10 × 1 eu region × h2h,spreads,totals. One historical kickoff pull. */
+  historicalCreditsPerPull: 30,
+  /** 10:00 ET reuses a same-sport odds_snapshot_cache row younger than this. */
+  earlyReuseMs: 5 * 60 * 1000,
 };
 
 /**
@@ -855,6 +861,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.41-omega-vnext-price-lock: The 3:00 ET Pinnacle check also stores yesterday\'s pregame closes and today\'s 3:00 baseline. Closes use historical odds (regions=eu, bookmakers=pinnacle, markets=h2h,spreads,totals) at the last snapshot at or before each commence_time. Games that share a commence_time share one pull. A game whose close is already in odds-master, clv-candidates-v2, or clv-{date} is not pulled. Today\'s 3:00 board is the same live pull as v12.3.40: it is the baseline, and the open when none is stored. 10:00 ET pulls Pinnacle and DraftKings and reuses a same-sport odds_snapshot_cache entry younger than 5 minutes. Direction is from the 3:00 baseline, with the same steam rules, and is selection context only. 9:00 and 10:30 stay. Prices append once to odds-master. Priced pulls stop when x-requests-remaining is below 49000. dryRun and OMEGA_REPLAY_NO_WRITE write nothing. The published card is not written. Historical cost is 30 credits per pull. A typical day is about 10 unstored shared kickoffs, about 300 historical credits. No rank, EV, gate, floor, Kelly, or unit-cap change. CLV stays grading-only.',
   'v12.3.40-omega-vnext-price-lock: Pinnacle no-vig line moves (moneyline, spread, total; NFL, NCAAF, NHL, MLB) start from a free hourly /v4/sports/{sport}/events poll. A new event id gets one live Pinnacle open (regions=eu, bookmakers=pinnacle, markets=h2h,spreads,totals), stored once in omega-pinnacle-line-moves keyed by sport/eventId and never re-pulled. Checks at 3:00, 9:00, and 10:30 ET pull Pinnacle and DraftKings, one call per sport, through the snapshot cache. Moves between open, 3:00, 9:00, and 10:30 are logged. Steam is a no-vig move of at least 3 probability points or a spread/total move of at least 0.5 points, same direction at both books, with windowMinutes 15 (STEAM_WINDOW_MIN) on each steam record. The 10:30 card audit and each candidate receive that summary as context. Priced pulls stop when x-requests-remaining is below 49000. No historical odds call. dryRun and OMEGA_REPLAY_NO_WRITE write no blobs. No price, EV, gate, selection, floor, Kelly, or unit-cap change.',
   'v12.3.39-omega-vnext-price-lock: Odds API responses are stored once per sport, snapshot, markets, regions, and bookmakers. Repeat dry runs and replays reuse that snapshot. A cache hit does not spend credits. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.38-omega-vnext-price-lock: NHL moneyline market blend BLEND.ml 0.50->0.10. Replay NHL LL 0.6861->0.6775. Spread stays 0.50 and total stays 0.45. No floor, Kelly, shrink, or unit-cap change.',

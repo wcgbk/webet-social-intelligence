@@ -10,6 +10,7 @@ const {
 } = require('./lib/omega-vnext/clv_grade');
 const { CLV_KPI_FLOOR } = require('./lib/omega-vnext/config');
 const { memoFetchJson, runWithFetchMemo, hasTrueClosingCapture } = require('./lib/omega-vnext/fetch_memo');
+const oddsMaster = require('./lib/omega-vnext/odds_master');
 const { captureCandidateCloses } = require('./lib/omega-vnext/clv_candidates');
 const { gradeCandidateResults } = require('./lib/omega-vnext/candidate_closes_v2');
 const { loadLinePath } = require('./lib/omega-vnext/line_path');
@@ -1093,15 +1094,44 @@ const trackClvOmegaHandler = async (event) => {
       let commenceMs = commenceISO ? Date.parse(commenceISO) : NaN;
       let gameObj = null;
       let snapAt = null; // null → live current; ISO → historical snapshot
+      let masterHit = false;
+
+      // A pregame close already on odds-master is the close. Do not pull it again.
+      if (!sideInfo.isF5) {
+        try {
+          const parts = String(pick.matchup || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map((s) => s.trim()).filter(Boolean);
+          const stored = await oddsMaster.readCloseEvent({
+            sport: pick.sport,
+            eventId: pick.eventId || pick.event_id,
+            awayTeam: pick.awayTeam || parts[0] || null,
+            homeTeam: pick.homeTeam || parts[1] || null,
+            commenceTime: pick.commenceTime || null,
+          });
+          if (stored && stored.event) {
+            const trial = extractClose(stored.event, sideInfo, pick, dateISO);
+            if (trial && trial.overround) {
+              gameObj = stored.event;
+              snapAt = stored.snapshotAt || pick.commenceTime || null;
+              masterHit = true;
+              if (gameObj.commence_time) {
+                commenceISO = gameObj.commence_time || commenceISO;
+                commenceMs = Date.parse(commenceISO);
+              }
+            }
+          }
+        } catch (err) {
+          console.log(`[track-clv] odds-master read soft-fail: ${err.message}`);
+        }
+      }
 
       // Upcoming (or commence unknown) → current line.
-      if (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000) {
+      if (!masterHit && (!commenceISO || !Number.isFinite(commenceMs) || commenceMs >= nowMs - PRE_PITCH_BUFFER_MIN * 60000)) {
         const games = await getBulk(sportKey, null);
         gameObj = findMatchingGame(pick, games, dateISO);
         if (gameObj) { commenceISO = gameObj.commence_time || commenceISO; commenceMs = Date.parse(commenceISO); }
       }
       // Past/started, or live miss but we know commence → historical snapshot AT first pitch (the true close).
-      if (!gameObj && Number.isFinite(commenceMs)) {
+      if (!masterHit && !gameObj && Number.isFinite(commenceMs)) {
         const games = await getBulk(sportKey, commenceISO);
         gameObj = findMatchingGame(pick, games, dateISO);
         if (gameObj) snapAt = commenceISO;
@@ -1115,6 +1145,19 @@ const trackClvOmegaHandler = async (event) => {
       }
 
       const close = gameObj ? extractClose(extractObj, sideInfo, pick, dateISO) : null;
+
+      if (!masterHit && snapAt && gameObj && gameObj.id) {
+        try {
+          await oddsMaster.storeCloseFromOddsEvent(gameObj, {
+            sport: pick.sport,
+            snapshotAt: snapAt,
+            requestedAt: commenceISO,
+            source: 'track-clv',
+          });
+        } catch (err) {
+          console.log(`[track-clv] odds-master write soft-fail: ${err.message}`);
+        }
+      }
 
       // Capture provenance: how close to first pitch this snapshot was.
       let captureMinsToCommence = null;

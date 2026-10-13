@@ -29,6 +29,7 @@ const { closingNoVigFromRaw, clvFromNoVig, americanToImplied } = require('./clv_
 const { hasTrueClosingCapture } = require('./fetch_memo');
 const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
+const oddsMaster = require('./odds_master');
 
 /** Yes-pool unselected + near-misses, after the quality sort. */
 const CANDIDATE_SIDE_CAP = 20;
@@ -167,6 +168,13 @@ function selectCandidateSides(picksData, { cap = CANDIDATE_SIDE_CAP, date = null
   return out.slice(0, limited);
 }
 
+function matchupTeams(side) {
+  if (side && side.homeTeam && side.awayTeam) return { home: side.homeTeam, away: side.awayTeam };
+  const parts = String((side && side.matchup) || '').split(/\s+(?:@|vs\.?|at|v)\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 2) return { away: parts[0], home: parts[1] };
+  return { home: null, away: null };
+}
+
 function groupByCommence(sides) {
   const groups = new Map();
   for (const side of sides || []) {
@@ -274,6 +282,7 @@ function planCandidatePulls({
   eventsBySportKey = {},
   storedByKey = new Map(),
   teamsMatch = null,
+  masterCloseIds = null,
 } = {}) {
   const cap = extraCreditCap(creditCap);
   const covered = new Set(publishedSnapshotKeys || []);
@@ -289,6 +298,10 @@ function planCandidatePulls({
     }
     if (groupFullyClosed(group, storedByKey)) {
       decisions.push({ ...base, action: 'skip-stored-close', credits: 0 });
+      continue;
+    }
+    if (masterCloseIds && masterCloseIds.has(group.id)) {
+      decisions.push({ ...base, action: 'odds-master-close', credits: 0 });
       continue;
     }
     const upcoming = commenceIsUpcoming(group.commenceISO, nowMs);
@@ -667,6 +680,34 @@ async function captureCandidateCloses(opts = {}) {
     }
   }
 
+  const masterOpts = opts.oddsMasterOpts || {};
+  const masterBySide = new Map();
+  if (opts.skipOddsMaster !== true) {
+    for (const side of selected) {
+      if (!side || !side.commenceTime) continue;
+      const teams = matchupTeams(side);
+      let hit = null;
+      try {
+        hit = await oddsMaster.readCloseEvent({
+          sport: side.sport,
+          eventId: side.eventId || side.event_id,
+          homeTeam: side.homeTeam || teams.home,
+          awayTeam: side.awayTeam || teams.away,
+          commenceTime: side.commenceTime,
+        }, masterOpts);
+      } catch (err) {
+        console.error(`[track-clv] odds-master read soft-fail: ${err.message}`);
+      }
+      if (hit && hit.event) masterBySide.set(sideKey(side), hit);
+    }
+  }
+  const masterCloseIds = new Set();
+  for (const group of groupByCommence(selected)) {
+    if (group.sides.length && group.sides.every((side) => masterBySide.has(sideKey(side)))) {
+      masterCloseIds.add(group.id);
+    }
+  }
+
   const plan = planCandidatePulls({
     sides: selected,
     publishedSnapshotKeys,
@@ -676,6 +717,7 @@ async function captureCandidateCloses(opts = {}) {
     eventsBySportKey,
     storedByKey,
     teamsMatch,
+    masterCloseIds,
   });
 
   const bulkCache = opts.bulkCache || new Map();
@@ -740,11 +782,29 @@ async function captureCandidateCloses(opts = {}) {
       const games = gamesByKey.get(`snap|${decision.groupId}`) || [];
       if (typeof findMatchingGame === 'function') gameObj = findMatchingGame(asClosePick(side), games);
       capturedAt = decision.capturedAt || null;
+    } else if (decision && decision.action === 'odds-master-close') {
+      const hit = masterBySide.get(sideKey(side));
+      if (hit && hit.event) {
+        gameObj = hit.event;
+        snapAt = hit.snapshotAt || side.commenceTime || null;
+      }
     }
     let close = null;
     if (gameObj && typeof extractClose === 'function' && typeof pickSideInfo === 'function') {
       const info = pickSideInfo(asClosePick(side));
       close = extractClose(gameObj, info, asClosePick(side));
+    }
+    if (decision && decision.action === 'pull-historical' && gameObj && gameObj.id && snapAt) {
+      try {
+        await oddsMaster.storeCloseFromOddsEvent(gameObj, {
+          sport: side.sport,
+          snapshotAt: snapAt,
+          requestedAt: side.commenceTime || snapAt,
+          source: 'clv-candidate',
+        }, masterOpts);
+      } catch (err) {
+        console.error(`[track-clv] odds-master candidate write soft-fail: ${err.message}`);
+      }
     }
     let row = applyClose(side, close, { snapAt, nowMs, capturedAt });
     if (opts.gradePick && opts.findGameForGrading) {

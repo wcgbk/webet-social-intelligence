@@ -3,11 +3,13 @@
 /**
  * capture-omega-pinnacle-lines.js — Pinnacle and DraftKings line checks.
  *
- * 3:00, 9:00, and 10:30 ET. Writes only omega-pinnacle-line-moves
- * sport/eventId keys. Does not write the published card.
- * The hourly open watcher is capture-omega-pinnacle-open.
+ * 3:00, 9:00, 10:00, and 10:30 ET. Writes omega-pinnacle-line-moves
+ * sport/eventId keys and the odds-master price tape. Does not write the
+ * published card. The hourly open watcher is capture-omega-pinnacle-open.
  *
- * Live Odds API only: regions=eu, one call per book per sport.
+ * Live Odds API: regions=eu, one call per book per sport. The 3:00 check
+ * also requests yesterday's pregame historical closes. The 10:00 check
+ * reuses a same-sport snapshot younger than 5 minutes.
  * Skips a priced pull when x-requests-remaining is below 49000.
  * ?dryRun=1 and OMEGA_REPLAY_NO_WRITE write nothing.
  */

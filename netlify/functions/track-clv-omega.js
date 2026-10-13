@@ -90,7 +90,7 @@ async function writeWeeklyObserver(store, dateISO, forceWeekly) {
 //
 // What "true close" means here (upgraded 2026-06-25):
 //   1. SHARP ANCHOR, not soft-book median. We prefer Pinnacle, then a sharp-book
-//      consensus (Betfair Exchange / Matchbook / Circa), and only fall back to an
+//      consensus (Betfair Exchange / Matchbook), and only fall back to an
 //      all-book median when no sharp book is present. Regions us,us2,eu surface them.
 //   2. AS CLOSE TO FIRST PITCH AS POSSIBLE. For games that have already started
 //      (e.g. a past/graded date, or the morning settle pass) we pull the Odds API
@@ -142,13 +142,12 @@ const ODDS_SPORTS_MAP = {
 };
 
 // ── Sharp-book anchor priority (the-odds-api book keys) ──
-// Pinnacle first, then Circa / Bookmaker (the US closing-line books), then the
-// reduced-juice sharps. Exchanges stay a labeled fallback when no US sharp
-// posts both sides. Order is the priority: the first book with a two-way
-// price wins. Regions us,us2,eu. If none are present, all-book median.
+// Pinnacle first, then Bookmaker and the reduced-juice sharps. Exchanges stay
+// a labeled fallback when no US sharp posts both sides. Order is the priority:
+// the first book with a two-way price wins. Regions us,us2,eu. If none are
+// present, all-book median.
 const SHARP_BOOKS = [
   'pinnacle',
-  'circa', 'circasports',
   'bookmaker', 'betonlineag', 'lowvig',
   'betfair_ex_eu', 'betfair_ex_uk', 'betfair', 'matchbook',
 ];

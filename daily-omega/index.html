@@ -135,7 +135,6 @@
     .badge-aminus { background: #1abc9c; }
     .badge-bplus { background: #f39c12; }
     .badge-b { background: #f9a825; }
-    .badge-lean { background: #5b6b7a; }
 
     .pick-matchup { font-size: 1.0625rem; font-weight: 700; color: var(--olive); line-height: 1.25; margin-bottom: .375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .pick-matchup-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .375rem; min-width: 0; }
@@ -830,8 +829,8 @@
     return matchup.replace(/\s+@\s+/, ' vs ').replace(/\s+vs\.\s+/i, ' vs ');
   }
 
-  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b', lean:'badge-lean' };
-  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B', lean:'Lean' };
+  const badgeClass = { aplus:'badge-aplus', a:'badge-a', aminus:'badge-aminus', bplus:'badge-bplus', b:'badge-b' };
+  const ratingLabel = { aplus:'A+', a:'A', aminus:'A-', bplus:'B+', b:'B' };
 
   /* Round UP to whole dollars — no cents anywhere (37.5 -> 38); -1e-9 keeps wholes whole. */
   function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
@@ -1795,7 +1794,6 @@
       'A-': 'aminus', 'a-': 'aminus', aminus: 'aminus',
       'B+': 'bplus', 'b+': 'bplus', bplus: 'bplus',
       'B': 'b', b: 'b',
-      'Lean': 'lean', lean: 'lean',
     };
     if (typeof p.rating === 'string' && map[p.rating] != null) return map[p.rating];
     if (typeof p.confidence === 'string' && badgeClass[p.confidence]) return p.confidence;
@@ -1858,9 +1856,6 @@
       : (opts.parlayOnly
           ? `<span style="background:var(--teal-light); color:var(--teal); font-size:.625rem; font-weight:700; padding:2px 8px; border-radius:4px;">PARLAY LEG</span>`
           : '');
-    const leanBadgeHTML = p && p.tier === 'lean'
-      ? '<span class="rating-badge badge-lean">Lean</span>'
-      : '';
 
     const showStake = opts.showStake !== false && p.units && !opts.parlayOnly;
     const unitsNum = parseFloat(p.units) || 0;
@@ -1875,7 +1870,7 @@
     const card = `<div class="pick-card" data-wb-pick="${esc(p.pick)}"${borderStyle}>
         <div class="pick-header" style="margin-bottom:.25rem;">
           <span class="sport-tag">${esc(p.sport || '')}</span>
-          <span class="pick-grade-cluster">${ratingHTML}${leanBadgeHTML}</span>
+          <span class="pick-grade-cluster">${ratingHTML}</span>
         </div>
         <div class="pick-matchup-row">
           <div class="pick-matchup">${esc(shortMatchup(p.matchup, p.sport))}</div>

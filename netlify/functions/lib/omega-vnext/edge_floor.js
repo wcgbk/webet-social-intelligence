@@ -10,7 +10,7 @@ const { americanToImplied } = require('./odds_math');
  * sides whose fair price is under that number. A flat EV hurdle does not grow
  * where a small probability error becomes a large bankroll error.
  *
- * Edge stays coverProb − fair_sharp (no-vig Pinnacle/Circa). The minimum is
+ * Edge stays coverProb − fair_sharp (no-vig Pinnacle). The minimum is
  *
  *   min(6%,
  *     1.75%

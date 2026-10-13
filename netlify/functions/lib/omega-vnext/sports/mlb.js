@@ -3,7 +3,7 @@
  * MLB projection — Pythag/Elo-lite + HFA, then SP quality and park when present.
  * v12.3.8: capped bullpen residual + SP-known std tighten (ENGINE_SOFT.MLB).
  * ML / spread / total blend weights unchanged. Every anchor is no-vig
- * Pinnacle/Circa (one book alone if the other is missing; else sharp no-vig).
+ * Pinnacle (else the sharp no-vig pair).
  * Base margin and total come from per-game runs, not season run differential.
  * Season rates are neutralized by each club's home park, then the venue factor is applied once.
  * The finished total then loses the 2026 environment gap (OMEGA_MLB_ROOTFIX)
@@ -24,7 +24,7 @@ const {
   sharpPostedTotal, mlbTotalLevelShift, mlbTotalFlags, applyMlbTotalShift,
 } = require('./mlb_env');
 const { applyGameDayAdjustments, applyWeatherTotalAdj } = require('./game_day');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 
 const SPORT = 'MLB';
 
@@ -177,7 +177,7 @@ function priceGame(derived, totalShift) {
     for (const b of bundles) {
       const isHome = b.side === home;
       let p = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
-      p = blendWithMarket(p, noVigPinnacleCircaImplied(bundles, b), 0.5);
+      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
@@ -203,7 +203,7 @@ function priceGame(derived, totalShift) {
         SPORT,
         stdOpt
       );
-      const mktImp = noVigPinnacleCircaImplied(bundles, b);
+      const mktImp = noVigPinnacleImplied(bundles, b);
       pCover = blendWithMarket(pCover, mktImp, 0.5);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       let raw = {
@@ -225,7 +225,7 @@ function priceGame(derived, totalShift) {
       const line = b.point;
       if (line == null) continue;
       let p = totalCoverProb(modelTotal, line, b.side, SPORT);
-      const mktImp = noVigPinnacleCircaImplied(bundles, b);
+      const mktImp = noVigPinnacleImplied(bundles, b);
       p = blendWithMarket(p, mktImp, 0.45);
       const sideLabel = `${b.side} ${line}`;
       let raw = {

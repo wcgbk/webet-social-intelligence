@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.71-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.72-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -111,7 +111,7 @@ const ESPN_LEAGUES = {
   NHL: { sport: 'hockey', league: 'nhl', label: 'NHL' },
 };
 
-const SHARP_BOOKS = ['pinnacle', 'circa', 'circasports', 'bookmaker', 'betonlineag', 'lowvig'];
+const SHARP_BOOKS = ['pinnacle', 'bookmaker', 'betonlineag', 'lowvig'];
 
 /**
  * Major US retail books — priority order for open prints / best-price /
@@ -211,7 +211,7 @@ const PINNACLE_LINE_MOVE = {
 };
 
 /**
- * DraftKings lags the one-book no-vig (Pinnacle, else Circa).
+ * DraftKings lags the one-book no-vig (Pinnacle).
  * minPinMovePp is the Pinnacle no-vig move toward the side, in percentage
  * points, from the morning snap or the opener to the 10:30 lock.
  * maxDkFollowRatio: DraftKings implied must move less than this fraction
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.72-omega-vnext-price-lock: The unused sharp book key is off the request list and the sharp priority. Sharp books are Pinnacle, then Bookmaker, BetOnline, and LowVig. The public card omits the read-time tier field. The Edge card does not show a Lean or Main tag. Lean selection, the 1.5% edge and positive-EV rule, 0.5u lean sizing, and 0.25u parlay sizing are unchanged.',
   'v12.3.71-omega-vnext-price-lock: Daily Supabase sync at 09:25 ET posts yesterday\'s opener, the 10:00 ET snapshot, and the 3:00 ET close, plus the graded Omega card and that day\'s CLV ledger. Duplicate posts are ignored. No Odds API pull. No 10:30 lock capture exists; Odds API pulls stay 3:00 and 10:00 ET.',
   'v12.3.70-omega-vnext-price-lock: A lean-day parlay publishes only when combined EV is positive, at 0.25u. Public picks carry tier main or lean. The 6:00, 7:30, 9:00, and 9:15 ET morning snaps stay retired. Odds API pulls remain 3:00 and 10:00 ET. Results grade a parlay at the card stake and omit the row when the card has no parlay.',
   'v12.3.69-omega-vnext-price-lock: The 3:00 and 10:00 ET DraftKings call also requests Hard Rock (bookmakers=draftkings,hardrockbet, one call, 3 credits). DraftKings quotes and pricing are unchanged. Hard Rock stays review-only.',
@@ -956,14 +957,14 @@ const MODEL_NOTES = [
   'v1 projections: sport power/market-hybrid (MLB Pythag/Elo-lite; NFL/CFB normal-spread; NBA/NHL disabled).',
   'Calibration: shrink p_model toward no-vig sharp with market K; isotonic clip soft-caps extremes (no 15% fake edges).',
   'Edge badge (edgePct): calibrated model edge after shrink = coverProb - no-vig sharp fair (fallback: vs book implied). Not predictedClv cents, not raw coverProb, not dog-inflated EV%.',
-  'Predicted CLV is a proxy; residual CLV uses open→now steam; realized no-vig CLV graded by track-clv-omega (Pinnacle/Circa/Bookmaker).',
+  'Predicted CLV is a proxy; residual CLV uses open→now steam; realized no-vig CLV graded by track-clv-omega (Pinnacle/Bookmaker).',
   'Weekly CLV report is OBSERVER ONLY — no auto-steer. openPrint+lockSnapshot populate open→close path.',
   'QA hard-fails drop scratched SP (MLB), stale odds, and adverse open→pick steam before publish. NFL/NCAAF QB out/doubtful is a soft projection adjustment only (game_day.js), never a hard-fail (2026-09-28).',
   'Empty card allowed when no candidate clears gates; no lean force-fill; no self-opt mutation.',
   'Day-scope: every straight + parlay leg commenceTime must fall on the card ET date (America/New_York).',
   'Unit structure: straights ≤3.5u + fixed 0.5u parlay = max 4.0u; may be under; never force-fill.',
   'Live card (get-picks-omega): newest store date with real picks ≤ tomorrowET; sticky prior-day when empty/missing; ?date= sticky unless forceEmpty.',
-  'US books prioritized: DK/FD/BetMGM/Caesars/ESPN BET/Hard Rock/BetRivers/Fanatics; sharp refs Pinnacle/Circa/Bookmaker for CLV context.',
+  'US books prioritized: DK/FD/BetMGM/Caesars/ESPN BET/Hard Rock/BetRivers/Fanatics; sharp refs Pinnacle/Bookmaker for CLV context.',
 ].join(' ');
 
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';

@@ -33,7 +33,7 @@ const {
   blendWithMarket, totalCoverProb, spreadCoverProb, mlFromSpread, FOOTBALL_AUDIT_KEYS,
   totalDetail, spreadDetail, mlDetail,
 } = require(path.join(root, 'sports/_common'));
-const { collectMarketOutcomes, noVigPinnacleCircaImplied } = require(path.join(root, 'edge'));
+const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
@@ -61,7 +61,7 @@ function event(home, away, total, spread) {
     home_team: home,
     away_team: away,
     commence_time: '2099-06-01T23:10:00Z',
-    bookmakers: ['pinnacle', 'circa', 'draftkings', 'fanduel'].map((key) => ({
+    bookmakers: ['pinnacle', 'altbook', 'draftkings', 'fanduel'].map((key) => ({
       key,
       markets: [
         { key: 'h2h', outcomes: [{ name: home, price: -130 }, { name: away, price: 110 }] },
@@ -117,7 +117,7 @@ function unshrunkModelRawP(c, ev) {
     return c.side.startsWith(b.side) && b.point === c.line;
   });
   assert.ok(bundle, `bundle for ${c.market} ${c.side}`);
-  const anchor = noVigPinnacleCircaImplied(bundles, bundle);
+  const anchor = noVigPinnacleImplied(bundles, bundle);
   let p;
   if (c.market === 'Total') {
     p = totalCoverProb(c.modelTotalRaw, c.line, c.side, c.sport);
@@ -478,7 +478,7 @@ function assertEdgesNeverGrow(cands, ev) {
   const totalStd = config.SPORT_TOTAL_STD.NCAAF * config.NCAAF_FCS.stdMult;
   const spreadStd = config.SPORT_SPREAD_STD.NCAAF * config.NCAAF_FCS.stdMult;
   const bundles = collectMarketOutcomes(ev, 'totals');
-  const anchor = noVigPinnacleCircaImplied(bundles, bundles.find((b) => b.side === 'Over'));
+  const anchor = noVigPinnacleImplied(bundles, bundles.find((b) => b.side === 'Over'));
   const priceAt = (proj) => blendWithMarket(
     totalDetail(proj, over.line, 'Over', 'NCAAF', totalStd).coverProb,
     anchor,
@@ -675,7 +675,7 @@ function assertEdgesNeverGrow(cands, ev) {
       home_team: home,
       away_team: away,
       commence_time: '2026-10-06T23:10:00Z',
-      bookmakers: ['pinnacle', 'circa', 'draftkings', 'fanduel'].map((key) => ({
+      bookmakers: ['pinnacle', 'altbook', 'draftkings', 'fanduel'].map((key) => ({
         key,
         markets: [
           { key: 'h2h', outcomes: [

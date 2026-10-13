@@ -4,7 +4,7 @@ The card is priced from the 10:00 AM America/New_York odds snapshot (`priceLockT
 
 ## 1. DraftKings is the execution book
 
-Odds API key `draftkings`. A side with a `bookPrices` ladder and no DraftKings quote is dropped (`no-draftkings-line`). The next candidate that DraftKings does post stays in the pool and can fill the bet. Shop books do not create a second candidate for the same side and number. The fair price stays the de-vigged Pinnacle/Circa price. Stake EV is recomputed at the DraftKings American price before the gates.
+Odds API key `draftkings`. A side with a `bookPrices` ladder and no DraftKings quote is dropped (`no-draftkings-line`). The next candidate that DraftKings does post stays in the pool and can fill the bet. Shop books do not create a second candidate for the same side and number. The fair price stays the de-vigged Pinnacle price. Stake EV is recomputed at the DraftKings American price before the gates.
 
 A candidate with no `bookPrices` array is a synthetic fixture. It keeps the price it already has so older gate tests stay eligible. Live projectors always attach a ladder.
 

@@ -568,7 +568,7 @@ function blendedNflMargin(base, home, away) {
   assert.strictEqual(env.resolvePark('Colorado Rockies', { 'Colorado Rockies': { park: 1.8 } }, null), null);
 }
 
-// v12.3.11: ML, spreads, and totals blend to no-vig Pinnacle/Circa. Never prices[0].
+// v12.3.11: ML, spreads, and totals blend to no-vig Pinnacle. Never prices[0].
 {
   const edgeMod = require(path.join(root, 'edge'));
   const common = require(path.join(root, 'sports/_common'));
@@ -576,7 +576,7 @@ function blendedNflMargin(base, home, away) {
   for (const f of ['sports/mlb.js', 'sports/nfl.js', 'sports/cfb.js']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     assert.strictEqual((src.match(/prices\[0\]/g) || []).length, 0, `${f} must not blend to prices[0]`);
-    assert.ok(src.includes('noVigPinnacleCircaImplied'), f);
+    assert.ok(src.includes('noVigPinnacleImplied'), f);
   }
   const home = 'Los Angeles Dodgers';
   const away = 'San Francisco Giants';
@@ -584,13 +584,13 @@ function blendedNflMargin(base, home, away) {
     home_team: home,
     away_team: away,
     commence_time: '2026-09-24T23:10:00Z',
-    bookmakers: ['draftkings', 'fanduel', 'pinnacle', 'circa'].map((key) => {
-      const spreadHome = key === 'pinnacle' ? -110 : key === 'circa' ? -108 : -105;
-      const spreadAway = key === 'pinnacle' ? -110 : key === 'circa' ? -112 : -115;
-      const over = key === 'pinnacle' ? -110 : key === 'circa' ? -112 : -105;
-      const under = key === 'pinnacle' ? -110 : key === 'circa' ? -104 : -115;
-      const mlHome = key === 'pinnacle' ? -130 : key === 'circa' ? -128 : -125;
-      const mlAway = key === 'pinnacle' ? 110 : key === 'circa' ? 108 : 105;
+    bookmakers: ['draftkings', 'fanduel', 'pinnacle', 'altbook'].map((key) => {
+      const spreadHome = key === 'pinnacle' ? -110 : key === 'altbook' ? -108 : -105;
+      const spreadAway = key === 'pinnacle' ? -110 : key === 'altbook' ? -112 : -115;
+      const over = key === 'pinnacle' ? -110 : key === 'altbook' ? -112 : -105;
+      const under = key === 'pinnacle' ? -110 : key === 'altbook' ? -104 : -115;
+      const mlHome = key === 'pinnacle' ? -130 : key === 'altbook' ? -128 : -125;
+      const mlAway = key === 'pinnacle' ? 110 : key === 'altbook' ? 108 : 105;
       return {
         key,
         markets: [
@@ -613,12 +613,12 @@ function blendedNflMargin(base, home, away) {
   const ml = cands.find(c => c.market === 'Moneyline' && c.side === home);
   const spreadBundles = edgeMod.collectMarketOutcomes(ev, 'spreads');
   const totalBundles = edgeMod.collectMarketOutcomes(ev, 'totals');
-  const spreadAnchor = edgeMod.noVigPinnacleCircaImplied(spreadBundles, spreadBundles.find(b => b.side === home));
-  const totalAnchor = edgeMod.noVigPinnacleCircaImplied(totalBundles, totalBundles.find(b => b.side === 'Over'));
+  const spreadAnchor = edgeMod.noVigPinnacleImplied(spreadBundles, spreadBundles.find(b => b.side === home));
+  const totalAnchor = edgeMod.noVigPinnacleImplied(totalBundles, totalBundles.find(b => b.side === 'Over'));
   const pinSpread = oddsMath.noVigTwoWay(-110, -110).p1;
-  const circaSpread = oddsMath.noVigTwoWay(-108, -112).p1;
+  const altSpread = oddsMath.noVigTwoWay(-108, -112).p1;
   assert.ok(Math.abs(spreadAnchor - pinSpread) < 1e-9, 'Pinnacle paired no-vig is the anchor');
-  assert.ok(Math.abs(spreadAnchor - circaSpread) > 1e-6);
+  assert.ok(Math.abs(spreadAnchor - altSpread) > 1e-6);
   const dkSpread = oddsMath.americanToImplied(-105);
   assert.ok(Math.abs(spreadAnchor - dkSpread) > 0.005);
   const pSpread = common.spreadCoverProb(config.HFA.MLB, -1.5, 'MLB');
@@ -636,18 +636,18 @@ function blendedNflMargin(base, home, away) {
     { side: 'Home', point: -3, prices: [{ book: 'draftkings', american: -105 }, { book: 'bookmaker', american: -110 }] },
     { side: 'Away', point: 3, prices: [{ book: 'draftkings', american: -115 }, { book: 'bookmaker', american: -110 }] },
   ];
-  const fallback = edgeMod.noVigPinnacleCircaImplied(softOnly, softOnly[0]);
-  assert.ok(Math.abs(fallback - 0.5) < 1e-9, 'missing Pinnacle/Circa falls back to sharp no-vig, not prices[0]');
+  const fallback = edgeMod.noVigPinnacleImplied(softOnly, softOnly[0]);
+  assert.ok(Math.abs(fallback - 0.5) < 1e-9, 'missing Pinnacle falls back to sharp no-vig, not prices[0]');
 
-  // Broken Pinnacle pair must not be mixed with DraftKings. Circa posts both sides.
+  // Broken Pinnacle pair must not be mixed with DraftKings. Bookmaker posts both sides.
   const splitPin = [
-    { side: 'Home', point: -1.5, prices: [{ book: 'pinnacle', american: -150 }, { book: 'circa', american: -110 }, { book: 'draftkings', american: -105 }] },
-    { side: 'Away', point: 1.5, prices: [{ book: 'circa', american: -110 }, { book: 'draftkings', american: -115 }] },
+    { side: 'Home', point: -1.5, prices: [{ book: 'pinnacle', american: -150 }, { book: 'bookmaker', american: -110 }, { book: 'draftkings', american: -105 }] },
+    { side: 'Away', point: 1.5, prices: [{ book: 'bookmaker', american: -110 }, { book: 'draftkings', american: -115 }] },
   ];
   const paired = edgeMod.sharpFairForSide(splitPin, 'Home', -1.5);
-  assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Circa pair when Pinnacle is one-sided');
-  const circaAnchor = edgeMod.noVigPinnacleCircaImplied(splitPin, splitPin[0]);
-  assert.ok(Math.abs(circaAnchor - 0.5) < 1e-9, 'Circa is the anchor when Pinnacle has no two-way price');
+  assert.ok(Math.abs(paired - 0.5) < 1e-9, 'fair uses the Bookmaker pair when Pinnacle is one-sided');
+  const nextAnchor = edgeMod.noVigPinnacleImplied(splitPin, splitPin[0]);
+  assert.ok(Math.abs(nextAnchor - 0.5) < 1e-9, 'the next sharp pair is the anchor when Pinnacle has no two-way price');
 }
 
 // Season run totals must not saturate the moneyline, and a starter still moves it.

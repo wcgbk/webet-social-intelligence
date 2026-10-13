@@ -3,7 +3,7 @@
  * NFL — EPA-style off/def prior when both teams match (nfl-epa-v1*),
  * else standings power + HFA (nfl-normal-*). Game-day rest/QB soft adj
  * may tag nfl-epa-v1-gameday-* / nfl-normal-*-gameday. Blend weights
- * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
+ * unchanged. ML, spread, and total anchors are no-vig Pinnacle.
  * Totals and margins shrink toward the sharp line in points before the
  * CDF. Calibrate shrink runs later on that probability.
  * An NWS row on gameDay.weatherByGame adjusts the total only. When that
@@ -29,7 +29,7 @@ const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT } = require('../config');
 const { homeFieldPoints } = require('./altitude');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 const SPORT = 'NFL';
 
 function withIdentity(raw, env) {
@@ -190,7 +190,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         pts.modelMarginRaw,
         pts.modelMarginShrunk,
         null,
-        noVigPinnacleCircaImplied(bundles, b),
+        noVigPinnacleImplied(bundles, b),
         0.5,
       );
       let raw = {
@@ -215,7 +215,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         isHome ? pts.modelMarginRaw : -pts.modelMarginRaw,
         isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
         b.point,
-        noVigPinnacleCircaImplied(bundles, b),
+        noVigPinnacleImplied(bundles, b),
         0.5,
       );
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
@@ -240,7 +240,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         pts.modelTotalRaw,
         pts.modelTotalShrunk,
         b.point,
-        noVigPinnacleCircaImplied(bundles, b),
+        noVigPinnacleImplied(bundles, b),
         NFL_TOTAL_MODEL_WEIGHT,
       );
       let raw = {

@@ -13,8 +13,8 @@
  * endpoint (10×). Daily cap OMEGA_CANDIDATE_CLOSE_CREDIT_CAP, default 90,
  * tracked per ET day inside the blob.
  *
- * De-vig matches fair_sharp_p: sharpFairForSide order (Pinnacle, then Circa,
- * then the other sharp books), same-book pair only. A spread or total whose
+ * De-vig matches fair_sharp_p: sharpFairForSide order (Pinnacle, then the
+ * other sharp books), same-book pair only. A spread or total whose
  * sharp close is a different number stores that number's no-vig and
  * pointAdjusted. It does not shift the probability onto the candidate line.
  *
@@ -33,8 +33,8 @@ const { resolveFetch, auditBlobCall } = require('./audit_log');
 const { oddsSnapshotSavedCredits } = require('./odds_snapshot_cache');
 const oddsMaster = require('./odds_master');
 
-/** Odds API bookmaker keys. circasports is Circa's key. ≤10 → 1 region. */
-const SHARP_CLOSE_BOOKS = ['pinnacle', 'circasports', 'lowvig', 'betonlineag', 'bookmaker'];
+/** Odds API bookmaker keys. ≤10 → 1 region. */
+const SHARP_CLOSE_BOOKS = ['pinnacle', 'lowvig', 'betonlineag', 'bookmaker'];
 const MARKETS = 'h2h,spreads,totals';
 /** 3 markets × 1 region. */
 const CREDITS_PER_CALL = 3;

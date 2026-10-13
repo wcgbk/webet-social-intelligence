@@ -15,7 +15,7 @@ const { noVigTwoWay, americanToImplied, americanCentsDiff } = require('./netlify
 const et = require('./netlify/functions/lib/et-schedule');
 const { handle } = require('./netlify/functions/capture-candidate-closes');
 
-const SHARP_BOOKS_PARAM = 'pinnacle,circasports,lowvig,betonlineag,bookmaker';
+const SHARP_BOOKS_PARAM = 'pinnacle,lowvig,betonlineag,bookmaker';
 const NOW = new Date('2026-10-09T23:00:00.000Z');
 const ET_DAY = '2026-10-09';
 const YDAY = '2026-10-08';
@@ -138,7 +138,7 @@ function oddsUrls(calls) {
   // -110/-110 is exactly 0.5. Pinnacle wins when both books post the line.
   const even = event('Host', 'Away', [
     book('pinnacle', [totals(8.5, -110, -110)]),
-    book('circasports', [totals(8.5, -115, -105)]),
+    book('bookmaker', [totals(8.5, -115, -105)]),
   ]);
   const evenClose = v2.devigCandidate(even, { market: 'Total', side: 'Over 8.5', line: 8.5 });
   assert.strictEqual(evenClose.closeNoVig, 0.5);
@@ -156,19 +156,19 @@ function oddsUrls(calls) {
   assert.strictEqual(offClose.book, 'pinnacle');
   assert.strictEqual(offClose.closeNoVig, shifted);
 
-  const circaExact = event('Host', 'Away', [
+  const exactOnNextSharp = event('Host', 'Away', [
     book('pinnacle', [totals(7.5, -115, -105)]),
-    book('circasports', [totals(8.5, -110, -110)]),
+    book('bookmaker', [totals(8.5, -110, -110)]),
   ]);
-  const circaClose = v2.devigCandidate(circaExact, { market: 'Total', side: 'Over 8.5', line: 8.5 });
-  assert.strictEqual(circaClose.pointAdjusted, false);
-  assert.strictEqual(circaClose.book, 'circasports');
-  assert.strictEqual(circaClose.line, 8.5);
-  assert.strictEqual(circaClose.closeNoVig, 0.5);
+  const nextClose = v2.devigCandidate(exactOnNextSharp, { market: 'Total', side: 'Over 8.5', line: 8.5 });
+  assert.strictEqual(nextClose.pointAdjusted, false);
+  assert.strictEqual(nextClose.book, 'bookmaker');
+  assert.strictEqual(nextClose.line, 8.5);
+  assert.strictEqual(nextClose.closeNoVig, 0.5);
 
   const bothExact = event('Host', 'Away', [
     book('pinnacle', [totals(8.5, -115, -105)]),
-    book('circasports', [totals(8.5, -110, -110)]),
+    book('bookmaker', [totals(8.5, -110, -110)]),
   ]);
   const pinWins = v2.devigCandidate(bothExact, { market: 'Total', side: 'Over 8.5', line: 8.5 });
   assert.strictEqual(pinWins.book, 'pinnacle');

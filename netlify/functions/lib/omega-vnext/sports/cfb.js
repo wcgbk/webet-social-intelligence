@@ -3,7 +3,7 @@
  * NCAAF/CFB — EPA-style off/def prior when both teams match (cfb-epa-v1*),
  * else standings power + HFA (cfb-normal-*). Game-day rest/QB soft adj
  * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. Blend weights
- * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
+ * unchanged. ML, spread, and total anchors are no-vig Pinnacle.
  * Totals and margins shrink toward the sharp line in points before the
  * CDF. Calibrate shrink runs later on that probability.
  * A tempo total (plays x points per play) blends into the total when the
@@ -23,7 +23,7 @@ const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD, NCAAF_MODEL_WEIGHT } = require('../config');
 const { homeFieldPoints } = require('./altitude');
 const { resolveTeamId, isFbsTeamId } = require('./team_identity');
-const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
+const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 
 const SPORT = 'NCAAF';
 
@@ -172,7 +172,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         pts.modelMarginRaw,
         pts.modelMarginShrunk,
         null,
-        noVigPinnacleCircaImplied(bundles, b),
+        noVigPinnacleImplied(bundles, b),
         NCAAF_MODEL_WEIGHT.ml,
       );
       let raw = {
@@ -198,7 +198,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         isHome ? pts.modelMarginRaw : -pts.modelMarginRaw,
         isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
         b.point,
-        noVigPinnacleCircaImplied(bundles, b),
+        noVigPinnacleImplied(bundles, b),
         NCAAF_MODEL_WEIGHT.spread,
       );
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
@@ -224,7 +224,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         pts.modelTotalRaw,
         pts.modelTotalShrunk,
         b.point,
-        noVigPinnacleCircaImplied(bundles, b),
+        noVigPinnacleImplied(bundles, b),
         NCAAF_MODEL_WEIGHT.total,
       );
       let raw = {

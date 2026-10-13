@@ -108,7 +108,7 @@ function withinPlaceableJuice(bookAmerican, publishedAmerican, cfg = PLACEABILIT
 
 /**
  * US retail books in US_BOOK_PRIORITY that offer this side near the published
- * price. Pinnacle / Circa / other sharp books do not count. One brand once.
+ * price. Pinnacle and the other sharp books do not count. One brand once.
  * @returns {{ placeableBooks: string[], bestPlaceable: {book: string, american: number, point?: number}|null, placeable: boolean }}
  */
 function assessPlaceability(prices, publishedAmerican, point) {
@@ -335,28 +335,22 @@ function noVigForBook(sideBundles, target, book) {
 }
 
 /**
- * One-book no-vig. Pinnacle when that book posts both sides. Circa
- * (circa, else circasports) only when Pinnacle has no two-way price.
- * Null when neither book has a pair. Does not mix books and does not
+ * One-book no-vig. Pinnacle when that book posts both sides.
+ * Null when Pinnacle has no pair. Does not mix books and does not
  * fall through to sharpFairForSide.
  */
 function pairedSharpNoVig(sideBundles, target) {
   if (!target) return null;
   const pin = noVigForBook(sideBundles, target, 'pinnacle');
   if (pin != null && Number.isFinite(pin)) return { p: pin, book: 'pinnacle' };
-  const circa = noVigForBook(sideBundles, target, 'circa');
-  if (circa != null && Number.isFinite(circa)) return { p: circa, book: 'circa' };
-  const circaAlt = noVigForBook(sideBundles, target, 'circasports');
-  if (circaAlt != null && Number.isFinite(circaAlt)) return { p: circaAlt, book: 'circasports' };
   return null;
 }
 
 /**
  * Spread/total/ML market anchor: Pinnacle's paired no-vig when that book
- * posts both sides. Circa (circa, else circasports) only when Pinnacle has
- * no two-way price. Missing both falls back to sharpFairForSide.
+ * posts both sides. Missing Pinnacle falls back to sharpFairForSide.
  */
-function noVigPinnacleCircaImplied(sideBundles, target) {
+function noVigPinnacleImplied(sideBundles, target) {
   const paired = pairedSharpNoVig(sideBundles, target);
   if (paired) return paired.p;
   if (!target) return null;
@@ -368,8 +362,8 @@ function noVigPinnacleCircaImplied(sideBundles, target) {
  */
 /**
  * No-vig fair for one side.
- * Prefer a paired same-book price (Pinnacle, then Circa, then the other
- * sharp books). Mixing Pinnacle on one side with a different book's number
+ * Prefer a paired same-book price (Pinnacle, then the other sharp books).
+ * Mixing Pinnacle on one side with a different book's number
  * on the other is not a de-vig. The mixed sharpConsensus path remains only
  * when no book posts both sides.
  */
@@ -567,7 +561,7 @@ module.exports = {
   applyPlaceabilityDrops,
   sharpFairForSide,
   pairedSharpNoVig,
-  noVigPinnacleCircaImplied,
+  noVigPinnacleImplied,
   oppositeBundle,
   predictedClvCents,
   enrichCandidateWithEdge,

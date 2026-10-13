@@ -17,6 +17,22 @@ exports.handler = (event, context) => {
   const now = (context && context.now instanceof Date) ? context.now : new Date();
   const etSkip = rejectUnlessEtSlot('trigger-omega-nba-shadow', event, now);
   if (etSkip) return etSkip;
+  // A live cron would pull NBA odds at 17:30 ET. Fixture tests pass
+  // nbaShadowTest and already spend 0 credits. Production does not fetch.
+  if (!(context && context.nbaShadowTest)) {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ok: true,
+        skipped: 'odds-api-window',
+        oddsCalls: 0,
+        wrote: false,
+        creditsEstimate: 0,
+        message: 'NBA shadow does not call the Odds API. Pulls are 3:00 and 10:00 ET only.',
+      }),
+    };
+  }
   return handleShadow(event, context, {
     mode: 'project',
     trustSchedule: true,

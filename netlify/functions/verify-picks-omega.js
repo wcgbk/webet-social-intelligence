@@ -527,7 +527,41 @@ function decisionForPick(pick, hr, { feedDown = false, gameMissing = false, live
   });
 }
 
+function snapshotAlreadyCoversQa(picksData) {
+  const sel = picksData && picksData.selection;
+  return !!(sel && sel.snapshotCoversHardRock === true && sel.snapshotCoversParlay === true);
+}
+
 async function runHardRockCheck(picksData) {
+  if (snapshotAlreadyCoversQa(picksData)) {
+    const schedule = verifySchedule(picksData, Date.now());
+    return {
+      summary: {
+        book: "Hard Rock Bet",
+        checked: (picksData.picks || []).length,
+        available: 0,
+        warnings: 0,
+        errors: 0,
+        skipped: true,
+        apiDown: false,
+        reason: "10 AM snapshot covers Hard Rock and the parlay",
+        scheduleDrops: schedule.dropped || [],
+      },
+      pickResults: (picksData.picks || []).map(() => ({
+        available: false,
+        hrOdds: null,
+        hrPoint: null,
+        warnings: [],
+        errors: [],
+        notes: [],
+        decision: { drop: false },
+      })),
+      parlayFindings: [],
+      legDecisions: [],
+      corrections: [],
+      changed: !!schedule.changed,
+    };
+  }
   const summary = { book: "Hard Rock Bet", checked: 0, available: 0, warnings: 0, errors: 0, skipped: false, apiDown: false };
   const pickResults = [];
   const parlayFindings = [];

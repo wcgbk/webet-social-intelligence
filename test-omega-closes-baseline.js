@@ -156,8 +156,8 @@ function priceKeys(store, eventId) {
   cache.resetKnownRequestsRemainingForTests();
   cache.clearMemoryForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.43-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.43-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.44-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.44-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('v12.3.40-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('No historical odds call.'));
     assert.strictEqual(config.PINNACLE_LINE_MOVE.historicalCreditsPerPull, 30);
@@ -167,7 +167,7 @@ function priceKeys(store, eventId) {
 
     const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
     const block = toml.split('[functions."capture-omega-pinnacle-lines"]')[1].split('\n[')[0];
-    assert.ok(block.includes('schedule = "0,30 7,8,13,14,15 * * *"'));
+    assert.ok(block.includes('schedule = "0 7,8,14,15 * * *"'));
     assert.ok(!/picks-\{date\}|storePicks/.test(block));
 
     assert.strictEqual(master.isPreviousEtDay('2026-03-08T04:30:00Z', '2026-03-08'), true);

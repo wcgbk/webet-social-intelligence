@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * Pinnacle / DraftKings line log. Context for the 10:30 ET card only.
+ * Pinnacle / DraftKings line log. Context for the 10:00 ET card only.
  *
- * The open is one Pinnacle print, stored once at sport/eventId, and never
- * rewritten. Checks at 03:00, 09:00, 10:00, and 10:30 ET append. Moves are
- * the change between consecutive observations
- * (open → 3:00 → 9:00 → 10:00 → 10:30).
+ * The open is the first price in the 3:00 ET pull, stored once at
+ * sport/eventId, and never rewritten. Checks at 03:00 and 10:00 ET append.
+ * Moves are the change between consecutive observations
+ * (open → 3:00 → 10:00). 9:00 and 10:30 are not pulled.
  * Direction on the card context is from the 3:00 baseline when that print
  * exists, otherwise from the open. Steam needs the same direction at
  * Pinnacle and DraftKings. This module does not price, rank, gate, or write
@@ -22,8 +22,8 @@ const { resolveFetch, auditBlobCall } = require('./audit_log');
 const LINE_MOVE_STORE = 'omega-pinnacle-line-moves';
 const SCHEMA = 'omega-pinnacle-line-moves-v1';
 const PINNACLE_SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL'];
-const CHECK_SLOTS = ['0300', '0900', '1000', '1030'];
-const SLOT_ORDER = ['open', '0300', '0900', '1000', '1030'];
+const CHECK_SLOTS = ['0300', '1000'];
+const SLOT_ORDER = ['open', '0300', '1000'];
 const CHECK_BOOKS = ['pinnacle', 'draftkings'];
 const LOCK_GRACE_MS = 15 * 60 * 1000;
 
@@ -330,7 +330,7 @@ function steamPairAllowed(fromSlot, toSlot, fromAt, toAt, windowMinutes) {
  * Prob: |no-vig| >= steamProbPts on both, same sign.
  * Line: spread or total |point| >= steamLinePoints on both, same sign.
  * Either predicate is enough. One book, or opposite signs, is not steam.
- * windowMinutes is always stored. A gap that is not an open/3:00/9:00/10:00/10:30
+ * windowMinutes is always stored. A gap that is not an open/3:00/10:00
  * step must also be <= windowMinutes (the later dense-check rule).
  */
 function confirmSteam(pinMove, dkMove, opts = {}) {
@@ -651,7 +651,7 @@ function slateAudit(doc, dateISO, attached, games) {
   return {
     store: LINE_MOVE_STORE,
     date: dateISO || (doc && doc.date) || null,
-    cutoff: '10:30 ET',
+    cutoff: '10:00 ET',
     eventCount: events.length,
     moveCount: rows.reduce((sum, row) => sum + (row.moveCount || 0), 0),
     steamCount: rows.reduce((sum, row) => sum + ((row.steams && row.steams.length) || 0), 0),
@@ -843,7 +843,7 @@ async function storeOpen(sport, eventId, open, opts = {}) {
 }
 
 /**
- * Append one 0300 / 0900 / 1030 check. The same slot is not written twice.
+ * Append one 0300 / 1000 check. The same slot is not written twice.
  * Moves and steams are computed against the previous observation only.
  */
 async function storeCheck(sport, eventId, check, opts = {}) {

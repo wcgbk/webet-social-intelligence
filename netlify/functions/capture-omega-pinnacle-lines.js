@@ -3,9 +3,10 @@
 /**
  * capture-omega-pinnacle-lines.js — Pinnacle and DraftKings line checks.
  *
- * 3:00, 9:00, 10:00, and 10:30 ET. Writes omega-pinnacle-line-moves
- * sport/eventId keys and the odds-master price tape. Does not write the
- * published card. The hourly open watcher is capture-omega-pinnacle-open.
+ * 3:00 and 10:00 ET only. Writes omega-pinnacle-line-moves sport/eventId
+ * keys and the odds-master price tape. Does not write the published card.
+ * capture-omega-pinnacle-open is suspended: openers are the first price
+ * in the 3:00 pull, and that handler returns before any Odds API call.
  *
  * Live Odds API: regions=eu, one call per book per sport. The 3:00 check
  * also requests yesterday's pregame historical closes. The 10:00 check
@@ -25,6 +26,21 @@ function compactSlot(hhmm) {
 
 async function handleCapture(event, functionName, opts = {}) {
   const name = functionName || 'capture-omega-pinnacle-lines';
+  if (name === 'capture-omega-pinnacle-open') {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ok: true,
+        skipped: 'odds-api-window',
+        mode: 'open',
+        wrote: false,
+        pulls: 0,
+        eventPolls: 0,
+        message: 'Openers are the first price in the 3:00 ET pull. This job does not call the Odds API.',
+      }),
+    };
+  }
   const now = opts.now instanceof Date ? opts.now : new Date();
   const etSkip = rejectUnlessEtSlot(name, event, now);
   if (etSkip) return etSkip;

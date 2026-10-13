@@ -10,7 +10,7 @@
  * bypass the guard and keep the handler's existing behavior.
  *
  * Every-15-min jobs with no ET window are listed in SCHEDULE_NA and are not
- * guarded. capture-candidate-closes is every 15 minutes but DST-guarded to the ET window.
+ * guarded. Kickoff close capture is not scheduled.
  * US Pacific jobs (Circa) are stored as ET. ET and PT switch DST together,
  * so an ET slot stays the same PT wall time all year.
  */
@@ -100,17 +100,11 @@ const ET_SCHEDULE = {
   'trigger-picks-cfb': { etTimes: ['09:10'] },
   'confirm-starters-mlb': { etTimes: ['13:30'] },
   'trigger-clv': { etTimes: ['03:00', '13:00', '19:00'] },
-  'capture-omega-lines': { etTimes: ['06:00', '07:30'] },
-  'capture-omega-lines-late': { etTimes: ['09:00', '09:15'] },
-  // Pinnacle + DraftKings line checks. 3:00, 9:00, 10:00, and 10:30 ET.
-  // Cron "0,30 7,8,13,14,15 * * *" is the UTC union of EDT (UTC-4) and EST
-  // (UTC-5). 10:00 is already in that union (14:00 UTC EDT, 15:00 UTC EST).
-  // etGuard drops 03:30, 04:00, 09:30, and 11:00. Context only.
-  'capture-omega-pinnacle-lines': { etTimes: ['03:00', '09:00', '10:00', '10:30'] },
-  // Free /events discovery every ET hour at :00. Cron "0 * * * *" covers both
-  // DST offsets. dstFold 'later' runs the fall-back hour once. A new event id
-  // gets one Pinnacle open pull. An already-captured open is not pulled again.
-  'capture-omega-pinnacle-open': { etTimes: hourlyAt(0), dstFold: 'later' },
+  // Pinnacle + DraftKings line checks. 3:00 and 10:00 ET only.
+  // Cron "0 7,8,14,15 * * *" is the UTC union of EDT (UTC-4) and EST (UTC-5).
+  // etGuard drops 04:00 and 11:00. 9:00 and 10:30 are not scheduled.
+  // Morning line snaps, the hourly opener, and kickoff closes are suspended.
+  'capture-omega-pinnacle-lines': { etTimes: ['03:00', '10:00'] },
   // 13:15 UTC = 9:15 ET (EDT), 14:15 UTC = 9:15 ET (EST). Before the 9:30 card.
   'recal-report-omega': { etTimes: ['09:15'] },
   // Same 09:15 ET slot. Display-only running CLV total. Does not price or select.
@@ -127,11 +121,6 @@ const ET_SCHEDULE = {
   'capture-omega-walkforward': { etTimes: ['11:15'] },
   'capture-omega-walkforward-evening': { etTimes: ['19:45'] },
   'capture-opening-lines': { etTimes: ['06:00'] },
-  // 11:30 ET through 01:30 ET next day, every 15 min. Cron is the UTC union
-  // of EDT (UTC-4) and EST (UTC-5); etGuard drops the hours outside this list.
-  // On the fall-back night the 1:00 hour occurs twice. dstFold 'later' keeps
-  // the second (EST) occurrence so the slot still fires once.
-  'capture-candidate-closes': { etTimes: quarterHourSlots('11:30', '01:30'), dstFold: 'later' },
   'verify-picks': { etTimes: ['10:30'] },
   'self-optimize': { etTimes: ['05:00'], days: [0] },
   'trigger-trend-monitor': { etTimes: ['21:00'] },

@@ -27,9 +27,8 @@ const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_
 const { attachGenerateHealth } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
-const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth, missingDueSlots, canonicalRetrySlot } = require('./line_path');
+const { loadLinePath, annotateLineMoves, assessCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
-const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
 const { stampCandidates } = require('./late_news');
@@ -224,6 +223,16 @@ async function emitCaptureHealthOps(dateISO, captureHealth, meta = {}) {
   }
 }
 
+/** True when the 10:00 ingest returned a US-region board with no sport error. */
+function tenAmSnapshotCoversChecks(snap) {
+  const bySport = snap && snap.oddsBySport;
+  if (!bySport || typeof bySport !== 'object') return false;
+  const names = Object.keys(bySport);
+  if (!names.length) return false;
+  if (Array.isArray(snap.oddsErrors) && snap.oddsErrors.length) return false;
+  return names.every((name) => Array.isArray(bySport[name]));
+}
+
 async function generateOmegaVnext(opts = {}) {
   if (!opts._fetchMemo) {
     const run = () => runWithFetchMemo(() => generateOmegaVnext({ ...opts, _fetchMemo: true }));
@@ -338,50 +347,8 @@ async function generateOmegaVnext(opts = {}) {
 
   const requiredSlotsET = (LINE_MOVE && LINE_MOVE.captureSlotsET) || ['0600', '0730', '0900', '0915'];
   let captureHealth = assessCaptureHealth(dateISO, linePathMeta, { requiredSlotsET });
-  let retriedCapture = false;
-  let retryOk = null;
-  // Retry only for snaps that should already exist (9:05 must not treat 9:15 as failed).
-  const dueMissing = missingDueSlots(captureHealth.missingSlotsET, now);
-  const retrySlot = replayLike ? null : canonicalRetrySlot(now, {
-    slots: requiredSlotsET,
-    missingDue: dueMissing,
-    usableSnapCount: captureHealth.usableSnapCount,
-  });
-  // dryRun is no-save: do not write a live line snap while pricing the card.
-  if (retrySlot && !dryRun) {
-    retriedCapture = true;
-    try {
-      const cap = await runOmegaLineCapture({ force: true, dateISO, now, etSlot: retrySlot });
-      retryOk = !!(cap && Number(cap.gameCount) > 0);
-      console.log(JSON.stringify({
-        event: 'captureHealthRetry',
-        date: dateISO,
-        retryOk,
-        gameCount: cap && cap.gameCount,
-        etSlot: cap && cap.etSlot,
-        error: null,
-      }));
-    } catch (e) {
-      retryOk = false;
-      console.warn(JSON.stringify({
-        event: 'captureHealthRetry',
-        date: dateISO,
-        retryOk: false,
-        error: e.message,
-      }));
-    }
-    try {
-      const reloaded = await loadLinePath(dateISO);
-      if (reloaded) linePathMeta = reloaded;
-    } catch (e) {
-      console.error(`[omega-vnext] line-move reload failed: ${e.message}`);
-    }
-    captureHealth = assessCaptureHealth(dateISO, linePathMeta, {
-      requiredSlotsET,
-      retriedCapture,
-      retryOk,
-    });
-  }
+  // Morning 0600/0730/0900/0915 snaps are suspended. Do not pull the Odds API
+  // to fill them. A missing slot stays a warning and does not block the card.
 
   if (replayLike) {
     const complete = captureHealth.usableSnapCount > 0 && captureHealth.missingSlotsET.length === 0;
@@ -398,7 +365,7 @@ async function generateOmegaVnext(opts = {}) {
     };
   }
 
-  // Missing 0600/0730/0900/0915 slots are a warning. Retry already ran.
+  // Missing 0600/0730/0900/0915 slots are a warning. They are not re-pulled.
   // The card always publishes. Zero usable snaps do not hard-fail.
   if (captureHealth.hardFail) {
     console.warn(JSON.stringify({
@@ -553,6 +520,10 @@ async function generateOmegaVnext(opts = {}) {
   }
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
   console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
+  for (const c of yesPool.concat(leanPool)) {
+    if (c) c.hardRockPriced = hasHardRockPrice(c);
+  }
+  const snapshotCoversQa = tenAmSnapshotCoversChecks(snap);
 
   const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null);
   const top10Candidates = selectTop10(yesPool, 10);
@@ -780,6 +751,8 @@ async function generateOmegaVnext(opts = {}) {
       window: '10:00-10:15',
       rerankWindow: '10:15-10:30',
       top10: top10Rows(top10Candidates, 10),
+      snapshotCoversHardRock: snapshotCoversQa,
+      snapshotCoversParlay: snapshotCoversQa,
       hrCoverage: top10Candidates.map((c) => ({
         matchup: c.matchup || null,
         market: c.market || null,

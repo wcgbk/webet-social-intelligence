@@ -45,6 +45,16 @@ function compactSlot(hhmm) {
 }
 
 async function handleCapture(event, functionName) {
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ok: true,
+      skipped: 'odds-api-window',
+      function: functionName || 'capture-omega-lines',
+      message: 'Odds API pulls are 3:00 and 10:00 ET only. Morning line snaps are suspended.',
+    }),
+  };
   const qs = (event && event.queryStringParameters) || {};
   const force = !!qs.force;
   const now = new Date();

@@ -460,7 +460,8 @@ async function recordTape(entry, storeOpts) {
 }
 
 /**
- * Open watcher or a 3:00 / 9:00 / 10:00 / 10:30 check.
+ * Open watcher or a 3:00 / 10:00 check. The hourly opener is not scheduled.
+ * 9:00 and 10:30 are not check slots.
  * Opens poll /events (0 credits) and pull Pinnacle once per sport that has a
  * new event id. Checks pull Pinnacle and DraftKings, one call per sport.
  * The 10:00 check reuses a same-sport snapshot younger than 5 minutes.

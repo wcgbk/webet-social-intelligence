@@ -372,8 +372,12 @@ assert.deepStrictEqual(
 );
 
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
-assert.ok(/\[functions\."capture-omega-lines"\]\s*\n\s*schedule = "0,30 10,11,12 \* \* \*"/.test(toml));
-assert.ok(/\[functions\."capture-omega-lines-late"\]\s*\n\s*schedule = "0,15 13,14 \* \* \*"/.test(toml));
+const linesBlock = toml.split('[functions."capture-omega-lines"]')[1].split('\n[functions.')[0];
+const lateBlock = toml.split('[functions."capture-omega-lines-late"]')[1].split('\n[functions.')[0];
+assert.ok(/#\s*schedule = "0,30 10,11,12 \* \* \*"/.test(linesBlock), 'morning line snap schedule stays commented');
+assert.ok(!/^\s*schedule\s*=/m.test(linesBlock), 'capture-omega-lines must not have an active schedule');
+assert.ok(/#\s*schedule = "0,15 13,14 \* \* \*"/.test(lateBlock), 'late line snap schedule stays commented');
+assert.ok(!/^\s*schedule\s*=/m.test(lateBlock), 'capture-omega-lines-late must not have an active schedule');
 assert.ok(/\[functions\."warm-omega-feeds"\]\s*\n\s*schedule = "0 13,14 \* \* \*"/.test(toml));
 assert.ok(/\[functions\."trigger-omega-shadow"\]\s*\n\s*schedule = "5 13,14 \* \* \*"/.test(toml));
 const tspBlock = toml.split('[functions."fetch-tsp-live"]')[1].split('\n[functions.')[0];

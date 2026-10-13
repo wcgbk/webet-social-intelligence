@@ -1,11 +1,10 @@
 'use strict';
 
 /**
- * capture-omega-pinnacle-open.js — hourly free /events discovery.
+ * capture-omega-pinnacle-open.js — suspended.
  *
- * Every ET hour at :00. A sport with a new event id gets one Pinnacle
- * open pull. An open already stored is not pulled again. Does not write
- * the published card. 3:00 / 9:00 / 10:30 checks live on
+ * Openers are the first price in the 3:00 ET pull. This handler returns
+ * before any Odds API call. 3:00 and 10:00 checks live on
  * capture-omega-pinnacle-lines.
  */
 

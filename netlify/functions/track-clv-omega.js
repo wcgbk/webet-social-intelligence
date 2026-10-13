@@ -914,6 +914,17 @@ const trackClvOmegaHandler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
+  // Omega closing lines come from the 3:00 ET historical capture.
+  // This job used to pull live odds. It does not.
+  return {
+    statusCode: 200,
+    headers: CORS,
+    body: JSON.stringify({
+      ok: true,
+      skipped: 'odds-api-window',
+      message: 'Omega closing lines come from the 3:00 ET historical capture. This job does not call the Odds API.',
+    }),
+  };
 
   try {
     // Determine date — default to today ET

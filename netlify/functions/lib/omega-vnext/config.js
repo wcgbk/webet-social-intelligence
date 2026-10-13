@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.43-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.44-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -174,21 +174,21 @@ const LINE_MOVE = {
 };
 
 /**
- * Minutes recorded on every steam row. Scheduled 3:00 / 9:00 / 10:00 / 10:30
- * checks are farther apart than this. A later denser series steams only when
- * the gap also fits in this window.
+ * Minutes recorded on every steam row. Scheduled 3:00 / 10:00 checks are
+ * farther apart than this. A later denser series steams only when the gap
+ * also fits in this window.
  */
 const STEAM_WINDOW_MIN = 15;
 
 /**
  * Pinnacle no-vig line log. Context for the card only.
  * It does not feed a price, an EV, a gate, a rank, a floor, Kelly, or a cap.
- * Opens: free /events poll, then one regions=eu Pinnacle call per sport that
- * has a new event id. Checks at 3:00, 9:00, 10:00, and 10:30 ET: one Pinnacle
- * call and one DraftKings call per sport. The 3:00 check also pulls yesterday's
- * pregame closes (historical, 10× live = historicalCreditsPerPull). The 10:00
- * check reuses a same-sport snapshot younger than earlyReuseMs. Stop priced
- * pulls when x-requests-remaining is below creditFloor.
+ * Opens are the first price in the 3:00 ET pull. Checks at 3:00 and 10:00 ET:
+ * one Pinnacle call and one DraftKings call per sport. The 3:00 check also
+ * pulls yesterday's pregame closes (historical, 10× live = historicalCreditsPerPull).
+ * The 10:00 check reuses a same-sport snapshot younger than earlyReuseMs.
+ * 9:00, 10:30, the hourly opener, and kickoff closes are not pulled.
+ * Stop priced pulls when x-requests-remaining is below creditFloor.
  */
 const PINNACLE_LINE_MOVE = {
   creditFloor: 49000,
@@ -861,6 +861,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.44-omega-vnext-price-lock: Odds API pulls are 3:00 and 10:00 ET only. 9:00 and 10:30 Pinnacle checks are gone. Morning line snaps, the hourly opener, kickoff closes, the 9:05 shadow generate, and the live NBA shadow pull do not call the Odds API. track-clv-omega does not pull. Hard Rock and the parlay are reviewed from the 10:00 snapshot and pull only when that snapshot does not cover them. The 49,000 credit floor is unchanged.',
   'v12.3.43-omega-vnext-price-lock: Hybrid rank. Edge is the primary key for the top 10, the straights, and the re-rank. When two candidates are within 0.2 percentage points of edge, higher stake EV wins. When the floor does not fill three straights, positive-EV leans fill the open slots, sorted by EV. Probability does not gate or rank.',
   'v12.3.42-omega-vnext-price-lock: Daily card timeline. Final pricing is the 10:00 ET snapshot. Top 10 candidates are ranked by edge, one per game. News already on those rows is the 10:15-10:30 input; the same edge rank is the re-ranked list. QA at 10:30 checks DraftKings on that snapshot and Hard Rock coverage of the top 10 and the three parlay legs. A parlay leg with no Hard Rock price is a backend bug-log entry, silent on the page, and is swapped for the next edge-ranked candidate that has a Hard Rock price or noted. QA does not block publish. The parlay is those three straights. The optimizer is not used. The public card waits until 11:00 ET.',
   'v12.3.41-omega-vnext-price-lock: The 3:00 ET Pinnacle check also stores yesterday\'s pregame closes and today\'s 3:00 baseline. Closes use historical odds (regions=eu, bookmakers=pinnacle, markets=h2h,spreads,totals) at the last snapshot at or before each commence_time. Games that share a commence_time share one pull. A game whose close is already in odds-master, clv-candidates-v2, or clv-{date} is not pulled. Today\'s 3:00 board is the same live pull as v12.3.40: it is the baseline, and the open when none is stored. 10:00 ET pulls Pinnacle and DraftKings and reuses a same-sport odds_snapshot_cache entry younger than 5 minutes. Direction is from the 3:00 baseline, with the same steam rules, and is selection context only. 9:00 and 10:30 stay. Prices append once to odds-master. Priced pulls stop when x-requests-remaining is below 49000. dryRun and OMEGA_REPLAY_NO_WRITE write nothing. The published card is not written. Historical cost is 30 credits per pull. A typical day is about 10 unstored shared kickoffs, about 300 historical credits. No rank, EV, gate, floor, Kelly, or unit-cap change. CLV stays grading-only.',

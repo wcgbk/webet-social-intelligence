@@ -20,7 +20,7 @@
  *   {
  *     schema, store, appendOnly: true,
  *     role,            // first role that created the key: open | baseline-0300 |
- *                      // check-0300 | check-0900 | check-1000 | check-1030 | close
+ *                      // check-0300 | check-1000 | close
  *     roles,           // every role this same price satisfies
  *     sport, eventId, book, market, timestamp,
  *     homeTeam, awayTeam, commenceTime,

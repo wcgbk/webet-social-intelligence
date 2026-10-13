@@ -381,6 +381,7 @@ function toPickObject(c, opts = {}) {
     ...footballAuditFields(c),
     ...(c.lateNews ? { lateNews: c.lateNews } : {}),
     ...(c.hrFlags && c.hrFlags.length ? { hrFlags: c.hrFlags } : {}),
+    ...(c.hardRockPriced === true || c.hardRockPriced === false ? { hardRockPriced: c.hardRockPriced === true } : {}),
     ...(dataReviewFlag ? { dataReviewFlag } : {}),
   };
 }

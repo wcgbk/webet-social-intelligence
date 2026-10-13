@@ -41,7 +41,8 @@
 [functions."verify-picks-omega"]
   schedule = "30 14,15 * * *"
   # Omega QA — 10:30am ET (14:30 UTC EDT). Target: publish unlock by 11:00am ET.
-  # Placeability advisory; must not invent sides. Empty card remains valid.
+  # Hard Rock and the parlay use the 10:00 snapshot. A pull happens only when
+  # that snapshot does not cover them. Placeability advisory; must not invent sides.
 
 [functions."pregame-check-omega"]
   schedule = "0,30 15-23,0-4 * * *"
@@ -246,45 +247,34 @@
 
 
 [functions."capture-omega-lines"]
-  schedule = "0,30 10,11,12 * * *"
-  # Omega-only US morning line-path (edge-picks-omega). 6:00/7:30 ET window:
-  #   10:00 UTC = 6:00am ET, 11:30 UTC = 7:30am ET.
-  # Union also fires 10:30/11:00 — handler no-ops outside ±5min of allowed UTC slots.
-  # 9:00/9:15 ET are on the thin second function capture-omega-lines-late.
-  # 9:30 capture removed so it does not race trigger-picks-omega (13:30 UTC).
-  # Alpha capture-opening-lines (edge-picks) left unchanged.
+  # Suspended. Odds API pulls are 3:00 and 10:00 ET only. Morning line snaps
+  # are not pulled. Alpha capture-opening-lines (edge-picks) is unchanged.
+  # schedule = "0,30 10,11,12 * * *"
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-lines-late"]
-  schedule = "0,15 13,14 * * *"
-  # 13:00 UTC = 9:00am ET, 13:15 UTC = 9:15am ET. Dedicated late-morning snaps.
-  # 9:30 (13:30) intentionally omitted — races trigger-picks-omega.
+  # Suspended with capture-omega-lines. 9:00 and 9:15 ET are not Odds API pulls.
+  # schedule = "0,15 13,14 * * *"
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pinnacle-lines"]
-  schedule = "0,30 7,8,13,14,15 * * *"
-  # Pinnacle + DraftKings checks at 3:00, 9:00, 10:00, and 10:30 ET.
-  # UTC union of EDT (UTC-4) and EST (UTC-5). The cron expression is unchanged.
+  schedule = "0 7,8,14,15 * * *"
+  # Pinnacle + DraftKings checks at 3:00 and 10:00 ET only.
+  # UTC union of EDT (UTC-4) and EST (UTC-5).
   #   07:00 UTC = 3:00 EDT, 08:00 UTC = 3:00 EST
-  #   13:00 UTC = 9:00 EDT, 14:00 UTC = 9:00 EST
   #   14:00 UTC = 10:00 EDT, 15:00 UTC = 10:00 EST
-  #   14:30 UTC = 10:30 EDT, 15:30 UTC = 10:30 EST
-  # etGuard keeps 10:00 and drops the other extra minutes in this union.
+  # etGuard drops 04:00 EDT and 11:00 EDT. 9:00 and 10:30 are not in this cron.
   # One live odds call per book per sport. regions=eu.
   # 3:00 also pulls yesterday's pregame historical closes (30 credits per
-  # shared commence_time). Writes omega-pinnacle-line-moves and odds-master.
-  # Never the card.
+  # shared commence_time) and stores the opener when none is stored.
+  # Writes omega-pinnacle-line-moves and odds-master. Never the card.
   # Skips a priced pull when x-requests-remaining < 49000. dryRun writes nothing.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pinnacle-open"]
-  schedule = "0 * * * *"
-  # Free Odds API /v4/sports/{sport}/events poll, every ET hour (0 credits).
-  # "0 * * * *" covers both EDT and EST. etGuard keeps :00 ET; dstFold later
-  # runs the fall-back hour once. A sport with a new event id gets one
-  # Pinnacle open pull (regions=eu, markets=h2h,spreads,totals). An open
-  # already stored at sport/eventId is not pulled again.
-  # Does not write the published card.
+  # Suspended. Openers are the first price in the 3:00 ET pull. This job
+  # does not poll /events and does not pull Pinnacle.
+  # schedule = "0 * * * *"
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."recal-report-omega"]
@@ -346,9 +336,9 @@
   # One live /odds call per sport that has a commence group starting within
   # 20 minutes or started less than 5 minutes ago. bookmakers is the five
   # sharp books (≤10 → one region) × markets h2h,spreads,totals = 3 credits.
-  # Daily cap OMEGA_CANDIDATE_CLOSE_CREDIT_CAP (default 90) per ET day.
-  # No historical odds endpoint.
-  schedule = "*/15 15-23,0-6 * * *"
+  # Suspended. Closing lines come from the 3:00 ET historical capture.
+  # This job does not call the Odds API.
+  # schedule = "*/15 15-23,0-6 * * *"
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."warm-omega-feeds"]
@@ -373,10 +363,9 @@
 [functions."trigger-omega-nba-shadow"]
   schedule = "30 21,22 * * *"
   # 21:30 UTC = 5:30pm ET (EDT), before NBA tips, away from the 13:30 UTC card.
-  # Projects and logs omega-nba-shadow-{ET date}. At most one Odds API call
-  # (9 credits) per ET date, and only after the free /events preflight shows
-  # a same-ET-day NBA game. Netlify cannot pass a body, so this wrapper is
-  # project-only. Grade is trigger-omega-nba-shadow-grade.
+  # The cron still fires. A live invoke does not call the Odds API.
+  # Fixture tests pass nbaShadowTest and do not fetch. Grade is
+  # trigger-omega-nba-shadow-grade.
   # EST from 2026-11-01: this slot becomes 4:30pm ET. Prepared replacement is
   # "30 22 * * *" (5:30pm EST). Do not switch it before that date.
   included_files = ["netlify/functions/lib/omega-vnext/**"]

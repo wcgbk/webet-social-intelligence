@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Pinnacle line log. Free /events discovery, one open per event id,
- * 3:00 / 9:00 / 10:30 ET checks, both-book steam. Context only.
+ * 3:00 / 10:00 ET checks, both-book steam. Context only.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -158,8 +158,8 @@ function scheduler(now) {
 (async () => {
   cache.resetKnownRequestsRemainingForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.43-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.43-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.44-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.44-omega-vnext-price-lock:'));
     assert.strictEqual(config.STEAM_WINDOW_MIN, 15);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.creditFloor, 49000);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.steamProbPts, 3);
@@ -167,7 +167,7 @@ function scheduler(now) {
     assert.strictEqual(config.PINNACLE_LINE_MOVE.windowMinutes, 15);
     assert.strictEqual(config.PINNACLE_LINE_MOVE.secondaryBookmakers, 'draftkings');
     assert.strictEqual(memo.PINNACLE_CREDIT_FLOOR, 49000);
-    assert.deepStrictEqual(CHECK_SLOTS, ['0300', '0900', '1000', '1030']);
+    assert.deepStrictEqual(CHECK_SLOTS, ['0300', '1000']);
 
     const eventsUrl = new URL(pinnacleEventsUrl('americanfootball_nfl', 'test-key-1234'));
     assert.strictEqual(eventsUrl.pathname, '/v4/sports/americanfootball_nfl/events');
@@ -219,9 +219,9 @@ function scheduler(now) {
 
     const longGap = {
       fromSlot: '0300',
-      toSlot: '0900',
+      toSlot: '1000',
       fromAt: '2026-10-12T07:00:00Z',
-      toAt: '2026-10-12T13:00:00Z',
+      toAt: '2026-10-12T14:00:00.000Z',
     };
     const bothProb = confirmSteam(synthetic({ probPts: 3.1 }), synthetic({ book: 'draftkings', probPts: 3.1 }), longGap);
     assert.ok(bothProb);
@@ -357,35 +357,35 @@ function scheduler(now) {
     assert.strictEqual(store.blobs.get(eventKey('NFL', 'ev1')).open.at, openAt);
     const movesAfter3 = after3.moves.length;
 
-    phase = '0900';
-    const at9 = await runPinnacleLineCapture(runnerOpts(store, {
+    phase = '1000';
+    const at10 = await runPinnacleLineCapture(runnerOpts(store, {
       mode: 'check',
-      etSlot: '0900',
-      now: new Date('2026-10-12T13:00:00Z'),
+      etSlot: '1000',
+      now: new Date('2026-10-12T14:00:00Z'),
       fetchImpl,
     }));
-    assert.ok(at9.steamCount >= 1);
-    const after9 = store.blobs.get(eventKey('NFL', 'ev1'));
-    const steam = after9.steams.find((row) => row.market === 'Spread' && row.side === 'home');
+    assert.ok(at10.steamCount >= 1);
+    const after10 = store.blobs.get(eventKey('NFL', 'ev1'));
+    const steam = after10.steams.find((row) => row.market === 'Spread' && row.side === 'home');
     assert.ok(steam);
     assert.strictEqual(steam.windowMinutes, 15);
     assert.strictEqual(steam.fromSlot, '0300');
-    assert.strictEqual(steam.toSlot, '0900');
+    assert.strictEqual(steam.toSlot, '1000');
     assert.ok(steam.pinnacle && steam.draftkings);
     assert.ok(steam.pinnacle.probPts >= 3);
     assert.ok(steam.draftkings.probPts >= 3);
-    assert.ok(after9.moves.length > movesAfter3);
-    const nineMove = after9.moves.find((m) => m.toSlot === '0900' && m.market === 'Spread' && m.side === 'home' && m.book === 'pinnacle');
-    assert.strictEqual(nineMove.fromSlot, '0300');
-    assert.ok(nineMove.probPts >= 3);
-    assert.strictEqual(nineMove.at, '2026-10-12T13:00:00.000Z');
+    assert.ok(after10.moves.length > movesAfter3);
+    const tenMove = after10.moves.find((m) => m.toSlot === '1000' && m.market === 'Spread' && m.side === 'home' && m.book === 'pinnacle');
+    assert.strictEqual(tenMove.fromSlot, '0300');
+    assert.ok(tenMove.probPts >= 3);
+    assert.strictEqual(tenMove.at, '2026-10-12T14:00:00.000Z');
 
-    const steamsBeforeDup = after9.steams.length;
-    const movesBeforeDup = after9.moves.length;
+    const steamsBeforeDup = after10.steams.length;
+    const movesBeforeDup = after10.moves.length;
     const dup = await runPinnacleLineCapture(runnerOpts(store, {
       mode: 'check',
-      etSlot: '0900',
-      now: new Date('2026-10-12T13:00:00Z'),
+      etSlot: '1000',
+      now: new Date('2026-10-12T14:00:00Z'),
       fetchImpl,
     }));
     assert.strictEqual(dup.wrote, false);
@@ -393,15 +393,18 @@ function scheduler(now) {
     assert.strictEqual(store.blobs.get(eventKey('NFL', 'ev1')).steams.length, steamsBeforeDup);
 
     phase = '1030';
-    await runPinnacleLineCapture(runnerOpts(store, {
+    const at1030 = await runPinnacleLineCapture(runnerOpts(store, {
       mode: 'check',
       etSlot: '1030',
       now: new Date('2026-10-12T14:30:00Z'),
       fetchImpl,
     }));
+    assert.strictEqual(at1030.skipped, 'slot');
+    assert.strictEqual(at1030.pulls, 0);
     const slate = await readPinnacleLineMoves(DATE, { read: store.read });
     const games = slate.events.find((row) => row.eventId === 'ev1');
-    assert.ok(games.checks.some((row) => row.slot === '1030'));
+    assert.ok(!games.checks.some((row) => row.slot === '1030'));
+    assert.ok(games.checks.some((row) => row.slot === '1000'));
     assert.strictEqual(games.open.at, openAt);
 
     const candidate = {
@@ -486,9 +489,9 @@ function scheduler(now) {
       });
       const allowed = await runPinnacleLineCapture(runnerOpts(memoryStore(), {
         mode: 'check',
-        etSlot: '0900',
+        etSlot: '1000',
         labels: ['MLB', 'NFL'],
-        now: new Date('2026-10-12T13:00:00Z'),
+        now: new Date('2026-10-12T14:00:00Z'),
         fetchImpl: okFetch,
       }));
       assert.strictEqual(allowed.stoppedForCredits, false);
@@ -498,9 +501,9 @@ function scheduler(now) {
       const blockedFetch = makeFetch(() => ({ body: [boardEvent('evX', 'pinnacle')], remaining: 50000 }));
       const blocked = await runPinnacleLineCapture(runnerOpts(memoryStore(), {
         mode: 'check',
-        etSlot: '1030',
+        etSlot: '1000',
         labels: ['MLB', 'NFL'],
-        now: new Date('2026-10-12T14:30:00Z'),
+        now: new Date('2026-10-12T14:00:00Z'),
         fetchImpl: blockedFetch,
       }));
       assert.strictEqual(blocked.pulls, 0);
@@ -639,53 +642,51 @@ function scheduler(now) {
     assert.strictEqual(eventCalls(edt3.calls).length, 0);
     assert.strictEqual(oddsCalls(edt3.calls).length, 2);
     const edt9 = await slotBody('2026-10-12T13:00:00Z', 'capture-omega-pinnacle-lines');
-    assert.strictEqual(edt9.body.etSlot, '0900');
+    assert.strictEqual(edt9.body.skipped, 'et-guard');
+    assert.strictEqual(edt9.calls.length, 0);
     const edt10 = await slotBody('2026-10-12T14:00:00Z', 'capture-omega-pinnacle-lines');
     assert.strictEqual(edt10.body.etSlot, '1000');
     assert.strictEqual(oddsCalls(edt10.calls).length, 2);
     const edt1030 = await slotBody('2026-10-12T14:30:00Z', 'capture-omega-pinnacle-lines');
-    assert.strictEqual(edt1030.body.etSlot, '1030');
+    assert.strictEqual(edt1030.body.skipped, 'et-guard');
+    assert.strictEqual(edt1030.calls.length, 0);
     const est3 = await slotBody('2027-01-15T08:00:00Z', 'capture-omega-pinnacle-lines');
     assert.strictEqual(est3.body.etSlot, '0300');
     const est9 = await slotBody('2027-01-15T14:00:00Z', 'capture-omega-pinnacle-lines');
-    assert.strictEqual(est9.body.etSlot, '0900');
+    assert.strictEqual(est9.body.skipped, 'et-guard');
+    assert.strictEqual(est9.calls.length, 0);
     const est10 = await slotBody('2027-01-15T15:00:00Z', 'capture-omega-pinnacle-lines');
     assert.strictEqual(est10.body.etSlot, '1000');
     const est1030 = await slotBody('2027-01-15T15:30:00Z', 'capture-omega-pinnacle-lines');
-    assert.strictEqual(est1030.body.etSlot, '1030');
+    assert.strictEqual(est1030.body.skipped, 'et-guard');
+    assert.strictEqual(est1030.calls.length, 0);
     const estOff = await lines.handleCapture(sched(), 'capture-omega-pinnacle-lines', {
       now: new Date('2027-01-15T07:00:00Z'),
       fetchImpl() { throw new Error('est off-slot fetched'); },
     });
     assert.strictEqual(JSON.parse(estOff.body).skipped, 'et-guard');
     const openSlot = await slotBody('2026-10-12T16:00:00Z', 'capture-omega-pinnacle-open');
-    assert.strictEqual(openSlot.body.mode, 'open');
-    assert.strictEqual(eventCalls(openSlot.calls).length, 1);
-    assert.strictEqual(eventCalls(openSlot.calls)[0].pathname, '/v4/sports/americanfootball_nfl/events');
+    assert.strictEqual(openSlot.body.skipped, 'odds-api-window');
+    assert.strictEqual(openSlot.calls.length, 0);
 
-    assert.deepStrictEqual(et.ET_SCHEDULE['capture-omega-pinnacle-lines'].etTimes, ['03:00', '09:00', '10:00', '10:30']);
-    assert.strictEqual(et.ET_SCHEDULE['capture-omega-pinnacle-open'].etTimes.length, 24);
-    assert.strictEqual(et.ET_SCHEDULE['capture-omega-pinnacle-open'].dstFold, 'later');
+    assert.deepStrictEqual(et.ET_SCHEDULE['capture-omega-pinnacle-lines'].etTimes, ['03:00', '10:00']);
+    assert.ok(!et.ET_SCHEDULE['capture-omega-pinnacle-open']);
     assert.ok(!et.ET_SCHEDULE['capture-omega-pinnacle-lines-open']);
-    assert.deepStrictEqual(et.ET_SCHEDULE['capture-omega-lines'].etTimes, ['06:00', '07:30']);
-    assert.deepStrictEqual(et.ET_SCHEDULE['capture-omega-lines-late'].etTimes, ['09:00', '09:15']);
+    assert.ok(!et.ET_SCHEDULE['capture-omega-lines']);
+    assert.ok(!et.ET_SCHEDULE['capture-omega-lines-late']);
+    assert.ok(!et.ET_SCHEDULE['capture-candidate-closes']);
     const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
     const active = et.activeTomlSchedules(toml);
     const cronOf = (name) => active.find((row) => row.functionName === name).cron;
     const linesCron = et.parseCron(cronOf('capture-omega-pinnacle-lines'));
-    for (const slot of ['03:00', '09:00', '10:00', '10:30']) {
+    for (const slot of ['03:00', '10:00']) {
       const want = et.utcHoursForEt(slot);
       assert.ok(linesCron.minute.has(want.minute), slot);
       for (const hour of want.hours) assert.ok(linesCron.hour.has(hour), `${slot} ${hour}`);
     }
-    const openCron = et.parseCron(cronOf('capture-omega-pinnacle-open'));
-    for (const slot of et.ET_SCHEDULE['capture-omega-pinnacle-open'].etTimes) {
-      const want = et.utcHoursForEt(slot);
-      assert.ok(openCron.minute.has(want.minute), slot);
-      for (const hour of want.hours) assert.ok(openCron.hour.has(hour), `${slot} ${hour}`);
+    for (const name of ['capture-omega-pinnacle-open', 'capture-omega-lines', 'capture-omega-lines-late', 'capture-candidate-closes']) {
+      assert.ok(!active.some((row) => row.functionName === name), name);
     }
-    assert.strictEqual(cronOf('capture-omega-lines'), '0,30 10,11,12 * * *');
-    assert.strictEqual(cronOf('capture-omega-lines-late'), '0,15 13,14 * * *');
     assert.ok(!toml.includes('capture-omega-pinnacle-lines-open'));
 
     const guard3 = et.etGuard('capture-omega-pinnacle-lines', sched(), new Date('2026-10-12T07:00:00Z'));
@@ -694,8 +695,8 @@ function scheduler(now) {
     const guardSkip = et.etGuard('capture-omega-pinnacle-lines', sched(), new Date('2026-10-12T11:00:00Z'));
     assert.strictEqual(guardSkip.run, false);
     const guardEst = et.etGuard('capture-omega-pinnacle-lines', sched(), new Date('2027-01-15T15:30:00Z'));
-    assert.strictEqual(guardEst.run, true);
-    assert.strictEqual(guardEst.matched, '10:30');
+    assert.strictEqual(guardEst.run, false);
+    assert.strictEqual(guardEst.matched, null);
 
     const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
     const applyAt = indexSrc.indexOf('applyLineMoveContext({');

@@ -686,8 +686,8 @@ function oddsUrls(calls) {
     const res = await guardAt(iso);
     assert.strictEqual(res.statusCode, 200, iso);
     const body = JSON.parse(res.body);
-    assert.strictEqual(body.ok, true, `${iso} ${res.body}`);
-    assert.ok(!body.skipped, iso);
+    assert.strictEqual(body.skipped, 'et-guard', iso);
+    assert.strictEqual(body.reason, 'no-et-schedule', iso);
   }
   async function expectSkip(iso) {
     let read = false;
@@ -716,12 +716,8 @@ function oddsUrls(calls) {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8');
   const schedules = et.activeTomlSchedules(toml);
   const row = schedules.find((s) => s.functionName === 'capture-candidate-closes');
-  assert.ok(row);
-  assert.strictEqual(row.cron, '*/15 15-23,0-6 * * *');
-  assert.ok(et.ET_SCHEDULE['capture-candidate-closes'].etTimes.includes('11:30'));
-  assert.ok(et.ET_SCHEDULE['capture-candidate-closes'].etTimes.includes('01:30'));
-  assert.ok(!et.ET_SCHEDULE['capture-candidate-closes'].etTimes.includes('02:00'));
-  assert.ok(!et.ET_SCHEDULE['capture-candidate-closes'].etTimes.includes('10:00'));
+  assert.ok(!row);
+  assert.ok(!et.ET_SCHEDULE['capture-candidate-closes']);
 
   const trackSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/track-clv-omega.js'), 'utf8');
   const healthSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/get-omega-capture-health.js'), 'utf8');

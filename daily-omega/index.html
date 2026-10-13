@@ -1807,7 +1807,7 @@
     return null;
   }
 
-  /** Full pick-card chrome — reused for straights and each parlay leg. */
+  /** Full pick-card chrome for a straight. Parlay legs stay in the compact bottom section. */
   function renderPickCard(p, opts) {
     opts = opts || {};
     const dollarPerUnit = opts.dollarPerUnit || 150;
@@ -1987,20 +1987,22 @@
     }
 
     const dollarPerUnit = 150;
-    // Optimized parlay ONLY from API — never fake with 3 straights
+    // The parlay is the top 3 straights. Use the published legs, or those three cards when the blob omitted them.
     const apiParlay = (data.parlayLegs && data.parlayLegs.length > 0 && data.parlayLegs[0].legs && data.parlayLegs[0].legs.length)
       ? data.parlayLegs[0] : null;
-    const optimizedParlayLegs = apiParlay ? apiParlay.legs : null;
+    const parlaySource = (apiParlay && apiParlay.legs && apiParlay.legs.length)
+      ? apiParlay.legs
+      : (picks.length >= 3 ? picks.slice(0, 3) : null);
 
     let parlayUnits = 0.5;
     if (apiParlay && apiParlay.units) parlayUnits = parseFloat(apiParlay.units) || 0.5;
     else if (picks.some(p => p.thinSlate)) parlayUnits = 0.25;
-    const parlayRisk = apiParlay ? wholeUp(parlayUnits * dollarPerUnit) : 0;
-    const parlayOddsStr = apiParlay
-      ? (apiParlay.combinedOdds || calcParlayOdds(apiParlay.legs.map(l => l.odds || '-110')))
+    const parlayRisk = parlaySource ? wholeUp(parlayUnits * dollarPerUnit) : 0;
+    const parlayOddsStr = parlaySource
+      ? ((apiParlay && apiParlay.combinedOdds) || calcParlayOdds(parlaySource.map(l => l.odds || '-110')))
       : null;
-    const parlayWin = apiParlay
-      ? wholeUp(calcParlayWinnings(parlayRisk, apiParlay.legs.map(l => l.odds || '-110')))
+    const parlayWin = parlaySource
+      ? wholeUp(calcParlayWinnings(parlayRisk, parlaySource.map(l => l.odds || '-110')))
       : 0;
 
     let totalStraightUnits = 0;
@@ -2015,7 +2017,7 @@
       totalStraightWin += win;
     }
 
-    const combinedUnits = totalStraightUnits + (apiParlay ? parlayUnits : 0);
+    const combinedUnits = totalStraightUnits + (parlaySource ? parlayUnits : 0);
     const _hp = document.getElementById('hero-picks');
     const _hu = document.getElementById('hero-units');
     const _ha = document.getElementById('hero-accuracy');
@@ -2093,10 +2095,9 @@
       });
     }
 
-    // ONE summary table: straights + Daily Lock Parlay row (no separate bottom parlay summary)
+    // Brief stake summary, then the card-section closes. The parlay block is the last section.
     const combinedSummaryRows = straightSummaryRows.slice();
-    if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
-      const legCount = optimizedParlayLegs.length;
+    if (parlaySource && parlaySource.length) {
       combinedSummaryRows.push({
         label: esc(`Daily Lock Parlay ${parlayOddsStr || ''}`.trim()),
         sub: '',
@@ -2107,57 +2108,22 @@
         highlight: true,
       });
     }
-    const summaryTotalUnits = totalStraightUnits + (apiParlay ? parlayUnits : 0);
-    const summaryTotalRisk = totalStraightRisk + (apiParlay ? parlayRisk : 0);
-    const summaryTotalWin = totalStraightWin + (apiParlay ? parlayWin : 0);
+    const summaryTotalUnits = totalStraightUnits + (parlaySource ? parlayUnits : 0);
+    const summaryTotalRisk = totalStraightRisk + (parlaySource ? parlayRisk : 0);
+    const summaryTotalWin = totalStraightWin + (parlaySource ? parlayWin : 0);
     html += sectionSummaryHTML('Bet Slip — Summary', combinedSummaryRows, summaryTotalUnits, summaryTotalRisk, summaryTotalWin);
     html += `</div>`;
 
-    // ═══ SECTION 2: Daily Lock Parlay legs only (API) — no redundant odds/units card ═══
-    let parlayBonusResult = null;
-    if (apiParlay && optimizedParlayLegs && optimizedParlayLegs.length) {
-      const sortedParlayLegs = optimizedParlayLegs.slice().sort((a, b) => {
-        const keyA = (typeof a.rating === 'string' && ratingOrder[a.rating] != null) ? a.rating
-          : (typeof a.confidence === 'string' ? a.confidence : a.rating);
-        const keyB = (typeof b.rating === 'string' && ratingOrder[b.rating] != null) ? b.rating
-          : (typeof b.confidence === 'string' ? b.confidence : b.rating);
-        const rA = ratingOrder[keyA] ?? 4;
-        const rB = ratingOrder[keyB] ?? 4;
-        if (rA !== rB) return rA - rB;
-        const eA = parseFloat(String(a.edgePct || a.ev || '0').replace(/[^0-9.+-]/g, '')) || 0;
-        const eB = parseFloat(String(b.edgePct || b.ev || '0').replace(/[^0-9.+-]/g, '')) || 0;
-        return eB - eA;
-      });
-      const legCount = sortedParlayLegs.length;
-
-      html += `<div class="card-section">
-        <div class="card-section-title parlay-sec">Daily Lock - Top 3 Leg Parlay</div>`;
-
-      for (const rawLeg of sortedParlayLegs) {
-        const leg = enrichParlayLeg(rawLeg, picks);
-        const isStraightDup = picks.some(p => p.pick === leg.pick || p.pick === ensureMlLabel(leg.pick, leg.betType));
-        const rendered = renderPickCard(leg, {
-          dollarPerUnit,
-          showStake: false,
-          parlayOnly: true,
-          footerNote: '',
-          depthSlot: false,
-        });
-        html += rendered.html;
-        if (!isStraightDup) {
-          parlayBonusResult = { pick: leg, game: rendered.game, result: rendered.result };
-          if (rendered.result.isLive) hasAnyLive = true;
-        }
-      }
-
-      // Parlay status bar
-      const parlayLegResults = sortedParlayLegs.map(leg => {
-        const enriched = enrichParlayLeg(leg, picks);
+    // One parlay section at the bottom. Compact legs only — each leg's write-up stays on its straight card.
+    if (parlaySource && parlaySource.length) {
+      const legCount = parlaySource.length;
+      const parlayLegResults = parlaySource.map(rawLeg => {
+        const enriched = enrichParlayLeg(rawLeg, picks);
         const straightMatch = legResults.find(lr => WeBetLive.sameGradeTarget(lr.pick, enriched));
         if (straightMatch) return straightMatch;
-        if (parlayBonusResult && WeBetLive.sameGradeTarget(parlayBonusResult.pick, enriched)) return parlayBonusResult;
         const g = findGame(enriched);
         const r = determineResult(enriched, g);
+        if (r.isLive) hasAnyLive = true;
         return { pick: enriched, game: g, result: r };
       });
       const parlayAnyLive = parlayLegResults.some(l => l.result.isLive);
@@ -2172,15 +2138,47 @@
         if (pushCount === parlayFinalStatuses.length) { parlayStatus = 'push'; parlayLabel = 'Push'; }
         else { parlayStatus = 'win'; parlayLabel = 'Win (reduced)'; }
       }
+      const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${Math.round(parlayWin).toLocaleString()}`;
+
+      html += `<div class="parlay-section">
+        <div class="parlay-title">Recommended ${legCount}-Team Parlay</div>
+        <div class="parlay-header">
+          <span class="parlay-name">Daily Lock Parlay</span>
+          <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
+        </div>
+        <div class="parlay-payout">${parlayPayStr}</div>`;
+
+      for (const lr of parlayLegResults) {
+        const p = lr.pick;
+        const r = lr.result;
+        const g = lr.game;
+        let legResultHTML = '';
+        if (r.isLive) legResultHTML = '<span class="leg-result leg-live">LIVE</span>';
+        else if (r.status === 'win') legResultHTML = '<span class="leg-result leg-win">✓ W</span>';
+        else if (r.status === 'loss') legResultHTML = '<span class="leg-result leg-loss">✗ L</span>';
+        else if (r.status === 'push') legResultHTML = '<span class="leg-result leg-push">— P</span>';
+        let scoreStr = '';
+        if (g && (g.state === 'in' || g.state === 'post')) {
+          scoreStr = ` <span style="font-size:.6875rem; color:var(--txt-m);">(${esc(String(g.awayScore))}-${esc(String(g.homeScore))})</span>`;
+        }
+        html += `<div class="parlay-leg" style="flex-direction:column; align-items:stretch; gap:2px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="leg-pick">${esc(displayPick(p.pick, p.sport, p.betType))}</span>
+            <span class="leg-odds">${esc(p.odds || '')}</span>
+          </div>
+          <div style="font-size:.75rem; color:var(--txt-l);">${esc(shortMatchup(p.matchup, p.sport))}${scoreStr}</div>
+          ${legResultHTML ? `<div>${legResultHTML}</div>` : ''}
+        </div>`;
+      }
+
       if (parlayStatus !== 'scheduled') {
         const legsHit = parlayFinalStatuses.filter(s => s === 'win').length;
         const note = parlayStatus === 'live' ? `${legsHit} of ${legCount} legs hit` : parlayLabel;
-        html += `<div class="pick-score-bar score-bar-${parlayStatus}" style="margin-bottom:.5rem;">
+        html += `<div class="pick-score-bar score-bar-${parlayStatus}" style="margin:.5rem 0 0;">
           <span style="font-weight:600;">Parlay ${parlayLabel}</span>
           <span class="score-status status-${parlayStatus}">${note}</span>
         </div>`;
       }
-
       html += `</div>`;
     }
 

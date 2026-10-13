@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.70-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.71-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.71-omega-vnext-price-lock: Daily Supabase sync at 09:25 ET posts yesterday\'s opener, the 10:00 ET snapshot, and the 3:00 ET close, plus the graded Omega card and that day\'s CLV ledger. Duplicate posts are ignored. No Odds API pull. No 10:30 lock capture exists; Odds API pulls stay 3:00 and 10:00 ET.',
   'v12.3.70-omega-vnext-price-lock: A lean-day parlay publishes only when combined EV is positive, at 0.25u. Public picks carry tier main or lean. The 6:00, 7:30, 9:00, and 9:15 ET morning snaps stay retired. Odds API pulls remain 3:00 and 10:00 ET. Results grade a parlay at the card stake and omit the row when the card has no parlay.',
   'v12.3.69-omega-vnext-price-lock: The 3:00 and 10:00 ET DraftKings call also requests Hard Rock (bookmakers=draftkings,hardrockbet, one call, 3 credits). DraftKings quotes and pricing are unchanged. Hard Rock stays review-only.',
   'v12.3.68-omega-vnext-price-lock: The 2026-10-10 golden card records the cover-probability stake cap. A main under 0.42 cover is 0.5u. The cap is unchanged. Leans stay flat 0.5u.',

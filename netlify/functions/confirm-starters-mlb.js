@@ -130,7 +130,22 @@ function lookupEspn(currentStarters, pick, fallbackSeen) {
   return legacy;
 }
 
-function processPicks(picksData, currentStarters) {
+function omegaCardIsLogOnly(store) {
+  return store === "edge-picks-omega";
+}
+
+function processPicks(picksData, currentStarters, opts = {}) {
+  if (opts && opts.logOnly) {
+    const copy = JSON.parse(JSON.stringify(picksData));
+    const stats = processPicks(copy, currentStarters);
+    return {
+      ...stats,
+      logOnly: true,
+      wrote: false,
+      wouldScratch: stats.scratches,
+      wouldKill: stats.killed,
+    };
+  }
   const picks = picksData.picks || [];
   let scratches = 0;
   let killed = 0;
@@ -214,6 +229,9 @@ function processPicks(picksData, currentStarters) {
 
 const { rejectUnlessEtSlot } = require('./lib/et-schedule');
 
+exports.processPicks = processPicks;
+exports.omegaCardIsLogOnly = omegaCardIsLogOnly;
+
 exports.handler = async (event) => {
   const etSkip = rejectUnlessEtSlot('confirm-starters-mlb', event);
   if (etSkip) return etSkip;
@@ -236,12 +254,19 @@ exports.handler = async (event) => {
         perStore.push({ store, skipped: true, reason: "no picks today" });
         continue;
       }
+      if (omegaCardIsLogOnly(store)) {
+        const stats = processPicks(picksData, currentStarters, { logOnly: true });
+        const detail = (stats && stats.wouldKill) || 0;
+        console.log(`[confirm-starters] ${store} log-only wouldScratch=${stats.scratches} wouldKill=${detail} wrote=false`);
+        perStore.push({ store, date: todayISO, ...stats, wrote: false });
+        continue;
+      }
       const stats = processPicks(picksData, currentStarters);
       picksData.starterCheckAt = new Date().toISOString();
       picksData.starterScratchCount = stats.scratches;
       picksData.starterKilledCount = stats.killed;
       await blobPut(store, `picks-${todayISO}`, picksData, token);
-      perStore.push({ store, date: todayISO, ...stats });
+      perStore.push({ store, date: todayISO, ...stats, wrote: true });
       console.log(`[confirm-starters] ${store}: remaining=${stats.remaining} scratches=${stats.scratches} killed=${stats.killed}`);
     }
 

@@ -384,7 +384,8 @@ function base(extra) {
   assert.ok(need > 0.03);
   const longshot = base({
     sport: 'MLB', market: 'Moneyline', side: 'A ML', odds: 300,
-    edgePct: 0.02, ev: 0.05, coverProb: 0.30, uncertainty: 0.1,
+    // +300 is the 2× band. 0.06 clears that EV floor so the 2% edge is the reject.
+    edgePct: 0.02, ev: 0.06, coverProb: 0.30, uncertainty: 0.1,
   });
   assert.strictEqual(gateReason(longshot, GATE), 'edge-floor');
   const underEv = base({ ev: 0.02, edgePct: 0.04, coverProb: 0.53 });

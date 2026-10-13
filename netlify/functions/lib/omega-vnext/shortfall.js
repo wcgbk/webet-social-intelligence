@@ -8,7 +8,7 @@
  */
 
 const { GATES, MAX_STRAIGHTS } = require('./config');
-const { minEdgeFor } = require('./edge_floor');
+const { minEdgeFor, mainMinEv } = require('./edge_floor');
 
 const NEXT_BEST_CAP = 10;
 const STRAIGHTS_TARGET = MAX_STRAIGHTS;
@@ -59,7 +59,7 @@ function failingGateOf(row) {
 function requiredFloor(row, gate) {
   const reason = gate || failingGateOf(row);
   const sport = row && row.sport;
-  if (reason === 'ev-floor') return sportFloor(GATES.minEV, sport);
+  if (reason === 'ev-floor') return mainMinEv(row && row.odds, sportFloor(GATES.minEV, sport));
   if (reason === 'coverProb-floor') return sportFloor(GATES.minCoverProb, sport);
   if (reason === 'nonpositive-edge') return 0;
   if (reason === 'edge-floor') return minEdgeFor(row && row.odds, row && row.uncertainty);

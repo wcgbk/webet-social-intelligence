@@ -19,7 +19,7 @@ const { americanToImplied, formatAmerican, normCdf, parseEdgeFraction, clamp } =
 const { attachEv } = require('./edge');
 const { toPickObject } = require('./select');
 const { parlayFromStraights } = require('./parlay');
-const { minEdgeFor } = require('./edge_floor');
+const { minEdgeFor, mainMinEv } = require('./edge_floor');
 
 const HR_KEYS = new Set(['hardrockbet', 'hardrockbet_oh', 'hardrock']);
 const POINT_MATERIAL = 0.5;
@@ -192,15 +192,16 @@ function stakeEv(c) {
   return typeof c.ev === 'number' ? c.ev : parseEdgeFraction(c.ev);
 }
 
-/** Full floor: stake EV >= 3% and the odds-scaled edge curve. */
+/** Main keep: stake EV at mainMinEv and the odds-scaled edge curve. */
 function clears(c) {
   const edge = edgeOf(c);
   const ev = stakeEv(c);
   const cp = coverFraction(c.coverProb);
-  if (!Number.isFinite(cp)) return false;
-  if (!Number.isFinite(ev) || ev + 1e-12 < (GATES.minEV.default || 0.03)) return false;
-  if (!Number.isFinite(edge) || edge <= 0) return false;
   const odds = typeof c.odds === 'number' ? c.odds : parseAmerican(c.odds);
+  if (!Number.isFinite(cp)) return false;
+  const needEv = mainMinEv(odds, GATES.minEV.default || 0.03);
+  if (!Number.isFinite(ev) || ev + 1e-12 < needEv) return false;
+  if (!Number.isFinite(edge) || edge <= 0) return false;
   if (edge + 1e-12 < minEdgeFor(odds, c.uncertainty)) return false;
   return true;
 }
@@ -472,6 +473,7 @@ function autoCorrectHardRock(picksData, sportGames) {
 module.exports = {
   autoCorrectHardRock,
   minEdgeClears: clears,
+  leanClears,
   quoteFor,
   materialHardRockGap: material,
 };

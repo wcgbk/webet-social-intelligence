@@ -4,8 +4,8 @@ const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
 const select = require('./netlify/functions/lib/omega-vnext/select');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.65-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.65-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.66-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.66-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 
 function pick(extra) {

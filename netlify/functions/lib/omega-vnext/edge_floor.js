@@ -38,11 +38,15 @@ const { americanToImplied } = require('./odds_math');
  * the floor. The 6% cap stops a thin longshot with a stale uncertainty from
  * demanding an edge the −300..+300 band cannot pay.
  *
- * minCoverProb stays 0. There is no flat cover floor. A published pick
- * also needs calibrated stake EV at the sport floor and edge >= 3%
- * (MAIN_EDGE_FLOOR). The odds-scaled curve still raises that 3% when
- * plus-money or uncertainty asks for more. A row under 3% edge does not
- * publish, including as a lean. A thin slate publishes the rows that clear.
+ * minCoverProb stays 0. There is no flat cover floor.
+ *
+ * A main also needs stake EV at mainMinEv and edge >= 3% (MAIN_EDGE_FLOOR).
+ * The odds-scaled curve still raises that 3% edge when plus-money or
+ * uncertainty asks for more. mainMinEv is the sport EV floor times the
+ * longshot band: 1× from −300 through +150, 1.5× from +151 through +200,
+ * and 2× from +201 through +300. At a 3% base those bands are 3%, 4.5%,
+ * and 6%. A main under 3% edge does not publish. A lean is a separate
+ * tier at 1.5% edge and positive EV. This module does not apply the lean floor.
  */
 const EDGE_FLOOR = Object.freeze({
   atMinus110: 0.0175,
@@ -53,7 +57,7 @@ const EDGE_FLOOR = Object.freeze({
   max: 0.06,
 });
 
-/** Hard edge floor for every published straight and parlay leg. */
+/** Hard 3% edge floor for a main pick. A lean stays at 1.5% and is not raised here. */
 const MAIN_EDGE_FLOOR = 0.03;
 
 function minEdgeFor(odds, uncertainty) {
@@ -72,8 +76,30 @@ function minEdgeFor(odds, uncertainty) {
   return +floor.toFixed(6);
 }
 
+/**
+ * Stake-EV multiplier for a main. +151..+200 inclusive is 1.5.
+ * +201..+300 inclusive is 2. −300..+150, and a non-numeric price, stay at 1.
+ * Prices outside −300/+300 are already odds-out-of-band before this runs.
+ */
+function evBandMultiplier(odds) {
+  const n = typeof odds === 'number' ? odds : Number(odds);
+  if (!Number.isFinite(n)) return 1;
+  if (n >= 201 && n <= 300) return 2;
+  if (n >= 151 && n <= 200) return 1.5;
+  return 1;
+}
+
+/** Sport minEV times the longshot band. A missing base uses 3%. */
+function mainMinEv(odds, base) {
+  const n = Number(base);
+  const b = base == null || base === '' || !Number.isFinite(n) ? 0.03 : n;
+  return +((b * evBandMultiplier(odds)).toFixed(6));
+}
+
 module.exports = {
   EDGE_FLOOR,
   MAIN_EDGE_FLOOR,
   minEdgeFor,
+  evBandMultiplier,
+  mainMinEv,
 };

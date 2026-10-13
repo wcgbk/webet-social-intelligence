@@ -72,15 +72,16 @@ assert.strictEqual(synthetic.parlay[0].legs.length, 3);
 const parlayGames = synthetic.parlay[0].legs.map(l => l.matchup);
 assert.strictEqual(new Set(parlayGames).size, 3);
 
-const one = [row('A @ B', 'B -3', 'Spread', 0.02)];
+const one = [row('A @ B', 'B -3', 'Spread', 0.03)];
 const tiny = selectStraights(one, 3);
-assert.strictEqual(tiny.length, 1, 'one candidate still publishes a straight');
+assert.strictEqual(tiny.length, 1, 'one main at the 3% edge floor still publishes a straight');
 
-// A 30% cover with a real edge is not a floor reject, and it is a straight
-// when it outranks the other sides. Placeability and predicted CLV log only.
+// A 30% cover is not a cover-floor reject, and it is a straight when it
+// outranks the other sides. +220 is the 2× main EV band, so stake EV is
+// 0.06, which clears 6%. Placeability and predicted CLV log only.
 const dog = row('Army Black Knights @ Navy Midshipmen', 'Army Black Knights ML', 'Moneyline', 0.04, {
   coverProb: 0.30,
-  ev: 0.04,
+  ev: 0.06,
   odds: 220,
   line: null,
   placeable: false,

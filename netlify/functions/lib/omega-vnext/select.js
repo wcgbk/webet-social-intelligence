@@ -13,7 +13,7 @@ const {
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
-const { minEdgeFor } = require('./edge_floor');
+const { minEdgeFor, mainMinEv } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
@@ -120,12 +120,13 @@ function publishMinEv(c) {
   const table = (config.GATES && config.GATES.minEV) || {};
   const sport = c && c.sport;
   const n = sport && table[sport] != null ? Number(table[sport]) : Number(table.default);
-  return Number.isFinite(n) ? n : 0.03;
+  return mainMinEv(c && c.odds, n);
 }
 
 /**
- * Published floor straights. Stake EV at the sport floor (3%) and edge
- * at or above minEdgeFor. A lean does not pass. Missing edge does not pass.
+ * Published floor straights. Stake EV at mainMinEv (sport floor times the
+ * longshot band) and edge at or above minEdgeFor. A lean does not pass.
+ * Missing edge does not pass.
  */
 function passesPublishFloor(c) {
   const ev = Number(c && c.ev);

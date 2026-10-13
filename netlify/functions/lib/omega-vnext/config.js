@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.65-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.66-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -864,6 +864,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.66-omega-vnext-price-lock: Main stake EV is 1.5x from +151 to +200 and 2x from +201 to +300. The base stays 3%. A miss can still be a lean. Odds outside -300/+300 stay ineligible.',
   'v12.3.65-omega-vnext-price-lock: 11:00 ET card post runs only when OMEGA_X_AUTOPOST is the string true. Copy containing the words Alpha or Omega is rejected. The flag stays unset.',
   'v12.3.64-omega-vnext-price-lock: NFL calibration report splits totals by wind band and counts spread pushes on margins 3 and 7. Display only. No price change.',
   'v12.3.63-omega-vnext-price-lock: NCAAF tempo weight default is 0.25. A name-matched altitude term is added on top of flat HFA, 0 at a neutral site, capped at 1 point. A frozen snap does not fetch the tempo table.',

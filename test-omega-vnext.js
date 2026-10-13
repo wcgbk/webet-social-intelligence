@@ -314,7 +314,8 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     { ...row('A @ B', 0.56, 0.05), odds: -110, side: 'PriceA' },
     { ...row('C @ D', 0.56, 0.05), odds: -110, side: 'PriceC' },
     { ...row('E @ F', 0.56, 0.05), odds: -110, side: 'PriceE' },
-    { ...row('G @ H', 0.56, 0.04), odds: 180, side: 'PlusPrice' },
+    // +180 is the 1.5× main EV band. 0.045 clears 4.5% so the plus price stays in the ticket search.
+    { ...row('G @ H', 0.56, 0.045), odds: 180, side: 'PlusPrice' },
   ], []);
   assert.ok(tied[0].legs.some(l => /PlusPrice/.test(l.pick)), 'plus price raises combined EV when edges tie');
 

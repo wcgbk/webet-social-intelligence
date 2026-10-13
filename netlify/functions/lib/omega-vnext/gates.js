@@ -1,7 +1,7 @@
 'use strict';
 
 const { GATES, LEAN_MIN_EV, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
-const { minEdgeFor } = require('./edge_floor');
+const { minEdgeFor, mainMinEv } = require('./edge_floor');
 const { formatMoneylinePick } = require('./odds_math');
 const { qualifiesAsLean } = require('./select');
 const { adverseSteamReason } = require('./line_path');
@@ -139,7 +139,7 @@ function resolvePregameAsOfMs(opts = {}) {
  */
 function gateReason(c, opts = {}) {
   const sport = c.sport || 'default';
-  const minEV = sportFloor(GATES.minEV, sport);
+  const minEV = mainMinEv(c.odds, sportFloor(GATES.minEV, sport));
   const minCP = sportFloor(GATES.minCoverProb, sport);
   const cardDate = opts.cardDate || opts.dateISO || null;
 
@@ -195,8 +195,9 @@ function gateReason(c, opts = {}) {
   if (GATES.requireMajorBook && !c.liquid) return 'insufficient-liquidity';
   // minCoverProb stays 0. A missing cover still rejects. There is no flat
   // coverProb floor, so a 30% cover is not rejected for the cover itself.
-  // minEV is 3%. EV under that returns ev-floor. applyGates promotes
-  // 1.5%–3% EV (and a 3%+ EV that misses the edge curve) into the lean tier.
+  // Main stake EV is the sport floor times the longshot band (1× through
+  // +150, 1.5× from +151 to +200, 2× from +201 to +300). EV under that
+  // returns ev-floor. applyGates can still promote that miss into a lean.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
   if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
   if (GATES.minPredictedClvCents != null

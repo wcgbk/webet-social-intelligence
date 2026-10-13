@@ -102,6 +102,14 @@ const ET_SCHEDULE = {
   'trigger-clv': { etTimes: ['03:00', '13:00', '19:00'] },
   'capture-omega-lines': { etTimes: ['06:00', '07:30'] },
   'capture-omega-lines-late': { etTimes: ['09:00', '09:15'] },
+  // Pinnacle + DraftKings line checks. Exactly 3:00, 9:00, and 10:30 ET.
+  // Cron "0,30 7,8,13,14,15 * * *" is the UTC union of EDT (UTC-4) and EST
+  // (UTC-5). etGuard drops 03:30, 04:00, 09:30, 10:00, and 11:00. Context only.
+  'capture-omega-pinnacle-lines': { etTimes: ['03:00', '09:00', '10:30'] },
+  // Free /events discovery every ET hour at :00. Cron "0 * * * *" covers both
+  // DST offsets. dstFold 'later' runs the fall-back hour once. A new event id
+  // gets one Pinnacle open pull. An already-captured open is not pulled again.
+  'capture-omega-pinnacle-open': { etTimes: hourlyAt(0), dstFold: 'later' },
   // 13:15 UTC = 9:15 ET (EDT), 14:15 UTC = 9:15 ET (EST). Before the 9:30 card.
   'recal-report-omega': { etTimes: ['09:15'] },
   // Same 09:15 ET slot. Display-only running CLV total. Does not price or select.

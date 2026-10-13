@@ -34,6 +34,26 @@ const BLOB_TIMEOUT_MS = 1500;
 const clockAls = new AsyncLocalStorage();
 const memory = new Map();
 const lookedUp = new Map();
+/** Last live x-requests-remaining seen by this process. Cache hits do not update it. */
+let knownRequestsRemaining = null;
+
+function noteKnownRequestsRemaining(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value['x-requests-remaining']
+    : value;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return knownRequestsRemaining;
+  knownRequestsRemaining = n;
+  return knownRequestsRemaining;
+}
+
+function knownRequestsRemainingValue() {
+  return knownRequestsRemaining;
+}
+
+function resetKnownRequestsRemainingForTests() {
+  knownRequestsRemaining = null;
+}
 
 function freshSnapMs() {
   return require('./fetch_memo').FRESH_SNAP_MS;
@@ -413,10 +433,12 @@ async function materialize(resp, key, secrets) {
   } else {
     return resp;
   }
+  const headers = readXHeaders(resp);
+  noteKnownRequestsRemaining(headers);
   const record = {
     key,
     body,
-    headers: readXHeaders(resp),
+    headers,
     fetchedAt: new Date().toISOString(),
   };
   const payload = scrubbedPayload(record, secrets);
@@ -481,6 +503,7 @@ function wrap(fetchImpl) {
 
 function clearMemoryForTests() {
   memory.clear();
+  lookedUp.clear();
 }
 
 module.exports = {
@@ -491,5 +514,8 @@ module.exports = {
   snapshotBucket,
   oddsSnapshotSavedCredits,
   clearMemoryForTests,
+  noteKnownRequestsRemaining,
+  knownRequestsRemainingValue,
+  resetKnownRequestsRemainingForTests,
   BLOB_STORE,
 };

@@ -135,6 +135,8 @@ function ledgerRow(source, { reason, published, generatedAt, oddsBySport }) {
     reason: reason || 'yes',
     published: !!published,
     generatedAt: generatedAt || null,
+    // Context only. Absent when the Pinnacle log has no row. Selection does not read it.
+    ...(source && source.lineMoveContext ? { lineMove: source.lineMoveContext } : {}),
   };
 }
 

@@ -170,6 +170,46 @@ function narrateErrorShouldRetry(err) {
   return true;
 }
 
+/** Odds API credit floor for the Pinnacle line-move capture. Stop when remaining is below this. */
+const PINNACLE_CREDIT_FLOOR = 49000;
+
+function responseHeader(resp, name) {
+  if (!resp || resp.headers == null) return null;
+  const headers = resp.headers;
+  const want = String(name || '').toLowerCase();
+  try {
+    if (typeof headers.get === 'function') {
+      const direct = headers.get(name);
+      if (direct != null && direct !== '') return Array.isArray(direct) ? String(direct[0]) : String(direct);
+    }
+  } catch (_) { /* mock headers */ }
+  if (typeof headers === 'object') {
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() !== want) continue;
+      if (typeof headers[key] === 'function') continue;
+      if (headers[key] == null || headers[key] === '') continue;
+      return Array.isArray(headers[key]) ? String(headers[key][0]) : String(headers[key]);
+    }
+  }
+  return null;
+}
+
+function responseRequestsRemaining(resp) {
+  const raw = responseHeader(resp, 'x-requests-remaining');
+  if (raw == null || String(raw).trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** True only when remaining is a finite number strictly below the floor. Null is unknown, not zero. */
+function creditFloorReached(remaining, floor = PINNACLE_CREDIT_FLOOR) {
+  if (remaining == null || remaining === '') return false;
+  const n = Number(remaining);
+  const f = Number(floor);
+  if (!Number.isFinite(n) || !Number.isFinite(f)) return false;
+  return n < f;
+}
+
 module.exports = {
   runWithFetchMemo,
   memoFetchJson,
@@ -183,4 +223,8 @@ module.exports = {
   hasTrueClosingCapture,
   narrateErrorShouldRetry,
   FRESH_SNAP_MS,
+  PINNACLE_CREDIT_FLOOR,
+  responseHeader,
+  responseRequestsRemaining,
+  creditFloorReached,
 };

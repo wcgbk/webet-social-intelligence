@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.39-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.40-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -171,6 +171,34 @@ const LINE_MOVE = {
   /** Verify (10:30): harder adverse thresholds — drop, do not refill. Empty OK. */
   verifyAdverseCents: 20,
   verifyAdversePts: { Spread: 1.5, Total: 1.5 },
+};
+
+/**
+ * Minutes recorded on every steam row. Scheduled 3:00 / 9:00 / 10:30 checks
+ * are farther apart than this. A later denser series steams only when the
+ * gap also fits in this window.
+ */
+const STEAM_WINDOW_MIN = 15;
+
+/**
+ * Pinnacle no-vig line log. Context for the 10:30 snapshot only.
+ * It does not feed a price, an EV, a gate, a rank, a floor, Kelly, or a cap.
+ * Opens: free /events poll, then one regions=eu Pinnacle call per sport that
+ * has a new event id. Checks at 3:00, 9:00, and 10:30 ET: one Pinnacle call
+ * and one DraftKings call per sport. Stop priced pulls when
+ * x-requests-remaining is below creditFloor.
+ */
+const PINNACLE_LINE_MOVE = {
+  creditFloor: 49000,
+  regions: 'eu',
+  bookmakers: 'pinnacle',
+  secondaryBookmakers: 'draftkings',
+  markets: 'h2h,spreads,totals',
+  /** Consecutive-check no-vig move, in probability points, both books. */
+  steamProbPts: 3,
+  /** Consecutive-check spread or total point move, both books, same sign. */
+  steamLinePoints: 0.5,
+  windowMinutes: STEAM_WINDOW_MIN,
 };
 
 /**
@@ -827,6 +855,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.40-omega-vnext-price-lock: Pinnacle no-vig line moves (moneyline, spread, total; NFL, NCAAF, NHL, MLB) start from a free hourly /v4/sports/{sport}/events poll. A new event id gets one live Pinnacle open (regions=eu, bookmakers=pinnacle, markets=h2h,spreads,totals), stored once in omega-pinnacle-line-moves keyed by sport/eventId and never re-pulled. Checks at 3:00, 9:00, and 10:30 ET pull Pinnacle and DraftKings, one call per sport, through the snapshot cache. Moves between open, 3:00, 9:00, and 10:30 are logged. Steam is a no-vig move of at least 3 probability points or a spread/total move of at least 0.5 points, same direction at both books, with windowMinutes 15 (STEAM_WINDOW_MIN) on each steam record. The 10:30 card audit and each candidate receive that summary as context. Priced pulls stop when x-requests-remaining is below 49000. No historical odds call. dryRun and OMEGA_REPLAY_NO_WRITE write no blobs. No price, EV, gate, selection, floor, Kelly, or unit-cap change.',
   'v12.3.39-omega-vnext-price-lock: Odds API responses are stored once per sport, snapshot, markets, regions, and bookmakers. Repeat dry runs and replays reuse that snapshot. A cache hit does not spend credits. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.38-omega-vnext-price-lock: NHL moneyline market blend BLEND.ml 0.50->0.10. Replay NHL LL 0.6861->0.6775. Spread stays 0.50 and total stays 0.45. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.37-omega-vnext-price-lock: NCAAF market blend uses NCAAF_MODEL_WEIGHT ml 0.10, spread 0.10, total 0.10. Replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008. No floor, Kelly, shrink, or unit-cap change.',
@@ -928,6 +957,8 @@ module.exports = {
   PLACEABILITY,
   MAJOR_LIQUIDITY_BOOKS,
   LINE_MOVE,
+  STEAM_WINDOW_MIN,
+  PINNACLE_LINE_MOVE,
   DK_LAG,
   PM_SOFT,
   ENGINE_SOFT,

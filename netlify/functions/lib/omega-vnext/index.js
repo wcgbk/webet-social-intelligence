@@ -36,6 +36,7 @@ const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags } = require('./pinnacle_flag');
+const { readPinnacleLineMoves, applyLineMoveContext } = require('./pinnacle_line_move');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -818,6 +819,32 @@ async function generateOmegaVnext(opts = {}) {
   }
   try { attachAuditSummary(picksData, auditLog); }
   catch (err) { console.error(`[omega-audit] card summary soft-fail: ${err && err.message}`); }
+
+  // Pinnacle line-move context. After picks, parlays, and Kelly are done.
+  // Does not replace picksData.picks. A missing blob leaves the card as it was.
+  try {
+    const lineMoveDoc = Object.prototype.hasOwnProperty.call(opts, 'lineMoveDoc')
+      ? opts.lineMoveDoc
+      : await readPinnacleLineMoves(dateISO);
+    const pools = [].concat(yesPool || [], leanPool || [], rejected || []);
+    const applied = applyLineMoveContext({
+      picks: picksData.picks,
+      parlayLegs: picksData.parlayLegs,
+      candidates: pools,
+      audit: picksData.audit || null,
+      doc: lineMoveDoc,
+      dateISO,
+    });
+    if (lineMoveDoc && applied.audit) picksData.audit = applied.audit;
+    if (lineMoveDoc && applied.candidates) {
+      for (let i = 0; i < pools.length; i += 1) {
+        const summary = applied.candidates[i] && applied.candidates[i].lineMoveContext;
+        if (summary && pools[i]) pools[i].lineMoveContext = summary;
+      }
+    }
+  } catch (err) {
+    console.error(`[omega-vnext] pinnacle line-move context soft-fail: ${err && err.message}`);
+  }
 
   // Health is diagnostic. A failure here must not change picks or skip the store.
   let healthRecord = null;

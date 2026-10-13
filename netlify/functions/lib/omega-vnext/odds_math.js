@@ -26,6 +26,34 @@ function formatAmerican(american) {
   return a > 0 ? `+${a}` : `${a}`;
 }
 
+/** Power de-vig only past −250 or +210. The band stays proportional. */
+function lopsidedAmerican(a1, a2) {
+  return [a1, a2].some((a) => {
+    const n = Number(a);
+    return Number.isFinite(n) && (n < -250 || n > 210);
+  });
+}
+
+/** k such that i1^k + i2^k = 1. Used when the pair is outside the band. */
+function powerFair(i1, i2) {
+  let lo = 1;
+  let hi = 1;
+  let sumHi = i1 + i2;
+  while (sumHi > 1 && hi < 32) {
+    hi *= 2;
+    sumHi = Math.pow(i1, hi) + Math.pow(i2, hi);
+  }
+  if (!(sumHi <= 1)) return null;
+  for (let n = 0; n < 50; n += 1) {
+    const mid = (lo + hi) / 2;
+    const sum = Math.pow(i1, mid) + Math.pow(i2, mid);
+    if (sum > 1) lo = mid;
+    else hi = mid;
+  }
+  const k = (lo + hi) / 2;
+  return { p1: Math.pow(i1, k), p2: Math.pow(i2, k), k };
+}
+
 /** Two-way no-vig probabilities from a pair of American prices. */
 function noVigTwoWay(a1, a2) {
   const i1 = americanToImplied(a1);
@@ -33,10 +61,15 @@ function noVigTwoWay(a1, a2) {
   if (i1 == null || i2 == null) return null;
   const s = i1 + i2;
   if (s <= 0) return null;
-  return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
+  if (!lopsidedAmerican(a1, a2)) {
+    return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
+  }
+  const powered = powerFair(i1, i2);
+  if (!powered) return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
+  return { p1: powered.p1, p2: powered.p2, vig: s - 1, method: 'power' };
 }
 
-/** De-vig a list of {side, american} sharing one market. */
+/** De-vig a list of {side, american} sharing one market. Two-way uses noVigTwoWay. */
 function deVigMarket(outcomes) {
   const rows = (outcomes || []).map(o => ({
     ...o,
@@ -44,6 +77,15 @@ function deVigMarket(outcomes) {
   })).filter(o => o.implied != null);
   const sum = rows.reduce((s, r) => s + r.implied, 0);
   if (sum <= 0) return rows;
+  if (rows.length === 2) {
+    const nv = noVigTwoWay(rows[0].american, rows[1].american);
+    if (nv) {
+      return [
+        { ...rows[0], fairP: nv.p1, vig: nv.vig },
+        { ...rows[1], fairP: nv.p2, vig: nv.vig },
+      ];
+    }
+  }
   return rows.map(r => ({ ...r, fairP: r.implied / sum, vig: sum - 1 }));
 }
 

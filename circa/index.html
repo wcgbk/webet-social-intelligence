@@ -472,10 +472,10 @@
       <div class="standings-rank-wrap" id="circa-standings-rank">
         <table class="standings-table" id="circa-standings-table" aria-label="Our Circa Million VIII entries">
           <thead>
-            <tr><th>Place</th><th>Entry</th><th>Points</th></tr>
+            <tr><th>Place</th><th>Entry</th><th>Points</th><th>Record</th></tr>
           </thead>
           <tbody id="circa-standings-body">
-            <tr><td colspan="3" class="entry-muted">Loading standings...</td></tr>
+            <tr><td colspan="4" class="entry-muted">Loading standings...</td></tr>
           </tbody>
         </table>
         <div class="standings-rank-meta" id="circa-standings-rank-meta">Matching our entries to the latest Circa Million VIII standings PDF...</div>
@@ -864,20 +864,21 @@
     const body = document.getElementById('circa-standings-body');
     if (!body) return;
     if (!rows || !rows.length) {
-      body.innerHTML = '<tr><td colspan="3" class="entry-muted">Standings unavailable</td></tr>';
+      body.innerHTML = '<tr><td colspan="4" class="entry-muted">Standings unavailable</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function (row) {
       const found = !!row.found;
       const place = found ? escapeHtml(row.placeDisplay || '--') : '--';
       const pts = found ? escapeHtml(formatStandingsPoints(row.points)) : '--';
+      const rec = found ? escapeHtml(row.recordDisplay || row.record || '--') : '--';
       const name = escapeHtml(row.entry || row.alias || '');
       const badge = row.isWebetai ? '<span class="standings-badge">WeBetAI</span>' : '';
       const entryHtml = found
         ? (name + badge)
         : ('<span class="entry-muted">' + name + badge + ' · not found</span>');
       const cls = row.isWebetai ? ' class="webetai-row"' : '';
-      return '<tr' + cls + '><td>' + place + '</td><td>' + entryHtml + '</td><td>' + pts + '</td></tr>';
+      return '<tr' + cls + '><td>' + place + '</td><td>' + entryHtml + '</td><td>' + pts + '</td><td>' + rec + '</td></tr>';
     }).join('');
   }
   function fetchStandingsRank() {
@@ -885,7 +886,7 @@
     const metaEl = document.getElementById('circa-standings-rank-meta');
     const linksEl = document.getElementById('circa-standings-pdf-links');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="3" class="entry-muted">Loading standings...</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" class="entry-muted">Loading standings...</td></tr>';
     if (metaEl) metaEl.textContent = 'Matching our entries to the latest Circa Million VIII standings PDF...';
     const req = ++_standingsReq;
     fetch('/api/get-circa-standings')

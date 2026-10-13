@@ -42,7 +42,7 @@ const ROW_RE_COLLAPSED =
 // Back-compat alias (tests / callers): prefer spaced shape documentation.
 const ROW_RE = ROW_RE_SPACED;
 
-const CACHE_KEY = "circa-standings-v3"; // v3: collapsed-row entry/picks split (PICKWIZARD32-*)
+const CACHE_KEY = "circa-standings-v4"; // v4: Full Season PDF preferred + exhaustive collapsed split
 const MEM_TTL_MS = 15 * 60 * 1000;
 
 let memCache = null; // { key, expires, payload }
@@ -84,6 +84,24 @@ function parseWeekFromTitle(title, url) {
   return m ? Number(m[1]) : null;
 }
 
+// W-L-P display from Circa's 4-part record (W-L-P-X) -> "9-10-1".
+function recordWLP(record) {
+  const parts = String(record || "").split("-");
+  if (parts.length < 3) return String(record || "");
+  return parts.slice(0, 3).join("-");
+}
+
+function isQuarterTitle(blob) {
+  return /\b(1st|2nd|3rd|4th|first|second|third|fourth)[\s-]+quarter\b/i.test(blob) || /quarter/i.test(blob);
+}
+
+function isFullSeason(blob) {
+  return /full[\s-]+season/i.test(blob);
+}
+
+// Returns "season" | "lastPlace" | "quarterSeason" | "quarterLastPlace" | null.
+// Main links are ONLY Full Season Standings / Full Season Last Place; quarter
+// PDFs are classified separately and surfaced as optional extras.
 function classifyMedia(item) {
   const title = String((item.title && item.title.rendered) || "");
   const url = String(item.source_url || "");
@@ -97,14 +115,16 @@ function classifyMedia(item) {
     blob.includes("last place") ||
     blob.includes("last-place") ||
     blob.includes("booby");
-  const isSeason =
-    blob.includes("standings") &&
-    (blob.includes("full season") ||
-      blob.includes("full-season") ||
-      blob.includes("quarter"));
-  if (isLast) return "lastPlace";
-  if (isSeason || blob.includes("standings")) return "season";
-  return null;
+  const isStandings = blob.includes("standings");
+  if (!isLast && !isStandings) return null;
+  const quarter = !isFullSeason(blob) && isQuarterTitle(blob);
+  if (isLast) return quarter ? "quarterLastPlace" : "lastPlace";
+  return quarter ? "quarterSeason" : "season";
+}
+
+// Rank for main-link choice: explicit "Full Season" beats untagged.
+function fullSeasonRank(meta) {
+  return isFullSeason((meta && meta.title) + " " + (meta && meta.url)) ? 1 : 0;
 }
 
 async function fetchMedia(search) {
@@ -138,12 +158,14 @@ function newerPdf(a, b) {
   const aw = Number.isFinite(a.week) ? a.week : -1;
   const bw = Number.isFinite(b.week) ? b.week : -1;
   if (aw !== bw) return aw > bw;
+  const ar = fullSeasonRank(a);
+  const br = fullSeasonRank(b);
+  if (ar !== br) return ar > br;
   return String(a.date || "") > String(b.date || "");
 }
 
 function pickLatestPdfs(pool) {
-  let season = null;
-  let last = null;
+  const best = { season: null, lastPlace: null, quarterSeason: null, quarterLastPlace: null };
   for (const item of pool || []) {
     const kind = classifyMedia(item);
     if (!kind || !item.source_url) continue;
@@ -156,13 +178,13 @@ function pickLatestPdfs(pool) {
       date: item.date || item.modified || null,
       week: parseWeekFromTitle(title, item.source_url),
     };
-    if (kind === "season") {
-      if (newerPdf(meta, season)) season = meta;
-    } else if (kind === "lastPlace") {
-      if (newerPdf(meta, last)) last = meta;
-    }
+    if (newerPdf(meta, best[kind])) best[kind] = meta;
   }
-  return { season, lastPlace: last };
+  const quarter =
+    best.quarterSeason || best.quarterLastPlace
+      ? { season: best.quarterSeason, lastPlace: best.quarterLastPlace }
+      : null;
+  return { season: best.season, lastPlace: best.lastPlace, quarter };
 }
 
 async function discoverLatestPdfs() {
@@ -170,9 +192,16 @@ async function discoverLatestPdfs() {
     fetchMedia("Million VIII Standings"),
     fetchMedia("Million VIII Last Place"),
   ]);
+  // Targeted Full Season searches so quarter uploads can't crowd them out of per_page.
+  const extra = await Promise.all([
+    fetchMedia("Million VIII Full Season Standings").catch(() => []),
+    fetchMedia("Million VIII Full Season Last Place").catch(() => []),
+  ]);
   const pool = []
     .concat(Array.isArray(standings) ? standings : [])
-    .concat(Array.isArray(lastPlace) ? lastPlace : []);
+    .concat(Array.isArray(lastPlace) ? lastPlace : [])
+    .concat(Array.isArray(extra[0]) ? extra[0] : [])
+    .concat(Array.isArray(extra[1]) ? extra[1] : []);
   return pickLatestPdfs(pool);
 }
 
@@ -217,7 +246,12 @@ async function resolveStandingsPdfs({ readBlob, writeBlob, discover, verify } = 
   let changed = false;
   for (const kind of ["season", "lastPlace"]) {
     const cand = found && found[kind];
-    const prev = lastGood && lastGood[kind];
+    let prev = lastGood && lastGood[kind];
+    // Old last-good blobs may hold a quarter PDF; never reuse one as a main link.
+    if (prev && isQuarterTitle(String(prev.title || "") + " " + String(prev.url || "")) &&
+        !isFullSeason(String(prev.title || "") + " " + String(prev.url || ""))) {
+      prev = null;
+    }
     if (cand && prev && cand.url === prev.url) {
       out[kind] = prev;
       continue;
@@ -235,7 +269,7 @@ async function resolveStandingsPdfs({ readBlob, writeBlob, discover, verify } = 
       await writeBlob(PDF_LINKS_KEY, { ...out, savedAt: new Date().toISOString() });
     } catch (_) {}
   }
-  return { ...out, discoverError };
+  return { ...out, quarter: (found && found.quarter) || null, discoverError };
 }
 
 function rowFromParts(placeRaw, tiedRaw, entryRaw, picksRaw, record, pointsRaw) {
@@ -290,8 +324,47 @@ function parseStandingsRow(line) {
   if (!m) return null;
   const record = m[4];
   const split = splitEntryPicksCollapsed(m[3], record);
-  if (!split) return null;
-  return rowFromParts(m[1], m[2], split.entry, split.picksCount, record, m[5]);
+  if (split) {
+    const r = rowFromParts(m[1], m[2], split.entry, split.picksCount, record, m[5]);
+    if (r && pointsMatchRecord(r.points, record)) return r;
+  }
+  return parseCollapsedExhaustive(raw);
+}
+
+// points = wins + 0.5 * pushes (Circa scoring)
+function pointsMatchRecord(points, record) {
+  const [w, , p] = String(record).split("-").map(Number);
+  return Math.abs(points - (w + 0.5 * (p || 0))) < 0.001;
+}
+
+// Greedy regex mis-splits rows like "1TPARLAYSAM-22520-4-1-020.50" (Full Season,
+// 2-digit wins). Try every record/points boundary; accept the one where
+// picks === sum(record) and points === W + 0.5*P.
+function parseCollapsedExhaustive(raw) {
+  const s = String(raw || "").replace(/\s+/g, "");
+  const head = s.match(/^([0-9,]+)(T?)(.+)$/);
+  if (!head) return null;
+  const body = head[3];
+  // Candidate tails: vary how many leading digits the record's first part
+  // and trailing digits its last part take.
+  for (let start = body.length - 1; start > 0; start--) {
+    const tail = body.slice(start);
+    const t = tail.match(/^(\d+)-(\d+)-(\d+)-(\d+\.\d{2})$/);
+    if (!t) continue;
+    const before = body.slice(0, start);
+    const last = t[4];
+    const intPart = last.split(".")[0];
+    for (let k = 1; k < intPart.length; k++) {
+      const record = [t[1], t[2], t[3], intPart.slice(0, k)].join("-");
+      const pts = last.slice(k);
+      if (!/^\d+\.\d{2}$/.test(pts)) continue;
+      const split = splitEntryPicksCollapsed(before, record);
+      if (!split) continue;
+      const r = rowFromParts(head[1], head[2], split.entry, split.picksCount, record, pts);
+      if (r && pointsMatchRecord(r.points, record)) return r;
+    }
+  }
+  return null;
 }
 
 function parseStandingsText(text) {
@@ -408,6 +481,7 @@ function lookupAliasEntries(parsed, aliases, webetaiAlias) {
       placeDisplay: formatPlaceDisplay(hit.place, tied),
       points: hit.points,
       record: hit.record,
+      recordDisplay: recordWLP(hit.record),
       tied,
       label: isWebetai ? hit.entry + " (WeBetAI)" : hit.entry,
     });
@@ -572,6 +646,16 @@ function buildPayload(meta, parsed, pointsQuery, aliases) {
     displayName: "WeBetAI",
     webetaiAlias: resolveWebetaiAlias(),
   };
+  // Optional extra only; never the main link.
+  if (meta.quarter && (meta.quarter.season || meta.quarter.lastPlace)) {
+    base.quarterPdfs = {
+      standingsUrl: (meta.quarter.season && meta.quarter.season.url) || null,
+      standingsTitle: (meta.quarter.season && meta.quarter.season.title) || null,
+      lastPlaceUrl: (meta.quarter.lastPlace && meta.quarter.lastPlace.url) || null,
+      lastPlaceTitle: (meta.quarter.lastPlace && meta.quarter.lastPlace.title) || null,
+      week: (meta.quarter.season && meta.quarter.season.week) || null,
+    };
+  }
   if (pointsQuery != null && pointsQuery !== "") {
     const n = Number(pointsQuery);
     // Legacy points->band lookup (no prize fields on the UI path anymore).
@@ -721,6 +805,8 @@ module.exports = {
   pickLatestPdfs,
   verifyPdfUrl,
   resolveStandingsPdfs,
+  recordWLP,
+  parseCollapsedExhaustive,
   decodeEntities,
   PDF_LINKS_KEY,
   extractPdfText,

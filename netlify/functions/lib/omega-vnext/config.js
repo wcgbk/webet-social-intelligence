@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.49-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.3.50-omega-vnext-price-lock';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -181,8 +181,9 @@ const LINE_MOVE = {
 const STEAM_WINDOW_MIN = 15;
 
 /**
- * Pinnacle no-vig line log. Context for the card only.
- * It does not feed a price, an EV, a gate, a rank, a floor, Kelly, or a cap.
+ * Pinnacle no-vig line log. The latest check (10:00 when present) versus
+ * the 3:00 baseline feeds the steam gate and the rank nudge. It does not
+ * rewrite the fair price, an EV formula, a floor, Kelly, or a cap.
  * Opens are the first price in the 3:00 ET pull. Checks at 3:00 and 10:00 ET:
  * one Pinnacle call and one DraftKings call per sport. The 3:00 check also
  * pulls yesterday's pregame closes (historical, 10× live = historicalCreditsPerPull).
@@ -862,6 +863,7 @@ function fbMarketGapLimits(sport) {
 const CLV_KPI_FLOOR = '2026-09-22';
 
 const MODEL_NOTES = [
+  'v12.3.50-omega-vnext-price-lock: The steam gate and the rank nudge read the latest Pinnacle/DraftKings check against the 3:00 baseline (else the open). Suspended 06:00/07:30/09:00/09:15 snaps are a fallback only when that log has no snapshot. The 15-minute dense-check window is unchanged; a named 03:00 to 10:00 step still steams. Fair price, floors, Kelly, and unit caps are unchanged.',
   'v12.3.49-omega-vnext-price-lock: One straight per game treats vs, at, and @ as the same matchup, in either team order. The game key is the sorted team names. A doubleheader stays two games. An undated key has no commence suffix.',
   'v12.3.48-omega-vnext-price-lock: The 49,000 credit stop applies to backfill and extra pulls only. It does not stop the 3:00 or 10:00 checks, yesterday\'s closes, or the card. Open and other extra pulls still stop below 49,000.',
   'v12.3.47-omega-vnext-price-lock: At 10:30 the card\'s top 3 are compared to the re-ranked list on game, side, and edge. A mismatch rebuilds that order and the parlay. The bug log entry stays off the page.',

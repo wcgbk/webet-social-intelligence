@@ -9,8 +9,13 @@
  * (open → 3:00 → 10:00). 9:00 and 10:30 are not pulled.
  * Direction on the card context is from the 3:00 baseline when that print
  * exists, otherwise from the open. Steam needs the same direction at
- * Pinnacle and DraftKings. This module does not price, rank, gate, or write
- * the published card.
+ * Pinnacle and DraftKings.
+ *
+ * Selection reads that same pair. linePathForSelection turns the latest
+ * check and the 3:00 baseline (else the open) into line-path polls.
+ * The steam gate and the rank nudge use those polls, not the suspended
+ * 06:00/07:30/09:00/09:15 snaps. The fair price is not rewritten here.
+ * applyLineMoveContext still only copies the audit summary.
  */
 
 const { PINNACLE_LINE_MOVE, STEAM_WINDOW_MIN, SITE_ID } = require('./config');
@@ -692,6 +697,135 @@ function applyLineMoveContext(input) {
   return { picks, parlayLegs, candidates, audit };
 }
 
+function rowFromSideQuotes(quotes) {
+  const row = {};
+  for (const quote of Object.values(quotes || {})) {
+    if (!quote) continue;
+    if (quote.market === 'Moneyline' && quote.side === 'home') row.mlHome = quote.price;
+    else if (quote.market === 'Moneyline' && quote.side === 'away') row.mlAway = quote.price;
+    else if (quote.market === 'Spread' && quote.side === 'home') {
+      row.spreadHome = quote.line;
+      row.spreadHomeOdds = quote.price;
+    } else if (quote.market === 'Spread' && quote.side === 'away') {
+      row.spreadAway = quote.line;
+      row.spreadAwayOdds = quote.price;
+    } else if (quote.market === 'Total' && quote.side === 'over') {
+      row.total = quote.line;
+      row.overOdds = quote.price;
+    } else if (quote.market === 'Total' && quote.side === 'under') {
+      row.underOdds = quote.price;
+      if (row.total == null) row.total = quote.line;
+    }
+  }
+  return row;
+}
+
+function gameFromObservation(eventDoc, obs) {
+  const pin = rowFromSideQuotes(bookQuotes(obs, 'pinnacle'));
+  const dk = rowFromSideQuotes(bookQuotes(obs, 'draftkings'));
+  const books = {};
+  if (Object.keys(pin).length) books.pinnacle = pin;
+  if (Object.keys(dk).length) books.draftkings = dk;
+  if (!Object.keys(books).length) return null;
+  const away = eventDoc.awayTeam;
+  const home = eventDoc.homeTeam;
+  if (!away || !home) return null;
+  return {
+    homeTeam: home,
+    awayTeam: away,
+    capturedAt: obs.at || null,
+    books,
+    sharpConsensus: {
+      spreadHome: pin.spreadHome != null ? pin.spreadHome : null,
+      total: pin.total != null ? pin.total : null,
+      mlHome: pin.mlHome != null ? pin.mlHome : null,
+      mlAway: pin.mlAway != null ? pin.mlAway : null,
+    },
+  };
+}
+
+function pollFromSlot(slot, at, games) {
+  const label = slot === 'open' ? 'open' : String(slot || '').padStart(4, '0');
+  return {
+    hhmm: label,
+    slot: slot || label,
+    capturedAt: at || null,
+    games,
+    gameCount: Object.keys(games).length,
+    source: 'pinnacle-line-moves',
+  };
+}
+
+/**
+ * Latest check vs the 3:00 baseline (else the open), as line-path polls.
+ * The latest poll is the snapshot selection must use. A doc with no
+ * visible quotes returns empty polls so the caller can keep another path.
+ */
+function selectionPollsFromDoc(doc, opts = {}) {
+  const empty = { earliest: null, latest: null, path: null };
+  const events = eventDocsOf(doc);
+  if (!events.length) return empty;
+  const dateISO = (opts && opts.dateISO) || (doc && doc.date) || null;
+  const endMs = cutoffMs(dateISO, opts && opts.cutoffIso);
+  const baselineGames = {};
+  const latestGames = {};
+  let baselineAt = null;
+  let latestAt = null;
+  let baselineSlot = null;
+  let latestSlot = null;
+  for (const eventDoc of events) {
+    const obs = visibleObservations(eventDoc, endMs);
+    if (!obs.length) continue;
+    const baselineObs = obs.find((row) => row.slot === '0300') || obs.find((row) => row.slot === 'open') || null;
+    const latestObs = obs[obs.length - 1];
+    const away = eventDoc.awayTeam;
+    const home = eventDoc.homeTeam;
+    if (!away || !home || !latestObs) continue;
+    const key = `${String(away).trim()} @ ${String(home).trim()}`.toLowerCase();
+    const latestGame = gameFromObservation(eventDoc, latestObs);
+    if (!latestGame) continue;
+    latestGames[key] = latestGame;
+    if (!latestSlot || latestObs.slot === '1000') {
+      latestSlot = latestObs.slot;
+      latestAt = latestObs.at || latestAt;
+    }
+    if (!baselineObs) continue;
+    const baseGame = gameFromObservation(eventDoc, baselineObs);
+    if (!baseGame) continue;
+    baselineGames[key] = baseGame;
+    if (!baselineSlot || baselineObs.slot === '0300') {
+      baselineSlot = baselineObs.slot;
+      baselineAt = baselineObs.at || baselineAt;
+    }
+  }
+  if (!Object.keys(latestGames).length) return empty;
+  const latest = pollFromSlot(latestSlot, latestAt, latestGames);
+  const earliest = Object.keys(baselineGames).length
+    ? pollFromSlot(baselineSlot, baselineAt, baselineGames)
+    : latest;
+  const polls = earliest === latest ? [latest] : [earliest, latest];
+  return {
+    earliest,
+    latest,
+    path: { date: dateISO, polls, source: 'pinnacle-line-moves' },
+  };
+}
+
+/**
+ * Selection line path. A pinnacle doc with a latest snapshot wins over
+ * the suspended morning snaps. No latest snapshot keeps the morning path.
+ */
+function linePathForSelection(morningMeta, doc, opts = {}) {
+  const pin = selectionPollsFromDoc(doc, opts);
+  if (pin && pin.latest && pin.latest.gameCount > 0) {
+    return { ...pin, source: 'pinnacle-latest' };
+  }
+  if (morningMeta && (morningMeta.latest || morningMeta.earliest)) {
+    return { ...morningMeta, source: morningMeta.source || 'morning-line-path' };
+  }
+  return morningMeta || { path: null, earliest: null, latest: null, source: null };
+}
+
 function writeBlocked(opts) {
   if (opts && opts.dryRun) return 'dryRun';
   if (replayNoWrite(opts && opts.env)) return 'OMEGA_REPLAY_NO_WRITE';
@@ -926,6 +1060,8 @@ module.exports = {
   netDirection,
   summaryForCandidate,
   applyLineMoveContext,
+  selectionPollsFromDoc,
+  linePathForSelection,
   readLineMoveKey,
   readPinnacleLineMoves,
   storeOpen,

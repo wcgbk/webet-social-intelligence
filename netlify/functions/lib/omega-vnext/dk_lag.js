@@ -14,10 +14,11 @@
  *   pinMove  = lock no-vig − baseline no-vig for this side
  *   dkMove   = lock DraftKings implied − baseline DraftKings implied
  *
- * The baseline is the earliest morning snap in 06:00..09:15 ET that has
- * the anchor pair (omega-line-snap), or the opener when those snaps do
- * not. lagEdge equals marketEv only when Pinnacle (or Circa) moved at
- * least DK_LAG.minPinMovePp toward the side, DraftKings implied moved
+ * The baseline is the 3:00 check when that poll is on the path, else the
+ * open. The suspended 06:00..09:15 snaps are the baseline only when neither
+ * of those is present. The lock price is the candidate's current DraftKings
+ * number (the latest snapshot). lagEdge equals marketEv only when Pinnacle
+ * (or Circa) moved at least DK_LAG.minPinMovePp toward the side, DraftKings implied moved
  * less than DK_LAG.maxDkFollowRatio of that move, and marketEv > 0.
  * OMEGA_DK_LAG=0 records the moves and does not change cover or rank.
  *
@@ -33,6 +34,8 @@ const { attachEv } = require('./edge');
 const { americanToImplied, americanToDecimal, noVigTwoWay, formatEdgePct } = require('./odds_math');
 
 const MORNING_SLOTS = ['0600', '0730', '0900', '0915'];
+/** 3:00 baseline, then the open. 10:00 is the lock, not a baseline. */
+const BASELINE_SLOTS = ['0300', 'open'];
 
 function dkLagEnabled(env) {
   const source = env || process.env;
@@ -160,10 +163,20 @@ function findGame(games, away, home) {
   return null;
 }
 
-/** Earliest 06:00..09:15 snap, then the opener when it is not already in that list. */
+/**
+ * 3:00 first, then the open. Morning 06:00..09:15 is used only when the
+ * path has neither, so an old morning snap cannot beat the latest log.
+ */
 function baselinePolls(polls, opener) {
-  const morning = (polls || [])
-    .filter((p) => p && p.games && MORNING_SLOTS.includes(slotOf(p)))
+  const list = (polls || []).filter((p) => p && p.games);
+  const rank = { '0300': 0, open: 1 };
+  const fresh = list
+    .filter((p) => BASELINE_SLOTS.includes(slotOf(p)))
+    .slice()
+    .sort((a, b) => (rank[slotOf(a)] != null ? rank[slotOf(a)] : 9) - (rank[slotOf(b)] != null ? rank[slotOf(b)] : 9));
+  if (fresh.length) return fresh;
+  const morning = list
+    .filter((p) => MORNING_SLOTS.includes(slotOf(p)))
     .slice()
     .sort((a, b) => slotOf(a).localeCompare(slotOf(b)));
   const seen = new Set(morning.map(slotOf));
@@ -440,6 +453,7 @@ function applyDkLag(candidates, opts) {
 
 module.exports = {
   MORNING_SLOTS,
+  BASELINE_SLOTS,
   dkLagEnabled,
   sideRole,
   probsFromRow,

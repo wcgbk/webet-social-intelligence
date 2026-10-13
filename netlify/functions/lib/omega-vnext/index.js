@@ -35,7 +35,7 @@ const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags } = require('./pinnacle_flag');
-const { readPinnacleLineMoves, applyLineMoveContext } = require('./pinnacle_line_move');
+const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -333,20 +333,35 @@ async function generateOmegaVnext(opts = {}) {
   candidates = calibrateAll(candidates, { cardDate: dateISO }).map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
 
-  // Open→pick US line-move (earliest morning snap → latest pre-generate).
-  // Missing required snaps: one real Odds capture into the current ET slot, then re-load.
-  // Zero usable snaps after that hard-fails. Partial snaps warn and continue.
-  // Does not invent snaps and does not force-fill leans.
-  let linePathMeta = { path: null, earliest: null, latest: null };
+  // Open→pick line move. The steam gate uses the latest Pinnacle/DraftKings
+  // check (10:00 when that print exists) against the 3:00 baseline.
+  // Suspended 06:00/07:30/09:00/09:15 snaps are only a fallback, and only
+  // for capture-health warnings. They do not outrank the latest snapshot.
+  // Does not invent snaps, does not pull the Odds API, and does not force-fill leans.
+  let morningPath = { path: null, earliest: null, latest: null };
   try {
     const loaded = await loadLinePath(dateISO);
-    if (loaded) linePathMeta = loaded;
+    if (loaded) morningPath = loaded;
   } catch (e) {
     console.error(`[omega-vnext] line-move load failed: ${e.message}`);
   }
+  let lineMoveDocForSelection = null;
+  let lineMoveDocLoaded = Object.prototype.hasOwnProperty.call(opts, 'lineMoveDoc') || !!replayLike;
+  if (Object.prototype.hasOwnProperty.call(opts, 'lineMoveDoc')) {
+    lineMoveDocForSelection = opts.lineMoveDoc;
+  } else if (!replayLike) {
+    try {
+      lineMoveDocForSelection = await readPinnacleLineMoves(dateISO);
+      lineMoveDocLoaded = true;
+    } catch (e) {
+      console.error(`[omega-vnext] pinnacle line-move read soft-fail: ${e.message}`);
+      lineMoveDocLoaded = true;
+    }
+  }
+  let linePathMeta = linePathForSelection(morningPath, lineMoveDocForSelection, { dateISO });
 
   const requiredSlotsET = (LINE_MOVE && LINE_MOVE.captureSlotsET) || ['0600', '0730', '0900', '0915'];
-  let captureHealth = assessCaptureHealth(dateISO, linePathMeta, { requiredSlotsET });
+  let captureHealth = assessCaptureHealth(dateISO, morningPath, { requiredSlotsET });
   // Morning 0600/0730/0900/0915 snaps are suspended. Do not pull the Odds API
   // to fill them. A missing slot stays a warning and does not block the card.
 
@@ -384,9 +399,9 @@ async function generateOmegaVnext(opts = {}) {
     const withOpen = candidates.filter(c => c.openPrint).length;
     const openSlot = linePathMeta.earliest.hhmm || linePathMeta.earliest.slot;
     const latestSlot = (linePathMeta.latest && (linePathMeta.latest.hhmm || linePathMeta.latest.slot)) || 'n/a';
-    console.log(`[omega-vnext] line-move open=${openSlot} latest=${latestSlot} annotated=${withOpen}/${candidates.length}`);
+    console.log(`[omega-vnext] line-move source=${linePathMeta.source || 'path'} open=${openSlot} latest=${latestSlot} annotated=${withOpen}/${candidates.length}`);
   } else {
-    console.log(`[omega-vnext] line-move: no morning snaps for ${dateISO}`);
+    console.log(`[omega-vnext] line-move: no latest snapshot for ${dateISO}`);
   }
 
   const healthLog = { event: 'captureHealth', date: dateISO, shadow: !!shadow, ...captureHealth };
@@ -810,8 +825,8 @@ async function generateOmegaVnext(opts = {}) {
   // Pinnacle line-move context. After picks, parlays, and Kelly are done.
   // Does not replace picksData.picks. A missing blob leaves the card as it was.
   try {
-    const lineMoveDoc = Object.prototype.hasOwnProperty.call(opts, 'lineMoveDoc')
-      ? opts.lineMoveDoc
+    const lineMoveDoc = lineMoveDocLoaded
+      ? lineMoveDocForSelection
       : await readPinnacleLineMoves(dateISO);
     const pools = [].concat(yesPool || [], leanPool || [], rejected || []);
     const applied = applyLineMoveContext({

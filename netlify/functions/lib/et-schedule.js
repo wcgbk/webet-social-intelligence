@@ -66,7 +66,7 @@ function hourlyAt(minute) {
 /** @type {Record<string, {etTimes: string[], days?: number[]}>} */
 const ET_SCHEDULE = {
   'trigger-picks-alpha': { etTimes: ['09:00'] },
-  'trigger-picks-omega': { etTimes: ['09:30'] },
+  'trigger-picks-omega': { etTimes: ['10:00'] },
   'verify-picks-omega': { etTimes: ['10:30'] },
   // Every 30 min, 11:00–23:30 ET inclusive. Cron is the UTC union of EDT
   // (UTC-4) and EST (UTC-5): "0,30 15-23,0-4 * * *". etGuard drops the copy
@@ -323,9 +323,9 @@ function cardGeneratedOnEtDate(card, dateET) {
 
 /**
  * ET wall minutes of the morning Omega slot minus the guard tolerance.
- * 09:30 - TOLERANCE_MIN = 09:20. A card written at or after that minute
- * is the 9:30 run (or a later same-day write). Earlier same-day cards
- * are overnight or pre-window and must still be rebuilt.
+ * The morning slot minus TOLERANCE_MIN. A card written at or after that
+ * minute is this morning's run (or a later same-day write). Earlier
+ * same-day cards are overnight or pre-window and must still be rebuilt.
  */
 function morningCardCutoffMin() {
   const slot = ET_SCHEDULE['trigger-picks-omega'].etTimes[0];
@@ -341,9 +341,9 @@ function cardFromMorningRun(card, dateET) {
 /**
  * Scheduler-only morning idempotency for the Omega card.
  * Skip only when generatedAt falls on today's ET date and the ET wall
- * time is at/after 09:20 (09:30 minus TOLERANCE_MIN): this morning's run
+ * time is at/after the morning slot minus TOLERANCE_MIN: this morning's run
  * already wrote the card. An earlier same-day card does not skip. The
- * 9:30 invoke still force-rebuilds it. A read error does not skip; the
+ * 10:00 invoke still force-rebuilds it. A read error does not skip; the
  * ET guard alone is the double-run protection. Manual/HTTP never reads.
  */
 async function morningCardIdempotency(event, now, readCard) {

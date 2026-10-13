@@ -136,7 +136,7 @@ function assertWindow(from, through) {
       assert.ok(Object.prototype.hasOwnProperty.call(want, key), `${name} unexpected run ${key} during ${from}..${through}`);
     }
     for (const ymd of etDays(from, through)) {
-      const omega = got[`${ymd}|09:30`] || 0;
+      const omega = got[`${ymd}|10:00`] || 0;
       const verify = name === 'verify-picks-omega' ? (got[`${ymd}|10:30`] || 0) : null;
       if (name === 'trigger-picks-omega') assert.strictEqual(omega, 1, `${ymd} omega runs`);
       if (name === 'verify-picks-omega') assert.strictEqual(verify, 1, `${ymd} verify runs`);
@@ -175,12 +175,12 @@ const earlyClose = et.etGuard('capture-candidate-closes', schedulerEvent(), new 
 assert.strictEqual(earlyClose.run, false);
 assert.strictEqual(earlyClose.reason, 'dst-fold');
 
-const sched = schedulerEvent('2026-10-07T13:30:00.000Z');
-const at0930 = new Date('2026-10-07T13:30:00Z');
-const match = et.etGuard('trigger-picks-omega', sched, at0930);
+const sched = schedulerEvent('2026-10-07T14:00:00.000Z');
+const at1000 = new Date('2026-10-07T14:00:00Z');
+const match = et.etGuard('trigger-picks-omega', sched, at1000);
 assert.strictEqual(match.scheduler, true);
 assert.strictEqual(match.run, true);
-assert.strictEqual(match.matched, '09:30');
+assert.strictEqual(match.matched, '10:00');
 assert.strictEqual(match.ymd, '2026-10-07');
 
 const manual = et.etGuard('trigger-picks-omega', { httpMethod: 'POST', body: '{}' }, new Date('2026-10-07T18:00:00Z'));
@@ -192,13 +192,14 @@ assert.strictEqual(et.rejectUnlessEtSlot('trigger-picks-omega', { httpMethod: 'G
 const wrongHour = et.etGuard('trigger-picks-omega', sched, new Date('2026-10-07T14:30:00Z'));
 assert.strictEqual(wrongHour.run, false);
 assert.strictEqual(wrongHour.reason, 'outside-et-slot');
-const skipped = et.rejectUnlessEtSlot('verify-picks-omega', sched, at0930);
+const skipped = et.rejectUnlessEtSlot('verify-picks-omega', sched, at1000);
 assert.strictEqual(JSON.parse(skipped.body).skipped, 'et-guard');
 assert.strictEqual(et.rejectUnlessEtSlot('verify-picks-omega', sched, new Date('2026-10-07T14:30:00Z')), null);
 
 assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2026-11-01T13:30:00Z')).run, false);
-assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2026-11-01T14:30:00Z')).matched, '09:30');
-assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2027-03-14T13:30:00Z')).matched, '09:30');
+assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2026-11-01T14:30:00Z')).run, false);
+assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2026-11-01T15:00:00Z')).matched, '10:00');
+assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2027-03-14T14:00:00Z')).matched, '10:00');
 assert.strictEqual(et.etGuard('trigger-picks-omega', sched, new Date('2027-03-14T14:30:00Z')).run, false);
 
 const evening = et.etGuard('capture-omega-walkforward-evening', sched, new Date('2026-11-02T00:45:00Z'));
@@ -240,9 +241,9 @@ assert.ok(!pregameSlots.some((slot) => slot.endsWith(':40')));
 assert.strictEqual(et.rejectUnlessEtSlot('pregame-check-omega', sched, new Date('2026-10-10T14:30:00Z')).statusCode, 200);
 
 async function idempotency() {
-  const now = new Date('2026-10-07T13:30:00Z');
+  const now = new Date('2026-10-07T14:00:00Z');
   const event = schedulerEvent(now.toISOString());
-  const card = { generatedAt: '2026-10-07T13:40:00Z', picks: [] };
+  const card = { generatedAt: '2026-10-07T14:10:00Z', picks: [] };
   let fetches = 0;
   const prev = global.fetch;
   global.fetch = async () => {

@@ -28,9 +28,10 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-omega"]
-  schedule = "30 13,14 * * *"
-  # OMEGA vNext (v12 CLV-first) — 9:30am ET (13:30 UTC in EDT). Generate early enough for QA;
-  # verify 10:30am ET; public card live by ~11:00am ET. Writes edge-picks-omega → /omega.
+  schedule = "0 14,15 * * *"
+  # OMEGA vNext — 10:00am ET (14:00 UTC EDT, 15:00 UTC EST). Data finalization
+  # on the 10:00 snapshot. Verify 10:30am ET. Public card at 11:00am ET.
+  # Writes edge-picks-omega → /omega.
   # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
 
 [functions."generate-picks-omega-background"]

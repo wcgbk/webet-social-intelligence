@@ -1,6 +1,6 @@
 # Selection rules
 
-The card is priced from the 10:30 AM America/New_York odds snapshot (`priceLockTimestamp`). Publish crons are unchanged. This file is the selection contract. Invented coefficients below are labeled **ASSUMPTION**. They are not fit on CLV.
+The card is priced from the 10:00 AM America/New_York odds snapshot (`priceLockTimestamp`). The public card waits until 11:00 ET. This file is the selection contract. Invented coefficients below are labeled **ASSUMPTION**. They are not fit on CLV.
 
 ## 1. DraftKings is the execution book
 
@@ -20,9 +20,9 @@ Flag when `|DK line − HR line| >= 1.0`, or in the NFL when the gap is 0.5 and 
 
 Spreads and moneylines already reject past `FB_MARKET_GAP.NFL.margin` (10) with reason `model_market_gap`. The game stamp and a total gap above 10 use `nfl-projection-gap`. Exactly 10 is allowed. `FB_MARKET_GAP` itself is unchanged. NCAAF caps are unchanged.
 
-## 4. Inputs at 10:30 AM ET
+## 4. Inputs at 10:00 AM ET
 
-A run before 10:30 ET prices the current board (`resolveGenerateOddsSnapshot` returns null). The log line `odds snapshot requested=live served=...` is the time the odds feed actually returned. The 10:30 final run requests `priceLockTimestamp` (10:30 ET). Missing morning capture slots `0600`, `0730`, `0900`, and `0915` are a `captureHealthWarning`. They do not throw and they do not withhold the card. One capture retry still runs when a due slot is empty.
+A run before 10:00 ET prices the current board (`resolveGenerateOddsSnapshot` returns null). The log line `odds snapshot requested=live served=...` is the time the odds feed actually returned. The 10:00 final run requests `priceLockTimestamp` (10:00 ET). The card is generated then and stays unpublished until 11:00 ET. Missing morning capture slots `0600`, `0730`, `0900`, and `0915` are a `captureHealthWarning`. They do not throw and they do not withhold the card. One capture retry still runs when a due slot is empty.
 
 - ESPN football injuries for any player: Out, Doubtful, Questionable, Inactive, deactivations, and transactions, parsed from the injuries payload the QB map already downloads (`parseFootballPersonnel`). No second HTTP call. A row that names both clubs (for example Marvin Harrison Jr. inactive, DET@ARI) applies only to that game. A team-level designation applies to that club's games.
 - X recent search when `X_BEARER_TOKEN` or `TWITTER_BEARER_TOKEN` is set. `x_news.js` reads those names from the process environment at call time (Netlify injects them). A test may pass an `env` object instead. The token is a Bearer header only. It is never logged and never stored on the card. The card and the dry run keep `{ mode, count }`.
@@ -44,11 +44,11 @@ A run before 10:30 ET prices the current board (`resolveGenerateOddsSnapshot` re
 
 The floor pool is stake EV ≥ 3% (`GATES.minEV`) and edge vs the de-vigged sharp at or above `minEdgeFor` in `edge_floor.js` (1.75% at −110, +0.05 per implied point of plus-money distance from −110, +0.04 per uncertainty point above 0.15, cap 6%). That curve is wired in `gateReason`. It is not retuned. Leans stay at 1.5% EV and 0.5u in the lean pool. Floors are not lowered to fill the card.
 
-Top 10 is the floor pool sorted by stake EV. An EV tie breaks on edge. One row per bet (matchup, start, market, side, line). One-per-game does not apply to the top 10. Two different bets from the same game both appear. A short floor pool publishes fewer than 10 rows. It is not padded with leans.
+Top 10 is the floor pool sorted by edge, one candidate per game. An exact edge tie keeps the earlier row. A second market on a game already taken is skipped. A short floor pool publishes fewer than 10 rows. It is not padded with leans. Hard Rock coverage of those ten is recorded and does not reject a row.
 
 Published straights are `selectStraights`: calibrated edge, one straight per game, up to three. When fewer than three clear the floor and `LEAN_PAD` is true, the open slots fill from leans sorted by stake EV. A fill lean needs stake EV > 0 after vig, edge >= 1.5% vs the no-vig sharp, a DraftKings line, and a pregame board. One pick per game. A game that already holds a straight is skipped. The stake is flat `LEAN_MAX_UNITS` (0.5u). The daily cap does not raise it. If the lean pool cannot fill the rest, the card still publishes the shorter set. It never blocks, and it does not publish "No Qualifying Plays" while a fill lean is still open. `summary.cardLabel` and `selection.cardLabel` say `3 floor straights`, `short card: 2 floor straights`, `short card: 1 floor straight`, or `no floor plays` when every published straight is a floor play. A mixed card says how many of the three are leans.
 
-The parlay stays `optimizeParlay` (45% cover, no same-game legs, positive combined EV) on a floor card. The published straights are the ticket when three of them qualify. Otherwise the builder prefers a floor leg over a lean on the same game, and a +EV lean may fill a leg. A 2-leg is allowed. No positive-EV parlay means no parlay. The straights still publish. On a card that includes a lean, the parlay is the top 3 card picks on distinct games when their combined EV is positive, sized 0.25u. If that combo's EV is not positive, it is the best positive-EV distinct-game 3-leg from the eligible pool, also 0.25u.
+The published parlay is `parlayFromStraights`: the three published straights, combined. There is no pool search, no cover floor, and no combined-EV gate. Fewer than three straights, or a straight with no finite price, means no parlay. The straights still publish. A lean among the three sizes the ticket at 0.25u. Otherwise it is 0.5u. A parlay leg with no Hard Rock price is a silent bug-log entry. It is swapped for the next edge-ranked one-per-game candidate that has a Hard Rock price, or the leg stays and the ticket notes it. QA does not block publish. `optimizeParlay` remains in the file for older tests and is not the card path.
 
 ## 7. Live and in-play
 

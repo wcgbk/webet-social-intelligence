@@ -597,8 +597,104 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   }];
 }
 
+function numericAmerican(odds) {
+  if (typeof odds === 'number' && Number.isFinite(odds) && odds !== 0) return odds;
+  if (odds == null || odds === '') return null;
+  const n = Number(String(odds).replace(/[^0-9.+-]/g, ''));
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
+/** Fraction in 0..1. "55%" and 55 both become 0.55. Missing stays null. */
+function coverFraction(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    if (v > 1 && v <= 100) return v / 100;
+    return v;
+  }
+  if (v == null || v === '') return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s.replace('%', ''));
+  if (!Number.isFinite(n)) return null;
+  return (s.includes('%') || n > 1) ? n / 100 : n;
+}
+
+function publishLeg(leg) {
+  if (leg && leg.pick && (leg.betType || leg.odds)) return { ...leg };
+  const cover = coverFraction(leg && leg.coverProb);
+  const american = numericAmerican(leg && leg.odds);
+  const edgeRaw = leg && leg.edgePct;
+  let edgePct = edgeRaw;
+  if (typeof edgeRaw === 'number') {
+    edgePct = formatEdgePct(edgeRaw <= 1 ? edgeRaw : edgeRaw / 100) || undefined;
+  }
+  return {
+    pick: formatMoneylinePick(leg.side, leg.market),
+    pickDisplay: formatMoneylinePick(leg.side, leg.market),
+    sport: leg.sport,
+    matchup: leg.matchup || `${leg.awayTeam || ''} @ ${leg.homeTeam || ''}`,
+    betType: leg.market,
+    odds: american == null ? '' : formatAmerican(american),
+    commenceTime: leg.commenceTime || '',
+    coverProb: cover == null ? '' : `${(cover * 100).toFixed(0)}%`,
+    ev: Number.isFinite(Number(leg.ev)) ? `${(Number(leg.ev) * 100).toFixed(1)}%` : (leg.ev != null ? String(leg.ev) : ''),
+    edgePct,
+    homeTeam: leg.homeTeam,
+    awayTeam: leg.awayTeam,
+    book: leg.book || null,
+    line: leg.line != null ? leg.line : null,
+    tier: leg.tier || 'floor',
+    coreReasoning: leg.coreReasoning || '',
+    source: 'omega-vnext',
+  };
+}
+
+/**
+ * Published parlay. The three straights, in edge order, combined.
+ * No pool search, no cover floor, no EV gate, no leg substitution.
+ * Fewer than three, or a straight with no finite price, is no ticket.
+ * A lean among the three sizes the ticket at LEAN_PARLAY_UNITS.
+ */
+function parlayFromStraights(straights, opts = {}) {
+  const rows = (straights || []).filter(Boolean).slice(0, 3);
+  if (rows.length < 3) return [];
+  const priced = rows.map((leg) => ({
+    leg,
+    american: numericAmerican(leg.odds != null ? leg.odds : leg.oddsStr),
+  }));
+  if (priced.some((row) => row.american == null)) return [];
+  const forStats = priced.map(({ leg, american }) => ({
+    ...leg,
+    odds: american,
+    coverProb: coverFraction(leg.coverProb != null ? leg.coverProb : leg.p_cal),
+  }));
+  const stats = comboStats(forStats);
+  if (!Number.isFinite(stats.combinedDecimal) || !(stats.combinedDecimal > 1)) return [];
+  const combinedAmerican = decimalToAmerican(stats.combinedDecimal);
+  const leanStake = rows.some((leg) => leg && leg.tier === 'lean');
+  const units = leanStake ? LEAN_PARLAY_UNITS : PARLAY_FIXED_UNITS;
+  const ticket = {
+    type: '3-leg-parlay-straight',
+    legs: rows.map(publishLeg),
+    units: `${units}u`,
+    ...(leanStake ? { leanDay: true } : {}),
+    combinedOdds: combinedAmerican == null ? '' : formatAmerican(combinedAmerican),
+    combinedDecimal: +stats.combinedDecimal.toFixed(2),
+    combinedProb: Number.isFinite(stats.combinedProb) ? `${(stats.combinedProb * 100).toFixed(1)}%` : '',
+    ev: Number.isFinite(stats.ev) ? `${(stats.ev * 100).toFixed(1)}%` : '',
+    uniqueGames: stats.uniqueGames,
+    uniqueSports: stats.uniqueSports,
+    independent: false,
+    legMarkets: rows.map((leg) => leg.market || leg.betType || null),
+    correlationNote: `Top 3 straights by edge — 3 legs / ${stats.uniqueGames} games`,
+    candidatesScanned: rows.length,
+    source: 'omega-vnext',
+  };
+  if (opts && opts.hrPlaceabilityNote) ticket.hrPlaceabilityNote = opts.hrPlaceabilityNote;
+  return [ticket];
+}
+
 module.exports = {
-  optimizeParlay, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
+  optimizeParlay, parlayFromStraights, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
   sameDirectionTotalFactor, correlatedTotalFactor, legsConflict, bestEdgeLegs, legEdge,
   passesParlayCandidate,
 };

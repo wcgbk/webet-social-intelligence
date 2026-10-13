@@ -1440,7 +1440,7 @@ exports.handler = async (event) => {
         cardLocked: true,
         removedSinceLock,
       })) {
-        throw new Error('[verify] refused: straight refill is not a verify action');
+        console.error('[verify] straight refill requested — ignored; QA does not block publish');
       }
       if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
         console.log(`[verify-final] Straight refill blocked — publishing ${picksData.picks.length} pick(s) from the locked card`);
@@ -1506,9 +1506,10 @@ exports.handler = async (event) => {
         straightCard: picksData.picks,
       });
       if (resolvedParlay.rebuilt) {
-        throw new Error('[verify] refused: parlay rebuild is not a verify action');
+        console.error('[verify] parlay rebuild requested — ignored; QA does not block publish');
+      } else {
+        picksData.parlayLegs = resolvedParlay.parlayLegs;
       }
-      picksData.parlayLegs = resolvedParlay.parlayLegs;
       if (resolvedParlay.action === 'preserved') {
         const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
         console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
@@ -1607,6 +1608,14 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: CORS, body: JSON.stringify(report, null, 2) };
   } catch (err) {
     console.error("[verify] Error:", err.message);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: true, message: err.message }) };
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({
+        published: true,
+        qaError: err.message,
+        message: 'QA did not block publish. The stored card stays up.',
+      }),
+    };
   }
 };

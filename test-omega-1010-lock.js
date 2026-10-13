@@ -32,11 +32,11 @@ function curve(american, uncertainty) {
 }
 
 // ── Price lock clock ──
-assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T14:30:00Z');
-assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T15:30:00Z');
+assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T14:00:00Z');
+assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T15:00:00Z');
 assert.strictEqual(
   resolveGenerateOddsSnapshot('2026-10-10', { nowMs: Date.parse('2026-10-10T16:00:00Z') }),
-  '2026-10-10T14:30:00Z',
+  '2026-10-10T14:00:00Z',
 );
 assert.strictEqual(
   resolveGenerateOddsSnapshot('2026-10-10', { historicalSnapshot: '2026-10-10T13:00:00Z' }),
@@ -211,8 +211,8 @@ global.fetch = async (url) => {
   if (u.includes('/events')) {
     return jsonResp([{ commence_time: '2026-10-10T19:30:00Z', home_team: 'Oklahoma Sooners', away_team: 'Texas Longhorns' }]);
   }
-  if (u.includes('/historical/') && u.includes('date=2026-10-10T14%3A30%3A00Z')) {
-    return jsonResp({ timestamp: '2026-10-10T14:30:00Z', data: [board(38.5, 8.5)] });
+  if (u.includes('/historical/') && u.includes('date=2026-10-10T14%3A00%3A00Z')) {
+    return jsonResp({ timestamp: '2026-10-10T14:00:00Z', data: [board(38.5, 8.5)] });
   }
   if (u.includes('/v4/sports/') && u.includes('/odds') && !u.includes('/historical/')) {
     return jsonResp([board(40.5, 9.5)]);
@@ -226,8 +226,8 @@ global.fetch = async (url) => {
     assert.ok(morningText.includes('38.5'), 'morning board missing 38.5');
     assert.ok(morningText.includes('8.5'), 'morning board missing +8.5');
     assert.ok(!morningText.includes('40.5'), 'morning board included the late total');
-    assert.strictEqual(morning.oddsSnapshotTimestamp, '2026-10-10T14:30:00Z');
-    assert.ok(seen.some(u => u.includes('/historical/') && u.includes('date=2026-10-10T14%3A30%3A00Z')));
+    assert.strictEqual(morning.oddsSnapshotTimestamp, '2026-10-10T14:00:00Z');
+    assert.ok(seen.some(u => u.includes('/historical/') && u.includes('date=2026-10-10T14%3A00%3A00Z')));
     const histCount = seen.length;
     const live = await fetchOddsMultiSport('2026-10-10');
     const liveText = JSON.stringify(live.bySport.NCAAF || []);

@@ -201,11 +201,11 @@ function base(extra) {
   assert.ok(blown.filter((c) => c.market === 'Spread').every((c) => c.nflGameProjectionGap === true));
 }
 
-// ── 4. 10:30 ET lock, ESPN personnel, X hook, weather, last-5 inside the rating ──
+// ── 4. 10:00 ET lock, ESPN personnel, X hook, weather, last-5 inside the rating ──
 {
-  assert.strictEqual(priceLockTimestamp('2026-10-11'), '2026-10-11T14:30:00Z');
-  assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T14:30:00Z');
-  assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T15:30:00Z');
+  assert.strictEqual(priceLockTimestamp('2026-10-11'), '2026-10-11T14:00:00Z');
+  assert.strictEqual(priceLockTimestamp('2026-10-10'), '2026-10-10T14:00:00Z');
+  assert.strictEqual(priceLockTimestamp('2026-11-08'), '2026-11-08T15:00:00Z');
 
   const parsed = parseFootballPersonnel({
     injuries: [{
@@ -378,7 +378,7 @@ function base(extra) {
   assert.strictEqual(nhl.UNCONFIRMED_BACKUP_SAVE_HAIRCUT, 0.010);
 }
 
-// ── 6. EV rank, 3% floor, edge floor, one bet, one straight per game, top 10 ──
+// ── 6. Edge rank, 3% floor, edge floor, one game, one straight per game, top 10 ──
 {
   const need = minEdgeFor(300, 0.1);
   assert.ok(need > 0.03);
@@ -394,11 +394,14 @@ function base(extra) {
   const highEvLowEdge = base({ matchup: 'C @ D', side: 'D +3', ev: 0.09, edgePct: 0.03, line: 3, homeTeam: 'D', awayTeam: 'C' });
   const dup = base({ matchup: 'C @ D', side: 'D +3', ev: 0.07, edgePct: 0.05, line: 3, homeTeam: 'D', awayTeam: 'C' });
   const ranked = selectTop10([lowEvHighEdge, highEvLowEdge, dup], 10);
-  assert.strictEqual(ranked[0].side, 'D +3');
-  assert.strictEqual(ranked[0].ev, 0.09);
-  assert.strictEqual(ranked.filter((c) => c.side === 'D +3').length, 1);
+  assert.strictEqual(ranked[0].side, 'B -3');
+  assert.strictEqual(ranked[0].edgePct, 0.08);
+  assert.strictEqual(ranked[1].side, 'D +3');
+  assert.strictEqual(ranked[1].edgePct, 0.05);
+  assert.strictEqual(ranked.length, 2);
+  assert.strictEqual(ranked.filter((c) => c.matchup === 'C @ D').length, 1);
   const rows = top10Rows([lowEvHighEdge, highEvLowEdge], 10);
-  assert.strictEqual(rows[0].game, 'C @ D');
+  assert.strictEqual(rows[0].game, 'A @ B');
   assert.strictEqual(rows[0].dkPrice, -110);
   assert.strictEqual(rows[0].book, 'draftkings');
   assert.ok('hrFlags' in rows[0]);

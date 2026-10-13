@@ -2,7 +2,7 @@
 
 const {
   MODEL_VERSION, MODEL_NOTES, SPORTS_ENABLED, MAX_STRAIGHTS, LINE_MOVE, PM_SOFT,
-  PARLAY_MIN_COVER, LEAN_PAD, nbaModuleEnabled,
+  LEAN_PAD, nbaModuleEnabled,
 } = require('./config');
 const { sportsForCard, applyUnresolvedSkip, formatSkipLog } = require('./season_calendar');
 const { ingest } = require('./ingest');
@@ -10,15 +10,15 @@ const { noPlaysFields, omegaReason } = require('../no-plays');
 const { calibrateAll, resolveCalMode } = require('./calibrate');
 const { attachEv } = require('./edge');
 const { applyGates, buildGapReview } = require('./gates');
-const { applyExecutionBook, top10Rows, excludedGames } = require('./selection_pass');
+const { applyExecutionBook, top10Rows, excludedGames, selectTop10, ensureParlayPlaceable, hasHardRockPrice } = require('./selection_pass');
 const { fetchXNews } = require('./x_news');
 const { replayNoWrite } = require('./no_write');
 const {
   createAuditLog, runWithAudit, currentAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId,
 } = require('./audit_log');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, passesPublishFloor, straightCardLabel, qualifiesAsLean, shouldPublishNoPlays } = require('./select');
-const { optimizeParlay } = require('./parlay');
-const { narrateAndVerify, narrateParlayLegsOnly } = require('./narrate');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, shouldPublishNoPlays } = require('./select');
+const { parlayFromStraights } = require('./parlay');
+const { narrateAndVerify } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
 const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_hardfail');
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, storeHealthRecord } = require('./store');
@@ -33,7 +33,7 @@ const { runOmegaLineCapture } = require('./capture_runner');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
 const { stampCandidates } = require('./late_news');
-const { resolveGenerateOddsSnapshot } = require('./price_lock');
+const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags } = require('./pinnacle_flag');
 const { readPinnacleLineMoves, applyLineMoveContext } = require('./pinnacle_line_move');
@@ -527,7 +527,7 @@ async function generateOmegaVnext(opts = {}) {
     console.log(`[omega-vnext] no-draftkings-line excluded=${dkExcluded.length}`);
   }
 
-  // Stale DraftKings vs the 10:30 one-book no-vig. Ranking edge and cover
+  // Stale DraftKings vs the 10:00 one-book no-vig. Ranking edge and cover
   // only. Floors, caps, Kelly, and the lean fill run on the stamped row.
   candidates = applyDkLag(candidates, {
     linePath: linePathMeta && linePathMeta.path,
@@ -554,7 +554,17 @@ async function generateOmegaVnext(opts = {}) {
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
   console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
 
-  const selected = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null);
+  const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null);
+  const top10Candidates = selectTop10(yesPool, 10);
+  // 10:00 rank is edge, one game each. A parlay leg with no Hard Rock price
+  // is swapped for the next edge-ranked candidate that has one, or noted.
+  // The note and the bug log stay off the page. The card still publishes.
+  const placement = ensureParlayPlaceable(
+    selectedRaw,
+    yesPool.concat(LEAN_PAD ? (leanPool || []) : []),
+  );
+  const selected = placement.straights;
+  let bugLog = placement.bugs.slice();
 
   // QA hard-fails before narrate/store — drop + refill; empty OK
   let qaCtx = {};
@@ -576,21 +586,15 @@ async function generateOmegaVnext(opts = {}) {
   if (hardFails.length) {
     console.log(`[omega-vnext] QA hard-fails=${hardFails.length}: ${hardFails.map(h => h.reason).join('; ')}`);
   }
-  // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u) after optimizeParlay
+  // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u).
   picks = applyDailyCap(picks);
 
-  // Published straights first. A +EV lean may be a leg when the straight
-  // card does not already make the parlay. No same-game legs. Combined
-  // EV must be positive.
-  const hfKeys = new Set(hardFails.map(h => `${h.matchup}|${h.side}`));
-  const leanLegs = (LEAN_PAD ? leanPool : []).filter((c) => {
-    return c && c.tier === 'lean' && !hfKeys.has(`${c.matchup}|${c.side}`);
+  // The parlay is these straights. Narration may write prose. It does not
+  // pick different legs.
+  const straightParlay = (rows, note) => parlayFromStraights(rows, {
+    hrPlaceabilityNote: note || placement.note,
   });
-  const poolForParlay = yesPool
-    .filter(c => passesPublishFloor(c) && !hfKeys.has(`${c.matchup}|${c.side}`))
-    .concat(leanLegs);
-  const parlayEligible = poolForParlay.filter(c => Number(c.coverProb) >= PARLAY_MIN_COVER && c.ev > 0 && Number.isFinite(c.odds)).length;
-  let parlayLegs = optimizeParlay(poolForParlay, picks, { cardDate: dateISO });
+  let parlayLegs = straightParlay(picks);
 
   let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
   if (!skipNarrate) {
@@ -601,18 +605,10 @@ async function generateOmegaVnext(opts = {}) {
       apiKey: process.env.XAI_API_KEY,
     });
     picks = narr.picks;
-    parlayLegs = narr.parlayLegs || parlayLegs;
     if (narr.rejections && narr.rejections.length) {
-      const veto = new Set(narr.rejections.map(r => (r.side || '').toLowerCase()));
-      const pool2 = poolForParlay.filter(c => !veto.has((c.side || '').toLowerCase()));
-      parlayLegs = optimizeParlay(pool2, picks, { cardDate: dateISO });
-      parlayLegs = await narrateParlayLegsOnly({
-        parlayLegs,
-        dateFormatted,
-        apiKey: process.env.XAI_API_KEY,
-        straightPicks: picks,
-      });
+      console.log(`[omega-vnext] narrate rejections=${narr.rejections.length} — parlay stays the published straights`);
     }
+    parlayLegs = straightParlay(picks);
   } else {
     console.log('[omega-vnext] skipNarrate=true (replay/eval path)');
   }
@@ -640,8 +636,10 @@ async function generateOmegaVnext(opts = {}) {
     if (openLeans.length) {
       const rescued = selectStraights([], MAX_STRAIGHTS, openLeans);
       if (rescued.length) {
-        picks = rescued.map((c) => toPickObject(c, { modelVersion: MODEL_VERSION }));
-        parlayLegs = optimizeParlay(yesPool.concat(openLeans), picks, { cardDate: dateISO });
+        const leanPlace = ensureParlayPlaceable(rescued, yesPool.concat(openLeans));
+        if (leanPlace.bugs.length) bugLog = bugLog.concat(leanPlace.bugs);
+        picks = leanPlace.straights.map((c) => toPickObject(c, { modelVersion: MODEL_VERSION }));
+        parlayLegs = straightParlay(picks, leanPlace.note || placement.note);
         const recap = applyDailyUnitCap(picks, parlayLegs);
         picks = sortByGradeThenUnits(recap.picks);
         parlayLegs = recap.parlayLegs;
@@ -722,6 +720,11 @@ async function generateOmegaVnext(opts = {}) {
       cardLabel: straightCardLabel(picks),
     },
     generatedAt: now.toISOString(),
+    publishAt: (() => {
+      try { return etLocalToUtcISO(dateISO, 11, 0); }
+      catch (_) { return null; }
+    })(),
+    bugLog,
     parlayLegs: empty ? [] : parlayLegs,
     // Private. publicPicksPayload drops this. Flag does not change the pool.
     gapReview: buildGapReview(candidates, picks, empty ? [] : parlayLegs),
@@ -759,19 +762,30 @@ async function generateOmegaVnext(opts = {}) {
       lean: leanPool.length,
       rejected: rejected.length,
       edgeFloor: rejected.filter((r) => r && r.rejectReason === 'edge-floor').length,
-      parlayEligible,
+      parlayEligible: empty ? 0 : ((parlayLegs[0] && parlayLegs[0].legs && parlayLegs[0].legs.length) || 0),
     },
     pmSoft: pmSoftMeta,
     teamIdentity: {
       unmatched: unmatchedReport.bySport,
       unmatchedCount: unmatchedReport.count,
     },
-    // Private. publicPicksPayload drops selection. Top 10 is EV rank on the
-    // floor pool. Straights above stay edge-ranked.
+    // Private. publicPicksPayload drops selection. Top 10 is the 10:00
+    // edge rank, one game each. The same order is the 10:15-10:30 re-rank
+    // because news is already stamped on these rows.
     selection: {
       snapshotTime: servedSnapshot || oddsSnapshot || null,
       cardLabel: straightCardLabel(picks),
-      top10: top10Rows(yesPool, 10),
+      rankedBy: 'edge',
+      onePerGame: true,
+      window: '10:00-10:15',
+      rerankWindow: '10:15-10:30',
+      top10: top10Rows(top10Candidates, 10),
+      hrCoverage: top10Candidates.map((c) => ({
+        matchup: c.matchup || null,
+        market: c.market || null,
+        side: c.side || null,
+        hardRock: hasHardRockPrice(c),
+      })),
       excludedGames: excludedGames([
         ...dkExcluded.map((c) => ({ ...c, rejectReason: c.excludeReason || 'no-draftkings-line' })),
         ...rejected,

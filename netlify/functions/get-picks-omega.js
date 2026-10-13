@@ -1,9 +1,10 @@
 // get-picks-omega.js
 // API endpoint: GET /.netlify/functions/get-picks-omega
-// Live card (no ?date=): newest edge-picks-omega date with real picks, ≤ tomorrow ET
-// (Mon evening can serve the already-generated Tue card). Sticky fallback keeps the
-// most recent prior day with picks when today/tomorrow is missing or empty noPlays —
-// never blank the page at midnight before the morning cron.
+// Live card (no ?date=): newest stored card whose 11:00 ET publish time has
+// passed. A card generated at 10:00 stays hidden until 11:00 ET that day, and
+// the previous card stays up. ?date=YYYY-MM-DD still returns that card,
+// including before 11:00. Sticky fallback keeps the most recent prior day
+// with picks when today is missing or empty — never blank the page at midnight.
 // Optional: ?date=YYYY-MM-DD (sticky to prior day with picks unless ?forceEmpty=1).
 
 const { publicPicksPayload } = require('./lib/public-picks');
@@ -19,6 +20,7 @@ const {
   resolveLiveCard,
 } = require('./lib/omega-live-date');
 const { normalizeEmptyCard } = require('./lib/no-plays');
+const { etLocalToUtcISO } = require('./lib/omega-vnext/price_lock');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -47,6 +49,21 @@ function emptyPayload(dateKey, message) {
 
 function generatingPayload(dateKey) {
   return emptyPayload(dateKey, "Today's card is generating. Check back by 11:00am ET.");
+}
+
+/** Live path only. A card stays unpublished until 11:00 ET on its date. */
+function cardIsUnpublished(picksData, now = new Date()) {
+  if (!picksData || typeof picksData !== 'object') return false;
+  const dateKey = picksData.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return false;
+  let publishAt = picksData.publishAt;
+  if (!publishAt) {
+    try { publishAt = etLocalToUtcISO(dateKey, 11, 0); }
+    catch (_) { return false; }
+  }
+  const ms = Date.parse(publishAt);
+  if (!Number.isFinite(ms)) return false;
+  return now.getTime() < ms;
 }
 
 function publicCard(picksData) {
@@ -145,10 +162,15 @@ exports.handler = async (event) => {
         return emptyBody(requestedDate, `No Omega picks found for ${requestedDate}.`, false);
       }
 
-      // Live: tomorrow only with real picks; else newest completed run ≤ today
-      // (a "No Qualifying Plays Today" card counts). Missing days are skipped.
+      // Live: hide a card until 11:00 ET on its date, then the newest completed
+      // run (a "No Qualifying Plays Today" card counts). Missing days are skipped.
       const tryDates = liveTryDates(knownDates);
-      const resolved = await resolveLiveCard(tryDates, loadPicks);
+      const liveLoad = async (dateKey) => {
+        const data = await loadPicks(dateKey);
+        if (cardIsUnpublished(data)) return null;
+        return data;
+      };
+      const resolved = await resolveLiveCard(tryDates, liveLoad);
       if (resolved) {
         return okBody(resolved.picksData, false);
       }

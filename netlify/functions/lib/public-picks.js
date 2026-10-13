@@ -22,7 +22,7 @@ const PICK_KEEP = [
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
   'uniqueGames', 'uniqueSports', 'independent', 'legMarkets', 'correlationNote',
-  'candidatesScanned', 'stake', 'source',
+  'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote',
 ];
 
 const ROOT_DROP = [
@@ -38,6 +38,7 @@ const ROOT_DROP = [
   'gateCounts',
   'hardRockCorrections',
   'selection',
+  'bugLog',
 ];
 
 function isVoidPregame(p) {

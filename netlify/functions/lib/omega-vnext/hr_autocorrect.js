@@ -8,18 +8,17 @@
  * The pick is repriced at Hard Rock's line and price. Edge is cover minus
  * the de-vigged fair at that number, then the odds-scaled floor. If it
  * still clears, the pick stays at the Hard Rock number. If it does not,
- * the next candidate confirmed at Hard Rock replaces it. The parlay is
- * rebuilt from the corrected straights when those three are distinct
- * games with cover >= 45% and positive combined EV. Otherwise it is the
- * best positive-EV edges on distinct games. Every change is logged.
- * The card is not withheld.
+ * the next candidate confirmed at Hard Rock replaces it. When the
+ * corrected straights are three priced plays, the parlay is those three.
+ * There is no pool search. Every change is logged. The card is not withheld.
+ * This helper is not on the verify path.
  */
 
 const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, GATES, LEAN_MIN_EV, LEAN_MAX_UNITS } = require('./config');
 const { americanToImplied, formatAmerican, normCdf, parseEdgeFraction, clamp } = require('./odds_math');
 const { attachEv } = require('./edge');
 const { toPickObject } = require('./select');
-const { optimizeParlay } = require('./parlay');
+const { parlayFromStraights } = require('./parlay');
 const { minEdgeFor } = require('./edge_floor');
 
 const HR_KEYS = new Set(['hardrockbet', 'hardrockbet_oh', 'hardrock']);
@@ -449,30 +448,7 @@ function autoCorrectHardRock(picksData, sportGames) {
 
   let nextParlay = data.parlayLegs;
   if (log.length) {
-    const seen = new Set();
-    const parlayPool = [];
-    const pushCand = (c) => {
-      if (!c || !(c.ev > 0) || !Number.isFinite(c.odds)) return;
-      const k = sideKey(c);
-      if (seen.has(k)) return;
-      seen.add(k);
-      parlayPool.push(c);
-    };
-    for (const b of built) pushCand(b.cand);
-    for (const row of pool) {
-      const game = matchGame(gamesFor(sportGames, row.sport), row.matchup);
-      const quote = game ? quoteFor(row, game) : null;
-      if (!quote) continue;
-      if (quote.point != null && row.line != null && Math.abs(quote.point - Number(row.line)) > POINT_MATERIAL + 1e-9) {
-        continue;
-      }
-      const cand = scoreAt(row, quote);
-      if (!clears(cand)) continue;
-      pushCand(cand);
-    }
-    const straights = built.map((b) => b.cand);
-    const tickets = optimizeParlay(parlayPool, straights, { cardDate: data.date || null });
-    nextParlay = tickets && tickets.length ? tickets : (optimizeParlay(straights, straights, { cardDate: data.date || null }) || []);
+    nextParlay = parlayFromStraights(built.map((b) => b.cand)) || [];
   }
 
   data.picks = built.map((b) => b.pick);

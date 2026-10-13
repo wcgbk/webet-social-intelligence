@@ -2,8 +2,9 @@
 
 /**
  * Selection pass. DraftKings is the execution book. Hard Rock flags only.
- * Ranking for the top 10 is stake EV, one row per bet. One-per-game applies
- * to straights only, not to the top 10. Straights are the floor tier only.
+ * Ranking for the top 10 is edge, one candidate per game. Straights are the
+ * first three of that list. The parlay is those three. Hard Rock coverage
+ * is review-only and does not block publish.
  * See SELECTION_RULES.md.
  *
  * This module must not require gates, parlay, ingest, or hr_autocorrect.
@@ -253,27 +254,83 @@ function edgeOf(c) {
 }
 
 /**
- * Floor pool only. EV desc, edge breaks a tie. One row per bet.
- * One-per-game is not applied here. Two bets from the same game both stay
- * when they are different sides. Straights enforce one game in selectStraights.
+ * Floor pool. Edge descending, one candidate per game. A second market on
+ * a game already taken is skipped. An exact edge tie keeps the earlier row.
  */
 function selectTop10(pool, n) {
   const limit = n == null ? 10 : n;
   const sorted = [...(pool || [])].sort((a, b) => {
-    const ev = evOf(b) - evOf(a);
-    if (Math.abs(ev) > 1e-12) return ev;
-    return edgeOf(b) - edgeOf(a);
+    const edge = edgeOf(b) - edgeOf(a);
+    if (Math.abs(edge) > 1e-12) return edge;
+    return 0;
   });
   const seen = new Set();
   const out = [];
   for (const c of sorted) {
-    const key = betKey(c);
-    if (seen.has(key)) continue;
+    const key = matchupKey(c);
+    if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(c);
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/** Hard Rock posted a numeric price for this side. Missing is not a reject. */
+function hasHardRockPrice(c) {
+  if (!c) return false;
+  const hr = c.hardRock;
+  if (hr && Number.isFinite(Number(hr.american))) return true;
+  if (!Array.isArray(c.bookPrices)) return false;
+  return c.bookPrices.some((p) => {
+    const book = String((p && (p.book || p.key)) || '');
+    if (!/hardrock/i.test(book)) return false;
+    const american = p.american != null ? p.american : p.price;
+    return Number.isFinite(Number(american));
+  });
+}
+
+/**
+ * Parlay legs are the straights. A leg with no Hard Rock price is logged
+ * and swapped for the next edge-ranked one-per-game candidate that has one.
+ * No replacement: the leg stays and the ticket carries a note. Never drops
+ * the card.
+ */
+function ensureParlayPlaceable(straights, pool) {
+  const current = (straights || []).filter(Boolean).slice();
+  const ranked = selectTop10(pool, Math.max(30, (pool || []).length));
+  const used = new Set(current.map((c) => matchupKey(c)));
+  const bugs = [];
+  let changed = false;
+  for (let i = 0; i < current.length; i += 1) {
+    if (hasHardRockPrice(current[i])) continue;
+    const replacement = ranked.find((c) => c && !used.has(matchupKey(c)) && hasHardRockPrice(c));
+    const entry = {
+      at: new Date().toISOString(),
+      kind: 'hard-rock-parlay-leg',
+      silent: true,
+      matchup: current[i].matchup || null,
+      side: current[i].side || null,
+      market: current[i].market || null,
+      action: replacement ? 'swapped' : 'noted',
+      replacement: replacement ? {
+        matchup: replacement.matchup || null,
+        side: replacement.side || null,
+        market: replacement.market || null,
+      } : null,
+    };
+    bugs.push(entry);
+    if (!replacement) continue;
+    used.delete(matchupKey(current[i]));
+    used.add(matchupKey(replacement));
+    current[i] = { ...replacement, tier: replacement.tier || current[i].tier || 'floor' };
+    changed = true;
+  }
+  const noted = bugs.filter((b) => b.action === 'noted');
+  const note = noted.length
+    ? `${noted.length} parlay leg${noted.length === 1 ? '' : 's'} had no Hard Rock price.`
+    : null;
+  return { straights: current, bugs, changed, note };
 }
 
 function top10Row(c) {
@@ -526,6 +583,8 @@ module.exports = {
   nflProjectionGap,
   liveInPlayReason,
   selectTop10,
+  hasHardRockPrice,
+  ensureParlayPlaceable,
   top10Row,
   top10Rows,
   excludedGames,

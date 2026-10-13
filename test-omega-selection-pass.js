@@ -400,6 +400,15 @@ function base(extra) {
   assert.strictEqual(ranked[1].edgePct, 0.05);
   assert.strictEqual(ranked.length, 2);
   assert.strictEqual(ranked.filter((c) => c.matchup === 'C @ D').length, 1);
+  const nearHighEv = base({ matchup: 'E @ F', side: 'F ML', ev: 0.08, edgePct: 0.050, homeTeam: 'F', awayTeam: 'E' });
+  const nearHighEdge = base({ matchup: 'G @ H', side: 'H ML', ev: 0.04, edgePct: 0.051, homeTeam: 'H', awayTeam: 'G' });
+  const near = selectTop10([nearHighEdge, nearHighEv], 10);
+  assert.strictEqual(near[0].side, 'F ML', '0.1pp edge gap lets higher EV win');
+  const wide = selectTop10([
+    base({ matchup: 'I @ J', side: 'J ML', ev: 0.02, edgePct: 0.06, homeTeam: 'J', awayTeam: 'I' }),
+    base({ matchup: 'K @ L', side: 'L ML', ev: 0.20, edgePct: 0.03, homeTeam: 'L', awayTeam: 'K' }),
+  ], 10);
+  assert.strictEqual(wide[0].side, 'J ML', 'a gap past 0.2pp stays on edge');
   const rows = top10Rows([lowEvHighEdge, highEvLowEdge], 10);
   assert.strictEqual(rows[0].game, 'A @ B');
   assert.strictEqual(rows[0].dkPrice, -110);

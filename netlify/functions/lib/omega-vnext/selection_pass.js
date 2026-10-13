@@ -14,7 +14,7 @@ const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { minEdgeFor } = require('./edge_floor');
 const { formatAmerican, etCalendarDate, parseEdgeFraction } = require('./odds_math');
-const { toPickObject, matchupKey } = require('./select');
+const { toPickObject, matchupKey, compareByEdge } = require('./select');
 
 const DK_BOOK = 'draftkings';
 const HR_BOOK = 'hardrockbet';
@@ -254,16 +254,13 @@ function edgeOf(c) {
 }
 
 /**
- * Floor pool. Edge descending, one candidate per game. A second market on
- * a game already taken is skipped. An exact edge tie keeps the earlier row.
+ * Floor pool. Edge descending, one candidate per game. Within 0.2
+ * percentage points of edge, higher stake EV wins. A second market on a
+ * game already taken is skipped.
  */
 function selectTop10(pool, n) {
   const limit = n == null ? 10 : n;
-  const sorted = [...(pool || [])].sort((a, b) => {
-    const edge = edgeOf(b) - edgeOf(a);
-    if (Math.abs(edge) > 1e-12) return edge;
-    return 0;
-  });
+  const sorted = [...(pool || [])].sort(compareByEdge);
   const seen = new Set();
   const out = [];
   for (const c of sorted) {

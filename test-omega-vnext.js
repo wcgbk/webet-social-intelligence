@@ -52,7 +52,7 @@ const sorted = math.sortByGradeThenUnits([
 ]);
 assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low']);
 
-// Published candidate rank uses the grade score, not raw EV. A +180 dog stays behind.
+// A gap past 0.2pp stays on edge. A +180 dog with a fatter EV stays behind.
 {
   const fav = { edgePct: 0.048, ev: 0.04, odds: -140, sport: 'MLB', side: 'Fav', predictedClv: 0, uncertainty: 0.12 };
   const dog = { edgePct: 0.021, ev: 0.18, odds: 180, sport: 'MLB', side: 'Dog', predictedClv: 0, uncertainty: 0.12 };
@@ -122,7 +122,7 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// Rank is calibrated edge, not dog EV. A +180 with a fatter EV stays behind a -110.
+// Rank is edge unless the gap is within 0.2pp. A +180 with a fatter EV stays behind a -110.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',

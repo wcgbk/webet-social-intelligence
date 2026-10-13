@@ -70,11 +70,23 @@ function scoreCandidate(c) {
   return s + nudge;
 }
 
-/** Higher calibrated edge first. scoreCandidate breaks an exact tie only. */
+/** 0.2 percentage points of edge. Inside the band, higher stake EV wins. */
+const EDGE_EV_BAND = 0.002;
+
+/**
+ * Edge is the primary key. Within 0.2 percentage points, higher stake EV
+ * wins. Probability is not a key. An exact edge and EV tie keeps sort order.
+ */
 function compareByEdge(a, b) {
-  const d = edgeRank(b) - edgeRank(a);
+  const ea = edgeRank(a);
+  const eb = edgeRank(b);
+  if (Number.isFinite(ea) && Number.isFinite(eb) && Math.abs(ea - eb) <= EDGE_EV_BAND) {
+    const evd = finiteEv(b) - finiteEv(a);
+    if (Math.abs(evd) > 1e-12) return evd;
+  }
+  const d = eb - ea;
   if (Math.abs(d) > 1e-12) return d;
-  return scoreCandidate(b) - scoreCandidate(a);
+  return 0;
 }
 
 function publishMinEv(c) {
@@ -128,7 +140,7 @@ function finiteEv(c) {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
-/** Higher stake EV first. Edge breaks a tie. */
+/** Higher stake EV first. An EV tie uses the edge band. Positive EV is required to fill. */
 function compareByEv(a, b) {
   const d = finiteEv(b) - finiteEv(a);
   if (Math.abs(d) > 1e-12) return d;
@@ -193,7 +205,7 @@ function shouldPublishNoPlays(picks, leanPool) {
  * Set the flag false and a second side of the same game is a straight
  * when its edge is in the top N.
  * When fewer than maxN clear the floor and LEAN_PAD is true, the open
- * slots fill from leanPool sorted by EV. One straight per game still
+ * slots fill from positive-EV leans sorted by EV. One straight per game still
  * applies, and a game that already holds a straight is skipped. A lean
  * is tier 'lean' and the stake is flat LEAN_MAX_UNITS. The card still
  * publishes when the lean pool cannot fill the rest.
@@ -564,6 +576,8 @@ function capSameGameExposure(picks, parlays) {
 
 module.exports = {
   edgeRank,
+  compareByEdge,
+  EDGE_EV_BAND,
   scoreCandidate,
   passesPublishFloor,
   qualifiesAsLean,

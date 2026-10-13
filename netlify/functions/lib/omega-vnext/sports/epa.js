@@ -1313,16 +1313,17 @@ function footballProjection({ sport, home, away, standings, efficiency, hfa } = 
  * every team is given the mean plays, the plays cancel, and the total is
  * the shrunk points matchup (off + opponent points allowed) / 2 for each side.
  *
- * Replay sweep, 2026-09-26..10-10. No positive weight beat w=0, so the
- * default stays off. OMEGA_NCAAF_TEMPO_WEIGHT can enable the blend.
- * KL(model||close) was flat across the three weights.
+ * Replay sweep, 2026-09-26..10-10. No positive weight beat w=0
+ * (all-candidate log-loss 0.5995 at 0, 0.6005 at 0.25). The Oct 13 rule
+ * turns the default on at 0.25 anyway. OMEGA_NCAAF_TEMPO_WEIGHT=0 is the off
+ * switch. A frozen snap does not fetch. KL(model||close) was flat.
  *
  *   w      NCAAF all-candidate log-loss    NCAAF totals log-loss
  *   0      0.5995                           0.6898
  *   0.25   0.6005                           0.6938
  *   0.5    0.6010                           0.6961
  */
-const NCAAF_TEMPO_WEIGHT = 0;
+const NCAAF_TEMPO_WEIGHT = 0.25;
 const NCAAF_TEMPO_K_FBS = 4;
 const NCAAF_TEMPO_K_FCS = 24;
 const NCAAF_TEMPO_MEAN_PLAYS = 67;

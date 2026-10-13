@@ -61,8 +61,8 @@ const HOME = 'Ohio State Buckeyes';
 const AWAY = 'Iowa Hawkeyes';
 const FCS = 'Cal Poly Mustangs';
 
-assert.strictEqual(epa.NCAAF_TEMPO_WEIGHT, 0);
-assert.strictEqual(epa.ncaafTempoWeight(), 0);
+assert.strictEqual(epa.NCAAF_TEMPO_WEIGHT, 0.25);
+assert.strictEqual(epa.ncaafTempoWeight(), 0.25);
 assert.strictEqual(epa.NCAAF_TEMPO_K_FBS, 4);
 assert.strictEqual(epa.NCAAF_TEMPO_K_FCS, 24);
 assert.strictEqual(epa.NCAAF_TEMPO_MEAN_PLAYS, 67);
@@ -216,9 +216,8 @@ assert.ok(/post-2023|plays cancel|points per game/i.test(epa.NCAAF_TEMPO_PROXY_N
   assert.strictEqual(byMarket(off, 'Total').ncaafTempo, undefined);
   assert.strictEqual(byMarket(off, 'Total').uncertainty, baseTotal.uncertainty);
 
-  // w=0, including the unset default, leaves every NCAAF candidate
-  // byte-identical to the pre-tempo projection. A hot FCS row is on the
-  // table so a leaked weight would move the numbers.
+  // w=0 leaves every NCAAF candidate byte-identical to the pre-tempo
+  // projection. The default weight is 0.25 and moves a table that is in hand.
   const evs = [ev, synthEvent(HOME, FCS)];
   const hotTable = {
     proxy: table.proxy,
@@ -228,21 +227,19 @@ assert.ok(/post-2023|plays cancel|points per game/i.test(epa.NCAAF_TEMPO_PROXY_N
       [FCS]: { games: 6, offPpg: 50, defPpg: 10, plays: null },
     },
   };
-  const before = withEnv({ OMEGA_NCAAF_TEMPO_WEIGHT: null }, () => cfb.project({
+  const zero = withEnv({ OMEGA_NCAAF_TEMPO_WEIGHT: '0' }, () => cfb.project({
+    oddsEvents: evs, standings, efficiency, gameDay: { ncaafTempo: hotTable },
+  }));
+  const bare = withEnv({ OMEGA_NCAAF_TEMPO_WEIGHT: '0' }, () => cfb.project({
     oddsEvents: evs, standings, efficiency, gameDay: {},
   }));
-  for (const weight of [null, '0']) {
-    const after = withEnv({ OMEGA_NCAAF_TEMPO_WEIGHT: weight }, () => cfb.project({
-      oddsEvents: evs, standings, efficiency, gameDay: { ncaafTempo: hotTable },
-    }));
-    const label = weight == null ? 'default' : weight;
-    assert.strictEqual(
-      JSON.stringify(after),
-      JSON.stringify(before),
-      `w=${label} leaves every NCAAF number byte-identical`,
-    );
-  }
-  assert.ok(before.length > off.length, 'both games are in the identity check');
+  assert.strictEqual(JSON.stringify(zero), JSON.stringify(bare), 'w=0 leaves every NCAAF number byte-identical');
+  const defOn = withEnv({ OMEGA_NCAAF_TEMPO_WEIGHT: null }, () => cfb.project({
+    oddsEvents: [ev], standings, efficiency, gameDay: { ncaafTempo: table },
+  }));
+  assert.strictEqual(byMarket(defOn, 'Total').ncaafTempo.weight, 0.25);
+  assert.ok(String(byMarket(defOn, 'Total').projMethod).includes('tempo'));
+  assert.ok(bare.length > off.length, 'both games are in the identity check');
 
   const missing = withEnv({ OMEGA_NCAAF_TEMPO_WEIGHT: '0.5' }, () => cfb.project({
     oddsEvents: [ev], standings, efficiency, gameDay: {},

@@ -28,6 +28,7 @@ const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = req
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT } = require('../config');
+const { homeFieldPoints } = require('./altitude');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 const SPORT = 'NFL';
 
@@ -76,7 +77,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
   const away = event.away_team;
   const commenceTime = event.commence_time;
   const neutral = !!(neutralGame && neutralGame.neutralSite === true);
-  const hfaPts = neutral ? 0 : HFA.NFL;
+  const hfaPts = homeFieldPoints(HFA.NFL, { home, neutral, espnGame: neutralGame }).hfa;
   const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
   // Last-5 residual is part of the team rating, before game-day and before
   // the market blend. The older raw-margin blend in game_day is not also applied.

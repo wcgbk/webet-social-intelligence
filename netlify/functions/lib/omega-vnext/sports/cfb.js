@@ -6,8 +6,9 @@
  * unchanged. ML, spread, and total anchors are no-vig Pinnacle/Circa.
  * Totals and margins shrink toward the sharp line in points before the
  * CDF. Calibrate shrink runs later on that probability.
- * A tempo total (plays x points per play) blends into the total only when
- * OMEGA_NCAAF_TEMPO_WEIGHT is above 0 and a pregame table is already in hand.
+ * A tempo total (plays x points per play) blends into the total when the
+ * tempo weight is above 0 (default 0.25) and a pregame table is already in hand.
+ * A frozen snap does not fetch that table.
  * Wind still adjusts that blended total on the existing football weather path.
  */
 const {
@@ -20,6 +21,7 @@ const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
 const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD, NCAAF_MODEL_WEIGHT } = require('../config');
+const { homeFieldPoints } = require('./altitude');
 const { resolveTeamId, isFbsTeamId } = require('./team_identity');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleCircaImplied } = require('../edge');
 
@@ -75,7 +77,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const away = event.away_team;
   const commenceTime = event.commence_time;
   const neutral = !!(espnGame && espnGame.neutralSite === true);
-  const hfaPts = neutral ? 0 : HFA.NCAAF;
+  const hfaPts = homeFieldPoints(HFA.NCAAF, { home, neutral, espnGame }).hfa;
   const env = footballProjection({ sport: SPORT, home, away, standings, efficiency, hfa: hfaPts });
   const gd = applyGameDayAdjustments({
     sport: SPORT,

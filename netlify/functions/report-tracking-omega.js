@@ -26,6 +26,7 @@ const { cacheIsFresh, resultHasPending } = require('./lib/kpi-cache');
 const ledger = require('./lib/clv-ledger');
 const tracking = require('./lib/tracking-report');
 const clvJob = require('./report-clv-omega');
+const { buildResultKpis } = require('./lib/omega-vnext/result_kpis');
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const SCORES = require('../../data/engineering-scores.json');
@@ -132,7 +133,12 @@ async function loadResultsDocument(src, event) {
 }
 
 async function loadClvReport(asOf, now, src) {
-  if (src && src.clvReport) return src.clvReport;
+  if (src && src.clvReport) {
+    return {
+      report: src.clvReport,
+      rows: Array.isArray(src.clvRows) ? src.clvRows : [],
+    };
+  }
   const result = await clvJob.runClvReport({
     asOf,
     now,
@@ -142,7 +148,7 @@ async function loadClvReport(asOf, now, src) {
     seedRows: src && src.seedRows,
     lookbackDays: src && src.lookbackDays,
   });
-  return result.report;
+  return { report: result.report, rows: result.rows || [] };
 }
 
 async function readPreviousRows(read) {
@@ -168,7 +174,8 @@ async function runTrackingReport(opts) {
   const updatedAtEt = ledger.formatUpdatedAtEt(generatedAt);
   const entries = Array.isArray(src.entries) ? src.entries : loadScoreEntries();
   const results = await loadResultsDocument(src, src.event);
-  const clvReport = await loadClvReport(asOf, now, src);
+  const clvBundle = await loadClvReport(asOf, now, src);
+  const clvReport = clvBundle.report;
   const read = src.readJson || ((key) => store.readJson(key));
   const previousRows = Array.isArray(src.previousRows)
     ? src.previousRows
@@ -186,6 +193,12 @@ async function runTrackingReport(opts) {
     updatedAtEt,
   });
   index.source = 'report';
+  index.resultKpis = buildResultKpis({
+    days: results && results.days,
+    clvRows: Array.isArray(src.clvRows) ? src.clvRows : clvBundle.rows,
+    scoredRows: src.scoredRows,
+    recal: src.recal,
+  });
   const dayDoc = tracking.dayDocument(index, asOf);
   const dryRun = !!src.dryRun;
   const env = src.env || process.env;

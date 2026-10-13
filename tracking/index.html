@@ -177,11 +177,13 @@
     <p class="page-sub">One row per day. Three tracks, each for Edge (overall, all versions) and for Omega. The change column is versus the previous saved day. The table updates at 9:15am ET, after closes and finals.</p>
     <p class="updated" id="updated">Loading the latest table…</p>
     <div id="report"><div class="stats-loading">Loading daily progress…</div></div>
+    <div id="kpis"></div>
     <div class="card">
       <p class="note">Engineering percentiles are the stored /percentile lenses: Processes, Architecture, Math, and Overall. The morning job copies the latest manual score on or before that day. They are not computed from the record.</p>
       <p class="note">The track record uses the same fields as the scorecard. Record is straight bets, wins-losses-pushes. Accuracy is straight bets with pushes left out. ROI and profit include straights and the parlay, at $150 a unit.</p>
       <p class="note">Closing line uses the ledger totals. Average CLV is in percentage points. Elite percentile maps that average: −2pp or lower is the 20th, −1pp is the 35th, 0 is the 50th, +1pp is the 75th, +2pp is the 85th, and +3pp or higher is the 95th. Values between those points are linear.</p>
       <p class="note">This page only reports. It does not change a price, a probability, or which bets are published.</p>
+      <p class="note">Win rate is compared with the break-even rate at the prices paid, not with 50%. Parlay hit rate is compared with the product of the straight prices. Closing line by price band and market, and log-loss and Brier by sport, use the stored rows. Empty cells mean that payload did not carry the field.</p>
     </div>
   </main>
   <script src="/nav.js" defer></script>
@@ -304,6 +306,51 @@
         + metricRow('Elite percentile', ordinal(ec.percentile), esc(signed(de.percentile, 1)), tone(de.percentile), ordinal(oc.percentile), esc(signed(dom.percentile, 1)), tone(dom.percentile))
         + '</tbody></table>';
     }
+    function pct(value) {
+      if (value == null || !isFinite(Number(value))) return '—';
+      return (Number(value) * 100).toFixed(1) + '%';
+    }
+    function pp(value) {
+      if (value == null || !isFinite(Number(value))) return '—';
+      return signed(value, 2);
+    }
+    function score(value) {
+      if (value == null || !isFinite(Number(value))) return '—';
+      return Number(value).toFixed(4);
+    }
+    function kpiSection(kpis) {
+      if (!kpis) return '';
+      var win = kpis.winRateVsBreakEven || {};
+      var parlay = kpis.parlayHitVsImplied || {};
+      var bands = kpis.clvByPriceBand || [];
+      var markets = kpis.clvByMarket || [];
+      var sports = kpis.scoringBySport || [];
+      var html = '<div class="card"><h2 class="card-title">Results views</h2>';
+      html += '<table class="inner"><thead><tr><th>View</th><th>Record</th><th>Rate</th><th>Benchmark</th><th>Gap</th></tr></thead><tbody>';
+      html += '<tr><td>Win rate vs break-even</td><td>' + esc(win.wins || 0) + '-' + esc(win.losses || 0) + '-' + esc(win.pushes || 0) + '</td><td>' + pct(win.winRate) + '</td><td>' + pct(win.breakEven) + '</td><td>' + pct(win.gap) + '</td></tr>';
+      html += '<tr><td>Parlay hit vs implied</td><td>' + esc(parlay.wins || 0) + '-' + esc(parlay.losses || 0) + '</td><td>' + pct(parlay.hitRate) + '</td><td>' + pct(parlay.implied) + '</td><td>' + pct(parlay.gap) + '</td></tr>';
+      html += '</tbody></table>';
+      html += '<table class="inner"><thead><tr><th>Price band</th><th>n</th><th>Avg CLV (pp)</th><th>Beat close</th></tr></thead><tbody>';
+      if (!bands.length) html += '<tr><td>No priced closes</td><td>—</td><td>—</td><td>—</td></tr>';
+      for (var i = 0; i < bands.length; i += 1) {
+        html += '<tr><td>' + esc(bands[i].band) + '</td><td>' + esc(bands[i].n) + '</td><td>' + pp(bands[i].avgClvPp) + '</td><td>' + (bands[i].beatClosePct == null ? '—' : Number(bands[i].beatClosePct).toFixed(1) + '%') + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      html += '<table class="inner"><thead><tr><th>Market</th><th>n</th><th>Avg CLV (pp)</th><th>Beat close</th></tr></thead><tbody>';
+      if (!markets.length) html += '<tr><td>No priced closes</td><td>—</td><td>—</td><td>—</td></tr>';
+      for (var j = 0; j < markets.length; j += 1) {
+        html += '<tr><td>' + esc(markets[j].market) + '</td><td>' + esc(markets[j].n) + '</td><td>' + pp(markets[j].avgClvPp) + '</td><td>' + (markets[j].beatClosePct == null ? '—' : Number(markets[j].beatClosePct).toFixed(1) + '%') + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      html += '<table class="inner"><thead><tr><th>Sport</th><th>n</th><th>Log-loss</th><th>Brier</th><th>Close log-loss</th><th>Close Brier</th></tr></thead><tbody>';
+      if (!sports.length) html += '<tr><td>No scored rows</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>';
+      for (var k = 0; k < sports.length; k += 1) {
+        var sport = sports[k];
+        html += '<tr><td>' + esc(sport.sport) + '</td><td>' + esc(sport.n) + '</td><td>' + score(sport.logLossModel) + '</td><td>' + score(sport.brierModel) + '</td><td>' + score(sport.logLossClose) + '</td><td>' + score(sport.brierClose) + '</td></tr>';
+      }
+      html += '</tbody></table></div>';
+      return html;
+    }
     function render(report) {
       document.getElementById('updated').textContent = 'Updated ' + (report.updatedAtEt || '—');
       var rows = (report.rows || []).slice().sort(function (a, b) {
@@ -311,6 +358,8 @@
       });
       if (!rows.length) {
         document.getElementById('report').innerHTML = '<div class="card"><p class="note">No daily row is saved yet.</p></div>';
+        var emptyHost = document.getElementById('kpis');
+        if (emptyHost) emptyHost.innerHTML = kpiSection(report.resultKpis);
         return;
       }
       var html = '<table class="days"><thead><tr><th>Date</th><th>Engineering</th><th>Track record</th><th>Closing line</th></tr></thead><tbody>';
@@ -325,6 +374,8 @@
       }
       html += '</tbody></table>';
       document.getElementById('report').innerHTML = html;
+      var kpiHost = document.getElementById('kpis');
+      if (kpiHost) kpiHost.innerHTML = kpiSection(report.resultKpis);
     }
     function loadReport() {
       return fetch('/api/get-tracking', { headers: { 'Accept': 'application/json' } })

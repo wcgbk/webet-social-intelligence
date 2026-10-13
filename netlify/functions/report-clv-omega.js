@@ -111,9 +111,10 @@ async function runClvReport(opts) {
   const read = src.readJson || ((key) => store.readJson(key));
   const seedRows = Array.isArray(src.seedRows) ? src.seedRows : loadSeedRows();
   const live = await loadLiveRows(asOf, read, src.lookbackDays);
+  const rows = seedRows.concat(live.rows);
   const now = src.now instanceof Date ? src.now : new Date();
   const report = ledger.buildReport({
-    rows: seedRows.concat(live.rows),
+    rows,
     asOf,
     generatedAt: now.toISOString(),
     source: 'seed+blobs',
@@ -129,6 +130,7 @@ async function runClvReport(opts) {
   if (blocked) {
     return {
       report,
+      rows,
       wrote: false,
       keys: [],
       reason: dryRun ? 'dry-run' : 'no-write',
@@ -141,9 +143,9 @@ async function runClvReport(opts) {
     await write(keys[1], report);
   } catch (e) {
     console.error(`[report-clv-omega] write failed: ${e.message}`);
-    return { report, wrote: false, keys: [], reason: 'write-failed', error: e.message };
+    return { report, rows, wrote: false, keys: [], reason: 'write-failed', error: e.message };
   }
-  return { report, wrote: true, keys, reason: null };
+  return { report, rows, wrote: true, keys, reason: null };
 }
 
 function envelope(result) {

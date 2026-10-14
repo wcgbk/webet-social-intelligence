@@ -71,6 +71,12 @@ function eventDoc(sport, eventId) {
 }
 
 (async () => {
+  // Harness children start with OMEGA_REPLAY_NO_WRITE=1, which blocks
+  // storeQuotes. These checks write through an injected store. Clear the
+  // flag for this section and restore it after.
+  const prevNoWrite = process.env.OMEGA_REPLAY_NO_WRITE;
+  delete process.env.OMEGA_REPLAY_NO_WRITE;
+
   const store = mem();
   await lines.ensureDateIndex('2026-10-14', 'NHL', 'e1', {}, store.read, store.write);
   await lines.ensureDateIndex('2026-10-14', 'NHL', 'e2', {}, store.read, store.write);
@@ -173,6 +179,9 @@ function eventDoc(sport, eventId) {
   });
   assert.strictEqual(denied.reason, 'read-failed');
   assert.deepStrictEqual(blocked, []);
+
+  if (prevNoWrite == null) delete process.env.OMEGA_REPLAY_NO_WRITE;
+  else process.env.OMEGA_REPLAY_NO_WRITE = prevNoWrite;
 
   console.log('PASS test-omega-blob-keys');
 })().catch((err) => {

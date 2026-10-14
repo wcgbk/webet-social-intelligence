@@ -207,7 +207,9 @@ function gateReason(c, opts = {}) {
     return 'ev-stale';
   }
   // Sharp card: grades are the price edge, p_fair − implied.
-  // A− and up (≥2%) are mains. B is the 1–2% lean. Under 1% is not a fill.
+  // A− and up (≥2%) are mains. B is the 1–2% lean. Under 1% is edge-floor
+  // here. selectStraights may still fill a short card from those same-line
+  // Pinnacle pairs, ranked by EV, at a flat 0.5u lean.
   if (c && c.sharpFairPriced) {
     const edge = finiteEdge(c);
     if (!Number.isFinite(edge) || edge < 0.01 - 1e-12) return 'edge-floor';

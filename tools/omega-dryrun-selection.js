@@ -75,7 +75,7 @@ function printCard(date, card) {
   console.log(`parlay units=${ticket && ticket.units} label=${ticket && ticket.label ? ticket.label : ''} qualifying=${ticket && ticket.qualifying} ev=${ticket && ticket.ev} type=${ticket && ticket.type}`);
   picks.forEach((p, i) => {
     console.log(
-      `STRAIGHT ${i + 1} tier=${p.tier || ''} label=${p.label || ''} book=${p.book || p.executionBook || ''} odds=${p.odds} ev=${p.ev} edge=${p.edgePct} units=${p.units} ${p.sport || ''} ${p.matchup || ''} ${p.pick || ''}`,
+      `STRAIGHT ${i + 1} tier=${p.tier || ''} label=${p.label || ''} book=${p.book || p.executionBook || ''} odds=${p.odds} fair=${p.fair_sharp_p != null ? p.fair_sharp_p : ''} ev=${p.ev} edge=${p.edgePct} units=${p.units} ${p.sport || ''} ${p.matchup || ''} ${p.pick || ''}`,
     );
   });
   legs.forEach((leg, i) => {

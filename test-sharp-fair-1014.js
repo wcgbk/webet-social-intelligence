@@ -340,7 +340,8 @@ assert.strictEqual(shifted.clv, null);
 assert.strictEqual(shifted.beatClose, null);
 delete process.env.OMEGA_SHARP_FAIR;
 
-const { toPickObject } = require('./netlify/functions/lib/omega-vnext/select');
+const { toPickObject, selectStraights } = require('./netlify/functions/lib/omega-vnext/select');
+const { parlayFromStraights } = require('./netlify/functions/lib/omega-vnext/parlay');
 const implied110 = americanToImplied(-110);
 const mainP = implied110 + 0.04;
 const main = toPickObject({
@@ -387,5 +388,67 @@ const strong = toPickObject({
 });
 assert.strictEqual(strong.rating, 'aplus');
 assert.ok(parseFloat(strong.units) <= 1 + 1e-9);
+
+function pairedRow(matchup, side, ev, edge, extra) {
+  const parts = matchup.split(' @ ');
+  return {
+    sharpFairPriced: true,
+    sport: 'NCAAF',
+    matchup,
+    side,
+    market: 'Moneyline',
+    odds: 105,
+    coverProb: 0.48,
+    ev,
+    edgePct: edge,
+    liquid: true,
+    book: 'draftkings',
+    homeTeam: parts[1],
+    awayTeam: parts[0],
+    commenceTime: '2026-10-14T23:00:00Z',
+    rejectReason: 'edge-floor',
+    ...extra,
+  };
+}
+
+const floorGame = pairedRow('A @ B', 'B ML', 0.04, 0.03, { tier: 'floor', rejectReason: null });
+const bGame = pairedRow('C @ D', 'D ML', 0.02, 0.015, { tier: 'lean', rejectReason: null });
+const bestEv = pairedRow('E @ F', 'F ML', -0.014, -0.0069);
+const sameGameWorse = pairedRow('E @ F', 'E +1.5', -0.014, -0.0074, { market: 'Spread', line: 1.5 });
+const midEv = pairedRow('G @ H', 'H +1.5', -0.015, -0.0103, { market: 'Spread', line: 1.5, odds: -225 });
+const lowEv = pairedRow('I @ J', 'J ML', -0.018, -0.0077, { odds: 136 });
+const worseEv = pairedRow('K @ L', 'L ML', -0.029, -0.0117, { odds: 150 });
+const notPaired = pairedRow('M @ N', 'N ML', 0.05, -0.01, { sharpFairPriced: false, sharpFairReject: 'no-two-way' });
+
+const short = selectStraights([floorGame], 3, [bGame], [worseEv, sameGameWorse, lowEv, notPaired, midEv, bestEv]);
+assert.deepStrictEqual(short.map((row) => row.side), ['B ML', 'D ML', 'F ML']);
+assert.deepStrictEqual(short.map((row) => row.tier), ['floor', 'lean', 'lean']);
+assert.strictEqual(short[2].pairedFill, true);
+assert.strictEqual(short[2].label, 'lean');
+assert.ok(!short.some((row) => row.side === 'E +1.5' || row.side === 'N ML'));
+
+const filledOnly = selectStraights([], 3, [], [worseEv, sameGameWorse, lowEv, midEv, bestEv, notPaired]);
+assert.deepStrictEqual(filledOnly.map((row) => row.side), ['F ML', 'H +1.5', 'J ML']);
+assert.ok(filledOnly.every((row) => row.tier === 'lean' && row.pairedFill === true));
+const fullFloor = selectStraights([
+  pairedRow('A @ B', 'B ML', 0.04, 0.03),
+  pairedRow('C @ D', 'D ML', 0.03, 0.025),
+  pairedRow('E @ F', 'F ML', 0.025, 0.021),
+], 3, [], [bestEv]);
+assert.ok(fullFloor.every((row) => row.tier === 'floor'));
+assert.strictEqual(fullFloor.length, 3);
+
+const leanStake = toPickObject(filledOnly[0]);
+assert.strictEqual(leanStake.tier, 'lean');
+assert.strictEqual(leanStake.label, 'lean');
+assert.strictEqual(leanStake.units, '0.5u');
+
+const negTicket = parlayFromStraights(filledOnly.map((row) => toPickObject(row)), { pool: filledOnly });
+assert.strictEqual(negTicket.length, 1);
+assert.strictEqual(negTicket[0].type, '3-leg-parlay-labeled');
+assert.strictEqual(negTicket[0].units, '0.25u');
+assert.strictEqual(negTicket[0].label, 'combined EV not positive');
+assert.strictEqual(negTicket[0].legs.length, 3);
+assert.strictEqual(negTicket[0].qualifying, true);
 
 console.log('test-sharp-fair-1014 ok');

@@ -285,15 +285,42 @@ function claimStraight(c, onePer, usedGames, usedSides) {
   return true;
 }
 
+/** Sharp price edge as a fraction. Missing stays null. */
+function sharpEdgeFraction(c) {
+  if (!c) return null;
+  return parseEdgeFraction(c.edgePct != null ? c.edgePct : c.edge);
+}
+
+/** Pinnacle-fair row whose price edge clears the 1% (B) tier. */
+function clearsOnePctTier(c) {
+  if (!c || c.sharpFairPriced !== true) return false;
+  const edge = sharpEdgeFraction(c);
+  return Number.isFinite(edge) && edge + 1e-12 >= 0.01;
+}
+
+/**
+ * Same-line Pinnacle pair that did not clear 1%. Ranked later by stake EV.
+ * Structural rejects (no pair, point mismatch, stale, live, ev-stale) are not
+ * fills. A synthetic row with no ladder stays eligible, same as a lean.
+ */
+function eligiblePairedFill(c) {
+  if (!c || c.sharpFairPriced !== true || c.sharpFairReject) return false;
+  if (clearsOnePctTier(c)) return false;
+  return eligibleForLeanPool(c);
+}
+
 /**
  * Top stake-EV rows, up to MAX_STRAIGHTS. Edge breaks an EV tie.
  * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
  * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
  * slots fill from positive-EV leans, then from any remaining pregame
- * lean sorted by EV, including a non-positive EV. One game. A lean is
- * tier 'lean' and the stake is flat LEAN_MAX_UNITS. ev-stale is not here.
+ * lean sorted by EV, including a non-positive EV. If the card is still
+ * short of 3, the open slots fill from same-line Pinnacle pairs that
+ * missed the 1% tier, ranked by EV vs Pinnacle. One game. A lean is
+ * tier 'lean' and the paired fill is flat LEAN_MAX_UNITS. ev-stale is
+ * not a fill.
  */
-function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
+function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
   const usedGames = new Set();
   const usedSides = new Set();
@@ -318,6 +345,21 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
     if (!eligibleForLeanPool(c)) continue;
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
+  }
+  if (out.length >= maxN) return out;
+  const paired = [...(pairedPool || [])].sort(compareByEv);
+  for (const c of paired) {
+    if (out.length >= maxN) break;
+    if (!eligiblePairedFill(c)) continue;
+    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+    out.push({
+      ...c,
+      tier: 'lean',
+      label: 'lean',
+      pairedFill: true,
+      leanReason: 'paired-ev',
+      _score: finiteEv(c),
+    });
   }
   return out;
 }
@@ -451,9 +493,16 @@ function toPickObject(c, opts = {}) {
   const rating = qualityToRating(edgeFrac, qualityClv, sharp ? null : c.uncertainty);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
   if (sharp) {
-    const raw = sharpStakeUnits(c);
-    const cap = edgeFrac != null && edgeFrac + 1e-12 >= 0.02 ? 1 : Number(B_GRADE_UNIT_CAP);
-    units = Math.min(raw == null ? 0 : raw, Number.isFinite(cap) ? cap : 0.5);
+    // A same-line fill under the 1% tier is a flat 0.5u lean. Quarter-Kelly
+    // on a non-positive fair is 0, and that would publish an empty stake.
+    const belowOne = !(edgeFrac != null && edgeFrac + 1e-12 >= 0.01);
+    if (tier === 'lean' && (c.pairedFill || belowOne)) {
+      units = Number(LEAN_MAX_UNITS);
+    } else {
+      const raw = sharpStakeUnits(c);
+      const cap = edgeFrac != null && edgeFrac + 1e-12 >= 0.02 ? 1 : Number(B_GRADE_UNIT_CAP);
+      units = Math.min(raw == null ? 0 : raw, Number.isFinite(cap) ? cap : 0.5);
+    }
   } else {
     // Kelly (and drawdown) already ran. Grade stays the edge letter.
     // Cover caps are sizing only. They do not reject the pick. Leans stay flat.
@@ -744,6 +793,8 @@ module.exports = {
   drawdownActive,
   qualifiesAsLean,
   passesLeanFill,
+  eligiblePairedFill,
+  clearsOnePctTier,
   shouldPublishNoPlays,
   straightCardLabel,
   selectStraights,

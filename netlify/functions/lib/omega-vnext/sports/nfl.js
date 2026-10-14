@@ -18,7 +18,7 @@
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity, bindEspnGameByTeamAndTime,
   spreadDetail, totalDetail, mlDetail,
-  sharpMarketLine, footballPointState, footballAudit, pricedFootball,
+  sharpMarketLine, footballPointState, footballAudit, pricedFootball, pureFootballCover,
   nflSpreadExcludesGame,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
@@ -181,21 +181,23 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
+      const detailAt = (proj) => {
+        const q = mlDetail(proj, SPORT);
+        if (isHome) return q;
+        return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
+      };
       const priced = pricedFootball(
-        (proj) => {
-          const q = mlDetail(proj, SPORT);
-          if (isHome) return q;
-          return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
-        },
+        detailAt,
         pts.modelMarginRaw,
         pts.modelMarginShrunk,
         null,
         noVigPinnacleImplied(bundles, b),
         0.5,
       );
+      const modelPureP = pureFootballCover(detailAt, pts.modelMarginRaw, null);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, projMethod: methods.ml, uncertainty,
+        market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, modelPureP, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
@@ -210,18 +212,21 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     for (const b of bundles) {
       if (b.point == null) continue;
       const isHome = b.side === home;
+      const projRaw = isHome ? pts.modelMarginRaw : -pts.modelMarginRaw;
+      const detailAt = (proj, line) => spreadDetail(proj, line, SPORT);
       const priced = pricedFootball(
-        (proj, line) => spreadDetail(proj, line, SPORT),
-        isHome ? pts.modelMarginRaw : -pts.modelMarginRaw,
+        detailAt,
+        projRaw,
         isHome ? pts.modelMarginShrunk : -pts.modelMarginShrunk,
         b.point,
         noVigPinnacleImplied(bundles, b),
         0.5,
       );
+      const modelPureP = pureFootballCover(detailAt, projRaw, b.point);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Spread', side: sideLabel, line: b.point, modelRawP: priced.p, projMethod: methods.spread, uncertainty,
+        market: 'Spread', side: sideLabel, line: b.point, modelRawP: priced.p, modelPureP, projMethod: methods.spread, uncertainty,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
@@ -235,17 +240,19 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
     const bundles = collectMarketOutcomes(event, 'totals');
     for (const b of bundles) {
       if (b.point == null) continue;
+      const detailAt = (proj, line) => totalDetail(proj, line, b.side, SPORT);
       const priced = pricedFootball(
-        (proj, line) => totalDetail(proj, line, b.side, SPORT),
+        detailAt,
         pts.modelTotalRaw,
         pts.modelTotalShrunk,
         b.point,
         noVigPinnacleImplied(bundles, b),
         NFL_TOTAL_MODEL_WEIGHT,
       );
+      const modelPureP = pureFootballCover(detailAt, pts.modelTotalRaw, b.point);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
-        market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p,
+        market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p, modelPureP,
         projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,

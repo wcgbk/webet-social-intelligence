@@ -176,13 +176,13 @@ function priceGame(derived, totalShift) {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
-      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), 0.5);
+      const pPure = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
+      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
-        modelRawP: p, projMethod: methods.ml, uncertainty,
+        modelRawP: p, modelPureP: pPure, projMethod: methods.ml, uncertainty,
         consensusLine: null, modelProjection: +(modelMargin).toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -197,20 +197,20 @@ function priceGame(derived, totalShift) {
       const isHome = b.side === home;
       const line = b.point;
       if (line == null) continue;
-      let pCover = spreadCoverProb(
+      const pCoverPure = spreadCoverProb(
         isHome ? modelMargin : -modelMargin,
         line,
         SPORT,
         stdOpt
       );
       const mktImp = noVigPinnacleImplied(bundles, b);
-      pCover = blendWithMarket(pCover, mktImp, 0.5);
+      const pCover = blendWithMarket(pCoverPure, mktImp, 0.5);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
-        modelRawP: pCover, projMethod: methods.spread, uncertainty,
+        modelRawP: pCover, modelPureP: pCoverPure, projMethod: methods.spread, uncertainty,
         consensusLine: line, modelProjection: +(modelMargin).toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -224,15 +224,15 @@ function priceGame(derived, totalShift) {
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
-      let p = totalCoverProb(modelTotal, line, b.side, SPORT);
+      const pPure = totalCoverProb(modelTotal, line, b.side, SPORT);
       const mktImp = noVigPinnacleImplied(bundles, b);
-      p = blendWithMarket(p, mktImp, 0.45);
+      const p = blendWithMarket(pPure, mktImp, 0.45);
       const sideLabel = `${b.side} ${line}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: sideLabel, line,
-        modelRawP: p, projMethod: methods.total, uncertainty: uncertainty + 0.05,
+        modelRawP: p, modelPureP: pPure, projMethod: methods.total, uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
       };

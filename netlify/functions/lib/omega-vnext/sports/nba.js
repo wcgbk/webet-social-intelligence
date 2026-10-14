@@ -411,8 +411,8 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      let p = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
-      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.ml);
+      const pPure = isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT);
+      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.ml);
       out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Moneyline',
@@ -420,6 +420,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
         line: null,
         pickSide: isHome ? 'home' : 'away',
         modelRawP: p,
+        modelPureP: pPure,
         projMethod: tag('ml'),
         uncertainty,
         consensusLine: null,
@@ -434,8 +435,8 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       const line = b.point;
       if (line == null) continue;
       const isHome = b.side === home;
-      let pCover = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
-      pCover = blendWithMarket(pCover, noVigPinnacleImplied(bundles, b), BLEND.spread);
+      const pCoverPure = spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
+      const pCover = blendWithMarket(pCoverPure, noVigPinnacleImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       out.push(enrichCandidateWithEdge({
         ...base,
@@ -444,6 +445,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
         line,
         pickSide: isHome ? 'home' : 'away',
         modelRawP: pCover,
+        modelPureP: pCoverPure,
         projMethod: tag('spread'),
         uncertainty,
         consensusLine: line,
@@ -458,8 +460,8 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
       const line = b.point;
       if (line == null) continue;
       const over = /over/i.test(b.side);
-      let p = totalCoverProb(modelTotal, line, b.side, SPORT);
-      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.total);
+      const pPure = totalCoverProb(modelTotal, line, b.side, SPORT);
+      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.total);
       out.push(enrichCandidateWithEdge({
         ...base,
         market: 'Total',
@@ -467,6 +469,7 @@ function projectGame(event, standings, espnGame, gameDay, opts) {
         line,
         pickSide: over ? 'over' : 'under',
         modelRawP: p,
+        modelPureP: pPure,
         projMethod: tag('total'),
         uncertainty: uncertainty + 0.05,
         consensusLine: line,

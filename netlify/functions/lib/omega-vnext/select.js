@@ -477,6 +477,7 @@ function coverStakeCap(units, coverProb) {
 function toPickObject(c, opts = {}) {
   const lean = c && c.tier === 'lean';
   const sharp = !!(c && c.sharpFairPriced);
+  const pure = !!(c && c.pureModelPriced);
   const drawdown = !!(opts && opts.drawdown) && !lean && !sharp;
   const fraction = drawdown ? KELLY_FRACTION * 0.75 : KELLY_FRACTION;
   const kFrac = pushAwareKelly(c.coverProb, c.odds, fraction, c && c.pPush);
@@ -484,13 +485,15 @@ function toPickObject(c, opts = {}) {
   let units = kellyToUnits(kFrac, perPickCap);
   if (drawdown) units = Math.max(0.5, units - 0.5);
 
-  // Sharp card: edge is p_fair − implied. Letter bands are that edge alone.
+  // Sharp card: edge is p_fair − implied. Pure model: edge is p_model − implied.
+  // Letter bands are that edge alone. CLV does not move the grade.
   // Older rows keep the model edge plus the small CLV nudge.
   const edgeFrac = parseEdgeFraction(c.edgePct);
   const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
-  const qualityClv = sharp ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
-  const pickQuality = qualityScore(edgeFrac, qualityClv, sharp ? null : c.uncertainty);
-  const rating = qualityToRating(edgeFrac, qualityClv, sharp ? null : c.uncertainty);
+  const gradeOnEdge = sharp || pure;
+  const qualityClv = gradeOnEdge ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
+  const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
+  const rating = qualityToRating(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
   if (sharp) {
     // A same-line fill under the 1% tier is a flat 0.5u lean. Quarter-Kelly
@@ -539,9 +542,9 @@ function toPickObject(c, opts = {}) {
     units: sharp ? fmtSharpU(units) : `${units}u`,
     ev: evStr,
     evRaw: Number.isFinite(evNum) ? evNum : null,
-    edgeBasis: 'calibrated-edge-vs-pinnacle-no-vig',
-    evBasis: c.evBasis || 'stake-ev-at-best-us-price',
-    gradeBasis: 'calibrated-edge-vs-pinnacle-no-vig',
+    edgeBasis: c.edgeBasis || (pure ? 'pure-model-edge-vs-bet-price' : 'calibrated-edge-vs-pinnacle-no-vig'),
+    evBasis: c.evBasis || (pure ? 'pure-model-stake-ev' : 'stake-ev-at-best-us-price'),
+    gradeBasis: c.gradeBasis || (pure ? 'pure-model-edge-vs-bet-price' : 'calibrated-edge-vs-pinnacle-no-vig'),
     edgePct: edgePctStr,
     coverProb: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
     winProbability: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
@@ -592,6 +595,7 @@ function toPickObject(c, opts = {}) {
     ...(c.hrFlags && c.hrFlags.length ? { hrFlags: c.hrFlags } : {}),
     ...(c.hardRockPriced === true || c.hardRockPriced === false ? { hardRockPriced: c.hardRockPriced === true } : {}),
     ...(dataReviewFlag ? { dataReviewFlag } : {}),
+    ...(pure ? { pureModelPriced: true } : {}),
   };
 }
 

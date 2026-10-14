@@ -815,15 +815,15 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     for (const b of bundles) {
       const isHome = b.side === home;
       const q = periodQuote({ modelMargin, modelTotal, market: 'ml', sideIsHome: isHome });
-      let p = q
+      const pPure = q
         ? q.coverProb
         : (isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT));
-      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.ml);
+      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.ml);
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
-        modelRawP: p, projMethod: periodMethod(methods.ml, !!q), uncertainty,
+        modelRawP: p, modelPureP: pPure, projMethod: periodMethod(methods.ml, !!q), uncertainty,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
@@ -840,16 +840,16 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       if (line == null) continue;
       const isHome = b.side === home;
       const q = periodQuote({ modelMargin, modelTotal, market: 'spread', sideIsHome: isHome, line });
-      let pCover = q
+      const pCoverPure = q
         ? q.coverProb
         : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
-      pCover = blendWithMarket(pCover, noVigPinnacleImplied(bundles, b), BLEND.spread);
+      const pCover = blendWithMarket(pCoverPure, noVigPinnacleImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
-        modelRawP: pCover, projMethod: periodMethod(methods.spread, !!q), uncertainty,
+        modelRawP: pCover, modelPureP: pCoverPure, projMethod: periodMethod(methods.spread, !!q), uncertainty,
         consensusLine: line, modelProjection: +modelMargin.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,
@@ -867,13 +867,13 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const q = periodQuote({
         modelMargin, modelTotal, market: 'total', line, side: b.side,
       });
-      let p = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT);
-      p = blendWithMarket(p, noVigPinnacleImplied(bundles, b), BLEND.total);
+      const pPure = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT);
+      const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.total);
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${line}`, line,
-        modelRawP: p, projMethod: periodMethod(methods.total, !!q), uncertainty: uncertainty + 0.05,
+        modelRawP: p, modelPureP: pPure, projMethod: periodMethod(methods.total, !!q), uncertainty: uncertainty + 0.05,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
         engineSoft,

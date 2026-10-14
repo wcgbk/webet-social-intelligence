@@ -149,8 +149,10 @@ function gateReason(c, opts = {}) {
   // Sharp-fair path. A bad Pinnacle pair is structural (not a lean).
   // A priced row skips the model-gap veto: the probability is the Pinnacle
   // power fair, so a model/line disagreement is not a reason to drop it.
-  if (c && c.sharpFairReject) return c.sharpFairReject;
-  if (!(c && c.sharpFairPriced)) {
+  // Pure-model rows never use a Pinnacle pair, a sharp gap, or steam as a gate.
+  const pure = !!(c && c.pureModelPriced);
+  if (c && c.sharpFairReject && !pure) return c.sharpFairReject;
+  if (!(c && c.sharpFairPriced) && !pure) {
     // Absurd model-vs-market gap. Caps live in FB_MARKET_GAP and are wider
     // than the MODEL_LINE_GAP flag. A normal disagreement still prices.
     const marketGap = footballMarketGapReason(c);
@@ -225,10 +227,11 @@ function gateReason(c, opts = {}) {
   // Pinnacle (else Circa) 3:00→10:00 probability moved against this side.
   // The sharp-fair price is already the 10:00 two-way. The move is inside
   // that fair, so it does not veto a soft price that still beats it.
-  if (!(c && c.sharpFairPriced) && c.movementDrop) return c.movementDropReason || 'sharp_prob_against';
+  // Pure-model rows do not use the move or the steam print to select.
+  if (!(c && c.sharpFairPriced) && !pure && c.movementDrop) return c.movementDropReason || 'sharp_prob_against';
 
   // Open→now adverse steam on the Pinnacle print (when line-move annotated)
-  if (!(c && c.sharpFairPriced) && GATES.rejectAdverseSteam && c.lineMove) {
+  if (!(c && c.sharpFairPriced) && !pure && GATES.rejectAdverseSteam && c.lineMove) {
     const steamReason = adverseSteamReason(c.lineMove, { verify: false });
     if (steamReason) return steamReason;
   }

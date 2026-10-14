@@ -127,7 +127,10 @@
     return true;
   }
 
-  function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
+  function wholeUp(n) {
+    var up = Math.ceil((n || 0) - 1e-9);
+    return Object.is(up, -0) ? 0 : up;
+  }
 
   function parlayWinAmount(risk, oddsList) {
     var decimalProduct = 1;
@@ -177,7 +180,7 @@
     }
     return {
       wins: wins, losses: losses, pushes: pushes, pending: pending,
-      profit: Math.round(profit), wagered: Math.round(wagered),
+      profit: wholeUp(profit), wagered: wholeUp(wagered),
       parlayResult: parlayResult, parlayProfit: parlayProfit,
     };
   }
@@ -196,8 +199,8 @@
     }
     var wins = (straight.wins || 0) - (day ? (day.wins || 0) : 0) + (today.wins || 0);
     var losses = (straight.losses || 0) - (day ? (day.losses || 0) : 0) + (today.losses || 0);
-    var profit = Math.round((cum.totalProfit || 0) - (day ? (day.profit || 0) : 0) + (today.profit || 0));
-    var wagered = Math.round((cum.totalWagered || 0) - (day ? (day.wagered || 0) : 0) + (today.wagered || 0));
+    var profit = wholeUp((cum.totalProfit || 0) - (day ? (day.profit || 0) : 0) + (today.profit || 0));
+    var wagered = wholeUp((cum.totalWagered || 0) - (day ? (day.wagered || 0) : 0) + (today.wagered || 0));
     var decided = wins + losses;
     var accuracy = decided > 0 ? ((wins / decided) * 100).toFixed(1) + '%' : '0%';
     var roiNum = wagered > 0 ? (profit / wagered) * 100 : 0;

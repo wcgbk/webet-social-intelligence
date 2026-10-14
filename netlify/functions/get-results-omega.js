@@ -486,7 +486,10 @@ function calcParlayWinnings(risk, legsOdds) {
 
 // Whole-dollar display: round UP to the next dollar so no cents show (37.5 -> 38). The -1e-9
 // keeps an already-whole amount whole (avoids 75 -> 76 on float dust).
-function wholeUp(n) { return Math.ceil((n || 0) - 1e-9); }
+function wholeUp(n) {
+  const up = Math.ceil((n || 0) - 1e-9);
+  return Object.is(up, -0) ? 0 : up;
+}
 
 /** Dollar amounts stay at cents. 0.25u is 37.50, not the next whole dollar. */
 function dollars(n) {
@@ -799,10 +802,10 @@ function aggregateDays(list) {
       wins: cw, losses: cl, pushes: cp, pending: cpe,
       accuracy: pct(cw, cw + cl),
       roi: cwag > 0 ? ((cpr / cwag) * 100).toFixed(1) + '%' : '0%',
-      totalWagered: Math.round(cwag), totalProfit: Math.round(cpr),
+      totalWagered: wholeUp(cwag), totalProfit: wholeUp(cpr),
     },
-    straight: { wins: sw, losses: sl, accuracy: pct(sw, sw + sl), totalWagered: Math.round(swag), totalProfit: Math.round(spr) },
-    parlay: { wins: pw, losses: pl, accuracy: pct(pw, pw + pl), totalWagered: Math.round(pwag), totalProfit: Math.round(ppr) },
+    straight: { wins: sw, losses: sl, accuracy: pct(sw, sw + sl), totalWagered: wholeUp(swag), totalProfit: wholeUp(spr) },
+    parlay: { wins: pw, losses: pl, accuracy: pct(pw, pw + pl), totalWagered: wholeUp(pwag), totalProfit: wholeUp(ppr) },
   };
 }
 

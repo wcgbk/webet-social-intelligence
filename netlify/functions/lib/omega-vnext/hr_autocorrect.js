@@ -14,7 +14,7 @@
  */
 
 const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, GATES, LEAN_MIN_EV, LEAN_MAX_UNITS } = require('./config');
-const { americanToImplied, formatAmerican, normCdf, parseEdgeFraction, clamp } = require('./odds_math');
+const { americanToImplied, formatAmerican, normCdf, parseEdgeFraction, clamp, writeSummaryStakeDisplay } = require('./odds_math');
 const { attachEv } = require('./edge');
 const { toPickObject } = require('./select');
 const { parlayFromStraights } = require('./parlay');
@@ -482,6 +482,7 @@ function autoCorrectHardRock(picksData, sportGames) {
   if (data.summary) {
     data.summary.totalPicks = data.picks.length;
     data.summary.totalStraightBets = data.picks.length;
+    writeSummaryStakeDisplay(data.summary, data.picks, data.parlayLegs);
   }
   data.hardRockCorrections = log;
   for (const row of log) {

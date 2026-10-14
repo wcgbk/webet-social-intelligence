@@ -3,6 +3,7 @@
 // gradeDayBody prices dollar profit at that unit. No behavior change.
 const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
+const { summaryStakeDisplay } = require('./netlify/functions/lib/omega-vnext/odds_math');
 const { gradeDayBody } = require('./netlify/functions/get-results-omega')._test;
 
 assert.strictEqual(config.UNIT_DOLLARS, 150);
@@ -74,6 +75,23 @@ async function main() {
   assert.strictEqual(juice.picks[0].profit, expectedWin);
   assert.strictEqual(juice.profit, expectedWin);
   assert.strictEqual(juice.wagered, unit);
+
+  // Summary display only. 0.5u straights and a 0.25u parlay each ceil to 1u at $150.
+  // The stake fields themselves stay fractional.
+  const straight = { units: '0.5u' };
+  const ticket = { units: '0.25u', type: '3-leg-parlay-labeled', qualifying: true };
+  const shown = summaryStakeDisplay([straight, { units: '0.5u' }, { units: '0.5u' }], [ticket]);
+  assert.strictEqual(shown.totalUnits, '4u');
+  assert.strictEqual(shown.totalDollars, 600);
+  assert.strictEqual(straight.units, '0.5u');
+  assert.strictEqual(ticket.units, '0.25u');
+  const marker = summaryStakeDisplay(
+    [{ units: '1.25u' }],
+    [{ units: '0.25u', qualifying: false, type: 'no-qualifying-parlay' }]
+  );
+  assert.strictEqual(marker.totalUnits, '2u');
+  assert.strictEqual(marker.totalDollars, 300);
+  assert.strictEqual(summaryStakeDisplay([{ units: '1u' }], []).totalUnits, '1u');
 }
 
 main().catch((err) => {

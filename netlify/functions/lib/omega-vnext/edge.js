@@ -3,7 +3,7 @@
 const { SHARP_BOOKS, US_BOOKS, US_BOOK_PRIORITY, MAJOR_LIQUIDITY_BOOKS, PLACEABILITY } = require('./config');
 const {
   americanToImplied, deVigMarket, evAtOdds, formatAmerican, formatEdgePct,
-  noVigTwoWay, americanJuiceDelta,
+  noVigTwoWay, americanJuiceDelta, writeSummaryStakeDisplay,
 } = require('./odds_math');
 const { pushAwareEv } = require('./push_ev');
 const { sharpFairEnabled } = require('./sharp_fair');
@@ -222,11 +222,6 @@ function placeabilitySideKey(row) {
   return `${String((row && (row.pick || row.side)) || '').trim().toLowerCase()}@@${String((row && row.matchup) || '').trim().toLowerCase()}`;
 }
 
-function parseUnitsLoose(u) {
-  const n = parseFloat(String(u == null ? '' : u).replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
-
 /**
  * Drop straights whose verify decision says so. Clear the parlay when any
  * leg fails (do not refill or invent a replacement leg). Other straights stay.
@@ -294,11 +289,9 @@ function applyPlaceabilityDrops(picksData, decisions, legDecisions) {
     }
   }
   if (data.summary) {
-    const straightU = kept.reduce((s, p) => s + parseUnitsLoose(p.units), 0);
-    const parlayU = (data.parlayLegs || []).reduce((s, pl) => s + parseUnitsLoose(pl.units), 0);
     data.summary.totalPicks = kept.length;
     data.summary.totalStraightBets = kept.length;
-    data.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
+    writeSummaryStakeDisplay(data.summary, kept, data.parlayLegs);
     if (Array.isArray(data.summary.sportsCovered)) {
       data.summary.sportsCovered = [...new Set(kept.map(p => p.sport).filter(Boolean))];
     }

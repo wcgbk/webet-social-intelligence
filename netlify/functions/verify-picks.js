@@ -27,6 +27,7 @@ function parseOdds(s) { return parseInt(String(s).replace(/[^0-9\-+]/g, ""), 10)
 function parseUnits(s) { return parseFloat(String(s).replace(/[^0-9.]/g, "")); }
 function parseProbability(s) { const n = parseFloat(String(s).replace(/[^0-9.]/g, "")); return n > 1 ? n / 100 : n; }
 function unitsToRating(u) { if (u >= 2.5) return "A+"; if (u >= 1.5) return "A"; if (u >= 1.0) return "A-"; if (u >= 0.5) return "B+"; return "B"; } // aligned w/ generator thresholds
+const { writeSummaryStakeDisplay } = require("./lib/omega-vnext/odds_math");
 
 // ── Math Checks ──
 function runMathChecks(pick) {
@@ -513,12 +514,11 @@ async function autoFixPicks(picksData, pickReports) {
     }
   }
 
-  // Recalculate summary
-  const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
+  // Recalculate summary. Display units round up; pick.units stays the stake.
   if (picksData.summary) {
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
-    picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
+    writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
   }
 
   return { fixed: true, replacements };
@@ -844,11 +844,10 @@ exports.handler = async (event) => {
 
       // If we made any sharp action (replace / downgrade / drop), recalc summary + update the blob
       if (sharpReplacements.length > 0 || droppedCount > 0) {
-        const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
         if (picksData.summary) {
           picksData.summary.totalPicks = picksData.picks.length;
           picksData.summary.totalStraightBets = picksData.picks.length;
-          picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
+          writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
         }
         await updatePicksBlob(dateKey, picksData);
         console.log(`[verify-sharp] Updated blob: ${sharpReplacements.filter(r => r.added).length} replacement(s), ${droppedCount} drop(s)`);
@@ -920,10 +919,9 @@ exports.handler = async (event) => {
         if (backfilled > 0) {
           finalFixCount += backfilled;
           if (picksData.summary) {
-            const tu = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0);
             picksData.summary.totalPicks = picksData.picks.length;
             picksData.summary.totalStraightBets = picksData.picks.length;
-            picksData.summary.totalUnits = `${tu.toFixed(1)}u`;
+            writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
           }
           console.log(`[verify-backfill] Refilled card to ${picksData.picks.length} pick(s) from candidate pool`);
         } else {

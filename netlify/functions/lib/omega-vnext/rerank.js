@@ -20,7 +20,7 @@ const {
   matchupKey,
 } = require('./select');
 const { parlayFromStraights } = require('./parlay');
-const { parseEdgeFraction } = require('./odds_math');
+const { parseEdgeFraction, writeSummaryStakeDisplay } = require('./odds_math');
 const { recordRankedList, top10Rows } = require('./selection_pass');
 const { compareByEv } = require('./select');
 const { GATES } = require('./config');
@@ -274,6 +274,7 @@ async function rerankCard(opts = {}) {
   if (working.summary && typeof working.summary === 'object') {
     working.summary.totalPicks = nextPicks.length;
     working.summary.totalStraightBets = nextPicks.length;
+    writeSummaryStakeDisplay(working.summary, nextPicks, parlayLegs);
   }
   return {
     card: working,

@@ -38,6 +38,7 @@ const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock')
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags } = require('./pinnacle_flag');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
+const { summaryStakeDisplay } = require('./odds_math');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -712,8 +713,6 @@ async function generateOmegaVnext(opts = {}) {
     }
   }
 
-  const parlayUnits = (parlayLegs || []).reduce((s, pl) => s + (parseFloat(pl.units) || 0), 0);
-  const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0) + parlayUnits;
   const sportsCovered = [...new Set(picks.map(p => p.sport))];
 
   const candidateTable = orderedByScore(yesPool).slice(0, 15).map((c, i) => ({
@@ -763,7 +762,9 @@ async function generateOmegaVnext(opts = {}) {
   const rejectionCounts = rejectionLog.rejectionCounts;
 
   const empty = picks.length === 0;
-  logReviewFlags(picks, empty ? [] : (parlayLegs || []));
+  const publishedParlay = empty ? [] : (parlayLegs || []);
+  const stakeDisplay = summaryStakeDisplay(picks, publishedParlay);
+  logReviewFlags(picks, publishedParlay);
   const picksData = {
     date: dateISO,
     dateFormatted,
@@ -776,7 +777,8 @@ async function generateOmegaVnext(opts = {}) {
     summary: {
       totalPicks: picks.length,
       totalStraightBets: picks.length,
-      totalUnits: `${totalUnits.toFixed(1)}u`,
+      totalUnits: stakeDisplay.totalUnits,
+      totalDollars: stakeDisplay.totalDollars,
       aplusLocks: picks.filter(p => p.rating === 'aplus').length,
       sportsCovered,
       modelVersion: MODEL_VERSION,
@@ -789,14 +791,14 @@ async function generateOmegaVnext(opts = {}) {
       catch (_) { return null; }
     })(),
     bugLog,
-    parlayLegs: empty ? [] : parlayLegs,
+    parlayLegs: publishedParlay,
     // Private. publicPicksPayload drops this. Flag does not change the pool.
-    gapReview: buildGapReview(candidates, picks, empty ? [] : parlayLegs),
+    gapReview: buildGapReview(candidates, picks, publishedParlay),
     // Private. Counts and the next 10 candidates when the card is short of
     // 3 straights or a 3-leg. Does not add a pick. publicPicksPayload drops it.
     shortfall: buildShortfall({
       picks,
-      parlayLegs: empty ? [] : parlayLegs,
+      parlayLegs: publishedParlay,
       yesPool,
       rejected,
     }),

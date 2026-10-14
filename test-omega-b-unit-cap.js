@@ -18,8 +18,8 @@ assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
 assert.strictEqual(config.QUALITY_GRADE.a, 0.035);
 assert.strictEqual(config.QUALITY_GRADE.aminus, 0.02);
-assert.strictEqual(config.GATES.minEV.MLB, 0.03);
-assert.strictEqual(config.GATES.minEV.NFL, 0.03);
+assert.strictEqual(config.GATES.minEV.MLB, 0.02);
+assert.strictEqual(config.GATES.minEV.NFL, 0.02);
 assert.strictEqual(config.GATES.minCoverProb.MLB, 0);
 assert.strictEqual(config.GATES.minCoverProb.NFL, 0);
 
@@ -191,7 +191,7 @@ function stake(pick) {
     { pick: 'B at cap', rating: 'b', qualityGrade: 'b', units: '0.5u', edgePct: '0.8%', qualityScore: 0.008 },
   ], null);
   assert.strictEqual(already.picks[0].units, '0.5u');
-  assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
+  assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
   assert.strictEqual(capped.parlayLegs[0].legs[0].units, '1.25u');
   assert.strictEqual(capped.parlayLegs[0].legs[0].rating, 'b');
 }
@@ -209,9 +209,9 @@ function stake(pick) {
   assert.strictEqual(upper.picks[0].rating, 'B');
 }
 
-// A 1.8% edge is grade B and under the 3% main floor. It is not a main
-// straight and it is not a main parlay leg. The B cap still sizes a
-// formatted B object at 0.5u. A main parlay of 3% edges keeps the 0.5u ticket.
+// A 1.8% edge at 5% stake EV clears the flat 2% floor, so it is a straight
+// and a parlay leg. The B cap still sizes a formatted B object at 0.5u.
+// optimizeParlay still prices a floor-day ticket at PARLAY_FIXED_UNITS.
 {
   const pool = [
     candidate({
@@ -227,9 +227,9 @@ function stake(pick) {
       coverProb: 0.58, ev: 0.05, edgePct: 0.018, commenceTime: '2026-09-22T23:15:00Z',
     }),
   ];
-  assert.ok(pool.every((c) => select.passesPublishFloor(c) === false));
-  assert.strictEqual(select.selectStraights(pool, 3).length, 0);
-  assert.strictEqual(parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' }).length, 0);
+  assert.ok(pool.every((c) => select.passesPublishFloor(c) === true));
+  assert.strictEqual(select.selectStraights(pool, 3).length, 3);
+  assert.strictEqual(parlay.optimizeParlay(pool, [], { cardDate: '2026-09-22' }).length, 1);
   const sameLegsAsStraights = pool.map(c => select.toPickObject(c));
   for (const straight of sameLegsAsStraights) {
     assert.strictEqual(straight.rating, 'b');

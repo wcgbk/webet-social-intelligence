@@ -1,9 +1,9 @@
 'use strict';
 
-const { GATES, LEAN_MIN_EV, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
+const { GATES, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
 const { minEdgeFor, mainMinEv } = require('./edge_floor');
 const { formatMoneylinePick } = require('./odds_math');
-const { qualifiesAsLean } = require('./select');
+const { eligibleForLeanPool } = require('./select');
 const { adverseSteamReason } = require('./line_path');
 const { footballMarketGapReason } = require('./sports/_common');
 const { slateReason, nflProjectionGap, liveInPlayReason } = require('./selection_pass');
@@ -158,9 +158,9 @@ function gateReason(c, opts = {}) {
   if (projGap) return projGap;
 
   // News and injuries reprice. They do not exclude a side or a total.
-  // A starter cluster and a fresh QB Out stay in the pool. The EV and
-  // edge floors, applied to the repriced probability at the DraftKings
-  // price, are the only way that news removes a candidate.
+  // A starter cluster and a fresh QB Out stay in the pool. The EV floor,
+  // applied to the repriced probability at the best DraftKings or Hard
+  // Rock price, is the inclusion gate. Edge is displayed, not a gate.
 
   // Football model-vs-line gap. Only mode 'block' rejects, and that mode
   // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
@@ -195,23 +195,22 @@ function gateReason(c, opts = {}) {
   if (GATES.requireMajorBook && !c.liquid) return 'insufficient-liquidity';
   // minCoverProb stays 0. A missing cover still rejects. There is no flat
   // coverProb floor, so a 30% cover is not rejected for the cover itself.
-  // Main stake EV is the sport floor times the longshot band (1× through
-  // +150, 1.5× from +151 to +200, 2× from +201 to +300). EV under that
-  // returns ev-floor. applyGates can still promote that miss into a lean.
+  // Main stake EV is a flat 2% for every sport. Odds do not raise it.
+  // EV above 12% is a stale or bad price: logged, not a lean.
+  // EV under the floor returns ev-floor. applyGates can promote that
+  // miss, including a non-positive EV, into the lean pool. Edge is not
+  // an inclusion gate.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
+  const maxEV = Number(GATES.maxEV);
+  if (Number.isFinite(c.ev) && Number.isFinite(maxEV) && c.ev > maxEV + 1e-12) {
+    console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} reason=ev-above-12pct`);
+    return 'ev-stale';
+  }
   if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
   if (GATES.minPredictedClvCents != null
     && typeof c.predictedClv === 'number'
     && c.predictedClv < GATES.minPredictedClvCents) {
     return 'predictedClv-negative';
-  }
-  // Edge vs the de-vigged sharp. Non-positive still rejects. A positive
-  // edge under the odds-scaled floor rejects as edge-floor. A missing
-  // edge is not a number, so it is not this gate (cover/EV already ran).
-  if (Number.isFinite(c.edgePct) && c.edgePct <= 0) return 'nonpositive-edge';
-  if (Number.isFinite(c.edgePct)) {
-    const need = minEdgeFor(c.odds, c.uncertainty);
-    if (c.edgePct + 1e-12 < need) return 'edge-floor';
   }
 
   // Pinnacle (else Circa) 3:00→10:00 probability moved against this side.
@@ -224,8 +223,8 @@ function gateReason(c, opts = {}) {
   }
 
   // One US book, or a price the other majors do not offer, is logged.
-  // It does not block a positive edge. Verify still drops a published
-  // pick only when Hard Rock and the US majors both fail.
+  // It does not block a qualifying EV. Verify still keeps a published
+  // pick when Hard Rock or DraftKings can price it.
   if (failsPlaceability(c)) {
     const books = Array.isArray(c.placeableBooks) ? c.placeableBooks.length : 'na';
     console.log(`[omega-vnext] placeability-logged ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} books=${books}`);
@@ -250,18 +249,13 @@ function finiteEdge(c) {
 }
 
 /**
- * A floor miss can still be a lean. Fill rows need qualifiesAsLean
- * (EV > 0, edge >= 1.5%, DraftKings, pregame). A legacy row with stake
- * EV >= LEAN_MIN_EV and a positive edge stays in the pool so a non-lean
- * parlay search does not move. It does not fill a straight slot.
- * Structural rejects stay rejects.
+ * A 2% floor miss can still be a lean, including a non-positive EV.
+ * ev-stale and structural rejects stay rejects. Edge is not required.
+ * The row already cleared odds, slate, liquidity, and pregame.
  */
 function asLean(c, reason) {
-  if (reason !== 'ev-floor' && reason !== 'edge-floor') return null;
-  const ev = Number(c && c.ev);
-  const edge = finiteEdge(c);
-  const legacy = ev >= LEAN_MIN_EV && edge > 0;
-  if (!legacy && !qualifiesAsLean(c)) return null;
+  if (reason !== 'ev-floor') return null;
+  if (!eligibleForLeanPool(c)) return null;
   return { ...c, tier: 'lean', leanReason: reason };
 }
 

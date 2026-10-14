@@ -27,7 +27,7 @@ assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
 assert.strictEqual(config.NBA_SHADOW.enabled, true);
 assert.strictEqual(config.SPORTS_ENABLED.NHL, true);
-assert.strictEqual(config.GATES.minEV.NBA, 0.03);
+assert.strictEqual(config.GATES.minEV.NBA, 0.02);
 assert.strictEqual(config.GATES.minCoverProb.NBA, 0);
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.SPORT_SPREAD_STD.NBA, 12);

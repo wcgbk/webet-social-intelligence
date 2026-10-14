@@ -5,7 +5,7 @@
  * MODEL_VERSION: see lib/omega-vnext/config.js
  *
  * Store: edge-picks-omega → /omega
- * Product: up to 3 straights + 1 optimized parlay; empty OK; no lean force-fill;
+ * Product: 3 straights + a 3-leg parlay. A short 2% floor fills with leans.
  * no self-opt mutation. Grok = verifier/narrator only.
  */
 const { generateOmegaVnext, MODEL_VERSION } = require('./lib/omega-vnext');

@@ -38,7 +38,7 @@ function names(list) {
   return new Set((list || []).map((item) => item.matchup || item.side));
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.LEAN_MAX_UNITS, 0.5);
 assert.strictEqual(config.LEAN_PARLAY_UNITS, 0.25);
@@ -63,7 +63,7 @@ const sameGame = row('A @ B', 'A +3', { ev: 0.03, edgePct: 0.03, line: -3 });
 
 assert.strictEqual(qualifiesAsLean(highEv), true);
 assert.strictEqual(qualifiesAsLean(dkLadder), true);
-assert.strictEqual(qualifiesAsLean(thinEdge), false);
+assert.strictEqual(qualifiesAsLean(thinEdge), true);
 assert.strictEqual(qualifiesAsLean(noBook), false);
 assert.strictEqual(qualifiesAsLean(noLadder), false);
 assert.strictEqual(qualifiesAsLean(flatEv), false);
@@ -71,15 +71,16 @@ assert.strictEqual(qualifiesAsLean(negEv), false);
 assert.strictEqual(qualifiesAsLean(live), false);
 
 const gated = applyGates([floor, highEv, thinEdge], asOf);
-assert.strictEqual(gated.yesPool.length, 1);
-assert.strictEqual(gated.yesPool[0].side, 'B +3');
+assert.strictEqual(gated.yesPool.length, 2);
+assert.ok(gated.yesPool.some((c) => c.side === 'B +3'));
+assert.ok(gated.yesPool.some((c) => c.side === 'J +3'));
 assert.ok(gated.leanPool.some((c) => c.side === 'D +3' && c.leanReason === 'ev-floor'));
-assert.ok(gated.leanPool.some((c) => c.side === 'J +3' && c.leanReason === 'edge-floor'));
+assert.ok(!gated.leanPool.some((c) => c.leanReason === 'edge-floor'));
 
 const filled = selectStraights([floor], 3, [
   midEv, thinEdge, noBook, noLadder, flatEv, negEv, live, sameGame, dkLadder, highEv,
 ]);
-assert.deepStrictEqual(filled.map((c) => c.side), ['B +3', 'D +3', 'F +3']);
+assert.deepStrictEqual(filled.map((c) => c.side), ['B +3', 'J +3', 'D +3']);
 assert.deepStrictEqual(filled.map((c) => c.tier), ['floor', 'lean', 'lean']);
 assert.ok(filled.every((c) => c.matchup !== 'A @ B' || c.side === 'B +3'));
 
@@ -163,11 +164,11 @@ const floorTicket = optimizeParlay(floors, floors, { cardDate: CARD });
 assert.strictEqual(floorTicket.length, 1);
 assert.strictEqual(floorTicket[0].units, '0.5u');
 assert.ok(floorTicket[0].leanDay !== true);
-assert.strictEqual(applyDailyUnitCap([], floorTicket).parlayLegs[0].units, '0.5u');
+assert.strictEqual(applyDailyUnitCap([], floorTicket).parlayLegs[0].units, '0.25u');
 
 assert.strictEqual(shouldPublishNoPlays([], [highEv]), false);
-assert.strictEqual(shouldPublishNoPlays([], [thinEdge]), true);
-assert.strictEqual(shouldPublishNoPlays([], [negEv]), true);
+assert.strictEqual(shouldPublishNoPlays([], [thinEdge]), false);
+assert.strictEqual(shouldPublishNoPlays([], [negEv]), false);
 assert.strictEqual(shouldPublishNoPlays([{ tier: 'lean', pick: 'D +3' }], []), false);
 
 const dropped = {

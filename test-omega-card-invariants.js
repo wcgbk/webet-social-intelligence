@@ -9,7 +9,7 @@
  *   - never put two parlay legs on the same game
  *   - never publish a negative-EV straight or a negative-EV ticket
  *   - keep straight units inside the per-pick, B-grade, lean, 3.5u, and 4.0u caps
- *   - keep a floor-day parlay at 0.5u and a lean-day parlay at 0.25u
+ *   - keep every published parlay at 0.25u after the unit cap
  *   - return the same card for the same input
  */
 
@@ -96,7 +96,6 @@ function assertCard(card, label) {
     assert.ok(Number.isFinite(ev) && ev > 0, `${label} negative straight EV ${pickRow.pick} ${pickRow.ev}`);
     if (pickRow.tier === 'lean') {
       assert.ok(ev > 0, `${label} lean ${pickRow.ev}`);
-      assert.ok(parsePct(pickRow.edgePct) + 1e-6 >= config.LEAN_MIN_EDGE * 100, `${label} lean edge ${pickRow.edgePct}`);
       assert.ok(parseU(pickRow.units) <= config.LEAN_MAX_UNITS + 1e-9, `${label} lean units ${pickRow.units}`);
     } else {
       assert.ok(ev + 1e-6 >= config.GATES.minEV.default * 100, `${label} floor ${pickRow.ev}`);
@@ -116,8 +115,7 @@ function assertCard(card, label) {
   let parlayUnits = 0;
   for (const ticket of tickets) {
     parlayUnits += parseU(ticket.units);
-    const parlayUnitsExpected = ticket.leanDay === true ? config.LEAN_PARLAY_UNITS : config.PARLAY_FIXED_UNITS;
-    assert.strictEqual(parseU(ticket.units), parlayUnitsExpected, `${label} parlay units ${ticket.units}`);
+    assert.strictEqual(parseU(ticket.units), config.LEAN_PARLAY_UNITS, `${label} parlay units ${ticket.units}`);
     assert.ok(parsePct(ticket.ev) > 0, `${label} ticket EV ${ticket.ev}`);
     const legs = ticket.legs || [];
     assert.ok(legs.length >= 2 && legs.length <= 3, `${label} leg count ${legs.length}`);
@@ -246,9 +244,9 @@ function fixedPools() {
     {
       label: 'leans-only',
       pool: [
-        row(a, 'Over 43', { market: 'Total', line: 43, ev: 0.02, edgePct: 0.02, coverProb: 0.55 }),
-        row(b, 'Packers +3', { market: 'Spread', line: 3, ev: 0.018, edgePct: 0.016, coverProb: 0.54 }),
-        row(c, 'Jets ML', { market: 'Moneyline', line: null, odds: 120, ev: 0.02, edgePct: 0.02, coverProb: 0.52 }),
+        row(a, 'Over 43', { market: 'Total', line: 43, ev: 0.012, edgePct: 0.02, coverProb: 0.55 }),
+        row(b, 'Packers +3', { market: 'Spread', line: 3, ev: 0.011, edgePct: 0.016, coverProb: 0.54 }),
+        row(c, 'Jets ML', { market: 'Moneyline', line: null, odds: 120, ev: 0.01, edgePct: 0.02, coverProb: 0.52 }),
       ],
       expectStraights: 3,
       expectTier: 'lean',

@@ -386,21 +386,22 @@ function base(extra) {
   assert.ok(need > 0.03);
   const longshot = base({
     sport: 'MLB', market: 'Moneyline', side: 'A ML', odds: 300,
-    // +300 is the 2× band. 0.06 clears that EV floor so the 2% edge is the reject.
     edgePct: 0.02, ev: 0.06, coverProb: 0.30, uncertainty: 0.1,
   });
-  assert.strictEqual(gateReason(longshot, GATE), 'edge-floor');
-  const underEv = base({ ev: 0.02, edgePct: 0.04, coverProb: 0.53 });
+  assert.strictEqual(gateReason(longshot, GATE), 'odds-out-of-band');
+  const underEv = base({ ev: 0.019, edgePct: 0.04, coverProb: 0.53 });
   assert.strictEqual(gateReason(underEv, GATE), 'ev-floor');
+  const flatEv = base({ ev: 0.02, edgePct: 0.0, coverProb: 0.53 });
+  assert.strictEqual(gateReason(flatEv, GATE), null);
 
   const lowEvHighEdge = base({ matchup: 'A @ B', side: 'B -3', ev: 0.04, edgePct: 0.08, line: -3 });
   const highEvLowEdge = base({ matchup: 'C @ D', side: 'D +3', ev: 0.09, edgePct: 0.03, line: 3, homeTeam: 'D', awayTeam: 'C' });
   const dup = base({ matchup: 'C @ D', side: 'D +3', ev: 0.07, edgePct: 0.05, line: 3, homeTeam: 'D', awayTeam: 'C' });
   const ranked = selectTop10([lowEvHighEdge, highEvLowEdge, dup], 10);
-  assert.strictEqual(ranked[0].side, 'B -3');
-  assert.strictEqual(ranked[0].edgePct, 0.08);
-  assert.strictEqual(ranked[1].side, 'D +3');
-  assert.strictEqual(ranked[1].edgePct, 0.05);
+  assert.strictEqual(ranked[0].side, 'D +3');
+  assert.strictEqual(ranked[0].ev, 0.09);
+  assert.strictEqual(ranked[1].side, 'B -3');
+  assert.strictEqual(ranked[1].edgePct, 0.08);
   assert.strictEqual(ranked.length, 2);
   assert.strictEqual(ranked.filter((c) => c.matchup === 'C @ D').length, 1);
   const nearHighEv = base({ matchup: 'E @ F', side: 'F ML', ev: 0.08, edgePct: 0.050, homeTeam: 'F', awayTeam: 'E' });
@@ -411,9 +412,9 @@ function base(extra) {
     base({ matchup: 'I @ J', side: 'J ML', ev: 0.02, edgePct: 0.06, homeTeam: 'J', awayTeam: 'I' }),
     base({ matchup: 'K @ L', side: 'L ML', ev: 0.20, edgePct: 0.03, homeTeam: 'L', awayTeam: 'K' }),
   ], 10);
-  assert.strictEqual(wide[0].side, 'J ML', 'a gap past 0.2pp stays on edge');
+  assert.strictEqual(wide[0].side, 'L ML', 'higher stake EV ranks first');
   const rows = top10Rows([lowEvHighEdge, highEvLowEdge], 10);
-  assert.strictEqual(rows[0].game, 'A @ B');
+  assert.strictEqual(rows[0].game, 'C @ D');
   assert.strictEqual(rows[0].dkPrice, -110);
   assert.strictEqual(rows[0].book, 'draftkings');
   assert.ok('hrFlags' in rows[0]);
@@ -475,7 +476,9 @@ function base(extra) {
   assert.strictEqual(checked.picks.length, 1);
   assert.strictEqual(checked.picks[0].matchup, 'E @ F');
   assert.ok(!checked.picks.some((p) => p.matchup === 'G @ H'));
-  assert.strictEqual(card.parlayLegs[0].legs.length, 0);
+  assert.strictEqual(card.parlayLegs[0].legs.length, 1);
+  assert.strictEqual(card.parlayLegs[0].legs[0].matchup, 'E @ F');
+  assert.strictEqual(card.parlayLegs[0].units, '0.25u');
 }
 
 // ── 9. Depth outs and a starter cluster reprice. They do not exclude. ──

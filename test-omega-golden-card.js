@@ -209,7 +209,7 @@ function assertInvariants(card) {
   assert.ok(parlay, 'card publishes a parlay');
   assert.strictEqual(parlay.legs.length, 3, 'parlay has exactly 3 legs');
   assert.strictEqual(new Set(parlay.legs.map((leg) => matchupKey(leg))).size, 3, 'parlay legs are three games');
-  assert.strictEqual(parseU(parlay.units), config.PARLAY_FIXED_UNITS);
+  assert.strictEqual(parseU(parlay.units), config.LEAN_PARLAY_UNITS);
   assert.ok(parsePct(parlay.ev) > 0, parlay.ev);
   for (const leg of parlay.legs) {
     assert.strictEqual(leg.book, 'draftkings', leg.pick);
@@ -248,7 +248,7 @@ function main() {
     inputRegen: 'OMEGA_REGEN_GOLDEN=input node test-omega-golden-card.js',
     cardDate: frozen.cardDate,
     note: 'Rewrite only for an intentional selection change. Review the diff. The command does not fetch odds or write blobs.',
-    comment: 'Cover-probability stake cap (item 8, v12.3.57): Sacramento State ML coverProb 0.30 and Army ML and Air Force ML coverProb 0.32 are each under 0.42, so these mains are 0.5u. The 1u figure predates that cap. The cap is sizing only and does not change the pick, the edge, or the EV. Leans stay flat 0.5u.',
+    comment: 'v12.3.74: straights are the top in-band stake-EV sides. Prices outside -250..+250 and EV above 12% are not on the card. The published parlay is 0.25u.',
     straights: card.projection.straights,
     parlay: card.projection.parlay,
   };

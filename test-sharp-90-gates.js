@@ -22,10 +22,11 @@ const yes = {
   commenceTime: future, edgePct: 0.04,
 };
 const no = { ...yes, ev: -0.01, edgePct: -0.01, predictedClv: -2 };
-const { yesPool, rejected } = applyGates([yes, no]);
+const { yesPool, leanPool, rejected } = applyGates([yes, no]);
 assert.strictEqual(yesPool.length, 1);
-assert.strictEqual(rejected.length, 1);
-assert.strictEqual(rejected[0].rejectReason, 'ev-floor');
+assert.strictEqual(leanPool.length, 1);
+assert.strictEqual(leanPool[0].leanReason, 'ev-floor');
+assert.strictEqual(rejected.length, 0);
 
 const pool = [
   yes,

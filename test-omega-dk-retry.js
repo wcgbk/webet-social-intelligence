@@ -43,7 +43,7 @@ function totalPoint(event) {
     const complete = fixture.NFL[0];
     assert.strictEqual(needsDkRetry(missing), true);
     assert.strictEqual(needsDkRetry(complete), false);
-    assert.ok(indexSrc.includes('if (snap && snap.oddsBySport && oddsSnapshot)'));
+    assert.ok(indexSrc.includes('if (snap && snap.oddsBySport && oddsSnapshot && snap.storedSnapshot !== true && allowPaidOdds)'));
     assert.ok(indexSrc.includes('retryMissingDraftKings'));
 
     const liveTotal = {

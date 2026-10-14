@@ -359,7 +359,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(by['KC -2.5'].units, '1.25u');
   assert.strictEqual(by['KC -2.5'].rating, 'aplus');
   assert.strictEqual(by['PHI -3'].units, '1.00u');
-  assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
+  assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
   withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
     assert.strictEqual(flags.gameExposureEnabled(), true);
     const on = select.applyDailyUnitCap([
@@ -367,10 +367,10 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       { ...otherStraight },
     ], [ticket]);
     const onBy = Object.fromEntries(on.picks.map(p => [p.pick, p]));
-    assert.strictEqual(onBy['KC -2.5'].units, '1.25u', '1.25u plus 0.5u equals the 1.75u cap');
+    assert.strictEqual(onBy['KC -2.5'].units, '1.25u', '1.25u plus the 0.25u ticket stays under the 1.75u cap');
     assert.strictEqual(onBy['KC -2.5'].rating, 'aplus');
     assert.strictEqual(onBy['PHI -3'].units, '1.00u');
-    assert.strictEqual(on.parlayLegs[0].units, '0.5u');
+    assert.strictEqual(on.parlayLegs[0].units, '0.25u');
   });
   withEnv('OMEGA_GAME_EXPOSURE', '0', () => {
     const off = select.applyDailyUnitCap([
@@ -540,7 +540,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     assert.strictEqual(untouched.picks[0].units, '1.25u');
     assert.strictEqual(untouched.picks[0].status, 'void-pregame');
     const liveStraight = select.applyDailyUnitCap([{ ...straight }], [liveLeg]);
-    assert.strictEqual(liveStraight.picks[0].units, '1.25u', '1.25u plus 0.5u equals the 1.75u cap');
+    assert.strictEqual(liveStraight.picks[0].units, '1.25u', '1.25u plus the 0.25u ticket stays under the 1.75u cap');
   });
 }
 
@@ -585,7 +585,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(card.voidedPregame[0].status, 'void-pregame');
   assert.strictEqual(card.voidedPregame[0].pick, 'KC -2.5');
   assert.strictEqual(card.parlayLegs.length, 1);
-  assert.strictEqual(card.parlayLegs[0].units, '0.5u');
+  assert.strictEqual(card.parlayLegs[0].units, '0.25u');
   withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
     const onCard = {
       picks: [

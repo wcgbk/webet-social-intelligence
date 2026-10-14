@@ -72,18 +72,18 @@ function side(extra) {
     ...extra,
   };
 }
-assert.strictEqual(gateReason(side({ edgePct: 0.01 }), asOf), 'edge-floor');
-assert.strictEqual(gateReason(side({ edgePct: 0.02 }), asOf), 'edge-floor');
-assert.strictEqual(gateReason(side({ edgePct: 0.029, ev: 0.05 }), asOf), 'edge-floor');
+assert.strictEqual(gateReason(side({ edgePct: 0.01 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0.02 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0.029, ev: 0.05 }), asOf), null);
 assert.strictEqual(gateReason(side({ edgePct: minEdgeFor(-110, 0.15) }), asOf), null);
-assert.strictEqual(gateReason(side({ odds: 200, edgePct: 0.02, coverProb: 0.40, ev: 0.05 }), asOf), 'edge-floor');
+assert.strictEqual(gateReason(side({ odds: 200, edgePct: 0.02, coverProb: 0.40, ev: 0.05 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 200, edgePct: 0.03, coverProb: 0.40, ev: 0.05 }), asOf), null);
-assert.strictEqual(gateReason(side({ edgePct: 0.02, uncertainty: 0.30 }), asOf), 'edge-floor');
+assert.strictEqual(gateReason(side({ edgePct: 0.02, uncertainty: 0.30 }), asOf), null);
 assert.strictEqual(gateReason(side({ edgePct: 0.03, uncertainty: 0.30 }), asOf), null);
 assert.strictEqual(gateReason(side({
   odds: 200, coverProb: 0.30, edgePct: 0.04, ev: 0.05, side: 'B ML', market: 'Moneyline', line: null,
 }), asOf), null);
-assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.04 }), asOf), 'nonpositive-edge');
+assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.04 }), asOf), null);
 assert.strictEqual(gateReason(side({ ev: -0.01, edgePct: 0.04 }), asOf), 'ev-floor');
 {
   const missing = side();
@@ -92,8 +92,11 @@ assert.strictEqual(gateReason(side({ ev: -0.01, edgePct: 0.04 }), asOf), 'ev-flo
 }
 assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
-assert.strictEqual(config.GATES.minEV.NFL, 0.03);
-assert.strictEqual(config.GATES.minEV.NCAAF, 0.03);
+assert.strictEqual(config.GATES.minEV.NFL, 0.02);
+assert.strictEqual(config.GATES.minEV.NCAAF, 0.02);
+assert.strictEqual(config.GATES.maxEV, 0.12);
+assert.strictEqual(config.GATES.minAmericanOdds, -250);
+assert.strictEqual(config.GATES.maxAmericanOdds, 250);
 assert.strictEqual(config.LEAN_MIN_EV, 0.015);
 assert.strictEqual(config.LEAN_MAX_UNITS, 0.5);
 assert.strictEqual(config.PARLAY_MIN_COVER, 0.45);
@@ -102,23 +105,21 @@ const mixed = applyGates([
   side({ edgePct: 0.01, side: 'Thin +3', matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C' }),
   side({ edgePct: 0.04, side: 'Fat +3', matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E' }),
 ], asOf);
-assert.strictEqual(mixed.yesPool.length, 1);
-assert.strictEqual(mixed.yesPool[0].side, 'Fat +3');
-assert.strictEqual(mixed.leanPool.length, 1);
-assert.strictEqual(mixed.leanPool[0].side, 'Thin +3');
-assert.strictEqual(mixed.leanPool[0].leanReason, 'edge-floor');
+assert.strictEqual(mixed.yesPool.length, 2);
+assert.ok(mixed.yesPool.some((c) => c.side === 'Fat +3'));
+assert.ok(mixed.yesPool.some((c) => c.side === 'Thin +3'));
+assert.strictEqual(mixed.leanPool.length, 0);
 assert.strictEqual(mixed.rejected.length, 0);
 {
   const mixedCard = selectStraights(mixed.yesPool, 3, mixed.leanPool);
-  assert.strictEqual(mixedCard.length, 1, 'edge under 1.5% stays in the lean pool and does not fill a slot');
-  assert.deepStrictEqual(mixedCard.map(c => c.tier), ['floor']);
-  assert.strictEqual(mixedCard[0].side, 'Fat +3');
+  assert.strictEqual(mixedCard.length, 2);
+  assert.ok(mixedCard.every((c) => c.tier === 'floor'));
 }
 
 const floorA = side({ edgePct: 0.05, ev: 0.06, side: 'Floor A' });
 const floorB = side({ edgePct: 0.04, ev: 0.05, side: 'Floor B', matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C' });
 const leanRow = side({
-  edgePct: 0.025, ev: 0.02, coverProb: 0.534, side: 'Lean C',
+  edgePct: 0.0, ev: 0.019, coverProb: 0.534, side: 'Lean C',
   matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E',
 });
 const leanGated = applyGates([leanRow], asOf);
@@ -134,16 +135,16 @@ assert.strictEqual(leanPick.tier, 'lean');
 assert.ok(parseFloat(leanPick.units) <= 0.5, leanPick.units);
 assert.strictEqual(selectStraights([floorA], 3, []).length, 1);
 const secondLean = side({
-  edgePct: 0.022, ev: 0.018, coverProb: 0.53, side: 'Lean D',
+  edgePct: 0.0, ev: 0.018, coverProb: 0.53, side: 'Lean D',
   matchup: 'G @ H', homeTeam: 'H', awayTeam: 'G',
 });
 const leansOnly = selectStraights([], 3, [leanRow, secondLean]);
 assert.strictEqual(leansOnly.length, 2);
 assert.deepStrictEqual(leansOnly.map(c => c.side), ['Lean C', 'Lean D']);
 assert.ok(leansOnly.every(c => c.tier === 'lean'));
-const edgeLean = applyGates([side({ edgePct: 0.01, ev: 0.05 })], asOf);
-assert.strictEqual(edgeLean.leanPool.length, 1);
-assert.strictEqual(edgeLean.leanPool[0].leanReason, 'edge-floor');
+const edgeLean = applyGates([side({ edgePct: 0.0, ev: 0.05 })], asOf);
+assert.strictEqual(edgeLean.yesPool.length, 1);
+assert.strictEqual(edgeLean.leanPool.length, 0);
 const belowLean = applyGates([side({ edgePct: 0.02, ev: 0.01 })], asOf);
 assert.strictEqual(belowLean.leanPool.length, 1);
 assert.strictEqual(belowLean.leanPool[0].leanReason, 'ev-floor');
@@ -174,7 +175,8 @@ assert.ok(parseFloat(fallback[0].ev) > 0, fallback[0].ev);
 // ── Generate wires the lock without flipping replayLike ──
 const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
 assert.ok(indexSrc.includes('resolveGenerateOddsSnapshot(dateISO, { ...opts, nowMs })'));
-assert.ok(indexSrc.includes('historicalSnapshot: oddsSnapshot'));
+assert.ok(indexSrc.includes('historicalSnapshot: allowPaidOdds ? oddsSnapshot : null'));
+assert.ok(indexSrc.includes('storedBoardOnly: !allowPaidOdds'));
 assert.ok(indexSrc.includes('const replayLike = !!(opts.historicalSnapshot || opts.replay)'));
 assert.ok(indexSrc.includes('warnCaptureHealth(captureHealth, dateISO)'));
 assert.ok(!indexSrc.includes("err.code = 'CAPTURE_HEALTH'"));
@@ -295,25 +297,17 @@ global.fetch = async (url) => {
       yes.length,
       `10/10 yes pool left the gates: ${gatedYes.rejected.map(r => `${r.side}:${r.rejectReason}`).join(', ')}`,
     );
-    assert.ok(gatedYes.yesPool.every((c) => c.edgePct + 1e-12 >= minEdgeFor(c.odds, c.uncertainty)));
+    assert.ok(gatedYes.yesPool.every((c) => Number(c.ev) + 1e-12 >= 0.02 && Number(c.ev) <= 0.12 + 1e-9));
     const gated = applyGates(board, asOf1010);
-    const sacMl = gated.yesPool.find(c => c.side === 'Sacramento State Hornets' && c.odds === 270);
-    assert.ok(sacMl, '30% cover with EV and edge above the curve is a floor play');
-    assert.ok(sacMl.coverProb < 0.45);
+    const sacMl = [...gated.yesPool, ...gated.leanPool, ...gated.rejected]
+      .find(c => c.side === 'Sacramento State Hornets' && c.odds === 270);
+    assert.ok(sacMl, '+270 moneyline stays on the board');
+    assert.strictEqual(sacMl.rejectReason, 'odds-out-of-band');
     const straights = selectStraights(gated.yesPool, 3, gated.leanPool);
     assert.strictEqual(straights.length, 3);
-    assert.ok(straights.every(s => s.tier === 'floor'));
     const labels = straights.map(s => `${s.side} @ ${s.line}`);
-    assert.ok(straights.some(s => /Over 38\.5/.test(s.side) && s.line === 38.5), labels.join(' | '));
-    assert.ok(!straights.some(s => /Over 39\.5/.test(s.side) && s.line === 39.5), labels.join(' | '));
     assert.strictEqual(new Set(straights.map(s => s.matchup)).size, 3, labels.join(' | '));
-    // +9 bovada (edge 4.26%) outranks +8.5 draftkings (edge 4.1%). The morning
-    // file had vetoed +9 for placeability; that check logs and does not reject.
-    // Over 39.5 is the same game as Over 38.5, so it does not take a second straight.
-    assert.ok(straights.some(s => /Sacramento State/.test(s.side) && s.line === 9), labels.join(' | '));
-    assert.strictEqual(gated.yesPool.length, 12);
-    assert.strictEqual(gated.leanPool.length, 21);
-    assert.ok(gated.yesPool.every((c) => c.tier === 'floor' && c.edgePct + 1e-12 >= minEdgeFor(c.odds, c.uncertainty)));
+    assert.ok(gated.yesPool.every((c) => c.tier === 'floor' && Number(c.ev) + 1e-12 >= 0.02 && Number(c.ev) <= 0.12 + 1e-9));
     assert.ok(gated.leanPool.every((c) => c.tier === 'lean'));
     assert.ok(!straights.some(s => /40\.5/.test(String(s.side)) || s.line === 40.5));
     assert.ok(!straights.some(s => /\+9\.5/.test(s.side) || s.line === 9.5));

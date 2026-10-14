@@ -57,6 +57,45 @@ async function fetchJson(url, timeoutMs = 12000) {
  * Odds API multi-sport snapshot. Timestamped. Does not burn extras beyond one pass/sport.
  */
 async function fetchOddsMultiSport(dateISO, opts = {}) {
+  if (opts.storedBoardOnly || opts.preferStoredSnapshot) {
+    let stored = null;
+    try {
+      const { loadStoredTenAmBoard } = require('./stored_board');
+      stored = await loadStoredTenAmBoard(dateISO, opts);
+    } catch (e) {
+      console.error(`[omega-vnext/ingest] stored 10:00 read soft-fail: ${e && e.message}`);
+    }
+    if (stored && stored.bySport) {
+      const bySport = {};
+      let n = 0;
+      for (const [label, events] of Object.entries(stored.bySport)) {
+        const filtered = filterEventsSameEtDay(events, dateISO);
+        bySport[label] = filtered;
+        n += filtered.length;
+      }
+      if (n > 0) {
+        console.log(`[omega-vnext/ingest] odds source=stored-10:00 events=${n} paidPull=0`);
+        return {
+          ...stored,
+          bySport,
+          storedSnapshot: true,
+          snapshotNote: 'stored-10:00',
+          paidPull: 0,
+        };
+      }
+    }
+    if (opts.storedBoardOnly) {
+      console.log('[omega-vnext/ingest] odds source=stored-10:00-missing paidPull=0');
+      return {
+        bySport: {},
+        fetchedAt: new Date().toISOString(),
+        snapshotNote: 'stored-10:00-missing',
+        storedSnapshot: false,
+        oddsErrors: [],
+        paidPull: 0,
+      };
+    }
+  }
   const apiKey = process.env.ODDS_API_KEY;
   const out = { bySport: {}, fetchedAt: new Date().toISOString(), snapshotNote: 'live', oddsErrors: [] };
   if (!apiKey) {
@@ -1346,6 +1385,8 @@ async function ingest(dateISO, opts = {}) {
     snapshotNote: odds.snapshotNote,
     oddsSnapshotTimestamp: odds.oddsSnapshotTimestamp || null,
     oddsErrors: odds.oddsErrors || [],
+    storedSnapshot: odds.storedSnapshot === true,
+    paidPull: odds.paidPull != null ? odds.paidPull : null,
   };
 }
 

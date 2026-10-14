@@ -37,7 +37,7 @@ const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 
 
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.deepStrictEqual(config.SHRINK_K, { Total: 0.58, Spread: 0.68, Moneyline: 0.73, default: 0.63 });
-assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.03, NFL: 0.03, NCAAF: 0.03, NBA: 0.03, NHL: 0.03, default: 0.03 });
+assert.deepStrictEqual(config.GATES.minEV, { MLB: 0.02, NFL: 0.02, NCAAF: 0.02, NBA: 0.02, NHL: 0.02, default: 0.02 });
 assert.deepStrictEqual(config.GATES.minCoverProb, { MLB: 0, NFL: 0, NCAAF: 0, NBA: 0, default: 0 });
 assert.deepStrictEqual(config.POINT_SHRINK, {
   NFL: { total: 1, margin: 1 },
@@ -287,13 +287,13 @@ function assertEdgesNeverGrow(cands, ev) {
   const midGated = applyGates(midSlate);
   const midScored = midGated.yesPool.find(c => c.side === midOver.side && c.matchup === midOver.matchup);
   assert.strictEqual(midScored, undefined);
-  const midRejected = midGated.rejected.find(c => c.side === midOver.side && c.matchup === midOver.matchup);
-  assert.ok(midRejected, '9.5-point NFL total was not gated');
-  assert.strictEqual(midRejected.rejectReason, 'ev-floor');
-  assert.notStrictEqual(midRejected.rejectReason, 'nfl-projection-gap');
-  assert.strictEqual(midRejected.gapFlag, true);
-  assert.strictEqual(gateReason(midRejected), 'ev-floor');
-  assert.strictEqual(gateReason({ ...midRejected, gapFlag: false }), 'ev-floor');
+  const midLean = midGated.leanPool.find(c => c.side === midOver.side && c.matchup === midOver.matchup);
+  assert.ok(midLean, '9.5-point NFL total was not gated');
+  assert.strictEqual(midLean.leanReason, 'ev-floor');
+  assert.strictEqual(midLean.gapFlag, true);
+  assert.strictEqual(gateReason(midLean), 'ev-floor');
+  assert.notStrictEqual(gateReason(midLean), 'nfl-projection-gap');
+  assert.strictEqual(gateReason({ ...midLean, gapFlag: false }), 'ev-floor');
   const midCleared = midGated.yesPool.map(c => ({ ...c, gapFlag: false }));
   const picked = selectStraights(midGated.yesPool, 3).map(c => `${c.matchup}|${c.side}`);
   const pickedClear = selectStraights(midCleared, 3).map(c => `${c.matchup}|${c.side}`);

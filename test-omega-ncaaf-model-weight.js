@@ -13,7 +13,7 @@ const { blendWithMarket, totalDetail, spreadDetail, mlDetail } = require(path.jo
 const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.deepStrictEqual(config.NCAAF_MODEL_WEIGHT, { ml: 0.10, spread: 0.10, total: 0.10 });
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
 
 const home = 'Ohio State Buckeyes';
 const away = 'Iowa Hawkeyes';

@@ -3,9 +3,10 @@
 /**
  * 10:15 ET news re-rank.
  * Uses the prices already on the 10:00 card. Does not call the Odds API.
- * A postponed game or a main that falls under the 3% edge floor is replaced
- * from that priced pool. ESPN failure, or a clock after 10:30 ET, keeps the
- * 10:00 card (last known good). Leans stay on the lean rules.
+ * A postponed game or a main that falls under the 2% EV floor is replaced
+ * from that priced pool. Rank is stake EV, then edge. ESPN failure, or a
+ * clock after 10:30 ET, keeps the 10:00 card (last known good). A row
+ * under the floor that is not ev-stale can fill as a lean.
  */
 
 const { etParts } = require('../et-schedule');
@@ -21,7 +22,8 @@ const {
 const { parlayFromStraights } = require('./parlay');
 const { parseEdgeFraction } = require('./odds_math');
 const { recordRankedList, top10Rows } = require('./selection_pass');
-const { compareByEdge } = require('./select');
+const { compareByEv } = require('./select');
+const { GATES } = require('./config');
 const { CONTEXT_INPUTS } = require('./timeline');
 
 const RERANK_WITHIN_MIN = 20 * 60;
@@ -214,8 +216,11 @@ async function rerankCard(opts = {}) {
     const id = `${matchupKey(row)}|${sideOf(row)}`;
     if (seen.has(id)) continue;
     seen.add(id);
+    const ev = numEv(row);
+    const maxEV = Number(GATES.maxEV);
+    const stale = Number.isFinite(ev) && Number.isFinite(maxEV) && ev > maxEV + 1e-12;
     if (passesPublishFloor(row)) floor.push({ ...row, tier: 'floor' });
-    else if (passesLeanFill(row)) leans.push({ ...row, tier: 'lean' });
+    else if (!stale && Number.isFinite(ev)) leans.push({ ...row, tier: 'lean' });
   }
   const selected = selectStraights(floor, 3, leans);
   const sameList = selected.length === original.picks.length
@@ -259,7 +264,7 @@ async function rerankCard(opts = {}) {
   working.selection = working.selection && typeof working.selection === 'object' ? working.selection : {};
   working.selection.window = '10:00-10:15';
   working.selection.rerankWindow = '10:15-10:30';
-  working.selection.rankedBy = 'edge';
+  working.selection.rankedBy = 'ev';
   working.selection.onePerGame = true;
   working.selection.top10 = recordRankedList(nextPicks, top10Rows(floor, 10));
   working.selection.rerankedAt = now.toISOString();
@@ -309,7 +314,7 @@ function rerankTop10(original, working, news, now) {
     if (hit.coverProb != null) row.coverProb = hit.coverProb;
   }
   const kept = top.filter((row) => row && !voidKeys.has(matchupKey(row)));
-  kept.sort((a, b) => compareByEdge(
+  kept.sort((a, b) => compareByEv(
     { edgePct: numEdge(a), ev: numEv(a) },
     { edgePct: numEdge(b), ev: numEv(b) },
   ));
@@ -322,7 +327,7 @@ function rerankTop10(original, working, news, now) {
   working.selection.stage = 'reranked';
   working.selection.window = '10:00-10:15';
   working.selection.rerankWindow = '10:15-10:30';
-  working.selection.rankedBy = 'edge';
+  working.selection.rankedBy = 'ev';
   working.selection.onePerGame = true;
   working.selection.rerankedAt = now.toISOString();
   working.selection.rerankReason = news && news.dropped ? 'news-drop' : (before === after ? 'context' : 're-rank');

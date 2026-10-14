@@ -60,8 +60,8 @@ function baseDeps(extra) {
   const prevNoWrite = process.env.OMEGA_REPLAY_NO_WRITE;
   delete process.env.OMEGA_REPLAY_NO_WRITE;
   assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
-  assert.strictEqual(config.GATES.minEV.MLB, 0.03);
-  assert.strictEqual(config.GATES.minEV.NFL, 0.03);
+  assert.strictEqual(config.GATES.minEV.MLB, 0.02);
+  assert.strictEqual(config.GATES.minEV.NFL, 0.02);
   assert.strictEqual(config.GATES.minCoverProb.MLB, 0);
   assert.strictEqual(config.KELLY_FRACTION, 0.25);
   assert.strictEqual(cand.CANDIDATE_SIDE_CAP, 20);
@@ -100,17 +100,17 @@ function baseDeps(extra) {
   assert.strictEqual(cand.isNearMissRejection(sampled.rows[0]), false);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'MLB', ev: 0.02 }), true);
   assert.strictEqual(cand.isNearMissRejection(sampled.rows[1]), false);
-  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'MLB', ev: 0.01 }), false);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'MLB', ev: 0.01 }), true);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: -0.01 }), true);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: 0.47 }), false);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'coverProb-floor', sport: 'MLB', coverProb: -0.02 }), false);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'nonpositive-edge', edge: -0.014 }), true);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'nonpositive-edge', edge: -0.02 }), false);
-  // Floor is 3%. A -1% EV is 4pp short, outside the 1.5pp near-miss band.
-  // 2% EV is 1pp short and still a near miss. 1.2% is 1.8pp short.
+  // Floor is 2%. The near-miss band is 1.5pp. -1% is 3pp short.
+  // 2% is on the floor. 1.2% is 0.8pp short.
   assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: -0.01 }), false);
   assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: 0.02 }), true);
-  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: 0.012 }), false);
+  assert.strictEqual(cand.isNearMissRejection({ reason: 'ev-floor', sport: 'NFL', ev: 0.012 }), true);
 
   // Cap: 15 yes-pool rows outrank near-misses; only 20 sides survive.
   const candidateTable = [];
@@ -130,7 +130,7 @@ function baseDeps(extra) {
   for (let i = 0; i < 10; i++) {
     rejections.push({
       sport: 'MLB', matchup: `Miss ${i} @ Opp`, side: `Under ${i}.5`, market: 'Total',
-      reason: 'ev-floor', odds: -110, edge: -0.001 * (i + 1), ev: 0.03 - 0.001 * (i + 1),
+      reason: 'ev-floor', odds: -110, edge: -0.001 * (i + 1), ev: 0.02 - 0.001 * (i + 1),
       coverProb: 0.50, fair_sharp_p: 0.50, commenceTime: COMMENCE, line: i + 0.5,
     });
   }

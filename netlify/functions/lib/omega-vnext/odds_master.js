@@ -227,23 +227,25 @@ function quotesByMarket(quotes) {
 
 async function defaultRead(key) {
   assertPriceKey(key);
+  // Same slash-key split as the line-move store. A null SDK get still tries
+  // the percent-encoded REST key that defaultWrite uses.
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(STORE);
-    return await auditBlobCall('GET', `${STORE}/${key}`, () => store.get(key, { type: 'json' }));
-  } catch (_) {
-    try {
-      const token = process.env.NETLIFY_AUTH_TOKEN;
-      if (!token) return null;
-      const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${STORE}/${encodeURIComponent(key)}`;
-      const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp || !resp.ok) return null;
-      return await resp.json();
-    } catch (err) {
-      return null;
-    }
+    const got = await auditBlobCall('GET', `${STORE}/${key}`, () => store.get(key, { type: 'json' }));
+    if (got != null) return got;
+  } catch (_) { /* REST below */ }
+  try {
+    const token = process.env.NETLIFY_AUTH_TOKEN;
+    if (!token) return null;
+    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${STORE}/${encodeURIComponent(key)}`;
+    const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!resp || !resp.ok) return null;
+    return await resp.json();
+  } catch (err) {
+    return null;
   }
 }
 

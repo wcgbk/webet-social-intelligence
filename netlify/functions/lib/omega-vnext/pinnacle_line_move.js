@@ -903,24 +903,51 @@ function applyMeta(doc, meta) {
   return doc;
 }
 
+function signedBlobUrl(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  if (body.schema != null || body.events != null || body.checks != null) return null;
+  if (typeof body.url !== 'string' || !/^https:\/\//i.test(body.url)) return null;
+  return body.url;
+}
+
+async function readBlobJson(resp, fetchImpl) {
+  if (!resp || !resp.ok) return null;
+  const body = await resp.json();
+  const signed = signedBlobUrl(body);
+  if (!signed) return body;
+  const next = await fetchImpl(signed);
+  if (!next || !next.ok) return null;
+  return await next.json();
+}
+
 async function defaultRead(key) {
+  // The SDK stores a slash key. Writes that fell through to the REST API
+  // stored the same key percent-encoded (date%2F…, NHL%2F…). A null SDK
+  // read is not proof the blob is missing, so the encoded REST key is next.
+  let fromSdk;
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(LINE_MOVE_STORE);
-    return await auditBlobCall('GET', `${LINE_MOVE_STORE}/${key}`, () => store.get(key, { type: 'json' }));
+    const read = store.get(key, { type: 'json' });
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('blob-read-timeout')), 8000);
+    });
+    fromSdk = await auditBlobCall('GET', `${LINE_MOVE_STORE}/${key}`, () => Promise.race([read, timeout]));
   } catch (_) {
-    try {
-      const token = process.env.NETLIFY_AUTH_TOKEN;
-      if (!token) return null;
-      const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${LINE_MOVE_STORE}/${key}`;
-      const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp || !resp.ok) return null;
-      return await resp.json();
-    } catch (err) {
-      return null;
-    }
+    fromSdk = undefined;
+  }
+  if (fromSdk != null) return fromSdk;
+  try {
+    const token = process.env.NETLIFY_AUTH_TOKEN;
+    if (!token) return null;
+    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${LINE_MOVE_STORE}/${encodeURIComponent(key)}`;
+    const fetchImpl = resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' });
+    const resp = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await readBlobJson(resp, fetchImpl);
+  } catch (err) {
+    return null;
   }
 }
 

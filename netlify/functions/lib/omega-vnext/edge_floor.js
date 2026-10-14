@@ -40,13 +40,11 @@ const { americanToImplied } = require('./odds_math');
  *
  * minCoverProb stays 0. There is no flat cover floor.
  *
- * A main also needs stake EV at mainMinEv and edge >= 3% (MAIN_EDGE_FLOOR).
- * The odds-scaled curve still raises that 3% edge when plus-money or
- * uncertainty asks for more. mainMinEv is the sport EV floor times the
- * longshot band: 1× from −300 through +150, 1.5× from +151 through +200,
- * and 2× from +201 through +300. At a 3% base those bands are 3%, 4.5%,
- * and 6%. A main under 3% edge does not publish. A lean is a separate
- * tier at 1.5% edge and positive EV. This module does not apply the lean floor.
+ * v12.3.74 does not use this curve as an inclusion gate. minEdgeFor stays
+ * exported for diagnostics and tiebreaks. A main publishes on stake EV.
+ * mainMinEv is the flat sport floor. Odds do not scale it. The longshot
+ * multiplier stays exported so the pure math can be checked, and gates
+ * do not call it.
  */
 const EDGE_FLOOR = Object.freeze({
   atMinus110: 0.0175,
@@ -89,11 +87,15 @@ function evBandMultiplier(odds) {
   return 1;
 }
 
-/** Sport minEV times the longshot band. A missing base uses 3%. */
+/**
+ * Flat sport EV floor. Odds do not scale it. A missing base uses 2%.
+ * evBandMultiplier is not an inclusion gate.
+ */
 function mainMinEv(odds, base) {
+  void odds;
   const n = Number(base);
-  const b = base == null || base === '' || !Number.isFinite(n) ? 0.03 : n;
-  return +((b * evBandMultiplier(odds)).toFixed(6));
+  const b = base == null || base === '' || !Number.isFinite(n) ? 0.02 : n;
+  return +b.toFixed(6);
 }
 
 module.exports = {

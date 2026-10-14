@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * Selection pass. DraftKings is the execution book. Hard Rock flags only.
- * Ranking for the top 10 is edge, one candidate per game. Straights are the
- * first three of that list. The parlay is those three. Hard Rock coverage
- * is review-only and does not block publish.
+ * Selection pass. The displayed price is the best DraftKings or Hard Rock
+ * American price. Ranking for the top 10 is stake EV, one candidate per
+ * game. Edge breaks a tie. Hard Rock coverage is review-only and does not
+ * block publish.
  * See SELECTION_RULES.md.
  *
  * This module must not require gates, parlay, ingest, or hr_autocorrect.
@@ -12,9 +12,10 @@
 
 const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
-const { minEdgeFor } = require('./edge_floor');
+const { mainMinEv } = require('./edge_floor');
+const { GATES } = require('./config');
 const { formatAmerican, etCalendarDate, parseEdgeFraction, americanToDecimal } = require('./odds_math');
-const { toPickObject, matchupKey, compareByEdge } = require('./select');
+const { toPickObject, matchupKey, compareByEv } = require('./select');
 
 const DK_BOOK = 'draftkings';
 const HR_BOOK = 'hardrockbet';
@@ -121,11 +122,57 @@ function priceAtDraftKings(c) {
 }
 
 /**
- * Keep a candidate only when DraftKings posts that side.
- * A candidate with no bookPrices array is a synthetic fixture and is left
- * on its existing price so gate and select tests stay eligible.
- * The dropped row is the backfill signal: the next DK-priced candidate
- * remains in the pool and can fill the bet.
+ * Best Hard Rock price on this side. Used when DraftKings has no quote.
+ * The line is the Hard Rock point. Stake EV uses that American price.
+ */
+function priceAtHardRock(c) {
+  const rows = [];
+  const push = (american, point) => {
+    const price = Number(american);
+    if (!Number.isFinite(price)) return;
+    const pt = point != null && point !== '' ? Number(point) : null;
+    rows.push({ book: HR_BOOK, american: price, point: Number.isFinite(pt) ? pt : null });
+  };
+  if (Array.isArray(c && c.bookPrices)) {
+    for (const p of c.bookPrices) {
+      if (!p || canonicalizeBook(p.book || p.key) !== HR_BOOK) continue;
+      push(p.american != null ? p.american : p.price, p.point);
+    }
+  }
+  if (c && c.hardRock && typeof c.hardRock === 'object') {
+    push(c.hardRock.american != null ? c.hardRock.american : c.hardRock.price, c.hardRock.point);
+  }
+  if (!rows.length) return null;
+  let best = rows[0];
+  let bestDec = americanToDecimal(best.american);
+  for (const row of rows.slice(1)) {
+    const dec = americanToDecimal(row.american);
+    if (Number.isFinite(dec) && (!Number.isFinite(bestDec) || dec > bestDec + 1e-12)) {
+      best = row;
+      bestDec = dec;
+    }
+  }
+  const line = best.point != null ? best.point : (c.line != null ? c.line : null);
+  return attachEv({
+    ...c,
+    odds: best.american,
+    oddsStr: formatAmerican(best.american),
+    book: HR_BOOK,
+    priceBook: HR_BOOK,
+    displayBook: HR_BOOK,
+    line,
+    hardRock: { american: best.american, point: best.point },
+    executionBook: HR_BOOK,
+    evBasis: 'stake-ev-at-best-us-price',
+  });
+}
+
+/**
+ * Keep a candidate when DraftKings or Hard Rock posts that side.
+ * DraftKings is priced first, then the better of DraftKings and Hard Rock
+ * on the DraftKings line. Hard Rock alone is kept. A candidate with no
+ * bookPrices array is a synthetic fixture and stays on its existing price.
+ * The dropped row is no-draftkings-line only when both books are missing.
  */
 function applyExecutionBook(candidates) {
   const kept = [];
@@ -137,11 +184,16 @@ function applyExecutionBook(candidates) {
       continue;
     }
     const priced = priceAtDraftKings(c);
-    if (!priced) {
-      excluded.push({ ...c, excludeReason: 'no-draftkings-line' });
+    if (priced) {
+      kept.push(stampHr(applyBestUsDisplay(priced)));
       continue;
     }
-    kept.push(stampHr(applyBestUsDisplay(priced)));
+    const hr = priceAtHardRock(c);
+    if (hr) {
+      kept.push(stampHr(hr));
+      continue;
+    }
+    excluded.push({ ...c, excludeReason: 'no-draftkings-line' });
   }
   return { candidates: kept, excluded };
 }
@@ -315,13 +367,12 @@ function edgeOf(c) {
 }
 
 /**
- * Floor pool. Edge descending, one candidate per game. Within 0.2
- * percentage points of edge, higher stake EV wins. A second market on a
- * game already taken is skipped.
+ * Floor pool. Stake EV descending, one candidate per game. An EV tie
+ * uses edge. A second market on a game already taken is skipped.
  */
 function selectTop10(pool, n) {
   const limit = n == null ? 10 : n;
-  const sorted = [...(pool || [])].sort(compareByEdge);
+  const sorted = [...(pool || [])].sort(compareByEv);
   const seen = new Set();
   const out = [];
   for (const c of sorted) {
@@ -624,15 +675,62 @@ function asFraction(v) {
   return parseEdgeFraction(v);
 }
 
-function bookIsDkOrUnknown(c) {
+function bookIsRetailOrUnknown(c) {
   if (!c || c.book == null || c.book === '') return true;
-  return canonicalizeBook(c.book) === DK_BOOK;
+  const book = canonicalizeBook(c.book);
+  return book === DK_BOOK || book === HR_BOOK;
+}
+
+function staleEv(ev) {
+  const maxEV = Number(GATES.maxEV);
+  return Number.isFinite(ev) && Number.isFinite(maxEV) && ev > maxEV + 1e-12;
+}
+
+function takeBackfill(c, now, cardDate, slateOpts, used, minEv) {
+  if (!c || used.has(matchupKey(c))) return null;
+  if (!bookIsRetailOrUnknown(c)) return null;
+  const odds = asAmerican(c.odds);
+  const ev = asFraction(c.ev);
+  const edge = edgeOf(c);
+  const cover = asFraction(c.coverProb);
+  if (!Number.isFinite(odds) || !Number.isFinite(ev)) return null;
+  if (staleEv(ev)) return null;
+  if (minEv != null && !(ev + 1e-12 >= minEv)) return null;
+  if (verifyStartReason(c, now, cardDate, slateOpts)) return null;
+  if (cardDate && !inSlate(c, cardDate)) return null;
+  const floor = ev + 1e-12 >= mainMinEv(odds);
+  return toPickObject({
+    ...c,
+    odds,
+    ev,
+    edgePct: Number.isFinite(edge) ? edge : c.edgePct,
+    coverProb: Number.isFinite(cover) ? cover : c.coverProb,
+    tier: floor ? 'floor' : 'lean',
+    book: c.book || DK_BOOK,
+  });
+}
+
+function parlayTicketEv(legs) {
+  let dec = 1;
+  let prob = 1;
+  for (const leg of legs || []) {
+    const odds = asAmerican(leg && leg.odds);
+    const p = asFraction(leg && (leg.p_cal != null ? leg.p_cal : leg.coverProb));
+    const d = americanToDecimal(odds);
+    if (!Number.isFinite(d) || !(d > 1) || !Number.isFinite(p)) return null;
+    dec *= d;
+    prob *= p;
+  }
+  return prob * dec - 1;
 }
 
 /**
  * Drop picks that have started or left the slate, then backfill from
- * candidateTable up to 3. A known non-DK book cannot fill. Floors stay
- * at 3% EV and the odds-scaled edge curve. One straight per game.
+ * candidateTable up to 3. DraftKings, Hard Rock, or an unknown book can
+ * fill. First pass is the 2% EV floor. A second pass takes any finite EV
+ * that is not ev-stale. One straight per game. A dropped parlay leg is
+ * refilled from that table up to 3, at 0.25u, and labeled when the
+ * combined EV is not positive. This does not throw.
  */
 function verifySchedule(picksData, nowMs) {
   const card = picksData || {};
@@ -652,39 +750,47 @@ function verifySchedule(picksData, nowMs) {
     picks.push(p);
   }
   const used = new Set(picks.map(matchupKey));
-  for (const c of card.candidateTable || []) {
-    if (picks.length >= 3) break;
-    if (!c || used.has(matchupKey(c))) continue;
-    if (!bookIsDkOrUnknown(c)) continue;
-    const odds = asAmerican(c.odds);
-    const ev = asFraction(c.ev);
-    const edge = edgeOf(c);
-    const cover = asFraction(c.coverProb);
-    if (!(ev >= 0.03) || !(edge > 0) || !Number.isFinite(odds)) continue;
-    const need = minEdgeFor(odds, c.uncertainty);
-    if (edge + 1e-12 < need) continue;
-    if (verifyStartReason(c, now, cardDate, slateOpts)) continue;
-    if (cardDate && !inSlate(c, cardDate)) continue;
-    const pick = toPickObject({
-      ...c,
-      odds,
-      ev,
-      edgePct: edge,
-      coverProb: Number.isFinite(cover) ? cover : c.coverProb,
-      tier: 'floor',
-      book: c.book || DK_BOOK,
-    });
-    picks.push(pick);
-    used.add(matchupKey(pick));
-    changed = true;
-  }
+  const table = card.candidateTable || [];
+  const fillFrom = (minEv) => {
+    for (const c of table) {
+      if (picks.length >= 3) break;
+      const pick = takeBackfill(c, now, cardDate, slateOpts, used, minEv);
+      if (!pick) continue;
+      picks.push(pick);
+      used.add(matchupKey(pick));
+      changed = true;
+    }
+  };
+  fillFrom(mainMinEv(null));
+  if (picks.length < 3) fillFrom(null);
   if (Array.isArray(card.parlayLegs)) {
     for (const pl of card.parlayLegs) {
       if (!pl || !Array.isArray(pl.legs)) continue;
+      if (pl.qualifying === false || pl.type === 'no-qualifying-parlay') continue;
       const next = pl.legs.filter((leg) => !verifyStartReason(leg, now, cardDate, slateOpts));
       if (next.length !== pl.legs.length) {
         pl.legs = next;
         changed = true;
+      }
+      const usedGames = new Set(pl.legs.map(matchupKey));
+      for (const c of table) {
+        if (pl.legs.length >= 3) break;
+        if (!c || usedGames.has(matchupKey(c))) continue;
+        const leg = takeBackfill(c, now, cardDate, slateOpts, usedGames, null);
+        if (!leg) continue;
+        leg.units = '0.25u';
+        pl.legs.push(leg);
+        usedGames.add(matchupKey(leg));
+        changed = true;
+      }
+      if (pl.legs.length) {
+        pl.units = '0.25u';
+        pl.qualifying = pl.legs.length === 3 ? true : pl.qualifying;
+        const ticketEv = pl.legs.length === 3 ? parlayTicketEv(pl.legs) : null;
+        if (ticketEv != null && !(ticketEv > 0)) {
+          pl.label = 'combined EV not positive';
+          pl.leanDay = true;
+        }
       }
     }
   }

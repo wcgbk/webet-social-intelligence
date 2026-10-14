@@ -52,13 +52,13 @@ const sorted = math.sortByGradeThenUnits([
 ]);
 assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low']);
 
-// A gap past 0.2pp stays on edge. A +180 dog with a fatter EV stays behind.
+// Stake EV is the rank. Edge only breaks a tie. The fatter-EV dog is first.
 {
   const fav = { edgePct: 0.048, ev: 0.04, odds: -140, sport: 'MLB', side: 'Fav', predictedClv: 0, uncertainty: 0.12 };
   const dog = { edgePct: 0.021, ev: 0.18, odds: 180, sport: 'MLB', side: 'Dog', predictedClv: 0, uncertainty: 0.12 };
   const rankedPool = select.orderedByScore([dog, fav]);
-  assert.strictEqual(rankedPool[0].side, 'Fav');
-  assert.strictEqual(rankedPool[1].side, 'Dog');
+  assert.strictEqual(rankedPool[0].side, 'Dog');
+  assert.strictEqual(rankedPool[1].side, 'Fav');
   assert.strictEqual(math.americanCentsDiff(105, -105), 10);
   assert.strictEqual(math.americanCentsDiff(-110, -130), 20);
   assert.notStrictEqual(math.americanCentsDiff(105, -105), 210);
@@ -122,7 +122,7 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// Rank is edge unless the gap is within 0.2pp. A +180 with a fatter EV stays behind a -110.
+// Published rank is stake EV. Edge is only the tiebreak. scoreCandidate stays the edge score.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
@@ -134,7 +134,7 @@ assert.ok(picked.length >= 1);
   };
   assert.ok(select.scoreCandidate(chalk) > select.scoreCandidate(dog));
   const ranked = select.selectStraights([dog, chalk], 1);
-  assert.strictEqual(ranked[0].matchup, 'A @ B');
+  assert.strictEqual(ranked[0].matchup, 'C @ D');
 }
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));
@@ -189,7 +189,7 @@ if (parlays.length) {
   assert.ok(/optimized/.test(alone[0].type));
 }
 
-// Daily unit structure: straights ≤3.5u + fixed 0.5u parlay ≤ 4.0u MAX
+// Daily unit structure: straights ≤3.5u + published 0.25u parlay ≤ 4.0u MAX
 {
   const fat = [
     { pick: 'A', rating: 'aplus', units: '1.5u', confidence: 90 },
@@ -202,7 +202,7 @@ if (parlays.length) {
   const parlayU = capped.parlayLegs.reduce((s, pl) => s + parseFloat(pl.units), 0);
   const total = straightU + parlayU;
   assert.ok(straightU <= 3.5 + 1e-9, `straight budget=${straightU}`);
-  assert.strictEqual(parlayU, 0.5, 'parlay must be fixed 0.5u');
+  assert.strictEqual(parlayU, 0.25, 'published parlay is 0.25u');
   assert.ok(total <= 4.0 + 1e-9, `cap total=${total}`);
   assert.strictEqual(capped.picks[0].rating, 'aplus');
 }
@@ -330,13 +330,11 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 }
 
 // Wednesday MLB. Legacy (hand-set shrink + bandRetainClip) and mode A
-// (hand-set shrink, no band) still fill 3 straights + a 3-leg from the
-// real starter / total / park edges. Publish floors are 0, so a pick'em
-// or a small disagreement with positive EV can sit in the yes pool. It
-// does not take a straight ahead of those real edges. Mode B stays
-// selectable. Its ship fit sets MLB spread K to the product floor 0.3
-// (hand-set 0.62; kMle 0). That fitted K is what emptied the 2026-10-10
-// and 2026-10-11 dry runs. K_MIN is a fit box, not a publish gate.
+// (hand-set shrink, no band) still fill 3 straights and a 3-leg. Rank is
+// stake EV, so a noise side with a higher EV can be a straight. Real
+// starter, total, and park games still clear into the yes pool. Mode B
+// stays selectable. Its ship fit sets MLB spread K to the product floor
+// 0.3 (hand-set 0.62; kMle 0). K_MIN is a fit box, not a publish gate.
 {
   const { sampleInSlateKick } = require(path.join(root, 'selection_pass'));
   const kick = sampleInSlateKick(Date.now() + 24 * 3600 * 1000);
@@ -416,12 +414,13 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     calibrate.clearCalParamsCache();
     try {
       const calibrated = calibrate.calibrateAll(raw, { cardDate: '2026-10-10' }).map(edge.attachEv);
-      const { yesPool } = gates.applyGates(calibrated, { cardDate, asOfMs: Date.now() });
+      const gated = gates.applyGates(calibrated, { cardDate, asOfMs: Date.now() });
+      const yesPool = gated.yesPool;
       const yesGames = new Set(yesPool.map(c => c.matchup));
       const realYes = [...yesGames].filter(m => realMatchups.has(m));
-      const straights = select.selectStraights(yesPool, config.MAX_STRAIGHTS);
+      const straights = select.selectStraights(yesPool, config.MAX_STRAIGHTS, gated.leanPool);
       const wedParlay = parlay.optimizeParlay(yesPool, [], { cardDate });
-      return { yesPool, yesGames, realYes, straights, wedParlay };
+      return { yesPool, rejected: gated.rejected, yesGames, realYes, straights, wedParlay };
     } finally {
       if (prev == null) delete process.env.OMEGA_CAL_MODE;
       else process.env.OMEGA_CAL_MODE = prev;
@@ -435,20 +434,30 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     assert.strictEqual(scored.wedParlay[0].legs.length, 3, label);
     assert.strictEqual(parseFloat(scored.wedParlay[0].units), config.PARLAY_FIXED_UNITS, label);
   }
-  function assertRealStraights(scored, label) {
-    for (const s of scored.straights) {
-      assert.ok(realMatchups.has(s.matchup), `${label} straight is not a real edge: ${s.matchup} ${s.side}`);
+  function assertEvRank(scored, label) {
+    const used = new Set(scored.straights.map((s) => s.matchup));
+    assert.strictEqual(used.size, scored.straights.length, `${label} two straights on one game`);
+    const bestOpen = {};
+    for (const c of scored.yesPool) {
+      if (used.has(c.matchup)) continue;
+      const ev = Number(c.ev);
+      if (!Number.isFinite(ev)) continue;
+      if (bestOpen[c.matchup] == null || ev > bestOpen[c.matchup]) bestOpen[c.matchup] = ev;
+    }
+    const minStraight = Math.min(...scored.straights.map((s) => Number(s.ev)));
+    for (const [game, ev] of Object.entries(bestOpen)) {
+      assert.ok(minStraight + 1e-9 >= ev, `${label} left ${game} ev ${ev} ahead of ${minStraight}`);
     }
   }
   const legacyCard = scoreWednesday('legacy');
   assert.ok(legacyCard.yesPool.every(c => c.calMode === 'legacy'));
   assertFilled(legacyCard, 'legacy');
-  assertRealStraights(legacyCard, 'legacy');
+  assertEvRank(legacyCard, 'legacy');
 
   const defaultCard = scoreWednesday(null);
   assert.ok(defaultCard.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
   assertFilled(defaultCard, 'mode A');
-  assertRealStraights(defaultCard, 'mode A');
+  assertEvRank(defaultCard, 'mode A');
   const aSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
   assert.ok(aSpread, 'mode A publishes an MLB spread');
   assert.strictEqual(aSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
@@ -457,18 +466,21 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
   assert.ok(modeB.yesPool.every(c => c.calMode === 'B' && c.calParamsSource === 'ship'));
   assertFilled(modeB, 'mode B');
   function noiseSpread(card, matchup) {
-    return card.yesPool.find(c => c.matchup === matchup && c.market === 'Spread' && /\+1\.5/.test(c.side));
+    const rows = card.yesPool.concat(card.rejected || []);
+    return rows.find(c => c.matchup === matchup && c.market === 'Spread' && /\+1\.5/.test(c.side));
   }
   const pirates = noiseSpread(modeB, 'Pittsburgh Pirates @ Cincinnati Reds');
   const marlins = noiseSpread(modeB, 'Miami Marlins @ Philadelphia Phillies');
-  assert.ok(pirates, 'Pirates +1.5 clears with positive EV at the MLB spread K floor');
+  assert.ok(pirates, 'Pirates +1.5 is priced at the MLB spread K floor');
   assert.strictEqual(pirates.calibK, 0.3);
   assert.strictEqual(pirates.calLevel, 'cell');
-  assert.ok(pirates.ev > 0);
-  assert.ok(marlins, 'Marlins +1.5 clears with positive EV at the MLB spread K floor');
+  assert.ok(pirates.ev > 0.12, 'mode B K=0.3 pushes that spread over the 12% stale cap');
+  assert.strictEqual(pirates.rejectReason, 'ev-stale');
+  assert.ok(!modeB.straights.some(s => /Pirates/.test(s.matchup)));
+  assert.ok(marlins, 'Marlins +1.5 is priced at the MLB spread K floor');
   assert.strictEqual(marlins.calibK, 0.3);
   assert.strictEqual(marlins.calLevel, 'cell');
-  assert.ok(modeB.straights.some(s => /Pirates/.test(s.matchup)), 'mode B K=0.3 can rank that spread onto the card');
+  assert.strictEqual(marlins.rejectReason, 'ev-stale');
   const astros = [...modeB.yesPool].filter(c => c.matchup === 'Texas Rangers @ Houston Astros');
   assert.ok(astros.every(c => c.edgePct > 0 && c.ev > 0), 'a -190 starter publishes only with a positive edge');
 }
@@ -707,8 +719,8 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(verify.sportCoverFloor('NFL'), config.GATES.minCoverProb.NFL);
   assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
   assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-  assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);
-  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0.03);
+  assert.strictEqual(verify.sportEvFloor('NFL'), 0.02);
+  assert.strictEqual(verify.sportEvFloor('NCAAF'), 0.02);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NFL', ev: 0.04, coverProb: 0.49 }), true);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.04, coverProb: 0.47 }), true);
   assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);

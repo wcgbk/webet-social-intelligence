@@ -5,12 +5,11 @@
  *
  * A material line or price gap (more than half a point, or more than 6
  * implied points worse) is not a warning that keeps the published number.
- * The pick is repriced at Hard Rock's line and price. Edge is cover minus
- * the de-vigged fair at that number, then the odds-scaled floor. If it
- * still clears, the pick stays at the Hard Rock number. If it does not,
- * the next candidate confirmed at Hard Rock replaces it. When the
- * corrected straights are three priced plays, the parlay is those three.
- * There is no pool search. Every change is logged. The card is not withheld.
+ * The pick is repriced at Hard Rock's line and price. A 2% to 12% stake
+ * EV keeps it. A positive EV under 2% stays as a 0.5u lean. Otherwise the
+ * next Hard Rock candidate by EV replaces it. If nothing clears, the
+ * original stays as a lean. The card is not withheld and a pick is not
+ * dropped.
  * This helper is not on the verify path.
  */
 
@@ -192,27 +191,24 @@ function stakeEv(c) {
   return typeof c.ev === 'number' ? c.ev : parseEdgeFraction(c.ev);
 }
 
-/** Main keep: stake EV at mainMinEv and the odds-scaled edge curve. */
+/** Main keep: stake EV from 2% through 12%. Edge is not required. */
 function clears(c) {
-  const edge = edgeOf(c);
   const ev = stakeEv(c);
-  const cp = coverFraction(c.coverProb);
   const odds = typeof c.odds === 'number' ? c.odds : parseAmerican(c.odds);
-  if (!Number.isFinite(cp)) return false;
-  const needEv = mainMinEv(odds, GATES.minEV.default || 0.03);
-  if (!Number.isFinite(ev) || ev + 1e-12 < needEv) return false;
-  if (!Number.isFinite(edge) || edge <= 0) return false;
-  if (edge + 1e-12 < minEdgeFor(odds, c.uncertainty)) return false;
+  if (!Number.isFinite(ev)) return false;
+  const needEv = mainMinEv(odds, GATES.minEV.default || 0.02);
+  if (ev + 1e-12 < needEv) return false;
+  const maxEV = Number(GATES.maxEV);
+  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   return true;
 }
 
-/** Lean keep: positive edge and stake EV >= 1.5%. Not a floor play. */
+/** Lean keep: positive stake EV at or under 12%. Edge is not required. */
 function leanClears(c) {
-  const edge = edgeOf(c);
   const ev = stakeEv(c);
-  const cp = coverFraction(c.coverProb);
-  if (!Number.isFinite(cp) || !Number.isFinite(ev) || ev + 1e-12 < LEAN_MIN_EV) return false;
-  if (!Number.isFinite(edge) || edge <= 0) return false;
+  if (!Number.isFinite(ev) || !(ev > 0)) return false;
+  const maxEV = Number(GATES.maxEV);
+  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   return true;
 }
 
@@ -346,7 +342,7 @@ function reprice(pick, quote, pool) {
 }
 
 function nextBest(pool, sportGames, used) {
-  const ranked = [...pool].sort((a, b) => (edgeOf(b) || -Infinity) - (edgeOf(a) || -Infinity));
+  const ranked = [...pool].sort((a, b) => (stakeEv(b) || -Infinity) - (stakeEv(a) || -Infinity));
   for (const row of ranked) {
     if (used.has(sideKey(row))) continue;
     const game = matchGame(gamesFor(sportGames, row.sport), row.matchup);
@@ -357,7 +353,7 @@ function nextBest(pool, sportGames, used) {
       continue;
     }
     const cand = scoreAt(row, quote);
-    if (!clears(cand)) continue;
+    if (!clears(cand) && !leanClears(cand)) continue;
     const pickObj = toPickObject(cand, { modelVersion: row.modelVersion });
     pickObj.book = 'hardrockbet';
     pickObj.line = quote.point != null ? quote.point : row.line;
@@ -419,7 +415,7 @@ function autoCorrectHardRock(picksData, sportGames) {
     const used = new Set(built.map((b) => sideKey(b.pick)));
     used.add(sideKey(pick));
     const alt = nextBest(pool, sportGames, used);
-    if (alt) {
+    if (alt && clears(alt.cand)) {
       log.push({
         index: i,
         action: 'replaced',
@@ -428,24 +424,53 @@ function autoCorrectHardRock(picksData, sportGames) {
         line: alt.pick.line,
         odds: alt.pick.odds,
         edge: alt.cand.edgePct,
-        reason: 'edge at the Hard Rock number failed the floor; next Hard Rock candidate',
+        reason: 'Hard Rock number missed the 2% floor; next Hard Rock candidate',
       });
       built.push(alt);
-    } else {
+    } else if (alt && leanClears(alt.cand)) {
+      markLean(alt);
       log.push({
         index: i,
-        action: 'dropped',
+        action: 'replaced',
         from: pick.pick,
-        to: null,
+        to: alt.pick.pick,
+        line: alt.pick.line,
+        odds: alt.pick.odds,
+        edge: alt.cand.edgePct,
+        reason: 'Hard Rock number missed the 2% floor; next positive-EV lean',
+      });
+      built.push(alt);
+    } else if (repriced) {
+      markLean(repriced);
+      log.push({
+        index: i,
+        action: 'kept-lean',
+        from: pick.pick,
+        to: repriced.pick.pick,
         line: quote.point,
         odds: formatAmerican(quote.american),
-        edge: repriced && repriced.cand ? repriced.cand.edgePct : null,
-        reason: 'edge at the Hard Rock number failed and no confirmed replacement cleared',
+        edge: repriced.cand.edgePct,
+        reason: 'Hard Rock number missed the floor; kept as a lean',
       });
+      built.push(repriced);
+    } else {
+      const kept = { pick: { ...pick, tier: 'lean', label: 'lean', units: `${LEAN_MAX_UNITS}u` }, cand: pickToCand(pick) };
+      markLean(kept);
+      log.push({
+        index: i,
+        action: 'kept-lean',
+        from: pick.pick,
+        to: kept.pick.pick,
+        line: quote.point,
+        odds: formatAmerican(quote.american),
+        edge: kept.cand.edgePct,
+        reason: 'Hard Rock number missed the floor; kept as a lean',
+      });
+      built.push(kept);
     }
   }
 
-  built.sort((a, b) => (edgeOf(b.cand) || -Infinity) - (edgeOf(a.cand) || -Infinity));
+  built.sort((a, b) => (stakeEv(b.cand) || -Infinity) - (stakeEv(a.cand) || -Infinity));
 
   let nextParlay = data.parlayLegs;
   if (log.length) {

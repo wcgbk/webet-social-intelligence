@@ -167,8 +167,8 @@ function priceKeys(store, eventId) {
   cache.resetKnownRequestsRemainingForTests();
   cache.clearMemoryForTests();
   try {
-    assert.strictEqual(config.MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
-    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.73-omega-vnext-price-lock:'));
+    assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
+    assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('v12.3.40-omega-vnext-price-lock:'));
     assert.ok(String(config.MODEL_NOTES).includes('No historical odds call.'));
     assert.strictEqual(config.PINNACLE_LINE_MOVE.historicalCreditsPerPull, 30);

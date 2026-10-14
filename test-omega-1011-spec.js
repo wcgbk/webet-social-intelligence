@@ -121,10 +121,10 @@ function floorRow(extra) {
     const other = {
       ...injured,
       pick: 'Atlanta Falcons ML',
-      coverProb: 0.62,
-      fair_sharp_p: 0.52,
-      ev: 0.18,
-      edgePct: 0.10,
+      coverProb: 0.51,
+      fair_sharp_p: 0.48,
+      ev: 0.04,
+      edgePct: 0.03,
     };
     const kept = late.finalizeNewsReprice(other, late.decideLateNews(other, liveOut));
     assert.strictEqual(kept.action, 'reprice');

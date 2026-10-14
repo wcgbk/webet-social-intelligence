@@ -16,13 +16,13 @@ const PICK_KEEP = [
   'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
   'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
-  'dataReviewFlag',
+  'dataReviewFlag', 'label',
 ];
 
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
   'uniqueGames', 'uniqueSports', 'independent', 'legMarkets', 'correlationNote',
-  'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote',
+  'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote', 'label',
 ];
 
 const ROOT_DROP = [

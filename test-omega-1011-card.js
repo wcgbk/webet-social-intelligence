@@ -65,11 +65,11 @@ function row(extra) {
     awayTeam: 'Seattle Kraken',
   });
   assert.strictEqual(passesPublishFloor(floor), true);
-  assert.strictEqual(passesPublishFloor(minLean), false);
-  assert.strictEqual(passesPublishFloor(kraken), false);
+  assert.strictEqual(passesPublishFloor(minLean), true);
+  assert.strictEqual(passesPublishFloor(kraken), true);
   const published = selectStraights([floor, minLean, kraken], 3, [minLean, kraken]);
   assert.deepStrictEqual(published.map(c => c.side), ['Over 43.5', 'Seattle Kraken ML']);
-  assert.deepStrictEqual(published.map(c => c.tier), ['floor', 'lean']);
+  assert.deepStrictEqual(published.map(c => c.tier), ['floor', 'floor']);
   assert.ok(!published.some(c => c.side === 'Minnesota Vikings -2.5'), 'same game as the floor total');
   assert.strictEqual(straightCardLabel(1), 'short card: 1 floor straight');
   assert.strictEqual(straightCardLabel(2), 'short card: 2 floor straights');

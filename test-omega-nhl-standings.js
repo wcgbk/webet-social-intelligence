@@ -9,7 +9,7 @@ const ingest = require(path.join(root, 'ingest'));
 const nhl = require(path.join(root, 'sports/nhl'));
 
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
-assert.strictEqual(config.GATES.minEV.NHL, 0.03);
+assert.strictEqual(config.GATES.minEV.NHL, 0.02);
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(nhl.NHL_MIN_GAMES, 2);
 assert.strictEqual(nhl.NHL_GPG_PRIOR_GAMES, config.NHL_PRIOR_K);

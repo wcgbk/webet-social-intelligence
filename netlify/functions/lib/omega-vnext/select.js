@@ -140,18 +140,16 @@ function publishMinEv(c) {
 }
 
 /**
- * Published floor straights. Stake EV at mainMinEv (sport floor times the
- * longshot band) and edge at or above minEdgeFor. A lean does not pass.
- * Missing edge does not pass.
+ * Published floor straights. Flat stake EV at mainMinEv (2%) and at or
+ * under GATES.maxEV (12%). Edge is not an inclusion test.
  */
 function passesPublishFloor(c) {
   const ev = Number(c && c.ev);
   const minEV = publishMinEv(c);
-  if (!(ev + 1e-12 >= minEV)) return false;
-  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
-  if (!Number.isFinite(edge) || !(edge > 0)) return false;
-  const need = minEdgeFor(c && c.odds, c && c.uncertainty);
-  return edge + 1e-12 >= need;
+  if (!Number.isFinite(ev) || !(ev + 1e-12 >= minEV)) return false;
+  const maxEV = Number(config.GATES && config.GATES.maxEV);
+  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
+  return true;
 }
 
 /**
@@ -184,7 +182,7 @@ function finiteEv(c) {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
-/** Higher stake EV first. An EV tie uses the edge band. Positive EV is required to fill. */
+/** Higher stake EV first. An exact EV tie uses edge. */
 function compareByEv(a, b) {
   const d = finiteEv(b) - finiteEv(a);
   if (Math.abs(d) > 1e-12) return d;
@@ -195,18 +193,43 @@ function sideKey(c) {
   return `${matchupKey(c)}||${c && c.side}`;
 }
 
+function bookToken(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isDraftKingsBook(value) {
+  const name = bookToken(value);
+  return name === 'draftkings' || name === 'draftkings_us';
+}
+
+function isHardRockBook(value) {
+  const name = bookToken(value);
+  return name === 'hardrockbet' || name === 'hardrock';
+}
+
 /** DraftKings posts this side. A synthetic fixture with no ladder stays eligible. */
 function hasDraftKingsLine(c) {
   if (!c) return false;
   if (Array.isArray(c.bookPrices)) {
+    return c.bookPrices.some((p) => isDraftKingsBook(p && (p.book || p.key)));
+  }
+  const book = bookToken(c.book || c.executionBook);
+  if (!book) return true;
+  return isDraftKingsBook(book);
+}
+
+/** DraftKings or Hard Rock. A synthetic fixture with no ladder stays eligible. */
+function hasRetailLine(c) {
+  if (!c) return false;
+  if (Array.isArray(c.bookPrices)) {
     return c.bookPrices.some((p) => {
-      const book = String((p && (p.book || p.key)) || '').trim().toLowerCase();
-      return book === 'draftkings' || book === 'draftkings_us';
+      const name = p && (p.book || p.key);
+      return isDraftKingsBook(name) || isHardRockBook(name);
     });
   }
-  const book = String((c.book || c.executionBook) || '').trim().toLowerCase();
+  const book = bookToken(c.book || c.executionBook);
   if (!book) return true;
-  return book === 'draftkings' || book === 'draftkings_us';
+  return isDraftKingsBook(book) || isHardRockBook(book);
 }
 
 /** Live and in-play are not pregame. A missing clock is not a start. */
@@ -218,17 +241,29 @@ function isPregameRow(c) {
 }
 
 /**
- * Lean fill. Stake EV > 0 after vig, edge >= LEAN_MIN_EDGE vs the no-vig
- * sharp, a DraftKings line, and pregame. LEAN_PAD false leaves the slot empty.
+ * Structural lean pool. Finite EV at or under the 12% stale cap, DraftKings
+ * or Hard Rock (or a synthetic with no ladder), and pregame. A non-positive
+ * EV stays eligible for the last-resort fill. EV above maxEV is ev-stale
+ * and is not a lean.
+ */
+function eligibleForLeanPool(c) {
+  const ev = Number(c && c.ev);
+  if (!Number.isFinite(ev)) return false;
+  const maxEV = Number(config.GATES && config.GATES.maxEV);
+  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
+  if (!hasRetailLine(c)) return false;
+  if (!isPregameRow(c)) return false;
+  return true;
+}
+
+/**
+ * Positive-EV lean fill. Edge is not required. LEAN_PAD false leaves the
+ * slot empty until the last-resort pass inside selectStraights.
  */
 function qualifiesAsLean(c) {
   const ev = Number(c && c.ev);
   if (!(ev > 0)) return false;
-  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
-  if (!Number.isFinite(edge) || edge + 1e-12 < LEAN_MIN_EDGE) return false;
-  if (!hasDraftKingsLine(c)) return false;
-  if (!isPregameRow(c)) return false;
-  return true;
+  return eligibleForLeanPool(c);
 }
 
 function passesLeanFill(c) {
@@ -236,63 +271,60 @@ function passesLeanFill(c) {
   return qualifiesAsLean(c);
 }
 
-/** Empty card may say No Qualifying Plays only when no publishable lean remains. */
+/** Empty card may say No Qualifying Plays only when no pregame lean remains. */
 function shouldPublishNoPlays(picks, leanPool) {
   if (Array.isArray(picks) && picks.length > 0) return false;
-  return !(leanPool || []).some((c) => qualifiesAsLean(c));
+  return !(leanPool || []).some((c) => eligibleForLeanPool(c));
+}
+
+function claimStraight(c, onePer, usedGames, usedSides) {
+  if (usedSides.has(sideKey(c))) return false;
+  if (onePer && usedGames.has(matchupKey(c))) return false;
+  usedSides.add(sideKey(c));
+  if (onePer) usedGames.add(matchupKey(c));
+  return true;
 }
 
 /**
- * Top floor edges, up to MAX_STRAIGHTS.
- * ONE_STRAIGHT_PER_GAME is read at call time and defaults true. A game
- * already taken is skipped and the next distinct game fills the slot.
- * Set the flag false and a second side of the same game is a straight
- * when its edge is in the top N.
- * When fewer than maxN clear the floor and LEAN_PAD is true, the open
- * slots fill from positive-EV leans sorted by EV. One straight per game still
- * applies, and a game that already holds a straight is skipped. A lean
- * is tier 'lean' and the stake is flat LEAN_MAX_UNITS. The card still
- * publishes when the lean pool cannot fill the rest.
+ * Top stake-EV rows, up to MAX_STRAIGHTS. Edge breaks an EV tie.
+ * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
+ * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
+ * slots fill from positive-EV leans, then from any remaining pregame
+ * lean sorted by EV, including a non-positive EV. One game. A lean is
+ * tier 'lean' and the stake is flat LEAN_MAX_UNITS. ev-stale is not here.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
   const usedGames = new Set();
   const usedSides = new Set();
-  const floor = [];
-  for (const c of [...(yesPool || [])].sort(compareByEdge)) {
-    if (floor.length >= maxN) break;
+  const out = [];
+  for (const c of [...(yesPool || [])].sort(compareByEv)) {
+    if (out.length >= maxN) break;
     if (!passesPublishFloor(c)) continue;
-    if (usedSides.has(sideKey(c))) continue;
-    if (onePer && usedGames.has(matchupKey(c))) continue;
-    floor.push({
-      ...c,
-      tier: 'floor',
-      _score: edgeRank(c),
-    });
-    usedSides.add(sideKey(c));
-    if (onePer) usedGames.add(matchupKey(c));
+    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+    out.push({ ...c, tier: 'floor', _score: finiteEv(c) });
   }
-  if (config.LEAN_PAD !== true || floor.length >= maxN) return floor;
-  const leans = [];
-  for (const c of [...(leanPool || [])].sort(compareByEv)) {
-    if (floor.length + leans.length >= maxN) break;
+  if (config.LEAN_PAD !== true || out.length >= maxN) return out;
+  const leans = [...(leanPool || [])].sort(compareByEv);
+  for (const c of leans) {
+    if (out.length >= maxN) break;
     if (!passesLeanFill(c)) continue;
-    if (usedSides.has(sideKey(c))) continue;
-    if (onePer && usedGames.has(matchupKey(c))) continue;
-    leans.push({
-      ...c,
-      tier: 'lean',
-      _score: finiteEv(c),
-    });
-    usedSides.add(sideKey(c));
-    if (onePer) usedGames.add(matchupKey(c));
+    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+    out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
   }
-  return floor.concat(leans);
+  if (out.length >= maxN) return out;
+  for (const c of leans) {
+    if (out.length >= maxN) break;
+    if (!eligibleForLeanPool(c)) continue;
+    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+    out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
+  }
+  return out;
 }
 
-/** Same order selectStraights uses. Candidate-table rank follows this, not pool insertion. */
+/** Same order selectStraights uses. Candidate-table rank follows EV, then edge. */
 function orderedByScore(pool) {
-  return [...(pool || [])].sort(compareByEdge);
+  return [...(pool || [])].sort(compareByEv);
 }
 
 function parseU(u) {
@@ -457,6 +489,7 @@ function toPickObject(c, opts = {}) {
     ...(c.executionBook ? { executionBook: c.executionBook } : {}),
     line: c.line != null ? c.line : null,
     tier,
+    label: tier === 'lean' ? 'lean' : 'floor',
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,
     steamToward: !!c.steamToward,
@@ -492,8 +525,9 @@ function applyDailyCap(picks) {
 }
 
 /**
- * Unit structure (v12.0.9):
- * - Parlay fixed at PARLAY_FIXED_UNITS (0.5u) when present — never scaled
+ * Unit structure:
+ * - Every published parlay is LEAN_PARLAY_UNITS (0.25u). A no-qualifying
+ *   marker keeps units null. PARLAY_FIXED_UNITS is the budget constant only.
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
  * - Total ≤ DAILY_UNIT_CAP (4.0u)
  * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
@@ -502,7 +536,7 @@ function applyDailyCap(picks) {
  * hierarchy may lift a floor stake. It does not lift a lean, and it does
  * not trim a floor stake down to the lean. Preserve quality grades.
  * Never force-fill to max.
- * Parlay tickets stay PARLAY_FIXED_UNITS and are not B-capped.
+ * Published parlay tickets are not B-capped.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
   let out = (picks || []).map(p => applyLeanUnitCap(applyBGradeUnitCap({ ...p })));
@@ -510,21 +544,14 @@ function applyDailyUnitCap(picks, parlayLegs) {
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
 
-  // Floor-day parlays stay 0.5u. A lean-day ticket is already 0.25u.
-  // Never raise it. A "no qualifying parlay" marker is not a stake.
+  // Every published parlay is 0.25u. A "no qualifying parlay" marker
+  // is not a stake. PARLAY_FIXED_UNITS stays the budget constant only.
   for (const pl of parlays) {
     if (pl && (pl.qualifying === false || pl.status === 'no qualifying parlay' || pl.type === 'no-qualifying-parlay')) {
       pl.units = null;
       continue;
     }
-    if (pl && pl.leanDay === true) {
-      const u = parseU(pl.units);
-      const cap = Number(LEAN_PARLAY_UNITS);
-      const next = Number.isFinite(u) && u > 0 && u < cap ? u : cap;
-      pl.units = fmtU(next);
-      continue;
-    }
-    pl.units = fmtU(PARLAY_FIXED_UNITS);
+    pl.units = fmtU(LEAN_PARLAY_UNITS);
   }
 
   const straightTotalOf = () => out.reduce((acc, p) => acc + parseU(p.units), 0);
@@ -679,9 +706,12 @@ function capSameGameExposure(picks, parlays) {
 module.exports = {
   edgeRank,
   compareByEdge,
+  compareByEv,
   EDGE_EV_BAND,
   scoreCandidate,
   passesPublishFloor,
+  eligibleForLeanPool,
+  hasRetailLine,
   drawdownActive,
   qualifiesAsLean,
   passesLeanFill,

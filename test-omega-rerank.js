@@ -9,8 +9,8 @@ const { passesPublishFloor } = require('./netlify/functions/lib/omega-vnext/sele
 const { runRerank } = require('./netlify/functions/rerank-picks-omega');
 const et = require('./netlify/functions/lib/et-schedule');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.73-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.73-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.LEAN_MIN_EV, 0.015);
 assert.deepStrictEqual(et.ET_SCHEDULE['rerank-picks-omega'].etTimes, ['10:15']);
@@ -89,7 +89,13 @@ function edgeOf(pick) {
   assert.strictEqual(dropped.card.picks.length, 3);
   assert.ok(dropped.card.picks.every((p) => p.pick !== 'Alpha +3'));
   assert.ok(dropped.card.picks.some((p) => p.pick === 'Eta -1' || p.side === 'Eta -1'));
-  assert.ok(dropped.card.picks.every((p) => p.tier !== 'lean' && edgeOf(p) >= 0.03));
+  assert.ok(dropped.card.picks.every((p) => p.tier === 'lean' || passesPublishFloor({
+    ...p,
+    edgePct: edgeOf(p),
+    ev: p.evRaw != null ? p.evRaw : p.ev,
+    odds: -110,
+    uncertainty: 0.15,
+  })));
   assert.strictEqual(dropped.card.parlayLegs[0].legs.length, 3);
   assert.ok(dropped.card.selection.top10.length >= 3);
   assert.strictEqual(dropped.card.selection.oddsApi, false);
@@ -115,7 +121,13 @@ function edgeOf(pick) {
     odds: -110,
     uncertainty: 0.15,
   })));
-  assert.ok(demoted.card.picks.every((p) => p.tier === 'lean' || edgeOf(p) + 1e-12 >= 0.03));
+  assert.ok(demoted.card.picks.every((p) => p.tier === 'lean' || passesPublishFloor({
+    ...p,
+    edgePct: edgeOf(p),
+    ev: p.evRaw != null ? p.evRaw : p.ev,
+    odds: -110,
+    uncertainty: 0.15,
+  })));
   const alpha = demoted.card.picks.find((p) => (p.pick || p.side) === 'Alpha +3');
   if (alpha) assert.strictEqual(alpha.tier, 'lean');
 

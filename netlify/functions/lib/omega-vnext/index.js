@@ -296,17 +296,20 @@ async function generateOmegaVnext(opts = {}) {
   const replayLike = !!(opts.historicalSnapshot || opts.replay);
   const nowMs = now.getTime();
   const oddsSnapshot = resolveGenerateOddsSnapshot(dateISO, { ...opts, nowMs });
+  const allowPaidOdds = opts.allowPaidOdds === true;
 
-  console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow} oddsSnapshot=${oddsSnapshot || 'live'} replay=${replayLike}`);
+  console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow} oddsSnapshot=${oddsSnapshot || 'live'} replay=${replayLike} storedBoard=${!allowPaidOdds}`);
 
   const fetched = await ingest(dateISO, {
-    historicalSnapshot: oddsSnapshot,
+    historicalSnapshot: allowPaidOdds ? oddsSnapshot : null,
+    storedBoardOnly: !allowPaidOdds,
+    readPinnacleLineMoves: opts.readPinnacleLineMoves,
   });
   const snap = applyUnresolvedSkip(fetched);
   const servedSnapshot = (snap && snap.oddsSnapshotTimestamp) || null;
   console.log(`[omega-vnext] odds snapshot requested=${oddsSnapshot || 'live'} served=${servedSnapshot || 'unknown'}`);
   console.log(`[omega-vnext] ingest sports=${Object.keys(snap.oddsBySport || {}).join(',')}`);
-  if (snap && snap.oddsBySport && oddsSnapshot) {
+  if (snap && snap.oddsBySport && oddsSnapshot && snap.storedSnapshot !== true && allowPaidOdds) {
     try {
       snap.oddsBySport = await retryMissingDraftKings(snap.oddsBySport, {
         dryRun,
@@ -582,9 +585,9 @@ async function generateOmegaVnext(opts = {}) {
 
   const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null);
   const top10Candidates = selectTop10(yesPool, 10);
-  // 10:00 rank is edge, one game each. A parlay leg with no Hard Rock price
-  // is swapped for the next edge-ranked candidate that has one, or noted.
-  // The note and the bug log stay off the page. The card still publishes.
+  // 10:00 rank is stake EV, one game each. Edge breaks a tie. A parlay
+  // leg with no Hard Rock price is swapped or noted. The note and the
+  // bug log stay off the page. The card still publishes.
   const placement = ensureParlayPlaceable(
     selectedRaw,
     yesPool.concat(LEAN_PAD ? (leanPool || []) : []),
@@ -624,10 +627,9 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u).
   picks = applyDailyCap(picks);
 
-  // Every parlay must be +EV on the unified adjusted cover. The three
-  // straights are the ticket when that holds. Otherwise the next-best
-  // +EV legs from distinct games are tried, with Hard Rock placeability
-  // when the row has a book ladder. No ticket is a negative-EV parlay.
+  // The parlay is always 3 legs at 0.25u from the best EV on distinct
+  // games. A ticket whose combined EV is not positive is labeled and
+  // still published. Fewer than 3 priced games is the only miss.
   const parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : []);
   const straightParlay = (rows, note) => parlayFromStraights(rows, {
     hrPlaceabilityNote: note || placement.note,
@@ -801,6 +803,7 @@ async function generateOmegaVnext(opts = {}) {
       lean: leanPool.length,
       rejected: rejected.length,
       edgeFloor: rejected.filter((r) => r && r.rejectReason === 'edge-floor').length,
+      evStale: rejected.filter((r) => r && r.rejectReason === 'ev-stale').length,
       parlayEligible: empty ? 0 : ((parlayLegs[0] && parlayLegs[0].legs && parlayLegs[0].legs.length) || 0),
     },
     pmSoft: pmSoftMeta,
@@ -809,12 +812,12 @@ async function generateOmegaVnext(opts = {}) {
       unmatchedCount: unmatchedReport.count,
     },
     // Private. publicPicksPayload drops selection. Top 10 is the 10:00
-    // edge rank, one game each. rerank-picks-omega at 10:15 refreshes news
+    // EV rank, one game each. rerank-picks-omega at 10:15 refreshes news
     // and may replace a main from this priced pool. It does not pull odds.
     selection: {
       snapshotTime: servedSnapshot || oddsSnapshot || null,
       cardLabel: straightCardLabel(picks),
-      rankedBy: 'edge',
+      rankedBy: 'ev',
       onePerGame: true,
       window: '10:00-10:15',
       rerankWindow: '10:15-10:30',

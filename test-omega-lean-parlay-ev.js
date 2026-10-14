@@ -1,7 +1,9 @@
 'use strict';
-// Lean-day parlay publishes only when combined EV is positive.
+// A 3-leg parlay publishes at 0.25u even when combined EV is not positive.
+// That ticket is labeled. Straights stay on the card. Fewer than three
+// priced games is the only no-qualifying marker.
 const assert = require('assert');
-const { parlayFromStraights, comboStats } = require('./netlify/functions/lib/omega-vnext/parlay');
+const { parlayFromStraights, comboStats, isNoQualifyingParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 
 function leg(matchup, odds, coverProb, tier) {
   const parts = matchup.split(' @ ');
@@ -31,18 +33,21 @@ const negative = trio(-200, 0.5, 'lean');
 const before = JSON.parse(JSON.stringify(negative));
 const stats = comboStats(negative.map((row) => ({ ...row, coverProb: 0.5 })));
 assert.ok(stats.ev <= 0, 'fixture combined EV is not positive');
-const dropped = parlayFromStraights(negative);
-assert.strictEqual(dropped.length, 1);
-assert.strictEqual(dropped[0].status, 'no qualifying parlay');
-assert.strictEqual(dropped[0].qualifying, false);
-assert.deepStrictEqual(dropped[0].legs, []);
-assert.deepStrictEqual(negative, before, 'straights stay on the card when the parlay is dropped');
+const labeled = parlayFromStraights(negative);
+assert.strictEqual(labeled.length, 1);
+assert.strictEqual(labeled[0].qualifying, true);
+assert.strictEqual(labeled[0].units, '0.25u');
+assert.strictEqual(labeled[0].leanDay, true);
+assert.strictEqual(labeled[0].label, 'combined EV not positive');
+assert.strictEqual(labeled[0].legs.length, 3);
+assert.ok(!(labeled[0].evRaw > 0));
+assert.deepStrictEqual(negative, before, 'straights stay on the card when the parlay is labeled');
 
 const positive = trio(150, 0.55, 'lean');
 const ticket = parlayFromStraights(positive);
 assert.strictEqual(ticket.length, 1);
 assert.strictEqual(ticket[0].units, '0.25u');
-assert.strictEqual(ticket[0].leanDay, true);
+assert.ok(!ticket[0].leanDay);
 assert.ok(parseFloat(ticket[0].ev) > 0, ticket[0].ev);
 assert.strictEqual(positive.length, 3);
 
@@ -50,9 +55,14 @@ const floor = trio(-200, 0.5, 'floor');
 const floorBefore = JSON.parse(JSON.stringify(floor));
 const floorTicket = parlayFromStraights(floor);
 assert.strictEqual(floorTicket.length, 1);
-assert.strictEqual(floorTicket[0].status, 'no qualifying parlay');
-assert.strictEqual(floorTicket[0].qualifying, false);
-assert.ok(!(parseFloat(floorTicket[0].ev) > 0));
-assert.deepStrictEqual(floor, floorBefore, 'a failed floor parlay does not drop the straights');
+assert.strictEqual(floorTicket[0].qualifying, true);
+assert.strictEqual(floorTicket[0].units, '0.25u');
+assert.strictEqual(floorTicket[0].label, 'combined EV not positive');
+assert.ok(!(floorTicket[0].evRaw > 0));
+assert.deepStrictEqual(floor, floorBefore, 'a labeled floor parlay does not drop the straights');
+
+const short = parlayFromStraights(floor.slice(0, 2));
+assert.ok(isNoQualifyingParlay(short[0]));
+assert.strictEqual(short[0].qualifying, false);
 
 console.log('PASS test-omega-lean-parlay-ev');

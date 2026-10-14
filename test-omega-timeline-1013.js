@@ -75,8 +75,8 @@ function scheduler() {
 }
 
 (async () => {
-  assert.ok(String(config.MODEL_VERSION).startsWith('v12.3.73'));
-  assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.73-omega-vnext-price-lock:'));
+  assert.ok(String(config.MODEL_VERSION).startsWith('v12.3.74'));
+  assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
   assert.ok(String(config.MODEL_NOTES).includes('v12.3.72-omega-vnext-price-lock:'));
   assert.strictEqual(config.PINNACLE_LINE_MOVE.checkBookmakers, 'pinnacle,draftkings,hardrockbet');
   assert.strictEqual(config.PINNACLE_LINE_MOVE.bookmakers, 'pinnacle');
@@ -123,8 +123,11 @@ function scheduler() {
     { book: 'hardrockbet', american: -105 },
     { book: 'pinnacle', american: -120 },
   ])]);
-  assert.strictEqual(noDk.candidates.length, 0);
-  assert.strictEqual(noDk.excluded[0].excludeReason, 'no-draftkings-line');
+  assert.strictEqual(noDk.candidates.length, 1);
+  assert.strictEqual(noDk.candidates[0].book, 'hardrockbet');
+  assert.strictEqual(noDk.candidates[0].executionBook, 'hardrockbet');
+  assert.strictEqual(noDk.candidates[0].odds, -105);
+  assert.strictEqual(noDk.excluded.length, 0);
 
   const dkOnly = priceAtDraftKings(priced([{ book: 'draftkings', american: -115, point: -1.5 }]));
   assert.strictEqual(dkOnly.book, 'draftkings');

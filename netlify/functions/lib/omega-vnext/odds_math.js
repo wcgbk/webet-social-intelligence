@@ -214,13 +214,15 @@ function formatMoneylinePick(side, market) {
 }
 
 
-/** Parse edge as fraction — accepts 0.053, 5.3, or "5.3%". */
+/** Parse edge as fraction — accepts 0.053, 5.3, or "5.3%". A percent sign always scales. */
 function parseEdgeFraction(v) {
   if (v == null || v === '') return null;
-  if (typeof v === 'number' && Number.isFinite(v)) return v > 1 ? v / 100 : v;
-  const n = parseFloat(String(v).replace(/[^0-9.+-]/g, ''));
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.abs(v) > 1 ? v / 100 : v;
+  const s = String(v).trim();
+  const n = parseFloat(s.replace(/[^0-9.+-]/g, ''));
   if (!Number.isFinite(n)) return null;
-  return Math.abs(n) > 1 ? n / 100 : n;
+  if (s.includes('%') || Math.abs(n) > 1) return n / 100;
+  return n;
 }
 
 /**

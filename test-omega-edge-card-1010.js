@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
-const { selectStraights, edgeRank, matchupKey } = require(path.join(root, 'select'));
+const { selectStraights, edgeRank, matchupKey, passesPublishFloor } = require(path.join(root, 'select'));
 const { optimizeParlay } = require(path.join(root, 'parlay'));
 const { gateReason, applyGates } = require(path.join(root, 'gates'));
 const calibrate = require(path.join(root, 'calibrate'));
@@ -24,15 +24,20 @@ function assertSpecCard(pool, cardDate, label) {
     assert.ok(straights.length > 0, `${label}: card empty with ${pool.length} candidates`);
   }
   if (!straights.length) return { straights, parlay: [] };
-  const minEdge = Math.min(...straights.map(edgeRank));
+  const evOf = (c) => {
+    const n = Number(c && c.ev);
+    return Number.isFinite(n) ? n : -Infinity;
+  };
+  const minEv = Math.min(...straights.map(evOf));
   const straightIds = new Set(straights.map(idOf));
   const usedGames = new Set(straights.map(matchupKey));
   for (const c of pool) {
-    if (!(edgeRank(c) > minEdge + 1e-9)) continue;
+    if (!passesPublishFloor(c)) continue;
+    if (!(evOf(c) > minEv + 1e-9)) continue;
     if (straightIds.has(idOf(c))) continue;
     assert.ok(
       config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c)),
-      `${label}: higher edge on an open game is not a straight ${c.side} ${c.matchup} ${c.edgePct}`,
+      `${label}: higher EV on an open game is not a straight ${c.side} ${c.matchup} ${c.ev}`,
     );
   }
   const parlay = optimizeParlay(pool, straights, { cardDate });
@@ -100,13 +105,12 @@ const lowCover = assertSpecCard([
   dog,
 ], '2026-10-10', 'low-cover');
 assert.ok(lowCover.straights.some(s => s.side === dog.side), '30% cover with the higher edge is a straight');
-// 1.5% edge misses minEdgeFor. The 30% cover misses the parlay cover minimum. No parlay.
-assert.strictEqual(lowCover.parlay.length, 0);
-assert.ok(!lowCover.straights.some(s => s.edgePct === 0.015));
+// A 1.5% edge at 4% EV is a straight. The 30% cover still misses the optimizer cover minimum.
+assert.ok(lowCover.straights.some(s => s.edgePct === 0.015));
 
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true }), lockAsOf), 'ev-floor');
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true }), lockAsOf), 'coverProb-floor');
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), 'nonpositive-edge');
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), null);
 
 delete process.env.OMEGA_CAL_MODE;
 calibrate.clearCalParamsCache();
@@ -126,14 +130,14 @@ assert.ok(calibrate.CAL_POOL.minRows >= 80);
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.GATES.minCoverProb.default, 0);
 assert.strictEqual(config.GATES.minCoverProb.NCAAF, 0);
-assert.strictEqual(config.GATES.minEV.NFL, 0.03);
-assert.strictEqual(config.GATES.minEV.NCAAF, 0.03);
+assert.strictEqual(config.GATES.minEV.NFL, 0.02);
+assert.strictEqual(config.GATES.minEV.NCAAF, 0.02);
 assert.strictEqual(config.GATES.minPredictedClvCents, null);
 assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, true);
 assert.strictEqual(verify.sportCoverFloor('NCAAF'), 0);
 assert.strictEqual(verify.sportCoverFloor('MLB'), 0);
-assert.strictEqual(verify.sportEvFloor('NFL'), 0.03);
-assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.03, coverProb: 0.30 }), true);
+assert.strictEqual(verify.sportEvFloor('NFL'), 0.02);
+assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.02, coverProb: 0.30 }), true);
 assert.strictEqual(verify.candidateClearsSportGates({ sport: 'NCAAF', ev: 0.01, coverProb: 0.30 }), false);
 assert.strictEqual(verify.candidateClearsSportGates({ sport: 'MLB', ev: -0.01, coverProb: 0.55 }), false);
 

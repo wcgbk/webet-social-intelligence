@@ -291,6 +291,14 @@
   # dryRun writes nothing.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
+[functions."monitor-omega-snapshot-coverage"]
+  schedule = "20 14,15 * * *"
+  # 14:20 UTC = 10:20 ET (EDT). 15:20 UTC = 10:20 ET (EST).
+  # After the 3:00 and 10:00 checks. Reads stored line moves only.
+  # Does not pull the Odds API, does not grade, does not write the card.
+  # etGuard drops the off-season copy of the UTC union.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."capture-omega-pinnacle-open"]
   # Suspended. Openers are the first price in the 3:00 ET pull. This job
   # does not poll /events and does not pull Pinnacle.

@@ -115,6 +115,9 @@ const ET_SCHEDULE = {
   // etGuard drops 04:00 and 11:00. 9:00 and 10:30 are not scheduled.
   // Morning line snaps, the hourly opener, and kickoff closes are suspended.
   'capture-omega-pinnacle-lines': { etTimes: ['03:00', '10:00'] },
+  // 10:20 ET, after both morning checks. Cron "20 14,15 * * *" is 14:20 UTC
+  // (EDT) and 15:20 UTC (EST). Reads stored checks only. No Odds API pull.
+  'monitor-omega-snapshot-coverage': { etTimes: ['10:20'] },
   // 13:15 UTC = 9:15 ET (EDT), 14:15 UTC = 9:15 ET (EST). Before the 9:30 card.
   'recal-report-omega': { etTimes: ['09:15'] },
   // Same 09:15 ET slot. Display-only running CLV total. Does not price or select.

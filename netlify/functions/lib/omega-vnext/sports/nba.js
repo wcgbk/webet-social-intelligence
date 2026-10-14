@@ -1,8 +1,13 @@
 'use strict';
 /**
  * NBA projection — shadow only while SPORTS_ENABLED.NBA is false.
- * Moneyline, spread, and total. Blend matches MLB/NHL (0.50 / 0.50 / 0.45)
- * on no-vig Pinnacle. Calibrate and the shared gates run later.
+ * Moneyline, spread, and total. Fair probability is de-vigged Pinnacle.
+ * The 2025-10-21..2025-12-17 tune rejected every model weight above 0
+ * (docs/nba-backtest-1020.md). BLEND is 0 on every market, so modelRawP
+ * is the sharp price when Pinnacle is present. The logged margin and total
+ * still include rest and pace. They are not the price. Calibrate still
+ * records the hand-set shrink. That shrink does not move a probability
+ * that is already the sharp price. The shared gates run later.
  * This module does not read SPORTS_ENABLED. projectAll is the daily gate
  * and does not pass allowPreseason, so a preseason board cannot join the card.
  *
@@ -47,7 +52,7 @@ const { resolveTeamId, rowByIdentity, logUnknownTeam } = require('./team_identit
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 
 const SPORT = 'NBA';
-const BLEND = { ml: 0.50, spread: 0.50, total: 0.45 };
+const BLEND = { ml: 0, spread: 0, total: 0 };
 const NBA_RAMP_GAMES = 20;
 const NBA_PPG_MIN = 90;
 const NBA_PPG_MAX = 140;

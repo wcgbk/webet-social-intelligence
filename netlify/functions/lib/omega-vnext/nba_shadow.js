@@ -3,6 +3,9 @@
  * NBA shadow runner. Not the daily card.
  *
  * SPORTS_ENABLED.NBA stays false. projectAll never calls this module.
+ * generate calls logNbaFromGenerate only when OMEGA_NBA_GENERATE_SHADOW=1
+ * (or nbaGenerateShadow: true). That path does not fetch odds and does not
+ * join the daily card.
  * Preseason games are projected here and tagged preseason / shadowOnly.
  * Gate floors are the shared GATES (no new floor, no lower floor).
  * selectStraights is not called. Nothing is written to picks-{date},
@@ -60,6 +63,66 @@ function shadowKillReason() {
 
 function shadowLiveEnabled() {
   return shadowKillReason() == null;
+}
+
+/**
+ * Generate asks for an NBA side log only when the caller passes
+ * nbaGenerateShadow: true or the server env OMEGA_NBA_GENERATE_SHADOW=1.
+ * Unset is off. A client body cannot set the env. OMEGA_NBA_SHADOW=0
+ * still kills the log.
+ */
+function generateShadowRequested(opts) {
+  if (opts && opts.nbaGenerateShadow === false) return false;
+  if (opts && opts.nbaGenerateShadow === true) return true;
+  return process.env.OMEGA_NBA_GENERATE_SHADOW === '1';
+}
+
+function slateLooksPreseason(espnGames) {
+  const games = (espnGames && espnGames.games) || [];
+  return games.length > 0 && games.every((g) => g.preseason || Number(g.seasonType) === 1);
+}
+
+/**
+ * Side log from generate. Default off. Not the daily card.
+ * Uses the board generate already ingested. Does not call the Odds API,
+ * does not call selectStraights, and does not write picks-{date}.
+ * dryRun (including replay) computes the blob and does not store it.
+ * The caller must not attach the return value to the card.
+ */
+async function logNbaFromGenerate(opts = {}) {
+  if (!generateShadowRequested(opts)) {
+    return { ran: false, reason: 'flag-off', oddsCalls: 0, wrote: false, attachedToCard: false };
+  }
+  const killed = shadowKillReason();
+  if (killed) {
+    return { ran: false, reason: killed, oddsCalls: 0, wrote: false, attachedToCard: false };
+  }
+  const dateISO = assertDate(opts.dateISO || todayET());
+  const snap = opts.snap || {};
+  const espnGames = (snap.espnBySport && snap.espnBySport.NBA) || opts.espnGames || { games: [] };
+  const dryRun = opts.dryRun !== false;
+  const summary = await runNbaShadow({
+    dateISO,
+    dryRun: true,
+    oddsEvents: (snap.oddsBySport && snap.oddsBySport.NBA) || opts.oddsEvents || [],
+    standings: (snap.standingsBySport && snap.standingsBySport.NBA) || opts.standings || {},
+    espnGames,
+    gameDay: snap.gameDay || opts.gameDay || { restByTeam: { NBA: {} } },
+    preseason: slateLooksPreseason(espnGames),
+    asOf: opts.asOf,
+    asOfMs: opts.asOfMs,
+    prior: opts.prior,
+  });
+  summary.ran = true;
+  summary.oddsCalls = 0;
+  summary.creditsEstimate = 0;
+  summary.attachedToCard = false;
+  summary.wrote = false;
+  if (dryRun || !summary.payload) return summary;
+  const write = opts.store || defaultStore;
+  await write(summary.key, summary.payload);
+  summary.wrote = true;
+  return summary;
 }
 
 function previousShadowDate(dateISO) {
@@ -583,6 +646,8 @@ async function gradeNbaShadow(opts = {}) {
 
 module.exports = {
   runNbaShadow,
+  logNbaFromGenerate,
+  generateShadowRequested,
   gradeNbaShadow,
   matchFinal,
   fetchNbaBoard,

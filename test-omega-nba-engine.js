@@ -208,6 +208,9 @@ function byMarket(rows, market, sideIncludes) {
   const total = byMarket(rows, 'Total', 'Over');
   assert.ok(Math.abs(spread.modelProjection - config.HFA.NBA) < 0.02, String(spread.modelProjection));
   assert.ok(Math.abs(total.modelProjection - 2 * LEAGUE) < 0.05, String(total.modelProjection));
+  assert.deepStrictEqual(nba.BLEND, { ml: 0, spread: 0, total: 0 });
+  assert.ok(Math.abs(spread.modelRawP - spread.fair_sharp_p) < 1e-9, `blend 0 prices the sharp ${spread.modelRawP} vs ${spread.fair_sharp_p}`);
+  assert.ok(Math.abs(total.modelRawP - total.fair_sharp_p) < 1e-9, `total blend ${total.modelRawP}`);
   assert.ok(/nba-net-prior/.test(spread.projMethod), spread.projMethod);
   assert.strictEqual(spread.preseason, false);
   assert.strictEqual(spread.shadowOnly, false);
@@ -507,10 +510,10 @@ function byMarket(rows, market, sideIncludes) {
   assert.strictEqual(dry.creditsEstimate, 0);
   assert.strictEqual(dry.key, 'omega-nba-shadow-2026-10-20');
   assert.ok(dry.candidateCount >= 6, `candidates ${dry.candidateCount}`);
-  // Default mode A keeps the hand-set shrink. This board's model and line
-  // disagree, so the shadow card is not empty. The daily NBA flag stays off.
-  assert.ok(dry.yesCount >= 1, `yes ${dry.yesCount} rejected ${dry.rejectedCount}`);
-  assert.ok(dry.payload.picks.length >= 1);
+  // Fair p is the Pinnacle no-vig price (blend weight 0). This fixture's
+  // books agree, so the 2% gate does not fire. The daily NBA flag stays off.
+  assert.strictEqual(dry.yesCount, 0, `yes ${dry.yesCount} rejected ${dry.rejectedCount}`);
+  assert.strictEqual(dry.payload.picks.length, 0);
   assert.ok(dry.payload.picks.every(p => p.shadowOnly === true));
   assert.strictEqual(dry.payload.shadowOnly, true);
   assert.strictEqual(dry.payload.sportsEnabledNba, false);
@@ -531,6 +534,8 @@ function byMarket(rows, market, sideIncludes) {
   clearCalParamsCache();
   try {
     const dryLegacy = await shadow.runNbaShadow({ ...board, dryRun: true });
+    // Legacy still applies the fixed 0.42–0.58 band. That clip, not the
+    // model blend, is what leaves a shadow pick on this board.
     assert.ok(dryLegacy.yesCount >= 1, `legacy yes ${dryLegacy.yesCount} rejected ${dryLegacy.rejectedCount}`);
     assert.ok(dryLegacy.payload.picks.every(p => p.shadowOnly === true));
     assert.ok(dryLegacy.payload.picks.every(p => p.preseason === true));
@@ -824,8 +829,8 @@ function fixtureBoard() {
   try {
     const projectHandler = require('./netlify/functions/trigger-omega-nba-shadow').handler;
     const gradeHandler = require('./netlify/functions/trigger-omega-nba-shadow-grade').handler;
-    // Default mode A: hand-set shrink, so this fixture still publishes
-    // shadow picks. The cron writes the doc. The daily NBA flag stays off.
+    // Blend weight 0: this agreeing board has no 2% edge. The cron still
+    // writes the doc. The daily NBA flag stays off.
     delete process.env.OMEGA_CAL_MODE;
     clearCalParamsCache();
     const shipWrites = [];
@@ -841,8 +846,8 @@ function fixtureBoard() {
     assert.strictEqual(shipBody.wrote, true);
     assert.strictEqual(shipBody.oddsCalls, 0);
     assert.strictEqual(shipWrites.length, 1);
-    assert.ok(shipWrites[0].data.yesCount >= 1);
-    assert.ok(shipWrites[0].data.picks.length >= 1);
+    assert.strictEqual(shipWrites[0].data.yesCount, 0);
+    assert.strictEqual(shipWrites[0].data.picks.length, 0);
     assert.strictEqual(shipWrites[0].data.shadowOnly, true);
     assert.ok(shipWrites[0].data.picks.every((p) => p.shadowOnly === true));
 
@@ -866,8 +871,8 @@ function fixtureBoard() {
     assert.strictEqual(bWrites[0].data.picks.length, 0);
     assert.strictEqual(bWrites[0].data.shadowOnly, true);
 
-    // Legacy still publishes the model-vs-line disagreement, so the tag
-    // and grader checks below have a non-empty shadow card.
+    // Legacy band clip still publishes one shadow pick, so the grader below
+    // has a card. Default mode A, above, does not.
     process.env.OMEGA_CAL_MODE = 'legacy';
     clearCalParamsCache();
     const writes = [];
@@ -1007,6 +1012,76 @@ function fixtureBoard() {
     else process.env.OMEGA_NBA_SHADOW = prevShadow;
     global.fetch = prevFetch;
     assert.strictEqual(shadow.shadowLiveEnabled(), config.NBA_SHADOW.enabled === true);
+  }
+}
+
+// Generate shadow is off unless asked. It writes its own blob and does not
+// touch a card object. It does not fetch odds.
+{
+  const prevGen = process.env.OMEGA_NBA_GENERATE_SHADOW;
+  const prevKill = process.env.OMEGA_NBA_SHADOW;
+  delete process.env.OMEGA_NBA_GENERATE_SHADOW;
+  delete process.env.OMEGA_NBA_SHADOW;
+  const prevFetch = global.fetch;
+  let fetches = 0;
+  global.fetch = async () => { fetches += 1; throw new Error('generate shadow must not fetch'); };
+  try {
+    const off = await shadow.logNbaFromGenerate({
+      dateISO: '2026-10-16',
+      oddsEvents: fixtureBoard().oddsEvents,
+      espnGames: fixtureBoard().espnGames,
+      prior: equalPrior(),
+      dryRun: true,
+      store: async () => { throw new Error('flag-off must not write'); },
+    });
+    assert.strictEqual(off.ran, false);
+    assert.strictEqual(off.reason, 'flag-off');
+    assert.strictEqual(off.oddsCalls, 0);
+    assert.strictEqual(fetches, 0);
+
+    const card = { picks: [{ sport: 'NHL', odds: '-110' }], parlayLegs: [{ legs: [{}, {}, {}] }] };
+    const before = JSON.stringify(card);
+    const writes = [];
+    process.env.OMEGA_NBA_GENERATE_SHADOW = '1';
+    const on = await shadow.logNbaFromGenerate({
+      dateISO: '2026-10-16',
+      snap: {
+        oddsBySport: { NBA: fixtureBoard().oddsEvents },
+        espnBySport: { NBA: fixtureBoard().espnGames },
+        standingsBySport: { NBA: {} },
+        gameDay: { restByTeam: { NBA: {} } },
+      },
+      prior: equalPrior(),
+      dryRun: false,
+      asOf: '2026-10-16T15:00:00Z',
+      store: async (key, data) => { writes.push({ key, data }); },
+    });
+    assert.strictEqual(JSON.stringify(card), before, 'shadow log must not mutate the card');
+    assert.strictEqual(on.attachedToCard, false);
+    assert.strictEqual(on.ran, true);
+    assert.strictEqual(on.oddsCalls, 0);
+    assert.strictEqual(on.creditsEstimate, 0);
+    assert.strictEqual(on.wrote, true);
+    assert.strictEqual(on.yesCount, 0);
+    assert.strictEqual(writes.length, 1);
+    assert.strictEqual(writes[0].key, 'omega-nba-shadow-2026-10-16');
+    assert.strictEqual(writes[0].data.shadowOnly, true);
+    assert.strictEqual(writes[0].data.sportsEnabledNba, false);
+    assert.strictEqual(writes[0].data.preseason, true);
+    assert.strictEqual(fetches, 0);
+
+    const indexSrc = fs.readFileSync(path.join(root, 'index.js'), 'utf8');
+    assert.ok(indexSrc.includes('logNbaFromGenerate'));
+    assert.ok(indexSrc.includes('not copied onto picksData') || indexSrc.includes('The result is'));
+    assert.ok(!/picksData\.nba/.test(indexSrc));
+    assert.strictEqual(config.SPORTS_ENABLED.NBA, false);
+    assert.strictEqual(config.NBA_CARD_LIVE, false);
+  } finally {
+    if (prevGen == null) delete process.env.OMEGA_NBA_GENERATE_SHADOW;
+    else process.env.OMEGA_NBA_GENERATE_SHADOW = prevGen;
+    if (prevKill == null) delete process.env.OMEGA_NBA_SHADOW;
+    else process.env.OMEGA_NBA_SHADOW = prevKill;
+    global.fetch = prevFetch;
   }
 }
 

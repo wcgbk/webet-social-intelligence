@@ -1064,6 +1064,21 @@ async function generateOmegaVnext(opts = {}) {
   picksData.timelineStep = '10:00';
   if (!picksData.selection || typeof picksData.selection !== 'object') picksData.selection = {};
   picksData.selection.stage = picksData.selection.stage || 'top10';
+  // NBA side log. Default off. Writes omega-nba-shadow-{date} only, and
+  // only when this generate is not a dry run or a replay. The result is
+  // not copied onto picksData. No Odds API call.
+  try {
+    const { logNbaFromGenerate } = require('./nba_shadow');
+    await logNbaFromGenerate({
+      dateISO,
+      snap,
+      dryRun: !!(dryRun || replayLike),
+      nbaGenerateShadow: opts.nbaGenerateShadow,
+      asOf: opts.historicalSnapshot || null,
+    });
+  } catch (err) {
+    console.error(`[omega-nba-generate-shadow] soft-fail: ${err && err.message}`);
+  }
   return picksData;
   } finally {
     if (auditLog) {

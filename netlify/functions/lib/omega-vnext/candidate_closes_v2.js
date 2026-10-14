@@ -223,7 +223,7 @@ function stampClose(row, close, nowIso) {
   const offered = americanToImplied(row && row.odds);
   const clvVsOffered = offered == null ? null : close.closeNoVig - offered;
   const clvAtPrice = priceClv(row, close);
-  const headline = sharpFairEnabled() ? clvAtPrice : clvProb;
+  const headline = clvAtPrice;
   return {
     closeAt: nowIso,
     closeBook: close.book,

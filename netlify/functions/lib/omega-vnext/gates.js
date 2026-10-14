@@ -206,7 +206,14 @@ function gateReason(c, opts = {}) {
     console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} reason=ev-above-12pct`);
     return 'ev-stale';
   }
-  if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
+  // Sharp card: grades are the price edge, p_fair − implied.
+  // A− and up (≥2%) are mains. B is the 1–2% lean. Under 1% is not a fill.
+  if (c && c.sharpFairPriced) {
+    const edge = finiteEdge(c);
+    if (!Number.isFinite(edge) || edge < 0.01 - 1e-12) return 'edge-floor';
+    if (edge < 0.02 - 1e-12) return 'ev-floor';
+    if (!Number.isFinite(c.ev)) return 'ev-floor';
+  } else if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
   if (GATES.minPredictedClvCents != null
     && typeof c.predictedClv === 'number'
     && c.predictedClv < GATES.minPredictedClvCents) {

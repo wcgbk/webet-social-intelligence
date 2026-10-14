@@ -104,7 +104,7 @@ assert.strictEqual(nflExact.ok, true);
 assert.strictEqual(nflExact.q, 0.09);
 assert.ok(nflExact.ev < 0);
 const noPush = stakeEv(0.5, -110, 0);
-assert.ok(Math.abs(nflExact.ev - noPush * 0.91) < 1e-9);
+assert.ok(Math.abs(nflExact.ev - noPush) < 1e-9);
 
 const bought = evaluateQuote({
   sport: 'NFL',
@@ -222,13 +222,13 @@ assert.strictEqual(stale.sharpFairReject, 'stale-sharp');
 assert.strictEqual(stale.coverProb, null);
 
 const asOf = { cardDate: '2026-09-22', asOfMs: Date.parse('2026-09-22T14:00:00Z') };
-assert.strictEqual(gateReason(priced, asOf), 'ev-floor');
+assert.strictEqual(gateReason(priced, asOf), 'edge-floor');
 const gated = applyGates([priced, stale], asOf);
 assert.strictEqual(gated.yesPool.length, 0);
-assert.strictEqual(gated.leanPool.length, 1);
-assert.strictEqual(gated.leanPool[0].side, 'Milwaukee Brewers');
-assert.strictEqual(gated.rejected.length, 1);
-assert.strictEqual(gated.rejected[0].rejectReason, 'stale-sharp');
+assert.strictEqual(gated.leanPool.length, 0);
+assert.ok(gated.rejected.some((row) => row.side === 'Milwaukee Brewers' && row.rejectReason === 'edge-floor'));
+assert.strictEqual(gated.rejected.length, 2);
+assert.ok(gated.rejected.some((row) => row.rejectReason === 'stale-sharp'));
 
 const floor = priceCandidate({
   ...modelRow,
@@ -339,5 +339,53 @@ assert.strictEqual(shifted.clvAtPrice, null);
 assert.strictEqual(shifted.clv, null);
 assert.strictEqual(shifted.beatClose, null);
 delete process.env.OMEGA_SHARP_FAIR;
+
+const { toPickObject } = require('./netlify/functions/lib/omega-vnext/select');
+const implied110 = americanToImplied(-110);
+const mainP = implied110 + 0.04;
+const main = toPickObject({
+  sharpFairPriced: true,
+  sport: 'MLB',
+  market: 'Moneyline',
+  side: 'Chicago White Sox',
+  matchup: 'Chicago White Sox @ Houston Astros',
+  homeTeam: 'Houston Astros',
+  awayTeam: 'Chicago White Sox',
+  odds: -110,
+  coverProb: mainP,
+  edgePct: mainP - implied110,
+  ev: mainP * dec110 - 1,
+  tier: 'floor',
+  liquid: true,
+});
+assert.strictEqual(main.rating, 'a');
+assert.ok(parseFloat(main.units) <= 1 + 1e-9, main.units);
+assert.ok(parseFloat(main.units) > 0.5, main.units);
+const leanP = implied110 + 0.015;
+const lean = toPickObject({
+  sharpFairPriced: true,
+  sport: 'MLB',
+  market: 'Total',
+  side: 'Over 7.5',
+  matchup: 'Chicago Cubs @ San Diego Padres',
+  odds: -110,
+  coverProb: leanP,
+  edgePct: 0.015,
+  ev: leanP * dec110 - 1,
+  tier: 'lean',
+  liquid: true,
+});
+assert.strictEqual(lean.rating, 'b');
+assert.ok(parseFloat(lean.units) <= 0.5 + 1e-9, lean.units);
+const strong = toPickObject({
+  ...main,
+  sharpFairPriced: true,
+  coverProb: implied110 + 0.05,
+  edgePct: 0.05,
+  odds: -110,
+  tier: 'floor',
+});
+assert.strictEqual(strong.rating, 'aplus');
+assert.ok(parseFloat(strong.units) <= 1 + 1e-9);
 
 console.log('test-sharp-fair-1014 ok');

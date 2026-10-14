@@ -240,7 +240,9 @@ function evaluateQuote(input) {
     return reject('point-mismatch', { vig, lagMin: lag });
   }
 
-  const ev = stakeEv(p, betAmerican, push);
+  // Card EV is p_fair × decimal − 1 at this line. Push stays on q for diagnostics.
+  const dec = americanToDecimal(betAmerican);
+  const ev = dec == null || !Number.isFinite(p) ? null : p * dec - 1;
   if (ev == null || !Number.isFinite(p)) return reject('no-two-way', { vig, lagMin: lag });
   return {
     ok: true,

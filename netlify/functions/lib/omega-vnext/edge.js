@@ -590,6 +590,20 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
  * edgePct stays coverProb − fair_sharp. Both of those are conditional.
  */
 function attachEv(c) {
+  // A sharp-priced row already holds p_fair in coverProb. Keep edge and EV
+  // on that fair. Do not put the model gap back on the badge.
+  if (c && c.sharpFairPriced && Number.isFinite(Number(c.coverProb))) {
+    const p = Number(c.coverProb);
+    const impliedSharp = americanToImplied(c.odds);
+    const sharpEv = evAtOdds(p, c.odds);
+    const sharpEdge = impliedSharp != null ? p - impliedSharp : null;
+    return {
+      ...c,
+      ev: sharpEv != null ? +sharpEv.toFixed(4) : null,
+      edgePct: sharpEdge != null ? +sharpEdge.toFixed(4) : null,
+      edgePctDisplay: formatEdgePct(sharpEdge),
+    };
+  }
   const ev = pushAwareEv(c.coverProb, c.odds, c && c.pPush);
   const implied = americanToImplied(c.odds);
   const fair = (c.fair_sharp_p != null && Number.isFinite(c.fair_sharp_p))

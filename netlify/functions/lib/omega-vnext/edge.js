@@ -6,6 +6,7 @@ const {
   noVigTwoWay, americanJuiceDelta,
 } = require('./odds_math');
 const { pushAwareEv } = require('./push_ev');
+const { sharpFairEnabled } = require('./sharp_fair');
 
 function bookKey(b) {
   return String(b || '').toLowerCase();
@@ -23,6 +24,7 @@ function collectMarketOutcomes(event, marketKey) {
     const key = bookKey(bk.key);
     const mkt = (bk.markets || []).find(m => m.key === marketKey);
     if (!mkt) continue;
+    const lastUpdate = mkt.last_update || mkt.lastUpdate || null;
     for (const o of mkt.outcomes || []) {
       const point = o.point != null ? Number(o.point) : null;
       const sideName = o.name;
@@ -30,7 +32,9 @@ function collectMarketOutcomes(event, marketKey) {
       if (!bySide.has(sideKey)) {
         bySide.set(sideKey, { side: sideName, point, prices: [] });
       }
-      bySide.get(sideKey).prices.push({ book: key, american: Number(o.price) });
+      const row = { book: key, american: Number(o.price) };
+      if (lastUpdate) row.lastUpdate = lastUpdate;
+      bySide.get(sideKey).prices.push(row);
     }
   }
   return [...bySide.values()];
@@ -372,9 +376,13 @@ function sharpFairForSide(sideBundles, targetSide, targetPoint) {
   if (!target) return null;
 
   for (const book of SHARP_BOOKS) {
+    if (sharpFairEnabled() && book !== 'pinnacle') continue;
     const paired = noVigForBook(sideBundles, target, book);
     if (paired != null) return paired;
   }
+
+  // Pinnacle had no pair at this point. A DK/HR median is not a fair.
+  if (sharpFairEnabled()) return null;
 
   const opposite = oppositeBundle(sideBundles, target);
   if (!opposite) {
@@ -447,6 +455,38 @@ function hardRockQuote(allBundles, side, point) {
   return best;
 }
 
+/**
+ * Pinnacle two-way half a point away, only when this side has no pair
+ * and the integer between the points is an NFL 3 or 7. Other gaps stay null.
+ */
+function nflHookPair(raw, sideBundle, allBundles) {
+  if (!raw || !sideBundle || String(raw.sport || '').toUpperCase() !== 'NFL') return null;
+  if (!/spread/i.test(String(raw.market || ''))) return null;
+  const pt = sideBundle.point != null ? Number(sideBundle.point) : null;
+  if (!Number.isFinite(pt)) return null;
+  for (const delta of [0.5, -0.5]) {
+    const want = pt + delta;
+    const bundle = (allBundles || []).find((b) => b && b.side === sideBundle.side && b.point != null && Math.abs(Number(b.point) - want) < 1e-6);
+    if (!bundle) continue;
+    const integer = Math.abs(pt - Math.round(pt)) < 1e-6 ? Math.round(pt) : Math.round(want);
+    if (Math.abs(integer) !== 3 && Math.abs(integer) !== 7) continue;
+    const opp = oppositeBundle(allBundles, bundle);
+    const sideRow = (bundle.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
+    const oppRow = opp
+      ? (opp.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)))
+      : null;
+    if (!sideRow || !oppRow) continue;
+    const last = sideRow.lastUpdate || oppRow.lastUpdate || null;
+    return {
+      american: Number(sideRow.american),
+      oppAmerican: Number(oppRow.american),
+      point: Number(bundle.point),
+      ...(last ? { lastUpdate: last } : {}),
+    };
+  }
+  return null;
+}
+
 function bundleHasPinnacle(bundle) {
   return ((bundle && bundle.prices) || []).some((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
 }
@@ -492,16 +532,23 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
   const pinnacleNoVig = noVigForBook(allBundles, sideBundle, 'pinnacle');
   const pinnaclePoint = pinnaclePointOf(raw, allBundles);
   const oppForPin = oppositeBundle(allBundles, sideBundle);
-  const pinSideAm = americanForBook(sideBundle.prices, 'pinnacle');
-  const pinOppAm = oppForPin ? americanForBook(oppForPin.prices, 'pinnacle') : null;
+  const pinSideRow = (sideBundle.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)));
+  const pinOppRow = oppForPin
+    ? (oppForPin.prices || []).find((p) => bookKey(p.book) === 'pinnacle' && Number.isFinite(Number(p.american)))
+    : null;
+  const pinSideAm = pinSideRow ? Number(pinSideRow.american) : null;
+  const pinOppAm = pinOppRow ? Number(pinOppRow.american) : null;
+  const pinLast = (pinSideRow && pinSideRow.lastUpdate) || (pinOppRow && pinOppRow.lastUpdate) || null;
   const pinnacleSide = (pinSideAm != null && pinOppAm != null)
     ? {
       american: pinSideAm,
       oppAmerican: pinOppAm,
       point: sideBundle.point != null && sideBundle.point !== '' ? Number(sideBundle.point) : null,
       oppPoint: oppForPin.point != null && oppForPin.point !== '' ? Number(oppForPin.point) : null,
+      ...(pinLast ? { lastUpdate: pinLast } : {}),
     }
     : null;
+  const pinnacleHook = pinnacleSide ? null : nflHookPair(raw, sideBundle, allBundles);
   return {
     ...raw,
     odds,
@@ -527,6 +574,7 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     ...(pinnacleNoVig != null && Number.isFinite(pinnacleNoVig) ? { pinnacleNoVig } : {}),
     ...(pinnaclePoint != null && Number.isFinite(pinnaclePoint) ? { pinnaclePoint } : {}),
     ...(pinnacleSide ? { pinnacleSide } : {}),
+    ...(pinnacleHook ? { pinnacleHook } : {}),
   };
 }
 

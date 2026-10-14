@@ -16,7 +16,7 @@ const {
 } = require('./netlify/functions/lib/omega-vnext/sharp_fair');
 
 assert.strictEqual(SHARP_FAIR_VERSION, 'sharp-math-1014');
-assert.strictEqual(FRESH_MINUTES, 15);
+assert.strictEqual(FRESH_MINUTES, 20);
 assert.strictEqual(sharpFairEnabled({}), false);
 assert.strictEqual(sharpFairEnabled({ OMEGA_SHARP_FAIR: '0' }), false);
 assert.strictEqual(sharpFairEnabled({ OMEGA_SHARP_FAIR: 'off' }), false);
@@ -68,7 +68,8 @@ assert.ok(brewers.ev < 0);
 assert.strictEqual(brewers.method, 'power');
 
 assert.strictEqual(quote({ pinLagMin: 15 }).ok, true);
-assert.strictEqual(quote({ pinLagMin: 15.01 }).reason, 'stale-sharp');
+assert.strictEqual(quote({ pinLagMin: 20 }).ok, true);
+assert.strictEqual(quote({ pinLagMin: 20.01 }).reason, 'stale-sharp');
 assert.strictEqual(quote({ pinLagMin: -5 }).reason, 'stale-sharp');
 assert.strictEqual(quote({ pinLagMin: null }).reason, 'stale-sharp');
 assert.strictEqual(quote({ pinLagMin: null, sameSnapshot: true }).ok, true);
@@ -298,5 +299,45 @@ assert.ok(americanToImplied(118) > enriched.fair_sharp_p);
 const batch = applySharpFair([modelRow], { sameSnapshot: false });
 assert.strictEqual(batch.length, 1);
 assert.strictEqual(batch[0].sharpFairPriced, true);
+
+const shop = priceCandidate({
+  ...modelRow,
+  odds: 100,
+  book: 'draftkings',
+  dkQuote: { book: 'draftkings', american: 100, point: null },
+  hardRock: { book: 'hardrockbet', american: 130, point: null },
+});
+assert.strictEqual(shop.book, 'hardrockbet');
+assert.strictEqual(shop.odds, 130);
+assert.ok(shop.ev > priceCandidate({ ...modelRow, odds: 100, book: 'draftkings' }).ev);
+
+const { sharpFairForSide } = require('./netlify/functions/lib/omega-vnext/edge');
+const { stampClose } = require('./netlify/functions/lib/omega-vnext/candidate_closes_v2');
+const { americanToDecimal } = require('./netlify/functions/lib/omega-vnext/odds_math');
+process.env.OMEGA_SHARP_FAIR = '1';
+const softOnly = sharpFairForSide([
+  { side: 'A', point: null, prices: [{ book: 'draftkings', american: -110 }, { book: 'hardrockbet', american: -108 }] },
+  { side: 'B', point: null, prices: [{ book: 'draftkings', american: -110 }, { book: 'hardrockbet', american: -112 }] },
+], 'A', null);
+assert.strictEqual(softOnly, null);
+const dec110 = americanToDecimal(-110);
+const stamped = stampClose(
+  { odds: -110, fair_sharp_p: 0.47 },
+  { book: 'pinnacle', line: -3, sideOdds: -105, oppOdds: -115, closeNoVig: 0.52, pointAdjusted: false },
+  '2026-10-14T16:00:00Z',
+);
+assert.ok(Math.abs(stamped.clvAtPrice - (dec110 * 0.52 - 1)) < 1e-12);
+assert.strictEqual(stamped.clv, stamped.clvAtPrice);
+assert.strictEqual(stamped.beatClose, stamped.clvAtPrice > 0);
+assert.ok(Math.abs(stamped.marketDrift - (0.52 - 0.47)) < 1e-12);
+const shifted = stampClose(
+  { odds: -110, fair_sharp_p: 0.5 },
+  { book: 'pinnacle', line: 7.5, sideOdds: -110, oppOdds: -110, closeNoVig: 0.5, pointAdjusted: true },
+  '2026-10-14T16:00:00Z',
+);
+assert.strictEqual(shifted.clvAtPrice, null);
+assert.strictEqual(shifted.clv, null);
+assert.strictEqual(shifted.beatClose, null);
+delete process.env.OMEGA_SHARP_FAIR;
 
 console.log('test-sharp-fair-1014 ok');

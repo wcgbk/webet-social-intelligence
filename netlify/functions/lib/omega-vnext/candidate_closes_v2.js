@@ -25,7 +25,8 @@
 
 const { SHARP_BOOKS, SITE_ID, BLOB_STORE } = require('./config');
 const { collectMarketOutcomes, oppositeBundle } = require('./edge');
-const { americanToImplied, noVigTwoWay, americanCentsDiff } = require('./odds_math');
+const { americanToImplied, americanToDecimal, noVigTwoWay, americanCentsDiff } = require('./odds_math');
+const { sharpFairEnabled } = require('./sharp_fair');
 const { etParts } = require('../et-schedule');
 const { rowKey, sportKeyFor, candidateLedgerKey } = require('./candidate_ledger');
 const { replayNoWrite, logBlocked } = require('./no_write');
@@ -184,6 +185,8 @@ function devigCandidate(event, row) {
     }
   }
   if (marketKey === 'h2h') return null;
+  // A nearest line is not the bet's contract. The sharp-fair path does not grade it.
+  if (sharpFairEnabled()) return null;
   for (const book of SHARP_BOOKS) {
     const paired = closestPaired(bundles, name, line, book);
     if (!paired) continue;
@@ -205,6 +208,13 @@ function clvAliases(clvProb) {
   return { clv: clvProb, clvCents: cents(clvProb), beatClose: clvProb > 0 };
 }
 
+function priceClv(row, close) {
+  if (!close || close.pointAdjusted) return null;
+  const dec = americanToDecimal(row && row.odds);
+  if (dec == null || !Number.isFinite(close.closeNoVig)) return null;
+  return dec * close.closeNoVig - 1;
+}
+
 function stampClose(row, close, nowIso) {
   const frozen = row && row.fair_sharp_p_at_generate != null ? Number(row.fair_sharp_p_at_generate) : null;
   const fair = Number.isFinite(frozen) ? frozen : (row && row.fair_sharp_p != null ? Number(row.fair_sharp_p) : null);
@@ -212,6 +222,8 @@ function stampClose(row, close, nowIso) {
   const clvProb = fairOk == null ? null : close.closeNoVig - fairOk;
   const offered = americanToImplied(row && row.odds);
   const clvVsOffered = offered == null ? null : close.closeNoVig - offered;
+  const clvAtPrice = priceClv(row, close);
+  const headline = sharpFairEnabled() ? clvAtPrice : clvProb;
   return {
     closeAt: nowIso,
     closeBook: close.book,
@@ -221,7 +233,10 @@ function stampClose(row, close, nowIso) {
     pointAdjusted: !!close.pointAdjusted,
     clvProb,
     clvProbCents: cents(clvProb),
-    ...clvAliases(clvProb),
+    ...clvAliases(headline),
+    clvAtPrice,
+    clvAtPriceCents: cents(clvAtPrice),
+    marketDrift: clvProb,
     clvVsOffered,
     clvVsOfferedCents: cents(clvVsOffered),
     clvAmericanCents: close.pointAdjusted ? null : americanCentsDiff(row && row.odds, close.sideOdds),
@@ -232,6 +247,7 @@ function stampClose(row, close, nowIso) {
 const CLOSE_FIELDS = [
   'closeAt', 'closeBook', 'closeLine', 'closeOddsPair', 'closeNoVig', 'pointAdjusted',
   'clvProb', 'clvProbCents', 'clv', 'clvCents', 'beatClose',
+  'clvAtPrice', 'clvAtPriceCents', 'marketDrift',
   'clvVsOffered', 'clvVsOfferedCents', 'clvAmericanCents',
   'fair_sharp_p_at_generate', 'result', 'gradedAt',
 ];

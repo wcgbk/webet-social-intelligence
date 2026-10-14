@@ -14,7 +14,7 @@
 const { americanToImplied, americanToDecimal } = require('./odds_math');
 
 const SHARP_FAIR_VERSION = 'sharp-math-1014';
-const FRESH_MINUTES = 15;
+const FRESH_MINUTES = 20;
 /** Close-conditioned NFL push rates. nflverse 1999–2025, spread exactly on the number. */
 const NFL_SPREAD_PUSH = { 3: 0.090, 7: 0.065 };
 const OVERROUND_MAX = 0.06;
@@ -266,6 +266,47 @@ function betPointOf(c) {
   return null;
 }
 
+function retailBook(name) {
+  const k = String(name || '').toLowerCase();
+  if (k === 'hardrockbet_oh' || k === 'hardrock') return 'hardrockbet';
+  if (k === 'draftkings' || k === 'hardrockbet') return k;
+  return null;
+}
+
+/**
+ * DraftKings and Hard Rock offers on this candidate.
+ * A quote at a different point is a different candidate, except the caller
+ * passes the bet point into evaluateQuote, which converts only the NFL 3/7 hook.
+ */
+function retailOffers(c) {
+  const offers = [];
+  const seen = new Set();
+  const add = (book, american, point, at) => {
+    const name = retailBook(book);
+    const price = numOrNull(american);
+    if (!name || price == null) return;
+    const pt = isMoneyline(c.market) ? null : numOrNull(point);
+    const key = `${name}|${price}|${pt == null ? 'ml' : pt}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    offers.push({ book: name, american: price, point: pt, at: at || null });
+  };
+  if (c.dkQuote) add('draftkings', c.dkQuote.american, c.dkQuote.point != null ? c.dkQuote.point : c.line, c.dkQuote.lastUpdate);
+  if (c.hardRock) {
+    add('hardrockbet', c.hardRock.american != null ? c.hardRock.american : c.hardRock.price, c.hardRock.point, c.hardRock.lastUpdate);
+  }
+  if (Array.isArray(c.bookPrices)) {
+    for (const p of c.bookPrices) {
+      if (!p) continue;
+      add(p.book || p.key, p.american != null ? p.american : p.price, p.point != null ? p.point : c.line, p.lastUpdate);
+    }
+  }
+  if (!offers.length && numOrNull(c.odds) != null) {
+    add(c.book || c.executionBook || 'draftkings', c.odds, c.line, c.softQuotedAt);
+  }
+  return offers;
+}
+
 /**
  * Replace coverProb and stake EV on one candidate.
  * A failed pair sets sharpFairReject and leaves the row off the floor and the lean fill.
@@ -273,43 +314,68 @@ function betPointOf(c) {
 function priceCandidate(c, opts) {
   if (!c) return c;
   const options = opts || {};
-  const pair = c.pinnacleSide || null;
+  const exact = c.pinnacleSide || null;
+  const hook = !exact && c.pinnacleHook ? c.pinnacleHook : null;
+  const pair = exact || hook || null;
   const pinAmerican = pair && pair.american != null ? pair.american : c.pinnacleAmerican;
   const pinOpp = pair && pair.oppAmerican != null ? pair.oppAmerican : c.pinnacleOppAmerican;
   const pinPoint = pair && Object.prototype.hasOwnProperty.call(pair, 'point')
     ? pair.point
     : (c.pinnacleSidePoint != null ? c.pinnacleSidePoint : c.pinnaclePoint);
-  const fair = evaluateQuote({
-    sport: c.sport,
-    market: c.market,
-    pinAmerican,
-    pinOppAmerican: pinOpp,
-    pinPoint: isMoneyline(c.market) ? null : pinPoint,
-    betPoint: betPointOf(c),
-    betAmerican: c.odds,
-    pinAt: c.pinQuotedAt || c.pinnacleQuotedAt,
-    softAt: c.softQuotedAt || c.entryTs,
-    pinLagMin: c.pinLagMin,
-    sameSnapshot: options.sameSnapshot === true,
-    freshMinutes: options.freshMinutes,
-  });
-  if (!fair.ok) {
+  const pinAt = (pair && pair.lastUpdate) || c.pinQuotedAt || c.pinnacleQuotedAt;
+  const offers = retailOffers(c);
+  let fair = null;
+  let chosen = null;
+  let firstReject = null;
+  for (const offer of offers) {
+    const got = evaluateQuote({
+      sport: c.sport,
+      market: c.market,
+      pinAmerican,
+      pinOppAmerican: pinOpp,
+      pinPoint: isMoneyline(c.market) ? null : pinPoint,
+      betPoint: isMoneyline(c.market) ? null : (offer.point != null ? offer.point : betPointOf(c)),
+      betAmerican: offer.american,
+      pinAt,
+      softAt: offer.at || c.softQuotedAt || c.entryTs,
+      pinLagMin: c.pinLagMin,
+      sameSnapshot: options.sameSnapshot === true,
+      freshMinutes: options.freshMinutes,
+    });
+    if (!got.ok) {
+      if (!firstReject) firstReject = got;
+      continue;
+    }
+    if (!fair || got.ev > fair.ev + 1e-12) {
+      fair = got;
+      chosen = offer;
+    }
+  }
+  if (!fair) {
+    const miss = firstReject || reject('no-two-way');
     return {
       ...c,
-      sharpFairReject: fair.reason,
+      sharpFairReject: miss.reason,
       sharpFairPriced: false,
       priceVersion: SHARP_FAIR_VERSION,
-      sharpVig: fair.vig != null ? fair.vig : null,
-      sharpLagMin: fair.lagMin != null ? fair.lagMin : null,
+      sharpVig: miss.vig != null ? miss.vig : null,
+      sharpLagMin: miss.lagMin != null ? miss.lagMin : null,
+      fair_sharp_p: null,
       coverProb: null,
       ev: null,
       movementDrop: false,
     };
   }
-  const implied = americanToImplied(c.odds);
+  const implied = americanToImplied(chosen.american);
   const edge = implied != null ? fair.p - implied : null;
+  const line = isMoneyline(c.market) ? null : (chosen.point != null ? chosen.point : betPointOf(c));
   return {
     ...c,
+    odds: chosen.american,
+    line,
+    book: chosen.book,
+    priceBook: chosen.book,
+    executionBook: chosen.book,
     sharpFairReject: null,
     sharpFairPriced: true,
     priceVersion: SHARP_FAIR_VERSION,
@@ -346,6 +412,7 @@ module.exports = {
   evaluateQuote,
   priceCandidate,
   applySharpFair,
+  retailOffers,
   stakeEv,
   lagMinutes,
 };

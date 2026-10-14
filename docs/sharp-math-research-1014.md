@@ -31,10 +31,7 @@ The code already has `powerFair` and only calls it past −250 / +210 (`odds_mat
 Fair is defined at **one point**. A soft price at 3.5 is not a bet against a Pinnacle fair at 3.
 
 1. Prefer the exact point and side, both books, same snapshot.
-2. If the points differ, convert with a distribution centered on the de-vigged main (or the sharp point), then read `P(win)` and `P(push)` at the soft point [S10][S13].
-   - NFL/NCAAF spreads: normal with extra mass on keys 3, 6, 7 (and 10, 14). Conditional push at NFL −3 is about 7–9%; at −7 about 4.7–6.5% [S11][S12]. Half-point value depends on which key you are leaving [S10].
-   - NFL totals: jagged integer bins, not a flat normal. NCAAF totals and NBA sides/totals: normal. MLB run lines / totals: negative binomial. NHL totals: Poisson [S13].
-   - This repo already has that football mass in `key_mass.js`. Use it for NFL/NCAAF. For NBA, NHL, and MLB, convert only when the point gap is at most 1.0 and the distribution is the sport normal / Poisson already in config. Larger gaps, or no distribution, **reject**.
+2. The only conversion this pass uses is an NFL spread whose points differ by exactly 0.5 and the integer between them is 3 or 7. Close-conditioned push is 0.090 at 3 and 0.065 at 7 [S11][S12]. Bought hook: `P(win) = p(1−q) + q`. Laid hook: `P(win) = p(1−q)`. Integer bet against a half-point sharp: divide by `1−q`. Every other gap is a reject. A guessed normal on a 1-point move was the bad CLV shift in the diagnosis, so `key_mass.js` stays unused here.
 3. Integer lines push. The two-way de-vig is `P(win | no push)`. Stake EV with a known push rate is `(1 − P(push)) × (p_cond × decimal − 1)`, which is `P(win)×(decimal−1) − P(lose)` [S13]. A moneyline has no push, so it is just `p × decimal − 1`.
 
 ## Freshness (sharp / soft pair)
@@ -45,7 +42,7 @@ The edge is a soft price versus a **same-time** Pinnacle no-vig on the **same li
 - The Odds API Pinnacle feed is a public-site scrape and can lag. Age is the market `last_update`, not our capture time [S16][S17].
 - Historical snapshots sit on a 5-minute grid [S16]. A same-request DK/HR/Pinnacle pull is same-time even when `last_update` is a few minutes apart.
 
-**N = 20 minutes.** A Pinnacle two-way older than 20 minutes relative to the DraftKings or Hard Rock price is not a pair. A quote more than 2 minutes after the bet is not a pair either. Missing timestamps on one stored board count as the same snapshot. The reason for 20, and the pricing error it does not fix, is at the end of this note.
+**N = 20 minutes.** A Pinnacle two-way older than 20 minutes relative to the DraftKings or Hard Rock price is not a pair. A quote more than 1 minute after the bet is not a pair either. Missing timestamps on one stored board count as the same snapshot. The reason for 20, and the pricing error it does not fix, is at the end of this note.
 
 ## EV
 

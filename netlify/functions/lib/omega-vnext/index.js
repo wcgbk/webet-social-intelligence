@@ -29,6 +29,7 @@ const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
+const { applySharpFair, sharpFairEnabled, SHARP_FAIR_VERSION, FRESH_MINUTES } = require('./sharp_fair');
 const { applyLineMoveProb } = require('./line_move_prob');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
@@ -560,6 +561,16 @@ async function generateOmegaVnext(opts = {}) {
   });
   const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
   console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
+
+  // OMEGA_SHARP_FAIR defaults off. On: cover and stake EV are the power
+  // de-vig of the same-time Pinnacle two-way at the DK/HR price. The
+  // model blend and the hand shrink stay on the candidate as diagnostics
+  // and do not enter ev. The 10:00 board is one capture (lag 0).
+  if (sharpFairEnabled()) {
+    candidates = applySharpFair(candidates, { sameSnapshot: true });
+    const sharpBad = candidates.filter((c) => c && c.sharpFairReject).length;
+    console.log(`[omega-vnext] sharp-fair version=${SHARP_FAIR_VERSION} freshMin=${FRESH_MINUTES} priced=${candidates.length - sharpBad} reject=${sharpBad}`);
+  }
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).

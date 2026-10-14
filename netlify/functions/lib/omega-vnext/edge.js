@@ -491,6 +491,17 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     : null;
   const pinnacleNoVig = noVigForBook(allBundles, sideBundle, 'pinnacle');
   const pinnaclePoint = pinnaclePointOf(raw, allBundles);
+  const oppForPin = oppositeBundle(allBundles, sideBundle);
+  const pinSideAm = americanForBook(sideBundle.prices, 'pinnacle');
+  const pinOppAm = oppForPin ? americanForBook(oppForPin.prices, 'pinnacle') : null;
+  const pinnacleSide = (pinSideAm != null && pinOppAm != null)
+    ? {
+      american: pinSideAm,
+      oppAmerican: pinOppAm,
+      point: sideBundle.point != null && sideBundle.point !== '' ? Number(sideBundle.point) : null,
+      oppPoint: oppForPin.point != null && oppForPin.point !== '' ? Number(oppForPin.point) : null,
+    }
+    : null;
   return {
     ...raw,
     odds,
@@ -515,6 +526,7 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     hardRock: hardRockQuote(allBundles, sideBundle.side, sideBundle.point),
     ...(pinnacleNoVig != null && Number.isFinite(pinnacleNoVig) ? { pinnacleNoVig } : {}),
     ...(pinnaclePoint != null && Number.isFinite(pinnaclePoint) ? { pinnaclePoint } : {}),
+    ...(pinnacleSide ? { pinnacleSide } : {}),
   };
 }
 

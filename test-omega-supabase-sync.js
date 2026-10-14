@@ -590,6 +590,16 @@ function runsOnDay(startIso, minutes) {
   assert.strictEqual(bodyOf(logged).wroteLog, true);
   assert.deepStrictEqual(logWrites.map((row) => row.key), [DATE]);
   assert.ok(!JSON.stringify(logWrites).includes(SERVICE_KEY));
+  const successCalls = postCalls.slice(4);
+  const successGamePosts = successCalls.filter((call) => {
+    try { return new URL(call.url).pathname.endsWith('/games'); } catch (_) { return false; }
+  });
+  const successFills = successCalls.filter((call) => String(call.url).includes('/rpc/fill_game_nulls'));
+  assert.ok(successGamePosts.length >= 1);
+  assert.strictEqual(successFills.length, successGamePosts.length);
+  assert.ok(successCalls.every((call) => !/the-odds-api/i.test(String(call.url))));
+  assert.ok(successFills.every((call) => call.init.method === 'POST'));
+  assert.ok(!JSON.stringify(successFills).includes('merge-duplicates'));
 
   const dryLogged = await sync.handle(
     manualEvent({ dryRun: '1', date: DATE, key: PICKS_SECRET }),
@@ -632,12 +642,74 @@ function runsOnDay(startIso, minutes) {
       return { ok: true, status: 201, text: async () => '' };
     },
   });
-  assert.strictEqual(batchCalls.length, 2);
-  assert.strictEqual(JSON.parse(batchCalls[0].init.body).length, 500);
-  assert.strictEqual(JSON.parse(batchCalls[1].init.body).length, 1);
+  assert.strictEqual(batchCalls.length, 4);
+  const gamePosts = batchCalls.filter((call) => new URL(call.url).pathname.endsWith('/games'));
+  const fills = batchCalls.filter((call) => String(call.url).includes('/rpc/fill_game_nulls'));
+  assert.strictEqual(gamePosts.length, 2);
+  assert.strictEqual(fills.length, 2);
+  assert.strictEqual(JSON.parse(gamePosts[0].init.body).length, 500);
+  assert.strictEqual(JSON.parse(gamePosts[1].init.body).length, 1);
   assert.strictEqual(batched.posted, 501);
-  assert.strictEqual(batched.requests, 2);
-  assertSupabaseCall(batchCalls[0], 'games', 'game_id', 'clv');
+  assert.strictEqual(batched.requests, 4);
+  assertSupabaseCall(gamePosts[0], 'games', 'game_id', 'clv');
+  for (const fill of fills) {
+    const fillUrl = new URL(fill.url);
+    assert.strictEqual(fillUrl.pathname, '/rest/v1/rpc/fill_game_nulls');
+    assert.strictEqual(fill.init.method, 'POST');
+    assert.strictEqual(fill.init.headers['Content-Profile'], 'clv');
+    assert.ok(!fill.init.headers.Prefer || !/merge-duplicates/i.test(String(fill.init.headers.Prefer)));
+    const body = JSON.parse(fill.init.body);
+    assert.ok(Array.isArray(body.rows));
+    assert.ok(body.rows.length > 0 && body.rows.length <= 500);
+    assert.ok(body.rows.every((row) => !Object.prototype.hasOwnProperty.call(row, 'price')));
+    assert.ok(body.rows.every((row) => !Object.prototype.hasOwnProperty.call(row, 'source')));
+  }
+
+  const oddsCalls = [];
+  const oddsPosted = await lib.postRows('odds_snapshots', [{
+    game_id: 'g0001',
+    book: 'pinnacle',
+    market: 'h2h',
+    side: 'home',
+    point: null,
+    price: -110,
+    line_type: 'closing',
+    snapshot_ts: '2026-10-13T23:00:00Z',
+    source: 'oddsapi',
+  }], {
+    env: { SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY },
+    fetchImpl: async (url, init) => {
+      oddsCalls.push({ url: String(url), init });
+      return { ok: true, status: 201, text: async () => '' };
+    },
+  });
+  assert.strictEqual(oddsCalls.length, 1);
+  assert.ok(!String(oddsCalls[0].url).includes('/rpc/'));
+  assert.strictEqual(oddsPosted.posted, 1);
+  assert.strictEqual(oddsPosted.requests, 1);
+  assert.strictEqual(oddsCalls[0].init.headers.Prefer, 'resolution=ignore-duplicates,return=minimal');
+
+  const alias = require('./netlify/functions/lib/game-alias');
+  const aliasMap = { 'alias-1': 'canon-1', 'alias-2': 'canon-1' };
+  assert.strictEqual(alias.canonicalGameId('alias-1', aliasMap), 'canon-1');
+  assert.strictEqual(alias.canonicalGameId('canon-1', aliasMap), 'canon-1');
+  assert.strictEqual(alias.canonicalGameId('alias-1', null), 'alias-1');
+  assert.deepStrictEqual(alias.familyIds('alias-2', aliasMap).sort(), ['alias-1', 'alias-2', 'canon-1']);
+  const ownClose = alias.attachCloses('alias-1', {
+    'alias-1': [{ price: -105, book: 'pinnacle' }],
+    'canon-1': [{ price: -110, book: 'pinnacle' }],
+  }, aliasMap);
+  assert.strictEqual(ownClose.length, 1);
+  assert.strictEqual(ownClose[0].price, -105);
+  assert.strictEqual(ownClose[0].pref, 0);
+  const familyClose = alias.attachCloses('alias-2', {
+    'canon-1': [{ price: -110, book: 'pinnacle' }],
+  }, aliasMap);
+  assert.strictEqual(familyClose.length, 1);
+  assert.strictEqual(familyClose[0].price, -110);
+  assert.strictEqual(familyClose[0].pref, 1);
+  assert.strictEqual(familyClose[0].close_game_id, 'canon-1');
+  assert.strictEqual(lib.attachCloses, alias.attachCloses);
 
   console.log('PASS test-omega-supabase-sync');
 })().catch((err) => {

@@ -8,13 +8,17 @@
  * prices the 3:00 ET historical pull stored. There is no 10:30 lock capture
  * in the blobs, and this job does not add an Odds API pull.
  *
- * Posts are insert-ignore. No merge, no update, no delete. Card and picks
- * blobs are read and never written. The optional log is store supabase-sync
- * keyed by the slate date.
+ * Posts are insert-ignore. No merge-duplicates, no delete, and no overwrite of a
+ * non-null game field or an existing odds price row. After a games insert
+ * succeeds, fill_game_nulls writes only columns that are still null (for
+ * example commence_time). Odds snapshot posts stay insert-ignore. Card and
+ * picks blobs are read and never written. The optional log is store
+ * supabase-sync keyed by the slate date.
  */
 
 const crypto = require('crypto');
 const ledger = require('./clv-ledger');
+const { attachCloses } = require('./game-alias');
 const oddsMaster = require('./omega-vnext/odds_master');
 const lineMoves = require('./omega-vnext/pinnacle_line_move');
 const { BLOB_STORE, MODEL_VERSION } = require('./omega-vnext/config');
@@ -834,6 +838,71 @@ async function postRows(name, rows, opts) {
       continue;
     }
     out.posted += batch.length;
+    if (name === 'games') {
+      const filled = await fillMissingGameFields(batch, { env, key, fetchImpl });
+      out.requests += filled.requests;
+      out.errors.push(...filled.errors);
+    }
+  }
+  return out;
+}
+
+function fillableGameRows(batch) {
+  const rows = [];
+  for (const row of batch || []) {
+    if (!row || !row.game_id) continue;
+    const item = {
+      game_id: row.game_id,
+      season: row.season || null,
+      commence_time: row.commence_time || null,
+      home_team: row.home_team || null,
+      away_team: row.away_team || null,
+    };
+    if (!item.commence_time && !item.home_team && !item.away_team && !item.season) continue;
+    rows.push(item);
+  }
+  return rows;
+}
+
+/**
+ * RPC clv.fill_game_nulls. Sets only null columns. Does not post prices.
+ * Called only after a games insert batch succeeded.
+ */
+async function fillMissingGameFields(batch, opts) {
+  const out = { requests: 0, errors: [] };
+  const rows = fillableGameRows(batch);
+  if (!rows.length) return out;
+  const env = (opts && opts.env) || process.env;
+  const key = (opts && opts.key) || (env && env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!key) {
+    out.errors.push({ table: 'games', error: 'SUPABASE_SERVICE_ROLE_KEY missing' });
+    return out;
+  }
+  const fetchImpl = (opts && opts.fetchImpl) || fetch;
+  const url = `${SUPABASE_URL}/rest/v1/rpc/fill_game_nulls`;
+  out.requests += 1;
+  let resp;
+  try {
+    resp = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'Content-Profile': 'clv',
+        'Accept-Profile': 'clv',
+      },
+      body: JSON.stringify({ rows }),
+    });
+  } catch (err) {
+    console.error(`[sync-supabase] games fill-nulls: ${err && err.message}`);
+    out.errors.push({ table: 'games', error: err && err.message });
+    return out;
+  }
+  if (!resp || !resp.ok) {
+    const status = resp && resp.status;
+    console.error(`[sync-supabase] games fill-nulls: supabase ${status}`);
+    out.errors.push({ table: 'games', status: status || null, error: `supabase ${status}` });
   }
   return out;
 }
@@ -1000,6 +1069,8 @@ module.exports = {
   handle,
   buildSync,
   postRows,
+  fillableGameRows,
+  attachCloses,
   isAuthorized,
   targetDate,
 };

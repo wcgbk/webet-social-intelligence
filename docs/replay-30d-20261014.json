@@ -1,0 +1,206 @@
+{
+  "window": {
+    "start": "2026-09-15",
+    "end": "2026-10-14",
+    "days": 30
+  },
+  "replayed": [
+    "2026-10-13"
+  ],
+  "skipped": [
+    "2026-09-15",
+    "2026-09-16",
+    "2026-09-17",
+    "2026-09-18",
+    "2026-09-19",
+    "2026-09-20",
+    "2026-09-21",
+    "2026-09-22",
+    "2026-09-23",
+    "2026-09-24",
+    "2026-09-25",
+    "2026-09-26",
+    "2026-09-27",
+    "2026-09-28",
+    "2026-09-29",
+    "2026-09-30",
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03",
+    "2026-10-04",
+    "2026-10-05",
+    "2026-10-06",
+    "2026-10-07",
+    "2026-10-08",
+    "2026-10-09",
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-14"
+  ],
+  "scheduleDiff": [
+    {
+      "functionName": "monitor-omega-snapshot-coverage",
+      "base": null,
+      "head": "20 14,15 * * *"
+    }
+  ],
+  "scheduleOk": true,
+  "days": [
+    {
+      "day": "2026-10-13",
+      "events": 19,
+      "shapeOk": true,
+      "identical": true,
+      "oddsBlocked": [],
+      "headErr": null,
+      "baseErr": null,
+      "head": {
+        "picks": 3,
+        "parlayLegs": 3,
+        "parlayUnits": "0.25u",
+        "picksDetail": [
+          {
+            "sport": "NHL",
+            "matchup": "Tampa Bay Lightning @ New York Rangers",
+            "pick": "New York Rangers +1.5",
+            "market": "Spread",
+            "odds": "-185",
+            "line": 1.5,
+            "units": "0.5u",
+            "rating": "aminus",
+            "result": null,
+            "profit": null,
+            "grade": null
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Edmonton Oilers @ Los Angeles Kings",
+            "pick": "Edmonton Oilers -1.5",
+            "market": "Spread",
+            "odds": "+190",
+            "line": -1.5,
+            "units": "0.5u",
+            "rating": "b",
+            "result": null,
+            "profit": null,
+            "grade": null
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Boston Bruins @ San Jose Sharks",
+            "pick": "Boston Bruins ML",
+            "market": "Moneyline",
+            "odds": "-120",
+            "line": null,
+            "units": "0.5u",
+            "rating": "b",
+            "result": null,
+            "profit": null,
+            "grade": null
+          }
+        ],
+        "parlayDetail": [
+          {
+            "matchup": "Cleveland Guardians @ Tampa Bay Rays",
+            "pick": "Tampa Bay Rays -1.5",
+            "odds": "+168",
+            "line": -1.5,
+            "units": null,
+            "result": null
+          },
+          {
+            "matchup": "Tampa Bay Lightning @ New York Rangers",
+            "pick": "New York Rangers +1.5",
+            "odds": "-185",
+            "line": 1.5,
+            "units": "0.5u",
+            "result": null
+          },
+          {
+            "matchup": "Boston Bruins @ San Jose Sharks",
+            "pick": "Boston Bruins ML",
+            "odds": "-120",
+            "line": null,
+            "units": "0.5u",
+            "result": null
+          }
+        ]
+      },
+      "base": {
+        "picks": 3,
+        "parlayLegs": 3,
+        "parlayUnits": "0.25u",
+        "picksDetail": [
+          {
+            "sport": "NHL",
+            "matchup": "Tampa Bay Lightning @ New York Rangers",
+            "pick": "New York Rangers +1.5",
+            "market": "Spread",
+            "odds": "-185",
+            "line": 1.5,
+            "units": "0.5u",
+            "rating": "aminus",
+            "result": null,
+            "profit": null,
+            "grade": null
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Edmonton Oilers @ Los Angeles Kings",
+            "pick": "Edmonton Oilers -1.5",
+            "market": "Spread",
+            "odds": "+190",
+            "line": -1.5,
+            "units": "0.5u",
+            "rating": "b",
+            "result": null,
+            "profit": null,
+            "grade": null
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Boston Bruins @ San Jose Sharks",
+            "pick": "Boston Bruins ML",
+            "market": "Moneyline",
+            "odds": "-120",
+            "line": null,
+            "units": "0.5u",
+            "rating": "b",
+            "result": null,
+            "profit": null,
+            "grade": null
+          }
+        ],
+        "parlayDetail": [
+          {
+            "matchup": "Cleveland Guardians @ Tampa Bay Rays",
+            "pick": "Tampa Bay Rays -1.5",
+            "odds": "+168",
+            "line": -1.5,
+            "units": null,
+            "result": null
+          },
+          {
+            "matchup": "Tampa Bay Lightning @ New York Rangers",
+            "pick": "New York Rangers +1.5",
+            "odds": "-185",
+            "line": 1.5,
+            "units": "0.5u",
+            "result": null
+          },
+          {
+            "matchup": "Boston Bruins @ San Jose Sharks",
+            "pick": "Boston Bruins ML",
+            "odds": "-120",
+            "line": null,
+            "units": "0.5u",
+            "result": null
+          }
+        ]
+      },
+      "pass": true
+    }
+  ],
+  "pass": true
+}

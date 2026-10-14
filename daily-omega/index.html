@@ -2003,7 +2003,10 @@
     const parlayEvNum = apiParlay && apiParlay.ev != null && apiParlay.ev !== ''
       ? parseFloat(String(apiParlay.ev).replace('%', ''))
       : null;
-    const parlayEvFails = !!(apiParlay && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
+    // v12.3.74: '3-leg-parlay-labeled' is a published ticket whose combined EV
+    // is not positive. It still renders, with its label shown as a note.
+    const parlayLabeled = !!(apiParlay && apiParlay.type === '3-leg-parlay-labeled');
+    const parlayEvFails = !parlayLabeled && !!(apiParlay && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
     const parlaySource = (apiParlay && !parlayEvFails)
       ? apiParlay.legs
       : (!rawParlayList && picks.length >= 3 ? picks.slice(0, 3) : null);
@@ -2170,7 +2173,8 @@
           <span class="parlay-name">Daily Lock Parlay</span>
           <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
         </div>
-        <div class="parlay-payout">${parlayPayStr}</div>`;
+        <div class="parlay-payout">${parlayPayStr}</div>
+        ${(parlayLabeled && apiParlay.label) ? `<div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">${esc(String(apiParlay.label).charAt(0).toUpperCase() + String(apiParlay.label).slice(1))}</div>` : ''}`;
 
       for (const lr of parlayLegResults) {
         const p = lr.pick;
@@ -2317,7 +2321,8 @@
     const parlayEvNum = api && api.ev != null && api.ev !== ''
       ? parseFloat(String(api.ev).replace('%', ''))
       : null;
-    const parlayEvFails = !!(api && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
+    const parlayEvFails = !(api && api.type === '3-leg-parlay-labeled')
+      && !!(api && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
     const rawLegs = (!parlayRejected && !parlayEvFails && api && api.legs && api.legs.length >= 2)
       ? api.legs
       : null;

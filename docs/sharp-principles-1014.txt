@@ -1,0 +1,134 @@
+Sharp Betting Models: Edge vs EV Conversation
+
+Full transcript of discussion on modern elite sharp betting daily picks models.
+
+
+
+
+User
+What do modern day elite sharp betting daily picks models optimize for, edge or EV?
+
+
+
+
+Grok
+They optimize for positive expected value (+EV). In modern sharp/professional betting, “edge” and “EV” are
+tightly linked (often treated as essentially the same concept), but the precise optimization target for daily picks
+models is +EV.
+
+How these models work Elite daily picks systems (proprietary statistical models, market-consensus tools, or
+hybrids) do the following:
+
+1. Estimate a “true” or fair probability for an outcome (via their own model, de-vigged sharp book lines like
+Pinnacle/Circa/Novig, or a weighted blend of both). 2. Compare that probability to the implied probability from
+the available odds at soft or recreational books. 3. Calculate expected value (typically as a percentage of stake:
+EV = p × decimal_odds − 1, or the equivalent form accounting for profit/loss). 4. Select, rank, and often size
+bets only when EV is positive and clears a minimum threshold (commonly +2–5% or higher, depending on the
+market, volume, and model confidence). They frequently apply fractional Kelly sizing based on the size of that
+EV/edge.
+
+“Edge” usually refers to the probability gap (model probability minus implied probability, in percentage points) or
+the resulting advantage. A positive edge at the actual price is exactly what produces positive EV. Many tools
+and services use the terms interchangeably (“find the edge,” “+EV spots,” “mathematical edge”). Slight
+technical distinctions exist—edge is often the probability differential, while EV is the expected monetary return
+that also depends on the odds—but models select and prioritize on the EV calculation.
+
+What “elite/sharp” really emphasizes - +EV relative to sharp benchmarks is the core filter for daily picks. Tools
+scan for discrepancies between soft books and no-vig sharp consensus or model output, then surface ranked
++EV opportunities. - Closing Line Value (CLV) is the main long-term validation metric. Consistently beating the
+closing line at sharp books is treated as proof the model captured real edge. Models are backtested and judged
+heavily on this. - Volume, line shopping, bankroll management, and avoiding limits matter operationally, but the
+pick-generation logic itself optimizes for positive EV.
+
+In short, modern elite sharp daily picks models are built to identify and prioritize positive expected value. “Edge”
+is the common shorthand for that advantage; the math they optimize for is EV.
+
+
+
+
+User
+What are the benchmarks they set for floors for these to make the daily card
+Grok
+Modern elite sharp daily picks models typically set EV floors in the 2–3% range for general inclusion, with
+meaningful differences by market type. They rarely put every positive-EV opportunity on a curated “daily card.”
+Instead they apply floors plus other filters to keep the card focused on higher-confidence spots.
+
+Common EV thresholds
+
+Market type | Typical floor to make the card / be actionable | Rationale Main lines (spreads, totals, moneylines) |
+0.5%–2% | Highly efficient; thin edges are still valuable at volume Player props & less liquid markets | 3%–6%+
+| Higher variance and less reliable pricing; need a bigger buffer Curated daily card / “top picks” | Often 2–3%
+minimum, frequently higher | Quality over quantity; rank and further filter High-volume or automated approaches
+| Can go as low as ~1% or even 0.5% | Edge shows up only over large samples
+
+Specific examples from tools and sharp practice: - Many disciplined bettors and tools (PropPrizm guidance,
+Parlayers, etc.) ignore anything under 3%. - Posit+EV shows only bets with ≥3% edge. - SharpAPI and similar
+recommend min_ev = 2 as a practical default; 2–5% is described as the solid “good” range. - Some
+prop-focused services use higher bars (e.g., 6% NBA / 8% NHL). - High-volume operators sometimes run lower
+floors (~1–3%) because volume compensates for thinner edges; manual or curated cards stay higher.
+
+Additional filters that act as floors EV% is rarely the only gate. Models commonly also require: - Minimum
+number of sharp books agreeing on the fair price (or minimum market width / consensus strength). - Minimum
+sharp-book limits (e.g., Pinnacle limit thresholds) so the fair price has been tested by real money. - Odds range
+limits (avoid extreme longshots or heavy favorites where variance and pricing are noisier). - Upper EV caps
+(very large edges, often >10–15%, are frequently treated as stale lines, errors, or unconfirmed news rather than
+automatic includes). - Sport- and market-specific adjustments, plus sometimes confidence grades or additional
+signals (line movement, model calibration, historical CLV on similar spots).
+
+How this shapes the daily card Most elite or professional-style daily picks are not “everything above X% EV.”
+They take the broader +EV pool, apply the floors above, then rank and further curate (often down to a small
+number of higher-confidence or higher-EV selections). The ultimate long-term benchmark remains consistent
+positive Closing Line Value (CLV) against sharp books, not just the initial EV percentage at the time of the pick.
+
+In short, a practical floor for a quality daily card is usually around 2–3% EV (higher on props), combined with
+consensus and market-quality filters, rather than a pure minimum positive number.
+
+
+
+
+User
+What about edge floors?
+
+
+
+
+Grok
+Edge floors are not commonly used as a separate primary benchmark. Most modern elite sharp daily picks
+models set their floors on EV%, and “edge” is used loosely (or interchangeably) for the same thing.
+
+Edge vs. EV in practice - Edge (probability points / pp): Model probability minus implied probability. Example:
+Model says 55%, book implies 52.4% at –110 → +2.6 pp edge. - EV%: Expected return as a percentage of
+stake. It incorporates both the probability gap and the odds/payout. The same +2.6 pp edge can produce
+different EV% depending on the price.
+
+Many tools and bettors still say “edge” when they mean the EV percentage (e.g., “3% edge”). When a model or
+service shows both, the filter that decides whether something makes the daily card is almost always the EV%
+number, not the raw probability-point gap.
+
+Typical numbers when “edge” is treated as the floor When people or tools do talk about an edge floor in
+percentage terms, the practical ranges look like this:
+
+Context | Common floor | Notes Main lines | ~1–3% (usually EV) | Thin edges are still playable with volume
+Player props | ~3–6%+ (usually EV) | Bigger buffer for variance and thinner markets Curated daily card | Often
+2–3% minimum | Frequently higher or further ranked Probability-point style (less common) | ~2–5 pp | Seen
+more on some prop models; still usually translated into EV for sizing
+
+Examples from current tools and sharp practice: - Posit+EV, PropPrizm guidance, and similar services use ≥3%
+as a common cutoff. - Many high-volume operators run lower (~1–3%) because volume compensates. - Very
+large apparent edges (often >10–15%) are frequently filtered or flagged as stale lines, errors, or unconfirmed
+news rather than automatic includes.
+
+Bottom line There isn’t a widely standardized separate “edge (pp) floor” that elite daily picks models optimize
+against independently of EV. The actionable floor that determines whether a pick makes a quality daily card is
+almost always an EV% threshold (commonly 2–3% general, higher on props), often combined with the other
+filters covered earlier (consensus strength, sharp-book limits, odds range, etc.).
+
+If a specific model or tool you use shows both “edge” and “EV,” the EV number is the one that drives the
+inclusion decision.
+
+
+
+
+User
+Put this full conversation in a pdf
+

@@ -20,11 +20,11 @@ const nhl = require(path.join(root, 'sports/nhl'));
 const { MODEL_VERSION } = require(path.join(root, 'index'));
 
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
-assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 4.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
-assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
+assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.5);
 assert.strictEqual(MODEL_VERSION, config.MODEL_VERSION);
-assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
+assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
 assert.strictEqual(config.LEAN_PAD, true);
 assert.ok(math.americanToImplied(-110) > 0.52 && math.americanToImplied(-110) < 0.53);
 assert.ok(Math.abs(math.evAtOdds(0.55, -110) - (0.55 * (100/110 + 1) - 1)) < 1e-9);
@@ -189,7 +189,7 @@ if (parlays.length) {
   assert.ok(/optimized/.test(alone[0].type));
 }
 
-// Daily unit structure: straights ≤3.5u + published 0.25u parlay ≤ 4.0u MAX
+// Daily unit structure: three A+ at 1.5u + full-card 0.5u parlay ≤ 5.0u MAX
 {
   const fat = [
     { pick: 'A', rating: 'aplus', units: '1.5u', confidence: 90 },
@@ -201,9 +201,11 @@ if (parlays.length) {
   const straightU = capped.picks.reduce((s, p) => s + parseFloat(p.units), 0);
   const parlayU = capped.parlayLegs.reduce((s, pl) => s + parseFloat(pl.units), 0);
   const total = straightU + parlayU;
-  assert.ok(straightU <= 3.5 + 1e-9, `straight budget=${straightU}`);
-  assert.strictEqual(parlayU, 0.25, 'published parlay is 0.25u');
-  assert.ok(total <= 4.0 + 1e-9, `cap total=${total}`);
+  assert.ok(straightU <= 4.5 + 1e-9, `straight budget=${straightU}`);
+  assert.strictEqual(straightU, 4.5);
+  assert.strictEqual(parlayU, 0.5, 'full card parlay is 0.5u');
+  assert.ok(total <= 5.0 + 1e-9, `cap total=${total}`);
+  assert.strictEqual(total, 5);
   assert.strictEqual(capped.picks[0].rating, 'aplus');
 }
 
@@ -687,7 +689,8 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.strictEqual(highEdgeLowUnits.rating, 'aplus');
   assert.strictEqual(highEdgeLowUnits.qualityGrade, 'aplus');
   const hiKelly = math.kellyToUnits(math.kellyFraction(0.53, -110, config.KELLY_FRACTION), config.MAX_STRAIGHT_UNITS_PER_PICK);
-  assert.strictEqual(highEdgeLowUnits.units, `${hiKelly}u`);
+  assert.notStrictEqual(highEdgeLowUnits.units, `${hiKelly}u`);
+  assert.strictEqual(highEdgeLowUnits.units, '1.5u');
   assert.notStrictEqual(highEdgeLowUnits.units, '5u');
   assert.strictEqual(typeof highEdgeLowUnits.confidence, 'number');
   assert.strictEqual(highEdgeLowUnits.confidence, math.ratingToConfidence('aplus'));

@@ -387,7 +387,7 @@ const strong = toPickObject({
   tier: 'floor',
 });
 assert.strictEqual(strong.rating, 'aplus');
-assert.ok(parseFloat(strong.units) <= 1 + 1e-9);
+assert.strictEqual(strong.units, '1.5u');
 
 function pairedRow(matchup, side, ev, edge, extra) {
   const parts = matchup.split(' @ ');

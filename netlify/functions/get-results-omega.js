@@ -491,7 +491,7 @@ function wholeUp(n) {
   return Object.is(up, -0) ? 0 : up;
 }
 
-/** Dollar amounts stay at cents. 0.25u is 37.50, not the next whole dollar. */
+/** Legacy cent round. Card risk uses wholeUp. 0.25u is $38, not $37.50. */
 function dollars(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
@@ -664,7 +664,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
       return { result: gradePick(eleg, game, gradeOpts), odds: eleg.odds || '-110' };
     });
     parlayUnits = parlayUnitsFromTicket(ticket);
-    parlayRisk = dollars(parlayUnits * dollarPerUnit);
+    parlayRisk = wholeUp(parlayUnits * dollarPerUnit);
     parlayResult = gradeParlay(parlayInput, parlayRisk);
     // From GRADING_RULES_V2_FROM, an all-push parlay returns the stake (same as a straight push).
     const parlayPushFree = omegaGradingRules.rulesV2(dateISO) && parlayResult.result === 'push';
@@ -728,7 +728,7 @@ function recomputeParlayFields(day, card) {
     return next;
   }
   const units = parlayUnitsFromTicket(ticket);
-  const risk = dollars(units * 150);
+  const risk = wholeUp(units * 150);
   const legResults = ticket.legs.map((leg) => {
     const hit = matchStraightResult(leg, straights);
     return {

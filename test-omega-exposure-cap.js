@@ -5,11 +5,11 @@ const config = require('./netlify/functions/lib/omega-vnext/config');
 const flags = require('./netlify/functions/lib/omega-vnext/gaps_flags');
 const select = require('./netlify/functions/lib/omega-vnext/select');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.PER_GAME_EXPOSURE_CAP_ENABLED, true);
-assert.strictEqual(flags.GAME_EXPOSURE_CAP, 1.75);
+assert.strictEqual(flags.GAME_EXPOSURE_CAP, 2.0);
 
 const game = 'A @ B';
 const ticket = {
@@ -27,7 +27,7 @@ delete process.env.OMEGA_GAME_EXPOSURE;
 try {
   assert.strictEqual(flags.gameExposureEnabled(), true);
   const trimmed = select.capSameGameExposure([{ ...heavy }], [ticket]);
-  assert.strictEqual(trimmed[0].units, '1.25u');
+  assert.strictEqual(trimmed[0].units, '1.5u');
   assert.strictEqual(ticket.units, '0.5u');
   const kept = select.capSameGameExposure([{ ...lean }], [ticket]);
   assert.strictEqual(kept[0].units, '2u');

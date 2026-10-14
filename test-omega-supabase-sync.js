@@ -229,8 +229,8 @@ function runsOnDay(startIso, minutes) {
 
 (async () => {
   assert.strictEqual(sync.handler.length, 2);
-  assert.strictEqual(MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
-  assert.ok(String(MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
+  assert.strictEqual(MODEL_VERSION, 'v12.4.0-webetai-pure');
+  assert.ok(String(MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
   assert.ok(!/placeholder/i.test(String(MODEL_NOTES)));
   assert.ok(/10:30/.test(lib.LOCK_NOTE));
   assert.ok(/10:00/.test(lib.LOCK_NOTE));
@@ -435,8 +435,8 @@ function runsOnDay(startIso, minutes) {
   const straights = dryBody.rows.picks.filter((row) => !row.is_parlay);
   assert.strictEqual(dryBody.rows.picks.filter((row) => row.is_parlay).length, 1);
   assert.strictEqual(parlay.units, 0.25);
-  assert.strictEqual(parlay.risk, 37.5);
-  assert.strictEqual(parlay.profit, -37.5);
+  assert.strictEqual(parlay.risk, 38);
+  assert.strictEqual(parlay.profit, -38);
   assert.strictEqual(parlay.result, 'loss');
   assert.strictEqual(parlay.model, 'Omega');
   assert.strictEqual(parlay.sport, 'PARLAY');
@@ -570,7 +570,7 @@ function runsOnDay(startIso, minutes) {
   assert.ok(!JSON.stringify(postedBodies(postCalls)).includes('-151'));
   const postedParlay = byTable.picks.find((row) => row.is_parlay);
   assert.strictEqual(postedParlay.units, 0.25);
-  assert.strictEqual(postedParlay.risk, 37.5);
+  assert.strictEqual(postedParlay.risk, 38);
   assert.strictEqual(mem.snapshot(), before);
 
   const logWrites = [];

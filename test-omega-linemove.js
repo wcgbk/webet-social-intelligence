@@ -315,9 +315,9 @@ const scorePlain = select.scoreCandidate({
 assert.strictEqual(scoreWith, scorePlain, `steam flags do not change the score ${scoreWith} vs ${scorePlain}`);
 
 // Unit structure unchanged
-assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 3.5);
+assert.strictEqual(config.STRAIGHT_UNIT_BUDGET, 4.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
-assert.strictEqual(config.DAILY_UNIT_CAP, 4.0);
+assert.strictEqual(config.DAILY_UNIT_CAP, 5.0);
 assert.strictEqual(config.LEAN_PAD, true);
 assert.strictEqual(config.CLV_KPI_FLOOR, '2026-09-22');
 

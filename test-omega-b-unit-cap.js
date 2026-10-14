@@ -13,7 +13,7 @@ const parlay = require(path.join(root, 'parlay'));
 assert.ok(/^v\d+\.\d+\.\d+$/.test(String(config.MODEL_VERSION).split('-')[0]));
 assert.strictEqual(config.B_GRADE_UNIT_CAP, 0.5);
 assert.strictEqual(config.KELLY_FRACTION, 0.25);
-assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.25);
+assert.strictEqual(config.MAX_STRAIGHT_UNITS_PER_PICK, 1.5);
 assert.strictEqual(config.PARLAY_FIXED_UNITS, 0.5);
 assert.strictEqual(config.QUALITY_GRADE.aplus, 0.05);
 assert.strictEqual(config.QUALITY_GRADE.a, 0.035);
@@ -34,7 +34,7 @@ assert.strictEqual(kellyUnits(0.55), 0.5);
 assert.strictEqual(kellyUnits(0.533), 0.5);
 assert.strictEqual(kellyUnits(0.527), 0.5);
 assert.strictEqual(kellyUnits(0.52), 0);
-assert.strictEqual(kellyUnits(0.58), 1.25);
+assert.strictEqual(kellyUnits(0.58), 1.5);
 assert.strictEqual(kellyUnits(0.58, 2), 1.5);
 assert.strictEqual(math.qualityToRating(0.015, 0, 0.12), 'b');
 assert.strictEqual(math.qualityToRating(0.008, 0, 0.12), 'b');
@@ -93,7 +93,7 @@ function stake(pick) {
   }));
   assert.strictEqual(pick.rating, 'b');
   assert.strictEqual(math.qualityToRating(0.015, 0, 0.12), 'b');
-  assert.strictEqual(kellyUnits(0.58), 1.25);
+  assert.strictEqual(kellyUnits(0.58), 1.5);
   assert.strictEqual(pick.units, '0.5u');
 }
 
@@ -119,14 +119,14 @@ function stake(pick) {
   }));
   assert.strictEqual(amin.rating, 'aminus');
   assert.strictEqual(amin.qualityGrade, 'aminus');
-  assert.strictEqual(kellyUnits(0.58), 1.25);
-  assert.strictEqual(amin.units, '1.25u');
+  assert.strictEqual(kellyUnits(0.58), 1.5);
+  assert.strictEqual(amin.units, '0.75u');
 
   const floor = select.toPickObject(candidate({
     coverProb: 0.58, ev: 0.05, edgePct: 0.02,
   }));
   assert.strictEqual(floor.rating, 'aminus');
-  assert.strictEqual(floor.units, '1.25u');
+  assert.strictEqual(floor.units, '0.75u');
 }
 
 // A+ whose Kelly stake is 1.5u (above the B cap) is unchanged.
@@ -148,15 +148,16 @@ function stake(pick) {
   assert.strictEqual(bDraw.units, '0.5u');
   const aDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(aDraw.rating, 'aminus');
-  assert.strictEqual(aDraw.units, '0.5u');
+  assert.strictEqual(aDraw.units, '0.75u');
   const cut = select.toPickObject(candidate({
     coverProb: 0.60, ev: 0.05, edgePct: 0.04,
   }), { drawdown: true, perPickCap: 3.5 });
+  assert.strictEqual(cut.rating, 'a');
   assert.strictEqual(cut.units, '1u');
   const floored = select.toPickObject(candidate({ coverProb: 0.55, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(kellyUnits(0.55), 0.5);
   assert.strictEqual(floored.rating, 'aminus');
-  assert.strictEqual(floored.units, '0.5u');
+  assert.strictEqual(floored.units, '0.75u');
   const lean = select.toPickObject(candidate({
     coverProb: 0.70, ev: 0.02, edgePct: 0.02, tier: 'lean',
   }), { drawdown: true, perPickCap: 3.5 });
@@ -191,7 +192,7 @@ function stake(pick) {
     { pick: 'B at cap', rating: 'b', qualityGrade: 'b', units: '0.5u', edgePct: '0.8%', qualityScore: 0.008 },
   ], null);
   assert.strictEqual(already.picks[0].units, '0.5u');
-  assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
+  assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
   assert.strictEqual(capped.parlayLegs[0].legs[0].units, '1.25u');
   assert.strictEqual(capped.parlayLegs[0].legs[0].rating, 'b');
 }

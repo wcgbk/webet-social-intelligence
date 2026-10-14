@@ -75,8 +75,8 @@ function scheduler() {
 }
 
 (async () => {
-  assert.ok(String(config.MODEL_VERSION).startsWith('v12.3.74'));
-  assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
+  assert.ok(String(config.MODEL_VERSION).startsWith('v12.4.0'));
+  assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
   assert.ok(String(config.MODEL_NOTES).includes('v12.3.72-omega-vnext-price-lock:'));
   assert.strictEqual(config.PINNACLE_LINE_MOVE.checkBookmakers, 'pinnacle,draftkings,hardrockbet');
   assert.strictEqual(config.PINNACLE_LINE_MOVE.bookmakers, 'pinnacle');

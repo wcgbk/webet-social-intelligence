@@ -14,8 +14,8 @@ const { eventsFromLineMoves, loadStoredTenAmBoard } = require('./netlify/functio
 const { parseEdgeFraction } = require('./netlify/functions/lib/omega-vnext/odds_math');
 const { fetchOddsMultiSport } = require('./netlify/functions/lib/omega-vnext/ingest');
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
-assert.ok(String(config.MODEL_NOTES).startsWith('v12.3.74-omega-vnext-price-lock:'));
+assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
+assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
 assert.strictEqual(config.GATES.minEV.NFL, 0.02);
 assert.strictEqual(config.GATES.minEV.MLB, 0.02);
 assert.strictEqual(config.GATES.minEV.NBA, 0.02);

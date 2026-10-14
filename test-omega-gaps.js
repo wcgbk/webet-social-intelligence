@@ -359,7 +359,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(by['KC -2.5'].units, '1.25u');
   assert.strictEqual(by['KC -2.5'].rating, 'aplus');
   assert.strictEqual(by['PHI -3'].units, '1.00u');
-  assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
+  assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
   withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
     assert.strictEqual(flags.gameExposureEnabled(), true);
     const on = select.applyDailyUnitCap([
@@ -367,10 +367,10 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       { ...otherStraight },
     ], [ticket]);
     const onBy = Object.fromEntries(on.picks.map(p => [p.pick, p]));
-    assert.strictEqual(onBy['KC -2.5'].units, '1.25u', '1.25u plus the 0.25u ticket stays under the 1.75u cap');
+    assert.strictEqual(onBy['KC -2.5'].units, '1.25u', '1.25u plus the 0.5u ticket stays under the 2.0u cap');
     assert.strictEqual(onBy['KC -2.5'].rating, 'aplus');
     assert.strictEqual(onBy['PHI -3'].units, '1.00u');
-    assert.strictEqual(on.parlayLegs[0].units, '0.25u');
+    assert.strictEqual(on.parlayLegs[0].units, '0.5u');
   });
   withEnv('OMEGA_GAME_EXPOSURE', '0', () => {
     const off = select.applyDailyUnitCap([
@@ -498,12 +498,14 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
     );
     assert.ok(scaledUnits < rawUnits, `push kelly units ${scaledUnits} vs ${rawUnits} at p=${row.coverProb}`);
     assert.notStrictEqual(pick.rating, 'b');
-    assert.strictEqual(pick.units, `${scaledUnits}u`);
+    const math = require(path.join(root, 'odds_math'));
+    assert.strictEqual(pick.units, `${math.gradeStakeUnits(pick.rating, pick.tier)}u`);
     withEnv('OMEGA_PUSH_EV', '0', () => {
       const off = edge.attachEv(row);
       near(off.ev, +naive.toFixed(4), 1e-12, 'push off leaves mode A EV');
       const offPick = select.toPickObject(off, { modelVersion: config.MODEL_VERSION });
-      assert.strictEqual(offPick.units, `${rawUnits}u`);
+      assert.strictEqual(offPick.units, pick.units);
+      assert.strictEqual(offPick.rating, pick.rating);
       assert.strictEqual(offPick.lateNews.qb.loaded, true);
     });
   });
@@ -585,7 +587,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(card.voidedPregame[0].status, 'void-pregame');
   assert.strictEqual(card.voidedPregame[0].pick, 'KC -2.5');
   assert.strictEqual(card.parlayLegs.length, 1);
-  assert.strictEqual(card.parlayLegs[0].units, '0.25u');
+  assert.strictEqual(card.parlayLegs[0].units, '0.5u');
   withEnv('OMEGA_GAME_EXPOSURE', '1', () => {
     const onCard = {
       picks: [

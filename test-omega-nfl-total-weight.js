@@ -13,7 +13,7 @@ const { blendWithMarket, totalDetail, spreadDetail } = require(path.join(root, '
 const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 0.10);
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
 
 const home = 'Kansas City Chiefs';
 const away = 'Buffalo Bills';

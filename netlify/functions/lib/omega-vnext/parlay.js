@@ -5,6 +5,8 @@ const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
+  normalizeRatingKey, ratingLetter, cardHasFullGrade, formatGameTimeET,
+  stakeDollars, toWinDollars,
 } = require('./odds_math');
 const { matchupKey, passesPublishFloor, qualifiesAsLean } = require('./select');
 const { inSlate } = require('./selection_pass');
@@ -886,11 +888,44 @@ function publishGatedLeg(leg) {
   published.p_cal = +Number(leg.coverProb).toFixed(6);
   published.ev = `${(leg.ev * 100).toFixed(1)}%`;
   published.evRaw = +Number(leg.ev).toFixed(6);
-  published.edgePct = formatEdgePct(leg.edgePct) || published.edgePct;
+  const edgeFrac = edgeFractionOf(leg, unifiedCoverProb(leg));
+  const edgeStr = formatEdgePct(edgeFrac) || formatEdgePct(leg.edgePct) || published.edgePct || null;
+  const rating = normalizeRatingKey(leg.rating || leg.qualityGrade || leg.grade)
+    || qualityToRating(edgeFrac, null, null);
+  published.edgePct = edgeStr || published.edgePct;
+  published.edge = edgeStr;
+  published.rating = rating;
+  published.qualityGrade = rating;
+  published.grade = ratingLetter(rating);
+  published.book = published.book || leg.book || null;
+  published.sport = published.sport || leg.sport || null;
+  published.matchup = published.matchup || leg.matchup || null;
+  published.pick = published.pick || formatMoneylinePick(leg.side || leg.pick, leg.market || leg.betType);
+  if (published.confidence == null) published.confidence = ratingToConfidence(rating);
+  if (!published.gameTime) {
+    published.gameTime = formatGameTimeET(published.commenceTime || leg.commenceTime) || null;
+  }
   published.probBasis = 'unified-adjusted-cover';
   if (leg.hardRockRepriced) published.hardRockRepriced = true;
   if (leg.tier) published.tier = leg.tier;
   return published;
+}
+
+/** American payout from the product of each leg's decimal odds. */
+function combinedFromLegOdds(legs) {
+  let dec = 1;
+  for (const leg of legs || []) {
+    const american = numericAmerican(leg && leg.odds);
+    const d = americanToDecimal(american);
+    if (!(d > 1)) return null;
+    dec *= d;
+  }
+  if (!(dec > 1)) return null;
+  const american = decimalToAmerican(dec);
+  return {
+    combinedDecimal: dec,
+    combinedOdds: american == null ? '' : formatAmerican(american),
+  };
 }
 
 /**
@@ -960,15 +995,25 @@ function parlayFromStraights(straights, opts = {}) {
   const labeled = !(st.ev > 0);
   const straightIds = new Set(rows.map((row) => parlaySideId(row)));
   const mirrored = rows.length >= 3 && chosen.every((leg) => straightIds.has(parlaySideId(leg)));
-  const combinedAmerican = decimalToAmerican(st.combinedDecimal);
+  const publishedLegs = chosen.map(publishGatedLeg);
+  const fromLegs = combinedFromLegOdds(publishedLegs);
+  const combinedDecimal = fromLegs ? fromLegs.combinedDecimal : st.combinedDecimal;
+  const combinedOdds = fromLegs
+    ? fromLegs.combinedOdds
+    : (decimalToAmerican(st.combinedDecimal) == null ? '' : formatAmerican(decimalToAmerican(st.combinedDecimal)));
+  const fullCard = cardHasFullGrade(rows);
+  const stakeUnits = fullCard ? PARLAY_FIXED_UNITS : LEAN_PARLAY_UNITS;
   const ticket = {
     type: labeled ? '3-leg-parlay-labeled' : '3-leg-parlay',
-    legs: chosen.map(publishGatedLeg),
-    units: `${LEAN_PARLAY_UNITS}u`,
+    legs: publishedLegs,
+    units: `${stakeUnits}u`,
     ...(labeled ? { leanDay: true, label: 'combined EV not positive' } : {}),
     qualifying: true,
-    combinedOdds: combinedAmerican == null ? '' : formatAmerican(combinedAmerican),
-    combinedDecimal: Number.isFinite(st.combinedDecimal) ? +st.combinedDecimal.toFixed(2) : null,
+    combinedOdds,
+    combinedDecimal: Number.isFinite(combinedDecimal) ? +combinedDecimal.toFixed(2) : null,
+    evLabel: 'assumes independent legs',
+    riskDollars: stakeDollars(stakeUnits),
+    toWinDollars: toWinDollars(stakeUnits, combinedOdds),
     combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
     combinedProbRaw: Number.isFinite(st.combinedProb) ? st.combinedProb : null,
     ev: Number.isFinite(st.ev) ? `${(st.ev * 100).toFixed(1)}%` : '',
@@ -977,7 +1022,7 @@ function parlayFromStraights(straights, opts = {}) {
     uniqueSports: st.uniqueSports,
     independent: !mirrored,
     legMarkets: chosen.map((leg) => leg.market || leg.betType || null),
-    correlationNote: `Best EV distinct games — 3 legs / ${st.uniqueGames} games`,
+    correlationNote: 'assumes independent legs',
     candidatesScanned: merged.length,
     autoCorrected: !mirrored,
     probBasis: 'unified-adjusted-cover',

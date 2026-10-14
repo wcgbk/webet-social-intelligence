@@ -209,7 +209,11 @@ function assertInvariants(card) {
   assert.ok(parlay, 'card publishes a parlay');
   assert.strictEqual(parlay.legs.length, 3, 'parlay has exactly 3 legs');
   assert.strictEqual(new Set(parlay.legs.map((leg) => matchupKey(leg))).size, 3, 'parlay legs are three games');
-  assert.strictEqual(parseU(parlay.units), config.LEAN_PARLAY_UNITS);
+  const fullCard = straights.some((p) => {
+    const r = String(p.rating || '').toLowerCase().replace(/\s+/g, '');
+    return r === 'aplus' || r === 'a+' || r === 'a' || r === 'aminus' || r === 'a-';
+  });
+  assert.strictEqual(parseU(parlay.units), fullCard ? config.PARLAY_FIXED_UNITS : config.LEAN_PARLAY_UNITS);
   assert.ok(parsePct(parlay.ev) > 0, parlay.ev);
   for (const leg of parlay.legs) {
     assert.strictEqual(leg.book, 'draftkings', leg.pick);
@@ -248,7 +252,7 @@ function main() {
     inputRegen: 'OMEGA_REGEN_GOLDEN=input node test-omega-golden-card.js',
     cardDate: frozen.cardDate,
     note: 'Rewrite only for an intentional selection change. Review the diff. The command does not fetch odds or write blobs.',
-    comment: 'v12.3.74: straights are the top in-band stake-EV sides. Prices outside -250..+250 and EV above 12% are not on the card. The published parlay is 0.25u.',
+    comment: 'v12.4.0: same sides as v12.3.74. A- straights are 0.75u. A full card parlays 0.5u. Prices outside -250..+250 and EV above 12% stay off the card.',
     straights: card.projection.straights,
     parlay: card.projection.parlay,
   };

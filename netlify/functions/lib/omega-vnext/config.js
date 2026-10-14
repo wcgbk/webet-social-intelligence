@@ -1,7 +1,7 @@
 'use strict';
 
 /** Omega vNext — CLV-first multi-sport composer (replaces v11 megascript). */
-const MODEL_VERSION = 'v12.3.74-omega-vnext-price-lock';
+const MODEL_VERSION = 'v12.4.0-webetai-pure';
 
 const UNIT_DOLLARS = 150;
 const KELLY_FRACTION = 0.25;
@@ -19,15 +19,16 @@ const ONE_STRAIGHT_PER_GAME = true;
  */
 const PER_GAME_EXPOSURE_CAP_ENABLED = true;
 /**
- * Unit structure (v12.0.9+ budget, v12.3.74 published stake):
- * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
- * - PARLAY_FIXED_UNITS (0.5u) stays the unit-budget assumption
- * - Every published parlay is LEAN_PARLAY_UNITS (0.25u), 3 legs
- * - Card MAX = DAILY_UNIT_CAP (4.0u)
+ * Unit structure (v12.4.0 flat grade stake):
+ * - A+ 1.5u, A 1u, A- 0.75u, B and every lean 0.5u
+ * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (4.5u, three A+)
+ * - Full card (any straight graded A- or better): parlay PARLAY_FIXED_UNITS (0.5u)
+ * - Lean-only card (no straight graded A- or better): parlay LEAN_PARLAY_UNITS (0.25u)
+ * - Card MAX = DAILY_UNIT_CAP (5.0u). Three A+ plus the 0.5u parlay fit.
  * A short floor fills from positive EV, then any EV, as 0.5u leans.
  * Overage: cut lowest-confidence straights only.
  */
-const STRAIGHT_UNIT_BUDGET = 3.5;
+const STRAIGHT_UNIT_BUDGET = 4.5;
 const PARLAY_FIXED_UNITS = 0.5;
 /**
  * Same-direction total parlays (every leg Over, or every leg Under) share
@@ -41,17 +42,26 @@ const PARLAY_TOTAL_HAIRCUT = {
   2: 0.95,
   3: 0.92,
 };
-const DAILY_UNIT_CAP = 4.0;
-/** Per-straight Kelly display cap (before card-level 3.5u budget trim). */
-const MAX_STRAIGHT_UNITS_PER_PICK = 1.25;
+const DAILY_UNIT_CAP = 5.0;
+/** Per-straight ceiling. A+ flat stake is 1.5u. Kelly does not set the stake. */
+const MAX_STRAIGHT_UNITS_PER_PICK = 1.5;
 /**
- * Post-Kelly stake cap for quality grade B only.
- * Grade B is qualityToRating 'b': calibrated edge under QUALITY_GRADE.aminus (2%).
- * Applied after Kelly units and the letter grade both exist. Lowers a stake
- * above this value and never raises one. A- / A / A+ are not capped.
- * The parlay ticket is not on this path (published stake is 0.25u).
+ * Grade B stake. qualityToRating 'b' is calibrated edge under QUALITY_GRADE.aminus (2%).
+ * The flat table already prices B at 0.5u. This cap still lowers a larger stake
+ * and never raises one. A- / A / A+ are not capped. Leans are 0.5u on their own path.
  */
 const B_GRADE_UNIT_CAP = 0.5;
+/**
+ * Flat published stake by letter. Leans are 0.5u at every letter.
+ * Dollars are UNIT_DOLLARS times units, rounded up to a whole dollar.
+ */
+const GRADE_STAKE_UNITS = {
+  aplus: 1.5,
+  a: 1,
+  aminus: 0.75,
+  b: 0.5,
+  lean: 0.5,
+};
 const LEAN_PAD = true; // short of 3 floor straights: fill from the lean pool
 
 /** Same ET calendar day only — no weekend football on Tue/Wed cards. */
@@ -353,8 +363,9 @@ const GATES = {
  * at DraftKings or Hard Rock and a pregame board. Edge is not required.
  * LEAN_MIN_EDGE stays exported for older diagnostics. LEAN_MIN_EV remains
  * the legacy parlay-pool bar. Stake is flat LEAN_MAX_UNITS. Every published
- * parlay is LEAN_PARLAY_UNITS. The last-resort fill may use a non-positive
- * EV that already cleared the structural gates.
+ * parlay on a lean-only card is LEAN_PARLAY_UNITS. A full card (any straight
+ * graded A- or better) publishes PARLAY_FIXED_UNITS. The last-resort fill
+ * may use a non-positive EV that already cleared the structural gates.
  */
 const LEAN_MIN_EV = 0.015;
 const LEAN_MIN_EDGE = 0.015;
@@ -946,6 +957,7 @@ const GENERATOR_BOOKMAKERS = [
 ].join(',');
 
 const MODEL_NOTES = [
+  'v12.4.0-webetai-pure: Published stake is flat by grade. A+ is 1.5u ($225), A is 1u ($150), A- is 0.75u ($113), and B or any lean is 0.5u ($75). Kelly rounding does not override the grade. A full card (any straight graded A- or better) parlays 0.5u ($75). A lean-only card parlays 0.25u ($38). Risk and to-win are whole dollars rounded up. DAILY_UNIT_CAP is 5.0u so three A+ plus the 0.5u parlay fit. Parlay legs carry pick, odds, matchup, sport, book, edge, and grade. Combined odds are the product of the leg decimal odds. Parlay EV is labeled assumes independent legs. Edge, EV, and pick selection are unchanged. OMEGA_X_AUTOPOST stays unset. Generate prices the stored board and does not re-pull paid odds.',
   'v12.3.74-omega-vnext-price-lock: Inclusion is a flat 2% stake-EV floor at the best DraftKings or Hard Rock price. The odds-scaled edge curve is display and tiebreak only, not an inclusion gate. EV above 12% is ev-stale and is logged, not published and not a lean. Straights stay inside -250 to +250. Rank is stake EV, then edge. When fewer than 3 straights clear 2%, the card fills from the best remaining positive-EV candidates, then the best EV even if it is not positive, one per game, labeled leans at 0.5u. The parlay is always 3 legs at 0.25u from the best EV on distinct games, and it is labeled when combined EV is not positive. QA auto-corrects and does not block. Generate prices the stored 10:00 ET board (pinnacle, DraftKings, Hard Rock) from omega-pinnacle-line-moves slot 1000 and does not re-pull paid odds. line_move_prob is unchanged. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.73-omega-vnext-price-lock: The 10:00 ET pull is the last Odds API pull and sets final prices. It ranks the top 10 by edge and leaves the card a draft. 10:15 re-ranks that top 10 after news, weather, injury, depth-chart, team-form, and stadium inputs. 10:30 drafts the top 3 and the parlay, then checks Hard Rock placeability at the displayed best US price (Hard Rock or DraftKings, never Pinnacle). A straight that fails is flagged. A parlay that fails is re-priced at the Hard Rock price or a leg is swapped for the next positive-EV distinct-game Hard Rock candidate. The re-price keeps positive edge versus the Pinnacle no-vig and positive EV on each leg and the ticket. The check does not block publish and does not pull odds. 10:45 writes context and summaries. 11:00 is the only finalization. The 3:00 and 10:00 checks are one call, bookmakers=pinnacle,draftkings,hardrockbet. The generator request names hardrockbet in one bookmakers parameter. Stake EV uses the displayed US price. DraftKings is still required. The optional sharp-book slot stays empty. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.72-omega-vnext-price-lock: Every parlay publishes only when combined EV is positive, on a lean day and on a floor day. The probability is the same adjusted cover that sets straight edge and stake EV. A straight ticket that misses is rebuilt from the next-best positive-EV legs on distinct games. A Hard Rock offer on that row is the leg price, and a leg Hard Rock does not offer is swapped. No positive-EV 3-leg is marked no qualifying parlay. Straights still publish. A main still needs 3% edge and the 3% stake-EV floor. A lean still needs 1.5% edge and stake EV above 0.',
@@ -1069,6 +1081,7 @@ module.exports = {
   DAILY_UNIT_CAP,
   MAX_STRAIGHT_UNITS_PER_PICK,
   B_GRADE_UNIT_CAP,
+  GRADE_STAKE_UNITS,
   LEAN_PAD,
   DAY_SCOPE_TZ,
   DAY_SCOPE_STRICT,

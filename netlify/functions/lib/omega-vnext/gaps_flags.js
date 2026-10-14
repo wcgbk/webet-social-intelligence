@@ -61,9 +61,9 @@ function auditCardEnabled() {
 /**
  * Straight units plus the full parlay stake on that game.
  * The parlay dies if the leg dies, so the 0.5u ticket is exposed on every leg.
- * 1.75u is a 1.25u straight plus the 0.5u parlay. A larger straight is trimmed.
+ * 2.0u is an A+ 1.5u straight plus the 0.5u parlay. A larger straight is trimmed.
  */
-const GAME_EXPOSURE_CAP = 1.75;
+const GAME_EXPOSURE_CAP = 2.0;
 
 /**
  * Pearson prior for same-direction cross-game totals.

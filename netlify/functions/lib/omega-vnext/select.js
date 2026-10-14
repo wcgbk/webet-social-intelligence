@@ -2,20 +2,20 @@
 
 const config = require('./config');
 const {
-  MAX_STRAIGHTS, KELLY_FRACTION, UNIT_DOLLARS,
+  MAX_STRAIGHTS,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
   MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EDGE,
   LEAN_PARLAY_UNITS, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = config;
 const {
-  kellyToUnits, ratingToConfidence, formatAmerican, americanToDecimal,
+  ratingToConfidence, formatAmerican,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
+  gradeStakeUnits, cardHasFullGrade, formatGameTimeET, stakeDollars, toWinDollars,
 } = require('./odds_math');
 const { minEdgeFor, mainMinEv } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
-const { pushAwareKelly } = require('./push_ev');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 const { reviewFlag } = require('./pinnacle_flag');
 
@@ -442,48 +442,9 @@ function drawdownActive(results) {
   return false;
 }
 
-/**
- * Quarter-Kelly on the Pinnacle fair, in units. 1u = $150 on a $10,000 bankroll.
- * f = 0.25 × (p × d − 1) / (d − 1). units = f / 0.015.
- * Null when this row is not sharp-priced, so the older stake path stays put.
- */
-function sharpStakeUnits(c) {
-  if (!(c && c.sharpFairPriced)) return null;
-  const p = Number(c.coverProb);
-  const dec = americanToDecimal(c.odds);
-  if (!Number.isFinite(p) || p <= 0 || p >= 1 || dec == null || !(dec > 1)) return 0;
-  const f = KELLY_FRACTION * (p * dec - 1) / (dec - 1);
-  if (!(f > 0)) return 0;
-  const unitFrac = UNIT_DOLLARS / 10000;
-  if (!(unitFrac > 0)) return 0;
-  return f / unitFrac;
-}
-
-function fmtSharpU(n) {
-  const nu = Math.round(Number(n) * 100) / 100;
-  return `${nu}u`;
-}
-
-/** Stake cap from cover probability. Under 0.42 → 0.5u. Under 0.50 → 1.0u. */
-function coverStakeCap(units, coverProb) {
-  const n = Number(coverProb);
-  if (!Number.isFinite(n) || !Number.isFinite(units)) return units;
-  const prob = n > 1 && n <= 100 ? n / 100 : n;
-  if (prob < 0.42) return Math.min(units, 0.5);
-  if (prob < 0.50) return Math.min(units, 1);
-  return units;
-}
-
 function toPickObject(c, opts = {}) {
-  const lean = c && c.tier === 'lean';
   const sharp = !!(c && c.sharpFairPriced);
   const pure = !!(c && c.pureModelPriced);
-  const drawdown = !!(opts && opts.drawdown) && !lean && !sharp;
-  const fraction = drawdown ? KELLY_FRACTION * 0.75 : KELLY_FRACTION;
-  const kFrac = pushAwareKelly(c.coverProb, c.odds, fraction, c && c.pPush);
-  const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
-  let units = kellyToUnits(kFrac, perPickCap);
-  if (drawdown) units = Math.max(0.5, units - 0.5);
 
   // Sharp card: edge is p_fair − implied. Pure model: edge is p_model − implied.
   // Letter bands are that edge alone. CLV does not move the grade.
@@ -495,27 +456,11 @@ function toPickObject(c, opts = {}) {
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
-  if (sharp) {
-    // A same-line fill under the 1% tier is a flat 0.5u lean. Quarter-Kelly
-    // on a non-positive fair is 0, and that would publish an empty stake.
-    const belowOne = !(edgeFrac != null && edgeFrac + 1e-12 >= 0.01);
-    if (tier === 'lean' && (c.pairedFill || belowOne)) {
-      units = Number(LEAN_MAX_UNITS);
-    } else {
-      const raw = sharpStakeUnits(c);
-      const cap = edgeFrac != null && edgeFrac + 1e-12 >= 0.02 ? 1 : Number(B_GRADE_UNIT_CAP);
-      units = Math.min(raw == null ? 0 : raw, Number.isFinite(cap) ? cap : 0.5);
-    }
-  } else {
-    // Kelly (and drawdown) already ran. Grade stays the edge letter.
-    // Cover caps are sizing only. They do not reject the pick. Leans stay flat.
-    if (!lean) units = coverStakeCap(units, c.coverProb);
-    // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
-    units = capBGradeStake(units, rating);
-    // Flat lean stake. Kelly and the grade cap do not move it. The daily
-    // cap may trim later. It must not raise the lean above this.
-    if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
-  }
+  // Flat stake by grade. Kelly rounding, the cover cap, and drawdown do not
+  // override it. B and every lean stay at 0.5u. The B cap never raises.
+  let units = gradeStakeUnits(rating, tier);
+  units = capBGradeStake(units, rating);
+  if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
   const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
   const evNum = Number.isFinite(evParsed) ? evParsed : null;
   const evStr = evNum == null ? null : formatEdgePct(evNum);
@@ -539,7 +484,11 @@ function toPickObject(c, opts = {}) {
     qualityGrade: rating,
     qualityScore: +pickQuality.toFixed(6),
     confidence: ratingToConfidence(rating),
-    units: sharp ? fmtSharpU(units) : `${units}u`,
+    units: `${units}u`,
+    grade: rating === 'aplus' ? 'A+' : rating === 'a' ? 'A' : rating === 'aminus' ? 'A-' : rating === 'bplus' ? 'B+' : 'B',
+    edge: edgePctStr,
+    riskDollars: stakeDollars(units),
+    toWinDollars: toWinDollars(units, c.oddsStr || formatAmerican(c.odds)),
     ev: evStr,
     evRaw: Number.isFinite(evNum) ? evNum : null,
     edgeBasis: c.edgeBasis || (pure ? 'pure-model-edge-vs-bet-price' : 'calibrated-edge-vs-pinnacle-no-vig'),
@@ -554,6 +503,7 @@ function toPickObject(c, opts = {}) {
     clvExpectation: c.clvExpectation || '',
     modelEdge,
     commenceTime: c.commenceTime || '',
+    gameTime: c.gameTime || formatGameTimeET(c.commenceTime) || null,
     homeTeam: c.homeTeam,
     awayTeam: c.awayTeam,
     source: 'omega-vnext',
@@ -608,10 +558,11 @@ function applyDailyCap(picks) {
 
 /**
  * Unit structure:
- * - Every published parlay is LEAN_PARLAY_UNITS (0.25u). A no-qualifying
- *   marker keeps units null. PARLAY_FIXED_UNITS is the budget constant only.
- * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (3.5u)
- * - Total ≤ DAILY_UNIT_CAP (4.0u)
+ * - Full card (any straight graded A- or better): parlay PARLAY_FIXED_UNITS (0.5u).
+ * - Lean-only card: parlay LEAN_PARLAY_UNITS (0.25u).
+ * - A no-qualifying marker keeps units null.
+ * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (4.5u)
+ * - Total ≤ DAILY_UNIT_CAP (5.0u)
  * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
  * Grade B straights are capped at B_GRADE_UNIT_CAP before that trim.
  * A lean is capped at LEAN_MAX_UNITS (0.5u) before that trim. The grade
@@ -626,14 +577,18 @@ function applyDailyUnitCap(picks, parlayLegs) {
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
 
-  // Every published parlay is 0.25u. A "no qualifying parlay" marker
-  // is not a stake. PARLAY_FIXED_UNITS stays the budget constant only.
+  // Full card parlays 0.5u. Lean-only parlays 0.25u. A "no qualifying
+  // parlay" marker is not a stake.
+  const parlayStake = cardHasFullGrade(out) ? PARLAY_FIXED_UNITS : LEAN_PARLAY_UNITS;
   for (const pl of parlays) {
     if (pl && (pl.qualifying === false || pl.status === 'no qualifying parlay' || pl.type === 'no-qualifying-parlay')) {
       pl.units = null;
       continue;
     }
-    pl.units = fmtU(LEAN_PARLAY_UNITS);
+    pl.units = fmtU(parlayStake);
+    pl.riskDollars = stakeDollars(parlayStake);
+    if (pl.combinedOdds) pl.toWinDollars = toWinDollars(parlayStake, pl.combinedOdds);
+    if (!pl.evLabel) pl.evLabel = 'assumes independent legs';
   }
 
   const straightTotalOf = () => out.reduce((acc, p) => acc + parseU(p.units), 0);

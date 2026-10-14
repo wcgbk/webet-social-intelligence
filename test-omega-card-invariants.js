@@ -8,8 +8,8 @@
  *   - publish at most one straight per game
  *   - never put two parlay legs on the same game
  *   - never publish a negative-EV straight or a negative-EV ticket
- *   - keep straight units inside the per-pick, B-grade, lean, 3.5u, and 4.0u caps
- *   - keep every published parlay at 0.25u after the unit cap
+ *   - keep straight units inside the per-pick, B-grade, lean, 4.5u, and 5.0u caps
+ *   - parlay 0.5u on a full card (any straight A- or better), else 0.25u
  *   - return the same card for the same input
  */
 
@@ -19,6 +19,7 @@ const {
   selectStraights, toPickObject, applyDailyUnitCap, passesPublishFloor, passesLeanFill, matchupKey,
 } = require('./netlify/functions/lib/omega-vnext/select');
 const { optimizeParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
+const { cardHasFullGrade } = require('./netlify/functions/lib/omega-vnext/odds_math');
 
 const CARD = '2026-10-11';
 const KICK = '2026-10-11T20:00:00Z';
@@ -115,7 +116,8 @@ function assertCard(card, label) {
   let parlayUnits = 0;
   for (const ticket of tickets) {
     parlayUnits += parseU(ticket.units);
-    assert.strictEqual(parseU(ticket.units), config.LEAN_PARLAY_UNITS, `${label} parlay units ${ticket.units}`);
+    const expectedStake = cardHasFullGrade(picks) ? config.PARLAY_FIXED_UNITS : config.LEAN_PARLAY_UNITS;
+    assert.strictEqual(parseU(ticket.units), expectedStake, `${label} parlay units ${ticket.units}`);
     assert.ok(parsePct(ticket.ev) > 0, `${label} ticket EV ${ticket.ev}`);
     const legs = ticket.legs || [];
     assert.ok(legs.length >= 2 && legs.length <= 3, `${label} leg count ${legs.length}`);

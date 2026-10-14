@@ -56,7 +56,7 @@ const floorBefore = JSON.parse(JSON.stringify(floor));
 const floorTicket = parlayFromStraights(floor);
 assert.strictEqual(floorTicket.length, 1);
 assert.strictEqual(floorTicket[0].qualifying, true);
-assert.strictEqual(floorTicket[0].units, '0.25u');
+assert.strictEqual(floorTicket[0].units, '0.5u');
 assert.strictEqual(floorTicket[0].label, 'combined EV not positive');
 assert.ok(!(floorTicket[0].evRaw > 0));
 assert.deepStrictEqual(floor, floorBefore, 'a labeled floor parlay does not drop the straights');

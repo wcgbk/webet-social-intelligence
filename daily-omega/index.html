@@ -681,7 +681,7 @@
   </div>
 
   <!-- Edge grade legend (record lives in KPI / results) -->
-  <div id="record-legend-bar" class="record-legend-bar" title="Exact 5.0% and 3.5% default to the higher grade. Units on each card are Kelly stake, separate from the letter.">
+  <div id="record-legend-bar" class="record-legend-bar" title="Exact 5.0% and 3.5% default to the higher grade. Stake is flat by letter: A+ 1.5u, A 1u, A- 0.75u, B or any lean 0.5u.">
     <span class="edge-legend-label">Edge:</span>
     <span><span class="legend-dot dot-aplus"></span>A+ Strong 5%+</span>
     <span><span class="legend-dot dot-a"></span>A Solid 3.5% - 5%</span>
@@ -863,8 +863,16 @@
     return '+' + Math.round(((1 - prob) / prob) * 100);
   }
   function calcParlayOdds(legs) {
-    const combined = legs.reduce((acc, o) => acc * americanToImplied(o), 1);
-    return impliedToAmerican(combined);
+    // Payout price is the product of each leg's decimal odds, not the implied product.
+    let dec = 1;
+    for (const oddsStr of legs) {
+      const odds = parseInt(String(oddsStr || '-110').replace(/[^0-9+-]/g, ''));
+      if (isNaN(odds) || odds === 0) { dec *= (100 / 110) + 1; continue; }
+      dec *= odds > 0 ? (odds / 100) + 1 : (100 / Math.abs(odds)) + 1;
+    }
+    if (!(dec > 1)) return '+100';
+    if (dec >= 2) return '+' + Math.round((dec - 1) * 100);
+    return '-' + Math.round(100 / (dec - 1));
   }
   function calcParlayWinnings(risk, legs) {
     // Multiply decimal odds for each leg, subtract 1 for profit, times risk
@@ -1805,6 +1813,7 @@
       'B': 'b', b: 'b',
     };
     if (typeof p.rating === 'string' && map[p.rating] != null) return map[p.rating];
+    if (typeof p.grade === 'string' && map[p.grade] != null) return map[p.grade];
     if (typeof p.confidence === 'string' && badgeClass[p.confidence]) return p.confidence;
     const u = parseFloat(String(p.units || '0').replace(/[^0-9.]/g, '')) || 0;
     if (u >= 1.5) return 'aplus';
@@ -1836,10 +1845,18 @@
       gameTimeStr = game.startTimeEST + ' EST';
     } else if (isPreGame && game && game.detail) {
       gameTimeStr = game.detail;
+    } else if (isPreGame && p.gameTime) {
+      gameTimeStr = p.gameTime;
     } else if (isPreGame && p.commenceTime) {
       try {
         const ct = new Date(p.commenceTime);
-        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' EST';
+        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
+      } catch (e) {}
+    }
+    if (isPreGame && !gameTimeStr && p.commenceTime) {
+      try {
+        const ct = new Date(p.commenceTime);
+        gameTimeStr = ct.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
       } catch (e) {}
     }
 
@@ -1856,8 +1873,9 @@
       timeChip = '';
     }
 
-    const edgeBadgeHTML = p.edgePct
-      ? `<span class="edge-badge" title="Letter grade uses this calibrated edge versus the Pinnacle no-vig. It is not DraftKings stake EV."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(p.edgePct)}</span>`
+    const edgeShown = p.edgePct || p.edge;
+    const edgeBadgeHTML = edgeShown
+      ? `<span class="edge-badge" title="Letter grade uses this calibrated edge versus the Pinnacle no-vig. It is not DraftKings stake EV."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(edgeShown)}</span>`
       : '';
     const evBadgeHTML = (p.ev != null && p.ev !== '')
       ? `<span class="edge-badge" title="Stake EV at the DraftKings price. The letter grade uses the calibrated edge versus the Pinnacle no-vig.">EV ${esc(p.ev)}</span>`
@@ -2179,7 +2197,8 @@
         if (pushCount === parlayFinalStatuses.length) { parlayStatus = 'push'; parlayLabel = 'Push'; }
         else { parlayStatus = 'win'; parlayLabel = 'Win (reduced)'; }
       }
-      const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${Math.round(parlayWin).toLocaleString()}`;
+      const parlayEvLabel = (apiParlay && apiParlay.evLabel) || 'assumes independent legs';
+      const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${wholeUp(parlayWin).toLocaleString()}`;
 
       html += `<div class="parlay-section">
         <div class="parlay-title">Recommended ${legCount}-Team Parlay</div>
@@ -2188,6 +2207,7 @@
           <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
         </div>
         <div class="parlay-payout">${parlayPayStr}</div>
+        <div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">Parlay EV ${esc(parlayEvLabel)}</div>
         ${(parlayLabeled && apiParlay.label) ? `<div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">${esc(String(apiParlay.label).charAt(0).toUpperCase() + String(apiParlay.label).slice(1))}</div>` : ''}`;
 
       for (const lr of parlayLegResults) {
@@ -2447,8 +2467,9 @@
         if (isPreGame) {
           let t = '';
           if (game && game.startTimeEST) t = game.startTimeEST;
+          else if (p.gameTime) t = p.gameTime;
           else if (p.commenceTime) { try { t = new Date(p.commenceTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }); } catch(e) {} }
-          if (t) { const tz = t.includes('EST') || t.includes('EDT') ? t : t + ' EST'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
+          if (t) { const tz = /ET|EST|EDT/.test(t) ? t : t + ' ET'; rightSide = `<span style="font-size:.65rem; color:var(--txt-l);">${esc(tz)}</span>`; }
         } else if (isLiveGame) {
           const scoreStr = game ? `(${game.awayScore}-${game.homeScore})` : '';
           rightSide = `<span style="color:var(--txt-m); font-weight:600; font-size:.65rem; margin-right:.25rem;">${scoreStr}</span><span class="result-badge result-pending">LIVE</span>`;

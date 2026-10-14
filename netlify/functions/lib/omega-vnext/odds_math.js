@@ -1,6 +1,6 @@
 'use strict';
 
-const { QUALITY_GRADE, UNIT_DOLLARS } = require('./config');
+const { QUALITY_GRADE, UNIT_DOLLARS, GRADE_STAKE_UNITS } = require('./config');
 
 function americanToImplied(american) {
   const a = Number(american);
@@ -244,6 +244,86 @@ function qualityScore(edgeFrac, predictedClv, uncertainty) {
   return edge + clvBonus + uncertaintyAdj;
 }
 
+/** aplus / a / aminus / bplus / b / lean, or ''. */
+function normalizeRatingKey(rating) {
+  const r = String(rating == null ? '' : rating).trim().toLowerCase().replace(/\s+/g, '');
+  if (r === 'a+' || r === 'aplus') return 'aplus';
+  if (r === 'a') return 'a';
+  if (r === 'a-' || r === 'aminus') return 'aminus';
+  if (r === 'b+' || r === 'bplus') return 'bplus';
+  if (r === 'b') return 'b';
+  if (r === 'lean') return 'lean';
+  return '';
+}
+
+/** Display letter. A+ / A / A- / B+ / B. */
+function ratingLetter(rating) {
+  const key = normalizeRatingKey(rating);
+  return ({
+    aplus: 'A+', a: 'A', aminus: 'A-', bplus: 'B+', b: 'B', lean: 'Lean',
+  })[key] || null;
+}
+
+/**
+ * Flat published stake. A lean is 0.5u at every letter.
+ * A+ 1.5, A 1, A- 0.75, B and anything else 0.5.
+ */
+function gradeStakeUnits(rating, tier) {
+  const t = String(tier || '').trim().toLowerCase();
+  if (t === 'lean') {
+    const lean = Number(GRADE_STAKE_UNITS && GRADE_STAKE_UNITS.lean);
+    return Number.isFinite(lean) ? lean : 0.5;
+  }
+  const key = normalizeRatingKey(rating);
+  const table = GRADE_STAKE_UNITS || {};
+  const raw = key && table[key] != null ? Number(table[key]) : Number(table.b);
+  return Number.isFinite(raw) ? raw : 0.5;
+}
+
+/** True when the letter is A- or better. That straight makes the card full. */
+function isFullCardGrade(rating) {
+  const key = normalizeRatingKey(rating);
+  return key === 'aplus' || key === 'a' || key === 'aminus';
+}
+
+/**
+ * Full card: any straight is graded A- or better.
+ * A missing letter falls back to the edge fraction (A- starts at 2%).
+ * No such straight is a lean-only card.
+ */
+function cardHasFullGrade(picks) {
+  return (picks || []).some((p) => {
+    if (!p) return false;
+    const explicit = p.rating != null && String(p.rating).trim() !== ''
+      ? p.rating
+      : (p.qualityGrade != null && String(p.qualityGrade).trim() !== ''
+        ? p.qualityGrade
+        : p.grade);
+    if (explicit != null && String(explicit).trim() !== '') return isFullCardGrade(explicit);
+    const edge = parseEdgeFraction(p.edgePct != null ? p.edgePct : p.edge);
+    if (edge != null) return edge + 1e-12 >= QUALITY_GRADE.aminus;
+    return false;
+  });
+}
+
+/** Kickoff clock in America/New_York, or null. */
+function formatGameTimeET(iso) {
+  if (iso == null || iso === '') return null;
+  try {
+    const d = iso instanceof Date ? iso : new Date(iso);
+    if (!Number.isFinite(d.getTime())) return null;
+    const clock = d.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return clock ? `${clock} ET` : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 /** Letter grade from edge-first quality. Thresholds come from shared config. */
 function qualityToRating(edgeFrac, predictedClv, uncertainty) {
   const edge = parseEdgeFraction(edgeFrac);
@@ -329,6 +409,23 @@ function parseStakeUnits(units) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Whole dollars at risk. 0.75u is $113. 0.25u is $38. */
+function stakeDollars(units) {
+  const n = typeof units === 'number' && Number.isFinite(units) ? units : parseStakeUnits(units);
+  if (n == null) return 0;
+  return wholeUpNumber(n * UNIT_DOLLARS);
+}
+
+/** Profit if the stake wins, rounded up to a whole dollar. Risk is already ceiled. */
+function toWinDollars(units, american) {
+  const risk = stakeDollars(units);
+  if (!risk) return 0;
+  const a = Number(String(american == null ? '' : american).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(a) || a === 0) return 0;
+  const profit = a > 0 ? risk * (a / 100) : risk * (100 / Math.abs(a));
+  return wholeUpNumber(profit);
+}
+
 function isPublishedParlay(pl) {
   if (!pl || typeof pl !== 'object') return false;
   if (pl.qualifying === false) return false;
@@ -338,23 +435,26 @@ function isPublishedParlay(pl) {
 }
 
 /**
- * Summary display only. Each stake rounds up to a whole unit, and that
- * unit is UNIT_DOLLARS. pick.units is left as the real stake.
+ * Summary display. Real unit stakes are summed and the parlay counts once.
+ * Each stake's dollars round up on their own, then those dollars sum.
+ * pick.units is left as the real stake.
  */
 function summaryStakeDisplay(picks, parlayLegs) {
-  // Real stakes are summed; the parlay counts once. Only dollars round up.
   let units = 0;
-  for (const p of picks || []) {
-    const n = p ? parseStakeUnits(p.units) : null;
-    if (n != null) units += n;
-  }
+  let dollars = 0;
+  const add = (raw) => {
+    const n = parseStakeUnits(raw);
+    if (n == null) return;
+    units += n;
+    dollars += stakeDollars(n);
+  };
+  for (const p of picks || []) add(p && p.units);
   const legs = (parlayLegs || []).filter(isPublishedParlay);
   if (legs.length) {
     const n = legs.map(l => parseStakeUnits(l.units)).find(v => v != null);
-    if (n != null) units += n;
+    if (n != null) add(n);
   }
   units = Math.round(units * 100) / 100;
-  const dollars = wholeUpNumber(units * UNIT_DOLLARS);
   return { units, dollars, totalUnits: `${units}u`, totalDollars: dollars };
 }
 
@@ -389,6 +489,14 @@ module.exports = {
   parseEdgeFraction,
   qualityScore,
   qualityToRating,
+  normalizeRatingKey,
+  ratingLetter,
+  gradeStakeUnits,
+  isFullCardGrade,
+  cardHasFullGrade,
+  formatGameTimeET,
+  stakeDollars,
+  toWinDollars,
   pickQualityScore,
   sortByGradeThenUnits,
   etCalendarDate,

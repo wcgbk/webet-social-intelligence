@@ -38,7 +38,7 @@ function names(list) {
   return new Set((list || []).map((item) => item.matchup || item.side));
 }
 
-assert.strictEqual(config.MODEL_VERSION, 'v12.3.74-omega-vnext-price-lock');
+assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
 assert.strictEqual(config.LEAN_MIN_EDGE, 0.015);
 assert.strictEqual(config.LEAN_MAX_UNITS, 0.5);
 assert.strictEqual(config.LEAN_PARLAY_UNITS, 0.25);
@@ -104,7 +104,7 @@ const capped = applyDailyUnitCap([
   },
 ], [{ units: '0.25u', leanDay: true, legs: [] }]);
 assert.strictEqual(capped.picks.find((p) => p.tier === 'lean').units, '0.25u');
-assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
+assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
 const arrivedHigh = applyDailyUnitCap([
   {
     pick: 'Lean high', matchup: 'C @ D', rating: 'a', qualityGrade: 'a', tier: 'lean',

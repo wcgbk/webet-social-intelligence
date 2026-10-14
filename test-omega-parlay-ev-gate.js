@@ -60,7 +60,7 @@ const beforeNeg = JSON.stringify(floorNeg);
 const labeled = parlayFromStraights(floorNeg);
 assert.strictEqual(labeled.length, 1);
 assert.strictEqual(labeled[0].qualifying, true);
-assert.strictEqual(labeled[0].units, '0.25u');
+assert.strictEqual(labeled[0].units, '0.5u');
 assert.strictEqual(labeled[0].leanDay, true);
 assert.strictEqual(labeled[0].label, 'combined EV not positive');
 assert.strictEqual(labeled[0].type, '3-leg-parlay-labeled');
@@ -81,7 +81,7 @@ const floorPos = [
 const floorTicket = parlayFromStraights(floorPos);
 assert.strictEqual(floorTicket.length, 1);
 assert.strictEqual(floorTicket[0].qualifying, true);
-assert.strictEqual(floorTicket[0].units, '0.25u');
+assert.strictEqual(floorTicket[0].units, '0.5u');
 assert.ok(!floorTicket[0].leanDay);
 assert.ok(floorTicket[0].label == null);
 assert.ok(floorTicket[0].evRaw > 0, floorTicket[0].ev);
@@ -98,7 +98,7 @@ const rounded = [
 assert.strictEqual(unifiedCoverProb(rounded[0]), 0.58);
 const fromCal = parlayFromStraights(rounded);
 assert.strictEqual(fromCal[0].qualifying, true, fromCal[0].status);
-assert.strictEqual(fromCal[0].units, '0.25u');
+assert.strictEqual(fromCal[0].units, '0.5u');
 assert.ok(fromCal[0].evRaw > 0);
 assert.strictEqual(fromCal[0].legs[0].p_cal, 0.58);
 assert.ok(parseFloat(fromCal[0].legs[0].ev) > 0);
@@ -114,7 +114,7 @@ const overs = [
 assert.ok(priceParlayLeg(overs[0]).ev > 0);
 const haircut = parlayFromStraights(overs);
 assert.strictEqual(haircut[0].qualifying, true);
-assert.strictEqual(haircut[0].units, '0.25u');
+assert.strictEqual(haircut[0].units, '0.5u');
 assert.strictEqual(haircut[0].label, 'combined EV not positive');
 assert.ok(!(haircut[0].evRaw > 0));
 const replacement = leg('Kings @ Oilers', {
@@ -123,7 +123,7 @@ const replacement = leg('Kings @ Oilers', {
 const corrected = parlayFromStraights(overs, { pool: [replacement] });
 assert.strictEqual(corrected[0].qualifying, true);
 assert.strictEqual(corrected[0].autoCorrected, true);
-assert.strictEqual(corrected[0].units, '0.25u');
+assert.strictEqual(corrected[0].units, '0.5u');
 assert.ok(!corrected[0].leanDay);
 assert.ok(corrected[0].evRaw > 0);
 assert.ok(names(corrected[0]).includes('Oilers ML'));
@@ -155,7 +155,7 @@ assert.strictEqual(priceParlayLeg(noHr), null);
 assert.ok(priceParlayLeg(withHr));
 const hrTicket = parlayFromStraights(hrCard, { pool: [noHr, withHr] });
 assert.strictEqual(hrTicket[0].qualifying, true);
-assert.strictEqual(hrTicket[0].units, '0.25u');
+assert.strictEqual(hrTicket[0].units, '0.5u');
 assert.strictEqual(hrTicket[0].autoCorrected, true);
 assert.ok(names(hrTicket[0]).includes('Oilers ML'));
 assert.ok(names(hrTicket[0]).some((name) => /Lightning|Rangers/.test(name)));
@@ -182,7 +182,7 @@ const repricedLegs = [
 const repriced = parlayFromStraights(repricedLegs);
 assert.strictEqual(repriced[0].qualifying, true);
 assert.strictEqual(repriced[0].autoCorrected, false);
-assert.strictEqual(repriced[0].units, '0.25u');
+assert.strictEqual(repriced[0].units, '0.5u');
 assert.ok(repriced[0].legs.every((row) => row.odds === '-110'));
 assert.ok(repriced[0].evRaw > 0);
 
@@ -196,17 +196,17 @@ const deadHr = repricedLegs.map((row) => ({
 assert.strictEqual(priceParlayLeg(deadHr[0]), null);
 const deadTicket = parlayFromStraights(deadHr);
 assert.strictEqual(deadTicket[0].qualifying, true);
-assert.strictEqual(deadTicket[0].units, '0.25u');
+assert.strictEqual(deadTicket[0].units, '0.5u');
 assert.ok(deadTicket[0].legs.every((row) => row.odds === '-110'));
 assert.ok(deadTicket[0].evRaw > 0);
 
-// The unit cap keeps the labeled ticket at 0.25u.
+// The unit cap keeps a full-card labeled ticket at 0.5u.
 const capped = applyDailyUnitCap(
   [{ pick: 'Bills', units: '1u', rating: 'aminus', tier: 'floor', matchup: 'Jets @ Bills' }],
   parlayFromStraights(floorNeg),
 );
 assert.strictEqual(capped.parlayLegs[0].qualifying, true);
-assert.strictEqual(capped.parlayLegs[0].units, '0.25u');
+assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
 assert.strictEqual(capped.parlayLegs[0].label, 'combined EV not positive');
 assert.ok(!isNoQualifyingParlay(capped.parlayLegs[0]));
 

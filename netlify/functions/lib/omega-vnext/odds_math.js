@@ -342,18 +342,19 @@ function isPublishedParlay(pl) {
  * unit is UNIT_DOLLARS. pick.units is left as the real stake.
  */
 function summaryStakeDisplay(picks, parlayLegs) {
-  const parts = [];
-  const push = (units) => {
-    const n = parseStakeUnits(units);
-    if (n != null) parts.push(n);
-  };
-  for (const p of picks || []) if (p) push(p.units);
-  for (const pl of parlayLegs || []) {
-    if (!isPublishedParlay(pl)) continue;
-    push(pl.units);
+  // Real stakes are summed; the parlay counts once. Only dollars round up.
+  let units = 0;
+  for (const p of picks || []) {
+    const n = p ? parseStakeUnits(p.units) : null;
+    if (n != null) units += n;
   }
-  const units = parts.reduce((s, u) => s + wholeUpNumber(u), 0);
-  const dollars = units * UNIT_DOLLARS;
+  const legs = (parlayLegs || []).filter(isPublishedParlay);
+  if (legs.length) {
+    const n = legs.map(l => parseStakeUnits(l.units)).find(v => v != null);
+    if (n != null) units += n;
+  }
+  units = Math.round(units * 100) / 100;
+  const dollars = wholeUpNumber(units * UNIT_DOLLARS);
   return { units, dollars, totalUnits: `${units}u`, totalDollars: dollars };
 }
 

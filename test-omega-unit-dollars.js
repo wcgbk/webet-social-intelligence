@@ -81,16 +81,16 @@ async function main() {
   const straight = { units: '0.5u' };
   const ticket = { units: '0.25u', type: '3-leg-parlay-labeled', qualifying: true };
   const shown = summaryStakeDisplay([straight, { units: '0.5u' }, { units: '0.5u' }], [ticket]);
-  assert.strictEqual(shown.totalUnits, '4u');
-  assert.strictEqual(shown.totalDollars, 600);
+  assert.strictEqual(shown.totalUnits, '1.75u');
+  assert.strictEqual(shown.totalDollars, 263);
   assert.strictEqual(straight.units, '0.5u');
   assert.strictEqual(ticket.units, '0.25u');
   const marker = summaryStakeDisplay(
     [{ units: '1.25u' }],
     [{ units: '0.25u', qualifying: false, type: 'no-qualifying-parlay' }]
   );
-  assert.strictEqual(marker.totalUnits, '2u');
-  assert.strictEqual(marker.totalDollars, 300);
+  assert.strictEqual(marker.totalUnits, '1.25u');
+  assert.strictEqual(marker.totalDollars, 188);
   assert.strictEqual(summaryStakeDisplay([{ units: '1u' }], []).totalUnits, '1u');
 }
 

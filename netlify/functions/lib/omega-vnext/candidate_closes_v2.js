@@ -32,6 +32,7 @@ const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
 const { oddsSnapshotSavedCredits } = require('./odds_snapshot_cache');
 const oddsMaster = require('./odds_master');
+const { blobRestUrl: canonicalBlobRestUrl } = require('./blob_key');
 
 /** Odds API bookmaker keys. ≤10 → 1 region. */
 const SHARP_CLOSE_BOOKS = ['pinnacle', 'lowvig', 'betonlineag', 'bookmaker'];
@@ -405,7 +406,7 @@ function eventsAllowSkip(events, dueRows, nowMs) {
 
 function blobRestUrl(key, siteId) {
   const site = siteId || process.env.SITE_ID || SITE_ID;
-  return `https://api.netlify.com/api/v1/blobs/${site}/${BLOB_STORE}/${key}`;
+  return canonicalBlobRestUrl(site, BLOB_STORE, key, 'canonical');
 }
 
 async function restCall(key, { method, body, fetchImpl, token, siteId } = {}) {

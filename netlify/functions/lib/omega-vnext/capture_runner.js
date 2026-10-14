@@ -29,8 +29,10 @@ const {
 } = require('./odds_snapshot_cache');
 const {
   PINNACLE_SPORTS, quotesFromEvents, quotesByEvent, storeOpen, storeCheck, LINE_MOVE_STORE,
-  eventKey, CHECK_SLOTS, commenceEtDate, readLineMoveKey, dateIndexKey, shiftYmd,
+  eventKey, CHECK_SLOTS, commenceEtDate, readLineMoveKey, shiftYmd,
+  readPinnacleLineMoves,
 } = require('./pinnacle_line_move');
+const { opsAlert } = require('./ops_alert');
 const {
   storeQuotes, closeAlreadyStored, storeHistoricalCloses, groupByCommence,
   isPreviousEtDay, historicalCreditsPerPull, earlyReuseMs, dateKey: masterDateKey,
@@ -379,19 +381,17 @@ async function listYesterdayGames(dateISO, storeOpts, opts) {
       });
     }
   };
-  const lineRead = storeOpts.read || ((key) => readLineMoveKey(key, storeOpts));
-  let lineIndex = null;
-  try { lineIndex = await lineRead(dateIndexKey(yday)); } catch (_) { lineIndex = null; }
-  for (const row of (lineIndex && lineIndex.events) || []) {
-    if (!row || !row.sport || row.eventId == null) continue;
-    let doc = null;
-    try { doc = await lineRead(eventKey(row.sport, row.eventId)); } catch (_) { doc = null; }
+  let pack = null;
+  try {
+    pack = await readPinnacleLineMoves(yday, { read: storeOpts.read, list: storeOpts.list });
+  } catch (_) { pack = null; }
+  for (const doc of (pack && pack.events) || []) {
     add({
-      sport: row.sport,
-      eventId: row.eventId,
-      commenceTime: doc && doc.commenceTime,
-      homeTeam: (doc && doc.homeTeam) || null,
-      awayTeam: (doc && doc.awayTeam) || null,
+      sport: doc.sport,
+      eventId: doc.eventId,
+      commenceTime: doc.commenceTime,
+      homeTeam: doc.homeTeam || null,
+      awayTeam: doc.awayTeam || null,
     });
   }
   let masterIndex = null;
@@ -400,6 +400,11 @@ async function listYesterdayGames(dateISO, storeOpts, opts) {
       ? await storeOpts.read(masterDateKey(yday))
       : await readMasterKey(masterDateKey(yday), storeOpts);
   } catch (_) { masterIndex = null; }
+  const lineCount = pack && Array.isArray(pack.events) ? pack.events.length : 0;
+  const masterCount = masterIndex && Array.isArray(masterIndex.events) ? masterIndex.events.length : 0;
+  if (masterCount > lineCount) {
+    opsAlert('date-index-short', `date=${yday} lineMoves=${lineCount} oddsMaster=${masterCount}`);
+  }
   for (const row of (masterIndex && masterIndex.events) || []) add(row);
   if (Array.isArray(opts.yesterdayGames)) {
     for (const row of opts.yesterdayGames) add(row);
@@ -445,6 +450,7 @@ async function captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, ap
     if (saved.reason === 'snapshot-after-commence') {
       console.log(`[pinnacle-line-move] reject historical snapshot after commence sport=${group.sport} commence=${group.commenceTime} snapshot=${pulled.snapshotAt}`);
     }
+
   }
 }
 

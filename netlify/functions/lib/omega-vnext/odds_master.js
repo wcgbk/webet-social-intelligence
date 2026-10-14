@@ -57,6 +57,8 @@ const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
 const { hasTrueClosingCapture } = require('./fetch_memo');
 const { quotesFromEvent } = require('./pinnacle_line_move');
+const { canonicalBlobKey, legacyEncodedBlobKey, blobHasSlash, blobRestUrl } = require('./blob_key');
+const { opsAlert } = require('./ops_alert');
 
 const STORE = 'odds-master';
 const SCHEMA = 'odds-master-v1';
@@ -88,6 +90,69 @@ function indexKey(sport, eventId) {
 
 function dateKey(ymd) {
   return `by-date/${ymd}`;
+}
+
+/** Write-once marker. A lost read-modify-write on by-date cannot drop this. */
+function dateEventMarkerKey(ymd, sport, eventId) {
+  return `by-date/${ymd}/event/${sport}/${eventId}`;
+}
+
+function isDateIndexKey(key) {
+  const text = String(key || '');
+  return text.startsWith('by-date/') && text.indexOf('/event/') === -1 && text.split('/').length === 2;
+}
+
+function unionDateEvents(lists) {
+  const out = [];
+  const at = new Map();
+  for (const list of lists) {
+    const rows = Array.isArray(list) ? list : ((list && list.events) || []);
+    for (const row of rows) {
+      if (!row || !row.sport || row.eventId == null) continue;
+      const id = `${row.sport}/${String(row.eventId)}`;
+      const next = {
+        sport: row.sport,
+        eventId: String(row.eventId),
+        homeTeam: row.homeTeam || null,
+        awayTeam: row.awayTeam || null,
+        commenceTime: row.commenceTime || null,
+        close: !!row.close,
+        open: !!row.open,
+        baseline0300: !!row.baseline0300,
+      };
+      if (!at.has(id)) {
+        at.set(id, out.length);
+        out.push(next);
+        continue;
+      }
+      const prev = out[at.get(id)];
+      out[at.get(id)] = {
+        sport: next.sport,
+        eventId: next.eventId,
+        homeTeam: next.homeTeam || prev.homeTeam,
+        awayTeam: next.awayTeam || prev.awayTeam,
+        commenceTime: next.commenceTime || prev.commenceTime,
+        close: prev.close || next.close,
+        open: prev.open || next.open,
+        baseline0300: prev.baseline0300 || next.baseline0300,
+      };
+    }
+  }
+  return out;
+}
+
+function mergeDateBodies(key, bodies) {
+  const docs = (bodies || []).filter((body) => body && typeof body === 'object' && !Array.isArray(body));
+  if (!docs.length) return null;
+  if (!isDateIndexKey(key)) return docs[0];
+  const events = unionDateEvents(docs);
+  const base = docs[0];
+  return {
+    schema: base.schema || DATE_SCHEMA,
+    store: base.store || STORE,
+    date: base.date || String(key).slice('by-date/'.length),
+    events,
+  };
 }
 
 function priceToken(book, market, timestamp) {
@@ -225,28 +290,52 @@ function quotesByMarket(quotes) {
   return out;
 }
 
+async function restGetBlob(url) {
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  if (!token) return null;
+  const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!resp || !resp.ok) return null;
+  return await resp.json();
+}
+
 async function defaultRead(key) {
   assertPriceKey(key);
-  // Same slash-key split as the line-move store. A null SDK get still tries
-  // the percent-encoded REST key that defaultWrite uses.
+  // SDK key and canonical REST key are the same object. A REST write that
+  // encodeURIComponent'd the whole key stored by-date%2F… beside by-date/….
+  // Both are read and, for the date index, unioned. A null SDK get is not
+  // proof the blob is missing. New writes use the canonical key only.
+  const bodies = [];
   try {
     const { getStore } = await import('@netlify/blobs');
     const store = getStore(STORE);
     const got = await auditBlobCall('GET', `${STORE}/${key}`, () => store.get(key, { type: 'json' }));
-    if (got != null) return got;
+    if (got != null) bodies.push(got);
   } catch (_) { /* REST below */ }
-  try {
-    const token = process.env.NETLIFY_AUTH_TOKEN;
-    if (!token) return null;
-    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${STORE}/${encodeURIComponent(key)}`;
-    const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!resp || !resp.ok) return null;
-    return await resp.json();
-  } catch (err) {
-    return null;
+  const slash = blobHasSlash(key);
+  const encodingsDiffer = legacyEncodedBlobKey(key) !== canonicalBlobKey(key);
+  if (!bodies.length || (slash && encodingsDiffer && isDateIndexKey(key))) {
+    try {
+      if (!bodies.length) {
+        const canon = await restGetBlob(blobRestUrl(SITE_ID, STORE, key, 'canonical'));
+        if (canon) bodies.push(canon);
+      }
+      if (slash && encodingsDiffer) {
+        const old = await restGetBlob(blobRestUrl(SITE_ID, STORE, key, 'legacy'));
+        if (old) bodies.push(old);
+      }
+    } catch (_) { /* soft */ }
   }
+  return mergeDateBodies(key, bodies);
+}
+
+async function defaultList(prefix) {
+  const { getStore } = await import('@netlify/blobs');
+  const store = getStore(STORE);
+  const listed = await store.list({ prefix: String(prefix || '') });
+  const blobs = (listed && listed.blobs) || [];
+  return blobs.map((blob) => (blob && blob.key) || blob).filter(Boolean);
 }
 
 async function defaultWrite(key, data) {
@@ -263,7 +352,7 @@ async function defaultWrite(key, data) {
   } catch (sdkErr) {
     const token = process.env.NETLIFY_AUTH_TOKEN;
     if (!token) throw sdkErr;
-    const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${STORE}/${encodeURIComponent(key)}`;
+    const url = blobRestUrl(SITE_ID, STORE, key, 'canonical');
     const resp = await resolveFetch(fetch, { kind: 'blob', provider: 'netlify-blobs' })(url, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -282,11 +371,47 @@ function writer(opts) {
   return (opts && opts.write) || defaultWrite;
 }
 
+async function markerRowsForDate(ymd, opts) {
+  const list = (opts && opts.list) || ((opts && opts.read) ? null : defaultList);
+  if (typeof list !== 'function') return [];
+  const read = reader(opts);
+  let keys = [];
+  try {
+    keys = await list(`by-date/${ymd}/event/`);
+  } catch (err) {
+    opsAlert('odds-date-index-list-failed', `date=${ymd} ${err && err.message}`);
+    return [];
+  }
+  const rows = [];
+  for (const key of keys || []) {
+    let doc = null;
+    try { doc = await read(key); } catch (_) { doc = null; }
+    if (doc && doc.sport && doc.eventId != null) rows.push(doc);
+  }
+  return rows;
+}
+
 async function readMasterKey(key, opts) {
   try {
-    return await reader(opts)(key);
+    const doc = await reader(opts)(key);
+    if (!isDateIndexKey(key)) return doc;
+    const ymd = String(key).slice('by-date/'.length);
+    const markers = await markerRowsForDate(ymd, opts);
+    if (!markers.length) return doc;
+    const fromDoc = doc && Array.isArray(doc.events) ? doc.events : [];
+    const events = unionDateEvents([fromDoc, markers]);
+    if (events.length > fromDoc.length) {
+      opsAlert('odds-date-index-short', `date=${ymd} index=${fromDoc.length} withMarkers=${events.length}`);
+    }
+    return {
+      schema: (doc && doc.schema) || DATE_SCHEMA,
+      store: STORE,
+      date: (doc && doc.date) || ymd,
+      events,
+    };
   } catch (err) {
     console.error(`[odds-master] read soft-fail: ${err && err.message}`);
+    opsAlert('odds-master-read-failed', `key=${key} ${err && err.message}`);
     return null;
   }
 }
@@ -305,16 +430,11 @@ async function readIndex(sport, eventId, opts) {
 
 async function touchDateIndex(index, opts, write) {
   const ymd = index.date || commenceEtDate(index.commenceTime);
-  if (!ymd) return;
-  const key = dateKey(ymd);
-  let doc = null;
-  try { doc = await reader(opts)(key); } catch (_) { doc = null; }
-  const events = doc && Array.isArray(doc.events) ? doc.events.slice() : [];
-  const id = String(index.eventId);
-  const prev = events.find((row) => row && row.sport === index.sport && String(row.eventId) === id);
+  if (!ymd) return { wrote: false, reason: 'no-date' };
+  const markerKey = dateEventMarkerKey(ymd, index.sport, index.eventId);
   const row = {
     sport: index.sport,
-    eventId: id,
+    eventId: String(index.eventId),
     homeTeam: index.homeTeam || null,
     awayTeam: index.awayTeam || null,
     commenceTime: index.commenceTime || null,
@@ -322,20 +442,37 @@ async function touchDateIndex(index, opts, write) {
     open: !!(index.open && index.open.at),
     baseline0300: !!(index.baseline0300 && index.baseline0300.at),
   };
-  if (prev) {
-    const same = prev.close === row.close && prev.open === row.open && prev.baseline0300 === row.baseline0300
-      && prev.commenceTime === row.commenceTime;
-    if (same) return;
-    const next = events.map((item) => (item && item.sport === row.sport && String(item.eventId) === id ? row : item));
-    await write(key, { schema: DATE_SCHEMA, store: STORE, date: ymd, events: next });
-    return;
+  try {
+    await write(markerKey, {
+      schema: DATE_SCHEMA,
+      marker: true,
+      store: STORE,
+      date: ymd,
+      ...row,
+    });
+  } catch (err) {
+    opsAlert('odds-date-index-marker-failed', `date=${ymd} sport=${index.sport} event=${index.eventId} ${err && err.message}`);
   }
-  await write(key, {
-    schema: DATE_SCHEMA,
-    store: STORE,
-    date: ymd,
-    events: events.concat([row]),
-  });
+  const key = dateKey(ymd);
+  let doc = null;
+  let failed = false;
+  try { doc = await reader(opts)(key); } catch (err) {
+    failed = true;
+    opsAlert('odds-date-index-read-failed', `date=${ymd} sport=${index.sport} event=${index.eventId} ${err && err.message}`);
+  }
+  if (failed) return { wrote: true, reason: 'marker-only', key: markerKey };
+  const prev = doc && Array.isArray(doc.events) ? doc.events : [];
+  const events = unionDateEvents([prev, [row]]);
+  if (prev.length && events.length < prev.length) {
+    opsAlert('odds-date-index-shrink-blocked', `date=${ymd} prev=${prev.length} next=${events.length}`);
+    return { wrote: true, reason: 'shrink-blocked', key: markerKey };
+  }
+  const prevNorm = unionDateEvents([prev]);
+  if (JSON.stringify(prevNorm) === JSON.stringify(events)) {
+    return { wrote: false, reason: 'indexed', key };
+  }
+  await write(key, { schema: DATE_SCHEMA, store: STORE, date: ymd, events });
+  return { wrote: true, reason: null, key };
 }
 
 /**
@@ -359,7 +496,12 @@ async function storeQuotes(input, opts = {}) {
   const read = reader(opts);
   const write = writer(opts);
   let index = null;
-  try { index = await read(indexKey(sport, eventId)); } catch (_) { index = null; }
+  let readFailed = false;
+  try { index = await read(indexKey(sport, eventId)); } catch (err) {
+    readFailed = true;
+    opsAlert('odds-index-read-failed', `sport=${sport} event=${eventId} ${err && err.message}`);
+  }
+  if (readFailed) return { wrote: false, reason: 'read-failed', keys: [] };
   if (!index || index.schema !== INDEX_SCHEMA) index = emptyIndex(sport, eventId, input);
   else index = clone(index);
   applyMeta(index, input);
@@ -457,7 +599,7 @@ async function readCloseEvent(query, opts = {}) {
     let index = eventId ? await readIndex(sport, eventId, opts) : null;
     if (!hasCloseIndex(index) && query && query.homeTeam && query.awayTeam && query.commenceTime) {
       const ymd = commenceEtDate(query.commenceTime);
-      const dated = ymd ? await reader(opts)(dateKey(ymd)) : null;
+      const dated = ymd ? await readMasterKey(dateKey(ymd), opts) : null;
       const events = dated && Array.isArray(dated.events) ? dated.events : [];
       const home = String(query.homeTeam).toLowerCase();
       const away = String(query.awayTeam).toLowerCase();
@@ -586,7 +728,9 @@ async function storeHistoricalCloses(group, payload, opts = {}) {
   const snapshotAt = payload && payload.snapshotAt;
   const commence = group && group.commenceTime;
   if (!snapshotAtOrBefore(snapshotAt, commence)) {
-    return { stored: 0, rejected: (group && group.games || []).length, reason: 'snapshot-after-commence' };
+    const rejected = (group && group.games || []).length;
+    opsAlert('close-snapshot-after-commence', `sport=${group && group.sport} commence=${commence} snapshot=${snapshotAt} rejected=${rejected}`);
+    return { stored: 0, rejected, reason: 'snapshot-after-commence' };
   }
   const byId = new Map();
   for (const event of payload.events || []) {
@@ -617,6 +761,9 @@ async function storeHistoricalCloses(group, payload, opts = {}) {
     }, opts);
     if (saved.reason === 'dryRun' || saved.reason === 'OMEGA_REPLAY_NO_WRITE') stored += 1;
     else if (saved.wrote || saved.reason === 'duplicate') stored += 1;
+  }
+  if (missed.length) {
+    opsAlert('close-event-missed', `sport=${group && group.sport} commence=${commence} missed=${missed.length}`);
   }
   return { stored, rejected: 0, missed, reason: null };
 }
@@ -711,6 +858,9 @@ module.exports = {
   priceKey,
   indexKey,
   dateKey,
+  dateEventMarkerKey,
+  isDateIndexKey,
+  unionDateEvents,
   apiMarket,
   displayMarket,
   commenceEtDate,

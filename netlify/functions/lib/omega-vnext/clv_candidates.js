@@ -30,6 +30,7 @@ const { hasTrueClosingCapture } = require('./fetch_memo');
 const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
 const oddsMaster = require('./odds_master');
+const { blobRestUrl: canonicalBlobRestUrl } = require('./blob_key');
 
 /** Yes-pool unselected + near-misses, after the quality sort. */
 const CANDIDATE_SIDE_CAP = 20;
@@ -563,7 +564,7 @@ function indexStored(existing) {
 
 function blobRestUrl(key, siteId) {
   const site = siteId || process.env.SITE_ID || SITE_ID;
-  return `https://api.netlify.com/api/v1/blobs/${site}/${BLOB_STORE}/${key}`;
+  return canonicalBlobRestUrl(site, BLOB_STORE, key, 'canonical');
 }
 
 /**

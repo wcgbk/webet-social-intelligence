@@ -21,6 +21,7 @@ const {
 const {
   choosePitcher, chooseGoalie, applySummaryStarters, needsStarterSummary,
 } = require('./starters');
+const { opsAlert } = require('./ops_alert');
 
 const ODDS_REGIONS = 'us,us2,eu';
 const ODDS_MARKETS = 'h2h,spreads,totals';
@@ -86,6 +87,7 @@ async function fetchOddsMultiSport(dateISO, opts = {}) {
     }
     if (opts.storedBoardOnly) {
       console.log('[omega-vnext/ingest] odds source=stored-10:00-missing paidPull=0');
+      opsAlert('stored-10:00-missing', `date=${dateISO || ''}`);
       return {
         bySport: {},
         fetchedAt: new Date().toISOString(),

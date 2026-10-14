@@ -204,8 +204,12 @@ assert.strictEqual(hr.markets[0].key, 'spreads');
 assert.strictEqual(hr.markets[0].outcomes[0].point, 3.5);
 
 const lineMoveSrc = fs.readFileSync(require.resolve('./netlify/functions/lib/omega-vnext/pinnacle_line_move.js'), 'utf8');
-const encodedReads = lineMoveSrc.split('LINE_MOVE_STORE}/${encodeURIComponent(key)}').length - 1;
-assert.ok(encodedReads >= 2, 'line-move REST read and write both percent-encode slash keys');
+const blobKey = require('./netlify/functions/lib/omega-vnext/blob_key');
+assert.ok(lineMoveSrc.includes("require('./blob_key')"));
+assert.ok(!lineMoveSrc.includes('LINE_MOVE_STORE}/${encodeURIComponent(key)}'));
+assert.strictEqual(blobKey.canonicalBlobKey('date/2026-10-14'), 'date/2026-10-14');
+assert.strictEqual(blobKey.legacyEncodedBlobKey('date/2026-10-14'), 'date%2F2026-10-14');
+assert.notStrictEqual(blobKey.canonicalBlobKey('date/2026-10-14'), blobKey.legacyEncodedBlobKey('date/2026-10-14'));
 
 const secondDoc = {
   schema: 'omega-pinnacle-line-moves-v1',

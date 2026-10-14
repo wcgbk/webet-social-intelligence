@@ -12,6 +12,7 @@ const { americanToImplied } = require('./odds_math');
 const { americanCentsWorse } = require('./edge');
 const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
+const { canonicalBlobKey } = require('./blob_key');
 
 function gameKey(away, home) {
   return `${String(away || '').trim()} @ ${String(home || '').trim()}`.toLowerCase();
@@ -52,7 +53,7 @@ function pathBlobKey(dateISO) {
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
-  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${path}`;
+  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${canonicalBlobKey(path)}`;
   const opts = {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

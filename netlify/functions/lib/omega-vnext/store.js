@@ -1,13 +1,14 @@
 'use strict';
 
 const { SITE_ID, BLOB_STORE } = require('./config');
+const { canonicalBlobKey } = require('./blob_key');
 const { replayNoWrite, logBlocked } = require('./no_write');
 const { resolveFetch, auditBlobCall } = require('./audit_log');
 
 async function blobFetch(path, { method = 'GET', body } = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
-  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${path}`;
+  const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${BLOB_STORE}/${canonicalBlobKey(path)}`;
   const opts = {
     method,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -366,7 +367,7 @@ async function storeReplaySummary(runId, summary) {
 }
 
 /** Ops-only capture-health and late-news runs — NEVER live picks / latest-date. */
-const OPS_KEY_RE = /^omega-ops\/(?:capture-health(?:-latest|-\d{4}-\d{2}-\d{2})|late-news(?:-latest|-\d{4}-\d{2}-\d{2}))$/;
+const OPS_KEY_RE = /^omega-ops\/(?:capture-health(?:-latest|-\d{4}-\d{2}-\d{2})|late-news(?:-latest|-\d{4}-\d{2}-\d{2})|snapshot-coverage-\d{4}-\d{2}-\d{2})$/;
 
 function assertOpsKey(key) {
   const k = String(key || '');
@@ -403,6 +404,22 @@ async function storeCaptureHealthSnapshot(dateISO, snapshot) {
     console.error(`[omega-vnext/store] capture-health latest: ${e.message}`);
   }
   return { dated, latest };
+}
+
+async function storeSnapshotCoverage(dateISO, report) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`omega-ops refused bad date: ${dateISO}`);
+  }
+  const key = assertOpsKey(`omega-ops/snapshot-coverage-${d}`);
+  const payload = {
+    ...(report || {}),
+    date: d,
+    opsOnly: true,
+    storedAt: new Date().toISOString(),
+  };
+  await storeJson(key, payload);
+  return { key };
 }
 
 async function readCaptureHealthLatest() {
@@ -527,6 +544,7 @@ module.exports = {
   storeWalkforwardSamples, storeWalkforwardReport, storeWalkforwardPriorsOffline,
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
+  storeSnapshotCoverage,
   storeLateNewsOps,
   readUnmatchedTeams,
   healthBlobKey, storeHealthRecord, readHealthRecord, readHealthLatest,

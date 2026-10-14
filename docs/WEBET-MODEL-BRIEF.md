@@ -11,7 +11,12 @@ Fixed rules (do not change):
 6. 1u = $150. KPI and dollar displays use whole dollars, rounded up.
 7. Do not change the morning 3 AM / 10 AM schedule, the grading, the results pages or the X posting (autopost stays off).
 8. No Odds API calls. Use only stored Supabase data (credentials in /workspace/supabase/webet-db.env; never print them) and the stored Netlify blobs.
-9. Do NOT push to main and do NOT deploy. Work on the branch feat/elite-model-1014 and push the branch.
+9. Autopilot: start from the current state of the repo, Supabase and the live site, and work continuously, QA'ing as you go, to get the most profitable daily-picks model LIVE. You MAY merge to main and deploy (Netlify auto-deploys on push) when ALL of these are true:
+(a) held-out backtest profit and ROI beat current main
+(b) all tests pass
+(c) the 10/14 dry run and a 30-day replay both produce 3 straights plus a 3-leg parlay every day
+(d) it is not 10–11 AM ET or 2:45–3:15 AM ET
+Never regenerate the already-published card for today. After each deploy, verify the site is live and append the change and its KPIs to docs/ELITE-MODEL-REPORT-1014.md. Keep iterating until no held-out improvement remains, or until tomorrow's 3 AM run.
 
 You decide, using elite sharp best practice and evidence from the Supabase history:
 - calibration of the model's own probabilities
@@ -33,3 +38,12 @@ Deliver docs/ELITE-MODEL-REPORT-1014.md covering:
 - each change and why
 - a before-and-after KPI table (record, profit in whole $, ROI, CLV), with a row for each tier and each sport
 - the 10/14 dry-run card, with each pick's model edge, tier, units and book
+
+---
+OWNER-APPROVED FAST PATH FOR TONIGHT (do this FIRST, in this order; WeBet approved: "Yes, rebuild tonight's card with the corrected model." This overrides "never regenerate today's card" for 2026-10-14 only, and for this first deploy only, gates (a) and the 30-day replay in (c) are waived):
+1. Pure-model fix: edge and EV from the pure WeBetAI model probability per rules 1–2 (no Pinnacle blend, anchor or gate).
+2. QA: all test-omega-*.js and test-sharp-*.js tests pass, and the 2026-10-14 dry run from the stored board gives 3 straights plus a 3-leg parlay.
+3. Only if step 2 passes, and outside the 10–11 AM ET and 2:45–3:15 AM ET windows: merge to main and push (Netlify auto-deploys). Verify the deploy is live and record its commit and deploy id.
+4. Regenerate the 2026-10-14 card: POST generate-picks-omega-background with {date:'2026-10-14', force:true}. Stored board only, no Odds API calls, X autopost stays off.
+5. Verify the new card on /api/get-picks-omega, then immediately print the card: each straight's pick, book, model edge, tier, units, and the 3-leg parlay.
+After that, continue on autopilot with the rest of this brief.

@@ -45,7 +45,7 @@ The edge is a soft price versus a **same-time** Pinnacle no-vig on the **same li
 - The Odds API Pinnacle feed is a public-site scrape and can lag. Age is the market `last_update`, not our capture time [S16][S17].
 - Historical snapshots sit on a 5-minute grid [S16]. A same-request DK/HR/Pinnacle pull is same-time even when `last_update` is a few minutes apart.
 
-The chosen window is in the error section below (filled in step 2). Quotes older than that window are not a pair. Missing `last_update` falls back to `snapshot_ts`, with the same window.
+**N = 20 minutes.** A Pinnacle two-way older than 20 minutes relative to the DraftKings or Hard Rock price is not a pair. A quote more than 2 minutes after the bet is not a pair either. Missing timestamps on one stored board count as the same snapshot. The reason for 20, and the pricing error it does not fix, is at the end of this note.
 
 ## EV
 
@@ -96,3 +96,22 @@ Full Kelly `f* = EV / (decimal − 1) = (b·p − q) / b` with `b = decimal − 
 19. https://pinnodds.com/blog/why-use-pinnacle-odds-as-fair-value — de-vigged Pinnacle is the fair used to grade a soft price.
 20. https://football-data.co.uk/blog/pinnacle_limit.php — EV measured more than about 24 hours out mostly dies by the close. A higher EV floor is the early-bet tax.
 21. https://pinnwire.com/closing-line-value-pinnacle-odds-guide.html — `CLV = decimal_bet × p_close_novig − 1` on the same outcome and line.
+
+## The error, and the 20-minute rule
+
+Re-fetched `origin/research/math-diag-1014` at `8688c9c` (`docs/MATH-DIAG-1014.md`).
+
+The published probability is not the Pinnacle fair. `blendWithMarket` then mode-A shrink still leaves the model above the sharp, and that gap is the EV the 2% floor accepts.
+
+Brewers moneyline, 2026-09-22, DraftKings +118, Pinnacle +121/−131, lag 0 (same cluster):
+
+- Proportional fair 0.4438. Power fair 0.4422 (k ≈ 1.03). Shin 0.4416. The three disagree by 0.2 pp.
+- After the 50% MLB blend and K = 0.30: cover 0.4778, which is 3.4 pp above the sharp.
+- EV at +118 from the model: **+4.17%**. Posted as a 1u floor. Lost. CLV −1.68 pp.
+- EV at +118 from the Pinnacle fair: **−3.3%** (proportional) / **−3.6%** (power). DraftKings implied 0.4587 was already worse than the no-vig.
+
+On 94 graded v12.3.74 pool bets, the vigged price averages 1.31 pp worse than `fairSharp`. **86 of 94 are negative EV** if `p` is the bet-time Pinnacle no-vig. Only 8 are actually soft versus Pinnacle. The 76 bets more than 0.5 pp worse than the fair are 28-48, −19.2% ROI. Pool ROI falls as displayed EV rises: 2–4% −2.9% (n=63), 4–6% −28.7% (n=20), 6–12% −36.3% (n=13). Model log-loss on those 94 is 0.668 versus 0.658 for the bet-time Pinnacle no-vig. The blend is not helping.
+
+De-vig choice and snapshot age are not this leak. Power versus proportional log-loss on 1,831 closing moneylines differs by 0.0005, and the interval covers zero. Of 254 card straights, 241 have a Pinnacle quote within 2 minutes, 12 sit between 2 and 20, none sit between 20 and 60, and 1 is older than 60. The 3-hour cap is what let that one in. It is not why the card is −12%.
+
+**Freshness stays 20 minutes** anyway. That is the gap in the lag histogram and the width of one capture cluster (`CLUSTER_MS` in the v74 backtest). It drops the 1–3 hour tail (18 kept markets, 1 actual card bet) and keeps same-time pairs. It is not a ROI-tuned knob. Fair is still the power no-vig, because that is the sharp-book method and it matches the others near −110, where this card lives. The change that moves the card is deleting the model: `p` is that Pinnacle fair or the bet is rejected.

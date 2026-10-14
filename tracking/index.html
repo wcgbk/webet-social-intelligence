@@ -212,15 +212,16 @@
       var good = invert ? n < 0 : n > 0;
       return good ? 'pos' : 'neg';
     }
+    function wholeUp(n) { return Math.ceil((Number(n) || 0) - 1e-9); }
     function money(value) {
       if (value == null || !isFinite(Number(value))) return '—';
-      var n = Math.round(Number(value));
+      var n = wholeUp(value);
       var sign = n > 0 ? '+' : n < 0 ? '-' : '';
       return sign + '$' + Math.abs(n).toLocaleString();
     }
     function units(value) {
       if (value == null || !isFinite(Number(value))) return '—';
-      return signed(value, 2) + 'u';
+      return signed(wholeUp(value), 0) + 'u';
     }
     function ordinal(value) {
       if (value == null || !isFinite(Number(value))) return '—';

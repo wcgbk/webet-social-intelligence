@@ -1,6 +1,6 @@
 'use strict';
 
-const { QUALITY_GRADE } = require('./config');
+const { QUALITY_GRADE, UNIT_DOLLARS } = require('./config');
 
 function americanToImplied(american) {
   const a = Number(american);
@@ -315,6 +315,56 @@ function isSameEtDay(commenceTime, cardDateISO) {
   return et != null && et === String(cardDateISO || '');
 }
 
+/** Display round-up. An already-whole number stays whole. */
+function wholeUpNumber(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  const up = Math.ceil(x - 1e-9);
+  return Object.is(up, -0) ? 0 : up;
+}
+
+function parseStakeUnits(units) {
+  if (units == null || units === '') return null;
+  const n = parseFloat(String(units).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function isPublishedParlay(pl) {
+  if (!pl || typeof pl !== 'object') return false;
+  if (pl.qualifying === false) return false;
+  if (pl.status === 'no qualifying parlay') return false;
+  if (pl.type === 'no-qualifying-parlay') return false;
+  return true;
+}
+
+/**
+ * Summary display only. Each stake rounds up to a whole unit, and that
+ * unit is UNIT_DOLLARS. pick.units is left as the real stake.
+ */
+function summaryStakeDisplay(picks, parlayLegs) {
+  const parts = [];
+  const push = (units) => {
+    const n = parseStakeUnits(units);
+    if (n != null) parts.push(n);
+  };
+  for (const p of picks || []) if (p) push(p.units);
+  for (const pl of parlayLegs || []) {
+    if (!isPublishedParlay(pl)) continue;
+    push(pl.units);
+  }
+  const units = parts.reduce((s, u) => s + wholeUpNumber(u), 0);
+  const dollars = units * UNIT_DOLLARS;
+  return { units, dollars, totalUnits: `${units}u`, totalDollars: dollars };
+}
+
+function writeSummaryStakeDisplay(summary, picks, parlayLegs) {
+  if (!summary || typeof summary !== 'object') return null;
+  const shown = summaryStakeDisplay(picks, parlayLegs);
+  summary.totalUnits = shown.totalUnits;
+  summary.totalDollars = shown.totalDollars;
+  return shown;
+}
+
 module.exports = {
   americanToImplied,
   americanToDecimal,
@@ -342,4 +392,7 @@ module.exports = {
   sortByGradeThenUnits,
   etCalendarDate,
   isSameEtDay,
+  wholeUpNumber,
+  summaryStakeDisplay,
+  writeSummaryStakeDisplay,
 };

@@ -16,7 +16,7 @@ const { replayNoWrite } = require('./no_write');
 const {
   createAuditLog, runWithAudit, currentAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId,
 } = require('./audit_log');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, shouldPublishNoPlays, drawdownActive } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, eligiblePairedFill, shouldPublishNoPlays, drawdownActive } = require('./select');
 const { parlayFromStraights } = require('./parlay');
 const { narrateAndVerify } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -29,6 +29,7 @@ const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
+const { applySharpFair, SHARP_FAIR_VERSION, FRESH_MINUTES } = require('./sharp_fair');
 const { applyLineMoveProb } = require('./line_move_prob');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
@@ -37,6 +38,7 @@ const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock')
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags } = require('./pinnacle_flag');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
+const { summaryStakeDisplay } = require('./odds_math');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -561,6 +563,14 @@ async function generateOmegaVnext(opts = {}) {
   const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
   console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
 
+  // Published edge and EV are the Pinnacle power fair at the bet line.
+  // edge = p_fair − implied(price). EV = p_fair × decimal − 1.
+  // The model blend stays on the row and does not enter either number.
+  // The 10:00 board is one capture (lag 0). A missing Pinnacle pair drops.
+  candidates = applySharpFair(candidates, { sameSnapshot: true });
+  const sharpBad = candidates.filter((c) => c && c.sharpFairReject).length;
+  console.log(`[omega-vnext] sharp-fair version=${SHARP_FAIR_VERSION} freshMin=${FRESH_MINUTES} priced=${candidates.length - sharpBad} reject=${sharpBad}`);
+
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   // pregameAsOfMs is a clock only. It does not flip replayLike or the odds URL.
@@ -577,20 +587,30 @@ async function generateOmegaVnext(opts = {}) {
     console.log(`[omega-vnext] pregame asOf=${new Date(gateOpts.asOfMs).toISOString()}`);
   }
   const placeVeto = rejected.filter(r => r.rejectReason === 'placeability-soft-veto').length;
-  console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
-  for (const c of yesPool.concat(leanPool)) {
+  // Under 1% stays edge-floor. Those same-line Pinnacle pairs fill a short card.
+  const pairedFill = LEAN_PAD
+    ? rejected.filter((c) => eligiblePairedFill(c)).map((c) => ({
+      ...c,
+      tier: 'lean',
+      label: 'lean',
+      pairedFill: true,
+      leanReason: c.leanReason || 'paired-ev',
+    }))
+    : [];
+  console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} pairedFill=${pairedFill.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
+  for (const c of yesPool.concat(leanPool, pairedFill)) {
     if (c) c.hardRockPriced = hasHardRockPrice(c);
   }
   const snapshotCoversQa = tenAmSnapshotCoversChecks(snap);
 
-  const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null);
+  const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null, pairedFill);
   const top10Candidates = selectTop10(yesPool, 10);
   // 10:00 rank is stake EV, one game each. Edge breaks a tie. A parlay
   // leg with no Hard Rock price is swapped or noted. The note and the
   // bug log stay off the page. The card still publishes.
   const placement = ensureParlayPlaceable(
     selectedRaw,
-    yesPool.concat(LEAN_PAD ? (leanPool || []) : []),
+    yesPool.concat(LEAN_PAD ? (leanPool || []) : [], pairedFill),
   );
   const selected = placement.straights;
   let bugLog = placement.bugs.slice();
@@ -617,6 +637,7 @@ async function generateOmegaVnext(opts = {}) {
     maxN: MAX_STRAIGHTS,
     modelVersion: MODEL_VERSION,
     leanPool: LEAN_PAD ? leanPool : null,
+    pairedPool: pairedFill,
     drawdown,
   });
   let picks = qa.picks;
@@ -630,7 +651,7 @@ async function generateOmegaVnext(opts = {}) {
   // The parlay is always 3 legs at 0.25u from the best EV on distinct
   // games. A ticket whose combined EV is not positive is labeled and
   // still published. Fewer than 3 priced games is the only miss.
-  const parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : []);
+  const parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : [], pairedFill);
   const straightParlay = (rows, note) => parlayFromStraights(rows, {
     hrPlaceabilityNote: note || placement.note,
     pool: parlayPool,
@@ -665,19 +686,22 @@ async function generateOmegaVnext(opts = {}) {
   }
   picks = sortByGradeThenUnits(picks);
 
-  // A positive-EV lean that still qualifies is the card. Do not fall through
-  // to "No Qualifying Plays" while one is publishable.
+  // A publishable lean, including a same-line fill under 1%, is the card.
+  // Do not fall through to "No Qualifying Plays" while one remains.
   let openLeans = [];
+  let openPaired = [];
   if (picks.length === 0 && LEAN_PAD) {
     const blocked = new Set([
       ...(hardFails || []).map((h) => `${h.matchup}|${h.side || h.pick}`),
       ...((narr && narr.rejections) || []).map((r) => `${r.matchup}|${r.side || r.pick}`),
     ]);
-    openLeans = (leanPool || []).filter((c) => qualifiesAsLean(c) && !blocked.has(`${c.matchup}|${c.side}`));
-    if (openLeans.length) {
-      const rescued = selectStraights([], MAX_STRAIGHTS, openLeans);
+    const blockedSide = (c) => blocked.has(`${c.matchup}|${c.side}`);
+    openLeans = (leanPool || []).filter((c) => qualifiesAsLean(c) && !blockedSide(c));
+    openPaired = pairedFill.filter((c) => !blockedSide(c));
+    if (openLeans.length || openPaired.length) {
+      const rescued = selectStraights([], MAX_STRAIGHTS, openLeans, openPaired);
       if (rescued.length) {
-        const leanPlace = ensureParlayPlaceable(rescued, yesPool.concat(openLeans));
+        const leanPlace = ensureParlayPlaceable(rescued, yesPool.concat(openLeans, openPaired));
         if (leanPlace.bugs.length) bugLog = bugLog.concat(leanPlace.bugs);
         picks = leanPlace.straights.map((c) => toPickObject(c, { modelVersion: MODEL_VERSION }));
         parlayLegs = straightParlay(picks, leanPlace.note || placement.note);
@@ -689,8 +713,6 @@ async function generateOmegaVnext(opts = {}) {
     }
   }
 
-  const parlayUnits = (parlayLegs || []).reduce((s, pl) => s + (parseFloat(pl.units) || 0), 0);
-  const totalUnits = picks.reduce((s, p) => s + (parseFloat(p.units) || 0), 0) + parlayUnits;
   const sportsCovered = [...new Set(picks.map(p => p.sport))];
 
   const candidateTable = orderedByScore(yesPool).slice(0, 15).map((c, i) => ({
@@ -740,7 +762,9 @@ async function generateOmegaVnext(opts = {}) {
   const rejectionCounts = rejectionLog.rejectionCounts;
 
   const empty = picks.length === 0;
-  logReviewFlags(picks, empty ? [] : (parlayLegs || []));
+  const publishedParlay = empty ? [] : (parlayLegs || []);
+  const stakeDisplay = summaryStakeDisplay(picks, publishedParlay);
+  logReviewFlags(picks, publishedParlay);
   const picksData = {
     date: dateISO,
     dateFormatted,
@@ -753,7 +777,8 @@ async function generateOmegaVnext(opts = {}) {
     summary: {
       totalPicks: picks.length,
       totalStraightBets: picks.length,
-      totalUnits: `${totalUnits.toFixed(1)}u`,
+      totalUnits: stakeDisplay.totalUnits,
+      totalDollars: stakeDisplay.totalDollars,
       aplusLocks: picks.filter(p => p.rating === 'aplus').length,
       sportsCovered,
       modelVersion: MODEL_VERSION,
@@ -766,14 +791,14 @@ async function generateOmegaVnext(opts = {}) {
       catch (_) { return null; }
     })(),
     bugLog,
-    parlayLegs: empty ? [] : parlayLegs,
+    parlayLegs: publishedParlay,
     // Private. publicPicksPayload drops this. Flag does not change the pool.
-    gapReview: buildGapReview(candidates, picks, empty ? [] : parlayLegs),
+    gapReview: buildGapReview(candidates, picks, publishedParlay),
     // Private. Counts and the next 10 candidates when the card is short of
     // 3 straights or a 3-leg. Does not add a pick. publicPicksPayload drops it.
     shortfall: buildShortfall({
       picks,
-      parlayLegs: empty ? [] : parlayLegs,
+      parlayLegs: publishedParlay,
       yesPool,
       rejected,
     }),
@@ -849,7 +874,7 @@ async function generateOmegaVnext(opts = {}) {
     picksData.storeKey = `omega-shadow/picks-${dateISO}`;
     picksData.meta.storeKey = picksData.storeKey;
   }
-  if (empty && shouldPublishNoPlays(picks, openLeans)) {
+  if (empty && shouldPublishNoPlays(picks, openLeans.concat(openPaired))) {
     // "No Qualifying Plays Today" card (lib/no-plays). Only a COMPLETED run gets here.
     // A publishable positive-EV lean never takes this branch.
     const slateCounts = slateCountsFor(snap, dateISO);

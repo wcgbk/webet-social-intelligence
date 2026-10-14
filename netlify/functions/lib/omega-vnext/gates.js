@@ -146,27 +146,27 @@ function gateReason(c, opts = {}) {
   // Unresolved NFL/NCAAF name. Checked before the floors so a bad id cannot publish.
   if (c && c.unknownTeam) return 'unknown_team';
 
-  // Absurd model-vs-market gap. Caps live in FB_MARKET_GAP and are wider
-  // than the MODEL_LINE_GAP flag. A normal disagreement still prices.
-  const marketGap = footballMarketGapReason(c);
-  if (marketGap) return marketGap;
+  // Sharp-fair path. A bad Pinnacle pair is structural (not a lean).
+  // A priced row skips the model-gap veto: the probability is the Pinnacle
+  // power fair, so a model/line disagreement is not a reason to drop it.
+  if (c && c.sharpFairReject) return c.sharpFairReject;
+  if (!(c && c.sharpFairPriced)) {
+    // Absurd model-vs-market gap. Caps live in FB_MARKET_GAP and are wider
+    // than the MODEL_LINE_GAP flag. A normal disagreement still prices.
+    const marketGap = footballMarketGapReason(c);
+    if (marketGap) return marketGap;
 
-  // NFL totals whose |projection − sharp| is above 10 and still inside the
-  // wider FB_MARKET_GAP total cap. Spreads above 10 already returned
-  // model_market_gap. Exactly 10 stays eligible.
-  const projGap = nflProjectionGap(c);
-  if (projGap) return projGap;
+    // NFL totals whose |projection − sharp| is above 10 and still inside the
+    // wider FB_MARKET_GAP total cap. Spreads above 10 already returned
+    // model_market_gap. Exactly 10 stays eligible.
+    const projGap = nflProjectionGap(c);
+    if (projGap) return projGap;
 
-  // News and injuries reprice. They do not exclude a side or a total.
-  // A starter cluster and a fresh QB Out stay in the pool. The EV floor,
-  // applied to the repriced probability at the best DraftKings or Hard
-  // Rock price, is the inclusion gate. Edge is displayed, not a gate.
-
-  // Football model-vs-line gap. Only mode 'block' rejects, and that mode
-  // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
-  // candidate on the same score and the same gates. Moneyline is not a
-  // point market. MLB/NHL never set the flag.
-  if (gapBlocksTicket(c)) return 'model_line_gap_review';
+    // Football model-vs-line gap. Only mode 'block' rejects, and that mode
+    // failed the 2026-10-06 replay gate. Shipped mode 'flag' leaves the
+    // candidate on the same score and the same gates.
+    if (gapBlocksTicket(c)) return 'model_line_gap_review';
+  }
 
   // Live/in-play and a start already past the pregame clock are rejected
   // before the slate window. A game that has tipped keeps
@@ -206,7 +206,16 @@ function gateReason(c, opts = {}) {
     console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} reason=ev-above-12pct`);
     return 'ev-stale';
   }
-  if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
+  // Sharp card: grades are the price edge, p_fair − implied.
+  // A− and up (≥2%) are mains. B is the 1–2% lean. Under 1% is edge-floor
+  // here. selectStraights may still fill a short card from those same-line
+  // Pinnacle pairs, ranked by EV, at a flat 0.5u lean.
+  if (c && c.sharpFairPriced) {
+    const edge = finiteEdge(c);
+    if (!Number.isFinite(edge) || edge < 0.01 - 1e-12) return 'edge-floor';
+    if (edge < 0.02 - 1e-12) return 'ev-floor';
+    if (!Number.isFinite(c.ev)) return 'ev-floor';
+  } else if (!Number.isFinite(c.ev) || (minEV != null && c.ev < minEV)) return 'ev-floor';
   if (GATES.minPredictedClvCents != null
     && typeof c.predictedClv === 'number'
     && c.predictedClv < GATES.minPredictedClvCents) {
@@ -214,10 +223,12 @@ function gateReason(c, opts = {}) {
   }
 
   // Pinnacle (else Circa) 3:00→10:00 probability moved against this side.
-  if (c.movementDrop) return c.movementDropReason || 'sharp_prob_against';
+  // The sharp-fair price is already the 10:00 two-way. The move is inside
+  // that fair, so it does not veto a soft price that still beats it.
+  if (!(c && c.sharpFairPriced) && c.movementDrop) return c.movementDropReason || 'sharp_prob_against';
 
   // Open→now adverse steam on the Pinnacle print (when line-move annotated)
-  if (GATES.rejectAdverseSteam && c.lineMove) {
+  if (!(c && c.sharpFairPriced) && GATES.rejectAdverseSteam && c.lineMove) {
     const steamReason = adverseSteamReason(c.lineMove, { verify: false });
     if (steamReason) return steamReason;
   }

@@ -1,5 +1,6 @@
 // confirm-starters-mlb.js
 const { samePlayerName } = require('./lib/player-name');
+const { writeSummaryStakeDisplay } = require('./lib/omega-vnext/odds_math');
 const { resolveTeamId } = require('./lib/omega-vnext/sports/team_identity');
 // 1:30pm ET re-check of ESPN probable starters against today's Alpha + Omega cards.
 // Flags SP changes; KILLS SP-dependent picks (MLB Total / Moneyline / F5 / Run Line)
@@ -213,16 +214,15 @@ function processPicks(picksData, currentStarters, opts = {}) {
 
   picksData.picks = kept;
   picksData.killedPicks = killedPicks;
-  if (picksData.summary) {
-    const totalUnits = kept.reduce((s, p) => s + (parseFloat(p.units) || 0), 0);
-    picksData.summary.totalPicks = kept.length;
-    picksData.summary.totalStraightBets = kept.length;
-    picksData.summary.totalUnits = `${totalUnits.toFixed(2)}u`;
-    picksData.summary.sportsCovered = [...new Set(kept.map(p => p.sport))];
-  }
   if (kept.length < 2 && Array.isArray(picksData.parlayLegs)) {
     picksData.parlayLegs = [];
     picksData.parlayKilledReason = "Parlay dropped — fewer than 2 live legs after SP kill";
+  }
+  if (picksData.summary) {
+    picksData.summary.totalPicks = kept.length;
+    picksData.summary.totalStraightBets = kept.length;
+    writeSummaryStakeDisplay(picksData.summary, kept, picksData.parlayLegs);
+    picksData.summary.sportsCovered = [...new Set(kept.map(p => p.sport))];
   }
   return { scratches, killed, remaining: kept.length };
 }

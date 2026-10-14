@@ -12,6 +12,7 @@
 
 const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
+const { sharpFairEnabled } = require('./sharp_fair');
 const { mainMinEv } = require('./edge_floor');
 const { GATES } = require('./config');
 const { formatAmerican, etCalendarDate, parseEdgeFraction, americanToDecimal } = require('./odds_math');
@@ -141,6 +142,15 @@ function priceAtHardRock(c) {
   }
   if (c && c.hardRock && typeof c.hardRock === 'object') {
     push(c.hardRock.american != null ? c.hardRock.american : c.hardRock.price, c.hardRock.point);
+  }
+  if (sharpFairEnabled() && rows.length) {
+    const want = c.line != null && c.line !== '' ? Number(c.line) : null;
+    const same = rows.filter((row) => {
+      if (want == null || !Number.isFinite(want)) return row.point == null;
+      return row.point != null && Math.abs(row.point - want) < 1e-6;
+    });
+    rows.length = 0;
+    for (const row of same) rows.push(row);
   }
   if (!rows.length) return null;
   let best = rows[0];

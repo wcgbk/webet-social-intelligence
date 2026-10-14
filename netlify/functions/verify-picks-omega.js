@@ -42,12 +42,9 @@ function enforceOmegaDailyUnitCap(picksData) {
   picksData.picks = capped.picks;
   if (Array.isArray(picksData.parlayLegs)) picksData.parlayLegs = capped.parlayLegs;
   if (picksData.summary) {
-    const parseU = (x) => parseFloat(String(x || '0').replace(/[^0-9.]/g, '')) || 0;
-    const straightU = picksData.picks.reduce((s, p) => s + parseU(p.units), 0);
-    const parlayU = (picksData.parlayLegs || []).reduce((s, pl) => s + parseU(pl.units), 0);
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
-    picksData.summary.totalUnits = `${(straightU + parlayU).toFixed(1)}u`;
+    writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
   }
 }
 
@@ -57,7 +54,7 @@ const { reviewHardRock, verifySchedule, applySilentSortCheck } = require('./lib/
 const { parlayFromStraights } = require('./lib/omega-vnext/parlay');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
-const { decimalToAmerican, formatAmerican } = require('./lib/omega-vnext/odds_math');
+const { decimalToAmerican, formatAmerican, writeSummaryStakeDisplay } = require('./lib/omega-vnext/odds_math');
 const { xaiChat, resolveXaiKey } = require('./lib/xai-chat');
 const {
   createAuditLog, runWithAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId, currentAudit,
@@ -1134,12 +1131,10 @@ async function autoFixPicks(picksData, pickReports) {
 
   // Recalculate summary + enforce 4.0u daily cap (straights ≤3.5u + parlay 0.5u)
   enforceOmegaDailyUnitCap(picksData);
-  const totalUnits = picksData.picks.reduce((s, p) => s + parseUnits(p.units), 0)
-    + (Array.isArray(picksData.parlayLegs) ? picksData.parlayLegs.reduce((s, pl) => s + parseUnits(pl.units), 0) : 0);
   if (picksData.summary) {
     picksData.summary.totalPicks = picksData.picks.length;
     picksData.summary.totalStraightBets = picksData.picks.length;
-    picksData.summary.totalUnits = `${totalUnits.toFixed(1)}u`;
+    writeSummaryStakeDisplay(picksData.summary, picksData.picks, picksData.parlayLegs);
   }
 
   return { fixed: true, replacements };

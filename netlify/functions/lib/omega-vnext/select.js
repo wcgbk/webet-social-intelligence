@@ -2,14 +2,14 @@
 
 const config = require('./config');
 const {
-  MAX_STRAIGHTS, KELLY_FRACTION,
+  MAX_STRAIGHTS, KELLY_FRACTION, UNIT_DOLLARS,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
   MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EDGE,
   LEAN_PARLAY_UNITS, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = config;
 const {
-  kellyToUnits, ratingToConfidence, formatAmerican,
+  kellyToUnits, ratingToConfidence, formatAmerican, americanToDecimal,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
 } = require('./odds_math');
@@ -285,15 +285,42 @@ function claimStraight(c, onePer, usedGames, usedSides) {
   return true;
 }
 
+/** Sharp price edge as a fraction. Missing stays null. */
+function sharpEdgeFraction(c) {
+  if (!c) return null;
+  return parseEdgeFraction(c.edgePct != null ? c.edgePct : c.edge);
+}
+
+/** Pinnacle-fair row whose price edge clears the 1% (B) tier. */
+function clearsOnePctTier(c) {
+  if (!c || c.sharpFairPriced !== true) return false;
+  const edge = sharpEdgeFraction(c);
+  return Number.isFinite(edge) && edge + 1e-12 >= 0.01;
+}
+
+/**
+ * Same-line Pinnacle pair that did not clear 1%. Ranked later by stake EV.
+ * Structural rejects (no pair, point mismatch, stale, live, ev-stale) are not
+ * fills. A synthetic row with no ladder stays eligible, same as a lean.
+ */
+function eligiblePairedFill(c) {
+  if (!c || c.sharpFairPriced !== true || c.sharpFairReject) return false;
+  if (clearsOnePctTier(c)) return false;
+  return eligibleForLeanPool(c);
+}
+
 /**
  * Top stake-EV rows, up to MAX_STRAIGHTS. Edge breaks an EV tie.
  * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
  * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
  * slots fill from positive-EV leans, then from any remaining pregame
- * lean sorted by EV, including a non-positive EV. One game. A lean is
- * tier 'lean' and the stake is flat LEAN_MAX_UNITS. ev-stale is not here.
+ * lean sorted by EV, including a non-positive EV. If the card is still
+ * short of 3, the open slots fill from same-line Pinnacle pairs that
+ * missed the 1% tier, ranked by EV vs Pinnacle. One game. A lean is
+ * tier 'lean' and the paired fill is flat LEAN_MAX_UNITS. ev-stale is
+ * not a fill.
  */
-function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
+function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
   const usedGames = new Set();
   const usedSides = new Set();
@@ -318,6 +345,21 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool) {
     if (!eligibleForLeanPool(c)) continue;
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
+  }
+  if (out.length >= maxN) return out;
+  const paired = [...(pairedPool || [])].sort(compareByEv);
+  for (const c of paired) {
+    if (out.length >= maxN) break;
+    if (!eligiblePairedFill(c)) continue;
+    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
+    out.push({
+      ...c,
+      tier: 'lean',
+      label: 'lean',
+      pairedFill: true,
+      leanReason: 'paired-ev',
+      _score: finiteEv(c),
+    });
   }
   return out;
 }
@@ -400,6 +442,28 @@ function drawdownActive(results) {
   return false;
 }
 
+/**
+ * Quarter-Kelly on the Pinnacle fair, in units. 1u = $150 on a $10,000 bankroll.
+ * f = 0.25 × (p × d − 1) / (d − 1). units = f / 0.015.
+ * Null when this row is not sharp-priced, so the older stake path stays put.
+ */
+function sharpStakeUnits(c) {
+  if (!(c && c.sharpFairPriced)) return null;
+  const p = Number(c.coverProb);
+  const dec = americanToDecimal(c.odds);
+  if (!Number.isFinite(p) || p <= 0 || p >= 1 || dec == null || !(dec > 1)) return 0;
+  const f = KELLY_FRACTION * (p * dec - 1) / (dec - 1);
+  if (!(f > 0)) return 0;
+  const unitFrac = UNIT_DOLLARS / 10000;
+  if (!(unitFrac > 0)) return 0;
+  return f / unitFrac;
+}
+
+function fmtSharpU(n) {
+  const nu = Math.round(Number(n) * 100) / 100;
+  return `${nu}u`;
+}
+
 /** Stake cap from cover probability. Under 0.42 → 0.5u. Under 0.50 → 1.0u. */
 function coverStakeCap(units, coverProb) {
   const n = Number(coverProb);
@@ -412,29 +476,43 @@ function coverStakeCap(units, coverProb) {
 
 function toPickObject(c, opts = {}) {
   const lean = c && c.tier === 'lean';
-  const drawdown = !!(opts && opts.drawdown) && !lean;
+  const sharp = !!(c && c.sharpFairPriced);
+  const drawdown = !!(opts && opts.drawdown) && !lean && !sharp;
   const fraction = drawdown ? KELLY_FRACTION * 0.75 : KELLY_FRACTION;
   const kFrac = pushAwareKelly(c.coverProb, c.odds, fraction, c && c.pPush);
   const perPickCap = opts.perPickCap != null ? opts.perPickCap : MAX_STRAIGHT_UNITS_PER_PICK;
   let units = kellyToUnits(kFrac, perPickCap);
   if (drawdown) units = Math.max(0.5, units - 0.5);
 
-  // Honest Edge badge = model edge after shrink vs no-vig sharp (fraction on c.edgePct).
-  // Fallback: coverProb - book implied. Never predictedClv cents / raw coverProb.
+  // Sharp card: edge is p_fair − implied. Letter bands are that edge alone.
+  // Older rows keep the model edge plus the small CLV nudge.
   const edgeFrac = parseEdgeFraction(c.edgePct);
   const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
-  const qualityClv = c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv;
-  const pickQuality = qualityScore(edgeFrac, qualityClv, c.uncertainty);
-  const rating = qualityToRating(edgeFrac, qualityClv, c.uncertainty);
-  // Kelly (and drawdown) already ran. Grade stays the edge letter.
-  // Cover caps are sizing only. They do not reject the pick. Leans stay flat.
-  if (!lean) units = coverStakeCap(units, c.coverProb);
-  // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
-  units = capBGradeStake(units, rating);
+  const qualityClv = sharp ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
+  const pickQuality = qualityScore(edgeFrac, qualityClv, sharp ? null : c.uncertainty);
+  const rating = qualityToRating(edgeFrac, qualityClv, sharp ? null : c.uncertainty);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
-  // Flat lean stake. Kelly and the grade cap do not move it. The daily
-  // cap may trim later. It must not raise the lean above this.
-  if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
+  if (sharp) {
+    // A same-line fill under the 1% tier is a flat 0.5u lean. Quarter-Kelly
+    // on a non-positive fair is 0, and that would publish an empty stake.
+    const belowOne = !(edgeFrac != null && edgeFrac + 1e-12 >= 0.01);
+    if (tier === 'lean' && (c.pairedFill || belowOne)) {
+      units = Number(LEAN_MAX_UNITS);
+    } else {
+      const raw = sharpStakeUnits(c);
+      const cap = edgeFrac != null && edgeFrac + 1e-12 >= 0.02 ? 1 : Number(B_GRADE_UNIT_CAP);
+      units = Math.min(raw == null ? 0 : raw, Number.isFinite(cap) ? cap : 0.5);
+    }
+  } else {
+    // Kelly (and drawdown) already ran. Grade stays the edge letter.
+    // Cover caps are sizing only. They do not reject the pick. Leans stay flat.
+    if (!lean) units = coverStakeCap(units, c.coverProb);
+    // B (edge under 2%) cannot keep a full Kelly unit. Never raises.
+    units = capBGradeStake(units, rating);
+    // Flat lean stake. Kelly and the grade cap do not move it. The daily
+    // cap may trim later. It must not raise the lean above this.
+    if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
+  }
   const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
   const evNum = Number.isFinite(evParsed) ? evParsed : null;
   const evStr = evNum == null ? null : formatEdgePct(evNum);
@@ -458,7 +536,7 @@ function toPickObject(c, opts = {}) {
     qualityGrade: rating,
     qualityScore: +pickQuality.toFixed(6),
     confidence: ratingToConfidence(rating),
-    units: `${units}u`,
+    units: sharp ? fmtSharpU(units) : `${units}u`,
     ev: evStr,
     evRaw: Number.isFinite(evNum) ? evNum : null,
     edgeBasis: 'calibrated-edge-vs-pinnacle-no-vig',
@@ -715,6 +793,8 @@ module.exports = {
   drawdownActive,
   qualifiesAsLean,
   passesLeanFill,
+  eligiblePairedFill,
+  clearsOnePctTier,
   shouldPublishNoPlays,
   straightCardLabel,
   selectStraights,

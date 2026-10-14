@@ -345,7 +345,7 @@ async function loadQaContext(dateISO, sportsNeeded = []) {
  * from leanPool when LEAN_PAD is on and the card is still short of maxN.
  * @returns {{ picks, hardFails, yesPoolRemaining }}
  */
-function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool, drawdown } = {}) {
+function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS, modelVersion, leanPool, pairedPool, drawdown } = {}) {
   const fails = [];
   const kept = [];
   const usedGames = new Set();
@@ -378,21 +378,19 @@ function applyHardFails(selectedCandidates, yesPool, ctx, { maxN = MAX_STRAIGHTS
     usedGames.add(matchupKey(c));
   }
 
-  // Refill from the remaining floor, then leans when the card is still short.
-  if (kept.length < maxN && ((yesPool && yesPool.length) || (leanPool && leanPool.length))) {
-    const remaining = (yesPool || []).filter(c => {
+  // Refill from the remaining floor, then leans, then same-line pairs under 1%.
+  const pairedList = config.LEAN_PAD === true ? (pairedPool || []) : [];
+  if (kept.length < maxN && ((yesPool && yesPool.length) || (leanPool && leanPool.length) || pairedList.length)) {
+    const stillOpen = (c) => {
       if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
       if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
       if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
       return true;
-    });
-    const leanRemaining = (config.LEAN_PAD === true ? (leanPool || []) : []).filter(c => {
-      if (rejectedKeys.has(`${matchupKey(c)}||${c.side}`)) return false;
-      if (kept.some(k => matchupKey(k) === matchupKey(c) && k.side === c.side)) return false;
-      if (config.ONE_STRAIGHT_PER_GAME === true && usedGames.has(matchupKey(c))) return false;
-      return true;
-    });
-    const sorted = selectStraights(remaining, maxN - kept.length, leanRemaining);
+    };
+    const remaining = (yesPool || []).filter(stillOpen);
+    const leanRemaining = (config.LEAN_PAD === true ? (leanPool || []) : []).filter(stillOpen);
+    const pairedRemaining = pairedList.filter(stillOpen);
+    const sorted = selectStraights(remaining, maxN - kept.length, leanRemaining, pairedRemaining);
     for (const c of sorted) {
       if (kept.length >= maxN) break;
       const reason = checkOne(c);

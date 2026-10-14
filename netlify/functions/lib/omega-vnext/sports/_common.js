@@ -732,6 +732,17 @@ function footballPushMass(detailAt, projRaw, projShrunk, line, anchor, weight) {
   return Number.isFinite(mass) && mass > 0 ? mass : 0;
 }
 
+/**
+ * Cover probability from the sport projection alone, at the bet line.
+ * No point-shrink toward the sharp number and no no-vig blend.
+ */
+function pureFootballCover(detailAt, projRaw, line) {
+  if (typeof detailAt !== 'function') return null;
+  const d = detailAt(projRaw, line);
+  const p = d && Number(d.coverProb);
+  return Number.isFinite(p) ? p : null;
+}
+
 /** Priced cover plus the push on that same projection. pPush is 0 under 0.001. */
 function pricedFootball(detailAt, projRaw, projShrunk, line, anchor, weight) {
   const p = pricedFromPointShrink(
@@ -777,6 +788,7 @@ module.exports = {
   mlFromSpread,
   footballPushMass,
   pricedFootball,
+  pureFootballCover,
   blendWithMarket,
   mapGamesSoft,
   HFA,

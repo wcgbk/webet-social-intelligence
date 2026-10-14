@@ -29,7 +29,7 @@ const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
-const { applySharpFair, SHARP_FAIR_VERSION, FRESH_MINUTES } = require('./sharp_fair');
+const { applyPureModel, PURE_MODEL_VERSION } = require('./pure_model');
 const { applyLineMoveProb } = require('./line_move_prob');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
@@ -563,13 +563,14 @@ async function generateOmegaVnext(opts = {}) {
   const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
   console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
 
-  // Published edge and EV are the Pinnacle power fair at the bet line.
-  // edge = p_fair − implied(price). EV = p_fair × decimal − 1.
-  // The model blend stays on the row and does not enter either number.
-  // The 10:00 board is one capture (lag 0). A missing Pinnacle pair drops.
-  candidates = applySharpFair(candidates, { sameSnapshot: true });
-  const sharpBad = candidates.filter((c) => c && c.sharpFairReject).length;
-  console.log(`[omega-vnext] sharp-fair version=${SHARP_FAIR_VERSION} freshMin=${FRESH_MINUTES} priced=${candidates.length - sharpBad} reject=${sharpBad}`);
+  // Published edge and EV are the pure sport-model probability at the bet price.
+  // edge = p_model − implied(price). EV = p_model × decimal − 1.
+  // The blend, the shrink, line-move, DK lag, and the Pinnacle fair do not enter.
+  // Pinnacle stays on the row for CLV only. A missing model probability drops.
+  candidates = applyPureModel(candidates);
+  const purePriced = candidates.filter((c) => c && c.pureModelPriced).length;
+  const pureMissing = candidates.filter((c) => c && c.pureModelMissing).length;
+  console.log(`[omega-vnext] pure-model version=${PURE_MODEL_VERSION} priced=${purePriced} missing=${pureMissing}`);
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).

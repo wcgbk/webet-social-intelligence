@@ -20,6 +20,7 @@ const {
   matchupKey,
 } = require('./select');
 const { parlayFromStraights } = require('./parlay');
+const { finishShortCard } = require('./card_topup');
 const { parseEdgeFraction, writeSummaryStakeDisplay } = require('./odds_math');
 const { recordRankedList, top10Rows } = require('./selection_pass');
 const { compareByEv } = require('./select');
@@ -138,6 +139,40 @@ function edgeMoved(before, after) {
   return Math.abs(a - b) > 1e-6;
 }
 
+/**
+ * Late news can drop a straight. selectStraights refills from the priced
+ * pool when that pool still has a row. If the card is still short, the
+ * private reserve fills the open slots. A voided game stays blocked.
+ */
+function topUpFromReserve(working, news, pool) {
+  const reserve = working && working.reserve;
+  if (!working || !Array.isArray(working.picks) || working.picks.length >= 3) return null;
+  if (!Array.isArray(reserve) || !reserve.length) return null;
+  const blocked = [];
+  for (const row of working.voidedPregame || []) {
+    if (row) blocked.push({ ...row, void: true });
+  }
+  for (const name of (news && news.removed) || []) {
+    if (name) blocked.push({ pick: name, side: name });
+  }
+  const finished = finishShortCard({
+    picks: working.picks,
+    reserve,
+    blocked,
+    parlayPool: (pool || []).concat(working.picks, reserve),
+  });
+  if (!finished.added.length) return finished;
+  working.picks = finished.picks;
+  working.parlayLegs = finished.parlayLegs;
+  working.reserve = finished.reserve;
+  if (!working.summary || typeof working.summary !== 'object') working.summary = {};
+  working.summary.topUps = finished.topUps;
+  working.summary.totalPicks = finished.picks.length;
+  working.summary.totalStraightBets = finished.picks.length;
+  writeSummaryStakeDisplay(working.summary, finished.picks, finished.parlayLegs);
+  return finished;
+}
+
 function keepOriginal(original, reason, extra) {
   return {
     card: original,
@@ -240,7 +275,7 @@ async function rerankCard(opts = {}) {
     };
   }
 
-  const nextPicks = selected.map((row) => {
+  let nextPicks = selected.map((row) => {
     const prev = (working.picks || []).find((p) => betSame(p, row));
     const prior = (original.picks || []).find((p) => betSame(p, row));
     if (prev && prior && !edgeMoved(prior, prev) && (prev.tier || 'floor') === (row.tier || 'floor')) {
@@ -258,9 +293,14 @@ async function rerankCard(opts = {}) {
     if (prev && prev.coreReasoning) built.coreReasoning = prev.coreReasoning;
     return built;
   });
-  const parlayLegs = parlayFromStraights(nextPicks, { pool });
+  let parlayLegs = parlayFromStraights(nextPicks, { pool });
   working.picks = nextPicks;
   working.parlayLegs = parlayLegs;
+  const topped = topUpFromReserve(working, news, pool);
+  if (topped && topped.added && topped.added.length) {
+    nextPicks = working.picks;
+    parlayLegs = working.parlayLegs;
+  }
   working.selection = working.selection && typeof working.selection === 'object' ? working.selection : {};
   working.selection.window = '10:00-10:15';
   working.selection.rerankWindow = '10:15-10:30';
@@ -336,7 +376,8 @@ function rerankTop10(original, working, news, now) {
   working.timelineStep = '10:15';
   working.cardStatus = 'draft';
   working.finalized = false;
-  const changed = before !== after || original.timelineStep !== '10:15';
+  const topped = topUpFromReserve(working, news, kept);
+  const changed = before !== after || original.timelineStep !== '10:15' || !!(topped && topped.added && topped.added.length);
   return {
     card: working,
     changed,

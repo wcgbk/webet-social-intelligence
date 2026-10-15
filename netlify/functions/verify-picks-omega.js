@@ -6,11 +6,12 @@
 // 2. NARRATIVE CHECKS: Verify reasoning mentions correct team, correct length, whatLoses present.
 // 3. SHARP REVIEW: Call Grok as an elite Vegas handicapper to review the full card.
 // 4. AUTO-FIX: If a pick fails critical checks (negative EV, math broken), drop it.
-//    Do not invent a replacement straight. Empty stays empty.
+//    Auto-fix does not invent a side. A later reserve top-up can refill to 3.
 // 5. DISCORD ALERT: Post errors/warnings to #picks-model-optimization.
 //
 // Verify may drop, flag, or resize inside the existing unit cap.
-// It does not invent a straight to fill a short card.
+// A short card refills only from the private reserve, only up to 3,
+// and never with a blocked side. Steam does not refill. No odds pull.
 // A material Hard Rock line or price is the exception: that pick is
 // repriced at Hard Rock, or replaced by the next Hard Rock candidate,
 // and the parlay is rebuilt from the corrected card. Every change is logged.
@@ -50,6 +51,9 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
+const { finishShortCard, sideBlocked } = require('./lib/omega-vnext/card_topup');
+const { buildShortfall } = require('./lib/omega-vnext/shortfall');
+const { MAX_STRAIGHTS } = require('./lib/omega-vnext/config');
 const { reviewHardRock, verifySchedule, applySilentSortCheck } = require('./lib/omega-vnext/selection_pass');
 const { parlayFromStraights } = require('./lib/omega-vnext/parlay');
 const lateNews = require('./lib/omega-vnext/late_news');
@@ -131,14 +135,88 @@ function steamDropBlocksStraightRefill(droppedSteam, steamHardFails) {
 }
 
 /**
- * Verify is not a second publisher. A short card stays short, including when
- * steam did not fire. Steam and placeability still record a block so a later
- * edit cannot quietly refill those drops.
+ * Refill only to reach 3, only from the private reserve, never for a
+ * blocked side. Steam still refuses. Placeability and late-news set
+ * blockStraightRefill for the audit trail; that flag does not veto a
+ * reserve row that is not itself blocked.
  */
 function straightRefillAllowed(ctx = {}) {
   if (steamDropBlocksStraightRefill(ctx.droppedSteam, ctx.steamHardFails)) return false;
-  if (ctx.blockStraightRefill) return false;
-  return false;
+  const count = ctx.straightCount != null
+    ? Number(ctx.straightCount)
+    : (Array.isArray(ctx.picks) ? ctx.picks.length : NaN);
+  if (!Number.isFinite(count) || !(count < MAX_STRAIGHTS)) return false;
+  const reserve = Array.isArray(ctx.reserve) ? ctx.reserve : [];
+  if (!reserve.length) return false;
+  return true;
+}
+
+/**
+ * After placeability, late-news, and auto-fix drops. Tops up from
+ * card.reserve, checks placeability on the new rows only, rebuilds the
+ * parlay, and re-applies the unit cap. Does not call the Odds API.
+ * A failure here leaves the card as it was.
+ */
+function applyVerifyReserveTopUp(picksData, ctx = {}) {
+  const empty = { topped: false, topUps: [], exhausted: false };
+  try {
+    if (!picksData || !Array.isArray(picksData.picks)) return empty;
+    const allowed = straightRefillAllowed({
+      droppedSteam: ctx.droppedSteam,
+      steamHardFails: ctx.steamHardFails,
+      straightCount: picksData.picks.length,
+      reserve: picksData.reserve,
+      picks: picksData.picks,
+    });
+    if (!allowed) {
+      if (picksData.picks.length < MAX_STRAIGHTS) {
+        picksData.shortfall = buildShortfall({
+          picks: picksData.picks,
+          parlayLegs: picksData.parlayLegs,
+          yesPool: picksData.reserve || [],
+          rejected: ctx.blocked || [],
+        });
+      }
+      return empty;
+    }
+    const finished = finishShortCard({
+      picks: picksData.picks,
+      reserve: picksData.reserve,
+      blocked: ctx.blocked || [],
+      parlayPool: (picksData.picks || []).concat(picksData.reserve || []),
+      decide: ctx.decide,
+      checkPlaceability: true,
+      maxRounds: 3,
+      allowSameGame: ctx.allowSameGame,
+    });
+    if (!finished.added.length) {
+      picksData.shortfall = buildShortfall({
+        picks: picksData.picks,
+        parlayLegs: picksData.parlayLegs,
+        yesPool: finished.reserve || picksData.reserve || [],
+        rejected: ctx.blocked || [],
+      });
+      return { topped: false, topUps: [], exhausted: !!finished.exhausted };
+    }
+    picksData.picks = finished.picks;
+    picksData.parlayLegs = finished.parlayLegs;
+    picksData.reserve = finished.reserve;
+    if (!picksData.summary || typeof picksData.summary !== 'object') picksData.summary = {};
+    picksData.summary.topUps = finished.topUps;
+    picksData.summary.totalPicks = finished.picks.length;
+    picksData.summary.totalStraightBets = finished.picks.length;
+    writeSummaryStakeDisplay(picksData.summary, finished.picks, finished.parlayLegs);
+    picksData.shortfall = buildShortfall({
+      picks: finished.picks,
+      parlayLegs: finished.parlayLegs,
+      yesPool: finished.reserve || [],
+      rejected: ctx.blocked || [],
+    });
+    return { topped: true, topUps: finished.topUps, exhausted: !!finished.exhausted };
+  } catch (err) {
+    console.log(`[verify-final] reserve top-up soft-fail: ${err && err.message}`);
+    return empty;
+  }
 }
 
 function sameTicketName(a, b) {
@@ -802,7 +880,8 @@ async function runHardRockCheckLegacyFetch(picksData) {
 // ── Open→pick steam recheck (Omega v12.1 line-move) ──
 // Load latest morning snap; hard-fail / flag critical on adverse steam past verify thresholds.
 // Empty card OK — never lean force-fill. Placeability soft-veto is separate from steam:
-// it drops a pick only when Hard Rock and US majors both fail, and it does not refill.
+// it drops a pick only when Hard Rock and US majors both fail. The later reserve
+// top-up may replace that drop. This steam recheck does not refill.
 async function runOmegaSteamRecheck(picksData, pickReports) {
   const out = { checked: 0, failed: 0, reasons: [] };
   try {
@@ -1275,6 +1354,7 @@ async function storeReport(dateKey, report) {
 exports.buildQualityReplacement = buildQualityReplacement;
 exports.steamDropBlocksStraightRefill = steamDropBlocksStraightRefill;
 exports.straightRefillAllowed = straightRefillAllowed;
+exports.applyVerifyReserveTopUp = applyVerifyReserveTopUp;
 exports.resolveLockedParlay = resolveLockedParlay;
 exports.formatCombinedAmerican = formatCombinedAmerican;
 exports.sportEvFloor = sportEvFloor;
@@ -1370,6 +1450,8 @@ exports.handler = async (event) => {
     let placeabilityDropped = 0;
     let droppedSteam = 0;
     let lateNewsReport = null;
+    const droppedThisRun = [];
+    let verifyTopUps = [];
     try {
       hrCheck = await runHardRockCheck(picksData);
       if (hrCheck.changed) {
@@ -1423,7 +1505,11 @@ exports.handler = async (event) => {
       totalWarnings += hrCheck.parlayFindings.filter(f => f.level === "warning").length;
       const anyDrop = decisions.some(d => d.drop) || legDecisions.some(d => d.drop);
       if (anyDrop && !hrCheck.summary.apiDown && !hrCheck.summary.skipped) {
+        const picksBeforePlace = (picksData.picks || []).slice();
         const applied = applyPlaceabilityDrops(picksData, decisions, legDecisions);
+        for (const gone of picksBeforePlace) {
+          if (!(picksData.picks || []).includes(gone)) droppedThisRun.push(gone);
+        }
         for (let i = pickReports.length - 1; i >= 0; i--) {
           if (decisions[i] && decisions[i].drop) pickReports.splice(i, 1);
         }
@@ -1454,6 +1540,9 @@ exports.handler = async (event) => {
     const fixResult = await autoFixPicks(picksData, pickReports);
     if (fixResult.fixed) {
       console.log(`[verify] Auto-fixed ${fixResult.replacements.length} pick(s)`);
+      for (const row of fixResult.replacements || []) {
+        if (row && row.removed) droppedThisRun.push({ pick: row.removed, side: row.removed });
+      }
       // Write updated picks back to blob so the page shows clean data
       await updatePicksBlob(dateKey, picksData);
     }
@@ -1478,6 +1567,14 @@ exports.handler = async (event) => {
           enforceCap: enforceOmegaDailyUnitCap,
         });
         if (plan.blockStraightRefill) blockStraightRefill = true;
+        if (late && Array.isArray(late.removed)) {
+          for (const name of late.removed) {
+            if (name) droppedThisRun.push({ pick: name, side: name });
+          }
+        }
+        for (const row of picksData.voidedPregame || []) {
+          if (row) droppedThisRun.push({ ...row, void: true });
+        }
         if (plan.write) await updatePicksBlob(dateKey, picksData);
       } catch (e) {
         console.log(`[verify-late-news] write soft-fail: ${e.message}`);
@@ -1521,30 +1618,37 @@ exports.handler = async (event) => {
       }));
     const allReplacements = [...(fixResult.replacements || []), ...sharpReplacements, ...hrReplacements];
 
-    // ── Step 3c: FINAL PASS — re-verify the locked card. Do not rebuild the parlay. ──
-    // After drops, the published card must stay the one generate locked:
+    // ── Step 3c: FINAL PASS — re-verify the locked card. ──
+    // After drops, refill from the private reserve up to 3. Steam does not
+    // refill. A blocked side never returns. No odds pull. When the reserve
+    // cannot fill the card, publish what remains.
     // 1. Every remaining pick has a real narrative (not generic)
     // 2. Grades stay quality/edge — never rewritten from units
     // 3. Math checks pass
-    // 4. A locked parlay is preserved, or a dropped leg is removed. It is not rebuilt.
+    // 4. A top-up rebuilds the parlay from the final straights. Otherwise a
+    //    locked parlay is preserved, or a dropped leg is removed.
     {
       console.log(`[verify-final] Running final verification pass on ${picksData.picks.length} picks`);
       let finalFixCount = 0;
 
-      // Placeability soft-veto and adverse steam drops do not refill. Empty slots stay empty.
-      // A clean short card does not refill either. Verify does not invent straights.
+      // Placeability, late-news, and auto-fix drops refill from the private reserve up to 3.
+      // Steam does not refill. A blocked side never returns.
       const stillOnCard = new Set(picksData.picks.map(p => p.pick));
       const removedSinceLock = lockedStraightPicks.filter(p => !stillOnCard.has(p));
-      if (straightRefillAllowed({
+      for (const name of removedSinceLock) {
+        if (name && !droppedThisRun.some((row) => (row.pick || row.side) === name)) {
+          droppedThisRun.push({ pick: name, side: name });
+        }
+      }
+      const topUpResult = applyVerifyReserveTopUp(picksData, {
         droppedSteam,
         steamHardFails: steamCheck.failed,
-        blockStraightRefill,
-        cardLocked: true,
-        removedSinceLock,
-      })) {
-        console.error('[verify] straight refill requested — ignored; QA does not block publish');
-      }
-      if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
+        blocked: droppedThisRun,
+      });
+      verifyTopUps = topUpResult.topUps || [];
+      if (topUpResult.topped) {
+        console.log(`[verify-final] reserve top-up ${verifyTopUps.length}: ${verifyTopUps.map((row) => `${row.pick} (${row.reason})`).join(', ')}`);
+      } else if (removedSinceLock.length || picksData.picks.length < lockedStraightPicks.length) {
         console.log(`[verify-final] Straight refill blocked — publishing ${picksData.picks.length} pick(s) from the locked card`);
       }
 
@@ -1594,32 +1698,45 @@ exports.handler = async (event) => {
         }
       }
 
-      // ── Parlay: preserve the generate-locked slip. Drop a leg steam or safety
+      // ── Parlay: a reserve top-up already rebuilt from the final straights.
+      // Otherwise preserve the generate-locked slip. Drop a leg steam or safety
       // already removed. Do not compose a new parlay from the straight card.
       const removedPicks = [
         ...removedSinceLock,
         ...allReplacements.map(r => r.removed).filter(Boolean),
       ];
-      if (blockParlayRefill) {
-        console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
-      }
-      const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
-        removedPicks,
-        straightCard: picksData.picks,
-      });
-      if (resolvedParlay.rebuilt) {
-        console.error('[verify] parlay rebuild requested — ignored; QA does not block publish');
+      if (topUpResult.topped) {
+        console.log(`[verify-final] Parlay rebuilt from ${picksData.picks.length} straights after reserve top-up`);
       } else {
-        picksData.parlayLegs = resolvedParlay.parlayLegs;
-      }
-      if (resolvedParlay.action === 'preserved') {
-        const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
-        console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
-      } else if (resolvedParlay.action === 'resized') {
-        finalFixCount++;
-        console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
-      } else if (resolvedParlay.action === 'cleared') {
-        console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
+        if (blockParlayRefill) {
+          console.log(`[verify-final] Parlay not refilled after placeability soft-veto`);
+        }
+        const resolvedParlay = resolveLockedParlay(picksData.parlayLegs, {
+          removedPicks,
+          straightCard: picksData.picks,
+        });
+        if (resolvedParlay.rebuilt) {
+          console.error('[verify] parlay rebuild requested — ignored; QA does not block publish');
+        } else {
+          picksData.parlayLegs = resolvedParlay.parlayLegs;
+        }
+        if (resolvedParlay.action === 'preserved') {
+          const keptType = (picksData.parlayLegs[0] && picksData.parlayLegs[0].type) || 'none';
+          console.log(`[verify-final] Parlay preserved — generator output intact (${keptType})`);
+        } else if (resolvedParlay.action === 'resized') {
+          finalFixCount++;
+          console.log(`[verify-final] Parlay resized after a safety drop — legs kept: ${resolvedParlay.parlayLegs[0].legs.map(l => l.pick).join(' + ')}`);
+        } else if (resolvedParlay.action === 'cleared') {
+          console.log(`[verify-final] Parlay cleared — a safety drop left fewer than 2 locked legs`);
+        }
+        if ((picksData.picks || []).length < MAX_STRAIGHTS) {
+          picksData.shortfall = buildShortfall({
+            picks: picksData.picks,
+            parlayLegs: picksData.parlayLegs,
+            yesPool: picksData.reserve || [],
+            rejected: droppedThisRun,
+          });
+        }
       }
 
       // ── Step 3c-parlay: write journalistic narratives for PARLAY LEGS (Optimized Parlay cards) ──
@@ -1681,15 +1798,22 @@ exports.handler = async (event) => {
           picksData.bugLog.push(sortCheck.entry);
         }
         if (sortCheck.changed) {
-          picksData.picks = sortCheck.picks;
-          const prevTicket = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || {};
-          const rebuilt = parlayFromStraights(picksData.picks, {
-            hrPlaceabilityNote: prevTicket.hrPlaceabilityNote,
-            pool: picksData.candidateTable,
-          });
-          if (rebuilt.length) picksData.parlayLegs = rebuilt;
-          enforceOmegaDailyUnitCap(picksData);
-          console.log(`[verify-sort] silent auto-correct differed=${sortCheck.entry.differed.length}`);
+          const restoresBlocked = (sortCheck.picks || []).some((row) => sideBlocked(row, droppedThisRun));
+          // The 10:00 rank list still names a side this run already dropped.
+          // Putting it back would undo the reserve fill. Keep the topped-up card.
+          if (topUpResult.topped || restoresBlocked) {
+            console.log('[verify-final] sort-check rebuild skipped — blocked side or reserve top-up');
+          } else {
+            picksData.picks = sortCheck.picks;
+            const prevTicket = (Array.isArray(picksData.parlayLegs) && picksData.parlayLegs[0]) || {};
+            const rebuilt = parlayFromStraights(picksData.picks, {
+              hrPlaceabilityNote: prevTicket.hrPlaceabilityNote,
+              pool: picksData.candidateTable,
+            });
+            if (rebuilt.length) picksData.parlayLegs = rebuilt;
+            enforceOmegaDailyUnitCap(picksData);
+            console.log(`[verify-sort] silent auto-correct differed=${sortCheck.entry.differed.length}`);
+          }
         }
       }
 
@@ -1711,6 +1835,7 @@ exports.handler = async (event) => {
       picks: pickReports,
       hardRock: { ...hrCheck.summary, parlay: hrCheck.parlayFindings, corrections: hrCheck.corrections || [] },
       placeability: { dropped: placeabilityDropped, parlayCleared: blockParlayRefill },
+      topUps: verifyTopUps,
       steamRecheck: steamCheck,
       lateNews: lateNewsReport ? {
         checked: lateNewsReport.checked || 0,

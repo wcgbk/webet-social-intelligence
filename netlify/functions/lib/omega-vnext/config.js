@@ -13,6 +13,14 @@ const MAX_STRAIGHTS = 3;
  */
 const ONE_STRAIGHT_PER_GAME = true;
 /**
+ * Same-game straight top-up. Default false: a short card does not take a
+ * second side of a game already on the card. Same-game fill is a decision
+ * for WeBet. When true, a same-game reserve row is used only after every
+ * distinct-game reserve row is exhausted, and the row is flagged
+ * sameGameFill. capSameGameExposure at 1.75u still applies.
+ */
+const ALLOW_SAME_GAME_TOPUP = false;
+/**
  * Same-game stake cap. Straight units plus the parlay stake on that game
  * stay at or under 1.75u. The parlay is not cut. Leans are not trimmed.
  * OMEGA_GAME_EXPOSURE=0 turns the trim off.
@@ -1074,6 +1082,7 @@ module.exports = {
   KELLY_FRACTION,
   MAX_STRAIGHTS,
   ONE_STRAIGHT_PER_GAME,
+  ALLOW_SAME_GAME_TOPUP,
   PER_GAME_EXPOSURE_CAP_ENABLED,
   STRAIGHT_UNIT_BUDGET,
   PARLAY_FIXED_UNITS,

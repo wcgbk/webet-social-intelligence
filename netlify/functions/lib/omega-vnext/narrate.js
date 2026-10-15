@@ -166,9 +166,22 @@ function buildFallbackNarrative(p) {
 
   let gapLine = null;
   if (Number.isFinite(proj) && Number.isFinite(line)) {
-    const gap = Math.abs(proj - line);
-    const unit = /nhl/i.test(sport) ? 'goals' : 'points';
-    gapLine = `The projection is ${proj.toFixed(1)} against a posted line of ${line.toFixed(1)}, a gap of ${gap.toFixed(1)} ${unit}.`;
+    const market = String((p && (p.market || p.betType)) || '');
+    const side = String((p && (p.side || p.pick)) || '').toLowerCase();
+    const home = String((p && p.homeTeam) || '').toLowerCase();
+    const away = String((p && p.awayTeam) || '').toLowerCase();
+    const spread = /spread|puck|run line/i.test(market);
+    let residual = proj - line;
+    if (spread && home && side.startsWith(home)) residual = proj + line;
+    else if (spread && away && side.startsWith(away)) residual = proj - line;
+    const unit = /nhl/i.test(sport) ? 'goals' : (/mlb/i.test(sport) ? 'runs' : 'points');
+    const abs = Math.abs(residual);
+    if (abs <= 0.05) {
+      gapLine = `The projection is ${proj.toFixed(1)} and the posted line is ${line.toFixed(1)}.`;
+    } else {
+      const relation = residual < 0 ? 'short of' : 'past';
+      gapLine = `The projection is ${proj.toFixed(1)} and the posted line is ${line.toFixed(1)}, ${abs.toFixed(1)} ${unit} ${relation} that number.`;
+    }
   }
 
   let moveLine = null;

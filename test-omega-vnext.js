@@ -591,6 +591,26 @@ assert.ok(/Giants \+6\.5/.test(fbDog));
 assert.ok(/2\.8%/.test(fbDog));
 assert.ok(/moved against/i.test(fbDog), 'steam against is the line move, not a made-up cause');
 
+const fbHomeSpread = narrate.buildFallbackNarrative({
+  pick: 'Texas State Bobcats -13.5',
+  side: 'Texas State Bobcats -13.5',
+  matchup: 'Colorado State Rams @ Texas State Bobcats',
+  homeTeam: 'Texas State Bobcats',
+  awayTeam: 'Colorado State Rams',
+  sport: 'NCAAF',
+  betType: 'Spread',
+  odds: '-120',
+  units: '0.5u',
+  rating: 'b',
+  edgePct: -0.109,
+  ev: -0.199,
+  coverProb: 0.437,
+  modelProjection: 12.7,
+  line: -13.5,
+});
+assert.ok(/0\.8 points short/.test(fbHomeSpread), fbHomeSpread);
+assert.ok(!/26\.2/.test(fbHomeSpread), fbHomeSpread);
+
 const fbMl = narrate.buildFallbackNarrative({ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '+120', edgePct: '5.4%', steamToward: true });
 assertDeskCopy(fbMl, 'ml fallback', 4, 6);
 assert.ok(/\+120/.test(fbMl) && /Yankees ML/.test(fbMl));

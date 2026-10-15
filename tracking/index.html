@@ -310,13 +310,16 @@
     }
     function clvTable(row) {
       var html = '<table class="inner">' + head(row, true) + '<tbody>';
-      function c(s) { return s.clv || null; }
-      html += line('Published straights (n)', row, true, function (s) { var x = c(s); return x ? esc(whole(x.n) || 0) + (x.smallSample ? ' <span class="badge">n&lt;50</span>' : '') : '—'; }, null);
-      html += line('Avg CLV (pp)', row, true, function (s) { var x = c(s); return x && x.n ? signed1(x.avgClvPp) : '—'; }, function (d) { var v = d.clv ? d.clv.avgClvPp : null; return v == null ? null : { raw: Math.round(v * 10) / 10, text: signed1(v) }; });
-      html += line('Beat close', row, true, function (s) { var x = c(s); return x && x.n ? pctText(x.beatClosePct) : '—'; }, function (d) { return dnum(d.clv && d.clv.beatClosePct, ' pts'); });
-      html += line('Elite percentile', row, true, function (s) { var x = c(s); return x && x.n ? ordinal(x.percentile) : '—'; }, function (d) { return dnum(d.clv && d.clv.percentile); });
+      // Rows saved before the published-pick format carry the all-evaluated
+      // ledger total in clv. Never label that as published straights.
+      function legacy(s) { return !!(s && s.clv && s.clv.basis !== 'published-straights' && !s.clvAll); }
+      function c(s) { return s.clv && !legacy(s) ? s.clv : null; }
+      html += line('Published straights (n)', row, true, function (s) { var x = c(s); if (legacy(s)) return 'not recorded (row saved before the published-pick format)'; return x ? esc(whole(x.n) || 0) + (x.smallSample ? ' <span class="badge">n&lt;50</span>' : '') : '—'; }, null);
+      html += line('Avg CLV (pp)', row, true, function (s) { var x = c(s); return x && x.n ? signed1(x.avgClvPp) : '—'; }, function (d, col) { if (legacy(col.side)) return null; var v = d.clv ? d.clv.avgClvPp : null; return v == null ? null : { raw: Math.round(v * 10) / 10, text: signed1(v) }; });
+      html += line('Beat close', row, true, function (s) { var x = c(s); return x && x.n ? pctText(x.beatClosePct) : '—'; }, function (d, col) { return legacy(col.side) ? null : dnum(d.clv && d.clv.beatClosePct, ' pts'); });
+      html += line('Elite percentile', row, true, function (s) { var x = c(s); return x && x.n ? ordinal(x.percentile) : '—'; }, function (d, col) { return legacy(col.side) ? null : dnum(d.clv && d.clv.percentile); });
       html += line('Parlay CLV', row, true, function (s) { var x = c(s); var p = x && x.parlay; return p && p.available ? signed1(p.avgClvPp) + ' pp (n ' + whole(p.n) + ')' : 'not available'; }, null);
-      html += line('All evaluated bets', row, false, function (s) { var a = s.clvAll; return a && a.n ? signed1(a.avgClvPp) + ' pp · ' + pctText(a.beatClosePct) + ' beat · n ' + whole(a.n) : '—'; }, null);
+      html += line('All evaluated bets', row, false, function (s) { var a = s.clvAll || (legacy(s) ? s.clv : null); return a && a.n ? signed1(a.avgClvPp) + ' pp · ' + pctText(a.beatClosePct) + ' beat · n ' + whole(a.n) : '—'; }, null);
       return html + '</tbody></table>';
     }
     function pct(value) {

@@ -100,10 +100,14 @@ function comboStats(legs) {
     independent *= Number(l.coverProb);
   }
   let combinedProb = independent;
+  const haircutFactor = sameDirectionTotalFactor(legs);
+  let haircutWasApplied = false;
+  let corrApplied = false;
   if (Number.isFinite(independent)) {
-    const haircutProb = independent * sameDirectionTotalFactor(legs);
+    const haircutProb = independent * haircutFactor;
     if (Number.isFinite(haircutProb) && haircutProb <= independent) {
       combinedProb = haircutProb;
+      if (haircutFactor < 1) haircutWasApplied = true;
     }
     // Correlation may only lower the joint. The ρ prior is positive, so
     // this branch does not fire for same-direction totals. The haircut stays.
@@ -111,7 +115,10 @@ function comboStats(legs) {
       const corr = correlatedTotalFactor((legs || []).map(l => Number(l.coverProb)));
       if (Number.isFinite(corr) && corr > 0 && corr < 1) {
         const lowered = independent * corr;
-        if (Number.isFinite(lowered) && lowered < combinedProb) combinedProb = lowered;
+        if (Number.isFinite(lowered) && lowered < combinedProb) {
+          combinedProb = lowered;
+          corrApplied = true;
+        }
       }
     }
     if (!Number.isFinite(combinedProb) || combinedProb > independent) combinedProb = independent;
@@ -119,7 +126,95 @@ function comboStats(legs) {
   const ev = combinedProb * combinedDecimal - 1;
   const games = new Set(legs.map(matchupKey)).size;
   const sports = new Set(legs.map(l => l.sport)).size;
-  return { combinedDecimal, combinedProb, ev, uniqueGames: games, uniqueSports: sports };
+  return {
+    combinedDecimal,
+    combinedProb,
+    ev,
+    uniqueGames: games,
+    uniqueSports: sports,
+    haircutApplied: { applied: haircutWasApplied, factor: haircutFactor },
+    corrApplied,
+  };
+}
+
+function formatHaircutFactor(factor) {
+  const n = Number(factor);
+  if (!Number.isFinite(n)) return String(factor);
+  const text = String(n);
+  if (!/[eE]/.test(text)) return text;
+  return n.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function legListOf(ticketOrStats) {
+  if (Array.isArray(ticketOrStats)) return ticketOrStats;
+  if (ticketOrStats && Array.isArray(ticketOrStats.legs)) return ticketOrStats.legs;
+  return null;
+}
+
+/** Haircut, correlation, and whether two legs share a game. */
+function adjustmentOf(ticketOrStats) {
+  const src = ticketOrStats && typeof ticketOrStats === 'object' && !Array.isArray(ticketOrStats)
+    ? ticketOrStats
+    : {};
+  const legs = legListOf(ticketOrStats);
+  let hair = src.haircutApplied && typeof src.haircutApplied === 'object'
+    ? { applied: src.haircutApplied.applied === true, factor: Number(src.haircutApplied.factor) }
+    : null;
+  let corr = typeof src.corrApplied === 'boolean' ? src.corrApplied : null;
+  if (legs && (hair == null || corr == null)) {
+    const numeric = legs.length > 0 && legs.every((leg) => leg && typeof leg.coverProb === 'number' && Number.isFinite(leg.coverProb));
+    if (numeric) {
+      const st = comboStats(legs);
+      if (hair == null) hair = st.haircutApplied;
+      if (corr == null) corr = st.corrApplied;
+    } else if (legs.length) {
+      const factor = sameDirectionTotalFactor(legs);
+      if (hair == null) hair = { applied: factor < 1, factor };
+      if (corr == null) corr = false;
+    }
+  }
+  if (!hair) hair = { applied: false, factor: 1 };
+  if (!Number.isFinite(hair.factor)) hair.factor = legs ? sameDirectionTotalFactor(legs) : 1;
+  if (corr == null) corr = false;
+  let share = false;
+  let distinct = false;
+  if (legs && legs.length) {
+    const games = new Set(legs.map((leg) => matchupKey(leg)));
+    share = games.size < legs.length;
+    distinct = games.size === legs.length;
+  }
+  return { share, hair, corr, distinct };
+}
+
+/**
+ * Wording for the EV that comboStats actually computed.
+ * evLabel and correlationNote both use this string.
+ * plainProduct on the object means the displayed EV is a raw product.
+ * The structural label stays, and a caveat is added when a haircut or
+ * correlation term was not applied to that product.
+ */
+function parlayEvLabel(ticketOrStats) {
+  const info = adjustmentOf(ticketOrStats);
+  let label = '';
+  if (info.share) label = 'legs share a game: not independent';
+  else if (info.corr) label = 'correlation-adjusted';
+  else if (info.hair.applied) {
+    label = `same-direction totals haircut x${formatHaircutFactor(info.hair.factor)} applied, other legs assumed independent`;
+  } else if (info.distinct) label = 'assumes independent legs (different games)';
+  const plain = !!(ticketOrStats && ticketOrStats.plainProduct === true);
+  if (plain && label && (info.hair.applied || info.corr)) {
+    const which = info.corr && info.hair.applied
+      ? 'haircut and correlation adjustment were not applied'
+      : (info.corr ? 'correlation adjustment was not applied' : 'haircut was not applied');
+    label = `${label}; displayed EV is a plain product of the leg probabilities (${which})`;
+  }
+  return label;
+}
+
+/** True only when no haircut or correlation term changed the joint and every leg is a different game. */
+function parlayIndependent(ticketOrStats) {
+  const info = adjustmentOf(ticketOrStats);
+  return info.distinct && !info.share && !info.hair.applied && !info.corr;
 }
 
 function leagueKey(leg) {
@@ -524,7 +619,13 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     return [];
   }
 
-  const independent = !parlayIsCardMirror(chosen.legs, straights);
+  // Type still records whether the legs are the card. That is mirrorsCard.
+  // independent is the probability statement, not that mirror flag.
+  // optimizeParlay ranks by edge and stake EV and keeps one leg per game.
+  // It does not rank by CLV and it does not fit a correlation model.
+  const mirrorsCard = !!parlayIsCardMirror(chosen.legs, straights);
+  const evLabel = parlayEvLabel(chosen);
+  const legsAreIndependent = parlayIndependent(chosen);
 
   // v12.0.9: published parlay always fixed PARLAY_FIXED_UNITS (0.5u)
   // A lean-day ticket overrides this with LEAN_PARLAY_UNITS below.
@@ -581,7 +682,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
   }));
 
   return [{
-    type: `${legs.length}-leg-parlay-${independent ? 'optimized' : 'straight'}`,
+    type: `${legs.length}-leg-parlay-${mirrorsCard ? 'straight' : 'optimized'}`,
     legs,
     units: leanStake ? `${LEAN_PARLAY_UNITS}u` : `${stake}u`,
     ...(leanStake ? { leanDay: true } : {}),
@@ -589,11 +690,13 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     combinedDecimal: +chosen.combinedDecimal.toFixed(2),
     combinedProb: `${(chosen.combinedProb * 100).toFixed(1)}%`,
     ev: `${(chosen.ev * 100).toFixed(1)}%`,
+    evLabel,
     uniqueGames: chosen.uniqueGames,
     uniqueSports: chosen.uniqueSports,
-    independent,
+    independent: legsAreIndependent,
+    mirrorsCard,
     legMarkets: chosen.legs.map(l => l.market),
-    correlationNote: `CLV-first de-correlated — ${legs.length} legs / ${chosen.uniqueGames} games`,
+    correlationNote: evLabel,
     candidatesScanned: search.length,
     source: 'omega-vnext',
   }];
@@ -995,6 +1098,8 @@ function parlayFromStraights(straights, opts = {}) {
   const labeled = !(st.ev > 0);
   const straightIds = new Set(rows.map((row) => parlaySideId(row)));
   const mirrored = rows.length >= 3 && chosen.every((leg) => straightIds.has(parlaySideId(leg)));
+  const labelInput = { ...st, legs: chosen };
+  const evLabel = parlayEvLabel(labelInput);
   const publishedLegs = chosen.map(publishGatedLeg);
   const fromLegs = combinedFromLegOdds(publishedLegs);
   const combinedDecimal = fromLegs ? fromLegs.combinedDecimal : st.combinedDecimal;
@@ -1011,7 +1116,7 @@ function parlayFromStraights(straights, opts = {}) {
     qualifying: true,
     combinedOdds,
     combinedDecimal: Number.isFinite(combinedDecimal) ? +combinedDecimal.toFixed(2) : null,
-    evLabel: 'assumes independent legs',
+    evLabel,
     riskDollars: stakeDollars(stakeUnits),
     toWinDollars: toWinDollars(stakeUnits, combinedOdds),
     combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
@@ -1020,9 +1125,10 @@ function parlayFromStraights(straights, opts = {}) {
     evRaw: Number.isFinite(st.ev) ? st.ev : null,
     uniqueGames: st.uniqueGames,
     uniqueSports: st.uniqueSports,
-    independent: !mirrored,
+    independent: parlayIndependent(labelInput),
+    mirrorsCard: mirrored,
     legMarkets: chosen.map((leg) => leg.market || leg.betType || null),
-    correlationNote: 'assumes independent legs',
+    correlationNote: evLabel,
     candidatesScanned: merged.length,
     autoCorrected: !mirrored,
     probBasis: 'unified-adjusted-cover',
@@ -1041,5 +1147,6 @@ module.exports = {
   optimizeParlay, parlayFromStraights, comboStats, enumerateCombos, preferHit, parlayIsCardMirror,
   sameDirectionTotalFactor, correlatedTotalFactor, legsConflict, bestEdgeLegs, legEdge,
   passesParlayCandidate, isNoQualifyingParlay, unifiedCoverProb, priceParlayLeg,
+  parlayEvLabel, parlayIndependent,
   NO_QUALIFYING_PARLAY,
 };

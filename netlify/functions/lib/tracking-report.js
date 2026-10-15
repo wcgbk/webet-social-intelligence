@@ -269,7 +269,9 @@ function bucketRows(rows) {
 
 function isParlayRow(row) {
   const m = String((row && (row.market || row.sport)) || '').toLowerCase();
-  return m === 'parlay';
+  if (m === 'parlay') return true;
+  const { isParlayGradeName } = require('./omega-vnext/result_kpis');
+  return isParlayGradeName(row && (row.pick || row.selection));
 }
 
 /**

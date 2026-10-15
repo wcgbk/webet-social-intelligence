@@ -89,7 +89,10 @@ const full = [
 ];
 const ticket = parlayFromStraights(full)[0];
 assert.strictEqual(ticket.units, '0.5u');
-assert.strictEqual(ticket.evLabel, 'assumes independent legs');
+assert.strictEqual(ticket.evLabel, 'assumes independent legs (different games)');
+assert.strictEqual(ticket.correlationNote, ticket.evLabel);
+assert.strictEqual(ticket.independent, true);
+assert.strictEqual(ticket.mirrorsCard, true);
 assert.strictEqual(ticket.combinedOdds, '+521');
 assert.strictEqual(ticket.combinedDecimal, 6.21);
 assert.strictEqual(ticket.riskDollars, 75);

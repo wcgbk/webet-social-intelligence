@@ -2197,7 +2197,7 @@
         if (pushCount === parlayFinalStatuses.length) { parlayStatus = 'push'; parlayLabel = 'Push'; }
         else { parlayStatus = 'win'; parlayLabel = 'Win (reduced)'; }
       }
-      const parlayEvLabel = (apiParlay && apiParlay.evLabel) || 'assumes independent legs';
+      const parlayEvLabel = (apiParlay && apiParlay.evLabel) ? String(apiParlay.evLabel) : '';
       const parlayPayStr = `${parlayUnits}u - Bet $${parlayRisk.toLocaleString()} — To Win +$${wholeUp(parlayWin).toLocaleString()}`;
 
       html += `<div class="parlay-section">
@@ -2207,7 +2207,7 @@
           <span class="parlay-odds">${esc(parlayOddsStr || '')}</span>
         </div>
         <div class="parlay-payout">${parlayPayStr}</div>
-        <div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">Parlay EV ${esc(parlayEvLabel)}</div>
+        ${parlayEvLabel ? `<div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">Parlay EV ${esc(parlayEvLabel)}</div>` : ''}
         ${(parlayLabeled && apiParlay.label) ? `<div class="parlay-note" style="font-size:12px;opacity:.75;margin-top:2px">${esc(String(apiParlay.label).charAt(0).toUpperCase() + String(apiParlay.label).slice(1))}</div>` : ''}`;
 
       for (const lr of parlayLegResults) {

@@ -588,7 +588,16 @@ function applyDailyUnitCap(picks, parlayLegs) {
     pl.units = fmtU(parlayStake);
     pl.riskDollars = stakeDollars(parlayStake);
     if (pl.combinedOdds) pl.toWinDollars = toWinDollars(parlayStake, pl.combinedOdds);
-    if (!pl.evLabel) pl.evLabel = 'assumes independent legs';
+    // Lazy require: parlay.js loads select.js at module scope.
+    const staleLabel = (value) => !value || value === 'assumes independent legs';
+    if (staleLabel(pl.evLabel) || staleLabel(pl.correlationNote)) {
+      const { parlayEvLabel } = require('./parlay');
+      const label = parlayEvLabel(pl);
+      if (label) {
+        if (staleLabel(pl.evLabel)) pl.evLabel = label;
+        if (staleLabel(pl.correlationNote)) pl.correlationNote = pl.evLabel;
+      }
+    }
   }
 
   const straightTotalOf = () => out.reduce((acc, p) => acc + parseU(p.units), 0);

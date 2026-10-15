@@ -37,7 +37,7 @@ const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags, reviewFlag } = require('./pinnacle_flag');
-const { holdReason, fetchPostedQuotes, staleGameKeys, gameKey } = require('./posted_line');
+const { holdReason, fetchPostedQuotes, gamesWithoutCurrentSpread, gameKey } = require('./posted_line');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
 const { awaitLiveCaptureGate } = require('./capture_gate');
 const { summaryStakeDisplay } = require('./odds_math');
@@ -718,12 +718,17 @@ async function generateOmegaVnext(opts = {}) {
       postedQuotes = [];
     }
   }
-  const staleGames = postedQuotes.length
-    ? staleGameKeys([].concat(picks || [], yesPool || [], leanPool || [], pairedFill || []), postedQuotes)
+  const spreadStale = postedQuotes.length
+    ? gamesWithoutCurrentSpread(candidates, postedQuotes)
     : new Set();
   const holdOf = (row) => {
     if (replayLike || !row) return null;
-    if (staleGames.size && staleGames.has(gameKey(row))) return 'line-moved';
+    const market = String((row && (row.market || row.betType)) || '');
+    if (/moneyline/i.test(market) && spreadStale.has(gameKey(row))) return 'line-moved';
+    if (postedQuotes.length) {
+      const moved = holdReason({ ...row, dataReviewFlag: null }, postedQuotes);
+      if (moved) return moved;
+    }
     if ((row.dataReviewFlag && row.dataReviewFlag.flagged) || reviewFlag(row)) return 'pinnacle-sanity';
     return null;
   };

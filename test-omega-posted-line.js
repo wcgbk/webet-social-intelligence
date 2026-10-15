@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { holdReason, staleGameKeys, gameKey } = require('./netlify/functions/lib/omega-vnext/posted_line');
+const { holdReason, gamesWithoutCurrentSpread, gameKey } = require('./netlify/functions/lib/omega-vnext/posted_line');
 
 function event(home, away, favorite, spread, total) {
   const homeFav = favorite === 'home';
@@ -60,14 +60,15 @@ assert.strictEqual(holdReason({
 }, []), null);
 
 const board = [
-  { betType: 'Spread', pick: 'Georgia Southern Eagles -3.5', line: -3.5, homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
-  { betType: 'Moneyline', pick: 'Georgia Southern Eagles ML', homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
-  { betType: 'Moneyline', pick: 'UAB Blazers ML', homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
-  { betType: 'Total', pick: 'Under 47.5', line: 47.5, homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
+  { market: 'Spread', side: 'Georgia Southern Eagles -3.5', line: -3.5, homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
+  { market: 'Moneyline', side: 'Georgia Southern Eagles', homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
+  { market: 'Spread', side: 'East Carolina Pirates -5.5', line: -5.5, homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
+  { market: 'Moneyline', side: 'UAB Blazers', homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
+  { market: 'Spread', side: 'Colorado State Rams +14.5', line: 14.5, homeTeam: 'Texas State Bobcats', awayTeam: 'Colorado State Rams' },
 ];
-const stale = staleGameKeys(board, quotes);
-assert.ok(stale.has(gameKey(board[1])));
-assert.ok(stale.has(gameKey(board[2])));
-assert.strictEqual(holdReason(board[1], quotes), null);
+const stale = gamesWithoutCurrentSpread(board, quotes);
+assert.ok(stale.has(gameKey(board[1])), 'Georgia Southern moneyline game has no current spread');
+assert.ok(stale.has(gameKey(board[3])), 'UAB moneyline game has no current spread');
+assert.ok(!stale.has(gameKey(board[4])), 'Colorado State +14.5 is the current number');
 
 console.log('test-omega-posted-line ok');

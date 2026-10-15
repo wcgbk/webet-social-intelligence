@@ -100,15 +100,29 @@ function gameKey(row) {
   return matchup || '';
 }
 
-/** Games whose spread or total on the priced board is not the current DraftKings number. */
-function staleGameKeys(rows, quotes) {
-  const keys = new Set();
+/**
+ * Games that have priced spreads, and none of those spreads is the current
+ * DraftKings number. The moneyline on that game is the morning price too.
+ * A game with no spread quote, or with one spread that still matches, is absent.
+ */
+function gamesWithoutCurrentSpread(rows, quotes) {
+  const byGame = new Map();
   for (const row of rows || []) {
-    if (holdReason({ ...row, dataReviewFlag: null }, quotes) !== 'line-moved') continue;
+    const market = String((row && (row.market || row.betType)) || '');
+    if (!/spread|puck|run line/i.test(market)) continue;
     const key = gameKey(row);
-    if (key) keys.add(key);
+    if (!key) continue;
+    if (!byGame.has(key)) byGame.set(key, []);
+    byGame.get(key).push(row);
   }
-  return keys;
+  const stale = new Set();
+  for (const [key, list] of byGame) {
+    const quote = quoteForRow(list[0], quotes);
+    if (!quote || quote.homeSpread == null) continue;
+    const anyCurrent = list.some((row) => holdReason({ ...row, dataReviewFlag: null }, quotes) == null);
+    if (!anyCurrent) stale.add(key);
+  }
+  return stale;
 }
 
 function holdReason(row, quotes) {
@@ -156,7 +170,7 @@ module.exports = {
   quoteFromEspnEvent,
   quotesFromScoreboard,
   gameKey,
-  staleGameKeys,
+  gamesWithoutCurrentSpread,
   holdReason,
   fetchPostedQuotes,
 };

@@ -169,7 +169,7 @@ assert.strictEqual(applyDailyUnitCap([], floorTicket).parlayLegs[0].units, '0.25
 
 assert.strictEqual(shouldPublishNoPlays([], [highEv]), false);
 assert.strictEqual(shouldPublishNoPlays([], [thinEdge]), false);
-assert.strictEqual(shouldPublishNoPlays([], [negEv]), false);
+assert.strictEqual(shouldPublishNoPlays([], [negEv]), true);
 assert.strictEqual(shouldPublishNoPlays([{ tier: 'lean', pick: 'D +3' }], []), false);
 
 const dropped = {

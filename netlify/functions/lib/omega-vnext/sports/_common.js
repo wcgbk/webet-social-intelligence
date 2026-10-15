@@ -423,9 +423,13 @@ function nflKeyNumberCover(modelMargin, line, std) {
  * OFF keeps the 2e0a803 path: NFL 3/7 via nflKeyNumberCover, everything else
  * a normal CDF. Optional 4th arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
-function spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride) {
+function spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride, opts) {
   const std = resolveSpreadStd(sport, stdOverride);
-  if ((sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled()
+  // Pure-model publish uses the normal. Key-mass stays on the blend path.
+  // A 0.8-point margin at σ 16 is about 2 probability points. The keyed
+  // PMF was moving that same margin by 4 points and the card then bet it.
+  const useNormal = !!(opts && opts.distribution === 'normal');
+  if (!useNormal && (sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled()
       && Number.isFinite(modelSpreadHome) && Number.isFinite(marketLineHome)) {
     const q = spreadQuote(modelSpreadHome, marketLineHome, sport, std);
     if (q) return q;
@@ -465,9 +469,10 @@ function totalCoverProb(modelTotal, marketTotal, side, sport) {
  * NFL ties push when the keyed PMF is on. NCAAF splits the tie.
  * Optional 3rd arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
-function mlDetail(modelSpreadHome, sport, stdOverride) {
+function mlDetail(modelSpreadHome, sport, stdOverride, opts) {
   const std = resolveSpreadStd(sport, stdOverride);
-  if ((sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled() && Number.isFinite(modelSpreadHome)) {
+  const useNormal = !!(opts && opts.distribution === 'normal');
+  if (!useNormal && (sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled() && Number.isFinite(modelSpreadHome)) {
     const q = mlQuote(modelSpreadHome, sport, std);
     if (q) return { ...q, coverProb: clamp(q.coverProb, 0.05, 0.95) };
   }

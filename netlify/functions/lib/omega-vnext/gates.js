@@ -1,7 +1,7 @@
 'use strict';
 
 const { GATES, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
-const { minEdgeFor, mainMinEv } = require('./edge_floor');
+const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { formatMoneylinePick } = require('./odds_math');
 const { eligibleForLeanPool } = require('./select');
 const { adverseSteamReason } = require('./line_path');
@@ -207,9 +207,8 @@ function gateReason(c, opts = {}) {
   // miss, including a non-positive EV, into the lean pool. Edge is not
   // an inclusion gate.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
-  const maxEV = Number(GATES.maxEV);
-  if (Number.isFinite(c.ev) && Number.isFinite(maxEV) && c.ev > maxEV + 1e-12) {
-    console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} reason=ev-above-12pct`);
+  if (stakeQuoteIsStale(c)) {
+    console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} edge=${finiteEdge(c)} reason=ev-above-12pct`);
     return 'ev-stale';
   }
   // Pinnacle no-vig is a CLV input, not a selection gate. A miss of the

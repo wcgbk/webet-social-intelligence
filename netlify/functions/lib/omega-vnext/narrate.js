@@ -171,16 +171,20 @@ function buildFallbackNarrative(p) {
     const home = String((p && p.homeTeam) || '').toLowerCase();
     const away = String((p && p.awayTeam) || '').toLowerCase();
     const spread = /spread|puck|run line/i.test(market);
-    let residual = proj - line;
-    if (spread && home && side.startsWith(home)) residual = proj + line;
-    else if (spread && away && side.startsWith(away)) residual = proj - line;
+    // modelProjection on a football spread is the home margin. The sentence
+    // quotes the side being bet, so an away favorite is not printed as a
+    // negative home number.
+    const awaySide = spread && away && side.startsWith(away);
+    const sideProj = awaySide ? -proj : proj;
+    let residual = sideProj - line;
+    if (spread) residual = sideProj + line;
     const unit = /nhl/i.test(sport) ? 'goals' : (/mlb/i.test(sport) ? 'runs' : 'points');
     const abs = Math.abs(residual);
     if (abs <= 0.05) {
-      gapLine = `The projection is ${proj.toFixed(1)} and the posted line is ${line.toFixed(1)}.`;
+      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${line.toFixed(1)}.`;
     } else {
       const relation = residual < 0 ? 'short of' : 'past';
-      gapLine = `The projection is ${proj.toFixed(1)} and the posted line is ${line.toFixed(1)}, ${abs.toFixed(1)} ${unit} ${relation} that number.`;
+      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${line.toFixed(1)}, ${abs.toFixed(1)} ${unit} ${relation} that number.`;
     }
   }
 

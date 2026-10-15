@@ -13,8 +13,7 @@
 const { etLocalToUtcISO } = require('./price_lock');
 const { attachEv, canonicalizeBook } = require('./edge');
 const { sharpFairEnabled } = require('./sharp_fair');
-const { mainMinEv } = require('./edge_floor');
-const { GATES } = require('./config');
+const { mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { formatAmerican, etCalendarDate, parseEdgeFraction, americanToDecimal } = require('./odds_math');
 const { toPickObject, matchupKey, compareByEv } = require('./select');
 
@@ -691,11 +690,6 @@ function bookIsRetailOrUnknown(c) {
   return book === DK_BOOK || book === HR_BOOK;
 }
 
-function staleEv(ev) {
-  const maxEV = Number(GATES.maxEV);
-  return Number.isFinite(ev) && Number.isFinite(maxEV) && ev > maxEV + 1e-12;
-}
-
 function takeBackfill(c, now, cardDate, slateOpts, used, minEv) {
   if (!c || used.has(matchupKey(c))) return null;
   if (!bookIsRetailOrUnknown(c)) return null;
@@ -704,8 +698,12 @@ function takeBackfill(c, now, cardDate, slateOpts, used, minEv) {
   const edge = edgeOf(c);
   const cover = asFraction(c.coverProb);
   if (!Number.isFinite(odds) || !Number.isFinite(ev)) return null;
-  if (staleEv(ev)) return null;
-  if (minEv != null && !(ev + 1e-12 >= minEv)) return null;
+  if (stakeQuoteIsStale({ ...c, odds, ev, edgePct: Number.isFinite(edge) ? edge : c.edgePct })) return null;
+  if (minEv != null) {
+    if (!(ev + 1e-12 >= minEv)) return null;
+  } else if (!(ev > 0)) {
+    return null;
+  }
   if (verifyStartReason(c, now, cardDate, slateOpts)) return null;
   if (cardDate && !inSlate(c, cardDate)) return null;
   const floor = ev + 1e-12 >= mainMinEv(odds);

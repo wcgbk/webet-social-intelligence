@@ -14,7 +14,7 @@ const {
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
   gradeStakeUnits, cardHasFullGrade, formatGameTimeET, stakeDollars, toWinDollars,
 } = require('./odds_math');
-const { minEdgeFor, mainMinEv } = require('./edge_floor');
+const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 const { reviewFlag } = require('./pinnacle_flag');
@@ -140,16 +140,16 @@ function publishMinEv(c) {
 }
 
 /**
- * Published floor straights. Flat stake EV at mainMinEv (2%) and at or
- * under GATES.maxEV (12%). Edge is not an inclusion test.
+ * Published floor straights. Flat stake EV at mainMinEv (2%). A stale
+ * quote stays out. A -110 spread whose edge is 6% to 12% is not stale
+ * just because that edge is more than 12% EV.
  */
 function passesPublishFloor(c) {
   if (c && c.marginBiasExtreme) return false;
   const ev = Number(c && c.ev);
   const minEV = publishMinEv(c);
   if (!Number.isFinite(ev) || !(ev + 1e-12 >= minEV)) return false;
-  const maxEV = Number(config.GATES && config.GATES.maxEV);
-  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
+  if (stakeQuoteIsStale(c)) return false;
   return true;
 }
 
@@ -259,15 +259,15 @@ function isPregameRow(c) {
 }
 
 /**
- * Structural lean pool. Finite EV at or under the 12% stale cap, DraftKings
+ * Structural lean pool. Positive EV at or under the stale rule, DraftKings
  * or Hard Rock (or a synthetic with no ladder), and pregame. A non-positive
- * EV stays eligible for the last-resort fill. EV above maxEV is ev-stale
- * and is not a lean.
+ * EV is not a lean. EV above the stale rule is not a lean.
  */
 function eligibleForLeanPool(c) {
   if (c && c.marginBiasExtreme) return false;
   const ev = Number(c && c.ev);
-  if (!Number.isFinite(ev)) return false;
+  // A negative EV is not a lean. The last card bet Texas State -13.5 at -19.9%.
+  if (!(ev > 0)) return false;
   const maxEV = Number(config.GATES && config.GATES.maxEV);
   if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   if (!hasRetailLine(c)) return false;
@@ -332,12 +332,11 @@ function eligiblePairedFill(c) {
  * Top probability-edge rows, up to MAX_STRAIGHTS. Stake EV breaks a tie.
  * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
  * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
- * slots fill from positive-EV leans, then from any remaining pregame
- * lean sorted by EV, including a non-positive EV. If the card is still
- * short of 3, the open slots fill from same-line Pinnacle pairs that
- * missed the 1% tier, ranked by EV vs Pinnacle. One game. A lean is
- * tier 'lean' and the paired fill is flat LEAN_MAX_UNITS. ev-stale is
- * not a fill.
+ * slots fill from positive-EV leans. A non-positive EV stays off the card.
+ * If the card is still short of 3, the open slots fill from same-line
+ * Pinnacle pairs that missed the 1% tier, ranked by EV vs Pinnacle.
+ * One game. A lean is tier 'lean' and the paired fill is flat
+ * LEAN_MAX_UNITS. ev-stale is not a fill.
  */
 function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   const onePer = config.ONE_STRAIGHT_PER_GAME === true;
@@ -355,13 +354,6 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   for (const c of leans) {
     if (out.length >= maxN) break;
     if (!passesLeanFill(c)) continue;
-    if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
-    out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
-  }
-  if (out.length >= maxN) return out;
-  for (const c of leans) {
-    if (out.length >= maxN) break;
-    if (!eligibleForLeanPool(c)) continue;
     if (!claimStraight(c, onePer, usedGames, usedSides)) continue;
     out.push({ ...c, tier: 'lean', _score: finiteEv(c) });
   }

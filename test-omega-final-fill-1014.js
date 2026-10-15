@@ -132,11 +132,11 @@ assert.deepStrictEqual(filled.map((row) => row.tier), ['floor', 'lean', 'lean'])
 assert.ok(filled.every((row) => passesPublishFloor(row) || row.tier === 'lean'));
 
 const lastResort = selectStraights([floorOnly], 3, [posHigh, zero, neg, staleFill, otherBook]);
-assert.deepStrictEqual(lastResort.map((row) => row.side), ['B +3', 'D ML', 'H ML']);
-assert.deepStrictEqual(lastResort.map((row) => row.tier), ['floor', 'lean', 'lean']);
-assert.ok(!lastResort.some((row) => row.side === 'N ML' || row.side === 'L ML'));
+assert.deepStrictEqual(lastResort.map((row) => row.side), ['B +3', 'D ML']);
+assert.deepStrictEqual(lastResort.map((row) => row.tier), ['floor', 'lean']);
+assert.ok(!lastResort.some((row) => row.side === 'N ML' || row.side === 'L ML' || row.side === 'H ML' || row.side === 'J ML'));
 
-const leanPick = toPickObject(lastResort[2]);
+const leanPick = toPickObject(lastResort[1]);
 const floorPick = toPickObject(lastResort[0]);
 assert.strictEqual(leanPick.tier, 'lean');
 assert.strictEqual(leanPick.label, 'lean');

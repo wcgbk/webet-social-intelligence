@@ -1,6 +1,7 @@
 'use strict';
 
-const { americanToImplied } = require('./odds_math');
+const { americanToImplied, parseEdgeFraction } = require('./odds_math');
+const { GATES } = require('./config');
 
 /**
  * Odds-scaled minimum edge vs the de-vigged sharp fair price.
@@ -98,10 +99,31 @@ function mainMinEv(odds, base) {
   return +b.toFixed(6);
 }
 
+/**
+ * EV above 12% is a bad price. A minus number from -150 to -101 with a
+ * probability edge of 6% to 12% is the exception: at -110 that edge is
+ * already more than 12% EV, and it is the spread the projection is about.
+ * Edge above 12% stays stale at every price. Plus-money EV above 12% stays stale.
+ */
+function stakeQuoteIsStale(c) {
+  const maxEV = Number(GATES && GATES.maxEV);
+  const ev = Number(c && c.ev);
+  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+  if (Number.isFinite(edge) && edge > 0.12 + 1e-12) return true;
+  if (!Number.isFinite(ev) || !Number.isFinite(maxEV) || !(ev > maxEV + 1e-12)) return false;
+  const odds = Number(c && c.odds);
+  if (Number.isFinite(edge) && edge + 1e-12 >= 0.06 && edge <= 0.12 + 1e-12
+      && Number.isFinite(odds) && odds <= -101 && odds >= -150) {
+    return false;
+  }
+  return true;
+}
+
 module.exports = {
   EDGE_FLOOR,
   MAIN_EDGE_FLOOR,
   minEdgeFor,
   evBandMultiplier,
   mainMinEv,
+  stakeQuoteIsStale,
 };

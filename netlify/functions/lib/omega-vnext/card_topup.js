@@ -203,7 +203,7 @@ function classifyReserveRow(row) {
   }
   if (passesLeanFill(candidate)) return { kind: 'posLean', candidate };
   if (eligibleForLeanPool(candidate)) return { kind: 'anyLean', candidate };
-  if (row.tier === 'lean') return { kind: ev > 0 ? 'posLean' : 'anyLean', candidate };
+  if (row.tier === 'lean' && ev > 0) return { kind: 'posLean', candidate };
   return null;
 }
 

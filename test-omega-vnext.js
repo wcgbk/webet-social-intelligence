@@ -611,6 +611,27 @@ const fbHomeSpread = narrate.buildFallbackNarrative({
 assert.ok(/0\.8 points short/.test(fbHomeSpread), fbHomeSpread);
 assert.ok(!/26\.2/.test(fbHomeSpread), fbHomeSpread);
 
+const fbAwaySpread = narrate.buildFallbackNarrative({
+  pick: 'Georgia Southern Eagles -3.5',
+  side: 'Georgia Southern Eagles -3.5',
+  matchup: 'Georgia Southern Eagles @ Old Dominion Monarchs',
+  homeTeam: 'Old Dominion Monarchs',
+  awayTeam: 'Georgia Southern Eagles',
+  sport: 'NCAAF',
+  betType: 'Spread',
+  odds: '-110',
+  units: '1.5u',
+  rating: 'aplus',
+  edgePct: 0.101,
+  ev: 0.193,
+  coverProb: 0.625,
+  modelProjection: -8.59,
+  line: -3.5,
+});
+assert.ok(/projection is 8\.6/.test(fbAwaySpread), fbAwaySpread);
+assert.ok(/5\.1 points past/.test(fbAwaySpread), fbAwaySpread);
+assert.ok(!/short of/.test(fbAwaySpread), fbAwaySpread);
+
 const fbMl = narrate.buildFallbackNarrative({ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '+120', edgePct: '5.4%', steamToward: true });
 assertDeskCopy(fbMl, 'ml fallback', 4, 6);
 assert.ok(/\+120/.test(fbMl) && /Yankees ML/.test(fbMl));

@@ -199,7 +199,7 @@ assert.strictEqual(capped.parlayLegs[0].units, '0.5u');
 assert.strictEqual(capped.parlayLegs[0].label, 'combined EV not positive');
 assert.ok(!isNoQualifyingParlay(capped.parlayLegs[0]));
 
-// Edge is not an inclusion test. A short card fills positive EV, then any EV.
+// Edge is not an inclusion test. A short card fills positive EV only.
 const mainOk = { sport: 'NHL', odds: -110, ev: 0.04, edgePct: 0.04, uncertainty: 0.1, coverProb: 0.56, matchup: 'A @ B', side: 'B', book: 'draftkings' };
 const mainEvZero = { ...mainOk, ev: 0, matchup: 'C @ D', side: 'D' };
 const mainEdgeThin = { ...mainOk, edgePct: 0.02, ev: 0.04, matchup: 'E @ F', side: 'F' };
@@ -216,11 +216,11 @@ assert.strictEqual(qualifiesAsLean(leanOk), true);
 assert.strictEqual(qualifiesAsLean(leanEvZero), false);
 assert.strictEqual(qualifiesAsLean(leanEdgeThin), true);
 const picked = selectStraights([mainOk], 3, [leanEvZero, leanEdgeThin]);
-assert.strictEqual(picked.length, 3);
-assert.deepStrictEqual(picked.map((row) => row.tier), ['floor', 'lean', 'lean']);
-assert.deepStrictEqual(picked.map((row) => row.side), ['B', 'L', 'J']);
+assert.strictEqual(picked.length, 2);
+assert.deepStrictEqual(picked.map((row) => row.tier), ['floor', 'lean']);
+assert.deepStrictEqual(picked.map((row) => row.side), ['B', 'L']);
 const withLean = selectStraights([], 3, [leanOk, leanEvZero]);
-assert.strictEqual(withLean.length, 2);
+assert.strictEqual(withLean.length, 1);
 assert.ok(withLean.every((row) => row.tier === 'lean'));
 
 console.log('PASS test-omega-parlay-ev-gate');

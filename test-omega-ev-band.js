@@ -4,7 +4,8 @@ const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
 const { evBandMultiplier, mainMinEv } = require('./netlify/functions/lib/omega-vnext/edge_floor');
 const { gateReason, applyGates } = require('./netlify/functions/lib/omega-vnext/gates');
-const { passesPublishFloor, qualifiesAsLean } = require('./netlify/functions/lib/omega-vnext/select');
+const { passesPublishFloor, qualifiesAsLean, eligibleForLeanPool } = require('./netlify/functions/lib/omega-vnext/select');
+const { spreadDetail } = require('./netlify/functions/lib/omega-vnext/sports/_common');
 const { minEdgeClears, leanClears } = require('./netlify/functions/lib/omega-vnext/hr_autocorrect');
 const { requiredFloor } = require('./netlify/functions/lib/omega-vnext/shortfall');
 
@@ -53,6 +54,9 @@ assert.strictEqual(gateReason(side({ odds: -251, ev: 0.08, edgePct: 0.05 }), asO
 assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0.0 }), asOf), null);
 assert.strictEqual(gateReason(side({ ev: 0.1200001, edgePct: 0.04 }), asOf), 'ev-stale');
 assert.strictEqual(gateReason(side({ ev: 0.12, edgePct: 0.04 }), asOf), null);
+assert.strictEqual(gateReason(side({ odds: -110, ev: 0.144, edgePct: 0.075 }), asOf), null);
+assert.strictEqual(gateReason(side({ odds: -110, ev: 0.20, edgePct: 0.13 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ odds: 180, ev: 0.15, edgePct: 0.05 }), asOf), 'ev-stale');
 
 const leanRow = side({ odds: 180, ev: 0.019, edgePct: 0.0, coverProb: 0.40 });
 assert.strictEqual(passesPublishFloor(leanRow), false);
@@ -75,5 +79,10 @@ assert.strictEqual(leanClears({ ...hr, ev: 0.13 }), false);
 assert.strictEqual(requiredFloor({ sport: 'NFL', odds: 220 }, 'ev-floor'), 0.02);
 assert.strictEqual(requiredFloor({ sport: 'MLB', odds: -110 }, 'ev-floor'), 0.02);
 assert.strictEqual(requiredFloor({ sport: 'NFL', odds: 180 }, 'ev-stale'), 0.12);
+assert.strictEqual(eligibleForLeanPool(side({ ev: -0.199, edgePct: -0.109 })), false);
+assert.strictEqual(passesPublishFloor(side({ odds: -110, ev: 0.144, edgePct: 0.075 })), true);
+assert.strictEqual(passesPublishFloor(side({ odds: -110, ev: 0.20, edgePct: 0.04 })), false);
+const homeCover = spreadDetail(12.71, -13.5, 'NCAAF', 16, { distribution: 'normal' }).coverProb;
+assert.ok(homeCover > 0.47 && homeCover < 0.50, String(homeCover));
 
 console.log('test-omega-ev-band ok');

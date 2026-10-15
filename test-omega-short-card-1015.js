@@ -95,7 +95,7 @@ function legNames(parlayLegs) {
   return names(ticket && ticket.legs);
 }
 
-// --- selectStraights order over the reserve: floor, positive lean, any lean, paired ---
+// --- selectStraights order: floor, positive lean, paired. A zero EV does not fill. ---
 {
   const floor = cand(1, { ev: 0.05, edgePct: 0.04, side: 'Home1 +3' });
   const pos = cand(2, { ev: 0.015, edgePct: 0.005, side: 'Home2 +3' });
@@ -107,8 +107,9 @@ function legNames(parlayLegs) {
     sharpFairPriced: true,
   });
   const selected = selectStraights([floor], 3, [pos, zero], [paired]);
-  assert.deepStrictEqual(selected.map((row) => row.side), ['Home1 +3', 'Home2 +3', 'Home3 +3']);
+  assert.deepStrictEqual(selected.map((row) => row.side), ['Home1 +3', 'Home2 +3', 'Home4 +3']);
   assert.deepStrictEqual(selected.map((row) => row.tier), ['floor', 'lean', 'lean']);
+  assert.ok(!selected.some((row) => row.side === 'Home3 +3'));
 
   const reserve = buildReserve({
     yesPool: [floor],
@@ -116,23 +117,23 @@ function legNames(parlayLegs) {
     pairedPool: [paired],
     picks: [],
   });
-  assert.deepStrictEqual(names(reserve), ['Home1 +3', 'Home2 +3', 'Home3 +3', 'Home4 +3']);
-  assert.strictEqual(reserve[3].pairedFill, true);
+  assert.deepStrictEqual(names(reserve), ['Home1 +3', 'Home2 +3', 'Home4 +3']);
+  assert.strictEqual(reserve[2].pairedFill, true);
   const reserveSnap = JSON.stringify(reserve);
   const up = topUpStraights({ picks: [], reserve, blocked: [] });
   assert.strictEqual(JSON.stringify(reserve), reserveSnap, 'top-up does not mutate the reserve');
-  assert.deepStrictEqual(names(up.picks), ['Home1 +3', 'Home2 +3', 'Home3 +3']);
+  assert.deepStrictEqual(names(up.picks), ['Home1 +3', 'Home2 +3', 'Home4 +3']);
   assert.strictEqual(up.exhausted, false);
-  assert.ok(!hasName(up.picks, 'Home4'));
+  assert.ok(!hasName(up.picks, 'Home3'));
   assert.strictEqual(up.picks[0].tier, 'floor');
   assert.strictEqual(up.picks[1].tier, 'lean');
   assert.strictEqual(up.picks[1].units, '0.5u');
   assert.strictEqual(up.picks[2].units, '0.5u');
 
   const last = selectStraights([floor], 3, [zero], [paired]);
-  assert.deepStrictEqual(last.map((row) => row.side), ['Home1 +3', 'Home3 +3', 'Home4 +3']);
-  assert.strictEqual(last[2].pairedFill, true);
-  assert.strictEqual(last[2].tier, 'lean');
+  assert.deepStrictEqual(last.map((row) => row.side), ['Home1 +3', 'Home4 +3']);
+  assert.strictEqual(last[1].pairedFill, true);
+  assert.strictEqual(last[1].tier, 'lean');
   const reserve2 = buildReserve({
     yesPool: [floor],
     leanPool: [zero],
@@ -140,11 +141,11 @@ function legNames(parlayLegs) {
     picks: [],
   });
   const up2 = topUpStraights({ picks: [], reserve: reserve2, blocked: [] });
-  assert.deepStrictEqual(names(up2.picks), ['Home1 +3', 'Home3 +3', 'Home4 +3']);
-  assert.strictEqual(up2.picks[2].pairedFill, true);
-  assert.strictEqual(up2.picks[2].tier, 'lean');
-  assert.strictEqual(up2.picks[2].units, '0.5u');
-  assert.ok(paired.ev > zero.ev, 'paired EV is higher and still fills after the zero lean');
+  assert.deepStrictEqual(names(up2.picks), ['Home1 +3', 'Home4 +3']);
+  assert.strictEqual(up2.picks[1].pairedFill, true);
+  assert.strictEqual(up2.picks[1].tier, 'lean');
+  assert.strictEqual(up2.picks[1].units, '0.5u');
+  assert.ok(paired.ev > zero.ev);
 }
 
 // A blocked side never returns. A side already on the card is not added.

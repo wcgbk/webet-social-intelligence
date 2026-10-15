@@ -176,7 +176,12 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         noVigPinnacleImplied(bundles, b),
         NCAAF_MODEL_WEIGHT.ml,
       );
-      const modelPureP = pureFootballCover(detailAt, pts.modelMarginRaw, null);
+      const pureAt = (proj) => {
+        const q = mlDetail(proj, SPORT, spreadStd, { distribution: 'normal' });
+        if (isHome) return q;
+        return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
+      };
+      const modelPureP = pureFootballCover(pureAt, pts.modelMarginRaw, null);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, modelPureP, projMethod: methods.ml, uncertainty,
@@ -205,7 +210,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         noVigPinnacleImplied(bundles, b),
         NCAAF_MODEL_WEIGHT.spread,
       );
-      const modelPureP = pureFootballCover(detailAt, projRaw, b.point);
+      const pureAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd, { distribution: 'normal' });
+      const modelPureP = pureFootballCover(pureAt, projRaw, b.point);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,

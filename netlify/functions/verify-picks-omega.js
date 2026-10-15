@@ -1267,6 +1267,9 @@ async function updatePicksBlob(dateKey, picksData) {
 
 // ── Discord Alert ──
 async function postToDiscord(report, sharpResult) {
+  // PAUSED 2026-10-15 (Ben): all Discord posts off. QA/report still run. Flip to false to re-enable.
+  const DISCORD_POSTS_PAUSED = true;
+  if (DISCORD_POSTS_PAUSED) { console.log("[verify] Discord posts paused, skipping"); return; }
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) { console.log("[verify] No DISCORD_BOT_TOKEN, skipping alert"); return; }
 

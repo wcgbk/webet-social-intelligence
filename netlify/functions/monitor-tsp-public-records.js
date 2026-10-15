@@ -36,8 +36,9 @@ async function runMonitor() {
     digest.storeError = e.message;
   }
 
-  // Optional Discord — only if already configured
-  if (process.env.TSP_RESEARCH_DISCORD_WEBHOOK && process.env.TSP_RESEARCH_DISCORD_ENABLE === 'true') {
+  // Optional Discord — only if already configured. PAUSED 2026-10-15 (Ben): all Discord posts off.
+  const DISCORD_POSTS_PAUSED = true;
+  if (!DISCORD_POSTS_PAUSED && process.env.TSP_RESEARCH_DISCORD_WEBHOOK && process.env.TSP_RESEARCH_DISCORD_ENABLE === 'true') {
     try {
       const lines = (digest.feeds || [])
         .slice(0, 8)

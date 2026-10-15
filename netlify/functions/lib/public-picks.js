@@ -3,6 +3,7 @@
 // Kelly internals). Those are unused on /omega /nfl /cfb cards and dominate
 // TTFB + parse time. gapReview is the private model-vs-line flag list.
 // shortfall is the private "fewer than 3 straights / no 3-leg" debug list.
+// reserve is the private next-best straight list. It is not a public pick.
 // lateNews, voidedPregame, and audit stay on the stored card. The public
 // payload drops all three, and it omits void-pregame picks and parlay legs.
 // Premium Sharp Depth still comes from get-picks-premium.
@@ -34,6 +35,7 @@ const ROOT_DROP = [
   'health',
   'captureGate',
   'shortfall',
+  'reserve',
   'voidedPregame',
   'lateNews',
   'audit',

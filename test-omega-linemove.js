@@ -425,9 +425,11 @@ assert.ok(/shadow/.test(bgSrc));
   );
   assert.ok(/blockStraightRefill\s*=\s*true/.test(steamRegion), 'steam drop sets blockStraightRefill');
   assert.ok(
-    /Placeability soft-veto and adverse steam drops do not refill/.test(verifySrc),
-    'backfill comment gates placeability and steam'
+    /Placeability, late-news, and auto-fix drops refill from the private reserve up to 3/.test(verifySrc),
+    'placeability, late-news, and auto-fix drops refill from the private reserve'
   );
+  assert.ok(/Steam does not refill/.test(verifySrc), 'steam does not refill');
+  assert.ok(/A blocked side never returns/.test(verifySrc), 'a blocked side never returns');
   assert.ok(!/if\s*\(\s*!blockStraightRefill\s*&&/.test(verifySrc), 'straight refill is not a live branch');
   assert.ok(!/leg-parlay-verified/.test(verifySrc), 'verify must not stamp a rebuilt parlay');
   assert.strictEqual(
@@ -453,6 +455,39 @@ assert.ok(/shadow/.test(bgSrc));
     verify.straightRefillAllowed({ droppedSteam: 0, steamHardFails: 0, blockStraightRefill: false, cardLocked: false }),
     false,
     'verify does not invent a straight even if a caller marks the card unlocked'
+  );
+  assert.strictEqual(
+    verify.straightRefillAllowed({
+      droppedSteam: 0,
+      steamHardFails: 0,
+      blockStraightRefill: true,
+      straightCount: 2,
+      reserve: [{ pick: 'Eta -1', matchup: 'Eta @ Theta' }],
+    }),
+    true,
+    'a short card refills from the private reserve up to 3 even when blockStraightRefill is set'
+  );
+  assert.strictEqual(
+    verify.straightRefillAllowed({
+      droppedSteam: 0,
+      steamHardFails: 0,
+      blockStraightRefill: true,
+      straightCount: 2,
+      reserve: [],
+    }),
+    false,
+    'refill needs a reserve row'
+  );
+  assert.strictEqual(
+    verify.straightRefillAllowed({
+      droppedSteam: 0,
+      steamHardFails: 0,
+      blockStraightRefill: true,
+      straightCount: 3,
+      reserve: [{ pick: 'Eta -1' }],
+    }),
+    false,
+    'a full card does not refill'
   );
 
   const locked = [{

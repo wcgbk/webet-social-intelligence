@@ -40,6 +40,7 @@ const { logReviewFlags } = require('./pinnacle_flag');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
 const { awaitLiveCaptureGate } = require('./capture_gate');
 const { summaryStakeDisplay } = require('./odds_math');
+const { applyGenerateReserve } = require('./card_topup');
 
 const mlb = require('./sports/mlb');
 const nfl = require('./sports/nfl');
@@ -699,7 +700,7 @@ async function generateOmegaVnext(opts = {}) {
     });
     picks = narr.picks;
     if (narr.rejections && narr.rejections.length) {
-      console.log(`[omega-vnext] narrate rejections=${narr.rejections.length} — parlay stays the published straights`);
+      console.log(`[omega-vnext] narrate rejections=${narr.rejections.length} — reserve top-up runs after the cap`);
     }
     parlayLegs = straightParlay(picks);
   } else {
@@ -714,6 +715,30 @@ async function generateOmegaVnext(opts = {}) {
     const capped = applyDailyUnitCap(picks, parlayLegs);
     picks = capped.picks;
     parlayLegs = capped.parlayLegs;
+  }
+  // Narrate and hard-fail can leave the card short. Refill from the private
+  // reserve only. A full card keeps the parlay generate already priced.
+  const topUpBlocked = [].concat(hardFails || [], (narr && narr.rejections) || []);
+  const reserved = applyGenerateReserve({
+    picks,
+    yesPool,
+    leanPool: LEAN_PAD ? leanPool : [],
+    pairedPool: pairedFill,
+    blocked: topUpBlocked,
+    parlayPool,
+    hrNote: placement.note,
+    modelVersion: MODEL_VERSION,
+  });
+  let cardReserve = reserved.reserve;
+  let generateTopUps = reserved.topUps || [];
+  if (reserved.rebuilt) {
+    picks = reserved.picks;
+    parlayLegs = reserved.parlayLegs;
+    picks = attachClvFields(picks, MODEL_VERSION, dateISO);
+    parlayLegs = attachClvToParlay(parlayLegs, MODEL_VERSION, dateISO);
+    if (generateTopUps.length) {
+      console.log(`[omega-vnext] reserve top-up=${generateTopUps.length}: ${generateTopUps.map((t) => t.pick).join(', ')}`);
+    }
   }
   picks = sortByGradeThenUnits(picks);
 
@@ -815,6 +840,7 @@ async function generateOmegaVnext(opts = {}) {
       modelVersion: MODEL_VERSION,
       qaHardFails: hardFails.length,
       cardLabel: straightCardLabel(picks),
+      ...(generateTopUps.length ? { topUps: generateTopUps } : {}),
     },
     generatedAt: now.toISOString(),
     publishAt: (() => {
@@ -833,6 +859,9 @@ async function generateOmegaVnext(opts = {}) {
       yesPool,
       rejected,
     }),
+    // Private. Next-best straights not on the card, selectStraights order.
+    // publicPicksPayload drops reserve. It does not change selection.
+    reserve: cardReserve,
     sgps: [],
     claudeVerified: !!narr.claudeVerified,
     fallback: false,

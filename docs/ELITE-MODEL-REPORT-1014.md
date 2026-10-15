@@ -77,21 +77,31 @@ No tier or sport split is on that results payload. Pure-model profit, ROI, and C
 
 Held-out replay on stored Supabase history before any further weight, calibration, Kelly, stale-cap, odds-band, or parlay change. A change ships only if held-out profit and ROI beat this card's model.
 
-## 2026-10-15 — empty card, not deployed
+## 2026-10-15 — empty card restored and republished
 
 Live site at 1:09 PM ET was still `v12.4.0-webetai-pure` and the 2026-10-15 Omega card had 0 picks, generated `2026-10-15T16:07:55Z` (12:07 PM ET), after the 11:00 ET finalization. Capture health was fine: slots 0300 and 1000 present, 17 games (MLB 2, NFL 1, NCAAF 3, NHL 11). NBA is preseason and correctly off the card.
 
 `/api/get-omega-health` showed `yes=0` in every sport. The best leftovers were NHL overs at +105 with stake EV 6.6–8.1% rejected as `ev-stale` (anchor cap 6%) and the rest rejected as `no-edge-vs-fair` with displayed edge 0. `OMEGA_MARKET_ANCHOR=1` blends the model into the Pinnacle no-vig (K floor 0.7), ranks edge against that fair, cuts max EV from 12% to 6%, and turns lean fill off. That violates brief rules 1 and 5 and is why the card was empty.
 
-Code change, local only, not pushed:
+Fix is on `main` as `6bf85f581f23cfb28198f2b8a73bef9777651c7c`. Netlify production deploy `6ad10d05095ad7a2b5d3655a` was ready at `2026-10-15T17:27:33Z`.
 
 - `marketAnchorOn()` always returns false. The env flag cannot re-enable the blend.
 - The Pinnacle selection gates `no-edge-vs-fair`, `edge-floor-vs-fair`, and `sharp-move-against` are removed. Pinnacle stays a CLV input.
-- Morning cron times are unchanged. Today's published card is not regenerated.
+- Morning cron times are unchanged.
 
-Owner asked on 2026-10-15 to deploy this restore and rebuild today's live card. The 10:00 ET board is already stored (17 events). The rebuild prices that board. It does not make a new Odds API pull. X autopost stays off.
+Owner asked to rebuild today's card on that deploy. `POST {"date":"2026-10-15","force":true}` to `generate-picks-omega-background` returned 202 at `2026-10-15T17:30:36Z` (request `01M509VA8G60KGRB2MXEJ2XBVR`). The run priced the stored 10:00 ET board (`priceLock.note` is `stored-10:00`, served `2026-10-15T14:01:04Z`). No new Odds API pull. X autopost stayed off. The written card still has slots 0300 and 1000 and `hardFail` false.
 
-As-of-now dry run (`pregameAsOfMs` = wall clock, stored 10:00 board, no write): 3 straights and a 3-leg parlay, `hardFails=0`. Six already-started rows were dropped. The card was Islanders ML +130 (5.2%, 1.5u), Seahawks @ Broncos Under 40.5 −102 (5.2%, 1.5u), Maple Leafs −1.5 +200 (4.0%, 1u), parlay 0.5u at +1266. All three start tonight.
+Public card from `GET /api/get-picks-omega`, `generatedAt` `2026-10-15T17:30:37.503Z`. `modelNotes` starts with the sentence that `OMEGA_MARKET_ANCHOR` is ignored. `qaHardFails` is empty. Label is `3 floor straights`. Straights are 4.5u ($675). The parlay is 0.5u because the card has floor grades.
+
+| Pick | Sport | Matchup | Book | Odds | Edge | EV | Grade | Units | Start |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| New York Islanders ML | NHL | Islanders @ Senators | DraftKings | +130 | 5.2% | 12.0% | A+ | 1.5u | 7:10 PM ET |
+| Under 40.5 | NFL | Seahawks @ Broncos | DraftKings | −102 | 5.2% | 10.3% | A+ | 1.5u | 8:15 PM ET |
+| Toronto Maple Leafs −1.5 | NHL | Sabres @ Maple Leafs | DraftKings | +200 | 4.0% | 11.9% | A | 1u | 7:10 PM ET |
+
+Parlay is those three legs, type `3-leg-parlay`, combined +1266, EV 38.2%, 0.5u, $75 to win $950, three distinct games.
+
+As-of-now dry run before the POST (`pregameAsOfMs` = wall clock, stored 10:00 board, no write) printed the same three sides and the same parlay, `hardFails=0`. Six already-started rows were dropped. All three published games start tonight.
 
 Local QA before that request:
 
@@ -108,4 +118,4 @@ Published Omega KPIs at the same check, from `/api/get-results-omega`. Profit is
 | October 2026 | 15–19 | −$1,300 | −21.1% | 1–11 | |
 | Last 7 days | 6–9 | −$796 | −33.1% | 0–5 | |
 
-The lifetime book is near the 55% / 15% / 20% parlay marks because of the March–July legacy run. The live Omega window is not. A calibration or stake change still needs a held-out replay that beats this pure-model policy before it ships. This anchor rollback is a rule restore, not a new weight. It ships only after the 10/14 dry run is 3 straights plus a 3-leg parlay and `test-omega-*.js` / `test-sharp-*.js` pass.
+The lifetime book is near the 55% / 15% / 20% parlay marks because of the March–July legacy run. The live Omega window is not. This anchor rollback is a rule restore, not a new weight, and it is the card above. A calibration or stake change still needs a held-out replay that beats this pure-model policy before it ships.

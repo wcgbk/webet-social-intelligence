@@ -525,9 +525,11 @@ function toPickObject(c, opts = {}) {
     source: 'omega-vnext',
     p_model: c.p_model != null ? +Number(c.p_model).toFixed(4) : null,
     p_cal: c.coverProb != null && Number.isFinite(Number(c.coverProb)) ? +Number(c.coverProb).toFixed(4) : null,
-    modelProjection: c.modelProjection != null && Number.isFinite(Number(c.modelProjection))
-      ? +Number(c.modelProjection).toFixed(2)
-      : null,
+    modelProjection: c.betProjection != null && Number.isFinite(Number(c.betProjection))
+      ? +Number(c.betProjection).toFixed(2)
+      : (c.modelProjection != null && Number.isFinite(Number(c.modelProjection))
+        ? +Number(c.modelProjection).toFixed(2)
+        : null),
     fair_sharp_p: c.fair_sharp_p != null ? +Number(c.fair_sharp_p).toFixed(4) : null,
     predictedClv: c.predictedClv,
     modelVersion: opts.modelVersion,

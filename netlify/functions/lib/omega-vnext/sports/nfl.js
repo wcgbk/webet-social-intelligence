@@ -18,7 +18,7 @@
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity, bindEspnGameByTeamAndTime,
   spreadDetail, totalDetail, mlDetail,
-  sharpMarketLine, footballPointState, footballAudit, pricedFootball, pureFootballCover,
+  sharpMarketLine, footballPointState, footballAudit, pricedFootball, pureFootballCover, pureForecastPoint,
   nflSpreadExcludesGame,
 } = require('./_common');
 const { footballProjection, applyEngineStack } = require('./epa');
@@ -199,11 +199,12 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         if (isHome) return q;
         return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
       };
-      const modelPureP = pureFootballCover(pureAt, pts.modelMarginRaw, null);
+      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, 0.5);
+      const modelPureP = pureFootballCover(pureAt, isHome ? homeForecast : -homeForecast, null);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, modelPureP, projMethod: methods.ml, uncertainty,
-        consensusLine: null, modelProjection: +modelMargin.toFixed(2),
+        consensusLine: null, modelProjection: +modelMargin.toFixed(2), betProjection: homeForecast,
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Moneyline'),
@@ -228,12 +229,13 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         0.5,
       );
       const pureAt = (proj, line) => spreadDetail(proj, line, SPORT, undefined, { distribution: 'normal' });
-      const modelPureP = pureFootballCover(pureAt, projRaw, b.point);
+      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, 0.5);
+      const modelPureP = pureFootballCover(pureAt, isHome ? homeForecast : -homeForecast, b.point);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line: b.point, modelRawP: priced.p, modelPureP, projMethod: methods.spread, uncertainty,
-        consensusLine: b.point, modelProjection: +modelMargin.toFixed(2),
+        consensusLine: b.point, modelProjection: +modelMargin.toFixed(2), betProjection: homeForecast,
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Spread'),
@@ -255,12 +257,13 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         noVigPinnacleImplied(bundles, b),
         NFL_TOTAL_MODEL_WEIGHT,
       );
-      const modelPureP = pureFootballCover(detailAt, pts.modelTotalRaw, b.point);
+      const totalForecast = pureForecastPoint(pts.modelTotalRaw, pts.marketTotal, NFL_TOTAL_MODEL_WEIGHT);
+      const modelPureP = pureFootballCover(detailAt, totalForecast, b.point);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p, modelPureP,
         projMethod: methods.total, uncertainty: uncertainty + env.totalUncBump,
-        consensusLine: b.point, modelProjection: +modelTotal.toFixed(2),
+        consensusLine: b.point, modelProjection: +modelTotal.toFixed(2), betProjection: totalForecast,
         gameDay: gameDayMeta,
         engineSoft,
         ...footballAudit(pts, 'Total'),

@@ -9,7 +9,7 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const nfl = require(path.join(root, 'sports/nfl'));
-const { blendWithMarket, totalDetail, spreadDetail } = require(path.join(root, 'sports/_common'));
+const { blendWithMarket, totalDetail, spreadDetail, pureForecastPoint } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 0.10);
@@ -77,5 +77,12 @@ assert.ok(Math.abs(over.modelRawP - blendAt(over, 0.10)) < 1e-9, `total ${over.m
 assert.ok(Math.abs(over.modelRawP - blendAt(over, 0.45)) > 1e-3, 'NFL total must not stay on 0.45');
 assert.ok(Math.abs(homeSpread.modelRawP - blendAt(homeSpread, 0.5)) < 1e-9, `spread ${homeSpread.modelRawP}`);
 assert.ok(Math.abs(homeSpread.modelRawP - blendAt(homeSpread, 0.10)) > 1e-3, 'NFL spread must stay on 0.5');
+
+const totalForecast = pureForecastPoint(over.modelTotalRaw, over.marketLine, 0.10);
+assert.strictEqual(over.betProjection, totalForecast);
+assert.ok(Math.abs(over.modelPureP - totalDetail(totalForecast, over.line, 'Over', 'NFL').coverProb) < 1e-9);
+const spreadForecast = pureForecastPoint(homeSpread.modelMarginRaw, homeSpread.marketLine == null ? null : -homeSpread.marketLine, 0.5);
+assert.strictEqual(homeSpread.betProjection, spreadForecast);
+assert.ok(Math.abs(homeSpread.modelPureP - spreadDetail(spreadForecast, homeSpread.line, 'NFL', undefined, { distribution: 'normal' }).coverProb) < 1e-9);
 
 console.log('PASS test-omega-nfl-total-weight');

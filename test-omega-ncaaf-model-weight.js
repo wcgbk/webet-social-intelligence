@@ -9,7 +9,7 @@ const path = require('path');
 const root = path.join(__dirname, 'netlify/functions/lib/omega-vnext');
 const config = require(path.join(root, 'config'));
 const cfb = require(path.join(root, 'sports/cfb'));
-const { blendWithMarket, totalDetail, spreadDetail, mlDetail } = require(path.join(root, 'sports/_common'));
+const { blendWithMarket, totalDetail, spreadDetail, mlDetail, pureForecastPoint } = require(path.join(root, 'sports/_common'));
 const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.deepStrictEqual(config.NCAAF_MODEL_WEIGHT, { ml: 0.10, spread: 0.10, total: 0.10 });
@@ -83,5 +83,36 @@ assert.ok(Math.abs(homeSpread.modelRawP - blendAt(homeSpread, 0.10)) < 1e-9, `sp
 assert.ok(Math.abs(homeSpread.modelRawP - blendAt(homeSpread, 0.45)) > 1e-3, 'NCAAF spread must not stay on 0.45');
 assert.ok(Math.abs(homeMl.modelRawP - blendAt(homeMl, 0.10)) < 1e-9, `ml ${homeMl.modelRawP}`);
 assert.ok(Math.abs(homeMl.modelRawP - blendAt(homeMl, 0.45)) > 1e-3, 'NCAAF moneyline must not stay on 0.45');
+
+function pureAtRow(c) {
+  const weight = 0.10;
+  const forecast = c.market === 'Total'
+    ? pureForecastPoint(c.modelTotalRaw, c.marketLine, weight)
+    : pureForecastPoint(c.modelMarginRaw, c.marketLine == null ? null : -c.marketLine, weight);
+  assert.strictEqual(c.betProjection, forecast, `${c.market} forecast`);
+  assert.notStrictEqual(c.modelProjection, c.betProjection, `${c.market} raw rating stays on modelProjection`);
+  const detail = c.market === 'Total'
+    ? totalDetail(forecast, c.line, 'Over', 'NCAAF')
+    : c.market === 'Spread'
+      ? spreadDetail(forecast, c.line, 'NCAAF', undefined, { distribution: 'normal' })
+      : mlDetail(forecast, 'NCAAF', undefined, { distribution: 'normal' });
+  assert.ok(Math.abs(c.modelPureP - detail.coverProb) < 1e-9, `${c.market} pure ${c.modelPureP}`);
+  const rawDetail = c.market === 'Total'
+    ? totalDetail(c.modelTotalRaw, c.line, 'Over', 'NCAAF')
+    : c.market === 'Spread'
+      ? spreadDetail(c.modelMarginRaw, c.line, 'NCAAF', undefined, { distribution: 'normal' })
+      : mlDetail(c.modelMarginRaw, 'NCAAF', undefined, { distribution: 'normal' });
+  assert.ok(Math.abs(c.modelPureP - rawDetail.coverProb) > 0.05, `${c.market} must not bet the raw rating`);
+}
+pureAtRow(over);
+pureAtRow(homeSpread);
+pureAtRow(homeMl);
+
+// Georgia Southern rating from the 10:00 board: home margin -8.59, market -3.5.
+const gsHome = pureForecastPoint(-8.5902, -3.5, 0.10);
+assert.strictEqual(gsHome, -4.009);
+const gsCover = spreadDetail(-gsHome, -3.5, 'NCAAF', undefined, { distribution: 'normal' }).coverProb;
+assert.ok(gsCover > 0.50 && gsCover < 0.53, `GS cover ${gsCover}`);
+assert.ok(Math.abs(gsCover - 0.6248) > 0.08, 'GS is not a 62.5% bet');
 
 console.log('PASS test-omega-ncaaf-model-weight');

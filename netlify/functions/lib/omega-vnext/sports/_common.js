@@ -738,8 +738,21 @@ function footballPushMass(detailAt, projRaw, projShrunk, line, anchor, weight) {
 }
 
 /**
- * Cover probability from the sport projection alone, at the bet line.
- * No point-shrink toward the sharp number and no no-vig blend.
+ * Point forecast the pure card prices. The replay weight is the share of
+ * the raw rating that beat the close: forecast = line + weight*(raw − line).
+ * A missing line leaves the raw rating. This is not a no-vig blend. The
+ * cover probability is still the normal curve of this point, and the edge
+ * is that probability minus the bet price.
+ */
+function pureForecastPoint(raw, market, weight) {
+  const model = Number(raw);
+  if (!Number.isFinite(model)) return null;
+  return round4(shrinkTowardMarketLine(model, Number(market), weight));
+}
+
+/**
+ * Cover probability from one point forecast, at the bet line.
+ * The caller passes the forecast. This function does not blend a no-vig price.
  */
 function pureFootballCover(detailAt, projRaw, line) {
   if (typeof detailAt !== 'function') return null;
@@ -793,6 +806,7 @@ module.exports = {
   mlFromSpread,
   footballPushMass,
   pricedFootball,
+  pureForecastPoint,
   pureFootballCover,
   blendWithMarket,
   mapGamesSoft,

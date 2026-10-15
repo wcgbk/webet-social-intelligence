@@ -67,6 +67,24 @@ assert.strictEqual(shown.coverProb, '48.7%');
 assert.strictEqual(shown.edge, '5.2%');
 assert.strictEqual(shown.ev, '12.0%');
 
+const total = toPickObject({
+  sport: 'NCAAF',
+  matchup: 'Colorado State Rams @ Texas State Bobcats',
+  side: 'Over 69.5',
+  market: 'Total',
+  odds: -105,
+  coverProb: 0.5235,
+  ev: 0.02207,
+  edgePct: 0.0113,
+  pureModelPriced: true,
+  line: 69.5,
+  homeTeam: 'Texas State Bobcats',
+  awayTeam: 'Colorado State Rams',
+});
+assert.strictEqual(total.winProbability, '52.3%');
+assert.strictEqual(total.edge, '1.1%');
+assert.strictEqual(total.ev, '2.1%');
+
 const hi = { sport: 'NCAAF', matchup: 'A @ B', side: 'B', ev: 0.03, edgePct: 0.05, coverProb: 0.69, odds: -180 };
 const lo = { sport: 'NCAAF', matchup: 'C @ D', side: 'D', ev: 0.08, edgePct: 0.02, coverProb: 0.4, odds: 180 };
 assert.strictEqual(orderedByScore([lo, hi])[0].side, 'B');

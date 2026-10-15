@@ -9,7 +9,7 @@ const {
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = config;
 const {
-  ratingToConfidence, formatAmerican,
+  ratingToConfidence, formatAmerican, americanToImplied, americanToDecimal,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
   gradeStakeUnits, cardHasFullGrade, formatGameTimeET, stakeDollars, toWinDollars,
@@ -461,7 +461,24 @@ function toPickObject(c, opts = {}) {
   // Letter bands are that edge alone. CLV does not move the grade.
   // Older rows keep the model edge plus the small CLV nudge.
   const edgeFrac = parseEdgeFraction(c.edgePct);
-  const edgePctStr = formatEdgePct(edgeFrac) || '0.0%';
+  // The page prints the win rate to one decimal. When the stored edge or EV
+  // is that same probability at this price, print the one-decimal version.
+  // 52.3% at -105 is 1.1% and 2.1%. A stored edge that is not cover minus
+  // the price stays as stored.
+  const fullCover = Number(c.coverProb);
+  const shownCover = Number.isFinite(fullCover)
+    ? Number((fullCover * 100).toFixed(1)) / 100
+    : null;
+  const price = Number(c.odds);
+  const canPrice = shownCover != null && Number.isFinite(price);
+  const fullImplied = canPrice ? americanToImplied(price) : null;
+  const shownDecimal = canPrice ? americanToDecimal(price) : null;
+  const fullEdge = canPrice ? fullCover - fullImplied : null;
+  const shownEdge = canPrice ? shownCover - fullImplied : null;
+  const edgeFromShown = fullEdge != null && shownEdge != null
+    && Number.isFinite(edgeFrac) && Math.abs(edgeFrac - fullEdge) <= 0.0005;
+  const displayEdge = edgeFromShown ? shownEdge : edgeFrac;
+  const edgePctStr = formatEdgePct(displayEdge) || '0.0%';
   const gradeOnEdge = sharp || pure;
   const qualityClv = gradeOnEdge ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
@@ -478,8 +495,12 @@ function toPickObject(c, opts = {}) {
     if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
   }
   const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
-  const evNum = Number.isFinite(evParsed) ? evParsed : null;
-  const evStr = evNum == null ? null : formatEdgePct(evNum);
+  const fullEv = canPrice ? (fullCover * shownDecimal) - 1 : null;
+  const shownEv = canPrice ? (shownCover * shownDecimal) - 1 : null;
+  const evFromShown = edgeFromShown && fullEv != null && shownEv != null
+    && Number.isFinite(evParsed) && Math.abs(evParsed - fullEv) <= 0.0005;
+  const evNum = evFromShown ? shownEv : (Number.isFinite(evParsed) ? evParsed : null);
+  const evStr = evNum == null || !Number.isFinite(evNum) ? null : formatEdgePct(evNum);
   const dataReviewFlag = reviewFlag(c);
 
   const isML = /moneyline/i.test(c.market || '');

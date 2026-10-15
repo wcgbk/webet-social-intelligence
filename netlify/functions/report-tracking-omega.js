@@ -28,6 +28,34 @@ const tracking = require('./lib/tracking-report');
 const clvJob = require('./report-clv-omega');
 const { buildResultKpis } = require('./lib/omega-vnext/result_kpis');
 
+const config = require('./lib/omega-vnext/config');
+
+/**
+ * Live code version for the row: the day's card model field when the card
+ * exists, else the deployed config MODEL_VERSION (9:15 runs before the card).
+ */
+async function readLiveVersion(asOf, src) {
+  if (src && src.liveVersion) return { live: String(src.liveVersion), from: 'override' };
+  try {
+    const readPicks = (src && src.readPicks) || ((d) => store.readPicks(d));
+    const card = await readPicks(asOf);
+    const fromCard = card && (card.model || card.modelVersion);
+    if (fromCard && /^v\d/.test(String(fromCard))) return { live: String(fromCard), from: 'card' };
+  } catch (e) {
+    console.error(`[report-tracking-omega] card read: ${e.message}`);
+  }
+  return { live: config.MODEL_VERSION, from: 'config' };
+}
+
+function aggregateDaysFn(src) {
+  if (src && typeof src.aggregateDays === 'function') return src.aggregateDays;
+  try {
+    return require('./get-results-omega')._test.aggregateDays;
+  } catch (_) {
+    return null;
+  }
+}
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const SCORES = require('../../data/engineering-scores.json');
 
@@ -180,12 +208,19 @@ async function runTrackingReport(opts) {
   const previousRows = Array.isArray(src.previousRows)
     ? src.previousRows
     : await readPreviousRows(read);
+  const liveVersion = await readLiveVersion(asOf, src);
+  const clvRows = Array.isArray(src.clvRows) ? src.clvRows : clvBundle.rows;
   const row = tracking.buildDayRow({
     date: asOf,
     entries,
     results,
     clvReport,
+    clvRows,
+    previousRows,
+    liveVersion: liveVersion.live,
+    aggregateDays: aggregateDaysFn(src),
   });
+  row.version.from = liveVersion.from;
   const index = tracking.buildIndex({
     row,
     previousRows,
@@ -287,6 +322,9 @@ async function handle(event, now, deps) {
       results: deps && deps.results,
       clvReport: deps && deps.clvReport,
       previousRows: deps && deps.previousRows,
+      liveVersion: deps && deps.liveVersion,
+      readPicks: deps && deps.readPicks,
+      clvRows: deps && deps.clvRows,
       readResultsCache: deps && deps.readResultsCache,
       invokeResults: deps && deps.invokeResults,
       seedRows: deps && deps.seedRows,

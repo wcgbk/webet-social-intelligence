@@ -44,7 +44,10 @@ assert.ok(page.includes('class="day-row"'));
 assert.ok(page.includes('Engineering'));
 assert.ok(page.includes('Track record'));
 assert.ok(page.includes('Closing line'));
-assert.ok(page.includes('Edge (overall, all versions)'));
+assert.ok(page.includes('Edge (all-time)'));
+assert.ok(page.includes('Current version'));
+assert.ok(page.includes('All evaluated bets'));
+assert.ok(page.includes('STALE'));
 assert.ok(page.includes('Omega'));
 assert.ok(page.includes('−2pp or lower is the 20th'));
 assert.ok(page.includes('+3pp or higher is the 95th'));
@@ -248,6 +251,8 @@ const scoreFile = {
     entries: scores.entries,
     results: kpi,
     clvReport,
+    clvRows: clvSeed.rows,
+    liveVersion: 'v12.3.38-omega-vnext-price-lock',
     generatedAt: snapshot.generatedAt,
     updatedAtEt: snapshot.updatedAtEt,
   });
@@ -267,15 +272,95 @@ const scoreFile = {
   assert.strictEqual(row.omega.kpi.roi, '3.1%');
   assert.strictEqual(row.omega.kpi.profitDollars, 304);
   assert.strictEqual(row.omega.kpi.profitUnits, 2.03);
-  assert.strictEqual(row.edge.clv.avgClvPp, 0.18);
-  assert.strictEqual(row.edge.clv.beatClosePct, 44.2);
-  assert.strictEqual(row.edge.clv.percentile, 54.5);
-  assert.strictEqual(row.omega.clv.avgClvPp, 0.17);
-  assert.strictEqual(row.omega.clv.beatClosePct, 44.2);
-  assert.strictEqual(row.omega.clv.percentile, 54.3);
+  // Headline: published straights. Edge = Alpha <= 9/21 + Omega >= 9/22.
+  assert.strictEqual(row.edge.clv.basis, 'published-straights');
+  assert.strictEqual(row.edge.clv.n, 293);
+  assert.strictEqual(row.edge.clv.avgClvPp, 0.24);
+  assert.strictEqual(row.edge.clv.beatClosePct, 44.7);
+  assert.strictEqual(row.edge.clv.percentile, 56);
+  assert.strictEqual(row.omega.clv.n, 47);
+  assert.strictEqual(row.omega.clv.avgClvPp, 0.54);
+  assert.strictEqual(row.omega.clv.beatClosePct, 48.9);
+  assert.strictEqual(row.omega.clv.percentile, 63.5);
+  assert.strictEqual(row.omega.clv.parlay.available, false);
+  // Secondary: every evaluated bet (ledger totals).
+  assert.strictEqual(row.edge.clvAll.avgClvPp, 0.18);
+  assert.strictEqual(row.edge.clvAll.beatClosePct, 44.2);
+  assert.strictEqual(row.edge.clvAll.percentile, 54.5);
+  assert.strictEqual(row.omega.clvAll.avgClvPp, 0.17);
+  assert.strictEqual(row.omega.clvAll.percentile, 54.3);
+  assert.strictEqual(row.version.live, 'v12.3.38-omega-vnext-price-lock');
+  assert.strictEqual(row.edge.engineering.stale, false);
   assert.strictEqual(snapshot.dollarPerUnit, 150);
   assert.strictEqual(snapshot.displayOnly, true);
   assert.strictEqual(snapshot.applied, false);
+}
+
+// v12.4.0 tracking: whole numbers, versions, stale engineering, current-version totals.
+{
+  assert.strictEqual(tracking.wholeAway(15.2), 16);
+  assert.strictEqual(tracking.wholeAway(-0.98), -1);
+  assert.strictEqual(tracking.wholeAway(-1.2), -2);
+  assert.strictEqual(tracking.wholeAway(0), 0);
+  assert.strictEqual(tracking.wholeAway(3), 3);
+  assert.strictEqual(tracking.wholeAway(null), null);
+
+  const v1 = tracking.resolveVersion([], '2026-10-14', 'v12.4.0-webetai-pure');
+  assert.deepStrictEqual(v1, { live: 'v12.4.0-webetai-pure', since: '2026-10-14', previous: null, changed: false });
+  const prior = [{ date: '2026-10-13', version: { live: 'v12.3.69-x', since: '2026-10-13' } }];
+  const v2 = tracking.resolveVersion(prior, '2026-10-14', 'v12.4.0-webetai-pure');
+  assert.strictEqual(v2.changed, true);
+  assert.strictEqual(v2.previous, 'v12.3.69-x');
+  const v3 = tracking.resolveVersion([{ date: '2026-10-14', version: v1 }], '2026-10-15', 'v12.4.0-webetai-pure');
+  assert.strictEqual(v3.since, '2026-10-14');
+  assert.strictEqual(v3.changed, false);
+  const v4 = tracking.resolveVersion([], '2026-10-20', 'v12.9.9-new');
+  assert.strictEqual(v4.since, '2026-10-20');
+
+  const rows = [
+    { source: 'alpha', kind: 'pick', date: '2026-09-21', clvPp: 1, beatClose: true },
+    { source: 'alpha', kind: 'pick', date: '2026-10-01', clvPp: 9, beatClose: true },
+    { source: 'omega', kind: 'pick', date: '2026-09-10', clvPp: 9, beatClose: true },
+    { source: 'omega', kind: 'pick', date: '2026-09-22', clvPp: -1, beatClose: false },
+    { source: 'omega', kind: 'candidate', date: '2026-09-23', clvPp: 9, beatClose: true },
+    { source: 'omega', kind: 'pick', date: '2026-10-14', clvPp: 2, beatClose: true },
+    { source: 'omega', kind: 'pick', date: '2026-10-15', clvPp: 5, beatClose: true },
+  ];
+  const pub = tracking.clvPublishedFromRows(rows, { asOf: '2026-10-14', versionSince: '2026-10-14' });
+  assert.strictEqual(pub.edge.n, 3);
+  assert.strictEqual(pub.edge.avgClvPp, 0.67);
+  assert.strictEqual(pub.omega.n, 2);
+  assert.strictEqual(pub.omega.avgClvPp, 0.5);
+  assert.strictEqual(pub.omega.beatClosePct, 50);
+  assert.strictEqual(pub.current.n, 1);
+  assert.strictEqual(pub.current.avgClvPp, 2);
+  assert.strictEqual(pub.current.percentile, 85);
+  assert.strictEqual(pub.edge.parlay.available, false);
+
+  const eng = tracking.carryEngineering([{ date: '2026-10-12', edge: { processes: 1, architecture: 1, math: 1, overall: 1 } }], '2026-10-14', 'edge', '2026-10-14');
+  assert.strictEqual(eng.scoredOn, '2026-10-12');
+  assert.strictEqual(eng.stale, true);
+  const fresh = tracking.carryEngineering([{ date: '2026-10-14', edge: { processes: 1, architecture: 1, math: 1, overall: 1 } }], '2026-10-14', 'edge', '2026-10-14');
+  assert.strictEqual(fresh.stale, false);
+
+  const fakeAgg = (list) => ({
+    cumulative: { wins: list.length, losses: 0, pushes: 0, pending: 0, roi: '10.0%', totalProfit: 15 * list.length },
+    straight: { wins: list.length, losses: 0, accuracy: '100.0%' },
+  });
+  const days = [{ date: '2026-10-13', source: 'omega' }, { date: '2026-10-14', source: 'omega' }, { date: '2026-10-15', source: 'omega' }];
+  const cur = tracking.currentKpi(days, '2026-10-14', '2026-10-16', fakeAgg);
+  assert.strictEqual(cur.wins, 2);
+  const sameDay = tracking.currentKpi(days, '2026-10-14', '2026-10-14', fakeAgg);
+  assert.strictEqual(sameDay.wins, 0);
+
+  // Current-version delta only within one version.
+  const idx = tracking.applyDeltas([
+    { date: '2026-10-13', version: { live: 'a' }, edge: {}, omega: {}, current: { kpi: { wins: 1 } } },
+    { date: '2026-10-14', version: { live: 'b' }, edge: {}, omega: {}, current: { kpi: { wins: 0 } } },
+    { date: '2026-10-15', version: { live: 'b' }, edge: {}, omega: {}, current: { kpi: { wins: 2 } } },
+  ]);
+  assert.strictEqual(idx[1].delta.current.kpi.wins, null);
+  assert.strictEqual(idx[2].delta.current.kpi.wins, 2);
 }
 
 function scheduler(body) {

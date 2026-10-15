@@ -1,0 +1,702 @@
+{
+  "schema": "omega-tracking-v1",
+  "observerOnly": true,
+  "displayOnly": true,
+  "applied": false,
+  "asOf": "2026-10-14",
+  "generatedAt": "2026-10-15T00:18:09.923Z",
+  "updatedAtEt": "Preview — Oct 14, 2026 (not live)",
+  "dollarPerUnit": 150,
+  "clvPercentileScale": [
+    {
+      "avgClvPp": -2,
+      "percentile": 20
+    },
+    {
+      "avgClvPp": -1,
+      "percentile": 35
+    },
+    {
+      "avgClvPp": 0,
+      "percentile": 50
+    },
+    {
+      "avgClvPp": 1,
+      "percentile": 75
+    },
+    {
+      "avgClvPp": 2,
+      "percentile": 85
+    },
+    {
+      "avgClvPp": 3,
+      "percentile": 95
+    }
+  ],
+  "rows": [
+    {
+      "date": "2026-10-12",
+      "edge": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": false,
+          "stale": false
+        },
+        "kpi": {
+          "wins": 289,
+          "losses": 247,
+          "pushes": 18,
+          "record": "289-247-18",
+          "accuracyPct": 53.9,
+          "accuracy": "53.9%",
+          "roiPct": 15.3,
+          "roi": "15.3%",
+          "profitDollars": 12624,
+          "profitUnits": 84.16,
+          "pending": 0
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 296,
+          "avgClvPp": 0.23,
+          "beatClosePct": 44.6,
+          "percentile": 55.8,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
+          "n": 1231,
+          "avgClvPp": 0.07,
+          "beatClosePct": 45.9,
+          "percentile": 51.8,
+          "smallSample": false
+        }
+      },
+      "omega": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": false,
+          "stale": false
+        },
+        "kpi": {
+          "wins": 27,
+          "losses": 23,
+          "pushes": 0,
+          "record": "27-23-0",
+          "accuracyPct": 54,
+          "accuracy": "54.0%",
+          "roiPct": 3.1,
+          "roi": "3.1%",
+          "profitDollars": 304,
+          "profitUnits": 2.03,
+          "pending": 0
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 50,
+          "avgClvPp": 0.42,
+          "beatClosePct": 48,
+          "percentile": 60.5,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
+          "n": 953,
+          "avgClvPp": 0.04,
+          "beatClosePct": 46.4,
+          "percentile": 51,
+          "smallSample": false
+        }
+      },
+      "delta": {
+        "from": null,
+        "edge": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        },
+        "omega": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        },
+        "current": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        }
+      },
+      "version": {
+        "live": "v12.3.38-omega-vnext-price-lock",
+        "since": "2026-10-12",
+        "previous": null,
+        "changed": false,
+        "from": "card"
+      },
+      "current": {
+        "version": "v12.3.38-omega-vnext-price-lock",
+        "since": "2026-10-12",
+        "kpi": {
+          "wins": 0,
+          "losses": 0,
+          "pushes": 0,
+          "record": "0-0-0",
+          "accuracyPct": 0,
+          "accuracy": "0%",
+          "roiPct": 0,
+          "roi": "0%",
+          "profitDollars": 0,
+          "profitUnits": 0,
+          "pending": 0
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 0,
+          "avgClvPp": null,
+          "beatClosePct": null,
+          "percentile": null,
+          "smallSample": true,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-13",
+      "edge": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": true,
+          "stale": true
+        },
+        "kpi": {
+          "wins": 290,
+          "losses": 247,
+          "pushes": 18,
+          "record": "290-247-18",
+          "accuracyPct": 54,
+          "accuracy": "54.0%",
+          "roiPct": 15.4,
+          "roi": "15.4%",
+          "profitDollars": 12737,
+          "profitUnits": 84.91,
+          "pending": 3
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 297,
+          "avgClvPp": 0.22,
+          "beatClosePct": 44.4,
+          "percentile": 55.5,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
+          "n": 1267,
+          "avgClvPp": 0.07,
+          "beatClosePct": 45.9,
+          "percentile": 51.8,
+          "smallSample": false
+        }
+      },
+      "omega": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": true,
+          "stale": true
+        },
+        "kpi": {
+          "wins": 28,
+          "losses": 23,
+          "pushes": 0,
+          "record": "28-23-0",
+          "accuracyPct": 54.9,
+          "accuracy": "54.9%",
+          "roiPct": 4.2,
+          "roi": "4.2%",
+          "profitDollars": 417,
+          "profitUnits": 2.78,
+          "pending": 3
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 51,
+          "avgClvPp": 0.4,
+          "beatClosePct": 47.1,
+          "percentile": 60,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
+          "n": 989,
+          "avgClvPp": 0.04,
+          "beatClosePct": 46.4,
+          "percentile": 51,
+          "smallSample": false
+        }
+      },
+      "delta": {
+        "from": "2026-10-12",
+        "edge": {
+          "engineering": {
+            "processes": 0,
+            "architecture": 0,
+            "math": 0,
+            "overall": 0
+          },
+          "kpi": {
+            "wins": 1,
+            "losses": 0,
+            "pushes": 0,
+            "accuracyPct": 0.1,
+            "roiPct": 0.1,
+            "profitDollars": 113,
+            "profitUnits": 0.75
+          },
+          "clv": {
+            "avgClvPp": -0.01,
+            "beatClosePct": -0.2,
+            "percentile": -0.3
+          }
+        },
+        "omega": {
+          "engineering": {
+            "processes": 0,
+            "architecture": 0,
+            "math": 0,
+            "overall": 0
+          },
+          "kpi": {
+            "wins": 1,
+            "losses": 0,
+            "pushes": 0,
+            "accuracyPct": 0.9,
+            "roiPct": 1.1,
+            "profitDollars": 113,
+            "profitUnits": 0.75
+          },
+          "clv": {
+            "avgClvPp": -0.02,
+            "beatClosePct": -0.9,
+            "percentile": -0.5
+          }
+        },
+        "current": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        }
+      },
+      "version": {
+        "live": "v12.3.69-omega-vnext-price-lock",
+        "since": "2026-10-13",
+        "previous": "v12.3.38-omega-vnext-price-lock",
+        "changed": true,
+        "from": "card"
+      },
+      "current": {
+        "version": "v12.3.69-omega-vnext-price-lock",
+        "since": "2026-10-13",
+        "kpi": {
+          "wins": 0,
+          "losses": 0,
+          "pushes": 0,
+          "record": "0-0-0",
+          "accuracyPct": 0,
+          "accuracy": "0%",
+          "roiPct": 0,
+          "roi": "0%",
+          "profitDollars": 0,
+          "profitUnits": 0,
+          "pending": 0
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 0,
+          "avgClvPp": null,
+          "beatClosePct": null,
+          "percentile": null,
+          "smallSample": true,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-14",
+      "edge": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": true,
+          "stale": true
+        },
+        "kpi": {
+          "wins": 291,
+          "losses": 249,
+          "pushes": 18,
+          "record": "291-249-18",
+          "accuracyPct": 53.9,
+          "accuracy": "53.9%",
+          "roiPct": 15.2,
+          "roi": "15.2%",
+          "profitDollars": 12590,
+          "profitUnits": 83.93,
+          "pending": 3
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 297,
+          "avgClvPp": 0.22,
+          "beatClosePct": 44.4,
+          "percentile": 55.5,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
+          "n": 1381,
+          "avgClvPp": 0.06,
+          "beatClosePct": 46.1,
+          "percentile": 51.5,
+          "smallSample": false
+        }
+      },
+      "omega": {
+        "engineering": {
+          "processes": 87,
+          "architecture": 86,
+          "math": 86,
+          "overall": 86,
+          "scoredOn": "2026-10-12",
+          "carriedForward": true,
+          "stale": true
+        },
+        "kpi": {
+          "wins": 29,
+          "losses": 25,
+          "pushes": 0,
+          "record": "29-25-0",
+          "accuracyPct": 53.7,
+          "accuracy": "53.7%",
+          "roiPct": 2.6,
+          "roi": "2.6%",
+          "profitDollars": 270,
+          "profitUnits": 1.8,
+          "pending": 3
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 51,
+          "avgClvPp": 0.4,
+          "beatClosePct": 47.1,
+          "percentile": 60,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
+          "n": 1103,
+          "avgClvPp": 0.03,
+          "beatClosePct": 46.6,
+          "percentile": 50.8,
+          "smallSample": false
+        }
+      },
+      "delta": {
+        "from": "2026-10-13",
+        "edge": {
+          "engineering": {
+            "processes": 0,
+            "architecture": 0,
+            "math": 0,
+            "overall": 0
+          },
+          "kpi": {
+            "wins": 1,
+            "losses": 2,
+            "pushes": 0,
+            "accuracyPct": -0.1,
+            "roiPct": -0.2,
+            "profitDollars": -147,
+            "profitUnits": -0.98
+          },
+          "clv": {
+            "avgClvPp": 0,
+            "beatClosePct": 0,
+            "percentile": 0
+          }
+        },
+        "omega": {
+          "engineering": {
+            "processes": 0,
+            "architecture": 0,
+            "math": 0,
+            "overall": 0
+          },
+          "kpi": {
+            "wins": 1,
+            "losses": 2,
+            "pushes": 0,
+            "accuracyPct": -1.2,
+            "roiPct": -1.6,
+            "profitDollars": -147,
+            "profitUnits": -0.98
+          },
+          "clv": {
+            "avgClvPp": 0,
+            "beatClosePct": 0,
+            "percentile": 0
+          }
+        },
+        "current": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        }
+      },
+      "version": {
+        "live": "v12.4.0-webetai-pure",
+        "since": "2026-10-14",
+        "previous": "v12.3.69-omega-vnext-price-lock",
+        "changed": true,
+        "from": "card"
+      },
+      "current": {
+        "version": "v12.4.0-webetai-pure",
+        "since": "2026-10-14",
+        "kpi": {
+          "wins": 0,
+          "losses": 0,
+          "pushes": 0,
+          "record": "0-0-0",
+          "accuracyPct": 0,
+          "accuracy": "0%",
+          "roiPct": 0,
+          "roi": "0%",
+          "profitDollars": 0,
+          "profitUnits": 0,
+          "pending": 0
+        },
+        "clv": {
+          "basis": "published-straights",
+          "n": 0,
+          "avgClvPp": null,
+          "beatClosePct": null,
+          "percentile": null,
+          "smallSample": true,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        }
+      }
+    }
+  ],
+  "source": "preview",
+  "resultKpis": {
+    "displayOnly": true,
+    "applied": false,
+    "winRateVsBreakEven": {
+      "n": 540,
+      "wins": 291,
+      "losses": 249,
+      "pushes": 18,
+      "winRate": 0.5389,
+      "breakEven": 0.4953,
+      "gap": 0.0436
+    },
+    "parlayHitVsImplied": {
+      "n": 160,
+      "wins": 33,
+      "losses": 127,
+      "hitRate": 0.2063,
+      "implied": 0.1251,
+      "gap": 0.0811,
+      "impliedFrom": "product of straight prices"
+    },
+    "clvByPriceBand": [
+      {
+        "band": "-300 to -151",
+        "n": 76,
+        "avgClvPp": -2.2029,
+        "beatClosePct": 40.7895
+      },
+      {
+        "band": "-150 to +150",
+        "n": 1044,
+        "avgClvPp": 0.0491,
+        "beatClosePct": 45.8812
+      },
+      {
+        "band": "+151 to +200",
+        "n": 35,
+        "avgClvPp": 0.5509,
+        "beatClosePct": 42.8571
+      },
+      {
+        "band": "+201 to +300",
+        "n": 28,
+        "avgClvPp": 4.5943,
+        "beatClosePct": 64.2857
+      },
+      {
+        "band": "outside",
+        "n": 36,
+        "avgClvPp": -0.0181,
+        "beatClosePct": 44.4444
+      }
+    ],
+    "clvByMarket": [
+      {
+        "market": "F5",
+        "n": 52,
+        "avgClvPp": 0.1835,
+        "beatClosePct": 53.8462
+      },
+      {
+        "market": "ML",
+        "n": 294,
+        "avgClvPp": -0.0515,
+        "beatClosePct": 44.898
+      },
+      {
+        "market": "Spread",
+        "n": 424,
+        "avgClvPp": 0.0109,
+        "beatClosePct": 46.6981
+      },
+      {
+        "market": "Total",
+        "n": 730,
+        "avgClvPp": 0.1138,
+        "beatClosePct": 46.3014
+      }
+    ],
+    "scoringBySport": []
+  }
+}

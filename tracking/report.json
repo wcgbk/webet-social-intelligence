@@ -43,7 +43,8 @@
           "math": 86,
           "overall": 86,
           "scoredOn": "2026-10-12",
-          "carriedForward": false
+          "carriedForward": false,
+          "stale": false
         },
         "kpi": {
           "wins": 289,
@@ -59,6 +60,18 @@
           "pending": 0
         },
         "clv": {
+          "basis": "published-straights",
+          "n": 293,
+          "avgClvPp": 0.24,
+          "beatClosePct": 44.7,
+          "percentile": 56,
+          "smallSample": false,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
           "n": 373,
           "avgClvPp": 0.18,
           "beatClosePct": 44.2,
@@ -73,7 +86,8 @@
           "math": 86,
           "overall": 86,
           "scoredOn": "2026-10-12",
-          "carriedForward": false
+          "carriedForward": false,
+          "stale": false
         },
         "kpi": {
           "wins": 27,
@@ -89,6 +103,18 @@
           "pending": 0
         },
         "clv": {
+          "basis": "published-straights",
+          "n": 47,
+          "avgClvPp": 0.54,
+          "beatClosePct": 48.9,
+          "percentile": 63.5,
+          "smallSample": true,
+          "parlay": {
+            "available": false,
+            "n": 0
+          }
+        },
+        "clvAll": {
           "n": 95,
           "avgClvPp": 0.17,
           "beatClosePct": 44.2,
@@ -140,6 +166,51 @@
             "avgClvPp": null,
             "beatClosePct": null,
             "percentile": null
+          }
+        },
+        "current": {
+          "engineering": {
+            "processes": null,
+            "architecture": null,
+            "math": null,
+            "overall": null
+          },
+          "kpi": {
+            "wins": null,
+            "losses": null,
+            "pushes": null,
+            "accuracyPct": null,
+            "roiPct": null,
+            "profitDollars": null,
+            "profitUnits": null
+          },
+          "clv": {
+            "avgClvPp": null,
+            "beatClosePct": null,
+            "percentile": null
+          }
+        }
+      },
+      "version": {
+        "live": "v12.3.38-omega-vnext-price-lock",
+        "since": "2026-10-12",
+        "previous": null,
+        "changed": false
+      },
+      "current": {
+        "version": "v12.3.38-omega-vnext-price-lock",
+        "since": "2026-10-12",
+        "kpi": null,
+        "clv": {
+          "basis": "published-straights",
+          "n": 0,
+          "avgClvPp": null,
+          "beatClosePct": null,
+          "percentile": null,
+          "smallSample": true,
+          "parlay": {
+            "available": false,
+            "n": 0
           }
         }
       }

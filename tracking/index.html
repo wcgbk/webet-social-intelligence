@@ -174,7 +174,7 @@
 
   <main class="main">
     <h1 class="page-title">Daily progress</h1>
-    <p class="page-sub">Is the current code improving? One row per day, tagged with the live code version. Each track shows Edge (all-time: Alpha through Sep 21 plus Omega from Sep 22), Omega (since Sep 22), and the current version since its first card. Δ is versus the previous saved day. Whole numbers: positives round up, negatives round away from zero. The table updates at 9:15am ET.</p>
+    <p class="page-sub">Is the current code improving? One row per day, tagged with the live code version. Each track shows Edge (all-time: Alpha through Sep 21 plus Omega from Sep 22), Omega (since Sep 22), and the current version since its first card. Δ is versus the previous saved day. Whole numbers (positives round up, negatives away from zero), except average CLV in pp, shown to one decimal. The table updates at 9:15am ET.</p>
     <p class="updated" id="updated">Loading the latest table…</p>
     <div id="report"><div class="stats-loading">Loading daily progress…</div></div>
     <div id="kpis"></div>
@@ -215,6 +215,13 @@
       var n = Number(value);
       if (value == null || !isFinite(n) || n === 0) return '';
       return n > 0 ? 'pos' : 'neg';
+    }
+    // CLV pp only: one decimal (standard rounding). Everything else stays whole.
+    function signed1(value) {
+      if (value == null || value === '' || !isFinite(Number(value))) return '—';
+      var n = Math.round(Number(value) * 10) / 10;
+      if (Math.abs(n) < 1e-9) return '0.0';
+      return (n > 0 ? '+' : '-') + Math.abs(n).toFixed(1);
     }
     function pctText(value) { var n = whole(value); return n == null ? '—' : n + '%'; }
     function money(value) {
@@ -305,11 +312,11 @@
       var html = '<table class="inner">' + head(row, true) + '<tbody>';
       function c(s) { return s.clv || null; }
       html += line('Published straights (n)', row, true, function (s) { var x = c(s); return x ? esc(whole(x.n) || 0) + (x.smallSample ? ' <span class="badge">n&lt;50</span>' : '') : '—'; }, null);
-      html += line('Avg CLV (pp)', row, true, function (s) { var x = c(s); return x && x.n ? signed(x.avgClvPp) : '—'; }, function (d) { return dnum(d.clv && d.clv.avgClvPp); });
+      html += line('Avg CLV (pp)', row, true, function (s) { var x = c(s); return x && x.n ? signed1(x.avgClvPp) : '—'; }, function (d) { var v = d.clv ? d.clv.avgClvPp : null; return v == null ? null : { raw: Math.round(v * 10) / 10, text: signed1(v) }; });
       html += line('Beat close', row, true, function (s) { var x = c(s); return x && x.n ? pctText(x.beatClosePct) : '—'; }, function (d) { return dnum(d.clv && d.clv.beatClosePct, ' pts'); });
       html += line('Elite percentile', row, true, function (s) { var x = c(s); return x && x.n ? ordinal(x.percentile) : '—'; }, function (d) { return dnum(d.clv && d.clv.percentile); });
-      html += line('Parlay CLV', row, true, function (s) { var x = c(s); var p = x && x.parlay; return p && p.available ? signed(p.avgClvPp) + ' pp (n ' + whole(p.n) + ')' : 'not available'; }, null);
-      html += line('All evaluated bets', row, false, function (s) { var a = s.clvAll; return a && a.n ? signed(a.avgClvPp) + ' pp · ' + pctText(a.beatClosePct) + ' beat · n ' + whole(a.n) : '—'; }, null);
+      html += line('Parlay CLV', row, true, function (s) { var x = c(s); var p = x && x.parlay; return p && p.available ? signed1(p.avgClvPp) + ' pp (n ' + whole(p.n) + ')' : 'not available'; }, null);
+      html += line('All evaluated bets', row, false, function (s) { var a = s.clvAll; return a && a.n ? signed1(a.avgClvPp) + ' pp · ' + pctText(a.beatClosePct) + ' beat · n ' + whole(a.n) : '—'; }, null);
       return html + '</tbody></table>';
     }
     function pct(value) {

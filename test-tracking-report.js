@@ -48,6 +48,7 @@ assert.ok(page.includes('Edge (all-time)'));
 assert.ok(page.includes('Current version'));
 assert.ok(page.includes('All evaluated bets'));
 assert.ok(page.includes('STALE'));
+assert.ok(page.includes('function signed1('));
 assert.ok(page.includes('Omega'));
 assert.ok(page.includes('−2pp or lower is the 20th'));
 assert.ok(page.includes('+3pp or higher is the 95th'));

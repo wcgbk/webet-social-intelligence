@@ -30,7 +30,7 @@ const {
 const {
   PINNACLE_SPORTS, quotesFromEvents, quotesByEvent, storeOpen, storeCheck, LINE_MOVE_STORE,
   eventKey, CHECK_SLOTS, commenceEtDate, readLineMoveKey, shiftYmd,
-  readPinnacleLineMoves,
+  readPinnacleLineMoves, writeCaptureDone, CAPTURE_DONE_SCHEMA,
 } = require('./pinnacle_line_move');
 const { opsAlert } = require('./ops_alert');
 const {
@@ -869,6 +869,30 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     baselines: state.baselines,
     opensFilled: state.opensFilled,
   };
+  if (mode === 'check' && (etSlot === '0300' || etSlot === '1000')) {
+    const sportErrored = sportsHit.some((row) => {
+      const text = String(row || '');
+      const idx = text.lastIndexOf(':');
+      return idx !== -1 && text.slice(idx + 1) === 'err';
+    });
+    const marker = {
+      schema: CAPTURE_DONE_SCHEMA,
+      date: dateISO,
+      slot: etSlot,
+      completedAt: now.toISOString(),
+      ok: !sportErrored && !state.stoppedForCredits,
+      gameCount: touched.size,
+      sports: sportsHit.slice(),
+      pulls: state.pulls,
+    };
+    if (etSlot === '0300') marker.closesStored = state.closesStored;
+    try {
+      await writeCaptureDone(dateISO, etSlot, marker, storeOpts);
+    } catch (err) {
+      opsAlert('capture-done-write-failed', `date=${dateISO} slot=${etSlot} ${err && err.message}`);
+    }
+  }
+
   console.log('[pinnacle-line-move] DONE', {
     mode: body.mode,
     date: body.date,

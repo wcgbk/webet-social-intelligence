@@ -30,6 +30,7 @@ const { opsAlert } = require('./ops_alert');
 
 const LINE_MOVE_STORE = 'omega-pinnacle-line-moves';
 const SCHEMA = 'omega-pinnacle-line-moves-v1';
+const CAPTURE_DONE_SCHEMA = 'omega-capture-done-v1';
 const PINNACLE_SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL'];
 const CHECK_SLOTS = ['0300', '1000'];
 const SLOT_ORDER = ['open', '0300', '1000'];
@@ -96,6 +97,27 @@ function dateEventMarkerKey(dateISO, sport, eventId) {
 function isDateIndexKey(key) {
   const text = String(key || '');
   return text.startsWith('date/') && text.indexOf('/event/') === -1 && text.split('/').length === 2;
+}
+
+/**
+ * Capture-finished marker. Outside date/{date}/event/, so a list of event
+ * markers cannot return it. Schema is not the line-move event schema.
+ * Slash key: REST encodes each segment and keeps the slashes.
+ */
+function captureDoneKey(dateISO, slot) {
+  const slotId = String(slot || '').replace(':', '');
+  return ['capture-done', String(dateISO || ''), slotId].join('/');
+}
+
+function isCaptureDoneKey(key) {
+  const text = String(key || '');
+  return text === 'capture-done' || text.startsWith('capture-done/');
+}
+
+function isCaptureDoneDoc(doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false;
+  if (doc.schema === CAPTURE_DONE_SCHEMA) return true;
+  return false;
 }
 
 function unionIndexEvents(lists) {
@@ -1096,8 +1118,10 @@ async function markerRows(dateISO, read, list) {
   }
   const rows = [];
   for (const key of keys || []) {
+    if (isCaptureDoneKey(key)) continue;
     let doc = null;
     try { doc = await read(key); } catch (_) { doc = null; }
+    if (isCaptureDoneDoc(doc)) continue;
     if (doc && doc.sport && doc.eventId != null) rows.push(doc);
   }
   return rows;
@@ -1127,8 +1151,11 @@ async function readPinnacleLineMoves(dateISO, opts = {}) {
     }
     const events = [];
     for (const row of listed) {
-      const doc = await read(eventKey(row.sport, row.eventId));
-      if (doc && doc.schema === SCHEMA) events.push(doc);
+      const key = eventKey(row.sport, row.eventId);
+      if (isCaptureDoneKey(key)) continue;
+      const doc = await read(key);
+      if (isCaptureDoneDoc(doc)) continue;
+      if (doc && doc.schema === SCHEMA && doc.eventId != null) events.push(doc);
     }
     if (!events.length) return null;
     return { schema: SCHEMA, date: dateISO, store: LINE_MOVE_STORE, events };
@@ -1252,9 +1279,35 @@ async function storeCheck(sport, eventId, check, opts = {}) {
   return { wrote: true, reason: null, key, indexKey: indexed.key || null, doc, moves, steams };
 }
 
+/**
+ * capture-done/{date}/{slot} in this same store. Not an event doc.
+ * dryRun and OMEGA_REPLAY_NO_WRITE write nothing. A failed write is soft.
+ */
+async function writeCaptureDone(dateISO, slot, doc, opts = {}) {
+  const slotId = String(slot || '').replace(':', '');
+  if (slotId !== '0300' && slotId !== '1000') return { wrote: false, reason: 'slot' };
+  const block = writeBlocked(opts);
+  if (block) return { wrote: false, reason: block };
+  const key = captureDoneKey(dateISO, slotId);
+  const canon = canonicalBlobKey(key);
+  if (canon.indexOf('%2F') !== -1 || canon.split('/').length !== 3) {
+    opsAlert('capture-done-write-failed', `date=${dateISO} slot=${slotId} non-canonical key`);
+    return { wrote: false, reason: 'key', key };
+  }
+  const write = opts.write || defaultWrite;
+  try {
+    await write(key, doc);
+    return { wrote: true, reason: null, key };
+  } catch (err) {
+    opsAlert('capture-done-write-failed', `date=${dateISO} slot=${slotId} ${err && err.message}`);
+    return { wrote: false, reason: 'write-failed', key };
+  }
+}
+
 module.exports = {
   LINE_MOVE_STORE,
   SCHEMA,
+  CAPTURE_DONE_SCHEMA,
   PINNACLE_SPORTS,
   CHECK_SLOTS,
   SLOT_ORDER,
@@ -1281,6 +1334,10 @@ module.exports = {
   eventKey,
   dateIndexKey,
   dateEventMarkerKey,
+  captureDoneKey,
+  isCaptureDoneKey,
+  isCaptureDoneDoc,
+  writeCaptureDone,
   unionIndexEvents,
   ensureDateIndex,
   commenceEtDate,

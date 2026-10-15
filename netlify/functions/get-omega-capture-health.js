@@ -107,6 +107,12 @@ async function handleCaptureHealth(event, context, deps) {
     } catch (err) {
       legacyCandidates = null;
     }
+    let missedPull = null;
+    try {
+      missedPull = await readBlob(`omega-ops/missed-pull-${coverageDate}`);
+    } catch (_) {
+      missedPull = null;
+    }
     return {
       statusCode: 200,
       headers: CORS,
@@ -117,6 +123,7 @@ async function handleCaptureHealth(event, context, deps) {
         snapshot: snap,
         candidateCloses,
         legacyCandidates,
+        missedPull,
         note: 'Ops signal only — does not change CAPTURE_HEALTH hardFail or live pick selection.',
       }),
     };

@@ -28,8 +28,10 @@
   # Background function — 15min timeout for Alpha pick generation
 
 [functions."trigger-picks-omega"]
-  schedule = "0 14,15 * * *"
-  # OMEGA vNext — 10:00am ET (14:00 UTC EDT, 15:00 UTC EST). Last Odds API pull.
+  schedule = "5 14,15 * * *"
+  # OMEGA vNext — 10:05am ET (14:05 UTC EDT, 15:05 UTC EST).
+  # Five minutes after the 10:00 ET capture. The build waits for that capture
+  # to finish, then publishes from the stored board. It does not pull odds.
   # Ranks the top 10 and leaves the card a draft. 11:00am ET finalizes.
   # Writes edge-picks-omega → /omega.
   # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
@@ -299,6 +301,14 @@
   # etGuard drops the off-season copy of the UTC union.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
+[functions."monitor-omega-missed-pull"]
+  schedule = "15 7,8 * * *"
+  # 07:15 UTC = 3:15 ET (EDT). 08:15 UTC = 3:15 ET (EST).
+  # After the 3:00 check. Reads the capture-done marker and stored line moves.
+  # Does not pull the Odds API and does not re-pull a missed slot.
+  # etGuard drops the other UTC copy.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
 [functions."capture-omega-pinnacle-open"]
   # Suspended. Openers are the first price in the 3:00 ET pull. This job
   # does not poll /events and does not pull Pinnacle.
@@ -431,14 +441,14 @@
 [functions."capture-omega-pm-observer-open"]
   schedule = "30 12,13 * * *"
   # Morning PM open snap — 8:30am ET (12:30 UTC in EDT), inside 8:00–8:45 ET.
-  # Writes omega-pm-observer/{date}-open (raw ML markets) so 9:30 generate can
-  # compute pmMove. One hour before trigger-picks-omega (13:30 UTC) — no race.
+  # Writes omega-pm-observer/{date}-open (raw ML markets) so the 10:05 ET
+  # generate can compute pmMove. This snap is before that build — no race.
   # Does not write the live card. Soft-fail if PM APIs are down.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."capture-omega-pm-observer"]
   schedule = "15 14,15 * * *"
-  # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after 9:30 generate.
+  # Omega PM observer sidecar — 10:15am ET (14:15 UTC in EDT), after the 10:05 ET card build.
   # Audit log: Kalshi/Polymarket implied probs → omega-pm-observer/{date}.
   # Generate already applied hard-capped soft score in-process. This job does
   # not mutate the live card / grades / units. ?slot=open also writes the open key.

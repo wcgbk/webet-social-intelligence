@@ -38,6 +38,7 @@ const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock')
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags } = require('./pinnacle_flag');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
+const { awaitLiveCaptureGate } = require('./capture_gate');
 const { summaryStakeDisplay } = require('./odds_math');
 
 const mlb = require('./sports/mlb');
@@ -302,6 +303,32 @@ async function generateOmegaVnext(opts = {}) {
 
   console.log(`[omega-vnext] START ${MODEL_VERSION} date=${dateISO} force=${force} sim=${simMode} shadow=${shadow} oddsSnapshot=${oddsSnapshot || 'live'} replay=${replayLike} storedBoard=${!allowPaidOdds}`);
 
+  // Live scheduled runs only. Manual, dry, replay, shadow, and sim do not wait.
+  // Timeout returns ready:false and the card still builds from the stored board.
+  let captureGate = null;
+  try {
+    captureGate = await awaitLiveCaptureGate({
+      scheduled: opts.scheduled === true,
+      dryRun,
+      replay: replayLike,
+      historicalSnapshot: opts.historicalSnapshot,
+      shadow,
+      simMode,
+      dateISO,
+      read: opts.read,
+      readPinnacleLineMoves: opts.readPinnacleLineMoves,
+      sleep: opts.sleep,
+      now: opts.now,
+      maxWaitMs: opts.maxWaitMs,
+      pollMs: opts.pollMs,
+      sportsForCard: opts.sportsForCard,
+      env: opts.env,
+    });
+  } catch (err) {
+    console.warn(`[omega-vnext] capture gate soft-fail: ${err && err.message}`);
+    captureGate = { ready: false, waitedMs: 0, polls: 0, reason: 'timeout' };
+  }
+
   const fetched = await ingest(dateISO, {
     historicalSnapshot: allowPaidOdds ? oddsSnapshot : null,
     storedBoardOnly: !allowPaidOdds,
@@ -447,7 +474,10 @@ async function generateOmegaVnext(opts = {}) {
   // Ops-only signal: persist snapshot + optional HTTP callback. Does NOT change hardFail policy.
   if (!replayLike && !shadow && !dryRun) {
     try {
-      await emitCaptureHealthOps(dateISO, captureHealth, { shadow: !!shadow });
+      const opsHealth = captureGate
+        ? Object.assign({}, captureHealth, { captureGate })
+        : captureHealth;
+      await emitCaptureHealthOps(dateISO, opsHealth, { shadow: !!shadow });
     } catch (e) {
       console.warn(JSON.stringify({ event: 'captureHealthOpsSoftFail', date: dateISO, error: e.message }));
     }
@@ -944,6 +974,11 @@ async function generateOmegaVnext(opts = {}) {
     });
   } catch (e) {
     console.warn(`[omega-health] attach soft-fail: ${e.message}`);
+  }
+  if (captureGate) {
+    if (healthRecord && typeof healthRecord === 'object') healthRecord.captureGate = captureGate;
+    if (!picksData.health || typeof picksData.health !== 'object') picksData.health = {};
+    picksData.health.captureGate = captureGate;
   }
   if (healthRecord) {
     const skipHealthWrite = dryRun || replayLike || process.env.OMEGA_REPLAY_NO_WRITE === '1';

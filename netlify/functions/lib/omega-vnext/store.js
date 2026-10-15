@@ -367,7 +367,7 @@ async function storeReplaySummary(runId, summary) {
 }
 
 /** Ops-only capture-health and late-news runs — NEVER live picks / latest-date. */
-const OPS_KEY_RE = /^omega-ops\/(?:capture-health(?:-latest|-\d{4}-\d{2}-\d{2})|late-news(?:-latest|-\d{4}-\d{2}-\d{2})|snapshot-coverage-\d{4}-\d{2}-\d{2})$/;
+const OPS_KEY_RE = /^omega-ops\/(?:capture-health(?:-latest|-\d{4}-\d{2}-\d{2})|late-news(?:-latest|-\d{4}-\d{2}-\d{2})|snapshot-coverage-\d{4}-\d{2}-\d{2}|missed-pull-\d{4}-\d{2}-\d{2})$/;
 
 function assertOpsKey(key) {
   const k = String(key || '');
@@ -412,6 +412,22 @@ async function storeSnapshotCoverage(dateISO, report) {
     throw new Error(`omega-ops refused bad date: ${dateISO}`);
   }
   const key = assertOpsKey(`omega-ops/snapshot-coverage-${d}`);
+  const payload = {
+    ...(report || {}),
+    date: d,
+    opsOnly: true,
+    storedAt: new Date().toISOString(),
+  };
+  await storeJson(key, payload);
+  return { key };
+}
+
+async function storeMissedPull(dateISO, report) {
+  const d = String(dateISO || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw new Error(`omega-ops refused bad date: ${dateISO}`);
+  }
+  const key = assertOpsKey(`omega-ops/missed-pull-${d}`);
   const payload = {
     ...(report || {}),
     date: d,
@@ -545,6 +561,7 @@ module.exports = {
   REPLAY_KEY_RE, assertReplayKey, storeReplayCard, storeReplaySummary,
   OPS_KEY_RE, assertOpsKey, storeCaptureHealthSnapshot, readCaptureHealthLatest, readCaptureHealthDate,
   storeSnapshotCoverage,
+  storeMissedPull,
   storeLateNewsOps,
   readUnmatchedTeams,
   healthBlobKey, storeHealthRecord, readHealthRecord, readHealthLatest,

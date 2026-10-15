@@ -32,6 +32,7 @@ const ROOT_DROP = [
   'teamIdentity',
   'gapReview',
   'health',
+  'captureGate',
   'shortfall',
   'voidedPregame',
   'lateNews',

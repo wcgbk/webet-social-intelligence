@@ -66,7 +66,10 @@ function hourlyAt(minute) {
 /** @type {Record<string, {etTimes: string[], days?: number[]}>} */
 const ET_SCHEDULE = {
   'trigger-picks-alpha': { etTimes: ['09:00'] },
-  'trigger-picks-omega': { etTimes: ['10:00'] },
+  // 10:05 ET card build. Cron "5 14,15 * * *" is 14:05 UTC (EDT) and
+  // 15:05 UTC (EST). The ±10 min guard does not let 15:05 UTC EDT (11:05 ET)
+  // or 14:05 UTC EST (09:05 ET) through. Capture stays at 10:00.
+  'trigger-picks-omega': { etTimes: ['10:05'] },
   // 10:15 ET news re-rank. Cron "15 14,15 * * *" is 14:15 UTC (EDT) and
   // 15:15 UTC (EST). Prices stay the 10:00 snapshot. No Odds API pull.
   'rerank-picks-omega': { etTimes: ['10:15'] },
@@ -115,6 +118,9 @@ const ET_SCHEDULE = {
   // etGuard drops 04:00 and 11:00. 9:00 and 10:30 are not scheduled.
   // Morning line snaps, the hourly opener, and kickoff closes are suspended.
   'capture-omega-pinnacle-lines': { etTimes: ['03:00', '10:00'] },
+  // 3:15 ET, after the 3:00 check. Cron "15 7,8 * * *" is 07:15 UTC (EDT)
+  // and 08:15 UTC (EST). Reads the capture-done marker. No Odds API pull.
+  'monitor-omega-missed-pull': { etTimes: ['03:15'] },
   // 10:20 ET, after both morning checks. Cron "20 14,15 * * *" is 14:20 UTC
   // (EDT) and 15:20 UTC (EST). Reads stored checks only. No Odds API pull.
   'monitor-omega-snapshot-coverage': { etTimes: ['10:20'] },
@@ -333,7 +339,7 @@ function cardGeneratedOnEtDate(card, dateET) {
  * ET wall minutes of the 09:30 card window minus the guard tolerance.
  * A card written at or after 09:20 ET is this morning's run (or a later
  * same-day write). Earlier same-day cards are overnight or pre-window
- * and must still be rebuilt. The 10:00 ET cron is a different job and
+ * and must still be rebuilt. The 10:05 ET card cron is a different job and
  * is not this cutoff.
  */
 function morningCardCutoffMin() {

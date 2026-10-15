@@ -20,14 +20,16 @@ exports.handler = async (event) => {
     }
     const qs = (event && event.queryStringParameters) || {};
     // Scheduled morning cron always force-overwrites same-day cards so overnight
-    // preview cards don't block the real 9:30am rebuild after line captures.
+    // preview cards don't block the real 10:05am rebuild after line captures.
     // shadow:true writes omega-shadow/* only — storePicks will not touch latest-date.
+    const scheduled = body.scheduled === true || body.scheduled === 'true' || qs.scheduled === 'true';
     const force = !!(body.force || qs.force === 'true' || body.scheduled || qs.scheduled === 'true');
     const shadow = body.shadow === true || body.shadow === 'true' || qs.shadow === 'true';
     const skipNarrate = body.skipNarrate === true || body.skipNarrate === 'true' || qs.skipNarrate === 'true';
     const opts = {
       date: body.date || qs.date,
       force,
+      scheduled,
       simMode: shadow ? false : !!(body.simMode || body.sim),
       historicalSnapshot: body.historicalSnapshot,
       dryRun: !!body.dryRun,

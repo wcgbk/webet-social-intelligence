@@ -345,20 +345,49 @@ function qbMarginAdj(home, away, qbAdj) {
   return (find(home) || 0) - (find(away) || 0);
 }
 
-async function fetchNFLSpreadOdds() {
-  const apiKey = process.env.ODDS_API_KEY;
-  if (!apiKey) { console.log("[circa] No ODDS_API_KEY — cannot fetch odds"); return []; }
-  try {
-    const url = `https://api.the-odds-api.com/v4/sports/${NFL_ODDS_SPORT}/odds?regions=us,us2,eu&markets=spreads&oddsFormat=american&apiKey=${apiKey}`;
-    const resp = await fetch(url);
-    if (!resp.ok) { console.log(`[circa] Odds fetch: HTTP ${resp.status}`); return []; }
-    const data = await resp.json();
-    console.log(`[circa] Odds API: ${(data || []).length} NFL event(s)`);
-    return data || [];
-  } catch (e) {
-    console.log(`[circa] Odds fetch error: ${e.message}`);
-    return [];
+// Circa reads the NFL board the 10:00 ET (fallback 3:00 ET) capture already
+// pulled. The capture writes the raw Odds API body (every upcoming NFL game,
+// Thu-Mon kickoffs) to the odds-snapshots store. Circa makes no Odds API call.
+const STORED_NFL_BOARD = {
+  sport: NFL_ODDS_SPORT,
+  markets: "h2h,spreads,totals",
+  regions: "eu",
+  bookmakers: "draftkings,hardrockbet,pinnacle",
+};
+
+function etWallMs(dateISO, hh, mm) {
+  // ET = UTC-4 (EDT) or UTC-5 (EST). Pick the offset whose ET date/hour match.
+  for (const off of [4, 5]) {
+    const ms = Date.parse(`${dateISO}T${String(hh + off).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00Z`);
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" }).formatToParts(new Date(ms));
+    const h = Number((parts.find((x) => x.type === "hour") || {}).value);
+    if (h === hh) return ms;
   }
+  return Date.parse(`${dateISO}T${String(hh + 4).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00Z`);
+}
+
+async function fetchNFLSpreadOdds(opts = {}) {
+  const cache = opts.snapshotCache || require("./lib/omega-vnext/odds_snapshot_cache");
+  const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+  const dateISO = opts.dateISO || new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(nowMs));
+  for (const [hh, label] of [[10, "10:00"], [3, "3:00"]]) {
+    const slotMs = etWallMs(dateISO, hh, 0);
+    if (slotMs > nowMs) continue;
+    for (const offMin of [5, 15, 25, 35, 45]) {
+      try {
+        const hit = await cache.findFreshSportPull({ ...STORED_NFL_BOARD, nowMs: slotMs + offMin * 60000, maxAgeMs: 15 * 60000 });
+        if (hit && hit.body) {
+          const events = Array.isArray(hit.body) ? hit.body : ((hit.body && hit.body.data) || []);
+          console.log(`[circa] Stored ${label} ET NFL board: ${events.length} event(s), fetchedAt=${hit.fetchedAt}. No Odds API call.`);
+          return events;
+        }
+      } catch (e) {
+        console.log(`[circa] Stored board read error (${label}): ${e.message}`);
+      }
+    }
+  }
+  console.log("[circa] No stored 10:00 or 3:00 ET NFL board. Market fields stay empty; no Odds API call.");
+  return [];
 }
 
 function teamsMatch(a, b) {
@@ -1055,3 +1084,4 @@ module.exports.liveCardPayload = liveCardPayload;
 module.exports.contestPdfUnavailablePayload = contestPdfUnavailablePayload;
 module.exports.MODEL_VERSION = MODEL_VERSION;
 module.exports.CONTEST_LINE_SOURCE = CONTEST_LINE_SOURCE;
+module.exports.fetchNFLSpreadOdds = fetchNFLSpreadOdds;

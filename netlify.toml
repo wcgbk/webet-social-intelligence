@@ -113,8 +113,8 @@
   # switch DST together, so the 10:15 AM PT first card stays 13:15 ET in both
   # PDT and PST. The cron fires both UTC hours; the guard drops the other one.
   # The old "shift 17:15 UTC to 18:15 UTC after November" TODO is resolved.
-  # schedule = "0,15,30,45 17,18,19,20,21 * * 3,4,5,6"
-  # PAUSED 2026-10-15 — Odds API pull at Wed-Sat 1:00-5:45 PM ET. Odds API credits go to the 3:00 and 10:00 ET pulls only.
+  schedule = "0,15,30,45 17,18,19,20,21 * * 3,4,5,6"
+  # Re-enabled 2026-10-15: Circa builds from the stored 10:00 ET (fallback 3:00 ET) NFL board. No Odds API call.
 
 [functions."generate-picks-circa-background"]
   # Background function — 15min timeout for Circa Million VIII weekly ATS card

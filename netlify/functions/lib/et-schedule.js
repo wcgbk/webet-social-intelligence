@@ -89,7 +89,14 @@ const ET_SCHEDULE = {
   // 'trigger-picks-nfl' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
   // Current union cron, expressed as ET = UTC-4. The handler still no-ops
   // outside the real Thu/Fri/Sat/holiday PT windows.
-  // 'trigger-picks-circa' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
+  'trigger-picks-circa': {
+    etTimes: [
+      '13:00', '13:15', '13:30', '13:45',
+      '14:00', '14:15', '14:30', '14:45',
+      '16:00', '16:15', '16:30', '16:45',
+    ],
+    days: [3, 4, 5, 6],
+  },
   'check-circa-card-health': {
     etTimes: [
       '13:05', '13:20', '13:35', '13:50',

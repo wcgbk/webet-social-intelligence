@@ -228,7 +228,12 @@ assert.strictEqual(clvEvening.run, false);
 const clv = et.etGuard('trigger-clv', sched, new Date('2026-10-16T07:00:00Z'));
 assert.strictEqual(clv.run, true);
 assert.strictEqual(clv.matched, '03:00');
-assert.ok(!et.ET_SCHEDULE['trigger-picks-circa'], 'circa generate schedule paused');
+const tue = et.etGuard('trigger-picks-circa', sched, new Date('2026-10-06T17:15:00Z'));
+assert.strictEqual(tue.run, false);
+assert.strictEqual(tue.reason, 'outside-et-weekday');
+const wed = et.etGuard('trigger-picks-circa', sched, new Date('2026-10-07T17:15:00Z'));
+assert.strictEqual(wed.run, true);
+assert.strictEqual(wed.matched, '13:15');
 assert.ok(!et.ET_SCHEDULE['capture-opening-lines'], 'capture-opening-lines paused');
 
 assert.strictEqual(et.etGuard('self-optimize', sched, new Date('2026-11-01T10:00:00Z')).matched, '05:00');

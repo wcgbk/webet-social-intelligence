@@ -284,6 +284,9 @@
   #   07:00 UTC = 3:00 EDT, 08:00 UTC = 3:00 EST
   #   14:00 UTC = 10:00 EDT, 15:00 UTC = 10:00 EST
   # etGuard drops 04:00 EDT and 11:00 EDT. 9:00 and 10:30 are not in this cron.
+  # A scheduler invoke fires capture-omega-pinnacle-lines-background and
+  # returns. This entry stays synchronous and keeps the only schedule.
+  # If that call cannot run, the capture still runs inline in this function.
   # One live odds call per sport: bookmakers=pinnacle,draftkings,hardrockbet.
   # regions=eu. Opens and historical closes stay pinnacle-only.
   # 3:00 also pulls yesterday's pregame historical closes (30 credits per
@@ -291,6 +294,12 @@
   # Writes omega-pinnacle-line-moves and odds-master. Never the card.
   # The 49,000 credit stop does not apply to this 3:00 or 10:00 pull.
   # dryRun writes nothing.
+  included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions."capture-omega-pinnacle-lines-background"]
+  # Background function — 15 min. No schedule. The 3:00 and 10:00 cron stays
+  # on capture-omega-pinnacle-lines, which invokes this and returns.
+  # Requires PICKS_SECRET_KEY. Historical closes cost 30 credits each.
   included_files = ["netlify/functions/lib/omega-vnext/**"]
 
 [functions."monitor-omega-snapshot-coverage"]
@@ -304,7 +313,8 @@
 [functions."monitor-omega-missed-pull"]
   schedule = "15 7,8 * * *"
   # 07:15 UTC = 3:15 ET (EDT). 08:15 UTC = 3:15 ET (EST).
-  # After the 3:00 check. Reads the capture-done marker and stored line moves.
+  # After the 3:00 check. Reads the capture-done and capture-start markers
+  # and stored line moves.
   # Does not pull the Odds API and does not re-pull a missed slot.
   # etGuard drops the other UTC copy.
   included_files = ["netlify/functions/lib/omega-vnext/**"]

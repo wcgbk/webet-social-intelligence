@@ -42,6 +42,17 @@ for (const row of active) {
   assert.ok(et.ET_SCHEDULE[row.functionName], `active schedule ${row.functionName} is not in the ET table`);
 }
 
+assert.ok(!et.ET_SCHEDULE['capture-omega-pinnacle-lines-background'], 'background capture has no ET entry');
+assert.ok(!activeByName['capture-omega-pinnacle-lines-background'], 'background capture has no cron');
+assert.ok(toml.includes('[functions."capture-omega-pinnacle-lines-background"]'));
+{
+  const bgBlock = toml.split('[functions."capture-omega-pinnacle-lines-background"]')[1].split('\n[')[0];
+  assert.ok(bgBlock && bgBlock.includes('included_files'));
+  assert.ok(!/^\s*schedule\s*=/m.test(bgBlock), 'background capture block has no schedule');
+  const entryBlock = toml.split('[functions."capture-omega-pinnacle-lines"]')[1].split('\n[')[0];
+  assert.ok(entryBlock.includes('schedule = "0 7,8,14,15 * * *"'));
+}
+
 assert.ok(et.SCHEDULE_NA.some((row) => row.functionName === 'admin-queue-process' && row.et === 'N/A'));
 assert.ok(!et.ET_SCHEDULE['admin-queue-process']);
 assert.strictEqual(readCronFromSource('admin-queue-process'), '*/15 * * * *');

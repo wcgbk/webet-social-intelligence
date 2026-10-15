@@ -471,8 +471,10 @@ async function recordTape(entry, storeOpts) {
  * per sport.
  * The 10:00 check reuses a same-sport snapshot younger than 5 minutes.
  * The 3:00 check stores that same live pull as the baseline and, when no
- * open exists, as the open. It then pulls yesterday's pregame closes.
- * CLV for yesterday is graded from those stored quotes after the pull.
+ * open exists, as the open. It then writes capture-done phase 'checks'
+ * (the 3:00 board is stored) before yesterday's pregame closes. CLV for
+ * yesterday is graded from those stored quotes after the pull, and the
+ * same key is written again as phase 'final' so the close counts are kept.
  * The grade does not call the Odds API.
  * The 49,000 credit floor stops open, backfill, and extra pulls only.
  * It does not stop a 3:00 or 10:00 check, yesterday's closes, or the card.
@@ -599,226 +601,260 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     if (id) touched.add(id);
   };
 
+  const runStarted = Date.now();
   for (const label of labels) {
-    const sportKey = ODDS_SPORT_KEYS[label];
-    if (!sportKey) continue;
-    if (mode === 'open') {
-      let discovered = [];
-      try {
-        const listed = await fetchEvents(sportKey, apiKey);
-        state.eventPolls += 1;
-        const remaining = listed && listed.requestsRemaining != null ? listed.requestsRemaining : null;
-        const cacheHit = !!(listed && listed.cacheHit);
-        if (cacheHit) state.cacheHits += 1;
-        noteLiveRemaining(state, remaining, cacheHit);
-        console.log(`[pinnacle-line-move] x-requests-remaining=${remaining == null ? 'null' : remaining} sport=${label} book=events cacheHit=${cacheHit ? 1 : 0}`);
-        discovered = listed && Array.isArray(listed.events) ? listed.events : [];
-      } catch (err) {
-        const remaining = err && err.requestsRemaining != null ? err.requestsRemaining : null;
-        noteLiveRemaining(state, remaining, !!(err && err.cacheHit));
-        console.log(`[pinnacle-line-move] x-requests-remaining=${remaining == null ? 'null' : remaining} sport=${label} book=events error=${err.message}`);
-        sportsHit.push(`${label}:err`);
+    const sportStarted = Date.now();
+    try {
+      const sportKey = ODDS_SPORT_KEYS[label];
+      if (!sportKey) continue;
+      if (mode === 'open') {
+        let discovered = [];
+        try {
+          const listed = await fetchEvents(sportKey, apiKey);
+          state.eventPolls += 1;
+          const remaining = listed && listed.requestsRemaining != null ? listed.requestsRemaining : null;
+          const cacheHit = !!(listed && listed.cacheHit);
+          if (cacheHit) state.cacheHits += 1;
+          noteLiveRemaining(state, remaining, cacheHit);
+          console.log(`[pinnacle-line-move] x-requests-remaining=${remaining == null ? 'null' : remaining} sport=${label} book=events cacheHit=${cacheHit ? 1 : 0}`);
+          discovered = listed && Array.isArray(listed.events) ? listed.events : [];
+        } catch (err) {
+          const remaining = err && err.requestsRemaining != null ? err.requestsRemaining : null;
+          noteLiveRemaining(state, remaining, !!(err && err.cacheHit));
+          console.log(`[pinnacle-line-move] x-requests-remaining=${remaining == null ? 'null' : remaining} sport=${label} book=events error=${err.message}`);
+          sportsHit.push(`${label}:err`);
+          continue;
+        }
+        const fresh = [];
+        for (const event of discovered) {
+          if (!event || event.id == null) continue;
+          const id = String(event.id);
+          const prev = await readLineMoveKey(eventKey(label, id), storeOpts);
+          if (prev && prev.open) continue;
+          fresh.push(event);
+        }
+        if (!fresh.length) {
+          sportsHit.push(`${label}:0`);
+          continue;
+        }
+        const known = knownRequestsRemainingValue();
+        if (enforceFloor && (state.stoppedForCredits || creditFloorReached(known, floor))) {
+          state.stoppedForCredits = true;
+          state.requestsRemaining = known != null ? known : state.requestsRemaining;
+          console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before ${label} pinnacle`);
+          sportsHit.push(`${label}:held`);
+          continue;
+        }
+        let pulled = null;
+        try {
+          pulled = await fetchOdds(sportKey, apiKey, 'pinnacle');
+          rememberPull(state, pulled, label, 'pinnacle', floor, enforceFloor);
+        } catch (err) {
+          rememberError(state, err, label, 'pinnacle', floor, enforceFloor);
+          sportsHit.push(`${label}:err`);
+          continue;
+        }
+        const found = quotesByEvent(quotesFromEvents(pulled.events, label, { at: capturedAt, book: 'pinnacle' }, 'pinnacle'));
+        let n = 0;
+        for (const event of fresh) {
+          const id = String(event.id);
+          const quotes = found.get(id);
+          if (!quotes || !Object.keys(quotes).length) continue;
+          const stored = await storeOpen(label, id, {
+            at: capturedAt,
+            homeTeam: event.home_team || null,
+            awayTeam: event.away_team || null,
+            commenceTime: event.commence_time || null,
+            date: commenceEtDate(event.commence_time),
+            quotes,
+          }, storeOpts);
+          if (stored.wrote || stored.reason === 'dryRun' || stored.reason === 'OMEGA_REPLAY_NO_WRITE') n += 1;
+          noteStored(stored, id);
+        }
+        sportsHit.push(`${label}:${n}`);
         continue;
       }
-      const fresh = [];
-      for (const event of discovered) {
-        if (!event || event.id == null) continue;
-        const id = String(event.id);
-        const prev = await readLineMoveKey(eventKey(label, id), storeOpts);
-        if (prev && prev.open) continue;
-        fresh.push(event);
-      }
-      if (!fresh.length) {
-        sportsHit.push(`${label}:0`);
-        continue;
-      }
+
       const known = knownRequestsRemainingValue();
       if (enforceFloor && (state.stoppedForCredits || creditFloorReached(known, floor))) {
         state.stoppedForCredits = true;
         state.requestsRemaining = known != null ? known : state.requestsRemaining;
-        console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before ${label} pinnacle`);
+        console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before ${label}`);
         sportsHit.push(`${label}:held`);
-        continue;
+        break;
       }
-      let pulled = null;
+      let board = null;
+      const now = opts.now instanceof Date ? opts.now : new Date();
       try {
-        pulled = await fetchOdds(sportKey, apiKey, 'pinnacle');
-        rememberPull(state, pulled, label, 'pinnacle', floor, enforceFloor);
+        board = await pullCheckBook(sportKey, apiKey, 'check', fetchOdds, etSlot, now);
+        rememberPull(state, board, label, 'check', floor, enforceFloor);
       } catch (err) {
-        rememberError(state, err, label, 'pinnacle', floor, enforceFloor);
+        rememberError(state, err, label, 'check', floor, enforceFloor);
         sportsHit.push(`${label}:err`);
+        if (enforceFloor && state.stoppedForCredits) break;
         continue;
       }
-      const found = quotesByEvent(quotesFromEvents(pulled.events, label, { at: capturedAt, book: 'pinnacle' }, 'pinnacle'));
-      let n = 0;
-      for (const event of fresh) {
-        const id = String(event.id);
-        const quotes = found.get(id);
-        if (!quotes || !Object.keys(quotes).length) continue;
-        const stored = await storeOpen(label, id, {
-          at: capturedAt,
-          homeTeam: event.home_team || null,
-          awayTeam: event.away_team || null,
-          commenceTime: event.commence_time || null,
-          date: commenceEtDate(event.commence_time),
-          quotes,
-        }, storeOpts);
-        if (stored.wrote || stored.reason === 'dryRun' || stored.reason === 'OMEGA_REPLAY_NO_WRITE') n += 1;
-        noteStored(stored, id);
+      const events = board && Array.isArray(board.events) ? board.events : [];
+      const pinQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'pinnacle' }, 'pinnacle'));
+      const dkQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'draftkings' }, 'draftkings'));
+      const hrQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'hardrockbet' }, 'hardrockbet'));
+      const meta = new Map();
+      for (const event of events) {
+        if (event && event.id != null) meta.set(String(event.id), event);
       }
-      sportsHit.push(`${label}:${n}`);
-      continue;
-    }
-
-    const known = knownRequestsRemainingValue();
-    if (enforceFloor && (state.stoppedForCredits || creditFloorReached(known, floor))) {
-      state.stoppedForCredits = true;
-      state.requestsRemaining = known != null ? known : state.requestsRemaining;
-      console.log(`[pinnacle-line-move] x-requests-remaining=${known == null ? 'null' : known} credit floor stop before ${label}`);
-      sportsHit.push(`${label}:held`);
-      break;
-    }
-    let board = null;
-    const now = opts.now instanceof Date ? opts.now : new Date();
-    try {
-      board = await pullCheckBook(sportKey, apiKey, 'check', fetchOdds, etSlot, now);
-      rememberPull(state, board, label, 'check', floor, enforceFloor);
-    } catch (err) {
-      rememberError(state, err, label, 'check', floor, enforceFloor);
-      sportsHit.push(`${label}:err`);
-      if (enforceFloor && state.stoppedForCredits) break;
-      continue;
-    }
-    const events = board && Array.isArray(board.events) ? board.events : [];
-    const pinQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'pinnacle' }, 'pinnacle'));
-    const dkQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'draftkings' }, 'draftkings'));
-    const hrQuotes = quotesByEvent(quotesFromEvents(events, label, { at: capturedAt, dateISO, book: 'hardrockbet' }, 'hardrockbet'));
-    const meta = new Map();
-    for (const event of events) {
-      if (event && event.id != null) meta.set(String(event.id), event);
-    }
-    const ids = new Set([...pinQuotes.keys(), ...dkQuotes.keys(), ...hrQuotes.keys()]);
-    for (const id of ids) {
-      const event = meta.get(id) || {};
-      const commenceTime = event.commence_time || null;
-      const homeTeam = event.home_team || null;
-      const awayTeam = event.away_team || null;
-      const pinQ = pinQuotes.get(id) || {};
-      const dkQ = dkQuotes.get(id) || {};
-      const hrQ = hrQuotes.get(id) || {};
-      if (etSlot === '0300' && Object.keys(pinQ).length) {
-        const prev = await readLineMoveKey(eventKey(label, id), storeOpts);
-        if (!prev || !prev.open) {
-          const opened = await storeOpen(label, id, {
-            at: capturedAt,
-            homeTeam,
-            awayTeam,
-            commenceTime,
-            date: commenceEtDate(commenceTime),
-            quotes: pinQ,
-          }, storeOpts);
-          if (opened.wrote || opened.reason === 'dryRun' || opened.reason === 'OMEGA_REPLAY_NO_WRITE') {
-            state.opensFilled += 1;
-          }
-          if (opened.wrote) {
-            await recordTape({
-              sport: label,
-              eventId: id,
-              book: 'pinnacle',
-              role: 'open',
-              timestamp: capturedAt,
-              quotes: pinQ,
+      const ids = new Set([...pinQuotes.keys(), ...dkQuotes.keys(), ...hrQuotes.keys()]);
+      for (const id of ids) {
+        const event = meta.get(id) || {};
+        const commenceTime = event.commence_time || null;
+        const homeTeam = event.home_team || null;
+        const awayTeam = event.away_team || null;
+        const pinQ = pinQuotes.get(id) || {};
+        const dkQ = dkQuotes.get(id) || {};
+        const hrQ = hrQuotes.get(id) || {};
+        if (etSlot === '0300' && Object.keys(pinQ).length) {
+          const prev = await readLineMoveKey(eventKey(label, id), storeOpts);
+          if (!prev || !prev.open) {
+            const opened = await storeOpen(label, id, {
+              at: capturedAt,
               homeTeam,
               awayTeam,
               commenceTime,
-              source: 'live',
+              date: commenceEtDate(commenceTime),
+              quotes: pinQ,
             }, storeOpts);
+            if (opened.wrote || opened.reason === 'dryRun' || opened.reason === 'OMEGA_REPLAY_NO_WRITE') {
+              state.opensFilled += 1;
+            }
+            if (opened.wrote) {
+              await recordTape({
+                sport: label,
+                eventId: id,
+                book: 'pinnacle',
+                role: 'open',
+                timestamp: capturedAt,
+                quotes: pinQ,
+                homeTeam,
+                awayTeam,
+                commenceTime,
+                source: 'live',
+              }, storeOpts);
+            }
+          } else if (prev.open && prev.open.at && prev.open.quotes && Object.keys(prev.open.quotes).length) {
+            const masterIndex = await readIndex(label, id, masterOptsFrom(storeOpts));
+            if (!masterIndex || !masterIndex.open) {
+              await recordTape({
+                sport: label,
+                eventId: id,
+                book: 'pinnacle',
+                role: 'open',
+                timestamp: prev.open.at,
+                quotes: prev.open.quotes,
+                homeTeam: prev.homeTeam || homeTeam,
+                awayTeam: prev.awayTeam || awayTeam,
+                commenceTime: prev.commenceTime || commenceTime,
+                source: 'live',
+              }, storeOpts);
+            }
           }
-        } else if (prev.open && prev.open.at && prev.open.quotes && Object.keys(prev.open.quotes).length) {
-          const masterIndex = await readIndex(label, id, masterOptsFrom(storeOpts));
-          if (!masterIndex || !masterIndex.open) {
-            await recordTape({
-              sport: label,
-              eventId: id,
+        }
+        const stored = await storeCheck(label, id, {
+          slot: etSlot,
+          at: capturedAt,
+          homeTeam,
+          awayTeam,
+          commenceTime,
+          date: commenceEtDate(commenceTime) || dateISO,
+          books: {
+            pinnacle: pinQ,
+            draftkings: dkQ,
+            hardrockbet: hrQ,
+          },
+          requestsRemaining: state.requestsRemaining,
+        }, storeOpts);
+        noteStored(stored, id);
+        if (stored.wrote && etSlot === '0300') {
+          const tapeMeta = { sport: label, eventId: id, homeTeam, awayTeam, commenceTime, source: 'live' };
+          if (Object.keys(pinQ).length) {
+            const baseline = await recordTape({
+              ...tapeMeta,
               book: 'pinnacle',
-              role: 'open',
-              timestamp: prev.open.at,
-              quotes: prev.open.quotes,
-              homeTeam: prev.homeTeam || homeTeam,
-              awayTeam: prev.awayTeam || awayTeam,
-              commenceTime: prev.commenceTime || commenceTime,
-              source: 'live',
+              role: 'baseline-0300',
+              timestamp: capturedAt,
+              quotes: pinQ,
             }, storeOpts);
+            if (baseline.wrote || baseline.reason === 'duplicate') state.baselines += 1;
+          }
+          if (Object.keys(dkQ).length) {
+            await recordTape({
+              ...tapeMeta,
+              book: 'draftkings',
+              role: 'baseline-0300',
+              timestamp: capturedAt,
+              quotes: dkQ,
+            }, storeOpts);
+          }
+          if (Object.keys(hrQ).length) {
+            await recordTape({
+              ...tapeMeta,
+              book: 'hardrockbet',
+              role: 'baseline-0300',
+              timestamp: capturedAt,
+              quotes: hrQ,
+            }, storeOpts);
+          }
+        } else if (stored.wrote) {
+          const tapeMeta = { sport: label, eventId: id, homeTeam, awayTeam, commenceTime, source: 'live' };
+          if (Object.keys(pinQ).length) {
+            await recordTape({ ...tapeMeta, book: 'pinnacle', role: `check-${etSlot}`, timestamp: capturedAt, quotes: pinQ }, storeOpts);
+          }
+          if (Object.keys(dkQ).length) {
+            await recordTape({ ...tapeMeta, book: 'draftkings', role: `check-${etSlot}`, timestamp: capturedAt, quotes: dkQ }, storeOpts);
+          }
+          if (Object.keys(hrQ).length) {
+            await recordTape({ ...tapeMeta, book: 'hardrockbet', role: `check-${etSlot}`, timestamp: capturedAt, quotes: hrQ }, storeOpts);
           }
         }
       }
-      const stored = await storeCheck(label, id, {
-        slot: etSlot,
-        at: capturedAt,
-        homeTeam,
-        awayTeam,
-        commenceTime,
-        date: commenceEtDate(commenceTime) || dateISO,
-        books: {
-          pinnacle: pinQ,
-          draftkings: dkQ,
-          hardrockbet: hrQ,
-        },
-        requestsRemaining: state.requestsRemaining,
-      }, storeOpts);
-      noteStored(stored, id);
-      if (stored.wrote && etSlot === '0300') {
-        const tapeMeta = { sport: label, eventId: id, homeTeam, awayTeam, commenceTime, source: 'live' };
-        if (Object.keys(pinQ).length) {
-          const baseline = await recordTape({
-            ...tapeMeta,
-            book: 'pinnacle',
-            role: 'baseline-0300',
-            timestamp: capturedAt,
-            quotes: pinQ,
-          }, storeOpts);
-          if (baseline.wrote || baseline.reason === 'duplicate') state.baselines += 1;
-        }
-        if (Object.keys(dkQ).length) {
-          await recordTape({
-            ...tapeMeta,
-            book: 'draftkings',
-            role: 'baseline-0300',
-            timestamp: capturedAt,
-            quotes: dkQ,
-          }, storeOpts);
-        }
-        if (Object.keys(hrQ).length) {
-          await recordTape({
-            ...tapeMeta,
-            book: 'hardrockbet',
-            role: 'baseline-0300',
-            timestamp: capturedAt,
-            quotes: hrQ,
-          }, storeOpts);
-        }
-      } else if (stored.wrote) {
-        const tapeMeta = { sport: label, eventId: id, homeTeam, awayTeam, commenceTime, source: 'live' };
-        if (Object.keys(pinQ).length) {
-          await recordTape({ ...tapeMeta, book: 'pinnacle', role: `check-${etSlot}`, timestamp: capturedAt, quotes: pinQ }, storeOpts);
-        }
-        if (Object.keys(dkQ).length) {
-          await recordTape({ ...tapeMeta, book: 'draftkings', role: `check-${etSlot}`, timestamp: capturedAt, quotes: dkQ }, storeOpts);
-        }
-        if (Object.keys(hrQ).length) {
-          await recordTape({ ...tapeMeta, book: 'hardrockbet', role: `check-${etSlot}`, timestamp: capturedAt, quotes: hrQ }, storeOpts);
-        }
-      }
+      sportsHit.push(`${label}:${ids.size}`);
+      if (enforceFloor && state.stoppedForCredits) break;
+    } finally {
+      console.log(`[pinnacle-line-move] sport=${label} slot=${etSlot || ''} elapsedMs=${Date.now() - sportStarted}`);
     }
-    sportsHit.push(`${label}:${ids.size}`);
-    if (enforceFloor && state.stoppedForCredits) break;
+  }
+
+
+  async function writeDone(phase) {
+    if (mode !== 'check' || (etSlot !== '0300' && etSlot !== '1000')) return;
+    const sportErrored = sportsHit.some((row) => {
+      const text = String(row || '');
+      const idx = text.lastIndexOf(':');
+      return idx !== -1 && text.slice(idx + 1) === 'err';
+    });
+    const marker = {
+      schema: CAPTURE_DONE_SCHEMA,
+      date: dateISO,
+      slot: etSlot,
+      completedAt: now.toISOString(),
+      ok: !sportErrored && !state.stoppedForCredits,
+      gameCount: touched.size,
+      sports: sportsHit.slice(),
+      pulls: state.pulls,
+      phase,
+    };
+    // closesStored is 0 on the checks write and the real total on final.
+    // Writing twice keeps the 3:00 board visible if the historical pulls die,
+    // and still records the final close count when they finish.
+    if (etSlot === '0300') marker.closesStored = state.closesStored;
+    try {
+      await writeCaptureDone(dateISO, etSlot, marker, storeOpts);
+    } catch (err) {
+      opsAlert('capture-done-write-failed', `date=${dateISO} slot=${etSlot} phase=${phase} ${err && err.message}`);
+    }
   }
 
   if (mode === 'check' && etSlot === '0300') {
+    await writeDone('checks');
     await captureYesterdayCloses(dateISO, state, storeOpts, opts, floor, apiKey, fetchImpl);
-  }
-
-  if (mode === 'check' && etSlot === '0300') {
     try {
       const gradeOpts = {
         now,
@@ -838,6 +874,9 @@ async function runPinnacleLineCaptureInner(opts = {}) {
       state.clvGraded = 0;
       state.clvWrote = false;
     }
+    await writeDone('final');
+  } else if (mode === 'check' && etSlot === '1000') {
+    await writeDone('final');
   }
 
   const body = {
@@ -869,30 +908,9 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     baselines: state.baselines,
     opensFilled: state.opensFilled,
   };
-  if (mode === 'check' && (etSlot === '0300' || etSlot === '1000')) {
-    const sportErrored = sportsHit.some((row) => {
-      const text = String(row || '');
-      const idx = text.lastIndexOf(':');
-      return idx !== -1 && text.slice(idx + 1) === 'err';
-    });
-    const marker = {
-      schema: CAPTURE_DONE_SCHEMA,
-      date: dateISO,
-      slot: etSlot,
-      completedAt: now.toISOString(),
-      ok: !sportErrored && !state.stoppedForCredits,
-      gameCount: touched.size,
-      sports: sportsHit.slice(),
-      pulls: state.pulls,
-    };
-    if (etSlot === '0300') marker.closesStored = state.closesStored;
-    try {
-      await writeCaptureDone(dateISO, etSlot, marker, storeOpts);
-    } catch (err) {
-      opsAlert('capture-done-write-failed', `date=${dateISO} slot=${etSlot} ${err && err.message}`);
-    }
-  }
 
+  const elapsedMs = Date.now() - runStarted;
+  console.log(`[pinnacle-line-move] total elapsedMs=${elapsedMs} mode=${mode} date=${dateISO} etSlot=${etSlot || ''}`);
   console.log('[pinnacle-line-move] DONE', {
     mode: body.mode,
     date: body.date,
@@ -903,6 +921,7 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     steamCount: body.steamCount,
     stoppedForCredits: body.stoppedForCredits,
     requestsRemaining: body.requestsRemaining,
+    elapsedMs,
   });
   return body;
 }

@@ -2,12 +2,15 @@
 
 /**
  * 3:15 ET missed 3:00 pull check.
- * Reads the capture-done marker and stored line moves. Does not call the
- * Odds API and does not re-pull. dryRun and OMEGA_REPLAY_NO_WRITE write nothing.
+ * Reads the capture-done marker, the capture-start marker, and stored line
+ * moves. Does not call the Odds API and does not re-pull.
+ * A start marker with no done marker means the function was invoked and
+ * died before the 3:00 board was marked. A done marker with phase 'checks'
+ * means that board is stored. dryRun and OMEGA_REPLAY_NO_WRITE write nothing.
  */
 
 const { rejectUnlessEtSlot, etParts } = require('./lib/et-schedule');
-const { readCaptureDone } = require('./lib/omega-vnext/capture_gate');
+const { readCaptureDone, readCaptureStart } = require('./lib/omega-vnext/capture_gate');
 const { readPinnacleLineMoves } = require('./lib/omega-vnext/pinnacle_line_move');
 const { sportsForCard } = require('./lib/omega-vnext/season_calendar');
 const { opsAlert } = require('./lib/omega-vnext/ops_alert');
@@ -72,10 +75,11 @@ async function handleMissedPull(event, context, deps) {
       code: 'ok',
       marker: true,
       ok: marker.ok !== false,
+      phase: marker.phase || null,
       gameCount: marker.gameCount == null ? null : marker.gameCount,
       sports: marker.sports || [],
     };
-    console.log(`[omega-ops] missed-pull ok date=${dateISO}`);
+    console.log(`[omega-ops] missed-pull ok date=${dateISO} phase=${report.phase || 'none'}`);
   } else if (marker && marker.ok === false) {
     report = {
       date: dateISO,
@@ -84,54 +88,74 @@ async function handleMissedPull(event, context, deps) {
       code: 'partial-0300-pull',
       marker: true,
       ok: false,
+      phase: marker.phase || null,
       gameCount: marker.gameCount == null ? null : marker.gameCount,
       sports: marker.sports || [],
     };
     opsAlert('partial-0300-pull', `date=${dateISO} sports=${(report.sports || []).join(',')}`);
   } else {
-    let moves = null;
+    let started = null;
     try {
-      moves = await readMoves(dateISO);
+      started = await readCaptureStart(dateISO, '0300', { read: deps && deps.read });
     } catch (_) {
-      moves = null;
+      started = null;
     }
-    if (hasSlotCheck(moves, '0300')) {
+    if (started) {
       report = {
         date: dateISO,
         slot: '0300',
-        severity: 'warn',
-        code: 'marker-missing-data-present',
+        severity: 'alert',
+        code: 'capture-started-not-finished',
         marker: false,
+        started: true,
+        startedAt: started.startedAt || null,
       };
-      opsAlert('marker-missing-data-present', `date=${dateISO}`);
+      opsAlert('capture-started-not-finished', `date=${dateISO}`);
     } else {
-      let sports = null;
+      let moves = null;
       try {
-        sports = sportsFn(dateISO, { env: deps && deps.env });
+        moves = await readMoves(dateISO);
       } catch (_) {
-        sports = null;
+        moves = null;
       }
-      if (Array.isArray(sports) && sports.length === 0) {
+      if (hasSlotCheck(moves, '0300')) {
         report = {
           date: dateISO,
           slot: '0300',
-          severity: 'ok',
-          code: 'no-slate',
+          severity: 'warn',
+          code: 'marker-missing-data-present',
           marker: false,
-          sports: [],
         };
-        console.log(`[omega-ops] missed-pull no-slate date=${dateISO}`);
+        opsAlert('marker-missing-data-present', `date=${dateISO}`);
       } else {
-        const listed = Array.isArray(sports) ? sports : [];
-        report = {
-          date: dateISO,
-          slot: '0300',
-          severity: 'alert',
-          code: 'missed-0300-pull',
-          marker: false,
-          sports: listed,
-        };
-        opsAlert('missed-0300-pull', `date=${dateISO} sports=${listed.join(',')}`);
+        let sports = null;
+        try {
+          sports = sportsFn(dateISO, { env: deps && deps.env });
+        } catch (_) {
+          sports = null;
+        }
+        if (Array.isArray(sports) && sports.length === 0) {
+          report = {
+            date: dateISO,
+            slot: '0300',
+            severity: 'ok',
+            code: 'no-slate',
+            marker: false,
+            sports: [],
+          };
+          console.log(`[omega-ops] missed-pull no-slate date=${dateISO}`);
+        } else {
+          const listed = Array.isArray(sports) ? sports : [];
+          report = {
+            date: dateISO,
+            slot: '0300',
+            severity: 'alert',
+            code: 'missed-0300-pull',
+            marker: false,
+            sports: listed,
+          };
+          opsAlert('missed-0300-pull', `date=${dateISO} sports=${listed.join(',')}`);
+        }
       }
     }
   }

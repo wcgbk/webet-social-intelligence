@@ -31,6 +31,7 @@ const { opsAlert } = require('./ops_alert');
 const LINE_MOVE_STORE = 'omega-pinnacle-line-moves';
 const SCHEMA = 'omega-pinnacle-line-moves-v1';
 const CAPTURE_DONE_SCHEMA = 'omega-capture-done-v1';
+const CAPTURE_START_SCHEMA = 'omega-capture-start-v1';
 const PINNACLE_SPORTS = ['MLB', 'NFL', 'NCAAF', 'NHL'];
 const CHECK_SLOTS = ['0300', '1000'];
 const SLOT_ORDER = ['open', '0300', '1000'];
@@ -112,6 +113,26 @@ function captureDoneKey(dateISO, slot) {
 function isCaptureDoneKey(key) {
   const text = String(key || '');
   return text === 'capture-done' || text.startsWith('capture-done/');
+}
+
+/**
+ * Capture-started marker. Same store as capture-done, different prefix, so a
+ * list of event markers cannot return it. Written when the background run
+ * begins, before any Odds API call.
+ */
+function captureStartKey(dateISO, slot) {
+  const slotId = String(slot || '').replace(':', '');
+  return ['capture-start', String(dateISO || ''), slotId].join('/');
+}
+
+function isCaptureStartKey(key) {
+  const text = String(key || '');
+  return text === 'capture-start' || text.startsWith('capture-start/');
+}
+
+function isCaptureStartDoc(doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false;
+  return doc.schema === CAPTURE_START_SCHEMA;
 }
 
 function isCaptureDoneDoc(doc) {
@@ -1118,10 +1139,10 @@ async function markerRows(dateISO, read, list) {
   }
   const rows = [];
   for (const key of keys || []) {
-    if (isCaptureDoneKey(key)) continue;
+    if (isCaptureDoneKey(key) || isCaptureStartKey(key)) continue;
     let doc = null;
     try { doc = await read(key); } catch (_) { doc = null; }
-    if (isCaptureDoneDoc(doc)) continue;
+    if (isCaptureDoneDoc(doc) || isCaptureStartDoc(doc)) continue;
     if (doc && doc.sport && doc.eventId != null) rows.push(doc);
   }
   return rows;
@@ -1152,9 +1173,9 @@ async function readPinnacleLineMoves(dateISO, opts = {}) {
     const events = [];
     for (const row of listed) {
       const key = eventKey(row.sport, row.eventId);
-      if (isCaptureDoneKey(key)) continue;
+      if (isCaptureDoneKey(key) || isCaptureStartKey(key)) continue;
       const doc = await read(key);
-      if (isCaptureDoneDoc(doc)) continue;
+      if (isCaptureDoneDoc(doc) || isCaptureStartDoc(doc)) continue;
       if (doc && doc.schema === SCHEMA && doc.eventId != null) events.push(doc);
     }
     if (!events.length) return null;
@@ -1304,10 +1325,42 @@ async function writeCaptureDone(dateISO, slot, doc, opts = {}) {
   }
 }
 
+/**
+ * capture-start/{date}/{slot} in this same store. Not an event doc.
+ * dryRun and OMEGA_REPLAY_NO_WRITE write nothing. A failed write is soft.
+ * phase is not stored here. The done marker carries phase 'checks' or 'final'.
+ */
+async function writeCaptureStart(dateISO, slot, doc, opts = {}) {
+  const slotId = String(slot || '').replace(':', '');
+  if (slotId !== '0300' && slotId !== '1000') return { wrote: false, reason: 'slot' };
+  const block = writeBlocked(opts);
+  if (block) return { wrote: false, reason: block };
+  const key = captureStartKey(dateISO, slotId);
+  const canon = canonicalBlobKey(key);
+  if (canon.indexOf('%2F') !== -1 || canon.split('/').length !== 3) {
+    opsAlert('capture-start-write-failed', `date=${dateISO} slot=${slotId} non-canonical key`);
+    return { wrote: false, reason: 'key', key };
+  }
+  const payload = Object.assign({}, doc, {
+    schema: CAPTURE_START_SCHEMA,
+    date: dateISO,
+    slot: slotId,
+  });
+  const write = opts.write || defaultWrite;
+  try {
+    await write(key, payload);
+    return { wrote: true, reason: null, key };
+  } catch (err) {
+    opsAlert('capture-start-write-failed', `date=${dateISO} slot=${slotId} ${err && err.message}`);
+    return { wrote: false, reason: 'write-failed', key };
+  }
+}
+
 module.exports = {
   LINE_MOVE_STORE,
   SCHEMA,
   CAPTURE_DONE_SCHEMA,
+  CAPTURE_START_SCHEMA,
   PINNACLE_SPORTS,
   CHECK_SLOTS,
   SLOT_ORDER,
@@ -1338,6 +1391,10 @@ module.exports = {
   isCaptureDoneKey,
   isCaptureDoneDoc,
   writeCaptureDone,
+  captureStartKey,
+  isCaptureStartKey,
+  isCaptureStartDoc,
+  writeCaptureStart,
   unionIndexEvents,
   ensureDateIndex,
   commenceEtDate,

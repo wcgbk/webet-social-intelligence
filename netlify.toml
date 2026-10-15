@@ -35,7 +35,8 @@
   # to finish, then publishes from the stored board. It does not pull odds.
   # Ranks the top 10 and leaves the card a draft. 11:00am ET finalizes.
   # Writes edge-picks-omega → /omega.
-  # CLV via trigger-clv (track-clv-omega). Empty card OK — no lean force-fill.
+  # CLV via trigger-clv (track-clv-omega). A short pregame board fills to
+  # 3 straights and a 3-leg parlay. Schedule is unchanged.
 
 [functions."generate-picks-omega-background"]
   # Background function — 15min timeout for Omega pick generation (omega-vnext)

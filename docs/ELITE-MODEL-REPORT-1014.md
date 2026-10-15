@@ -76,3 +76,36 @@ No tier or sport split is on that results payload. Pure-model profit, ROI, and C
 ### Next
 
 Held-out replay on stored Supabase history before any further weight, calibration, Kelly, stale-cap, odds-band, or parlay change. A change ships only if held-out profit and ROI beat this card's model.
+
+## 2026-10-15 — empty card, not deployed
+
+Live site at 1:09 PM ET was still `v12.4.0-webetai-pure` and the 2026-10-15 Omega card had 0 picks, generated `2026-10-15T16:07:55Z` (12:07 PM ET), after the 11:00 ET finalization. Capture health was fine: slots 0300 and 1000 present, 17 games (MLB 2, NFL 1, NCAAF 3, NHL 11). NBA is preseason and correctly off the card.
+
+`/api/get-omega-health` showed `yes=0` in every sport. The best leftovers were NHL overs at +105 with stake EV 6.6–8.1% rejected as `ev-stale` (anchor cap 6%) and the rest rejected as `no-edge-vs-fair` with displayed edge 0. `OMEGA_MARKET_ANCHOR=1` blends the model into the Pinnacle no-vig (K floor 0.7), ranks edge against that fair, cuts max EV from 12% to 6%, and turns lean fill off. That violates brief rules 1 and 5 and is why the card was empty.
+
+Code change, local only, not pushed:
+
+- `marketAnchorOn()` always returns false. The env flag cannot re-enable the blend.
+- The Pinnacle selection gates `no-edge-vs-fair`, `edge-floor-vs-fair`, and `sharp-move-against` are removed. Pinnacle stays a CLV input.
+- Morning cron times are unchanged. Today's published card is not regenerated.
+
+Owner asked on 2026-10-15 to deploy this restore and rebuild today's live card. The 10:00 ET board is already stored (17 events). The rebuild prices that board. It does not make a new Odds API pull. X autopost stays off.
+
+As-of-now dry run (`pregameAsOfMs` = wall clock, stored 10:00 board, no write): 3 straights and a 3-leg parlay, `hardFails=0`. Six already-started rows were dropped. The card was Islanders ML +130 (5.2%, 1.5u), Seahawks @ Broncos Under 40.5 −102 (5.2%, 1.5u), Maple Leafs −1.5 +200 (4.0%, 1u), parlay 0.5u at +1266. All three start tonight.
+
+Local QA before that request:
+
+- `node tools/omega-dryrun-selection.js --date 2026-10-14` exited 0. Stored 10:00 board, no Odds API pull, no blob write. Result: 3 straights and a 3-leg parlay. Straight 1 matches the published 10/14 card (Dodgers/Brewers Under 7.5, Hard Rock −115, 3.6% edge, 1u). Straight 2 is the same Over 5.5 at DraftKings −135, at 2.1% edge and 0.75u. Straight 3 is Capitals −1.5 at +185, 1.4% edge, 0.5u. The local run could not read the line-move blob index (`@netlify/blobs` is not installed in this worktree) and it refetched ESPN inputs, so it is not a byte match of the 22:05Z card.
+- `node tools/run-tests.js` on `test-omega-*.js` and `test-sharp-*.js`: 118 passed, 5 failed. The 5 failures all read `/workspace/omega-replay-2w`, which is not on this machine. They do not import the gate change.
+
+Published Omega KPIs at the same check, from `/api/get-results-omega`. Profit is the API's dollar total. These rows are the cards already graded. They are not a pure-model replay.
+
+| Slice | Record | Profit | ROI | Parlay | CLV |
+| --- | --- | --- | --- | --- | --- |
+| All versions, 2026-03-19 on | 291–252–18 | $12,139 | 14.5% | 33–128, 20.5% | |
+| Legacy through 2026-09-21 | 262–224–18 | $12,320 | 16.9% | 30–111, 21.3% | |
+| Omega only from 2026-09-22 | 29–28 | −$181 | −1.7% | 3–17, 15.0% | n=51, +0.4¢, 47.1% beat close |
+| October 2026 | 15–19 | −$1,300 | −21.1% | 1–11 | |
+| Last 7 days | 6–9 | −$796 | −33.1% | 0–5 | |
+
+The lifetime book is near the 55% / 15% / 20% parlay marks because of the March–July legacy run. The live Omega window is not. A calibration or stake change still needs a held-out replay that beats this pure-model policy before it ships. This anchor rollback is a rule restore, not a new weight. It ships only after the 10/14 dry run is 3 straights plus a 3-leg parlay and `test-omega-*.js` / `test-sharp-*.js` pass.

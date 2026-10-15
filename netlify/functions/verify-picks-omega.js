@@ -182,7 +182,7 @@ function applyVerifyReserveTopUp(picksData, ctx = {}) {
     const finished = finishShortCard({
       picks: picksData.picks,
       reserve: picksData.reserve,
-      blocked: ctx.blocked || [],
+      blocked: require('./lib/omega-vnext/card_integrity').blockedRowsFor(picksData, ctx.blocked || []),
       parlayPool: (picksData.picks || []).concat(picksData.reserve || []),
       decide: ctx.decide,
       checkPlaceability: true,
@@ -206,6 +206,8 @@ function applyVerifyReserveTopUp(picksData, ctx = {}) {
     picksData.summary.totalPicks = finished.picks.length;
     picksData.summary.totalStraightBets = finished.picks.length;
     writeSummaryStakeDisplay(picksData.summary, finished.picks, finished.parlayLegs);
+    const integrity = require('./lib/omega-vnext/card_integrity').applyCardIntegrity(picksData);
+    Object.assign(picksData, integrity.card);
     picksData.shortfall = buildShortfall({
       picks: finished.picks,
       parlayLegs: finished.parlayLegs,
@@ -1657,7 +1659,7 @@ exports.handler = async (event) => {
       const topUpResult = applyVerifyReserveTopUp(picksData, {
         droppedSteam,
         steamHardFails: steamCheck.failed,
-        blocked: droppedThisRun,
+        blocked: require('./lib/omega-vnext/card_integrity').blockedRowsFor(picksData, droppedThisRun),
       });
       verifyTopUps = topUpResult.topUps || [];
       if (topUpResult.topped) {

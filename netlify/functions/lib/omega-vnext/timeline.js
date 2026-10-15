@@ -250,7 +250,8 @@ function writeSummaries(card) {
 
 /** 11:00 is the only step that marks the card final. */
 function finalizeCard(card, now) {
-  const data = clone(card);
+  const integrity = require('./card_integrity').applyCardIntegrity(clone(card));
+  const data = integrity.card;
   const when = now instanceof Date ? now : new Date(now || Date.now());
   data.cardStatus = 'final';
   data.finalized = true;
@@ -259,7 +260,7 @@ function finalizeCard(card, now) {
   data.selection.stage = 'final';
   if (!data.publishedAt) data.publishedAt = Number.isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString();
   const before = card || {};
-  const changed = before.finalized !== true || before.timelineStep !== '11:00' || before.cardStatus !== 'final';
+  const changed = integrity.changed || before.finalized !== true || before.timelineStep !== '11:00' || before.cardStatus !== 'final';
   return { card: data, changed };
 }
 

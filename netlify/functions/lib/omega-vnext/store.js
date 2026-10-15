@@ -90,7 +90,18 @@ async function storePicks(dateISO, picksData, opts = {}) {
   if (target.shadow && !String(pickKey).startsWith('omega-shadow/')) {
     throw new Error(`shadow store refused non-shadow key: ${pickKey}`);
   }
-  const payload = target.shadow ? shadowPayload(dateISO, picksData, pickKey) : picksData;
+  // Every live card write passes the integrity gate: no hard-fail pick or
+  // parlay leg, text matches the final picks, no empty reasoning, Hard Rock
+  // placeability flagged.
+  let gated = picksData;
+  if (!target.shadow && picksData && Array.isArray(picksData.picks) && opts.skipIntegrity !== true) {
+    try {
+      gated = require('./card_integrity').applyCardIntegrity(picksData).card;
+    } catch (err) {
+      console.error(`[card-integrity] soft-fail: ${err && err.message}`);
+    }
+  }
+  const payload = target.shadow ? shadowPayload(dateISO, gated, pickKey) : gated;
 
   if (target.overwriteGuard && !force) {
     const existing = await readPicks(dateISO);

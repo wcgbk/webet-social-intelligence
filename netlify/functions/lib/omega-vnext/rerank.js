@@ -155,10 +155,11 @@ function topUpFromReserve(working, news, pool) {
   for (const name of (news && news.removed) || []) {
     if (name) blocked.push({ pick: name, side: name });
   }
+  const allBlocked = require('./card_integrity').blockedRowsFor(working, blocked);
   const finished = finishShortCard({
     picks: working.picks,
     reserve,
-    blocked,
+    blocked: allBlocked,
     parlayPool: (pool || []).concat(working.picks, reserve),
   });
   if (!finished.added.length) return finished;
@@ -170,6 +171,8 @@ function topUpFromReserve(working, news, pool) {
   working.summary.totalPicks = finished.picks.length;
   working.summary.totalStraightBets = finished.picks.length;
   writeSummaryStakeDisplay(working.summary, finished.picks, finished.parlayLegs);
+  const integrity = require('./card_integrity').applyCardIntegrity(working);
+  Object.assign(working, integrity.card);
   return finished;
 }
 

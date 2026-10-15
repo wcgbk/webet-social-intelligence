@@ -718,7 +718,10 @@ async function generateOmegaVnext(opts = {}) {
   }
   // Narrate and hard-fail can leave the card short. Refill from the private
   // reserve only. A full card keeps the parlay generate already priced.
-  const topUpBlocked = [].concat(hardFails || [], (narr && narr.rejections) || []);
+  const topUpBlocked = require('./card_integrity').blockedRowsFor({
+    qaHardFails: (hardFails || []).map((r) => (r && typeof r === 'object' ? { hardFail: true, ...r } : r)),
+    rejections: (narr && narr.rejections) || [],
+  });
   const reserved = applyGenerateReserve({
     picks,
     yesPool,

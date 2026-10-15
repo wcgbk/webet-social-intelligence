@@ -116,10 +116,14 @@ const ET_SCHEDULE = {
   // One Pinnacle + DraftKings + Hard Rock check call. 3:00 and 10:00 ET only.
   // Cron "0 7,8,14,15 * * *" is the UTC union of EDT (UTC-4) and EST (UTC-5).
   // etGuard drops 04:00 and 11:00. 9:00 and 10:30 are not scheduled.
-  // Morning line snaps, the hourly opener, and kickoff closes are suspended.
+  // The scheduled entry fires capture-omega-pinnacle-lines-background and
+  // returns. That function has no cron and is not in this table. A failed
+  // fire runs the capture inline. Morning line snaps, the hourly opener,
+  // and kickoff closes are suspended.
   'capture-omega-pinnacle-lines': { etTimes: ['03:00', '10:00'] },
   // 3:15 ET, after the 3:00 check. Cron "15 7,8 * * *" is 07:15 UTC (EDT)
-  // and 08:15 UTC (EST). Reads the capture-done marker. No Odds API pull.
+  // and 08:15 UTC (EST). Reads the capture-done and capture-start markers.
+  // No Odds API pull.
   'monitor-omega-missed-pull': { etTimes: ['03:15'] },
   // 10:20 ET, after both morning checks. Cron "20 14,15 * * *" is 14:20 UTC
   // (EDT) and 15:20 UTC (EST). Reads stored checks only. No Odds API pull.

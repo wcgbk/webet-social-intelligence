@@ -115,6 +115,34 @@ async function run(deps, event) {
   assert.strictEqual(missed.posts.length, 1);
   assert.ok(missed.alerts.some((line) => line.includes('missed-0300-pull') && line.includes('NFL')));
 
+  const checksPhase = await run({ read: async () => marker(true, { phase: 'checks', closesStored: 0 }) });
+  assert.strictEqual(checksPhase.body.report.code, 'ok');
+  assert.strictEqual(checksPhase.body.report.severity, 'ok');
+  assert.strictEqual(checksPhase.body.report.phase, 'checks');
+  assert.strictEqual(checksPhase.posts.length, 0);
+
+  const startedOnly = await run({
+    read: async (key) => {
+      if (String(key).indexOf('capture-start/') === 0) {
+        return {
+          schema: moves.CAPTURE_START_SCHEMA,
+          date: DATE,
+          slot: '0300',
+          startedAt: '2026-10-15T07:00:05.000Z',
+        };
+      }
+      return null;
+    },
+    readPinnacleLineMoves: async () => ({
+      events: [{ sport: 'NFL', eventId: 'e1', checks: [{ slot: '0300', at: '2026-10-15T07:01:00Z' }] }],
+    }),
+  });
+  assert.strictEqual(startedOnly.body.report.code, 'capture-started-not-finished');
+  assert.strictEqual(startedOnly.body.report.severity, 'alert');
+  assert.strictEqual(startedOnly.body.report.started, true);
+  assert.strictEqual(startedOnly.posts.length, 1);
+  assert.ok(startedOnly.alerts.some((line) => line.includes('capture-started-not-finished')));
+
   const partial = await run({ read: async () => marker(false) });
   assert.strictEqual(partial.body.report.code, 'partial-0300-pull');
   assert.strictEqual(partial.body.report.severity, 'alert');

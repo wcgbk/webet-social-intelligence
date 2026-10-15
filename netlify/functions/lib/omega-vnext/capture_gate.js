@@ -3,6 +3,10 @@
 /**
  * Live scheduled card build waits until the 10:00 ET capture has finished.
  * Reads the capture-done marker and, if that is missing, stored line moves.
+ * The 10:05 build waits on the 1000 marker only. A 0300 marker whose phase
+ * is 'checks' means that morning board is already stored. It does not gate
+ * the card. phase 'final', phase 'checks', and a marker with no phase all
+ * count as the slot being present.
  * Does not call the Odds API. Never throws. A timeout still returns so the
  * caller can publish the best card from whatever is already stored.
  */
@@ -13,8 +17,11 @@ const {
   readPinnacleLineMoves,
   readLineMoveKey,
   captureDoneKey,
+  captureStartKey,
   CAPTURE_DONE_SCHEMA,
+  CAPTURE_START_SCHEMA,
   isCaptureDoneDoc,
+  isCaptureStartDoc,
 } = require('./pinnacle_line_move');
 
 const DEFAULT_MAX_WAIT_MS = 240000;
@@ -67,15 +74,39 @@ function newestSettledAgeMs(doc, slot, atMs) {
   return atMs - newest;
 }
 
+/**
+ * phase 'checks' is the 3:00 board (opens, baselines, checks) stored before
+ * yesterday's closes. phase 'final' is the same key after closes and CLV.
+ * A marker written before phases existed has no phase and still counts.
+ */
+function donePhasePresent(doc) {
+  if (!doc) return false;
+  if (doc.phase == null || doc.phase === '') return true;
+  return doc.phase === 'checks' || doc.phase === 'final';
+}
+
+function acceptDoneDoc(doc, slotId) {
+  if (!isCaptureDoneDoc(doc)) return null;
+  if (doc.schema && doc.schema !== CAPTURE_DONE_SCHEMA) return null;
+  if (doc.slot && String(doc.slot) !== slotId) return null;
+  if (!donePhasePresent(doc)) return null;
+  return doc;
+}
+
+function acceptStartDoc(doc, slotId) {
+  if (!isCaptureStartDoc(doc)) return null;
+  if (doc.schema && doc.schema !== CAPTURE_START_SCHEMA) return null;
+  if (doc.slot && String(doc.slot) !== slotId) return null;
+  return doc;
+}
+
 async function readCaptureDone(dateISO, slot, opts = {}) {
   const slotId = String(slot || '1000').replace(':', '');
   const read = (opts && typeof opts.read === 'function') ? opts.read : null;
   if (!read) {
     try {
       const doc = await readLineMoveKey(captureDoneKey(dateISO, slotId), opts);
-      if (!isCaptureDoneDoc(doc)) return null;
-      if (doc.slot && String(doc.slot) !== slotId) return null;
-      return doc;
+      return acceptDoneDoc(doc, slotId);
     } catch (_) {
       return null;
     }
@@ -86,10 +117,27 @@ async function readCaptureDone(dateISO, slot, opts = {}) {
   } catch (_) {
     return null;
   }
-  if (!isCaptureDoneDoc(doc)) return null;
-  if (doc.schema && doc.schema !== CAPTURE_DONE_SCHEMA) return null;
-  if (doc.slot && String(doc.slot) !== slotId) return null;
-  return doc;
+  return acceptDoneDoc(doc, slotId);
+}
+
+async function readCaptureStart(dateISO, slot, opts = {}) {
+  const slotId = String(slot || '0300').replace(':', '');
+  const read = (opts && typeof opts.read === 'function') ? opts.read : null;
+  if (!read) {
+    try {
+      const doc = await readLineMoveKey(captureStartKey(dateISO, slotId), opts);
+      return acceptStartDoc(doc, slotId);
+    } catch (_) {
+      return null;
+    }
+  }
+  let doc = null;
+  try {
+    doc = await read(captureStartKey(dateISO, slotId));
+  } catch (_) {
+    return null;
+  }
+  return acceptStartDoc(doc, slotId);
 }
 
 async function waitForCapture(dateISO, slot = '1000', opts = {}) {
@@ -177,6 +225,8 @@ module.exports = {
   DATA_PRESENT_AGE_MS,
   shouldWaitForCapture,
   readCaptureDone,
+  readCaptureStart,
+  donePhasePresent,
   waitForCapture,
   awaitLiveCaptureGate,
 };

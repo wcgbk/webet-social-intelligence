@@ -1,0 +1,211 @@
+{
+  "window": {
+    "start": "2026-09-15",
+    "end": "2026-10-14",
+    "days": 30
+  },
+  "replayed": [
+    "2026-10-13"
+  ],
+  "skipped": [
+    "2026-09-15",
+    "2026-09-16",
+    "2026-09-17",
+    "2026-09-18",
+    "2026-09-19",
+    "2026-09-20",
+    "2026-09-21",
+    "2026-09-22",
+    "2026-09-23",
+    "2026-09-24",
+    "2026-09-25",
+    "2026-09-26",
+    "2026-09-27",
+    "2026-09-28",
+    "2026-09-29",
+    "2026-09-30",
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03",
+    "2026-10-04",
+    "2026-10-05",
+    "2026-10-06",
+    "2026-10-07",
+    "2026-10-08",
+    "2026-10-09",
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-14"
+  ],
+  "scheduleDiff": [
+    {
+      "functionName": "monitor-omega-missed-pull",
+      "base": null,
+      "head": "15 7,8 * * *"
+    },
+    {
+      "functionName": "trigger-picks-omega",
+      "base": "0 14,15 * * *",
+      "head": "5 14,15 * * *"
+    }
+  ],
+  "scheduleOk": true,
+  "days": [
+    {
+      "day": "2026-10-13",
+      "events": 19,
+      "shapeOk": true,
+      "identical": true,
+      "oddsBlocked": [],
+      "headErr": null,
+      "baseErr": null,
+      "head": {
+        "picks": 3,
+        "parlayLegs": 3,
+        "parlayUnits": "0.5u",
+        "picksDetail": [
+          {
+            "sport": "NHL",
+            "matchup": "St Louis Blues @ Ottawa Senators",
+            "pick": "Over 5.5",
+            "market": "Total",
+            "odds": "-122",
+            "line": 5.5,
+            "units": "1.5u",
+            "rating": "aplus",
+            "result": null,
+            "profit": null,
+            "grade": "A+"
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Florida Panthers @ Columbus Blue Jackets",
+            "pick": "Over 5.5",
+            "market": "Total",
+            "odds": "-135",
+            "line": 5.5,
+            "units": "1.5u",
+            "rating": "aplus",
+            "result": null,
+            "profit": null,
+            "grade": "A+"
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Calgary Flames @ Anaheim Ducks",
+            "pick": "Over 6.5",
+            "market": "Total",
+            "odds": "+110",
+            "line": 6.5,
+            "units": "1u",
+            "rating": "a",
+            "result": null,
+            "profit": null,
+            "grade": "A"
+          }
+        ],
+        "parlayDetail": [
+          {
+            "matchup": "St Louis Blues @ Ottawa Senators",
+            "pick": "Over 5.5",
+            "odds": "-122",
+            "line": 5.5,
+            "units": "1.5u",
+            "result": null
+          },
+          {
+            "matchup": "Florida Panthers @ Columbus Blue Jackets",
+            "pick": "Over 5.5",
+            "odds": "-135",
+            "line": 5.5,
+            "units": "1.5u",
+            "result": null
+          },
+          {
+            "matchup": "Calgary Flames @ Anaheim Ducks",
+            "pick": "Over 6.5",
+            "odds": "+110",
+            "line": 6.5,
+            "units": "1u",
+            "result": null
+          }
+        ]
+      },
+      "base": {
+        "picks": 3,
+        "parlayLegs": 3,
+        "parlayUnits": "0.5u",
+        "picksDetail": [
+          {
+            "sport": "NHL",
+            "matchup": "St Louis Blues @ Ottawa Senators",
+            "pick": "Over 5.5",
+            "market": "Total",
+            "odds": "-122",
+            "line": 5.5,
+            "units": "1.5u",
+            "rating": "aplus",
+            "result": null,
+            "profit": null,
+            "grade": "A+"
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Florida Panthers @ Columbus Blue Jackets",
+            "pick": "Over 5.5",
+            "market": "Total",
+            "odds": "-135",
+            "line": 5.5,
+            "units": "1.5u",
+            "rating": "aplus",
+            "result": null,
+            "profit": null,
+            "grade": "A+"
+          },
+          {
+            "sport": "NHL",
+            "matchup": "Calgary Flames @ Anaheim Ducks",
+            "pick": "Over 6.5",
+            "market": "Total",
+            "odds": "+110",
+            "line": 6.5,
+            "units": "1u",
+            "rating": "a",
+            "result": null,
+            "profit": null,
+            "grade": "A"
+          }
+        ],
+        "parlayDetail": [
+          {
+            "matchup": "St Louis Blues @ Ottawa Senators",
+            "pick": "Over 5.5",
+            "odds": "-122",
+            "line": 5.5,
+            "units": "1.5u",
+            "result": null
+          },
+          {
+            "matchup": "Florida Panthers @ Columbus Blue Jackets",
+            "pick": "Over 5.5",
+            "odds": "-135",
+            "line": 5.5,
+            "units": "1.5u",
+            "result": null
+          },
+          {
+            "matchup": "Calgary Flames @ Anaheim Ducks",
+            "pick": "Over 6.5",
+            "odds": "+110",
+            "line": 6.5,
+            "units": "1u",
+            "result": null
+          }
+        ]
+      },
+      "pass": true
+    }
+  ],
+  "pass": true
+}

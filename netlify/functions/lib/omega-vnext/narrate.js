@@ -261,7 +261,9 @@ function templateInsights(picks) {
   return joinSentences([
     sportLine,
     watch,
-    'WeBetAI built this as a few straights plus a small parlay, not a pile of leans.',
+    list.length === 1
+      ? 'Only one bet cleared the WeBetAI bar today, so the card is one straight and no parlay.'
+      : `${list.length} straights cleared the WeBetAI bar today, and nothing was added to fill the card.`,
     'Each play argues for one side, and the stake matches how far off the price looks.',
     'If a blurb does not convince you, pass on that leg.',
   ]);

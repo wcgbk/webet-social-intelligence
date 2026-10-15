@@ -51,3 +51,25 @@ assert.ok(empty.edgeSummary && empty.edgeSummary.length > 10);
 // Admin trigger refuses without the server token.
 assert.strictEqual(admin.tokenOk({ headers: { 'x-admin-token': 'x' } }), false);
 console.log('PASS test-market-anchor-1015');
+// 2026-10-15 elite pass: K floor 0.7, power de-vig, edge floor, template, public flag.
+{
+  assert.ok(pm.kFor('MLB', 'Moneyline') >= 0.7, 'MLB ML K floor');
+  assert.ok(pm.kFor('MLB', 'Spread') >= 0.7, 'MLB RL K floor');
+  // Longshot pair +300/-400: power fair for the dog is below multiplicative.
+  const c = { sport: 'NHL', market: 'Moneyline', odds: 320, modelPureP: 0.3, book: 'draftkings',
+    pinnacleSide: { american: 300, oppAmerican: -400 }, pinnacleNoVigP: 0.2353 };
+  const pf = pm.fairProbability(c);
+  assert.ok(pf > 0 && pf < 0.2353, `power fair ${pf}`);
+  const g = require('./netlify/functions/lib/omega-vnext/gates');
+  const fn = g.rejectReason || g.gateReason;
+  if (typeof fn === 'function') {
+    assert.ok(fn({ sport: 'MLB', market: 'Moneyline', odds: 130, coverProb: 0.45, ev: 0.035, edgePct: 0.015, p_fair: 0.435, pureModelPriced: true }), 'rejected under 2pt edge');
+  }
+  const ins = narrate.buildCardFallbackCopy({ picks: [{ sport: 'MLB', pick: 'Milwaukee Brewers ML' }] }).insights;
+  assert.ok(/one straight and no parlay/.test(ins) && !/small parlay/.test(ins));
+  const pub = require('./netlify/functions/lib/public-picks');
+  const fnPub = pub.publicPicksPayload || Object.values(pub).find((f) => typeof f === 'function');
+  const out = fnPub({ picks: [{ pick: 'X', matchup: 'A @ B', placeabilityFlag: 'Not available at Hard Rock.' }] });
+  assert.strictEqual(out.picks[0].placeabilityFlag, 'Not available at Hard Rock.');
+  console.log('PASS elite-1015 checks');
+}

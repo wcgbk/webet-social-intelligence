@@ -43,6 +43,7 @@ function retailBook(c) {
  * execution price. No fair: the bet is skipped. Raw model p stays diagnostic.
  */
 let K_TABLE = null;
+const K_FLOOR = 0.7;
 function kFor(sport, market) {
   if (!K_TABLE) {
     K_TABLE = {};
@@ -57,11 +58,25 @@ function kFor(sport, market) {
   }
   const m = /money/i.test(market || '') ? 'Moneyline' : (/total|over|under/i.test(market || '') ? 'Total' : 'Spread');
   const k = K_TABLE[`${sport}|${m}`];
-  return Number.isFinite(k) ? k : 1;
+  // Floor 0.7 toward the market until a fresh fit justifies less (2026-10-15).
+  return Number.isFinite(k) ? Math.max(K_FLOOR, k) : 1;
+}
+
+function powerFair(c) {
+  // Power de-vig on the Pinnacle pair at the same line (handles longshot bias).
+  const ps = c && c.pinnacleSide;
+  if (!ps || !Number.isFinite(Number(ps.american)) || !Number.isFinite(Number(ps.oppAmerican))) return null;
+  try {
+    const { powerTwoWay } = require('./sharp_fair');
+    const i1 = americanToImplied(Number(ps.american));
+    const i2 = americanToImplied(Number(ps.oppAmerican));
+    const r = typeof powerTwoWay === 'function' ? powerTwoWay(i1, i2) : null;
+    return r ? finiteProb(r.p1) : null;
+  } catch (_) { return null; }
 }
 
 function fairProbability(c) {
-  return finiteProb(c && c.pinnacleNoVigP) || finiteProb(c && c.fair_sharp_p) || finiteProb(c && c.sharpFairP);
+  return powerFair(c) || finiteProb(c && c.pinnacleNoVigP) || finiteProb(c && c.fair_sharp_p) || finiteProb(c && c.sharpFairP);
 }
 
 function calibratedProbability(pModel, pFair, k) {

@@ -1,0 +1,2730 @@
+functionsDirectory = "/workspace/wsi/netlify/functions"
+functionsDirectoryOrigin = "config-v1"
+redirectsOrigin = "config"
+plugins = []
+
+[build]
+publish = "/workspace/wsi"
+publishOrigin = "default"
+functions = "/workspace/wsi/netlify/functions"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions.build-ratings-background]
+
+[functions.trigger-picks]
+
+[functions.trigger-picks-beta]
+
+[functions.trigger-picks-alpha]
+
+[functions.serve-dashboard]
+included_files = ["dashboard/index.html"]
+
+[functions.generate-picks-alpha-background]
+
+[functions.trigger-picks-omega]
+schedule = "5 14,15 * * *"
+
+[functions.generate-picks-omega-background]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.rerank-picks-omega]
+schedule = "15 14,15 * * *"
+
+[functions.verify-picks-omega]
+schedule = "30 14,15 * * *"
+
+[functions.narrate-card-omega]
+schedule = "45 14,15 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.post-card-omega]
+schedule = "0 15,16 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.pregame-check-omega]
+schedule = "0,30 15-23,0-4 * * *"
+
+[functions.self-optimize-omega]
+
+[functions.fetch-tsp-live]
+
+[functions.trigger-picks-nfl]
+
+[functions.generate-picks-nfl-background]
+
+[functions.trigger-picks-circa]
+schedule = "0,15,30,45 17,18,19,20,21 * * 3,4,5,6"
+
+[functions.generate-picks-circa-background]
+included_files = ["node_modules/@hyzyla/pdfium/package.json", "node_modules/@hyzyla/pdfium/dist/**", "node_modules/tesseract.js/**", "node_modules/tesseract.js-core/**", "node_modules/bmp-js/**", "node_modules/idb-keyval/**", "node_modules/is-electron/**", "node_modules/is-url/**", "node_modules/node-fetch/**", "node_modules/regenerator-runtime/**", "node_modules/tr46/**", "node_modules/wasm-feature-detect/**", "node_modules/webidl-conversions/**", "node_modules/whatwg-url/**", "node_modules/zlibjs/**", "netlify/functions/lib/circa-contest-pdf-ocr.js", "netlify/functions/lib/circa-contest-lines.js", "netlify/functions/lib/circa-card-health.js"]
+
+[functions.get-circa-standings]
+included_files = ["node_modules/pdf-parse/**", "node_modules/node-ensure/**", "node_modules/debug/**", "node_modules/ms/**"]
+
+[functions.regrade-circa]
+schedule = "40 * * * *"
+
+[functions.check-circa-card-health]
+schedule = "5,20,35,50 17,18,19,20,21 * * 3,4,5,6"
+
+[functions.trigger-picks-cfb]
+
+[functions.generate-picks-cfb-background]
+
+[functions.grok-beta-daily]
+
+[functions.grok-beta-run-background]
+included_files = ["lib/grok-beta/**"]
+
+[functions.grok-beta-get-picks]
+included_files = ["lib/grok-beta/**"]
+
+[functions.grok-beta-status]
+included_files = ["lib/grok-beta/**"]
+
+[functions.trigger-picks-mvp]
+
+[functions.generate-picks-mvp-background]
+
+[functions.trigger-picks-mlb]
+
+[functions.generate-picks-mlb-background]
+
+[functions.confirm-starters-mlb]
+schedule = "30 17,18 * * *"
+
+[functions.trigger-picks-props]
+
+[functions.generate-picks-props-background]
+
+[functions.trigger-picks-mlb-props]
+
+[functions.generate-picks-mlb-props-background]
+
+[functions.trigger-kalshi]
+
+[functions.trigger-kalshi-scan]
+
+[functions.generate-picks-beta-background]
+
+[functions.generate-picks-be-background]
+
+[functions.trigger-clv]
+schedule = "0 7,8 * * *"
+
+[functions.capture-omega-lines]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-lines-late]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-pinnacle-lines]
+schedule = "0 7,8,14,15 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-pinnacle-lines-background]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.monitor-omega-snapshot-coverage]
+schedule = "20 14,15 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.monitor-omega-missed-pull]
+schedule = "15 7,8 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-pinnacle-open]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.recal-report-omega]
+schedule = "15 13,14 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.report-clv-omega]
+schedule = "15 13,14 * * *"
+included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
+
+[functions.get-clv-report]
+included_files = ["data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js"]
+
+[functions.report-tracking-omega]
+schedule = "15 13,14 * * *"
+included_files = ["data/engineering-scores.json", "data/clv-ledger-seed.json", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/tracking-report.js", "netlify/functions/lib/kpi-cache.js"]
+
+[functions.sync-supabase]
+schedule = "25 13,14 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**", "netlify/functions/lib/clv-ledger.js", "netlify/functions/lib/omega-grading-rules.js", "js/live-score.js"]
+
+[functions.report-calibration-omega]
+schedule = "15 10,11 * * 0"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.get-tracking]
+included_files = ["tracking/report.json", "netlify/functions/lib/tracking-report.js"]
+
+[functions.capture-candidate-closes]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.warm-omega-feeds]
+schedule = "0 13,14 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.trigger-omega-shadow]
+schedule = "5 13,14 * * *"
+
+[functions.omega-nba-shadow]
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.trigger-omega-nba-shadow]
+schedule = "30 21,22 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.trigger-omega-nba-shadow-grade]
+schedule = "0 12,13 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-pm-observer-open]
+schedule = "30 12,13 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-pm-observer]
+schedule = "15 14,15 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-walkforward]
+schedule = "15 15,16 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-omega-walkforward-evening]
+schedule = "45 23,0 * * *"
+included_files = ["netlify/functions/lib/omega-vnext/**"]
+
+[functions.capture-opening-lines]
+
+[functions.verify-picks]
+
+[functions.self-optimize]
+schedule = "0 9,10 * * 0"
+
+[functions.trigger-trend-monitor]
+schedule = "0 1,2 * * *"
+
+[functions.generate-fox-background]
+
+[functions.trigger-fox]
+
+[functions.admin-auto-draft]
+
+[functions.admin-queue-process]
+
+[functions.generate-webet-content-background]
+
+[functions.generate-truth-content-background]
+
+[functions.trigger-truth]
+
+[functions.generate-guardian-background]
+
+[functions.trigger-guardian]
+
+[functions.matching-engine-background]
+
+[functions.exodus-scan-background]
+
+[functions.monitor-tsp-public-records]
+schedule = "0 15,16 * * *"
+included_files = ["netlify/functions/lib/tsp-research/**"]
+
+[functions.fetch-tsp-public-records]
+included_files = ["netlify/functions/lib/tsp-research/**"]
+
+[functions."*"]
+node_bundler = "nft"
+
+[[headers]]
+for = "/betty.vcf"
+
+[headers.values]
+Content-Type = "text/vcard; charset=utf-8"
+Content-Disposition = "inline; filename=\"Betty.vcf\""
+Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+for = "/daily-omega/*"
+
+[headers.values]
+Cache-Control = "public, max-age=120, must-revalidate"
+
+[[headers]]
+for = "/agentics/*"
+
+[headers.values]
+Cache-Control = "public, max-age=120, must-revalidate"
+
+[[headers]]
+for = "/nfl/*"
+
+[headers.values]
+Cache-Control = "public, max-age=120, must-revalidate"
+
+[[headers]]
+for = "/cfb/*"
+
+[headers.values]
+Cache-Control = "public, max-age=120, must-revalidate"
+
+[[redirects]]
+from = "/mvpalpha"
+to = "/mvpalpha/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/mvpalpha/"
+to = "/mvpalpha/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/nfl"
+to = "/nfl/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/nfl/"
+to = "/nfl/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/circa"
+to = "/circa/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/circa/"
+to = "/circa/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-picks-circa"
+to = "/.netlify/functions/get-picks-circa"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-circa-standings"
+to = "/.netlify/functions/get-circa-standings"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/cfb"
+to = "/cfb/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/cfb/"
+to = "/cfb/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/live-edge"
+to = "/live-edge/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/live-edge/"
+to = "/live-edge/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-beta"
+to = "/live-edge"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-beta/"
+to = "/live-edge"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/daily-omega"
+to = "/daily-omega/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/daily-omega/"
+to = "/daily-omega/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/omega"
+to = "/daily-omega"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/omega/"
+to = "/daily-omega"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/agentics"
+to = "/agentics/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/agentics/"
+to = "/agentics/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/agentics-ledger"
+to = "/.netlify/functions/agentics-ledger"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-picks-omega"
+to = "/.netlify/functions/get-picks-omega"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-results-omega"
+to = "/.netlify/functions/get-results-omega"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbot"
+to = "/grokbot/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbot/"
+to = "/grokbot/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbok"
+to = "/grokbot"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbok/"
+to = "/grokbot"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbot-cadence"
+to = "/grokbot-cadence/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbot-cadence/"
+to = "/grokbot-cadence/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbot-preview"
+to = "/grokbot-preview/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grokbot-preview/"
+to = "/grokbot-preview/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-preview"
+to = "/grokbot-preview/"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-preview/"
+to = "/grokbot-preview/"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-bot-preview"
+to = "/grokbot-preview/"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-bot-preview/"
+to = "/grokbot-preview/"
+status = 301.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/grok-bot-picks"
+to = "/.netlify/functions/get-grok-bot-picks"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/grok-bot-webhook"
+to = "/.netlify/functions/grok-bot-webhook"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/live-picks"
+to = "/live-picks/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/live-picks/"
+to = "/live-picks/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/live-picks-data"
+to = "/.netlify/functions/get-live-picks"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/live-picks-results"
+to = "/.netlify/functions/get-live-picks-results"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/live-ingest"
+to = "/.netlify/functions/live-ingest"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/kalshi-demo"
+to = "/kalshi-demo/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/kalshi-demo/"
+to = "/kalshi-demo/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/s/betty"
+to = "/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/s/betty/"
+to = "/grokbot?utm_source=site_share&utm_medium=referral&utm_campaign=page_share&utm_content=share_follow#follow"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/b/grokbot"
+to = "/grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=sales_page"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/b/grokbot/"
+to = "/grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=sales_page"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/b/share"
+to = "/grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=share"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/b/share/"
+to = "/grokbot?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=share"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/b/omega"
+to = "/daily-omega?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=daily_omega"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/b/omega/"
+to = "/daily-omega?utm_source=grokbot&utm_medium=bot&utm_campaign=betty&utm_content=daily_omega"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/go/*"
+to = "/.netlify/functions/go-redirect"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/go"
+to = "/.netlify/functions/go-redirect"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/users"
+to = "/users/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/users/"
+to = "/users/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/admin-list-users"
+to = "/.netlify/functions/admin-list-users"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-omega-clv-report"
+to = "/.netlify/functions/get-omega-clv-report"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-clv-report"
+to = "/.netlify/functions/get-clv-report"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/tracking"
+to = "/tracking/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/tracking/"
+to = "/tracking/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-tracking"
+to = "/.netlify/functions/get-tracking"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/tracking/report.json"
+to = "/.netlify/functions/get-tracking"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/betty-guide"
+to = "/betty-guide/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/betty-guide/"
+to = "/betty-guide/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/betty-x"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=betty-x&utm_id=betty-x"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/betty-x/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=betty-x&utm_id=betty-x"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/6dzbjs"
+to = "/daily-omega?utm_source=x&utm_medium=social&utm_campaign=omega&utm_content=6dzbjs&utm_id=6dzbjs"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/6dzbjs/"
+to = "/daily-omega?utm_source=x&utm_medium=social&utm_campaign=omega&utm_content=6dzbjs&utm_id=6dzbjs"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/tf265h"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=share_follow&utm_id=tf265h#follow"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/tf265h/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=share_follow&utm_id=tf265h#follow"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/love"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_top&utm_id=love"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/love/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_top&utm_id=love"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/card"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_card&utm_id=card"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/card/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_love_card&utm_id=card"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/uws7x9"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_kalshi_margin&utm_id=uws7x9"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/uws7x9/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_kalshi_margin&utm_id=uws7x9"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/gfecak"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_bot_finance&utm_id=gfecak"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/gfecak/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_bot_finance&utm_id=gfecak"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/tkd6rj"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_cody_roller&utm_id=tkd6rj"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/tkd6rj/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_cody_roller&utm_id=tkd6rj"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/stnpzf"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_bot_support&utm_id=stnpzf"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/stnpzf/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_bot_support&utm_id=stnpzf"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/vtskth"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_dk_penix&utm_id=vtskth"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/vtskth/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_dk_penix&utm_id=vtskth"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/kx9crv"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_sawyer_tutorial&utm_id=kx9crv"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/kx9crv/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_sawyer_tutorial&utm_id=kx9crv"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/ezpzms"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_underdog_waivers&utm_id=ezpzms"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/ezpzms/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_underdog_waivers&utm_id=ezpzms"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/djkngc"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_poly_agents&utm_id=djkngc"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/djkngc/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=betty&utm_content=reply_poly_agents&utm_id=djkngc"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/betty-video"
+to = "/grokbot-preview/?utm_source=x&utm_medium=social&utm_campaign=pinned_post&utm_content=betty_video&utm_id=betty-video"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/betty-video/"
+to = "/grokbot-preview/?utm_source=x&utm_medium=social&utm_campaign=pinned_post&utm_content=betty_video&utm_id=betty-video"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/betty-grokbot"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=grokbot_share&utm_content=betty_grokbot&utm_id=betty-grokbot"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/betty-grokbot/"
+to = "/grokbot?utm_source=x&utm_medium=social&utm_campaign=grokbot_share&utm_content=betty_grokbot&utm_id=betty-grokbot"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/r/*"
+to = "/"
+status = 302.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/prediction-markets"
+to = "/prediction-markets/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-kalshi-paper"
+to = "/.netlify/functions/get-kalshi-paper"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/props"
+to = "/props/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-picks-props"
+to = "/.netlify/functions/get-picks-props"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/run-picks-props"
+to = "/.netlify/functions/run-picks-props"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-results-props"
+to = "/.netlify/functions/get-results-props"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/mlb-props/dev"
+to = "/mlb-props/dev/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/mlb-props"
+to = "/alpha"
+status = 302.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-picks-mlb-props"
+to = "/.netlify/functions/get-picks-mlb-props"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-results-mlb-props"
+to = "/.netlify/functions/get-results-mlb-props"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/run-picks-mlb-props"
+to = "/.netlify/functions/generate-picks-mlb-props-background"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/mlb/dev"
+to = "/mlb/dev/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/mlb"
+to = "/alpha"
+status = 302.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-picks-mlb"
+to = "/.netlify/functions/get-picks-mlb"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/run-picks-mlb"
+to = "/.netlify/functions/run-picks-mlb"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/confirm-starters-mlb"
+to = "/.netlify/functions/confirm-starters-mlb"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-results-mlb"
+to = "/.netlify/functions/get-results-mlb"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/edge-beta"
+to = "/edge-beta/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/edge/beta"
+to = "/edge-beta/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/mvp"
+to = "/mvp/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-picks-mvp"
+to = "/.netlify/functions/get-picks-mvp"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/run-picks-mvp"
+to = "/.netlify/functions/run-picks-mvp"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/get-results-mvp"
+to = "/.netlify/functions/get-results-mvp"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/alpha"
+to = "/alpha/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/dashboard"
+to = "/.netlify/functions/serve-dashboard"
+status = 200.0
+force = true
+
+[redirects.query]
+view = ":view"
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/dashboard"
+to = "/.netlify/functions/serve-dashboard"
+status = 200.0
+force = true
+
+[redirects.query]
+card = "bettycfbv1"
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/dashboard"
+to = "/.netlify/functions/serve-dashboard"
+status = 200.0
+force = true
+
+[redirects.query]
+card = "betty-cfb-v1"
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/dashboard"
+to = "/dashboard/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/alpha/dashboard"
+to = "/alpha/dashboard/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/bet"
+to = "/bet/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/bet/*"
+to = "/.netlify/functions/serve-bet"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/exodus"
+to = "/exodus/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/truth/command"
+to = "/truth/command.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/truth"
+to = "/truth/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/truth/*"
+to = "/truth/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/scanner"
+to = "/scanner/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/finalboss"
+to = "/finalboss/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/partners"
+to = "/partners/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/95"
+to = "/95/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/invite"
+to = "/invite/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/backend"
+to = "/backend/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/handshake"
+to = "/handshake/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/handshake/*"
+to = "/handshake/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/bettoredge"
+to = "/bettoredge/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/edge/beta/better-edge"
+to = "/edge/beta/better-edge/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/edge/optimization"
+to = "/edge/optimization/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/predictions"
+to = "/predictions/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/brandon"
+to = "/brandon/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/edge"
+to = "/edge/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/webetai"
+to = "/webetai/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/webetai/*"
+to = "/webetai/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/feed/alpha"
+to = "/feed/alpha/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/feed/beta3"
+to = "/feed/beta3/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/feed/beta2"
+to = "/feed/beta2/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/feed/beta"
+to = "/feed/beta/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/feed"
+to = "/feed/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/chat"
+to = "/chat/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-to-code"
+to = "/grok-to-code.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/claude"
+to = "/grok-to-code.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/admin"
+to = "/admin/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/admin/*"
+to = "/admin/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "https://app.webetsocial.com/*"
+to = "/admin/index.html"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+Role = ["admin"]
+
+[redirects.headers]
+
+[[redirects]]
+from = "https://app.webetsocial.com/api/*"
+to = "/.netlify/functions/:splat"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "https://app.webetsocial.com"
+to = "/admin/index.html"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "https://app.webetsocial.com/*"
+to = "/admin/index.html"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/betty/blog/*"
+to = "/.netlify/functions/get-blog-post?slug=:splat"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/fox/dev"
+to = "/fox/dev/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/fox"
+to = "/fox/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/agent-battle-bots"
+to = "/agent-battle-bots/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/ai"
+to = "/ai/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/alive"
+to = "/alive/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/askapai"
+to = "/askapai/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/authenticity"
+to = "/authenticity/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/battlebots"
+to = "/battlebots/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/betty"
+to = "/betty/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/brackets"
+to = "/brackets/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/challenge"
+to = "/challenge/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/credits"
+to = "/credits/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/derby"
+to = "/derby/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/fun"
+to = "/fun/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/funnel"
+to = "/funnel/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/guardian"
+to = "/guardian/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/homepage"
+to = "/homepage/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/kalshi"
+to = "/kalshi/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/live"
+to = "/live/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/llm"
+to = "/llm/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/octavius"
+to = "/octavius/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/old"
+to = "/old/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/p2p-sports"
+to = "/p2p-sports/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/p2p-trending"
+to = "/p2p-trending/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/percentile"
+to = "/percentile/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/pick3p2p"
+to = "/pick3p2p/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/priority"
+to = "/priority/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/rif"
+to = "/rif/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/scorecard"
+to = "/scorecard/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/summary"
+to = "/alpha"
+status = 302.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/voicebet"
+to = "/voicebet/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/webit"
+to = "/webit/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/x"
+to = "/x/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/grok-beta"
+to = "/live-edge"
+status = 301.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/grok-beta-picks"
+to = "/.netlify/functions/grok-beta-get-picks"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/grok-beta-run"
+to = "/.netlify/functions/grok-beta-run"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/grok-beta-status"
+to = "/.netlify/functions/grok-beta-status"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/auth/x/callback"
+to = "/.netlify/functions/auth-x-callback"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/auth/me"
+to = "/.netlify/functions/auth-me"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/auth/logout"
+to = "/.netlify/functions/auth-logout"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/:splat"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]

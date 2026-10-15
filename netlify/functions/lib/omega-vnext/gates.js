@@ -210,6 +210,12 @@ function gateReason(c, opts = {}) {
   }
   // 2026-10-15 market anchor: the calibrated p must beat the no-vig fair.
   if (c.pureModelPriced && c.p_fair != null && !(Number(c.edgePct) > 0)) return 'no-edge-vs-fair';
+  if (c.pureModelPriced && c.p_fair != null && require('./config').marketAnchorOn()) {
+    // Per-market minimum edge vs fair: sides and totals 2 points.
+    if (Number(c.edgePct) < 0.02 - 1e-12) return 'edge-floor-vs-fair';
+    // Stale price: the sharp moved against this side since 3:00.
+    if (c.steamAgainst === true) return 'sharp-move-against';
+  }
   // Sharp card: grades are the price edge, p_fair − implied.
   // A− and up (≥2%) are mains. B is the 1–2% lean. Under 1% is edge-floor
   // here. selectStraights may still fill a short card from those same-line

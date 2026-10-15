@@ -9,6 +9,7 @@ const { cacheIsFresh, cacheControlFor } = require('./lib/kpi-cache');
 const { resolveDoubleheader, inheritCommenceTime } = require('../../js/live-score');
 const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
 const omegaGradingRules = require('./lib/omega-grading-rules');
+const { isParlayGradeName } = require('./lib/omega-vnext/result_kpis');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -498,6 +499,21 @@ function dollars(n) {
   return Math.round(x * 100) / 100;
 }
 
+function isParlayGradeRow(row) {
+  if (!row) return false;
+  if (String(row.sport || '').toUpperCase() === 'PARLAY') return true;
+  return isParlayGradeName(row.pick);
+}
+
+/** "(Optimized)" only when the stored ticket type ends in -optimized. */
+function gradedParlayPickName(legCount, ticket) {
+  const n = Number(legCount);
+  const count = Number.isFinite(n) ? n : 0;
+  const type = String((ticket && ticket.type) || '');
+  const base = `${count}-Team Parlay`;
+  return type.endsWith('-optimized') ? `${base} (Optimized)` : base;
+}
+
 /**
  * The published ticket, or null when the card has no parlay.
  * A missing list, an empty list, or a ticket with fewer than 2 legs
@@ -541,9 +557,9 @@ function matchStraightResult(leg, straights) {
   const pick = leg && leg.pick;
   const matchup = leg && leg.matchup;
   const sport = leg && leg.sport;
-  return list.find((row) => row && row.sport !== 'PARLAY' && pick && row.pick === pick && (!matchup || row.matchup === matchup))
-    || list.find((row) => row && row.sport !== 'PARLAY' && pick && row.pick === pick)
-    || list.find((row) => row && row.sport !== 'PARLAY' && matchup && row.matchup === matchup && (!sport || row.sport === sport))
+  return list.find((row) => row && !isParlayGradeRow(row) && pick && row.pick === pick && (!matchup || row.matchup === matchup))
+    || list.find((row) => row && !isParlayGradeRow(row) && pick && row.pick === pick)
+    || list.find((row) => row && !isParlayGradeRow(row) && matchup && row.matchup === matchup && (!sport || row.sport === sport))
     || null;
 }
 
@@ -676,7 +692,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
       gradedPicks.push({
         sport: 'PARLAY',
         matchup: ticketLegs.map(p => (p.pick || '').split(/\s/)[0]).join(' / '),
-        pick: `${parlayInput.length}-Team Parlay (Optimized)`,
+        pick: gradedParlayPickName(parlayInput.length, ticket),
         odds: '',
         units: `${parlayUnits}u`,
         rating: 'P',
@@ -717,7 +733,7 @@ function recomputeParlayFields(day, card) {
     next.wagered = dollars((Number(day.wagered) || 0) - oldRisk);
     next.profit = dollars((Number(day.profit) || 0) - oldProfit);
   }
-  const straights = (next.picks || []).filter((row) => !row || row.sport !== 'PARLAY');
+  const straights = (next.picks || []).filter((row) => !row || !isParlayGradeRow(row));
   next.picks = straights;
   const ticket = cardParlayTicket(card);
   if (!ticket) {
@@ -749,7 +765,7 @@ function recomputeParlayFields(day, card) {
     next.picks = straights.concat([{
       sport: 'PARLAY',
       matchup: ticket.legs.map((p) => (p.pick || '').split(/\s/)[0]).join(' / '),
-      pick: `${ticket.legs.length}-Team Parlay (Optimized)`,
+      pick: gradedParlayPickName(ticket.legs.length, ticket),
       odds: '',
       units: `${units}u`,
       rating: 'P',
@@ -783,7 +799,7 @@ function aggregateDays(list) {
     cw += day.wins || 0; cl += day.losses || 0; cp += day.pushes || 0; cpe += day.pending || 0;
     cwag += day.wagered || 0; cpr += day.profit || 0;
     for (const p of (day.picks || [])) {
-      if (p.sport === 'PARLAY' || p.result === 'pending' || p.result === 'push') continue;
+      if (isParlayGradeRow(p) || p.result === 'pending' || p.result === 'push') continue;
       swag += wholeUp((parseFloat(p.units) || 1) * 150);
       spr += p.profit || 0;
       if (p.result === 'win') sw++; else if (p.result === 'loss') sl++;
@@ -1008,6 +1024,8 @@ exports._test = {
   cardParlayTicket,
   parlayUnitsFromTicket,
   recomputeParlayFields,
+  gradedParlayPickName,
+  isParlayGradeRow,
   GRADING_RULES_V2_FROM: omegaGradingRules.GRADING_RULES_V2_FROM,
   IDENTITY_V2_FROM: omegaGradingRules.IDENTITY_V2_FROM,
 };

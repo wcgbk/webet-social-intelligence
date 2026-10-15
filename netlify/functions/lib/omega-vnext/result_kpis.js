@@ -76,10 +76,25 @@ function outcomeBit(result) {
   return null;
 }
 
+/** Historical rows say "N-Team Parlay (Optimized)". New rows drop that suffix unless the ticket type ended in -optimized. */
+const PARLAY_GRADE_NAME = /^(\d+)-Team Parlay(?: \(Optimized\))?$/;
+
+function isParlayGradeName(name) {
+  return PARLAY_GRADE_NAME.test(String(name || '').trim());
+}
+
+/** Same parlay group with or without the old "(Optimized)" suffix. */
+function canonicalParlayGradeName(name) {
+  const text = String(name || '').trim().replace(/ \(Optimized\)$/, '');
+  if (!text || !isParlayGradeName(text)) return null;
+  return text;
+}
+
 function isParlayPick(pick) {
   if (!pick) return false;
   if (String(pick.sport || '').toUpperCase() === 'PARLAY') return true;
-  return /parlay/i.test(String(pick.pick || ''));
+  if (isParlayGradeName(pick.pick) || isParlayGradeName(pick.selection)) return true;
+  return /parlay/i.test(String(pick.pick || pick.selection || ''));
 }
 
 function dayList(days) {
@@ -225,7 +240,7 @@ function scoringFromRows(rows) {
   for (const row of rows || []) {
     if (!row || typeof row !== 'object') continue;
     const sport = String(row.sport || '').trim().toUpperCase();
-    if (!sport || sport === 'PARLAY') continue;
+    if (!sport || sport === 'PARLAY' || isParlayGradeName(row.pick) || isParlayGradeName(row.selection)) continue;
     const y = row.y === 0 || row.y === 1 ? row.y : outcomeBit(row.result != null ? row.result : row.outcome);
     if (y == null) continue;
     const pModel = probOf(row, ['pScore', 'coverProb', 'calibratedProb', 'p_model', 'modelRawP']);
@@ -287,4 +302,7 @@ module.exports = {
   priceBand,
   winRateVsBreakEven,
   parlayHitVsImplied,
+  isParlayPick,
+  isParlayGradeName,
+  canonicalParlayGradeName,
 };

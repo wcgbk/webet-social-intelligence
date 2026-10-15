@@ -51,7 +51,7 @@ function enforceOmegaDailyUnitCap(picksData) {
 
 const { toPickObject, applyDailyUnitCap } = require('./lib/omega-vnext/select');
 const { reviewHardRock, verifySchedule, applySilentSortCheck } = require('./lib/omega-vnext/selection_pass');
-const { parlayFromStraights } = require('./lib/omega-vnext/parlay');
+const { parlayFromStraights, parlayEvLabel, parlayIndependent } = require('./lib/omega-vnext/parlay');
 const lateNews = require('./lib/omega-vnext/late_news');
 const { storeLateNewsOps } = require('./lib/omega-vnext/store');
 const { decimalToAmerican, formatAmerican, writeSummaryStakeDisplay } = require('./lib/omega-vnext/odds_math');
@@ -161,12 +161,26 @@ function repriceLockedParlay(root, legs) {
   }
   const type = String(root.type || '').replace(/^\d+(?=-leg-parlay-)/, String(legs.length));
   const next = { ...root, legs, type: type || root.type };
-  if (!priced) return next;
-  const parlayEV = (combinedProb * combinedDecimal) - 1;
-  next.combinedOdds = formatCombinedAmerican(combinedDecimal);
-  next.combinedDecimal = +combinedDecimal.toFixed(2);
-  next.combinedProb = `${(combinedProb * 100).toFixed(1)}%`;
-  next.ev = `${(parlayEV * 100).toFixed(1)}%`;
+  if (priced) {
+    const parlayEV = (combinedProb * combinedDecimal) - 1;
+    next.combinedOdds = formatCombinedAmerican(combinedDecimal);
+    next.combinedDecimal = +combinedDecimal.toFixed(2);
+    next.combinedProb = `${(combinedProb * 100).toFixed(1)}%`;
+    next.ev = `${(parlayEV * 100).toFixed(1)}%`;
+  }
+  // Numbers stay a plain product. The label says so when comboStats would
+  // have applied a haircut or a correlation term.
+  const view = { ...next, legs, plainProduct: priced === true };
+  const label = parlayEvLabel(view);
+  if (label) {
+    next.evLabel = label;
+    next.correlationNote = label;
+  }
+  next.independent = parlayIndependent({ ...next, legs });
+  if (Object.prototype.hasOwnProperty.call(root, 'mirrorsCard')) {
+    const origLen = Array.isArray(root.legs) ? root.legs.length : legs.length;
+    next.mirrorsCard = root.mirrorsCard === true && origLen === legs.length;
+  }
   return next;
 }
 

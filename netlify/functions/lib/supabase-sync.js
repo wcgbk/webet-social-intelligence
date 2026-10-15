@@ -25,6 +25,7 @@ const { BLOB_STORE, MODEL_VERSION } = require('./omega-vnext/config');
 const { replayNoWrite } = require('./omega-vnext/no_write');
 const { isSchedulerEvent, rejectUnlessEtSlot } = require('./et-schedule');
 const results = require('../get-results-omega')._test;
+const { isParlayGradeName, canonicalParlayGradeName } = require('./omega-vnext/result_kpis');
 const gradingRules = require('./omega-grading-rules');
 
 const SUPABASE_URL = 'https://qvfgebrkolfyggfizgkx.supabase.co';
@@ -664,6 +665,12 @@ function straightRow(date, card, src, graded) {
   };
 }
 
+function isSyncedParlayRow(row) {
+  if (!row) return false;
+  if (String(row.sport || '').toUpperCase() === 'PARLAY') return true;
+  return isParlayGradeName(row.pick) || isParlayGradeName(row.selection);
+}
+
 function parlayRow(date, card, ticket, day, graded) {
   const selection = graded.pick || `${ticket.legs.length}-Team Parlay`;
   if (!selection || graded.result === 'skip') return null;
@@ -715,13 +722,13 @@ async function loadPicks(date, read, games, catalog, skipped, seen, deps, dryRun
   }
   if (!day || !Array.isArray(day.picks)) return [];
   const straights = picks.slice(0, 3);
-  const gradedStraights = day.picks.filter((row) => row && row.sport !== 'PARLAY');
+  const gradedStraights = day.picks.filter((row) => row && !isSyncedParlayRow(row));
   const out = [];
   gradedStraights.forEach((graded, index) => {
     const row = straightRow(date, card, straights[index] || {}, graded);
     if (row) out.push(row);
   });
-  const parlayGraded = day.picks.find((row) => row && row.sport === 'PARLAY');
+  const parlayGraded = day.picks.find((row) => isSyncedParlayRow(row));
   if (ticket && parlayGraded) {
     const row = parlayRow(date, card, ticket, day, parlayGraded);
     if (row) out.push(row);
@@ -915,12 +922,20 @@ function conflictFields(name) {
   return [];
 }
 
+function conflictToken(name, field, row) {
+  if (name === 'picks' && field === 'selection' && row && (row.is_parlay || isParlayGradeName(row.selection))) {
+    const canonical = canonicalParlayGradeName(row.selection);
+    if (canonical) return canonical;
+  }
+  return row[field] == null ? '' : String(row[field]);
+}
+
 function dedupeConflict(name, rows) {
   const fields = conflictFields(name);
   const seen = new Set();
   const out = [];
   for (const row of rows) {
-    const key = fields.map((field) => (row[field] == null ? '' : String(row[field]))).join('|');
+    const key = fields.map((field) => conflictToken(name, field, row)).join('|');
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(row);

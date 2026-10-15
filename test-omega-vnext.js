@@ -161,7 +161,8 @@ if (parlays.length) {
   assert.ok(parlays[0].type.includes('parlay'));
 }
 
-// A moneyline parlay of the straight card is not "independent" just because the label gained " ML".
+// A moneyline parlay of the straight card still mirrors the card after the " ML" suffix.
+// independent is the probability statement: distinct games and no haircut.
 {
   const mirrorPool = [
     {
@@ -182,9 +183,13 @@ if (parlays.length) {
   }));
   const mirrored = parlay.optimizeParlay(mirrorPool, mirrorStraights, { cardDate: '2026-09-23' });
   assert.strictEqual(mirrored.length, 1);
-  assert.strictEqual(mirrored[0].independent, false);
+  assert.strictEqual(mirrored[0].mirrorsCard, true);
+  assert.strictEqual(mirrored[0].independent, true);
+  assert.strictEqual(mirrored[0].evLabel, 'assumes independent legs (different games)');
+  assert.strictEqual(mirrored[0].correlationNote, mirrored[0].evLabel);
   assert.ok(/straight/.test(mirrored[0].type));
   const alone = parlay.optimizeParlay(mirrorPool, [], { cardDate: '2026-09-23' });
+  assert.strictEqual(alone[0].mirrorsCard, false);
   assert.strictEqual(alone[0].independent, true);
   assert.ok(/optimized/.test(alone[0].type));
 }

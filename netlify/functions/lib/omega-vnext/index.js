@@ -37,7 +37,7 @@ const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
 const { logReviewFlags, reviewFlag } = require('./pinnacle_flag');
-const { holdReason, fetchPostedQuotes } = require('./posted_line');
+const { holdReason, fetchPostedQuotes, staleGameKeys, gameKey } = require('./posted_line');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
 const { awaitLiveCaptureGate } = require('./capture_gate');
 const { summaryStakeDisplay } = require('./odds_math');
@@ -718,12 +718,12 @@ async function generateOmegaVnext(opts = {}) {
       postedQuotes = [];
     }
   }
+  const staleGames = postedQuotes.length
+    ? staleGameKeys([].concat(picks || [], yesPool || [], leanPool || [], pairedFill || []), postedQuotes)
+    : new Set();
   const holdOf = (row) => {
     if (replayLike || !row) return null;
-    if (postedQuotes.length) {
-      const moved = holdReason({ ...row, dataReviewFlag: null }, postedQuotes);
-      if (moved) return moved;
-    }
+    if (staleGames.size && staleGames.has(gameKey(row))) return 'line-moved';
     if ((row.dataReviewFlag && row.dataReviewFlag.flagged) || reviewFlag(row)) return 'pinnacle-sanity';
     return null;
   };
@@ -820,6 +820,23 @@ async function generateOmegaVnext(opts = {}) {
         picks = sortByGradeThenUnits(recap.picks);
         parlayLegs = recap.parlayLegs;
         console.log(`[omega-vnext] lean rescue picks=${picks.length}`);
+      }
+    }
+  }
+
+  if (!replayLike) {
+    const finalKept = [];
+    for (const pick of picks) {
+      const reason = holdOf(pick);
+      if (reason) console.log(`[omega-vnext] hold-final ${reason} ${pick.sport || ''} ${pick.pick || pick.side || ''}`);
+      else finalKept.push(pick);
+    }
+    if (finalKept.length !== picks.length) {
+      picks = finalKept;
+      parlayLegs = picks.length ? straightParlay(picks) : [];
+      if (!picks.length) {
+        narr.edgeSummary = "WeBetAI went through today's board and did not lock a side. A price that is no longer the posted number does not get a stake. Forcing a pick would turn a pass into a guess.";
+        narr.insights = 'Nothing made the card. The DraftKings number has moved off the price on the morning board, so the morning side is not a live bet.';
       }
     }
   }

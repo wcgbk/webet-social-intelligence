@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { holdReason } = require('./netlify/functions/lib/omega-vnext/posted_line');
+const { holdReason, staleGameKeys, gameKey } = require('./netlify/functions/lib/omega-vnext/posted_line');
 
 function event(home, away, favorite, spread, total) {
   const homeFav = favorite === 'home';
@@ -58,5 +58,16 @@ assert.strictEqual(holdReason({
   betType: 'Spread', pick: 'Colorado State Rams +13.5', line: 13.5,
   homeTeam: 'Texas State Bobcats', awayTeam: 'Colorado State Rams',
 }, []), null);
+
+const board = [
+  { betType: 'Spread', pick: 'Georgia Southern Eagles -3.5', line: -3.5, homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
+  { betType: 'Moneyline', pick: 'Georgia Southern Eagles ML', homeTeam: 'Old Dominion Monarchs', awayTeam: 'Georgia Southern Eagles' },
+  { betType: 'Moneyline', pick: 'UAB Blazers ML', homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
+  { betType: 'Total', pick: 'Under 47.5', line: 47.5, homeTeam: 'UAB Blazers', awayTeam: 'East Carolina Pirates' },
+];
+const stale = staleGameKeys(board, quotes);
+assert.ok(stale.has(gameKey(board[1])));
+assert.ok(stale.has(gameKey(board[2])));
+assert.strictEqual(holdReason(board[1], quotes), null);
 
 console.log('test-omega-posted-line ok');

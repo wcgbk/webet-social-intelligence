@@ -92,6 +92,25 @@ function currentSpreadForRow(row, quote) {
 /**
  * @returns {'pinnacle-sanity'|'line-moved'|null}
  */
+function gameKey(row) {
+  const away = normName(row && (row.awayTeam || row.away_team));
+  const home = normName(row && (row.homeTeam || row.home_team));
+  if (away && home) return `${away}|${home}`;
+  const matchup = normName(row && row.matchup);
+  return matchup || '';
+}
+
+/** Games whose spread or total on the priced board is not the current DraftKings number. */
+function staleGameKeys(rows, quotes) {
+  const keys = new Set();
+  for (const row of rows || []) {
+    if (holdReason({ ...row, dataReviewFlag: null }, quotes) !== 'line-moved') continue;
+    const key = gameKey(row);
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
 function holdReason(row, quotes) {
   if (!row || typeof row !== 'object') return null;
   if (row.dataReviewFlag && row.dataReviewFlag.flagged) return 'pinnacle-sanity';
@@ -136,6 +155,8 @@ async function fetchPostedQuotes(dateISO, sports) {
 module.exports = {
   quoteFromEspnEvent,
   quotesFromScoreboard,
+  gameKey,
+  staleGameKeys,
   holdReason,
   fetchPostedQuotes,
 };

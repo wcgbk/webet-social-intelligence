@@ -236,10 +236,9 @@ function ensureNarrative(p) {
 function emptyEdgeSummary() {
   return joinSentences([
     "WeBetAI went through today's board and did not lock a side.",
-    'The numbers on the screen are already close to where they should be, so there is no soft price worth a stake.',
-    'An empty Omega card is the call on a day like this.',
+    'A price that is no longer the posted number, or a projection too far from that number, does not get a stake.',
+    'An empty card is the call when nothing on the board is both current and worth a bet.',
     'Forcing a pick would turn a pass into a guess.',
-    'When a total, spread, or moneyline is actually off, it will show up here with a real reason.',
   ]);
 }
 

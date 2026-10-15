@@ -100,10 +100,11 @@ function mainMinEv(odds, base) {
 }
 
 /**
- * EV above 12% is a bad price. A minus number from -150 to -101 with a
+ * EV above 12% is a bad price. A spread priced from -150 to -101 with a
  * probability edge of 6% to 12% is the exception: at -110 that edge is
  * already more than 12% EV, and it is the spread the projection is about.
- * Edge above 12% stays stale at every price. Plus-money EV above 12% stays stale.
+ * A total, a moneyline, and a plus-money price stay stale above 12% EV.
+ * Edge above 12% stays stale at every price.
  */
 function stakeQuoteIsStale(c) {
   const maxEV = Number(GATES && GATES.maxEV);
@@ -111,8 +112,10 @@ function stakeQuoteIsStale(c) {
   const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
   if (Number.isFinite(edge) && edge > 0.12 + 1e-12) return true;
   if (!Number.isFinite(ev) || !Number.isFinite(maxEV) || !(ev > maxEV + 1e-12)) return false;
+  const market = String((c && (c.market || c.betType)) || '');
+  const spread = /spread|puck|run line/i.test(market);
   const odds = Number(c && c.odds);
-  if (Number.isFinite(edge) && edge + 1e-12 >= 0.06 && edge <= 0.12 + 1e-12
+  if (spread && Number.isFinite(edge) && edge + 1e-12 >= 0.06 && edge <= 0.12 + 1e-12
       && Number.isFinite(odds) && odds <= -101 && odds >= -150) {
     return false;
   }

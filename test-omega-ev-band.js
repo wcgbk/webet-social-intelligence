@@ -54,7 +54,9 @@ assert.strictEqual(gateReason(side({ odds: -251, ev: 0.08, edgePct: 0.05 }), asO
 assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0.0 }), asOf), null);
 assert.strictEqual(gateReason(side({ ev: 0.1200001, edgePct: 0.04 }), asOf), 'ev-stale');
 assert.strictEqual(gateReason(side({ ev: 0.12, edgePct: 0.04 }), asOf), null);
-assert.strictEqual(gateReason(side({ odds: -110, ev: 0.144, edgePct: 0.075 }), asOf), null);
+assert.strictEqual(gateReason(side({ odds: -110, ev: 0.144, edgePct: 0.075 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ market: 'Spread', side: 'A -3.5', odds: -110, ev: 0.144, edgePct: 0.075 }), asOf), null);
+assert.strictEqual(gateReason(side({ market: 'Total', side: 'Under 47.5', odds: -110, ev: 0.171, edgePct: 0.09 }), asOf), 'ev-stale');
 assert.strictEqual(gateReason(side({ odds: -110, ev: 0.20, edgePct: 0.13 }), asOf), 'ev-stale');
 assert.strictEqual(gateReason(side({ odds: 180, ev: 0.15, edgePct: 0.05 }), asOf), 'ev-stale');
 
@@ -80,7 +82,8 @@ assert.strictEqual(requiredFloor({ sport: 'NFL', odds: 220 }, 'ev-floor'), 0.02)
 assert.strictEqual(requiredFloor({ sport: 'MLB', odds: -110 }, 'ev-floor'), 0.02);
 assert.strictEqual(requiredFloor({ sport: 'NFL', odds: 180 }, 'ev-stale'), 0.12);
 assert.strictEqual(eligibleForLeanPool(side({ ev: -0.199, edgePct: -0.109 })), false);
-assert.strictEqual(passesPublishFloor(side({ odds: -110, ev: 0.144, edgePct: 0.075 })), true);
+assert.strictEqual(passesPublishFloor(side({ odds: -110, ev: 0.144, edgePct: 0.075 })), false);
+assert.strictEqual(passesPublishFloor(side({ market: 'Spread', odds: -110, ev: 0.144, edgePct: 0.075 })), true);
 assert.strictEqual(passesPublishFloor(side({ odds: -110, ev: 0.20, edgePct: 0.04 })), false);
 const homeCover = spreadDetail(12.71, -13.5, 'NCAAF', 16, { distribution: 'normal' }).coverProb;
 assert.ok(homeCover > 0.47 && homeCover < 0.50, String(homeCover));

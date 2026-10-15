@@ -36,7 +36,8 @@ const { runWithSnapshotClock } = require('./odds_snapshot_cache');
 const { stampCandidates } = require('./late_news');
 const { resolveGenerateOddsSnapshot, etLocalToUtcISO } = require('./price_lock');
 const { retryMissingDraftKings } = require('./dk_retry');
-const { logReviewFlags } = require('./pinnacle_flag');
+const { logReviewFlags, reviewFlag } = require('./pinnacle_flag');
+const { holdReason, fetchPostedQuotes } = require('./posted_line');
 const { readPinnacleLineMoves, applyLineMoveContext, linePathForSelection } = require('./pinnacle_line_move');
 const { awaitLiveCaptureGate } = require('./capture_gate');
 const { summaryStakeDisplay } = require('./odds_math');
@@ -695,12 +696,51 @@ async function generateOmegaVnext(opts = {}) {
   // The parlay is always 3 legs at 0.25u from the best EV on distinct
   // games. A ticket whose combined EV is not positive is labeled and
   // still published. Fewer than 3 priced games is the only miss.
-  const parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : [], pairedFill);
+  let parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : [], pairedFill);
   const straightParlay = (rows, note) => parlayFromStraights(rows, {
     hrPlaceabilityNote: note || placement.note,
     pool: parlayPool,
   });
   let parlayLegs = straightParlay(picks);
+
+  // The page calls this the posted line. A DraftKings number that has
+  // moved, and a row already flagged against Pinnacle, does not publish.
+  // Replay keeps the historical ticket. A missed scoreboard does not
+  // invent a hold.
+  let postedQuotes = [];
+  if (!replayLike && !dryRun && picks.length) {
+    try {
+      const sports = [...new Set(picks.map((p) => p.sport).filter(Boolean))];
+      postedQuotes = await fetchPostedQuotes(dateISO, sports);
+      console.log(`[omega-vnext] posted quotes=${postedQuotes.length}`);
+    } catch (err) {
+      console.error(`[omega-vnext] posted-line check failed: ${err && err.message}`);
+      postedQuotes = [];
+    }
+  }
+  const holdOf = (row) => {
+    if (replayLike || !row) return null;
+    if (postedQuotes.length) {
+      const moved = holdReason({ ...row, dataReviewFlag: null }, postedQuotes);
+      if (moved) return moved;
+    }
+    if ((row.dataReviewFlag && row.dataReviewFlag.flagged) || reviewFlag(row)) return 'pinnacle-sanity';
+    return null;
+  };
+  const keepPublishable = (list) => (list || []).filter((row) => !holdOf(row));
+  parlayPool = keepPublishable(parlayPool);
+  if (!replayLike) {
+    const kept = [];
+    for (const pick of picks) {
+      const reason = holdOf(pick);
+      if (reason) console.log(`[omega-vnext] hold ${reason} ${pick.sport || ''} ${pick.pick || pick.side || ''}`);
+      else kept.push(pick);
+    }
+    if (kept.length !== picks.length) {
+      picks = kept;
+      parlayLegs = straightParlay(picks);
+    }
+  }
 
   let narr = { picks, parlayLegs, rejections: [], edgeSummary: '', insights: '', claudeVerified: false };
   if (!skipNarrate) {
@@ -736,9 +776,9 @@ async function generateOmegaVnext(opts = {}) {
   });
   const reserved = applyGenerateReserve({
     picks,
-    yesPool,
-    leanPool: LEAN_PAD ? leanPool : [],
-    pairedPool: pairedFill,
+    yesPool: keepPublishable(yesPool),
+    leanPool: LEAN_PAD ? keepPublishable(leanPool) : [],
+    pairedPool: keepPublishable(pairedFill),
     blocked: topUpBlocked,
     parlayPool,
     hrNote: placement.note,
@@ -767,8 +807,8 @@ async function generateOmegaVnext(opts = {}) {
       ...((narr && narr.rejections) || []).map((r) => `${r.matchup}|${r.side || r.pick}`),
     ]);
     const blockedSide = (c) => blocked.has(`${c.matchup}|${c.side}`);
-    openLeans = (leanPool || []).filter((c) => qualifiesAsLean(c) && !blockedSide(c));
-    openPaired = pairedFill.filter((c) => !blockedSide(c));
+    openLeans = keepPublishable(leanPool).filter((c) => qualifiesAsLean(c) && !blockedSide(c));
+    openPaired = keepPublishable(pairedFill).filter((c) => !blockedSide(c));
     if (openLeans.length || openPaired.length) {
       const rescued = selectStraights([], MAX_STRAIGHTS, openLeans, openPaired);
       if (rescued.length) {

@@ -608,7 +608,8 @@ const fbHomeSpread = narrate.buildFallbackNarrative({
   modelProjection: 12.7,
   line: -13.5,
 });
-assert.ok(/0\.8 points short/.test(fbHomeSpread), fbHomeSpread);
+assert.ok(/win by 12\.7/.test(fbHomeSpread), fbHomeSpread);
+assert.ok(/0\.8 points past that win/.test(fbHomeSpread), fbHomeSpread);
 assert.ok(!/26\.2/.test(fbHomeSpread), fbHomeSpread);
 
 const fbAwaySpread = narrate.buildFallbackNarrative({
@@ -628,8 +629,9 @@ const fbAwaySpread = narrate.buildFallbackNarrative({
   modelProjection: -8.59,
   line: -3.5,
 });
-assert.ok(/projection is 8\.6/.test(fbAwaySpread), fbAwaySpread);
-assert.ok(/5\.1 points past/.test(fbAwaySpread), fbAwaySpread);
+assert.ok(/win by 8\.6/.test(fbAwaySpread), fbAwaySpread);
+assert.ok(/5\.1 points inside that win/.test(fbAwaySpread), fbAwaySpread);
+assert.ok(!/projection is 8\.6/.test(fbAwaySpread), fbAwaySpread);
 assert.ok(!/short of/.test(fbAwaySpread), fbAwaySpread);
 
 const fbDogSpread = narrate.buildFallbackNarrative({

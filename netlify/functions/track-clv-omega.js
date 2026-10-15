@@ -17,7 +17,7 @@ const { loadLinePath } = require('./lib/omega-vnext/line_path');
 const omegaGradingRules = require('./lib/omega-grading-rules');
 const { resolveTeamId, matchSides } = require('./lib/omega-vnext/sports/team_identity');
 const { etCalendarDate } = require('./lib/omega-vnext/odds_math');
-const { fetchESPNScores: fetchSharedScoreboard } = require('./lib/espn-scoreboard');
+const { fetchESPNScores: fetchSharedScoreboard, detectNhlShootout } = require('./lib/espn-scoreboard');
 const resultsGrader = require('./get-results-omega');
 
 function attachModelClvFields(rec, pick) {
@@ -605,6 +605,7 @@ async function fetchESPNScores(dateISO, sport) {
       const period = status.period || 0;
       const st = status.type?.state || 'pre';
       const f5Complete = isMLB && ((period > 5) || (st === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
+      const so = detectNhlShootout(status, away, home, sport);
       return {
         awayTeam: away.team?.displayName || '', awayAbbr: away.team?.abbreviation || '',
         awayId: away.team && away.team.id != null && away.team.id !== '' ? String(away.team.id) : '',
@@ -622,6 +623,11 @@ async function fetchESPNScores(dateISO, sport) {
         homeInnings: homeLS.length,
         f5Complete: !!f5Complete,
         period: period,
+        detail: status.type?.shortDetail || status.type?.detail || '',
+        shortDetail: status.type?.shortDetail || '',
+        statusDetail: status.type?.detail || '',
+        shootout: so.shootout,
+        shootoutWinner: so.shootoutWinner,
       };
     }).filter(Boolean);
   } catch (e) { return []; }
@@ -686,6 +692,14 @@ function gradePick(pick, game, opts) {
   if (isF5 && !(snap && snap.f5Mode === 'partial') && ((game.awayInnings || 0) < 5 || (game.homeInnings || 0) < 5)) return 'pending';
   const awayScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.awayScore : (isF5 ? (game.awayScoreF5 ?? 0) : game.awayScore);
   const homeScore = (isF5 && snap && snap.f5Mode === 'partial') ? snap.homeScore : (isF5 ? (game.homeScoreF5 ?? 0) : game.homeScore);
+  function nhlScores(market) {
+    if (typeof omegaGradingRules === 'undefined' || typeof omegaGradingRules.nhlRegulationScores !== 'function') {
+      return { awayScore: awayScore, homeScore: homeScore };
+    }
+    return omegaGradingRules.nhlRegulationScores({
+      pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: dateISO, market: market,
+    });
+  }
   const pickTeamRaw = pickStr.replace(/[+-]\d+(\.\d+)?/g, '').replace(/ML$/i, '').replace(/\bF5\b/gi, '').replace(/\b(Over|Under)\b/gi, '').trim();
   let pickedAway = teamsMatch(pickTeamRaw, game.awayTeam);
   let pickedHome = teamsMatch(pickTeamRaw, game.homeTeam);
@@ -708,7 +722,9 @@ function gradePick(pick, game, opts) {
   if (betType === 'total' || betType === 'f5 total' || /over|under/i.test(pickStr)) {
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
     if (lineMatch) {
-      const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]), total = awayScore + homeScore;
+      const ou = lineMatch[1].toLowerCase(), line = parseFloat(lineMatch[2]);
+      const scored = nhlScores('total');
+      const total = scored.awayScore + scored.homeScore;
       // Short completed game: only an Over already past the line has action.
       if (snap && !isF5 && !snap.fullOfficial) {
         if (total > line && ou === 'over') return 'win';
@@ -724,8 +740,9 @@ function gradePick(pick, game, opts) {
     if (spreadMatch && (pickedAway || pickedHome)) {
       if (snap && !isF5 && !snap.fullOfficial) return 'push';
       const spread = parseFloat(spreadMatch[1]);
-      const pickedScore = pickedAway ? awayScore : homeScore;
-      const oppScore = pickedAway ? homeScore : awayScore;
+      const scored = nhlScores('spread');
+      const pickedScore = pickedAway ? scored.awayScore : scored.homeScore;
+      const oppScore = pickedAway ? scored.homeScore : scored.awayScore;
       const adj = pickedScore + spread;
       if (adj === oppScore) return 'push';
       return adj > oppScore ? 'win' : 'loss';

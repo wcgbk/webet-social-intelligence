@@ -707,6 +707,7 @@ async function generateOmegaVnext(opts = {}) {
   // moved, and a row already flagged against Pinnacle, does not publish.
   // Replay keeps the historical ticket. A missed scoreboard does not
   // invent a hold.
+  let lineMoveCleared = false;
   let postedQuotes = [];
   if (!replayLike && !dryRun && picks.length) {
     try {
@@ -738,7 +739,10 @@ async function generateOmegaVnext(opts = {}) {
     const kept = [];
     for (const pick of picks) {
       const reason = holdOf(pick);
-      if (reason) console.log(`[omega-vnext] hold ${reason} ${pick.sport || ''} ${pick.pick || pick.side || ''}`);
+      if (reason) {
+        if (reason === 'line-moved') lineMoveCleared = true;
+        console.log(`[omega-vnext] hold ${reason} ${pick.sport || ''} ${pick.pick || pick.side || ''}`);
+      }
       else kept.push(pick);
     }
     if (kept.length !== picks.length) {
@@ -833,7 +837,10 @@ async function generateOmegaVnext(opts = {}) {
     const finalKept = [];
     for (const pick of picks) {
       const reason = holdOf(pick);
-      if (reason) console.log(`[omega-vnext] hold-final ${reason} ${pick.sport || ''} ${pick.pick || pick.side || ''}`);
+      if (reason) {
+        if (reason === 'line-moved') lineMoveCleared = true;
+        console.log(`[omega-vnext] hold-final ${reason} ${pick.sport || ''} ${pick.pick || pick.side || ''}`);
+      }
       else finalKept.push(pick);
     }
     if (finalKept.length !== picks.length) {
@@ -1022,9 +1029,12 @@ async function generateOmegaVnext(opts = {}) {
       err.code = 'FEED_DOWN';
       throw err;
     }
-    Object.assign(picksData, noPlaysFields(omegaReason({
-      counts: slateCounts.bySport, dateISO, hardFails: hardFails.length,
-    }), { noGames: slateCounts.total === 0 }));
+    const emptyReason = lineMoveCleared
+      ? 'The DraftKings numbers have moved off the morning prices, so those sides are not live bets.'
+      : omegaReason({
+        counts: slateCounts.bySport, dateISO, hardFails: hardFails.length,
+      });
+    Object.assign(picksData, noPlaysFields(emptyReason, { noGames: slateCounts.total === 0 }));
     picksData.edgeSummary = picksData.noPlaysReason;
     picksData.insights = picksData.insights || '';
   } else if (empty) {

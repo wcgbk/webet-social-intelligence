@@ -423,9 +423,21 @@ function gradePick(pick, game, opts) {
     : ncaafPickedSides(pickTeamRaw, game.awayTeam, game.awayAbbr, game.homeTeam, game.homeAbbr, pick.sport, game.awayId, game.homeId);
   const pickedAway = side.pickedAway;
   const pickedHome = side.pickedHome;
+  // Card date stays on opts (no opts = the pre-rule path). HTML extracts of
+  // gradePick have no omegaGradingRules and keep the ESPN final.
+  const nhlDate = (parts && parts.opts && parts.opts.dateISO) || (opts && opts.dateISO) || null;
+  function nhlScores(market) {
+    if (typeof omegaGradingRules === 'undefined' || typeof omegaGradingRules.nhlRegulationScores !== 'function') {
+      return { awayScore: awayScore, homeScore: homeScore };
+    }
+    return omegaGradingRules.nhlRegulationScores({
+      pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: nhlDate, market: market,
+    });
+  }
 
   if (betType === 'total' || /over|under/i.test(pickStr)) {
-    const totalPoints = awayScore + homeScore;
+    const scored = nhlScores('total');
+    const totalPoints = scored.awayScore + scored.homeScore;
     const lineMatch = pickStr.match(/(over|under)\s*([\d.]+)/i);
     if (lineMatch) {
       const ou = lineMatch[1].toLowerCase();
@@ -446,8 +458,9 @@ function gradePick(pick, game, opts) {
     if (spreadMatch && (pickedAway || pickedHome)) {
       if (snap && !isF5 && !snap.fullOfficial) return 'push';
       const spread = parseFloat(spreadMatch[1]);
-      const pickedScore = pickedAway ? awayScore : homeScore;
-      const oppScore = pickedAway ? homeScore : awayScore;
+      const scored = nhlScores('spread');
+      const pickedScore = pickedAway ? scored.awayScore : scored.homeScore;
+      const oppScore = pickedAway ? scored.homeScore : scored.awayScore;
       const adjusted = pickedScore + spread;
       if (adjusted === oppScore) return 'push';
       return adjusted > oppScore ? 'win' : 'loss';

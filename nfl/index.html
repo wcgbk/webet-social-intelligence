@@ -876,6 +876,12 @@
     const period = status.period || 0;
     const state = (status.type && status.type.state) || 'pre';
     const f5Complete = isMLB && ((period > 5) || (state === 'post' && awayLS.length >= 5 && homeLS.length >= 5));
+    var shootout = false;
+    var shootoutWinner = null;
+    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.detectNhlShootout === 'function') {
+      var so = WeBetLive.detectNhlShootout(status, away, home, sport);
+      if (so) { shootout = !!so.shootout; shootoutWinner = so.shootoutWinner || null; }
+    }
     return {
       awayTeam: (away.team && (away.team.displayName || away.team.shortDisplayName)) || '',
       awayAbbr: (away.team && away.team.abbreviation) || '',
@@ -885,6 +891,10 @@
       homeScore: parseInt(home.score, 10) || 0,
       state,
       detail: (status.type && (status.type.shortDetail || status.type.detail)) || '',
+      shortDetail: (status.type && status.type.shortDetail) || '',
+      statusDetail: (status.type && status.type.detail) || '',
+      shootout: shootout,
+      shootoutWinner: shootoutWinner,
       clock: status.displayClock || '',
       period,
       startTimeEST,
@@ -1055,8 +1065,15 @@
     if (isF5 && game.state === 'post' && !game.f5Complete) {
       return { status: 'push', label: 'No F5 result' };
     }
-    const awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
-    const homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
+    let awayScore = isF5 ? (game.awayScoreF5 || 0) : game.awayScore;
+    let homeScore = isF5 ? (game.homeScoreF5 || 0) : game.homeScore;
+    // NHL shootout goal counts on the moneyline only, from 2026-10-15.
+    // Extracts of this function have no WeBetLive and keep the ESPN final.
+    if (typeof WeBetLive !== 'undefined' && WeBetLive && typeof WeBetLive.nhlRegulationScores === 'function') {
+      var nhlDate = (pick && pick.date) || (typeof picksData !== 'undefined' && picksData && picksData.date) || null;
+      var nhlReg = WeBetLive.nhlRegulationScores({ pick: pick, game: game, awayScore: awayScore, homeScore: homeScore, dateISO: nhlDate });
+      if (nhlReg && nhlReg.applied) { awayScore = nhlReg.awayScore; homeScore = nhlReg.homeScore; }
+    }
     const isFinal = isF5 ? !!game.f5Complete : (game.state === 'post');
 
     if (!isFinal) {

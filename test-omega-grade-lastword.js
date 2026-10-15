@@ -129,7 +129,18 @@ function extractSource(src, name) {
 
 function loadMapEvent() {
   const src = fs.readFileSync(path.join(repo, 'netlify/functions/lib/espn-scoreboard.js'), 'utf8');
-  return new Function(extractSource(src, 'espnTeamId') + '\n' + extractSource(src, 'mapEvent') + '\nreturn mapEvent;')();
+  return new Function(
+    extractSource(src, 'espnTeamId') + '\n' +
+    extractSource(src, 'shootoutBlob') + '\n' +
+    extractSource(src, 'textIsShootout') + '\n' +
+    extractSource(src, 'textIsOvertime') + '\n' +
+    extractSource(src, 'lineEntryIsShootout') + '\n' +
+    extractSource(src, 'linescoreHasShootout') + '\n' +
+    extractSource(src, 'winnerFromScores') + '\n' +
+    extractSource(src, 'sportIsNhl') + '\n' +
+    extractSource(src, 'detectNhlShootout') + '\n' +
+    extractSource(src, 'mapEvent') + '\nreturn mapEvent;'
+  )();
 }
 
 function loadOld() {

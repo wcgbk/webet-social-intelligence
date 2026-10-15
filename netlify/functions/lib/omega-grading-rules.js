@@ -1,8 +1,14 @@
 'use strict';
 
+const { shootoutFromGame } = require('./espn-scoreboard');
+
 // Forward-only grading rules. Card dates before this ET date (the picks blob
 // dateISO) must grade exactly as they did on 50d3eb9. Do not retune past KPIs.
 const GRADING_RULES_V2_FROM = '2026-10-07';
+// NHL totals and puck line ignore the shootout winner's goal from this card
+// date. Earlier cards keep the ESPN final (shootout goal included). The same
+// literal lives in js/live-score.js — test-omega-nhl-shootout-1015 checks both.
+const NHL_SHOOTOUT_RULE_FROM = '2026-10-15';
 // Id matching for every sport (and the White Sox / Red Sox split) starts on
 // this card date. Earlier dates keep the matcher they were graded with.
 const IDENTITY_V2_FROM = '2026-10-07';
@@ -13,6 +19,67 @@ const POSTPONE_CUTOFF_MS = 24 * 60 * 60 * 1000;
 
 function rulesV2(dateISO) {
   return typeof dateISO === 'string' && dateISO >= GRADING_RULES_V2_FROM;
+}
+
+// True when this card date grades NHL totals and spreads without the shootout goal.
+function nhlShootoutExcluded(dateISO) {
+  return typeof dateISO === 'string' && dateISO >= NHL_SHOOTOUT_RULE_FROM;
+}
+
+function nhlPickIsF5(pick) {
+  if (!pick) return false;
+  const pickStr = String(pick.pick || '');
+  const betType = String(pick.betType || pick.market || '').toLowerCase();
+  const src = String(pick.source || '').toLowerCase();
+  return src === 'f5' || betType.includes('f5') || /\bf5\b|first 5|1st 5|first-5/i.test(pickStr);
+}
+
+function nhlSport(pick, game) {
+  const s = (pick && pick.sport) || (game && (game.sport || game._sport)) || '';
+  return String(s).toUpperCase() === 'NHL';
+}
+
+// Same market order the graders use: a total wins over a stray +/- in the text.
+function nhlGradeMarket(pick, market) {
+  if (market === 'total' || market === 'spread' || market === 'moneyline') return market;
+  if (market === 'ml') return 'moneyline';
+  const betType = String((pick && (pick.betType || pick.market)) || '').toLowerCase();
+  const pickStr = String((pick && pick.pick) || '');
+  if (betType === 'total' || betType === 'f5 total' || betType.includes('total') || /\b(over|under)\b/i.test(pickStr)) {
+    if (/\b(over|under)\b/i.test(pickStr) || betType.includes('total')) return 'total';
+  }
+  if (betType === 'spread' || betType === 'puck line' || /spread|puck|run line/.test(betType) || /[+-]\d+(\.\d+)?/.test(pickStr)) {
+    if (!/\b(over|under)\b/i.test(pickStr)) return 'spread';
+  }
+  return 'moneyline';
+}
+
+// Regulation + OT scores for an NHL total or puck line. Moneyline and every
+// other sport keep the ESPN final. applied is false when nothing was removed,
+// including a shootout whose scores are still tied (the goal is not on the board).
+function nhlRegulationScores(input) {
+  const pick = input && input.pick;
+  const game = input && input.game;
+  let awayScore = Number(input && input.awayScore);
+  let homeScore = Number(input && input.homeScore);
+  if (!Number.isFinite(awayScore)) awayScore = Number(game && game.awayScore) || 0;
+  if (!Number.isFinite(homeScore)) homeScore = Number(game && game.homeScore) || 0;
+  const raw = { awayScore: awayScore, homeScore: homeScore, applied: false, winner: null };
+  if (!input || nhlPickIsF5(pick)) return raw;
+  const market = nhlGradeMarket(pick, input.market);
+  if (market !== 'total' && market !== 'spread') return raw;
+  // An explicit dateISO (including null) is the card date. Omitting the key
+  // is the only path that may read pick.date. Graders pass the key from opts.
+  let dateISO = null;
+  if (input && Object.prototype.hasOwnProperty.call(input, 'dateISO')) dateISO = input.dateISO;
+  else if (pick && pick.date) dateISO = pick.date;
+  if (!nhlShootoutExcluded(dateISO)) return raw;
+  if (!nhlSport(pick, game)) return raw;
+  const info = shootoutFromGame(game, (pick && pick.sport) || (game && (game.sport || game._sport)));
+  if (!info.shootout || !info.shootoutWinner) return raw;
+  if (info.shootoutWinner === 'away') awayScore = Math.max(0, awayScore - 1);
+  else homeScore = Math.max(0, homeScore - 1);
+  return { awayScore: awayScore, homeScore: homeScore, applied: true, winner: info.shootoutWinner };
 }
 
 function identityV2(dateISO) {
@@ -182,10 +249,13 @@ function mlbSnapshot(pick, game, opts) {
 
 module.exports = {
   GRADING_RULES_V2_FROM,
+  NHL_SHOOTOUT_RULE_FROM,
   IDENTITY_V2_FROM,
   CLV_POINT_AWARE_FROM,
   POSTPONE_CUTOFF_MS,
   rulesV2,
+  nhlShootoutExcluded,
+  nhlRegulationScores,
   identityV2,
   clvPointAware,
   nowMs,

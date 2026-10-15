@@ -221,17 +221,15 @@ assert.strictEqual(evening.ymd, '2026-11-01');
 assert.strictEqual(evening.matched, '19:45');
 assert.strictEqual(et.etGuard('capture-omega-walkforward-evening', sched, new Date('2026-11-01T23:45:00Z')).run, false);
 
-const clv = et.etGuard('trigger-clv', sched, new Date('2026-11-02T00:00:00Z'));
+// 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only. trigger-clv keeps 3:00 ET;
+// the 19:00 ET closing-line pull and the Circa generate schedule are paused.
+const clvEvening = et.etGuard('trigger-clv', sched, new Date('2026-11-02T00:00:00Z'));
+assert.strictEqual(clvEvening.run, false);
+const clv = et.etGuard('trigger-clv', sched, new Date('2026-10-16T07:00:00Z'));
 assert.strictEqual(clv.run, true);
-assert.strictEqual(clv.ymd, '2026-11-01');
-assert.strictEqual(clv.matched, '19:00');
-
-const tue = et.etGuard('trigger-picks-circa', sched, new Date('2026-10-06T17:15:00Z'));
-assert.strictEqual(tue.run, false);
-assert.strictEqual(tue.reason, 'outside-et-weekday');
-const wed = et.etGuard('trigger-picks-circa', sched, new Date('2026-10-07T17:15:00Z'));
-assert.strictEqual(wed.run, true);
-assert.strictEqual(wed.matched, '13:15');
+assert.strictEqual(clv.matched, '03:00');
+assert.ok(!et.ET_SCHEDULE['trigger-picks-circa'], 'circa generate schedule paused');
+assert.ok(!et.ET_SCHEDULE['capture-opening-lines'], 'capture-opening-lines paused');
 
 assert.strictEqual(et.etGuard('self-optimize', sched, new Date('2026-11-01T10:00:00Z')).matched, '05:00');
 assert.strictEqual(et.etGuard('self-optimize', sched, new Date('2026-11-02T10:00:00Z')).reason, 'outside-et-weekday');

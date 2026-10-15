@@ -65,7 +65,7 @@ function hourlyAt(minute) {
 
 /** @type {Record<string, {etTimes: string[], days?: number[]}>} */
 const ET_SCHEDULE = {
-  'trigger-picks-alpha': { etTimes: ['09:00'] },
+  // 'trigger-picks-alpha' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
   // 10:05 ET card build. Cron "5 14,15 * * *" is 14:05 UTC (EDT) and
   // 15:05 UTC (EST). The ±10 min guard does not let 15:05 UTC EDT (11:05 ET)
   // or 14:05 UTC EST (09:05 ET) through. Capture stays at 10:00.
@@ -86,17 +86,10 @@ const ET_SCHEDULE = {
   // that is outside this list (15:00 UTC is 11:00 EDT and 10:00 EST; 04:30 UTC
   // is 00:30 EDT and 23:30 EST). No slot sits in the 01:00 fall-back hour.
   'pregame-check-omega': { etTimes: halfHourSlots('11:00', '23:30') },
-  'trigger-picks-nfl': { etTimes: ['09:05'] },
+  // 'trigger-picks-nfl' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
   // Current union cron, expressed as ET = UTC-4. The handler still no-ops
   // outside the real Thu/Fri/Sat/holiday PT windows.
-  'trigger-picks-circa': {
-    etTimes: [
-      '13:00', '13:15', '13:30', '13:45',
-      '14:00', '14:15', '14:30', '14:45',
-      '16:00', '16:15', '16:30', '16:45',
-    ],
-    days: [3, 4, 5, 6],
-  },
+  // 'trigger-picks-circa' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
   'check-circa-card-health': {
     etTimes: [
       '13:05', '13:20', '13:35', '13:50',
@@ -110,9 +103,9 @@ const ET_SCHEDULE = {
   // fall-back wall time. Spring-forward has no 02:00 hour, so 02:40 does not
   // occur that morning. Cron stays "40 * * * *".
   'regrade-circa': { etTimes: hourlyAt(40), dstFold: 'both' },
-  'trigger-picks-cfb': { etTimes: ['09:10'] },
+  // 'trigger-picks-cfb' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
   'confirm-starters-mlb': { etTimes: ['13:30'] },
-  'trigger-clv': { etTimes: ['03:00', '13:00', '19:00'] },
+  'trigger-clv': { etTimes: ['03:00'] },
   // One Pinnacle + DraftKings + Hard Rock check call. 3:00 and 10:00 ET only.
   // Cron "0 7,8,14,15 * * *" is the UTC union of EDT (UTC-4) and EST (UTC-5).
   // etGuard drops 04:00 and 11:00. 9:00 and 10:30 are not scheduled.
@@ -149,8 +142,8 @@ const ET_SCHEDULE = {
   'capture-omega-pm-observer': { etTimes: ['10:15'] },
   'capture-omega-walkforward': { etTimes: ['11:15'] },
   'capture-omega-walkforward-evening': { etTimes: ['19:45'] },
-  'capture-opening-lines': { etTimes: ['06:00'] },
-  'verify-picks': { etTimes: ['10:30'] },
+  // 'capture-opening-lines' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
+  // 'verify-picks' PAUSED 2026-10-15: Odds API pulls are 3:00 and 10:00 ET only.
   'self-optimize': { etTimes: ['05:00'], days: [0] },
   'trigger-trend-monitor': { etTimes: ['21:00'] },
   'monitor-tsp-public-records': { etTimes: ['11:00'] },

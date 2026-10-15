@@ -105,6 +105,10 @@ function isDateIndexKey(key) {
  * markers cannot return it. Schema is not the line-move event schema.
  * Slash key: REST encodes each segment and keeps the slashes.
  */
+function clvBoardKey(dateISO) {
+  return ['clv-board', String(dateISO || ''), '1000'].join('/');
+}
+
 function captureDoneKey(dateISO, slot) {
   const slotId = String(slot || '').replace(':', '');
   return ['capture-done', String(dateISO || ''), slotId].join('/');
@@ -1326,6 +1330,27 @@ async function writeCaptureDone(dateISO, slot, doc, opts = {}) {
 }
 
 /**
+ * clv-board/{date}/1000 in this same store. The daily 10:00 ET board that
+ * CLV tracking measures against: every event and the Pinnacle, DraftKings,
+ * and Hard Rock quotes from the 10:00 check. Written from the quotes the
+ * 10:00 pull already returned, so it costs no extra Odds API credits.
+ * dryRun and OMEGA_REPLAY_NO_WRITE write nothing. A failed write is soft.
+ */
+async function writeClvBoard(dateISO, doc, opts = {}) {
+  const block = writeBlocked(opts);
+  if (block) return { wrote: false, reason: block };
+  const key = clvBoardKey(dateISO);
+  const write = opts.write || defaultWrite;
+  try {
+    await write(key, doc);
+    return { wrote: true, reason: null, key };
+  } catch (err) {
+    opsAlert('clv-board-write-failed', `date=${dateISO} ${err && err.message}`);
+    return { wrote: false, reason: 'write-failed', key };
+  }
+}
+
+/**
  * capture-start/{date}/{slot} in this same store. Not an event doc.
  * dryRun and OMEGA_REPLAY_NO_WRITE write nothing. A failed write is soft.
  * phase is not stored here. The done marker carries phase 'checks' or 'final'.
@@ -1391,6 +1416,8 @@ module.exports = {
   isCaptureDoneKey,
   isCaptureDoneDoc,
   writeCaptureDone,
+  writeClvBoard,
+  clvBoardKey,
   captureStartKey,
   isCaptureStartKey,
   isCaptureStartDoc,

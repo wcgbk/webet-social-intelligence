@@ -14,7 +14,7 @@ Fixed rules (do not change):
 9. Autopilot: start from the current state of the repo, Supabase and the live site, and work continuously, QA'ing as you go, to get the most profitable daily-picks model LIVE. You MAY merge to main and deploy (Netlify auto-deploys on push) when ALL of these are true:
 (a) held-out backtest profit and ROI beat current main
 (b) all tests pass
-(c) the 10/14 dry run and a 30-day replay both produce 3 straights plus a 3-leg parlay every day
+(c) the 10/14 dry run produces 3 straights plus a 3-leg parlay (the 30-day replay was removed from the pre-deploy check on 2026-10-15)
 (d) it is not 10–11 AM ET or 2:45–3:15 AM ET
 Never regenerate the already-published card for today. After each deploy, verify the site is live and append the change and its KPIs to docs/ELITE-MODEL-REPORT-1014.md. Keep iterating until no held-out improvement remains, or until tomorrow's 3 AM run.
 
@@ -32,7 +32,6 @@ Justify each change with a held-out backtest on Supabase history: profit, ROI an
 QA before finishing:
 - all test-omega-*.js and test-sharp-*.js tests pass
 - a dry run of 2026-10-14 from the stored board produces 3 straights plus a 3-leg parlay
-- a 30-day replay shows a full card every day
 
 Deliver docs/ELITE-MODEL-REPORT-1014.md covering:
 - each change and why

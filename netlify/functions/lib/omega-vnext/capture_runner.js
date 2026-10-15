@@ -30,7 +30,7 @@ const {
 const {
   PINNACLE_SPORTS, quotesFromEvents, quotesByEvent, storeOpen, storeCheck, LINE_MOVE_STORE,
   eventKey, CHECK_SLOTS, commenceEtDate, readLineMoveKey, shiftYmd,
-  readPinnacleLineMoves, writeCaptureDone, CAPTURE_DONE_SCHEMA,
+  readPinnacleLineMoves, writeCaptureDone, writeClvBoard, CAPTURE_DONE_SCHEMA,
 } = require('./pinnacle_line_move');
 const { opsAlert } = require('./ops_alert');
 const {
@@ -583,6 +583,7 @@ async function runPinnacleLineCaptureInner(opts = {}) {
   };
   const sportsHit = [];
   const touched = new Set();
+  const clvBoard = [];
   let wrote = false;
   let reason = null;
   let moveCount = 0;
@@ -772,6 +773,12 @@ async function runPinnacleLineCaptureInner(opts = {}) {
           requestsRemaining: state.requestsRemaining,
         }, storeOpts);
         noteStored(stored, id);
+        if (etSlot === '1000') {
+          clvBoard.push({
+            sport: label, eventId: id, homeTeam, awayTeam, commenceTime,
+            books: { pinnacle: pinQ, draftkings: dkQ, hardrockbet: hrQ },
+          });
+        }
         if (stored.wrote && etSlot === '0300') {
           const tapeMeta = { sport: label, eventId: id, homeTeam, awayTeam, commenceTime, source: 'live' };
           if (Object.keys(pinQ).length) {
@@ -876,6 +883,17 @@ async function runPinnacleLineCaptureInner(opts = {}) {
     }
     await writeDone('final');
   } else if (mode === 'check' && etSlot === '1000') {
+    // Daily CLV board: save the 10:00 ET board every day for CLV tracking.
+    const boardRes = await writeClvBoard(dateISO, {
+      schema: 'clv-board-v1',
+      date: dateISO,
+      slot: '1000',
+      capturedAt: now.toISOString(),
+      eventCount: clvBoard.length,
+      events: clvBoard,
+    }, storeOpts);
+    state.clvBoardSaved = !!(boardRes && boardRes.wrote);
+    state.clvBoardEvents = clvBoard.length;
     await writeDone('final');
   }
 

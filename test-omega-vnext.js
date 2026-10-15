@@ -632,6 +632,28 @@ assert.ok(/projection is 8\.6/.test(fbAwaySpread), fbAwaySpread);
 assert.ok(/5\.1 points past/.test(fbAwaySpread), fbAwaySpread);
 assert.ok(!/short of/.test(fbAwaySpread), fbAwaySpread);
 
+const fbDogSpread = narrate.buildFallbackNarrative({
+  pick: 'Colorado State Rams +13.5',
+  side: 'Colorado State Rams +13.5',
+  matchup: 'Colorado State Rams @ Texas State Bobcats',
+  homeTeam: 'Texas State Bobcats',
+  awayTeam: 'Colorado State Rams',
+  sport: 'NCAAF',
+  betType: 'Spread',
+  odds: '+100',
+  units: '0.75u',
+  rating: 'aminus',
+  edgePct: 0.02,
+  ev: 0.039,
+  coverProb: 0.52,
+  modelProjection: 12.71,
+  line: 13.5,
+});
+assert.ok(/lose by 12\.7/.test(fbDogSpread), fbDogSpread);
+assert.ok(/\+13\.5/.test(fbDogSpread), fbDogSpread);
+assert.ok(/0\.8 points past/.test(fbDogSpread), fbDogSpread);
+assert.ok(!/projection is -12\.7/.test(fbDogSpread), fbDogSpread);
+
 const fbMl = narrate.buildFallbackNarrative({ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '+120', edgePct: '5.4%', steamToward: true });
 assertDeskCopy(fbMl, 'ml fallback', 4, 6);
 assert.ok(/\+120/.test(fbMl) && /Yankees ML/.test(fbMl));

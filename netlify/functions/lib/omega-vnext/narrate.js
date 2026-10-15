@@ -180,11 +180,17 @@ function buildFallbackNarrative(p) {
     if (spread) residual = sideProj + line;
     const unit = /nhl/i.test(sport) ? 'goals' : (/mlb/i.test(sport) ? 'runs' : 'points');
     const abs = Math.abs(residual);
-    if (abs <= 0.05) {
-      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${line.toFixed(1)}.`;
+    const posted = line > 0 ? `+${line.toFixed(1)}` : line.toFixed(1);
+    if (spread && sideProj < 0) {
+      const loss = Math.abs(sideProj).toFixed(1);
+      gapLine = abs <= 0.05
+        ? `The side is projected to lose by ${loss}. The posted line is ${posted}.`
+        : `The side is projected to lose by ${loss}. The posted line is ${posted}, ${abs.toFixed(1)} ${unit} ${residual < 0 ? 'short of' : 'past'} that number.`;
+    } else if (abs <= 0.05) {
+      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${posted}.`;
     } else {
       const relation = residual < 0 ? 'short of' : 'past';
-      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${line.toFixed(1)}, ${abs.toFixed(1)} ${unit} ${relation} that number.`;
+      gapLine = `The projection is ${sideProj.toFixed(1)} and the posted line is ${posted}, ${abs.toFixed(1)} ${unit} ${relation} that number.`;
     }
   }
 

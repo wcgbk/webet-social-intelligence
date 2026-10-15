@@ -130,7 +130,9 @@ function proseKeepsMath(prose, base) {
   const ev = shownEv(base);
   if (edge && !text.includes(edge)) return false;
   if (ev && !text.includes(ev)) return false;
-  if (/half[- ]point|little high|little low|strong edge|stayed firm|price has stayed/i.test(text)) return false;
+  if (/\b(probShown|edgeShown|evShown)\b/.test(text)) return false;
+  if (/half[- ]point|little high|little low|strong edge|stayed firm|price has stayed|mostly held|held since/i.test(text)) return false;
+  if (/because/i.test(text) && !/because the probability and the price/i.test(text)) return false;
   return true;
 }
 
@@ -371,7 +373,7 @@ VOICE:
 - Always say "WeBetAI". Never say "the model", "our model", or "the algorithm".
 - No em dashes. Use periods and commas.
 - No help-desk tone. No filler like "form and injuries line up".
-- State the locked probability, the price, the edge, and the expected value. When edgeShown, evShown, or probShown is on the row, those exact strings must appear in coreReasoning. When a projection and a line are on the row, state both numbers and the gap. Do not invent a cause the numbers do not support. Do not say the total is a half-point high, that an edge band is strong, or that the price has stayed firm.
+- State the locked probability, the price, the edge, and the expected value as the numbers themselves. Do not print the words probShown, edgeShown, or evShown. When a projection and a line are on the row, state both numbers and the gap. Do not invent a cause the numbers do not support. Do not say the total is a half-point high, that an edge band is strong, or that the price has stayed firm or mostly held.
 - edgeBand is not copy. Do not write "strong", "solid", or "modest" as a reason. steamHint may be stated only as a line that moved toward or against the side.
 - Never say "the model". Never use EV%, coverProb, CLV, Kelly, ORtg, DRtg, DVOA, ATS, FIP, xFIP, WAR, or wRC+.
 - Do not lead with bad news about the side you are picking.
@@ -387,9 +389,9 @@ YOUR JOB:
 
 HOW TO BUILD coreReasoning (straights, 4-6 sentences):
 1. Open with a concrete fact. Use verified news when you have it. Otherwise open on the matchup and the number.
-2. Explain the matchup or the situation: why this side, in this game, today.
-3. Explain the price with the locked probability, edgeShown, and evShown. A projection gap is the two numbers and their difference. Do not invent a scoring script.
-4. Close on why WeBetAI locked this side.
+2. Name the matchup and the posted number. Do not invent a cause the table does not contain.
+3. State the locked probability, the edge, and the expected value as those numbers. A projection gap is the two numbers and their difference. Do not invent a scoring script.
+4. Close on the probability and the price. Do not add a reason the table does not contain.
 
 Parlay legs use the same voice in 3-5 sentences. Do not write a stub. Argue for that leg.
 
@@ -399,16 +401,16 @@ insights (3-5 sentences): the sport mix, what to watch before lock (starter, qua
 
 whatLoses: one concrete sentence. Name the game script that beats this side. Do not write "the opposite happens."
 
-clvExpectation: one plain-English sentence on where the closing number should land (toward the side, against it, or holding). Do not say "CLV" and do not quote cents.
+clvExpectation: one plain-English sentence. If the row has no steam flag, say the close is not called on this pass. Do not say the line held. Do not say "CLV" and do not quote cents.
 
 dataVerified: a short note on what you actually checked (form, injuries, starter, quarterback, weather), or "locked number and price only; no live news on this pass."
 
 CONTEXT FIELDS on each locked row are a compass. They are not copy:
 - rating, grade, odds, units, sport, betType: fine to mention in English.
-- edgeShown, evShown, probShown: print these exact strings in coreReasoning when they are present.
+- The probability, edge, and expected-value numbers on the row must appear in coreReasoning. Do not print the field names probShown, edgeShown, or evShown.
 - edgeBand: do not translate it and do not print it.
-- steamHint: state the direction only if it is present. If it is missing, do not invent line movement and do not say the price stayed firm.
-- _contextEv and _contextCover: the same numbers as evShown and probShown. Print the shown strings, not a different rounding.
+- steamHint: state the direction only if it is present. If it is missing, do not invent line movement and do not say the price stayed firm or mostly held.
+- _contextEv and _contextCover: the same numbers as the shown edge and probability. Print those numbers, not a different rounding.
 
 OUTPUT: Return ONLY valid JSON (no markdown fences):
 {
@@ -448,7 +450,7 @@ ${JSON.stringify(lockedLegs || [], null, 2)}
 
 Write the JSON now.
 Straights need 4-6 sentence coreReasoning. Parlay legs need 3-5 sentences. edgeSummary and insights need 3-5 sentences each.
-Print edgeShown, evShown, and probShown exactly when they are on the row. State the price. If a projection and a line are present, state the gap as those two numbers. Do not invent a half-point, a strong edge band, or a price that stayed firm. Say WeBetAI. No em dashes.`;
+Print the probability, edge, and expected value as the numbers on the row. Do not print the field names. State the price. If a projection and a line are present, state the gap as those two numbers. Do not invent a half-point, a strong edge band, or a price that stayed firm or mostly held. Say WeBetAI. No em dashes.`;
 
   // No web search. The previous tool path was flaky on Netlify and both attempts
   // already ran with tools off. Same prompt, same max tokens, 60s budget.

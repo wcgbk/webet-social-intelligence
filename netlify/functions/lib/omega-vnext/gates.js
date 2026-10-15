@@ -208,6 +208,8 @@ function gateReason(c, opts = {}) {
     console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} reason=ev-above-12pct`);
     return 'ev-stale';
   }
+  // 2026-10-15 market anchor: the calibrated p must beat the no-vig fair.
+  if (c.pureModelPriced && c.p_fair != null && !(Number(c.edgePct) > 0)) return 'no-edge-vs-fair';
   // Sharp card: grades are the price edge, p_fair − implied.
   // A− and up (≥2%) are mains. B is the 1–2% lean. Under 1% is edge-floor
   // here. selectStraights may still fill a short card from those same-line

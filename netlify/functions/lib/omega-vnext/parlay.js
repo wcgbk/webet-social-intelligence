@@ -1084,17 +1084,25 @@ function parlayFromStraights(straights, opts = {}) {
   });
   const chosen = [];
   const games = new Set();
-  for (const leg of merged) {
+  const straightIdSet = new Set(rows.map((row) => parlaySideId(row)));
+  // 2026-10-15: legs must be qualifying straights with positive calibrated EV.
+  const anchor = require('./config').marketAnchorOn();
+  const legPool = anchor ? merged.filter((l) => Number(l.ev) > 0 && straightIdSet.has(parlaySideId(l))) : merged;
+  for (const leg of legPool) {
     const key = matchupKey(leg);
     if (!key || games.has(key)) continue;
     games.add(key);
     chosen.push(leg);
     if (chosen.length === 3) break;
   }
-  if (chosen.length < 3) {
+  if (anchor && chosen.length < 2) {
+    return [noQualifyingParlay('fewer than 2 qualifying positive-EV legs')];
+  }
+  if (!anchor && chosen.length < 3) {
     return [noQualifyingParlay('fewer than 3 distinct priced games')];
   }
   const st = comboStats(chosen);
+  if (anchor && !(st.ev > 0)) return [noQualifyingParlay('combined EV not positive')];
   const labeled = !(st.ev > 0);
   const straightIds = new Set(rows.map((row) => parlaySideId(row)));
   const mirrored = rows.length >= 3 && chosen.every((leg) => straightIds.has(parlaySideId(leg)));

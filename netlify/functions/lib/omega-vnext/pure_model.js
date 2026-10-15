@@ -35,7 +35,91 @@ function retailBook(c) {
  * One candidate. A missing pure probability cannot fall back to the blend
  * or to Pinnacle. Cover, edge, and EV are cleared so the gates reject it.
  */
+/**
+ * 2026-10-15 market anchor. Published p = (1 - K) * p_model + K * p_fair,
+ * p_fair = Pinnacle no-vig (both sides), else the paired sharp no-vig fair.
+ * K per sport|market is the walk-forward log-loss minimizer (kMle, no 0.3
+ * floor) from data/omega-cal-mode.json ship. Edge = p - p_fair. EV is at the
+ * execution price. No fair: the bet is skipped. Raw model p stays diagnostic.
+ */
+let K_TABLE = null;
+function kFor(sport, market) {
+  if (!K_TABLE) {
+    K_TABLE = {};
+    try {
+      const cal = require('./data/omega-cal-mode.json');
+      const cells = (cal && cal.ship && cal.ship.B && cal.ship.B.cells) || {};
+      for (const [key, v] of Object.entries(cells)) {
+        const k = v && (v.kMle != null ? v.kMle : v.k);
+        if (Number.isFinite(Number(k))) K_TABLE[key] = Math.min(1, Math.max(0, Number(k)));
+      }
+    } catch (_) { /* default below */ }
+  }
+  const m = /money/i.test(market || '') ? 'Moneyline' : (/total|over|under/i.test(market || '') ? 'Total' : 'Spread');
+  const k = K_TABLE[`${sport}|${m}`];
+  return Number.isFinite(k) ? k : 1;
+}
+
+function fairProbability(c) {
+  return finiteProb(c && c.pinnacleNoVigP) || finiteProb(c && c.fair_sharp_p) || finiteProb(c && c.sharpFairP);
+}
+
+function calibratedProbability(pModel, pFair, k) {
+  return (1 - k) * pModel + k * pFair;
+}
+
 function applyPureModelOne(c) {
+  if (!c) return c;
+  if (!require('./config').marketAnchorOn()) return applyPureModelLegacy(c);
+  const pModel = pureProbability(c);
+  const pFair = fairProbability(c);
+  const cleared = {
+    sharpFairPriced: false,
+    sharpFairReject: null,
+    movementDrop: false,
+    movementDropReason: null,
+  };
+  if (pModel == null || pFair == null) {
+    return {
+      ...c,
+      ...cleared,
+      pureModelPriced: false,
+      pureModelMissing: pModel == null,
+      fairMissing: pFair == null,
+      coverProb: null,
+      ev: null,
+      edgePct: null,
+    };
+  }
+  const k = kFor(c.sport, c.market);
+  const p = calibratedProbability(pModel, pFair, k);
+  const dec = americanToDecimal(c.odds);
+  const ev = dec != null ? (p * dec) - 1 : null;
+  const edge = p - pFair;
+  const book = retailBook(c);
+  const retail = book === 'draftkings' || book === 'hardrockbet';
+  return {
+    ...c,
+    ...cleared,
+    coverProb: p,
+    p_model: pModel,
+    p_calibrated: +p.toFixed(6),
+    p_fair: +pFair.toFixed(6),
+    calK: k,
+    p_blended: c.modelRawP != null ? c.modelRawP : null,
+    ev: ev != null ? +ev.toFixed(6) : null,
+    edgePct: +edge.toFixed(6),
+    edgePctDisplay: formatEdgePct(edge),
+    pureModelPriced: true,
+    pureModelVersion: 'market-anchor-1015',
+    edgeBasis: 'calibrated-p-vs-pinnacle-novig',
+    evBasis: 'calibrated-p-at-execution-price',
+    gradeBasis: 'calibrated-p-vs-pinnacle-novig',
+    ...(retail ? { liquid: true } : {}),
+  };
+}
+
+function applyPureModelLegacy(c) {
   if (!c) return c;
   const p = pureProbability(c);
   const cleared = {
@@ -89,4 +173,7 @@ module.exports = {
   pureProbability,
   applyPureModelOne,
   applyPureModel,
+  kFor,
+  fairProbability,
+  calibratedProbability,
 };

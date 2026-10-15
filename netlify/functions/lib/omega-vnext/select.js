@@ -183,7 +183,27 @@ function finiteEv(c) {
 }
 
 /** Higher stake EV first. An exact EV tie uses edge. */
+/**
+ * Quarter Kelly on the calibrated p, as a fraction of a 100u bankroll,
+ * rounded to 0.25u, floor 0.25u, cap 1u.
+ */
+function quarterKellyUnits(p, odds) {
+  const prob = Number(p);
+  const o = Number(String(odds).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(prob) || !Number.isFinite(o) || o === 0) return 0.25;
+  const b = o > 0 ? o / 100 : 100 / Math.abs(o);
+  const f = (prob * (b + 1) - 1) / b;
+  const u = Math.round((f / 4) * 100 * 4) / 4;
+  return Math.min(1, Math.max(0.25, u));
+}
+
 function compareByEv(a, b) {
+  if (config.marketAnchorOn()) {
+    // 2026-10-15: rank by calibrated edge vs no-vig fair, then EV.
+    const e = compareByEdge(a, b);
+    if (e !== 0) return e;
+    return finiteEv(b) - finiteEv(a);
+  }
   const d = finiteEv(b) - finiteEv(a);
   if (Math.abs(d) > 1e-12) return d;
   return compareByEdge(a, b);
@@ -458,9 +478,14 @@ function toPickObject(c, opts = {}) {
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
   // Flat stake by grade. Kelly rounding, the cover cap, and drawdown do not
   // override it. B and every lean stay at 0.5u. The B cap never raises.
-  let units = gradeStakeUnits(rating, tier);
-  units = capBGradeStake(units, rating);
-  if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
+  let units;
+  if (config.marketAnchorOn()) {
+    units = quarterKellyUnits(c.coverProb, c.odds);
+  } else {
+    units = gradeStakeUnits(rating, tier);
+    units = capBGradeStake(units, rating);
+    if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
+  }
   const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
   const evNum = Number.isFinite(evParsed) ? evParsed : null;
   const evStr = evNum == null ? null : formatEdgePct(evNum);
@@ -750,6 +775,7 @@ function capSameGameExposure(picks, parlays) {
 }
 
 module.exports = {
+  quarterKellyUnits,
   edgeRank,
   compareByEdge,
   compareByEv,

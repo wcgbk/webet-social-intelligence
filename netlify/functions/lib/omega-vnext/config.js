@@ -365,6 +365,21 @@ const GATES = {
   /** Reject when open→now steam strongly against (LINE_MOVE thresholds). */
   rejectAdverseSteam: true,
 };
+/**
+ * 2026-10-15 market anchor (OMEGA_MARKET_ANCHOR=1). Published p is the
+ * K-blend of model and Pinnacle no-vig, edge is vs that fair, min EV 1.5%,
+ * max EV 6%, no lean fill, quarter-Kelly stake. Unset is the prior policy.
+ */
+function marketAnchorOn() {
+  return String(process.env.OMEGA_MARKET_ANCHOR || '').trim() === '1';
+}
+const LEGACY_MIN_EV = GATES.minEV;
+const LEGACY_MAX_EV = GATES.maxEV;
+const ANCHOR_MIN_EV = { MLB: 0.015, NFL: 0.015, NCAAF: 0.015, NBA: 0.015, NHL: 0.015, default: 0.015 };
+const ANCHOR_MAX_EV = 0.06;
+Object.defineProperty(GATES, 'minEV', { enumerable: true, get() { return marketAnchorOn() ? ANCHOR_MIN_EV : LEGACY_MIN_EV; } });
+Object.defineProperty(GATES, 'maxEV', { enumerable: true, get() { return marketAnchorOn() ? ANCHOR_MAX_EV : LEGACY_MAX_EV; } });
+
 
 /**
  * Lean fill under the 2% main floor. A positive-EV fill needs stake EV > 0
@@ -1091,7 +1106,7 @@ module.exports = {
   MAX_STRAIGHT_UNITS_PER_PICK,
   B_GRADE_UNIT_CAP,
   GRADE_STAKE_UNITS,
-  LEAN_PAD,
+  marketAnchorOn,
   DAY_SCOPE_TZ,
   DAY_SCOPE_STRICT,
   SPORTS_ENABLED,
@@ -1168,3 +1183,4 @@ module.exports = {
   SITE_ID,
   BLOB_STORE,
 };
+Object.defineProperty(module.exports, 'LEAN_PAD', { enumerable: true, get() { return marketAnchorOn() ? false : LEAN_PAD; } });

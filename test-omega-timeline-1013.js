@@ -161,6 +161,9 @@ function scheduler() {
 
   const passPicks = ['A', 'B', 'C'].map((name) => row(name, 0.06, {
     odds: -105,
+    // 0.58 at -105 is 13.2% stake EV and cannot be a parlay leg.
+    coverProb: 0.55,
+    p_cal: 0.55,
     book: 'hardrockbet',
     priceBook: 'hardrockbet',
     hardRock: { american: -105, point: null },

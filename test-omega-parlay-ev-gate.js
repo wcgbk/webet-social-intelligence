@@ -1,6 +1,6 @@
 'use strict';
-// The published parlay is always 3 legs at 0.25u when three distinct priced
-// games exist. Combined EV that is not positive is labeled, not dropped.
+// A parlay leg needs cover >= 45% and positive stake EV at or under 12%.
+// Three qualifying games publish. Combined EV that is not positive is labeled.
 // Hard Rock and the edge floor are not required on this path. priceParlayLeg
 // still prices the older optimizer and still requires a positive EV.
 const assert = require('assert');
@@ -50,33 +50,22 @@ function assertNoTicket(rows, pool) {
   return out[0];
 }
 
-// Negative combined EV still publishes, labeled, at 0.25u. Straights stay.
+// A leg with negative stake EV is not a parlay leg. Straights stay.
 const floorNeg = [
   leg('Jets @ Bills', { odds: -200, coverProb: 0.5, edgePct: 0.04 }),
   leg('Dolphins @ Patriots', { odds: -200, coverProb: 0.5, edgePct: 0.04 }),
   leg('Giants @ Cowboys', { odds: -200, coverProb: 0.5, edgePct: 0.04 }),
 ];
-const beforeNeg = JSON.stringify(floorNeg);
-const labeled = parlayFromStraights(floorNeg);
-assert.strictEqual(labeled.length, 1);
-assert.strictEqual(labeled[0].qualifying, true);
-assert.strictEqual(labeled[0].units, '0.5u');
-assert.strictEqual(labeled[0].leanDay, true);
-assert.strictEqual(labeled[0].label, 'combined EV not positive');
-assert.strictEqual(labeled[0].type, '3-leg-parlay-labeled');
-assert.ok(!(labeled[0].evRaw > 0));
-assert.strictEqual(labeled[0].legs.length, 3);
-assert.strictEqual(labeled[0].autoCorrected, false);
-assert.strictEqual(JSON.stringify(floorNeg), beforeNeg);
+assertNoTicket(floorNeg);
 
 // Two games cannot make a ticket.
 assertNoTicket(floorNeg.slice(0, 2));
 
 // Positive combined EV: 0.25u, not a lean-day label.
 const floorPos = [
-  leg('Jets @ Bills', { odds: 120, coverProb: 0.55, edgePct: 0.04 }),
-  leg('Dolphins @ Patriots', { odds: 120, coverProb: 0.55, edgePct: 0.04 }),
-  leg('Giants @ Cowboys', { odds: 120, coverProb: 0.55, edgePct: 0.04 }),
+  leg('Jets @ Bills', { odds: 120, coverProb: 0.50, edgePct: 0.04 }),
+  leg('Dolphins @ Patriots', { odds: 120, coverProb: 0.50, edgePct: 0.04 }),
+  leg('Giants @ Cowboys', { odds: 120, coverProb: 0.50, edgePct: 0.04 }),
 ];
 const floorTicket = parlayFromStraights(floorPos);
 assert.strictEqual(floorTicket.length, 1);
@@ -118,7 +107,7 @@ assert.strictEqual(haircut[0].units, '0.5u');
 assert.strictEqual(haircut[0].label, 'combined EV not positive');
 assert.ok(!(haircut[0].evRaw > 0));
 const replacement = leg('Kings @ Oilers', {
-  market: 'Moneyline', side: 'Oilers', odds: 100, coverProb: 0.6, edgePct: 0.05,
+  market: 'Moneyline', side: 'Oilers', odds: -110, coverProb: 0.56, edgePct: 0.05,
 });
 const corrected = parlayFromStraights(overs, { pool: [replacement] });
 assert.strictEqual(corrected[0].qualifying, true);
@@ -130,25 +119,25 @@ assert.ok(names(corrected[0]).includes('Oilers ML'));
 assert.strictEqual(corrected[0].legs.length, 3);
 assert.strictEqual(new Set(corrected[0].legs.map((row) => row.matchup)).size, 3);
 
-// Best EV wins. Hard Rock is not required, so the no-HR dog is the first leg.
+// Edge rank. The 8% dog leads. The 3% Oilers price does not outrank a 4% card leg.
 const hrCard = [
-  leg('Jets @ Bills', { odds: 120, coverProb: 0.55, edgePct: 0.04 }),
-  leg('Dolphins @ Patriots', { odds: 120, coverProb: 0.55, edgePct: 0.04 }),
+  leg('Jets @ Bills', { odds: -110, coverProb: 0.55, edgePct: 0.04 }),
+  leg('Dolphins @ Patriots', { odds: -110, coverProb: 0.55, edgePct: 0.04 }),
   leg('Giants @ Cowboys', {
-    odds: 120, coverProb: 0.55, edgePct: 0.04,
-    bookPrices: [{ book: 'draftkings', american: 120 }],
+    odds: -110, coverProb: 0.55, edgePct: 0.04,
+    bookPrices: [{ book: 'draftkings', american: -110 }],
   }),
 ];
 const noHr = leg('Rangers @ Lightning', {
-  odds: 150, coverProb: 0.6, edgePct: 0.08,
-  bookPrices: [{ book: 'draftkings', american: 150 }],
+  odds: -110, coverProb: 0.56, edgePct: 0.08,
+  bookPrices: [{ book: 'draftkings', american: -110 }],
 });
 const withHr = leg('Kings @ Oilers', {
-  odds: 110, coverProb: 0.58, edgePct: 0.03,
-  hardRock: { american: 110, point: null },
+  odds: -110, coverProb: 0.54, edgePct: 0.03,
+  hardRock: { american: -110, point: null },
   bookPrices: [
-    { book: 'draftkings', american: 110 },
-    { book: 'hardrockbet', american: 110 },
+    { book: 'draftkings', american: -110 },
+    { book: 'hardrockbet', american: -110 },
   ],
 });
 assert.strictEqual(priceParlayLeg(noHr), null);
@@ -157,24 +146,24 @@ const hrTicket = parlayFromStraights(hrCard, { pool: [noHr, withHr] });
 assert.strictEqual(hrTicket[0].qualifying, true);
 assert.strictEqual(hrTicket[0].units, '0.5u');
 assert.strictEqual(hrTicket[0].autoCorrected, true);
-assert.ok(names(hrTicket[0]).includes('Oilers ML'));
+assert.ok(!names(hrTicket[0]).includes('Oilers ML'));
 assert.ok(names(hrTicket[0]).some((name) => /Lightning|Rangers/.test(name)));
-assert.ok(!names(hrTicket[0]).some((name) => /Cowboys|Giants/.test(name)));
+assert.ok(names(hrTicket[0]).some((name) => /Cowboys|Giants|Bills|Dolphins|Patriots|Jets/.test(name)));
 
 // The card prices the displayed odds. Hard Rock does not replace them here.
 const repricedLegs = [
   leg('Jets @ Bills', {
-    odds: -110, coverProb: 0.62, edgePct: 0.04,
+    odds: -110, coverProb: 0.56, edgePct: 0.04,
     hardRock: { american: -130 },
     bookPrices: [{ book: 'hardrockbet', american: -130 }, { book: 'draftkings', american: -110 }],
   }),
   leg('Dolphins @ Patriots', {
-    odds: -110, coverProb: 0.62, edgePct: 0.04,
+    odds: -110, coverProb: 0.56, edgePct: 0.04,
     hardRock: { american: -130 },
     bookPrices: [{ book: 'hardrockbet', american: -130 }, { book: 'draftkings', american: -110 }],
   }),
   leg('Giants @ Cowboys', {
-    odds: -110, coverProb: 0.62, edgePct: 0.04,
+    odds: -110, coverProb: 0.56, edgePct: 0.04,
     hardRock: { american: -130 },
     bookPrices: [{ book: 'hardrockbet', american: -130 }, { book: 'draftkings', american: -110 }],
   }),
@@ -203,7 +192,7 @@ assert.ok(deadTicket[0].evRaw > 0);
 // The unit cap keeps a full-card labeled ticket at 0.5u.
 const capped = applyDailyUnitCap(
   [{ pick: 'Bills', units: '1u', rating: 'aminus', tier: 'floor', matchup: 'Jets @ Bills' }],
-  parlayFromStraights(floorNeg),
+  parlayFromStraights(overs),
 );
 assert.strictEqual(capped.parlayLegs[0].qualifying, true);
 assert.strictEqual(capped.parlayLegs[0].units, '0.5u');

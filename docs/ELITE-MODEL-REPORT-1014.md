@@ -79,6 +79,8 @@ Held-out replay on stored Supabase history before any further weight, calibratio
 
 ## 2026-10-15 — empty card restored and republished
 
+The 17:30Z card in this section is not a QA pass. Integer win percents cannot produce the printed edge and expected value, the rank was stake EV, and NHL, NFL, and MLB were past the extreme margin line. The following section replaces it.
+
 Live site at 1:09 PM ET was still `v12.4.0-webetai-pure` and the 2026-10-15 Omega card had 0 picks, generated `2026-10-15T16:07:55Z` (12:07 PM ET), after the 11:00 ET finalization. Capture health was fine: slots 0300 and 1000 present, 17 games (MLB 2, NFL 1, NCAAF 3, NHL 11). NBA is preseason and correctly off the card.
 
 `/api/get-omega-health` showed `yes=0` in every sport. The best leftovers were NHL overs at +105 with stake EV 6.6–8.1% rejected as `ev-stale` (anchor cap 6%) and the rest rejected as `no-edge-vs-fair` with displayed edge 0. `OMEGA_MARKET_ANCHOR=1` blends the model into the Pinnacle no-vig (K floor 0.7), ranks edge against that fair, cuts max EV from 12% to 6%, and turns lean fill off. That violates brief rules 1 and 5 and is why the card was empty.
@@ -118,4 +120,31 @@ Published Omega KPIs at the same check, from `/api/get-results-omega`. Profit is
 | October 2026 | 15–19 | −$1,300 | −21.1% | 1–11 | |
 | Last 7 days | 6–9 | −$796 | −33.1% | 0–5 | |
 
-The lifetime book is near the 55% / 15% / 20% parlay marks because of the March–July legacy run. The live Omega window is not. This anchor rollback is a rule restore, not a new weight, and it is the card above. A calibration or stake change still needs a held-out replay that beats this pure-model policy before it ships.
+The lifetime book is near the 55% / 15% / 20% parlay marks because of the March–July legacy run. The live Omega window is not. The anchor rollback is a rule restore, not a new weight. A calibration or stake change still needs a held-out replay that beats this pure-model policy before it ships.
+
+## 2026-10-15 — edge rank, margin gate, and the replacement card
+
+The 17:30Z Islanders / Broncos under / Leafs ticket stays in the section above as the card that was live before this change. It is withdrawn.
+
+Rules now in the publisher:
+
+- Win probability prints to one decimal from the same probability that sets edge and expected value.
+- A sport whose mean margin residual is more than three times its limit is off the card for that run. It is not a lean fill.
+- Straights rank by probability edge. Stake EV from 2% through 12% is the inclusion check and the tie-break inside 0.2 percentage points.
+- A parlay leg needs a sport that passed the margin check, cover of at least 45%, and positive stake EV at or under 12%. Fewer than three such games publishes no parlay.
+- Narration has to print the probability, the price, the edge, and the expected value. Copy that invents a cause is replaced with the factual line.
+- A stored morning card with no picks can be rebuilt. A card that already has picks stays locked for the scheduled job.
+
+Dry run of the stored 10:00 ET board for 2026-10-15, no Odds API pull, no blob write, pregame clock at the 10:00 lock. `bias-margin-extreme` removed MLB, NHL, and NFL (98 rows). NCAAF stayed. Gate log: yes 2, lean 11, ev-stale 7. No parlay.
+
+| Pick | Sport | Matchup | Book | Odds | Win | Edge | EV | Units | Role |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Georgia Southern Eagles ML | NCAAF | Georgia Southern @ Old Dominion | DraftKings | −180 | 69.3% | 5.0% | 7.8% | 1.5u | floor |
+| UAB Blazers ML | NCAAF | East Carolina @ UAB | Hard Rock | +180 | 38.1% | 2.4% | 6.6% | 0.75u | floor |
+| Texas State Bobcats −13.5 | NCAAF | Colorado State @ Texas State | Hard Rock | −120 | 43.7% | −10.9% | −19.9% | 0.5u | lean |
+
+The third row is the lean pad on the only remaining NCAAF game. The other side of that spread is over the 12% cap, so it is not a floor play. The pad still fills the third slot, and the printed edge and expected value are negative. UAB is under 45% cover, so it is not a parlay leg. ESPN listed all three kickoffs as scheduled, 7:30 PM and 8:00 PM ET.
+
+Architecture scorecard on this build: Processes 82, Architecture 84, Math 70, Verify 78, Straights 70, Parlay 65, Overall 65. The hockey rating stays near 46 until a replay. These are judgments of the publisher. They are not the ROI table.
+
+Local QA: `node tools/run-tests.js` on the omega and sharp files, excluding the five that read `/workspace/omega-replay-2w`, was 121 passed after the edge-rank fixture updates. The five replay-path files were not run. NHL shrink mode stays `all`.

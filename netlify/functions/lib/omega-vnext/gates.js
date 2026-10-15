@@ -146,6 +146,10 @@ function gateReason(c, opts = {}) {
   // Unresolved NFL/NCAAF name. Checked before the floors so a bad id cannot publish.
   if (c && c.unknownTeam) return 'unknown_team';
 
+  // Margin residual past 3× the sport limit. The rating is broken for that
+  // sport on this run. Not a lean, and not a fill for a short card.
+  if (c && c.marginBiasExtreme) return 'bias-margin-extreme';
+
   // Sharp-fair path. A bad Pinnacle pair is structural (not a lean).
   // A priced row skips the model-gap veto: the probability is the Pinnacle
   // power fair, so a model/line disagreement is not a reason to drop it.

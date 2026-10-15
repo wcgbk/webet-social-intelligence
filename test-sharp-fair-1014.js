@@ -428,7 +428,7 @@ assert.strictEqual(short[2].label, 'lean');
 assert.ok(!short.some((row) => row.side === 'E +1.5' || row.side === 'N ML'));
 
 const filledOnly = selectStraights([], 3, [], [worseEv, sameGameWorse, lowEv, midEv, bestEv, notPaired]);
-assert.deepStrictEqual(filledOnly.map((row) => row.side), ['F ML', 'H +1.5', 'J ML']);
+assert.deepStrictEqual(filledOnly.map((row) => row.side), ['F ML', 'J ML', 'H +1.5']);
 assert.ok(filledOnly.every((row) => row.tier === 'lean' && row.pairedFill === true));
 const fullFloor = selectStraights([
   pairedRow('A @ B', 'B ML', 0.04, 0.03),
@@ -445,10 +445,8 @@ assert.strictEqual(leanStake.units, '0.5u');
 
 const negTicket = parlayFromStraights(filledOnly.map((row) => toPickObject(row)), { pool: filledOnly });
 assert.strictEqual(negTicket.length, 1);
-assert.strictEqual(negTicket[0].type, '3-leg-parlay-labeled');
-assert.strictEqual(negTicket[0].units, '0.25u');
-assert.strictEqual(negTicket[0].label, 'combined EV not positive');
-assert.strictEqual(negTicket[0].legs.length, 3);
-assert.strictEqual(negTicket[0].qualifying, true);
+assert.strictEqual(negTicket[0].type, 'no-qualifying-parlay');
+assert.strictEqual(negTicket[0].qualifying, false);
+assert.deepStrictEqual(negTicket[0].legs, []);
 
 console.log('test-sharp-fair-1014 ok');

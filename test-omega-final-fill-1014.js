@@ -98,8 +98,8 @@ assert.strictEqual(eligibleForLeanPool(stale), false);
 
 const dog = side({ ev: 0.08, edgePct: 0.01, matchup: 'A @ B', side: 'Dog', homeTeam: 'B', awayTeam: 'A' });
 const fav = side({ ev: 0.03, edgePct: 0.09, matchup: 'C @ D', side: 'Fav', homeTeam: 'D', awayTeam: 'C' });
-assert.ok(compareByEv(dog, fav) < 0);
-assert.strictEqual(orderedByScore([fav, dog])[0].side, 'Dog');
+assert.ok(compareByEv(fav, dog) < 0);
+assert.strictEqual(orderedByScore([dog, fav])[0].side, 'Fav');
 const tieHi = side({ ev: 0.04, edgePct: 0.05, matchup: 'E @ F', side: 'Hi', homeTeam: 'F', awayTeam: 'E' });
 const tieLo = side({ ev: 0.04, edgePct: 0.02, matchup: 'G @ H', side: 'Lo', homeTeam: 'H', awayTeam: 'G' });
 assert.ok(compareByEv(tieHi, tieLo) < 0);
@@ -158,11 +158,14 @@ const weak = [
 ];
 const better = pl('Ravens @ Bengals', 130, 0.55);
 const ticket = parlayFromStraights(weak, { pool: [better] });
-assert.strictEqual(ticket[0].qualifying, true);
-assert.strictEqual(ticket[0].units, '0.25u');
-assert.strictEqual(ticket[0].legs.length, 3);
-assert.ok(ticket[0].legs.some((row) => row.matchup === 'Ravens @ Bengals'));
-assert.strictEqual(ticket[0].label, 'combined EV not positive');
+assert.ok(isNoQualifyingParlay(ticket[0]), 'negative-EV legs are not a parlay');
+const priced = [
+  pl('Jets @ Bills', 120, 0.55),
+  pl('Dolphins @ Patriots', 120, 0.55),
+  pl('Giants @ Cowboys', 120, 0.40),
+];
+const underCover = parlayFromStraights(priced);
+assert.ok(isNoQualifyingParlay(underCover[0]), 'a leg under 45% cover leaves fewer than 3 games');
 const missing = parlayFromStraights(weak.slice(0, 2));
 assert.ok(isNoQualifyingParlay(missing[0]));
 

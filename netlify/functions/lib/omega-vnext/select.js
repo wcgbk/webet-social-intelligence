@@ -144,6 +144,7 @@ function publishMinEv(c) {
  * under GATES.maxEV (12%). Edge is not an inclusion test.
  */
 function passesPublishFloor(c) {
+  if (c && c.marginBiasExtreme) return false;
   const ev = Number(c && c.ev);
   const minEV = publishMinEv(c);
   if (!Number.isFinite(ev) || !(ev + 1e-12 >= minEV)) return false;
@@ -198,15 +199,12 @@ function quarterKellyUnits(p, odds) {
 }
 
 function compareByEv(a, b) {
-  if (config.marketAnchorOn()) {
-    // 2026-10-15: rank by calibrated edge vs no-vig fair, then EV.
-    const e = compareByEdge(a, b);
-    if (e !== 0) return e;
-    return finiteEv(b) - finiteEv(a);
-  }
-  const d = finiteEv(b) - finiteEv(a);
-  if (Math.abs(d) > 1e-12) return d;
-  return compareByEdge(a, b);
+  // Probability edge is the rank. Stake EV breaks a tie inside 0.2
+  // percentage points (compareByEdge) and any exact-edge tie left over.
+  // A plus-money price must not outrank a higher edge.
+  const e = compareByEdge(a, b);
+  if (e !== 0) return e;
+  return finiteEv(b) - finiteEv(a);
 }
 
 function sideKey(c) {
@@ -267,6 +265,7 @@ function isPregameRow(c) {
  * and is not a lean.
  */
 function eligibleForLeanPool(c) {
+  if (c && c.marginBiasExtreme) return false;
   const ev = Number(c && c.ev);
   if (!Number.isFinite(ev)) return false;
   const maxEV = Number(config.GATES && config.GATES.maxEV);
@@ -330,7 +329,7 @@ function eligiblePairedFill(c) {
 }
 
 /**
- * Top stake-EV rows, up to MAX_STRAIGHTS. Edge breaks an EV tie.
+ * Top probability-edge rows, up to MAX_STRAIGHTS. Stake EV breaks a tie.
  * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
  * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
  * slots fill from positive-EV leans, then from any remaining pregame
@@ -384,7 +383,7 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   return out;
 }
 
-/** Same order selectStraights uses. Candidate-table rank follows EV, then edge. */
+/** Same order selectStraights uses. Rank follows probability edge, then stake EV. */
 function orderedByScore(pool) {
   return [...(pool || [])].sort(compareByEv);
 }
@@ -520,8 +519,8 @@ function toPickObject(c, opts = {}) {
     evBasis: c.evBasis || (pure ? 'pure-model-stake-ev' : 'stake-ev-at-best-us-price'),
     gradeBasis: c.gradeBasis || (pure ? 'pure-model-edge-vs-bet-price' : 'calibrated-edge-vs-pinnacle-no-vig'),
     edgePct: edgePctStr,
-    coverProb: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
-    winProbability: `${((c.coverProb || 0) * 100).toFixed(0)}%`,
+    coverProb: `${((c.coverProb || 0) * 100).toFixed(1)}%`,
+    winProbability: `${((c.coverProb || 0) * 100).toFixed(1)}%`,
     coreReasoning: c.coreReasoning || '',
     whatLoses: c.whatLoses || '',
     dataVerified: c.dataVerified || '',

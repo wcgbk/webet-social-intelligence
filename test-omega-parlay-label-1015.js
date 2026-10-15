@@ -108,8 +108,17 @@ assert.strictEqual(threeStats.uniqueSports, 1);
 assert.deepStrictEqual(threeStats.haircutApplied, { applied: true, factor: 0.92 });
 assert.strictEqual(threeStats.corrApplied, false);
 
-const haircutTicket = parlayFromStraights(threeOvers)[0];
-assert.deepStrictEqual(numericFields(haircutTicket), FROZEN_THREE_TICKET);
+const publishOvers = [
+  leg('A @ B', 'Over 8.5', { coverProb: 0.55, odds: -110 }),
+  leg('C @ D', 'Over 7.5', { coverProb: 0.55, odds: -105 }),
+  leg('E @ F', 'Over 9', { coverProb: 0.50, odds: 120 }),
+];
+const haircutTicket = parlayFromStraights(publishOvers)[0];
+assert.strictEqual(haircutTicket.combinedOdds, FROZEN_THREE_TICKET.combinedOdds);
+assert.strictEqual(haircutTicket.combinedDecimal, FROZEN_THREE_TICKET.combinedDecimal);
+assert.strictEqual(haircutTicket.units, '0.5u');
+assert.strictEqual(haircutTicket.qualifying, true);
+assert.ok(haircutTicket.evRaw > 0 && haircutTicket.evRaw < FROZEN_THREE_STATS.ev);
 assert.strictEqual(haircutTicket.independent, false);
 assert.strictEqual(haircutTicket.mirrorsCard, true);
 assert.strictEqual(
@@ -120,7 +129,7 @@ assert.strictEqual(haircutTicket.correlationNote, haircutTicket.evLabel);
 
 const mixed = [
   leg('A @ B', 'Over 8.5', { market: 'Total', coverProb: 0.56, odds: -110, edgePct: 0.04 }),
-  leg('C @ D', 'Yankees', { market: 'Moneyline', side: 'Yankees', coverProb: 0.55, odds: 130, edgePct: 0.05 }),
+  leg('C @ D', 'Yankees', { market: 'Moneyline', side: 'Yankees', coverProb: 0.48, odds: 130, edgePct: 0.05 }),
   leg('E @ F', 'Under 9', { market: 'Total', coverProb: 0.54, odds: -115, edgePct: 0.03 }),
 ];
 const mixedTicket = parlayFromStraights(mixed)[0];
@@ -128,8 +137,8 @@ assert.strictEqual(mixedTicket.evLabel, 'assumes independent legs (different gam
 assert.strictEqual(mixedTicket.correlationNote, mixedTicket.evLabel);
 assert.strictEqual(mixedTicket.independent, true);
 assert.strictEqual(mixedTicket.mirrorsCard, true);
-assert.strictEqual(mixedTicket.combinedProbRaw, 0.16632000000000005);
-assert.strictEqual(mixedTicket.evRaw, 0.3653360000000001);
+assert.strictEqual(mixedTicket.combinedProbRaw, 0.14515200000000003);
+assert.strictEqual(mixedTicket.evRaw, 0.19156596363636358);
 assert.strictEqual(mixedTicket.combinedOdds, '+721');
 assert.strictEqual(mixedTicket.combinedDecimal, 8.21);
 

@@ -2860,10 +2860,14 @@
       // Documented elite-desk QA. Re-scored night of 2026-10-05/06.
       // Original 2026-09-23 on v12.3.12 was 86/86/84/84. Engineering judgment, not a results rank.
       const qa = [
-        { metric: 'Processes', pct: 89 },
-        { metric: 'Architecture', pct: 88 },
-        { metric: 'Math', pct: 85 },
-        { metric: 'Overall', pct: 85 },
+        { metric: 'Processes', pct: 82 },
+        { metric: 'Architecture', pct: 84 },
+        { metric: 'Math', pct: 70 },
+        { metric: 'Verify', pct: 78 },
+        { metric: 'Straights', pct: 70 },
+        { metric: 'Parlay', pct: 65 },
+        { metric: 'NHL rating', pct: 46 },
+        { metric: 'Overall', pct: 65 },
       ];
 
       let html = `
@@ -2888,8 +2892,8 @@
         <div style="padding:10px 14px;background:var(--primary-dim);border:1px solid rgba(0,76,84,0.15);border-radius:10px;margin-bottom:20px;font-size:0.8125rem;color:var(--primary)">
           <strong>Daily Edge Picks · ${totalPicks} graded straights · ${days.length} card days since ${floor}</strong>
         </div>
-        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:8px">Elite desk QA · re-scored 2026-10-05/06</div>
-        <div style="font-size:0.75rem;color:var(--fg-muted);line-height:1.45;margin-bottom:12px">Engineering judgment, not a live results rank. Originally scored 2026-09-23 on v12.3.12 (86/86/84/84). Re-scored after the Omega autopilot to Processes 89, Architecture 88, Math 85, Overall 85. Overall follows Math. Hockey is on. NBA stays off.</div>
+        <div style="font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-dim);margin-bottom:8px">Elite desk QA · scored 2026-10-15</div>
+        <div style="font-size:0.75rem;color:var(--fg-muted);line-height:1.45;margin-bottom:12px">Engineering judgment of the live publisher, not a live results rank. Processes 82, Architecture 84, Math 70, Verify 78, Straights 70, Parlay 65, Overall 65. The hockey rating stays near 46 until a replay. NBA stays off through 2026-10-19.</div>
       `;
 
       qa.forEach(m => {

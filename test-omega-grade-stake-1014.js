@@ -43,7 +43,7 @@ function row(matchup, side, odds, edge, tier) {
     side,
     market: 'Total',
     odds,
-    coverProb: 0.55,
+    coverProb: 0.58,
     ev: 0.05,
     edgePct: edge,
     tier: tier || 'floor',

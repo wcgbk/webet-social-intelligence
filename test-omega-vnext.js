@@ -52,13 +52,13 @@ const sorted = math.sortByGradeThenUnits([
 ]);
 assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low']);
 
-// Stake EV is the rank. Edge only breaks a tie. The fatter-EV dog is first.
+// Probability edge is the rank. Stake EV breaks a tie inside 0.2 points.
 {
   const fav = { edgePct: 0.048, ev: 0.04, odds: -140, sport: 'MLB', side: 'Fav', predictedClv: 0, uncertainty: 0.12 };
   const dog = { edgePct: 0.021, ev: 0.18, odds: 180, sport: 'MLB', side: 'Dog', predictedClv: 0, uncertainty: 0.12 };
   const rankedPool = select.orderedByScore([dog, fav]);
-  assert.strictEqual(rankedPool[0].side, 'Dog');
-  assert.strictEqual(rankedPool[1].side, 'Fav');
+  assert.strictEqual(rankedPool[0].side, 'Fav');
+  assert.strictEqual(rankedPool[1].side, 'Dog');
   assert.strictEqual(math.americanCentsDiff(105, -105), 10);
   assert.strictEqual(math.americanCentsDiff(-110, -130), 20);
   assert.notStrictEqual(math.americanCentsDiff(105, -105), 210);
@@ -122,7 +122,7 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// Published rank is stake EV. Edge is only the tiebreak. scoreCandidate stays the edge score.
+// Published rank is probability edge. Stake EV breaks a tie inside 0.2 points.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
@@ -134,7 +134,7 @@ assert.ok(picked.length >= 1);
   };
   assert.ok(select.scoreCandidate(chalk) > select.scoreCandidate(dog));
   const ranked = select.selectStraights([dog, chalk], 1);
-  assert.strictEqual(ranked[0].matchup, 'C @ D');
+  assert.strictEqual(ranked[0].matchup, 'A @ B');
 }
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));
@@ -441,30 +441,37 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
     assert.strictEqual(scored.wedParlay[0].legs.length, 3, label);
     assert.strictEqual(parseFloat(scored.wedParlay[0].units), config.PARLAY_FIXED_UNITS, label);
   }
-  function assertEvRank(scored, label) {
+  function assertEdgeRank(scored, label) {
     const used = new Set(scored.straights.map((s) => s.matchup));
     assert.strictEqual(used.size, scored.straights.length, `${label} two straights on one game`);
+    const floors = scored.straights.filter((s) => s.tier !== 'lean');
     const bestOpen = {};
     for (const c of scored.yesPool) {
-      if (used.has(c.matchup)) continue;
-      const ev = Number(c.ev);
-      if (!Number.isFinite(ev)) continue;
-      if (bestOpen[c.matchup] == null || ev > bestOpen[c.matchup]) bestOpen[c.matchup] = ev;
+      if (used.has(c.matchup) || !select.passesPublishFloor(c)) continue;
+      const cur = bestOpen[c.matchup];
+      if (!cur || select.compareByEv(c, cur) < 0) bestOpen[c.matchup] = c;
     }
-    const minStraight = Math.min(...scored.straights.map((s) => Number(s.ev)));
-    for (const [game, ev] of Object.entries(bestOpen)) {
-      assert.ok(minStraight + 1e-9 >= ev, `${label} left ${game} ev ${ev} ahead of ${minStraight}`);
+    if (!floors.length) return;
+    let worst = floors[0];
+    for (const s of floors) {
+      if (select.compareByEv(s, worst) > 0) worst = s;
+    }
+    for (const [game, c] of Object.entries(bestOpen)) {
+      assert.ok(
+        select.compareByEv(worst, c) <= 0,
+        `${label} left ${game} edge ${c.edgePct} ahead of ${worst.matchup} edge ${worst.edgePct}`,
+      );
     }
   }
   const legacyCard = scoreWednesday('legacy');
   assert.ok(legacyCard.yesPool.every(c => c.calMode === 'legacy'));
   assertFilled(legacyCard, 'legacy');
-  assertEvRank(legacyCard, 'legacy');
+  assertEdgeRank(legacyCard, 'legacy');
 
   const defaultCard = scoreWednesday(null);
   assert.ok(defaultCard.yesPool.every(c => c.calMode === 'A' && c.calParamsSource === 'none' && c.calMap == null && c.calLevel === 'handset'));
   assertFilled(defaultCard, 'mode A');
-  assertEvRank(defaultCard, 'mode A');
+  assertEdgeRank(defaultCard, 'mode A');
   const aSpread = defaultCard.yesPool.find(c => c.sport === 'MLB' && c.market === 'Spread');
   assert.ok(aSpread, 'mode A publishes an MLB spread');
   assert.strictEqual(aSpread.calibK, config.MLB_CALIBRATION.shrinkK.Spread);
@@ -574,19 +581,20 @@ function assertDeskCopy(text, label, minSentences, maxSentences) {
 const fb = narrate.buildFallbackNarrative({ pick: 'Under 45.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Total', odds: '-105', units: '1u', rating: 'a', edgePct: '4.2%' });
 assertDeskCopy(fb, 'total fallback', 4, 6);
 assert.ok(/Under 45\.5/.test(fb) && /DAL @ NYG/.test(fb));
-assert.ok(/little high/i.test(fb), 'total fallback translates the number into English');
-assert.ok(/under/i.test(fb));
+assert.ok(/4\.2%/.test(fb), 'total fallback states the edge');
+assert.ok(/-105/.test(fb));
+assert.ok(!/little high|half[- ]point/i.test(fb), 'total fallback does not invent a point gap');
 
 const fbDog = narrate.buildFallbackNarrative({ pick: 'Giants +6.5', matchup: 'DAL @ NYG', sport: 'NFL', betType: 'Spread', odds: '-110', units: '0.75u', steamAgainst: true, edgePct: 0.028 });
 assertDeskCopy(fbDog, 'dog fallback', 4, 6);
 assert.ok(/Giants \+6\.5/.test(fbDog));
-assert.ok(/points/i.test(fbDog));
-assert.ok(/leaning the other way/i.test(fbDog), 'steam against is translated, not dumped as cents');
+assert.ok(/2\.8%/.test(fbDog));
+assert.ok(/moved against/i.test(fbDog), 'steam against is the line move, not a made-up cause');
 
 const fbMl = narrate.buildFallbackNarrative({ pick: 'Yankees ML', matchup: 'BOS @ NYY', sport: 'MLB', betType: 'Moneyline', odds: '+120', edgePct: '5.4%', steamToward: true });
 assertDeskCopy(fbMl, 'ml fallback', 4, 6);
 assert.ok(/\+120/.test(fbMl) && /Yankees ML/.test(fbMl));
-assert.ok(/strong/i.test(fbMl) && /leaning this way/i.test(fbMl));
+assert.ok(/5\.4%/.test(fbMl) && /moved toward/i.test(fbMl));
 
 const replaced = narrate.ensureNarrative({
   pick: 'Lakers ML', matchup: 'A @ B', sport: 'NBA', odds: '+120',

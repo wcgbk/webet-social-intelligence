@@ -716,6 +716,23 @@ function buildHealthRecord(input) {
   };
 }
 
+/**
+ * Sports whose margin residual is past 3× the sport limit.
+ * A sport with no spread sample is not on the list.
+ * The health alert uses the same cut. This list is what takes the sport off the card.
+ */
+function extremeMarginSports(candidates) {
+  const bias = biasFor(candidates || []);
+  const out = [];
+  for (const sport of Object.keys(BIAS_LIMIT)) {
+    const row = bias[sport];
+    const lim = BIAS_LIMIT[sport];
+    if (!row || !lim || !row.marginN) continue;
+    if (Math.abs(row.marginMean) > lim.margin * BIAS_MARGIN_EXTREME_MULT + 1e-12) out.push(sport);
+  }
+  return out;
+}
+
 function compactHealth(record) {
   if (!record) return null;
   const bySport = {};
@@ -756,6 +773,7 @@ module.exports = {
   BANDS,
   BIAS_LIMIT,
   BIAS_MARGIN_EXTREME_MULT,
+  extremeMarginSports,
   buildHealthRecord,
   compactHealth,
   attachGenerateHealth,

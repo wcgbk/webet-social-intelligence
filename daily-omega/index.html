@@ -1907,10 +1907,10 @@
 
     const edgeShown = p.edgePct || p.edge;
     const edgeBadgeHTML = edgeShown
-      ? `<span class="edge-badge" title="Letter grade uses this calibrated edge versus the Pinnacle no-vig. It is not DraftKings stake EV."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(edgeShown)}</span>`
+      ? `<span class="edge-badge" title="Letter grade uses the model probability minus the implied probability of this price. Pinnacle is the closing-line check, not this edge."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Edge ${esc(edgeShown)}</span>`
       : '';
     const evBadgeHTML = (p.ev != null && p.ev !== '')
-      ? `<span class="edge-badge" title="Stake EV at the DraftKings price. The letter grade uses the calibrated edge versus the Pinnacle no-vig.">EV ${esc(p.ev)}</span>`
+      ? `<span class="edge-badge" title="Stake EV is that same probability times the decimal odds, minus 1.">EV ${esc(p.ev)}</span>`
       : '';
 
     const ratingHTML = badge && label

@@ -3,7 +3,7 @@
 /**
  * Grok as VERIFIER + NARRATOR only. Cannot invent sides.
  * May reject on news; unit cuts ≤50% allowed.
- * Narratives: ESPN-style 4–6 sentence journalistic blurbs (not math templates).
+ * Narratives: ESPN-style 4–6 sentence journalistic blurbs that state the locked probability, price, edge, and expected value.
  * Voice: feature-desk matchup storytelling plus a sharp handicapper's price logic.
  * A failed xAI call keeps the locked card (sports-desk fallback). It never blocks publish.
  */
@@ -88,6 +88,52 @@ function joinSentences(parts) {
   return parts.filter(Boolean).join(' ');
 }
 
+/** "4.2%", 0.042, and 4.2 all become "4.2%". Missing stays null. */
+function displayedRate(raw) {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return null;
+    if (s.includes('%')) return s;
+    const n = parseFloat(s);
+    if (!Number.isFinite(n)) return null;
+    const frac = Math.abs(n) > 1 ? n / 100 : n;
+    return `${(frac * 100).toFixed(1)}%`;
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const frac = Math.abs(raw) > 1 ? raw / 100 : raw;
+    return `${(frac * 100).toFixed(1)}%`;
+  }
+  return null;
+}
+
+function shownEdge(p) {
+  if (!p) return null;
+  return displayedRate(p.edge != null && p.edge !== '' ? p.edge : p.edgePct);
+}
+
+function shownEv(p) {
+  if (!p) return null;
+  return displayedRate(p.ev != null && p.ev !== '' ? p.ev : p.evRaw);
+}
+
+function shownProb(p) {
+  if (!p) return null;
+  const raw = p.winProbability != null && p.winProbability !== '' ? p.winProbability : p.coverProb;
+  return displayedRate(raw);
+}
+
+/** Grok prose that drops the locked edge or EV, or invents a cause, is replaced. */
+function proseKeepsMath(prose, base) {
+  const text = String(prose || '');
+  const edge = shownEdge(base);
+  const ev = shownEv(base);
+  if (edge && !text.includes(edge)) return false;
+  if (ev && !text.includes(ev)) return false;
+  if (/half[- ]point|little high|little low|strong edge|stayed firm|price has stayed/i.test(text)) return false;
+  return true;
+}
+
 /**
  * Sports-desk fallback when Grok is unavailable.
  * 5 sentences, argues for the side, no gate jargon.
@@ -96,86 +142,51 @@ function buildFallbackNarrative(p) {
   const pick = p.pick || p.side || 'this side';
   const matchup = p.matchup || "today's game";
   const sport = p.sport || '';
-  const betType = p.betType || p.market || '';
   const odds = p.odds != null && p.odds !== '' ? String(p.odds) : '';
   const units = p.units ? String(p.units) : '';
-  const shape = sideShape(pick, betType);
-  const band = edgeBandFrom(p);
-  const steam = steamHintFrom(p);
   const grade = gradeLabel(p);
-  const price = odds || 'this price';
+  const price = odds || 'the posted price';
+  const prob = shownProb(p);
+  const edge = shownEdge(p);
+  const ev = shownEv(p);
+  const proj = Number(p && p.modelProjection);
+  const lineRaw = p && (p.line != null ? p.line : p.consensusLine);
+  const line = Number(lineRaw);
 
-  const hook = `${sport ? `${sport}: ` : ''}WeBetAI locked ${pick} in ${matchup}${odds ? ` at ${odds}` : ''}.`;
+  const hook = `${sport ? `${sport}: ` : ''}WeBetAI locked ${pick} in ${matchup} at ${price}.`;
+  const probLine = prob
+    ? `WeBetAI rates this side at ${prob}.`
+    : 'WeBetAI is pricing this side from the posted number on this pass.';
+  let valueLine = `The posted price is ${price}.`;
+  if (edge && ev) valueLine = `At ${price} that is a ${edge} edge and a ${ev} expected value.`;
+  else if (edge) valueLine = `At ${price} that is a ${edge} edge.`;
+  else if (ev) valueLine = `At ${price} that is a ${ev} expected value.`;
 
-  let why;
-  if (shape === 'under') {
-    why = 'The way these teams have been playing points to a slower script than the total assumes, with fewer clean scoring trips than a high number needs.';
-  } else if (shape === 'over') {
-    why = 'The way these teams have been playing points to a livelier script than the total assumes, with more scoring chances than a low number allows.';
-  } else if (shape === 'dog') {
-    why = 'WeBetAI reads the favorite as priced for a cleaner win than this matchup figures to produce, which is why the plus points are the side.';
-  } else if (shape === 'favorite' || shape === 'spread') {
-    why = 'WeBetAI reads this side as the one that should control the game long enough to clear a short number with a normal winning margin.';
-  } else {
-    why = 'WeBetAI reads this side as the right team in the matchup, and the moneyline is how you get paid for that read.';
+  let gapLine = null;
+  if (Number.isFinite(proj) && Number.isFinite(line)) {
+    const gap = Math.abs(proj - line);
+    const unit = /nhl/i.test(sport) ? 'goals' : 'points';
+    gapLine = `The projection is ${proj.toFixed(1)} against a posted line of ${line.toFixed(1)}, a gap of ${gap.toFixed(1)} ${unit}.`;
   }
 
-  let value;
-  if (shape === 'under') {
-    value = `The total still looks a little high versus how these offenses have been scoring, and ${price} is still paying on the under.`;
-  } else if (shape === 'over') {
-    value = `The total still looks a little low versus how these offenses have been scoring, and ${price} has not caught all the way up.`;
-  } else if (shape === 'dog') {
-    value = `The points are the soft side of the number, and ${price} still leaves ${pick} as a bettable price.`;
-  } else if (shape === 'favorite' || shape === 'spread') {
-    value = `The spread still looks short for a side WeBetAI expects to win by enough, and ${price} is a fair way to lay it.`;
-  } else if (/^\+/.test(odds)) {
-    value = `Plus money is the case: WeBetAI wants this side, and ${price} still pays more than a short favorite would.`;
-  } else {
-    value = `The moneyline at ${price} still offers a better payout than the matchup risk WeBetAI sees.`;
-  }
+  let moveLine = null;
+  if (p && p.steamAgainst === true) moveLine = 'The line has moved against this side.';
+  else if (p && p.steamToward === true) moveLine = 'The line has moved toward this side.';
 
-  let compass = '';
-  if (band === 'strong') compass = 'WeBetAI sees a strong disagreement with the posted number';
-  else if (band === 'solid') compass = 'WeBetAI sees a solid disagreement with the posted number';
-  else if (band === 'modest') compass = 'WeBetAI has this as a modest disagreement with the posted number';
-  if (steam && /toward/i.test(steam)) {
-    compass = compass
-      ? `${compass}, and the line is already leaning this way.`
-      : 'The line is already leaning this way.';
-  } else if (steam && /against/i.test(steam)) {
-    compass = compass
-      ? `${compass}, even with the line leaning the other way.`
-      : 'The read holds even with the line leaning the other way.';
-  } else if (compass) {
-    compass = `${compass}.`;
-  }
+  let stake = null;
+  if (grade && units) stake = `WeBetAI has this graded ${grade} and sized at ${units}.`;
+  else if (units) stake = `The stake is ${units}.`;
+  else if (grade) stake = `WeBetAI has this graded ${grade}.`;
 
-  let stake;
-  if (grade && units) {
-    stake = `WeBetAI has this graded ${grade} and sized at ${units}, enough to matter without making one game the whole day.`;
-  } else if (units) {
-    stake = `The stake is ${units}, big enough to matter and small enough that one game is not the whole day.`;
-  } else if (grade) {
-    stake = `WeBetAI has this graded ${grade}, a card play with a measured stake rather than a max swing.`;
-  } else {
-    stake = 'WeBetAI kept the stake disciplined, enough to matter without making one game the whole day.';
+  const close = `WeBetAI is on ${pick} because the probability and the price are the case for the bet.`;
+  const parts = [hook, probLine, valueLine, gapLine, moveLine, stake, close].filter(Boolean);
+  while (parts.length > 6) {
+    const stakeAt = parts.indexOf(stake);
+    if (stake && stakeAt !== -1) parts.splice(stakeAt, 1);
+    else if (moveLine && parts.indexOf(moveLine) !== -1) parts.splice(parts.indexOf(moveLine), 1);
+    else break;
   }
-
-  let close;
-  if (shape === 'under') {
-    close = 'WeBetAI is on the under because the game should land quieter than the posted total.';
-  } else if (shape === 'over') {
-    close = 'WeBetAI is on the over because the game should land higher than the posted total.';
-  } else if (shape === 'dog') {
-    close = `WeBetAI is on ${pick} because the favorite still has to win by more than this matchup should produce.`;
-  } else if (shape === 'favorite' || shape === 'spread') {
-    close = `WeBetAI is on ${pick} because a normal win should be enough to cover.`;
-  } else {
-    close = `WeBetAI is on ${pick} because the payout still respects the risk in ${matchup}.`;
-  }
-
-  return joinSentences([hook, why, value, compass, stake, close]);
+  return joinSentences(parts);
 }
 
 function ensureNarrative(p) {
@@ -286,12 +297,11 @@ function ensureExtraFields(p) {
   const matchup = next.matchup || 'this matchup';
   const sport = next.sport || 'this slate';
   const shape = sideShape(pick, next.betType || next.market || '');
-  const band = edgeBandFrom(next);
   const steam = steamHintFrom(next);
 
   if (!next.whatLoses || String(next.whatLoses).trim().length < 15) {
     if (shape === 'under') {
-      next.whatLoses = `${pick} loses if ${matchup} turns into a track meet and the teams score past the total WeBetAI thinks is too high.`;
+      next.whatLoses = `${pick} loses if ${matchup} scores past the posted total.`;
     } else if (shape === 'over') {
       next.whatLoses = `${pick} loses if ${matchup} stalls into a low-event game and the scoring stays under the number.`;
     } else if (shape === 'dog') {
@@ -312,10 +322,8 @@ function ensureExtraFields(p) {
       next.clvExpectation = `WeBetAI expects the closing number to keep leaning toward ${pick}, so the price on this card should still look fair or better by the close.`;
     } else if (steam && /against/i.test(steam)) {
       next.clvExpectation = `The number has already leaned the other way, so WeBetAI expects a close that holds near ${pick} rather than a big further move.`;
-    } else if (band === 'strong' || band === 'solid') {
-      next.clvExpectation = `WeBetAI expects the closing number to drift toward ${pick} as the rest of the market finds the same side.`;
     } else {
-      next.clvExpectation = `WeBetAI expects a quiet close around ${pick}, and a number that simply holds is still a fair ticket.`;
+      next.clvExpectation = `The closing number on ${pick} is not a second pick. WeBetAI is grading the price already on the card.`;
     }
   }
   return next;
@@ -346,6 +354,12 @@ function lockedRow(p, i, kind) {
   const steam = steamHintFrom(p);
   if (band) row.edgeBand = band;
   if (steam) row.steamHint = steam;
+  const edgeShown = shownEdge(p);
+  const evShown = shownEv(p);
+  const probShown = shownProb(p);
+  if (edgeShown) row.edgeShown = edgeShown;
+  if (evShown) row.evShown = evShown;
+  if (probShown) row.probShown = probShown;
   return row;
 }
 
@@ -357,8 +371,9 @@ VOICE:
 - Always say "WeBetAI". Never say "the model", "our model", or "the algorithm".
 - No em dashes. Use periods and commas.
 - No help-desk tone. No filler like "form and injuries line up".
-- Translate value into English. Good: "the total still looks a half-point high versus how these offenses have been scoring" or "the price is still paying." Bad: pasting EV%, coverProb, cover probability, CLV cents, Kelly, or an edge percent.
-- Never use ORtg, DRtg, DVOA, ATS, FIP, xFIP, WAR, wRC+, or other advanced-stat abbreviations.
+- State the locked probability, the price, the edge, and the expected value. When edgeShown, evShown, or probShown is on the row, those exact strings must appear in coreReasoning. When a projection and a line are on the row, state both numbers and the gap. Do not invent a cause the numbers do not support. Do not say the total is a half-point high, that an edge band is strong, or that the price has stayed firm.
+- edgeBand is not copy. Do not write "strong", "solid", or "modest" as a reason. steamHint may be stated only as a line that moved toward or against the side.
+- Never say "the model". Never use EV%, coverProb, CLV, Kelly, ORtg, DRtg, DVOA, ATS, FIP, xFIP, WAR, or wRC+.
 - Do not lead with bad news about the side you are picking.
 - Do not apply baseball starter logic to football, or football quarterback logic to baseball.
 
@@ -373,7 +388,7 @@ YOUR JOB:
 HOW TO BUILD coreReasoning (straights, 4-6 sentences):
 1. Open with a concrete fact. Use verified news when you have it. Otherwise open on the matchup and the number.
 2. Explain the matchup or the situation: why this side, in this game, today.
-3. Explain the price in plain English. Use edgeBand and steamHint when they are present. A strong or solid band means the number is meaningfully off. A modest band means the price is only a little off, so keep the tone measured.
+3. Explain the price with the locked probability, edgeShown, and evShown. A projection gap is the two numbers and their difference. Do not invent a scoring script.
 4. Close on why WeBetAI locked this side.
 
 Parlay legs use the same voice in 3-5 sentences. Do not write a stub. Argue for that leg.
@@ -390,9 +405,10 @@ dataVerified: a short note on what you actually checked (form, injuries, starter
 
 CONTEXT FIELDS on each locked row are a compass. They are not copy:
 - rating, grade, odds, units, sport, betType: fine to mention in English.
-- edgeBand: modest, solid, or strong. Translate it. Do not print a percent.
-- steamHint: translate the direction if it is present. If it is missing, do not invent line movement.
-- _contextEv and _contextCover: private. Use them only to decide how hard to talk about value. Never print them, and never print EV, expected value, cover probability, or a percent edge.
+- edgeShown, evShown, probShown: print these exact strings in coreReasoning when they are present.
+- edgeBand: do not translate it and do not print it.
+- steamHint: state the direction only if it is present. If it is missing, do not invent line movement and do not say the price stayed firm.
+- _contextEv and _contextCover: the same numbers as evShown and probShown. Print the shown strings, not a different rounding.
 
 OUTPUT: Return ONLY valid JSON (no markdown fences):
 {
@@ -432,8 +448,7 @@ ${JSON.stringify(lockedLegs || [], null, 2)}
 
 Write the JSON now.
 Straights need 4-6 sentence coreReasoning. Parlay legs need 3-5 sentences. edgeSummary and insights need 3-5 sentences each.
-Fields named edgeBand, steamHint, _contextEv, and _contextCover are a compass for plain-English value talk. Do not print EV, cover probability, CLV cents, Kelly, or those raw context numbers.
-Argue for the picked side. Say WeBetAI. No em dashes.`;
+Print edgeShown, evShown, and probShown exactly when they are on the row. State the price. If a projection and a line are present, state the gap as those two numbers. Do not invent a half-point, a strong edge band, or a price that stayed firm. Say WeBetAI. No em dashes.`;
 
   // No web search. The previous tool path was flaky on Netlify and both attempts
   // already ran with tools off. Same prompt, same max tokens, 60s budget.
@@ -500,7 +515,7 @@ function applyStraightRows(templated, parsed) {
     const next = {
       ...base,
       units,
-      coreReasoning: prose.length > 40 ? prose : base.coreReasoning,
+      coreReasoning: prose.length > 40 && proseKeepsMath(prose, base) ? prose : base.coreReasoning,
     };
     const wl = (row.whatLoses || '').trim();
     const dv = (row.dataVerified || '').trim();
@@ -526,7 +541,7 @@ function applyLegRows(legsTemplated, parsed) {
   return legsTemplated.map((leg, i) => {
     const row = byIdx.get(i);
     const prose = row && (row.coreReasoning || '').trim();
-    const base = (prose && prose.length > 30) ? { ...leg, coreReasoning: prose } : ensureNarrative(leg);
+    const base = (prose && prose.length > 30 && proseKeepsMath(prose, leg)) ? { ...leg, coreReasoning: prose } : ensureNarrative(leg);
     if (!row) return base;
     const wl = (row.whatLoses || '').trim();
     const dv = (row.dataVerified || '').trim();

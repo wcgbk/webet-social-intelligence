@@ -307,7 +307,7 @@ async function rerankCard(opts = {}) {
   working.selection = working.selection && typeof working.selection === 'object' ? working.selection : {};
   working.selection.window = '10:00-10:15';
   working.selection.rerankWindow = '10:15-10:30';
-  working.selection.rankedBy = 'ev';
+  working.selection.rankedBy = 'edge';
   working.selection.onePerGame = true;
   working.selection.top10 = recordRankedList(nextPicks, top10Rows(floor, 10));
   working.selection.rerankedAt = now.toISOString();
@@ -371,7 +371,7 @@ function rerankTop10(original, working, news, now) {
   working.selection.stage = 'reranked';
   working.selection.window = '10:00-10:15';
   working.selection.rerankWindow = '10:15-10:30';
-  working.selection.rankedBy = 'ev';
+  working.selection.rankedBy = 'edge';
   working.selection.onePerGame = true;
   working.selection.rerankedAt = now.toISOString();
   working.selection.rerankReason = news && news.dropped ? 'news-drop' : (before === after ? 'context' : 're-rank');

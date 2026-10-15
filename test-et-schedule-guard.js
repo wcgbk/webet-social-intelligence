@@ -259,7 +259,7 @@ assert.strictEqual(et.rejectUnlessEtSlot('pregame-check-omega', sched, new Date(
 async function idempotency() {
   const now = new Date('2026-10-07T14:05:00Z');
   const event = schedulerEvent(now.toISOString());
-  const card = { generatedAt: '2026-10-07T14:10:00Z', picks: [] };
+  const card = { generatedAt: '2026-10-07T14:10:00Z', picks: [{ pick: 'Bills ML' }] };
   let fetches = 0;
   const prev = global.fetch;
   global.fetch = async () => {
@@ -336,7 +336,7 @@ async function idempotency() {
 
     const skip0931 = await triggerOmega.handler(event, {
       now,
-      readCard: async () => ({ generatedAt: isoAtEt('2026-10-07', 9, 31), picks: [] }),
+      readCard: async () => ({ generatedAt: isoAtEt('2026-10-07', 9, 31), picks: [{ pick: 'Bills ML' }] }),
     });
     const body0931 = JSON.parse(skip0931.body);
     assert.strictEqual(skip0931.statusCode, 200);
@@ -345,6 +345,7 @@ async function idempotency() {
     assert.strictEqual(body0931.date, '2026-10-07');
 
     await expectRebuild('yesterday 09:31 ET', isoAtEt('2026-10-06', 9, 31));
+    await expectRebuild('today 09:31 ET with zero picks', isoAtEt('2026-10-07', 9, 31));
 
     const priorError = fetches;
     let errorReads = 0;

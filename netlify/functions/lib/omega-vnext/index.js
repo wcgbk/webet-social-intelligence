@@ -24,7 +24,7 @@ const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_ha
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, storeHealthRecord } = require('./store');
 const { persistCandidateLedger } = require('./candidate_ledger');
 const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
-const { attachGenerateHealth } = require('./health');
+const { attachGenerateHealth, extremeMarginSports } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
@@ -603,6 +603,17 @@ async function generateOmegaVnext(opts = {}) {
   const pureMissing = candidates.filter((c) => c && c.pureModelMissing).length;
   console.log(`[omega-vnext] pure-model version=${PURE_MODEL_VERSION} priced=${purePriced} missing=${pureMissing}`);
 
+  // A sport past 3× its margin limit is off this run. The stamp is the gate.
+  // Health still records the alert. The sport does not fill a short card.
+  const bannedSports = extremeMarginSports(candidates);
+  if (bannedSports.length) {
+    console.log(`[omega-vnext] bias-margin-extreme off-card sports=${bannedSports.join(',')}`);
+  }
+  const bannedSportSet = new Set(bannedSports);
+  candidates = candidates.map((c) => (
+    c && bannedSportSet.has(c.sport) ? { ...c, marginBiasExtreme: true } : c
+  ));
+
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.
   // Live generate leaves asOf unset (Date.now() + 5-minute grace unchanged).
   // pregameAsOfMs is a clock only. It does not flip replayLike or the odds URL.
@@ -637,7 +648,8 @@ async function generateOmegaVnext(opts = {}) {
 
   const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null, pairedFill);
   const top10Candidates = selectTop10(yesPool, 10);
-  // 10:00 rank is stake EV, one game each. Edge breaks a tie. A parlay
+  // 10:00 rank is probability edge, one game each. Stake EV breaks a tie
+  // inside 0.2 percentage points. A parlay
   // leg with no Hard Rock price is swapped or noted. The note and the
   // bug log stay off the page. The card still publishes.
   const placement = ensureParlayPlaceable(
@@ -900,12 +912,12 @@ async function generateOmegaVnext(opts = {}) {
       unmatchedCount: unmatchedReport.count,
     },
     // Private. publicPicksPayload drops selection. Top 10 is the 10:00
-    // EV rank, one game each. rerank-picks-omega at 10:15 refreshes news
+    // Edge rank, one game each. rerank-picks-omega at 10:15 refreshes news
     // and may replace a main from this priced pool. It does not pull odds.
     selection: {
       snapshotTime: servedSnapshot || oddsSnapshot || null,
       cardLabel: straightCardLabel(picks),
-      rankedBy: 'ev',
+      rankedBy: 'edge',
       onePerGame: true,
       window: '10:00-10:15',
       rerankWindow: '10:15-10:30',

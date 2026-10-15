@@ -1,6 +1,6 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_MIN_EDGE, LEAN_PARLAY_UNITS } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_MIN_EDGE, LEAN_PARLAY_UNITS, GATES } = require('./config');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
@@ -8,7 +8,7 @@ const {
   normalizeRatingKey, ratingLetter, cardHasFullGrade, formatGameTimeET,
   stakeDollars, toWinDollars,
 } = require('./odds_math');
-const { matchupKey, passesPublishFloor, qualifiesAsLean } = require('./select');
+const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge } = require('./select');
 const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
@@ -652,7 +652,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       betType: l.market,
       odds: formatAmerican(l.odds),
       commenceTime: l.commenceTime || '',
-      coverProb: `${(l.coverProb * 100).toFixed(0)}%`,
+      coverProb: `${(l.coverProb * 100).toFixed(1)}%`,
       ev: `${((l.ev || 0) * 100).toFixed(1)}%`,
       edgePct: l.edgePct != null
         ? (typeof l.edgePct === 'number' ? (formatEdgePct(l.edgePct <= 1 ? l.edgePct : l.edgePct / 100) || undefined) : String(l.edgePct))
@@ -740,7 +740,7 @@ function publishLeg(leg) {
     betType: leg.market,
     odds: american == null ? '' : formatAmerican(american),
     commenceTime: leg.commenceTime || '',
-    coverProb: cover == null ? '' : `${(cover * 100).toFixed(0)}%`,
+    coverProb: cover == null ? '' : `${(cover * 100).toFixed(1)}%`,
     ev: Number.isFinite(Number(leg.ev)) ? `${(Number(leg.ev) * 100).toFixed(1)}%` : (leg.ev != null ? String(leg.ev) : ''),
     edgePct,
     homeTeam: leg.homeTeam,
@@ -1057,11 +1057,28 @@ function priceCardLeg(row) {
 }
 
 /**
- * Published parlay. Always 3 legs at 0.25u when three distinct priced
- * games exist. Best stake EV per game, then the top three. Edge breaks
- * an EV tie. A ticket whose combined EV is not positive still publishes
- * and is labeled. Fewer than three distinct priced games is the only
- * no-qualifying marker. Straights are not removed.
+ * A parlay leg on the pure-model card. Cover at or above PARLAY_MIN_COVER,
+ * stake EV positive and at or under the 12% cap, and not a sport the
+ * margin check already banned. Rank is probability edge.
+ */
+function parlayLegQualifies(leg) {
+  if (!leg || leg.marginBiasExtreme) return false;
+  const cover = Number(leg.coverProb);
+  if (!(Number.isFinite(cover) && cover + 1e-12 >= PARLAY_MIN_COVER)) return false;
+  const ev = Number(leg.ev);
+  if (!(Number.isFinite(ev) && ev > 1e-12)) return false;
+  const maxEV = Number(GATES && GATES.maxEV);
+  if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
+  return true;
+}
+
+/**
+ * Published parlay. Three distinct games, or none.
+ * Each leg needs cover >= 45%, positive stake EV at or under 12%, and a
+ * sport that passed the margin check. Rank is probability edge. Stake EV
+ * breaks a tie inside 0.2 percentage points. A ticket whose combined EV
+ * is not positive still publishes and is labeled when three legs qualify.
+ * Fewer than three qualifying games publishes no parlay. Straights stay.
  */
 function parlayFromStraights(straights, opts = {}) {
   const rows = (straights || []).filter(Boolean);
@@ -1077,17 +1094,24 @@ function parlayFromStraights(straights, opts = {}) {
     seenId.add(id);
     merged.push(priced);
   }
-  merged.sort((a, b) => {
-    const d = (Number(b.ev) || 0) - (Number(a.ev) || 0);
-    if (Math.abs(d) > 1e-12) return d;
-    return (Number(b.edgePct) || 0) - (Number(a.edgePct) || 0);
-  });
+  const anchor = require('./config').marketAnchorOn();
+  if (anchor) {
+    merged.sort((a, b) => {
+      const d = (Number(b.ev) || 0) - (Number(a.ev) || 0);
+      if (Math.abs(d) > 1e-12) return d;
+      return (Number(b.edgePct) || 0) - (Number(a.edgePct) || 0);
+    });
+  } else {
+    merged.sort(compareByEdge);
+  }
   const chosen = [];
   const games = new Set();
   const straightIdSet = new Set(rows.map((row) => parlaySideId(row)));
-  // 2026-10-15: legs must be qualifying straights with positive calibrated EV.
-  const anchor = require('./config').marketAnchorOn();
-  const legPool = anchor ? merged.filter((l) => Number(l.ev) > 0 && straightIdSet.has(parlaySideId(l))) : merged;
+  // Anchor path: qualifying straights with positive EV.
+  // Pure path: cover, EV band, and the margin ban. Edge rank is already applied.
+  const legPool = anchor
+    ? merged.filter((l) => Number(l.ev) > 0 && straightIdSet.has(parlaySideId(l)))
+    : merged.filter(parlayLegQualifies);
   for (const leg of legPool) {
     const key = matchupKey(leg);
     if (!key || games.has(key)) continue;
@@ -1099,7 +1123,7 @@ function parlayFromStraights(straights, opts = {}) {
     return [noQualifyingParlay('fewer than 2 qualifying positive-EV legs')];
   }
   if (!anchor && chosen.length < 3) {
-    return [noQualifyingParlay('fewer than 3 distinct priced games')];
+    return [noQualifyingParlay('fewer than 3 games with cover >= 45% and positive stake EV at or under 12%')];
   }
   const st = comboStats(chosen);
   if (anchor && !(st.ev > 0)) return [noQualifyingParlay('combined EV not positive')];

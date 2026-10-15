@@ -80,7 +80,8 @@ assert.ok(!gated.leanPool.some((c) => c.leanReason === 'edge-floor'));
 const filled = selectStraights([floor], 3, [
   midEv, thinEdge, noBook, noLadder, flatEv, negEv, live, sameGame, dkLadder, highEv,
 ]);
-assert.deepStrictEqual(filled.map((c) => c.side), ['B +3', 'J +3', 'D +3']);
+// Edge rank: H 4.0%, then F 2.0%. J is 1.0% edge at a fatter stake EV.
+assert.deepStrictEqual(filled.map((c) => c.side), ['B +3', 'H +3', 'F +3']);
 assert.deepStrictEqual(filled.map((c) => c.tier), ['floor', 'lean', 'lean']);
 assert.ok(filled.every((c) => c.matchup !== 'A @ B' || c.side === 'B +3'));
 

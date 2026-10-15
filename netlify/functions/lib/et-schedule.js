@@ -360,9 +360,9 @@ function cardFromMorningRun(card, dateET) {
  * Scheduler-only morning idempotency for the Omega card.
  * Skip only when generatedAt falls on today's ET date and the ET wall
  * time is at/after 09:20 ET (09:30 minus TOLERANCE_MIN): this morning's run
- * already wrote the card. An earlier same-day card does not skip. A read
- * error does not skip; the ET guard alone is the double-run protection.
- * Manual/HTTP never reads.
+ * already wrote a card that has picks. A stored card with zero picks can
+ * be rebuilt. An earlier same-day card does not skip. A read error does
+ * not skip. Manual/HTTP never reads.
  */
 async function morningCardIdempotency(event, now, readCard) {
   const guard = etGuard('trigger-picks-omega', event, now);
@@ -374,7 +374,8 @@ async function morningCardIdempotency(event, now, readCard) {
   } catch (_) {
     return { skip: false, guard, readError: true, dateET };
   }
-  if (cardFromMorningRun(card, dateET)) {
+  const picks = card && Array.isArray(card.picks) ? card.picks : [];
+  if (cardFromMorningRun(card, dateET) && picks.length > 0) {
     return { skip: true, reason: 'already-generated', dateET, guard };
   }
   return { skip: false, guard, dateET };

@@ -148,3 +148,5 @@ The third row is the lean pad on the only remaining NCAAF game. The other side o
 Architecture scorecard on this build: Processes 82, Architecture 84, Math 70, Verify 78, Straights 70, Parlay 65, Overall 65. The hockey rating stays near 46 until a replay. These are judgments of the publisher. They are not the ROI table.
 
 Local QA: `node tools/run-tests.js` on the omega and sharp files, excluding the five that read `/workspace/omega-replay-2w`, was 121 passed after the edge-rank fixture updates. The five replay-path files were not run. NHL shrink mode stays `all`.
+
+Public card after deploy `6ad11fc2af386205134e57b2` (`410c163`), `generatedAt` `2026-10-15T18:48:26.520Z`. Same three NCAAF rows as the dry run. No parlay. MLB, NFL, and NHL are off the card. The copy is the factual template: probability, price, edge, and expected value. The Texas State line says the projection is 12.7 against a posted line of -13.5, 0.8 points short of that number. Kickoffs were still scheduled at the rebuild. X autopost stayed off. No new odds pull.

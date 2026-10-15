@@ -219,6 +219,11 @@
       var sign = n > 0 ? '+' : n < 0 ? '-' : '';
       return sign + '$' + Math.abs(n).toLocaleString();
     }
+    function pctUp(value) {
+      var n = (value == null || value === '') ? NaN : Number(String(value).replace('%', ''));
+      if (!isFinite(n)) return '—';
+      return wholeUp(n) + '%';
+    }
     function units(value) {
       if (value == null || !isFinite(Number(value))) return '—';
       return signed(wholeUp(value), 0) + 'u';
@@ -288,8 +293,8 @@
       var dom = row.delta.omega.kpi;
       return '<table class="inner">' + head() + '<tbody>'
         + metricRow('Record', esc(ek.record), esc(recordDelta(de)), '', esc(ok.record), esc(recordDelta(dom)), '')
-        + metricRow('Accuracy', esc(ek.accuracy), esc(signed(de.accuracyPct, 1)), tone(de.accuracyPct), esc(ok.accuracy), esc(signed(dom.accuracyPct, 1)), tone(dom.accuracyPct))
-        + metricRow('ROI', esc(ek.roi), esc(signed(de.roiPct, 1)), tone(de.roiPct), esc(ok.roi), esc(signed(dom.roiPct, 1)), tone(dom.roiPct))
+        + metricRow('Accuracy', esc(pctUp(ek.accuracyPct != null ? ek.accuracyPct : ek.accuracy)), esc(signed(de.accuracyPct == null ? null : wholeUp(de.accuracyPct), 0)), tone(de.accuracyPct), esc(pctUp(ok.accuracyPct != null ? ok.accuracyPct : ok.accuracy)), esc(signed(dom.accuracyPct == null ? null : wholeUp(dom.accuracyPct), 0)), tone(dom.accuracyPct))
+        + metricRow('ROI', esc(pctUp(ek.roiPct != null ? ek.roiPct : ek.roi)), esc(signed(de.roiPct == null ? null : wholeUp(de.roiPct), 0)), tone(de.roiPct), esc(pctUp(ok.roiPct != null ? ok.roiPct : ok.roi)), esc(signed(dom.roiPct == null ? null : wholeUp(dom.roiPct), 0)), tone(dom.roiPct))
         + metricRow('Profit (u)', units(ek.profitUnits), units(de.profitUnits), tone(de.profitUnits), units(ok.profitUnits), units(dom.profitUnits), tone(dom.profitUnits))
         + metricRow('Profit ($)', money(ek.profitDollars), money(de.profitDollars), tone(de.profitDollars), money(ok.profitDollars), money(dom.profitDollars), tone(dom.profitDollars))
         + '</tbody></table>';

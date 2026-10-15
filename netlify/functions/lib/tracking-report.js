@@ -154,7 +154,8 @@ function kpiFromAggregate(block) {
   const wins = Number(str.wins) || 0;
   const losses = Number(str.losses) || 0;
   const pushes = Number(cum.pushes) || 0;
-  const profitDollars = Math.round(Number(cum.totalProfit) || 0);
+  // Whole dollars, rounded up (tracking rule; matches stakeDollars ceil).
+  const profitDollars = Math.ceil((Number(cum.totalProfit) || 0) - 1e-9);
   const accuracyPct = parsePct(str.accuracy);
   const roiPct = parsePct(cum.roi);
   return {

@@ -37,10 +37,12 @@ function seedReport(now) {
   });
 }
 
+// SDK first, then the REST blob API (same fix as get-tracking). report-clv-omega
+// writes through store.storeJson, which lands in the REST namespace when the
+// SDK has no blobs context. The SDK-only read never saw it and served the seed.
 async function readLatestFromStore() {
-  const { getStore } = await import('@netlify/blobs');
-  const store = getStore(BLOB_STORE);
-  return store.get(ledger.LATEST_KEY, { type: 'json' });
+  const store = require('./lib/omega-vnext/store');
+  return store.readJson(ledger.LATEST_KEY);
 }
 
 function isReport(value) {

@@ -978,6 +978,24 @@ function noQualifyingParlay(reason) {
   };
 }
 
+/** One-decimal win rate the card prints, as a fraction. */
+function shownFraction(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Number((n * 100).toFixed(1)) / 100;
+}
+
+/**
+ * EV of the win rate printed on the card at the American price printed
+ * next to it. The unrounded cover can print 63.4% and 8.1% together.
+ */
+function evAtShownPrice(prob, american) {
+  const shown = shownFraction(prob);
+  const dec = americanToDecimal(numericAmerican(american));
+  if (shown == null || !Number.isFinite(dec) || !(dec > 1)) return null;
+  return shown * dec - 1;
+}
+
 function publishGatedLeg(leg) {
   const base = { ...leg };
   // publishLeg returns a pick object unchanged. Price from the candidate
@@ -989,7 +1007,9 @@ function publishGatedLeg(leg) {
   published.odds = formatAmerican(leg.odds);
   published.coverProb = `${(leg.coverProb * 100).toFixed(1)}%`;
   published.p_cal = +Number(leg.coverProb).toFixed(6);
-  published.ev = `${(leg.ev * 100).toFixed(1)}%`;
+  const shownLegEv = evAtShownPrice(leg.coverProb, published.odds);
+  published.ev = formatEdgePct(shownLegEv != null ? shownLegEv : Number(leg.ev))
+    || `${(Number(leg.ev) * 100).toFixed(1)}%`;
   published.evRaw = +Number(leg.ev).toFixed(6);
   const edgeFrac = edgeFractionOf(leg, unifiedCoverProb(leg));
   const edgeStr = formatEdgePct(edgeFrac) || formatEdgePct(leg.edgePct) || published.edgePct || null;
@@ -1129,7 +1149,7 @@ function ticketFromLegs(chosen, rows, opts) {
     toWinDollars: toWinDollars(stakeUnits, combinedOdds),
     combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
     combinedProbRaw: Number.isFinite(st.combinedProb) ? st.combinedProb : null,
-    ev: Number.isFinite(st.ev) ? `${(st.ev * 100).toFixed(1)}%` : '',
+    ev: formatEdgePct(evAtShownPrice(st.combinedProb, combinedOdds) ?? st.ev) || '',
     evRaw: Number.isFinite(st.ev) ? st.ev : null,
     uniqueGames: st.uniqueGames,
     uniqueSports: st.uniqueSports,

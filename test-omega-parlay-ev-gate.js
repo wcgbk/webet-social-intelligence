@@ -80,6 +80,18 @@ const ignoredPool = parlayFromStraights([
 assert.strictEqual(ignoredPool[0].type, '2-leg-parlay');
 assert.strictEqual(ignoredPool[0].legs.length, 2);
 assert.ok(!names(ignoredPool[0]).some((name) => /Ducks|Bruins/.test(name)));
+// Unrounded 63.44% still prints 63.4%. The parlay leg EV is that printed win rate at -142.
+const drifted = parlayFromStraights([
+  leg('Penguins @ Avalanche', { odds: -142, coverProb: 0.6344, edgePct: 0.047, rating: 'a' }),
+  leg('Memphis @ Tulane', { odds: 220, coverProb: 0.3282, edgePct: 0.016, rating: 'b' }),
+]);
+assert.strictEqual(drifted[0].legs[0].coverProb, '63.4%');
+assert.strictEqual(drifted[0].legs[0].ev, '8.0%');
+assert.strictEqual(drifted[0].legs[1].coverProb, '32.8%');
+assert.strictEqual(drifted[0].legs[1].ev, '5.0%');
+assert.strictEqual(drifted[0].combinedProb, '20.8%');
+assert.strictEqual(drifted[0].combinedOdds, '+445');
+assert.strictEqual(drifted[0].ev, '13.4%');
 assertNoTicket(floorNeg.slice(0, 2), [third]);
 
 // Positive combined EV: 0.25u, not a lean-day label.

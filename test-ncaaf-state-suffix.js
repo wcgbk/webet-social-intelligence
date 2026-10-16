@@ -182,7 +182,7 @@ for (const [file, names] of impls) {
 }
 
 const omegaSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/get-results-omega.js'), 'utf8');
-assert.ok(omegaSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v9-ncaaf-state'"));
+assert.ok(omegaSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v10-parlay-legs'"));
 assert.ok(!omegaSrc.includes('results-omega-cache-v8-allver'));
 
 console.log('all ncaaf state-suffix checks passed');

@@ -25,6 +25,7 @@ const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHe
 const { persistCandidateLedger } = require('./candidate_ledger');
 const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
 const { attachGenerateHealth, marginGamesOffCard } = require('./health');
+const { checkCardIdentity } = require('./card_identity');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
@@ -1098,6 +1099,17 @@ async function generateOmegaVnext(opts = {}) {
     if (healthRecord && typeof healthRecord === 'object') healthRecord.captureGate = captureGate;
     if (!picksData.health || typeof picksData.health !== 'object') picksData.health = {};
     picksData.health.captureGate = captureGate;
+  }
+  if (healthRecord && typeof healthRecord === 'object') {
+    try {
+      healthRecord.cardIdentity = checkCardIdentity(picksData);
+      if (healthRecord.cardIdentity && healthRecord.cardIdentity.ok === false) {
+        const issues = (healthRecord.cardIdentity.issues || []).join('; ');
+        console.warn(`[omega-health] ALERT card-identity ${issues}`);
+      }
+    } catch (e) {
+      console.warn(`[omega-health] card-identity soft-fail: ${e.message}`);
+    }
   }
   if (healthRecord) {
     const skipHealthWrite = dryRun || replayLike || process.env.OMEGA_REPLAY_NO_WRITE === '1';

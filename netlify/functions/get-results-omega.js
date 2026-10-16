@@ -17,7 +17,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-const RESULTS_CACHE_KEY = 'results-omega-cache-v9-ncaaf-state';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v10-parlay-legs';
 
 function getEasternDateToday() {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -730,6 +730,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
     wagered: dollars(dayWagered), profit: dollars(dayProfit),
     roi: dayWagered > 0 ? ((dayProfit / dayWagered) * 100).toFixed(1) : '--',
     parlayResult: parlayResult.result, parlayProfit: parlayResult.profit, parlayRisk,
+    parlayLegs: ticket ? ticketLegs.length : 0,
   };
 }
 
@@ -753,6 +754,7 @@ function recomputeParlayFields(day, card) {
     next.parlayResult = 'skip';
     next.parlayProfit = 0;
     next.parlayRisk = 0;
+    next.parlayLegs = 0;
     next.roi = next.wagered > 0 ? ((next.profit / next.wagered) * 100).toFixed(1) : '--';
     return next;
   }
@@ -774,6 +776,7 @@ function recomputeParlayFields(day, card) {
   next.parlayResult = graded.result;
   next.parlayProfit = graded.result === 'skip' ? 0 : graded.profit;
   next.parlayRisk = graded.result === 'skip' ? 0 : risk;
+  next.parlayLegs = ticket.legs.length;
   if (graded.result !== 'skip') {
     next.picks = straights.concat([{
       sport: 'PARLAY',
@@ -836,6 +839,55 @@ function aggregateDays(list) {
     straight: { wins: sw, losses: sl, accuracy: pct(sw, sw + sl), totalWagered: wholeUp(swag), totalProfit: wholeUp(spr) },
     parlay: { wins: pw, losses: pl, accuracy: pct(pw, pw + pl), totalWagered: wholeUp(pwag), totalProfit: wholeUp(ppr) },
   };
+}
+
+// Separate from aggregateDays. That function is frozen against git 50d3eb9.
+// Days with no readable leg count sit in `unsplit` so the buckets still add
+// up to the combined parlay total. Profit math is unchanged.
+function parlayLegCount(day) {
+  const n = Number(day && day.parlayLegs);
+  if (Number.isFinite(n) && n >= 2) return n;
+  const row = ((day && day.picks) || []).find(isParlayGradeRow);
+  const m = String((row && row.pick) || '').match(/^(\d+)-Team Parlay/i);
+  if (m) return Number(m[1]);
+  return null;
+}
+
+function parlaySplits(list) {
+  const buckets = {};
+  for (const day of list || []) {
+    if (!day || !day.parlayResult || day.parlayResult === 'skip') continue;
+    const n = parlayLegCount(day);
+    const key = n == null ? 'unsplit' : String(n);
+    if (!buckets[key]) {
+      buckets[key] = { wins: 0, losses: 0, pushes: 0, pending: 0, wagered: 0, profit: 0 };
+    }
+    const b = buckets[key];
+    if (day.parlayResult === 'win') b.wins += 1;
+    else if (day.parlayResult === 'loss') b.losses += 1;
+    else if (day.parlayResult === 'push') b.pushes += 1;
+    else if (day.parlayResult === 'pending') b.pending += 1;
+    const pushFree = omegaGradingRules.rulesV2(day.date) && day.parlayResult === 'push';
+    if (day.parlayResult !== 'pending' && !pushFree) {
+      b.wagered += (day.parlayRisk || 75);
+      b.profit += (day.parlayProfit || 0);
+    }
+  }
+  const out = {};
+  for (const key of Object.keys(buckets)) {
+    const b = buckets[key];
+    out[key] = {
+      wins: b.wins,
+      losses: b.losses,
+      pushes: b.pushes,
+      pending: b.pending,
+      accuracy: pct(b.wins, b.wins + b.losses),
+      totalWagered: wholeUp(b.wagered),
+      totalProfit: wholeUp(b.profit),
+      roi: b.wagered > 0 ? ((b.profit / b.wagered) * 100).toFixed(1) + '%' : '0%',
+    };
+  }
+  return out;
 }
 
 function flatSummary(list) {
@@ -971,12 +1023,15 @@ exports.handler = async (event) => {
     const all = aggregateDays(allDays);
     const omegaOnly = aggregateDays(omegaDays);
     const legacy = aggregateDays(legacyDays);
+    all.parlayByLegs = parlaySplits(allDays);
+    omegaOnly.parlayByLegs = parlaySplits(omegaDays);
 
     const result = {
       days: allDays.slice().reverse(), // newest first; respond() trims to ?range (7 default)
       cumulative: all.cumulative,
       straight: all.straight,
       parlay: all.parlay,
+      parlayByLegs: all.parlayByLegs,
       scope: {
         label: 'All model versions',
         from: allDays.length ? allDays[0].date : null,
@@ -1039,6 +1094,8 @@ exports._test = {
   recomputeParlayFields,
   gradedParlayPickName,
   isParlayGradeRow,
+  parlayLegCount,
+  parlaySplits,
   GRADING_RULES_V2_FROM: omegaGradingRules.GRADING_RULES_V2_FROM,
   IDENTITY_V2_FROM: omegaGradingRules.IDENTITY_V2_FROM,
 };

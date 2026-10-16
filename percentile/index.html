@@ -751,6 +751,18 @@
         const roiClass = tone(parseFloat(cum.roi));
         const strRoi = roiOf(str.totalProfit, str.totalWagered);
         const parRoi = roiOf(par.totalProfit, par.totalWagered);
+        function legBucketLine(label, bucket) {
+          if (!bucket) return '';
+          const decided = (bucket.wins || 0) + (bucket.losses || 0);
+          const pending = bucket.pending || 0;
+          if (!decided && !pending) return '';
+          const rec = (bucket.wins || 0) + 'W-' + (bucket.losses || 0) + 'L';
+          const roi = bucket.roi || '--';
+          const wait = pending ? ' · ' + pending + ' pending' : '';
+          return '<div class="split-row-item"><span class="split-row-label">' + label + '</span><span class="split-row-val">' + rec + wait + ' · ' + roi + '</span></div>';
+        }
+        const byLegs = data.parlayByLegs || {};
+        const legLines = legBucketLine('2-team', byLegs['2']) + legBucketLine('3-leg', byLegs['3']);
 
         let html = `
           <div class="stats-date-range">${fmt(first)} – ${fmt(last)} &nbsp;·&nbsp; All model versions since ${fmt(floor)} &nbsp;·&nbsp; ${days.length} card days</div>
@@ -788,6 +800,7 @@
               <div class="split-row-item"><span class="split-row-label">Wagered</span><span class="split-row-val">${par.totalWagered != null ? '$' + Number(par.totalWagered).toLocaleString() : '--'}</span></div>
               <div class="split-row-item"><span class="split-row-label">Profit</span><span class="split-row-val ${tone(par.totalProfit)}">${par.totalProfit != null ? money(par.totalProfit) : '--'}</span></div>
               <div class="split-row-item"><span class="split-row-label">ROI</span><span class="split-row-val ${tone(par.totalProfit)}">${parRoi}</span></div>
+              ${legLines}
             </div>
           </div>
           <table class="daily-mini-table">

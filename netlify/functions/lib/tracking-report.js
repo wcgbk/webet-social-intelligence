@@ -39,7 +39,7 @@
  */
 
 const DOLLAR_PER_UNIT = 150;
-const RESULTS_CACHE_KEY = 'results-omega-cache-v9-ncaaf-state';
+const RESULTS_CACHE_KEY = 'results-omega-cache-v10-parlay-legs';
 const INDEX_KEY = 'omega-tracking/index';
 const LENSES = ['processes', 'architecture', 'math', 'overall'];
 

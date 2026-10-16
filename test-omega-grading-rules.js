@@ -16,7 +16,7 @@ const rules = require('./netlify/functions/lib/omega-grading-rules');
 assert.strictEqual(rules.GRADING_RULES_V2_FROM, '2026-10-07');
 assert.strictEqual(results.GRADING_RULES_V2_FROM, '2026-10-07');
 const resultsSrc = fs.readFileSync(path.join(repo, 'netlify/functions/get-results-omega.js'), 'utf8');
-assert.ok(resultsSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v9-ncaaf-state'"));
+assert.ok(resultsSrc.includes("const RESULTS_CACHE_KEY = 'results-omega-cache-v10-parlay-legs'"));
 assert.ok(!resultsSrc.includes('gradingContext'), 'grade day must not keep a module-level card date');
 assert.ok(!resultsSrc.includes('mergeGradeOpts'), 'grade opts are not merged from shared state');
 

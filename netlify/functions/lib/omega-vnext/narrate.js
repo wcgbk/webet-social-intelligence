@@ -310,8 +310,8 @@ function templateInsights(picks) {
     watch,
     list.length === 1
       ? 'Only one bet cleared the WeBetAI bar today, so the card is one straight and no parlay.'
-      : list.length < 3
-        ? `${list.length} straights are on the card, and a third game did not clear, so there is no parlay.`
+      : list.length === 2
+        ? '2 straights are on the card, and the parlay is those two teams.'
         : `${list.length} straights are on the card.`,
     'Each play argues for one side, and the stake matches how far off the price looks.',
     'If a blurb does not convince you, pass on that leg.',

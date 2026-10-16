@@ -121,7 +121,7 @@ function game(matchup, sideName, ev, extra) {
 const floorOnly = game('A @ B', 'B +3', 0.05, { market: 'Spread', line: 3 });
 const sameGame = game('A @ B', 'A +3', 0.04, { market: 'Spread', line: -3 });
 const posHigh = game('C @ D', 'D ML', 0.015);
-const posLow = game('E @ F', 'F ML', 0.004);
+const posLow = game('E @ F', 'F ML', 0.012);
 const zero = game('G @ H', 'H ML', 0);
 const neg = game('I @ J', 'J ML', -0.02);
 const otherBook = game('K @ L', 'L ML', 0.01, { book: 'fanduel' });

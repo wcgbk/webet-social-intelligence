@@ -79,7 +79,7 @@ assert.ok(/5\.0%/.test(tulane.coreReasoning), tulane.coreReasoning);
 assert.ok(/32\.8%/.test(tulane.coreReasoning));
 assert.ok(!/deserves/i.test(tulane.coreReasoning));
 assert.ok(/Tulane|Wave/i.test(fixed.card.edgeSummary), fixed.card.edgeSummary);
-assert.ok(/no parlay/i.test(fixed.card.insights), fixed.card.insights);
+assert.ok(/those two teams/i.test(fixed.card.insights), fixed.card.insights);
 assert.deepStrictEqual(ci.textProblems(fixed.card), []);
 assert.strictEqual(ci.applyCardIntegrity(fixed.card).changed, false);
 console.log('PASS test-card-integrity');

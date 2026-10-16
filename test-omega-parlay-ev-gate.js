@@ -58,8 +58,29 @@ const floorNeg = [
 ];
 assertNoTicket(floorNeg);
 
-// Two games cannot make a ticket.
+// Two negative-EV games still cannot make a ticket.
 assertNoTicket(floorNeg.slice(0, 2));
+
+// Two published straights are a 2-team parlay, including a cover under 45%.
+const twoTeam = parlayFromStraights([
+  leg('Penguins @ Avalanche', { odds: -142, coverProb: 0.634, edgePct: 0.047, rating: 'a' }),
+  leg('Memphis @ Tulane', { odds: 220, coverProb: 0.328, edgePct: 0.016, rating: 'b' }),
+]);
+assert.strictEqual(twoTeam[0].type, '2-leg-parlay');
+assert.strictEqual(twoTeam[0].qualifying, true);
+assert.strictEqual(twoTeam[0].units, '0.5u');
+assert.strictEqual(twoTeam[0].legs.length, 2);
+assert.ok(twoTeam[0].evRaw > 0, twoTeam[0].ev);
+assert.ok(twoTeam[0].legs.some((row) => Number(row.coverProb) < 0.45 || /32\.8%/.test(String(row.coverProb))));
+const third = leg('Ducks @ Bruins', { odds: -110, coverProb: 0.58, edgePct: 0.06 });
+const ignoredPool = parlayFromStraights([
+  leg('Penguins @ Avalanche', { odds: -142, coverProb: 0.634, edgePct: 0.047, rating: 'a' }),
+  leg('Memphis @ Tulane', { odds: 220, coverProb: 0.328, edgePct: 0.016, rating: 'b' }),
+], { pool: [third] });
+assert.strictEqual(ignoredPool[0].type, '2-leg-parlay');
+assert.strictEqual(ignoredPool[0].legs.length, 2);
+assert.ok(!names(ignoredPool[0]).some((name) => /Ducks|Bruins/.test(name)));
+assertNoTicket(floorNeg.slice(0, 2), [third]);
 
 // Positive combined EV: 0.25u, not a lean-day label.
 const floorPos = [

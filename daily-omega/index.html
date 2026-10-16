@@ -2064,7 +2064,7 @@
       : null;
     // v12.3.74: '3-leg-parlay-labeled' is a published ticket whose combined EV
     // is not positive. It still renders, with its label shown as a note.
-    const parlayLabeled = !!(apiParlay && apiParlay.type === '3-leg-parlay-labeled');
+    const parlayLabeled = !!(apiParlay && (apiParlay.type === '3-leg-parlay-labeled' || apiParlay.type === '2-leg-parlay-labeled'));
     const parlayEvFails = !parlayLabeled && !!(apiParlay && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
     const parlaySource = (apiParlay && !parlayEvFails)
       ? apiParlay.legs
@@ -2387,7 +2387,7 @@
     const parlayEvNum = api && api.ev != null && api.ev !== ''
       ? parseFloat(String(api.ev).replace('%', ''))
       : null;
-    const parlayEvFails = !(api && api.type === '3-leg-parlay-labeled')
+    const parlayEvFails = !(api && (api.type === '3-leg-parlay-labeled' || api.type === '2-leg-parlay-labeled'))
       && !!(api && Number.isFinite(parlayEvNum) && !(parlayEvNum > 0));
     const rawLegs = (!parlayRejected && !parlayEvFails && api && api.legs && api.legs.length >= 2)
       ? api.legs

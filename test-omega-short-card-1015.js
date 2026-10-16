@@ -101,7 +101,8 @@ function legNames(parlayLegs) {
   const pos = cand(2, { ev: 0.015, edgePct: 0.005, side: 'Home2 +3' });
   const zero = cand(3, { ev: 0, edgePct: 0.001, side: 'Home3 +3' });
   const paired = cand(4, {
-    ev: 0.008,
+    // Printed EV or edge under 1% is not a lean. 1.2% still ranks under Home2.
+    ev: 0.012,
     edgePct: 0.005,
     side: 'Home4 +3',
     sharpFairPriced: true,
@@ -286,7 +287,9 @@ function legNames(parlayLegs) {
   }];
   assert.strictEqual(oldTwoLeg[0].legs.length, 2);
   const before = parlayFromStraights(shortPicks);
-  assert.ok(isNoQualifyingParlay(before[0]), 'two priced games are not a 3-leg');
+  assert.strictEqual(before[0].type, '2-leg-parlay');
+  assert.strictEqual(before[0].qualifying, true);
+  assert.strictEqual(before[0].legs.length, 2);
   const out = applyGenerateReserve({
     picks: shortPicks,
     yesPool: [keptA, keptB],
@@ -345,7 +348,9 @@ function legNames(parlayLegs) {
   assert.ok(hasName(out.picks, 'Home1'));
   assert.ok(hasName(out.picks, 'Home2'));
   assert.ok(!hasName(out.picks, 'Away1'));
-  assert.ok(isNoQualifyingParlay(out.parlayLegs[0]));
+  assert.strictEqual(out.parlayLegs[0].type, '2-leg-parlay');
+  assert.strictEqual(out.parlayLegs[0].legs.length, 2);
+  assert.strictEqual(out.parlayLegs[0].qualifying, true);
   const short = buildShortfall({
     picks: out.picks,
     parlayLegs: out.parlayLegs,

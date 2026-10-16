@@ -213,6 +213,15 @@ const short = parlayFromStraights([
 ]);
 assert.ok(isNoQualifyingParlay(short[0]));
 
+const twoCard = parlayFromStraights([
+  { ...leg('Pittsburgh Penguins @ Colorado Avalanche', 0.634, 0.047), odds: -142, rating: 'a' },
+  { ...leg('Memphis Tigers @ Tulane Green Wave', 0.328, 0.016), odds: 220, rating: 'b' },
+]);
+assert.strictEqual(twoCard[0].type, '2-leg-parlay');
+assert.strictEqual(twoCard[0].qualifying, true);
+assert.strictEqual(twoCard[0].legs.length, 2);
+assert.ok(!isNoQualifyingParlay(twoCard[0]));
+
 const banned = parlayFromStraights([
   { ...leg('A @ B', 0.56, 0.09), sport: 'NHL', marginBiasExtreme: true },
   leg('C @ D', 0.55, 0.04),

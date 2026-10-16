@@ -1073,17 +1073,105 @@ function parlayLegQualifies(leg) {
 }
 
 /**
- * Published parlay. Three distinct games, or none.
- * Each leg needs cover >= 45%, positive stake EV at or under 12%, and a
- * sport that passed the margin check. Rank is probability edge. Stake EV
- * breaks a tie inside 0.2 percentage points. A ticket whose combined EV
- * is not positive still publishes and is labeled when three legs qualify.
- * Fewer than three qualifying games publishes no parlay. Straights stay.
+ * The two published straights, when that is the whole card. Cover may sit
+ * under 45%. Each leg still needs positive stake EV at or under 12%, a
+ * price, and its own game. A negative-EV straight does not make a ticket.
+ */
+function twoTeamFromPublished(rows) {
+  if (!Array.isArray(rows) || rows.length !== 2) return null;
+  const priced = [];
+  const games = new Set();
+  const maxEV = Number(GATES && GATES.maxEV);
+  for (const row of rows) {
+    if (row && row.marginBiasExtreme) return null;
+    const leg = priceCardLeg(row);
+    if (!leg || leg.marginBiasExtreme) return null;
+    const ev = Number(leg.ev);
+    if (!(ev > 1e-12)) return null;
+    if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return null;
+    const key = matchupKey(leg);
+    if (!key || games.has(key)) return null;
+    games.add(key);
+    priced.push(leg);
+  }
+  return priced.length === 2 ? priced : null;
+}
+
+function ticketFromLegs(chosen, rows, opts) {
+  const st = comboStats(chosen);
+  const anchor = require('./config').marketAnchorOn();
+  if (anchor && !(st.ev > 0)) return [noQualifyingParlay('combined EV not positive')];
+  const labeled = !(st.ev > 0);
+  const straightIds = new Set(rows.map((row) => parlaySideId(row)));
+  const mirrored = rows.length >= chosen.length
+    && chosen.every((leg) => straightIds.has(parlaySideId(leg)));
+  const labelInput = { ...st, legs: chosen };
+  const evLabel = parlayEvLabel(labelInput);
+  const publishedLegs = chosen.map(publishGatedLeg);
+  const fromLegs = combinedFromLegOdds(publishedLegs);
+  const combinedDecimal = fromLegs ? fromLegs.combinedDecimal : st.combinedDecimal;
+  const combinedOdds = fromLegs
+    ? fromLegs.combinedOdds
+    : (decimalToAmerican(st.combinedDecimal) == null ? '' : formatAmerican(decimalToAmerican(st.combinedDecimal)));
+  const fullCard = cardHasFullGrade(rows);
+  const stakeUnits = fullCard ? PARLAY_FIXED_UNITS : LEAN_PARLAY_UNITS;
+  const n = chosen.length;
+  const ticket = {
+    type: labeled ? `${n}-leg-parlay-labeled` : `${n}-leg-parlay`,
+    legs: publishedLegs,
+    units: `${stakeUnits}u`,
+    ...(labeled ? { leanDay: true, label: 'combined EV not positive' } : {}),
+    qualifying: true,
+    combinedOdds,
+    combinedDecimal: Number.isFinite(combinedDecimal) ? +combinedDecimal.toFixed(2) : null,
+    evLabel,
+    riskDollars: stakeDollars(stakeUnits),
+    toWinDollars: toWinDollars(stakeUnits, combinedOdds),
+    combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
+    combinedProbRaw: Number.isFinite(st.combinedProb) ? st.combinedProb : null,
+    ev: Number.isFinite(st.ev) ? `${(st.ev * 100).toFixed(1)}%` : '',
+    evRaw: Number.isFinite(st.ev) ? st.ev : null,
+    uniqueGames: st.uniqueGames,
+    uniqueSports: st.uniqueSports,
+    independent: parlayIndependent(labelInput),
+    mirrorsCard: mirrored,
+    legMarkets: chosen.map((leg) => leg.market || leg.betType || null),
+    correlationNote: evLabel,
+    candidatesScanned: chosen.length,
+    autoCorrected: !mirrored,
+    probBasis: 'unified-adjusted-cover',
+    evBasis: 'combined-prob-times-decimal-minus-1',
+    source: 'omega-vnext',
+  };
+  if (opts && opts.hrPlaceabilityNote) ticket.hrPlaceabilityNote = opts.hrPlaceabilityNote;
+  if (!mirrored || labeled) {
+    const names = chosen.map((leg) => leg.side || leg.pick).join(' | ');
+    console.log(`[omega-vnext] parlay ${labeled ? 'labeled' : 'auto-correct'} ev=${ticket.ev} legs=${names}`);
+  }
+  return [ticket];
+}
+
+/**
+ * Published parlay. Three qualifying games, or the two published straights
+ * when that is the whole card. A 3-leg leg needs cover >= 45%, positive
+ * stake EV at or under 12%, and a sport that passed the margin check. The
+ * 2-team ticket is those two straights and does not reapply the 45% cover.
+ * Rank is probability edge. A ticket whose combined EV is not positive
+ * still publishes and is labeled. One straight is no parlay.
  */
 function parlayFromStraights(straights, opts = {}) {
   const rows = (straights || []).filter(Boolean);
   const pool = (opts && opts.pool) || [];
   if (!rows.length && !(pool && pool.length)) return [];
+  const anchorOn = require('./config').marketAnchorOn();
+  // Two published straights are the ticket. Do not pull a third game from the pool.
+  if (!anchorOn && rows.length === 2) {
+    const pair = twoTeamFromPublished(rows);
+    if (!pair) {
+      return [noQualifyingParlay('two published straights did not clear as a 2-team parlay')];
+    }
+    return ticketFromLegs(pair, rows, opts);
+  }
   const merged = [];
   const seenId = new Set();
   for (const row of pool.concat(rows)) {
@@ -1125,54 +1213,9 @@ function parlayFromStraights(straights, opts = {}) {
   if (!anchor && chosen.length < 3) {
     return [noQualifyingParlay('fewer than 3 games with cover >= 45% and positive stake EV at or under 12%')];
   }
-  const st = comboStats(chosen);
-  if (anchor && !(st.ev > 0)) return [noQualifyingParlay('combined EV not positive')];
-  const labeled = !(st.ev > 0);
-  const straightIds = new Set(rows.map((row) => parlaySideId(row)));
-  const mirrored = rows.length >= 3 && chosen.every((leg) => straightIds.has(parlaySideId(leg)));
-  const labelInput = { ...st, legs: chosen };
-  const evLabel = parlayEvLabel(labelInput);
-  const publishedLegs = chosen.map(publishGatedLeg);
-  const fromLegs = combinedFromLegOdds(publishedLegs);
-  const combinedDecimal = fromLegs ? fromLegs.combinedDecimal : st.combinedDecimal;
-  const combinedOdds = fromLegs
-    ? fromLegs.combinedOdds
-    : (decimalToAmerican(st.combinedDecimal) == null ? '' : formatAmerican(decimalToAmerican(st.combinedDecimal)));
-  const fullCard = cardHasFullGrade(rows);
-  const stakeUnits = fullCard ? PARLAY_FIXED_UNITS : LEAN_PARLAY_UNITS;
-  const ticket = {
-    type: labeled ? '3-leg-parlay-labeled' : '3-leg-parlay',
-    legs: publishedLegs,
-    units: `${stakeUnits}u`,
-    ...(labeled ? { leanDay: true, label: 'combined EV not positive' } : {}),
-    qualifying: true,
-    combinedOdds,
-    combinedDecimal: Number.isFinite(combinedDecimal) ? +combinedDecimal.toFixed(2) : null,
-    evLabel,
-    riskDollars: stakeDollars(stakeUnits),
-    toWinDollars: toWinDollars(stakeUnits, combinedOdds),
-    combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
-    combinedProbRaw: Number.isFinite(st.combinedProb) ? st.combinedProb : null,
-    ev: Number.isFinite(st.ev) ? `${(st.ev * 100).toFixed(1)}%` : '',
-    evRaw: Number.isFinite(st.ev) ? st.ev : null,
-    uniqueGames: st.uniqueGames,
-    uniqueSports: st.uniqueSports,
-    independent: parlayIndependent(labelInput),
-    mirrorsCard: mirrored,
-    legMarkets: chosen.map((leg) => leg.market || leg.betType || null),
-    correlationNote: evLabel,
-    candidatesScanned: merged.length,
-    autoCorrected: !mirrored,
-    probBasis: 'unified-adjusted-cover',
-    evBasis: 'combined-prob-times-decimal-minus-1',
-    source: 'omega-vnext',
-  };
-  if (opts && opts.hrPlaceabilityNote) ticket.hrPlaceabilityNote = opts.hrPlaceabilityNote;
-  if (!mirrored || labeled) {
-    const names = chosen.map((leg) => leg.side || leg.pick).join(' | ');
-    console.log(`[omega-vnext] parlay ${labeled ? 'labeled' : 'auto-correct'} ev=${ticket.ev} legs=${names}`);
-  }
-  return [ticket];
+  const ticket = ticketFromLegs(chosen, rows, opts);
+  if (ticket[0] && ticket[0].qualifying !== false) ticket[0].candidatesScanned = merged.length;
+  return ticket;
 }
 
 module.exports = {

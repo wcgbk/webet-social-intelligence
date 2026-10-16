@@ -696,9 +696,9 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u).
   picks = applyDailyCap(picks);
 
-  // The parlay is always 3 legs at 0.25u from the best EV on distinct
-  // games. A ticket whose combined EV is not positive is labeled and
-  // still published. Fewer than 3 priced games is the only miss.
+  // Three qualifying games make a 3-leg. Two published straights make a
+  // 2-team parlay of those straights. One straight is no parlay. A ticket
+  // whose combined EV is not positive is labeled and still published.
   let parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : [], pairedFill);
   const straightParlay = (rows, note) => parlayFromStraights(rows, {
     hrPlaceabilityNote: note || placement.note,

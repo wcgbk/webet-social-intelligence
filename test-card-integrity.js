@@ -48,4 +48,38 @@ assert.ok(!fin.picks.some(isRays));
 // A card with no hard fails and matching text keeps its picks.
 const clean = ci.applyCardIntegrity({ ...c, qaHardFails: [] }).card;
 assert.strictEqual(clean.picks.length, c.picks.length);
+
+const short = {
+  dateFormatted: 'Friday, October 16, 2026',
+  picks: [
+    {
+      sport: 'NHL', matchup: 'Pittsburgh Penguins @ Colorado Avalanche',
+      pick: 'Pittsburgh Penguins +1.5', odds: '-142', units: '1u', rating: 'a', grade: 'A',
+      edge: '4.7%', ev: '8.0%', winProbability: '63.4%', coverProb: '63.4%',
+      market: 'Spread', line: 1.5, modelProjection: 0.38, homeTeam: 'Colorado Avalanche', awayTeam: 'Pittsburgh Penguins',
+      coreReasoning: 'NHL: WeBetAI locked Pittsburgh Penguins +1.5 at -142. WeBetAI rates this side at 63.4%. At -142 that is a 4.7% edge and a 8.0% expected value.',
+    },
+    {
+      sport: 'NCAAF', matchup: 'Memphis Tigers @ Tulane Green Wave',
+      pick: 'Tulane Green Wave ML', odds: '+220', units: '0.5u', rating: 'b', grade: 'B',
+      edge: '1.6%', ev: '5.0%', winProbability: '32.8%', coverProb: '32.8%',
+      market: 'Moneyline', homeTeam: 'Tulane Green Wave', awayTeam: 'Memphis Tigers',
+      coreReasoning: '',
+    },
+  ],
+  parlayLegs: [],
+  edgeSummary: 'WeBetAI concentrates value on the single NHL spread. The Penguins plus 1.5 supplies the entire slate edge at 4.7 percent.',
+  insights: 'The card features one NHL game.',
+  summary: { sportsCovered: ['NHL'] },
+};
+const fixed = ci.applyCardIntegrity(short);
+const tulane = fixed.card.picks.find((p) => /Tulane/.test(p.pick));
+assert.ok(/1\.6%/.test(tulane.coreReasoning), tulane.coreReasoning);
+assert.ok(/5\.0%/.test(tulane.coreReasoning), tulane.coreReasoning);
+assert.ok(/32\.8%/.test(tulane.coreReasoning));
+assert.ok(!/deserves/i.test(tulane.coreReasoning));
+assert.ok(/Tulane|Wave/i.test(fixed.card.edgeSummary), fixed.card.edgeSummary);
+assert.ok(/no parlay/i.test(fixed.card.insights), fixed.card.insights);
+assert.deepStrictEqual(ci.textProblems(fixed.card), []);
+assert.strictEqual(ci.applyCardIntegrity(fixed.card).changed, false);
 console.log('PASS test-card-integrity');

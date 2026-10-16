@@ -280,7 +280,7 @@ function templateEdgeSummary(picks, dateFormatted) {
   }
   return joinSentences([
     `WeBetAI's Omega card${dateBit} covers ${sportBit}, built around ${listLead(names)}.`,
-    'The thesis is that the posted prices still give the picked side a cleaner number than the matchup deserves.',
+    'Each locked side is there because its win rate is above the price on the card.',
     where,
     'Stakes stay inside the daily card because a good slate is a set of prices, not a pile of units.',
     'Read each blurb for the why, then bet the side WeBetAI locked.',
@@ -310,7 +310,9 @@ function templateInsights(picks) {
     watch,
     list.length === 1
       ? 'Only one bet cleared the WeBetAI bar today, so the card is one straight and no parlay.'
-      : `${list.length} straights cleared the WeBetAI bar today, and nothing was added to fill the card.`,
+      : list.length < 3
+        ? `${list.length} straights are on the card, and a third game did not clear, so there is no parlay.`
+        : `${list.length} straights are on the card.`,
     'Each play argues for one side, and the stake matches how far off the price looks.',
     'If a blurb does not convince you, pass on that leg.',
   ]);

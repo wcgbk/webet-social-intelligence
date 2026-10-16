@@ -105,8 +105,13 @@ function textProblems(card) {
   }
   for (const t of offCard) if (t.length > 3 && new RegExp(`\\b${t}\\b`, 'i').test(text)) problems.push(`mentions ${t} not on card`);
   for (const p of picks) {
-    const toks = teamTokens(p);
-    if (toks.length && !toks.some((t) => new RegExp(`\\b${t}\\b`, 'i').test(text)) && card.textSignature) {
+    const needles = teamTokens(p).concat(
+      String((p && (p.pick || p.side)) || '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 3)
+    );
+    if (needles.length && !needles.some((t) => new RegExp(`\\b${t}\\b`, 'i').test(text))) {
       problems.push(`omits ${p.pick}`);
     }
   }
@@ -135,12 +140,8 @@ function refreshCardText(card) {
 }
 
 function fallbackReasoning(row) {
-  const side = row.pick || row.side || 'this side';
-  const price = row.odds != null ? ` at ${row.odds}` : '';
-  const book = row.book ? ` (${row.book})` : '';
-  const prob = row.coverProb ? ` WeBetAI's model puts it at ${row.coverProb}.` : '';
-  const ev = row.ev ? ` That is ${row.ev} expected value.` : '';
-  return `WeBetAI takes ${side}${price}${book}.${prob}${ev} The price gives this side a better number than WeBetAI's projection says it deserves.`;
+  const { buildFallbackNarrative } = require('./narrate');
+  return buildFallbackNarrative(row);
 }
 
 function ensureCoreReasoning(card) {

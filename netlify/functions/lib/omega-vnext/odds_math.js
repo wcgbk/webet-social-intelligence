@@ -191,10 +191,19 @@ function calibratedEdgeFraction(coverProb, american) {
   return evAtOdds(coverProb, american);
 }
 
-/** Format as "X.X%" for card badges. */
+/**
+ * Format as "X.X%" for card badges.
+ * Half up on the tenth. A float just under n.5 (15.499999… for 1.55%)
+ * still prints the higher tenth. Math.round is half toward +inf, so the
+ * sign is applied after rounding the absolute value.
+ */
 function formatEdgePct(edgeFrac) {
   if (!Number.isFinite(edgeFrac)) return null;
-  return `${(edgeFrac * 100).toFixed(1)}%`;
+  const negative = edgeFrac < 0;
+  const tenths = Math.round(Math.abs(edgeFrac) * 1000 + 1e-8);
+  const whole = Math.trunc(tenths / 10);
+  const frac = tenths % 10;
+  return `${negative && tenths !== 0 ? '-' : ''}${whole}.${frac}%`;
 }
 
 /**

@@ -147,8 +147,13 @@ function gateReason(c, opts = {}) {
   if (c && c.unknownTeam) return 'unknown_team';
 
   // Margin residual past 3× the sport limit. The rating is broken for that
-  // sport on this run. Not a lean, and not a fill for a short card.
+  // game on this run. Not a lean, and not a fill for a short card.
   if (c && c.marginBiasExtreme) return 'bias-margin-extreme';
+
+  // The printed projection and the side have to be the same story.
+  // An Over whose total is under the number is not a bet, even when a
+  // period model leaves a hair of stake EV.
+  if (c && c.pureModelPriced && projectionDisagrees(c)) return 'projection-disagrees';
 
   // Sharp-fair path. A bad Pinnacle pair is structural (not a lean).
   // A priced row skips the model-gap veto: the probability is the Pinnacle
@@ -259,6 +264,36 @@ function gateReason(c, opts = {}) {
  * Pass opts.asOfMs or opts.asOf to judge pregame against a snapshot instant
  * (historical replay). Omit both for live Date.now() semantics.
  */
+function printedProjection(c) {
+  const bet = Number(c && c.betProjection);
+  if (Number.isFinite(bet)) return bet;
+  const raw = Number(c && c.modelProjection);
+  return Number.isFinite(raw) ? raw : null;
+}
+
+/**
+ * True when the side fights the projection the card prints.
+ * Totals: Over needs the total above the number, Under below it.
+ * Spreads: the side's cover residual (side margin + line) has to be positive.
+ * A moneyline has no point, so this check does not apply.
+ */
+function projectionDisagrees(c) {
+  const market = String((c && c.market) || '');
+  const line = Number(c && (c.line != null ? c.line : c.consensusLine));
+  const proj = printedProjection(c);
+  if (!Number.isFinite(proj) || !Number.isFinite(line)) return false;
+  const side = String((c && (c.side || c.pick)) || '').toLowerCase();
+  if (/total/i.test(market)) {
+    if (/^over\b/i.test(side)) return !(proj > line);
+    if (/^under\b/i.test(side)) return !(proj < line);
+    return false;
+  }
+  if (!/spread|puck|run line/i.test(market)) return false;
+  const away = String((c && c.awayTeam) || '').toLowerCase();
+  const sideProj = away && side.startsWith(away) ? -proj : proj;
+  return !(sideProj + line > 0);
+}
+
 function finiteEdge(c) {
   const raw = c && c.edgePct;
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw > 1 ? raw / 100 : raw;
@@ -317,4 +352,5 @@ module.exports = {
   applyGates, gateReason, failsPlaceability, resolvePregameAsOfMs, PREGAME_GRACE_MS,
   isGapReviewMarket, buildGapReview, gapBlocksTicket, minEdgeFor,
   nflProjectionGap, slateReason, liveInPlayReason, injuryClusterReason, sideNamesTeam,
+  projectionDisagrees,
 };

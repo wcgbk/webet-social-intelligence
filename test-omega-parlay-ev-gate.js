@@ -215,6 +215,8 @@ const leanEdgeThin = { ...leanOk, edgePct: 0.014, matchup: 'K @ L', side: 'L' };
 assert.strictEqual(qualifiesAsLean(leanOk), true);
 assert.strictEqual(qualifiesAsLean(leanEvZero), false);
 assert.strictEqual(qualifiesAsLean(leanEdgeThin), true);
+const leanPrintsZero = { ...leanOk, edgePct: 0.0002, ev: 0.0004, matchup: 'M @ N', side: 'N' };
+assert.strictEqual(qualifiesAsLean(leanPrintsZero), false);
 const picked = selectStraights([mainOk], 3, [leanEvZero, leanEdgeThin]);
 assert.strictEqual(picked.length, 2);
 assert.deepStrictEqual(picked.map((row) => row.tier), ['floor', 'lean']);

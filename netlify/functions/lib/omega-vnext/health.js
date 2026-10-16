@@ -491,25 +491,8 @@ function biasFor(candidates) {
       bag.totalN += 1;
       bag.totals.push(total.model);
     }
-    let margin = null;
-    for (const c of rows) {
-      if (!isSpreadMarket(c) || c.line == null || c.modelProjection == null) continue;
-      if (!Number.isFinite(Number(c.line)) || !Number.isFinite(Number(c.modelProjection))) continue;
-      if (sideStarts(c, c.homeTeam)) {
-        margin = Number(c.modelProjection) + Number(c.line);
-        break;
-      }
-    }
-    if (margin == null) {
-      for (const c of rows) {
-        if (!isSpreadMarket(c) || c.line == null || c.modelProjection == null) continue;
-        if (sideStarts(c, c.awayTeam)) {
-          margin = Number(c.modelProjection) - Number(c.line);
-          break;
-        }
-      }
-    }
-    if (margin != null && Number.isFinite(margin)) {
+    const margin = gameMarginResidual(rows);
+    if (margin != null) {
       bag.marginSum += margin;
       bag.marginN += 1;
     }
@@ -717,10 +700,67 @@ function buildHealthRecord(input) {
 }
 
 /**
- * Sports whose margin residual is past 3× the sport limit.
- * A sport with no spread sample is not on the list.
- * The health alert uses the same cut. This list is what takes the sport off the card.
+ * Signed home margin residual for one game: modelProjection + home line,
+ * or modelProjection − away line when the home spread is missing.
+ * Same number biasFor averages. Null when the game has no priced spread.
  */
+function gameMarginResidual(rows) {
+  let margin = null;
+  for (const c of rows || []) {
+    if (!isSpreadMarket(c) || c.line == null || c.modelProjection == null) continue;
+    if (!Number.isFinite(Number(c.line)) || !Number.isFinite(Number(c.modelProjection))) continue;
+    if (sideStarts(c, c.homeTeam)) {
+      margin = Number(c.modelProjection) + Number(c.line);
+      break;
+    }
+  }
+  if (margin == null) {
+    for (const c of rows || []) {
+      if (!isSpreadMarket(c) || c.line == null || c.modelProjection == null) continue;
+      if (sideStarts(c, c.awayTeam)) {
+        margin = Number(c.modelProjection) - Number(c.line);
+        break;
+      }
+    }
+  }
+  return margin != null && Number.isFinite(margin) ? margin : null;
+}
+
+/**
+ * Games whose own margin residual is past 3× the sport limit.
+ * The sport mean stays a health alert. One outlier does not blank the
+ * other games, and a game inside the cut stays eligible.
+ */
+function extremeMarginGames(candidates) {
+  const out = [];
+  for (const rows of grouped(candidates || []).values()) {
+    const sport = rows[0] && rows[0].sport;
+    const lim = sport && BIAS_LIMIT[sport];
+    if (!lim) continue;
+    const margin = gameMarginResidual(rows);
+    if (margin == null) continue;
+    if (Math.abs(margin) > lim.margin * BIAS_MARGIN_EXTREME_MULT + 1e-12) {
+      out.push({
+        sport,
+        matchup: String(rows[0].matchup || ''),
+        margin: +margin.toFixed(3),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Games taken off the card. The sport mean has to be past 3× first.
+ * A single game past the cut does not blank a sport whose mean is inside
+ * the cut, and an extreme sport holds only the games past the cut.
+ */
+function marginGamesOffCard(candidates) {
+  const sports = new Set(extremeMarginSports(candidates));
+  if (!sports.size) return [];
+  return extremeMarginGames(candidates).filter((g) => sports.has(g.sport));
+}
+
 function extremeMarginSports(candidates) {
   const bias = biasFor(candidates || []);
   const out = [];
@@ -774,6 +814,9 @@ module.exports = {
   BIAS_LIMIT,
   BIAS_MARGIN_EXTREME_MULT,
   extremeMarginSports,
+  extremeMarginGames,
+  marginGamesOffCard,
+  gameMarginResidual,
   buildHealthRecord,
   compactHealth,
   attachGenerateHealth,

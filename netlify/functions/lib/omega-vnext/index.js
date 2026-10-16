@@ -24,7 +24,7 @@ const { applyHardFails, loadQaContext, majorBookStillOffers } = require('./qa_ha
 const { storePicks, storeShadowPicks, storePmObserver, storeJson, storeCaptureHealthSnapshot, readPmObserverOpen, storeHealthRecord } = require('./store');
 const { persistCandidateLedger } = require('./candidate_ledger');
 const { buildUnmatchedReport, persistUnmatchedReport } = require('./sports/team_identity');
-const { attachGenerateHealth, extremeMarginSports } = require('./health');
+const { attachGenerateHealth, marginGamesOffCard } = require('./health');
 const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
@@ -604,15 +604,18 @@ async function generateOmegaVnext(opts = {}) {
   const pureMissing = candidates.filter((c) => c && c.pureModelMissing).length;
   console.log(`[omega-vnext] pure-model version=${PURE_MODEL_VERSION} priced=${purePriced} missing=${pureMissing}`);
 
-  // A sport past 3× its margin limit is off this run. The stamp is the gate.
-  // Health still records the alert. The sport does not fill a short card.
-  const bannedSports = extremeMarginSports(candidates);
-  if (bannedSports.length) {
-    console.log(`[omega-vnext] bias-margin-extreme off-card sports=${bannedSports.join(',')}`);
+  // Off the card only when the sport mean is past 3× and this game is too.
+  // One outlier does not blank the other games. A single game past the
+  // cut does not blank a sport whose mean is inside the cut.
+  const bannedGames = marginGamesOffCard(candidates);
+  if (bannedGames.length) {
+    console.log(`[omega-vnext] bias-margin-extreme off-card games=${bannedGames.map((g) => `${g.sport}:${g.matchup}:${g.margin}`).join('|')}`);
   }
-  const bannedSportSet = new Set(bannedSports);
+  const bannedGameSet = new Set(bannedGames.map((g) => `${g.sport}\0${g.matchup}`));
   candidates = candidates.map((c) => (
-    c && bannedSportSet.has(c.sport) ? { ...c, marginBiasExtreme: true } : c
+    c && bannedGameSet.has(`${c.sport}\0${String(c.matchup || '')}`)
+      ? { ...c, marginBiasExtreme: true }
+      : c
   ));
 
   // Historical replay: pregame is vs the snapshot instant, not wall-clock now.

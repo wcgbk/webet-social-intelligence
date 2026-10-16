@@ -52,9 +52,13 @@ const rows = cfb.project({ oddsEvents: [ev], standings: {}, efficiency: {}, game
 const over = rows.find((c) => c.market === 'Total' && c.side.startsWith('Over'));
 const homeSpread = rows.find((c) => c.market === 'Spread' && c.side.startsWith(home));
 const homeMl = rows.find((c) => c.market === 'Moneyline' && c.side === home);
+const awayMl = rows.find((c) => c.market === 'Moneyline' && c.side === away);
 assert.ok(over, 'NCAAF over');
 assert.ok(homeSpread, 'NCAAF home spread');
 assert.ok(homeMl, 'NCAAF home moneyline');
+assert.ok(awayMl, 'NCAAF away moneyline');
+assert.ok(Math.abs(homeMl.modelPureP + awayMl.modelPureP - 1) < 1e-9, 'moneylines are complements');
+assert.ok(Math.abs(homeMl.modelPureP - awayMl.modelPureP) > 0.05, 'away moneyline is not the home win');
 
 function blendAt(c, weight) {
   const key = c.market === 'Total' ? 'totals' : c.market === 'Spread' ? 'spreads' : 'h2h';

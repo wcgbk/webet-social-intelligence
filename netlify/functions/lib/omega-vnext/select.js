@@ -267,7 +267,12 @@ function eligibleForLeanPool(c) {
   if (c && c.marginBiasExtreme) return false;
   const ev = Number(c && c.ev);
   // A negative EV is not a lean. The last card bet Texas State -13.5 at -19.9%.
+  // A hair that prints as 0.0% EV is the same pass. An edge under 1% whose
+  // EV also prints under 1% is not a B. A 0% edge with a real printed EV stays.
   if (!(ev > 0)) return false;
+  if (ev < 0.0005) return false;
+  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
+  if (Number.isFinite(edge) && edge < 0.01 - 1e-12 && ev < 0.01 - 1e-12) return false;
   const maxEV = Number(config.GATES && config.GATES.maxEV);
   if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   if (!hasRetailLine(c)) return false;
@@ -475,8 +480,10 @@ function toPickObject(c, opts = {}) {
   const shownDecimal = canPrice ? americanToDecimal(price) : null;
   const fullEdge = canPrice ? fullCover - fullImplied : null;
   const shownEdge = canPrice ? shownCover - fullImplied : null;
+  // Half a tenth: the stored edge is this cover minus the price.
+  // 1e-9 absorbs a float that lands one ulp over 0.0005 (32.8% at +220).
   const edgeFromShown = fullEdge != null && shownEdge != null
-    && Number.isFinite(edgeFrac) && Math.abs(edgeFrac - fullEdge) <= 0.0005;
+    && Number.isFinite(edgeFrac) && Math.abs(edgeFrac - fullEdge) <= 0.0005 + 1e-9;
   const displayEdge = edgeFromShown ? shownEdge : edgeFrac;
   const edgePctStr = formatEdgePct(displayEdge) || '0.0%';
   const gradeOnEdge = sharp || pure;
@@ -497,8 +504,12 @@ function toPickObject(c, opts = {}) {
   const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
   const fullEv = canPrice ? (fullCover * shownDecimal) - 1 : null;
   const shownEv = canPrice ? (shownCover * shownDecimal) - 1 : null;
+  // 0.0015 covers a reserve fill that reprints the one-decimal win rate
+  // with the unrounded stake EV (about 0.1pp under). A stored 0 stays 0.
+  // An edge that is not this cover minus the price does not snap.
   const evFromShown = edgeFromShown && fullEv != null && shownEv != null
-    && Number.isFinite(evParsed) && Math.abs(evParsed - fullEv) <= 0.0005;
+    && Number.isFinite(evParsed) && evParsed !== 0
+    && Math.abs(evParsed - fullEv) <= 0.0015;
   const evNum = evFromShown ? shownEv : (Number.isFinite(evParsed) ? evParsed : null);
   const evStr = evNum == null || !Number.isFinite(evNum) ? null : formatEdgePct(evNum);
   const dataReviewFlag = reviewFlag(c);

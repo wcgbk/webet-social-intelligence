@@ -182,7 +182,9 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
       };
       const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, NCAAF_MODEL_WEIGHT.ml);
-      const modelPureP = pureFootballCover(pureAt, isHome ? homeForecast : -homeForecast, null);
+      // pureAt already flips the away side. Negating the margin here too
+      // priced both moneylines at the home win probability.
+      const modelPureP = pureFootballCover(pureAt, homeForecast, null);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, modelPureP, projMethod: methods.ml, uncertainty,

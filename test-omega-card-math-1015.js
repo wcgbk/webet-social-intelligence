@@ -2,9 +2,10 @@
 // Extreme margin bias is off the card. Win percent is one decimal from the
 // same probability as edge and EV. A parlay needs three covers at or above 45%.
 const assert = require('assert');
-const { extremeMarginSports } = require('./netlify/functions/lib/omega-vnext/health');
-const { gateReason, applyGates } = require('./netlify/functions/lib/omega-vnext/gates');
+const { extremeMarginSports, extremeMarginGames, marginGamesOffCard } = require('./netlify/functions/lib/omega-vnext/health');
+const { gateReason, applyGates, projectionDisagrees } = require('./netlify/functions/lib/omega-vnext/gates');
 const { toPickObject, passesPublishFloor, eligibleForLeanPool, orderedByScore } = require('./netlify/functions/lib/omega-vnext/select');
+const { formatEdgePct } = require('./netlify/functions/lib/omega-vnext/odds_math');
 const { parlayFromStraights, isNoQualifyingParlay } = require('./netlify/functions/lib/omega-vnext/parlay');
 
 function spread(sport, proj, line) {
@@ -22,7 +23,7 @@ function spread(sport, proj, line) {
     ev: 0.05,
     edgePct: 0.04,
     liquid: true,
-    commenceTime: '2026-10-16T00:00:00Z',
+    commenceTime: '2026-12-01T00:00:00Z',
   };
 }
 
@@ -48,6 +49,82 @@ const cfb = spread('NCAAF', -0.5, -1.5);
 assert.ok(Math.abs(-0.5 + -1.5) > 1);
 assert.ok(Math.abs(-0.5 + -1.5) < 3);
 assert.deepStrictEqual(extremeMarginSports([cfb]), []);
+
+// One outlier does not blank a second game inside the cut.
+const outlier = spread('NCAAF', 13.5, -3.5);
+const calm = {
+  ...spread('NCAAF', -5.5, 7),
+  matchup: 'Memphis Tigers @ Tulane Green Wave',
+  homeTeam: 'Tulane Green Wave',
+  awayTeam: 'Memphis Tigers',
+  side: 'Tulane Green Wave +7',
+};
+const held = extremeMarginGames([outlier, calm]);
+assert.deepStrictEqual(held.map((g) => g.matchup), ['Away @ Home']);
+assert.ok(Math.abs(held[0].margin - 10) < 1e-9);
+assert.deepStrictEqual(extremeMarginSports([outlier, calm]), ['NCAAF']);
+assert.deepStrictEqual(marginGamesOffCard([outlier, calm]).map((g) => g.matchup), ['Away @ Home']);
+
+// Opposite puck-line residuals can each exceed 0.9 while the sport mean
+// stays inside the cut. That sport stays on the card.
+const pit = {
+  sport: 'NHL', matchup: 'Pittsburgh Penguins @ Colorado Avalanche',
+  homeTeam: 'Colorado Avalanche', awayTeam: 'Pittsburgh Penguins',
+  market: 'Spread', side: 'Colorado Avalanche -1.5', modelProjection: 0.38, line: -1.5,
+};
+const ana = {
+  sport: 'NHL', matchup: 'Boston Bruins @ Anaheim Ducks',
+  homeTeam: 'Anaheim Ducks', awayTeam: 'Boston Bruins',
+  market: 'Spread', side: 'Anaheim Ducks +1.5', modelProjection: -0.11, line: 1.5,
+};
+assert.deepStrictEqual(extremeMarginSports([pit, ana]), []);
+assert.deepStrictEqual(marginGamesOffCard([pit, ana]), []);
+assert.deepStrictEqual(marginGamesOffCard([nhl]).map((g) => g.sport), ['NHL']);
+
+const zeroEvOver = {
+  sport: 'NHL',
+  matchup: 'Boston Bruins @ Anaheim Ducks',
+  homeTeam: 'Anaheim Ducks',
+  awayTeam: 'Boston Bruins',
+  market: 'Total',
+  side: 'Over 6.5',
+  line: 6.5,
+  modelProjection: 6.14,
+  betProjection: 6.14,
+  odds: 105,
+  coverProb: 0.488,
+  ev: 0.0004,
+  edgePct: 0.0002,
+  pureModelPriced: true,
+  book: 'draftkings',
+  liquid: true,
+};
+assert.strictEqual(projectionDisagrees(zeroEvOver), true);
+assert.strictEqual(gateReason(zeroEvOver), 'projection-disagrees');
+assert.strictEqual(eligibleForLeanPool(zeroEvOver), false);
+const puck = {
+  sport: 'NHL',
+  matchup: 'Pittsburgh Penguins @ Colorado Avalanche',
+  homeTeam: 'Colorado Avalanche',
+  awayTeam: 'Pittsburgh Penguins',
+  market: 'Spread',
+  side: 'Pittsburgh Penguins +1.5',
+  line: 1.5,
+  modelProjection: 0.38,
+  odds: -142,
+  coverProb: 0.634,
+  ev: 0.081,
+  edgePct: 0.0476,
+  pureModelPriced: true,
+};
+assert.strictEqual(projectionDisagrees(puck), false);
+const underAgrees = {
+  ...zeroEvOver,
+  side: 'Under 6.5',
+  modelProjection: 6.14,
+  betProjection: 6.14,
+};
+assert.strictEqual(projectionDisagrees(underAgrees), false);
 
 const shown = toPickObject({
   sport: 'NHL',
@@ -84,6 +161,39 @@ const total = toPickObject({
 assert.strictEqual(total.winProbability, '52.3%');
 assert.strictEqual(total.edge, '1.1%');
 assert.strictEqual(total.ev, '2.1%');
+
+assert.strictEqual(formatEdgePct(0.015499999999999958), '1.6%');
+assert.strictEqual(formatEdgePct(0.0154), '1.5%');
+assert.strictEqual(formatEdgePct(0), '0.0%');
+assert.strictEqual(formatEdgePct(-0.015499999999999958), '-1.6%');
+
+const reserve = toPickObject({
+  sport: 'NCAAF',
+  matchup: 'Memphis Tigers @ Tulane Green Wave',
+  side: 'Tulane Green Wave ML',
+  market: 'Moneyline',
+  odds: 220,
+  coverProb: 0.328,
+  edgePct: '1.5%',
+  ev: 0.048609,
+  pureModelPriced: true,
+  homeTeam: 'Tulane Green Wave',
+  awayTeam: 'Memphis Tigers',
+});
+assert.strictEqual(reserve.winProbability, '32.8%');
+assert.strictEqual(reserve.edge, '1.6%');
+assert.strictEqual(reserve.ev, '5.0%');
+assert.notStrictEqual(reserve.evRaw, 0);
+
+const penguinsCard = toPickObject({
+  ...puck,
+  coverProb: 0.6343912972348869,
+  edgePct: 0.047614,
+  ev: 0.081146,
+});
+assert.strictEqual(penguinsCard.winProbability, '63.4%');
+assert.strictEqual(penguinsCard.edge, '4.7%');
+assert.strictEqual(penguinsCard.ev, '8.0%');
 
 const hi = { sport: 'NCAAF', matchup: 'A @ B', side: 'B', ev: 0.03, edgePct: 0.05, coverProb: 0.69, odds: -180 };
 const lo = { sport: 'NCAAF', matchup: 'C @ D', side: 'D', ev: 0.08, edgePct: 0.02, coverProb: 0.4, odds: 180 };

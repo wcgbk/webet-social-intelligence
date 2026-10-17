@@ -580,7 +580,7 @@ function legNames(parlayLegs) {
   assert.ok(/sideBlocked\(/.test(verifySrc));
   const configSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/config.js'), 'utf8');
   assert.ok(/Same-game fill is a decision[\s\S]*for WeBet/.test(configSrc));
-  assert.ok(/capSameGameExposure at 1\.75u still applies/.test(configSrc));
+  assert.ok(/capSameGameExposure at GAME_EXPOSURE_CAP \(2\.0u\) still applies/.test(configSrc));
 }
 
 function spreadRow(side, matchup, edge, extra) {

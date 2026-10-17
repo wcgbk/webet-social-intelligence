@@ -8,7 +8,7 @@ const {
   normalizeRatingKey, ratingLetter, cardHasFullGrade, formatGameTimeET,
   stakeDollars, toWinDollars,
 } = require('./odds_math');
-const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge } = require('./select');
+const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge, printedEdgeEv } = require('./select');
 const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
@@ -996,7 +996,29 @@ function evAtShownPrice(prob, american) {
   return shown * dec - 1;
 }
 
-function publishGatedLeg(leg) {
+function printedPct(value) {
+  if (value == null || value === '') return null;
+  const text = String(value).trim();
+  return text.includes('%') ? text : null;
+}
+
+/** Same game, side, price, and line as a published straight. */
+function sameBetStraight(leg, straights) {
+  if (!leg || !Array.isArray(straights)) return null;
+  for (const straight of straights) {
+    if (!straight || !parlayIsCardMirror([leg], [straight])) continue;
+    const legOdds = numericAmerican(leg.odds);
+    const straightOdds = numericAmerican(straight.odds != null ? straight.odds : straight.oddsStr);
+    if (legOdds != null && straightOdds != null && legOdds !== straightOdds) continue;
+    const legLine = leg.line != null && leg.line !== '' ? Number(leg.line) : null;
+    const straightLine = straight.line != null && straight.line !== '' ? Number(straight.line) : null;
+    if (Number.isFinite(legLine) && Number.isFinite(straightLine) && Math.abs(legLine - straightLine) > 1e-9) continue;
+    return straight;
+  }
+  return null;
+}
+
+function publishGatedLeg(leg, straights) {
   const base = { ...leg };
   // publishLeg returns a pick object unchanged. Price from the candidate
   // fields so the card leg does not carry the book ladder.
@@ -1008,11 +1030,30 @@ function publishGatedLeg(leg) {
   published.coverProb = `${(leg.coverProb * 100).toFixed(1)}%`;
   published.p_cal = +Number(leg.coverProb).toFixed(6);
   const shownLegEv = evAtShownPrice(leg.coverProb, published.odds);
-  published.ev = formatEdgePct(shownLegEv != null ? shownLegEv : Number(leg.ev))
+  const shownEvStr = formatEdgePct(shownLegEv != null ? shownLegEv : Number(leg.ev))
     || `${(Number(leg.ev) * 100).toFixed(1)}%`;
+  // evRaw stays the unrounded stake EV. Grading below uses that edge too.
   published.evRaw = +Number(leg.ev).toFixed(6);
-  const edgeFrac = edgeFractionOf(leg, unifiedCoverProb(leg));
-  const edgeStr = formatEdgePct(edgeFrac) || formatEdgePct(leg.edgePct) || published.edgePct || null;
+  const cover = unifiedCoverProb(leg);
+  const edgeFrac = edgeFractionOf(leg, cover);
+  // Same one-decimal cover rule as the straight badge. The stored edge
+  // used for rank and grade is edgeFrac, not this display string.
+  const computed = printedEdgeEv({
+    coverProb: cover,
+    odds: numericAmerican(leg.odds),
+    edgePct: edgeFrac,
+    ev: leg.ev,
+  });
+  const straight = sameBetStraight(leg, straights);
+  const straightEdge = printedPct(straight && (straight.edge != null && straight.edge !== '' ? straight.edge : straight.edgePct));
+  const straightEv = printedPct(straight && straight.ev);
+  // The straight badge already rounded this bet. Copy that cover string too,
+  // so a p_cal that moved the tenth (0.64749 → 0.6475) does not print 64.8%
+  // next to the straight's 5.5% edge. p_cal and evRaw stay on the leg.
+  const straightCover = printedPct(straight && straight.coverProb);
+  if (straightCover) published.coverProb = straightCover;
+  const edgeStr = straightEdge || computed.edgePctStr || formatEdgePct(edgeFrac) || published.edgePct || null;
+  published.ev = straightEv || shownEvStr;
   const rating = normalizeRatingKey(leg.rating || leg.qualityGrade || leg.grade)
     || qualityToRating(edgeFrac, null, null);
   published.edgePct = edgeStr || published.edgePct;
@@ -1127,7 +1168,7 @@ function ticketFromLegs(chosen, rows, opts) {
     && chosen.every((leg) => straightIds.has(parlaySideId(leg)));
   const labelInput = { ...st, legs: chosen };
   const evLabel = parlayEvLabel(labelInput);
-  const publishedLegs = chosen.map(publishGatedLeg);
+  const publishedLegs = chosen.map((leg) => publishGatedLeg(leg, rows));
   const fromLegs = combinedFromLegOdds(publishedLegs);
   const combinedDecimal = fromLegs ? fromLegs.combinedDecimal : st.combinedDecimal;
   const combinedOdds = fromLegs

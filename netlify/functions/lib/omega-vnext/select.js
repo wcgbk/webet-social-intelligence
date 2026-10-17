@@ -458,23 +458,20 @@ function drawdownActive(results) {
   return false;
 }
 
-function toPickObject(c, opts = {}) {
-  const sharp = !!(c && c.sharpFairPriced);
-  const pure = !!(c && c.pureModelPriced);
-
-  // Sharp card: edge is p_fair − implied. Pure model: edge is p_model − implied.
-  // Letter bands are that edge alone. CLV does not move the grade.
-  // Older rows keep the model edge plus the small CLV nudge.
-  const edgeFrac = parseEdgeFraction(c.edgePct);
-  // The page prints the win rate to one decimal. When the stored edge or EV
-  // is that same probability at this price, print the one-decimal version.
-  // 52.3% at -105 is 1.1% and 2.1%. A stored edge that is not cover minus
-  // the price stays as stored.
-  const fullCover = Number(c.coverProb);
+/**
+ * Printed edge and EV. The page shows the win rate to one decimal.
+ * When the stored edge is that cover minus this price, print
+ * shownCover − implied (52.3% at -105 is 1.1% and 2.1%). A stored edge
+ * that is not cover minus the price stays as stored. Grading and stake
+ * EV keep the unrounded edgeFrac / evNum caller already holds.
+ */
+function printedEdgeEv(c) {
+  const edgeFrac = parseEdgeFraction(c && c.edgePct);
+  const fullCover = Number(c && c.coverProb);
   const shownCover = Number.isFinite(fullCover)
     ? Number((fullCover * 100).toFixed(1)) / 100
     : null;
-  const price = Number(c.odds);
+  const price = Number(c && c.odds);
   const canPrice = shownCover != null && Number.isFinite(price);
   const fullImplied = canPrice ? americanToImplied(price) : null;
   const shownDecimal = canPrice ? americanToDecimal(price) : null;
@@ -486,6 +483,30 @@ function toPickObject(c, opts = {}) {
     && Number.isFinite(edgeFrac) && Math.abs(edgeFrac - fullEdge) <= 0.0005 + 1e-9;
   const displayEdge = edgeFromShown ? shownEdge : edgeFrac;
   const edgePctStr = formatEdgePct(displayEdge) || '0.0%';
+  const evParsed = c && (c.ev == null || c.ev === '') ? null : Number(c && c.ev);
+  const fullEv = canPrice ? (fullCover * shownDecimal) - 1 : null;
+  const shownEv = canPrice ? (shownCover * shownDecimal) - 1 : null;
+  // 0.0015 covers a reserve fill that reprints the one-decimal win rate
+  // with the unrounded stake EV (about 0.1pp under). A stored 0 stays 0.
+  // An edge that is not this cover minus the price does not snap.
+  const evFromShown = edgeFromShown && fullEv != null && shownEv != null
+    && Number.isFinite(evParsed) && evParsed !== 0
+    && Math.abs(evParsed - fullEv) <= 0.0015;
+  const evNum = evFromShown ? shownEv : (Number.isFinite(evParsed) ? evParsed : null);
+  const evStr = evNum == null || !Number.isFinite(evNum) ? null : formatEdgePct(evNum);
+  return { edgeFrac, edgeFromShown, displayEdge, edgePctStr, evNum, evStr };
+}
+
+function toPickObject(c, opts = {}) {
+  const sharp = !!(c && c.sharpFairPriced);
+  const pure = !!(c && c.pureModelPriced);
+
+  // Sharp card: edge is p_fair − implied. Pure model: edge is p_model − implied.
+  // Letter bands are that edge alone. CLV does not move the grade.
+  // Older rows keep the model edge plus the small CLV nudge.
+  const printed = printedEdgeEv(c);
+  const edgeFrac = printed.edgeFrac;
+  const edgePctStr = printed.edgePctStr;
   const gradeOnEdge = sharp || pure;
   const qualityClv = gradeOnEdge ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
@@ -501,17 +522,8 @@ function toPickObject(c, opts = {}) {
     units = capBGradeStake(units, rating);
     if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
   }
-  const evParsed = c.ev == null || c.ev === '' ? null : Number(c.ev);
-  const fullEv = canPrice ? (fullCover * shownDecimal) - 1 : null;
-  const shownEv = canPrice ? (shownCover * shownDecimal) - 1 : null;
-  // 0.0015 covers a reserve fill that reprints the one-decimal win rate
-  // with the unrounded stake EV (about 0.1pp under). A stored 0 stays 0.
-  // An edge that is not this cover minus the price does not snap.
-  const evFromShown = edgeFromShown && fullEv != null && shownEv != null
-    && Number.isFinite(evParsed) && evParsed !== 0
-    && Math.abs(evParsed - fullEv) <= 0.0015;
-  const evNum = evFromShown ? shownEv : (Number.isFinite(evParsed) ? evParsed : null);
-  const evStr = evNum == null || !Number.isFinite(evNum) ? null : formatEdgePct(evNum);
+  const evNum = printed.evNum;
+  const evStr = printed.evStr;
   const dataReviewFlag = reviewFlag(c);
 
   const isML = /moneyline/i.test(c.market || '');
@@ -760,7 +772,7 @@ function isVoidPregame(p) {
 
 /**
  * Straight units plus the full parlay stake on the same game, capped at
- * GAME_EXPOSURE_CAP (1.75u). The parlay is never cut. Steps are 0.25u,
+ * GAME_EXPOSURE_CAP (2.0u). The parlay is never cut. Steps are 0.25u,
  * floor 0.5u. A lean is not trimmed. OMEGA_GAME_EXPOSURE=0 turns this off.
  * A void-pregame leg is not stake at risk, so it does not count. A
  * void-pregame straight is left unchanged. Late-news removes a dropped
@@ -819,6 +831,7 @@ module.exports = {
   selectStraights,
   orderedByScore,
   toPickObject,
+  printedEdgeEv,
   applyDailyCap,
   applyDailyUnitCap,
   capSameGameExposure,

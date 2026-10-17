@@ -88,6 +88,42 @@ function joinSentences(parts) {
   return parts.filter(Boolean).join(' ');
 }
 
+/**
+ * Card copy must not claim the rest of the board is empty, or that
+ * injuries, lineups, goalies, or weather are already in the price.
+ * A sentence that matches is dropped. Fewer than two sentences left
+ * falls back to the template (or the original text when there is none).
+ */
+const BAD_CARD_COPY = [
+  /no other sports/i,
+  /already price[sd]? in/i,
+  /price[sd]? in the usual injur/i,
+  /injur\w* and lineup variables/i,
+];
+
+function copySentenceBad(sentence) {
+  return BAD_CARD_COPY.some((re) => re.test(sentence));
+}
+
+function splitCopySentences(text) {
+  const src = String(text || '').trim();
+  if (!src) return [];
+  return src.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+}
+
+function sanitizeCardCopy(text, fallback) {
+  const raw = String(text || '').trim();
+  const sentences = splitCopySentences(raw);
+  const bad = sentences.some(copySentenceBad);
+  if (!bad && sentences.length >= 2) return raw;
+  const kept = sentences.filter((s) => !copySentenceBad(s));
+  if (kept.length >= 2) return joinSentences(kept);
+  const fb = fallback == null ? '' : String(fallback).trim();
+  if (fb && fb !== raw) return sanitizeCardCopy(fb, null);
+  if (kept.length) return joinSentences(kept);
+  return raw;
+}
+
 /** "4.2%", 0.042, and 4.2 all become "4.2%". Missing stays null. */
 function displayedRate(raw) {
   if (raw == null || raw === '') return null;
@@ -320,11 +356,14 @@ function templateInsights(picks) {
 
 function buildCardFallbackCopy({ picks, dateFormatted } = {}) {
   if (!picks || !picks.length) {
-    return { edgeSummary: emptyEdgeSummary(), insights: emptyInsights() };
+    return {
+      edgeSummary: sanitizeCardCopy(emptyEdgeSummary(), null),
+      insights: sanitizeCardCopy(emptyInsights(), null),
+    };
   }
   return {
-    edgeSummary: templateEdgeSummary(picks, dateFormatted),
-    insights: templateInsights(picks),
+    edgeSummary: sanitizeCardCopy(templateEdgeSummary(picks, dateFormatted), null),
+    insights: sanitizeCardCopy(templateInsights(picks), null),
   };
 }
 
@@ -417,11 +456,15 @@ VOICE:
 
 YOUR JOB:
 1. When web search is available, use it sparingly to verify injuries, recent news, starting pitchers (MLB), quarterback status (NFL/NCAAF), outdoor weather, and recent form. When tools are disabled, write from the locked table only. Do NOT invent specific injuries, records, scores, or weather.
-2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, starter scratch, severe weather, material lineup change). Do NOT reject a football pick because a quarterback is out, doubtful, or questionable: WeBetAI already priced the quarterback injury report into the number. You do NOT choose replacements.
+2. ACCEPT or REJECT each LOCKED STRAIGHT pick. Default is ACCEPT. Reject ONLY for concrete disqualifying news (star out, starter scratch, severe weather, material lineup change). Do NOT reject a football pick because a quarterback is out, doubtful, or questionable. You do NOT choose replacements. Do not say that injury, lineup, goalie, or weather news is already priced in.
 3. Write coreReasoning for every ACCEPTED straight (4-6 sentences) and every parlay leg (3-5 sentences).
 4. You MAY reduce straight units by up to 50% with a reason. You MUST NOT increase units. Do not change parlay leg units.
 5. You MUST NOT invent new picks, swap sides, or override the locked direction.
 6. Every specific fact must come from web search this run or the locked table. If you cannot verify a detail, describe the handicap in general terms instead of inventing one.
+
+SLATE AND PRICED INPUTS:
+- Never say other sports are absent, that no other sports are on the slate, or that no other sports appear. The locked table is the card. Other games can be on the slate with no qualifying edge. Only say the card's picks are in sport X.
+- Never say injuries, lineups, goalies, or weather are priced in, already in the number, or covered by the usual injury and lineup variables, unless that pick's own locked data says so.
 
 HOW TO BUILD coreReasoning (straights, 4-6 sentences):
 1. Open with a concrete fact. Use verified news when you have it. Otherwise open on the matchup and the number.
@@ -660,8 +703,8 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
       return {
         picks: templated.map(ensureExtraFields),
         parlayLegs: decorateParlays(mergeLegsBack(parlayLegs, narratedLegs, legOwners)),
-        edgeSummary: parsed.edgeSummary || templateSummary,
-        insights: parsed.insights || templateInsights,
+        edgeSummary: sanitizeCardCopy(parsed.edgeSummary, templateSummary),
+        insights: sanitizeCardCopy(parsed.insights, templateInsights),
         claudeVerified: false,
         rejections: [],
       };
@@ -672,8 +715,8 @@ async function narrateAndVerify({ picks, parlayLegs, dateFormatted, apiKey }) {
     return {
       picks: finals,
       parlayLegs: mergeLegsBack(parlayLegs, finalsLegs, legOwners),
-      edgeSummary: parsed.edgeSummary || templateSummary,
-      insights: parsed.insights || templateInsights,
+      edgeSummary: sanitizeCardCopy(parsed.edgeSummary, templateSummary),
+      insights: sanitizeCardCopy(parsed.insights, templateInsights),
       claudeVerified: true,
       rejections,
     };
@@ -746,6 +789,7 @@ module.exports = {
   narrateParlayLegsOnly,
   buildFallbackNarrative,
   buildCardFallbackCopy,
+  sanitizeCardCopy,
   ensureNarrative,
   ensureExtraFields,
   lockedRow,

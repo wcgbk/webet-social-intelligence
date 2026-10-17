@@ -394,17 +394,38 @@ function selectTop10(pool, n) {
   return out;
 }
 
-/** Hard Rock posted a numeric price for this side. Missing is not a reject. */
+/**
+ * Hard Rock's point is this candidate's line. Both empty is a moneyline.
+ * A nearest-line quote (a different total or spread) is not this bet.
+ */
+function hardRockPointMatches(line, point) {
+  const lineEmpty = line == null || line === '';
+  const pointEmpty = point == null || point === '';
+  if (lineEmpty && pointEmpty) return true;
+  if (lineEmpty || pointEmpty) return false;
+  const a = Number(line);
+  const b = Number(point);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(a - b) <= 1e-9;
+}
+
+/** Hard Rock posted a numeric price for this side and this line. Missing is not a reject. */
 function hasHardRockPrice(c) {
   if (!c) return false;
+  const line = c.line;
   const hr = c.hardRock;
-  if (hr && Number.isFinite(Number(hr.american))) return true;
+  if (hr && Number.isFinite(Number(hr.american)) && hardRockPointMatches(line, hr.point)) return true;
   if (!Array.isArray(c.bookPrices)) return false;
   return c.bookPrices.some((p) => {
     const book = String((p && (p.book || p.key)) || '');
     if (!/hardrock/i.test(book)) return false;
     const american = p.american != null ? p.american : p.price;
-    return Number.isFinite(Number(american));
+    if (!Number.isFinite(Number(american))) return false;
+    const carriesPoint = p.point != null && p.point !== '';
+    if (carriesPoint) return hardRockPointMatches(line, p.point);
+    // Quote names no point. Moneyline behavior stays: a finite Hard Rock
+    // price counts. A lined quote is handled above, when it carries a point.
+    return true;
   });
 }
 

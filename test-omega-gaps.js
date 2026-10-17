@@ -151,10 +151,11 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(mlH.pPush, 0);
   assert.strictEqual(mlA.pPush, 0);
   assert.ok(mlH.pTie > 0.12 && mlH.pTie < 0.22, `reg tie ${mlH.pTie}`);
-  withEnv('OMEGA_NHL_EMPTY_NET', '0', () => {
-    const plain = nhlPeriod.nhlMarketQuote({ modelMargin: 0.15, modelTotal: 6.2, market: 'ml', sideIsHome: true });
-    near(plain.expectedTotal, 6.2, 0.05, 'plain Poisson puts the OT goal back on the model total');
-    assert.ok(mlH.expectedTotal + 1e-9 >= plain.expectedTotal, 'empty-net does not cut the total');
+  near(mlH.expectedTotal, 6.2, 0.05, 'plain Poisson puts the OT goal back on the model total');
+  withEnv('OMEGA_NHL_EMPTY_NET', '1', () => {
+    const forced = nhlPeriod.nhlMarketQuote({ modelMargin: 0.15, modelTotal: 6.2, market: 'ml', sideIsHome: true });
+    near(forced.expectedTotal, mlH.expectedTotal, 1e-12, 'OMEGA_NHL_EMPTY_NET is ignored');
+    assert.ok(forced.expectedTotal < 6.25, `empty-net step stays off ${forced.expectedTotal}`);
   });
 
   const fav = nhlPeriod.nhlMarketQuote({ modelMargin: 0.6, modelTotal: 6.2, market: 'ml', sideIsHome: true });

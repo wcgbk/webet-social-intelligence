@@ -2,10 +2,14 @@
 /**
  * NCAAF/CFB — EPA-style off/def prior when both teams match (cfb-epa-v1*),
  * else standings power + HFA (cfb-normal-*). Game-day rest/QB soft adj
- * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday. Blend weights
- * unchanged. ML, spread, and total anchors are no-vig Pinnacle.
- * Totals and margins shrink toward the sharp line in points before the
- * CDF. Calibrate shrink runs later on that probability.
+ * may tag cfb-epa-v1-gameday-* / cfb-normal-*-gameday.
+ * 2026-10-17: Pinnacle is CLV-only, no pull toward the market line on
+ * NCAAF pick probabilities. NCAAF_MODEL_WEIGHT is 1, so modelPureP and
+ * betProjection are the raw model margin or total (moneyline, spread,
+ * and total). Anchors stay no-vig Pinnacle for CLV. The legacy modelRawP
+ * blend uses the same weight: at 1, blendWithMarket is the model cover
+ * with no market mix and no division. POINT_SHRINK, the FCS point lambda,
+ * calibration, tempo, and gates are unchanged.
  * A tempo total (plays x points per play) blends into the total when the
  * tempo weight is above 0 (default 0.25) and a pregame table is already in hand.
  * A frozen snap does not fetch that table.

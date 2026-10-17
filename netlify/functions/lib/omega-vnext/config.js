@@ -800,8 +800,13 @@ function envNumber(name, fallback) {
 /** replay 9/22-10/10 showed the NFL total projection has no predictive slope vs finals; w 0.45->0.10 cut NFL log-loss vs close 0.6755->0.6703 */
 const NFL_TOTAL_MODEL_WEIGHT = 0.10;
 
-/** replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008 */
-const NCAAF_MODEL_WEIGHT = { ml: 0.10, spread: 0.10, total: 0.10 };
+/**
+ * 2026-10-17: Pinnacle is CLV-only, no pull toward the market line on NCAAF
+ * pick probabilities. Weight 1 keeps the raw model point
+ * (forecast = line + 1*(model − line) = model). The retired 0.10 blend
+ * was the 9/22-10/10 replay (NCAAF LL vs close 0.6193->0.6008).
+ */
+const NCAAF_MODEL_WEIGHT = { ml: 1, spread: 1, total: 1 };
 
 /**
  * Weight of the NFL Elo margin inside the projected home margin.
@@ -936,20 +941,12 @@ function fbWeatherEnabled() {
 }
 
 /**
- * Empty-net end game on the NHL regulation joint. The object is the default.
- * OMEGA_NHL_EMPTY_NET=0 (off/false/no) skips the late-game step and restores
- * the plain Poisson joint. Any other set value turns the step on.
- * Pull times are minutes left. rateLeaderEN60 is empty-net goals per 60 by
- * the club that kept its goalie. rateTrailer6v5_60 is the extra attacker's
- * goals per 60. Figures are published league rates, not fit on a replay.
- * Citations live in nhl_period.js.
+ * 2026-10-17: the empty-net end-game step was removed. Season GF/GA already
+ * include empty-net goals, so the late-game Markov step double-counted them.
+ * OMEGA_NHL_EMPTY_NET is ignored. audit_card still reads this field.
  */
 const NHL_EMPTY_NET = Object.freeze({
-  enabled: true,
-  pullMinDown1: 2,
-  pullMinDown2: 3,
-  rateLeaderEN60: 18,
-  rateTrailer6v5_60: 7.2,
+  enabled: false,
 });
 
 function fbMarketGapLimits(sport) {
@@ -1023,7 +1020,7 @@ const MODEL_NOTES = [
   'v12.3.40-omega-vnext-price-lock: Pinnacle no-vig line moves (moneyline, spread, total; NFL, NCAAF, NHL, MLB) start from a free hourly /v4/sports/{sport}/events poll. A new event id gets one live Pinnacle open (regions=eu, bookmakers=pinnacle, markets=h2h,spreads,totals), stored once in omega-pinnacle-line-moves keyed by sport/eventId and never re-pulled. Checks at 3:00, 9:00, and 10:30 ET pull Pinnacle and DraftKings, one call per sport, through the snapshot cache. Moves between open, 3:00, 9:00, and 10:30 are logged. Steam is a no-vig move of at least 3 probability points or a spread/total move of at least 0.5 points, same direction at both books, with windowMinutes 15 (STEAM_WINDOW_MIN) on each steam record. The 10:30 card audit and each candidate receive that summary as context. Priced pulls stop when x-requests-remaining is below 49000. No historical odds call. dryRun and OMEGA_REPLAY_NO_WRITE write no blobs. No price, EV, gate, selection, floor, Kelly, or unit-cap change.',
   'v12.3.39-omega-vnext-price-lock: Odds API responses are stored once per sport, snapshot, markets, regions, and bookmakers. Repeat dry runs and replays reuse that snapshot. A cache hit does not spend credits. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.38-omega-vnext-price-lock: NHL moneyline market blend BLEND.ml 0.50->0.10. Replay NHL LL 0.6861->0.6775. Spread stays 0.50 and total stays 0.45. No floor, Kelly, shrink, or unit-cap change.',
-  'v12.3.37-omega-vnext-price-lock: NCAAF market blend uses NCAAF_MODEL_WEIGHT ml 0.10, spread 0.10, total 0.10. Replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008. No floor, Kelly, shrink, or unit-cap change.',
+  'v12.3.37-omega-vnext-price-lock: NCAAF market blend used NCAAF_MODEL_WEIGHT ml 0.10, spread 0.10, total 0.10. Replay 9/22-10/10 NCAAF LL vs close 0.6193->0.6008. 2026-10-17: Pinnacle is CLV-only, no pull toward the market line on NCAAF pick probabilities; weights are ml 1, spread 1, total 1. No floor, Kelly, shrink, or unit-cap change.',
   'v12.3.36-omega-vnext-price-lock: NBA stays off the daily card unless OMEGA_NBA=1. Off produces zero NBA candidates and the rest of the card is unchanged. On, NBA uses sports/nba.js and the net-rating seed, the Pinnacle no-vig anchor, DraftKings execution, and the same gates. Aliases: LA Rams, LA Chargers, NY Giants, NY Jets, UL Lafayette, Sixers, Portland Trailblazers. London Lions stays unmapped. No floor, lean-fill, Kelly, shrink, or unit-cap change.',
   'v12.3.35-omega-vnext-price-lock: Public /clv and /tracking pages only. /clv shows the running closing-line total (Alpha Jun 20–Oct 7 and Omega from Sep 5, one row per graded close, written at 9:15 ET). /tracking shows one daily Edge and Omega row for engineering percentiles, track-record KPIs, and closing-line totals, with the change from the previous day. No model change. No price, lean-fill, floor, Kelly, shrink, or unit-cap change.',
   'v12.3.34-omega-vnext-price-lock: NFL total market blend uses NFL_TOTAL_MODEL_WEIGHT 0.10. Replay 9/22-10/10 showed the NFL total projection has no predictive slope vs finals; w 0.45->0.10 cut NFL log-loss vs close 0.6755->0.6703. ML and spread stay 0.50. NCAAF and POINT_SHRINK unchanged. No floor, Kelly, shrink, or unit-cap change.',

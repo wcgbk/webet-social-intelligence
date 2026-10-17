@@ -87,9 +87,11 @@ const LG_SHOOT = 0.10;
 const BLEND = { ml: 0.10, spread: 0.50, total: 0.45 };
 
 /**
- * 60-minute joint. The empty-net end game, when NHL_EMPTY_NET is on, is
- * inside this quote, so the moneyline, puck line, and total share one
- * distribution. Null keeps the legacy normal price and the old method string.
+ * 60-minute joint plus the OT/shootout split. The empty-net end game was
+ * removed 2026-10-17 (season GF/GA already include those goals), so
+ * OMEGA_NHL_EMPTY_NET does not add a second step. Moneyline, puck line,
+ * and total share this one distribution. Null keeps the legacy normal
+ * price and the old method string.
  */
 function periodQuote(args) {
   if (!nhlPeriodEnabled()) return null;

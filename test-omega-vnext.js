@@ -52,13 +52,16 @@ const sorted = math.sortByGradeThenUnits([
 ]);
 assert.deepStrictEqual(sorted.map(p => p.pick), ['top', 'midHigh', 'midA', 'low']);
 
-// Probability edge is the rank. Stake EV breaks a tie inside 0.2 points.
+// Shrunk EV is the rank. Edge breaks an equal-EV tie.
 {
   const fav = { edgePct: 0.048, ev: 0.04, odds: -140, sport: 'MLB', side: 'Fav', predictedClv: 0, uncertainty: 0.12 };
   const dog = { edgePct: 0.021, ev: 0.18, odds: 180, sport: 'MLB', side: 'Dog', predictedClv: 0, uncertainty: 0.12 };
   const rankedPool = select.orderedByScore([dog, fav]);
-  assert.strictEqual(rankedPool[0].side, 'Fav');
-  assert.strictEqual(rankedPool[1].side, 'Dog');
+  assert.strictEqual(rankedPool[0].side, 'Dog');
+  assert.strictEqual(rankedPool[1].side, 'Fav');
+  const hiEdge = { edgePct: 0.05, ev: 0.04, odds: -110, sport: 'MLB', side: 'Hi', predictedClv: 0, uncertainty: 0.12 };
+  const loEdge = { edgePct: 0.02, ev: 0.04, odds: -110, sport: 'MLB', side: 'Lo', predictedClv: 0, uncertainty: 0.12 };
+  assert.strictEqual(select.orderedByScore([loEdge, hiEdge])[0].side, 'Hi');
   assert.strictEqual(math.americanCentsDiff(105, -105), 10);
   assert.strictEqual(math.americanCentsDiff(-110, -130), 20);
   assert.notStrictEqual(math.americanCentsDiff(105, -105), 210);
@@ -122,7 +125,7 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// Published rank is probability edge. Stake EV breaks a tie inside 0.2 points.
+// The letter score is still the edge. Published order is shrunk EV.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
@@ -134,7 +137,7 @@ assert.ok(picked.length >= 1);
   };
   assert.ok(select.scoreCandidate(chalk) > select.scoreCandidate(dog));
   const ranked = select.selectStraights([dog, chalk], 1);
-  assert.strictEqual(ranked[0].matchup, 'A @ B');
+  assert.strictEqual(ranked[0].matchup, 'C @ D');
 }
 
 const picks = picked.map(c => select.toPickObject(c, { modelVersion: MODEL_VERSION }));
@@ -162,7 +165,7 @@ if (parlays.length) {
 }
 
 // A moneyline parlay of the straight card still mirrors the card after the " ML" suffix.
-// independent is the probability statement: distinct games and no haircut.
+// The same-model-bias haircut makes the joint dependent on every multi-leg ticket.
 {
   const mirrorPool = [
     {
@@ -184,13 +187,13 @@ if (parlays.length) {
   const mirrored = parlay.optimizeParlay(mirrorPool, mirrorStraights, { cardDate: '2026-09-23' });
   assert.strictEqual(mirrored.length, 1);
   assert.strictEqual(mirrored[0].mirrorsCard, true);
-  assert.strictEqual(mirrored[0].independent, true);
-  assert.strictEqual(mirrored[0].evLabel, 'assumes independent legs (different games)');
+  assert.strictEqual(mirrored[0].independent, false);
+  assert.strictEqual(mirrored[0].evLabel, 'same-model-bias haircut x0.95 applied');
   assert.strictEqual(mirrored[0].correlationNote, mirrored[0].evLabel);
   assert.ok(/straight/.test(mirrored[0].type));
   const alone = parlay.optimizeParlay(mirrorPool, [], { cardDate: '2026-09-23' });
   assert.strictEqual(alone[0].mirrorsCard, false);
-  assert.strictEqual(alone[0].independent, true);
+  assert.strictEqual(alone[0].independent, false);
   assert.ok(/optimized/.test(alone[0].type));
 }
 
@@ -328,9 +331,9 @@ assert.strictEqual(math.unitsToRating(0.75), 'aminus');
 
   // Favorite combined price (decimal < 2) is a minus number, never a plus.
   const chalk = parlay.optimizeParlay([
-    { ...row('A @ B', 0.90, 0.12), odds: -400, side: 'ChalkA' },
-    { ...row('C @ D', 0.90, 0.12), odds: -400, side: 'ChalkC' },
-    { ...row('E @ F', 0.90, 0.12), odds: -400, side: 'ChalkE' },
+    { ...row('A @ B', 0.90, 0.08), odds: -400, side: 'ChalkA' },
+    { ...row('C @ D', 0.90, 0.08), odds: -400, side: 'ChalkC' },
+    { ...row('E @ F', 0.90, 0.08), odds: -400, side: 'ChalkE' },
   ], []);
   assert.ok(chalk[0].combinedDecimal < 2);
   assert.ok(chalk[0].combinedOdds.startsWith('-'), chalk[0].combinedOdds);
@@ -766,9 +769,8 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   }, { modelVersion: MODEL_VERSION });
   assert.strictEqual(highEdgeLowUnits.rating, 'aplus');
   assert.strictEqual(highEdgeLowUnits.qualityGrade, 'aplus');
-  const hiKelly = math.kellyToUnits(math.kellyFraction(0.53, -110, config.KELLY_FRACTION), config.MAX_STRAIGHT_UNITS_PER_PICK);
-  assert.notStrictEqual(highEdgeLowUnits.units, `${hiKelly}u`);
-  assert.strictEqual(highEdgeLowUnits.units, '1.5u');
+  assert.strictEqual(highEdgeLowUnits.units, `${select.quarterKellyUnits(0.53, -110)}u`);
+  assert.notStrictEqual(highEdgeLowUnits.units, '1.5u');
   assert.notStrictEqual(highEdgeLowUnits.units, '5u');
   assert.strictEqual(typeof highEdgeLowUnits.confidence, 'number');
   assert.strictEqual(highEdgeLowUnits.confidence, math.ratingToConfidence('aplus'));
@@ -776,8 +778,7 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   assert.ok(typeof highEdgeLowUnits.qualityScore === 'number' && highEdgeLowUnits.qualityScore >= 0.05);
   assert.strictEqual(highEdgeLowUnits.modelVersion, MODEL_VERSION);
 
-  // High stake, thin edge → B, not the units letter (1.5u would be A+ on the old map).
-  // Kelly still sizes the bet; the post-Kelly B cap then lowers it to 0.5u.
+  // High cover, thin edge → letter B. Stake is quarter Kelly, not the B cap.
   const lowEdgeHighUnits = verify.buildQualityReplacement({
     sport: 'NFL', matchup: 'C @ D', side: 'Over 45.5', market: 'Total',
     odds: -110, coverProb: 0.58, ev: 0.03, edgePct: 0.012, kellyUnits: 9,
@@ -785,10 +786,8 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   }, { modelVersion: MODEL_VERSION });
   assert.strictEqual(lowEdgeHighUnits.rating, 'b');
   assert.strictEqual(lowEdgeHighUnits.qualityGrade, 'b');
-  const loKelly = math.kellyToUnits(math.kellyFraction(0.58, -110, config.KELLY_FRACTION), config.MAX_STRAIGHT_UNITS_PER_PICK);
-  assert.ok(loKelly > config.B_GRADE_UNIT_CAP);
-  assert.strictEqual(lowEdgeHighUnits.units, `${config.B_GRADE_UNIT_CAP}u`);
-  assert.ok(parseFloat(lowEdgeHighUnits.units) < loKelly);
+  assert.strictEqual(lowEdgeHighUnits.units, `${select.quarterKellyUnits(0.58, -110)}u`);
+  assert.notStrictEqual(lowEdgeHighUnits.units, `${config.B_GRADE_UNIT_CAP}u`);
   assert.notStrictEqual(lowEdgeHighUnits.units, '9u');
   assert.strictEqual(typeof lowEdgeHighUnits.confidence, 'number');
   assert.notStrictEqual(lowEdgeHighUnits.rating, math.unitsToRating(1.5));

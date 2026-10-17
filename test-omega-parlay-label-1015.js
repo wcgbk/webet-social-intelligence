@@ -1,5 +1,5 @@
 'use strict';
-// Parlay labels must describe comboStats. Numbers stay the pre-change values.
+// Parlay labels must describe comboStats. The joint is product(p) * 0.95^(n-1).
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -57,8 +57,8 @@ const FROZEN_TWO = {
 };
 const FROZEN_THREE_STATS = {
   combinedDecimal: 8.200000000000001,
-  combinedProb: 0.2087664,
-  ev: 0.7118844800000002,
+  combinedProb: 0.20479529999999999,
+  ev: 0.6793214600000002,
   uniqueGames: 3,
   uniqueSports: 1,
 };
@@ -86,11 +86,11 @@ assert.strictEqual(twoStats.combinedProb, FROZEN_TWO.combinedProb);
 assert.strictEqual(twoStats.ev, FROZEN_TWO.ev);
 assert.strictEqual(twoStats.uniqueGames, FROZEN_TWO.uniqueGames);
 assert.strictEqual(twoStats.uniqueSports, FROZEN_TWO.uniqueSports);
-assert.deepStrictEqual(twoStats.haircutApplied, { applied: true, factor: 0.95 });
+assert.deepStrictEqual(twoStats.haircutApplied, { applied: true, factor: 0.95, kind: 'same-model-bias' });
 assert.strictEqual(twoStats.corrApplied, false);
 assert.strictEqual(
   parlayEvLabel({ ...twoStats, legs: twoOvers }),
-  'same-direction totals haircut x0.95 applied, other legs assumed independent',
+  'same-model-bias haircut x0.95 applied',
 );
 assert.strictEqual(parlayIndependent({ ...twoStats, legs: twoOvers }), false);
 
@@ -105,7 +105,7 @@ assert.strictEqual(threeStats.combinedProb, FROZEN_THREE_STATS.combinedProb);
 assert.strictEqual(threeStats.ev, FROZEN_THREE_STATS.ev);
 assert.strictEqual(threeStats.uniqueGames, 3);
 assert.strictEqual(threeStats.uniqueSports, 1);
-assert.deepStrictEqual(threeStats.haircutApplied, { applied: true, factor: 0.92 });
+assert.deepStrictEqual(threeStats.haircutApplied, { applied: true, factor: 0.9025, kind: 'same-model-bias' });
 assert.strictEqual(threeStats.corrApplied, false);
 
 const publishOvers = [
@@ -123,22 +123,22 @@ assert.strictEqual(haircutTicket.independent, false);
 assert.strictEqual(haircutTicket.mirrorsCard, true);
 assert.strictEqual(
   haircutTicket.evLabel,
-  'same-direction totals haircut x0.92 applied, other legs assumed independent',
+  'same-model-bias haircut x0.9025 applied',
 );
 assert.strictEqual(haircutTicket.correlationNote, haircutTicket.evLabel);
 
 const mixed = [
   leg('A @ B', 'Over 8.5', { market: 'Total', coverProb: 0.56, odds: -110, edgePct: 0.04 }),
-  leg('C @ D', 'Yankees', { market: 'Moneyline', side: 'Yankees', coverProb: 0.48, odds: 130, edgePct: 0.05 }),
+  leg('C @ D', 'Yankees', { market: 'Moneyline', side: 'Yankees', coverProb: 0.478, odds: 130, edgePct: 0.05 }),
   leg('E @ F', 'Under 9', { market: 'Total', coverProb: 0.54, odds: -115, edgePct: 0.03 }),
 ];
 const mixedTicket = parlayFromStraights(mixed)[0];
-assert.strictEqual(mixedTicket.evLabel, 'assumes independent legs (different games)');
+assert.strictEqual(mixedTicket.evLabel, 'same-model-bias haircut x0.9025 applied');
 assert.strictEqual(mixedTicket.correlationNote, mixedTicket.evLabel);
-assert.strictEqual(mixedTicket.independent, true);
+assert.strictEqual(mixedTicket.independent, false);
 assert.strictEqual(mixedTicket.mirrorsCard, true);
-assert.strictEqual(mixedTicket.combinedProbRaw, 0.14515200000000003);
-assert.strictEqual(mixedTicket.evRaw, 0.19156596363636358);
+assert.strictEqual(mixedTicket.combinedProbRaw, 0.130453848);
+assert.strictEqual(mixedTicket.evRaw, 0.07090749767272708);
 assert.strictEqual(mixedTicket.combinedOdds, '+721');
 assert.strictEqual(mixedTicket.combinedDecimal, 8.21);
 
@@ -170,7 +170,7 @@ assert.strictEqual(parlayIndependent({ corrApplied: true, legs: mixed }), false)
     combinedOdds: '+600',
     legs: mixedLegs,
   }]);
-  assert.strictEqual(filled.parlayLegs[0].evLabel, 'assumes independent legs (different games)');
+  assert.strictEqual(filled.parlayLegs[0].evLabel, 'same-model-bias haircut x0.9025 applied');
   assert.strictEqual(filled.parlayLegs[0].correlationNote, filled.parlayLegs[0].evLabel);
 
   const overs = select.applyDailyUnitCap(straights, [{
@@ -186,7 +186,7 @@ assert.strictEqual(parlayIndependent({ corrApplied: true, legs: mixed }), false)
   }]);
   assert.strictEqual(
     overs.parlayLegs[0].evLabel,
-    'same-direction totals haircut x0.92 applied, other legs assumed independent',
+    'same-model-bias haircut x0.9025 applied',
   );
   assert.strictEqual(overs.parlayLegs[0].correlationNote, overs.parlayLegs[0].evLabel);
   assert.strictEqual(overs.parlayLegs[0].units, '0.5u');
@@ -217,7 +217,7 @@ assert.strictEqual(parlayIndependent({ corrApplied: true, legs: mixed }), false)
   assert.strictEqual(ticket.combinedProb, `${(plainProb * 100).toFixed(1)}%`);
   assert.strictEqual(ticket.ev, `${(plainEv * 100).toFixed(1)}%`);
   assert.notStrictEqual(ticket.combinedProb, `${(plainProb * 0.95 * 100).toFixed(1)}%`);
-  assert.ok(ticket.evLabel.includes('same-direction totals haircut x0.95 applied'));
+  assert.ok(ticket.evLabel.includes('same-model-bias haircut x0.95 applied'));
   assert.ok(ticket.evLabel.includes('plain product of the leg probabilities'));
   assert.ok(ticket.evLabel.includes('haircut was not applied'));
   assert.strictEqual(ticket.correlationNote, ticket.evLabel);
@@ -238,9 +238,9 @@ assert.strictEqual(parlayIndependent({ corrApplied: true, legs: mixed }), false)
       { pick: 'Dodgers -1.5', betType: 'Spread', odds: '-110', coverProb: '54%', matchup: 'Padres @ Dodgers', sport: 'MLB', homeTeam: 'Dodgers', awayTeam: 'Padres' },
     ]),
   }], { removedPicks: ['Dodgers -1.5'] });
-  assert.strictEqual(kept.parlayLegs[0].evLabel, 'assumes independent legs (different games)');
+  assert.strictEqual(kept.parlayLegs[0].evLabel, 'same-model-bias haircut x0.95 applied; displayed EV is a plain product of the leg probabilities (haircut was not applied)');
   assert.strictEqual(kept.parlayLegs[0].correlationNote, kept.parlayLegs[0].evLabel);
-  assert.strictEqual(kept.parlayLegs[0].independent, true);
+  assert.strictEqual(kept.parlayLegs[0].independent, false);
 }
 
 const pub = publicPicksPayload({ picks: [], parlayLegs: [haircutTicket, mixedTicket] });
@@ -248,7 +248,7 @@ assert.strictEqual(pub.parlayLegs[0].mirrorsCard, true);
 assert.strictEqual(pub.parlayLegs[0].independent, false);
 assert.strictEqual(pub.parlayLegs[0].evLabel, haircutTicket.evLabel);
 assert.strictEqual(pub.parlayLegs[1].mirrorsCard, true);
-assert.strictEqual(pub.parlayLegs[1].independent, true);
+assert.strictEqual(pub.parlayLegs[1].independent, false);
 assert.strictEqual(pub.parlayLegs[1].evLabel, mixedTicket.evLabel);
 assert.ok(pub.parlayLegs[0].correlationNote);
 

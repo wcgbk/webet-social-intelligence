@@ -1,7 +1,7 @@
 'use strict';
 
 const { americanToImplied, parseEdgeFraction } = require('./odds_math');
-const { GATES } = require('./config');
+const { EV_CAP_ALL, EDGE_FLOOR_K } = require('./config');
 
 /**
  * Odds-scaled minimum edge vs the de-vigged sharp fair price.
@@ -100,26 +100,34 @@ function mainMinEv(odds, base) {
 }
 
 /**
- * EV above 12% is a bad price. A spread priced from -150 to -101 with a
- * probability edge of 6% to 12% is the exception: at -110 that edge is
- * already more than 12% EV, and it is the spread the projection is about.
- * A total, a moneyline, and a plus-money price stay stale above 12% EV.
- * Edge above 12% stays stale at every price.
+ * EV above EV_CAP_ALL (0.10, ASSUMED) is a model-error flag.
+ * Every sport, market, and price. No spread exception.
  */
 function stakeQuoteIsStale(c) {
-  const maxEV = Number(GATES && GATES.maxEV);
+  const cap = Number(EV_CAP_ALL);
   const ev = Number(c && c.ev);
+  if (!Number.isFinite(ev) || !Number.isFinite(cap)) return false;
+  return ev > cap + 1e-12;
+}
+
+/** max(2%, k * SE). A missing or zero SE leaves the 2% floor. */
+function edgeFloorSe(se) {
+  const k = Number(EDGE_FLOOR_K);
+  const kk = Number.isFinite(k) ? k : 1.5;
+  const s = Number(se);
+  const used = Number.isFinite(s) && s > 0 ? s : 0;
+  return Math.max(0.02, kk * used);
+}
+
+/**
+ * True when a finite edge is under the uncertainty-scaled floor.
+ * A missing edge is not this gate. The caller still has the EV floor.
+ */
+function failsEdgeFloorSe(c) {
   const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
-  if (Number.isFinite(edge) && edge > 0.12 + 1e-12) return true;
-  if (!Number.isFinite(ev) || !Number.isFinite(maxEV) || !(ev > maxEV + 1e-12)) return false;
-  const market = String((c && (c.market || c.betType)) || '');
-  const spread = /spread|puck|run line/i.test(market);
-  const odds = Number(c && c.odds);
-  if (spread && Number.isFinite(edge) && edge + 1e-12 >= 0.06 && edge <= 0.12 + 1e-12
-      && Number.isFinite(odds) && odds <= -101 && odds >= -150) {
-    return false;
-  }
-  return true;
+  if (!Number.isFinite(edge)) return false;
+  const se = Number(c && c.ratingSe);
+  return edge + 1e-12 < edgeFloorSe(Number.isFinite(se) ? se : 0);
 }
 
 module.exports = {
@@ -129,4 +137,6 @@ module.exports = {
   evBandMultiplier,
   mainMinEv,
   stakeQuoteIsStale,
+  edgeFloorSe,
+  failsEdgeFloorSe,
 };

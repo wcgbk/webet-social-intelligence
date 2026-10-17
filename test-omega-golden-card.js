@@ -252,7 +252,7 @@ function main() {
     inputRegen: 'OMEGA_REGEN_GOLDEN=input node test-omega-golden-card.js',
     cardDate: frozen.cardDate,
     note: 'Rewrite only for an intentional selection change. Review the diff. The command does not fetch odds or write blobs.',
-    comment: 'v12.4.0: same sides as v12.3.74. A- straights are 0.75u. A full card parlays 0.5u. Prices outside -250..+250 and EV above 12% stay off the card.',
+    comment: 'v12.4.2 textbook: same sides. These A- prices are quarter Kelly at the 1.5u cap. A full card parlays 0.5u. EV above 10% stays off the card. Parlay joint uses 0.95^(n-1).',
     straights: card.projection.straights,
     parlay: card.projection.parlay,
   };

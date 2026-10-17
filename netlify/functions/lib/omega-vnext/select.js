@@ -5,6 +5,7 @@ const {
   MAX_STRAIGHTS,
   DAILY_UNIT_CAP, STRAIGHT_UNIT_BUDGET, PARLAY_FIXED_UNITS,
   MAX_STRAIGHT_UNITS_PER_PICK, B_GRADE_UNIT_CAP, LEAN_MAX_UNITS, LEAN_MIN_EDGE,
+  BANKROLL_UNITS,
   LEAN_PARLAY_UNITS, PM_SOFT,
   PER_GAME_EXPOSURE_CAP_ENABLED,
 } = config;
@@ -12,8 +13,9 @@ const {
   ratingToConfidence, formatAmerican, americanToImplied, americanToDecimal,
   formatEdgePct, formatMoneylinePick, sortByGradeThenUnits, ratingRank,
   parseEdgeFraction, qualityScore, qualityToRating, pickQualityScore,
-  gradeStakeUnits, cardHasFullGrade, formatGameTimeET, stakeDollars, toWinDollars,
+  cardHasFullGrade, formatGameTimeET, stakeDollars, toWinDollars,
 } = require('./odds_math');
+const { fairPickFields } = require('./prob_anchor');
 const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
@@ -141,8 +143,7 @@ function publishMinEv(c) {
 
 /**
  * Published floor straights. Flat stake EV at mainMinEv (2%). A stale
- * quote stays out. A -110 spread whose edge is 6% to 12% is not stale
- * just because that edge is more than 12% EV.
+ * quote stays out. EV above EV_CAP_ALL is ev-stale for every market.
  */
 function passesPublishFloor(c) {
   if (c && c.marginBiasExtreme) return false;
@@ -183,28 +184,37 @@ function finiteEv(c) {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
-/** Higher stake EV first. An exact EV tie uses edge. */
 /**
- * Quarter Kelly on the calibrated p, as a fraction of a 100u bankroll,
- * rounded to 0.25u, floor 0.25u, cap 1u.
+ * Quarter Kelly on the final p, times BANKROLL_UNITS.
+ * f = 0.25 * (p*dec - 1) / (dec - 1). Nearest 0.25u.
+ * EV <= 0 is 0. A positive stake is at least 0.5u and at most 1.5u.
+ * Not push-adjusted: the previous helper was not push-aware.
  */
 function quarterKellyUnits(p, odds) {
   const prob = Number(p);
   const o = Number(String(odds).replace(/[^0-9.+-]/g, ''));
-  if (!Number.isFinite(prob) || !Number.isFinite(o) || o === 0) return 0.25;
-  const b = o > 0 ? o / 100 : 100 / Math.abs(o);
-  const f = (prob * (b + 1) - 1) / b;
-  const u = Math.round((f / 4) * 100 * 4) / 4;
-  return Math.min(1, Math.max(0.25, u));
+  if (!Number.isFinite(prob) || !Number.isFinite(o) || o === 0) return 0;
+  const dec = o > 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1;
+  const ev = (prob * dec) - 1;
+  if (!(ev > 0) || !(dec > 1)) return 0;
+  const bankroll = Number(BANKROLL_UNITS);
+  const br = Number.isFinite(bankroll) ? bankroll : 100;
+  const raw = 0.25 * (ev / (dec - 1)) * br;
+  const rounded = Math.round(raw * 4) / 4;
+  const cap = Number(MAX_STRAIGHT_UNITS_PER_PICK);
+  const maxU = Number.isFinite(cap) ? cap : 1.5;
+  return Math.min(maxU, Math.max(0.5, rounded));
 }
 
+/** Higher shrunk EV first. Edge is the tiebreak. A PM nudge breaks an exact tie. */
 function compareByEv(a, b) {
-  // Probability edge is the rank. Stake EV breaks a tie inside 0.2
-  // percentage points (compareByEdge) and any exact-edge tie left over.
-  // A plus-money price must not outrank a higher edge.
-  const e = compareByEdge(a, b);
-  if (e !== 0) return e;
-  return finiteEv(b) - finiteEv(a);
+  const evd = finiteEv(b) - finiteEv(a);
+  if (Math.abs(evd) > 1e-12) return evd;
+  const ed = edgeRank(b) - edgeRank(a);
+  if (Math.abs(ed) > 1e-12) return ed;
+  const nd = selectionNudge(b) - selectionNudge(a);
+  if (Math.abs(nd) > 1e-12) return nd;
+  return 0;
 }
 
 function sideKey(c) {
@@ -273,7 +283,9 @@ function eligibleForLeanPool(c) {
   if (ev < 0.0005) return false;
   const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
   if (Number.isFinite(edge) && edge < 0.01 - 1e-12 && ev < 0.01 - 1e-12) return false;
-  const maxEV = Number(config.GATES && config.GATES.maxEV);
+  // EV_CAP_ALL (0.10), not the legacy GATES.maxEV 0.12. Above the cap is
+  // ev-stale: never a lean, and never staked as one.
+  const maxEV = Number(config.EV_CAP_ALL);
   if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   if (!hasRetailLine(c)) return false;
   if (!isPregameRow(c)) return false;
@@ -287,6 +299,8 @@ function eligibleForLeanPool(c) {
 function qualifiesAsLean(c) {
   const ev = Number(c && c.ev);
   if (!(ev > 0)) return false;
+  const cap = Number(config.EV_CAP_ALL);
+  if (Number.isFinite(cap) && ev > cap + 1e-12) return false;
   return eligibleForLeanPool(c);
 }
 
@@ -426,6 +440,18 @@ function isLeanPick(p) {
   return !!(p && p.tier === 'lean');
 }
 
+/**
+ * Full card (a floor straight graded A- or better) parlays 0.5u.
+ * A card whose straights are all leans parlays 0.25u, even when a
+ * letter is A- or better. No full grade is also 0.25u.
+ */
+function publishedParlayUnits(picks) {
+  const rows = (picks || []).filter(Boolean);
+  const leanOnly = rows.length > 0 && rows.every((p) => p.tier === 'lean');
+  if (leanOnly || !cardHasFullGrade(rows)) return LEAN_PARLAY_UNITS;
+  return PARLAY_FIXED_UNITS;
+}
+
 /** Lean stake is at most LEAN_MAX_UNITS. A floor pick is unchanged. */
 function applyLeanUnitCap(pick) {
   if (!isLeanPick(pick)) return pick;
@@ -513,15 +539,12 @@ function toPickObject(c, opts = {}) {
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
-  // Flat stake by grade. Kelly rounding, the cover cap, and drawdown do not
-  // override it. B and every lean stay at 0.5u. The B cap never raises.
-  let units;
-  if (config.marketAnchorOn()) {
-    units = quarterKellyUnits(c.coverProb, c.odds);
-  } else {
-    units = gradeStakeUnits(rating, tier);
-    units = capBGradeStake(units, rating);
-    if (tier === 'lean') units = Number(LEAN_MAX_UNITS);
+  // Quarter Kelly on the final p. The letter above is a label only.
+  // A lean stake is 0.5u. Kelly rounding does not raise it above that.
+  let units = quarterKellyUnits(c.coverProb, c.odds);
+  if (tier === 'lean') {
+    const cap = Number(LEAN_MAX_UNITS);
+    if (Number.isFinite(cap)) units = Math.min(units, cap);
   }
   const evNum = printed.evNum;
   const evStr = printed.evStr;
@@ -568,7 +591,7 @@ function toPickObject(c, opts = {}) {
     homeTeam: c.homeTeam,
     awayTeam: c.awayTeam,
     source: 'omega-vnext',
-    p_model: c.p_model != null ? +Number(c.p_model).toFixed(4) : null,
+    ...fairPickFields(c),
     p_cal: c.coverProb != null && Number.isFinite(Number(c.coverProb)) ? +Number(c.coverProb).toFixed(4) : null,
     modelProjection: c.betProjection != null && Number.isFinite(Number(c.betProjection))
       ? +Number(c.betProjection).toFixed(2)
@@ -627,22 +650,20 @@ function applyDailyCap(picks) {
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (4.5u)
  * - Total ≤ DAILY_UNIT_CAP (5.0u)
  * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
- * Grade B straights are capped at B_GRADE_UNIT_CAP before that trim.
- * A lean is capped at LEAN_MAX_UNITS (0.5u) before that trim. The grade
- * hierarchy may lift a floor stake. It does not lift a lean, and it does
- * not trim a floor stake down to the lean. Preserve quality grades.
+ * Stake is the Kelly unit already on the pick. Grade does not resize it.
+ * Preserve quality grades.
  * Never force-fill to max.
  * Published parlay tickets are not B-capped.
  */
 function applyDailyUnitCap(picks, parlayLegs) {
-  let out = (picks || []).map(p => applyLeanUnitCap(applyBGradeUnitCap({ ...p })));
+  let out = (picks || []).map(p => applyLeanUnitCap({ ...p }));
   let parlays = Array.isArray(parlayLegs)
     ? parlayLegs.map(pl => ({ ...pl, legs: (pl.legs || []).map(l => ({ ...l })) }))
     : [];
 
   // Full card parlays 0.5u. Lean-only parlays 0.25u. A "no qualifying
   // parlay" marker is not a stake.
-  const parlayStake = cardHasFullGrade(out) ? PARLAY_FIXED_UNITS : LEAN_PARLAY_UNITS;
+  const parlayStake = publishedParlayUnits(out);
   for (const pl of parlays) {
     if (pl && (pl.qualifying === false || pl.status === 'no qualifying parlay' || pl.type === 'no-qualifying-parlay')) {
       pl.units = null;
@@ -705,49 +726,9 @@ function applyDailyUnitCap(picks, parlayLegs) {
   const finalStraightBudget = Math.min(STRAIGHT_UNIT_BUDGET, maxStraightsForTotal);
   reduceStraightsTo(finalStraightBudget);
 
-  // A higher quality grade must never carry less stake than a lower one. Use any
-  // remaining budget to lift the better pick first; if that cannot fully resolve
-  // the inversion, trim the lower-grade pick. Grades themselves never change.
-  let straightTotal = straightTotalOf();
-  const ordered = out.map((_, i) => i).sort((a, b) => {
-    const rankDelta = ratingRank(out[a].rating) - ratingRank(out[b].rating);
-    if (rankDelta) return rankDelta;
-    return pickQualityScore(out[b]) - pickQualityScore(out[a]);
-  });
-  for (let hiPos = 0; hiPos < ordered.length; hiPos++) {
-    for (let loPos = hiPos + 1; loPos < ordered.length; loPos++) {
-      const hi = out[ordered[hiPos]];
-      const lo = out[ordered[loPos]];
-      if (ratingRank(hi.rating) >= ratingRank(lo.rating)) continue;
-      let hiUnits = parseU(hi.units);
-      let loUnits = parseU(lo.units);
-      if (hiUnits >= loUnits) continue;
-      // A B is already at or under the post-Kelly cap. Do not lift it.
-      if (isGradeB(hi.rating || hi.qualityGrade)) continue;
-      // A lean stays at or under 0.5u. Do not lift it, and do not trim the
-      // lower-grade floor down to the lean.
-      if (isLeanPick(hi)) continue;
-
-      const headroom = Math.max(0, finalStraightBudget - straightTotal);
-      const lift = Math.floor(Math.min(loUnits - hiUnits, headroom, Math.max(0, MAX_STRAIGHT_UNITS_PER_PICK - hiUnits)) * 4 + 1e-9) / 4;
-      if (lift > 0) {
-        hiUnits += lift;
-        hi.units = fmtU(hiUnits);
-        straightTotal += lift;
-      }
-      if (hiUnits < loUnits) {
-        lo.units = fmtU(hiUnits);
-        straightTotal -= (loUnits - hiUnits);
-      }
-    }
-  }
-
-  // Hierarchy trims can only lower a B. Re-apply so a lift cannot undo the cap.
-  out = out.map(applyBGradeUnitCap);
-  // A parlay leg puts the whole ticket at risk on that game. Trim the straight
-  // after the hierarchy lift so the lift cannot put the game back over the cap.
+  // Stake is the Kelly unit already on the pick. Grade does not resize it.
+  // Same-game exposure still trims a straight. The parlay stake is not cut.
   out = capSameGameExposure(out, parlays);
-  out = out.map(applyLeanUnitCap);
   out = sortByGradeThenUnits(out);
   // v12.3.25: parlay legs copy the capped straights' units.
   const legKey = (x) => [x.game || x.matchup || '', x.pick || x.selection || '', x.market || ''].join('|');
@@ -835,6 +816,7 @@ module.exports = {
   printedEdgeEv,
   applyDailyCap,
   applyDailyUnitCap,
+  publishedParlayUnits,
   capSameGameExposure,
   matchupKey,
   formatMoneylinePick,

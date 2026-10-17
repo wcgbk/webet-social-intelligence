@@ -2,7 +2,7 @@
 /**
  * NCAAF keeps the raw model point. NCAAF_MODEL_WEIGHT is 1 on ML, spread,
  * and total, so a Pinnacle line does not pull the pick forecast.
- * NFL spread/ML stay at 0.5 and NFL totals stay at 0.10. No network.
+ * NFL-CHANGE: pure point weight is 1. NFL modelRawP spread stays at 0.5. No network.
  */
 const assert = require('assert');
 const path = require('path');
@@ -15,7 +15,7 @@ const { blendWithMarket, totalDetail, spreadDetail, mlDetail, pureForecastPoint 
 const { collectMarketOutcomes, noVigPinnacleImplied } = require(path.join(root, 'edge'));
 
 assert.deepStrictEqual(config.NCAAF_MODEL_WEIGHT, { ml: 1, spread: 1, total: 1 });
-assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 0.10);
+assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 1);
 assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
 
 assert.strictEqual(pureForecastPoint(24.5, 48, 1), 24.5);
@@ -174,15 +174,15 @@ const nflOver = nflRows.find((c) => c.market === 'Total' && c.side.startsWith('O
 const nflHomeSpread = nflRows.find((c) => c.market === 'Spread' && c.side.startsWith(nflHome));
 const nflHomeMl = nflRows.find((c) => c.market === 'Moneyline' && c.side === nflHome);
 assert.ok(nflOver && nflHomeSpread && nflHomeMl);
-const nflTotalForecast = pureForecastPoint(nflOver.modelTotalRaw, nflOver.marketLine, 0.10);
-const nflSpreadForecast = pureForecastPoint(nflHomeSpread.modelMarginRaw, nflHomeSpread.marketLine == null ? null : -nflHomeSpread.marketLine, 0.5);
-const nflMlForecast = pureForecastPoint(nflHomeMl.modelMarginRaw, nflHomeMl.marketLine == null ? null : -nflHomeMl.marketLine, 0.5);
+const nflTotalForecast = pureForecastPoint(nflOver.modelTotalRaw, nflOver.marketLine, 1);
+const nflSpreadForecast = pureForecastPoint(nflHomeSpread.modelMarginRaw, nflHomeSpread.marketLine == null ? null : -nflHomeSpread.marketLine, 1);
+const nflMlForecast = pureForecastPoint(nflHomeMl.modelMarginRaw, nflHomeMl.marketLine == null ? null : -nflHomeMl.marketLine, 1);
 assert.strictEqual(nflOver.betProjection, nflTotalForecast);
 assert.strictEqual(nflHomeSpread.betProjection, nflSpreadForecast);
 assert.strictEqual(nflHomeMl.betProjection, nflMlForecast);
-assert.notStrictEqual(nflOver.betProjection, nflOver.modelTotalRaw);
-assert.notStrictEqual(nflHomeSpread.betProjection, nflHomeSpread.modelMarginRaw);
-assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 0.10);
+assert.strictEqual(nflOver.betProjection, Math.round(nflOver.modelTotalRaw * 10000) / 10000);
+assert.strictEqual(nflHomeSpread.betProjection, Math.round(nflHomeSpread.modelMarginRaw * 10000) / 10000);
+assert.strictEqual(config.NFL_TOTAL_MODEL_WEIGHT, 1);
 
 // Georgia Southern home margin from the 10:00 board. Weight 1 keeps -8.5902.
 const gsHome = pureForecastPoint(-8.5902, -3.5, 1);

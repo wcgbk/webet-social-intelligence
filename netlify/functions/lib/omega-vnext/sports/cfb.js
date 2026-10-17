@@ -198,6 +198,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null, modelRawP: priced.p, modelPureP, projMethod: methods.ml, uncertainty,
+        ratingN: nGames,
         consensusLine: null, modelProjection: +modelMargin.toFixed(2), betProjection: homeForecast,
         gameDay: gameDayMeta,
         engineSoft,
@@ -230,6 +231,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line: b.point, modelRawP: priced.p, modelPureP, projMethod: methods.spread, uncertainty,
+        ratingN: nGames,
         consensusLine: b.point, modelProjection: +modelMargin.toFixed(2), betProjection: homeForecast,
         gameDay: gameDayMeta,
         engineSoft,
@@ -258,6 +260,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away, matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: `${b.side} ${b.point}`, line: b.point, modelRawP: priced.p, modelPureP,
+        ratingN: nGames,
         projMethod: tempo.applied ? `${methods.total}-tempo` : methods.total,
         uncertainty: uncertainty + env.totalUncBump,
         consensusLine: b.point, modelProjection: +modelTotal.toFixed(2), betProjection: totalForecast,

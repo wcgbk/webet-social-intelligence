@@ -72,7 +72,7 @@ function side(extra) {
     ...extra,
   };
 }
-assert.strictEqual(gateReason(side({ edgePct: 0.01 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0.01 }), asOf), 'edge-floor-se');
 assert.strictEqual(gateReason(side({ edgePct: 0.02 }), asOf), null);
 assert.strictEqual(gateReason(side({ edgePct: 0.029, ev: 0.05 }), asOf), null);
 assert.strictEqual(gateReason(side({ edgePct: minEdgeFor(-110, 0.15) }), asOf), null);
@@ -83,7 +83,7 @@ assert.strictEqual(gateReason(side({ edgePct: 0.03, uncertainty: 0.30 }), asOf),
 assert.strictEqual(gateReason(side({
   odds: 200, coverProb: 0.30, edgePct: 0.04, ev: 0.05, side: 'B ML', market: 'Moneyline', line: null,
 }), asOf), null);
-assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.04 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.04 }), asOf), 'edge-floor-se');
 assert.strictEqual(gateReason(side({ ev: -0.01, edgePct: 0.04 }), asOf), 'ev-floor');
 {
   const missing = side();
@@ -105,15 +105,16 @@ const mixed = applyGates([
   side({ edgePct: 0.01, side: 'Thin +3', matchup: 'C @ D', homeTeam: 'D', awayTeam: 'C' }),
   side({ edgePct: 0.04, side: 'Fat +3', matchup: 'E @ F', homeTeam: 'F', awayTeam: 'E' }),
 ], asOf);
-assert.strictEqual(mixed.yesPool.length, 2);
+assert.strictEqual(mixed.yesPool.length, 1);
 assert.ok(mixed.yesPool.some((c) => c.side === 'Fat +3'));
-assert.ok(mixed.yesPool.some((c) => c.side === 'Thin +3'));
-assert.strictEqual(mixed.leanPool.length, 0);
+assert.strictEqual(mixed.leanPool.length, 1);
+assert.strictEqual(mixed.leanPool[0].side, 'Thin +3');
+assert.strictEqual(mixed.leanPool[0].leanReason, 'edge-floor-se');
 assert.strictEqual(mixed.rejected.length, 0);
 {
   const mixedCard = selectStraights(mixed.yesPool, 3, mixed.leanPool);
   assert.strictEqual(mixedCard.length, 2);
-  assert.ok(mixedCard.every((c) => c.tier === 'floor'));
+  assert.deepStrictEqual(mixedCard.map((c) => c.tier), ['floor', 'lean']);
 }
 
 const floorA = side({ edgePct: 0.05, ev: 0.06, side: 'Floor A' });
@@ -125,7 +126,7 @@ const leanRow = side({
 const leanGated = applyGates([leanRow], asOf);
 assert.strictEqual(leanGated.yesPool.length, 0);
 assert.strictEqual(leanGated.leanPool.length, 1);
-assert.strictEqual(leanGated.leanPool[0].leanReason, 'ev-floor');
+assert.strictEqual(leanGated.leanPool[0].leanReason, 'edge-floor-se');
 const filled = selectStraights([floorA, floorB], 3, [leanRow]);
 assert.strictEqual(filled.length, 3);
 assert.deepStrictEqual(filled.map(c => c.tier), ['floor', 'floor', 'lean']);
@@ -143,8 +144,9 @@ assert.strictEqual(leansOnly.length, 2);
 assert.deepStrictEqual(leansOnly.map(c => c.side), ['Lean C', 'Lean D']);
 assert.ok(leansOnly.every(c => c.tier === 'lean'));
 const edgeLean = applyGates([side({ edgePct: 0.0, ev: 0.05 })], asOf);
-assert.strictEqual(edgeLean.yesPool.length, 1);
-assert.strictEqual(edgeLean.leanPool.length, 0);
+assert.strictEqual(edgeLean.yesPool.length, 0);
+assert.strictEqual(edgeLean.leanPool.length, 1);
+assert.strictEqual(edgeLean.leanPool[0].leanReason, 'edge-floor-se');
 const belowLean = applyGates([side({ edgePct: 0.02, ev: 0.01 })], asOf);
 assert.strictEqual(belowLean.leanPool.length, 1);
 assert.strictEqual(belowLean.leanPool[0].leanReason, 'ev-floor');

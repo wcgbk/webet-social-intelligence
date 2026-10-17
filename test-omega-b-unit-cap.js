@@ -48,8 +48,9 @@ assert.ok(!/B_GRADE_UNIT_CAP/.test(oddsSrc), 'Kelly helpers stay uncapped');
 assert.ok(!/B_GRADE_UNIT_CAP/.test(parlaySrc), 'parlay path is not the B cap');
 assert.ok(/const stake = PARLAY_FIXED_UNITS/.test(parlaySrc));
 const rateAt = selectSrc.indexOf('const rating = qualityToRating');
-const capAt = selectSrc.indexOf('units = capBGradeStake(units, rating)');
-assert.ok(rateAt > 0 && capAt > rateAt, 'cap runs after the edge grade exists');
+const kellyAt = selectSrc.indexOf('units = quarterKellyUnits(c.coverProb, c.odds)');
+assert.ok(rateAt > 0 && kellyAt > rateAt, 'Kelly stake is set after the edge grade label');
+assert.ok(!selectSrc.includes('units = gradeStakeUnits'), 'grade table is not the stake source');
 
 function candidate(overrides) {
   return {
@@ -81,7 +82,7 @@ function stake(pick) {
   assert.strictEqual(pick.edgePct, '0.8%');
   assert.strictEqual(pick.ev, '3.6%');
   assert.strictEqual(kellyUnits(0.5427), 0.5);
-  assert.strictEqual(pick.units, '0.5u');
+  assert.strictEqual(pick.units, `${select.quarterKellyUnits(0.5427, -110)}u`);
   assert.strictEqual(pick.modelVersion, config.MODEL_VERSION);
 }
 
@@ -94,7 +95,7 @@ function stake(pick) {
   assert.strictEqual(pick.rating, 'b');
   assert.strictEqual(math.qualityToRating(0.015, 0, 0.12), 'b');
   assert.strictEqual(kellyUnits(0.58), 1.5);
-  assert.strictEqual(pick.units, '0.5u');
+  assert.strictEqual(pick.units, `${select.quarterKellyUnits(0.58, -110)}u`);
 }
 
 // A B already at 0.5u stays 0.5u. A smaller positive Kelly floors at 0.5u. The B cap does not raise it.
@@ -102,12 +103,12 @@ function stake(pick) {
   const atCap = select.toPickObject(candidate({ coverProb: 0.533, ev: 0.018, edgePct: 0.008 }));
   assert.strictEqual(atCap.rating, 'b');
   assert.strictEqual(kellyUnits(0.533), 0.5);
-  assert.strictEqual(atCap.units, '0.5u');
+  assert.strictEqual(atCap.units, `${select.quarterKellyUnits(0.533, -110)}u`);
 
   const under = select.toPickObject(candidate({ coverProb: 0.527, ev: 0.006, edgePct: 0.008 }));
   assert.strictEqual(under.rating, 'b');
   assert.strictEqual(kellyUnits(0.527), 0.5);
-  assert.strictEqual(under.units, '0.5u');
+  assert.strictEqual(under.units, `${select.quarterKellyUnits(0.527, -110)}u`);
   assert.ok(stake(under) <= stake(atCap));
 }
 
@@ -120,13 +121,13 @@ function stake(pick) {
   assert.strictEqual(amin.rating, 'aminus');
   assert.strictEqual(amin.qualityGrade, 'aminus');
   assert.strictEqual(kellyUnits(0.58), 1.5);
-  assert.strictEqual(amin.units, '0.75u');
+  assert.strictEqual(amin.units, `${select.quarterKellyUnits(0.58, -110)}u`);
 
   const floor = select.toPickObject(candidate({
     coverProb: 0.58, ev: 0.05, edgePct: 0.02,
   }));
   assert.strictEqual(floor.rating, 'aminus');
-  assert.strictEqual(floor.units, '0.75u');
+  assert.strictEqual(floor.units, `${select.quarterKellyUnits(0.58, -110)}u`);
 }
 
 // A+ whose Kelly stake is 1.5u (above the B cap) is unchanged.
@@ -145,23 +146,24 @@ function stake(pick) {
 {
   const bDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.008 }), { drawdown: true });
   assert.strictEqual(bDraw.rating, 'b');
-  assert.strictEqual(bDraw.units, '0.5u');
+  assert.strictEqual(bDraw.units, `${select.quarterKellyUnits(0.58, -110)}u`);
   const aDraw = select.toPickObject(candidate({ coverProb: 0.58, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(aDraw.rating, 'aminus');
-  assert.strictEqual(aDraw.units, '0.75u');
+  assert.strictEqual(aDraw.units, `${select.quarterKellyUnits(0.58, -110)}u`);
   const cut = select.toPickObject(candidate({
     coverProb: 0.60, ev: 0.05, edgePct: 0.04,
   }), { drawdown: true, perPickCap: 3.5 });
   assert.strictEqual(cut.rating, 'a');
-  assert.strictEqual(cut.units, '1u');
+  assert.strictEqual(cut.units, `${select.quarterKellyUnits(0.60, -110)}u`);
   const floored = select.toPickObject(candidate({ coverProb: 0.55, ev: 0.05, edgePct: 0.025 }), { drawdown: true });
   assert.strictEqual(kellyUnits(0.55), 0.5);
   assert.strictEqual(floored.rating, 'aminus');
-  assert.strictEqual(floored.units, '0.75u');
+  assert.strictEqual(floored.units, `${select.quarterKellyUnits(0.55, -110)}u`);
   const lean = select.toPickObject(candidate({
     coverProb: 0.70, ev: 0.02, edgePct: 0.02, tier: 'lean',
   }), { drawdown: true, perPickCap: 3.5 });
   assert.strictEqual(lean.tier, 'lean');
+  assert.strictEqual(select.quarterKellyUnits(0.70, -110), 1.5);
   assert.strictEqual(lean.units, '0.5u');
   assert.strictEqual(select.drawdownActive(null), false);
   assert.strictEqual(select.drawdownActive([]), false);
@@ -186,7 +188,7 @@ function stake(pick) {
   assert.strictEqual(byPick['A+'].rating, 'aplus');
   assert.strictEqual(byPick['A-'].units, '1.25u');
   assert.strictEqual(byPick['A-'].rating, 'aminus');
-  assert.strictEqual(byPick.B.units, '0.5u');
+  assert.strictEqual(byPick.B.units, '1.25u');
   assert.strictEqual(byPick.B.rating, 'b');
   const already = select.applyDailyUnitCap([
     { pick: 'B at cap', rating: 'b', qualityGrade: 'b', units: '0.5u', edgePct: '0.8%', qualityScore: 0.008 },
@@ -206,7 +208,7 @@ function stake(pick) {
   const upper = select.applyDailyUnitCap([
     { pick: 'B', rating: 'B', units: '1u', qualityScore: 0.008 },
   ], null);
-  assert.strictEqual(upper.picks[0].units, '0.5u');
+  assert.strictEqual(upper.picks[0].units, '1u');
   assert.strictEqual(upper.picks[0].rating, 'B');
 }
 
@@ -234,7 +236,7 @@ function stake(pick) {
   const sameLegsAsStraights = pool.map(c => select.toPickObject(c));
   for (const straight of sameLegsAsStraights) {
     assert.strictEqual(straight.rating, 'b');
-    assert.strictEqual(straight.units, '0.5u');
+    assert.strictEqual(straight.units, `${select.quarterKellyUnits(0.58, -110)}u`);
   }
   const mains = [
     candidate({
@@ -325,7 +327,7 @@ function stake(pick) {
     },
   ], null);
   const floors = Object.fromEntries(floorLift.picks.map(p => [p.pick, p]));
-  assert.strictEqual(floors['Floor A'].units, '0.75u');
+  assert.strictEqual(floors['Floor A'].units, '0.5u');
   assert.strictEqual(floors['Floor A-'].units, '0.75u');
 }
 

@@ -1,21 +1,24 @@
 'use strict';
 
 /**
- * NHL and MLB post-calibration anchor, then the published edge.
+ * Post-calibration anchor, then the published edge.
  *
- * p_final = w * p_model + (1 - w) * p_fair
- * w is MARKET_ANCHOR_MODEL_WEIGHT (1 = model, 0 = market).
+ * p_final = w(sport, market) * modelPureP + (1 - w) * p_fair
+ * w = 1 is the model. w = 0 is the market. NBA is absent and is not touched.
+ * modelPureP already carries the rating-error SD. coverProb is the fallback
+ * only when modelPureP is missing, so calibration is not mixed in again.
  * p_fair is the Pinnacle power no-vig on this side at this line, else the
- * DraftKings two-way no-vig (power past -250/+210, otherwise proportional).
- * No fair: the row stays on p_model and anchorFairSource is 'none'.
- * Other sports are not in the weight table and are not touched.
+ * DraftKings two-way no-vig. No fair: the row is not dropped. coverProb
+ * stays, and anchorFairSource is 'none'.
  *
  * Published edge = p - vigged implied(odds).
  * Published EV = p * decimal(odds) - 1.
  * This is not the marketAnchorOn() K-table. That switch stays off.
  */
 
-const { MARKET_ANCHOR_MODEL_WEIGHT } = require('./config');
+const {
+  MARKET_ANCHOR_MODEL_WEIGHT, ratingErrorSd, effectiveSd,
+} = require('./config');
 const { americanToImplied, americanToDecimal, formatEdgePct, noVigTwoWay } = require('./odds_math');
 const { powerFair } = require('./pure_model');
 
@@ -25,15 +28,118 @@ function finiteProb(v) {
   return n;
 }
 
-function modelWeightFor(sport) {
+function sportAnchored(sport) {
+  const table = MARKET_ANCHOR_MODEL_WEIGHT || {};
+  return Object.prototype.hasOwnProperty.call(table, String(sport || '').toUpperCase());
+}
+
+/** Per sport and market. A bare number in the table applies to every market. */
+function modelWeightFor(sport, market) {
   const table = MARKET_ANCHOR_MODEL_WEIGHT || {};
   const key = String(sport || '').toUpperCase();
   if (!Object.prototype.hasOwnProperty.call(table, key)) return null;
-  const w = Number(table[key]);
+  const entry = table[key];
+  let w;
+  if (entry != null && typeof entry === 'object') {
+    const mk = marketFamily(market);
+    if (!Object.prototype.hasOwnProperty.call(entry, mk)) return null;
+    w = Number(entry[mk]);
+  } else {
+    w = Number(entry);
+  }
   if (!Number.isFinite(w)) return null;
   if (w < 0) return 0;
   if (w > 1) return 1;
   return w;
+}
+
+function normalPdf(z) {
+  return Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
+}
+
+/** Acklam rational approximation. p outside (0, 1) returns null. */
+function normalQuantile(p) {
+  const x = Number(p);
+  if (!(x > 0) || !(x < 1)) return null;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const plow = 0.02425;
+  const phigh = 1 - plow;
+  let q;
+  if (x < plow) {
+    q = Math.sqrt(-2 * Math.log(x));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (x > phigh) {
+    q = Math.sqrt(-2 * Math.log(1 - x));
+    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  q = x - 0.5;
+  const r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
+    / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
+/**
+ * SE of the anchored p. w * phi(z) * SD_rating / SD_eff.
+ * z is the standard normal quantile of the model probability.
+ * Missing n uses 6. A zero rating SD (NBA) returns 0.
+ */
+function ratingSeOf(row) {
+  if (!row) return 0;
+  const market = row.market || row.betType;
+  const kind = /total/i.test(String(market || '')) ? 'total' : 'margin';
+  const nRaw = row.ratingN != null ? row.ratingN : row.nGames;
+  const n = Number(nRaw);
+  const usedN = Number.isFinite(n) && n > 0 ? n : 6;
+  const sdR = ratingErrorSd(row.sport, kind, usedN);
+  const sdE = effectiveSd(row.sport, kind, usedN);
+  if (!(sdR > 0) || !(sdE > 0)) return 0;
+  const w = modelWeightFor(row.sport, market);
+  if (w == null) return 0;
+  const pm = finiteProb(row.modelPureP);
+  const p = pm != null ? pm : (finiteProb(row.p_model) != null ? finiteProb(row.p_model) : finiteProb(row.coverProb));
+  if (p == null) return 0;
+  const z = normalQuantile(p);
+  if (z == null || !Number.isFinite(z)) return 0;
+  return w * normalPdf(z) * sdR / sdE;
+}
+
+function pctString(p) {
+  if (p == null || !Number.isFinite(Number(p))) return null;
+  return `${(Number(p) * 100).toFixed(1)}%`;
+}
+
+function fairNumber(c) {
+  const direct = finiteProb(c && c.p_fair);
+  if (direct != null) return direct;
+  const text = c && c.fairP;
+  if (text == null || text === '') return null;
+  const n = Number(String(text).replace('%', ''));
+  if (!Number.isFinite(n)) return null;
+  const p = String(text).includes('%') || n > 1 ? n / 100 : n;
+  return finiteProb(p);
+}
+
+/** Printed fair p, source, EV-at-fair, raw model p, and the anchor weight. */
+function fairPickFields(c) {
+  const fair = fairNumber(c);
+  const dec = americanToDecimal(c && (c.odds != null ? c.odds : c.oddsStr));
+  const evFair = fair != null && dec != null ? (fair * dec) - 1 : null;
+  const raw = c && c.p_model != null ? Number(c.p_model) : null;
+  const weight = c && c.anchorWeight != null ? Number(c.anchorWeight) : null;
+  return {
+    fairP: pctString(fair),
+    fairSource: (c && c.anchorFairSource) || 'none',
+    evAtFair: evFair == null || !Number.isFinite(evFair) ? null : formatEdgePct(evFair),
+    p_model: raw != null && Number.isFinite(raw) ? +raw.toFixed(4) : null,
+    p_fair: fair != null ? +Number(fair).toFixed(6) : null,
+    modelWeight: weight != null && Number.isFinite(weight) ? weight : null,
+  };
 }
 
 /** w = 1 returns pModel. w = 0 returns pFair. */
@@ -130,23 +236,27 @@ function draftkingsFair(c, opp) {
 }
 
 /**
- * Anchor NHL and MLB coverProb. Other sports return the same row.
- * Does not drop a row.
+ * Anchor coverProb from modelPureP and the fair price.
+ * A sport missing from the weight table is returned unchanged.
+ * No fair: the row is kept, coverProb is not replaced, anchorFairSource is 'none'.
+ * The incoming coverProb is kept as p_calibrated. It does not feed final p
+ * when a fair price is present.
  */
 function applyMarketAnchor(candidates) {
   const rows = candidates || [];
   const groups = new Map();
   for (const c of rows) {
-    if (!c || modelWeightFor(c.sport) == null) continue;
+    if (!c || !sportAnchored(c.sport)) continue;
     const key = pairKey(c);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(c);
   }
   return rows.map((c) => {
     if (!c) return c;
-    const w = modelWeightFor(c.sport);
+    const w = modelWeightFor(c.sport, c.market);
     if (w == null) return c;
-    const pModel = finiteProb(c.coverProb);
+    const fromPure = finiteProb(c.modelPureP);
+    const pModel = fromPure != null ? fromPure : finiteProb(c.coverProb);
     let pFair = pinnacleFair(c);
     let source = pFair != null ? 'pinnacle' : 'none';
     if (pFair == null) {
@@ -157,11 +267,18 @@ function applyMarketAnchor(candidates) {
         source = 'draftkings';
       }
     }
+    const se = ratingSeOf({
+      ...c,
+      modelPureP: pModel != null ? pModel : c.modelPureP,
+      anchorWeight: w,
+    });
     const stamped = {
-      p_model: pModel != null ? pModel : (c.p_model != null ? c.p_model : null),
+      p_model: pModel != null ? +Number(pModel).toFixed(6) : (c.p_model != null ? c.p_model : null),
       p_fair: pFair != null ? +Number(pFair).toFixed(6) : null,
+      p_calibrated: finiteProb(c.coverProb),
       anchorWeight: w,
       anchorFairSource: source,
+      ratingSe: Number.isFinite(se) ? se : 0,
     };
     if (pModel == null || pFair == null) {
       return { ...c, ...stamped, anchorFairSource: 'none', p_fair: null };
@@ -222,4 +339,9 @@ module.exports = {
   priceEdgesAtBet,
   pinnacleFair,
   modelWeightFor,
+  sportAnchored,
+  ratingSeOf,
+  normalPdf,
+  normalQuantile,
+  fairPickFields,
 };

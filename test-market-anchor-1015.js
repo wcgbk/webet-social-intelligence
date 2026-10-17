@@ -66,8 +66,8 @@ assert.strictEqual(reasonFn({
   ...row, ev: 0.13, coverProb: 0.7, edgePct: 0.1, pureModelPriced: true, liquid: true,
 }), 'ev-stale');
 
-assert.strictEqual(quarterKellyUnits(0.55, -110), 1);
-assert.strictEqual(quarterKellyUnits(0.53, -110), 0.25);
+assert.strictEqual(quarterKellyUnits(0.55, -110), 1.5);
+assert.strictEqual(quarterKellyUnits(0.53, -110), 0.5);
 assert.strictEqual(quarterKellyUnits(0.54, -110), 0.75);
 
 const narrate = require(D + 'narrate');

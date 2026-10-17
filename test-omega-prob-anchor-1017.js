@@ -14,7 +14,14 @@ const {
 assert.strictEqual(config.MODEL_VERSION, 'v12.4.0-webetai-pure');
 assert.ok(String(config.MODEL_NOTES).startsWith('v12.4.0-webetai-pure:'));
 assert.strictEqual(config.marketAnchorOn(), false);
-assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, { NHL: 0.25, MLB: 0.25 });
+assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
+  NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
+  NFL: { spread: 0.25, ml: 0.25, total: 0.10 },
+  NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
+  MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
+});
+assert.strictEqual(config.RATING_ERROR_SD.NFL.margin, 8);
+assert.strictEqual(config.RATING_ERROR_SD.NFL.total, 6);
 assert.strictEqual(config.RATING_ERROR_SD.NCAAF.margin, 8);
 assert.strictEqual(config.RATING_ERROR_SD.NCAAF.total, 6);
 assert.strictEqual(config.RATING_ERROR_SD.NHL.margin, 0.5 * config.SPORT_SPREAD_STD.NHL);
@@ -39,11 +46,12 @@ for (const sport of ['NCAAF', 'NHL', 'MLB']) {
     assert.ok(Math.abs(full - Math.sqrt(game * game + base * base)) < 1e-12);
   }
 }
-assert.strictEqual(config.effectiveSd('NFL', 'margin', 6), config.SPORT_SPREAD_STD.NFL);
-assert.strictEqual(config.effectiveSd('NFL', 'total', 17), config.SPORT_TOTAL_STD.NFL);
+assert.ok(Math.abs(config.effectiveSd('NFL', 'margin', 6) - Math.sqrt(13.5 * 13.5 + 8 * 8)) < 1e-12);
+assert.ok(config.effectiveSd('NFL', 'total', 17) < config.effectiveSd('NFL', 'total', 6));
 assert.strictEqual(config.effectiveSd('NBA', 'margin'), config.SPORT_SPREAD_STD.NBA);
 assert.strictEqual(config.effectiveSd('NBA', 'total', 40), config.SPORT_TOTAL_STD.NBA);
-assert.strictEqual(config.ratingErrorSd('NFL', 'margin', 3), 0);
+assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 3) - 8) < 1e-12);
+assert.ok(Math.abs(config.ratingErrorSd('NFL', 'margin', 17) - 8 * Math.sqrt(6 / 17)) < 1e-12);
 assert.strictEqual(config.ratingErrorSd('NBA', 'total'), 0);
 
 assert.strictEqual(anchorProbability(0.60, 0.40, 0), 0.40);
@@ -75,9 +83,10 @@ assert.ok(Math.abs(pinFair - 0.5) < 1e-12, pinFair);
 const [anchoredNhl] = applyMarketAnchor([pin]);
 assert.strictEqual(anchoredNhl.anchorFairSource, 'pinnacle');
 assert.strictEqual(anchoredNhl.anchorWeight, 0.25);
-assert.strictEqual(anchoredNhl.p_model, 0.60);
+assert.strictEqual(anchoredNhl.p_model, 0.71);
 assert.strictEqual(anchoredNhl.p_fair, 0.5);
-assert.ok(Math.abs(anchoredNhl.coverProb - 0.525) < 1e-12, anchoredNhl.coverProb);
+assert.ok(Math.abs(anchoredNhl.coverProb - (0.25 * 0.71 + 0.75 * 0.5)) < 1e-12, anchoredNhl.coverProb);
+assert.strictEqual(anchoredNhl.p_calibrated, 0.6);
 assert.notStrictEqual(anchoredNhl.coverProb, anchoredNhl.modelPureP);
 assert.ok(Math.abs(anchoredNhl.p_fair - 0.99) > 0.2);
 
@@ -89,7 +98,7 @@ assert.ok(lopFair != null && Math.abs(lopFair - 0.99) > 0.2);
 const [lop] = applyMarketAnchor([lopsided]);
 assert.strictEqual(lop.anchorFairSource, 'pinnacle');
 assert.strictEqual(lop.p_fair, +Number(lopFair).toFixed(6));
-assert.ok(Math.abs(lop.coverProb - anchorProbability(0.60, lopFair, 0.25)) < 1e-12);
+assert.ok(Math.abs(lop.coverProb - anchorProbability(0.71, lopFair, 0.25)) < 1e-12);
 
 function dkSide(sport, side, line, p) {
   return {
@@ -116,19 +125,24 @@ assert.strictEqual(mlbHome.p_model, 0.60);
 assert.ok(Math.abs(mlbHome.p_fair - 0.5) < 1e-9);
 assert.ok(Math.abs(mlbHome.coverProb - 0.525) < 1e-12, mlbHome.coverProb);
 
-const ncaaf = { sport: 'NCAAF', coverProb: 0.62, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
-const nfl = { sport: 'NFL', coverProb: 0.62, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
-const [ncaafOut, nflOut] = applyMarketAnchor([ncaaf, nfl]);
-assert.strictEqual(ncaafOut, ncaaf);
-assert.strictEqual(nflOut, nfl);
-assert.strictEqual(ncaafOut.anchorFairSource, undefined);
-assert.strictEqual(nflOut.coverProb, 0.62);
+const ncaaf = { sport: 'NCAAF', market: 'Spread', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
+const nfl = { sport: 'NFL', market: 'Total', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
+const nba = { sport: 'NBA', market: 'Spread', coverProb: 0.62, modelPureP: 0.70, odds: -110, pinnacleSide: { american: -110, oppAmerican: -110 } };
+const [ncaafOut, nflOut, nbaOut] = applyMarketAnchor([ncaaf, nfl, nba]);
+assert.strictEqual(ncaafOut.anchorFairSource, 'pinnacle');
+assert.strictEqual(ncaafOut.anchorWeight, 0.25);
+assert.strictEqual(nflOut.anchorFairSource, 'pinnacle');
+assert.strictEqual(nflOut.anchorWeight, 0.10);
+assert.ok(Math.abs(ncaafOut.coverProb - (0.25 * 0.70 + 0.75 * 0.5)) < 1e-12);
+assert.ok(Math.abs(nflOut.coverProb - (0.10 * 0.70 + 0.90 * 0.5)) < 1e-12);
+assert.strictEqual(nbaOut, nba);
+assert.strictEqual(nbaOut.anchorFairSource, undefined);
 
 const [none] = applyMarketAnchor([nhlRow()]);
 assert.strictEqual(none.anchorFairSource, 'none');
 assert.strictEqual(none.coverProb, 0.60);
 assert.strictEqual(none.p_fair, null);
-assert.strictEqual(none.p_model, 0.60);
+assert.strictEqual(none.p_model, 0.71);
 assert.strictEqual(none.anchorWeight, 0.25);
 
 const p = 0.55;

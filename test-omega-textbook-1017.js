@@ -1,0 +1,154 @@
+'use strict';
+// Textbook path: fair anchor, SE edge floor, 10% EV cap, quarter Kelly, parlay haircut.
+const assert = require('assert');
+const config = require('./netlify/functions/lib/omega-vnext/config');
+const {
+  anchorProbability, modelWeightFor, ratingSeOf, normalPdf, normalQuantile,
+  fairPickFields, applyMarketAnchor,
+} = require('./netlify/functions/lib/omega-vnext/prob_anchor');
+const {
+  stakeQuoteIsStale, failsEdgeFloorSe, edgeFloorSe,
+} = require('./netlify/functions/lib/omega-vnext/edge_floor');
+const { gateReason } = require('./netlify/functions/lib/omega-vnext/gates');
+const { quarterKellyUnits, toPickObject } = require('./netlify/functions/lib/omega-vnext/select');
+const {
+  stakeDollars, americanToImplied, americanToDecimal, formatEdgePct,
+} = require('./netlify/functions/lib/omega-vnext/odds_math');
+const { comboStats } = require('./netlify/functions/lib/omega-vnext/parlay');
+
+assert.strictEqual(anchorProbability(0.62, 0.50, 0), 0.50);
+assert.strictEqual(anchorProbability(0.62, 0.50, 1), 0.62);
+assert.strictEqual(anchorProbability(0.62, 0.50, 0.25), 0.53);
+
+assert.deepStrictEqual(config.MARKET_ANCHOR_MODEL_WEIGHT, {
+  NCAAF: { spread: 0.25, ml: 0.25, total: 0.10 },
+  NFL: { spread: 0.25, ml: 0.25, total: 0.10 },
+  NHL: { spread: 0.25, ml: 0.25, total: 0.25 },
+  MLB: { spread: 0.25, ml: 0.25, total: 0.25 },
+});
+assert.strictEqual(modelWeightFor('NCAAF', 'Spread'), 0.25);
+assert.strictEqual(modelWeightFor('NCAAF', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('NCAAF', 'Total'), 0.10);
+assert.strictEqual(modelWeightFor('NFL', 'Spread'), 0.25);
+assert.strictEqual(modelWeightFor('NFL', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('NFL', 'Total'), 0.10);
+assert.strictEqual(modelWeightFor('NHL', 'Puck Line'), 0.25);
+assert.strictEqual(modelWeightFor('NHL', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('NHL', 'Total'), 0.25);
+assert.strictEqual(modelWeightFor('MLB', 'Run Line'), 0.25);
+assert.strictEqual(modelWeightFor('MLB', 'Moneyline'), 0.25);
+assert.strictEqual(modelWeightFor('MLB', 'Total'), 0.25);
+assert.strictEqual(modelWeightFor('NBA', 'Spread'), null);
+
+assert.strictEqual(config.EV_CAP_ALL, 0.10);
+assert.strictEqual(stakeQuoteIsStale({ market: 'Spread', odds: -110, ev: 0.11 }), true);
+assert.strictEqual(stakeQuoteIsStale({ market: 'Total', odds: -110, ev: 0.11 }), true);
+assert.strictEqual(stakeQuoteIsStale({ market: 'Moneyline', odds: -110, ev: 0.11 }), true);
+assert.strictEqual(stakeQuoteIsStale({ market: 'Spread', odds: -110, ev: 0.10 }), false);
+
+const asOf = { cardDate: '2026-10-13', asOfMs: Date.parse('2026-10-13T13:30:00Z') };
+function side(extra) {
+  return {
+    sport: 'NFL', matchup: 'A @ B', side: 'A -3.5', market: 'Spread', line: -3.5,
+    odds: -110, coverProb: 0.55, ev: 0.05, edgePct: 0.04, liquid: true,
+    uncertainty: 0.15, commenceTime: '2026-10-13T20:00:00Z',
+    homeTeam: 'B', awayTeam: 'A', book: 'draftkings',
+    ...extra,
+  };
+}
+assert.strictEqual(gateReason(side({ ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ market: 'Total', side: 'Over 45.5', ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ market: 'Moneyline', side: 'A ML', ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
+
+assert.strictEqual(config.EDGE_FLOOR_K, 1.5);
+assert.strictEqual(edgeFloorSe(0.04), 0.06);
+assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.05, ratingSe: 0.04 }), true);
+assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.07, ratingSe: 0.04 }), false);
+assert.strictEqual(gateReason(side({ edgePct: 0.05, ev: 0.05, ratingSe: 0.04 }), asOf), 'edge-floor-se');
+assert.strictEqual(gateReason(side({ edgePct: 0.07, ev: 0.05, ratingSe: 0.04 }), asOf), null);
+
+const seRow = { sport: 'NFL', market: 'Spread', modelPureP: 0.6, ratingN: 6 };
+const z = normalQuantile(0.6);
+const seExpected = modelWeightFor('NFL', 'Spread')
+  * normalPdf(z)
+  * config.ratingErrorSd('NFL', 'margin', 6)
+  / config.effectiveSd('NFL', 'margin', 6);
+assert.ok(Math.abs(ratingSeOf(seRow) - seExpected) < 1e-12, String(ratingSeOf(seRow)));
+assert.strictEqual(ratingSeOf({ sport: 'NBA', market: 'Spread', modelPureP: 0.6, ratingN: 6 }), 0);
+
+const anchored = applyMarketAnchor([{
+  sport: 'NFL', market: 'Spread', side: 'Home -3', line: -3,
+  modelPureP: 0.6, coverProb: 0.7, ratingN: 6,
+  matchup: 'Away @ Home', homeTeam: 'Home', awayTeam: 'Away',
+  pinnacleSide: { american: -110, oppAmerican: -110, point: -3, oppPoint: 3 },
+}]);
+assert.strictEqual(anchored[0].anchorFairSource, 'pinnacle');
+assert.ok(Math.abs(anchored[0].ratingSe - seExpected) < 1e-9);
+
+const implied = americanToImplied(-110);
+assert.strictEqual(quarterKellyUnits(implied, -110), 0);
+assert.strictEqual(quarterKellyUnits(implied - 0.01, -110), 0);
+assert.strictEqual(quarterKellyUnits(0.53, -110), 0.5);
+assert.strictEqual(quarterKellyUnits(0.54, -110), 0.75);
+assert.strictEqual(quarterKellyUnits(0.55, -110), 1.5);
+assert.strictEqual(quarterKellyUnits(0.60, -110), 1.5);
+assert.strictEqual(quarterKellyUnits(0.9, 0), 0);
+let prev = -1;
+for (let i = 0; i <= 40; i++) {
+  const p = implied + i * 0.005;
+  const u = quarterKellyUnits(p, -110);
+  assert.ok(u >= prev, `${p} units ${u} < ${prev}`);
+  assert.ok(Math.abs(u * 4 - Math.round(u * 4)) < 1e-9);
+  prev = u;
+}
+assert.strictEqual(stakeDollars(0.75), 113);
+assert.strictEqual(stakeDollars(0.5), 75);
+assert.strictEqual(stakeDollars(1), 150);
+assert.strictEqual(stakeDollars(1.5), 225);
+
+function evOf(p, odds) { return p * americanToDecimal(odds) - 1; }
+function edgeOf(p, odds) { return p - americanToImplied(odds); }
+assert.ok(edgeOf(0.48, -110) < 0);
+assert.ok(evOf(0.48, -110) < 0);
+const dec110 = americanToDecimal(-110);
+for (const p of [0.48, 0.55, 0.60]) {
+  const ratio = evOf(p, -110) / edgeOf(p, -110);
+  assert.ok(Math.abs(ratio - dec110) < 1e-9, String(ratio));
+  assert.ok(Math.abs(ratio - 2) < 0.15);
+}
+
+const legs = [
+  { coverProb: 0.6, odds: -110, p_fair: 0.52, sport: 'NFL', matchup: 'A @ B' },
+  { coverProb: 0.55, odds: -115, p_fair: 0.50, sport: 'NHL', matchup: 'C @ D' },
+  { coverProb: 0.5, odds: 100, p_fair: 0.48, sport: 'MLB', matchup: 'E @ F' },
+];
+const stats = comboStats(legs);
+const prod = 0.6 * 0.55 * 0.5;
+const hair = Math.pow(0.95, 2);
+const payout = legs.reduce((acc, l) => acc * americanToDecimal(l.odds), 1);
+assert.ok(Math.abs(stats.combinedProb - prod * hair) < 1e-12);
+assert.ok(Math.abs(stats.combinedDecimal - payout) < 1e-12);
+assert.ok(Math.abs(stats.ev - (prod * hair * payout - 1)) < 1e-12);
+assert.strictEqual(stats.evAtModel, stats.ev);
+assert.ok(Math.abs(stats.evAtFair - (0.52 * 0.50 * 0.48 * payout - 1)) < 1e-12);
+const two = comboStats(legs.slice(0, 2));
+assert.ok(Math.abs(two.combinedProb - (0.6 * 0.55 * 0.95)) < 1e-12);
+assert.strictEqual(config.CORR_HAIRCUT_PER_LEG, 0.95);
+
+const pick = toPickObject({
+  sport: 'NFL', matchup: 'A @ B', side: 'A -3', market: 'Spread',
+  odds: -110, coverProb: 0.55, edgePct: 0.04, ev: 0.05,
+  edgeBasis: 'model-edge-vs-bet-price',
+  p_fair: 0.504, anchorFairSource: 'pinnacle', anchorWeight: 0.25,
+  p_model: 0.62, modelPureP: 0.62,
+  homeTeam: 'B', awayTeam: 'A',
+});
+assert.strictEqual(pick.fairP, '50.4%');
+assert.strictEqual(pick.fairSource, 'pinnacle');
+assert.strictEqual(pick.modelWeight, 0.25);
+assert.strictEqual(pick.p_model, 0.62);
+assert.strictEqual(pick.evAtFair, formatEdgePct(0.504 * americanToDecimal(-110) - 1));
+const printed = fairPickFields(pick);
+assert.strictEqual(printed.fairP, '50.4%');
+
+console.log('test-omega-textbook-1017 ok');

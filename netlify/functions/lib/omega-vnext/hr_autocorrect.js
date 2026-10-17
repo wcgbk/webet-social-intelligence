@@ -13,7 +13,7 @@
  * This helper is not on the verify path.
  */
 
-const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, GATES, LEAN_MIN_EV, LEAN_MAX_UNITS } = require('./config');
+const { SPORT_SPREAD_STD, SPORT_TOTAL_STD, GATES, LEAN_MIN_EV } = require('./config');
 const { americanToImplied, formatAmerican, normCdf, parseEdgeFraction, clamp, writeSummaryStakeDisplay } = require('./odds_math');
 const { attachEv } = require('./edge');
 const { toPickObject } = require('./select');
@@ -198,16 +198,16 @@ function clears(c) {
   if (!Number.isFinite(ev)) return false;
   const needEv = mainMinEv(odds, GATES.minEV.default || 0.02);
   if (ev + 1e-12 < needEv) return false;
-  const maxEV = Number(GATES.maxEV);
+  const maxEV = Number(require('./config').EV_CAP_ALL);
   if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   return true;
 }
 
-/** Lean keep: positive stake EV at or under 12%. Edge is not required. */
+/** Lean keep: positive stake EV at or under EV_CAP_ALL. Edge is not required. */
 function leanClears(c) {
   const ev = stakeEv(c);
   if (!Number.isFinite(ev) || !(ev > 0)) return false;
-  const maxEV = Number(GATES.maxEV);
+  const maxEV = Number(require('./config').EV_CAP_ALL);
   if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   return true;
 }
@@ -216,8 +216,6 @@ function markLean(built) {
   if (!built || !built.pick) return built;
   built.pick.tier = 'lean';
   built.cand.tier = 'lean';
-  const u = parseFloat(String(built.pick.units || '').replace(/[^0-9.]/g, ''));
-  if (Number.isFinite(u) && u > LEAN_MAX_UNITS) built.pick.units = `${LEAN_MAX_UNITS}u`;
   return built;
 }
 
@@ -454,7 +452,7 @@ function autoCorrectHardRock(picksData, sportGames) {
       });
       built.push(repriced);
     } else {
-      const kept = { pick: { ...pick, tier: 'lean', label: 'lean', units: `${LEAN_MAX_UNITS}u` }, cand: pickToCand(pick) };
+      const kept = { pick: { ...pick, tier: 'lean', label: 'lean' }, cand: pickToCand(pick) };
       markLean(kept);
       log.push({
         index: i,

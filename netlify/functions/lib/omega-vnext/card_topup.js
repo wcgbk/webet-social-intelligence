@@ -5,9 +5,10 @@
  *
  * Fill order matches selectStraights over the reserve: floor rows by
  * stake EV, then positive-EV leans, then any pregame lean, then same-line
- * Pinnacle pairs. A row that misses the floor is tier 'lean' at
- * LEAN_MAX_UNITS. A blocked side never returns. A side already on the
- * card is not added. One straight per game unless allowSameGame, and
+ * Pinnacle pairs. A row that misses the floor is tier 'lean'. Stake is
+ * the Kelly unit already on the pick. A blocked side never returns. A
+ * side already on the card is not added. One straight per game unless
+ * allowSameGame, and
  * that fill is only after distinct-game rows are exhausted
  * (sameGameFill: true). An exhausted reserve still returns the card.
  */
@@ -15,7 +16,6 @@
 const config = require('./config');
 const {
   MAX_STRAIGHTS,
-  LEAN_MAX_UNITS,
 } = config;
 const {
   passesPublishFloor,
@@ -267,7 +267,6 @@ function materialize(entry, { sameGame }) {
   if (lean) {
     pick.tier = 'lean';
     pick.label = 'lean';
-    pick.units = `${Number(LEAN_MAX_UNITS)}u`;
   }
   return pick;
 }

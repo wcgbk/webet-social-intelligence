@@ -59,14 +59,15 @@ function side(extra) {
   };
 }
 
-assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.02 }), asOf), null);
-assert.strictEqual(gateReason(side({ edgePct: -0.02, ev: 0.03 }), asOf), null);
-assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0 }), asOf), null);
-assert.strictEqual(gateReason(side({ odds: 250, ev: 0.02, edgePct: 0 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.02 }), asOf), 'edge-floor-se');
+assert.strictEqual(gateReason(side({ edgePct: -0.02, ev: 0.03 }), asOf), 'edge-floor-se');
+assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0.03 }), asOf), null);
+assert.strictEqual(gateReason(side({ odds: 250, ev: 0.02, edgePct: 0.03 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 260, ev: 0.08 }), asOf), 'odds-out-of-band');
 assert.strictEqual(gateReason(side({ odds: -260, ev: 0.08 }), asOf), 'odds-out-of-band');
-assert.strictEqual(gateReason(side({ ev: 0.12 }), asOf), null);
-assert.strictEqual(gateReason(side({ ev: 0.019 }), asOf), 'ev-floor');
+assert.strictEqual(gateReason(side({ ev: 0.12, edgePct: 0.05 }), asOf), 'ev-stale');
+assert.strictEqual(gateReason(side({ ev: 0.10, edgePct: 0.05 }), asOf), null);
+assert.strictEqual(gateReason(side({ ev: 0.019, edgePct: 0.04 }), asOf), 'ev-floor');
 
 const logs = [];
 const origLog = console.log;
@@ -78,14 +79,14 @@ try {
   console.log = origLog;
 }
 assert.strictEqual(staleReason, 'ev-stale');
-assert.ok(logs.some((line) => line.includes('[omega-vnext] ev-stale') && line.includes('reason=ev-above-12pct')));
+assert.ok(logs.some((line) => line.includes('[omega-vnext] ev-stale') && line.includes('reason=ev-above-cap')));
 
 const stale = side({ ev: 0.15, matchup: 'A @ B', side: 'A ML' });
 const gated = applyGates([
-  side({ ev: 0.03, edgePct: 0 }),
-  side({ ev: 0.01, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C' }),
+  side({ ev: 0.03, edgePct: 0.04 }),
+  side({ ev: 0.01, edgePct: 0.04, matchup: 'C @ D', side: 'D', homeTeam: 'D', awayTeam: 'C' }),
   stale,
-  side({ odds: 260, ev: 0.05, matchup: 'E @ F', side: 'F', homeTeam: 'F', awayTeam: 'E' }),
+  side({ odds: 260, ev: 0.05, edgePct: 0.04, matchup: 'E @ F', side: 'F', homeTeam: 'F', awayTeam: 'E' }),
 ], asOf);
 assert.strictEqual(gated.yesPool.length, 1);
 assert.strictEqual(gated.yesPool[0].tier, 'floor');
@@ -93,13 +94,13 @@ assert.strictEqual(gated.leanPool.length, 1);
 assert.strictEqual(gated.leanPool[0].leanReason, 'ev-floor');
 assert.ok(gated.rejected.some((row) => row.rejectReason === 'ev-stale'));
 assert.ok(gated.rejected.some((row) => row.rejectReason === 'odds-out-of-band'));
-assert.ok(!gated.leanPool.some((row) => row.rejectReason === 'ev-stale' || row.ev > 0.12));
+assert.ok(!gated.leanPool.some((row) => row.rejectReason === 'ev-stale' || row.ev > config.EV_CAP_ALL));
 assert.strictEqual(eligibleForLeanPool(stale), false);
 
 const dog = side({ ev: 0.08, edgePct: 0.01, matchup: 'A @ B', side: 'Dog', homeTeam: 'B', awayTeam: 'A' });
 const fav = side({ ev: 0.03, edgePct: 0.09, matchup: 'C @ D', side: 'Fav', homeTeam: 'D', awayTeam: 'C' });
-assert.ok(compareByEv(fav, dog) < 0);
-assert.strictEqual(orderedByScore([dog, fav])[0].side, 'Fav');
+assert.ok(compareByEv(dog, fav) < 0);
+assert.strictEqual(orderedByScore([dog, fav])[0].side, 'Dog');
 const tieHi = side({ ev: 0.04, edgePct: 0.05, matchup: 'E @ F', side: 'Hi', homeTeam: 'F', awayTeam: 'E' });
 const tieLo = side({ ev: 0.04, edgePct: 0.02, matchup: 'G @ H', side: 'Lo', homeTeam: 'H', awayTeam: 'G' });
 assert.ok(compareByEv(tieHi, tieLo) < 0);

@@ -63,19 +63,20 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
   near(km.marginBin(3, 3, 'NCAAF'), 0.0535, 0.003, 'NCAAF P(M=3|μ=3)');
   assert.ok(Math.abs(km.marginBin(3, 3, 'NFL') - km.marginBin(3, 3, 'NCAAF')) > 0.02);
 
+  const coverStd = config.effectiveSd('NFL', 'margin');
   const gap = common.spreadCoverProb(3, -2.5, 'NFL') - common.spreadCoverProb(3, -3.5, 'NFL');
-  near(gap, km.marginBin(3, 3, 'NFL'), 1e-6, 'half-point gap is the 3 bin');
+  near(gap, km.marginBin(3, 3, 'NFL', coverStd), 1e-6, 'half-point gap is the 3 bin');
   const normalGap = normCdf((3 - 2.5) / nflStd) - normCdf((3 - 3.5) / nflStd);
   assert.ok(gap > normalGap + 0.04, `keyed gap ${gap} vs normal ${normalGap}`);
 
   near(common.spreadCoverProb(3, -2.5, 'NFL') + common.spreadCoverProb(-3, 2.5, 'NFL'), 1, 1e-9);
   near(common.spreadCoverProb(3, -3.5, 'NFL') + common.spreadCoverProb(-3, 3.5, 'NFL'), 1, 1e-9);
 
-  const pk = km.spreadQuote(3, -3, 'NFL', nflStd);
+  const pk = km.spreadQuote(3, -3, 'NFL', coverStd);
   assert.ok(pk.pPush > 0.08 && pk.pPush < 0.10, `integer push ${pk.pPush}`);
   near(pk.coverProb, pk.pWin / (1 - pk.pPush), 1e-9, 'conditional cover');
   near(common.spreadCoverProb(3, -3, 'NFL'), pk.coverProb, 1e-12);
-  const dogInt = km.spreadQuote(-3, 3, 'NFL', nflStd);
+  const dogInt = km.spreadQuote(-3, 3, 'NFL', coverStd);
   near(pk.coverProb + dogInt.coverProb, 1, 1e-9);
 
   assert.ok(Math.abs(common.spreadCoverProb(3, -10, 'NFL') - normCdf((3 - 10) / nflStd)) > 0.02);
@@ -111,7 +112,7 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
 
 // OFF restores nflKeyNumberCover and the plain normal.
 withEnv('OMEGA_KEY_MASS', '0', () => {
-  const std = config.SPORT_SPREAD_STD.NFL;
+  const std = config.effectiveSd('NFL', 'margin');
   const cfbEff = config.effectiveSd('NCAAF', 'margin');
   const legacy = common.nflKeyNumberCover(3, -3, std);
   assert.strictEqual(common.spreadCoverProb(3, -3, 'NFL'), legacy.coverProb);
@@ -119,7 +120,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   assert.strictEqual(common.spreadCoverProb(3, -10, 'NFL'), normCdf((3 - 10) / std));
   assert.strictEqual(common.spreadCoverProb(4, -3, 'NCAAF'), normCdf((4 - 3) / cfbEff));
   assert.strictEqual(common.spreadCoverProb(4, -7.5, 'NCAAF'), normCdf((4 - 7.5) / cfbEff));
-  const z = (44 - 43.5) / config.SPORT_TOTAL_STD.NFL;
+  const z = (44 - 43.5) / config.effectiveSd('NFL', 'total');
   assert.strictEqual(common.totalCoverProb(44, 43.5, 'Over', 'NFL'), normCdf(z));
   assert.strictEqual(common.mlFromSpread(3, 'NFL'), clamp(normCdf(3 / std), 0.05, 0.95));
   const detail = common.spreadDetail(3, -3, 'NFL');
@@ -225,12 +226,12 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   const three = [leg('Over 44', 0.60), leg('Over 41', 0.58), leg('Over 47', 0.57)];
   const threeIndep = 0.60 * 0.58 * 0.57;
   assert.strictEqual(parlay.sameDirectionTotalFactor(three), 0.92);
-  near(parlay.comboStats(three).combinedProb, threeIndep * 0.92, 1e-12);
+  near(parlay.comboStats(three).combinedProb, threeIndep * Math.pow(0.95, 2), 1e-12);
   withEnv('OMEGA_PARLAY_CORR', '1', () => {
     assert.strictEqual(flags.parlayCorrEnabled(), true);
     assert.strictEqual(parlay.sameDirectionTotalFactor(three), 0.92);
     const on = parlay.comboStats(three);
-    near(on.combinedProb, threeIndep * 0.92, 1e-12);
+    near(on.combinedProb, threeIndep * Math.pow(0.95, 2), 1e-12);
     assert.ok(on.combinedProb <= threeIndep);
     assert.ok(on.ev <= threeIndep * on.combinedDecimal - 1 + 1e-12);
   });

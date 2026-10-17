@@ -1,7 +1,7 @@
 'use strict';
 
 const { GATES, PLACEABILITY, MODEL_LINE_GAP } = require('./config');
-const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
+const { minEdgeFor, mainMinEv, stakeQuoteIsStale, failsEdgeFloorSe } = require('./edge_floor');
 const { formatMoneylinePick } = require('./odds_math');
 const { eligibleForLeanPool } = require('./select');
 const { adverseSteamReason } = require('./line_path');
@@ -210,15 +210,16 @@ function gateReason(c, opts = {}) {
   // minCoverProb stays 0. A missing cover still rejects. There is no flat
   // coverProb floor, so a 30% cover is not rejected for the cover itself.
   // Main stake EV is a flat 2% for every sport. Odds do not raise it.
-  // EV above 12% is a stale or bad price: logged, not a lean.
-  // EV under the floor returns ev-floor. applyGates can promote that
-  // miss, including a non-positive EV, into the lean pool. Edge is not
-  // an inclusion gate.
+  // EV above EV_CAP_ALL is a model-error flag: logged, not a lean.
+  // Edge under max(2%, k*SE) is edge-floor-se. applyGates promotes that
+  // miss the same way as ev-floor when the row is lean-eligible.
+  // EV under the 2% floor returns ev-floor.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
   if (stakeQuoteIsStale(c)) {
-    console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} edge=${finiteEdge(c)} reason=ev-above-12pct`);
+    console.log(`[omega-vnext] ev-stale ${c.sport || ''} ${c.matchup || ''} ${c.side || ''} ev=${c.ev} edge=${finiteEdge(c)} reason=ev-above-cap`);
     return 'ev-stale';
   }
+  if (failsEdgeFloorSe(c)) return 'edge-floor-se';
   // Pinnacle no-vig is a CLV input, not a selection gate. A miss of the
   // 2% stake-EV floor, including a non-positive EV, stays ev-floor so the
   // lean fill can still publish 3 straights.
@@ -307,12 +308,13 @@ function finiteEdge(c) {
 }
 
 /**
- * A 2% floor miss can still be a lean, including a non-positive EV.
- * ev-stale and structural rejects stay rejects. Edge is not required.
- * The row already cleared odds, slate, liquidity, and pregame.
+ * A floor miss can still be a lean. ev-floor and edge-floor-se both
+ * promote. ev-stale and structural rejects stay rejects. The row must
+ * pass eligibleForLeanPool: positive EV, pregame, a retail line, and
+ * EV at or under EV_CAP_ALL.
  */
 function asLean(c, reason) {
-  if (reason !== 'ev-floor') return null;
+  if (reason !== 'ev-floor' && reason !== 'edge-floor-se') return null;
   if (!eligibleForLeanPool(c)) return null;
   return { ...c, tier: 'lean', leanReason: reason };
 }

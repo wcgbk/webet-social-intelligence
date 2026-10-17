@@ -27,7 +27,7 @@ const { eloMargin } = require('./nfl_elo');
 const { applyGameDayAdjustments, applyNflWeatherTotalAdj, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT } = require('../config');
+const { HFA, nflEloWeight, NFL_TOTAL_MODEL_WEIGHT, NFL_MODEL_WEIGHT } = require('../config');
 const { homeFieldPoints } = require('./altitude');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
 const SPORT = 'NFL';
@@ -199,7 +199,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         if (isHome) return q;
         return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
       };
-      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, 0.5);
+      // NFL-CHANGE: weight 1. The probability anchor is the only market pull.
+      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, NFL_MODEL_WEIGHT.ml);
       // pureAt already flips the away side. Negating the margin here too
       // priced both moneylines at the home win probability.
       const modelPureP = pureFootballCover(pureAt, homeForecast, null);
@@ -231,7 +232,8 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
         0.5,
       );
       const pureAt = (proj, line) => spreadDetail(proj, line, SPORT, undefined, { distribution: 'normal' });
-      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, 0.5);
+      // NFL-CHANGE: weight 1. The probability anchor is the only market pull.
+      const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, NFL_MODEL_WEIGHT.spread);
       const modelPureP = pureFootballCover(pureAt, isHome ? homeForecast : -homeForecast, b.point);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
       let raw = {

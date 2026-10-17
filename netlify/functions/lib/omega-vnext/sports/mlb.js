@@ -186,6 +186,7 @@ function priceGame(derived, totalShift) {
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Moneyline', side: b.side, line: null,
         modelRawP: p, modelPureP: pPure, projMethod: methods.ml, uncertainty,
+        ratingN: ratingN,
         consensusLine: null, modelProjection: +(modelMargin).toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -215,6 +216,7 @@ function priceGame(derived, totalShift) {
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Spread', side: sideLabel, line,
         modelRawP: pCover, modelPureP: pCoverPure, projMethod: methods.spread, uncertainty,
+        ratingN: ratingN,
         consensusLine: line, modelProjection: +(modelMargin).toFixed(2),
         gameDay: gameDayMeta,
       };
@@ -237,6 +239,7 @@ function priceGame(derived, totalShift) {
         matchup: formatMatchup(away, home), commenceTime,
         market: 'Total', side: sideLabel, line,
         modelRawP: p, modelPureP: pPure, projMethod: methods.total, uncertainty: uncertainty + 0.05,
+        ratingN: ratingN,
         consensusLine: line, modelProjection: +modelTotal.toFixed(2),
         gameDay: gameDayMeta,
       };

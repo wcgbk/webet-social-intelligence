@@ -1,5 +1,5 @@
 'use strict';
-// A parlay leg needs cover >= 45% and positive stake EV at or under 12%.
+// A parlay leg needs cover >= 45% and positive stake EV at or under the 10% cap.
 // Three qualifying games publish. Combined EV that is not positive is labeled.
 // Hard Rock and the edge floor are not required on this path. priceParlayLeg
 // still prices the older optimizer and still requires a positive EV.
@@ -89,9 +89,9 @@ assert.strictEqual(drifted[0].legs[0].coverProb, '63.4%');
 assert.strictEqual(drifted[0].legs[0].ev, '8.0%');
 assert.strictEqual(drifted[0].legs[1].coverProb, '32.8%');
 assert.strictEqual(drifted[0].legs[1].ev, '5.0%');
-assert.strictEqual(drifted[0].combinedProb, '20.8%');
+assert.strictEqual(drifted[0].combinedProb, '19.8%');
 assert.strictEqual(drifted[0].combinedOdds, '+445');
-assert.strictEqual(drifted[0].ev, '13.4%');
+assert.strictEqual(drifted[0].ev, '7.9%');
 assertNoTicket(floorNeg.slice(0, 2), [third]);
 
 // Positive combined EV: 0.25u, not a lean-day label.
@@ -110,19 +110,19 @@ assert.ok(floorTicket[0].evRaw > 0, floorTicket[0].ev);
 assert.strictEqual(floorTicket[0].autoCorrected, false);
 assert.strictEqual(floorTicket[0].probBasis, 'unified-adjusted-cover');
 
-// Display cover "50%" must not beat p_cal 0.58. 50% at -110 is -EV.
-// 0.58 at -110 is +EV, and three of those clear the ticket.
+// Display cover "50%" must not beat p_cal. 50% at -110 is -EV.
+// 0.56 at -110 is +EV and under the 10% cap. 0.58 is about 10.7% and is stale.
 const rounded = [
-  leg('Jets @ Bills', { odds: -110, coverProb: '50%', p_cal: 0.58, edgePct: '4.0%' }),
-  leg('Dolphins @ Patriots', { odds: -110, coverProb: '50%', p_cal: 0.58, edgePct: '4.0%' }),
-  leg('Giants @ Cowboys', { odds: -110, coverProb: '50%', p_cal: 0.58, edgePct: '4.0%' }),
+  leg('Jets @ Bills', { odds: -110, coverProb: '50%', p_cal: 0.56, edgePct: '4.0%' }),
+  leg('Dolphins @ Patriots', { odds: -110, coverProb: '50%', p_cal: 0.56, edgePct: '4.0%' }),
+  leg('Giants @ Cowboys', { odds: -110, coverProb: '50%', p_cal: 0.56, edgePct: '4.0%' }),
 ];
-assert.strictEqual(unifiedCoverProb(rounded[0]), 0.58);
+assert.strictEqual(unifiedCoverProb(rounded[0]), 0.56);
 const fromCal = parlayFromStraights(rounded);
 assert.strictEqual(fromCal[0].qualifying, true, fromCal[0].status);
 assert.strictEqual(fromCal[0].units, '0.5u');
 assert.ok(fromCal[0].evRaw > 0);
-assert.strictEqual(fromCal[0].legs[0].p_cal, 0.58);
+assert.strictEqual(fromCal[0].legs[0].p_cal, 0.56);
 assert.ok(parseFloat(fromCal[0].legs[0].ev) > 0);
 
 // Same-direction totals can each be +EV and still miss after the 0.92 haircut.
@@ -140,7 +140,7 @@ assert.strictEqual(haircut[0].units, '0.5u');
 assert.strictEqual(haircut[0].label, 'combined EV not positive');
 assert.ok(!(haircut[0].evRaw > 0));
 const replacement = leg('Kings @ Oilers', {
-  market: 'Moneyline', side: 'Oilers', odds: -110, coverProb: 0.56, edgePct: 0.05,
+  market: 'Moneyline', side: 'Oilers', odds: -110, coverProb: 0.572, edgePct: 0.048,
 });
 const corrected = parlayFromStraights(overs, { pool: [replacement] });
 assert.strictEqual(corrected[0].qualifying, true);

@@ -24,11 +24,11 @@ const p = optimizeParlay(pool3, []);
 assert.ok(p.length === 1);
 assert.ok(p[0].legs.length === 3, 'prefer 3-leg when available');
 
-// A 1% EV third leg is below the 3% publish floor. It is not a parlay leg.
-// The two floor legs still publish.
+// A 1% EV third leg is below the 2% publish floor and the 10% cap.
+// It is not a parlay leg. The two floor legs still publish.
 const strong2 = [
-  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
-  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
+  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.08),
+  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.07),
   mk('NCAAF', 'X @ Y', 'Y -1', 'Spread', 0.50, 0.01),
 ];
 const pPrefer3 = optimizeParlay(strong2, []);
@@ -39,8 +39,8 @@ assert.ok(!pPrefer3[0].legs.some(l => l.pick === 'Y -1' || l.side === 'Y -1'));
 // A third leg under 45% cover is not parlay-eligible. The +EV 2-leg remains.
 // A 3-leg whose combined EV is not positive falls back to that 2-leg.
 const thinThird = [
-  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
-  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
+  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.08),
+  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.07),
   mk('NCAAF', 'X @ Y', 'Y -1', 'Spread', 0.36, 0.02),
 ];
 const p2 = optimizeParlay(thinThird, []);
@@ -64,8 +64,8 @@ const underCover = [
 assert.strictEqual(optimizeParlay(underCover, []).length, 0);
 
 const twoGames = [
-  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.12),
-  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.11),
+  mk('NFL', 'A @ B', 'B -3', 'Spread', 0.62, 0.08),
+  mk('MLB', 'C @ D', 'Under 8.5', 'Total', 0.61, 0.07),
 ];
 const pTwo = optimizeParlay(twoGames, []);
 assert.strictEqual(pTwo.length, 1);

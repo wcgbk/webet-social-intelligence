@@ -18,10 +18,12 @@ const PICK_KEEP = [
   'betType', 'coreReasoning', 'commenceTime', 'gameTime', 'edgePct', 'edge', 'ev',
   'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge',
   'dataReviewFlag', 'placeabilityFlag', 'p_fair', 'p_model', 'calK', 'label', 'grade', 'riskDollars', 'toWinDollars',
+  'fairP', 'fairSource', 'evAtFair', 'modelWeight',
 ];
 
 const PARLAY_KEEP = [
   'type', 'units', 'combinedOdds', 'combinedDecimal', 'combinedProb', 'ev',
+  'evAtModel', 'evAtFair',
   'evLabel', 'riskDollars', 'toWinDollars',
   'uniqueGames', 'uniqueSports', 'independent', 'mirrorsCard', 'legMarkets', 'correlationNote',
   'candidatesScanned', 'stake', 'source', 'hrPlaceabilityNote', 'label',

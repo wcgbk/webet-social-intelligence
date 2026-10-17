@@ -55,7 +55,7 @@ function names(card) {
   ].sort());
   assert.ok(!card[0].legs.some(l => l.pick === 'Under 45'));
   assert.strictEqual(card[0].mirrorsCard, true);
-  assert.strictEqual(card[0].independent, true);
+  assert.strictEqual(card[0].independent, false);
   assert.ok(card[0].type.includes('straight'));
 }
 
@@ -73,7 +73,7 @@ function names(card) {
     'Under 44 @ E @ F',
   ].sort());
   assert.strictEqual(card[0].mirrorsCard, true);
-  assert.strictEqual(card[0].independent, true);
+  assert.strictEqual(card[0].independent, false);
   assert.ok(card[0].type.includes('straight'));
 }
 
@@ -89,7 +89,7 @@ function names(card) {
   assert.ok(leg, 'straight leg present');
   assert.strictEqual(leg.odds, '-105');
   assert.strictEqual(card[0].mirrorsCard, true);
-  assert.strictEqual(card[0].independent, true);
+  assert.strictEqual(card[0].independent, false);
 }
 
 // Fallback: two straights share a game, so the preference does not fire.
@@ -107,7 +107,7 @@ function names(card) {
   assert.ok(card[0].legs.some(l => l.pick === 'Under 45'));
   assert.strictEqual(new Set(card[0].legs.map(l => l.matchup)).size, 3);
   assert.strictEqual(card[0].mirrorsCard, false);
-  assert.strictEqual(card[0].independent, true);
+  assert.strictEqual(card[0].independent, false);
   assert.ok(card[0].type.includes('optimized'));
 }
 

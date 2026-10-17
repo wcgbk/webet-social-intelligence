@@ -1,14 +1,15 @@
 'use strict';
 
-const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_MIN_EDGE, LEAN_PARLAY_UNITS, GATES } = require('./config');
+const { KELLY_FRACTION, PARLAY_FIXED_UNITS, PARLAY_TOTAL_HAIRCUT, PARLAY_MIN_COVER, LEAN_MIN_EV, LEAN_MIN_EDGE, LEAN_PARLAY_UNITS, GATES, EV_CAP_ALL, CORR_HAIRCUT_PER_LEG } = require('./config');
+const { fairPickFields } = require('./prob_anchor');
 const {
   americanToDecimal, decimalToAmerican, formatAmerican, kellyToUnits,
   formatMoneylinePick, formatEdgePct, ratingToConfidence,
   parseEdgeFraction, qualityScore, qualityToRating, sortByGradeThenUnits,
-  normalizeRatingKey, ratingLetter, cardHasFullGrade, formatGameTimeET,
+  normalizeRatingKey, ratingLetter, formatGameTimeET,
   stakeDollars, toWinDollars,
 } = require('./odds_math');
-const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge, printedEdgeEv } = require('./select');
+const { matchupKey, passesPublishFloor, qualifiesAsLean, compareByEdge, printedEdgeEv, publishedParlayUnits } = require('./select');
 const { inSlate } = require('./selection_pass');
 const { footballAuditFields } = require('./sports/_common');
 const { pushAwareKelly } = require('./push_ev');
@@ -92,27 +93,44 @@ function sameDirectionTotalFactor(legs) {
   return raw;
 }
 
+function legFairP(l) {
+  const direct = Number(l && l.p_fair);
+  if (Number.isFinite(direct) && direct > 0 && direct < 1) return direct;
+  const text = l && l.fairP;
+  if (text == null || text === '') return null;
+  const n = Number(String(text).replace('%', ''));
+  if (!Number.isFinite(n)) return null;
+  const p = String(text).includes('%') || n > 1 ? n / 100 : n;
+  return p > 0 && p < 1 ? p : null;
+}
+
+/**
+ * Joint = product of final p, times CORR_HAIRCUT_PER_LEG^(n-1).
+ * That factor is a same-model-bias haircut (ASSUMED), not a fitted rho.
+ * Payout is the product of the book's leg decimals.
+ * ev is evAtModel and is the positive-EV gate. evAtFair uses fair p and no haircut.
+ */
 function comboStats(legs) {
+  const list = legs || [];
   let combinedDecimal = 1;
   let independent = 1;
-  for (const l of legs) {
+  let fairProd = 1;
+  let fairOk = list.length > 0;
+  for (const l of list) {
     combinedDecimal *= americanToDecimal(l.odds);
     independent *= Number(l.coverProb);
+    const fp = legFairP(l);
+    if (fp == null) fairOk = false;
+    else fairProd *= fp;
   }
+  const n = list.length;
+  const bias = n > 1 ? Math.pow(Number(CORR_HAIRCUT_PER_LEG) || 0.95, n - 1) : 1;
   let combinedProb = independent;
-  const haircutFactor = sameDirectionTotalFactor(legs);
-  let haircutWasApplied = false;
   let corrApplied = false;
   if (Number.isFinite(independent)) {
-    const haircutProb = independent * haircutFactor;
-    if (Number.isFinite(haircutProb) && haircutProb <= independent) {
-      combinedProb = haircutProb;
-      if (haircutFactor < 1) haircutWasApplied = true;
-    }
-    // Correlation may only lower the joint. The ρ prior is positive, so
-    // this branch does not fire for same-direction totals. The haircut stays.
-    if (parlayCorrEnabled() && sameDirectionSides(legs)) {
-      const corr = correlatedTotalFactor((legs || []).map(l => Number(l.coverProb)));
+    combinedProb = independent * bias;
+    if (parlayCorrEnabled() && sameDirectionSides(list)) {
+      const corr = correlatedTotalFactor(list.map(l => Number(l.coverProb)));
       if (Number.isFinite(corr) && corr > 0 && corr < 1) {
         const lowered = independent * corr;
         if (Number.isFinite(lowered) && lowered < combinedProb) {
@@ -124,15 +142,22 @@ function comboStats(legs) {
     if (!Number.isFinite(combinedProb) || combinedProb > independent) combinedProb = independent;
   }
   const ev = combinedProb * combinedDecimal - 1;
-  const games = new Set(legs.map(matchupKey)).size;
-  const sports = new Set(legs.map(l => l.sport)).size;
+  const evAtFair = fairOk && Number.isFinite(combinedDecimal) ? (fairProd * combinedDecimal) - 1 : null;
+  const games = new Set(list.map(matchupKey)).size;
+  const sports = new Set(list.map(l => l.sport)).size;
   return {
     combinedDecimal,
     combinedProb,
     ev,
+    evAtModel: ev,
+    evAtFair,
     uniqueGames: games,
     uniqueSports: sports,
-    haircutApplied: { applied: haircutWasApplied, factor: haircutFactor },
+    haircutApplied: {
+      applied: Number.isFinite(bias) && bias < 1,
+      factor: bias,
+      kind: 'same-model-bias',
+    },
     corrApplied,
   };
 }
@@ -158,7 +183,11 @@ function adjustmentOf(ticketOrStats) {
     : {};
   const legs = legListOf(ticketOrStats);
   let hair = src.haircutApplied && typeof src.haircutApplied === 'object'
-    ? { applied: src.haircutApplied.applied === true, factor: Number(src.haircutApplied.factor) }
+    ? {
+      applied: src.haircutApplied.applied === true,
+      factor: Number(src.haircutApplied.factor),
+      kind: src.haircutApplied.kind || null,
+    }
     : null;
   let corr = typeof src.corrApplied === 'boolean' ? src.corrApplied : null;
   if (legs && (hair == null || corr == null)) {
@@ -168,8 +197,12 @@ function adjustmentOf(ticketOrStats) {
       if (hair == null) hair = st.haircutApplied;
       if (corr == null) corr = st.corrApplied;
     } else if (legs.length) {
-      const factor = sameDirectionTotalFactor(legs);
-      if (hair == null) hair = { applied: factor < 1, factor };
+      // Printed covers are strings, so comboStats cannot rerun. The label
+      // still uses the same-model-bias haircut: 0.95^(n-1) on every ticket.
+      const n = legs.length;
+      const per = Number(CORR_HAIRCUT_PER_LEG);
+      const factor = n > 1 ? Math.pow(Number.isFinite(per) ? per : 0.95, n - 1) : 1;
+      if (hair == null) hair = { applied: factor < 1, factor, kind: 'same-model-bias' };
       if (corr == null) corr = false;
     }
   }
@@ -199,7 +232,8 @@ function parlayEvLabel(ticketOrStats) {
   if (info.share) label = 'legs share a game: not independent';
   else if (info.corr) label = 'correlation-adjusted';
   else if (info.hair.applied) {
-    label = `same-direction totals haircut x${formatHaircutFactor(info.hair.factor)} applied, other legs assumed independent`;
+    const kind = info.hair.kind === 'same-model-bias' ? 'same-model-bias' : 'same-direction totals';
+    label = `${kind} haircut x${formatHaircutFactor(info.hair.factor)} applied`;
   } else if (info.distinct) label = 'assumes independent legs (different games)';
   const plain = !!(ticketOrStats && ticketOrStats.plainProduct === true);
   if (plain && label && (info.hair.applied || info.corr)) {
@@ -665,7 +699,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
       coreReasoning: l.coreReasoning || '',
       homeTeam: l.homeTeam,
       awayTeam: l.awayTeam,
-      p_model: l.p_model,
+      ...fairPickFields(l),
       fair_sharp_p: l.fair_sharp_p,
       book: l.book || null,
       line: l.line != null ? l.line : null,
@@ -690,6 +724,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     combinedDecimal: +chosen.combinedDecimal.toFixed(2),
     combinedProb: `${(chosen.combinedProb * 100).toFixed(1)}%`,
     ev: `${(chosen.ev * 100).toFixed(1)}%`,
+    evAtModel: formatEdgePct(chosen.evAtModel != null ? chosen.evAtModel : chosen.ev),
+    evAtFair: chosen.evAtFair == null ? null : formatEdgePct(chosen.evAtFair),
     evLabel,
     uniqueGames: chosen.uniqueGames,
     uniqueSports: chosen.uniqueSports,
@@ -1072,6 +1108,7 @@ function publishGatedLeg(leg, straights) {
   published.probBasis = 'unified-adjusted-cover';
   if (leg.hardRockRepriced) published.hardRockRepriced = true;
   if (leg.tier) published.tier = leg.tier;
+  Object.assign(published, fairPickFields(leg));
   return published;
 }
 
@@ -1119,7 +1156,7 @@ function priceCardLeg(row) {
 
 /**
  * A parlay leg on the pure-model card. Cover at or above PARLAY_MIN_COVER,
- * stake EV positive and at or under the 12% cap, and not a sport the
+ * stake EV positive and at or under the EV cap, and not a sport the
  * margin check already banned. Rank is probability edge.
  */
 function parlayLegQualifies(leg) {
@@ -1128,21 +1165,21 @@ function parlayLegQualifies(leg) {
   if (!(Number.isFinite(cover) && cover + 1e-12 >= PARLAY_MIN_COVER)) return false;
   const ev = Number(leg.ev);
   if (!(Number.isFinite(ev) && ev > 1e-12)) return false;
-  const maxEV = Number(GATES && GATES.maxEV);
+  const maxEV = Number(EV_CAP_ALL);
   if (Number.isFinite(maxEV) && ev > maxEV + 1e-12) return false;
   return true;
 }
 
 /**
  * The two published straights, when that is the whole card. Cover may sit
- * under 45%. Each leg still needs positive stake EV at or under 12%, a
+ * under 45%. Each leg still needs positive stake EV at or under the EV cap, a
  * price, and its own game. A negative-EV straight does not make a ticket.
  */
 function twoTeamFromPublished(rows) {
   if (!Array.isArray(rows) || rows.length !== 2) return null;
   const priced = [];
   const games = new Set();
-  const maxEV = Number(GATES && GATES.maxEV);
+  const maxEV = Number(EV_CAP_ALL);
   for (const row of rows) {
     if (row && row.marginBiasExtreme) return null;
     const leg = priceCardLeg(row);
@@ -1174,8 +1211,7 @@ function ticketFromLegs(chosen, rows, opts) {
   const combinedOdds = fromLegs
     ? fromLegs.combinedOdds
     : (decimalToAmerican(st.combinedDecimal) == null ? '' : formatAmerican(decimalToAmerican(st.combinedDecimal)));
-  const fullCard = cardHasFullGrade(rows);
-  const stakeUnits = fullCard ? PARLAY_FIXED_UNITS : LEAN_PARLAY_UNITS;
+  const stakeUnits = publishedParlayUnits(rows);
   const n = chosen.length;
   const ticket = {
     type: labeled ? `${n}-leg-parlay-labeled` : `${n}-leg-parlay`,
@@ -1191,6 +1227,8 @@ function ticketFromLegs(chosen, rows, opts) {
     combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
     combinedProbRaw: Number.isFinite(st.combinedProb) ? st.combinedProb : null,
     ev: formatEdgePct(evAtShownPrice(st.combinedProb, combinedOdds) ?? st.ev) || '',
+    evAtModel: formatEdgePct(st.evAtModel != null ? st.evAtModel : st.ev),
+    evAtFair: st.evAtFair == null ? null : formatEdgePct(st.evAtFair),
     evRaw: Number.isFinite(st.ev) ? st.ev : null,
     uniqueGames: st.uniqueGames,
     uniqueSports: st.uniqueSports,
@@ -1215,7 +1253,7 @@ function ticketFromLegs(chosen, rows, opts) {
 /**
  * Published parlay. Three qualifying games, or the two published straights
  * when that is the whole card. A 3-leg leg needs cover >= 45%, positive
- * stake EV at or under 12%, and a sport that passed the margin check. The
+ * stake EV at or under the EV cap, and a sport that passed the margin check. The
  * 2-team ticket is those two straights and does not reapply the 45% cover.
  * Rank is probability edge. A ticket whose combined EV is not positive
  * still publishes and is labeled. One straight is no parlay.
@@ -1272,7 +1310,7 @@ function parlayFromStraights(straights, opts = {}) {
     return [noQualifyingParlay('fewer than 2 qualifying positive-EV legs')];
   }
   if (!anchor && chosen.length < 3) {
-    return [noQualifyingParlay('fewer than 3 games with cover >= 45% and positive stake EV at or under 12%')];
+    return [noQualifyingParlay('fewer than 3 games with cover >= 45% and positive stake EV at or under the EV cap')];
   }
   const ticket = ticketFromLegs(chosen, rows, opts);
   if (ticket[0] && ticket[0].qualifying !== false) ticket[0].candidatesScanned = merged.length;

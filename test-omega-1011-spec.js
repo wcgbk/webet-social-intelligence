@@ -121,7 +121,8 @@ function floorRow(extra) {
     const other = {
       ...injured,
       pick: 'Atlanta Falcons ML',
-      coverProb: 0.51,
+      // QB shift adds 0.0675 cover. 0.48 stays near 4.5% EV, under the 10% cap.
+      coverProb: 0.48,
       fair_sharp_p: 0.48,
       ev: 0.04,
       edgePct: 0.03,
@@ -137,10 +138,11 @@ function floorRow(extra) {
       pick: 'Over 47.5',
       betType: 'Total',
       market: 'Total',
-      coverProb: 0.62,
+      // Total shift cuts 0.03375 cover. 0.58 stays near 4% EV, under the 10% cap.
+      coverProb: 0.58,
       fair_sharp_p: 0.52,
-      ev: 0.18,
-      edgePct: 0.10,
+      ev: 0.08,
+      edgePct: 0.06,
     };
     const overKept = late.finalizeNewsReprice(over, late.decideLateNews(over, liveOut));
     assert.strictEqual(overKept.action, 'reprice');

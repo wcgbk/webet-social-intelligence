@@ -390,9 +390,8 @@ async function generateOmegaVnext(opts = {}) {
   // Legacy and A do not read it. Gates, floors, Kelly, and unit caps are unchanged.
   console.log(`[omega-vnext] cal-mode=${resolveCalMode()} cardDate=${dateISO}`);
   candidates = calibrateAll(candidates, { cardDate: dateISO });
-  // NHL/MLB only. p = w*p_cal + (1-w)*p_fair, w = 0.25. Other sports stay put.
-  // Edge and EV are priced later from this cover, after line-move may nudge it.
-  candidates = applyMarketAnchor(candidates);
+  // Calibration stays on the row as a diagnostic. The anchor below, after
+  // line-move, is the final p for sports in the weight table.
   candidates = candidates.map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
 
@@ -600,12 +599,13 @@ async function generateOmegaVnext(opts = {}) {
   const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
   console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
 
-  // Final cover is the calibrated probability (NHL/MLB already anchored).
-  // modelPureP stays on the row as a diagnostic and does not replace coverProb.
+  // Final p = w*modelPureP + (1-w)*fair. Calibrated coverProb does not feed it.
+  // No fair: the row stays unanchored (anchorFairSource 'none') and is kept.
   // edge = p − vigged implied. EV = p × decimal − 1.
+  candidates = applyMarketAnchor(candidates);
   candidates = priceEdgesAtBet(candidates);
   const anchored = candidates.filter((c) => c && (c.anchorFairSource === 'pinnacle' || c.anchorFairSource === 'draftkings')).length;
-  console.log(`[omega-vnext] prob-anchor edge-priced=${candidates.length} nhl-mlb-anchored=${anchored}`);
+  console.log(`[omega-vnext] prob-anchor edge-priced=${candidates.length} anchored=${anchored}`);
 
   // Off the card only when the sport mean is past 3× and this game is too.
   // One outlier does not blank the other games. A single game past the

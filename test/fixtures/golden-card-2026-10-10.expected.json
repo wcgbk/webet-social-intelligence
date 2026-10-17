@@ -3,7 +3,7 @@
   "inputRegen": "OMEGA_REGEN_GOLDEN=input node test-omega-golden-card.js",
   "cardDate": "2026-10-10",
   "note": "Rewrite only for an intentional selection change. Review the diff. The command does not fetch odds or write blobs.",
-  "comment": "v12.4.0: same sides as v12.3.74. A- straights are 0.75u. A full card parlays 0.5u. Prices outside -250..+250 and EV above 12% stay off the card.",
+  "comment": "v12.4.2 textbook: same sides. These A- prices are quarter Kelly at the 1.5u cap. A full card parlays 0.5u. EV above 10% stays off the card. Parlay joint uses 0.95^(n-1).",
   "straights": [
     {
       "sport": "NCAAF",
@@ -13,7 +13,7 @@
       "book": "draftkings",
       "line": 39.5,
       "odds": "-110",
-      "units": "0.75u",
+      "units": "1.5u",
       "ev": "5.0%",
       "edgePct": "2.6%",
       "tier": "floor",
@@ -27,7 +27,7 @@
       "book": "draftkings",
       "line": 8.5,
       "odds": "-110",
-      "units": "0.75u",
+      "units": "1.5u",
       "ev": "5.0%",
       "edgePct": "2.6%",
       "tier": "floor",
@@ -41,7 +41,7 @@
       "book": "draftkings",
       "line": 5.5,
       "odds": "-110",
-      "units": "0.75u",
+      "units": "1.5u",
       "ev": "5.0%",
       "edgePct": "2.6%",
       "tier": "floor",
@@ -51,7 +51,7 @@
   "parlay": {
     "type": "3-leg-parlay-straight",
     "units": "0.5u",
-    "ev": "15.8%",
+    "ev": "4.5%",
     "legs": [
       {
         "sport": "NCAAF",

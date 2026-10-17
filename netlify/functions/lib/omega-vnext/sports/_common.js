@@ -351,9 +351,9 @@ function powerFromStandings(st, sport) {
 }
 
 /**
- * One application of the rating-error term. A zero rating returns `game`
- * unchanged so NFL and NBA stay bit-identical. Do not call this on a
- * standard deviation that is already effective.
+ * One application of the rating-error term. A zero rating base returns
+ * `game` unchanged (NBA). Do not call this on a standard deviation that
+ * is already effective.
  */
 function applyRatingSd(sport, kind, game, n) {
   if (!(game > 0)) return game;

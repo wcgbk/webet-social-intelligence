@@ -52,7 +52,8 @@ function assertSamePrintedEdge(raw, picks, ticket) {
 // Side ids differ ("Oilers" vs "Oilers ML"), which is how the card merges them.
 const specs = [
   ['Penguins @ Avalanche', 'Avalanche', -145, 0.6475],
-  ['Ducks @ Bruins', 'Bruins', -125, 0.6208],
+  // -125 at 0.6208 is about 11.7% EV and fails the 10% cap. 0.611 stays under it.
+  ['Ducks @ Bruins', 'Bruins', -125, 0.611],
   ['Jets @ Oilers', 'Oilers', -145, 0.64749],
 ];
 const raw = specs.map((row) => candidate(...row));
@@ -60,8 +61,8 @@ const picks = raw.map((row) => toPickObject(row));
 
 assert.strictEqual(picks[0].edge, '5.6%');
 assert.strictEqual(picks[0].coverProb, '64.8%');
-assert.strictEqual(picks[1].edge, '6.5%');
-assert.strictEqual(picks[1].coverProb, '62.1%');
+assert.strictEqual(picks[1].edge, '5.5%');
+assert.strictEqual(picks[1].coverProb, '61.1%');
 assert.strictEqual(picks[2].edge, '5.5%');
 assert.strictEqual(picks[2].coverProb, '64.7%');
 

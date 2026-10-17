@@ -9,7 +9,8 @@
  *   - never put two parlay legs on the same game
  *   - never publish a negative-EV straight or a negative-EV ticket
  *   - keep straight units inside the per-pick, B-grade, lean, 4.5u, and 5.0u caps
- *   - parlay 0.5u on a full card (any straight A- or better), else 0.25u
+ *   - parlay 0.5u on a full card (a floor straight graded A- or better)
+ *   - parlay 0.25u when every straight is a lean, or no straight is A- or better
  *   - return the same card for the same input
  */
 
@@ -101,9 +102,6 @@ function assertCard(card, label) {
     } else {
       assert.ok(ev + 1e-6 >= config.GATES.minEV.default * 100, `${label} floor ${pickRow.ev}`);
     }
-    if (String(pickRow.rating || '').toLowerCase() === 'b') {
-      assert.ok(parseU(pickRow.units) <= config.B_GRADE_UNIT_CAP + 1e-9, `${label} B units ${pickRow.units}`);
-    }
     const units = parseU(pickRow.units);
     assert.ok(units <= config.MAX_STRAIGHT_UNITS_PER_PICK + 1e-9, `${label} units ${pickRow.units}`);
     assert.ok(units >= 0, pickRow.units);
@@ -116,7 +114,10 @@ function assertCard(card, label) {
   let parlayUnits = 0;
   for (const ticket of tickets) {
     parlayUnits += parseU(ticket.units);
-    const expectedStake = cardHasFullGrade(picks) ? config.PARLAY_FIXED_UNITS : config.LEAN_PARLAY_UNITS;
+    const leanOnly = picks.length > 0 && picks.every((p) => p.tier === 'lean');
+    const expectedStake = (!leanOnly && cardHasFullGrade(picks))
+      ? config.PARLAY_FIXED_UNITS
+      : config.LEAN_PARLAY_UNITS;
     assert.strictEqual(parseU(ticket.units), expectedStake, `${label} parlay units ${ticket.units}`);
     assert.ok(parsePct(ticket.ev) > 0, `${label} ticket EV ${ticket.ev}`);
     const legs = ticket.legs || [];
@@ -241,7 +242,9 @@ function fixedPools() {
         row(c, 'Jets +1', { market: 'Spread', line: 1, ev: 0.05, edgePct: 0.018, coverProb: 0.62 }),
       ],
       expectStraights: 3,
-      maxStraightUnits: config.B_GRADE_UNIT_CAP,
+      maxStraightUnits: config.MAX_STRAIGHT_UNITS_PER_PICK,
+      expectUnits: '1.5u',
+      expectRating: 'b',
     },
     {
       label: 'leans-only',
@@ -274,6 +277,12 @@ for (const spec of fixedPools()) {
     for (const pickRow of card.picks) {
       assert.ok(parseU(pickRow.units) <= spec.maxStraightUnits + 1e-9, `${spec.label} ${pickRow.units}`);
     }
+  }
+  if (spec.expectUnits) {
+    assert.ok(card.picks.every((p) => p.units === spec.expectUnits), spec.label);
+  }
+  if (spec.expectRating) {
+    assert.ok(card.picks.every((p) => String(p.rating).toLowerCase() === spec.expectRating), spec.label);
   }
   publishedStraights += card.picks.length;
   if (card.parlayLegs.length) {

@@ -227,10 +227,10 @@ function legNames(parlayLegs) {
   const leanPick = byName(out.picks, 'Home4');
   assert.ok(a && am && leanPick);
   assert.strictEqual(a.rating, 'a');
-  assert.strictEqual(a.units, '1u');
+  assert.strictEqual(a.units, '1.5u');
   assert.strictEqual(a.tier, 'floor');
   assert.strictEqual(am.rating, 'aminus');
-  assert.strictEqual(am.units, '0.75u');
+  assert.strictEqual(am.units, '1.5u');
   assert.strictEqual(leanPick.tier, 'lean');
   assert.strictEqual(leanPick.units, '0.5u');
   assert.strictEqual(leanPick.label, 'lean');
@@ -244,14 +244,14 @@ function legNames(parlayLegs) {
   assert.strictEqual(out.topUps[0].reason, 'short-card');
   assert.ok(String(out.topUps[0].pick).includes('Home4'));
   const shown = summaryStakeDisplay(out.picks, out.parlayLegs);
-  assert.strictEqual(shown.totalUnits, '2.75u');
-  assert.strictEqual(shown.totalDollars, 413);
-  assert.strictEqual(shown.units, 2.75);
+  assert.strictEqual(shown.totalUnits, '4u');
+  assert.strictEqual(shown.totalDollars, 600);
+  assert.strictEqual(shown.units, 4);
   assert.ok(!names(out.reserve).includes('Home1 ML'));
   assert.strictEqual(picks.length, 2, 'caller picks stay the pre-top-up card');
 }
 
-// Lean-only card: parlay is 0.25u. Dollars follow the flat table.
+// Lean-only card: each straight is capped at 0.5u. The parlay is 0.25u.
 {
   const leans = [1, 2, 3].map((n) => ml(n, 0.01, 0.005));
   const picks = [toPickObject({ ...leans[0], tier: 'lean' }), toPickObject({ ...leans[1], tier: 'lean' })];

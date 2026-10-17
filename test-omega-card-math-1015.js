@@ -195,9 +195,10 @@ assert.strictEqual(penguinsCard.winProbability, '63.4%');
 assert.strictEqual(penguinsCard.edge, '4.7%');
 assert.strictEqual(penguinsCard.ev, '8.0%');
 
+// Shrunk EV ranks first. The higher edge does not outrank the higher EV.
 const hi = { sport: 'NCAAF', matchup: 'A @ B', side: 'B', ev: 0.03, edgePct: 0.05, coverProb: 0.69, odds: -180 };
 const lo = { sport: 'NCAAF', matchup: 'C @ D', side: 'D', ev: 0.08, edgePct: 0.02, coverProb: 0.4, odds: 180 };
-assert.strictEqual(orderedByScore([lo, hi])[0].side, 'B');
+assert.strictEqual(orderedByScore([lo, hi])[0].side, 'D');
 
 function leg(matchup, cover, edge) {
   const parts = matchup.split(' @ ');

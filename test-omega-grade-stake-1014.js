@@ -1,5 +1,5 @@
 'use strict';
-// Flat stake by grade. Kelly does not set the published units.
+// Letter grade is the edge label. Published units are quarter Kelly on coverProb.
 // A full card (any straight A- or better) parlays 0.5u. A lean-only card parlays 0.25u.
 // Risk and to-win are whole dollars, rounded up per stake.
 const assert = require('assert');
@@ -43,7 +43,7 @@ function row(matchup, side, odds, edge, tier) {
     side,
     market: 'Total',
     odds,
-    coverProb: 0.58,
+    coverProb: 0.575,
     ev: 0.05,
     edgePct: edge,
     tier: tier || 'floor',
@@ -65,21 +65,25 @@ const a = pickOf(0.036, 'floor', -115);
 const aMinus = pickOf(0.024, 'floor', -110);
 const b = pickOf(0.008, 'floor', -110);
 const leanA = pickOf(0.04, 'lean', -110);
-assert.strictEqual(aPlus.units, '1.5u');
+function kellyUnits(p, odds) {
+  return `${select.quarterKellyUnits(p, odds)}u`;
+}
+assert.strictEqual(aPlus.units, kellyUnits(0.575, -110));
 assert.strictEqual(aPlus.grade, 'A+');
-assert.strictEqual(aPlus.riskDollars, 225);
-assert.strictEqual(a.units, '1u');
+assert.strictEqual(aPlus.riskDollars, math.stakeDollars(select.quarterKellyUnits(0.575, -110)));
+assert.strictEqual(a.units, kellyUnits(0.575, -115));
 assert.strictEqual(a.grade, 'A');
-assert.strictEqual(a.riskDollars, 150);
-assert.strictEqual(a.toWinDollars, 131);
-assert.strictEqual(aMinus.units, '0.75u');
+assert.strictEqual(a.riskDollars, math.stakeDollars(select.quarterKellyUnits(0.575, -115)));
+assert.strictEqual(a.toWinDollars, math.toWinDollars(select.quarterKellyUnits(0.575, -115), -115));
+assert.strictEqual(aMinus.units, kellyUnits(0.575, -110));
 assert.strictEqual(aMinus.grade, 'A-');
-assert.strictEqual(aMinus.riskDollars, 113);
-assert.strictEqual(b.units, '0.5u');
+assert.strictEqual(aMinus.riskDollars, math.stakeDollars(select.quarterKellyUnits(0.575, -110)));
+assert.strictEqual(b.units, kellyUnits(0.575, -110));
 assert.strictEqual(b.grade, 'B');
-assert.strictEqual(b.riskDollars, 75);
+assert.strictEqual(b.riskDollars, math.stakeDollars(select.quarterKellyUnits(0.575, -110)));
 assert.strictEqual(leanA.units, '0.5u');
 assert.strictEqual(leanA.tier, 'lean');
+assert.ok(select.quarterKellyUnits(0.575, -110) >= select.quarterKellyUnits(0.54, -110));
 assert.strictEqual(a.gameTime, '8:00 PM ET');
 
 const full = [
@@ -89,9 +93,9 @@ const full = [
 ];
 const ticket = parlayFromStraights(full)[0];
 assert.strictEqual(ticket.units, '0.5u');
-assert.strictEqual(ticket.evLabel, 'assumes independent legs (different games)');
+assert.strictEqual(ticket.evLabel, 'same-model-bias haircut x0.9025 applied');
 assert.strictEqual(ticket.correlationNote, ticket.evLabel);
-assert.strictEqual(ticket.independent, true);
+assert.strictEqual(ticket.independent, false);
 assert.strictEqual(ticket.mirrorsCard, true);
 assert.strictEqual(ticket.combinedOdds, '+521');
 assert.strictEqual(ticket.combinedDecimal, 6.21);

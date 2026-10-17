@@ -247,8 +247,9 @@ function findSide(cands, market, re) {
     leg('E @ F', 'Over 46.5', 'Total', 0.57),
   ];
   const raw = 0.60 * 0.58 * 0.57;
+  const hair3 = Math.pow(0.95, 2);
   const stats = parlay.comboStats(overs);
-  near(stats.combinedProb, raw * 0.92, 1e-12);
+  near(stats.combinedProb, raw * hair3, 1e-12);
   near(stats.ev, stats.combinedProb * stats.combinedDecimal - 1, 1e-12);
   assert.ok(stats.combinedProb < raw);
   assert.strictEqual(parlay.sameDirectionTotalFactor(overs), 0.92);
@@ -265,7 +266,7 @@ function findSide(cands, market, re) {
     leg('E @ F', 'F -3', 'Spread', 0.57),
   ];
   const rawMixed = 0.60 * 0.58 * 0.57;
-  near(parlay.comboStats(mixed).combinedProb, rawMixed, 1e-12);
+  near(parlay.comboStats(mixed).combinedProb, rawMixed * hair3, 1e-12);
   assert.strictEqual(parlay.sameDirectionTotalFactor(mixed), 1);
 
   const spreadOnly = [
@@ -273,13 +274,14 @@ function findSide(cands, market, re) {
     leg('C @ D', 'D -3', 'Spread', 0.58),
     leg('E @ F', 'F -6.5', 'Spread', 0.57),
   ];
-  near(parlay.comboStats(spreadOnly).combinedProb, rawMixed, 1e-12);
+  near(parlay.comboStats(spreadOnly).combinedProb, rawMixed * hair3, 1e-12);
 
   const ticket = parlay.optimizeParlay(overs, []);
   assert.strictEqual(ticket.length, 1, 'three NFL overs on distinct games are a parlay');
   assert.strictEqual(ticket[0].legs.length, 3);
 
-  // Raw all-over product beats every other trio. After the haircut it does not.
+  // 0.95^(n-1) scales every ticket of the same length, so it does not
+  // invert two 3-leg rankings. The hotter raw product still ranks first.
   const rivals = [
     leg('G @ H', 'H -3', 'Spread', 0.605),
     leg('I @ J', 'J ML', 'Moneyline', 0.605),
@@ -300,14 +302,14 @@ function findSide(cands, market, re) {
   assert.strictEqual(new Set(rankedGames).size, 3, 'parlay legs are distinct games');
   const overStats = parlay.comboStats(hotOvers);
   const otherStats = parlay.comboStats([hotOvers[0], hotOvers[1], rivals[0]]);
-  assert.ok(overStats.combinedProb < otherStats.combinedProb);
-  assert.strictEqual(parlay.preferHit(otherStats, overStats), true);
+  assert.ok(overStats.combinedProb > otherStats.combinedProb);
+  assert.strictEqual(parlay.preferHit(overStats, otherStats), true);
 }
 
 // NFL 3/7 key-number mass. NCAAF stays on the normal. Push at −3 is conditional cover.
 {
   assert.deepStrictEqual(config.NFL_KEY_NUMBERS, { 3: 0.09, 7: 0.06 });
-  const std = config.SPORT_SPREAD_STD.NFL;
+  const std = config.effectiveSd('NFL', 'margin');
   const normal = (mu, line, s) => normCdf((mu + line) / s);
 
   const mu = 3;

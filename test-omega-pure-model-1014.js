@@ -86,7 +86,7 @@ assert.strictEqual(pick.pureModelPriced, true);
 assert.ok(pick.rating === 'aplus' || pick.rating === 'a' || pick.rating === 'aminus' || pick.rating === 'b');
 
 const indexSrc = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/index.js'), 'utf8');
-assert.ok(indexSrc.includes('applyPureModel(candidates)'));
+assert.ok(!indexSrc.includes('applyPureModel(candidates)'));
 assert.ok(!indexSrc.includes('applySharpFair('));
 assert.ok(Math.abs(implied - 0.5238) < 0.01);
 assert.ok(dec > 1);

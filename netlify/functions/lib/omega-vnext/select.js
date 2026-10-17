@@ -500,14 +500,15 @@ function printedEdgeEv(c) {
 function toPickObject(c, opts = {}) {
   const sharp = !!(c && c.sharpFairPriced);
   const pure = !!(c && c.pureModelPriced);
+  const onBetPrice = pure || !!(c && c.edgeBasis === 'model-edge-vs-bet-price');
 
-  // Sharp card: edge is p_fair − implied. Pure model: edge is p_model − implied.
+  // Sharp card: edge is p_fair − implied. Bet-price card: edge is p − vigged implied.
   // Letter bands are that edge alone. CLV does not move the grade.
   // Older rows keep the model edge plus the small CLV nudge.
   const printed = printedEdgeEv(c);
   const edgeFrac = printed.edgeFrac;
   const edgePctStr = printed.edgePctStr;
-  const gradeOnEdge = sharp || pure;
+  const gradeOnEdge = sharp || onBetPrice;
   const qualityClv = gradeOnEdge ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);

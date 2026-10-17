@@ -24,7 +24,7 @@
  * anyway.
  */
 const { clamp } = require('../odds_math');
-const { HFA, ENGINE_SOFT, NHL_PRIOR_K, nhlPriorK } = require('../config');
+const { HFA, ENGINE_SOFT, NHL_PRIOR_K, nhlPriorK, ratingGamesN } = require('../config');
 const {
   formatMatchup, mapGamesSoft, LEAGUE_PPG, bindEspnGameByTeamAndTime,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
@@ -806,6 +806,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
     goalie: soft.goalie,
     winPct: soft.winPct,
   };
+  const nGames = ratingGamesN(nhlGames(homeSt), nhlGames(awaySt));
   const out = [];
 
   {
@@ -819,7 +820,9 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const q = periodQuote({ modelMargin, modelTotal, market: 'ml', sideIsHome: isHome });
       const pPure = q
         ? q.coverProb
-        : (isHome ? mlFromSpread(modelMargin, SPORT) : 1 - mlFromSpread(modelMargin, SPORT));
+        : (isHome
+          ? mlFromSpread(modelMargin, SPORT, undefined, nGames)
+          : 1 - mlFromSpread(modelMargin, SPORT, undefined, nGames));
       const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.ml);
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,
@@ -844,7 +847,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const q = periodQuote({ modelMargin, modelTotal, market: 'spread', sideIsHome: isHome, line });
       const pCoverPure = q
         ? q.coverProb
-        : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT);
+        : spreadCoverProb(isHome ? modelMargin : -modelMargin, line, SPORT, undefined, nGames);
       const pCover = blendWithMarket(pCoverPure, noVigPinnacleImplied(bundles, b), BLEND.spread);
       const sideLabel = line > 0 ? `${b.side} +${line}` : `${b.side} ${line}`;
       const raw = stamp({
@@ -869,7 +872,7 @@ function projectGame(event, standings, espnGame, gameDay, fallbackSeen, baseline
       const q = periodQuote({
         modelMargin, modelTotal, market: 'total', line, side: b.side,
       });
-      const pPure = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT);
+      const pPure = q ? q.coverProb : totalCoverProb(modelTotal, line, b.side, SPORT, nGames);
       const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), BLEND.total);
       const raw = stamp({
         sport: SPORT, homeTeam: home, awayTeam: away,

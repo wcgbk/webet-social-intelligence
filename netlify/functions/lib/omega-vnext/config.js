@@ -561,6 +561,69 @@ const SPORT_SPREAD_STD = { NFL: 13.5, NCAAF: 16.0, NBA: 12.0, NHL: 2.5, MLB: 4.2
  * It does not change a gate. NBA stays off the daily card.
  */
 const SPORT_TOTAL_STD = { NFL: 10.5, NCAAF: 13.5, NBA: 18.0, NHL: 1.8, MLB: 3.5 };
+
+/**
+ * Rating-error SD on the margin/total → cover conversion.
+ * SD_rating = base * sqrt(6 / max(n, 6)).
+ * n is the average games played of the two teams. Unknown n uses 6,
+ * which is the full base. Effective SD = sqrt(game_SD^2 + SD_rating^2).
+ * Game SD stays SPORT_SPREAD_STD / SPORT_TOTAL_STD (margin uses the spread SD).
+ * NFL and NBA bases are 0, so the term is off and those paths stay bit-identical.
+ * NHL and MLB bases are ASSUMED, not fitted: half that sport's game SD.
+ * NCAAF bases are the stated point values, also not a fitted residual.
+ */
+const RATING_ERROR_N0 = 6;
+const RATING_ERROR_SD = {
+  NCAAF: { margin: 8, total: 6 },
+  NHL: { margin: 1.25, total: 0.9 },
+  MLB: { margin: 2.1, total: 1.75 },
+  NFL: { margin: 0, total: 0 },
+  NBA: { margin: 0, total: 0 },
+};
+
+function ratingKind(kind) {
+  return /total/i.test(String(kind || '')) ? 'total' : 'margin';
+}
+
+/** Average games played. Either side unknown → undefined (caller treats that as n = 6). */
+function ratingGamesN(gpHome, gpAway) {
+  const a = Number(gpHome);
+  const b = Number(gpAway);
+  if (!(a > 0) || !(b > 0)) return undefined;
+  return (a + b) / 2;
+}
+
+function ratingErrorSd(sport, kind, n) {
+  const table = RATING_ERROR_SD[String(sport || '').toUpperCase()];
+  const base = table ? Number(table[ratingKind(kind)]) : 0;
+  if (!(base > 0)) return 0;
+  const games = Number(n);
+  const used = Number.isFinite(games) && games > 0 ? games : RATING_ERROR_N0;
+  return base * Math.sqrt(RATING_ERROR_N0 / Math.max(used, RATING_ERROR_N0));
+}
+
+function gameSdFor(sport, kind) {
+  const key = String(sport || '').toUpperCase();
+  if (ratingKind(kind) === 'total') return SPORT_TOTAL_STD[key] || 10;
+  return SPORT_SPREAD_STD[key] || 13.5;
+}
+
+/** Pure. Rating base 0 returns the game SD unchanged (no sqrt). */
+function effectiveSd(sport, kind, n) {
+  const game = gameSdFor(sport, kind);
+  const rating = ratingErrorSd(sport, kind, n);
+  if (!(rating > 0) || !(game > 0)) return game;
+  return Math.sqrt(game * game + rating * rating);
+}
+
+/**
+ * Post-calibration anchor. Model weight. Absent sport → no anchor.
+ * p = w * p_model + (1 - w) * p_fair. w = 1 is the model. w = 0 is the market.
+ * NHL and MLB 0.25 are ASSUMED, not fitted. NCAAF is not in this table
+ * (point weight stays 1, plus the rating-error SD). NFL and NBA are not anchored.
+ * This is not the marketAnchorOn() K-table. That switch stays off.
+ */
+const MARKET_ANCHOR_MODEL_WEIGHT = { NHL: 0.25, MLB: 0.25 };
 /** HFA base; game_day.js applies soft rest/B2B deltas on top. */
 const HFA = { MLB: 0.12, NFL: 2.0, NCAAF: 2.6, NBA: 2.5, NHL: 0.15 };
 
@@ -981,7 +1044,7 @@ const GENERATOR_BOOKMAKERS = [
 ].join(',');
 
 const MODEL_NOTES = [
-  'v12.4.0-webetai-pure: v12.4.1-webetai-pure (2026-10-17): NCAAF no pull toward Pinnacle (weight 1); NHL empty-net step removed (double count); card copy sanitizer; parlay-leg edge string identity; Hard Rock same-line placeability. OMEGA_MARKET_ANCHOR is ignored, so edge and EV stay on the pure model probability versus the bet price and a short card still fills to 3. Published stake is flat by grade. A+ is 1.5u ($225), A is 1u ($150), A- is 0.75u ($113), and B or any lean is 0.5u ($75). Kelly rounding does not override the grade. A full card (any straight graded A- or better) parlays 0.5u ($75). A lean-only card parlays 0.25u ($38). Risk and to-win are whole dollars rounded up. DAILY_UNIT_CAP is 5.0u so three A+ plus the 0.5u parlay fit. Parlay legs carry pick, odds, matchup, sport, book, edge, and grade. Combined odds are the product of the leg decimal odds. Parlay EV is labeled assumes independent legs. Edge, EV, and pick selection are unchanged. OMEGA_X_AUTOPOST stays unset. Generate prices the stored board and does not re-pull paid odds.',
+  'v12.4.0-webetai-pure: 2026-10-17: normal cover uses effective SD sqrt(game_SD^2+SD_rating^2), SD_rating=base*sqrt(6/max(n,6)) (NCAAF margin 8 total 6; NHL/MLB half the game SD, ASSUMED; NFL/NBA base 0). NHL/MLB anchor p=0.25*p_cal+0.75*p_fair after calibration (ASSUMED). Published edge is that p minus the vigged price. v12.4.1-webetai-pure (2026-10-17): NCAAF no pull toward Pinnacle (weight 1); NHL empty-net step removed (double count); card copy sanitizer; parlay-leg edge string identity; Hard Rock same-line placeability. OMEGA_MARKET_ANCHOR is ignored, so edge and EV stay on the pure model probability versus the bet price and a short card still fills to 3. Published stake is flat by grade. A+ is 1.5u ($225), A is 1u ($150), A- is 0.75u ($113), and B or any lean is 0.5u ($75). Kelly rounding does not override the grade. A full card (any straight graded A- or better) parlays 0.5u ($75). A lean-only card parlays 0.25u ($38). Risk and to-win are whole dollars rounded up. DAILY_UNIT_CAP is 5.0u so three A+ plus the 0.5u parlay fit. Parlay legs carry pick, odds, matchup, sport, book, edge, and grade. Combined odds are the product of the leg decimal odds. Parlay EV is labeled assumes independent legs. Edge, EV, and pick selection are unchanged. OMEGA_X_AUTOPOST stays unset. Generate prices the stored board and does not re-pull paid odds.',
   'v12.3.74-omega-vnext-price-lock: Inclusion is a flat 2% stake-EV floor at the best DraftKings or Hard Rock price. The odds-scaled edge curve is display and tiebreak only, not an inclusion gate. EV above 12% is ev-stale and is logged, not published and not a lean. Straights stay inside -250 to +250. Rank is probability edge, then stake EV within 0.2 points. When fewer than 3 straights clear 2%, the card fills from the best remaining positive-EV candidates, then the best EV even if it is not positive, one per game, labeled leans at 0.5u. A full card parlays 0.5u and a lean-only card parlays 0.25u, from the best edges on distinct games, and it is labeled when combined EV is not positive. QA auto-corrects and does not block. Generate prices the stored 10:00 ET board (pinnacle, DraftKings, Hard Rock) from omega-pinnacle-line-moves slot 1000 and does not re-pull paid odds. line_move_prob is unchanged. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.73-omega-vnext-price-lock: The 10:00 ET pull is the last Odds API pull and sets final prices. It ranks the top 10 by edge and leaves the card a draft. 10:15 re-ranks that top 10 after news, weather, injury, depth-chart, team-form, and stadium inputs. 10:30 drafts the top 3 and the parlay, then checks Hard Rock placeability at the displayed best US price (Hard Rock or DraftKings, never Pinnacle). A straight that fails is flagged. A parlay that fails is re-priced at the Hard Rock price or a leg is swapped for the next positive-EV distinct-game Hard Rock candidate. The re-price keeps positive edge versus the Pinnacle no-vig and positive EV on each leg and the ticket. The check does not block publish and does not pull odds. 10:45 writes context and summaries. 11:00 is the only finalization. The 3:00 and 10:00 checks are one call, bookmakers=pinnacle,draftkings,hardrockbet. The generator request names hardrockbet in one bookmakers parameter. Stake EV uses the displayed US price. DraftKings is still required. The optional sharp-book slot stays empty. OMEGA_X_AUTOPOST stays unset.',
   'v12.3.72-omega-vnext-price-lock: Every parlay publishes only when combined EV is positive, on a lean day and on a floor day. The probability is the same adjusted cover that sets straight edge and stake EV. A straight ticket that misses is rebuilt from the next-best positive-EV legs on distinct games. A Hard Rock offer on that row is the leg price, and a leg Hard Rock does not offer is swapped. No positive-EV 3-leg is marked no qualifying parlay. Straights still publish. A main still needs 3% edge and the 3% stake-EV floor. A lean still needs 1.5% edge and stake EV above 0.',
@@ -1143,6 +1206,12 @@ module.exports = {
   SELECT_WEIGHTS,
   SPORT_SPREAD_STD,
   SPORT_TOTAL_STD,
+  RATING_ERROR_SD,
+  RATING_ERROR_N0,
+  ratingGamesN,
+  ratingErrorSd,
+  effectiveSd,
+  MARKET_ANCHOR_MODEL_WEIGHT,
   HFA,
   NFL_TOTAL_MODEL_WEIGHT,
   NCAAF_MODEL_WEIGHT,

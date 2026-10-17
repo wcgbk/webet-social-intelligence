@@ -17,14 +17,14 @@
  */
 const {
   formatMatchup, mapGamesSoft, matchEspnGameByIdentity,
-  spreadDetail, totalDetail, mlDetail,
+  spreadDetail, totalDetail, mlDetail, gamesPlayed,
   sharpMarketLine, footballPointState, footballAudit, pricedFootball, pureFootballCover, pureForecastPoint,
 } = require('./_common');
 const { footballProjection, applyEngineStack, blendNcaafTempo } = require('./epa');
 const { applyGameDayAdjustments, stampRestAudit } = require('./game_day');
 const { stampPersonnel } = require('../personnel');
 const { footballTotalFromGameDay } = require('./football_weather');
-const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD, NCAAF_MODEL_WEIGHT } = require('../config');
+const { HFA, NCAAF_FCS, SPORT_SPREAD_STD, SPORT_TOTAL_STD, NCAAF_MODEL_WEIGHT, ratingGamesN } = require('../config');
 const { homeFieldPoints } = require('./altitude');
 const { resolveTeamId, isFbsTeamId } = require('./team_identity');
 const { collectMarketOutcomes, enrichCandidateWithEdge, noVigPinnacleImplied } = require('../edge');
@@ -153,6 +153,12 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
   const fcs = isFcsGame(home, away);
   const spreadStd = fcs ? SPORT_SPREAD_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
   const totalStd = fcs ? SPORT_TOTAL_STD.NCAAF * NCAAF_FCS.stdMult : undefined;
+  // Name key only. A miss stays unknown (n = 6, full rating-error base).
+  // Do not call rowByIdentity here: that logs a second miss for the same club.
+  const homeGp = standings && standings[home] ? gamesPlayed(standings[home]) : 0;
+  const awayGp = standings && standings[away] ? gamesPlayed(standings[away]) : 0;
+  const nGames = ratingGamesN(homeGp, awayGp);
+  const nOpt = nGames != null ? { n: nGames } : {};
   const pts = footballPointState(
     SPORT,
     modelTotal,
@@ -168,7 +174,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     for (const b of bundles) {
       const isHome = b.side === home;
       const detailAt = (proj) => {
-        const q = mlDetail(proj, SPORT, spreadStd);
+        const q = mlDetail(proj, SPORT, spreadStd, nOpt);
         if (isHome) return q;
         return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
       };
@@ -181,7 +187,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         NCAAF_MODEL_WEIGHT.ml,
       );
       const pureAt = (proj) => {
-        const q = mlDetail(proj, SPORT, spreadStd, { distribution: 'normal' });
+        const q = mlDetail(proj, SPORT, spreadStd, { distribution: 'normal', ...nOpt });
         if (isHome) return q;
         return { ...q, coverProb: 1 - q.coverProb, pWin: q.pLoss, pLoss: q.pWin };
       };
@@ -208,7 +214,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
       if (b.point == null) continue;
       const isHome = b.side === home;
       const projRaw = isHome ? pts.modelMarginRaw : -pts.modelMarginRaw;
-      const detailAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd);
+      const detailAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd, nOpt);
       const priced = pricedFootball(
         detailAt,
         projRaw,
@@ -217,7 +223,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
         noVigPinnacleImplied(bundles, b),
         NCAAF_MODEL_WEIGHT.spread,
       );
-      const pureAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd, { distribution: 'normal' });
+      const pureAt = (proj, line) => spreadDetail(proj, line, SPORT, spreadStd, { distribution: 'normal', ...nOpt });
       const homeForecast = pureForecastPoint(pts.modelMarginRaw, pts.marketMargin, NCAAF_MODEL_WEIGHT.spread);
       const modelPureP = pureFootballCover(pureAt, isHome ? homeForecast : -homeForecast, b.point);
       const sideLabel = b.point > 0 ? `${b.side} +${b.point}` : `${b.side} ${b.point}`;
@@ -238,7 +244,7 @@ function projectGame(event, standings, efficiency, gameDay, espnGame) {
     const bundles = collectMarketOutcomes(event, 'totals');
     for (const b of bundles) {
       if (b.point == null) continue;
-      const detailAt = (proj, line) => totalDetail(proj, line, b.side, SPORT, totalStd);
+      const detailAt = (proj, line) => totalDetail(proj, line, b.side, SPORT, totalStd, nOpt);
       const priced = pricedFootball(
         detailAt,
         pts.modelTotalRaw,

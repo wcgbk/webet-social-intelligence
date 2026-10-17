@@ -189,6 +189,7 @@ module.exports = {
   applyPureModelOne,
   applyPureModel,
   kFor,
+  powerFair,
   fairProbability,
   calibratedProbability,
 };

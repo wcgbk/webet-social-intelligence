@@ -153,13 +153,16 @@ function gateReason(c, opts = {}) {
   // The printed projection and the side have to be the same story.
   // An Over whose total is under the number is not a bet, even when a
   // period model leaves a hair of stake EV.
-  if (c && c.pureModelPriced && projectionDisagrees(c)) return 'projection-disagrees';
+  // pureModelPriced is no longer set on the card. The bet-price edge
+  // path keeps the same projection check and the same skips below.
+  const pure = !!(c && (c.pureModelPriced || c.edgeBasis === 'model-edge-vs-bet-price'));
+  if (c && pure && projectionDisagrees(c)) return 'projection-disagrees';
 
   // Sharp-fair path. A bad Pinnacle pair is structural (not a lean).
   // A priced row skips the model-gap veto: the probability is the Pinnacle
   // power fair, so a model/line disagreement is not a reason to drop it.
-  // Pure-model rows never use a Pinnacle pair, a sharp gap, or steam as a gate.
-  const pure = !!(c && c.pureModelPriced);
+  // Bet-price rows (and the old pure-model rows) do not use a Pinnacle
+  // pair, a sharp gap, or steam as a gate.
   if (c && c.sharpFairReject && !pure) return c.sharpFairReject;
   if (!(c && c.sharpFairPriced) && !pure) {
     // Absurd model-vs-market gap. Caps live in FB_MARKET_GAP and are wider

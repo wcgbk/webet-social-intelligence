@@ -4,6 +4,7 @@ const { normCdf, clamp, americanToImplied, etCalendarDate } = require('../odds_m
 const {
   SPORT_SPREAD_STD, SPORT_TOTAL_STD, HFA, SHARP_BOOKS, POINT_SHRINK, MODEL_LINE_GAP,
   NFL_KEY_NUMBERS, ncaafGpFixEnabled, ncaafShrinkK, fbGapGuardEnabled, fbMarketGapLimits,
+  ratingErrorSd,
 } = require('../config');
 const { resolveTeamId } = require('./team_identity');
 const { keyMassEnabled } = require('../gaps_flags');
@@ -349,9 +350,23 @@ function powerFromStandings(st, sport) {
   return 0;
 }
 
-function resolveSpreadStd(sport, stdOverride) {
-  if (Number.isFinite(stdOverride) && stdOverride > 0) return stdOverride;
-  return SPORT_SPREAD_STD[sport] || 13.5;
+/**
+ * One application of the rating-error term. A zero rating returns `game`
+ * unchanged so NFL and NBA stay bit-identical. Do not call this on a
+ * standard deviation that is already effective.
+ */
+function applyRatingSd(sport, kind, game, n) {
+  if (!(game > 0)) return game;
+  const rating = ratingErrorSd(sport, kind, n);
+  if (!(rating > 0)) return game;
+  return Math.sqrt(game * game + rating * rating);
+}
+
+function resolveSpreadStd(sport, stdOverride, n) {
+  const game = (Number.isFinite(stdOverride) && stdOverride > 0)
+    ? stdOverride
+    : (SPORT_SPREAD_STD[sport] || 13.5);
+  return applyRatingSd(sport, 'margin', game, n);
 }
 
 function binMass(mean, std, k) {
@@ -424,7 +439,7 @@ function nflKeyNumberCover(modelMargin, line, std) {
  * a normal CDF. Optional 4th arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
 function spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride, opts) {
-  const std = resolveSpreadStd(sport, stdOverride);
+  const std = resolveSpreadStd(sport, stdOverride, opts && opts.n);
   // Pure-model publish uses the normal. Key-mass stays on the blend path.
   // A 0.8-point margin at σ 16 is about 2 probability points. The keyed
   // PMF was moving that same margin by 4 points and the card then bet it.
@@ -442,14 +457,16 @@ function spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride, opts)
   return { coverProb: p, pWin: p, pPush: 0, pLoss: Math.max(0, 1 - p) };
 }
 
-function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride) {
-  return spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride).coverProb;
+function spreadCoverProb(modelSpreadHome, marketLineHome, sport, stdOverride, n) {
+  const opts = n != null ? { n } : undefined;
+  return spreadDetail(modelSpreadHome, marketLineHome, sport, stdOverride, opts).coverProb;
 }
 
-function totalDetail(modelTotal, marketTotal, side, sport, stdOverride) {
-  const std = (Number.isFinite(stdOverride) && stdOverride > 0)
+function totalDetail(modelTotal, marketTotal, side, sport, stdOverride, opts) {
+  const game = (Number.isFinite(stdOverride) && stdOverride > 0)
     ? stdOverride
     : (SPORT_TOTAL_STD[sport] || 10);
+  const std = applyRatingSd(sport, 'total', game, opts && opts.n);
   if (sport === 'NFL' && keyMassEnabled()
       && Number.isFinite(modelTotal) && Number.isFinite(marketTotal)) {
     const q = totalQuote(modelTotal, marketTotal, side, sport, std);
@@ -460,8 +477,9 @@ function totalDetail(modelTotal, marketTotal, side, sport, stdOverride) {
   return { coverProb: p, pWin: p, pPush: 0, pLoss: Math.max(0, 1 - p) };
 }
 
-function totalCoverProb(modelTotal, marketTotal, side, sport) {
-  return totalDetail(modelTotal, marketTotal, side, sport).coverProb;
+function totalCoverProb(modelTotal, marketTotal, side, sport, n) {
+  const opts = n != null ? { n } : undefined;
+  return totalDetail(modelTotal, marketTotal, side, sport, undefined, opts).coverProb;
 }
 
 /**
@@ -470,7 +488,7 @@ function totalCoverProb(modelTotal, marketTotal, side, sport) {
  * Optional 3rd arg stdOverride (v12.3.7 MLB SP-known tighten).
  */
 function mlDetail(modelSpreadHome, sport, stdOverride, opts) {
-  const std = resolveSpreadStd(sport, stdOverride);
+  const std = resolveSpreadStd(sport, stdOverride, opts && opts.n);
   const useNormal = !!(opts && opts.distribution === 'normal');
   if (!useNormal && (sport === 'NFL' || sport === 'NCAAF') && keyMassEnabled() && Number.isFinite(modelSpreadHome)) {
     const q = mlQuote(modelSpreadHome, sport, std);
@@ -480,8 +498,9 @@ function mlDetail(modelSpreadHome, sport, stdOverride, opts) {
   return { coverProb: p, pWin: p, pPush: 0, pLoss: Math.max(0, 1 - p) };
 }
 
-function mlFromSpread(modelSpreadHome, sport, stdOverride) {
-  return mlDetail(modelSpreadHome, sport, stdOverride).coverProb;
+function mlFromSpread(modelSpreadHome, sport, stdOverride, n) {
+  const opts = n != null ? { n } : undefined;
+  return mlDetail(modelSpreadHome, sport, stdOverride, opts).coverProb;
 }
 
 /** Mild market-anchored lean: blend model with market implied. */

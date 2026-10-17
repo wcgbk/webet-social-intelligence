@@ -308,7 +308,6 @@ function findSide(cands, market, re) {
 {
   assert.deepStrictEqual(config.NFL_KEY_NUMBERS, { 3: 0.09, 7: 0.06 });
   const std = config.SPORT_SPREAD_STD.NFL;
-  const cfbStd = config.SPORT_SPREAD_STD.NCAAF;
   const normal = (mu, line, s) => normCdf((mu + line) / s);
 
   const mu = 3;
@@ -339,11 +338,14 @@ function findSide(cands, market, re) {
   for (const line of [-1.5, -4, -6, -10, 0, 4.5, 8.5]) {
     near(common.spreadCoverProb(mu, line, 'NFL'), normal(mu, line, std));
   }
+  const cfbEff = config.effectiveSd('NCAAF', 'margin');
   for (const line of [-2.5, -3, -3.5, -6.5, -7, -7.5, 2.5, 3.5]) {
-    near(common.spreadCoverProb(4, line, 'NCAAF'), normal(4, line, cfbStd));
+    near(common.spreadCoverProb(4, line, 'NCAAF'), normal(4, line, cfbEff));
   }
-  near(common.spreadCoverProb(1.2, -1.5, 'MLB'), normal(1.2, -1.5, config.SPORT_SPREAD_STD.MLB));
-  near(common.spreadCoverProb(1.2, -1.5, 'MLB', 3.9), normal(1.2, -1.5, 3.9));
+  near(common.spreadCoverProb(1.2, -1.5, 'MLB'), normal(1.2, -1.5, config.effectiveSd('MLB', 'margin')));
+  const mlbRating = config.ratingErrorSd('MLB', 'margin');
+  const mlbOver = Math.sqrt(3.9 * 3.9 + mlbRating * mlbRating);
+  near(common.spreadCoverProb(1.2, -1.5, 'MLB', 3.9), normal(1.2, -1.5, mlbOver));
   near(common.mlFromSpread(mu, 'NFL'), normCdf(mu / std));
 
   const push = common.nflKeyNumberCover(3, -3, std);
@@ -390,9 +392,9 @@ function findSide(cands, market, re) {
   assert.strictEqual(cfb25.modelMarginRaw, cfb3.modelMarginRaw);
   const cm = cfb25.modelMarginRaw;
   const cfbBlend = (p) => common.blendWithMarket(p, anchor, config.NCAAF_MODEL_WEIGHT.spread);
-  near(cfb25.modelRawP, cfbBlend(normal(cm, -2.5, cfbStd)), 1e-9);
-  near(cfb35.modelRawP, cfbBlend(normal(cm, -3.5, cfbStd)), 1e-9);
-  near(cfb3.modelRawP, cfbBlend(normal(cm, -3, cfbStd)), 1e-9);
+  near(cfb25.modelRawP, cfbBlend(normal(cm, -2.5, cfbEff)), 1e-9);
+  near(cfb35.modelRawP, cfbBlend(normal(cm, -3.5, cfbEff)), 1e-9);
+  near(cfb3.modelRawP, cfbBlend(normal(cm, -3, cfbEff)), 1e-9);
 
   const nflPush = spreadRow(nfl, 'Kansas City Chiefs', 'Buffalo Bills', -3);
   const detail = common.nflKeyNumberCover(nflPush.modelMarginRaw, -3, std);

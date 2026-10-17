@@ -30,7 +30,7 @@ const { buildShortfall } = require('./shortfall');
 const { runPmObserver, annotatePmSoftFeatures } = require('./pm_observer');
 const { loadLinePath, annotateLineMoves, assessCaptureHealth, assessPullCaptureHealth, warnCaptureHealth } = require('./line_path');
 const { applyDkLag } = require('./dk_lag');
-const { applyPureModel, PURE_MODEL_VERSION } = require('./pure_model');
+const { applyMarketAnchor, priceEdgesAtBet } = require('./prob_anchor');
 const { applyLineMoveProb } = require('./line_move_prob');
 const { runWithFetchMemo } = require('./fetch_memo');
 const { runWithSnapshotClock } = require('./odds_snapshot_cache');
@@ -389,7 +389,11 @@ async function generateOmegaVnext(opts = {}) {
   // cardDate picks the prior-date record for OMEGA_CAL_MODE B and C.
   // Legacy and A do not read it. Gates, floors, Kelly, and unit caps are unchanged.
   console.log(`[omega-vnext] cal-mode=${resolveCalMode()} cardDate=${dateISO}`);
-  candidates = calibrateAll(candidates, { cardDate: dateISO }).map(attachEv);
+  candidates = calibrateAll(candidates, { cardDate: dateISO });
+  // NHL/MLB only. p = w*p_cal + (1-w)*p_fair, w = 0.25. Other sports stay put.
+  // Edge and EV are priced later from this cover, after line-move may nudge it.
+  candidates = applyMarketAnchor(candidates);
+  candidates = candidates.map(attachEv);
   candidates = annotateMajorBooks(candidates, snap);
 
   // Open→pick line move. The steam gate uses the 10:00 Pinnacle print
@@ -596,14 +600,12 @@ async function generateOmegaVnext(opts = {}) {
   const lagFired = candidates.filter((c) => c && c.lagEdge != null && c.lagEdge > 0).length;
   console.log(`[omega-vnext] dk-lag fired=${lagFired}/${candidates.length}`);
 
-  // Published edge and EV are the pure sport-model probability at the bet price.
-  // edge = p_model − implied(price). EV = p_model × decimal − 1.
-  // The blend, the shrink, line-move, DK lag, and the Pinnacle fair do not enter.
-  // Pinnacle stays on the row for CLV only. A missing model probability drops.
-  candidates = applyPureModel(candidates);
-  const purePriced = candidates.filter((c) => c && c.pureModelPriced).length;
-  const pureMissing = candidates.filter((c) => c && c.pureModelMissing).length;
-  console.log(`[omega-vnext] pure-model version=${PURE_MODEL_VERSION} priced=${purePriced} missing=${pureMissing}`);
+  // Final cover is the calibrated probability (NHL/MLB already anchored).
+  // modelPureP stays on the row as a diagnostic and does not replace coverProb.
+  // edge = p − vigged implied. EV = p × decimal − 1.
+  candidates = priceEdgesAtBet(candidates);
+  const anchored = candidates.filter((c) => c && (c.anchorFairSource === 'pinnacle' || c.anchorFairSource === 'draftkings')).length;
+  console.log(`[omega-vnext] prob-anchor edge-priced=${candidates.length} nhl-mlb-anchored=${anchored}`);
 
   // Off the card only when the sport mean is past 3× and this game is too.
   // One outlier does not blank the other games. A single game past the

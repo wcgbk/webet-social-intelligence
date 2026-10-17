@@ -12,9 +12,9 @@
  * Both off leaves this total on the pre-correction number. Margin is not shifted.
  * assumedStarter stays tagged for QA hard-fail.
  */
-const { HFA, ENGINE_SOFT } = require('../config');
+const { HFA, ENGINE_SOFT, ratingGamesN } = require('../config');
 const {
-  formatMatchup, bindEspnGameByTeamAndTime,
+  formatMatchup, bindEspnGameByTeamAndTime, gamesPlayed,
   spreadCoverProb, totalCoverProb, mlFromSpread, blendWithMarket,
 } = require('./_common');
 const { rowByIdentityOrFuzzy } = require('./team_identity');
@@ -157,16 +157,17 @@ function deriveGame(event, standings, espnGame, ctx) {
     usedGameday,
   });
   const stdOpt = effStd != null ? effStd : undefined;
+  const ratingN = ratingGamesN(gamesPlayed(homeSt), gamesPlayed(awaySt));
   return {
     event, home, away, commenceTime, modelMargin, modelTotal, uncertainty,
-    methods, gameDayMeta, stdOpt,
+    methods, gameDayMeta, stdOpt, ratingN,
   };
 }
 
 function priceGame(derived, totalShift) {
   const {
     home, away, commenceTime, modelMargin, uncertainty,
-    methods, gameDayMeta, stdOpt,
+    methods, gameDayMeta, stdOpt, ratingN,
   } = derived;
   const modelTotal = applyMlbTotalShift(derived.modelTotal, totalShift);
   const out = [];
@@ -176,7 +177,9 @@ function priceGame(derived, totalShift) {
     const bundles = collectMarketOutcomes(event, 'h2h');
     for (const b of bundles) {
       const isHome = b.side === home;
-      const pPure = isHome ? mlFromSpread(modelMargin, SPORT, stdOpt) : 1 - mlFromSpread(modelMargin, SPORT, stdOpt);
+      const pPure = isHome
+        ? mlFromSpread(modelMargin, SPORT, stdOpt, ratingN)
+        : 1 - mlFromSpread(modelMargin, SPORT, stdOpt, ratingN);
       const p = blendWithMarket(pPure, noVigPinnacleImplied(bundles, b), 0.5);
       let raw = {
         sport: SPORT, homeTeam: home, awayTeam: away,
@@ -201,7 +204,8 @@ function priceGame(derived, totalShift) {
         isHome ? modelMargin : -modelMargin,
         line,
         SPORT,
-        stdOpt
+        stdOpt,
+        ratingN
       );
       const mktImp = noVigPinnacleImplied(bundles, b);
       const pCover = blendWithMarket(pCoverPure, mktImp, 0.5);
@@ -224,7 +228,7 @@ function priceGame(derived, totalShift) {
     for (const b of bundles) {
       const line = b.point;
       if (line == null) continue;
-      const pPure = totalCoverProb(modelTotal, line, b.side, SPORT);
+      const pPure = totalCoverProb(modelTotal, line, b.side, SPORT, ratingN);
       const mktImp = noVigPinnacleImplied(bundles, b);
       const p = blendWithMarket(pPure, mktImp, 0.45);
       const sideLabel = `${b.side} ${line}`;

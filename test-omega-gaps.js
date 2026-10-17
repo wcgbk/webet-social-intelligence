@@ -81,7 +81,7 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
   assert.ok(Math.abs(common.spreadCoverProb(3, -10, 'NFL') - normCdf((3 - 10) / nflStd)) > 0.02);
   assert.ok(Math.abs(common.spreadCoverProb(4, -3, 'NCAAF') - normCdf((4 - 3) / cfbStd)) > 0.002);
   assert.ok(Math.abs(common.spreadCoverProb(4, -10, 'NCAAF') - normCdf((4 - 10) / cfbStd)) > 0.02);
-  near(common.spreadCoverProb(1.2, -1.5, 'MLB'), normCdf((1.2 - 1.5) / config.SPORT_SPREAD_STD.MLB), 1e-12);
+  near(common.spreadCoverProb(1.2, -1.5, 'MLB'), normCdf((1.2 - 1.5) / config.effectiveSd('MLB', 'margin')), 1e-12);
 
   const t44 = km.totalBin(44, 44, totStd);
   const t42 = km.totalBin(44, 42, totStd);
@@ -92,7 +92,7 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
   assert.ok(t44 > t42);
   const overGap = common.totalCoverProb(44, 43.5, 'Over', 'NFL') - common.totalCoverProb(44, 44.5, 'Over', 'NFL');
   assert.ok(overGap > n44, `total key gap ${overGap} vs normal ${n44}`);
-  near(common.totalCoverProb(44, 43.5, 'Over', 'NCAAF'), normCdf((44 - 43.5) / config.SPORT_TOTAL_STD.NCAAF), 1e-12);
+  near(common.totalCoverProb(44, 43.5, 'Over', 'NCAAF'), normCdf((44 - 43.5) / config.effectiveSd('NCAAF', 'total')), 1e-12);
 
   const ml = km.mlQuote(0, 'NFL', nflStd);
   assert.ok(ml.pPush >= 0.001 && ml.pPush < 0.01, `NFL tie ${ml.pPush}`);
@@ -112,13 +112,13 @@ assert.ok(/void-pregame parlay leg is not exposure/.test(config.MODEL_NOTES));
 // OFF restores nflKeyNumberCover and the plain normal.
 withEnv('OMEGA_KEY_MASS', '0', () => {
   const std = config.SPORT_SPREAD_STD.NFL;
-  const cfbStd = config.SPORT_SPREAD_STD.NCAAF;
+  const cfbEff = config.effectiveSd('NCAAF', 'margin');
   const legacy = common.nflKeyNumberCover(3, -3, std);
   assert.strictEqual(common.spreadCoverProb(3, -3, 'NFL'), legacy.coverProb);
   assert.strictEqual(common.spreadCoverProb(3, -2.5, 'NFL'), common.nflKeyNumberCover(3, -2.5, std).coverProb);
   assert.strictEqual(common.spreadCoverProb(3, -10, 'NFL'), normCdf((3 - 10) / std));
-  assert.strictEqual(common.spreadCoverProb(4, -3, 'NCAAF'), normCdf((4 - 3) / cfbStd));
-  assert.strictEqual(common.spreadCoverProb(4, -7.5, 'NCAAF'), normCdf((4 - 7.5) / cfbStd));
+  assert.strictEqual(common.spreadCoverProb(4, -3, 'NCAAF'), normCdf((4 - 3) / cfbEff));
+  assert.strictEqual(common.spreadCoverProb(4, -7.5, 'NCAAF'), normCdf((4 - 7.5) / cfbEff));
   const z = (44 - 43.5) / config.SPORT_TOTAL_STD.NFL;
   assert.strictEqual(common.totalCoverProb(44, 43.5, 'Over', 'NFL'), normCdf(z));
   assert.strictEqual(common.mlFromSpread(3, 'NFL'), clamp(normCdf(3 / std), 0.05, 0.95));

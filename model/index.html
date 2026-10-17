@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    if (document.cookie.split(';').some(function (c) { return c.trim().indexOf('ga_exclude=') === 0; })) {
+      window['ga-disable-G-848D47V084'] = true;
+    }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-848D47V084"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-848D47V084');
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeBetAI - Social Intelligence | Model Math</title>
+  <meta name="description" content="How the WeBetAI Omega model calculates probability, edge, EV, grades, stakes, parlays and the track record, with an audit of the live card." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://webetsocial.com/model" />
+  <meta property="og:title" content="WeBetAI - Social Intelligence | Model Math" />
+  <meta property="og:description" content="The WeBetAI model math, straight from the live code." />
+  <meta property="og:image" content="https://webetsocial.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="WeBetAI - Social Intelligence | Model Math" />
+  <meta name="twitter:image" content="https://webetsocial.com/og-image.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/400.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/500.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/600.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5.0.1/700.css" />
+  <style>
+    :root {
+      --white: #ffffff;
+      --off-white: #f8f9fa;
+      --bg: #f2f3f5;
+      --olive: #1a2e1a;
+      --teal: #004C54;
+      --teal-light: #e6f4f1;
+      --teal-border: #b8ddd6;
+      --green: #2e7d32;
+      --border-lt: #e0e3e8;
+      --txt-b: #1a2e1a;
+      --txt-m: #5f6b7a;
+      --txt-l: #8b95a3;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { background: var(--bg); min-height: 100vh; min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt-b);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh; min-height: 100dvh;
+    }
+    .header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border-lt);
+      padding: .875rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: var(--olive); }
+    .logo-text { font-size: 1rem; font-weight: 700; }
+    .header-nav { display: flex; gap: .5rem; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+    .header-link {
+      font-size: .625rem; font-weight: 600; color: var(--teal);
+      background: var(--teal-light); border: 1px solid var(--teal-border);
+      border-radius: 9999px; padding: .2rem .5rem; text-decoration: none;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .header-link.active { background: var(--teal); color: var(--white); border-color: var(--teal); font-weight: 700; }
+    .header-link:hover { background: var(--teal-border); }
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+    .mobile-dropdown {
+      display: none; position: absolute; top: 100%; right: 0; background: var(--white);
+      border: 1px solid var(--border-lt); border-top: none; border-radius: 0 0 .75rem .75rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: .5rem; z-index: 101; min-width: 180px;
+    }
+    .mobile-dropdown.open { display: flex; flex-direction: column; gap: .25rem; }
+    .mobile-dropdown a { font-size: .8125rem; font-weight: 600; color: var(--teal); padding: .5rem .75rem; text-decoration: none; border-radius: .5rem; }
+    .mobile-dropdown a:hover { background: var(--teal-light); }
+    .in-iframe .header-nav { display: none !important; }
+    .in-iframe .mobile-menu-btn { display: block !important; }
+    @media (max-width: 640px) {
+      .header-nav { display: none; }
+      .mobile-menu-btn { display: block; }
+    }
+    .main { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .page-title { font-size: 1.125rem; font-weight: 700; color: var(--olive); margin-bottom: .125rem; }
+    .page-sub { font-size: .8125rem; color: var(--txt-m); margin-bottom: 1rem; line-height: 1.5; }
+    .updated { font-size: .75rem; color: var(--teal); font-weight: 600; margin-bottom: 1rem; }
+    .summary-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; margin-bottom: 1.25rem; }
+    .summary-card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .75rem; padding: .75rem; text-align: center;
+    }
+    .summary-label {
+      font-size: .625rem; font-weight: 600; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .summary-value { font-size: 1.5rem; font-weight: 700; color: var(--teal); margin-top: .125rem; }
+    .summary-value.pos { color: var(--green); }
+    .summary-value.neg { color: #c0392b; }
+    .card {
+      background: var(--white); border: 1px solid var(--border-lt);
+      border-radius: .875rem; padding: 1.125rem; margin-bottom: .75rem;
+    }
+    .card-title {
+      font-size: .6875rem; font-weight: 700; color: var(--teal);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+    th {
+      font-size: .625rem; font-weight: 700; color: var(--txt-l);
+      text-transform: uppercase; letter-spacing: .04em;
+      text-align: left; padding: .35rem .3rem; border-bottom: 1px solid var(--border-lt);
+    }
+    td { padding: .4rem .3rem; border-bottom: 1px solid var(--off-white); }
+    td.num, th.num { text-align: right; }
+    tr:last-child td { border-bottom: none; }
+    .pos { color: var(--green); font-weight: 600; }
+    .neg { color: #c0392b; font-weight: 600; }
+    .badge {
+      display: inline-block; margin-left: .35rem; font-size: .625rem; font-weight: 700;
+      color: var(--txt-m); background: var(--off-white); border: 1px solid var(--border-lt);
+      border-radius: 9999px; padding: .05rem .35rem; vertical-align: middle;
+    }
+    .target { font-size: .8125rem; line-height: 1.45; margin-bottom: .75rem; }
+    .target:last-child { margin-bottom: 0; }
+    .target b { color: var(--olive); }
+    .met { color: var(--green); font-weight: 700; }
+    .miss { color: #c0392b; font-weight: 700; }
+    .note { font-size: .75rem; color: var(--txt-m); line-height: 1.5; }
+    .stats-loading { text-align: center; padding: 1.5rem; color: var(--txt-l); font-size: .8125rem; }
+    @media (max-width: 480px) {
+      .summary-row { grid-template-columns: 1fr; }
+      .summary-value { font-size: 1.25rem; }
+    }
+  .main{max-width:900px} section.card h2{font-size:1rem;color:var(--teal);margin-bottom:.5rem} section.card p, section.card li{font-size:.8125rem;line-height:1.55} section.card h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .25rem} .meta{color:var(--txt-m);font-size:.72rem} section.card code{background:var(--teal-light);color:var(--teal);padding:0 .2rem;border-radius:3px;font-size:.72rem} section.card pre{background:var(--off-white);border:1px solid var(--border-lt);border-radius:.5rem;padding:.6rem;font-size:.68rem;line-height:1.45;white-space:pre;overflow-x:auto;margin:.25rem 0} .tbl{overflow-x:auto} section.card table{width:100%;border-collapse:collapse;font-size:.72rem} section.card th{background:var(--teal);color:#fff;text-align:left;padding:.35rem} section.card td{border-bottom:1px solid var(--border-lt);padding:.35rem;vertical-align:top} .ok{color:var(--green);font-weight:600}.warn{color:#b26a00;font-weight:600}.bad{color:#c0392b;font-weight:700}.na{color:var(--txt-l);font-weight:600} .bugs{padding-left:1.25rem} .bugs li{margin-bottom:.4rem}
+  </style>
+</head>
+<body>
+  <header class="header" style="position:relative;">
+    <a href="/" class="logo">
+      <svg viewBox="0 0 470 419" fill="none" style="width:32px; height:28px; flex-shrink:0;" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M468.052 41.8933C475.338 21.4744 460.199 0 438.52 0H258.273C244.592 0 232.491 8.86935 228.372 21.915L224.279 34.8759C248.801 41.3632 269.435 57.9169 281.086 80.4478L294.349 106.096C294.585 106.553 294.786 106.963 294.999 107.431C298.607 115.353 334.405 193.978 357.551 245.403C365.813 263.759 378.664 292.426 378.664 292.426L468.052 41.8933Z" fill="#004C54"/>
+        <path d="M2.5744 90.1347C-6.41714 56.7413 22.8839 25.563 56.7707 32.4661L209.173 63.5124C228.73 67.4964 245.223 80.5515 253.59 98.6714L370.845 352.594C385.077 383.414 362.565 418.605 328.618 418.605H139.079C110.723 418.605 85.8955 399.578 78.523 372.198L2.5744 90.1347Z" fill="#004C54"/>
+      </svg>
+      <span class="logo-text">WeBetAI</span>
+    </a>
+    <nav class="header-nav">
+      <a href="/edge" class="header-link">Edge Picks</a>
+      <a href="/percentile" class="header-link">Scorecard</a>
+      <a href="/clv" class="header-link">Closing line</a>
+      <a href="/credits" class="header-link">Credits</a>
+    </nav>
+    <span id="wb-auth-slot" style="margin-left:10px;display:inline-flex;align-items:center;"></span>
+    <button class="mobile-menu-btn" type="button" onclick="document.getElementById('mobileDropdown').classList.toggle('open')" aria-label="Menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#004C54" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="mobile-dropdown" id="mobileDropdown">
+      <a href="/edge">Edge Picks</a>
+      <a href="/percentile">Scorecard</a>
+      <a href="/clv">Closing line</a>
+      <a href="/credits">Credits</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <h1 class="page-title">WeBetAI model math</h1>
+    <p class="page-sub">How the Omega model prices a bet, straight from the live code, plus an audit of the Friday, October 16, 2026 Daily Edge card. This page only reports. It does not change any pick, price, or schedule.</p>
+<section class="card">
+<h2>1. Verdict: is the on-page math correct?</h2>
+<p><strong>Mostly yes on arithmetic, no on model honesty.</strong> Every price, stake, to-win, grade, parlay and record number on the Daily Edge Picks view (<code>/dashboard?view=omega</code>, which loads <code>/daily-omega</code>) recomputes from the live API and live code. Of 24 checked figures, 17 are correct, 3 are correct only after display rounding, 2 are wrong (a $1 parlay to-win mismatch and a "0%" accuracy shown before any game is decided), and 2 cannot be checked from public data (the Pinnacle fair price and CLV). Three problems matter more than the arithmetic. First, the live model ignores the Pinnacle market anchor (<code>config.js:376-378</code>). Second, the headline record mixes legacy versions. Third, the methodology text on the page describes an older model.</p>
+<p class="meta">Audited 10:20 PM ET, Oct 16, 2026 against git HEAD <code>d183fbc</code>, published Netlify deploy <code>6ad2609e011f910a79645529</code> (published 1:37 PM ET). The card was generated at 1:05 PM ET. Model version <code>v12.4.0-webetai-pure</code>.</p>
+</section>
+
+<section class="card">
+<h2>2. Audit findings, ranked</h2>
+<ol class="bugs">
+<li><strong>Market anchor is off in live code.</strong> <code>netlify/functions/lib/omega-vnext/config.js:376-378</code>, where <code>marketAnchorOn()</code> returns <code>false</code> and the <code>OMEGA_MARKET_ANCHOR</code> env flag is ignored (commit 6bf85f5, Oct 15 1:27 PM ET). Published edge is now the raw sport-model probability minus the <em>vigged</em> bet-price implied probability (<code>pure_model.js:157-160</code>). The Pinnacle no-vig price is not used for edge, EV or grade. This is the same setup the Oct 15 audit found inflating edges.</li>
+<li><strong>Headline KPIs mix model versions.</strong> In <code>daily-omega/index.html:2438-2455</code>, ROI 14.6%, record 292-252, 53.7% and +$12,211 are cumulative since Mar 19, 2026, across every model version. The live Omega model since Sep 22 is 30-28 (51.7%), ROI −1.0%, −$109 (<code>omegaOnly</code> in the same API response). A scope line discloses this, but the big numbers are the legacy blend.</li>
+<li><strong>The methodology text is stale.</strong> <code>daily-omega/index.html:2678-2688</code> ("13 sports", "edge vs consensus line … since 6am", "EV via Kelly criterion", Kalshi/Polymarket calibration, "Top 3 by EV") does not describe the live code. Live EV is p×decimal−1, stakes are flat by grade, and ranking uses quality score.</li>
+<li><strong>Tulane ML is a sub-floor fill labeled "floor".</strong> Edge is 1.52%, under the 2.0% A- line, and EV is 4.9%. The summary says "2 floor straights", but <code>topUps</code> shows Tulane came from the reserve as a short-card fill (<code>card_topup.js</code>, <code>config.js:387-399</code>).</li>
+<li><strong>Parlay to-win is off by $1 between surfaces.</strong> The API has <code>toWinDollars</code> 334 (from rounded decimal 5.45). The page bet slip and parlay card show +$335 (exact 75×4.4535=334.01, rounded up). Exact rule-based value: $335.</li>
+<li><strong>Printed edge/EV use the rounded win rate.</strong> This is by design (<code>select.js:474-510</code>, commit dfc20fe). Penguins prints 4.7% / 8.0% while unrounded gives 4.8% / 8.1%. Tulane prints 1.6% / 5.0% while unrounded gives 1.5% / 4.9%. Grades use the unrounded edge, so no grade changes.</li>
+<li><strong>Today row shows "0%" accuracy with no decided games.</strong> <code>daily-omega/index.html:2519</code> falls back to <code>'0'</code>, while historical rows use "--".</li>
+<li><strong>Parlay legs in the API carry <code>p_model: null</code>.</strong> This is cosmetic: combined probability still uses each leg's cover probability.</li>
+</ol>
+</section>
+
+<section class="card">
+<h2>3. Audit table: today's card and KPIs</h2>
+<div class="tbl"><table>
+<tr><th>Item</th><th>On page</th><th>Recomputed</th><th>Status</th></tr>
+<tr><td>Penguins +1.5 −142 implied</td><td>n/a</td><td>142/242 = 58.68%</td><td>Basis</td></tr>
+<tr><td>Penguins win rate (p_model)</td><td>63.4%</td><td>0.6344 stamped</td><td class="ok">Correct</td></tr>
+<tr><td>Penguins edge</td><td>4.7%</td><td>63.4−58.68 = 4.72 (unrounded 4.76)</td><td class="warn">Correct (rounding)</td></tr>
+<tr><td>Penguins EV</td><td>8.0%</td><td>0.634×1.7042−1 = 8.05% (unrounded 8.12%)</td><td class="warn">Correct (rounding)</td></tr>
+<tr><td>Penguins grade / units / $</td><td>A, 1u, $150</td><td>4.76% in [3.5, 5.0) → A → 1u × $150</td><td class="ok">Correct</td></tr>
+<tr><td>Penguins to win</td><td>$106</td><td>150×100/142 = 105.63 → 106</td><td class="ok">Correct</td></tr>
+<tr><td>Tulane ML +220 implied</td><td>n/a</td><td>100/320 = 31.25%</td><td>Basis</td></tr>
+<tr><td>Tulane win rate</td><td>32.8%</td><td>0.3277</td><td class="ok">Correct</td></tr>
+<tr><td>Tulane edge / EV</td><td>1.6% / 5.0%</td><td>1.55 / 4.96 (unrounded 1.52 / 4.86)</td><td class="warn">Correct (rounding)</td></tr>
+<tr><td>Tulane grade / units / $ / to win</td><td>B, 0.5u, $75, $165</td><td>&lt;2% → B → 0.5u; 75×2.20 = 165</td><td class="ok">Correct</td></tr>
+<tr><td>Pinnacle no-vig fair, both picks</td><td>not shown</td><td>stored board not public</td><td class="na">Can't verify</td></tr>
+<tr><td>Parlay odds</td><td>+445</td><td>1.70423×3.20 = 5.4535 → +445</td><td class="ok">Correct</td></tr>
+<tr><td>Parlay hit prob</td><td>20.8%</td><td>0.6344×0.3277 = 20.79%</td><td class="ok">Correct</td></tr>
+<tr><td>Parlay EV</td><td>13.4%</td><td>0.2079×5.4535−1 = 13.4% (assumes independence)</td><td class="ok">Correct</td></tr>
+<tr><td>Parlay stake / to win</td><td>0.5u $75 / +$335 (page), 334 (API)</td><td>75×4.4535 = 334.01 → 335</td><td class="bad">$1 mismatch</td></tr>
+<tr><td>Bet slip totals</td><td>2u, $300, +$606</td><td>150+75+75; 106+165+335</td><td class="ok">Correct</td></tr>
+<tr><td>Record (all versions)</td><td>292-252</td><td>sum of 212 day rows = 292-252</td><td class="ok">Correct</td></tr>
+<tr><td>Accuracy</td><td>53.7%</td><td>292/544 = 53.68%</td><td class="ok">Correct</td></tr>
+<tr><td>P/L</td><td>+$12,211</td><td>sum day profit = 12,211</td><td class="ok">Correct</td></tr>
+<tr><td>ROI</td><td>14.6%</td><td>12,211 / 83,568 = 14.61%</td><td class="ok">Correct (mixed scope, finding 2)</td></tr>
+<tr><td>Straight + parlay split</td><td>API</td><td>69,057 + 12,038 = 81,095 vs 83,568: the $2,473 gap is push stakes, which count in cumulative wagered and are excluded from straight wagered (<code>get-results-omega.js:815-819</code>)</td><td class="ok">Correct per code</td></tr>
+<tr><td>Live model (since 9/22)</td><td>not headline</td><td>30-28, 9,356+1,463 = 10,819 wagered, 200−309 = −$109, ROI −1.0%</td><td class="ok">Correct</td></tr>
+<tr><td>Past 7 days rows (Oct 10-15)</td><td>+54, +86, +113, −147, −451, +72</td><td>matches day rows; total 7-7, −$273 on $2,028</td><td class="ok">Correct</td></tr>
+<tr><td>Parlays by legs</td><td>API</td><td>2-leg 2-3 + 3-leg 31-125 = 33-128</td><td class="ok">Correct</td></tr>
+<tr><td>CLV (+0.4¢, 47.1% beat close, n=51)</td><td>API</td><td>closing ledger not public</td><td class="na">Can't verify</td></tr>
+<tr><td>Today row accuracy</td><td>0%</td><td>no decided games, so should be "--"</td><td class="bad">Display bug</td></tr>
+</table></div>
+</section>
+
+<section class="card">
+<h2>4. Exact model math in the live code</h2>
+<p class="meta">Paths are relative to <code>netlify/functions/lib/omega-vnext/</code> unless noted.</p>
+<h3>Prices</h3>
+<pre>implied(a) = a&gt;0 ? 100/(a+100) : |a|/(|a|+100)          odds_math.js:5
+decimal(a) = a&gt;0 ? 1+a/100     : 1+100/|a|               odds_math.js:11
+no-vig two-way: proportional i/(i1+i2); power (i^k, sum=1)
+  only if a price is past −250/+210 and i1+i2&gt;1          odds_math.js:34-84</pre>
+<h3>Probability (live: pure model)</h3>
+<pre>marketAnchorOn() = false                                  config.js:376-378
+p = modelPureP (sport engine probability)                 pure_model.js:139
+Edge = p − implied(bet price)        [vigged, not no-vig] pure_model.js:160
+EV   = p × decimal(bet price) − 1                         pure_model.js:159
+(anchor path, OFF: p=(1−K)p_model+K·p_fair, K≥0.7,
+ Edge=p−p_fair, EV cap 6%)                                pure_model.js:57-110</pre>
+<h3>Gates and grade</h3>
+<pre>min EV 2% per sport, max EV 12%, odds −250..+250,
+major book, pregame, same ET day, reject adverse steam   config.js:355-367
+qualityScore = edge + clamp(CLV¢,−3,3)×0.0005
+               + clamp((0.18−unc)×0.005, ±0.001)          odds_math.js:241
+grade: ≥5.0% A+, ≥3.5% A, ≥2.0% A-, else B                config.js:536-542
+short-card fill: lean/B at 0.5u when fewer than 3 clear   config.js:387-399</pre>
+<h3>Stake (flat by grade, not Kelly)</h3>
+<pre>A+ 1.5u, A 1u, A- 0.75u, B/lean 0.5u                      config.js:66, odds_math.js:280
+$ risk = ceil(units × $150);  to win = ceil(risk × payout) odds_math.js:422-436
+straights ≤ 4.5u; card ≤ 5.0u; per-game ≤ 1.75u           config.js:39,53
+(quarter-Kelly is computed in odds_math.js:112 but does not set the published stake)</pre>
+<h3>Parlay</h3>
+<pre>decimal = Π decimal(leg);  P = Π coverProb(leg)
+ × 0.95 (2-leg) / 0.92 (3-leg) if all legs same-direction totals
+EV = P × decimal − 1                                       parlay.js:95-126, config.js:49
+stake 0.5u if any straight A- or better, else 0.25u       config.js:40,399</pre>
+<h3>Record, ROI, CLV</h3>
+<pre>Record/accuracy = straight W/(W+L), pushes excluded
+ROI = Σ profit (straights + parlays) / Σ wagered          netlify/functions/get-results-omega.js:810-840
+win profit = risk × payout, loss = −risk, push = 0
+CLV ¢ = juice-ladder cents, bet price vs close price       odds_math.js:153-170</pre>
+</section>
+
+<section class="card">
+<h2>5. Today's live card, Fri Oct 16, 2026</h2>
+<div class="tbl"><table>
+<tr><th>Pick</th><th>Price (DK)</th><th>Implied</th><th>Model p</th><th>Edge</th><th>EV</th><th>Grade / stake</th><th>To win</th></tr>
+<tr><td>Penguins +1.5 @ Avalanche (NHL, 9:10 PM ET)</td><td>−142</td><td>58.68%</td><td>63.44%</td><td>4.76% (shown 4.7%)</td><td>8.12% (shown 8.0%)</td><td>A · 1u · $150</td><td>$106</td></tr>
+<tr><td>Tulane ML vs Memphis (NCAAF, 7:30 PM ET)</td><td>+220</td><td>31.25%</td><td>32.77%</td><td>1.52% (shown 1.6%)</td><td>4.86% (shown 5.0%)</td><td>B (short-card fill) · 0.5u · $75</td><td>$165</td></tr>
+<tr><td>2-leg parlay</td><td>+445 (5.4535)</td><td>18.34%</td><td>20.79%</td><td>n/a</td><td>13.4%</td><td>0.5u · $75</td><td>$335 (API 334)</td></tr>
+</table></div>
+<p>Card totals: 2 straights, 2u, $300 at risk, +$606 if everything wins. Neither pick's edge was measured against Pinnacle's no-vig price, because the anchor is off. Treat the 4.8% puck-line edge and the 8% EV with caution, since the Oct 15 audit found that unanchored NHL probabilities ran too high.</p>
+</section>
+
+<section class="card">
+<h2>6. The model in plain English</h2>
+<p>Each sport engine (NFL, college football, MLB, NHL, with NBA off in preseason) projects a margin and a total from team ratings and adjustments, then turns them into a win or cover probability. The live code compares that probability straight to the sportsbook price. Edge is how far the model's probability sits above the price's implied probability, and EV is the expected return per dollar. A bet must show at least 2% EV, sit between −250 and +250, be pregame at a major book, and not be fighting a sharp line move. The best qualifiers by quality score get letter grades. A+ needs 5% edge, A needs 3.5%, and A- needs 2%. Stakes are flat: 1.5u, 1u, 0.75u, or 0.5u, with $150 per unit. When fewer than 3 picks qualify, the card fills with 0.5u leans. When the card has at least two picks, they are combined into a parlay.</p>
+<p>What's missing: the sharp market. Pinnacle's no-vig price is captured and used for closing-line grading, but it does not move today's probability. Elite models treat that price as the baseline and bet only where they can show they beat it. Live results so far match a model without a real edge yet: 30-28, ROI −1.0%, and average CLV of +0.4¢ with 47% of bets beating the close.</p>
+</section>
+
+  </main>
+  <script src="/nav.js" defer></script>
+  <script>if (window.self !== window.top) document.documentElement.classList.add("in-iframe");</script>
+</body>
+</html>

@@ -965,5 +965,8 @@
   # V1 LOCK backend (The Lock — Unified Spec v2.0) — separate from Omega; no schedule yet (manual/first-card run 2026-10-18)
   included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]
 
+[functions."run-picks-v1"]
+  included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]
+
 [functions."get-picks-v1"]
   included_files = ["netlify/functions/lib/v1-lock/**", "netlify/functions/lib/omega-vnext/**", "v1/model.js"]

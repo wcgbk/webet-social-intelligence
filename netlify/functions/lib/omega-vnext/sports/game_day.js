@@ -9,7 +9,7 @@
 
 const { clamp } = require('../odds_math');
 const { fuzzyTeam } = require('./_common');
-const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY } = require('../config');
+const { QA_HARDFAIL, ENGINE_SOFT, QB_INJURY, QB_MARGIN_SCALE } = require('../config');
 
 const HFA_ADJ = {
   NFL: { max: 0.4, shortRest: -0.35, extraRest: 0.25 },
@@ -137,10 +137,13 @@ function qbSoftAdjust(sport, homeQb, awayQb) {
   };
   apply(homeQb, 'home');
   apply(awayQb, 'away');
+  // LOCK (2026-10-18): QB_MARGIN_SCALE=0 — unfitted QB points move nothing
+  // (margin, total, uncertainty). Status notes/flags still report.
+  const qbScale = QB_MARGIN_SCALE == null ? 1 : QB_MARGIN_SCALE;
   return {
-    marginAdj: clamp(marginAdj, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
-    totalAdj: clamp(totalAdj, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
-    uncBump,
+    marginAdj: clamp(marginAdj * qbScale, -cfg.maxAbsMarginAdj, cfg.maxAbsMarginAdj),
+    totalAdj: clamp(totalAdj * qbScale, -cfg.maxAbsTotalAdj, cfg.maxAbsTotalAdj),
+    uncBump: uncBump * qbScale,
     note: notes.length ? notes.join('; ') : null,
   };
 }

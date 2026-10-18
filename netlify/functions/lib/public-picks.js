@@ -11,7 +11,7 @@ const { isCfbSport, formatCfbPickDisplay, formatCfbMatchupDisplay } = require('.
 const PICK_KEEP = [
   'pick', 'pickDisplay', 'matchup', 'sport', 'odds', 'units', 'rating', 'confidence',
   'betType', 'coreReasoning', 'commenceTime', 'edgePct', 'ev',
-  'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge', 'book', 'displayBook', 'executionBook',
+  'winProbability', 'coverProb', 'thinSlate', 'source', 'modelEdge', 'book', 'displayBook', 'executionBook', 'lockGrade', 'lockFormulaLine', 'lockReceiptLine', 'lockAvailability',
 ];
 
 const PARLAY_KEEP = [

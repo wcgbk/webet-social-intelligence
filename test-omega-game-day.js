@@ -50,17 +50,17 @@ const qbAdj = gd.applyGameDayAdjustments({
   },
   hfaBase: config.HFA.NFL,
 });
-assert.ok(qbAdj.modelMargin < 3.0, 'home QB out soft-discounts home margin');
-assert.ok(qbAdj.uncertainty > 0.13);
+// LOCK (2026-10-18): QB hand-set points are OFF — margin/total/uncertainty
+// do not move; the status still flags on the receipt (qbNote).
+assert.ok(Math.abs(qbAdj.modelMargin - 3.0) < 1e-9, 'home QB out does NOT move margin under Lock');
+assert.ok(Math.abs(qbAdj.uncertainty - 0.13) < 1e-9, 'no QB uncertainty bump under Lock');
 assert.ok(qbAdj.gameDay.qbNote);
-
-// Known QB injury is priced (margin + total), never a cancel (2026-09-28)
-assert.ok(qbAdj.modelMargin <= 0.0 + 1e-9, `home QB out moves margin >= 3 pts: ${qbAdj.modelMargin}`);
-assert.ok(qbAdj.modelTotal < 45, `QB out lowers total: ${qbAdj.modelTotal}`);
+assert.ok(Math.abs(qbAdj.modelTotal - 45) < 1e-9, 'QB out does not move total under Lock');
 {
   const d = gd.qbSoftAdjust('NFL', null, { qbStatus: 'doubtful', qbName: 'X' });
-  assert.ok(Math.abs(d.marginAdj - 2.25) < 1e-9, `doubtful away = +2.25: ${d.marginAdj}`);
-  assert.ok(Math.abs(d.totalAdj + 1.125) < 1e-9, `doubtful total: ${d.totalAdj}`);
+  assert.ok(Math.abs(d.marginAdj - 0) < 1e-9, `doubtful away moves nothing under Lock: ${d.marginAdj}`);
+  assert.ok(Math.abs(d.totalAdj - 0) < 1e-9, `doubtful total moves nothing under Lock: ${d.totalAdj}`);
+  assert.ok(d.note, 'QB status still flags');
   const m = gd.qbSoftAdjust('MLB', { qbStatus: 'out' }, null);
   assert.strictEqual(m.marginAdj, 0); assert.strictEqual(m.totalAdj, 0);
   const qa = require('./netlify/functions/lib/omega-vnext/qa_hardfail');

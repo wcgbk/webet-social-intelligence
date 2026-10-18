@@ -1,5 +1,5 @@
 # WeBet — THE LOCK: NFL & NCAAF
-## Football Lock Principles, Version 1.1 — October 18, 2026 (America/New_York)
+## Football Lock Principles, Version 1.2 — October 18, 2026 (America/New_York)
 
 **Verification-status header (read first).** The companion "Lock Principles"
 Drive file (1CRPaC55iyr4aLhc5oylzt8XGvVKCLShy) returns 404 from Google; its
@@ -77,7 +77,12 @@ A pick is not a pick until its receipt prints:
    probability (the receipt). A pair at a different line does not anchor.
 4. Anchored p = w·model + (1−w)·fair, w **fitted** per sport/market by
    expanding-window log-loss (market is the prior; the model earns weight
-   only out of sample).
+   only out of sample). **Open question for Ben (stated, not resolved):**
+   live v1 does not run this anchor — it runs the era shrink blend
+   (SHRINK_K: Spread 0.68 / Total 0.58 / ML 0.73 toward the market, plus a
+   0.42–0.58 band clip). The walkforward evidence (preserved lineage,
+   n=4,160) points to w ≈ 0.10; adopting a fitted w changes probability
+   formation and is Ben's decision under §9's held-out-replay rule.
 5. The closing Pinnacle line is the sanity ceiling: disagreement past the
    audit band is flagged, never bet bigger.
 
@@ -130,22 +135,22 @@ for a refit. Confirmed process errors are fixed immediately and logged.
 |---|---|---|---|---|
 | 1 | Formula probabilities from ratings | **Compliant** | sports/nfl.js, sports/cfb.js projectors; nfl_elo.js | — |
 | 2 | Work forwards to receipt line | **Partial** | calibrate.js shrinkTowardSharp blends model TOWARD market before comparison | Lock §4 anchor order (preserved lineage) |
-| 3 | Receipt line 4: bet book named | **Compliant** (Oct 18 fix) | select.js toPickObject `book`; lib/public-picks.js PICK_KEEP | — |
-| 4 | Receipt lines 6–7: formula spread/total printed | **Absent** | modelProjection exists on candidates; not stamped on picks | Stamp formula line on pick |
-| 5 | Receipt line 9: availability flags on pick | **Absent** | game_day.js computes flags; not printed on card | Stamp flags on pick |
-| 6 | Power de-vig of Pinnacle pair | **Absent** | odds_math.js noVigTwoWay is PROPORTIONAL | Power de-vig (decision: changes fair ~0.4pt) |
+| 3 | Receipt line 4: bet book named | **Compliant** | select.js toPickObject `book`; lib/public-picks.js PICK_KEEP (live on stored card) | — |
+| 4 | Receipt lines 6–7: formula spread/total printed | **Compliant** (Oct 18 fix) | edge.js stamps lockFormulaLine/lockReceiptLine on candidates; select.js prints them on picks; PICK_KEEP passes them | — |
+| 5 | Receipt line 9: availability flags on pick | **Partial** (Oct 18 fix) | select.js stamps lockAvailability (QB note where the candidate carries one) | Ensure every football candidate carries its QB note |
+| 6 | Power de-vig of Pinnacle pair | **Compliant** (Oct 18 fix, Lock §4 mandated) | odds_math.js noVigTwoWay is now POWER (bisection, k solved) | — |
 | 7 | Fitted anchor weight w | **Absent** | calibrate.js SHRINK_K hand-set (Spread 0.68 / Total 0.58 / ML 0.73) + 0.42–0.58 band clip | Fitted w (walkforward evidence exists in preserved lineage) |
-| 8 | QB/injury: flags only, zero hand points | **VIOLATED** | config.js QB_INJURY (NFL out 3.0 pts, doubtful ×0.75); game_day.js qbSoftAdjust | Zero the points (decision) |
-| 9 | Missing-data mandatory pass | **Partial** | gates.js unknown_team/pregame exist; unanchored rows fall back to consensus fair (edge.js sharpFairForSide) and can publish | Lock missing-data pass (preserved lineage) |
+| 8 | QB/injury: flags only, zero hand points | **Compliant** (Oct 18 fix, Lock priority ruling) | config.js QB_MARGIN_SCALE=0; game_day.js qbSoftAdjust scales margin/total/uncertainty to 0, notes still flag | — |
+| 9 | Missing-data mandatory pass | **Compliant** (Oct 18 fix) | edge.js stamps lockPass when formula or Pinnacle fair is missing; gates.js returns 'lock-missing-data' for NFL/NCAAF | — |
 | 10 | Closing line as sanity ceiling (audit flag) | **Partial** | pinnacle sanity/hold exists in posted-line path; era form differs from §4.5 | Align flag definition |
-| 11 | No leans / no sub-standard fills | **Partial** | era LEAN_PAD off in current config notes; lean machinery still in code | Remove or hard-disable revival paths |
-| 12 | Grade A = verified standard only | **Absent** | odds_math.js qualityToRating grades on model edge bands (A+ ≥5pts), not verification | Verification-based grading (decision) |
+| 11 | No leans / no sub-standard fills | **Compliant** | config.js LEAN_PAD is a plain `false` const with no override getter in v1; lean paths unreachable | Remove dormant machinery (cleanup, optional) |
+| 12 | Grade A = verified standard only | **Partial** (Oct 18 fix) | select.js stamps lockGrade 'A' only on verified football picks (formula+receipt gate-enforced, era-floor cleared); era letter rating still prints alongside | Front-end to display lockGrade for football (Ben decision) |
 | 13 | True p printed to a tenth | **Compliant** (Oct 18 fix) | select.js coverProb/winProbability toFixed(1) | — |
 | 14 | Sheet as admission standard | **Not live (by design)** | v1 stake-EV floors in gates.js/config.js; sheet lives in preserved lineage (bet_check_gate.js@pre-reset-20261018) | Ben's decision to re-impose |
 | 15 | Changes require held-out replay proof | **Compliant (rule documented)** | docs/ELITE-MODEL-REPORT-1014.md; no automated gate | Automate replay gate (future) |
 
-**Headline: 3 compliant, 5 partial, 5 absent, 1 violated, 1 not-live-by-design**
-(of 15; the two Oct 18 display fixes move #3 and #13 to compliant).
+**Headline (v1.2): 8 compliant, 4 partial, 1 absent, 0 violated, 1 not-live-by-design, 1 rule-documented**
+(of 15. The one remaining absent row is fitted weights — the doc states the question; it does not invent a fit.)
 
 ## 11. WHAT THIS MODEL NEVER DOES
 
@@ -155,6 +160,17 @@ by a hand-set table. Never publishes a lean or a fill. Never invents a rating,
 a price, or a feed. An empty card is a valid card.
 
 ## Changelog
+- **v1.2 — Oct 18, 2026:** Lock priority ruling (Ben, 2:14 PM ET: "The lock
+  document takes priority"). Implemented on live v1: QB hand-set points
+  zeroed (QB_MARGIN_SCALE=0, flags kept); power de-vig in noVigTwoWay;
+  football formula/receipt tracing (lockFormulaLine/lockReceiptLine) with
+  mandatory 'lock-missing-data' pass at the gates; parlay correlation
+  haircut 0.95^(n-1) in comboStats; lockGrade 'A' stamp for verified
+  football picks (era floors are the verification floor until Ben rules
+  otherwise — sheet floors remain NOT live, §6); receipt fields added to
+  the public card. Compliance rescored: 8 compliant / 4 partial / 1 absent
+  / 0 violated. Remaining absent: fitted blend weights (SHRINK_K remains
+  hand-set; the weight question is stated in §4 and NOT silently changed).
 - **v1.1 — Oct 18, 2026:** Reconciled to the v1 reset. States what governs
   today (v1 era pipeline, live) vs the Lock standard; compliance table with
   code locations; sheet-vs-era-floors relationship made explicit; removed

@@ -429,6 +429,14 @@ function enrichCandidateWithEdge(raw, sideBundle, allBundles) {
     liquid,
     majorBookCount: new Set((sideBundle.prices || []).map(p => p.book)
       .filter(b => MAJOR_LIQUIDITY_BOOKS.includes(b))).size,
+    // NFL/NCAAF Lock tracing (2026-10-18): formula line (ratings, pre-market),
+    // Pinnacle receipt line, and the mandatory-pass flag when either is missing.
+    ...(/^(NFL|NCAAF)$/.test(String(raw.sport || '')) ? {
+      lockFormulaLine: raw.modelProjection != null ? raw.modelProjection : null,
+      lockReceiptLine: raw.pinnacleSide && raw.pinnacleSide.point != null ? raw.pinnacleSide.point
+        : (raw.consensusLine != null ? raw.consensusLine : null),
+      lockPass: (fairSharp == null || raw.modelProjection == null) ? 'lock-missing-data' : null,
+    } : {}),
     placeableBooks: place.placeableBooks,
     bestPlaceable: place.bestPlaceable,
     placeable: place.placeable,

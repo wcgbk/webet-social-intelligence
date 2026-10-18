@@ -21,6 +21,9 @@ function comboStats(legs) {
     combinedDecimal *= americanToDecimal(l.odds);
     combinedProb *= l.coverProb;
   }
+  // Lock (2026-10-18): correlation haircut — raw independence overstates
+  // combined probability. combinedProb *= 0.95^(legs-1) before EV.
+  if (legs.length > 1) combinedProb *= Math.pow(0.95, legs.length - 1);
   const ev = combinedProb * combinedDecimal - 1;
   const games = new Set(legs.map(matchupKey)).size;
   const sports = new Set(legs.map(l => l.sport)).size;

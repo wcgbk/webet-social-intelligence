@@ -135,6 +135,12 @@ function toPickObject(c, opts = {}) {
     predictedClv: c.predictedClv,
     modelVersion: opts.modelVersion,
     book: c.book,
+    // NFL/NCAAF Lock receipt (2026-10-18): Grade A only for the verified
+    // standard bet — formula + receipt present (gate-enforced) and the pick
+    // cleared era floors by being selected. Era letter rating is untouched.
+    ...((c && /^(NFL|NCAAF)$/.test(String(c.sport || '')) && !c.lockPass && c.lockFormulaLine != null)
+      ? { lockGrade: 'A', lockFormulaLine: c.lockFormulaLine, lockReceiptLine: c.lockReceiptLine != null ? c.lockReceiptLine : null, lockAvailability: c.qbNote || c.lockAvailability || null }
+      : {}),
     line: c.line != null ? c.line : null,
     projMethod: c.projMethod || '',
     uncertainty: c.uncertainty,

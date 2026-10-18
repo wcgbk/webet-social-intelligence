@@ -50,6 +50,10 @@ function gateReason(c, opts = {}) {
   const minCP = sportFloor(GATES.minCoverProb, sport);
   const cardDate = opts.cardDate || opts.dateISO || null;
 
+  // NFL/NCAAF Lock mandatory pass (2026-10-18): no formula line or no
+  // Pinnacle receipt at the bet line = pass. Never a guessed lean.
+  if (c && /^(NFL|NCAAF)$/.test(String(c.sport || '')) && c.lockPass) return 'lock-missing-data';
+
   // Same ET calendar day only — reject weekend football on Tue/Wed cards, etc.
   if (GATES.sameEtDayOnly && cardDate) {
     if (!c.commenceTime) return 'missing-commenceTime';

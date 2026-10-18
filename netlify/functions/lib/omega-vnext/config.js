@@ -171,6 +171,7 @@ const QA_HARDFAIL = {
  * value (spread AND total), then let the normal edge gates decide. Doubtful
  * scales by doubtfulWeight. Used by sports/game_day.js qbSoftAdjust only.
  */
+const QB_MARGIN_SCALE = 0; // LOCK (2026-10-18): hand-set QB points banned. Flags only. Was 1.
 const QB_INJURY = {
   NFL: { outMarginPts: 3.0, outTotalPts: -1.5, doubtfulWeight: 0.75, maxAbsMarginAdj: 5.0, maxAbsTotalAdj: 3.0 },
   NCAAF: { outMarginPts: 3.5, outTotalPts: -2.0, doubtfulWeight: 0.75, maxAbsMarginAdj: 6.0, maxAbsTotalAdj: 4.0 },
@@ -369,6 +370,7 @@ module.exports = {
   GATES,
   QA_HARDFAIL,
   QB_INJURY,
+  QB_MARGIN_SCALE,
   QUALITY_GRADE,
   SELECT_WEIGHTS,
   SPORT_SPREAD_STD,

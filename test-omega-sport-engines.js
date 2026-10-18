@@ -1255,8 +1255,8 @@ function byMarket(cands, market) {
   const deepRow = byMarket(deep, 'Moneyline');
   const deepM = deepRow.modelProjection;
   assert.ok(Math.abs(deepRow.engineSoft.stacked.sum) <= config.ENGINE_SOFT.NFL.maxAbsMarginAdj + 1e-9);
-  // QB out is priced once (qbSoftAdjust); continuity adds nothing for an out QB.
-  assert.ok(Math.abs((deepM - plainM) - (config.QB_INJURY.NFL.outMarginPts + deepRow.engineSoft.stacked.sum)) < 0.02);
+  // LOCK (2026-10-18): QB out is NOT priced; only engineSoft moves the margin.
+  assert.ok(Math.abs((deepM - plainM) - deepRow.engineSoft.stacked.sum) < 0.02);
 
   const cfbDeep = cfb.project({
     oddsEvents: [synthEvent('Ohio State Buckeyes', 'Iowa Hawkeyes', { total: 51.5, spread: -6.5 })],

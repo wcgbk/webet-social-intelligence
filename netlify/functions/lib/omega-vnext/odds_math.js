@@ -28,12 +28,25 @@ function formatAmerican(american) {
 
 /** Two-way no-vig probabilities from a pair of American prices. */
 function noVigTwoWay(a1, a2) {
+  // LOCK §4 (2026-10-18): POWER de-vig, not proportional. Solve k so
+  // i1^k + i2^k = 1; fair = i^k. Proportional under-shrinks longshots.
   const i1 = americanToImplied(a1);
   const i2 = americanToImplied(a2);
   if (i1 == null || i2 == null) return null;
   const s = i1 + i2;
   if (s <= 0) return null;
-  return { p1: i1 / s, p2: i2 / s, vig: s - 1 };
+  if (Math.abs(s - 1) < 1e-12) return { p1: i1, p2: i2, vig: 0, k: 1 };
+  let lo = 1, hi = 1;
+  if (s > 1) { while (Math.pow(i1, hi) + Math.pow(i2, hi) > 1 && hi < 64) hi *= 2; lo = 1; }
+  else { lo = 0.01; hi = 1; }
+  for (let n = 0; n < 80; n++) {
+    const mid = (lo + hi) / 2;
+    const sum = Math.pow(i1, mid) + Math.pow(i2, mid);
+    if (Math.abs(sum - 1) < 1e-10) { lo = hi = mid; break; }
+    if (s > 1 ? sum > 1 : sum < 1) lo = mid; else hi = mid;
+  }
+  const k = (lo + hi) / 2;
+  return { p1: Math.pow(i1, k), p2: Math.pow(i2, k), vig: s - 1, k };
 }
 
 /** De-vig a list of {side, american} sharing one market. */

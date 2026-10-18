@@ -18,7 +18,8 @@ const {
 const { fairPickFields } = require('./prob_anchor');
 const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
-const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
+const { gameExposureEnabled, GAME_EXPOSURE_CAP, pushEvEnabled } = require('./gaps_flags');
+const { pushKeep } = require('./push_ev');
 const { reviewFlag } = require('./pinnacle_flag');
 
 function cleanTeam(s) {
@@ -186,20 +187,22 @@ function finiteEv(c) {
 
 /**
  * Quarter Kelly on the final p, times BANKROLL_UNITS.
- * f = 0.25 * (p*dec - 1) / (dec - 1). Nearest 0.25u.
+ * f = 0.25 * (p*dec - 1) / (dec - 1), then times (1 - pPush). Nearest 0.25u.
  * EV <= 0 is 0. A positive stake is at least 0.5u and at most 1.5u.
- * Not push-adjusted: the previous helper was not push-aware.
+ * p stays the conditional (no-push) probability. Missing or zero pPush
+ * leaves the stake unchanged. OMEGA_PUSH_EV=0 leaves the unscaled Kelly.
  */
-function quarterKellyUnits(p, odds) {
+function quarterKellyUnits(p, odds, pPush = 0) {
   const prob = Number(p);
   const o = Number(String(odds).replace(/[^0-9.+-]/g, ''));
   if (!Number.isFinite(prob) || !Number.isFinite(o) || o === 0) return 0;
   const dec = o > 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1;
   const ev = (prob * dec) - 1;
   if (!(ev > 0) || !(dec > 1)) return 0;
+  const keep = pushEvEnabled() ? pushKeep(pPush) : 1;
   const bankroll = Number(BANKROLL_UNITS);
   const br = Number.isFinite(bankroll) ? bankroll : 100;
-  const raw = 0.25 * (ev / (dec - 1)) * br;
+  const raw = 0.25 * ((ev * keep) / (dec - 1)) * br;
   const rounded = Math.round(raw * 4) / 4;
   const cap = Number(MAX_STRAIGHT_UNITS_PER_PICK);
   const maxU = Number.isFinite(cap) ? cap : 1.5;
@@ -541,7 +544,7 @@ function toPickObject(c, opts = {}) {
   const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
   // Quarter Kelly on the final p. The letter above is a label only.
   // A lean stake is 0.5u. Kelly rounding does not raise it above that.
-  let units = quarterKellyUnits(c.coverProb, c.odds);
+  let units = quarterKellyUnits(c.coverProb, c.odds, c.pPush);
   if (tier === 'lean') {
     const cap = Number(LEAN_MAX_UNITS);
     if (Number.isFinite(cap)) units = Math.min(units, cap);
@@ -649,7 +652,9 @@ function applyDailyCap(picks) {
  * - A no-qualifying marker keeps units null.
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (4.5u)
  * - Total ≤ DAILY_UNIT_CAP (5.0u)
- * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.25u).
+ * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.5u).
+ * If the budget is still over once every straight is at 0.5u, drop the
+ * lowest-quality straight. A trim never publishes a straight under 0.5u.
  * Stake is the Kelly unit already on the pick. Grade does not resize it.
  * Preserve quality grades.
  * Never force-fill to max.
@@ -705,8 +710,8 @@ function applyDailyUnitCap(picks, parlayLegs) {
       let reduced = false;
       for (const idx of order) {
         const u = parseU(out[idx].units);
-        if (u > 0.25) {
-          const nu = Math.max(0.25, Math.round((u - 0.25) * 4) / 4);
+        if (u > 0.5 + 1e-9) {
+          const nu = Math.max(0.5, Math.round((u - 0.25) * 4) / 4);
           out[idx].units = fmtU(nu);
           // Rating/confidence describe quality, not stake size. Never downgrade on trim.
           st = straightTotalOf();
@@ -714,7 +719,10 @@ function applyDailyUnitCap(picks, parlayLegs) {
           break;
         }
       }
-      if (!reduced) break;
+      if (!reduced) {
+        out.splice(order[0], 1);
+        st = straightTotalOf();
+      }
     }
   };
 

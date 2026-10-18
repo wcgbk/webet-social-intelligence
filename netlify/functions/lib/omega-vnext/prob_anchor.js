@@ -11,8 +11,9 @@
  * DraftKings two-way no-vig. No fair: the row is not dropped. coverProb
  * stays, and anchorFairSource is 'none'.
  *
- * Published edge = p - vigged implied(odds).
- * Published EV = p * decimal(odds) - 1.
+ * Published edge = p - vigged implied(odds). Edge is not push-adjusted.
+ * Published EV = (1 - pPush) * (p * decimal(odds) - 1).
+ * Missing or zero pPush leaves that EV unscaled.
  * This is not the marketAnchorOn() K-table. That switch stays off.
  */
 
@@ -21,6 +22,7 @@ const {
 } = require('./config');
 const { americanToImplied, americanToDecimal, formatEdgePct, noVigTwoWay } = require('./odds_math');
 const { powerFair } = require('./pure_model');
+const { pushAwareEv } = require('./push_ev');
 
 function finiteProb(v) {
   const n = Number(v);
@@ -129,7 +131,9 @@ function fairNumber(c) {
 function fairPickFields(c) {
   const fair = fairNumber(c);
   const dec = americanToDecimal(c && (c.odds != null ? c.odds : c.oddsStr));
-  const evFair = fair != null && dec != null ? (fair * dec) - 1 : null;
+  const evFair = fair != null && dec != null
+    ? pushAwareEv(fair, c && (c.odds != null ? c.odds : c.oddsStr), c && c.pPush)
+    : null;
   const raw = c && c.p_model != null ? Number(c.p_model) : null;
   const weight = c && c.anchorWeight != null ? Number(c.anchorWeight) : null;
   return {
@@ -298,7 +302,9 @@ function retailBook(c) {
 }
 
 /**
- * edge = p - vigged implied. EV = p * decimal - 1.
+ * edge = p - vigged implied. EV = (1 - pPush) * (p * decimal - 1).
+ * p stays the conditional (no-push) probability. Edge is not scaled.
+ * Missing or zero pPush leaves EV on p * decimal - 1.
  * Leaves coverProb and modelPureP. DK and Hard Rock stay liquid.
  * Clears the sharp-fair and movement flags the old pure-model step cleared,
  * so those gates do not start rejecting the calibrated row.
@@ -310,7 +316,7 @@ function priceEdgeAtBet(c) {
   const implied = americanToImplied(c.odds);
   const dec = americanToDecimal(c.odds);
   const edge = implied != null ? p - implied : null;
-  const ev = dec != null ? (p * dec) - 1 : null;
+  const ev = dec != null ? pushAwareEv(p, c.odds, c && c.pPush) : null;
   const retail = retailBook(c) === 'draftkings' || retailBook(c) === 'hardrockbet';
   return {
     ...c,

@@ -1213,6 +1213,7 @@ function ticketFromLegs(chosen, rows, opts) {
     : (decimalToAmerican(st.combinedDecimal) == null ? '' : formatAmerican(decimalToAmerican(st.combinedDecimal)));
   const stakeUnits = publishedParlayUnits(rows);
   const n = chosen.length;
+  const modelEvStr = formatEdgePct(st.evAtModel != null ? st.evAtModel : st.ev);
   const ticket = {
     type: labeled ? `${n}-leg-parlay-labeled` : `${n}-leg-parlay`,
     legs: publishedLegs,
@@ -1226,8 +1227,8 @@ function ticketFromLegs(chosen, rows, opts) {
     toWinDollars: toWinDollars(stakeUnits, combinedOdds),
     combinedProb: Number.isFinite(st.combinedProb) ? `${(st.combinedProb * 100).toFixed(1)}%` : '',
     combinedProbRaw: Number.isFinite(st.combinedProb) ? st.combinedProb : null,
-    ev: formatEdgePct(evAtShownPrice(st.combinedProb, combinedOdds) ?? st.ev) || '',
-    evAtModel: formatEdgePct(st.evAtModel != null ? st.evAtModel : st.ev),
+    ev: modelEvStr || '',
+    evAtModel: modelEvStr,
     evAtFair: st.evAtFair == null ? null : formatEdgePct(st.evAtFair),
     evRaw: Number.isFinite(st.ev) ? st.ev : null,
     uniqueGames: st.uniqueGames,

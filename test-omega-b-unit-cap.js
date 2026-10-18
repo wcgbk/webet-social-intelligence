@@ -48,7 +48,7 @@ assert.ok(!/B_GRADE_UNIT_CAP/.test(oddsSrc), 'Kelly helpers stay uncapped');
 assert.ok(!/B_GRADE_UNIT_CAP/.test(parlaySrc), 'parlay path is not the B cap');
 assert.ok(/const stake = PARLAY_FIXED_UNITS/.test(parlaySrc));
 const rateAt = selectSrc.indexOf('const rating = qualityToRating');
-const kellyAt = selectSrc.indexOf('units = quarterKellyUnits(c.coverProb, c.odds)');
+const kellyAt = selectSrc.indexOf('units = quarterKellyUnits(c.coverProb, c.odds, c.pPush)');
 assert.ok(rateAt > 0 && kellyAt > rateAt, 'Kelly stake is set after the edge grade label');
 assert.ok(!selectSrc.includes('units = gradeStakeUnits'), 'grade table is not the stake source');
 

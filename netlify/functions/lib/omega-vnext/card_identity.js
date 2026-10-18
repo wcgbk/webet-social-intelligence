@@ -135,9 +135,16 @@ function checkCardIdentity(card) {
   if (ticket) {
     const legs = Array.isArray(ticket.legs) ? ticket.legs.filter(Boolean) : [];
     legs.forEach((leg, i) => checkPrinted(leg, issues, `parlay leg ${i + 1}`));
-    if (ticket.combinedProb != null && String(ticket.combinedProb).trim() !== ''
+    const modelEv = ticket.evAtModel != null ? String(ticket.evAtModel).trim() : '';
+    const printedEv = ticket.ev != null ? String(ticket.ev).trim() : '';
+    // Ticket EV is evAtModel. The rounded win rate at the rounded price
+    // can sit a tenth away, so that pair is not a mismatch.
+    if (modelEv && printedEv && printedEv !== modelEv) {
+      issues.push(`parlay EV ${ticket.ev} is not evAtModel ${ticket.evAtModel}`);
+    } else if (!modelEv
+      && ticket.combinedProb != null && String(ticket.combinedProb).trim() !== ''
       && ticket.combinedOdds != null && String(ticket.combinedOdds).trim() !== ''
-      && ticket.ev != null && String(ticket.ev).trim() !== '') {
+      && printedEv !== '') {
       checkPrinted({
         coverProb: ticket.combinedProb,
         odds: ticket.combinedOdds,

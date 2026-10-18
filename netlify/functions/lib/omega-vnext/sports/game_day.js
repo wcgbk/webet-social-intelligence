@@ -396,6 +396,51 @@ function isFreshQbOut(qb, feedEntry, ctx) {
   return /\bout\b/.test(st);
 }
 
+/** Out, IR, or doubtful. Questionable stays uncertainty-only and is not a QB flag. */
+function qbOutIrDoubtful(status) {
+  const st = String(status || '').toLowerCase();
+  if (!st || /questionable/.test(st)) return false;
+  if (/injured reserve|\bir\b|\bpup\b/.test(st)) return true;
+  if (/doubtful/.test(st)) return true;
+  return /\bout\b/.test(st);
+}
+
+function claimsStarterBit(qb) {
+  if (!qb) return false;
+  const depth = qb.depthChartRank != null ? qb.depthChartRank
+    : (qb.depthRank != null ? qb.depthRank : qb.depth);
+  if (depth != null && Number.isFinite(Number(depth)) && Number(depth) === 1) return true;
+  return qb.isStarter === true || qb.qb1 === true;
+}
+
+/**
+ * NFL QB-flag inputs for one side. Does not move the margin.
+ * preseasonRule: the frozen PRESEASON_QB1 name and team matched and the
+ * status is out, IR, or doubtful (the statuses that rule prices).
+ * unconfirmed: that same injury, and the row is a rated or claimed starter,
+ * but there is no chart QB1 or the chart QB1 is a different player (a
+ * backup is listed to start). A backup injury with no starter bit is not
+ * a flag. NCAAF returns both false.
+ */
+function nflQbSideFlag(sport, qb, entry, teamName) {
+  if (sport !== 'NFL' || !qb) return { preseasonRule: false, unconfirmed: false };
+  if (!qbOutIrDoubtful(qb.qbStatus || qb.status)) {
+    return { preseasonRule: false, unconfirmed: false };
+  }
+  const preseasonRule = preseasonRatedStarter(qb, teamName);
+  const named = Object.prototype.hasOwnProperty.call(
+    NAMED_STARTING_QB,
+    normQbName(qb.qbName || qb.name),
+  );
+  const rated = preseasonRule || named || claimsStarterBit(qb);
+  let unconfirmed = false;
+  if (rated) {
+    if (!entry || !entry.qb1) unconfirmed = true;
+    else if (!playerIsFeedQb1(qb, entry)) unconfirmed = true;
+  }
+  return { preseasonRule, unconfirmed };
+}
+
 function normQbName(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -639,6 +684,13 @@ function applyGameDayAdjustments({
   // DraftKings price, and the floors are the only drop.
   const startingQbOut = isFreshQbOut(homeQb, homeEntry, { sport, team: home })
     || isFreshQbOut(awayQb, awayEntry, { sport, team: away });
+  // Flag only. The QB points added below stay the generic QB_INJURY table
+  // (NFL out is 3.0). No fitted QB value table exists, so this does not
+  // replace margin with a market-implied QB number.
+  const homeQbFlag = nflQbSideFlag(sport, homeQb, homeEntry, home);
+  const awayQbFlag = nflQbSideFlag(sport, awayQb, awayEntry, away);
+  const preseasonRuleFired = homeQbFlag.preseasonRule || awayQbFlag.preseasonRule;
+  const unconfirmedStarter = homeQbFlag.unconfirmed || awayQbFlag.unconfirmed;
   margin += qb.marginAdj;
   total += qb.totalAdj || 0;
   unc = Math.min(0.45, unc + qb.uncBump);
@@ -710,6 +762,12 @@ function applyGameDayAdjustments({
     qbNote: qb.note,
     qbMarginAdj: +(qb.marginAdj || 0).toFixed(2),
     qbTotalAdj: +(qb.totalAdj || 0).toFixed(2),
+    // NFL only. qbMarginAdj != 0 (out / IR / doubtful, including the
+    // generic table), or the frozen PRESEASON_QB1 rule fired, or the
+    // starter is unconfirmed / a backup is listed. Not set for other sports.
+    ...(sport === 'NFL' ? {
+      qbFlag: Math.abs(qb.marginAdj || 0) > 1e-9 || preseasonRuleFired || unconfirmedStarter,
+    } : {}),
     injuryMarginAdj: (qb.marginAdj || 0) + (cont.marginAdj || 0) + personnelMarginAdj,
     qbBackupDelta: (qb.backupDeltas && qb.backupDeltas.length) ? qb.backupDeltas : null,
     startingQbOut,

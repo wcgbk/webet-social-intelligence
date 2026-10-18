@@ -28,6 +28,7 @@
 
 const {
   MARKET_ANCHOR_MODEL_WEIGHT, ratingErrorSd, effectiveSd, SHARP_BOOKS,
+  SPORT_SPREAD_STD,
 } = require('./config');
 const { americanToImplied, americanToDecimal, formatEdgePct } = require('./odds_math');
 const { powerFair } = require('./pure_model');
@@ -105,7 +106,7 @@ function normalQuantile(p) {
  * z is the standard normal quantile of the model probability.
  * Missing n uses 6. A zero rating SD (NBA) returns 0.
  */
-function ratingSeOf(row) {
+function ratingSeOf(row, weightOverride) {
   if (!row) return 0;
   const market = row.market || row.betType;
   const kind = /total/i.test(String(market || '')) ? 'total' : 'margin';
@@ -115,8 +116,16 @@ function ratingSeOf(row) {
   const sdR = ratingErrorSd(row.sport, kind, usedN);
   const sdE = effectiveSd(row.sport, kind, usedN);
   if (!(sdR > 0) || !(sdE > 0)) return 0;
-  const w = modelWeightFor(row.sport, market);
-  // null is unanchored. 0 is a real weight and returns 0, not NaN.
+  // A passed weight is the row's anchor weight after the QB cap. Absent,
+  // use the table. null is unanchored. 0 is a real weight and returns 0.
+  let w;
+  if (weightOverride != null && weightOverride !== '' && Number.isFinite(Number(weightOverride))) {
+    w = Number(weightOverride);
+    if (w < 0) w = 0;
+    if (w > 1) w = 1;
+  } else {
+    w = modelWeightFor(row.sport, market);
+  }
   if (w == null) return 0;
   const pm = finiteProb(row.modelPureP);
   const p = pm != null ? pm : (finiteProb(row.p_model) != null ? finiteProb(row.p_model) : finiteProb(row.coverProb));
@@ -155,7 +164,7 @@ function fairPickFields(c) {
     : null;
   const raw = c && c.p_model != null ? Number(c.p_model) : null;
   const weight = c && c.anchorWeight != null ? Number(c.anchorWeight) : null;
-  return {
+  const out = {
     fairP: pctString(fair),
     fairSource: (c && c.anchorFairSource) || 'none',
     evAtFair: evFair == null || !Number.isFinite(evFair) ? null : formatEdgePct(evFair),
@@ -163,6 +172,14 @@ function fairPickFields(c) {
     p_fair: fair != null ? +Number(fair).toFixed(6) : null,
     modelWeight: weight != null && Number.isFinite(weight) ? weight : null,
   };
+  // Present only on an NFL QB-flagged row. toPickObject copies this object.
+  if (c && c.qbFlag === true) out.qbFlag = true;
+  if (c && c.qbMarketInformed === true) out.qbMarketInformed = true;
+  if (c && c.qbMarketImpliedPts != null && Number.isFinite(Number(c.qbMarketImpliedPts))) {
+    out.qbMarketImpliedPts = +Number(c.qbMarketImpliedPts).toFixed(2);
+  }
+  if (c && c.notes) out.notes = c.notes;
+  return out;
 }
 
 /** w = 1 returns pModel. w = 0 returns pFair. */
@@ -346,11 +363,111 @@ function resolveFair(c, opp) {
 }
 
 /**
+ * ASSUMED 2026-10-18. Not fit on this box. A QB-flagged NFL row whose
+ * |p_model − p_fair| is more than 10 percentage points treats the market
+ * as informed. The anchor weight is then capped at 0.10, and only
+ * downward: a table weight already at or below 0.10 is left alone (NFL
+ * totals stay 0). The cap is not a fitted QB point value. No such table
+ * exists. The model margin is not edited.
+ */
+const QB_MARKET_GAP = 0.10;
+const QB_MARKET_WEIGHT_CAP = 0.10;
+
+function qbGameKey(c) {
+  const game = (c && (c.matchup || `${c.awayTeam} @ ${c.homeTeam}`)) || '';
+  return [
+    String((c && c.sport) || '').toUpperCase(),
+    game,
+    String((c && c.commenceTime) || ''),
+  ].join('\0');
+}
+
+function sideRole(c) {
+  const side = String((c && c.side) || '');
+  const home = String((c && c.homeTeam) || '');
+  const away = String((c && c.awayTeam) || '');
+  if (home && (side === home || side.startsWith(`${home} `))) return 'home';
+  if (away && (side === away || side.startsWith(`${away} `))) return 'away';
+  return null;
+}
+
+/**
+ * Home margin implied by this row's no-vig fair.
+ * Spread: Φ((margin + homeLine) / sd) = P(home covers), so
+ * margin = sd * Φ^{-1}(pHome) − homeLine.
+ * Moneyline: margin = sd * Φ^{-1}(pHome).
+ * sd is SPORT_SPREAD_STD.NFL (FITTED game SD 13.2), not effectiveSd.
+ * Φ^{-1} is normalQuantile (Acklam), not the keyed PMF.
+ * ASSUMED: the power no-vig price is that normal probability, including
+ * on an integer line where a push exists. Diagnostic only.
+ */
+function impliedHomeMargin(c, pFair, sd) {
+  const fam = marketFamily(c && c.market);
+  if (fam === 'total') return null;
+  const who = sideRole(c);
+  if (who !== 'home' && who !== 'away') return null;
+  const pSide = Number(pFair);
+  if (!(pSide > 0 && pSide < 1) || !(sd > 0)) return null;
+  const pHome = who === 'home' ? pSide : (1 - pSide);
+  if (!(pHome > 0 && pHome < 1)) return null;
+  const z = normalQuantile(pHome);
+  if (z == null || !Number.isFinite(z)) return null;
+  if (fam === 'spread') {
+    const line = Number(c.line);
+    if (!Number.isFinite(line)) return null;
+    const homeLine = who === 'home' ? line : -line;
+    return (sd * z) - homeLine;
+  }
+  return sd * z;
+}
+
+function marginWithoutQb(c) {
+  const direct = Number(c && c.modelMarginNoQb);
+  if (Number.isFinite(direct)) return direct;
+  const raw = Number(c && (c.modelMarginRaw != null ? c.modelMarginRaw : c.modelProjection));
+  const adj = c && c.gameDay && Number(c.gameDay.qbMarginAdj);
+  if (Number.isFinite(raw) && Number.isFinite(adj)) return raw - adj;
+  return null;
+}
+
+function mergeNote(prev, text) {
+  const next = String(text || '').trim();
+  if (!next) return prev == null || prev === '' ? null : prev;
+  const prior = prev != null ? String(prev).trim() : '';
+  if (!prior) return next;
+  if (prior.includes(next)) return prior;
+  return `${prior} ${next}`;
+}
+
+/**
+ * qbMarketImpliedPts is the market home margin minus the model home margin
+ * with the QB/injury points removed: how many points of QB value the
+ * market is pricing that the model margin does not carry. Negative means
+ * the market has the home side worse than that no-QB margin.
+ */
+function qbDiagnosticNote(pts, informed, pModel, pFair) {
+  const parts = [];
+  if (pts != null && Number.isFinite(pts)) {
+    const shown = `${pts > 0 ? '+' : ''}${pts.toFixed(1)}`;
+    parts.push(
+      `QB diagnostic: market-implied QB value is ${shown} pts (market home margin minus the model home margin with the QB/injury points removed). No fitted QB value table exists, so the model margin is unchanged.`,
+    );
+  }
+  if (informed && pModel != null && pFair != null) {
+    const pp = Math.abs(Number(pModel) - Number(pFair)) * 100;
+    const gap = (Math.round(pp * 10) / 10).toFixed(1);
+    parts.push(`QB flag: market treated as informed (model-vs-market gap ${gap}pp)`);
+  }
+  return parts.length ? parts.join(' ') : null;
+}
+
+/**
  * Anchor coverProb from modelPureP and the fair price.
  * A sport missing from the weight table is returned unchanged.
  * No fair: the row is kept, coverProb is not replaced, anchorFairSource is 'none'.
  * The incoming coverProb is kept as p_calibrated. It does not feed final p
  * when a fair price is present.
+ * NFL QB flag: per-row weight cap only. The model margin is not changed.
  */
 function applyMarketAnchor(candidates) {
   const rows = candidates || [];
@@ -361,34 +478,77 @@ function applyMarketAnchor(candidates) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(c);
   }
-  return rows.map((c) => {
-    if (!c) return c;
+  const resolved = new Map();
+  for (const c of rows) {
+    if (!c || !sportAnchored(c.sport)) continue;
     const w = modelWeightFor(c.sport, c.market);
     // 0 still anchors: p_final is the fair. Only null leaves the row alone.
-    if (w == null) return c;
+    if (w == null) continue;
     const fromPure = finiteProb(c.modelPureP);
     const pModel = fromPure != null ? fromPure : finiteProb(c.coverProb);
     const opp = (groups.get(pairKey(c)) || []).find((row) => isOpposite(c, row));
-    const resolved = resolveFair(c, opp);
-    const pFair = resolved.pFair;
-    const source = resolved.source;
+    const fair = resolveFair(c, opp);
+    resolved.set(c, { w, pModel, pFair: fair.pFair, source: fair.source });
+  }
+  // One market margin per QB-flagged NFL game. A spread fair wins over a
+  // moneyline fair. Totals do not identify a margin.
+  const nflSd = Number(SPORT_SPREAD_STD && SPORT_SPREAD_STD.NFL);
+  const marginByGame = new Map();
+  if (nflSd > 0) {
+    for (const c of rows) {
+      const info = resolved.get(c);
+      if (!info || info.pFair == null) continue;
+      if (String(c.sport || '').toUpperCase() !== 'NFL' || c.qbFlag !== true) continue;
+      const implied = impliedHomeMargin(c, info.pFair, nflSd);
+      if (implied == null || !Number.isFinite(implied)) continue;
+      const key = qbGameKey(c);
+      const fam = marketFamily(c.market);
+      const prev = marginByGame.get(key);
+      if (!prev || (fam === 'spread' && !prev.fromSpread)) {
+        marginByGame.set(key, { margin: implied, fromSpread: fam === 'spread' });
+      }
+    }
+  }
+  return rows.map((c) => {
+    if (!c) return c;
+    const info = resolved.get(c);
+    if (!info) return c;
+    const { w, pModel, pFair, source } = info;
+    const qbFlag = String(c.sport || '').toUpperCase() === 'NFL' && c.qbFlag === true;
+    const gap = pModel != null && pFair != null ? Math.abs(pModel - pFair) : null;
+    // Strictly greater than 10pp. A gap of exactly 0.10 is not capped.
+    const informed = qbFlag && gap != null && gap > QB_MARKET_GAP;
+    // Downward only. Never raises w (NFL total 0 stays 0).
+    const wUse = informed && w > QB_MARKET_WEIGHT_CAP ? QB_MARKET_WEIGHT_CAP : w;
     const se = ratingSeOf({
       ...c,
       modelPureP: pModel != null ? pModel : c.modelPureP,
-      anchorWeight: w,
-    });
+    }, wUse);
+    const noQb = qbFlag ? marginWithoutQb(c) : null;
+    const pack = qbFlag ? marginByGame.get(qbGameKey(c)) : null;
+    const pts = noQb != null && pack && Number.isFinite(pack.margin)
+      ? +(pack.margin - noQb).toFixed(2)
+      : null;
+    const note = qbFlag ? qbDiagnosticNote(pts, informed, pModel, pFair) : null;
+    const qbStamp = qbFlag ? {
+      qbFlag: true,
+      qbMarketInformed: informed,
+      ...(pts != null ? { qbMarketImpliedPts: pts } : {}),
+      ...(note ? { notes: mergeNote(c.notes, note) } : {}),
+    } : {};
     const stamped = {
       p_model: pModel != null ? +Number(pModel).toFixed(6) : (c.p_model != null ? c.p_model : null),
       p_fair: pFair != null ? +Number(pFair).toFixed(6) : null,
       p_calibrated: finiteProb(c.coverProb),
-      anchorWeight: w,
+      anchorWeight: wUse,
       anchorFairSource: source,
       ratingSe: Number.isFinite(se) ? se : 0,
+      ...qbStamp,
     };
     if (pModel == null || pFair == null) {
       return { ...c, ...stamped, anchorFairSource: 'none', p_fair: null };
     }
-    const p = anchorProbability(pModel, pFair, w);
+    const p = anchorProbability(pModel, pFair, wUse);
     if (p == null || !Number.isFinite(p)) {
       return { ...c, ...stamped, anchorFairSource: 'none' };
     }
@@ -451,4 +611,6 @@ module.exports = {
   normalPdf,
   normalQuantile,
   fairPickFields,
+  QB_MARKET_GAP,
+  QB_MARKET_WEIGHT_CAP,
 };

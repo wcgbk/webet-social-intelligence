@@ -177,6 +177,14 @@ function projectGame(event, standings, efficiency, gameDay, espnGame, neutralGam
       raw.nflElo = { w: eloW, margin: +eloPts.toFixed(3) };
     }
     if (nflSpreadExcludesGame(pts.modelMarginRaw, pts.marketMargin)) raw.nflGameProjectionGap = true;
+    // Diagnostic input for qbMarketImpliedPts. qbMarginAdj was added once
+    // at full weight (the elo blend puts injury points back on). Subtracting
+    // it here does not write modelMargin. No fitted QB value table exists;
+    // QB_INJURY.NFL.outMarginPts 3.0 stays the priced adjustment.
+    const qbAdj = gameDayMeta && Number(gameDayMeta.qbMarginAdj);
+    const qbPts = Number.isFinite(qbAdj) ? qbAdj : 0;
+    if (Number.isFinite(modelMargin)) raw.modelMarginNoQb = +(modelMargin - qbPts).toFixed(4);
+    raw.qbFlag = !!(gameDayMeta && gameDayMeta.qbFlag === true);
     return raw;
   }
   const engineSoft = stacked.engineSoft;

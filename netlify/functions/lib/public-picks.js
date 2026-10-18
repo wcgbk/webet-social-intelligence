@@ -21,6 +21,10 @@ const PICK_KEEP = [
   // fairSource is anchorFairSource (pinnacle, sharp-books, consensus, a book key, or none).
   // evAtFair is that same p_fair at the bet price.
   'fairP', 'fairSource', 'evAtFair', 'modelWeight',
+  // NFL QB flag. notes is the diagnostic (market-implied QB points) and,
+  // when the gap guard fires, the informed-market sentence. qbFlag is only
+  // set on a flagged game. The model margin is not changed.
+  'qbFlag', 'qbMarketImpliedPts', 'qbMarketInformed', 'notes',
 ];
 
 const PARLAY_KEEP = [
@@ -65,6 +69,13 @@ function pickPublic(p) {
   if (isCfbSport(out.sport)) {
     if (out.pick) out.pickDisplay = formatCfbPickDisplay(out.pick);
     if (out.matchup) out.matchupDisplay = formatCfbMatchupDisplay(out.matchup);
+  }
+  // The public blurb keeps the narrator text and prints the QB note on the end.
+  const note = out.notes != null ? String(out.notes).trim() : '';
+  if (note) {
+    const reasoning = out.coreReasoning != null ? String(out.coreReasoning).trim() : '';
+    if (!reasoning) out.coreReasoning = note;
+    else if (!reasoning.includes(note)) out.coreReasoning = `${reasoning} ${note}`;
   }
   return out;
 }

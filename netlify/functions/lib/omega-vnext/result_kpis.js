@@ -101,11 +101,20 @@ function dayList(days) {
   return Array.isArray(days) ? days.filter((day) => day && typeof day === 'object') : [];
 }
 
+/** A 0u 'no stake' listing is not a bet and stays out of win-rate and parlay KPIs. */
+function isNoStakePick(pick) {
+  if (!pick) return false;
+  if (pick.noStake === true) return true;
+  const label = String(pick.label == null ? '' : pick.label).trim().toLowerCase();
+  const tier = String(pick.tier == null ? '' : pick.tier).trim().toLowerCase();
+  return label === 'no stake' || tier === 'no stake';
+}
+
 function straightPicks(days) {
   const out = [];
   for (const day of dayList(days)) {
     for (const pick of day.picks || []) {
-      if (!pick || isParlayPick(pick)) continue;
+      if (!pick || isParlayPick(pick) || isNoStakePick(pick)) continue;
       out.push(pick);
     }
   }
@@ -151,7 +160,7 @@ function parlayHitVsImplied(days) {
     if (y == null) continue;
     const legs = [];
     for (const pick of day.picks || []) {
-      if (!pick || isParlayPick(pick)) continue;
+      if (!pick || isParlayPick(pick) || isNoStakePick(pick)) continue;
       if (americanImplied(pick.odds) == null) continue;
       legs.push(pick);
       if (legs.length === 3) break;

@@ -133,9 +133,9 @@ assert.deepStrictEqual(filled.map((row) => row.tier), ['floor', 'lean', 'lean'])
 assert.ok(filled.every((row) => passesPublishFloor(row) || row.tier === 'lean'));
 
 const lastResort = selectStraights([floorOnly], 3, [posHigh, zero, neg, staleFill, otherBook]);
-assert.deepStrictEqual(lastResort.map((row) => row.side), ['B +3', 'D ML']);
-assert.deepStrictEqual(lastResort.map((row) => row.tier), ['floor', 'lean']);
-assert.ok(!lastResort.some((row) => row.side === 'N ML' || row.side === 'L ML' || row.side === 'H ML' || row.side === 'J ML'));
+assert.deepStrictEqual(lastResort.map((row) => row.side), ['B +3', 'D ML', 'H ML']); // 2026-10-18: EV 0 fills a short card as no stake
+assert.deepStrictEqual(lastResort.map((row) => row.tier), ['floor', 'lean', 'no stake']);
+assert.ok(!lastResort.some((row) => row.side === 'N ML' || row.side === 'L ML' || row.side === 'J ML'));
 
 const leanPick = toPickObject(lastResort[1]);
 const floorPick = toPickObject(lastResort[0]);

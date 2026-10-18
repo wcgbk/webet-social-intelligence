@@ -200,7 +200,9 @@ assert.ok(Date.parse(beforeSnapshot) < asOfMs - GRACE, 'started candidate is bef
   const qa = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/qa_hardfail.js'), 'utf8');
   const sel = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/select.js'), 'utf8');
   assert.ok(!/in-progress-or-started/.test(qa), 'qa_hardfail has no pregame in-progress gate');
-  assert.ok(!/in-progress-or-started/.test(sel), 'select has no pregame in-progress gate');
+  // 2026-10-18: short-card fill refuses a row the gate already marked in-progress. It does not clock kickoff.
+  assert.ok(!/Date\.now\(/.test(sel), 'select has no Date.now() pregame kill switch');
+  assert.ok(/rejectReason/.test(sel) && /in-progress-or-started/.test(sel));
   assert.ok(!/pregameOnly/.test(qa) && !/pregameOnly/.test(sel));
 }
 

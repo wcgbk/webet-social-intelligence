@@ -649,12 +649,12 @@ async function generateOmegaVnext(opts = {}) {
     }))
     : [];
   console.log(`[omega-vnext] yesPool=${yesPool.length} lean=${leanPool.length} pairedFill=${pairedFill.length} rejected=${rejected.length} placeabilityVeto=${placeVeto}`);
-  for (const c of yesPool.concat(leanPool, pairedFill)) {
+  for (const c of yesPool.concat(leanPool, pairedFill, rejected)) {
     if (c) c.hardRockPriced = hasHardRockPrice(c);
   }
   const snapshotCoversQa = tenAmSnapshotCoversChecks(snap);
 
-  const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null, pairedFill);
+  const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null, pairedFill, rejected);
   const top10Candidates = selectTop10(yesPool, 10);
   // 10:00 rank is probability edge, one game each. Stake EV breaks a tie
   // inside 0.2 percentage points. A parlay
@@ -795,6 +795,7 @@ async function generateOmegaVnext(opts = {}) {
     yesPool: keepPublishable(yesPool),
     leanPool: LEAN_PAD ? keepPublishable(leanPool) : [],
     pairedPool: keepPublishable(pairedFill),
+    rejected: keepPublishable(rejected),
     blocked: topUpBlocked,
     parlayPool,
     hrNote: placement.note,

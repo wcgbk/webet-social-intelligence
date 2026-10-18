@@ -141,7 +141,7 @@ assert.strictEqual(quarterKellyUnits(0.53, -110), 0.25);
 assert.strictEqual(smallKelly.rating, 'aplus');
 assert.strictEqual(smallKelly.tier, 'lean');
 assert.strictEqual(smallKelly.label, 'lean');
-assert.strictEqual(smallKelly.units, '0.5u');
+assert.strictEqual(smallKelly.units, '0.25u'); // 2026-10-18: graded Kelly under 0.5u is a lean at max(Kelly, 0.25) capped at 0.5
 
 const namedLean = toPickObject(straight({ coverProb: 0.60, tier: 'lean', edgePct: 0.04 }));
 assert.strictEqual(quarterKellyUnits(0.60, -110), 1.5);
@@ -150,8 +150,7 @@ assert.strictEqual(namedLean.label, 'lean');
 assert.strictEqual(namedLean.units, '0.5u');
 
 const namedSmall = toPickObject(straight({ coverProb: 0.53, tier: 'lean', edgePct: 0.02 }));
-assert.strictEqual(namedSmall.units, '0.5u');
-assert.notStrictEqual(namedSmall.units, '0.25u');
+assert.strictEqual(namedSmall.units, '0.25u'); // 2026-10-18: a positive-EV lean keeps quarter Kelly on the 0.25 grid, not a flat 0.5u
 
 assert.strictEqual(quarterKellyUnits(0.50, -110), 0);
 assert.strictEqual(quarterKellyUnits(0.55, -110, 0.1), quarterKellyUnits(0.55, -110, 0));

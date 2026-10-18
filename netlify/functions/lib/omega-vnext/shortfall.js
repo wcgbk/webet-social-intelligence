@@ -3,6 +3,8 @@
 /**
  * Private card shortfall. Diagnostic only.
  * Does not add a pick, change a gate, or force-fill a negative-EV play.
+ * A 0u row labelled 'no stake' is not a cleared straight: it lists a
+ * side and risks nothing, so straightsCleared ignores it.
  * The public pick list must not include this object. publicPicksPayload
  * drops `shortfall`. The generate-time health blob keeps a copy.
  */
@@ -130,10 +132,19 @@ function toNextBest(row, gate) {
  *   picks and parlayLegs are the published card. yesPool cleared the gates.
  *   rejected did not. Next-best is diagnostic and is not a ticket.
  */
+function isListedNoStake(pick) {
+  if (!pick || typeof pick !== 'object') return false;
+  if (pick.noStake === true) return true;
+  const label = String(pick.label == null ? '' : pick.label).trim().toLowerCase();
+  const tier = String(pick.tier == null ? '' : pick.tier).trim().toLowerCase();
+  return label === 'no stake' || tier === 'no stake';
+}
+
 function buildShortfall(input) {
   const src = input || {};
   const picks = Array.isArray(src.picks) ? src.picks : [];
-  const straightsCleared = picks.length;
+  // 0u 'no stake' rows count 0 toward the straight target.
+  const straightsCleared = picks.filter((pick) => !isListedNoStake(pick)).length;
   const legs = parlayLegCount(src.parlayLegs);
   const parlayCleared = legs >= PARLAY_TARGET;
   const active = straightsCleared < STRAIGHTS_TARGET || !parlayCleared;

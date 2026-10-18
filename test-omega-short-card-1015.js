@@ -118,7 +118,7 @@ function legNames(parlayLegs) {
     pairedPool: [paired],
     picks: [],
   });
-  assert.deepStrictEqual(names(reserve), ['Home1 +3', 'Home2 +3', 'Home4 +3']);
+  assert.deepStrictEqual(names(reserve), ['Home1 +3', 'Home2 +3', 'Home4 +3', 'Home3 +3']); // 2026-10-18: EV 0 stays on the reserve as no stake
   assert.strictEqual(reserve[2].pairedFill, true);
   const reserveSnap = JSON.stringify(reserve);
   const up = topUpStraights({ picks: [], reserve, blocked: [] });
@@ -132,9 +132,11 @@ function legNames(parlayLegs) {
   assert.strictEqual(up.picks[2].units, '0.5u');
 
   const last = selectStraights([floor], 3, [zero], [paired]);
-  assert.deepStrictEqual(last.map((row) => row.side), ['Home1 +3', 'Home4 +3']);
+  assert.deepStrictEqual(last.map((row) => row.side), ['Home1 +3', 'Home4 +3', 'Home3 +3']); // 2026-10-18: EV 0 fills the open slot as no stake
   assert.strictEqual(last[1].pairedFill, true);
   assert.strictEqual(last[1].tier, 'lean');
+  assert.strictEqual(last[2].tier, 'no stake');
+  assert.strictEqual(last[2].label, 'no stake');
   const reserve2 = buildReserve({
     yesPool: [floor],
     leanPool: [zero],
@@ -142,7 +144,7 @@ function legNames(parlayLegs) {
     picks: [],
   });
   const up2 = topUpStraights({ picks: [], reserve: reserve2, blocked: [] });
-  assert.deepStrictEqual(names(up2.picks), ['Home1 +3', 'Home4 +3']);
+  assert.deepStrictEqual(names(up2.picks), ['Home1 +3', 'Home4 +3', 'Home3 +3']);
   assert.strictEqual(up2.picks[1].pairedFill, true);
   assert.strictEqual(up2.picks[1].tier, 'lean');
   assert.strictEqual(up2.picks[1].units, '0.5u');

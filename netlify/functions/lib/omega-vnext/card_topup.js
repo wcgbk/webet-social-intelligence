@@ -5,13 +5,15 @@
  *
  * Fill order matches selectStraights over the reserve: floor rows by
  * anchored stake EV (compareByEv), then positive-EV leans, then any
- * pregame lean, then same-line Pinnacle pairs. ratingSe is not a rank
- * or size term. A row that misses the floor is tier 'lean'. Stake is
- * the Kelly unit already on the pick. A blocked side never returns. A
- * side already on the card is not added. One straight per game unless
- * allowSameGame, and
- * that fill is only after distinct-game rows are exhausted
- * (sameGameFill: true). An exhausted reserve still returns the card.
+ * pregame lean, then same-line Pinnacle pairs, then thin positive EV
+ * the noise rule would skip, then EV <= 0 as 'no stake' when
+ * SHORT_CARD_NOSTAKE_FILL is on. ratingSe is not a rank or size term.
+ * A positive fill that misses the floor is tier 'lean'. A non-positive
+ * fill is label 'no stake' at 0u. A blocked side never returns. A side
+ * already on the card is not added. One straight per game unless
+ * allowSameGame, and that fill is only after distinct-game rows are
+ * exhausted (sameGameFill: true). A started game is not a fill.
+ * An exhausted reserve still returns the card.
  */
 
 const config = require('./config');
@@ -23,6 +25,9 @@ const {
   passesLeanFill,
   eligibleForLeanPool,
   eligiblePairedFill,
+  eligibleShortCardPositive,
+  eligibleShortCardNoStake,
+  isNoStakeRow,
   compareByEv,
   matchupKey,
   toPickObject,
@@ -204,12 +209,16 @@ function classifyReserveRow(row) {
   }
   if (passesLeanFill(candidate)) return { kind: 'posLean', candidate };
   if (eligibleForLeanPool(candidate)) return { kind: 'anyLean', candidate };
-  if (row.tier === 'lean' && ev > 0) return { kind: 'posLean', candidate };
+  if (row.tier === 'lean' && ev > 0 && !isNoStakeRow(row)) return { kind: 'posLean', candidate };
+  // ASSUMED: thin positive anchored EV is still a lean. The noise rule
+  // (edge under 1% and EV under 1%) does not block this top-up.
+  if (eligibleShortCardPositive(candidate)) return { kind: 'thinLean', candidate };
+  if (eligibleShortCardNoStake(candidate) || isNoStakeRow(row)) return { kind: 'noStake', candidate };
   return null;
 }
 
 function bucketReserve(reserve) {
-  const buckets = { floor: [], posLean: [], anyLean: [], paired: [] };
+  const buckets = { floor: [], posLean: [], anyLean: [], paired: [], thinLean: [], noStake: [] };
   for (const row of reserve || []) {
     const found = classifyReserveRow(row);
     if (!found || !buckets[found.kind]) continue;
@@ -224,8 +233,9 @@ function bucketReserve(reserve) {
 function materialize(entry, { sameGame }) {
   const row = entry.row || {};
   const candidate = entry.candidate || {};
-  const lean = entry.kind !== 'floor';
-  const want = lean ? 'lean' : 'floor';
+  const nostake = entry.kind === 'noStake' || isNoStakeRow(row) || isNoStakeRow(candidate);
+  const lean = !nostake && entry.kind !== 'floor';
+  const want = nostake ? 'no stake' : (lean ? 'lean' : 'floor');
   const src = {
     ...row,
     ...candidate,
@@ -247,7 +257,11 @@ function materialize(entry, { sameGame }) {
     coreReasoning: row.coreReasoning || '',
     line: row.line != null ? row.line : candidate.line,
   };
-  if (lean) {
+  if (nostake) {
+    src.label = 'no stake';
+    src.noStake = true;
+    src.leanReason = row.leanReason || 'no-stake';
+  } else if (lean) {
     src.label = 'lean';
     if (entry.kind === 'paired' || row.pairedFill) {
       src.pairedFill = true;
@@ -265,7 +279,15 @@ function materialize(entry, { sameGame }) {
   }
   if (row.hardRockPriced === true || row.hardRockPriced === false) pick.hardRockPriced = row.hardRockPriced === true;
   if (sameGame) pick.sameGameFill = true;
-  if (lean) {
+  if (nostake || isNoStakeRow(pick)) {
+    pick.tier = 'no stake';
+    pick.label = 'no stake';
+    pick.units = '0u';
+    pick.noStake = true;
+    pick.excludeFromKpi = true;
+    pick.riskDollars = 0;
+    pick.toWinDollars = 0;
+  } else if (lean) {
     pick.tier = 'lean';
     pick.label = 'lean';
   }
@@ -286,7 +308,7 @@ function topUpStraights(opts = {}) {
   const usedGames = new Set(card.map((pick) => matchupKey(pick)).filter(Boolean));
   const added = [];
   const buckets = bucketReserve(opts.reserve);
-  const order = ['floor', 'posLean', 'anyLean', 'paired'];
+  const order = ['floor', 'posLean', 'anyLean', 'paired', 'thinLean', 'noStake'];
 
   const take = (entry, sameGame) => {
     if (card.length >= target) return;
@@ -321,10 +343,12 @@ function topUpStraights(opts = {}) {
 }
 
 function stampReservePick(row, kind, modelVersion) {
-  const lean = kind !== 'floor';
+  const nostake = kind === 'noStake';
+  const lean = !nostake && kind !== 'floor';
   const src = {
     ...row,
-    tier: lean ? 'lean' : 'floor',
+    tier: nostake ? 'no stake' : (lean ? 'lean' : 'floor'),
+    ...(nostake ? { label: 'no stake', noStake: true, leanReason: row.leanReason || 'no-stake' } : {}),
   };
   if (kind === 'paired') {
     src.pairedFill = true;
@@ -374,6 +398,19 @@ function buildReserve(opts = {}) {
   const paired = [...(opts.pairedPool || [])].sort(compareByEv);
   for (const row of paired) {
     if (row && (row.pairedFill === true || eligiblePairedFill(row))) push(row, 'paired');
+  }
+  const rest = [].concat(
+    opts.yesPool || [],
+    opts.leanPool || [],
+    opts.pairedPool || [],
+    opts.rejected || [],
+    opts.restPool || [],
+  ).sort(compareByEv);
+  for (const row of rest) {
+    if (eligibleShortCardPositive(row)) push(row, 'thinLean');
+  }
+  for (const row of rest) {
+    if (eligibleShortCardNoStake(row)) push(row, 'noStake');
   }
   return ranked.slice(0, Math.max(0, limit)).map((item) => stampReservePick(item.row, item.kind, opts.modelVersion));
 }
@@ -530,6 +567,8 @@ function applyGenerateReserve(opts = {}) {
     yesPool: opts.yesPool,
     leanPool: opts.leanPool,
     pairedPool: opts.pairedPool,
+    rejected: opts.rejected,
+    restPool: opts.restPool,
     picks,
     blocked: opts.blocked,
     modelVersion: opts.modelVersion,

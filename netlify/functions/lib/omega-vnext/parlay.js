@@ -715,7 +715,7 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     };
   }));
 
-  return [{
+  const out = [{
     type: `${legs.length}-leg-parlay-${mirrorsCard ? 'straight' : 'optimized'}`,
     legs,
     units: leanStake ? `${LEAN_PARLAY_UNITS}u` : `${stake}u`,
@@ -736,6 +736,8 @@ function optimizeParlay(yesPool, straights = [], opts = {}) {
     candidatesScanned: search.length,
     source: 'omega-vnext',
   }];
+  if (out[0].legs.length === 3) stampFairParlay(out[0], chosen.evAtFair);
+  return out;
 }
 
 function numericAmerican(odds) {
@@ -1195,10 +1197,55 @@ function twoTeamFromPublished(rows) {
   return priced.length === 2 ? priced : null;
 }
 
+/**
+ * 3-leg fair rule. Not FITTED. The cut is the sign of EV, not a tuned hurdle.
+ * evAtFair is comboStats: product of no-vig fair probs times the parlay
+ * decimal, minus 1, with no haircut. Fair EV above 0 is a real ticket at
+ * the stake already chosen (full card 0.5u, lean card 0.25u). Fair EV at
+ * or under 0 still publishes (10/10 never-block) but only as a lean at
+ * LEAN_PARLAY_UNITS (the existing 0.25u minimum), labelled exactly
+ * FAIR_LEAN_LABEL. It is not a real ticket and is not sized above 0.25u.
+ * A missing fair price, or any ticket that is not 3 legs, is unchanged.
+ */
+const FAIR_LEAN_LABEL = 'lean - negative EV at fair price';
+
+function stampFairParlay(ticket, evAtFair) {
+  if (!ticket || !Array.isArray(ticket.legs) || ticket.legs.length !== 3) return ticket;
+  // null is a missing fair price. Number(null) is 0, which would fake a lean.
+  if (evAtFair == null || evAtFair === '') return ticket;
+  const fair = Number(evAtFair);
+  if (!Number.isFinite(fair)) return ticket;
+  const n = ticket.legs.length;
+  if (fair > 0) {
+    ticket.isLean = false;
+    if (ticket.label === 'combined EV not positive') {
+      delete ticket.label;
+      delete ticket.leanDay;
+      if (typeof ticket.type === 'string' && ticket.type.endsWith('-labeled')) {
+        ticket.type = `${n}-leg-parlay`;
+      }
+    }
+    return ticket;
+  }
+  const stake = Number(LEAN_PARLAY_UNITS);
+  const units = Number.isFinite(stake) ? stake : 0.25;
+  ticket.isLean = true;
+  ticket.leanDay = true;
+  ticket.label = FAIR_LEAN_LABEL;
+  ticket.qualifying = true;
+  ticket.type = `${n}-leg-parlay-labeled`;
+  ticket.units = `${units}u`;
+  ticket.riskDollars = stakeDollars(units);
+  if (ticket.combinedOdds) ticket.toWinDollars = toWinDollars(units, ticket.combinedOdds);
+  return ticket;
+}
+
 function ticketFromLegs(chosen, rows, opts) {
   const st = comboStats(chosen);
   const anchor = require('./config').marketAnchorOn();
-  if (anchor && !(st.ev > 0)) return [noQualifyingParlay('combined EV not positive')];
+  if (anchor && !(st.ev > 0) && !(chosen.length === 3 && Number.isFinite(st.evAtFair))) {
+    return [noQualifyingParlay('combined EV not positive')];
+  }
   const labeled = !(st.ev > 0);
   const straightIds = new Set(rows.map((row) => parlaySideId(row)));
   const mirrored = rows.length >= chosen.length
@@ -1244,6 +1291,7 @@ function ticketFromLegs(chosen, rows, opts) {
     source: 'omega-vnext',
   };
   if (opts && opts.hrPlaceabilityNote) ticket.hrPlaceabilityNote = opts.hrPlaceabilityNote;
+  if (chosen.length === 3) stampFairParlay(ticket, st.evAtFair);
   if (!mirrored || labeled) {
     const names = chosen.map((leg) => leg.side || leg.pick).join(' | ');
     console.log(`[omega-vnext] parlay ${labeled ? 'labeled' : 'auto-correct'} ev=${ticket.ev} legs=${names}`);

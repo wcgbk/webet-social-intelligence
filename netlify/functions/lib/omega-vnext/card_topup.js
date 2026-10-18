@@ -4,8 +4,9 @@
  * Short-card top-up. Pure. No odds pull, no blob, no model-math change.
  *
  * Fill order matches selectStraights over the reserve: floor rows by
- * stake EV, then positive-EV leans, then any pregame lean, then same-line
- * Pinnacle pairs. A row that misses the floor is tier 'lean'. Stake is
+ * anchored stake EV (compareByEv), then positive-EV leans, then any
+ * pregame lean, then same-line Pinnacle pairs. ratingSe is not a rank
+ * or size term. A row that misses the floor is tier 'lean'. Stake is
  * the Kelly unit already on the pick. A blocked side never returns. A
  * side already on the card is not added. One straight per game unless
  * allowSameGame, and

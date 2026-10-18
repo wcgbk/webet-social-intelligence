@@ -134,7 +134,9 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   const naive = evAtOdds(0.52, -110);
   const scaled = push.pushAwareEv(0.52, -110, 0.09);
   near(scaled, naive * 0.91, 1e-12, 'push scales EV');
-  near(push.pushAwareKelly(0.52, -110, 0.25, 0.09), kellyFraction(0.52, -110, 0.25) * 0.91, 1e-12);
+  // 2026-10-18: f* does not depend on pPush. EV still scales by (1-pPush).
+  assert.strictEqual(push.pushAwareKelly(0.52, -110, 0.25, 0.09), kellyFraction(0.52, -110, 0.25));
+  assert.strictEqual(push.pushAwareKelly(0.52, -110, 0.25, 0.09), push.pushAwareKelly(0.52, -110, 0.25, 0));
   assert.strictEqual(push.pushAwareEv(0.52, -110, 0), naive);
   assert.strictEqual(push.pushAwareEv(0.52, -110), naive);
   near(push.pushKeep(0.8), 0.5, 1e-12, 'push keep floor');
@@ -459,7 +461,7 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
   });
 }
 
-// Mode A shrinks coverProb. Push mass still scales that calibrated EV and Kelly.
+// Mode A shrinks coverProb. Push mass still scales that calibrated EV. Kelly is not scaled.
 // lateNews is copied through calibration onto the published pick.
 {
   withEnv('OMEGA_CAL_MODE', null, () => {
@@ -498,7 +500,8 @@ withEnv('OMEGA_KEY_MASS', '0', () => {
       kellyFraction(row.coverProb, -110, config.KELLY_FRACTION),
       config.MAX_STRAIGHT_UNITS_PER_PICK,
     );
-    assert.ok(scaledUnits < rawUnits, `push kelly units ${scaledUnits} vs ${rawUnits} at p=${row.coverProb}`);
+    // 2026-10-18: both hit the 1.5u cap. The push scale no longer lowers the Kelly units.
+    assert.strictEqual(scaledUnits, rawUnits, `push kelly units ${scaledUnits} vs ${rawUnits} at p=${row.coverProb}`);
     assert.notStrictEqual(pick.rating, 'b');
     const math = require(path.join(root, 'odds_math'));
     assert.strictEqual(pick.units, `${math.gradeStakeUnits(pick.rating, pick.tier)}u`);

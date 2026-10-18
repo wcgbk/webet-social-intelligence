@@ -18,8 +18,7 @@ const {
 const { fairPickFields } = require('./prob_anchor');
 const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
 const { footballAuditFields } = require('./sports/_common');
-const { gameExposureEnabled, GAME_EXPOSURE_CAP, pushEvEnabled } = require('./gaps_flags');
-const { pushKeep } = require('./push_ev');
+const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 const { reviewFlag } = require('./pinnacle_flag');
 
 function cleanTeam(s) {
@@ -90,8 +89,12 @@ function selectionNudge(c) {
 }
 
 function scoreCandidate(c) {
+  // Letter-score diagnostic. selectStraights does not rank on this.
+  // Rank is compareByEv: stake EV from the anchored p_final at the bet
+  // price. The ±0.001 uncertainty term inside qualityScore is the existing
+  // tie-break and is not an SE penalty.
   // Same number the letter grade uses: calibrated edge vs no-vig sharp,
-  // plus a small residual-CLV nudge. Raw EV is not the rank — a +180 dog
+  // plus a small residual-CLV nudge. Raw EV is not this score — a +180 dog
   // inflates EV without a better close.
   // Line movement is not a score bump. It adjusts cover probability before
   // this function runs. _pmScoreAdj stays inside ±SCORE_NUDGE_CAP so it
@@ -187,29 +190,45 @@ function finiteEv(c) {
 
 /**
  * Quarter Kelly on the final p, times BANKROLL_UNITS.
- * f = 0.25 * (p*dec - 1) / (dec - 1), then times (1 - pPush). Nearest 0.25u.
- * EV <= 0 is 0. A positive stake is at least 0.5u and at most 1.5u.
- * p stays the conditional (no-push) probability. Missing or zero pPush
- * leaves the stake unchanged. OMEGA_PUSH_EV=0 leaves the unscaled Kelly.
+ * f* = 0.25 * (p*dec - 1) / (dec - 1). Nearest 0.25u. Cap 1.5u.
+ * EV <= 0 is 0. There is no 0.5u floor in this function.
+ * p is conditional on no push. f* does not depend on pPush (push_ev.js).
+ * The pPush argument stays so the call site does not change.
+ * Not FITTED: this is the Kelly maximiser. The 0.25 step and 1.5u cap
+ * are the existing stake grid.
  */
 function quarterKellyUnits(p, odds, pPush = 0) {
+  void pPush;
   const prob = Number(p);
   const o = Number(String(odds).replace(/[^0-9.+-]/g, ''));
   if (!Number.isFinite(prob) || !Number.isFinite(o) || o === 0) return 0;
   const dec = o > 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1;
   const ev = (prob * dec) - 1;
   if (!(ev > 0) || !(dec > 1)) return 0;
-  const keep = pushEvEnabled() ? pushKeep(pPush) : 1;
   const bankroll = Number(BANKROLL_UNITS);
   const br = Number.isFinite(bankroll) ? bankroll : 100;
-  const raw = 0.25 * ((ev * keep) / (dec - 1)) * br;
+  const raw = 0.25 * (ev / (dec - 1)) * br;
   const rounded = Math.round(raw * 4) / 4;
   const cap = Number(MAX_STRAIGHT_UNITS_PER_PICK);
   const maxU = Number.isFinite(cap) ? cap : 1.5;
-  return Math.min(maxU, Math.max(0.5, rounded));
+  if (!(rounded > 0)) return 0;
+  return Math.min(maxU, rounded);
 }
 
-/** Higher shrunk EV first. Edge is the tiebreak. A PM nudge breaks an exact tie. */
+/** Conditional stake EV at the bet price. The same object Kelly sizes. */
+function positiveKellyEv(c) {
+  const prob = Number(c && c.coverProb);
+  const o = Number(String(c && c.odds).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(prob) || !Number.isFinite(o) || o === 0) return false;
+  const dec = o > 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1;
+  return dec > 1 && (prob * dec) - 1 > 0;
+}
+
+/**
+ * Higher anchored stake EV first. That EV is push-aware EV at the bet
+ * price from p_final (the posterior mean). It is not an SE-penalised score.
+ * Edge is the tiebreak. The capped PM nudge breaks an exact tie.
+ */
 function compareByEv(a, b) {
   const evd = finiteEv(b) - finiteEv(a);
   if (Math.abs(evd) > 1e-12) return evd;
@@ -397,7 +416,7 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   return out;
 }
 
-/** Same order selectStraights uses. Rank follows probability edge, then stake EV. */
+/** Same order selectStraights uses. Rank is anchored stake EV, then edge. */
 function orderedByScore(pool) {
   return [...(pool || [])].sort(compareByEv);
 }
@@ -541,13 +560,22 @@ function toPickObject(c, opts = {}) {
   const qualityClv = gradeOnEdge ? null : (c.predictedResidualClv != null ? c.predictedResidualClv : c.predictedClv);
   const pickQuality = qualityScore(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
   const rating = qualityToRating(edgeFrac, qualityClv, gradeOnEdge ? null : c.uncertainty);
-  const tier = c && c.tier === 'lean' ? 'lean' : 'floor';
+  let tier = c && c.tier === 'lean' ? 'lean' : 'floor';
   // Quarter Kelly on the final p. The letter above is a label only.
-  // A lean stake is 0.5u. Kelly rounding does not raise it above that.
+  // ASSUMED publish rule, not a fitted stake. The 0.5u figure is the
+  // existing LEAN_MAX_UNITS. It is a floor only for a row labelled lean
+  // (10/10 never-block: a lean prints at that minimum even when Kelly is
+  // smaller) and Kelly does not raise a lean above it. A graded row keeps
+  // the Kelly stake and is never raised to 0.5u. If that stake rounds
+  // under 0.5u, the row is a lean at 0.5u and is labelled lean.
   let units = quarterKellyUnits(c.coverProb, c.odds, c.pPush);
+  const leanFloor = Number(LEAN_MAX_UNITS);
+  const leanU = Number.isFinite(leanFloor) ? leanFloor : 0.5;
   if (tier === 'lean') {
-    const cap = Number(LEAN_MAX_UNITS);
-    if (Number.isFinite(cap)) units = Math.min(units, cap);
+    if (units > 0 || positiveKellyEv(c)) units = leanU;
+  } else if (units + 1e-12 < 0.5 && positiveKellyEv(c)) {
+    tier = 'lean';
+    units = leanU;
   }
   const evNum = printed.evNum;
   const evStr = printed.evStr;
@@ -652,9 +680,11 @@ function applyDailyCap(picks) {
  * - A no-qualifying marker keeps units null.
  * - Straights combined ≤ STRAIGHT_UNIT_BUDGET (4.5u)
  * - Total ≤ DAILY_UNIT_CAP (5.0u)
- * Overage: reduce lowest-quality straights in 0.25u steps (floor 0.5u).
- * If the budget is still over once every straight is at 0.5u, drop the
- * lowest-quality straight. A trim never publishes a straight under 0.5u.
+ * Overage: reduce lowest-quality straights in 0.25u steps.
+ * The 0.5u trim floor is the daily-cap floor from 9a9be5b. Keep it.
+ * It does not raise a graded Kelly stake to 0.5u. A trim never publishes
+ * a straight under 0.5u. If the budget is still over once every straight
+ * is at 0.5u, drop the lowest-quality straight.
  * Stake is the Kelly unit already on the pick. Grade does not resize it.
  * Preserve quality grades.
  * Never force-fill to max.
@@ -674,9 +704,14 @@ function applyDailyUnitCap(picks, parlayLegs) {
       pl.units = null;
       continue;
     }
-    pl.units = fmtU(parlayStake);
-    pl.riskDollars = stakeDollars(parlayStake);
-    if (pl.combinedOdds) pl.toWinDollars = toWinDollars(parlayStake, pl.combinedOdds);
+    // A fair-negative parlay is a lean at LEAN_PARLAY_UNITS (0.25u, the
+    // existing minimum). The full-card stake does not raise it.
+    const fairLean = pl && pl.isLean === true;
+    const leanParlay = Number(LEAN_PARLAY_UNITS);
+    const stakeU = fairLean && Number.isFinite(leanParlay) ? leanParlay : parlayStake;
+    pl.units = fmtU(stakeU);
+    pl.riskDollars = stakeDollars(stakeU);
+    if (pl.combinedOdds) pl.toWinDollars = toWinDollars(stakeU, pl.combinedOdds);
     // Lazy require: parlay.js loads select.js at module scope.
     const staleLabel = (value) => !value || value === 'assumes independent legs';
     if (staleLabel(pl.evLabel) || staleLabel(pl.correlationNote)) {
@@ -711,6 +746,7 @@ function applyDailyUnitCap(picks, parlayLegs) {
       for (const idx of order) {
         const u = parseU(out[idx].units);
         if (u > 0.5 + 1e-9) {
+          // Daily-cap floor 0.5u (9a9be5b). Do not trim a published straight under it.
           const nu = Math.max(0.5, Math.round((u - 0.25) * 4) / 4);
           out[idx].units = fmtU(nu);
           // Rating/confidence describe quality, not stake size. Never downgrade on trim.

@@ -125,7 +125,7 @@ const picked = select.selectStraights(yesPool, 3);
 assert.ok(picked.length <= 3);
 assert.ok(picked.length >= 1);
 
-// The letter score is still the edge. Published order is shrunk EV.
+// The letter score is still the edge. Published order is anchored stake EV.
 {
   const chalk = {
     sport: 'MLB', matchup: 'A @ B', side: 'B ML', market: 'Moneyline',
@@ -769,7 +769,11 @@ assert.ok(!/Optimized \$\{legCount\} Pick Parlay/.test(html));
   }, { modelVersion: MODEL_VERSION });
   assert.strictEqual(highEdgeLowUnits.rating, 'aplus');
   assert.strictEqual(highEdgeLowUnits.qualityGrade, 'aplus');
-  assert.strictEqual(highEdgeLowUnits.units, `${select.quarterKellyUnits(0.53, -110)}u`);
+  // 2026-10-18: quarter Kelly at p=0.53 is 0.25u, so the row is a labelled lean at 0.5u. The letter stays the edge.
+  assert.strictEqual(select.quarterKellyUnits(0.53, -110), 0.25);
+  assert.strictEqual(highEdgeLowUnits.tier, 'lean');
+  assert.strictEqual(highEdgeLowUnits.label, 'lean');
+  assert.strictEqual(highEdgeLowUnits.units, '0.5u');
   assert.notStrictEqual(highEdgeLowUnits.units, '1.5u');
   assert.notStrictEqual(highEdgeLowUnits.units, '5u');
   assert.strictEqual(typeof highEdgeLowUnits.confidence, 'number');

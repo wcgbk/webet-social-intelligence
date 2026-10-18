@@ -1,7 +1,7 @@
 'use strict';
 
 const { americanToImplied, parseEdgeFraction } = require('./odds_math');
-const { EV_CAP_ALL, EDGE_FLOOR_K } = require('./config');
+const { EV_CAP_ALL, EDGE_FLOOR_K, envNumber } = require('./config');
 
 /**
  * Odds-scaled minimum edge vs the de-vigged sharp fair price.
@@ -110,10 +110,15 @@ function stakeQuoteIsStale(c) {
   return ev > cap + 1e-12;
 }
 
-/** max(2%, k * SE). A missing or zero SE leaves the 2% floor. */
+/**
+ * max(2%, k * SE). Default k is 0, so this is the flat 2% edge minimum.
+ * The 0.02 is the existing minimum, not a new fit. A missing or zero SE
+ * leaves that 2%. OMEGA_EDGE_FLOOR_K restores a k * SE hurdle for a replay.
+ * ratingSe is not removed; the gate just does not demand k * SE at k = 0.
+ */
 function edgeFloorSe(se) {
-  const k = Number(EDGE_FLOOR_K);
-  const kk = Number.isFinite(k) ? k : 1.5;
+  const k = envNumber('OMEGA_EDGE_FLOOR_K', EDGE_FLOOR_K);
+  const kk = Number.isFinite(Number(k)) ? Number(k) : 0;
   const s = Number(se);
   const used = Number.isFinite(s) && s > 0 ? s : 0;
   return Math.max(0.02, kk * used);

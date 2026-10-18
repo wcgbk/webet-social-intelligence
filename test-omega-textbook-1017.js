@@ -60,12 +60,15 @@ assert.strictEqual(gateReason(side({ ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stal
 assert.strictEqual(gateReason(side({ market: 'Total', side: 'Over 45.5', ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
 assert.strictEqual(gateReason(side({ market: 'Moneyline', side: 'A ML', ev: 0.11, edgePct: 0.06 }), asOf), 'ev-stale');
 
-assert.strictEqual(config.EDGE_FLOOR_K, 1.5);
-assert.strictEqual(edgeFloorSe(0.04), 0.06);
-assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.05, ratingSe: 0.04 }), true);
+// 2026-10-18: default k is 0. The 1.5*SE hurdle double-counted the anchor (SIM-REPORT). Flat 2% remains.
+assert.strictEqual(config.EDGE_FLOOR_K, 0);
+assert.strictEqual(edgeFloorSe(0.04), 0.02);
+assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.05, ratingSe: 0.04 }), false);
 assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.07, ratingSe: 0.04 }), false);
-assert.strictEqual(gateReason(side({ edgePct: 0.05, ev: 0.05, ratingSe: 0.04 }), asOf), 'edge-floor-se');
+assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.01, ratingSe: 0.04 }), true);
+assert.strictEqual(gateReason(side({ edgePct: 0.05, ev: 0.05, ratingSe: 0.04 }), asOf), null);
 assert.strictEqual(gateReason(side({ edgePct: 0.07, ev: 0.05, ratingSe: 0.04 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: 0.01, ev: 0.05, ratingSe: 0.04 }), asOf), 'edge-floor-se');
 
 const seRow = { sport: 'NFL', market: 'Spread', modelPureP: 0.6, ratingN: 6 };
 const z = normalQuantile(0.6);

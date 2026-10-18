@@ -211,8 +211,9 @@ function gateReason(c, opts = {}) {
   // coverProb floor, so a 30% cover is not rejected for the cover itself.
   // Main stake EV is a flat 2% for every sport. Odds do not raise it.
   // EV above EV_CAP_ALL is a model-error flag: logged, not a lean.
-  // Edge under max(2%, k*SE) is edge-floor-se. applyGates promotes that
-  // miss the same way as ev-floor when the row is lean-eligible.
+  // Edge under max(2%, k*SE) is edge-floor-se. Default k is 0, so this is
+  // the flat 2% edge minimum. applyGates promotes that miss the same way
+  // as ev-floor when the row is lean-eligible.
   // EV under the 2% floor returns ev-floor.
   if (!Number.isFinite(c.coverProb) || (minCP != null && c.coverProb < minCP)) return 'coverProb-floor';
   if (stakeQuoteIsStale(c)) {

@@ -90,8 +90,12 @@ function selectionNudge(c) {
 }
 
 function scoreCandidate(c) {
+  // Letter-score diagnostic. selectStraights does not rank on this.
+  // Rank is compareByEv: stake EV from the anchored p_final at the bet
+  // price. The ±0.001 uncertainty term inside qualityScore is the existing
+  // tie-break and is not an SE penalty.
   // Same number the letter grade uses: calibrated edge vs no-vig sharp,
-  // plus a small residual-CLV nudge. Raw EV is not the rank — a +180 dog
+  // plus a small residual-CLV nudge. Raw EV is not this score — a +180 dog
   // inflates EV without a better close.
   // Line movement is not a score bump. It adjusts cover probability before
   // this function runs. _pmScoreAdj stays inside ±SCORE_NUDGE_CAP so it
@@ -209,7 +213,11 @@ function quarterKellyUnits(p, odds, pPush = 0) {
   return Math.min(maxU, Math.max(0.5, rounded));
 }
 
-/** Higher shrunk EV first. Edge is the tiebreak. A PM nudge breaks an exact tie. */
+/**
+ * Higher anchored stake EV first. That EV is push-aware EV at the bet
+ * price from p_final (the posterior mean). It is not an SE-penalised score.
+ * Edge is the tiebreak. The capped PM nudge breaks an exact tie.
+ */
 function compareByEv(a, b) {
   const evd = finiteEv(b) - finiteEv(a);
   if (Math.abs(evd) > 1e-12) return evd;
@@ -397,7 +405,7 @@ function selectStraights(yesPool, maxN = MAX_STRAIGHTS, leanPool, pairedPool) {
   return out;
 }
 
-/** Same order selectStraights uses. Rank follows probability edge, then stake EV. */
+/** Same order selectStraights uses. Rank is anchored stake EV, then edge. */
 function orderedByScore(pool) {
   return [...(pool || [])].sort(compareByEv);
 }

@@ -77,6 +77,7 @@ function requiredFloor(row, gate) {
   return null;
 }
 
+/** Diagnostic order: stake EV, then edge, then cover. ratingSe is not a key. */
 function rankScore(row) {
   const ev = finite(row && row.ev);
   const edge = finite(row && (row.edgePct != null ? row.edgePct : row.edge));

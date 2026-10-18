@@ -9,15 +9,21 @@ const { BLOB_STORE_V1, OMEGA_BOARD_STORE } = require('./config-v1');
 const SITE_ID = process.env.SITE_ID || '87d7bcd9-e95a-479c-bc44-6432a2ffc606';
 async function getStoreV1(name) {
   const { getStore } = await import('@netlify/blobs');
-  return getStore(name);
+  const token = process.env.NETLIFY_AUTH_TOKEN;
+  // Background runtimes may lack automatic Blobs context (same failure
+  // Omega logs); supply manual config when a token is available.
+  try { return token ? getStore({ name, siteID: SITE_ID, token }) : getStore(name); }
+  catch (_) { return getStore(name); }
 }
 async function restFetch(storeName, key, opts = {}) {
   const token = process.env.NETLIFY_AUTH_TOKEN;
   if (!token) throw new Error('NETLIFY_AUTH_TOKEN missing');
   const url = `https://api.netlify.com/api/v1/blobs/${SITE_ID}/${storeName}/${key}`;
-  return fetch(url, { method: opts.method || 'GET',
+  const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 20000);
+  try { return await fetch(url, { method: opts.method || 'GET', signal: ctrl.signal,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: opts.body != null ? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body)) : undefined });
+    body: opts.body != null ? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body)) : undefined }); }
+  finally { clearTimeout(timer); }
 }
 async function readJsonFromStore(storeName, key) {
   try { const s = await getStoreV1(storeName); const v = await s.get(key, { type: 'json' }); if (v != null) return v; } catch (_) {}

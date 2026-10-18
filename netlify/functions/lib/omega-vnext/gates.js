@@ -146,6 +146,11 @@ function gateReason(c, opts = {}) {
   // Unresolved NFL/NCAAF name. Checked before the floors so a bad id cannot publish.
   if (c && c.unknownTeam) return 'unknown_team';
 
+  // NFL/NCAAF Lock mandatory pass (2026-10-18): no Pinnacle receipt at the
+  // bet line, or no ratings-derived formula line, means pass — never a
+  // guessed lean. Sheet floors remain the only other admission rule.
+  if (c && /^(NFL|NCAAF)$/.test(String(c.sport || '')) && c.lockPass) return 'lock-missing-data';
+
   // Margin residual past 3× the sport limit. The rating is broken for that
   // game on this run. Not a lean, and not a fill for a short card.
   // Removed as a gate 2026-10-18: margin bias is a health alert/flag, not a

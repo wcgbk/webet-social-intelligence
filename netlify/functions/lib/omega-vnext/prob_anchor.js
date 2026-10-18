@@ -392,7 +392,19 @@ function applyMarketAnchor(candidates) {
       modelPureP: pModel != null ? pModel : c.modelPureP,
       anchorWeight: w,
     });
+    // NFL/NCAAF Lock (2026-10-18): formula line (ratings-derived, pre-market)
+    // and the Pinnacle receipt line travel with the candidate. Missing either
+    // is a mandatory pass — no unanchored or unrated football probability.
+    const lockFootball = /^(NFL|NCAAF)$/.test(String(c.sport || ''));
+    const lockFields = lockFootball ? {
+      lockFormulaLine: c.modelProjection != null ? c.modelProjection : null,
+      lockReceiptLine: c.pinnacleSide && c.pinnacleSide.point != null ? c.pinnacleSide.point
+        : (c.consensusLine != null ? c.consensusLine : null),
+      lockPass: (source === 'none' || pModel == null || c.modelProjection == null)
+        ? 'lock-missing-data' : null,
+    } : {};
     const stamped = {
+      ...lockFields,
       p_model: pModel != null ? +Number(pModel).toFixed(6) : (c.p_model != null ? c.p_model : null),
       p_fair: pFair != null ? +Number(pFair).toFixed(6) : null,
       p_calibrated: finiteProb(c.coverProb),

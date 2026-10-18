@@ -673,6 +673,12 @@ function toPickObject(c, opts = {}) {
     awayTeam: c.awayTeam,
     source: 'omega-vnext',
     ...fairPickFields(c),
+    // NFL/NCAAF Lock Grade A (2026-10-18): printed only for the verified
+    // standard bet — formula line present, Pinnacle receipt anchored, and
+    // the pick cleared the sheet at publish. Anything else prints no grade.
+    ...((c && /^(NFL|NCAAF)$/.test(String(c.sport || '')) && c.anchorFairSource && c.anchorFairSource !== 'none' && !c.lockPass)
+      ? { lockGrade: 'A', lockFormulaLine: c.lockFormulaLine != null ? c.lockFormulaLine : null, lockReceiptLine: c.lockReceiptLine != null ? c.lockReceiptLine : null }
+      : {}),
     p_cal: c.coverProb != null && Number.isFinite(Number(c.coverProb)) ? +Number(c.coverProb).toFixed(4) : null,
     modelProjection: c.betProjection != null && Number.isFinite(Number(c.betProjection))
       ? +Number(c.betProjection).toFixed(2)

@@ -44,14 +44,16 @@ function side(extra) {
 }
 
 assert.strictEqual(gateReason(side({ odds: 180, ev: 0.019, edgePct: 0.04 }), asOf), 'ev-floor');
-assert.strictEqual(gateReason(side({ odds: 200, ev: 0.019, edgePct: 0.01 }), asOf), 'edge-floor-se');
-assert.strictEqual(gateReason(side({ odds: 151, ev: 0.02, edgePct: 0.01 }), asOf), 'edge-floor-se');
-assert.strictEqual(gateReason(side({ odds: 150, ev: 0.02, edgePct: 0.0 }), asOf), 'edge-floor-se');
-assert.strictEqual(gateReason(side({ odds: 200, ev: 0.02, edgePct: 0.0 }), asOf), 'edge-floor-se');
+// 2026-10-18: a short edge at stake EV >= 2% passes. Under 2% EV is ev-floor.
+assert.strictEqual(gateReason(side({ odds: 200, ev: 0.019, edgePct: 0.01 }), asOf), 'ev-floor');
+assert.strictEqual(gateReason(side({ odds: 151, ev: 0.02, edgePct: 0.01 }), asOf), null);
+assert.strictEqual(gateReason(side({ odds: 150, ev: 0.02, edgePct: 0.0 }), asOf), null);
+assert.strictEqual(gateReason(side({ odds: 200, ev: 0.02, edgePct: 0.0 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 250, ev: 0.02, edgePct: 0.03, coverProb: 0.35 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 251, ev: 0.08, edgePct: 0.05 }), asOf), 'odds-out-of-band');
 assert.strictEqual(gateReason(side({ odds: -251, ev: 0.08, edgePct: 0.05 }), asOf), 'odds-out-of-band');
-assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0.0 }), asOf), 'edge-floor-se');
+// 2026-10-18: −250 at 2% EV passes. A zero edge is not a reject.
+assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0.0 }), asOf), null);
 assert.strictEqual(gateReason(side({ ev: 0.1000001, edgePct: 0.04 }), asOf), 'ev-stale');
 assert.strictEqual(gateReason(side({ ev: 0.10, edgePct: 0.04 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: -110, ev: 0.11, edgePct: 0.075 }), asOf), 'ev-stale');

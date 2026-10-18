@@ -23,6 +23,47 @@ function pushAwareEv(p, american, pPush) {
 }
 
 /**
+ * Posterior mean the anchor writes onto the row. coverProb is that p_final.
+ * An explicit p_final wins when a caller sets both.
+ */
+function pFinalOf(row) {
+  if (!row || typeof row !== 'object') return null;
+  const raw = row.p_final != null ? row.p_final : row.coverProb;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Stake EV the publish gate compares to GATES.minEV (2%) and EV_CAP_ALL.
+ * The number is pushAwareEv(p_final, bet price, pPush). A push returns the
+ * stake, so pPush > 0 lowers EV versus p × decimal − 1. Not a new fit:
+ * the formula is the existing pushAwareEv, and the 2% floor is GATES.minEV.
+ *
+ * priceEdgeAtBet already stores that EV on the row. When the stored ev
+ * matches the recompute (within 1e-4, the attachEv rounding), this returns
+ * the recompute. A fixture that sets ev without a matching coverProb keeps
+ * that stored ev when pPush is not positive, so the field still means the
+ * stake EV the gate reads. pPush > 0 always recomputes: a naive stored EV
+ * must not clear the floor when the price pushes. No stored ev falls back
+ * to the recompute.
+ */
+function anchoredStakeEv(row) {
+  const stored = Number(row && row.ev);
+  const p = pFinalOf(row);
+  const price = row && (row.odds != null ? row.odds : row.oddsStr);
+  const push = Number(row && row.pPush);
+  const usePush = Number.isFinite(push) && push > 0;
+  const computed = (p != null && price != null && price !== '')
+    ? pushAwareEv(p, price, row && row.pPush)
+    : null;
+  if (computed != null && Number.isFinite(computed)) {
+    if (!Number.isFinite(stored) || usePush) return computed;
+    if (Math.abs(computed - stored) <= 1e-4) return computed;
+  }
+  return Number.isFinite(stored) ? stored : NaN;
+}
+
+/**
  * Fractional Kelly conditional on no push.
  * g(f) = (1 − pPush) * [p ln(1 + f b) + (1 − p) ln(1 − f)], with p and b
  * conditional on no push. The maximiser f* = (p b − (1 − p)) / b does not
@@ -40,4 +81,6 @@ module.exports = {
   pushKeep,
   pushAwareEv,
   pushAwareKelly,
+  pFinalOf,
+  anchoredStakeEv,
 };

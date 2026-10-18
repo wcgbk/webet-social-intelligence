@@ -71,12 +71,13 @@ assert.strictEqual(qualifiesAsLean(negEv), false);
 assert.strictEqual(qualifiesAsLean(live), false);
 
 const gated = applyGates([floor, highEv, thinEdge], asOf);
-assert.strictEqual(gated.yesPool.length, 1);
+// 2026-10-18: J is 1% edge at 4% EV, so it is a floor. D at 1.2% EV stays an ev-floor lean.
+assert.strictEqual(gated.yesPool.length, 2);
 assert.ok(gated.yesPool.some((c) => c.side === 'B +3'));
-assert.ok(!gated.yesPool.some((c) => c.side === 'J +3'));
-assert.ok(gated.leanPool.some((c) => c.side === 'D +3' && c.leanReason === 'edge-floor-se'));
-assert.ok(gated.leanPool.some((c) => c.side === 'J +3' && c.leanReason === 'edge-floor-se'));
-assert.ok(!gated.leanPool.some((c) => c.leanReason === 'edge-floor'));
+assert.ok(gated.yesPool.some((c) => c.side === 'J +3'));
+assert.ok(gated.leanPool.some((c) => c.side === 'D +3' && c.leanReason === 'ev-floor'));
+assert.ok(!gated.leanPool.some((c) => c.side === 'J +3'));
+assert.ok(!gated.leanPool.some((c) => c.leanReason === 'edge-floor' || c.leanReason === 'edge-floor-se'));
 
 const filled = selectStraights([floor], 3, [
   midEv, thinEdge, noBook, noLadder, flatEv, negEv, live, sameGame, dkLadder, highEv,

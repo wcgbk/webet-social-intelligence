@@ -59,8 +59,9 @@ function side(extra) {
   };
 }
 
-assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.02 }), asOf), 'edge-floor-se');
-assert.strictEqual(gateReason(side({ edgePct: -0.02, ev: 0.03 }), asOf), 'edge-floor-se');
+// 2026-10-18: edge is not a gate. Stake EV at or above 2% passes.
+assert.strictEqual(gateReason(side({ edgePct: 0, ev: 0.02 }), asOf), null);
+assert.strictEqual(gateReason(side({ edgePct: -0.02, ev: 0.03 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: -250, ev: 0.02, edgePct: 0.03 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 250, ev: 0.02, edgePct: 0.03 }), asOf), null);
 assert.strictEqual(gateReason(side({ odds: 260, ev: 0.08 }), asOf), 'odds-out-of-band');

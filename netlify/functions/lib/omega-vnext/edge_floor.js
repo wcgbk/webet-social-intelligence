@@ -1,7 +1,7 @@
 'use strict';
 
-const { americanToImplied, parseEdgeFraction } = require('./odds_math');
-const { EV_CAP_ALL, EDGE_FLOOR_K, envNumber } = require('./config');
+const { americanToImplied } = require('./odds_math');
+const { EV_CAP_ALL } = require('./config');
 
 /**
  * Odds-scaled minimum edge vs the de-vigged sharp fair price.
@@ -110,31 +110,6 @@ function stakeQuoteIsStale(c) {
   return ev > cap + 1e-12;
 }
 
-/**
- * max(2%, k * SE). Default k is 0, so this is the flat 2% edge minimum.
- * The 0.02 is the existing minimum, not a new fit. A missing or zero SE
- * leaves that 2%. OMEGA_EDGE_FLOOR_K restores a k * SE hurdle for a replay.
- * ratingSe is not removed; the gate just does not demand k * SE at k = 0.
- */
-function edgeFloorSe(se) {
-  const k = envNumber('OMEGA_EDGE_FLOOR_K', EDGE_FLOOR_K);
-  const kk = Number.isFinite(Number(k)) ? Number(k) : 0;
-  const s = Number(se);
-  const used = Number.isFinite(s) && s > 0 ? s : 0;
-  return Math.max(0.02, kk * used);
-}
-
-/**
- * True when a finite edge is under the uncertainty-scaled floor.
- * A missing edge is not this gate. The caller still has the EV floor.
- */
-function failsEdgeFloorSe(c) {
-  const edge = parseEdgeFraction(c && (c.edgePct != null ? c.edgePct : c.edge));
-  if (!Number.isFinite(edge)) return false;
-  const se = Number(c && c.ratingSe);
-  return edge + 1e-12 < edgeFloorSe(Number.isFinite(se) ? se : 0);
-}
-
 module.exports = {
   EDGE_FLOOR,
   MAIN_EDGE_FLOOR,
@@ -142,6 +117,4 @@ module.exports = {
   evBandMultiplier,
   mainMinEv,
   stakeQuoteIsStale,
-  edgeFloorSe,
-  failsEdgeFloorSe,
 };

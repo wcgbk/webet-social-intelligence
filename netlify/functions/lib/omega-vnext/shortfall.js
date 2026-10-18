@@ -61,10 +61,6 @@ function requiredFloor(row, gate) {
   const sport = row && row.sport;
   if (reason === 'ev-floor') return mainMinEv(row && row.odds, sportFloor(GATES.minEV, sport));
   if (reason === 'ev-stale') return Number(require('./config').EV_CAP_ALL);
-  if (reason === 'edge-floor-se') {
-    const { edgeFloorSe } = require('./edge_floor');
-    return edgeFloorSe(row && row.ratingSe);
-  }
   if (reason === 'coverProb-floor') return sportFloor(GATES.minCoverProb, sport);
   if (reason === 'nonpositive-edge') return 0;
   if (reason === 'edge-floor') return minEdgeFor(row && row.odds, row && row.uncertainty);

@@ -17,6 +17,7 @@ const {
 } = require('./odds_math');
 const { fairPickFields } = require('./prob_anchor');
 const { minEdgeFor, mainMinEv, stakeQuoteIsStale } = require('./edge_floor');
+const { anchoredStakeEv } = require('./push_ev');
 const { footballAuditFields } = require('./sports/_common');
 const { gameExposureEnabled, GAME_EXPOSURE_CAP } = require('./gaps_flags');
 const { reviewFlag } = require('./pinnacle_flag');
@@ -146,15 +147,16 @@ function publishMinEv(c) {
 }
 
 /**
- * Published floor straights. Flat stake EV at mainMinEv (2%). A stale
- * quote stays out. EV above EV_CAP_ALL is ev-stale for every market.
+ * Published floor straights. Push-aware stake EV at mainMinEv (2%),
+ * the same number gateReason uses. A stale quote stays out. EV above
+ * EV_CAP_ALL is ev-stale for every market. Edge is not a floor.
  */
 function passesPublishFloor(c) {
   if (c && c.marginBiasExtreme) return false;
-  const ev = Number(c && c.ev);
+  const ev = anchoredStakeEv(c);
   const minEV = publishMinEv(c);
   if (!Number.isFinite(ev) || !(ev + 1e-12 >= minEV)) return false;
-  if (stakeQuoteIsStale(c)) return false;
+  if (stakeQuoteIsStale({ ...c, ev })) return false;
   return true;
 }
 

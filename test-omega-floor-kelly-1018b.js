@@ -3,7 +3,6 @@
 // Item 5 tests are appended below the Kelly / stake / parlay marker.
 const assert = require('assert');
 const config = require('./netlify/functions/lib/omega-vnext/config');
-const { failsEdgeFloorSe, edgeFloorSe } = require('./netlify/functions/lib/omega-vnext/edge_floor');
 const { gateReason, applyGates } = require('./netlify/functions/lib/omega-vnext/gates');
 const { selectStraights, compareByEv } = require('./netlify/functions/lib/omega-vnext/select');
 
@@ -19,22 +18,20 @@ function side(extra) {
   };
 }
 
-assert.strictEqual(config.EDGE_FLOOR_K, 0);
+// 2026-10-18: OMEGA_EDGE_FLOOR_K is removed. Inclusion is stake EV, not k*SE.
+assert.strictEqual(config.EDGE_FLOOR_K, undefined);
 assert.strictEqual(config.EV_CAP_ALL, 0.10);
 assert.strictEqual(config.GATES.minAmericanOdds, -250);
 assert.strictEqual(config.GATES.maxAmericanOdds, 250);
 assert.strictEqual(config.GATES.minEV.NFL, 0.02);
 
-// Edge 3% with SE 4% used to miss max(2%, 1.5*4%) = 6%. It clears the flat 2%.
+// Edge 3% with SE 4% used to miss max(2%, 1.5*4%) = 6%. Stake EV 4% clears.
 const clear = side({ edgePct: 0.03, ratingSe: 0.04, ev: 0.04 });
-assert.strictEqual(edgeFloorSe(0.04), 0.02);
-assert.strictEqual(failsEdgeFloorSe(clear), false);
 assert.strictEqual(gateReason(clear, asOf), null);
 
-// Edge 1% is still under the flat 2% minimum.
+// 2026-10-18: edge 1% at stake EV 5% passes. ratingSe does not raise a floor.
 const thin = side({ edgePct: 0.01, ratingSe: 0, ev: 0.05 });
-assert.strictEqual(failsEdgeFloorSe(thin), true);
-assert.strictEqual(gateReason(thin, asOf), 'edge-floor-se');
+assert.strictEqual(gateReason(thin, asOf), null);
 
 // 2% stake EV, 10% cap, and the -250/+250 band stay.
 assert.strictEqual(gateReason(side({ ev: 0.019, edgePct: 0.04 }), asOf), 'ev-floor');
@@ -43,21 +40,18 @@ assert.strictEqual(gateReason(side({ odds: 300, ev: 0.04, edgePct: 0.04 }), asOf
 assert.strictEqual(gateReason(side({ odds: -300, ev: 0.04, edgePct: 0.04 }), asOf), 'odds-out-of-band');
 
 const gated = applyGates([clear, thin], asOf);
-assert.strictEqual(gated.yesPool.length, 1);
-assert.strictEqual(gated.yesPool[0].edgePct, 0.03);
-assert.ok(gated.leanPool.some((row) => row.edgePct === 0.01) || gated.rejected.some((row) => row.edgePct === 0.01));
+assert.strictEqual(gated.yesPool.length, 2);
+assert.ok(gated.yesPool.some((row) => row.edgePct === 0.03));
+assert.ok(gated.yesPool.some((row) => row.edgePct === 0.01));
 
-// Plumbing: the env override still scales the floor. Default stays 0.
+// 2026-10-18: OMEGA_EDGE_FLOOR_K no longer scales a pass/fail floor.
 process.env.OMEGA_EDGE_FLOOR_K = '1.5';
 try {
-  assert.strictEqual(edgeFloorSe(0.04), 0.06);
-  assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.03, ratingSe: 0.04 }), true);
-  assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.07, ratingSe: 0.04 }), false);
+  assert.strictEqual(gateReason(side({ edgePct: 0.03, ratingSe: 0.04, ev: 0.04 }), asOf), null);
 } finally {
   delete process.env.OMEGA_EDGE_FLOOR_K;
 }
-assert.strictEqual(edgeFloorSe(0.04), 0.02);
-assert.strictEqual(config.EDGE_FLOOR_K, 0);
+assert.strictEqual(config.EDGE_FLOOR_K, undefined);
 
 // Rank is stake EV. A higher edge and a larger SE do not outrank a higher EV.
 function row(matchup, ev, edge, se) {

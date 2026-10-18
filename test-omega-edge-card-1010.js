@@ -110,7 +110,8 @@ assert.ok(lowCover.straights.some(s => s.edgePct === 0.015));
 
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { ev: -0.01, liquid: true }), lockAsOf), 'ev-floor');
 assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0.02, { coverProb: null, liquid: true }), lockAsOf), 'coverProb-floor');
-assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), 'edge-floor-se');
+// 2026-10-18: 0 edge at the default 4% stake EV passes.
+assert.strictEqual(gateReason(row('A @ B', 'B -3', 'Spread', 0, { edgePct: 0, liquid: true }), lockAsOf), null);
 
 delete process.env.OMEGA_CAL_MODE;
 calibrate.clearCalParamsCache();

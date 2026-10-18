@@ -7,7 +7,7 @@ const config = require('./netlify/functions/lib/omega-vnext/config');
 const {
   modelWeightFor, anchorProbability, applyMarketAnchor, ratingSeOf, pinnacleFair,
 } = require('./netlify/functions/lib/omega-vnext/prob_anchor');
-const { edgeFloorSe, failsEdgeFloorSe } = require('./netlify/functions/lib/omega-vnext/edge_floor');
+
 
 const src = fs.readFileSync(path.join(__dirname, 'netlify/functions/lib/omega-vnext/config.js'), 'utf8');
 const sdBlock = src.slice(src.indexOf('Margin residual SD'), src.indexOf('function ratingKind'));
@@ -130,10 +130,7 @@ assert.ok(Number.isFinite(totalOut.ratingSe));
 const totalSe = ratingSeOf({ sport: 'NFL', market: 'Total', modelPureP: 0.62, ratingN: 6 });
 assert.strictEqual(totalSe, 0);
 assert.ok(Number.isFinite(totalSe));
-assert.strictEqual(edgeFloorSe(totalSe), 0.02);
-assert.ok(Number.isFinite(edgeFloorSe(0)));
-assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.03, ratingSe: 0 }), false);
-assert.strictEqual(failsEdgeFloorSe({ edgePct: 0.01, ratingSe: 0 }), true);
+// 2026-10-18: ratingSe stays a diagnostic. A zero SE is not an edge gate.
 const spreadSe = ratingSeOf({ sport: 'NFL', market: 'Spread', modelPureP: 0.62, ratingN: 6 });
 assert.ok(Number.isFinite(spreadSe) && spreadSe > 0);
 

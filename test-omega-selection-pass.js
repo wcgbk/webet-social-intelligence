@@ -391,8 +391,9 @@ function base(extra) {
   assert.strictEqual(gateReason(longshot, GATE), 'odds-out-of-band');
   const underEv = base({ ev: 0.019, edgePct: 0.04, coverProb: 0.53 });
   assert.strictEqual(gateReason(underEv, GATE), 'ev-floor');
+  // 2026-10-18: 0 edge at 2% stake EV passes. The edge floor is not a gate.
   const flatEv = base({ ev: 0.02, edgePct: 0.0, coverProb: 0.53 });
-  assert.strictEqual(gateReason(flatEv, GATE), 'edge-floor-se');
+  assert.strictEqual(gateReason(flatEv, GATE), null);
 
   const lowEvHighEdge = base({ matchup: 'A @ B', side: 'B -3', ev: 0.04, edgePct: 0.08, line: -3 });
   const highEvLowEdge = base({ matchup: 'C @ D', side: 'D +3', ev: 0.09, edgePct: 0.03, line: 3, homeTeam: 'D', awayTeam: 'C' });

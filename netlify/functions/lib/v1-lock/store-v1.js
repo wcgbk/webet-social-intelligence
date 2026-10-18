@@ -37,7 +37,16 @@ async function writeJsonToStore(storeName, key, data) {
 }
 /** READ-ONLY: stored morning board from Omega's capture store. */
 async function readStoredBoardV1(dateISO) {
-  return readJsonFromStore(OMEGA_BOARD_STORE, `omega-line-path/${dateISO}`);
+  const path = await readJsonFromStore(OMEGA_BOARD_STORE, `omega-line-path/${dateISO}`);
+  if (path && Array.isArray(path.polls) && path.polls.length) return path;
+  // Fallback mirroring Omega loadLinePath: per-slot snap keys (no slash).
+  const polls = [];
+  for (const hhmm of ['0300','0600','0730','0900','0915','1000','1030','1100']) {
+    const snap = await readJsonFromStore(OMEGA_BOARD_STORE, `omega-line-snap-${dateISO}-${hhmm}`);
+    if (snap && snap.games && Object.keys(snap.games).length) polls.push({ hhmm, slot: snap.slot || hhmm, capturedAt: snap.capturedAt || null, games: snap.games });
+  }
+  if (polls.length) return { date: dateISO, polls };
+  return path;
 }
 async function storeCardV1(dateISO, card) {
   await writeJsonToStore(BLOB_STORE_V1, `picks-v1-${dateISO}`, card);

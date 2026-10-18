@@ -19,7 +19,13 @@ async function generateV1Lock(opts={}){
   const poll=selectBoardPollV1(boardDoc.polls, opts.boardCutoff||'1000');
   if(!poll) throw new Error('V1: stored board has no usable poll');
   const boardSlot=String(poll.hhmm||poll.slot);
-  const allEvents=reconstructEventsV1(poll.games);
+  // Opening read for Filter 4: earliest stored poll (0600 capture / 0300
+  // baseline merged into the board doc) vs the board poll's line.
+  const sortedPolls=[...boardDoc.polls].filter(x=>x&&x.games&&Object.keys(x.games).length).sort((a,b)=>String(a.hhmm||a.slot).localeCompare(String(b.hhmm||b.slot)));
+  const openPoll=sortedPolls[0]||null;
+  const openSlot=openPoll?String(openPoll.hhmm||openPoll.slot):null;
+  const openGames=(openPoll&&openPoll!==poll)?openPoll.games:(boardDoc.openGames||null);
+  const allEvents=reconstructEventsV1(poll.games, openGames);
   const events=allEvents.filter(e=>SPORTS_V1.includes(e.sport));
   const unsupported=[...new Set(allEvents.map(e=>e.sport).filter(s=>s&&!SPORTS_V1.includes(s)))];
   const seeds=loadEfficiencySeeds();
@@ -38,7 +44,7 @@ async function generateV1Lock(opts={}){
   }
   const { candidates, passes }=projectAllV1(events, efficiencyBySport, { byGame, boardSlot, boardCapturedAt: poll.capturedAt||null });
   const { picks, parlayLegs, funnel, rejections }=selectV1(candidates, passes);
-  funnel.gamesOnBoard=events.length; funnel.boardSource=(boardDoc&&boardDoc.source)||'omega-line-path'; funnel.feedsWired=Object.keys(byGame).length; funnel.unsupportedSportsOnBoard=unsupported; funnel.boardSlot=boardSlot; funnel.boardCapturedAt=poll.capturedAt||null;
+  funnel.gamesOnBoard=events.length; funnel.boardSource=(boardDoc&&boardDoc.source)||'omega-line-path'; funnel.feedsWired=Object.keys(byGame).length; funnel.unsupportedSportsOnBoard=unsupported; funnel.boardSlot=boardSlot; funnel.boardCapturedAt=poll.capturedAt||null; funnel.openSlot=(openGames?openSlot:null); funnel.openSource=(boardDoc&&boardDoc.openSource)||(openGames?'earliest-poll':null);
   const totalUnits=picks.reduce((s,p)=>s+(parseFloat(p.units)||0),0)+(parlayLegs||[]).reduce((s,p)=>s+(parseFloat(p.units)||0),0);
   const card={ date:dateISO, dateFormatted:formatDateLong(dateISO), model:MODEL_VERSION_V1, engine:ENGINE_V1, source:'v1-lock',
     picks, parlayLegs:parlayLegs||[], sgps:[], rejections, generatedAt:new Date().toISOString(), boardSlot, boardCapturedAt:poll.capturedAt||null,

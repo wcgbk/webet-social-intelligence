@@ -6,6 +6,8 @@
  * No Odds API call, no credits, no live scores — the board is the stored
  * snapshot. Poll choice: latest slot at or before 10:00 ET (the stored
  * 10 AM board); if none exists at/before 1000, the earliest stored poll.
+ * The earliest poll (0600 Omega capture, or the 0300 odds-master baseline
+ * merged in store-v1) is attached as openBooks for Filter 4 movement.
  */
 function selectBoardPollV1(polls, cutoffHHMM = '1000') {
   const rows = (Array.isArray(polls) ? polls : [])
@@ -15,9 +17,9 @@ function selectBoardPollV1(polls, cutoffHHMM = '1000') {
   const atOrBefore = rows.filter(p => String(p.hhmm || p.slot) <= cutoffHHMM);
   return atOrBefore.length ? atOrBefore[atOrBefore.length - 1] : rows[0];
 }
-function reconstructEventsV1(games) {
+function reconstructEventsV1(games, openGames) {
   const events = [];
-  for (const g of Object.values(games || {})) {
+  for (const [gameKey, g] of Object.entries(games || {})) {
     if (!g || !g.homeTeam || !g.awayTeam || !g.books) continue;
     const bookmakers = [];
     for (const [key, row] of Object.entries(g.books)) {
@@ -43,12 +45,13 @@ function reconstructEventsV1(games) {
       }
       if (markets.length) bookmakers.push({ key, markets });
     }
+    const openRow = (openGames && (openGames[gameKey] || openGames[`${g.awayTeam} @ ${g.homeTeam}`])) || null;
     events.push({
       sport: g.sport || null,
       home_team: g.homeTeam, away_team: g.awayTeam,
       commence_time: g.commenceTime || null,
       bookmakers,
-      openBooks: g.openBooks || null,
+      openBooks: g.openBooks || (openRow ? (openRow.books || openRow.openBooks || null) : null),
     });
   }
   return events;

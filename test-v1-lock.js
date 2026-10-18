@@ -55,3 +55,26 @@ console.log('test-v1-lock: ALL PASS (Spec v2.0)');
   const sel=selectV1(candidates,[]);
   assert.ok(sel.funnel.filter2Form>=1, 'filter2 should reject away-form candidates'); assert.ok(!sel.picks.some(x=>String(x.pick).startsWith('Away'))); }
 console.log('test-v1-lock appendix: PASS');
+// --- Oct 18 QA additions: depth-chart QB1, -7 boundary, 0600/0300 open read ---
+{ const { qbConfirmFromDepth }=L('feeds-v1');
+  const depth=(qbs)=>({depthchart:[{positions:{qb:{athletes:qbs}}}]});
+  // QB1 healthy, QB3 Out (Patriots case) -> confirmed (pre-fix: false pass)
+  assert.strictEqual(qbConfirmFromDepth(depth([{displayName:'Starter A',injuries:[]},{displayName:'Backup B',injuries:[]},{displayName:'Third C',injuries:[{status:'Out'}]}],[])).confirmed,true);
+  // QB1 Out -> not confirmed, replacement named but unproven
+  const out=qbConfirmFromDepth(depth([{displayName:'Starter A',injuries:[{status:'Out'}]},{displayName:'Backup B',injuries:[]}]),[]);
+  assert.strictEqual(out.confirmed,false); assert.strictEqual(out.unknownReplacement,true); assert.strictEqual(out.replacement,'Backup B');
+  // QB1 Questionable -> not confirmed
+  assert.strictEqual(qbConfirmFromDepth(depth([{displayName:'Starter A',injuries:[{status:'Questionable'}]}]),[]).confirmed,false);
+  // No depth chart -> null (fallback)
+  assert.strictEqual(qbConfirmFromDepth({},[]),null); assert.strictEqual(qbConfirmFromDepth(null,[]),null); }
+{ // Road favourite at exactly -7 is NOT "more than -7": must not hit the 75% rule
+  const {candidates}=projectGameV1(events[0],'NFL',eff,{});
+  const c={...candidates.find(x=>x.market==='Spread'), side:'Away -7', line:-7, trueProbability:0.65,
+    last5:{home:[1,2,3,4,5],away:[1,2,3,4,5]}, injuries:{home:[],away:[]}, keyStarter:{homeConfirmed:true,awayConfirmed:true,unknownReplacement:false}, form:null, odds:-110, confirmedBook:'Hard Rock Bet'};
+  const sel=selectV1([c],[]); assert.ok(!sel.rejections.some(r=>r.reason==='lock-road-favorite-75'), '-7 exactly must not trigger road-favorite-75');
+  const c2={...c, side:'Away -7.5', line:-7.5}; const sel2=selectV1([c2],[]);
+  assert.ok(sel2.rejections.some(r=>r.reason==='lock-road-favorite-75'), '-7.5 must trigger road-favorite-75'); }
+{ // Earliest poll (0600) attaches as openBooks for Filter 4
+  const open={'Away @ Home':{books:{hardrockbet:{spreadHome:-2.5,spreadHomeOdds:-110,spreadAway:2.5,spreadAwayOdds:-110,total:44,overOdds:-110,underOdds:-110,mlHome:-140,mlAway:120}}}};
+  const evs=reconstructEventsV1(games, open); assert.strictEqual(evs[0].openBooks.hardrockbet.spreadHome,-2.5); }
+console.log('test-v1-lock QA additions: PASS');

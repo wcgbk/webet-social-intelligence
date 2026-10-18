@@ -40,7 +40,32 @@ async function writeJsonToStore(storeName, key, data) {
 /** READ-ONLY: stored morning board from Omega's capture store. */
 async function readStoredBoardV1(dateISO) {
   const path = await readJsonFromStore(OMEGA_BOARD_STORE, `omega-line-path/${dateISO}`);
-  if (path && Array.isArray(path.polls) && path.polls.length) return path;
+  if (path && Array.isArray(path.polls) && path.polls.length) {
+    // 3 AM feed for V1: merge the odds-master baseline-0300 Hard Rock line
+    // as openBooks (opening read for Filter 4), even when the board itself
+    // comes from the Omega 0600/0730/0900/0915 line-path. Read-only, no
+    // Odds pull. If odds-master has no 0300 for the date, openBooks stays
+    // unset and index-v1 falls back to the earliest line-path poll (0600).
+    try {
+      const { reconstructBoardFromMasterV1 } = require('./board-master-v1');
+      const master = await reconstructBoardFromMasterV1((st, k) => readJsonFromStore(st, k), dateISO);
+      if (master && master.polls && master.polls.length) {
+        const mgames = (master.polls[0] && master.polls[0].games) || {};
+        let merged = 0;
+        for (const poll of path.polls) {
+          for (const [key, g] of Object.entries(poll.games || {})) {
+            if (!g || g.openBooks) continue;
+            const mg = mgames[key] || mgames[`${g.awayTeam} @ ${g.homeTeam}`];
+            if (!mg) continue;
+            const open = mg.openBooks || (String(master.polls[0].hhmm) === '0300' ? mg.books : null);
+            if (open) { g.openBooks = open; merged++; }
+          }
+        }
+        if (merged) { path.openSource = 'odds-master-baseline-0300'; path.openGamesMerged = merged; }
+      }
+    } catch (_) {}
+    return path;
+  }
   // Era morning snaps were suspended 2026-10-13..18 by the pre-reset pipeline;
   // its morning pulls live in odds-master (03:00 / 10:00 ET). Rebuild the
   // stored board from those genuine stored lines (board-master-v1).

@@ -57,6 +57,44 @@ function qbRead(injuryRows) {
   }
   return { confirmed, unknownReplacement, qbFlags: qbs.map(q => String((q.athlete && q.athlete.displayName) || 'QB') + ': ' + (q.status || '')), flags };
 }
+/**
+ * Depth-chart QB1 confirmation (Spec §§5,7.4,9): the required starter is the
+ * QB1 on the ESPN depth chart. A backup/QB3 listed Out does NOT make the
+ * starter unknown — the pre-fix qbRead treated any QB Out as starter-unknown
+ * and falsely passed whole games (2026-10-18: 36 of 48 starter passes).
+ * QB1 Out/Doubtful/IR -> starter not confirmed; replacement is named on the
+ * depth chart but its quality is unproven on this feed, so the game passes
+ * per §7.4 (unknown/unproven replacement). QB1 Questionable -> not confirmed.
+ * QB1 with no adverse status -> confirmed, regardless of backups.
+ * Returns null when no depth chart is available (caller falls back to qbRead).
+ */
+function depthQb1(depthJson) {
+  const charts = (depthJson && depthJson.depthchart) || [];
+  for (const dc of charts) {
+    const pos = dc && dc.positions && dc.positions.qb;
+    const ath = (pos && pos.athletes) || [];
+    if (ath.length) return { starter: ath[0].displayName || ath[0].name || null,
+      starterInjuries: ath[0].injuries || [],
+      replacement: ath.length > 1 ? (ath[1].displayName || ath[1].name || null) : null };
+  }
+  return null;
+}
+function qbConfirmFromDepth(depthJson, injuryRows) {
+  const d = depthQb1(depthJson);
+  if (!d || !d.starter) return null;
+  let status = '';
+  const di = (d.starterInjuries || [])[0];
+  if (di && di.status) status = String(di.status);
+  if (!status) {
+    const row = (injuryRows || []).find(x => String((x.athlete && (x.athlete.displayName || x.athlete.name)) || '') === d.starter);
+    if (row) status = String(row.status || (row.type && row.type.description) || '');
+  }
+  const st = status.toLowerCase();
+  const flags = [`starter ${d.starter}${status ? `: ${status}` : ': no adverse injury status'}${d.replacement ? `; replacement on depth chart: ${d.replacement}` : ''}`];
+  if (/out|doubtful|injured reserve|\bir\b/.test(st)) return { confirmed: false, unknownReplacement: true, starter: d.starter, replacement: d.replacement, status, qbFlags: flags };
+  if (/questionable/.test(st)) return { confirmed: false, unknownReplacement: false, starter: d.starter, replacement: d.replacement, status, qbFlags: flags };
+  return { confirmed: true, unknownReplacement: false, starter: d.starter, replacement: d.replacement, status: status || 'active', qbFlags: flags };
+}
 async function loadFootballFeedsV1(sport, dateISO, games) {
   const league = LEAGUES[sport]; if (!league) return {};
   const ymd = String(dateISO).replace(/-/g, '');
@@ -67,6 +105,12 @@ async function loadFootballFeedsV1(sport, dateISO, games) {
     const inj = await getJson(`https://site.api.espn.com/apis/site/v2/sports/${league}/injuries`);
     for (const t of (inj.injuries || inj.teams || [])) injuriesByTeam[t.displayName || t.name] = t.injuries || t.athletes || [];
   } catch (_) { injuriesByTeam = null; }
+  const depthCache = {};
+  const depthFor = async (team) => {
+    const id = ids[team]; if (!id) return null;
+    if (!(id in depthCache)) { try { depthCache[id] = await getJson(`https://site.api.espn.com/apis/site/v2/sports/${league}/teams/${id}/depthcharts`); } catch (_) { depthCache[id] = null; } }
+    return depthCache[id];
+  };
   const schedCache = {};
   const schedFor = async (team) => {
     const id = ids[team]; if (!id) return null;
@@ -101,14 +145,17 @@ async function loadFootballFeedsV1(sport, dateISO, games) {
     }
     if (injuriesByTeam) {
       const aInj = injuriesByTeam[g.awayTeam] || []; const hInj = injuriesByTeam[g.homeTeam] || [];
-      const aq = qbRead(aInj); const hq = qbRead(hInj);
-      entry.injuries = { away: aq.flags, home: hq.flags };
+      const [aDepth, hDepth] = await Promise.all([depthFor(g.awayTeam), depthFor(g.homeTeam)]);
+      const aqD = qbConfirmFromDepth(aDepth, aInj); const hqD = qbConfirmFromDepth(hDepth, hInj);
+      const aq = aqD || qbRead(aInj); const hq = hqD || qbRead(hInj);
+      entry.injuries = { away: aq.flags || qbRead(aInj).flags, home: hq.flags || qbRead(hInj).flags };
       entry.keyStarter = { awayConfirmed: aq.confirmed, homeConfirmed: hq.confirmed,
         unknownReplacement: aq.unknownReplacement || hq.unknownReplacement,
-        note: [...aq.qbFlags.map(s => `away QB ${s}`), ...hq.qbFlags.map(s => `home QB ${s}`)].join('; ') || 'no QB on ESPN injury report for either team' };
+        starterSource: aqD && hqD ? 'espn-depth-chart-qb1' : 'espn-injury-list-fallback',
+        note: [...(aq.qbFlags || []).map(x => `away QB ${x}`), ...(hq.qbFlags || []).map(x => `home QB ${x}`)].join('; ') || 'no QB on ESPN injury report for either team' };
     }
     byGame[matchup] = entry;
   }
   return byGame;
 }
-module.exports = { loadFootballFeedsV1, lastGamesFromSchedule, qbRead, teamIdMap, LEAGUES };
+module.exports = { loadFootballFeedsV1, lastGamesFromSchedule, qbRead, qbConfirmFromDepth, depthQb1, teamIdMap, LEAGUES };

@@ -54,8 +54,8 @@ function selectV1(candidates, formulaPasses=[]){
     if(!c.last5||!Array.isArray(c.last5.home)||c.last5.home.length<5||!Array.isArray(c.last5.away)||c.last5.away.length<5){ funnel.missingLast5++; reject('lock-missing-last5'); continue; }
     if(!c.injuries||c.injuries.home==null||c.injuries.away==null){ funnel.missingInjuries++; reject('lock-missing-injury-reports'); continue; }
     if(!c.keyStarter||!c.keyStarter.homeConfirmed||!c.keyStarter.awayConfirmed||c.keyStarter.unknownReplacement){ funnel.keyStarterUnknown++; reject('lock-key-starter-unknown'); continue; }
-    // Filter 2: road favourite > -7 needs 75%+ (points sports)
-    if(c.market==='Spread'&&c.side.startsWith(c.awayTeam)&&c.line!=null&&c.line<=-7&&c.trueProbability<0.75){ funnel.roadFavoriteRule++; reject('lock-road-favorite-75'); continue; }
+    // Filter 2: road favourite of more than -7 (strictly; -7 itself is not 'more than -7') needs 75%+ (points sports)
+    if(c.market==='Spread'&&c.side.startsWith(c.awayTeam)&&c.line!=null&&c.line<-7&&c.trueProbability<0.75){ funnel.roadFavoriteRule++; reject('lock-road-favorite-75'); continue; }
     // Filter 2 — Record and Form (§6): when last-10 form is on file, do not
     // back a sub-.500 recent-form team against an opponent in equal/better
     // form. Team markets only; totals are not a backing of either team.

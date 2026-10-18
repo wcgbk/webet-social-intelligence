@@ -387,7 +387,7 @@ function passesShortCardStructure(c) {
   const reason = c.rejectReason || c.reason;
   if (reason) {
     const name = String(reason);
-    if (name !== 'ev-floor' && name !== 'edge-floor' && name !== 'edge-floor-se' && name !== 'nonpositive-edge') {
+    if (name !== 'ev-floor' && name !== 'edge-floor' && name !== 'nonpositive-edge') {
       return false;
     }
   }
@@ -462,7 +462,7 @@ function eligiblePairedFill(c) {
 }
 
 /**
- * Top probability-edge rows, up to MAX_STRAIGHTS. Stake EV breaks a tie.
+ * Top stake-EV rows, up to MAX_STRAIGHTS. Edge is the tiebreak.
  * ONE_STRAIGHT_PER_GAME is read at call time and defaults true.
  * When fewer than maxN clear the 2% floor and LEAN_PAD is true, open
  * slots fill from positive-EV leans. The noise rule still applies there.
@@ -603,7 +603,9 @@ function isLeanPick(p) {
  * letter is A- or better. No full grade is also 0.25u.
  */
 function publishedParlayUnits(picks) {
-  const rows = (picks || []).filter(Boolean);
+  // A 0u 'no stake' row is not a bet. Its letter must not make a lean card
+  // stake the parlay at the full-grade 0.5u.
+  const rows = (picks || []).filter((p) => p && !isNoStakeRow(p));
   const leanOnly = rows.length > 0 && rows.every((p) => p.tier === 'lean');
   if (leanOnly || !cardHasFullGrade(rows)) return LEAN_PARLAY_UNITS;
   return PARLAY_FIXED_UNITS;
@@ -910,10 +912,10 @@ function applyDailyUnitCap(picks, parlayLegs) {
     }
   };
 
-  // 1) Straights ≤ 3.5u
+  // 1) Straights ≤ STRAIGHT_UNIT_BUDGET (4.5u)
   reduceStraightsTo(STRAIGHT_UNIT_BUDGET);
 
-  // 2) Total ≤ 4.0u (parlay fixed — only straights can absorb remaining overage)
+  // 2) Total ≤ DAILY_UNIT_CAP (5.0u). The parlay stake is fixed — only straights absorb remaining overage.
   const maxStraightsForTotal = Math.max(0, DAILY_UNIT_CAP - parlayTotalOf());
   const finalStraightBudget = Math.min(STRAIGHT_UNIT_BUDGET, maxStraightsForTotal);
   reduceStraightsTo(finalStraightBudget);
@@ -961,7 +963,7 @@ function capSameGameExposure(picks, parlays) {
     if (!(stake > 0)) continue;
     const seen = new Set();
     for (const leg of pl.legs || []) {
-      if (isVoidPregame(leg)) continue;
+      if (isVoidPregame(leg) || isNoStakeRow(leg)) continue;
       const key = usableGameKey(leg);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -970,7 +972,7 @@ function capSameGameExposure(picks, parlays) {
   }
   if (!onGame.size) return picks;
   return (picks || []).map((p) => {
-    if (isVoidPregame(p) || isLeanPick(p)) return p;
+    if (isVoidPregame(p) || isLeanPick(p) || isNoStakeRow(p)) return p;
     const extra = onGame.get(usableGameKey(p)) || 0;
     if (!(extra > 0)) return p;
     const u = parseU(p.units);

@@ -262,13 +262,14 @@ function spreadRow(extra) {
   assert.ok(shown.coreReasoning.includes('QB diagnostic:'));
 }
 
-// Same gap, no QB flag: table weight 0.25, not capped.
+// Same gap, no QB flag: table weight, not capped.
+// 2026-10-18: c3 set NFL ML to 0.40. 0.25 was the pre-merge cell.
 {
   const [row] = applyMarketAnchor([phiMl({ qbFlag: false })]);
   assert.ok(Math.abs(row.p_model - row.p_fair) > QB_MARKET_GAP);
-  assert.strictEqual(row.anchorWeight, 0.25);
+  assert.strictEqual(row.anchorWeight, 0.40);
   assert.notStrictEqual(row.qbMarketInformed, true);
-  assert.ok(Math.abs(row.coverProb - (0.25 * row.p_model + 0.75 * row.p_fair)) < 1e-6);
+  assert.ok(Math.abs(row.coverProb - (0.40 * row.p_model + 0.60 * row.p_fair)) < 1e-6);
   assert.ok(!row.notes || !String(row.notes).includes('market treated as informed'));
   const pub = publicPicksPayload({ picks: [toPickObject(row)], parlayLegs: [] });
   assert.strictEqual(pub.picks[0].qbFlag, undefined);
@@ -285,7 +286,8 @@ function spreadRow(extra) {
   assert.ok(Math.abs(small.p_model - small.p_fair) < QB_MARKET_GAP);
   assert.strictEqual(small.qbFlag, true);
   assert.strictEqual(small.qbMarketInformed, false);
-  assert.strictEqual(small.anchorWeight, 0.25);
+  // 2026-10-18: uncapped NFL ML is the c3 table weight 0.40, not the old 0.25 cell.
+  assert.strictEqual(small.anchorWeight, 0.40);
   assert.ok(!small.notes.includes('market treated as informed'));
 
   const even = { american: -110, oppAmerican: -110, point: null, oppPoint: null };
@@ -293,7 +295,7 @@ function spreadRow(extra) {
   assert.ok(Math.abs(edge.p_fair - 0.5) < 1e-9, edge.p_fair);
   assert.ok(Math.abs(Math.abs(edge.p_model - edge.p_fair) - 0.10) < 1e-9);
   assert.strictEqual(edge.qbMarketInformed, false);
-  assert.strictEqual(edge.anchorWeight, 0.25);
+  assert.strictEqual(edge.anchorWeight, 0.40);
 
   const [over] = applyMarketAnchor([phiMl({ modelPureP: 0.61, pinnacleSide: even })]);
   assert.ok(Math.abs(over.p_model - over.p_fair) - QB_MARKET_GAP > 0);
@@ -304,7 +306,8 @@ function spreadRow(extra) {
 // Other sports are not capped, even with the flag and the same gap.
 {
   const [ncaaf] = applyMarketAnchor([phiMl({ sport: 'NCAAF', qbFlag: true })]);
-  assert.strictEqual(ncaaf.anchorWeight, 0.25);
+  // 2026-10-18: c3 set NCAAF ML to 0.05. 0.25 was the pre-merge cell.
+  assert.strictEqual(ncaaf.anchorWeight, 0.05);
   assert.notStrictEqual(ncaaf.qbMarketInformed, true);
   const [nhl] = applyMarketAnchor([phiMl({ sport: 'NHL', market: 'Moneyline', qbFlag: true })]);
   assert.strictEqual(nhl.anchorWeight, 0.25);
@@ -331,7 +334,8 @@ function spreadRow(extra) {
   const [dog] = applyMarketAnchor([spreadRow()]);
   assert.ok(Math.abs(dog.p_fair - 0.5) < 1e-9, dog.p_fair);
   assert.strictEqual(dog.qbMarketInformed, false);
-  assert.strictEqual(dog.anchorWeight, 0.25);
+  // 2026-10-18: uncapped NFL spread is the c3 table weight 0.40, not the old 0.25 cell.
+  assert.strictEqual(dog.anchorWeight, 0.40);
   assert.ok(Math.abs(dog.qbMarketImpliedPts - (-9.5)) < 1e-9, dog.qbMarketImpliedPts);
   assert.ok(dog.qbMarketImpliedPts < -config.QB_INJURY.NFL.outMarginPts);
 

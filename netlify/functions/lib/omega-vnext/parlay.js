@@ -1185,7 +1185,8 @@ function priceCardLeg(row) {
 /**
  * A parlay leg on the pure-model card. Cover at or above PARLAY_MIN_COVER,
  * stake EV positive and at or under the EV cap, and not a sport the
- * margin check already banned. Rank is probability edge.
+ * margin check already banned. The published card ranks in
+ * eligibleParlayLegs by anchored stake EV, not here.
  */
 function parlayLegQualifies(leg) {
   // A 0u 'no stake' listing is not a bet and is never a parlay leg.
@@ -1488,8 +1489,7 @@ function tooFewLegsReason(n) {
  * A passing 3-leg beats every 2-leg, even when the 2-leg EV is higher.
  */
 function parlayFromStraights(straights, opts = {}) {
-  // Drop 0u 'no stake' rows before the 2-team vs 3-leg choice. They are
-  // not bets, so they must not turn two real straights into a failed 3-leg.
+  // A 0u 'no stake' row is not a bet and is never a parlay leg.
   const rows = (straights || []).filter((row) => row && !isNoStakeRow(row));
   const pool = (opts && opts.pool) || [];
   if (!rows.length && !(pool && pool.length)) return [];

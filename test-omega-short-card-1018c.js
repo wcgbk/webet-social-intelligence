@@ -17,6 +17,7 @@ const {
   eligibleShortCardNoStake,
   isNoStakeRow,
   applyDailyUnitCap,
+  publishedParlayUnits,
 } = require('./netlify/functions/lib/omega-vnext/select');
 const { parlayFromStraights } = require('./netlify/functions/lib/omega-vnext/parlay');
 const { buildShortfall } = require('./netlify/functions/lib/omega-vnext/shortfall');
@@ -148,7 +149,8 @@ assert.strictEqual(leanStakeUnits(0), 0.25);
     edgePct: 0.003,
     coverProb: 0.533,
     side: 'Home3 +3',
-    rejectReason: 'edge-floor-se',
+    // edge-floor-se was the superseded k*SE label. The live floor reason is ev-floor.
+    rejectReason: 'ev-floor',
   });
   assert.strictEqual(qualifiesAsLean(thinHi), false);
   assert.strictEqual(eligibleForLeanPool(thinLo), false);
@@ -357,7 +359,10 @@ assert.strictEqual(leanStakeUnits(0), 0.25);
   })]);
   const leanTicket = parlayFromStraights(positive);
   assert.strictEqual(leanTicket.length, 1);
-  assert.strictEqual((leanTicket[0].legs || []).length, 3);
+  // 2026-10-18: these three covers are negative as a 3-leg after the 0.95^(n-1)
+  // haircut, so the both-EV rule publishes the best passing 2-leg.
+  assert.strictEqual((leanTicket[0].legs || []).length, 2);
+  assert.notStrictEqual(leanTicket[0].isLean, true);
   // Published legs store the stake EV on evRaw. The ev field is the display string.
   assert.ok((leanTicket[0].legs || []).every((leg) => Number(leg.evRaw) > 0 && !isNoStakeRow(leg)));
 }
@@ -377,4 +382,29 @@ assert.strictEqual(leanStakeUnits(0), 0.25);
   assert.strictEqual(view.n, 1);
   assert.strictEqual(view.wins, 1);
   assert.strictEqual(view.losses, 0);
+}
+
+// A 0u letter does not raise the parlay stake. It is not a cleared straight
+// and it is not a parlay leg in the shortfall count.
+{
+  assert.strictEqual(publishedParlayUnits([
+    { tier: 'lean', rating: 'b', units: '0.25u' },
+    { tier: 'no stake', label: 'no stake', noStake: true, rating: 'aplus', units: '0u' },
+  ]), config.LEAN_PARLAY_UNITS);
+  assert.strictEqual(publishedParlayUnits([
+    { tier: 'floor', rating: 'a', units: '1u' },
+    { tier: 'no stake', label: 'no stake', noStake: true, rating: 'b', units: '0u' },
+  ]), config.PARLAY_FIXED_UNITS);
+  const report = buildShortfall({
+    picks: [
+      { matchup: 'Away1 @ Home1', pick: 'Home1 +3', tier: 'floor' },
+      { matchup: 'Away2 @ Home2', pick: 'Home2 +3', tier: 'no stake', label: 'no stake', noStake: true },
+    ],
+    parlayLegs: [{ legs: [
+      { pick: 'Home1 +3', matchup: 'Away1 @ Home1' },
+      { pick: 'Home3 +3', matchup: 'Away3 @ Home3', noStake: true, label: 'no stake' },
+    ] }],
+  });
+  assert.strictEqual(report.straightsCleared, 1);
+  assert.strictEqual(report.parlayLegs, 1);
 }

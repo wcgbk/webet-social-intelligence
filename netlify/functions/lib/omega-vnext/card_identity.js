@@ -3,9 +3,13 @@
 const { americanToImplied, americanToDecimal, formatEdgePct } = require('./odds_math');
 
 // Printed edge and EV have to be the one-decimal win rate at the printed
-// American price. The parlay has to be the published straights: none when
-// there is one, those two teams when there are two, and not a 2-leg shortcut
-// when there are three. This does not change the card.
+// American price. A card with no top-10 pool still requires the parlay to
+// be the published straights: none when there is one real straight, those
+// two teams when there are two, and not a 2-leg shortcut when there are
+// three. A card that stored selection.top10 or candidateTable draws legs
+// from that pool, so a 2-leg is allowed when every leg is a real straight
+// or a pool row, including when fewer than three straights published.
+// A 0u 'no stake' row is not a straight. This does not change the card.
 
 function parsePct(v) {
   if (v == null || v === '') return null;
@@ -51,11 +55,72 @@ function evFraction(row) {
   return null;
 }
 
-function straightsOf(card) {
+function isNoStakePick(row) {
+  if (!row) return false;
+  if (row.noStake === true) return true;
+  const label = String(row.label == null ? '' : row.label).trim().toLowerCase();
+  const tier = String(row.tier == null ? '' : row.tier).trim().toLowerCase();
+  return label === 'no stake' || tier === 'no stake';
+}
+
+function listedStraights(card) {
   return ((card && card.picks) || []).filter((row) => {
     if (!row) return false;
     return String(row.sport || '').toUpperCase() !== 'PARLAY';
   });
+}
+
+/** Real bets. A 0u 'no stake' listing is not a straight. */
+function straightsOf(card) {
+  return listedStraights(card).filter((row) => !isNoStakePick(row));
+}
+
+function teamToken(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/** Sorted team pair. "@", "vs", and "at" match in either order. */
+function gameToken(row) {
+  const away = teamToken(row && (row.awayTeam || row.away_team));
+  const home = teamToken(row && (row.homeTeam || row.home_team));
+  if (away && home) return [away, home].sort().join('|');
+  const text = String((row && (row.game || row.matchup)) || '').toLowerCase().replace(/\./g, '');
+  const parts = text.split(/\s+(?:@|vs|at)\s+/);
+  if (parts.length >= 2) {
+    const teams = [parts[0], parts.slice(1).join(' ')].map(teamToken).filter(Boolean).sort();
+    if (teams.length >= 2) return teams.join('|');
+  }
+  return teamToken(text);
+}
+
+function sideToken(row) {
+  return String((row && (row.pick || row.side)) || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.+-]+/g, ' ')
+    .replace(/\s+ml$/, '')
+    .trim();
+}
+
+function sameBet(a, b) {
+  const left = sideToken(a);
+  const right = sideToken(b);
+  if (!left || !right || left !== right) return false;
+  const ga = gameToken(a);
+  const gb = gameToken(b);
+  if (!ga || !gb) return true;
+  return ga === gb;
+}
+
+function poolRows(card) {
+  const top = card && card.selection && Array.isArray(card.selection.top10) ? card.selection.top10 : [];
+  const table = card && Array.isArray(card.candidateTable) ? card.candidateTable : [];
+  if (!top.length && !table.length) return null;
+  return top.concat(table);
+}
+
+function legsShareGame(legs) {
+  const keys = (legs || []).map(gameToken).filter(Boolean);
+  return keys.some((key, i) => keys.slice(i + 1).some((other) => other === key));
 }
 
 function publishedTicket(card) {
@@ -129,8 +194,9 @@ function legsAreTheStraights(picks, legs) {
 
 function checkCardIdentity(card) {
   const issues = [];
-  const picks = straightsOf(card);
-  picks.forEach((pick, i) => checkPrinted(pick, issues, `straight ${i + 1}`));
+  const listed = listedStraights(card);
+  listed.forEach((pick, i) => checkPrinted(pick, issues, `straight ${i + 1}`));
+  const picks = listed.filter((row) => !isNoStakePick(row));
   const ticket = publishedTicket(card);
   if (ticket) {
     const legs = Array.isArray(ticket.legs) ? ticket.legs.filter(Boolean) : [];
@@ -154,6 +220,35 @@ function checkCardIdentity(card) {
   }
 
   const n = picks.length;
+  const pool = poolRows(card);
+  if (pool) {
+    const legs = ticket && Array.isArray(ticket.legs) ? ticket.legs.filter(Boolean) : [];
+    const accepted = (leg) => picks.some((row) => sameBet(leg, row)) || pool.some((row) => sameBet(leg, row));
+    if (ticket && legsShareGame(legs)) issues.push('same-game pair published a parlay');
+    if (ticket && !legs.every(accepted)) {
+      issues.push('parlay leg is outside the published straights and the top-10 pool');
+    }
+    if (n === 2 && !ticket) {
+      const keys = picks.map(gameKey);
+      const sameGame = keys.length === 2 && keys[0] && keys[0] === keys[1];
+      const evs = picks.map(evFraction);
+      const bothPositive = evs.every((v) => v != null && v > 1e-12);
+      if (!sameGame && bothPositive && keys[0] && keys[1] && keys[0] !== keys[1]) {
+        issues.push('two positive-EV straights have no parlay');
+      }
+    }
+    if (ticket && n === 2 && legsAreTheStraights(picks, legs)) {
+      const evs = picks.map(evFraction);
+      const evKnown = evs.every((v) => v != null);
+      const bothPositive = evKnown && evs.every((v) => v > 1e-12);
+      const keys = picks.map(gameKey);
+      const sameGame = keys.length === 2 && keys[0] && keys[0] === keys[1];
+      if (!sameGame && evKnown && !bothPositive) {
+        issues.push('2-team parlay includes a non-positive leg');
+      }
+    }
+    return { ok: issues.length === 0, issues };
+  }
   if (n <= 1 && ticket) issues.push(`${n} straight published a parlay`);
   if (n === 2) {
     const keys = picks.map(gameKey);

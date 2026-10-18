@@ -92,6 +92,23 @@ async function main() {
   assert.strictEqual(marker.totalUnits, '1.25u');
   assert.strictEqual(marker.totalDollars, 188);
   assert.strictEqual(summaryStakeDisplay([{ units: '1u' }], []).totalUnits, '1u');
+
+  // A 0u 'no stake' row is not graded as 1u, and it does not consume a slot.
+  const board = [finalGame(5, 2)];
+  const zeroDay = await gradeDayBody('2026-10-07', {
+    picks: [
+      { ...mlPick('New York Yankees ML', '0u', '-110'), label: 'no stake', tier: 'no stake', noStake: true },
+      mlPick('Boston Red Sox ML', '1u', '+100'),
+      { sport: 'NFL', matchup: 'A @ B', pick: 'A ML', odds: '-110', units: '1u' },
+      { sport: 'NHL', matchup: 'C @ D', pick: 'C ML', odds: '-110', units: '1u' },
+    ],
+  }, { games: board });
+  assert.ok(zeroDay.picks.every((p) => String(p.units) !== '0u'));
+  assert.ok(zeroDay.picks.some((p) => p.pick === 'C ML'));
+  assert.strictEqual(zeroDay.wins, 1);
+  assert.strictEqual(zeroDay.losses, 0);
+  assert.strictEqual(zeroDay.wagered, unit);
+  assert.strictEqual(zeroDay.profit, unit);
 }
 
 main().catch((err) => {

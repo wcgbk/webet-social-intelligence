@@ -116,6 +116,44 @@ const threeShortcut = {
 };
 assert.ok(checkCardIdentity(threeShortcut).issues.some((line) => /2-leg/.test(line)));
 
+const pooled = {
+  picks: [penguins, tulane, third],
+  parlayLegs: [twoTeamTicket([{ ...penguins }, { ...tulane }])],
+  selection: {
+    top10: [
+      { game: penguins.matchup, side: penguins.pick },
+      { game: tulane.matchup, side: 'Tulane' },
+      { game: third.matchup, side: third.pick },
+    ],
+  },
+};
+assert.strictEqual(checkCardIdentity(pooled).ok, true, checkCardIdentity(pooled).issues.join('; '));
+const outsider = {
+  picks: [penguins, tulane, third],
+  selection: pooled.selection,
+  parlayLegs: [twoTeamTicket([
+    { ...penguins },
+    { sport: 'NHL', matchup: 'X @ Y', awayTeam: 'X', homeTeam: 'Y', pick: 'X ML', odds: '-110' },
+  ])],
+};
+assert.ok(checkCardIdentity(outsider).issues.some((line) => /top-10/.test(line)));
+const fromPool = {
+  picks: [penguins],
+  selection: {
+    top10: [
+      { game: penguins.matchup, side: penguins.pick },
+      { game: tulane.matchup, side: tulane.pick },
+    ],
+  },
+  parlayLegs: [twoTeamTicket([{ ...penguins }, { ...tulane }])],
+};
+assert.strictEqual(checkCardIdentity(fromPool).ok, true, checkCardIdentity(fromPool).issues.join('; '));
+const withZero = {
+  picks: [penguins, tulane, { ...third, units: '0u', label: 'no stake', tier: 'no stake', noStake: true }],
+  parlayLegs: [twoTeamTicket([{ ...penguins }, { ...tulane }])],
+};
+assert.strictEqual(checkCardIdentity(withZero).ok, true, checkCardIdentity(withZero).issues.join('; '));
+
 const threeLeg = {
   picks: [penguins, tulane, third],
   parlayLegs: [{
@@ -158,6 +196,22 @@ assert.strictEqual(splits['3'].totalWagered, 150, 'v2 push is free; the pre-v2 p
 assert.strictEqual(splits.unsplit.losses, 1);
 assert.strictEqual(splits.unsplit.totalWagered, 75);
 const agg = results.aggregateDays(days);
+const aggZero = results.aggregateDays([{
+  date: '2026-10-16',
+  wins: 0,
+  losses: 1,
+  pushes: 0,
+  pending: 0,
+  wagered: 150,
+  profit: -150,
+  picks: [
+    { sport: 'NFL', pick: 'Home', result: 'loss', units: '0u', label: 'no stake', tier: 'no stake', noStake: true, profit: -150 },
+    { sport: 'NFL', pick: 'Away', result: 'loss', units: '1u', profit: -150 },
+  ],
+}]);
+assert.strictEqual(aggZero.straight.losses, 1);
+assert.strictEqual(aggZero.straight.totalWagered, 150);
+assert.strictEqual(aggZero.straight.totalProfit, -150);
 assert.deepStrictEqual(Object.keys(agg).sort(), ['cumulative', 'parlay', 'straight']);
 const bucketWager = splits['2'].totalWagered + splits['3'].totalWagered + splits.unsplit.totalWagered;
 assert.strictEqual(bucketWager, agg.parlay.totalWagered);

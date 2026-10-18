@@ -565,6 +565,24 @@ function parlayWasCounted(day) {
   return true;
 }
 
+/** 0u 'no stake' is a listing, not a wager. A missing unit still defaults to 1u. */
+function isNoStakeListed(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (row.noStake === true) return true;
+  const label = String(row.label == null ? '' : row.label).trim().toLowerCase();
+  const tier = String(row.tier == null ? '' : row.tier).trim().toLowerCase();
+  return label === 'no stake' || tier === 'no stake';
+}
+
+function unitsAtRisk(row) {
+  if (isNoStakeListed(row)) return 0;
+  const raw = row && row.units;
+  if (raw == null || String(raw).trim() === '') return 1;
+  const n = parseFloat(String(raw).replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(n)) return 1;
+  return n > 0 ? n : 0;
+}
+
 function matchStraightResult(leg, straights) {
   const list = straights || [];
   const pick = leg && leg.pick;
@@ -617,7 +635,7 @@ async function gradeDay(dateISO, picksData, opts) {
 }
 
 async function gradeDayBody(dateISO, picksData, opts) {
-  const picks = (picksData.picks || []).slice(0, 3);
+  const picks = (picksData.picks || []).filter((row) => row && !isNoStakeListed(row)).slice(0, 3);
   if (picks.length === 0) return null;
 
   const ticket = cardParlayTicket(picksData);
@@ -657,7 +675,7 @@ async function gradeDayBody(dateISO, picksData, opts) {
     const sportGames = scoresByGames.filter(g => g._sport === pick.sport);
     const game = findGameForDate(pick, sportGames, dateISO);
     const result = gradePick(pick, game, gradeOpts);
-    const units = parseFloat(pick.units) || 1;
+    const units = unitsAtRisk(pick);
     const risk = wholeUp(units * dollarPerUnit);
     const winAmount = wholeUp(calcWinnings(risk, pick.odds || '-110'));
     let profit = 0;
@@ -761,7 +779,7 @@ function recomputeParlayFields(day, card) {
   const units = parlayUnitsFromTicket(ticket);
   const risk = wholeUp(units * 150);
   const legResults = ticket.legs.map((leg) => {
-    const hit = matchStraightResult(leg, straights);
+    const hit = matchStraightResult(leg, straights.filter((row) => row && !isNoStakeListed(row)));
     return {
       result: hit && hit.result ? hit.result : 'pending',
       odds: (hit && hit.odds) || (leg && leg.odds) || '-110',
@@ -816,7 +834,10 @@ function aggregateDays(list) {
     cwag += day.wagered || 0; cpr += day.profit || 0;
     for (const p of (day.picks || [])) {
       if (isParlayGradeRow(p) || p.result === 'pending' || p.result === 'push') continue;
-      swag += wholeUp((parseFloat(p.units) || 1) * 150);
+      if (isNoStakeListed(p)) continue;
+      const units = unitsAtRisk(p);
+      if (!(units > 0)) continue;
+      swag += wholeUp(units * 150);
       spr += p.profit || 0;
       if (p.result === 'win') sw++; else if (p.result === 'loss') sl++;
     }

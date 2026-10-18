@@ -42,8 +42,10 @@ function norm(value) {
 function parlayLegCount(parlayLegs) {
   let best = 0;
   for (const ticket of parlayLegs || []) {
-    const n = Array.isArray(ticket && ticket.legs) ? ticket.legs.length : 0;
-    if (n > best) best = n;
+    const legs = Array.isArray(ticket && ticket.legs)
+      ? ticket.legs.filter((leg) => !isListedNoStake(leg))
+      : [];
+    if (legs.length > best) best = legs.length;
   }
   return best;
 }

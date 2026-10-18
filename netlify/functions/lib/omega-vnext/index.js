@@ -16,7 +16,7 @@ const { replayNoWrite } = require('./no_write');
 const {
   createAuditLog, runWithAudit, currentAudit, persistAuditLog, attachAuditSummary, resolveFetch, makeRunId,
 } = require('./audit_log');
-const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, eligiblePairedFill, shouldPublishNoPlays, drawdownActive } = require('./select');
+const { selectStraights, toPickObject, applyDailyCap, applyDailyUnitCap, sortByGradeThenUnits, orderedByScore, formatMoneylinePick, straightCardLabel, qualifiesAsLean, eligiblePairedFill, shouldPublishNoPlays, drawdownActive, isNoStakeRow } = require('./select');
 const { parlayFromStraights } = require('./parlay');
 const { narrateAndVerify } = require('./narrate');
 const { attachClvFields, attachClvToParlay } = require('./clv_log');
@@ -656,8 +656,8 @@ async function generateOmegaVnext(opts = {}) {
 
   const selectedRaw = selectStraights(yesPool, MAX_STRAIGHTS, LEAN_PAD ? leanPool : null, pairedFill, rejected);
   const top10Candidates = selectTop10(yesPool, 10);
-  // 10:00 rank is probability edge, one game each. Stake EV breaks a tie
-  // inside 0.2 percentage points. A parlay
+  // 10:00 rank is anchored stake EV (compareByEv), one game each. Edge
+  // breaks a tie. A parlay
   // leg with no Hard Rock price is swapped or noted. The note and the
   // bug log stay off the page. The card still publishes.
   const placement = ensureParlayPlaceable(
@@ -700,9 +700,10 @@ async function generateOmegaVnext(opts = {}) {
   // Provisional straight-only trim; final 3.5u straights + 0.5u parlay (≤4.0u).
   picks = applyDailyCap(picks);
 
-  // Three qualifying games make a 3-leg. Two published straights make a
-  // 2-team parlay of those straights. One straight is no parlay. A ticket
-  // whose combined EV is not positive is labeled and still published.
+  // Parlay legs are the top 10 by stake EV, one game each. A real ticket
+  // needs model EV after the haircut and, when the fair number exists,
+  // fair EV. Otherwise the best 2-leg publishes as a 0.25u lean. A 0u
+  // 'no stake' row is not a leg. Fewer than two eligible legs is no parlay.
   let parlayPool = [].concat(yesPool || [], LEAN_PAD ? (leanPool || []) : [], pairedFill);
   const straightParlay = (rows, note) => parlayFromStraights(rows, {
     hrPlaceabilityNote: note || placement.note,
@@ -924,7 +925,7 @@ async function generateOmegaVnext(opts = {}) {
     insights: narr.insights || '',
     summary: {
       totalPicks: picks.length,
-      totalStraightBets: picks.length,
+      totalStraightBets: picks.filter((p) => !isNoStakeRow(p)).length,
       totalUnits: stakeDisplay.totalUnits,
       totalDollars: stakeDisplay.totalDollars,
       aplusLocks: picks.filter(p => p.rating === 'aplus').length,
@@ -988,8 +989,9 @@ async function generateOmegaVnext(opts = {}) {
       unmatched: unmatchedReport.bySport,
       unmatchedCount: unmatchedReport.count,
     },
-    // Private. publicPicksPayload drops selection. Top 10 is the 10:00
-    // Edge rank, one game each. rerank-picks-omega at 10:15 refreshes news
+    // Private. publicPicksPayload drops selection. Top 10 is stake EV,
+    // one game each. The stored rankedBy label stays 'edge'.
+    // rerank-picks-omega at 10:15 refreshes news
     // and may replace a main from this priced pool. It does not pull odds.
     selection: {
       snapshotTime: servedSnapshot || oddsSnapshot || null,

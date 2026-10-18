@@ -6,10 +6,10 @@ const { americanToImplied, americanToDecimal, formatEdgePct } = require('./netli
 const { powerTwoWay } = require('./netlify/functions/lib/omega-vnext/sharp_fair');
 const { pushAwareEv } = require('./netlify/functions/lib/omega-vnext/push_ev');
 const {
-  applyMarketAnchor, fairPickFields, priceEdgeAtBet,
+  applyMarketAnchor, fairPickFields, priceEdgeAtBet, priceEdgesAtBet,
 } = require('./netlify/functions/lib/omega-vnext/prob_anchor');
-const { comboStats } = require('./netlify/functions/lib/omega-vnext/parlay');
-const { toPickObject } = require('./netlify/functions/lib/omega-vnext/select');
+const { comboStats, parlayFromStraights, FAIR_LEAN_LABEL } = require('./netlify/functions/lib/omega-vnext/parlay');
+const { toPickObject, selectStraights, applyDailyUnitCap } = require('./netlify/functions/lib/omega-vnext/select');
 const { pickPublic } = require('./netlify/functions/lib/public-picks');
 
 const SOFT_EV = 'n/a (soft fair)';
@@ -348,6 +348,58 @@ function expectSharp(row, source) {
   assert.ok(Math.abs(kept.evAtFair - (0.53 * 0.53 * dec * dec - 1)) < 1e-12);
   const blocked = comboStats([legacy, { ...legacy, matchup: 'G @ H', evAtFairValid: false }]);
   assert.strictEqual(blocked.evAtFair, null);
+}
+
+// Soft fair through the card path. Retail-only books stamp evAtFairValid
+// false. Both legs are soft, so no combo is a real ticket. The published
+// 2-leg stays a 0.25u fair lean even when the straights would stake 0.5u.
+{
+  function gameRow(away, home, side, modelPureP, commence) {
+    return {
+      sport: 'NFL',
+      market: 'Moneyline',
+      side,
+      matchup: `${away} @ ${home}`,
+      awayTeam: away,
+      homeTeam: home,
+      commenceTime: commence,
+      odds: -110,
+      book: 'draftkings',
+      modelPureP,
+      coverProb: modelPureP,
+      bookPrices: [{ book: 'draftkings', american: -110, point: null }],
+    };
+  }
+  const anchored = applyMarketAnchor([
+    gameRow('A1', 'H1', 'H1', 0.62, 't1'),
+    gameRow('A1', 'H1', 'A1', 0.38, 't1'),
+    gameRow('A2', 'H2', 'H2', 0.62, 't2'),
+    gameRow('A2', 'H2', 'A2', 0.38, 't2'),
+  ]);
+  const priced = priceEdgesAtBet(anchored);
+  const chosen = priced.filter((row) => row.side === 'H1' || row.side === 'H2');
+  assert.strictEqual(chosen.length, 2);
+  for (const row of chosen) {
+    assert.strictEqual(row.fairSoft, true);
+    assert.strictEqual(row.evAtFairValid, false);
+    assert.ok(row.ev > 0.02 && row.ev < 0.10, `stake EV ${row.ev}`);
+  }
+  const selected = selectStraights(chosen, 3, [], [], []);
+  assert.strictEqual(selected.length, 2, selected.map((row) => row.rejectReason || row.ev).join(','));
+  const published = selected.map((row) => toPickObject(row));
+  assert.ok(published.every((row) => row.evAtFairValid === false && row.fairSoft === true));
+  assert.ok(published.some((row) => row.grade === 'A-' || row.grade === 'A' || row.grade === 'A+'));
+  const tickets = parlayFromStraights(published);
+  const capped = applyDailyUnitCap(published, tickets);
+  const ticket = capped.parlayLegs[0];
+  assert.ok(ticket && ticket.qualifying !== false, JSON.stringify(ticket));
+  assert.strictEqual(ticket.isLean, true);
+  assert.strictEqual(ticket.label, FAIR_LEAN_LABEL);
+  assert.strictEqual(ticket.units, '0.25u');
+  assert.ok(String(ticket.type).endsWith('-labeled'));
+  assert.strictEqual(ticket.evAtFair, null);
+  assert.strictEqual(ticket.legs.length, 2);
+  assert.ok(ticket.legs.some((leg) => leg.evAtFairValid === false));
 }
 
 console.log('test-omega-fair-soft-1018c ok');

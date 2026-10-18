@@ -229,12 +229,16 @@ function fairPickFields(c) {
     fairSource: meta.fairSource,
     fairSoft: meta.soft,
     fairQuality: meta.quality,
-    evAtFairValid: sharpEv,
     evAtFair,
     p_model: raw != null && Number.isFinite(raw) ? +raw.toFixed(4) : null,
     p_fair: fair != null ? +Number(fair).toFixed(6) : null,
     modelWeight: weight != null && Number.isFinite(weight) ? weight : null,
   };
+  // Soft fair is not stakeable. A sharp fair is. A row with no source and
+  // no flag keeps the flag absent: a missing fair is not a retail-only fair.
+  // An anchor that already set evAtFairValid false (no fair survived) stays false.
+  if (meta.quality === 'soft' || (c && c.evAtFairValid === false)) out.evAtFairValid = false;
+  else if (sharpEv || (c && c.evAtFairValid === true)) out.evAtFairValid = true;
   // Present only on an NFL QB-flagged row. toPickObject copies this object.
   if (c && c.qbFlag === true) out.qbFlag = true;
   if (c && c.qbMarketInformed === true) out.qbMarketInformed = true;

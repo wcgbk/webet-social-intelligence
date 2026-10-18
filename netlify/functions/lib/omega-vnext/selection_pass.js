@@ -430,8 +430,10 @@ function hasHardRockPrice(c) {
 }
 
 /**
- * Parlay legs are the straights. A leg with no Hard Rock price is logged
- * and swapped for the next edge-ranked one-per-game candidate that has one.
+ * Straights on the card are swapped here when one has no Hard Rock price.
+ * The parlay itself is chosen later from the top 10 by stake EV. A missing
+ * price is logged and the straight is swapped for the next stake-EV
+ * one-per-game candidate that has one.
  * No replacement: the leg stays and the ticket carries a note. Never drops
  * the card.
  */
@@ -557,7 +559,7 @@ function slotSnap(row, kind) {
 }
 
 /**
- * The re-ranked list of record. Final straights, in edge order, are marked
+ * The re-ranked list of record. Final straights, in top-10 order, are marked
  * selected and lead the list. The rest of the 10:00 top 10 follows.
  */
 function recordRankedList(picks, poolTop10) {

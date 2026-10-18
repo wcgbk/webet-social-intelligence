@@ -1,147 +1,84 @@
 'use strict';
 /**
- * V1 selection (Lock §5/§6/§8): mandatory passes first, then Ben's sheet
- * as the sole admission floor, Grade A only for the verified standard bet,
- * rank by anchored true probability, no leans, no fills.
- * Pass order: missing formula (project-v1) -> missing Pinnacle receipt at
- * the bet line -> missing named bet-book price -> QB unknown replacement
- * -> sheet verdict != GOOD BET.
+ * V1 selection — Spec §§3,5,6,8,9,10 ONLY.
+ * Mandatory passes first, then Filter 1 grading. B = parlay only.
+ * No sheet, no anchor, no haircut, no stake-EV floor beyond Spec §9
+ * (negative expected value at the confirmed price = pass).
  */
-const { checkSheetV1, quarterKellyUnitsV1 } = require('./sheet-v1');
-const { americanToDecimal, decimalToAmerican, formatAmerican, formatMoneylinePick } = require('../omega-vnext/odds_math');
-const { MAX_STRAIGHTS_V1, PARLAY_UNITS_V1, CORR_HAIRCUT_V1, MODEL_VERSION_V1 } = require('./config-v1');
-
-function fmtPct(p, digits = 1) { return p == null || !Number.isFinite(p) ? null : `${(p * 100).toFixed(digits)}%`; }
-function kickoffET(iso) {
-  if (!iso) return 'TBD';
-  try { return new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York',
-    weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET'; }
-  catch (_) { return String(iso); }
-}
-function whatLosesV1(c) {
-  if (c.market === 'Total') return /^over/i.test(c.side)
-    ? `The game stays under ${c.line} total points.`
-    : `The game goes over ${c.line} total points.`;
-  if (c.market === 'Spread') return `${c.side} fails to cover ${c.line != null ? c.line : ''} against the final margin.`;
+const { gradeForV1, floorForV1, unitsForGradeV1, MODEL_VERSION_V1 } = require('./config-v1');
+function fmtPct(p){ return p==null||!Number.isFinite(p)?null:`${(p*100).toFixed(1)}%`; }
+function decFromAmerican(a){ return a>0?1+a/100:1+100/Math.abs(a); }
+function evFor(p, odds){ return odds==null?null:p*decFromAmerican(odds)-1; }
+function whatLosesV1(c){
+  if(c.market==='Total') return /^over/i.test(c.side)?`The game stays under ${c.line} total points.`:`The game goes over ${c.line} total points.`;
+  if(c.market==='Spread') return `${c.side} fails to cover against the final margin.`;
   return `${c.side} loses the game outright.`;
 }
-function receiptV1(c, check) {
-  const pickLabel = formatMoneylinePick(c.side, c.market);
+function receiptV1(c, grade, ev){
+  const unit=unitsForGradeV1(grade);
   return {
-    game: `${c.matchup}, ${kickoffET(c.commenceTime)}`,
-    pick: pickLabel,
-    grade: 'A',
-    confirmedLine: `${c.book} ${c.oddsStr}`,
-    trueWinProbability: fmtPct(c.coverProb),
-    formulaSpreadHome: c.formulaSpreadHome,
-    formulaTotal: c.formulaTotal,
-    receiptSpreadHome: c.receiptSpreadHome != null ? c.receiptSpreadHome : null,
-    receiptTotal: c.receiptTotal != null ? c.receiptTotal : null,
-    pinnacleAtBetLine: c.pinnacleReceipt ? { point: c.pinnacleReceipt.point,
-      american: c.pinnacleReceipt.american, oppAmerican: c.pinnacleReceipt.oppAmerican } : null,
-    availabilityFlags: c.qbFlag || 'no QB flag on file',
-    coreReasoning: `Formula line (home margin ${c.formulaSpreadHome}, total ${c.formulaTotal}) prices ${pickLabel} at ${(c.modelPureP * 100).toFixed(1)}% before market contact; Pinnacle power de-vig fair is ${(c.pFair * 100).toFixed(1)}%; anchored p (w=${c.anchorWeight}) is ${(c.coverProb * 100).toFixed(1)}% vs ${(check.edgePts >= 0 ? '+' : '')}${check.edgePts.toFixed(1)} pts of edge and ${(check.ev * 100).toFixed(1)}% EV at ${c.book} ${c.oddsStr}.`,
-    unitSize: 'sheet quarter-Kelly (preserved bet_check_gate quarterKellyUnitsSimple), cap 1.5u',
-    whatLoses: whatLosesV1(c),
+    game:`${c.awayTeam} vs ${c.homeTeam}`,
+    pick:c.market==='Moneyline'?c.side:c.side,
+    rating:grade,
+    confirmedLine:`Hard Rock Bet ${c.oddsStr}${c.line!=null?` (${c.line})`:''}`,
+    trueWinProbability:fmtPct(c.trueProbability),
+    last5TeamA:c.last5&&c.last5.away?c.last5.away:null,
+    last5TeamB:c.last5&&c.last5.home?c.last5.home:null,
+    h2h:c.h2h||null,
+    keyInjuryFlags:c.injuries?JSON.stringify(c.injuries):null,
+    coreReasoning:`Formula line (expected margin ${c.formulaSpreadHome}, expected total ${c.formulaTotal}, inputs: ${c.formulaInputs.method}) prices this at ${fmtPct(c.trueProbability)} against the confirmed Hard Rock Bet line; expected value at that price is ${ev!=null?(ev*100).toFixed(1)+'%':''}.`,
+    unitSize:`${unit}u`,
+    whatLoses:whatLosesV1(c),
   };
 }
-function toPickV1(c, check) {
-  const units = Math.max(0.25, check.kellyUnits || quarterKellyUnitsV1(c.coverProb, c.odds));
-  const pickLabel = formatMoneylinePick(c.side, c.market);
-  return {
-    sport: c.sport, matchup: c.matchup, homeTeam: c.homeTeam, awayTeam: c.awayTeam,
-    pick: pickLabel, pickDisplay: pickLabel, betType: c.market,
-    odds: c.oddsStr, units: `${units}u`, rating: 'a', lockGrade: 'A',
-    confidence: 82, commenceTime: c.commenceTime,
-    winProbability: fmtPct(c.coverProb), coverProb: fmtPct(c.coverProb),
-    edgePct: fmtPct(check.edgePts / 100), ev: fmtPct(check.ev),
-    book: c.book, displayBook: c.book, executionBook: c.book,
-    source: 'v1-lock', model: MODEL_VERSION_V1,
-    modelEdge: `Anchored p: ${fmtPct(c.coverProb)}, model ${(c.modelPureP * 100).toFixed(1)}%, Pinnacle fair ${(c.pFair * 100).toFixed(1)}%, edge ${check.edgePts.toFixed(1)} pts`,
-    coreReasoning: receiptV1(c, check).coreReasoning,
-    lockFormulaLine: { spreadHome: c.formulaSpreadHome, total: c.formulaTotal },
-    lockReceiptLine: { spreadHome: c.receiptSpreadHome, total: c.receiptTotal, point: c.pinnacleReceipt.point },
-    lockAvailability: c.qbFlag || 'no QB flag on file',
-    lockReceipt: receiptV1(c, check),
-    sheetCheck: { verdict: check.verdict, edgePts: check.edgePts, ev: check.ev,
-      profitPerUnit: check.profitPerUnit, band: check.band, credibility: check.credibility },
-  };
+function toPickV1(c, grade, ev){
+  const unit=unitsForGradeV1(grade); const r=receiptV1(c,grade,ev);
+  return { sport:c.sport, matchup:c.matchup, homeTeam:c.homeTeam, awayTeam:c.awayTeam,
+    pick:r.pick, pickDisplay:r.pick, betType:c.market, odds:c.oddsStr, units:`${unit}u`,
+    rating:grade.toLowerCase(), lockGrade:grade, grade, commenceTime:c.commenceTime,
+    winProbability:fmtPct(c.trueProbability), trueProbability:c.trueProbability,
+    ev:ev!=null?fmtPct(ev):null, book:'hardrockbet', displayBook:'Hard Rock Bet', executionBook:'Hard Rock Bet',
+    source:'v1-lock', model:MODEL_VERSION_V1, coreReasoning:r.coreReasoning, lockReceipt:r,
+    formula:{ spreadHome:c.formulaSpreadHome, total:c.formulaTotal, inputs:c.formulaInputs } };
 }
-function comboV1(legs) {
-  let dec = 1, p = 1;
-  for (const l of legs) { dec *= americanToDecimal(l.odds); p *= l.coverProb; }
-  if (legs.length > 1) p *= Math.pow(CORR_HAIRCUT_V1, legs.length - 1);
-  return { combinedDecimal: dec, combinedProb: p, ev: p * dec - 1 };
-}
-function buildParlayV1(goodPool, picks) {
-  const pool = [...goodPool].sort((a, b) => b.coverProb - a.coverProb).slice(0, 24);
-  const combos = (n) => {
-    const out = []; const idx = [...Array(n).keys()];
-    const rec = (start, cur) => {
-      if (cur.length === n) { out.push([...cur]); return; }
-      for (let i = start; i < pool.length; i++) { cur.push(pool[i]); rec(i + 1, cur); cur.pop(); }
-    };
-    if (pool.length >= n) rec(0, []);
-    return out;
-  };
-  for (const n of [3, 2]) {
-    let best = null;
-    for (const legs of combos(n)) {
-      if (new Set(legs.map(l => l.matchup)).size !== n) continue;
-      const st = comboV1(legs);
-      if (st.ev <= 0) continue; // Lock: parlay only if EV>0 after haircut
-      if (!best || st.combinedProb > best.st.combinedProb) best = { legs, st };
-    }
-    if (best) {
-      const am = decimalToAmerican(best.st.combinedDecimal);
-      return [{ type: `${n}-leg-parlay-v1-lock`, units: `${PARLAY_UNITS_V1}u`,
-        combinedOdds: am != null ? formatAmerican(am) : '',
-        combinedDecimal: +best.st.combinedDecimal.toFixed(4),
-        combinedProb: fmtPct(best.st.combinedProb), ev: fmtPct(best.st.ev),
-        uniqueGames: n, uniqueSports: new Set(best.legs.map(l => l.sport)).size,
-        independent: true, legMarkets: best.legs.map(l => l.market),
-        correlationNote: `0.95 haircut per extra leg applied (${CORR_HAIRCUT_V1}^${n - 1})`,
-        source: 'v1-lock',
-        legs: best.legs.map(l => toPickV1(l.c, l.check)) }];
-    }
+function selectV1(candidates, formulaPasses=[]){
+  const funnel={ candidates:(candidates||[]).length, formulaPassGames:formulaPasses.length,
+    noConfirmedHardRockLine:0, missingLast5:0, missingInjuries:0, keyStarterUnknown:0,
+    belowFloor:0, negativeEv:0, roadFavoriteRule:0, qualified:0, straights:0, parlayLegPool:0 };
+  const rejections=formulaPasses.map(p=>({ matchup:p.matchup, sport:p.sport, reason:p.reason, detail:p.detail }));
+  const qualified=[];
+  for(const c of candidates||[]){
+    const reject=(reason)=>{ rejections.push({ matchup:c.matchup, sport:c.sport, side:c.side, reason }); };
+    if(c.odds==null||!c.confirmedBook){ funnel.noConfirmedHardRockLine++; reject('lock-no-confirmed-hard-rock-line'); continue; }
+    if(!c.last5||!Array.isArray(c.last5.home)||c.last5.home.length<5||!Array.isArray(c.last5.away)||c.last5.away.length<5){ funnel.missingLast5++; reject('lock-missing-last5'); continue; }
+    if(!c.injuries||c.injuries.home==null||c.injuries.away==null){ funnel.missingInjuries++; reject('lock-missing-injury-reports'); continue; }
+    if(!c.keyStarter||!c.keyStarter.homeConfirmed||!c.keyStarter.awayConfirmed||c.keyStarter.unknownReplacement){ funnel.keyStarterUnknown++; reject('lock-key-starter-unknown'); continue; }
+    const grade=gradeForV1(c.sport,c.trueProbability);
+    if(!grade){ funnel.belowFloor++; reject('lock-below-grade-floor'); continue; }
+    const ev=evFor(c.trueProbability,c.odds);
+    if(ev==null||ev<=0){ funnel.negativeEv++; reject('lock-negative-ev'); continue; }
+    // Filter 2: road favourite > -7 needs 75%+ (points sports)
+    if(c.market==='Spread'&&c.side.startsWith(c.awayTeam)&&c.line!=null&&c.line<=-7&&c.trueProbability<0.75){ funnel.roadFavoriteRule++; reject('lock-road-favorite-75'); continue; }
+    funnel.qualified++; qualified.push({c,grade,ev});
   }
-  return [];
-}
-function selectV1(candidates, formulaPasses = []) {
-  const funnel = { candidates: (candidates || []).length, formulaPassGames: formulaPasses.length,
-    missingReceipt: 0, missingBetPrice: 0, qbUnknown: 0, sheetFail: 0, sheetAudit: 0, good: 0 };
-  const rejections = formulaPasses.map(p => ({ matchup: p.matchup, sport: p.sport, reason: p.reason }));
-  const good = [];
-  for (const c of candidates || []) {
-    if (!c.pinnacleReceipt || c.pFair == null) { funnel.missingReceipt++;
-      rejections.push({ matchup: c.matchup, side: c.side, reason: 'lock-missing-receipt' }); continue; }
-    if (c.odds == null || !c.book) { funnel.missingBetPrice++;
-      rejections.push({ matchup: c.matchup, side: c.side, reason: 'lock-missing-bet-price' }); continue; }
-    if (c.qbUnknownReplacement) { funnel.qbUnknown++;
-      rejections.push({ matchup: c.matchup, side: c.side, reason: 'lock-qb-unknown-replacement' }); continue; }
-    if (c.coverProb == null) { funnel.missingReceipt++;
-      rejections.push({ matchup: c.matchup, side: c.side, reason: 'lock-missing-anchor' }); continue; }
-    const check = checkSheetV1({ p: c.coverProb, odds: c.odds });
-    if (check.verdict !== 'GOOD BET') {
-      if (check.flagged) funnel.sheetAudit++; else funnel.sheetFail++;
-      rejections.push({ matchup: c.matchup, side: c.side,
-        reason: check.flagged ? `sheet-audit:${check.betCheckFlag}` : 'sheet-fail',
-        edgePts: check.edgePts, ev: check.ev });
-      continue;
-    }
-    funnel.good++;
-    good.push({ c, check });
+  qualified.sort((a,b)=>b.c.trueProbability-a.c.trueProbability||b.ev-a.ev);
+  const picks=[]; const used=new Set();
+  for(const q of qualified){ if(q.grade==='B') continue; if(used.has(q.c.matchup)) continue; used.add(q.c.matchup); picks.push(toPickV1(q.c,q.grade,q.ev)); }
+  funnel.straights=picks.length;
+  // Parlay (Spec §8): B and above, distinct games, 0.5u flat. No haircut rule in Spec.
+  const legPool=qualified.filter(q=>!used.has(q.c.matchup)||true); // all qualified may be legs; straights already qualify independently
+  funnel.parlayLegPool=legPool.length;
+  let parlayLegs=[];
+  const distinct=[]; const seen=new Set();
+  for(const q of qualified){ if(seen.has(q.c.matchup)) continue; seen.add(q.c.matchup); distinct.push(q); if(distinct.length>=3) break; }
+  if(distinct.length>=2){
+    let dec=1,p=1; for(const q of distinct){ dec*=decFromAmerican(q.c.odds); p*=q.c.trueProbability; }
+    const ev=p*dec-1;
+    if(ev>0){ const am=dec>=2?Math.round((dec-1)*100):Math.round(-100/(dec-1));
+      parlayLegs=[{ type:`${distinct.length}-leg-parlay-v1-lock`, units:'0.5u', combinedOdds:String(am>0?`+${am}`:`${am}`),
+        combinedProb:fmtPct(p), ev:fmtPct(ev), uniqueGames:distinct.length, source:'v1-lock',
+        legs:distinct.map(q=>toPickV1(q.c,q.grade,q.ev)) }]; }
   }
-  // Rank by anchored true probability (preserved rule), ties by EV. One per game.
-  good.sort((a, b) => (b.c.coverProb - a.c.coverProb) || (b.check.ev - a.check.ev));
-  const picks = []; const used = new Set();
-  for (const g of good) {
-    if (picks.length >= MAX_STRAIGHTS_V1) break;
-    if (used.has(g.c.matchup)) continue;
-    used.add(g.c.matchup);
-    picks.push(toPickV1(g.c, g.check));
-  }
-  const parlayLegs = picks.length ? buildParlayV1(good, picks) : [];
-  return { picks, parlayLegs, funnel, rejections, goodPoolSize: good.length };
+  return { picks, parlayLegs, funnel, rejections, qualifiedPoolSize:qualified.length };
 }
-module.exports = { selectV1, receiptV1, comboV1, buildParlayV1, whatLosesV1 };
+module.exports={ selectV1, receiptV1, evFor, decFromAmerican };
